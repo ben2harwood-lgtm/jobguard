@@ -196,3 +196,22 @@ PostgreSQL, browser and full required CI checks were not run here and remain due
 when the freeze permits CI. One independent RED review of the exact final head
 remains required before merge. Shared fee-collection paths with M4-12 and M4-15
 must serialize integration. All production gates remain closed.
+
+Catch-up verification (3 November 2026): MON-4B, NOPR, no migration. Resolved
+only the DB barrel conflict by preserving the collection repository export and
+main's offline-upload export. The remaining diff against the merged main contains
+only MON-4B's existing slice and its lane; removed the stale core barrel entry
+from that lane. No tests, expectations, SQL routines or collection behavior changed.
+All migration SQL and predecessor lane files match the merged main.
+
+Installed Vitest 4.1.12, --maxWorkers=2, at most three named files per invocation:
+- executor, success-fee-direct-debit, success-fee-composition: 94 passed.
+- fake-gocardless and m4-23-sb-rails: 40 passed.
+- payment-fee-collection-repository: 9 passed.
+Installed package TypeScript --noEmit passed for API, DB and core. Money arithmetic,
+commercial boundary and diff whitespace checks passed. The pnpm wrapper stalled
+before invoking checks and was interrupted; installed binaries were used without
+package downloads. PostgreSQL, browser and full CI suites remain unproved here.
+Exact-head independent RED review and green CI remain required before merge.
+READY for router staging and commit; the read-only index still records the DB
+barrel as unmerged even though its working-tree conflict markers are resolved.

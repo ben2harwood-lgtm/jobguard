@@ -1,7 +1,7 @@
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
-import { loadMeter, MeterDetails, MeterScreen } from "./meter-screen";
+import { loadMeter, loadMeterJobs, MeterJobs, JobsOnTheGoLine, MeterDetails, MeterScreen } from "./meter-screen";
 vi.stubGlobal("React", React);
 const session = { csrfToken: "csrf", memberships: [{ tenantId: "fictional-company" }] };
 const view = { version: "meter-today-read.v1" as const, hypothetical: true as const, date: "2026-10-28", plan: "Builder" as const, countedPlaces: 5, freeSmallPlaces: 2 };
@@ -27,6 +27,36 @@ it("never substitutes zero for a missing session, missing ledger or malformed re
     await expect(loadMeter(vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(session)).mockResolvedValueOnce(response))).rejects.toThrow();
   }
 });
+it.each([401, 503])("finishes the rejected session response body (%s)", async status => {
+  const response = Response.json({ code: "UNAUTHENTICATED" }, { status });
+  const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(response);
+  await expect(loadMeter(fetcher)).rejects.toThrow(status === 401 ? "SIGN_IN_REQUIRED" : "READ_UNAVAILABLE");
+  expect(response.bodyUsed).toBe(true);
+  expect(fetcher).toHaveBeenCalledTimes(1);
+});
+it.each([401, 403, 503])("finishes rejected count and drill-down response bodies (%s)", async status => {
+  for (const load of [loadMeter, loadMeterJobs]) {
+    const response = Response.json({ code: "METER_UNAVAILABLE" }, { status });
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(session)).mockResolvedValueOnce(response);
+    await expect(load(fetcher)).rejects.toThrow(status < 500 ? "SIGN_IN_REQUIRED" : "READ_UNAVAILABLE");
+    expect(response.bodyUsed).toBe(true);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  }
+});
+it.each([401, 503])("preserves the intended error when a rejected body cannot be read (%s)", async status => {
+  for (const load of [loadMeter, loadMeterJobs]) {
+    for (const failedSession of [true, false]) {
+      const response = Response.json({}, { status });
+      const read = vi.spyOn(response, "text").mockRejectedValue(new Error("Interrupted body"));
+      const fetcher = vi.fn<typeof fetch>();
+      if (!failedSession) fetcher.mockResolvedValueOnce(Response.json(session));
+      fetcher.mockResolvedValueOnce(response);
+      await expect(load(fetcher)).rejects.toThrow(status === 401 ? "SIGN_IN_REQUIRED" : "READ_UNAVAILABLE");
+      expect(read).toHaveBeenCalledOnce();
+      expect(fetcher).toHaveBeenCalledTimes(failedSession ? 1 : 2);
+    }
+  }
+});
 it("shows a loading state without company numbers before authentication", () => {
   const html = renderToStaticMarkup(<MeterScreen />);
   expect(html).toContain('role="status"'); expect(html).toContain("hypothetical"); expect(html).not.toContain("of 7 jobs");
@@ -42,4 +72,26 @@ it("shows track_review_due only from a saved decision", () => {
   const id = "d1500000-0000-4000-8000-000000000001";
   const html = renderToStaticMarkup(<MeterDetails view={{ ...view, trackReviewDecisionId: id }} />);
   expect(html).toContain("track_review_due"); expect(html).toContain(id);
+});
+
+const jobIds = Array.from({ length: 5 }, (_, i) => `a1500000-0000-4000-8000-${String(i).padStart(12, "0")}`);
+const jobsView = { version: "meter-today-jobs-read.v1" as const, meter: { ...view, freeSmallPlaces: 0 },
+  places: jobIds.map(id => ({ jobIds: [id], kind: "place" as const })) };
+it("renders five place rows with their server job references", () => {
+ const html = renderToStaticMarkup(<MeterJobs view={jobsView} />);
+ expect(html.match(/data-testid="meter-job-row"/g)).toHaveLength(5);
+ for (const id of jobIds) expect(html).toContain(id);
+ expect(html).toContain("Counts as a place");
+});
+it("reads the separate versioned drill-down and rejects inconsistent row counts and replays", async () => {
+ const fetcher = () => vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(session));
+ expect(await loadMeterJobs(fetcher().mockResolvedValueOnce(Response.json(jobsView)))).toEqual(jobsView);
+ for (const bad of [{ ...jobsView, places: jobsView.places.slice(1) },
+   { ...jobsView, places: jobsView.places.map(() => jobsView.places[0]) },
+   { ...jobsView, version: "meter-today-read.v1" }]) {
+  await expect(loadMeterJobs(fetcher().mockResolvedValueOnce(Response.json(bad)))).rejects.toThrow();
+ }
+});
+it("has no invented jobs-list line before a company read succeeds", () => {
+ expect(renderToStaticMarkup(<JobsOnTheGoLine />)).toBe("");
 });

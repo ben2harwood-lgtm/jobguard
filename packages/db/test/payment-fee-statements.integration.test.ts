@@ -1,28 +1,92 @@
 // Real PostgreSQL CI only. No customer data or provider calls.
 import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import { rolledBack } from "./upgrade-proof-utils.js";
 import { beforeAll,afterAll,expect,it } from "vitest";
 import { createFinalCheckFixture,closeFinalCheckFixture,finalCheckTenant,type FinalCheckFixture } from "./final-check-fixture.js";
-import { realReceiptFixture } from "./stored-receipt-case-fixture.js";
-import { StoredReceiptCaseAllocationRepository } from "../src/stored-receipt-case-allocation-repository.js";
+import { catchFeeFixture } from "./success-fee-catch-fixture.js";
 import { RecoveryAttributionRepository } from "../src/recovery-attribution-repository.js";
 import { PaymentFeeRepository } from "../src/payment-fee-repository.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 let f:FinalCheckFixture;const environment=process.env.JOBGUARD_ENV;
 beforeAll(async()=>{f=await createFinalCheckFixture();},120000);
 afterAll(async()=>{if(f)await closeFinalCheckFixture(f);if(environment===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=environment;});
-async function fixture(){
- const x=await realReceiptFixture(f);
- const revision=(await f.admin.query("SELECT revision FROM app.recovery_case_current WHERE tenant_id=$1 AND job_id=$2 AND id=$3",[x.context.tenantId,x.jobId,x.caseId])).rows[0].revision as number;
- const allocator=new StoredReceiptCaseAllocationRepository(f.runtime,"synthetic_demo");
- const p={version:"stored-receipt-case-command.v1",action:"review",commandId:randomUUID(),factLineId:x.fact.lineAllocationId,caseId:x.caseId,workId:x.workId,expectedCaseRevision:revision};
- const review=await allocator.command(x.context,x.jobId,x.auth.digest,p);
- await allocator.command(x.context,x.jobId,x.auth.digest,{...p,action:"approve",commandId:randomUUID(),reviewId:review.reviewId,approvalHash:review.approvalHash});
- await new RecoveryAttributionRepository(f.runtime).assess(x.context,x.jobId,x.auth.digest,{version:"recovery-attribution-command.v1",action:"assess",commandId:randomUUID(),caseId:x.caseId,workId:x.workId,lineId:x.line,lockId:x.fact.invoiceBinding.lockId,expectedCaseRevision:revision,expectedAttributionRevision:0});
+async function fixture(approved=true){
+ const x=await catchFeeFixture(f,approved);
  const repo=new PaymentFeeRepository(f.runtime);
  return {...x,repo,run:(p:unknown)=>repo.command(x.context,x.jobId,x.auth.digest,p),view:()=>repo.read(x.context,x.jobId,x.auth.digest)};
 }
+async function reviewAttribution(x:Awaited<ReturnType<typeof fixture>>){
+ const a=x.assessment;
+ const hash=(await f.admin.query("SELECT app.final_lock_hash($1::jsonb) hash",[a])).rows[0].hash as string;
+ return new RecoveryAttributionRepository(f.runtime).approveReview(x.context,x.jobId,x.auth.digest,{
+  version:"recovery-attribution-command.v1",action:"approve_review",commandId:randomUUID(),
+  caseId:a.caseId,workId:a.workId,lineId:a.lineId,lockId:a.lockId,
+  expectedCaseRevision:a.caseRevision,expectedAttributionRevision:a.revision,
+  assessmentId:a.assessmentId,expectedSourceHash:a.sourceHash,reviewArtifactHash:hash,
+ });
+}
 const prepare=(paymentId:string)=>({version:"payment-fee-command.v1",action:"prepare",commandId:randomUUID(),paymentId});
 const approve=(s:{statementId:string;statementHash:string})=>({version:"payment-fee-command.v1",action:"approve",commandId:randomUUID(),statementId:s.statementId,statementHash:s.statementHash});
+it("eligible assessment can price a statement but cannot authorize payment_fee.collect until its exact review is approved",async()=>{
+ const x=await fixture(false),s=await x.run(prepare(x.paymentId)),p=approve(s);
+ expect(x.assessment.assessmentOutcome).toBe("eligible_for_review");
+ expect(s.feePence).toBe(8000);
+ await expect(x.run(p)).rejects.toThrow("PAYMENT_FEE_REVIEW_REQUIRED");
+ expect((await f.admin.query("SELECT id FROM app.action_authorization WHERE tenant_id=$1 AND action_type='payment_fee.collect' AND decision_id IN(SELECT decision_id FROM app.payment_fee_statement WHERE tenant_id=$1 AND id=$2)",[x.context.tenantId,s.statementId])).rows).toEqual([]);
+ expect((await f.admin.query("SELECT command_id FROM app.payment_fee_command WHERE tenant_id=$1 AND command_id=$2",[x.context.tenantId,p.commandId])).rows).toEqual([]);
+ await reviewAttribution(x);
+ expect(await x.run(p)).toEqual(s); // failed command rolled back; same exact intent can retry
+ expect((await x.view()).statements[0]!.state).toBe("approved");
+ expect((await f.admin.query("SELECT a.action_type,a.amount_pence::text,a.content_hash,r.resolution FROM app.action_authorization a JOIN app.decision_resolution r ON(r.tenant_id,r.id)=(a.tenant_id,a.resolution_id) JOIN app.payment_fee_command c ON(c.tenant_id,c.authorization_id)=(a.tenant_id,a.id) WHERE c.tenant_id=$1 AND c.command_id=$2",[x.context.tenantId,p.commandId])).rows).toEqual([{action_type:"payment_fee.collect",amount_pence:"8000",content_hash:s.statementHash,resolution:"approved"}]);
+});
+it.each(["revoked","expired"] as const)("a %s SV-6 review cannot authorize collection",async state=>{
+ const x=await fixture(),s=await x.run(prepare(x.paymentId));
+ await expect(rolledBack(f.admin,async db=>{
+  await db.query("SELECT set_config('app.tenant_id',$1,true)",[x.context.tenantId]);
+  // Negative control only, restored by rollback; the allowed path uses real commands.
+  await db.query("ALTER TABLE app.action_authorization DISABLE TRIGGER USER");
+  await db.query(`UPDATE app.action_authorization SET ${state==="revoked"?"revoked_at=clock_timestamp()":"expires_at=clock_timestamp()-interval '1 second'"} WHERE tenant_id=$1 AND recipient=$2 AND action_type='recovery.attribution_review'`,[x.context.tenantId,x.assessment.assessmentId]);
+  await db.query("ALTER TABLE app.action_authorization ENABLE TRIGGER USER");
+  await db.query("SET LOCAL ROLE jobguard_runtime");
+  await db.query("SELECT app.write_payment_fee($1,$2,$3::jsonb)",[x.jobId,x.auth.digest,approve(s)]);
+ })).rejects.toThrow("PAYMENT_FEE_REVIEW_REQUIRED");
+ await x.run(approve(s));
+});
+it("another assessment's approved review cannot authorize an unreviewed successor",async()=>{
+ const x=await fixture(),s=await x.run(prepare(x.paymentId)),a=x.assessment;
+ const successor=await new RecoveryAttributionRepository(f.runtime).assess(x.context,x.jobId,x.auth.digest,{
+  version:"recovery-attribution-command.v1",action:"assess",commandId:randomUUID(),caseId:a.caseId,
+  workId:a.workId,lineId:a.lineId,lockId:a.lockId,expectedCaseRevision:a.caseRevision,expectedAttributionRevision:a.revision,
+ });
+ expect(successor.sourceHash).toBe(a.sourceHash);
+ await expect(x.run(approve(s))).rejects.toThrow("PAYMENT_FEE_REVIEW_REQUIRED");
+ await reviewAttribution({...x,assessment:successor});
+ await x.run(approve(s));
+});
+it("0561 upgrades the populated 0359 writer in place, preserves grants/data and is rerunnable",async()=>{
+ const x=await fixture(false),s=await x.run(prepare(x.paymentId));
+ const original=await readFile(new URL("../migrations/0359_payment_fee_statements.sql",import.meta.url),"utf8");
+ const oldWriter=original.slice(original.indexOf("CREATE FUNCTION app.write_payment_fee"),original.indexOf("DO $$ DECLARE f text;")).replace("CREATE FUNCTION","CREATE OR REPLACE FUNCTION");
+ const upgrade=(await readFile(new URL("../migrations/0527_payment_fee_collect_review.sql",import.meta.url),"utf8")).replace(/^BEGIN;\n/u,"").replace(/COMMIT;\n$/u,"");
+ await rolledBack(f.admin,async db=>{
+  await db.query("SELECT set_config('app.tenant_id',$1,true)",[x.context.tenantId]);
+  await db.query(oldWriter);
+  const metadata=async()=> (await db.query("SELECT oid,proowner,proacl FROM pg_proc WHERE oid='app.write_payment_fee(uuid,text,jsonb)'::regprocedure")).rows;
+  const before=await metadata();
+  await db.query("SAVEPOINT legacy_approval");
+  await db.query("SET LOCAL ROLE jobguard_runtime");
+  await db.query("SELECT app.write_payment_fee($1,$2,$3::jsonb)",[x.jobId,x.auth.digest,approve(s)]);
+  await db.query("ROLLBACK TO SAVEPOINT legacy_approval");
+  await db.query(upgrade);await db.query(upgrade);
+  expect(await metadata()).toEqual(before);
+  expect((await db.query("SELECT document FROM app.payment_fee_statement WHERE tenant_id=$1 AND id=$2",[x.context.tenantId,s.statementId])).rows).toEqual([{document:s}]);
+  await db.query("SET LOCAL ROLE jobguard_runtime");
+  await db.query("SAVEPOINT guarded_approval");
+  await expect(db.query("SELECT app.write_payment_fee($1,$2,$3::jsonb)",[x.jobId,x.auth.digest,approve(s)])).rejects.toThrow("PAYMENT_FEE_REVIEW_REQUIRED");
+  await db.query("ROLLBACK TO SAVEPOINT guarded_approval");
+ });
+});
 it("one verified real-writer receipt yields £800/£80/£720 and one exact approval, despite replays/races/double clicks",async()=>{
  const x=await fixture(),p=prepare(x.paymentId);
  const [a,b]=await Promise.all([x.run(p),x.run(p)]);expect(b).toEqual(a);

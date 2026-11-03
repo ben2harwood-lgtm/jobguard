@@ -10,17 +10,16 @@
         "apps/api/src/fee-collection/contracts.ts",
         "apps/api/src/fee-collection/executor.ts",
         "apps/api/src/fee-collection/fake-gocardless.ts",
-        "apps/api/src/fee-collection/test-fixture.ts",
-        "apps/api/src/fee-collection/success-fee-direct-debit.ts",
-        "apps/api/src/fee-collection/success-fee-direct-debit.test.ts",
-        "docs/contracts/gocardless-dark-v1.md",
-        "apps/api/src/fee-collection/success-fee-composition.ts",
         "apps/api/src/fee-collection/success-fee-composition.test.ts",
-        "packages/db/src/payment-fee-collection-repository.ts",
-        "packages/db/src/payment-fee-collection-repository.test.ts",
+        "apps/api/src/fee-collection/success-fee-composition.ts",
+        "apps/api/src/fee-collection/success-fee-direct-debit.test.ts",
+        "apps/api/src/fee-collection/success-fee-direct-debit.ts",
+        "apps/api/src/fee-collection/test-fixture.ts",
+        "docs/contracts/gocardless-dark-v1.md",
         "packages/db/src/index.ts",
-        "packages/db/test/success-fee-direct-debit.integration.test.ts",
-        "packages/core/src/index.ts"
+        "packages/db/src/payment-fee-collection-repository.test.ts",
+        "packages/db/src/payment-fee-collection-repository.ts",
+        "packages/db/test/success-fee-direct-debit.integration.test.ts"
       ]
     }
   }
