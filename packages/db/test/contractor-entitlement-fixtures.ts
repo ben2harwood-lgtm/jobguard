@@ -1,17 +1,14 @@
+import { startSession as baseStartSession } from "./contractor-practice-session-fixtures.js";
 import { randomUUID } from "node:crypto";
 import { expect } from "vitest";
 import type { Pool, PoolClient } from "pg";
+import { snapshotRows as snapshot } from "./upgrade-proof-utils.js";
 import { ContractorEntitlementAuthorityRepository } from "../src/contractor-entitlement-authority-repository.js";
 import { ownerTx, type Cluster, type SessionFixture } from "./contractor-practice-session-fixtures.js";
-export { cluster, startSession, startBeforeMigration, applyMigration, ownerTx, makeSessionExpired } from "./contractor-practice-session-fixtures.js";
+export { cluster, startBeforeMigration, applyMigration, ownerTx, makeSessionExpired } from "./contractor-practice-session-fixtures.js";
 export type { Cluster, SessionFixture };
 export const own = "0198_contractor_entitlement_authority.sql";
-export async function snapshot(db: Pool | PoolClient) {
- const tables = (await db.query("SELECT schemaname,tablename FROM pg_tables WHERE schemaname IN ('app','identity','control_plane','audit_control') ORDER BY 1,2")).rows;
- const rows: Record<string, unknown> = {};
- for (const t of tables) rows[`${t.schemaname}.${t.tablename}`] = (await db.query(`SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text),'[]') data FROM "${t.schemaname}"."${t.tablename}" t`)).rows[0].data;
- return rows;
-}
+export { snapshot };
 export async function unchanged<T>(c: Cluster, work: () => Promise<T>): Promise<T> {
  const before = await snapshot(c.admin);
  try { return await work(); } finally { expect(await snapshot(c.admin)).toEqual(before); }
@@ -46,3 +43,6 @@ export async function predecessorCatalogue(db: Pool | PoolClient) {
  const policies=(await db.query("SELECT * FROM pg_policies WHERE schemaname IN('app','identity','control_plane','audit_control') AND NOT(schemaname='app' AND tablename=$1) ORDER BY schemaname,tablename,policyname",[table])).rows;
  return {relations,routines,policies};
 }
+
+// MON-8 tests deliberately start without the positive agreement fixture.
+export const startSession = (c: Cluster, home = false) => baseStartSession(c, home, false);

@@ -1,0 +1,584 @@
+{
+  "migration": "0562_lp6a_request_binding.sql",
+  "lp0": [
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "id": "a-lp6a-request-binding",
+        "title": "Dark credential-derived transaction binding and narrow owner",
+        "kind": "identity",
+        "status": "approved_current",
+        "target": {
+          "state": "rebind_at_card",
+          "note": "Dark foundation retained; caller conversion and whole-track real-data gates remain."
+        },
+        "cards": [
+          "LP-6a",
+          "LP-6b",
+          "LP-9",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-6a": "Validate credential-derived transaction binding, lifecycle and narrow owner.",
+          "LP-6b": "Convert callers without enabling authority from caller-selected context.",
+          "LP-9": "Verify deployment-specific restore, credentials and full-track gates.",
+          "LP-12": "Review private lookup helper and existing migration owner custody."
+        },
+        "downstream": "Runtime can bind only a real session membership or a database-confined practice principal, then read the current transaction actor and tenant. No business writes or existing authority cutover. The private migration-owned session lock helper has no runtime execution grant.",
+        "sources": [
+          "packages/db/migrations/0562_lp6a_request_binding.sql",
+          "docs/contracts/lp-command-binding-design-v1.md"
+        ],
+        "tests": [
+          "packages/db/test/lp6a-binding.integration.test.ts",
+          "packages/db/test/lp6a-practice-restore.integration.test.ts",
+          "packages/db/test/lp6a-sso.integration.test.ts"
+        ],
+        "gaps": [
+          "PostgreSQL suite and independent exact-head RED review required; identity login can read/mint real credentials."
+        ],
+        "path": "ap-lp6a-request-binding"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|rel|table|control_plane.contractor_practice_session|jobguard_binding_owner|SELECT|-",
+        "group": "a-lp6a-request-binding"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|rel|table|control_plane.practice_session|jobguard_binding_owner|SELECT|-",
+        "group": "a-lp6a-request-binding"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|rel|table|identity.session|jobguard_binding_owner|SELECT|-",
+        "group": "a-lp6a-request-binding"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.bind_request(text,text,uuid)|jobguard_runtime|EXECUTE|-",
+        "group": "a-lp6a-request-binding"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.current_actor()|jobguard_runtime|EXECUTE|-",
+        "group": "a-lp6a-request-binding"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.current_tenant()|jobguard_runtime|EXECUTE|-",
+        "group": "a-lp6a-request-binding"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.lp6_session_authority(text,text,uuid)|jobguard_binding_owner|EXECUTE|-",
+        "group": "a-lp6a-request-binding"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:identity.sso_session_memberships(uuid,uuid)|jobguard_binding_owner|EXECUTE|-",
+        "group": "a-lp6a-request-binding"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|schema|app|jobguard_binding_owner|USAGE|-",
+        "group": "a-lp6a-request-binding"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|schema|control_plane|jobguard_binding_owner|USAGE|-",
+        "group": "a-lp6a-request-binding"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|schema|identity|jobguard_binding_owner|USAGE|-",
+        "group": "a-lp6a-request-binding"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|rel:table|control_plane.request_binding|jobguard_binding_owner",
+        "group": "a-lp6a-request-binding"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.bind_request(text,text,uuid)|jobguard_binding_owner",
+        "group": "a-lp6a-request-binding"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.current_actor()|jobguard_binding_owner",
+        "group": "a-lp6a-request-binding"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.current_tenant()|jobguard_binding_owner",
+        "group": "a-lp6a-request-binding"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.lp6_bound_request()|jobguard_binding_owner",
+        "group": "a-lp6a-request-binding"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.lp6_session_authority(text,text,uuid)|jobguard_migration",
+        "group": "a-lp6a-request-binding"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "role|jobguard_binding_owner|super=f,inherit=f,createrole=f,createdb=f,login=f,replication=f,bypassrls=f,connlimit=-1,settings=",
+        "group": "a-lp6a-request-binding"
+      }
+    },
+    {
+      "section": "authorityPaths",
+      "before": null,
+      "after": {
+        "id": "ap-lp6a-request-binding",
+        "title": "Dark request-session binding",
+        "description": "Credential-scoped real/practice resolution, session row locking and private transaction context, with no existing route cutover.",
+        "cards": [
+          "LP-6a",
+          "LP-6b",
+          "LP-9",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-6a": "Validate credential-derived transaction binding, lifecycle and narrow owner.",
+          "LP-6b": "Convert callers without enabling authority from caller-selected context.",
+          "LP-9": "Verify deployment-specific restore, credentials and full-track gates.",
+          "LP-12": "Review private lookup helper and existing migration owner custody."
+        },
+        "sources": [
+          "packages/db/migrations/0562_lp6a_request_binding.sql",
+          "docs/contracts/lp-command-binding-design-v1.md"
+        ],
+        "tests": [
+          "packages/db/test/lp6a-binding.integration.test.ts",
+          "packages/db/test/lp6a-practice-restore.integration.test.ts",
+          "packages/db/test/lp6a-sso.integration.test.ts"
+        ],
+        "gaps": [
+          "Dark; LP-6b through LP-6e and deployment acceptance remain."
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp6_session_authority(text,text,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_binding_owner"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.authenticate_practice_session",
+          "app.contractor_practice_home_deadline",
+          "app.contractor_practice_session_digest",
+          "identity.sso_session_memberships"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.bind_request(text,text,uuid)",
+        "owner": "jobguard_binding_owner",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "control_plane.request_binding"
+        ],
+        "staticCalls": [
+          "app.lp6_session_authority"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp6_bound_request()",
+        "owner": "jobguard_binding_owner",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.current_actor()",
+        "owner": "jobguard_binding_owner",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.lp6_bound_request"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.current_tenant()",
+        "owner": "jobguard_binding_owner",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.lp6_bound_request"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:identity.sso_session_memberships(uuid,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_identity"
+        ],
+        "definitionSha256": "af8eb845cf9f282887bb524660334bd4c66769d62d40f4f6bab831bb963ba217",
+        "staticWrites": [],
+        "staticCalls": [
+          "identity.current_memberships",
+          "identity.sso_required_state"
+        ]
+      },
+      "after": {
+        "identity": "function:identity.sso_session_memberships(uuid,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_binding_owner",
+          "jobguard_identity"
+        ],
+        "definitionSha256": "af8eb845cf9f282887bb524660334bd4c66769d62d40f4f6bab831bb963ba217",
+        "staticWrites": [],
+        "staticCalls": [
+          "identity.current_memberships",
+          "identity.sso_required_state"
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|rel:table|control_plane.contractor_practice_session|jobguard_migration",
+        "group": "a-lp6a-request-binding"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|rel:table|control_plane.practice_session|jobguard_migration",
+        "group": "a-lp6a-request-binding"
+      }
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp6_session_authority",
+        "args": "p_kind text, p_credential text, p_tenant uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_binding_owner=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "bind_request",
+        "args": "p_kind text, p_credential text, p_tenant uuid",
+        "proowner": "jobguard_binding_owner",
+        "proacl": "{jobguard_binding_owner=X/jobguard_binding_owner,jobguard_runtime=X/jobguard_binding_owner}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp6_bound_request",
+        "args": "",
+        "proowner": "jobguard_binding_owner",
+        "proacl": "{jobguard_binding_owner=X/jobguard_binding_owner}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "current_actor",
+        "args": "",
+        "proowner": "jobguard_binding_owner",
+        "proacl": "{jobguard_binding_owner=X/jobguard_binding_owner,jobguard_runtime=X/jobguard_binding_owner}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "current_tenant",
+        "args": "",
+        "proowner": "jobguard_binding_owner",
+        "proacl": "{jobguard_binding_owner=X/jobguard_binding_owner,jobguard_runtime=X/jobguard_binding_owner}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "nspname": "identity",
+        "proname": "sso_session_memberships",
+        "args": "u uuid, s uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_identity=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      },
+      "after": {
+        "nspname": "identity",
+        "proname": "sso_session_memberships",
+        "args": "u uuid, s uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_identity=X/jobguard_migration,jobguard_binding_owner=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "relations",
+      "before": {
+        "nspname": "identity",
+        "relname": "session",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_identity=ar/jobguard_migration}",
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      },
+      "after": {
+        "nspname": "identity",
+        "relname": "session",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_identity=ar/jobguard_migration,jobguard_binding_owner=r/jobguard_migration}",
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": {
+        "nspname": "control_plane",
+        "relname": "practice_session",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration}",
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      },
+      "after": {
+        "nspname": "control_plane",
+        "relname": "practice_session",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_binding_owner=r/jobguard_migration}",
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": {
+        "nspname": "control_plane",
+        "relname": "contractor_practice_session",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration}",
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      },
+      "after": {
+        "nspname": "control_plane",
+        "relname": "contractor_practice_session",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_binding_owner=r/jobguard_migration}",
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "control_plane.request_binding",
+        "data": []
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "control_plane",
+        "relname": "request_binding",
+        "relowner": "jobguard_binding_owner",
+        "relacl": "{jobguard_binding_owner=arwdDxt/jobguard_binding_owner}",
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "control_plane",
+        "relname": "request_binding_pkey",
+        "relowner": "jobguard_binding_owner",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    }
+  ],
+  "tenancy": []
+}

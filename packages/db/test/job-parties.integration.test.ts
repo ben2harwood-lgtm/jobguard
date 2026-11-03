@@ -200,6 +200,9 @@ describe("CH-3a real PostgreSQL guarantees",()=>{
     expect(results.filter(r=>r.status==="fulfilled")).toHaveLength(1);expect(results.find(r=>r.status==="rejected")).toMatchObject({reason:{code:"REVISION_CONFLICT"}});
     const winner=results[0]?.status==="fulfilled"?a:b;
     const first=await repository.command(context,member,job,winner);expect(await repository.command(context,member,job,winner)).toEqual(first);
+    const terminal = (await admin.query("SELECT event_type,payload FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND payload->'references'->>'commandId'=$3 ORDER BY event_type", [tenant, job, winner.commandId])).rows;
+    expect(terminal.map(row => row.event_type)).toEqual(["command.succeeded", "job.parties.bind"]);
+    expect(terminal[0]!.payload.references).toMatchObject({ commandId: winner.commandId, auditTrust: "checked_operation" });
     await expect(repository.command(context,member,job,{...winner,expectedJobRevision:1})).rejects.toThrow("COMMAND_CONFLICT");
     expect((await admin.query(`SELECT count(*)::int n FROM app.job_party_current WHERE tenant_id=$1 AND job_id=$2`,[tenant,job])).rows[0].n).toBe(1);
     const binding=(await repository.view(context,member,job)).current!;
@@ -231,7 +234,7 @@ describe("CH-3a real PostgreSQL guarantees",()=>{
     await repository.command(context,member,one,command("correct",{expectedJobRevision:1,parties,reason:"Correct fictional payer"}));
     expect((await admin.query(`SELECT snapshot FROM app.job_party_snapshot WHERE tenant_id=$1 AND binding_id=$2`,[tenant,before.bindingId])).rows[0].snapshot).toEqual(before);
     const audit=await admin.query(`SELECT payload FROM app.audit_event WHERE tenant_id=$1 AND event_type LIKE 'job.parties.%'`,[tenant]);
-    for(const {payload} of audit.rows){expect(Object.keys(payload).sort()).toEqual(["classifications","hashes","references"]);expect(Object.keys(payload.references).sort()).toEqual(["commandId","identityId"]);expect(JSON.stringify(payload)).not.toMatch(/Fictional|Street|example\.invalid|00000000000|Correct fictional/u);}
+    for(const {payload} of audit.rows){expect(Object.keys(payload).sort()).toEqual(["classifications","hashes","references"]);expect(Object.keys(payload.references).sort()).toEqual(["auditTrust","commandId","identityId"]);expect(JSON.stringify(payload)).not.toMatch(/Fictional|Street|example\.invalid|00000000000|Correct fictional/u);}
   });
   it("uses composite foreign keys to reject cross-tenant parties and hides foreign identities",async()=>{
     const job=await createJob(),{parties,c}=await saveParties(job);
@@ -337,7 +340,7 @@ describe("CH-3a adoption authorization boundary (round 2)",()=>{
     const seeds=new Set([stagedAuthority.get(command),stagedAuthority.get(authorization)]);
     for(const seed of seeds)if(seed)await seed(db);
   };
-  const callAdopt=(a:{job:string;hash:string;customer:string;site:string;command:string;authorization:string;actor?:string;net?:number;policy?:string;baseline?:string})=>withTenant(runtime,context,async db=>{
+  const callAdopt=(a:{job:string;hash:string;customer:string;site:string;command:string;authorization:string;actor?:string;net?:number;policy?:string;baseline?:string})=>withTenant(admin,context,async db=>{
     await materializeAuthority(db,a.command,a.authorization);
     return db.$client.query(`SELECT app.adopt_in_flight_job($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
       [tenant,a.job,a.baseline??randomUUID(),"Fictional import","live",a.hash,"Fictional baseline",a.net??100000,1500,"reference_fee_policy_v1",a.policy??OWNER_POLICY,a.actor??member,new Date(0),a.customer,a.site,null,a.command,a.authorization]);
@@ -364,7 +367,7 @@ describe("CH-3a adoption authorization boundary (round 2)",()=>{
     return id;
   }
   // Everything the dispatcher does in one transaction: the routine, the audit events and the receipt completion.
-  const executeDirect=(a:{job:string;hash:string;customer:string;site:string;command:string;authorization:string},steps:{audit?:boolean;receipt?:boolean;auditedAuthorization?:string}={})=>withTenant(runtime,context,async db=>{
+  const executeDirect=(a:{job:string;hash:string;customer:string;site:string;command:string;authorization:string},steps:{audit?:boolean;receipt?:boolean;auditedAuthorization?:string}={})=>withTenant(admin,context,async db=>{
     await materializeAuthority(db,a.command,a.authorization);
     const baseline=randomUUID();
     await db.$client.query(`SELECT app.adopt_in_flight_job($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,[tenant,a.job,baseline,"Fictional import","live",a.hash,"Fictional baseline",100000,1500,"reference_fee_policy_v1",OWNER_POLICY,member,new Date(0),a.customer,a.site,null,a.command,a.authorization]);
@@ -446,7 +449,7 @@ describe("CH-3a binding changes leave their record (round 4)",()=>{
   const bindDirect=async(job:string,customerRevision:string,siteRevision:string,steps:Steps={})=>{
     const command=randomUUID(),binding=randomUUID(),other=randomUUID();
     const expected=(await repository.view(context,member,job)).jobRevision;
-    await withTenant(runtime,context,async db=>{
+    await withTenant(admin,context,async db=>{
       await db.$client.query(`INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,'job.parties',$3,$4,'processing',$5)`,[command,tenant,command,"d".repeat(64),member]);
       const bind=(id:string,revision:number)=>db.$client.query(`SELECT app.bind_job_parties($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,[tenant,job,id,revision,customerRevision,null,siteRevision,false,null,member,command]);
       await bind(binding,expected);
@@ -504,16 +507,19 @@ describe("CH-3a a null correction flag cannot bypass the post-live guard (round 
   type BindRoute="routine"|"runtime-insert"|"owner-insert";
   const bindWithFlag=async(job:string,customerRevision:string,siteRevision:string,flag:boolean|null,reason:string|null,eventType="job.parties.bind",route:BindRoute="routine")=>{
     const command=randomUUID(),binding=randomUUID(),expected=(await repository.view(context,member,job)).jobRevision;
-    await withTenant(route==="owner-insert"?admin:runtime,context,async db=>{
+    await withTenant(admin,context,async db=>{
       await db.$client.query(`INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,'job.parties',$3,$4,'processing',$5)`,[command,tenant,command,"d".repeat(64),member]);
       if (route==="owner-insert") {
         await db.$client.query("SET LOCAL ROLE jobguard_migration");
         expect((await db.$client.query("SELECT current_user")).rows[0]).toEqual({ current_user: "jobguard_migration" });
-      } else expect((await db.$client.query("SELECT current_user,pg_has_role(current_user,'jobguard_runtime','USAGE') AS runtime_role")).rows[0]).toEqual({ current_user: "ch3a_login", runtime_role: true });
+      } else {
+        await db.$client.query("SET LOCAL ROLE ch3a_login");
+        expect((await db.$client.query("SELECT current_user,pg_has_role(current_user,'jobguard_runtime','USAGE') AS runtime_role")).rows[0]).toEqual({ current_user: "ch3a_login", runtime_role: true });
+      }
       if (route!=="routine") await db.$client.query(`INSERT INTO app.job_party_binding(tenant_id,id,job_id,revision,customer_id,customer_revision_id,paying_party_id,paying_party_revision_id,site_id,site_revision_id,provenance,correction_reason,command_id)
         SELECT $1,$2,$3,$4,c.customer_id,c.id,c.customer_id,c.id,s.site_id,s.id,'entered',$7,$8 FROM app.customer_revision c,app.site_revision s WHERE c.tenant_id=$1 AND c.id=$5 AND s.tenant_id=$1 AND s.id=$6`, [tenant,binding,job,expected+1,customerRevision,siteRevision,reason,command]);
       else await db.$client.query(`SELECT app.bind_job_parties($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,[tenant,job,binding,expected,customerRevision,null,siteRevision,flag,reason,member,command]);
-      if (route==="owner-insert") await db.$client.query("RESET ROLE");
+      await db.$client.query("RESET ROLE");
       await db.$client.query(`UPDATE app.command_receipt SET status='succeeded',result=$3::jsonb,completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2`,[tenant,command,JSON.stringify({id:binding})]);
       await appendAuditBatch(db,[{id:randomUUID(),version:"audit.v1",actorRef:`membership:${member}`,eventType,subjectType:"job",subjectRef:job,payload:{references:{commandId:command,identityId:binding},hashes:{request:"d".repeat(64)},classifications:{action:"operational"}}}]);
     });
@@ -674,10 +680,11 @@ describe("CH-3a round 13 generated practice entry", () => {
     await runtime.query("SELECT app.issue_practice_session($1)", [digest]);
     return { digest, context: testTenantContext(DEMO_TENANT_ID) };
   }
-  it("issues the unchanged three home scenarios with a bound live example, empty quoting suggestions and isolated reusable identities", async () => {
+  it("issues the three home scenarios and saved v1 sample with a bound live example, empty quoting suggestions and isolated reusable identities", async () => {
     const owner = await session(), stranger = await session();
     const jobs = (await repository.list(owner.context, DEMO_MEMBERSHIP_ID, owner.digest)).jobs;
     expect(jobs.map(({ title, status, revision }) => ({ title, status, revision })).sort((a, b) => a.title.localeCompare(b.title))).toEqual([
+      { title: "Earlier proposed pricing (v1)", status: "draft", revision: 0 },
       { title: "Kitchen extension", status: "live", revision: 0 },
       { title: "Loft conversion", status: "quoting", revision: 0 },
       { title: "Practice kitchen", status: "quoting", revision: 0 },
@@ -712,13 +719,26 @@ describe("CH-3a round 13 generated practice entry", () => {
   it("refuses missing parties despite forged scenario, session and bypass settings on direct runtime INSERT and UPDATE", async () => {
     const owner = await session(), id = randomUUID();
     const quote = (await repository.list(owner.context, DEMO_MEMBERSHIP_ID, owner.digest)).jobs.find(job => job.status === "quoting")!;
+    // 0356's INVOKER permit guard runs before job_parties_live_guard on INSERT.
+    // Runtime cannot DELETE its private permit table, so that structural refusal
+    // necessarily precedes JOB_PARTIES_REQUIRED; require the exact door/error.
+    const guardOrder = (await admin.query(`SELECT tgname FROM pg_trigger WHERE tgrelid='app.job'::regclass
+      AND tgname IN ('imported_job_command_only','job_parties_live_guard') ORDER BY tgname`)).rows;
+    expect(guardOrder).toEqual([{ tgname: "imported_job_command_only" }, { tgname: "job_parties_live_guard" }]);
+    expect((await admin.query(`SELECT prosecdef,has_table_privilege('jobguard_runtime','app.lp_job_insert_permit','DELETE') can_delete
+      FROM pg_proc WHERE oid='app.guard_imported_job()'::regprocedure`)).rows).toEqual([{ prosecdef: false, can_delete: false }]);
     for (const insert of [true, false]) {
       await expect(withTenant(runtime, owner.context, async db => {
         await db.$client.query("SELECT set_config('app.practice_session_digest',$1,true),set_config('app.practice_scenario','home',true),set_config('app.skip_job_parties','true',true)", [owner.digest]);
         if (insert) await db.$client.query("INSERT INTO app.job(id,tenant_id,title,status,practice_session_digest,practice_scenario) VALUES($1,$2,'Forged fictional home','live',$3,'home')", [id, DEMO_TENANT_ID, owner.digest]);
         else await db.$client.query("UPDATE app.job SET status='live' WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, quote.id]);
-      })).rejects.toMatchObject(insert ? { code: "22023", message: "JOB_PARTIES_REQUIRED" } : { code: "42501" });
+      })).rejects.toMatchObject({ code: "42501", message: insert ? "permission denied for table lp_job_insert_permit" : "permission denied for table job" });
     }
+    // Keep the exact business refusal through the allowed runtime entrypoint too.
+    await expect(withTenant(runtime, owner.context, async db => {
+      await db.$client.query("SELECT set_config('app.skip_job_parties','true',true)");
+      await db.$client.query("SELECT app.require_current_job_parties($1,$2)", [DEMO_TENANT_ID, quote.id]);
+    })).rejects.toMatchObject({ code: "22023", message: "JOB_PARTIES_REQUIRED" });
     // Runtime has no direct status UPDATE grant; the allowed migration-owner
     // path must independently reject the same attempted unbound promotion.
     await expect(withTenant(admin, owner.context, async db => {
@@ -779,7 +799,7 @@ describe("CH-3a round 13 generated practice entry", () => {
     const before = await counts();
     await expect(runtime.query("SELECT app.issue_practice_session($1)", [owner.digest])).rejects.toMatchObject({ code: "23505" });
     await expect(runtime.query("SELECT app.issue_practice_session($1)", ["forged"])).rejects.toMatchObject({ code: "42501" });
-    await expect(runtime.query("SELECT app.issue_practice_session($1)", [null])).rejects.toMatchObject({ code: "23502" });
+    await expect(runtime.query("SELECT app.issue_practice_session($1)", [null])).rejects.toMatchObject({ code: "42501", message: "UNAUTHENTICATED" });
     try {
       await admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID]);
       await expect(runtime.query("SELECT app.issue_practice_session($1)", [createHash("sha256").update(randomUUID()).digest("hex")])).rejects.toMatchObject({ code: "42501" });

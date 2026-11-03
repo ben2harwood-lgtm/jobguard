@@ -1,7 +1,8 @@
 import { fakeAuditAppend } from "./audit-protocol-test-fixture.js";
+import { createHash, createHmac } from "node:crypto";
 import type { Pool } from "pg";
 import { describe, expect, it, vi } from "vitest";
-import { ActionExecutor, type OutboundAdapter } from "./outbox.js";
+import { customerSigninLink, ActionExecutor, type OutboundAdapter } from "./outbox.js";
 import { verifiedTenantContextFromMembership } from "./tenant-context.js";
 
 const testTenantContext = (tenantId: string) => verifiedTenantContextFromMembership({
@@ -37,7 +38,8 @@ describe("ActionExecutor adapter ownership", () => {
     };
     const before = { ...row };
     const query = vi.fn(async (sql: string) => {
-      if (sql.startsWith("SELECT o.* FROM app.action_outbox")) return { rows: [row] };
+      if (sql === "SELECT outbound_control.claims_enabled() AS enabled") return { rows: [{ enabled: true }] };
+      if (sql.startsWith("SELECT o.*,a.actor_membership_id AS authorization_actor FROM app.action_outbox")) return { rows: [row] };
       if (sql.startsWith("SELECT count(*)::int n FROM app.action_attempt")) return { rows: [{ n: 0 }] };
       if (sql.startsWith("UPDATE ") || sql.startsWith("INSERT ")) return { rows: [] };
       if (sql.startsWith("SELECT pg_advisory_xact_lock(")) return { rows: [] };
@@ -60,7 +62,7 @@ describe("ActionExecutor adapter ownership", () => {
       "BEGIN",
       "SELECT set_config('app.tenant_id', $1, true)",
       "SELECT pg_advisory_xact_lock(hashtextextended($1::text,54))",
-      expect.stringMatching(/^SELECT o\.\* FROM app\.action_outbox.*FOR UPDATE OF o$/u),
+      expect.stringMatching(/^SELECT o\.\*,a\.actor_membership_id AS authorization_actor FROM app\.action_outbox.*FOR UPDATE OF o$/u),
       "COMMIT",
     ]);
     expect(row).toEqual(before);
@@ -95,7 +97,11 @@ describe("ActionExecutor retry exhaustion", () => {
     const query = vi.fn(async (sql: string, _values?: unknown[]) => {
       if (sql.includes("FROM app.append_audit(")) return { rows: fakeAuditAppend(String(_values?.[0]), context.tenantId) };
       if (sql.startsWith("SELECT nullif(current_setting")) return { rows: [{ tenant_id: context.tenantId }] };
-      if (sql.startsWith("SELECT o.* FROM app.action_outbox")) return { rows: [row] };
+      if (sql === "SELECT sequence::text, event_hash FROM app.lock_audit_head()") return { rows: [] };
+      if (sql === "SELECT clock_timestamp() AS occurred_at") return { rows: [{ occurred_at: new Date() }] };
+      if (sql === "SELECT app.advance_audit_head($1, $2)") return { rows: [] };
+      if (sql === "SELECT outbound_control.claims_enabled() AS enabled") return { rows: [{ enabled: true }] };
+      if (sql.startsWith("SELECT o.*,a.actor_membership_id AS authorization_actor FROM app.action_outbox")) return { rows: [row] };
       if (sql.startsWith("SELECT count(*)::int n FROM app.action_attempt")) return { rows: [{ n: 4 }] };
       if (sql.startsWith("UPDATE ") || sql.startsWith("INSERT ")) return { rows: [] };
       if (sql.startsWith("SELECT pg_advisory_xact_lock(")) return { rows: [] };
@@ -127,5 +133,73 @@ describe("ActionExecutor retry exhaustion", () => {
     ]);
     expect(telemetry.emit).toHaveBeenCalledWith("outbox.failure", { actionId: id, attempt: 5 });
     expect(telemetry.emit).toHaveBeenCalledWith("outbox.retry", { actionId: id, attempt: 5 });
+  });
+});
+it("MON-8 cancels an approval message before delivery or attempt creation after entitlement loss (unit double)", async () => {
+  const context=testTenantContext("10000000-0000-4000-8000-000000000001"),id="20000000-0000-4000-8000-000000000002";
+  const row={adapter:"fake_email",action_type:"extra.client_approval_request.send",authorization_actor:"40000000-0000-4000-8000-000000000004",
+    status:"pending",created_at:"2026-01-01T00:00:00Z",authorization_expires_at:"2099-01-01T00:00:00Z"};
+  const query=vi.fn(async(sql:string, values?: unknown[])=>{
+    if(sql.includes("FROM app.append_audit("))return {rows:fakeAuditAppend(String(values?.[0]),context.tenantId)};
+    if(sql === "SELECT outbound_control.claims_enabled() AS enabled")return {rows:[{enabled:true}]};
+    if(sql.startsWith("SELECT o.*"))return {rows:[row]};
+    if(sql.startsWith("SELECT app.mon8_feature_decision"))return {rows:[{decision:{version:"plan-entitlement-decision.v1",environment:"synthetic_demo",feature:"approval_chains",entitlement:"held",executable:false,reason:"agreement_authority_held"}}]};
+    if(sql.startsWith("SELECT nullif(current_setting"))return {rows:[{tenant_id:context.tenantId}]};
+    if(sql==="SELECT clock_timestamp() AS occurred_at")return {rows:[{occurred_at:new Date()}]};
+    if(sql.startsWith("INSERT ")||sql.startsWith("UPDATE ")||sql.startsWith("SELECT pg_advisory_xact_lock(")||sql.startsWith("SELECT set_config")||sql==="SELECT sequence::text, event_hash FROM app.lock_audit_head()"||sql==="SELECT app.advance_audit_head($1, $2)"||["BEGIN","COMMIT","ROLLBACK"].includes(sql))return {rows:[]};
+    throw new Error(`Unexpected database operation: ${sql}`);
+  });
+  const pool={connect:vi.fn(async()=>({query,release:vi.fn()}))} as unknown as Pool;
+  const deliver=vi.fn(async()=>({kind:"succeeded" as const,providerReference:"fictional"}));
+  const adapter:OutboundAdapter={name:"fake_email",supportsProviderDeduplication:true,deliver,reconcile:async()=>"unknown"};
+  await new ActionExecutor(pool,new Map([[adapter.name,adapter]]),{emit:vi.fn()}).execute(context,id);
+  expect(deliver).not.toHaveBeenCalled();
+  expect(query.mock.calls.some(([sql])=>sql.startsWith("INSERT INTO app.action_attempt"))).toBe(false);
+  expect(query.mock.calls.some(([sql])=>sql.includes("SET status='cancelled'"))).toBe(true);
+});
+
+
+describe("customer sign-in delivery references", () => {
+  const reference = "customer-signin-reference.v1:91000000-0000-4000-8000-000000000001/92000000-0000-4000-8000-000000000002/93000000-0000-4000-8000-000000000003/" + "a".repeat(43);
+  const digest = (value:string) => createHmac("sha256", "fictional-delivery-secret").update(value).digest("hex");
+  it("needs the server key, binds the entire reference and rejects raw links", () => {
+    const link = customerSigninLink(reference,digest);
+    expect(link).toMatch(/^\/customer\/sign-in#[a-f0-9/-]+\/[A-Za-z0-9_-]{43}$/u);
+    expect(link.split("/").at(-1)).not.toBe("a".repeat(43));
+    expect(customerSigninLink(reference,digest)).toBe(link);
+    expect(customerSigninLink(reference.replace("92000000","94000000"),digest)).not.toBe(link);
+    expect(customerSigninLink(reference,v=>createHmac("sha256","other-fictional-key").update(v).digest("hex"))).not.toBe(link);
+    expect(()=>customerSigninLink(link,digest)).toThrow("INVALID_CUSTOMER_SIGNIN_REFERENCE");
+  });
+  it.each(["success", "missing-key", "tampered-hash"])("keeps credentials out of stored work and audit: %s", async mode => {
+    const id="98000000-0000-4000-8000-000000000003", context=testTenantContext("91000000-0000-4000-8000-000000000001");
+    const row={id,adapter:"fake_email",authorization_id:"97000000-0000-4000-8000-000000000003",provider_effect_key:"customer-signin:fictional",action_type:"customer_portal.signin.send",recipient:"fixture@example.invalid",content_hash:mode==="tampered-hash"?"a".repeat(64):createHash("sha256").update(reference).digest("hex"),immutable_content:reference,aggregate_revision:1,amount_pence:null,currency:null,policy_version:"customer-signin.synthetic.v1",created_at:"2026-01-01T00:00:00Z",authorization_expires_at:"2099-01-01T00:00:00Z",status:"pending"};
+    const query=vi.fn(async(sql:string,values?:unknown[])=>{
+      if(sql.includes("FROM app.append_audit("))return {rows:fakeAuditAppend(String(values?.[0]),context.tenantId)};
+      if(sql === "SELECT outbound_control.claims_enabled() AS enabled")return {rows:[{enabled:true}]};
+      if(sql.startsWith("SELECT o.*,a.actor_membership_id AS authorization_actor FROM app.action_outbox"))return {rows:[row]};
+      if(sql.startsWith("SELECT count(*)::int n FROM app.action_attempt"))return {rows:[{n:0}]};
+      if(sql.startsWith("SELECT nullif(current_setting"))return {rows:[{tenant_id:context.tenantId}]};
+      if(sql==="SELECT clock_timestamp() AS occurred_at")return {rows:[{occurred_at:new Date()}]};
+      if(sql.startsWith("UPDATE app.action_outbox SET status='executing'"))row.status="executing";
+      if(sql.startsWith("UPDATE app.action_outbox SET status=$2"))row.status=values![1] as string;
+      return {rows:[],rowCount:1};
+    });
+    const pool={connect:vi.fn(async()=>({query,release:vi.fn()}))} as unknown as Pool;
+    const deliver=vi.fn(async()=>({kind:"succeeded" as const,providerReference:"fictional-email"}));
+    const adapter:OutboundAdapter={name:"fake_email",supportsProviderDeduplication:false,deliver,reconcile:async()=>"unknown"};
+    const telemetry={emit:vi.fn()},derive=vi.fn(digest);
+    const executor=new ActionExecutor(pool,new Map([[adapter.name,adapter]]),telemetry,mode==="missing-key"?undefined:derive);
+    if(mode!=="success") {
+      await expect(executor.execute(context,id)).rejects.toThrow(mode==="missing-key"?"CUSTOMER_SIGNIN_DELIVERY_UNAVAILABLE":"CONTENT_HASH_MISMATCH");
+      expect(deliver).not.toHaveBeenCalled();expect(row.status).toBe("pending");return;
+    }
+    await executor.execute(context,id);await executor.execute(context,id);
+    expect(deliver).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({immutableContent:reference}),customerSigninLink(reference,digest));
+    expect(derive).toHaveBeenCalledOnce();expect(row.status).toBe("succeeded");
+    const token=customerSigninLink(reference,digest).split("/").at(-1)!;
+    expect(JSON.stringify(row)).not.toContain(token);
+    expect(JSON.stringify(query.mock.calls)).not.toContain(token);
+    expect(JSON.stringify(telemetry.emit.mock.calls)).not.toContain(token);
   });
 });

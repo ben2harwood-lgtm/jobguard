@@ -33,7 +33,6 @@ describe.sequential("FIXLATER-7 supplementary SV-2 rule-9 proof", () => {
   afterAll(async () => {
     await closeTestPools(runtime, admin);
     await postgres?.stop();
-    // Retain the disposable directory: this order forbids deleting anything.
   });
 
   it("[F7-U01] seeded predecessors produce nonempty SH-1 backfilled origins", async () => {
@@ -285,7 +284,7 @@ async function preparePredecessors(): Promise<void> {
   expect(sh1).toBeGreaterThan(0);
   const directory = await mkdtemp(join(tmpdir(), "jg-fixlater7-pg16-"));
   port = await freePort(62000, 200);
-  postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: dbAccessValue, persistent: true,
+  postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: dbAccessValue, persistent: false,
     createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
   await postgres.initialise();
   await postgres.start();

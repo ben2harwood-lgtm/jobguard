@@ -51,3 +51,27 @@ describe("DW4 prevention severance architecture", () => {
     }
   });
 });
+
+describe("MON-7 schedule boundary", () => {
+  it("authenticates the exact job before reading or saving schedules", async () => {
+    const access = vi.spyOn(PracticeAccess.prototype, "job").mockRejectedValue(Object.assign(new Error("NOT_FOUND"), { code: "NOT_FOUND" }));
+    const persistence = vi.spyOn(PreventionCheckRepository.prototype, "exposureSchedule");
+    try {
+      const app = new PreventionCheckApplication({} as Pool);
+      await expect(app.exposureSchedule("another-job")).rejects.toMatchObject({ code: "NOT_FOUND" });
+      await expect(app.exposureSchedule("another-job", {})).rejects.toMatchObject({ code: "NOT_FOUND" });
+      expect(persistence).not.toHaveBeenCalled();
+    } finally { access.mockRestore(); persistence.mockRestore(); }
+  });
+  it("keeps reads and writes off in every non-practice environment before opening a connection", async () => {
+    const previous = process.env.JOBGUARD_ENV;
+    try {
+      for (const mode of [undefined, "pilot_no_charge", "provider_sandbox", "production_billing"]) {
+        if (mode === undefined) delete process.env.JOBGUARD_ENV; else process.env.JOBGUARD_ENV = mode;
+        const repository = new PreventionCheckRepository({} as Pool);
+        await expect(repository.exposureSchedule(undefined as never, "member", "job", "digest")).rejects.toMatchObject({ code: "SYNTHETIC_ONLY" });
+        await expect(repository.exposureSchedule(undefined as never, "member", "job", "digest", {})).rejects.toMatchObject({ code: "SYNTHETIC_ONLY" });
+      }
+    } finally { if (previous === undefined) delete process.env.JOBGUARD_ENV; else process.env.JOBGUARD_ENV = previous; }
+  });
+});
