@@ -7,7 +7,7 @@ import { parseInventory } from "./lp-0-catalog.js";
 describe("M3-5 explicit migration proof", () => {
   it("loads its fragment and extends the unchanged LP-0 baseline without duplicate allowances", () => {
     const { proofs } = loadMigrationProofs();
-    const resumableProofs = proofs.filter(proof => proof.migration === "0552_resumable_evidence.sql");
+    const resumableProofs = proofs.filter(proof => proof.migration === "0553_resumable_evidence.sql");
     expect(resumableProofs).toHaveLength(1);
     const baseline = parseInventory(JSON.parse(readFileSync(new URL("../../../docs/contracts/lp-0-effective-privileges-v1.json", import.meta.url), "utf8")));
     const combined = parseInventory(combineLp0(baseline, resumableProofs));

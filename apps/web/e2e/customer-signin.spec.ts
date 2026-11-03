@@ -42,7 +42,7 @@ async function seedQuote(admin: Pool, tenant: string, job: string, member: strin
 }
 test("emailed fictional link signs into exactly one job with a browser-session cookie, rejects replay and signs out", async ({ page, browser, baseURL }) => {
  const nativeImport = new Function("specifier", "return import(specifier)") as (specifier:string) => Promise<typeof import("@jobguard/db")>;
- const { customerSigninLink, ActionExecutor, verifiedTenantContextFromMembership } = await nativeImport(pathToFileURL(join(process.cwd(), "../../packages/db/dist/index.js")).href);
+ const { customerSigninLink, ActionExecutor, verifiedTenantContextForQueuedJob } = await nativeImport(pathToFileURL(join(process.cwd(), "../../packages/db/dist/index.js")).href);
  const admin = new Pool({ connectionString: process.env.E2E_ADMIN_DATABASE_URL });
  const runtime = new Pool({ connectionString: E2E_RUNTIME_URL });
  const customerContext = await browser.newContext();
@@ -77,8 +77,7 @@ test("emailed fictional link signs into exactly one job with a browser-session c
   const digest = (value:string) => createHmac("sha256",E2E_AUTH_CODE_SECRET).update(value).digest("hex");
   let deliveredLink = "", deliveries = 0;
   const adapter:OutboundAdapter = {name:"fake_email",supportsProviderDeduplication:false,deliver:async (_action,link)=>{deliveredLink=link!;deliveries++;return {kind:"succeeded",providerReference:"fictional-portal-email"};},reconcile:async()=>"unknown"};
-  const context = verifiedTenantContextFromMembership({ tenantId: tenant, membershipId: session.memberships[0].id,
-   identityUserId: session.principal.id } as Parameters<typeof verifiedTenantContextFromMembership>[0]);
+  const context = verifiedTenantContextForQueuedJob(tenant);
   const executor = new ActionExecutor(runtime,new Map([[adapter.name,adapter]]),{emit:()=>undefined},digest);
   await executor.execute(context,outbox.id);await executor.execute(context,outbox.id);
   expect(deliveries).toBe(1);expect(deliveredLink).toBe(customerSigninLink(outbox.immutable_content,digest));

@@ -20,7 +20,9 @@ beforeAll(async () => {
   postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: "synthetic-only",
     persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C"], onLog: () => undefined });
   await postgres.initialise(); await postgres.start();
-  admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password: "synthetic-only" });
+  const control = new Pool({ host: "127.0.0.1", port, user: "postgres", password: "synthetic-only", database: "postgres" });
+  try { await control.query("CREATE DATABASE jobguard_synthetic_demo"); } finally { await control.end(); }
+  admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password: "synthetic-only", database: "jobguard_synthetic_demo" });
   // Upgrade proof: install the preceding schema and mark each migration exactly as migrate() does.
   await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
   for (const url of MIGRATION_URLS) {
@@ -34,12 +36,12 @@ beforeAll(async () => {
   await admin.query("INSERT INTO identity.identity_user(id) VALUES($1),($2)", [user, secondUser]);
   await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Synthetic A'),($3,$4,'Synthetic B')", [id(20), a, id(21), b]);
   await admin.query(`INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)
-    VALUES($1,$2,$3,$4,'operative'),($5,$6,$7,$4,'operative'),($8,$2,$3,$9,'operative')`,
+    VALUES($1,$2,$3,$4,'owner'),($5,$6,$7,$4,'owner'),($8,$2,$3,$9,'owner')`,
   [id(22), a, id(20), user, id(23), b, id(21), id(24), secondUser]);
   await migrate(admin); // applies 0454 to a populated predecessor schema
   await migrate(admin); // deployment replay must preserve state
   await admin.query("CREATE ROLE sync_test_login LOGIN PASSWORD 'synthetic-runtime' INHERIT NOBYPASSRLS; GRANT jobguard_runtime TO sync_test_login");
-  runtime = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "sync_test_login", password: "synthetic-runtime", max: 2 });
+  runtime = new Pool({ host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "sync_test_login", password: "synthetic-runtime", max: 2 });
 }, 120_000);
 afterAll(async () => {
   await closeTestPools(runtime, admin); await postgres?.stop();
@@ -56,7 +58,7 @@ describe("M3-3 durable checkpoint SQL", () => {
     await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [u]);
     if (status !== "absent") {
       await admin.query(`INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role,revoked_at,expires_at)
-        VALUES($1,$2,$3,$1,'operative',$4,$5)`, [u, status === "foreign" ? b : a, status === "foreign" ? id(21) : id(20),
+        VALUES($1,$2,$3,$1,'owner',$4,$5)`, [u, status === "foreign" ? b : a, status === "foreign" ? id(21) : id(20),
         status === "revoked" ? "2020-01-01T00:00:00Z" : null, status === "expired" ? "2020-01-01T00:00:00Z" : null]);
     }
     await expect(scoped(a, u)).rejects.toThrow("SYNC_CHECKPOINT_INVALID");
@@ -67,7 +69,7 @@ describe("M3-3 durable checkpoint SQL", () => {
     const u = id(column === "revoked_at" ? 110 : 111);
     await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [u]);
     await admin.query(`INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)
-      VALUES($1,$2,$3,$1,'operative')`, [u, a, id(20)]);
+      VALUES($1,$2,$3,$1,'owner')`, [u, a, id(20)]);
     expect(await scoped(a, u)).toBe(1);
     await admin.query(`UPDATE app.membership SET ${column}='2020-01-01T00:00:00Z' WHERE tenant_id=$1 AND id=$2`, [a, u]);
     await expect(scoped(a, u, 2)).rejects.toThrow("SYNC_CHECKPOINT_INVALID");
@@ -90,7 +92,7 @@ describe("M3-3 durable checkpoint SQL", () => {
     const u = id(112);
     await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [u]);
     await admin.query(`INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)
-      VALUES($1,$2,$3,$1,'operative')`, [u, a, id(20)]);
+      VALUES($1,$2,$3,$1,'owner')`, [u, a, id(20)]);
     await admin.query("INSERT INTO app.contractor_member(tenant_id,membership_id,email) VALUES($1,$2,'revoked@example.invalid')", [a, u]);
     await admin.query("INSERT INTO app.contractor_membership_revocation(tenant_id,id,membership_id) VALUES($1,$2,$2)", [a, u]);
     await expect(scoped(a, u)).rejects.toThrow("SYNC_CHECKPOINT_INVALID");
@@ -154,7 +156,7 @@ describe("M3-3 durable checkpoint SQL", () => {
     const principal = id(9), job = id(10), otherJob = id(11);
     await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [principal]);
     await admin.query(`INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)
-      VALUES($1,$2,$3,$4,'operative')`, [id(14), a, id(20), principal]);
+      VALUES($1,$2,$3,$4,'owner')`, [id(14), a, id(20), principal]);
     const row = (jobId: string, tenantId = a) => ({ tenantId, jobId, workOrderId: id(12), reference: "Synthetic",
       priority: "routine", issuedOn: "2026-10-29", dueOn: null, openVisitId: null, shadow: "HIDDEN", bank: "BANK" });
     const facts = { version: "sync-provider-snapshot.v1", environment: "synthetic_demo", sessionId: id(13), userId: principal,

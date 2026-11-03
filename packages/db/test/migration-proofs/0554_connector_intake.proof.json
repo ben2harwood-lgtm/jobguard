@@ -1,5 +1,5 @@
 {
-  "migration": "0553_connector_intake.sql",
+  "migration": "0554_connector_intake.sql",
   "lp0": [
     {
       "section": "groups",
@@ -23,7 +23,7 @@
         },
         "downstream": "NOLOGIN NOINHERIT jobguard_connector has only connector schema USAGE and connector.intake(uuid,text,jsonb) EXECUTE. Migration-owned tables and binding guard remain private; tenant comes from an expiring secret-authenticated synthetic binding. Intake stages immutable fixture facts and receipts plus audit, with zero domain effects. No login, binding, role membership, commercial authority or endpoint is provisioned.",
         "sources": [
-          "packages/db/migrations/0553_connector_intake.sql"
+          "packages/db/migrations/0554_connector_intake.sql"
         ],
         "tests": [
           "packages/db/test/connector-intake.integration.test.ts",

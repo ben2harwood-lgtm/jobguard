@@ -68,13 +68,10 @@ async function completeJ3(page: Page, browser: Browser, testInfo: TestInfo) {
  await refusedEarly(page.request.post(`/api/jobs/${jobId}/shadow-demo/customer-link`, { headers: { origin }, data: { version: "shadow-guide-customer-link.v1", customerId } }), "CUSTOMER_REFUSED");
  await refusedEarly(page.request.get(`/api/jobs/${jobId}/shadow-demo/review-inputs`), "FINAL_ACCOUNT_LOCK_REQUIRED");
  const publicBefore = await read("shadow-demo");
- // Authenticated membership contexts use the same ESM module as the driver.
+ // Test-only queued-worker contexts use the same ESM module as the driver.
  const nativeImport = new Function("specifier", "return import(specifier)") as (specifier: string) => Promise<typeof import("@jobguard/db")>;
- const { verifiedTenantContextFromMembership } = await nativeImport(pathToFileURL(join(process.cwd(), "../../packages/db/dist/index.js")).href);
- const session = await page.evaluate(async () => (await fetch("/api/auth/session")).json());
- const membership = session.memberships.find((entry: { tenantId: string }) => entry.tenantId === "11111111-1111-4111-8111-111111111111");
- const member = { tenantId: membership.tenantId, membershipId: membership.id, identityUserId: session.principal.id } as Parameters<typeof verifiedTenantContextFromMembership>[0];
- await holdShadowRecipeSources(verifiedTenantContextFromMembership(member), verifiedTenantContextFromMembership({ ...member, tenantId: randomUUID() }), jobId);
+ const { verifiedTenantContextForQueuedJob } = await nativeImport(pathToFileURL(join(process.cwd(), "../../packages/db/dist/index.js")).href);
+ await holdShadowRecipeSources(verifiedTenantContextForQueuedJob("11111111-1111-4111-8111-111111111111"), verifiedTenantContextForQueuedJob(randomUUID()), jobId);
  expect(await read("shadow-demo")).toEqual(publicBefore); // Holding/replaying signals cannot change a builder response.
  expect(await read("final-check")).toMatchObject({ state: "unlocked", items: [] });
  let final = await post("final-account", { version: "final-account.assemble.v1", commandId: randomUUID(), expectedRevision: 0 });

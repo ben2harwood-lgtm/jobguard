@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import type { Pool } from "pg";
 import { MIGRATION_URLS } from "../src/migrate.js";
 
-export const OUTBOUND_PAUSE_MIGRATION = "0551_commercial_outbound_pause.sql";
+export const OUTBOUND_PAUSE_MIGRATION = "0552_commercial_outbound_pause.sql";
 /** Today's ActionExecutor reads the outbound pause, so a fixture stopped at an older schema seeds through
  * today's code only with this one migration applied early. It is self-contained and needs only the base roles. */
 export async function applyOutboundPause(admin: Pick<Pool, "query">) {
