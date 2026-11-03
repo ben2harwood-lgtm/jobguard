@@ -7,6 +7,9 @@ const when = (value: string) => new Date(value).toLocaleString("en-GB", { timeZo
 type Kind = "diary" | "customer-messages";
 const refusal = (status: number, code: string | undefined) =>
  code === "POST_LOCK_WORK_REQUIRES_LINKED_JOB" ? `${LINKED_JOB_COPY}. This job's final account is locked.` :
+ code === "METER_UPGRADE_REQUIRED" ? "Your plan has no room for another job on site. Review your jobs or upgrade your plan, then try again." :
+ code === "METER_PROJECTION_MISMATCH" ? "The jobs-on-the-go record needs checking. Reload the job and try again. Your note has not been saved." :
+ code === "JOB_WORK_CLOSED" ? "Work on this job is closed. Your note has not been saved." :
  code === "JOB_NOT_LIVE" ? "Notes and messages can only be added while the job is live." :
  status === 409 ? "That save conflicted with an earlier one. The saved list has been reloaded." :
  "It was not saved. Nothing was changed.";
@@ -48,10 +51,11 @@ function useSource<T>(jobId: string, kind: Kind, parse: (raw: unknown) => T) {
 
 export function JobDiary({ jobId }: { jobId: string }) {
  const { view, busy, error, save, pending } = useSource<DiaryRead>(jobId, "diary", raw => diaryReadV1.parse(raw));
+ const [onSite, setOnSite] = useState(false);
  const [text, setText] = useState(""), [mode, setMode] = useState<"typed" | "dictated_text">("typed");
  const submit = async (retry: boolean) => {
-  const command = retry && pending.current ? pending.current : diaryInputV1.parse({ version: "job-diary-input.v1", commandId: crypto.randomUUID(), entryMode: mode, onSite: false, text });
-  if (await save(command)) setText("");
+  const command = retry && pending.current ? pending.current : diaryInputV1.parse({ version: "job-diary-input.v1", commandId: crypto.randomUUID(), entryMode: mode, onSite, text });
+  if (await save(command)) { setText(""); setOnSite(false); }
  };
  return <section id="job-diary" className={styles.panel} aria-labelledby="job-diary-title" aria-busy={busy} data-testid="job-diary">
   <h2 id="job-diary-title">Job diary</h2>
@@ -60,7 +64,7 @@ export function JobDiary({ jobId }: { jobId: string }) {
   <div className={styles.field}><label htmlFor="diary-text">Note</label><textarea id="diary-text" value={text} maxLength={8000} disabled={busy} onChange={e => setText(e.target.value)}/></div>
   <div className={styles.actions}>
    <div className={styles.field}><label htmlFor="diary-mode">How it was written</label><select id="diary-mode" value={mode} disabled={busy} onChange={e => setMode(e.target.value as "typed" | "dictated_text")}><option value="typed">Typed</option><option value="dictated_text">Dictated, then checked</option></select></div>
-   <label><input type="checkbox" disabled checked={false} readOnly/> Written on site (arrives with the jobs-on-the-go meter)</label>
+   <label><input type="checkbox" disabled={busy} checked={onSite} onChange={e => setOnSite(e.target.checked)}/> Written on site</label>
    <button type="button" disabled={busy || !!pending.current || text.trim() === ""} onClick={() => void submit(false)}>Save note</button>
    {pending.current && !busy && <button type="button" onClick={() => void submit(true)}>Retry the same save</button>}
   </div>
@@ -85,6 +89,6 @@ export function CustomerMessages({ jobId }: { jobId: string }) {
    <button type="button" disabled={busy || !!pending.current || text.trim() === "" || name.trim() === ""} onClick={() => void submit(false)}>Save message</button>
    {pending.current && !busy && <button type="button" onClick={() => void submit(true)}>Retry the same save</button>}
   </div>
-  <ol>{view?.messages.map(message => <li key={message.id} data-testid="customer-message" data-message-id={message.id}><strong>{message.fictionalCustomer.name}</strong><p style={{ whiteSpace: "pre-wrap" }}>{message.text}</p><small>{when(message.evidence.serverReceivedAt)}</small></li>)}</ol>
+  <ol>{view?.messages.map(message => <li key={message.id} data-testid="customer-message" data-message-id={message.id}><strong>{message.fictionalCustomer.name}</strong><p style={{ whiteSpace: "pre-wrap" }}>{message.text}</p><small>{when(message.evidence.serverReceivedAt)} · Evidence {message.evidence.id} · SHA-256 {message.evidence.sha256} · Version {message.evidence.objectVersionId}</small></li>)}</ol>
  </section>;
 }

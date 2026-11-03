@@ -30,7 +30,7 @@ beforeAll(async () => {
   admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password: "synthetic", database: "postgres" });
   // Upgrade from the exact predecessor set, then apply the new migration through the real registry.
   for (const url of MIGRATION_URLS) {
-    if (url.pathname.endsWith("/0485_scheduled_readiness_store.sql")) break;
+    if (url.pathname.endsWith("/0594_scheduled_readiness_store.sql")) break;
     const { readFile } = await import("node:fs/promises");
     const sql = await readFile(url, "utf8");
     await admin.query(url.pathname.endsWith("/0095_job_parties.sql") ? sql.replace("BEGIN;", "BEGIN; SELECT set_config('app.deployment_mode','synthetic_demo',true);") : sql);
@@ -38,7 +38,7 @@ beforeAll(async () => {
   // Predecessors are tracked here so migrate proves the additive upgrade rather than recreating tables.
   await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
   for (const url of MIGRATION_URLS) {
-    if (url.pathname.endsWith("/0485_scheduled_readiness_store.sql")) break;
+    if (url.pathname.endsWith("/0594_scheduled_readiness_store.sql")) break;
     await admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)", [url.pathname.split("/").at(-1)]);
   }
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1),($2)", [tenantId, other]);

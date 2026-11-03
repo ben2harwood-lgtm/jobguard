@@ -2,11 +2,20 @@
   "version": 2,
   "lanes": {
     "m2-6-edge-facts": {
-      "branches": ["codex/sandbox/m2-6-edge-facts"],
-      "note": "M2-6 AMBER: missing dependency-edge facts remain unknown at the dark scheduler seam; no migration or live use.",
+      "branches": [
+        "codex/sandbox/m2-6-edge-facts"
+      ],
+      "note": "M2-6 RED: preserve synthetic durable readiness storage and missing dependency facts; live routes remain disabled.",
       "allow": [
+        "apps/api/src/readiness-adapters.ts",
+        "apps/api/src/readiness-scheduler.test.ts",
         "apps/api/src/readiness-scheduler.ts",
-        "apps/api/src/readiness-scheduler.test.ts"
+        "apps/api/src/readiness-store.test.ts",
+        "apps/api/src/readiness-store.ts",
+        "packages/db/migrations/0594_scheduled_readiness_store.sql",
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/0594_scheduled_readiness_store.proof.json",
+        "packages/db/test/readiness-store.integration.test.ts"
       ]
     }
   }
