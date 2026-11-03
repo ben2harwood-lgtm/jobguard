@@ -1,3 +1,4 @@
+import { recordSupervisorQuery, readSupervisorQueries } from "./site-supervisor-query.js";
 import type { Pool } from "pg";
 import { z } from "zod";
 import { offlineClientMetadataV1, parseOfflineIntentV1, ExtraPersistenceError, WorkOrderError, SiteExtraError, siteExtraContentSha256V1, type SiteExtraErrorCode } from "@jobguard/core";
@@ -206,6 +207,12 @@ export class SiteExtraRepository {
   throw new SiteExtraError(refusal.code);
  }
 
+ async recordSupervisorQuery(context: VerifiedTenantContext, actor: AuthenticatedMembership, jobId: string, raw: unknown) {
+  return recordSupervisorQuery(this.pool, context, actor, jobId, raw);
+ }
+ async supervisorQueries(context: VerifiedTenantContext, actor: AuthenticatedMembership, jobId: string) {
+  return readSupervisorQueries(this.pool, context, actor, jobId);
+ }
  // ---- ENT-3c additions (append-only): the order check, the server-priced log and the two site reads. Authority first, through the private pre-check; nothing below restates the access rule. ----
  private async sorAuthority(context: VerifiedTenantContext, actor: AuthenticatedMembership, jobId: string, retained = false): Promise<{ grant: string; live: boolean } | Refusal> {
   try {
@@ -334,7 +341,7 @@ export class SiteExtraRepository {
    const claimedQuantity = canonicalSorQuantity(query.quantity);
    if (check.outcome === "new") return { outcome: "new" as const, sorCode: query.sorCode, unit: facts.item.unit, claimedQuantity, instructedQuantity: null, extraQuantity: check.extraQuantity, orderLineScopeItemId: null };
    if (check.outcome === "more_than_ordered") return { outcome: "more_than_ordered" as const, sorCode: query.sorCode, unit: facts.item.unit, claimedQuantity, instructedQuantity: check.instructedQuantity, extraQuantity: check.extraQuantity, orderLineScopeItemId: check.orderLineScopeItemId };
-   return { outcome: "already_on_order" as const, sorCode: query.sorCode, unit: facts.item.unit, claimedQuantity, instructedQuantity: check.instructedQuantity, orderLineScopeItemId: check.orderLineScopeItemId };
+   return { orderRevisionId: facts.revisionId, outcome: "already_on_order" as const, sorCode: query.sorCode, unit: facts.item.unit, claimedQuantity, instructedQuantity: check.instructedQuantity, orderLineScopeItemId: check.orderLineScopeItemId };
   });
  }
 }

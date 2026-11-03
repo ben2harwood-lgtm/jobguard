@@ -122,7 +122,7 @@ const resultHead = { environment: z.literal("synthetic_demo"), realExternalActio
 const quantityText = sorQuantityV1;
 const orderCheckBodyV1 = z.object({
   outcome: z.enum(["new", "more_than_ordered", "already_on_order"]), sorCode: codeText, unit: z.string().min(1).max(40), claimedQuantity: quantityText, instructedQuantity: quantityText.nullable(),
-  extraQuantity: quantityText.optional(), orderLineScopeItemId: uuid.nullable(),
+  extraQuantity: quantityText.optional(), orderLineScopeItemId: uuid.nullable(), orderRevisionId: uuid.optional(),
 }).strict().superRefine((value, context) => {
   if ((value.outcome === "already_on_order") === (value.extraQuantity !== undefined)) context.addIssue({ code: "custom", path: ["extraQuantity"], message: "extra quantity exists exactly when there is an extra" });
 });
@@ -148,3 +148,23 @@ export function extraSorRevisionHashV1(input: ExtraSorRevisionHashInput): string
   const encode = (value: string | null) => value === null ? "N;" : `S${new TextEncoder().encode(value).length}:${value};`;
   return sha256(`extra-sor-revision-hash.v1\n${extraSorRevisionHashFields.map(field => encode(input[field])).join("")}`);
 }
+
+/** ENT-3: within-order capture is an immutable question, never a commercial extra. */
+export const recordSiteSupervisorQueryV1 = z.object({
+ version: z.literal("record-site-supervisor-query.v1"), commandId: uuid,
+ orderLineScopeItemId: uuid, sorCode: codeText, quantity: positiveQuantityV1,
+ expectedOrderRevisionId: uuid,
+}).strict();
+export const siteSupervisorQueryV1 = z.object({
+ version: z.literal("site-supervisor-query.v1"), ...resultHead,
+ queryId: uuid, jobId: uuid, orderLineScopeItemId: uuid, sorCode: codeText,
+ quantity: positiveQuantityV1, orderRevisionId: uuid, operativeMembershipId: uuid,
+ recordedAt: z.iso.datetime(),
+}).strict();
+export const siteSupervisorQueriesV1 = z.object({
+ version: z.literal("site-supervisor-queries.v1"), ...resultHead, jobId: uuid,
+ queries: z.array(siteSupervisorQueryV1),
+}).strict();
+export const sorSiteExtraSubmittedV2 = sorSiteExtraLoggedV1.extend({
+ version: z.literal("sor-site-extra-submitted.v2"), state: z.enum(["awaiting_approval", "approved"]), requestId: uuid,
+}).strict();

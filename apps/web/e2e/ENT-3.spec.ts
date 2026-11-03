@@ -43,7 +43,7 @@ test("priced capture binds the displayed evidence in at most four taps, with exa
   await page.route(`**/api/contractor/jobs/${jobId}/site-extras/sor`, async route => {
     attempts.push(route.request().postDataJSON());
     if (attempts.length === 1) return route.fulfill({ status: 503, json: { code: "SITE_PRICING_UNAVAILABLE" } });
-    return route.fulfill({ status: 201, json: { version: "sor-site-extra-logged.v1", ...head, jobId, extraId: jobId, state: "logged", priceSource: "server_sor", orderCheck } });
+    return route.fulfill({ status: 201, json: { version: "sor-site-extra-submitted.v2", ...head, jobId, extraId: jobId, requestId: visitId, state: "awaiting_approval", priceSource: "server_sor", orderCheck } });
   });
   await page.goto("/site/extra");
   await page.getByLabel("Search schedule of rates").fill("lock");
@@ -65,4 +65,54 @@ test("priced capture binds the displayed evidence in at most four taps, with exa
   expect(attempts[0]).toEqual(attempts[1]);
   expect(attempts[0]).toMatchObject({ version: "log-sor-site-extra.v2", photoEvidenceId: visitId, residentConfirmation: { shownContentSha256: hash }, siteVisitId: visitId });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+
+test("within-order item records one supervisor question with exact retry and no extra", async ({ page }) => {
+ const attempts: Record<string, unknown>[] = [];
+ let extraCalls = 0;
+ await page.route("**/api/northside", route => route.fulfill({ status: 401, json: {} }));
+ await page.route("**/api/contractor/practice/acting-as", route => route.fulfill({ json: { state: "acting" } }));
+ await page.route("**/api/contractor/site/jobs", route => route.fulfill({ json: { jobs: [{ jobId, reference: "Fictional order", openVisitId: visitId }] } }));
+ await page.route("**/api/northside/extras", route => route.fulfill({ json: { extras: [] } }));
+ await page.route(`**/api/contractor/jobs/${jobId}/order-lines`, route => route.fulfill({ json: { version: "site-order-lines.v1", ...head, jobId, workOrderId: jobId, revision: 1, lines: [] } }));
+ await page.route(`**/api/contractor/jobs/${jobId}/sor-items?*`, route => route.fulfill({ json: { version: "site-sor-items.v1", ...head, jobId, sorVersionId: jobId, items: [{ code: "FIT-LOCK", description: "Fictional lock", unit: "each" }], truncated: false } }));
+ await page.route(`**/api/contractor/jobs/${jobId}/order-check?*`, route => route.fulfill({ json: { version: "site-order-check.v1", ...head, jobId, orderCheck: { outcome: "already_on_order", sorCode: "FIT-LOCK", unit: "each", claimedQuantity: "1", instructedQuantity: "2", orderLineScopeItemId: visitId, orderRevisionId: jobId } } }));
+ await page.route(`**/api/contractor/jobs/${jobId}/site-extras**`, route => { extraCalls++; return route.fulfill({ status: 500 }); });
+ await page.route(`**/api/contractor/jobs/${jobId}/supervisor-queries`, route => {
+  attempts.push(route.request().postDataJSON());
+  if (attempts.length === 1) return route.fulfill({ status: 503, json: { code: "SITE_PRICING_UNAVAILABLE" } });
+  return route.fulfill({ status: 201, json: { version: "site-supervisor-query.v1", ...head, queryId: visitId, jobId, orderLineScopeItemId: visitId, sorCode: "FIT-LOCK", quantity: "1", orderRevisionId: jobId, operativeMembershipId: visitId, recordedAt: "2026-11-03T10:00:00.000Z" } });
+ });
+ await page.goto("/site/extra");
+ await page.getByLabel("Search schedule of rates").fill("lock");
+ await page.getByRole("button", { name: "FIT-LOCK: Fictional lock (each)", exact: true }).click();
+ const ask = page.getByRole("button", { name: "Ask supervisor", exact: true });
+ await expect(ask).toBeEnabled();
+ for (const target of [ask, page.getByLabel("Total quantity")]) {
+  const box = await target.boundingBox(); expect(box!.height).toBeGreaterThanOrEqual(44); expect(box!.width).toBeGreaterThanOrEqual(44);
+ }
+ await expect(page.getByRole("button", { name: "Attach practice photo" })).toBeDisabled();
+ await ask.click();
+ await expect(page.getByRole("alert")).toContainText("SITE_PRICING_UNAVAILABLE");
+ await expect(page.getByLabel("Total quantity")).toBeDisabled();
+ await ask.click();
+ await expect(page.getByTestId("extra-logged")).toHaveText("Question recorded for your supervisor. No extra was created.");
+ expect(attempts).toHaveLength(2); expect(attempts[0]).toEqual(attempts[1]);
+ expect(attempts[0]).toMatchObject({ version: "record-site-supervisor-query.v1", orderLineScopeItemId: visitId, sorCode: "FIT-LOCK", quantity: "1", expectedOrderRevisionId: jobId });
+ expect(extraCalls).toBe(0);
+ expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test("supervisor reads immutable questions on the existing job extras screen", async ({ page }) => {
+ await page.route("**/api/northside", route => route.fulfill({ status: 401, json: {} }));
+ await page.route("**/api/contractor/practice/acting-as", route => route.fulfill({ json: { state: "acting" } }));
+ await page.route("**/api/contractor/site/jobs", route => route.fulfill({ json: { jobs: [{ jobId, reference: "Fictional order", openVisitId: null }] } }));
+ await page.route("**/api/northside/extras", route => route.fulfill({ json: { extras: [], role: "supervisor" } }));
+ await page.route(`**/api/contractor/jobs/${jobId}/order-lines`, route => route.fulfill({ json: { version: "site-order-lines.v1", ...head, jobId, workOrderId: jobId, revision: 1, lines: [] } }));
+ await page.route(`**/api/contractor/jobs/${jobId}/supervisor-queries`, route => route.fulfill({ json: { version: "site-supervisor-queries.v1", ...head, jobId, queries: [{ version: "site-supervisor-query.v1", ...head, queryId: visitId, jobId, orderLineScopeItemId: visitId, sorCode: "FIT-LOCK", quantity: "1", orderRevisionId: jobId, operativeMembershipId: visitId, recordedAt: "2026-11-03T10:00:00.000Z" }] } }));
+ await page.goto("/site/extra");
+ await expect(page.getByRole("heading", { name: "My extras", exact: true })).toBeVisible();
+ await expect(page.getByTestId("supervisor-query")).toContainText("FIT-LOCK: claimed quantity 1");
+ await expect(page.getByText("These are within the order. No extra or price was created. Resolving questions is not available yet.")).toBeVisible();
 });

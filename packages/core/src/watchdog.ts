@@ -105,6 +105,8 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   // contractor work-order jobs have no pre-live phase (they become live in the same transaction as the import), and the route carries its own live-job guard
   "/api/contractor/jobs/[id]/site-extras/sor": "pre_live_allowed",
   "nest:/contractor/jobs/:id/site-extras/sor": "pre_live_allowed",
+  "/api/contractor/jobs/[id]/supervisor-queries": "pre_live_allowed",
+  "nest:/contractor/jobs/:id/supervisor-queries": "pre_live_allowed",
   "/api/contractor/jobs/[id]/site-visits/start": "pre_live_allowed",
   "/api/contractor/jobs/[id]/site-visits/[visitId]/complete": "pre_live_allowed",
   "nest:/contractor/jobs/:id/site-visits/start": "pre_live_allowed",
@@ -212,6 +214,7 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "command:ClientDecideExtra": "pre_live_allowed",
   "command:MarkDuplicate": "pre_live_allowed",
   "command:LogSiteExtra": "pre_live_allowed",
+  "command:RecordSiteSupervisorQuery": "pre_live_allowed",
   "command:RecordOfficeExtra": "pre_live_allowed",
   "command:RecordClientInstruction": "pre_live_allowed",
   "command:UnlinkDuplicate": "pre_live_allowed",

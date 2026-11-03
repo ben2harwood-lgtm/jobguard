@@ -2721,6 +2721,102 @@
         ]
       }
     },
+    "/contractor/jobs/{id}/supervisor-queries": {
+      "post": {
+        "operationId": "SiteExtraPricingController_recordQuery",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "version",
+                  "commandId",
+                  "orderLineScopeItemId",
+                  "sorCode",
+                  "quantity",
+                  "expectedOrderRevisionId"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "record-site-supervisor-query.v1"
+                    ]
+                  },
+                  "commandId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "orderLineScopeItemId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "sorCode": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "quantity": {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]{0,11})(\\.[0-9]{1,6})?$"
+                  },
+                  "expectedOrderRevisionId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Immutable within-order supervisor question recorded or replayed; no extra or price"
+          }
+        },
+        "summary": "Record a within-order question for the supervisor",
+        "tags": [
+          "contractor-site-extras"
+        ]
+      },
+      "get": {
+        "operationId": "SiteExtraPricingController_queries",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Immutable questions for a job in this supervisor's scope"
+          }
+        },
+        "summary": "Read a job's within-order supervisor questions",
+        "tags": [
+          "contractor-site-extras"
+        ]
+      }
+    },
     "/contractor/jobs/{id}/sor-items": {
       "get": {
         "operationId": "SiteExtraPricingController_sorItems",

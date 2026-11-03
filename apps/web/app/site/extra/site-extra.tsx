@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { siteOrderCheckV1, sorSiteExtraLoggedV1, siteExtraLoggedV3, type SiteOrderCheck } from "@jobguard/core";
+import { siteOrderCheckV1, siteSupervisorQueryV1, siteSupervisorQueriesV1, sorSiteExtraSubmittedV2, siteExtraLoggedV3, type SiteOrderCheck } from "@jobguard/core";
 import { SiteVisit } from "./site-visit";
 import { NorthsidePractice } from "../../northside/northside-practice";
 import { pounds } from "../../lib/pounds";
@@ -20,6 +20,7 @@ export function SiteExtra() {
   const attempt = useRef<string | null>(null), pending = useRef(false);
   const [sorCode, setSorCode] = useState(""), [quantity, setQuantity] = useState("1"), [visitId, setVisitId] = useState<string | null>(null);
   const [check, setCheck] = useState<SiteOrderCheck["orderCheck"] | null>(null);
+  const [supervisor, setSupervisor] = useState(false), [queries, setQueries] = useState<Array<ReturnType<typeof siteSupervisorQueryV1.parse>>>([]), [queryReadError, setQueryReadError] = useState("");
   const [proceedLimit, setProceedLimit] = useState<number | null>(null);
   useEffect(() => {
     setCheck(null);
@@ -42,6 +43,7 @@ export function SiteExtra() {
       if (!j.ok || !e.ok) throw new Error(`Jobs and extras could not load (jobs: ${j.status}; extras: ${e.status}).`);
       const jobsBody = await j.json(), extrasBody = await e.json();
       if (!Array.isArray(jobsBody.jobs) || !Array.isArray(extrasBody.extras)) throw new Error("Jobs and extras returned an unreadable response.");
+      setSupervisor(extrasBody.role === "supervisor");
       setProceedLimit(extrasBody.settings?.settings?.rules?.proceedLimit?.pence ?? null);
       setJobs(jobsBody.jobs.map((x: Job) => ({ jobId: x.jobId, reference: x.reference, openVisitId: x.openVisitId }))); setExtras(extrasBody.extras); setLoadState("ready");
     } catch (cause) {
@@ -50,7 +52,20 @@ export function SiteExtra() {
   }, []);
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { if (jobs && jobs.length && !jobId) { setJobId(jobs[0]!.jobId); setVisitId(jobs[0]!.openVisitId); } }, [jobs, jobId]);
-  const locked = photo !== null || busy;
+  useEffect(() => {
+    setQueries([]); setQueryReadError("");
+    if (!supervisor || !jobId) return;
+    const controller = new AbortController();
+    void fetch(`/api/contractor/jobs/${jobId}/supervisor-queries`, { cache: "no-store", signal: controller.signal }).then(async response => {
+      if (!response.ok) throw new Error("Supervisor questions are unavailable.");
+      const body = siteSupervisorQueriesV1.parse(await response.json());
+      if (body.jobId !== jobId) throw new Error("Job response mismatch.");
+      if (!controller.signal.aborted) setQueries(body.queries);
+    }).catch(() => { if (!controller.signal.aborted) setQueryReadError("Supervisor questions are unavailable."); });
+    return () => controller.abort();
+  }, [supervisor, jobId]);
+  const queryAttempt = useRef<string | null>(null);
+  const locked = photo !== null || busy || queryAttempt.current !== null;
   function chooseJob(id: string) { setJobId(id); setSorCode(""); setCheck(null); setVisitId(jobs?.find(j => j.jobId === id)?.openVisitId ?? null); }
   async function attach() {
     setBusy(true); setError("");
@@ -66,11 +81,24 @@ export function SiteExtra() {
       attempt.current ??= JSON.stringify(sorCode ? { version: "log-sor-site-extra.v2", commandId: commandId.current, sorCode, quantity, description, note, photoEvidenceId: photo.photoEvidenceId, residentConfirmation: { shownContentSha256: photo.shownContentSha256 }, ...(visitId ? { siteVisitId: visitId } : {}) } : { version: "log-site-extra.v3", commandId: commandId.current, description, note, photoEvidenceId: photo.photoEvidenceId, residentConfirmation: { shownContentSha256: photo.shownContentSha256 } });
       const r = await fetch(`/api/contractor/jobs/${jobId}/site-extras${sorCode ? "/sor" : ""}`, { method: "POST", headers: { "content-type": "application/json" }, body: attempt.current });
       const body = await r.json(); if (!r.ok) throw new Error(`The extra was not logged (${body.code}).`);
-      const result = sorCode ? sorSiteExtraLoggedV1.parse(body) : siteExtraLoggedV3.parse(body);
+      const result = sorCode ? sorSiteExtraSubmittedV2.parse(body) : siteExtraLoggedV3.parse(body);
       if (result.jobId !== jobId) throw new Error("Job response mismatch.");
       attempt.current = null; setSorCode(""); setCheck(null); setQuantity("1");
-      setDone(sorCode ? "Extra logged and priced by the server. Approval is still required." : "Extra logged. It is waiting for a price and approval."); setPhoto(null); setConfirmed(false); setDescription(""); setNote(""); commandId.current = crypto.randomUUID(); await load();
+      setDone(sorCode ? "Extra logged and priced by the server, and submitted for approval." : "Extra logged. It is waiting for a price and approval."); setPhoto(null); setConfirmed(false); setDescription(""); setNote(""); commandId.current = crypto.randomUUID(); await load();
     } catch (e) { setError((e as Error).message); } finally { pending.current = false; setBusy(false); }
+  }
+  async function askSupervisor() {
+    if (!check || check.outcome !== "already_on_order" || !check.orderRevisionId || !check.orderLineScopeItemId || pending.current) return;
+    pending.current = true; setBusy(true); setError(""); setDone("");
+    try {
+      queryAttempt.current ??= JSON.stringify({ version: "record-site-supervisor-query.v1", commandId: commandId.current, orderLineScopeItemId: check.orderLineScopeItemId, sorCode, quantity, expectedOrderRevisionId: check.orderRevisionId });
+      const r = await fetch(`/api/contractor/jobs/${jobId}/supervisor-queries`, { method: "POST", headers: { "content-type": "application/json" }, body: queryAttempt.current });
+      const body = await r.json(); if (!r.ok) throw new Error(`Supervisor question could not be confirmed (${body.code}). Retry the same question.`);
+      const answer = siteSupervisorQueryV1.parse(body);
+      if (answer.jobId !== jobId) throw new Error("Job response mismatch.");
+      queryAttempt.current = null; commandId.current = crypto.randomUUID(); setSorCode(""); setCheck(null); setQuantity("1");
+      setDone("Question recorded for your supervisor. No extra was created.");
+    } catch (cause) { setError((cause as Error).message); } finally { pending.current = false; setBusy(false); }
   }
   return <main className={styles.page} data-site-extra-state={loadState}>
     <NorthsidePractice />
@@ -83,7 +111,7 @@ export function SiteExtra() {
       <div className={styles.row}><label htmlFor="job">Job</label><select id="job" value={jobId} disabled={locked} onChange={e => chooseJob(e.target.value)}>{jobs?.map(j => <option key={j.jobId} value={j.jobId}>{j.reference}</option>)}</select></div>
       <SiteVisit key={jobId} jobId={jobId} openVisitId={jobs?.find(job => job.jobId === jobId)?.openVisitId ?? null} locked={locked} onVisitChange={setVisitId} onSelect={item => { if (item.code !== sorCode || quantity !== "1") setCheck(null); setSorCode(item.code); setDescription(item.description); setNote(item.description); setQuantity("1"); }} />
       {sorCode && <><p>Schedule item: {sorCode}</p><label htmlFor="quantity">Total quantity</label><input className={styles.quantity} id="quantity" inputMode="decimal" value={quantity} disabled={locked} onChange={e => { setQuantity(e.target.value); setCheck(null); }} />
-        <p role="status">{!check ? "Checking order…" : check.outcome === "already_on_order" ? "Already on the order. Ask your supervisor; this cannot be logged as an extra." : check.outcome === "new" ? "New extra" : `${check.extraQuantity} ${check.unit} more than ordered`}</p></>}
+        <p role="status">{!check ? "Checking order…" : check.outcome === "already_on_order" ? "Already on the order. Record a question for your supervisor; this is not an extra." : check.outcome === "new" ? "New extra" : `${check.extraQuantity} ${check.unit} more than ordered`}</p>{check?.outcome === "already_on_order" && <div className={styles.actions}><button disabled={busy || !check.orderRevisionId} onClick={() => void askSupervisor()}>Ask supervisor</button></div>}</>}
       <p>Proceed limit: {proceedLimit === null ? "unavailable" : `${pounds(proceedLimit)} (demo setting, not a real rule)`}. This does not grant permission to proceed.</p>
       <p>Work status: not recorded. Work timing is unavailable in this practice.</p>
       <div className={styles.row}><label htmlFor="description">What is the extra work?</label><input id="description" value={description} disabled={locked} maxLength={500} onChange={e => setDescription(e.target.value)} /></div>
@@ -96,5 +124,9 @@ export function SiteExtra() {
     <section className={styles.card} aria-label="My extras"><h2>My extras</h2>
       {loadState !== "ready" ? <p>{loadState === "loading" ? "Loading extras…" : "Extras are unavailable."}</p> : extras.length === 0 ? <p>None yet.</p> : <ul>{extras.map(x => <li key={x.extraId} data-testid="my-extra"><strong>{x.orderReference}</strong>: {x.description} <span className={styles.pill} data-testid="my-extra-state">{x.outcome ? labels[x.outcome] ?? x.outcome : labels[x.state] ?? x.state}</span>{x.quotedPence !== null && <> · price {pounds(x.quotedPence)}</>}{x.hasPhoto && " · photo"}{x.residentConfirmed && " · resident confirmed"}</li>)}</ul>}
     </section>
+    {supervisor && <section className={styles.card} aria-label="Supervisor questions"><h2>Questions on this job</h2>
+      <p>These are within the order. No extra or price was created. Resolving questions is not available yet.</p>
+      {queryReadError ? <p role="alert">{queryReadError}</p> : queries.length === 0 ? <p>No questions to show.</p> : <ul>{queries.map(query => <li key={query.queryId} data-testid="supervisor-query"><strong>{query.sorCode}</strong>: claimed quantity {query.quantity} · order line {query.orderLineScopeItemId} · operative {query.operativeMembershipId} · recorded {query.recordedAt}</li>)}</ul>}
+    </section>}
   </main>;
 }

@@ -5,13 +5,15 @@
       "branches": [
         "codex/sandbox/ent-3e-screens"
       ],
-      "note": "ENT-3e priced evidence v2 and operative screens; RED; remaining acceptance is listed in the contract and handoff.",
+      "note": "ENT-3e priced evidence and submission v2 plus immutable within-order supervisor questions and existing-screen reads; RED; ENT-3 remains open.",
       "allow": [
         "apps/api/openapi.json",
         "apps/api/src/contractor/site-extra-pricing.application.test.ts",
         "apps/api/src/contractor/site-extra-pricing.controller.ts",
         "apps/api/src/contractor/site-extra.application.ts",
         "apps/web/app/api/contractor/jobs/[id]/site-extras/sor/route.test.ts",
+        "apps/web/app/api/contractor/jobs/[id]/supervisor-queries/route.test.ts",
+        "apps/web/app/api/contractor/jobs/[id]/supervisor-queries/route.ts",
         "apps/web/app/northside/northside.module.css",
         "apps/web/app/site/extra/site-extra.tsx",
         "apps/web/app/site/extra/site-visit.test.tsx",
@@ -21,9 +23,19 @@
         "packages/core/src/site-extra-priced-evidence.test.ts",
         "packages/core/src/site-extra-pricing.test.ts",
         "packages/core/src/site-extra-pricing.ts",
+        "packages/core/src/site-supervisor-query.test.ts",
+        "packages/core/src/watchdog.ts",
+        "packages/db/migration-notes/0744_site_supervisor_query.md",
+        "packages/db/migrations/0744_site_supervisor_query.sql",
+        "packages/db/src/site-extra-pricing-queries.ts",
         "packages/db/src/site-extra-repository.ts",
+        "packages/db/src/site-supervisor-query.ts",
+        "packages/db/test/later-empty-tables.ts",
+        "packages/db/test/migration-proofs/0744_site_supervisor_query.proof.json",
         "packages/db/test/site-extra-priced-evidence.integration.test.ts",
-        "packages/db/test/site-extra-priced-evidence.test.ts"
+        "packages/db/test/site-extra-priced-evidence.test.ts",
+        "packages/db/test/site-supervisor-query.integration.test.ts",
+        "packages/db/test/site-supervisor-query.test.ts"
       ]
     }
   }
