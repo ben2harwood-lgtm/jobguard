@@ -346,7 +346,7 @@ describe("ENT-4c un-link command", () => {
    expect(reached, fragment).toBe(1);
   }
   const before = await snapshot(f);
-  await expect(withTenant(c.runtime, f.ctx, async db => {
+  await expect(withTenant(c.admin, f.ctx, async db => {
    const commandId = randomUUID(); await receipt(db, f.p.tenantId, f.jobId, l.duplicate, f.p.membershipId, "UnlinkDuplicate", commandId, { semanticKey: semantic(f.jobId, l.linkId, commandId) });
    await db.$client.query("INSERT INTO app.extra_duplicate_link(tenant_id,id,job_id,duplicate_id,canonical_id,kind,reverses_link_id,reason_code,command_id,actor_membership_id) VALUES($1,$2,$3,$4,$5,'unlink',$6,$7,$8,$9)", [f.p.tenantId, randomUUID(), f.jobId, l.duplicate, l.canonical, l.linkId, "linked_in_error", commandId, f.p.membershipId]);
    // Isolate the missing unlink audit with a terminal unmanaged receipt.
