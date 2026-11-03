@@ -14,7 +14,7 @@ beforeAll(async()=>{
 },120000);
 afterAll(async()=>{await c?.close();});
 it("combined upgrade and repeated migrator preserve every predecessor row without inventing active agreements",async()=>{
- expect(await snapshot(c.admin)).toEqual(before);await migrate(c.admin);await migrate(c.admin);expect(await snapshot(c.admin)).toEqual(before);
+ expect(await snapshot(c.admin)).toEqual(before);await migrate(c.admin);await migrate(c.admin);expect(await snapshot(c.admin)).toEqual({...before,"app.practice_exposure_schedule":[]});
  const view=await new ContractorRepository(c.runtime).query(f.p,{version:"contractor-query.v1",tenantId:f.p.tenantId,resource:"organisation"});
  expect(view.members.some(m=>m.membership_id===f.members.operative)).toBe(true);
 });
