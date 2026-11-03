@@ -1,3 +1,4 @@
+import type { TenantTransaction } from "../src/tenant-context.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -9,6 +10,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AdoptInFlightJobMutation, appendAuditBatch, authenticatePracticeSession, authorizePracticeJob, issuePracticeSession, DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID, DEMO_IDENTITY_USER_ID, MIGRATION_URLS, migrate, JobPartiesRepository, UserCommandDispatcher, withTenant } from "../src/index.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
 
+// The shared integration setup selects the actual pre-LP4 audit client for
+// this deliberately frozen 0095 schema; fully migrated fixtures stay sealed.
 const tenant = randomUUID(), foreignTenant = randomUUID(), member = randomUUID();
 const migrationURL=MIGRATION_URLS.find(url=>url.pathname.endsWith("0095_job_parties.sql"))!;
 const context = testTenantContext(tenant);
@@ -150,9 +153,12 @@ beforeAll(async () => {
   legacyInvoice=(await admin.query(`SELECT id,pdf_bytes,pdf_sha256 FROM app.customer_invoice WHERE tenant_id=$1`,[tenant])).rows[0];
   const migration=await readFile(migrationURL,"utf8");
   await admin.query(migration.replace("BEGIN;","BEGIN; SELECT set_config('app.deployment_mode','synthetic_demo',true);"));
+  // Keep the populated 0095 upgrade setup and every historical assertion, then
+  // run current repository callers against their actual lifecycle successors.
+  for(const successor of MIGRATION_URLS.slice(MIGRATION_URLS.indexOf(migrationURL)+1))await admin.query(await readFile(successor,"utf8"));
   await admin.query(`CREATE ROLE ch3a_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEROLE NOBYPASSRLS;GRANT jobguard_runtime TO ch3a_login;`);
   runtime=new Pool({host:"127.0.0.1",port,database:"jobguard_synthetic_demo",user:"ch3a_login",password:"synthetic",max:5});repository=new JobPartiesRepository(runtime);
-},60000);
+},300000);
 afterAll(async()=>{await closeTestPools(runtime,admin);await postgres?.stop();if(dir)await rm(dir,{recursive:true,force:true});});
 
 describe("CH-3a real PostgreSQL guarantees",()=>{
@@ -194,6 +200,9 @@ describe("CH-3a real PostgreSQL guarantees",()=>{
     expect(results.filter(r=>r.status==="fulfilled")).toHaveLength(1);expect(results.find(r=>r.status==="rejected")).toMatchObject({reason:{code:"REVISION_CONFLICT"}});
     const winner=results[0]?.status==="fulfilled"?a:b;
     const first=await repository.command(context,member,job,winner);expect(await repository.command(context,member,job,winner)).toEqual(first);
+    const terminal = (await admin.query("SELECT event_type,payload FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND payload->'references'->>'commandId'=$3 ORDER BY event_type", [tenant, job, winner.commandId])).rows;
+    expect(terminal.map(row => row.event_type)).toEqual(["command.succeeded", "job.parties.bind"]);
+    expect(terminal[0]!.payload.references).toMatchObject({ commandId: winner.commandId, auditTrust: "checked_operation" });
     await expect(repository.command(context,member,job,{...winner,expectedJobRevision:1})).rejects.toThrow("COMMAND_CONFLICT");
     expect((await admin.query(`SELECT count(*)::int n FROM app.job_party_current WHERE tenant_id=$1 AND job_id=$2`,[tenant,job])).rows[0].n).toBe(1);
     const binding=(await repository.view(context,member,job)).current!;
@@ -225,7 +234,7 @@ describe("CH-3a real PostgreSQL guarantees",()=>{
     await repository.command(context,member,one,command("correct",{expectedJobRevision:1,parties,reason:"Correct fictional payer"}));
     expect((await admin.query(`SELECT snapshot FROM app.job_party_snapshot WHERE tenant_id=$1 AND binding_id=$2`,[tenant,before.bindingId])).rows[0].snapshot).toEqual(before);
     const audit=await admin.query(`SELECT payload FROM app.audit_event WHERE tenant_id=$1 AND event_type LIKE 'job.parties.%'`,[tenant]);
-    for(const {payload} of audit.rows){expect(Object.keys(payload).sort()).toEqual(["classifications","hashes","references"]);expect(Object.keys(payload.references).sort()).toEqual(["commandId","identityId"]);expect(JSON.stringify(payload)).not.toMatch(/Fictional|Street|example\.invalid|00000000000|Correct fictional/u);}
+    for(const {payload} of audit.rows){expect(Object.keys(payload).sort()).toEqual(["classifications","hashes","references"]);expect(Object.keys(payload.references).sort()).toEqual(["auditTrust","commandId","identityId"]);expect(JSON.stringify(payload)).not.toMatch(/Fictional|Street|example\.invalid|00000000000|Correct fictional/u);}
   });
   it("uses composite foreign keys to reject cross-tenant parties and hides foreign identities",async()=>{
     const job=await createJob(),{parties,c}=await saveParties(job);
@@ -296,11 +305,17 @@ describe("CH-3a real PostgreSQL guarantees",()=>{
     }finally{await fresh.end();}
   }, 60_000);
   it("applies the full migration chain to a SQL_ASCII database without UTF8 encoding", async () => {
-    // Reuse this suite's cluster; template0 permits a different database encoding.
-    // Do not change the encoding flags of the six earlier regression suites.
-    await admin.query("CREATE DATABASE ch3a_sql_ascii TEMPLATE template0 ENCODING 'SQL_ASCII' LC_COLLATE 'C' LC_CTYPE 'C'");
-    const ascii = new Pool({ ...admin.options, password: "synthetic", database: "ch3a_sql_ascii", max: 1 });
+    // Role names are cluster-wide. Keep this full-chain proof isolated from
+    // the current-schema callers without altering any production migration SQL.
+    const asciiPort=await freePort(58700,300),asciiPostgres=new EmbeddedPostgres({databaseDir:join(dir,"sql-ascii-server"),
+      port:asciiPort,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,
+      initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});
+    let ascii:Pool|undefined,asciiControl:Pool|undefined;
     try {
+      await asciiPostgres.initialise();await asciiPostgres.start();
+      asciiControl=new Pool({host:"127.0.0.1",port:asciiPort,user:"postgres",password:"synthetic",database:"postgres",max:1});
+      await asciiControl.query("CREATE DATABASE ch3a_sql_ascii TEMPLATE template0 ENCODING 'SQL_ASCII' LC_COLLATE 'C' LC_CTYPE 'C'");
+      ascii=new Pool({host:"127.0.0.1",port:asciiPort,user:"postgres",password:"synthetic",database:"ch3a_sql_ascii",max:1});
       expect((await ascii.query("SHOW server_encoding")).rows).toEqual([{ server_encoding: "SQL_ASCII" }]);
       await migrate(ascii);
       const expected = MIGRATION_URLS.map(url => url.pathname.split("/").at(-1));
@@ -309,28 +324,39 @@ describe("CH-3a real PostgreSQL guarantees",()=>{
       await migrate(ascii);
       expect((await ascii.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map(row => row.migration_name)).toEqual(expected);
     } finally {
-      await ascii.end();
-      await admin.query("DROP DATABASE ch3a_sql_ascii");
+      await closeTestPools(ascii,asciiControl);await asciiPostgres.stop();
     }
-  }, 60_000);
+  }, 180_000);
 });
 
 describe("CH-3a adoption authorization boundary (round 2)",()=>{
   const OWNER_POLICY="synthetic_import_terms_candidate.v1";
   const adoptInput=(job:string,hash:string,customerRevisionId:string,siteRevisionId:string)=>({parties:{customerRevisionId,siteRevisionId},version:"adopt-job.v1" as const,jobId:job,baselineId:randomUUID(),title:"Fictional import",lifecyclePoint:"live" as const,provenance:"imported" as const,lineageStrength:"builder_attested_weaker" as const,baselineHash:hash,baselineDescription:"Fictional baseline",acceptedNetValuePence:100000,recoveryCapPence:1500,acceptedValueSource:"builder_attestation" as const,attestedByMembershipId:member,attestedAt:new Date(0),importTermsVersion:OWNER_POLICY as typeof OWNER_POLICY,feePolicyVersion:"reference_fee_policy_v1" as const,mode:"synthetic_candidate" as const});
   const commandFor=(job:string,hash:string)=>({version:"command.v1" as const,commandId:randomUUID(),commandType:"job.adopt_in_flight",semanticKey:`import:${job}`,actorMembershipId:member,subjectType:"job",subjectRef:job,action:{actionType:"job.adopt_in_flight",recipient:null,contentHash:hash,aggregateRevision:0,amountPence:100000,currency:"GBP" as const,policyVersion:OWNER_POLICY,expiresAt:new Date(Date.now()+60000)}});
-  const callAdopt=(a:{job:string;hash:string;customer:string;site:string;command:string;authorization:string;actor?:string;net?:number;policy?:string;baseline?:string})=>withTenant(runtime,context,db=>db.$client.query(
-    `SELECT app.adopt_in_flight_job($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
-    [tenant,a.job,a.baseline??randomUUID(),"Fictional import","live",a.hash,"Fictional baseline",a.net??100000,1500,"reference_fee_policy_v1",a.policy??OWNER_POLICY,a.actor??member,new Date(0),a.customer,a.site,null,a.command,a.authorization]));
-  // The rows the command dispatcher writes, created directly so each defect can be isolated.
+  // A processing receipt cannot be committed on its own after LP-5a. These
+  // owner-connected adversarial seeds join the exact transaction under test.
+  const stagedAuthority=new Map<string,(db:TenantTransaction)=>Promise<void>>();
+  const materializeAuthority=async(db:TenantTransaction,command:string,authorization:string)=>{
+    const seeds=new Set([stagedAuthority.get(command),stagedAuthority.get(authorization)]);
+    for(const seed of seeds)if(seed)await seed(db);
+  };
+  const callAdopt=(a:{job:string;hash:string;customer:string;site:string;command:string;authorization:string;actor?:string;net?:number;policy?:string;baseline?:string})=>withTenant(runtime,context,async db=>{
+    await materializeAuthority(db,a.command,a.authorization);
+    return db.$client.query(`SELECT app.adopt_in_flight_job($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
+      [tenant,a.job,a.baseline??randomUUID(),"Fictional import","live",a.hash,"Fictional baseline",a.net??100000,1500,"reference_fee_policy_v1",a.policy??OWNER_POLICY,a.actor??member,new Date(0),a.customer,a.site,null,a.command,a.authorization]);
+  });
+  // Each original authority defect is still materialized independently.
   async function authority(o:{job:string;hash:string;actor?:string;net?:number;policy?:string;expiresInMs?:number;revoked?:boolean;receipt?:"processing"|"succeeded";subject?:string}){
     const command=randomUUID(),decision=randomUUID(),resolution=randomUUID(),authorization=randomUUID(),actor=o.actor??member,receipt=o.receipt??"processing";
-    await admin.query(`INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id,result,completed_at) VALUES($1,$2,'job.adopt_in_flight',$3,$4,$5,$6,$7,$8)`,
+    const seed=async(db:TenantTransaction)=>{
+      await db.$client.query(`INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id,result,completed_at) VALUES($1,$2,'job.adopt_in_flight',$3,$4,$5,$6,$7,$8)`,
       [command,tenant,`import:${o.job}`,"d".repeat(64),receipt,actor,receipt==="succeeded"?"{}":null,receipt==="succeeded"?new Date():null]);
-    await admin.query(`INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES($1,$2,'job',$3,'job.adopt_in_flight')`,[decision,tenant,o.subject??o.job]);
-    await admin.query(`INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'approved',$4)`,[resolution,tenant,decision,actor]);
-    await admin.query(`INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,recipient,content_hash,aggregate_revision,amount_pence,currency,policy_version,expires_at,revoked_at) VALUES($1,$2,$3,$4,$5,'job.adopt_in_flight',NULL,$6,0,$7,'GBP',$8,$9,$10)`,
+      await db.$client.query(`INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES($1,$2,'job',$3,'job.adopt_in_flight')`,[decision,tenant,o.subject??o.job]);
+      await db.$client.query(`INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'approved',$4)`,[resolution,tenant,decision,actor]);
+      await db.$client.query(`INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,recipient,content_hash,aggregate_revision,amount_pence,currency,policy_version,expires_at,revoked_at) VALUES($1,$2,$3,$4,$5,'job.adopt_in_flight',NULL,$6,0,$7,'GBP',$8,$9,$10)`,
       [authorization,tenant,decision,resolution,actor,o.hash,o.net??100000,o.policy??OWNER_POLICY,new Date(Date.now()+(o.expiresInMs??60000)),o.revoked?new Date():null]);
+    };
+    stagedAuthority.set(command,seed);stagedAuthority.set(authorization,seed);
     return {command,authorization};
   }
   async function extraOwner(kind:"revoked"|"expired"){
@@ -342,6 +368,7 @@ describe("CH-3a adoption authorization boundary (round 2)",()=>{
   }
   // Everything the dispatcher does in one transaction: the routine, the audit events and the receipt completion.
   const executeDirect=(a:{job:string;hash:string;customer:string;site:string;command:string;authorization:string},steps:{audit?:boolean;receipt?:boolean;auditedAuthorization?:string}={})=>withTenant(runtime,context,async db=>{
+    await materializeAuthority(db,a.command,a.authorization);
     const baseline=randomUUID();
     await db.$client.query(`SELECT app.adopt_in_flight_job($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,[tenant,a.job,baseline,"Fictional import","live",a.hash,"Fictional baseline",100000,1500,"reference_fee_policy_v1",OWNER_POLICY,member,new Date(0),a.customer,a.site,null,a.command,a.authorization]);
     if(steps.audit!==false)await appendAuditBatch(db,[
@@ -650,10 +677,11 @@ describe("CH-3a round 13 generated practice entry", () => {
     await runtime.query("SELECT app.issue_practice_session($1)", [digest]);
     return { digest, context: testTenantContext(DEMO_TENANT_ID) };
   }
-  it("issues the unchanged three home scenarios with a bound live example, empty quoting suggestions and isolated reusable identities", async () => {
+  it("issues the three home scenarios and saved v1 sample with a bound live example, empty quoting suggestions and isolated reusable identities", async () => {
     const owner = await session(), stranger = await session();
     const jobs = (await repository.list(owner.context, DEMO_MEMBERSHIP_ID, owner.digest)).jobs;
     expect(jobs.map(({ title, status, revision }) => ({ title, status, revision })).sort((a, b) => a.title.localeCompare(b.title))).toEqual([
+      { title: "Earlier proposed pricing (v1)", status: "draft", revision: 0 },
       { title: "Kitchen extension", status: "live", revision: 0 },
       { title: "Loft conversion", status: "quoting", revision: 0 },
       { title: "Practice kitchen", status: "quoting", revision: 0 },
@@ -688,13 +716,26 @@ describe("CH-3a round 13 generated practice entry", () => {
   it("refuses missing parties despite forged scenario, session and bypass settings on direct runtime INSERT and UPDATE", async () => {
     const owner = await session(), id = randomUUID();
     const quote = (await repository.list(owner.context, DEMO_MEMBERSHIP_ID, owner.digest)).jobs.find(job => job.status === "quoting")!;
+    // 0356's INVOKER permit guard runs before job_parties_live_guard on INSERT.
+    // Runtime cannot DELETE its private permit table, so that structural refusal
+    // necessarily precedes JOB_PARTIES_REQUIRED; require the exact door/error.
+    const guardOrder = (await admin.query(`SELECT tgname FROM pg_trigger WHERE tgrelid='app.job'::regclass
+      AND tgname IN ('imported_job_command_only','job_parties_live_guard') ORDER BY tgname`)).rows;
+    expect(guardOrder).toEqual([{ tgname: "imported_job_command_only" }, { tgname: "job_parties_live_guard" }]);
+    expect((await admin.query(`SELECT prosecdef,has_table_privilege('jobguard_runtime','app.lp_job_insert_permit','DELETE') can_delete
+      FROM pg_proc WHERE oid='app.guard_imported_job()'::regprocedure`)).rows).toEqual([{ prosecdef: false, can_delete: false }]);
     for (const insert of [true, false]) {
       await expect(withTenant(runtime, owner.context, async db => {
         await db.$client.query("SELECT set_config('app.practice_session_digest',$1,true),set_config('app.practice_scenario','home',true),set_config('app.skip_job_parties','true',true)", [owner.digest]);
         if (insert) await db.$client.query("INSERT INTO app.job(id,tenant_id,title,status,practice_session_digest,practice_scenario) VALUES($1,$2,'Forged fictional home','live',$3,'home')", [id, DEMO_TENANT_ID, owner.digest]);
         else await db.$client.query("UPDATE app.job SET status='live' WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, quote.id]);
-      })).rejects.toMatchObject(insert ? { code: "22023", message: "JOB_PARTIES_REQUIRED" } : { code: "42501" });
+      })).rejects.toMatchObject({ code: "42501", message: insert ? "permission denied for table lp_job_insert_permit" : "permission denied for table job" });
     }
+    // Keep the exact business refusal through the allowed runtime entrypoint too.
+    await expect(withTenant(runtime, owner.context, async db => {
+      await db.$client.query("SELECT set_config('app.skip_job_parties','true',true)");
+      await db.$client.query("SELECT app.require_current_job_parties($1,$2)", [DEMO_TENANT_ID, quote.id]);
+    })).rejects.toMatchObject({ code: "22023", message: "JOB_PARTIES_REQUIRED" });
     // Runtime has no direct status UPDATE grant; the allowed migration-owner
     // path must independently reject the same attempted unbound promotion.
     await expect(withTenant(admin, owner.context, async db => {
@@ -755,7 +796,7 @@ describe("CH-3a round 13 generated practice entry", () => {
     const before = await counts();
     await expect(runtime.query("SELECT app.issue_practice_session($1)", [owner.digest])).rejects.toMatchObject({ code: "23505" });
     await expect(runtime.query("SELECT app.issue_practice_session($1)", ["forged"])).rejects.toMatchObject({ code: "42501" });
-    await expect(runtime.query("SELECT app.issue_practice_session($1)", [null])).rejects.toMatchObject({ code: "23502" });
+    await expect(runtime.query("SELECT app.issue_practice_session($1)", [null])).rejects.toMatchObject({ code: "42501", message: "UNAUTHENTICATED" });
     try {
       await admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID]);
       await expect(runtime.query("SELECT app.issue_practice_session($1)", [createHash("sha256").update(randomUUID()).digest("hex")])).rejects.toMatchObject({ code: "42501" });

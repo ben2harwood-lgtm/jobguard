@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MeterTodayApplication } from "../../../../../api/src/meter-today.application.js";
 const state = vi.hoisted(() => ({ credentials: {} as Record<string, string>, read: vi.fn(), authenticate: vi.fn(), findMembership: vi.fn() }));
 const tenant = "00000000-0000-4000-8000-000000000001";
@@ -8,8 +8,10 @@ vi.mock("../../../lib/identity-server", () => ({ identityCredentials: async () =
   identityApplication: () => ({ allowedOrigin: "https://company.invalid" }) }));
 vi.mock("../../../lib/meter-server", () => ({ meterApplication: () => new MeterTodayApplication({
   allowedOrigin: "https://company.invalid", provider: { authenticate: state.authenticate, findMembership: state.findMembership, digest: () => "a".repeat(64) },
-} as never, { read: state.read }) }));
-import { GET } from "./route";
+} as never, { read: state.read, readJobs: state.read }) }));
+import { GET as countGET } from "./route";
+import { GET as jobsGET } from "./jobs/route";
+describe.each([{ name: "count", GET: countGET }, { name: "drill-down", GET: jobsGET }])("meter $name boundary", ({ GET }) => {
 beforeEach(() => {
   vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
   state.credentials = { sessionToken: "s".repeat(32), csrfToken: "c".repeat(24), tenantHeader: tenant };
@@ -52,4 +54,6 @@ it("production and unknown failures disclose no counts or details", async () => 
   state.read.mockRejectedValue(new Error("private ledger detail"));
   const response = await GET(request()); expect(response.status).toBe(503);
   expect(await response.json()).toEqual({ version: "meter-today-error.v1", code: "METER_UNAVAILABLE" });
+});
+
 });

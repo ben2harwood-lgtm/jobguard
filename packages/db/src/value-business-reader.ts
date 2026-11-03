@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
 import { z } from "zod";
-import { mapValueReceipt, mapBusinessValueSummary, type ValueWindowV1 } from "@jobguard/core";
+import { valueJobSourcesV1, receiptBaseSources, mapCurrentValueReceipt, mapCurrentBusinessValueSummary, type ValueWindowV1 } from "@jobguard/core";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 import { subscriptionPersistedReadV1 } from "./subscription-repository.js";
 
@@ -10,22 +10,30 @@ export class ValueBusinessReader {
  constructor(private readonly pool:Pool){}
  async readJob(context:VerifiedTenantContext,digest:string,jobId:string,window:ValueWindowV1|null=null){
   const id=z.string().uuid().parse(jobId);
-  const raw=await withTenant(this.pool,context,async db=>(await db.$client.query("SELECT app.read_value_job($1,$2) result",[id,digest])).rows[0]?.result);
+  const raw=await withTenant(this.pool,context,async db=>(await db.$client.query("SELECT app.read_value_job_v2($1,$2) result",[id,digest])).rows[0]?.result);
   if(raw===null)return null;
-  const receipt=mapValueReceipt(raw,window);
-  if(receipt.sources.tenantId!==context.tenantId||receipt.sources.jobId!==id)throw new Error("VALUE_SCOPE_MISMATCH");
+  const receipt=mapCurrentValueReceipt(raw,window);
+  if(receiptBaseSources(receipt).tenantId!==context.tenantId||receiptBaseSources(receipt).jobId!==id)throw new Error("VALUE_SCOPE_MISMATCH");
   return receipt;
  }
  async readBusiness(context:VerifiedTenantContext,digest:string,periodId?:string,window:ValueWindowV1|null=null){
-  const snapshot=await withTenant(this.pool,context,async db=>(await db.$client.query(
-   "SELECT app.read_value_business($1) result",[digest])).rows[0]?.result);
-  const raw=z.object({billing:subscriptionPersistedReadV1,jobs:z.array(z.unknown())}).strict().parse(snapshot);
-  const billing=raw.billing;
-  const jobs=raw.jobs.map(source=>{
-   const receipt=mapValueReceipt(source,window);
-   if(receipt.sources.tenantId!==context.tenantId)throw new Error("VALUE_SCOPE_MISMATCH");
-   return {version:"job-value.v3",environment:"synthetic_demo",jobId:receipt.sources.jobId,status:"mapped",receipt};
+  // Enumerate and upgrade within one authorized tenant transaction. Subscription
+  // periods remain business sources and are never allocated to these jobs.
+  const raw=await withTenant(this.pool,context,async db=>{
+   const snapshot=(await db.$client.query("SELECT app.read_value_business($1) result",[digest])).rows[0]?.result;
+   const original=z.object({billing:subscriptionPersistedReadV1,jobs:z.array(valueJobSourcesV1)}).strict().parse(snapshot);
+   const jobs=[];
+   for(const source of original.jobs){
+    if(source.tenantId!==context.tenantId)throw new Error("VALUE_SCOPE_MISMATCH");
+    const upgraded=(await db.$client.query("SELECT app.read_value_job_v2($1,$2) result",[source.jobId,digest])).rows[0]?.result;
+    const receipt=mapCurrentValueReceipt(upgraded,window);
+    const scope=receiptBaseSources(receipt);
+    if(scope.tenantId!==context.tenantId||scope.jobId!==source.jobId)throw new Error("VALUE_SCOPE_MISMATCH");
+    jobs.push({version:"job-value.v3",environment:"synthetic_demo",jobId:scope.jobId,status:"mapped",receipt});
+   }
+   return {billing:original.billing,jobs};
   });
+  const {billing,jobs}=raw;
   const period=z.object({tenant_id:z.literal(context.tenantId),id:z.string().uuid(),period_start:z.string(),period_end:z.string(),
    source_id:z.string().uuid(),principal_pence:z.number().int().min(0).max(16900),artifact_hash:z.string()});
   const periods=billing.periods.map(p=>period.parse(p)).filter(p=>!periodId||p.id===periodId);
@@ -44,6 +52,6 @@ export class ValueBusinessReader {
    return {periodId:p.id,from:p.period_start,toExclusive:p.period_end,sourceId:p.source_id,statementId:statements[0]!.id,
     policyVersion:"subscription_pricing_policy_v4",derivationVersion:"MON-1/MON-2A",amount:{pence:p.principal_pence,currency:"GBP"},lines};
   });
-  return {version:"business-value-result.v1",state:"mapped",label:"mapped, inspectable",environment:"synthetic_demo",tenantId:context.tenantId,jobs,summary:mapBusinessValueSummary(jobs.map(j=>j.receipt)),subscription};
+  return {version:"business-value-result.v1",state:"mapped",label:"mapped, inspectable",environment:"synthetic_demo",tenantId:context.tenantId,jobs,summary:mapCurrentBusinessValueSummary(jobs.map(j=>j.receipt)),subscription};
  }
 }

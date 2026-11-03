@@ -1,3 +1,5 @@
+import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
+import { installAuditCommandWriterRoles } from "./pool-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -18,6 +20,7 @@ export async function cluster(beforeOwn = false) {
  const config = { host: "127.0.0.1", port, user: "postgres", password: "synthetic" };
  const control = new Pool(config); await control.query("CREATE DATABASE jobguard_synthetic_demo"); await control.end();
  const admin = new Pool({ ...config, database: "jobguard_synthetic_demo" });
+ await installAuditCommandWriterRoles(admin);
  if (beforeOwn) {
   await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
   for (const url of MIGRATION_URLS.filter(u => u.pathname.split("/").at(-1)! < "0122_extra_origin_persistence.sql")) {
@@ -41,7 +44,9 @@ export async function cluster(beforeOwn = false) {
 }
 export type Cluster = Awaited<ReturnType<typeof cluster>>;
 export async function fixture(c: Cluster, n = 1) {
- const p = await new ContractorRepository(c.runtime).startPractice(randomUUID()), demo = await prepareWorkOrderDemo(c.runtime, p, { siteCount: 3 });
+ const p = await new ContractorRepository(c.runtime).startPractice(randomUUID());
+ await seedActiveContractorAgreement(c.admin, p.tenantId);
+ const demo = await prepareWorkOrderDemo(c.runtime, p, { siteCount: 3 });
  await new WorkOrderRepository(c.runtime).importCsv(p, { commandId: randomUUID(), name: "fictional.csv", kind: "csv", csv: demoFile([demoRow(demo, n)]) });
  const row = (await c.admin.query("SELECT w.id order_id,w.job_id,c.revision_id FROM app.work_order w JOIN app.work_order_current c ON (c.tenant_id,c.work_order_id)=(w.tenant_id,w.id) WHERE w.tenant_id=$1", [p.tenantId])).rows[0];
  const grant = (await c.admin.query("SELECT id FROM app.role_grant WHERE tenant_id=$1 AND membership_id=$2 AND scope_kind='tenant'", [p.tenantId, p.membershipId])).rows[0];
@@ -55,6 +60,12 @@ export async function ownerTx<T>(c: Cluster, tenantId: string, work: (db: Tenant
 }
 export async function receipt(db: TenantTransaction, tenantId: string, jobId: string, variationId: string, actor: string, type = "LogSiteExtra", commandId = randomUUID(), fields: { status?: string; semanticKey?: string } = {}) {
  await db.$client.query("INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id,result,completed_at) VALUES($1,$2,$3,$4,$5,$6::text,$7,CASE WHEN $6::text='succeeded' THEN '{}'::jsonb ELSE NULL END,CASE WHEN $6::text='succeeded' THEN clock_timestamp() ELSE NULL END)", [tenantId, commandId, type, fields.semanticKey ?? `extra-origin:${jobId}:${variationId}`, "a".repeat(64), fields.status ?? "processing", actor]); return commandId;
+}
+/** Raw guard fixtures deliberately bypass the repository lifecycle so one SQL
+ * defect can be isolated. Call only after that fixture's real mutation, inside
+ * its transaction; no processing receipt may leak across a fixture commit. */
+export async function terminalizeFixtureReceipt(db: TenantTransaction, tenantId: string, commandId: string, result: Record<string,unknown>) {
+ await db.$client.query("UPDATE app.command_receipt SET status='succeeded',result=$3::jsonb,completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2 AND status='processing'",[tenantId,commandId,JSON.stringify(result)]);
 }
 export async function rawVariation(db: TenantTransaction, tenant: string, job: string, variation = randomUUID(), kind = "site_user", track = "contractor") {
  const scope = randomUUID();

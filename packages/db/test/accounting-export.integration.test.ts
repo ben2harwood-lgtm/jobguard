@@ -170,3 +170,18 @@ it("SQL rejects caller matches and ignores inbox observations for another tenant
  await expect(f.call("claim", { version: 1, attemptId: randomUUID() })).rejects.toThrow("EXPORT_RECONCILE_REQUIRED");
  await expect(c.admin.query("UPDATE app.accounting_export_inbox SET matches='[]' WHERE tenant_id=$1", [f.a.tenantId])).rejects.toThrow("EXPORT_IMMUTABLE");
 });
+
+it("export audits use the database-owned checked-operation chain", async () => {
+ const f = await setup();
+ await f.call("approve", f.approval);
+ await f.push();
+ const events = (await c.admin.query(
+  "SELECT version,event_type,payload FROM app.audit_event WHERE tenant_id=$1 AND event_type LIKE 'accounting_export.%' ORDER BY sequence",
+  [f.a.tenantId])).rows;
+ expect(events.map(e => e.event_type)).toEqual(["accounting_export.approve", "accounting_export.claim", "accounting_export.reconcile"]);
+ for (const event of events) {
+  expect(event.version).toBe("audit.v2");
+  expect(event.payload.references.auditTrust).toBe("checked_operation");
+  expect(event.payload.hashes).toEqual({ request: expect.stringMatching(/^[a-f0-9]{64}$/), result: expect.stringMatching(/^[a-f0-9]{64}$/) });
+ }
+});

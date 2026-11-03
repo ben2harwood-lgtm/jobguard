@@ -1,3 +1,4 @@
+import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
 // Independent compatibility groundwork; this file does not claim LP-2 acceptance.
 import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -24,6 +25,7 @@ afterAll(async () => { vi.unstubAllEnvs(); await db?.close(); });
 describe("LP-2 creation caller compatibility groundwork", () => {
   it("[LP2-A12] ENT-2 import still creates one live work-order job atomically through the product repository", async () => {
     const principal = await new ContractorRepository(db.runtime).startPractice(randomUUID());
+    await seedActiveContractorAgreement(db.owner, principal.tenantId);
     const demo = await prepareWorkOrderDemo(db.runtime, principal, { siteCount: 1 });
     const command = { commandId: randomUUID(), kind: "csv" as const, name: "fictional-lp2.csv", csv: demoFile([demoRow(demo, 1)]) };
     const repository = new WorkOrderRepository(db.runtime), result = await repository.importCsv(principal, command);

@@ -8,16 +8,16 @@
       "allow": [
         "apps/api/src/accounting-export.persisted.ts",
         "docs/contracts/accounting-export-v1.md",
-        "packages/db/migrations/0582_accounting_export_persistence.sql",
+        "packages/db/migrations/0558_accounting_export_persistence.sql",
         "packages/db/src/accounting-export-repository.ts",
         "packages/db/src/index.ts",
         "packages/db/test/accounting-export-executor.test.ts",
         "packages/db/test/accounting-export-upgrade.integration.test.ts",
         "packages/db/test/accounting-export.integration.test.ts",
         "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
-        "packages/db/test/migration-proofs/0582_accounting_export_persistence.proof.json"
+        "packages/db/test/migration-proofs/0558_accounting_export_persistence.proof.json"
       ],
-      "note": "M5-1 RED synthetic persistence atop unmerged m5-2-xero; shared contract docs and catalog expectation lists serialize with other migrations. Follow-up binds reconciliation to the private fake-adapter inbox for the exact tenant and attempt. Own lane file implicitly permitted.",
+      "note": "M5-1 RED dark synthetic persistence catch-up to incoming main 111865cf6. Migration 0558 is additive; shared contract and upgrade expectations serialize. Audit uses app.lp4_seal_audit. NOPR; PostgreSQL CI and independent review remain required.",
       "test": "packages/db/test/accounting-export-executor.test.ts packages/db/test/accounting-export.integration.test.ts"
     }
   }
