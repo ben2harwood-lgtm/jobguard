@@ -1,3 +1,4 @@
+import { fakeAuditAppend } from "./audit-protocol-test-fixture.js";
 import type { Pool } from "pg";
 import { describe, expect, it, vi } from "vitest";
 import { ActionExecutor, type OutboundAdapter } from "./outbox.js";
@@ -92,6 +93,7 @@ describe("ActionExecutor retry exhaustion", () => {
       status: "retryable",
     };
     const query = vi.fn(async (sql: string, _values?: unknown[]) => {
+      if (sql.includes("FROM app.append_audit(")) return { rows: fakeAuditAppend(String(_values?.[0]), context.tenantId) };
       if (sql.startsWith("SELECT nullif(current_setting")) return { rows: [{ tenant_id: context.tenantId }] };
       if (sql === "SELECT sequence::text, event_hash FROM app.lock_audit_head()") return { rows: [] };
       if (sql === "SELECT clock_timestamp() AS occurred_at") return { rows: [{ occurred_at: new Date() }] };
@@ -134,7 +136,8 @@ it("MON-8 cancels an approval message before delivery or attempt creation after 
   const context=testTenantContext("10000000-0000-4000-8000-000000000001"),id="20000000-0000-4000-8000-000000000002";
   const row={adapter:"fake_email",action_type:"extra.client_approval_request.send",authorization_actor:"40000000-0000-4000-8000-000000000004",
     status:"pending",created_at:"2026-01-01T00:00:00Z",authorization_expires_at:"2099-01-01T00:00:00Z"};
-  const query=vi.fn(async(sql:string)=>{
+  const query=vi.fn(async(sql:string, values?: unknown[])=>{
+    if(sql.includes("FROM app.append_audit("))return {rows:fakeAuditAppend(String(values?.[0]),context.tenantId)};
     if(sql.startsWith("SELECT o.*"))return {rows:[row]};
     if(sql.startsWith("SELECT app.mon8_feature_decision"))return {rows:[{decision:{version:"plan-entitlement-decision.v1",environment:"synthetic_demo",feature:"approval_chains",entitlement:"held",executable:false,reason:"agreement_authority_held"}}]};
     if(sql.startsWith("SELECT nullif(current_setting"))return {rows:[{tenant_id:context.tenantId}]};

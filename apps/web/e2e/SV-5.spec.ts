@@ -1,4 +1,5 @@
 // SV-5 reveal and real post-lock practice worker journeys. Synthetic; CI only.
+import { sourceFixture } from "./helpers/final-check-source-fixtures";
 import { randomUUID } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
 import { openLiveWatchdogJob } from "./helpers/capture-journey";
@@ -226,5 +227,25 @@ test("O (real run): zero-result wording survives reload and replay creates no du
 });
 
 // I remains blocked: D13 must-surface activation is held.
-// J/L remain blocked: merged SV-7A rejects new post-lock sources with POST_LOCK_WORK_REQUIRES_LINKED_JOB;
-// email/photo coalescing and post-lock message imports are not supplied by its bounded text intake.
+// J source coalescing is tracked as a separate SV-5 follow-up.
+// L uses an explicit fictional connector-source fixture; real connector intake remains outside this suite.
+test("L source leg: an old message received after lock is shown at once and never fee eligible", async ({page}) => {
+ const {jobId,tenantId} = await lockedPracticeJob(page);
+ await withSyntheticShadow(tenantId, async (shadow,admin) => {
+  const observation=await sourceFixture(admin,tenantId,jobId,"message"),signalId=randomUUID();
+  await shadow.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state) VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic_web.v1',clock_timestamp(),'Old fictional outside tap message','low','held_for_final_check')",[tenantId,jobId,signalId,randomUUID()]);
+  const e=observation.evidence;
+  await shadow.query("INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,$5,$6,$7::timestamptz)",[tenantId,jobId,signalId,e.id,e.objectVersionId,e.sha256,e.serverReceivedAt]);
+  for(let pass=0;pass<2;pass++) {
+   await page.goto(`/jobs/${jobId}#final-check`);
+   const panel=page.getByTestId("final-check-reveal");
+   await expect(panel.getByTestId("final-check-post-lock")).toHaveCount(1);
+   await expect(panel.getByTestId("final-check-post-lock")).toContainText("Old fictional outside tap message");
+   await expect(panel).toContainText("it never earns JobGuard a fee");
+   await expect(panel.getByTestId("final-check-item")).toHaveCount(0);
+   await page.reload();
+  }
+  expect((await shadow.query("SELECT reason FROM app.shadow_signal_ineligibility WHERE tenant_id=$1 AND job_id=$2 AND signal_id=$3",[tenantId,jobId,signalId])).rows).toContainEqual({reason:"evidence_after_lock"});
+  expect((await admin.query("SELECT device_captured_at < l.locked_at old, e.server_received_at > l.locked_at late FROM app.evidence_object e JOIN app.final_account_lock l USING(tenant_id,job_id) WHERE e.tenant_id=$1 AND e.id=$2",[tenantId,e.id])).rows).toEqual([{old:true,late:true}]);
+ });
+});

@@ -8,12 +8,12 @@ import {migrate} from "../src/migrate.js";
 import {FinalAccountLockRepository} from "../src/final-account-lock-repository.js";
 import {FinalCheckRepository,type FinalCheckClassification} from "../src/final-check-repository.js";
 import {testTenantContext} from "./tenant-context-test-utils.js";
-import {freePort,closeTestPools,installLegacySyntheticPartyFixtures} from "./pool-test-utils.js";
+import {freePort,closeTestDatabase,installLegacySyntheticPartyFixtures} from "./pool-test-utils.js";
 export const FINAL_CHECK_TENANT="11111111-1111-4111-8111-111111111111",FINAL_CHECK_ACTOR="d1500000-0000-4000-8000-000000000003",FINAL_CHECK_USER="d1500000-0000-4000-8000-000000000001";
 export type FinalCheckFixture={postgres:EmbeddedPostgres;admin:Pool;runtime:Pool;shadow:Pool;directory:string;logs:string[]};
 export async function createFinalCheckFixture(install=true):Promise<FinalCheckFixture>{
  const directory=await mkdtemp(join(tmpdir(),"sv5-pg16-")),port=await freePort(58000,200),credential=randomUUID(),logs:string[]=[];
- const postgres=new EmbeddedPostgres({databaseDir:directory,port,user:"postgres",password:credential,persistent:true,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:line=>logs.push(line)});
+ const postgres=new EmbeddedPostgres({databaseDir:directory,port,user:"postgres",password:credential,persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:line=>logs.push(line)});
  await postgres.initialise();await postgres.start();
  const config={host:"127.0.0.1",port,user:"postgres",password:credential},bootstrap=new Pool({...config,database:"postgres"});
  await bootstrap.query('CREATE DATABASE jobguard_synthetic_demo');await bootstrap.end();const admin=new Pool({...config,database:"jobguard_synthetic_demo"});
@@ -25,7 +25,7 @@ export async function createFinalCheckFixture(install=true):Promise<FinalCheckFi
  if(install){await admin.query(`GRANT jobguard_runtime TO ${runtimeLogin}`);await admin.query(`GRANT jobguard_shadow TO ${shadowLogin}`);}
  return {postgres,admin,runtime:new Pool({...config,database:"jobguard_synthetic_demo",user:runtimeLogin}),shadow:new Pool({...config,database:"jobguard_synthetic_demo",user:shadowLogin}),directory,logs};
 }
-export async function closeFinalCheckFixture(f:FinalCheckFixture|undefined){if(!f)return;await closeTestPools(f.runtime,f.shadow,f.admin);await f.postgres.stop();}
+export async function closeFinalCheckFixture(f:FinalCheckFixture|undefined){if(!f)return;await closeTestDatabase(f.postgres,f.directory,f.runtime,f.shadow,f.admin);}
 export async function finalCheckTenant<T>(pool:Pool,tenantId:string,work:(client:PoolClient)=>Promise<T>):Promise<T>{const db=await pool.connect();try{await db.query('BEGIN');await db.query("SELECT set_config('app.tenant_id',$1,true)",[tenantId]);const result=await work(db);await db.query('COMMIT');return result;}catch(e){await db.query('ROLLBACK');throw e;}finally{db.release();}}
 export async function seedFinalCheckJob(f:FinalCheckFixture){
  const tenantId=FINAL_CHECK_TENANT,jobId=randomUUID(),scopeItemId=randomUUID(),baselineId=randomUUID(),draftId=randomUUID(),revisionId=randomUUID(),lineId=randomUUID(),accountId=randomUUID(),sessionId=randomUUID(),digest=createHash('sha256').update(sessionId).digest('hex'),hash="a".repeat(64);
@@ -49,9 +49,9 @@ export async function seedFinalCheckJob(f:FinalCheckFixture){
  return {tenantId,jobId,scopeItemId,baselineId,revisionId,lineId,context,digest,sessionId,lock:()=>locks.lock(context,{jobId,actorMembershipId:FINAL_CHECK_ACTOR,commandId:randomUUID(),finalAccountRevisionId:revisionId,expectedRevision:1,declarationVersion:"final_account_declaration.v1"})};
 }
 export type FinalCheckJob=Awaited<ReturnType<typeof seedFinalCheckJob>>;
-export async function insertFinalCheckEvidence(f:FinalCheckFixture,a:FinalCheckJob,evidenceType="completion_photo",contentType="image/png"){const evidence=randomUUID(),upload=randomUUID(),hash="a".repeat(64),objectVersion=randomUUID();await finalCheckTenant(f.admin,a.tenantId,async db=>{
+export async function insertFinalCheckEvidence(f:FinalCheckFixture,a:FinalCheckJob,evidenceType="completion_photo",contentType="image/png",byteLength=0){const evidence=randomUUID(),upload=randomUUID(),hash="a".repeat(64),objectVersion=randomUUID();await finalCheckTenant(f.admin,a.tenantId,async db=>{
  await db.query("INSERT INTO app.evidence_upload(id,tenant_id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at,state,object_version_id,server_verified_at) VALUES($1,$2,$3,$4,$5,$6,$8,100,'standard_evidence',clock_timestamp()+interval '1 day','verified',$7,clock_timestamp())",[upload,a.tenantId,a.jobId,a.scopeItemId,`synthetic/${evidence}`,hash,objectVersion,contentType]);
- await db.query("INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at,device_captured_at) VALUES($1,$2,$3,$4,$5,'original',$9,$6,$7,$8,0,$10,'standard_evidence',clock_timestamp(),clock_timestamp(),'2020-01-01')",[evidence,a.tenantId,upload,a.jobId,a.scopeItemId,`synthetic/${evidence}`,objectVersion,hash,evidenceType,contentType]);
+ await db.query("INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at,device_captured_at) VALUES($1,$2,$3,$4,$5,'original',$9,$6,$7,$8,$11,$10,'standard_evidence',clock_timestamp(),clock_timestamp(),'2020-01-01')",[evidence,a.tenantId,upload,a.jobId,a.scopeItemId,`synthetic/${evidence}`,objectVersion,hash,evidenceType,contentType,byteLength]);
  });return evidence;}
 export async function finalCheckProposal(f:FinalCheckFixture,a:FinalCheckJob,evidence:string,scopeItemId:string|null=null){const signalId=randomUUID();await finalCheckTenant(f.shadow,a.tenantId,async db=>{
  await db.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state,matched_scope_item_id) VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic.v1',clock_timestamp(),'Outside tap','low','held_for_final_check',$5)",[a.tenantId,a.jobId,signalId,randomUUID(),scopeItemId]);

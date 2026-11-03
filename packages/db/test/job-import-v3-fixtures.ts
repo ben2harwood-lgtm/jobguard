@@ -17,17 +17,17 @@ export const command = consequentialCommandV1Schema.parse({ version: "command.v1
 type ScriptQuery = (sql: string, values?: unknown[]) => Promise<{ rows: Record<string, unknown>[]; rowCount: number }>;
 type ScriptedImportPool = {
   pool: Pool; query: Mock<ScriptQuery>; release: Mock<() => void>; context: ReturnType<typeof testTenantContext>;
-  state: { authenticated: boolean; owns: boolean; actor: string; binding: typeof parties };
+  state: { authenticated: boolean; owns: boolean; provenance: string; actor: string; binding: typeof parties };
 };
 export function scriptedImportPool(): ScriptedImportPool {
-  const state = { authenticated: true, owns: true, actor: M, binding: { ...parties } };
+  const state = { authenticated: true, owns: true, provenance: "system_generated_quote", actor: M, binding: { ...parties } };
   const query = vi.fn<ScriptQuery>(async (sql: string, _values?: unknown[]) => {
     if (["BEGIN", "COMMIT", "ROLLBACK"].includes(sql) || sql.startsWith("SELECT set_config")) return { rows: [], rowCount: 0 };
     if (sql.includes("authenticate_practice_session")) return { rows: state.authenticated ? [{ membership_id: state.actor }] : [], rowCount: state.authenticated ? 1 : 0 };
-    if (sql.includes("FROM practice_owned_job WHERE")) return { rows: state.owns ? [{ id: J }] : [], rowCount: state.owns ? 1 : 0 };
+    if (sql.includes("FROM practice_owned_job")) return { rows: state.owns ? [{ id: J, provenance: state.provenance }] : [], rowCount: state.owns ? 1 : 0 };
     if (sql.includes("FROM app.job_party_current")) return { rows: [state.binding], rowCount: 1 };
     if (sql.includes("FROM app.job_import_v3")) return { rows: [], rowCount: 0 };
-    if (sql.startsWith("SELECT role FROM app.membership")) return { rows: [{ role: "owner" }], rowCount: 1 };
+    if ((sql.startsWith("SELECT role FROM app.membership") || sql.startsWith("SELECT 1 FROM app.membership"))) return { rows: [{ role: "owner" }], rowCount: 1 };
     throw new Error(`Unexpected SQL in unit transport: ${sql}`);
   });
   const release = vi.fn(), client = { query, release }, pool = { connect: vi.fn(async () => client) } as unknown as Pool;
@@ -46,7 +46,7 @@ export type ImportFixture = Awaited<ReturnType<typeof createImportFixture>>;
 export { closeWorkFixture };
 export async function importState(f: WorkFixture) {
   const result: Record<string, unknown> = {};
-  for (const table of ["app.job", "app.imported_job_baseline", "app.command_receipt", "app.action_authorization", "app.decision_resolution", "app.audit_event", "app.job_work_state_event", "app.synthetic_obligation", "app.recovery_fee_journal", "app.customer_invoice"])
+  for (const table of ["app.job", "app.job_import_v3", "app.imported_job_baseline", "app.command_receipt", "app.action_authorization", "app.decision_resolution", "app.audit_event", "app.job_work_state_event", "app.synthetic_obligation", "app.recovery_fee_journal", "app.customer_invoice"])
     result[table] = (await f.admin.query(`SELECT coalesce(jsonb_agg(to_jsonb(x) ORDER BY to_jsonb(x)::text),'[]'::jsonb) rows FROM ${table} x`)).rows[0].rows;
   return result;
 }

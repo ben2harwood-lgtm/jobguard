@@ -1,4 +1,5 @@
 import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
+import { syntheticOwnerPool } from "./pool-test-utils.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { readFile, mkdtemp, rm } from "node:fs/promises";
@@ -35,9 +36,7 @@ async function insertVariation(client:Pick<PoolClient,"query">,id:string,jobId:s
 beforeAll(async()=>{
  dir=await mkdtemp(join(tmpdir(),"sh-1-pg-"));port=await freePort(59600,100);
  pg=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});
- await pg.initialise();await pg.start();const control=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic",database:"postgres"});
- try { await control.query("CREATE DATABASE jobguard_synthetic_demo"); } finally { await control.end(); }
- admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic",database:"jobguard_synthetic_demo"});
+ await pg.initialise();await pg.start();admin = await syntheticOwnerPool({host:"127.0.0.1",port,user:"postgres",password:"synthetic"});
  await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
  for(const url of MIGRATION_URLS.slice(0,MIGRATION_URLS.indexOf(migrationURL))) {
   await admin.query(await readFile(url,"utf8"));

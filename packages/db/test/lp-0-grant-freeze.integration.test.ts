@@ -1,3 +1,4 @@
+import { loadMigrationProofs, proofSourceDigests } from "./migration-proof-loader.js";
 /**
  * LP-0 grant freeze guard, real PostgreSQL 16, complete migration registry.
  *
@@ -19,6 +20,7 @@ import { rolledBack } from "./upgrade-proof-utils.js";
 let db: Lp0Database;
 let inventory: Inventory;
 let rawInventory: any;
+let reviewedSourcesBefore: Record<string, string>;
 let baselineMigrationOnly: Fact[]; // runtime NOLOGIN: exactly as the migrations leave it
 let baselineBootstrapLogin: Fact[]; // runtime LOGIN: the synthetic-bootstrap posture used to exercise the real role
 let registryBefore: { migration_name: string; applied_at: string }[];
@@ -41,6 +43,7 @@ const has = async (c: PoolClient, sql: string, values: unknown[] = []) => (await
 
 beforeAll(async () => {
   ({ raw: rawInventory, inventory } = await loadReviewedInventory());
+  reviewedSourcesBefore = proofSourceDigests([new URL("../../../docs/contracts/lp-0-effective-privileges-v1.json", import.meta.url).pathname, ...loadMigrationProofs().sources]);
   db = await startLp0Database(58600);
   // Catalogue of the migrated base BEFORE any test-only login posture is applied.
   baselineMigrationOnly = deriveFacts(await readCatalogue(db.admin));
@@ -351,7 +354,7 @@ describe("LP-0 grant freeze guard against the fully migrated database", () => {
     const find = (key: string) => rows.find(r => r.key === key);
     // Existing powers are reported as what they are, not as SELECT/INSERT-only and not as the final state.
     for (const [key, cards] of [
-      ["acl|rel|table|app.audit_event|jobguard_runtime|INSERT|-", ["LP-4", "LP-6e"]],
+      ["acl|rel|table|app.audit_event|jobguard_audit_writer|INSERT|-", ["LP-4", "LP-6e"]],
       ["acl|rel|table|app.command_receipt|jobguard_runtime|INSERT|-", ["LP-5a", "LP-5b", "LP-5c"]],
       ["acl|col|app.command_receipt.status|jobguard_runtime|UPDATE|-", ["LP-5c"]],
       ["acl|rel|table|app.customer_invoice|jobguard_runtime|INSERT|-", ["LP-8a"]],
@@ -364,6 +367,9 @@ describe("LP-0 grant freeze guard against the fully migrated database", () => {
       expect(row!.cards, key).toEqual(expect.arrayContaining([...cards]));
       expect(row!.target).not.toBe("retain");
     }
+    // LP-4 deliberately withdraws direct runtime audit INSERT; its dedicated
+    // NOLOGIN writer is the remaining, separately reviewed capability above.
+    expect(find("acl|rel|table|app.audit_event|jobguard_runtime|INSERT|-")).toBeUndefined();
     // LP-1 closed these broad powers; neither live facts nor the reviewed exceptions may retain them.
     for (const key of [
       "acl|rel|table|app.membership|jobguard_runtime|DELETE|-",
@@ -447,7 +453,8 @@ describe("LP-0 grant freeze guard against the fully migrated database", () => {
       expect(leftovers.rows[0]).toEqual({ roles: 0, relations: 0, routines: 0, defaults: 0, memberships: 0, tenants: 0, accounts: 0, jobs: 0, login: true });
     } finally { second.release(); }
     // The reviewed file on disk is untouched by any of the above.
-    expect(parseInventory(JSON.parse(await readFile(new URL("../../../docs/contracts/lp-0-effective-privileges-v1.json", import.meta.url), "utf8"))).entries.length).toBe(inventory.entries.length);
+    expect(proofSourceDigests([new URL("../../../docs/contracts/lp-0-effective-privileges-v1.json", import.meta.url).pathname, ...loadMigrationProofs().sources])).toEqual(reviewedSourcesBefore);
+    expect((await loadReviewedInventory()).inventory).toEqual(inventory);
   });
 });
 

@@ -6,7 +6,7 @@
         "codex/sandbox/mon8-upgrade-successors"
       ],
       "receipt": "docs/verdicts/MON8-UPGRADE-SUCCESSORS/BUILDER_RECEIPT.md",
-      "note": "MON-8 RED PR #302 catch-up and stem-only renumber to 0616/0617. Preserve the exact merged-main union and latest main LP-5b site-visit effect bindings. Router stages the resolution, commits, pushes and runs CI and exact-head RED review.",
+      "note": "MON-8 RED catch-up: exact union with origin/main be69b8d91. Keep 0616/0617 for router renumbering at landing. Router stages the resolution, commits, pushes and runs CI and exact-head RED review.",
       "allow": [
         "apps/api/src/auth/context-boundary.test.ts",
         "apps/api/src/contractor/contractor-retained-read.application.test.ts",

@@ -1310,3 +1310,24 @@ RED PASS applies to f998d594 only; this handoff does not claim a fresh independe
 review. Current main must supply the LP-5b migration before the carried visit
 bodies execute (it is already on observed origin/main, beyond MERGE_HEAD).
 No Git write, fetch, install, provider action or release was performed.
+
+### 3 November 2026 — exact-union catch-up for router handoff
+
+Resolved the ten launcher merge conflicts against origin/main `be69b8d91d91f77bf2765a13b0a2074545c40fbe`. Preserved MON-8 entitlement guards together with main's repository command lifecycle, replay handling, synthetic-owner pool helpers, LP-3 catalogue assertions, CH-6 routine assertions and LP-5 registry/empty-successor assertions. Kept MON-8's populated predecessor/multiset proofs and negative controls. Test assertions were not weakened or changed to accept a different outcome. Adapted the existing MON-8 outbox unit double to main's `fakeAuditAppend` helper. Privilege metadata is the union without duplicate keys/identities; removed obsolete scanner entries for calls absent from the merged source, retaining main's other entries. No new product behavior.
+
+Kept migrations `0616_server_plan_entitlements.sql` and `0617_contractor_feature_guards.sql`; no migration present on origin/main was edited. Router owns landing renumbering. Updated this piece's lane to all 98 non-lane paths differing from origin/main. No other lane files differ from origin/main, so none needed removal.
+
+Actual local checks (installed Node 24.17.0, Vitest 4.1.12, maxWorkers=1):
+
+- `node packages/db/node_modules/typescript/bin/tsc -p packages/db/tsconfig.json --noEmit` — passed, including final repeat after the audit-double compatibility edit.
+- Strict TypeScript compilation with `--noEmit --strict --noUncheckedIndexedAccess --exactOptionalPropertyTypes --skipLibCheck --target ES2023 --module NodeNext --moduleResolution NodeNext` of `contractor-entitlement-upgrade.integration.test.ts`, `serious-b5-upgrade.integration.test.ts`, `recovery-case-terms.integration.test.ts`, `shared-money-origin.integration.test.ts`, and `audit-export.integration.test.ts` — passed. This compiles those tests; it does not execute PostgreSQL.
+- From packages/db, installed Vitest: `run --maxWorkers=1 src/plan-entitlement-service.test.ts src/outbox.test.ts test/mon8-combined-migration.test.ts` — final run 3 files, 20 tests passed. Initial run exposed the old audit-double protocol; corrected using the existing helper, with assertions preserved.
+- From apps/api, installed Vitest: `run --maxWorkers=1 src/plan-entitlements.persisted.test.ts src/auth/context-boundary.test.ts src/contractor/site-extra.application.test.ts` — 3 files, 188 tests passed.
+- `node tools/commercial-integrity-current-source-guard.mjs` — 86 protected roots, zero diagnostics, eight baselined unresolved cases. Initial run identified two stale site-visit entries, removed because the branch already uses executeVisit.
+- `node tools/commercial-boundary-lint.mjs`, `node tools/money-arithmetic-lint.mjs`, `node tools/ai-provider-boundary-lint.mjs`, `node tools/plpgsql-case-in-if-lint.mjs` — passed; SQL lint checked 199 migrations.
+- `git diff --check` — passed. JSON parse and duplicate-key/identity checks — passed.
+- Endpoint lane validation using the existing `mergeLanePolicy` and `lanePathAllowed` exports against `git diff --no-renames --name-only origin/main` — passed for 99 paths including this lane.
+
+`LANE_BASE_REF=origin/main node tools/lint.mjs` ran core purity successfully, then stopped at lane checking: before the router stages/commits this merge, the unchanged checker also includes incoming-main paths from the index and the old HEAD's merge-base range. This is not a completed full lint pass. Router must rerun normal lane/full lint against the committed merge. No checker changes or broad lane grants were made. The pnpm wrapper stalled without starting either requested check and was interrupted; the checks above ran directly through the installed repository compiler and Vitest instead, without downloads.
+
+RED: router must stage the resolved files (the read-only Git index still records unmerged entries), commit, push, open the PR and arrange independent review at the exact resulting head. PostgreSQL/migration, browser, full repository checks and build remain GitHub CI work under the issued sandbox restriction. No localhost/database attempt, git fetch, Git write, provider call or real data use occurred. This handoff is source inspection and deterministic local test evidence, not independent review or release approval.

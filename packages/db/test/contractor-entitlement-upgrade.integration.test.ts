@@ -1,3 +1,4 @@
+import { lp5RegistryRows } from "./lp5-command-catalog.js";
 import { afterAll,beforeAll,expect,it } from "vitest";
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
@@ -153,6 +154,15 @@ it("actual catalogs retain least privilege",async()=>{
 });
 // Preserve the union of main's explicit empty successor expectations and the general proof.
 const emptySuccessors=[
+ "app.command_lifecycle_claim",
+ "app.repository_operational_record",
+ "app.demo_trial_binding",
+ "app.simulation_money_review",
+ "app.simulation_money_run",
+ "app.ch6_identifier_assertion",
+ "app.ch6_line_correction_source",
+ "app.activation_acceptance_operation_use",
+
  "app.platform_fee_attempt",
  "app.platform_fee_attempt_event",
  "app.platform_fee_collection_command",
@@ -298,6 +308,7 @@ it("repeat migration and later successors succeed",async()=>{
  for (let pass=0;pass<2;pass++) {
   await migrate(c.admin);
   for(const table of emptySuccessors) expect((await c.admin.query(`SELECT * FROM ${tableIdent(table)}`)).rows,table).toEqual([]);
+  expect((await c.admin.query("SELECT jsonb_agg(value ORDER BY value::text) data FROM jsonb_array_elements($1::jsonb)",[JSON.stringify(lp5RegistryRows)])).rows[0].data).toEqual((await snapshot(c.admin,["app.command_type_registry"]))["app.command_type_registry"]);
   expect(await proofDifferences(c.admin,original)).toEqual(preserved);
   expect(await proofDifferences(c.admin,before)).toEqual(preserved);
   expect((await c.admin.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map(r=>r.migration_name)).toEqual(MIGRATION_URLS.map(url=>url.pathname.split("/").at(-1)!));
@@ -475,4 +486,29 @@ it("empty keyed predecessors have structural evidence while partition and spine 
   await db.query("ALTER TABLE app.mon8_empty_scratch ADD COLUMN later_note text");
   expect(await proofDifferences(db,proof)).toEqual(preserved);
  });
+});
+// CH-6: retained 0227 and additive 0309 routine execution boundaries.
+it("0227 and 0309 routines retain exact ownership and execution boundaries",async()=>{
+ await migrate(c.admin);
+ const rows=(await c.admin.query(`SELECT p.proname,pg_get_function_identity_arguments(p.oid) args,r.rolname owner,p.prosecdef,p.proconfig,
+ has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') runtime,
+ has_function_privilege('jobguard_shadow',p.oid,'EXECUTE') shadow,
+ has_function_privilege('jobguard_infrastructure',p.oid,'EXECUTE') infrastructure,
+ EXISTS(SELECT 1 FROM aclexplode(p.proacl) WHERE grantee=0 AND privilege_type='EXECUTE') public
+ FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace JOIN pg_roles r ON r.oid=p.proowner
+ WHERE n.nspname='app' AND left(p.proname,4)='ch6_' ORDER BY p.proname`)).rows;
+ const identities=[
+  ["ch6_append_integrity_review_audit", "t uuid, j uuid, actor uuid, command_id uuid, request_hash text, snapshot_hash text"],
+  ["ch6_guard_integrity_review_receipt", ""],
+  ["ch6_guard_line_correction", ""],
+  ["ch6_integrity_authority", "t uuid, j uuid, digest text"],
+  ["ch6_integrity_canonical", "v jsonb"],
+  ["ch6_integrity_family", "t uuid, j uuid"],
+  ["ch6_integrity_published", "t uuid, j uuid, d text"],
+  ["ch6_integrity_source_fingerprint", "t uuid, j uuid, digest text, source_snapshot jsonb"],
+  ["ch6_integrity_sources", "t uuid, j uuid, d text"],
+  ["ch6_record_integrity_review", "t uuid, j uuid, digest text, review jsonb, source_snapshot jsonb"],
+  ["ch6_source", "t uuid, j uuid, d text, i text, k text, at_time timestamp with time zone, content jsonb, provenance text"],
+ ] as const;
+ expect(rows).toEqual(identities.map(([proname,args])=>({proname,args,owner:"jobguard_migration",prosecdef:["ch6_record_integrity_review","ch6_integrity_sources"].includes(proname),proconfig:["search_path=pg_catalog"],runtime:["ch6_record_integrity_review","ch6_integrity_sources"].includes(proname),shadow:false,infrastructure:false,public:false})));
 });

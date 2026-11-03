@@ -1,5 +1,6 @@
+import { rm } from "node:fs/promises";
 import { createServer } from "node:net";
-import type { Pool } from "pg";
+import { Pool } from "pg";
 
 const canListen = (host: string, port: number) => new Promise<boolean>(resolve => {
   const server = createServer();
@@ -29,6 +30,15 @@ export async function freePort(base: number, span: number): Promise<number> {
 export async function closeTestPools(...pools: Array<Pool | undefined>): Promise<void> {
   await Promise.all(pools.map(async (pool) => pool?.end()));
   await new Promise<void>((resolve) => setTimeout(resolve, 25));
+}
+
+/** Close a practice database's pools, stop it and remove its temp folder, even if an earlier step fails. */
+export async function closeTestDatabase(postgres: { stop(): Promise<void> }, directory: string, ...pools: Array<Pool | undefined>): Promise<void> {
+  try { await closeTestPools(...pools); }
+  finally {
+    try { await postgres.stop(); }
+    finally { await rm(directory, { recursive: true, force: true }); }
+  }
 }
 
 /** Earlier suites exercise other contracts with generated jobs. Supply CH-3a's
@@ -79,4 +89,12 @@ export async function installLegacySyntheticPartyFixtures(admin: Pool): Promise<
   END $$;
   CREATE TRIGGER aaa_explicit_quote_fixture BEFORE INSERT ON app.quote_document_version FOR EACH ROW EXECUTE FUNCTION app.test_fixture_document_context();
   CREATE TRIGGER aaa_explicit_invoice_fixture BEFORE INSERT ON app.customer_invoice FOR EACH ROW EXECUTE FUNCTION app.test_fixture_document_context();`);
+}
+
+/** LP-3 dark routines require the trusted practice database, including in tests. */
+export async function syntheticOwnerPool(options: import("pg").PoolConfig): Promise<Pool> {
+  const control = new Pool({ ...options, database: "postgres" });
+  try { await control.query("CREATE DATABASE jobguard_synthetic_demo"); }
+  finally { await control.end(); }
+  return new Pool({ ...options, database: "jobguard_synthetic_demo" });
 }
