@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/batch-9"
       ],
-      "note": "Built ahead NOPR group: MON-9 guard, M4-10 invoices, M4-12 collect, M4-5 pursuit and M4-17 reconciliation. M4-17 queue remains unmerged for the router. RED.",
+      "note": "Built ahead NOPR group: MON-9 guard, M4-10 invoices, M4-12 collect, M4-5 pursuit and M4-17 reconciliation queue. RED.",
       "allow": [
         "apps/api/src/fee-collection-fake-adapter.test.ts",
         "apps/api/src/fee-collection-fake-adapter.ts",
@@ -41,6 +41,9 @@
         "packages/db/migrations/0600_managed_recovery_pursuit_guard.sql",
         "packages/db/migrations/0601_platform_tax_invoice.sql",
         "packages/db/migrations/0602_money_trail_reconciliation.sql",
+        "packages/db/migrations/0603_financial_reconciliation_queue.sql",
+        "packages/db/src/financial-reconciliation-queue-repository.test.ts",
+        "packages/db/src/financial-reconciliation-queue-repository.ts",
         "packages/db/src/index.ts",
         "packages/db/src/managed-recovery-repository.ts",
         "packages/db/src/money-trail-repository.test.ts",
@@ -49,6 +52,8 @@
         "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
         "packages/db/test/contractor-practice-session-fixtures.ts",
         "packages/db/test/extra-fixtures.ts",
+        "packages/db/test/financial-reconciliation-queue-upgrade.integration.test.ts",
+        "packages/db/test/financial-reconciliation-queue.integration.test.ts",
         "packages/db/test/later-empty-tables.ts",
         "packages/db/test/lp5-command-catalog.ts",
         "packages/db/test/managed-recovery-actor-bind-upgrade.integration.test.ts",
@@ -62,6 +67,7 @@
         "packages/db/test/migration-proofs/0600_managed_recovery_pursuit_guard.proof.json",
         "packages/db/test/migration-proofs/0601_platform_tax_invoice.proof.json",
         "packages/db/test/migration-proofs/0602_money_trail_reconciliation.proof.json",
+        "packages/db/test/migration-proofs/0603_financial_reconciliation_queue.proof.json",
         "packages/db/test/money-trail-security.integration.test.ts",
         "packages/db/test/money-trail-upgrade.integration.test.ts",
         "packages/db/test/platform-tax-invoice-upgrade.integration.test.ts",

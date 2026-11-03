@@ -140,7 +140,6 @@ export * from "./free-first-job-eligibility-repository.js";
 export * from "./free-first-job-lifecycle-repository.js";
 export * from "./recovery-attribution-repository.js";
 export * from "./success-fee-repository.js";
-export * from "./money-trail-repository.js";
 export * from "./final-check-repository.js";
 export * from "./final-check-source-reader.js";
 
@@ -178,3 +177,6 @@ export { ShadowDemoApprovalReader } from "./shadow-demo-approval-reader.js";
 export { ShadowDemoGuideRepository } from "./shadow-demo-guide-repository.js";
 
 export { importLateSource, readLateSourceObservations, readLateSources } from "./late-source-import.js";
+
+export * from "./financial-reconciliation-queue-repository.js";
+export * from "./money-trail-repository.js";
