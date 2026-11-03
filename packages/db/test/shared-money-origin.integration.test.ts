@@ -1,3 +1,4 @@
+import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
 import { syntheticOwnerPool } from "./pool-test-utils.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
@@ -49,6 +50,13 @@ beforeAll(async()=>{
  await admin.query("UPDATE app.variation SET state='priced',current_revision_id=$1 WHERE tenant_id=$2 AND id=$3",[R,T,V]);
  await migrate(admin);await installLegacySyntheticPartyFixtures(admin);
  await admin.query("CREATE ROLE sh1_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_runtime TO sh1_login");
+ await withTenant(admin,ctx(),async db=>{
+  const assignment=randomUUID();
+  await db.$client.query("SELECT app.assign_commercial_track($1,$2,'contractor',$3,0,'operations:sh1-fixture')",[T,assignment,`synthetic-agreement:${T}`]);
+  const { appendAuditBatch } = await import("../src/index.js");
+  await appendAuditBatch(db,[{id:assignment,version:"audit.v1",actorRef:"operations:sh1-fixture",eventType:"commercial_track.assigned",subjectType:"tenant",subjectRef:T,payload:{references:{environment:"synthetic_demo"}}}]);
+ });
+ await seedActiveContractorAgreement(admin,T);
  runtime=new Pool({host:"127.0.0.1",port,database:"jobguard_synthetic_demo",user:"sh1_login",password:"synthetic",max:4});
 },60000);
 afterAll(async()=>{await closeTestPools(runtime,admin);await pg?.stop();if(dir)await rm(dir,{recursive:true,force:true});});

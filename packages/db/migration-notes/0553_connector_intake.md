@@ -30,7 +30,7 @@ reordering, reversal facts, tenant spoofing, malformed/oversized input, forbidde
 command types and statements/shadow access. Database/browser tests cannot run in this
 sandbox and are not claimed executed here. No browser workflow changes.
 
-Catch-up proof isolation: `0574_connector_intake.proof.json` holds this piece's exact
+Catch-up proof isolation: `0553_connector_intake.proof.json` holds this piece's exact
 LP-0 additions. Its explicit empty `upgrade` and `tenancy` sections preserve the main
 snapshots: serious-b5 observes app/identity/control_plane/audit_control, and tenancy
 observes app tables; this migration creates only connector objects. The connector

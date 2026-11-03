@@ -11,7 +11,7 @@ vi.mock("./job-work-state-sources.js", () => ({ refuseLockedNewSource: vi.fn(), 
 import { refuseLockedNewSource } from "./job-work-state-sources.js";
 
 const tenant = randomUUID(), user = randomUUID(), member = randomUUID();
-const context = verifiedTenantContextFromMembership({ tenantId: tenant, identityUserId: user, membershipId: member } as Parameters<typeof verifiedTenantContextFromMembership>[0]);
+const context = { tenantId: tenant, identityUserId: user, membershipId: member } as Parameters<typeof verifiedTenantContextFromMembership>[0];
 const input = { version: "resumable-evidence.v1", uploadId: randomUUID(), jobId: randomUUID(), actorMembershipId: member };
 function fixture() {
   let allowed = true;
@@ -70,15 +70,24 @@ describe("dark resumable transfer orchestration (SQL isolation is tested in CI)"
         ...(method === "append" ? { offset: 0, bytes: new Uint8Array([1]) } :
           method === "finalize" ? { commandId: randomUUID(), evidenceType: "photo" } : {}) };
       await expect(f.service[method](context, { ...raw, actorMembershipId: otherMember })).rejects.toMatchObject({ code: "NOT_FOUND" });
-      await expect(f.service[method](verifiedTenantContextForQueuedJob(tenant), raw)).rejects.toMatchObject({ code: "NOT_FOUND" });
+      await expect(f.service[method](verifiedTenantContextForQueuedJob(tenant) as unknown as typeof context, raw)).rejects.toMatchObject({ code: "NOT_FOUND" });
     }
     const storage = f.service.storageForProof(context, { ...input, actorMembershipId: otherMember });
     await expect(storage.readExactVersion("synthetic-original", "synthetic-version")).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(f.query.mock.calls.some(([sql]) => sql.includes("FROM app.evidence_upload"))).toBe(false);
     expect(f.parts).toHaveLength(0);
     await expect(f.service.status(context, input)).resolves.toMatchObject({ nextOffset: 0 });
-    const wrongUser = verifiedTenantContextFromMembership({ tenantId: tenant, identityUserId: randomUUID(), membershipId: member } as Parameters<typeof verifiedTenantContextFromMembership>[0]);
+    const wrongUser = { tenantId: tenant, identityUserId: randomUUID(), membershipId: member } as Parameters<typeof verifiedTenantContextFromMembership>[0];
     await expect(f.service.status(wrongUser, input)).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+  it("snapshots the caller membership before an asynchronous lookup", async () => {
+    const f = fixture(), caller = { ...context };
+    const result = f.service.status(caller, input);
+    caller.identityUserId = randomUUID();
+    caller.membershipId = randomUUID();
+    await expect(result).resolves.toMatchObject({ nextOffset: 0 });
+    expect(f.query.mock.calls.find(([sql]) => sql.startsWith("SELECT 1 FROM app.job_commercial_track"))?.[1])
+      .toEqual([tenant, input.jobId, member, user]);
   });
   it("reads status without a row lock while append still locks the upload", async () => {
     const f = fixture();
@@ -128,7 +137,7 @@ describe("dark resumable transfer orchestration (SQL isolation is tested in CI)"
   });
   it("refuses other tenants, jobs and revoked access without exposing offsets", async () => {
     const f=fixture();
-    await expect(f.service.status(verifiedTenantContextForQueuedJob(randomUUID()),input)).rejects.toMatchObject({code:"NOT_FOUND"});
+    await expect(f.service.status(verifiedTenantContextForQueuedJob(randomUUID()) as unknown as typeof context,input)).rejects.toMatchObject({code:"NOT_FOUND"});
     await expect(f.service.status(context,{...input,jobId:randomUUID()})).rejects.toMatchObject({code:"NOT_FOUND"});
     f.revoke();
     for (const method of ["append", "status", "finalize"] as const)

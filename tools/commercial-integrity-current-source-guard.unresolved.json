@@ -42,20 +42,6 @@
     "code": "UNRESOLVED_COVERED_EDGE"
   },
   {
-    "file": "packages/db/src/site-visit-repository.ts",
-    "line": 194,
-    "fingerprint": "8fc6170a300c497b71d17954d2be5b4c7ec18e4e03e56fa796757e039b3f9dd6",
-    "reason": "Business this.execute(context,...) dispatch is covered by terminal name; context is not static SQL.",
-    "code": "UNRESOLVED_COVERED_EDGE"
-  },
-  {
-    "file": "packages/db/src/site-visit-repository.ts",
-    "line": 202,
-    "fingerprint": "842c1ff872c7ad73917ebe6ede51a4c0221038a961a99b25c9f2e333fd0de695",
-    "reason": "Second business this.execute(context,...) dispatch has the same unresolved boundary.",
-    "code": "UNRESOLVED_COVERED_EDGE"
-  },
-  {
     "file": "packages/db/src/quote-document-repository.ts",
     "line": 9,
     "fingerprint": "a03814ad97eb55bfe1dca02eca37c87717afeb72090091c8703d5a9d14d1222d",

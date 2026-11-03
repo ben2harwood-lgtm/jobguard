@@ -4,7 +4,7 @@
 real URL, gateway call or deployment. It defaults off. Explicit enablement still
 requires the job's server-owned `synthetic_demo` track and active tenant membership
 on every operation. The service binds actorMembershipId to the membership and identity
-user retained in the authenticated context; queued system contexts are refused. G3 and D08 remain closed.
+user supplied by the authenticated caller. It derives the tenant context through the existing membership boundary; queued system contexts are refused. G3 and D08 remain closed.
 
 Requests use strict `version: resumable-evidence.v1` schemas. Begin supplies the
 stable upload id, job/scope, actor membership, client SHA-256, device capture time,

@@ -1,7 +1,11 @@
 BEGIN;
 -- ENT-13a slice 1, RED, DARK. Stages fictional source facts only, never domain commands.
 -- No LOGIN, role membership, binding, credential or endpoint is provisioned by migration.
-CREATE ROLE jobguard_connector NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
+DO $$ BEGIN
+ IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='jobguard_connector') THEN
+  CREATE ROLE jobguard_connector NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
+ END IF;
+END $$;
 CREATE SCHEMA connector AUTHORIZATION jobguard_migration;
 REVOKE ALL ON SCHEMA connector FROM PUBLIC,jobguard_runtime,jobguard_infrastructure;
 GRANT USAGE ON SCHEMA connector TO jobguard_connector;
@@ -63,7 +67,7 @@ REVOKE ALL ON ALL TABLES IN SCHEMA connector FROM PUBLIC,jobguard_connector,jobg
 CREATE FUNCTION connector.intake(binding_id uuid, token text, input jsonb) RETURNS jsonb
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE b connector.binding; prior connector.input_event; h text; result jsonb;
- seq bigint; prev text; ts timestamptz; payload jsonb; ph text; eh text; actor text; v_kind text;
+ payload jsonb; v_kind text;
 BEGIN
  -- No caller-supplied tenant, human membership, role, mode, job, bill or target SQL routine.
  SELECT * INTO b FROM connector.binding WHERE id=binding_id FOR SHARE;
@@ -111,14 +115,11 @@ BEGIN
  INSERT INTO connector.input_event(tenant_id,binding_id,namespace,event_id,kind,subject,revision,payload,semantic_hash,receipt)
  VALUES(b.tenant_id,b.id,b.namespace,input->>'eventId',v_kind,input->>'subject',(input->>'revision')::integer,input,h,result);
  -- Append to the existing per-tenant chain, identifiers/hash only. Audit head is the LAST lock.
- SELECT sequence,event_hash INTO seq,prev FROM app.lock_audit_head();seq:=seq+1;
- ts:=date_trunc('milliseconds',clock_timestamp());actor:='connector:'||b.id::text;
  payload:=jsonb_build_object('references',jsonb_build_object('bindingId',b.id,'sourceEvent',input->>'eventId'),'hashes',jsonb_build_object('input',h));
- ph:=app.final_lock_hash(payload);
- eh:=encode(sha256(convert_to(concat_ws(chr(31),'audit.v1',b.tenant_id::text,seq::text,actor,'connector.input_staged','connector',b.id::text,to_char(ts AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),ph,coalesce(prev,'')),'UTF8')),'hex');
- INSERT INTO app.audit_event(id,tenant_id,sequence,version,actor_ref,event_type,subject_type,subject_ref,occurred_at,payload,payload_hash,previous_hash,event_hash)
- VALUES(gen_random_uuid(),b.tenant_id,seq,'audit.v1',actor,'connector.input_staged','connector',b.id::text,ts,payload,ph,prev,eh);
- PERFORM app.advance_audit_head(seq,eh);
+ PERFORM app.lp4_seal_audit(jsonb_build_array(jsonb_build_object(
+  'id',gen_random_uuid(),'version','audit.v1','actorRef','connector:'||b.id::text,
+  'eventType','connector.input_staged','subjectType','connector','subjectRef',b.id::text,
+  'payload',payload)),'checked_operation');
  RETURN result;
 END $$;
 ALTER FUNCTION connector.intake(uuid,text,jsonb) OWNER TO jobguard_migration;

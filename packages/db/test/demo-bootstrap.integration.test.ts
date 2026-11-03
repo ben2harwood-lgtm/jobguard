@@ -85,9 +85,7 @@ describe("bootstrap SQL trace (no PostgreSQL proof)", () => {
       if (sql.startsWith("SELECT app.complete_command(")) return { rowCount: 1, rows: [{ result: {} }] };
       if (sql.includes("FROM pg_roles WHERE rolname='jobguard_runtime'")) return { rowCount: 1, rows: [{ rolsuper: false, rolbypassrls: false, rolcreatedb: false, rolcreaterole: false, rolinherit: false, rolcanlogin: true }] };
       // Restricted shadow/meter roles: one posture row each; no holders in this trace.
-      if (sql.includes("SELECT rolsuper,rolbypassrls") && sql.includes("FROM pg_roles WHERE rolname=$1") && ["jobguard_shadow", "jobguard_shadow_emergency_access", "jobguard_meter", "jobguard_meter_owner", "jobguard_audit_writer", "jobguard_command_writer"].includes(values[0] as string)) return { rowCount: 1, rows: [{ rolsuper: false, rolbypassrls: false, rolcreatedb: false, rolcreaterole: false, rolinherit: false, rolcanlogin: false, rolreplication: false, member: false }] };
-      // Restricted shadow/meter/operator roles: one posture row each; no holders in this trace.
-      if (sql.includes("SELECT rolsuper,rolbypassrls") && sql.includes("FROM pg_roles WHERE rolname=$1") && ["jobguard_shadow", "jobguard_shadow_emergency_access", "jobguard_meter", "jobguard_meter_owner", "jobguard_outbound_operator"].includes(values[0] as string)) return { rowCount: 1, rows: [{ rolsuper: false, rolbypassrls: false, rolcreatedb: false, rolcreaterole: false, rolinherit: false, rolcanlogin: false, rolreplication: false, member: false }] };
+      if (sql.includes("SELECT rolsuper,rolbypassrls") && sql.includes("FROM pg_roles WHERE rolname=$1") && ["jobguard_shadow", "jobguard_shadow_emergency_access", "jobguard_meter", "jobguard_meter_owner", "jobguard_audit_writer", "jobguard_command_writer", "jobguard_outbound_operator", "jobguard_connector"].includes(values[0] as string)) return { rowCount: 1, rows: [{ rolsuper: false, rolbypassrls: false, rolcreatedb: false, rolcreaterole: false, rolinherit: false, rolcanlogin: false, rolreplication: false, member: false }] };
       if (sql.includes("SELECT pg_get_userbyid(proowner) AS owner")) return { rowCount: 1, rows: [{ owner: "jobguard_migration" }] };
       if (sql === "SELECT current_user") return { rowCount: 1, rows: [{ current_user: "synthetic_owner" }] };
       if (sql.includes("SELECT 1 FROM public.jobguard_schema_migration")) return { rowCount: 1, rows: [{}] };
@@ -140,14 +138,16 @@ describe("bootstrap SQL trace (no PostgreSQL proof)", () => {
       expect(queries.findIndex(({sql,values}) => sql.includes('SELECT rolsuper,rolbypassrls') && values[0] === 'jobguard_meter'))
         .toBeLessThan(queries.findIndex(({sql}) => sql === 'SET ROLE jobguard_migration'));
       expect(queries.some(({sql}) => sql.includes('CREATE ROLE jobguard_meter_owner'))).toBe(true);
-      const operatorCreated = queries.findIndex(({ sql }) => sql.includes('CREATE ROLE jobguard_outbound_operator'));
-      expect(operatorCreated).toBeGreaterThanOrEqual(0);
       const migrationRole = queries.findIndex(({ sql }) => sql === 'SET ROLE jobguard_migration');
-      expect(operatorCreated).toBeLessThan(migrationRole);
-      for (const check of ['SELECT rolsuper,rolbypassrls', 'FROM pg_auth_members m WHERE m.roleid=']) {
-        const checked = queries.findIndex(({ sql, values }) => sql.includes(check) && values[0] === 'jobguard_outbound_operator');
-        expect(checked).toBeGreaterThan(operatorCreated);
-        expect(checked).toBeLessThan(migrationRole);
+      for (const role of ['jobguard_outbound_operator', 'jobguard_connector']) {
+        const created = queries.findIndex(({ sql }) => sql.includes(`CREATE ROLE ${role}`));
+        expect(created).toBeGreaterThanOrEqual(0);
+        expect(created).toBeLessThan(migrationRole);
+        for (const check of ['SELECT rolsuper,rolbypassrls', 'FROM pg_auth_members m WHERE m.roleid=']) {
+          const checked = queries.findIndex(({ sql, values }) => sql.includes(check) && values[0] === role);
+          expect(checked).toBeGreaterThan(created);
+          expect(checked).toBeLessThan(migrationRole);
+        }
       }
       const reset = queries.findIndex(({sql}) => sql === 'RESET ROLE');
       const transfer = queries.findIndex(({sql}) => sql.includes('ALTER FUNCTION app.mon1_lifecycle_actor') && sql.includes('OWNER TO jobguard_meter_owner'));

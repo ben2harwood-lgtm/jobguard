@@ -1,9 +1,11 @@
+import { installContractorAgreementFixture } from "./contractor-agreement-fixture.js";
 import { expect, test, type Page } from "@playwright/test";
 import { Pool } from "pg";
 import baselineSample from "../../../docs/fixtures/contractor-full-demo-package.v1.json";
 import type { projectEnterpriseDashboard, projectStoredDashboardBilling } from "@jobguard/core";
 import type { StatementView } from "../app/lib/enterprise-statement-types";
 test.setTimeout(600_000);
+test.beforeEach(async ({ page }) => { await installContractorAgreementFixture(page); });
 const baseURL = "http://127.0.0.1:3000";
 const banner = "Practice sandbox — synthetic data; nothing is sent or charged";
 const admin = () => new Pool({ host: "127.0.0.1", port: 55432, user: "postgres", password: "sbox-e2e-owner", database: "jobguard_synthetic_demo" });

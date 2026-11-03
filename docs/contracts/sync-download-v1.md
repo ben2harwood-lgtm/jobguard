@@ -94,7 +94,7 @@ including revoke/regrant or switch-away/switch-back with no intervening download
 hashes the currently observed authority cannot meet that contract. This slice intentionally provides no live
 identity/provider implementation; deterministic fakes exercise the seam.
 
-Migration `0454_sync_snapshot_checkpoint.sql` persists one generation per tenant/user with forced RLS and
+Migration `0550_sync_snapshot_checkpoint.sql` persists one generation per tenant/user with forced RLS and
 foreign keys to the tenant and identity user. Runtime can read its tenant's checkpoint metadata, but cannot
 insert, update, delete or truncate it directly. A narrowly granted, tenant-bound definer routine serializes
 concurrent checkpoint advancement. Identical revision/schema/hash replays retain the generation; newer authority

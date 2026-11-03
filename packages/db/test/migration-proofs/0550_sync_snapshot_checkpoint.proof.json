@@ -1,5 +1,5 @@
 {
-  "migration": "0454_sync_snapshot_checkpoint.sql",
+  "migration": "0550_sync_snapshot_checkpoint.sql",
   "lp0": [
     {
       "section": "groups",
@@ -20,7 +20,7 @@
         "downstream": "Runtime SELECT is tenant-scoped; SECURITY DEFINER advancement rechecks active membership, rejects contractor revocation, stale revisions and non-synthetic environments. No direct runtime checkpoint writes.",
         "path": "ap-m3-3-snapshot",
         "sources": [
-          "packages/db/migrations/0454_sync_snapshot_checkpoint.sql"
+          "packages/db/migrations/0550_sync_snapshot_checkpoint.sql"
         ],
         "tests": [
           "packages/db/test/sync-snapshot.integration.test.ts",
@@ -43,7 +43,7 @@
         ],
         "responsibilities": {},
         "sources": [
-          "packages/db/migrations/0454_sync_snapshot_checkpoint.sql"
+          "packages/db/migrations/0550_sync_snapshot_checkpoint.sql"
         ],
         "tests": [
           "packages/db/test/sync-snapshot.integration.test.ts",

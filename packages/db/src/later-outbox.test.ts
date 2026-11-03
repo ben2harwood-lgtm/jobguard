@@ -17,8 +17,6 @@ function fixture(status = "pending", result: FakeDeliveryResult = { kind: "succe
     authorization_expires_at: new Date("2099-01-01"), created_at: new Date(),
     next_attempt_at: new Date(0), claimed_at: new Date(0), updated_at: new Date(0) };
   let audit: AuditEvent[] = [], snapshot: { row: typeof row; audit: AuditEvent[] };
-  let inTransaction = false, failAudit = false;
-  let audit: unknown[][] = [], snapshot: { row: typeof row; audit: unknown[][] };
   let inTransaction = false, failAudit = false, claimsEnabled = true;
   const query = vi.fn(async (sql: string, values: unknown[] = []) => {
     if (sql === "BEGIN") { snapshot = { row: { ...row }, audit: [...audit] }; inTransaction = true; }

@@ -4,8 +4,8 @@ import { customerSigninLink, ActionExecutor, type OutboundAdapter } from "../src
 import { testTenantContext } from "./tenant-context-test-utils.js";
 // CI only: real PostgreSQL proves atomic consumption, RLS, current binding and upgrade behavior.
 import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
-import { beforeAll, afterAll, expect, it } from "vitest";
-import { startBeforeMigration, applyMigration, type Cluster } from "./contractor-practice-session-fixtures.js";
+import { beforeAll, afterAll, expect, it, vi } from "vitest";
+import { startBeforeMigration, applyMigration, startSession, ownerTx, type Cluster } from "./contractor-practice-session-fixtures.js";
 import { MIGRATION_URLS, migrate } from "../src/migrate.js";
 import { verifyAuditChain } from "../src/audit.js";
 import { snapshot } from "./contractor-entitlement-fixtures.js";
@@ -83,12 +83,15 @@ async function identityQuery(sql: string, args: unknown[]) {
   catch (error) { await db.query("ROLLBACK"); throw error; } finally { db.release(); }
 }
 async function world(role = "owner") {
-  const tenant = randomUUID(), account = randomUUID(), member = randomUUID(), user = randomUUID(), job = randomUUID(), session = randomUUID(), token = randomBytes(32).toString("base64url"), digest = hmac(token);
-  await c.admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [tenant]);
+  // A real operative needs contractor authority before the issuer refusal can be exercised.
+  if (role === "operative") vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
+  const contractor = role === "operative" ? await startSession(c) : undefined;
+  const tenant = contractor?.p.tenantId ?? randomUUID(), account = randomUUID(), member = randomUUID(), user = randomUUID(), job = randomUUID(), session = randomUUID(), token = randomBytes(32).toString("base64url"), digest = hmac(token);
+  await c.admin.query("INSERT INTO control_plane.tenant(id) VALUES($1) ON CONFLICT DO NOTHING", [tenant]);
   await c.admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [user]);
   await c.admin.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", [`${user}@fixture.invalid`, user]);
   await c.admin.query("INSERT INTO app.account(tenant_id,id,name) VALUES($1,$2,'Fictional builder')", [tenant, account]);
-  await c.admin.query("INSERT INTO app.membership(tenant_id,id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,$5)", [tenant, member, account, user, role]);
+  await ownerTx(c, tenant, db => db.$client.query("INSERT INTO app.membership(tenant_id,id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,$5)", [tenant, member, account, user, role]));
   await c.admin.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3)", [user, tenant, member]);
   await c.admin.query("INSERT INTO identity.session(id,user_id,token_digest,csrf_token,expires_at,environment) VALUES($1,$2,$3,'fictional-csrf-token',clock_timestamp()+interval '1 hour','synthetic_demo')", [session, user, digest]);
   await c.admin.query("INSERT INTO app.job(tenant_id,id,title) VALUES($1,$2,'Fictional portal job')", [tenant, job]);
@@ -107,7 +110,13 @@ const use = (w: World, k: Awaited<ReturnType<typeof issue>>, operation = "redeem
   return identityQuery("SELECT identity.customer_portal_use($1,$2,$3,$4,$5,$6) result", [x.tenant, x.job, x.customer, operation === "redeem" ? k.digest : k.sessionDigest, k.sessionDigest, operation]);
 };
 const refused = { code: "42501", message: "CUSTOMER_REFUSED" };
-it.each(["admin", "estimator", "foreman", "operative", "read_only"])("%s cannot issue", async role => { await expect(issue(await world(role))).rejects.toMatchObject(refused); });
+it.each(["admin", "estimator", "foreman", "operative", "read_only"])("%s cannot issue", async role => {
+  const w = await world(role);
+  const counts = () => c.admin.query("SELECT (SELECT count(*)::int FROM app.customer_portal_grant WHERE tenant_id=$1) grants, (SELECT count(*)::int FROM app.action_outbox WHERE tenant_id=$1) actions", [w.tenant]);
+  const before = (await counts()).rows;
+  await expect(issue(w)).rejects.toMatchObject(refused);
+  expect((await counts()).rows).toEqual(before);
+});
 it.each(["owner", "finance"])("%s can issue only an outbox fake email, no plaintext in grants or audit", async role => {
   const w = await world(role), k = await issue(w);
   await assertLp4SealedEvents(c.admin,w.tenant,"customer_portal.issued");
