@@ -1,0 +1,6 @@
+{
+  "migration": "0556_mon8_job_track_and_trial.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}
