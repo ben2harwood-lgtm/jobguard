@@ -11,7 +11,7 @@ let f: WorkFixture;
 beforeAll(async () => { f = await createWorkFixture(false); }, 60000);
 afterAll(async () => { await closeWorkFixture(f); });
 it("CH-5 0566 preserves imported receipts, exclusion identities, replay and writer privileges on upgrade", async () => {
-  const index = MIGRATION_URLS.findIndex(url => url.pathname.endsWith("0532_job_import_v3_original_source.sql"));
+  const index = MIGRATION_URLS.findIndex(url => url.pathname.endsWith("0530_job_import_v3_original_source.sql"));
   expect(index).toBeGreaterThan(0);
   await f.admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
   for (const url of MIGRATION_URLS.slice(0, index)) {

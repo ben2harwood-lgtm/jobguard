@@ -1,14 +1,14 @@
 {
-  "migration": "0531_prevent_allocated_case.sql",
+  "migration": "0528_customer_evidence_approval_guard.sql",
   "lp0": [
     {
       "section": "routines",
       "before": null,
       "after": {
-        "identity": "function:app.guard_prevention_after_stored_receipt()",
+        "identity": "function:app.variation_customer_evidence_guard()",
         "owner": "jobguard_migration",
-        "securityDefiner": true,
-        "searchPath": "search_path=pg_catalog, app",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog",
         "returnsTrigger": true,
         "extension": null,
         "reachable": false,
@@ -23,7 +23,7 @@
     {
       "section": "triggers",
       "before": null,
-      "after": "app.recovery_case_event|recovery_prevention_stored_cash_guard|app.guard_prevention_after_stored_receipt|BEFORE INSERT|O"
+      "after": "app.variation_approval|variation_customer_evidence_guard|app.variation_customer_evidence_guard|BEFORE INSERT|O"
     }
   ],
   "upgrade": [
@@ -32,13 +32,13 @@
       "before": null,
       "after": {
         "nspname": "app",
-        "proname": "guard_prevention_after_stored_receipt",
+        "proname": "variation_customer_evidence_guard",
         "args": "",
         "proowner": "jobguard_migration",
         "proacl": "{jobguard_migration=X/jobguard_migration}",
-        "prosecdef": true,
+        "prosecdef": false,
         "proconfig": [
-          "search_path=pg_catalog, app"
+          "search_path=pg_catalog"
         ]
       }
     }

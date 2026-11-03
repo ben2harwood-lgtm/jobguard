@@ -68,7 +68,7 @@ it("0561 upgrades the populated 0359 writer in place, preserves grants/data and 
  const x=await fixture(false),s=await x.run(prepare(x.paymentId));
  const original=await readFile(new URL("../migrations/0359_payment_fee_statements.sql",import.meta.url),"utf8");
  const oldWriter=original.slice(original.indexOf("CREATE FUNCTION app.write_payment_fee"),original.indexOf("DO $$ DECLARE f text;")).replace("CREATE FUNCTION","CREATE OR REPLACE FUNCTION");
- const upgrade=(await readFile(new URL("../migrations/0529_payment_fee_collect_review.sql",import.meta.url),"utf8")).replace(/^BEGIN;\n/u,"").replace(/COMMIT;\n$/u,"");
+ const upgrade=(await readFile(new URL("../migrations/0527_payment_fee_collect_review.sql",import.meta.url),"utf8")).replace(/^BEGIN;\n/u,"").replace(/COMMIT;\n$/u,"");
  await rolledBack(f.admin,async db=>{
   await db.query("SELECT set_config('app.tenant_id',$1,true)",[x.context.tenantId]);
   await db.query(oldWriter);

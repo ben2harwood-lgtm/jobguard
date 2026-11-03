@@ -1,11 +1,11 @@
 {
-  "migration": "0533_final_lock_disclosure_terms.sql",
+  "migration": "0529_prevent_allocated_case.sql",
   "lp0": [
     {
       "section": "routines",
       "before": null,
       "after": {
-        "identity": "function:app.guard_final_lock_disclosure_terms()",
+        "identity": "function:app.guard_prevention_after_stored_receipt()",
         "owner": "jobguard_migration",
         "securityDefiner": true,
         "searchPath": "search_path=pg_catalog, app",
@@ -15,7 +15,7 @@
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "c560155f18168617a38c358f987e2853a44a64ae5746ca403f1846379765a7b8",
+        "definitionSha256": null,
         "staticWrites": [],
         "staticCalls": []
       }
@@ -23,7 +23,7 @@
     {
       "section": "triggers",
       "before": null,
-      "after": "app.final_account_lock|final_lock_disclosure_terms|app.guard_final_lock_disclosure_terms|BEFORE INSERT|O"
+      "after": "app.recovery_case_event|recovery_prevention_stored_cash_guard|app.guard_prevention_after_stored_receipt|BEFORE INSERT|O"
     }
   ],
   "upgrade": [
@@ -32,7 +32,7 @@
       "before": null,
       "after": {
         "nspname": "app",
-        "proname": "guard_final_lock_disclosure_terms",
+        "proname": "guard_prevention_after_stored_receipt",
         "args": "",
         "proowner": "jobguard_migration",
         "proacl": "{jobguard_migration=X/jobguard_migration}",

@@ -12,7 +12,7 @@ let f:FinalCheckFixture;
 beforeAll(async()=>{f=await createFinalCheckFixture(false);},120000);
 afterAll(async()=>{await closeFinalCheckFixture(f);});
 it("0564 preserves a populated predecessor and blocks prevention of its cash catch",async()=>{
- const own=MIGRATION_URLS.findIndex(url=>url.pathname.endsWith("0531_prevent_allocated_case.sql"));
+ const own=MIGRATION_URLS.findIndex(url=>url.pathname.endsWith("0529_prevent_allocated_case.sql"));
  expect(own).toBeGreaterThan(0);
  await f.admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
  for(const url of MIGRATION_URLS.slice(0,own)){

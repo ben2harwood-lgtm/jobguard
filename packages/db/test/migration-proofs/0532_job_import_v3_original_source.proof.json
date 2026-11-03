@@ -1,6 +1,0 @@
-{
-  "migration": "0532_job_import_v3_original_source.sql",
-  "lp0": [],
-  "upgrade": [],
-  "tenancy": []
-}
