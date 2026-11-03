@@ -101,9 +101,15 @@ describe("M0-6L persisted identity / actual PostgreSQL roles",()=>{
   expect(await fixture().memberships(p)).toEqual([expect.objectContaining({tenantId:owner.membership.tenantId,role:"foreman",email:recipient})]);
   await expect(app.invite({version:"identity-invitation.v1",requested_tenant_id:owner.membership.tenantId,email:email(),role:"admin"},{sessionToken:session.sessionToken,csrfToken:session.csrfToken,origin})).rejects.toMatchObject({code:"42501"});
  });
+ it("MON-8 refuses operative email invitations for a small-builder owner",async()=>{
+  const owner=await signup(),app=new IdentityApplication(owner.provider,origin);
+  const before=(await admin.query("SELECT count(*)::int n FROM identity.invitation WHERE tenant_id=$1",[owner.membership.tenantId])).rows[0].n;
+  await expect(app.invite({version:"identity-invitation.v1",requested_tenant_id:owner.membership.tenantId,email:email(),role:"operative"},{sessionToken:owner.session.sessionToken,csrfToken:owner.session.csrfToken,origin})).rejects.toMatchObject({code:"42501"});
+  expect((await admin.query("SELECT count(*)::int n FROM identity.invitation WHERE tenant_id=$1",[owner.membership.tenantId])).rows[0].n).toBe(before);
+ });
  it("rejects expired invitations and revocation before new business commands",async()=>{
   const owner=await signup(),app=new IdentityApplication(owner.provider,origin),recipient=email();
-  const invitation=await app.invite({version:"identity-invitation.v1",requested_tenant_id:owner.membership.tenantId,email:recipient,role:"operative"},{sessionToken:owner.session.sessionToken,csrfToken:owner.session.csrfToken,origin});
+  const invitation=await app.invite({version:"identity-invitation.v1",requested_tenant_id:owner.membership.tenantId,email:recipient,role:"foreman"},{sessionToken:owner.session.sessionToken,csrfToken:owner.session.csrfToken,origin});
   const expiredId=randomUUID();
   await admin.query("INSERT INTO identity.invitation(id,email,tenant_id,account_id,role,expires_at,issuer_user_id) SELECT $2,email,tenant_id,account_id,role,clock_timestamp()-interval '1 second',issuer_user_id FROM identity.invitation WHERE id=$1",[invitation.id,expiredId]);
   await fixture().requestCode({email:recipient,purpose:"invitation",invitationId:expiredId,ip:randomUUID()});

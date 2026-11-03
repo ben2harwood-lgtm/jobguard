@@ -18,3 +18,10 @@ it("fake reconciliation requires an attempt identity and accepts no client amoun
  expect(simulationFeeCollectionCommandV1.safeParse({...raw,amountPence:28200}).success).toBe(false);
  expect(simulationFeeCollectionCommandV1.safeParse({...raw,settled:true}).success).toBe(false);
 });
+
+it("standing collection pins both consent and receipt statement; neither is a caller-set fee limit",()=>{
+ const standing={...command,authorityId:command.commandId,receiptStatementId:command.statementId};
+ expect(simulationFeeCollectionCommandV1.parse(standing)).toEqual(standing);
+ for(const patch of [{receiptStatementId:undefined},{authorityId:undefined},{action:"refund"},{cap:999999},{receiptStatementId:"bad"}])
+  expect(simulationFeeCollectionCommandV1.safeParse({...standing,...patch}).success).toBe(false);
+});

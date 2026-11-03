@@ -928,7 +928,7 @@ PostgreSQL pass claimed. Earlier work in this worktree is preserved.
 
 Compared against available origin/main f94b2d577ed4be9e7020f3578a56c415710b524b
 without fetching. Local main 694e9e17 is stale. Neither retained migration
-0310_money_trail_reconciliation.sql (SHA-256
+0574_money_trail_reconciliation.sql (SHA-256
  a67fead829fe896aa8a0ba0dd665c1d4ac5155602d9ab724f5f38f63b5f4027e)
 nor the queue branch's 0479_financial_reconciliation_queue.sql (SHA-256
  f5a196593d2825a68f306499ad548c4314437bea240dac1c03b155ffc803c162)
@@ -939,7 +939,7 @@ routines and tables. 0479 belongs only to codex/sandbox/m4-17-queue; it is not
 part of this worktree and no proof for that absent migration is introduced.
 This branch still adds reconciliation code beyond main and is not redundant.
 
-Added 0310_money_trail_reconciliation.proof.json from the retained SQL and
+Added 0574_money_trail_reconciliation.proof.json from the retained SQL and
 source expectations only, never a database. Its explicit lp0 section contains
 the two exact capabilities, protected routine attributes and a separate narrow
 authority path. Its upgrade section fixes the exact identity, owner, ACL,
@@ -975,3 +975,48 @@ These are deterministic local checks. PostgreSQL migration/upgrade/tenancy,
 LP-0 grant-freeze and money-trail security suites, browser journeys, green CI
 and independent RED review remain required after router push. No live money,
 provider, production readiness or release approval is claimed.
+
+
+## 3 November M4-17 NOPR catch-up to main 111865cf
+
+Plan piece M4-17, RED. Preserved the existing synthetic reference comparison,
+its fee-collection reference dependency, and read-only M4-17-S availability.
+Resolved the core barrel conflict by keeping both reconciliation and main's
+new exports. Main's simulation money run is a separate implemented path; the
+retained reference comparison and availability routine are not duplicate SQL.
+No new product behavior or test expectation changes.
+
+Moved only full migration stems from 0310_money_trail_reconciliation to
+0574_money_trail_reconciliation in SQL/proof filenames and references, retaining
+the exact SQL body. No existing routine is re-created, no audit writer or table
+is added, and the current read_success_fee_v3 access check remains delegated.
+All 215 incoming-main migration files compare byte-identically. The historical
+downstream inventory now takes main's exact copy because 0574 is outside its
+frozen source boundary. Removed the two branch-only inherited lane files; the
+M4-17 lane lists all 22 changed non-lane paths and excludes itself.
+
+The first DB unit run failed one unchanged path-completeness assertion: the
+retained proof declared an authority path with no referencing group. Added a
+narrow read_access group to that proof and assigned only this routine's EXECUTE
+to it. No frozen inventory or existing group is edited. The rerun passed.
+
+Checks actually run using installed Vitest 4.1.12, maxWorkers=2, at most three
+named Vitest files per invocation:
+
+- packages/core: vitest run --maxWorkers=2 src/financial-reconciliation.test.ts src/money-trail-reconciliation.test.ts src/fee-collection.test.ts — 78 passed.
+- packages/db: vitest run --maxWorkers=2 test/migration-proof-loader.test.ts test/lp-0-catalog.test.ts src/money-trail-repository.test.ts — 115 passed after the proof correction.
+- apps/api: vitest run --maxWorkers=2 src/fee-collection-fake-adapter.test.ts — 10 passed.
+- Root installed tsc -p packages/core/tsconfig.json --noEmit and tsc -p packages/db/tsconfig.json --noEmit — passed.
+- python3 tools/lp-downstream-inventory.py --check — passed.
+- node --test tools/lp-downstream-inventory.test.mjs — 6 passed.
+- node tools/plpgsql-case-in-if-lint.mjs — 216 migrations passed.
+- Read-only comparison of all incoming-main SQL and reserved SQL body — passed.
+- git diff --check — passed.
+
+PostgreSQL migration, upgrade, privilege/RLS and money-trail security suites,
+browser journeys, CI and independent RED review remain unproved locally. The
+sandbox provides no database or browser. No fetch, git write, package download,
+provider action, PR or production release was performed. The router must stage
+the resolved files and migration rename to finish its existing merge.
+
+- Final API typecheck: root installed tsc -p apps/api/tsconfig.json --noEmit — passed.
