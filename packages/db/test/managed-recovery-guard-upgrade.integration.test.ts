@@ -7,7 +7,7 @@ import { MIGRATION_URLS, migrate } from "../src/migrate.js";
 import { startBeforeMigration, applyMigration } from "./contractor-practice-session-fixtures.js";
 import { fixture, newCase, start, command, type Cluster, type Fixture } from "./managed-recovery-fixtures.js";
 
-const own = '0570_managed_recovery_pursuit_guard.sql';
+const own = '0600_managed_recovery_pursuit_guard.sql';
 let c: Cluster;
 afterAll(async () => { await c?.close(); });
 

@@ -1,5 +1,5 @@
 {
-  "migration": "0568_managed_recovery_election.sql",
+  "migration": "0598_managed_recovery_election.sql",
   "lp0": [
     {
       "section": "groups",
@@ -63,7 +63,7 @@
           "packages/db/migrations/0018_recovery_outcomes.sql:41",
           "packages/db/migrations/0335_stored_receipt_case_allocation.sql",
           "packages/db/migrations/0359_payment_fee_statements.sql",
-          "packages/db/migrations/0568_managed_recovery_election.sql",
+          "packages/db/migrations/0598_managed_recovery_election.sql",
           "packages/db/src/managed-recovery-repository.ts"
         ],
         "tests": [

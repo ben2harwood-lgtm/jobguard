@@ -928,7 +928,7 @@ PostgreSQL pass claimed. Earlier work in this worktree is preserved.
 
 Compared against available origin/main f94b2d577ed4be9e7020f3578a56c415710b524b
 without fetching. Local main 694e9e17 is stale. Neither retained migration
-0574_money_trail_reconciliation.sql (SHA-256
+0602_money_trail_reconciliation.sql (SHA-256
  a67fead829fe896aa8a0ba0dd665c1d4ac5155602d9ab724f5f38f63b5f4027e)
 nor the queue branch's 0479_financial_reconciliation_queue.sql (SHA-256
  f5a196593d2825a68f306499ad548c4314437bea240dac1c03b155ffc803c162)
@@ -939,7 +939,7 @@ routines and tables. 0479 belongs only to codex/sandbox/m4-17-queue; it is not
 part of this worktree and no proof for that absent migration is introduced.
 This branch still adds reconciliation code beyond main and is not redundant.
 
-Added 0574_money_trail_reconciliation.proof.json from the retained SQL and
+Added 0602_money_trail_reconciliation.proof.json from the retained SQL and
 source expectations only, never a database. Its explicit lp0 section contains
 the two exact capabilities, protected routine attributes and a separate narrow
 authority path. Its upgrade section fixes the exact identity, owner, ACL,
@@ -987,7 +987,7 @@ retained reference comparison and availability routine are not duplicate SQL.
 No new product behavior or test expectation changes.
 
 Moved only full migration stems from 0310_money_trail_reconciliation to
-0574_money_trail_reconciliation in SQL/proof filenames and references, retaining
+0602_money_trail_reconciliation in SQL/proof filenames and references, retaining
 the exact SQL body. No existing routine is re-created, no audit writer or table
 is added, and the current read_success_fee_v3 access check remains delegated.
 All 215 incoming-main migration files compare byte-identically. The historical
@@ -1020,3 +1020,49 @@ provider action, PR or production release was performed. The router must stage
 the resolved files and migration rename to finish its existing merge.
 
 - Final API typecheck: root installed tsc -p apps/api/tsconfig.json --noEmit — passed.
+
+
+### Batch-9 built-ahead union — 3 November 2026 (RED, NOPR)
+
+Resolved the M4-10 invoice merge by keeping both export sets. Preserved the
+already merged MON-9 guard, M4-12 collection, M4-5 pursuit and M4-17 reconciliation
+behaviour. M4-17-queue remains unmerged because of its conflicts; the router takes
+it next. No new product behaviour, live action, database or browser run.
+
+Migration filename stems and all matching references were moved, with names
+preserved, to 0598_managed_recovery_election, 0599_managed_recovery_actor_bind,
+0600_managed_recovery_pursuit_guard, 0601_platform_tax_invoice and
+0602_money_trail_reconciliation. Each retains its corresponding migration proof.
+Added all five new empty app tables to later-empty-tables.ts. Replaced the five
+component lanes with batch-9, listing the final changed paths against the local
+origin/main base bc8993090. The older local main ref is stale; no fetch was run.
+
+Executed using the installed binaries, with --maxWorkers=2 and at most three
+named Vitest files per invocation:
+- core: fee-collection, financial-reconciliation, money-trail-reconciliation
+  (78 passed); platform-tax-invoice, managed-recovery (22 passed).
+- db: src/money-trail-repository.test.ts and
+  test/managed-recovery-repository.test.ts (18 passed).
+- ai: pursuit-draft (24 passed).
+- api: fee-collection-fake-adapter and recovery-message.application (35 passed).
+Total: 177 tests passed in ten files. The first db invocation could not load the
+unbuilt core package; after building local workspace dependencies, the same
+files passed without source or test changes.
+
+Installed tsc -p tsconfig.json --noEmit passed for core, db, ai, API and web.
+Local dependency builds passed for core, config, storage, db and ai. The pnpm
+wrapper stalled before starting its checks and was interrupted; direct installed
+binaries were used without downloads. Core purity, money arithmetic, commercial
+boundary, AI provider boundary and PL/pgSQL CASE-in-IF checks passed. Final
+working-tree lane coverage, conflict-marker, old-stem and git diff --check checks
+passed. node tools/lint.mjs stops at the local lane check: its union of committed,
+staged and unstaged paths still includes removed component lanes and old migration
+names. The final batch lane intentionally lists only final changes from the base,
+as required. This is not a claimed full lint pass.
+
+CI must prove the committed lane and migration ordering, the full required unit,
+lint, typecheck and build gates, real PostgreSQL fresh/upgrade/repeat migrations,
+proof/catalogue/RLS/privilege checks (including command grant withdrawal and sealed
+audit), and applicable browser journeys. One independent RED review remains due
+at the final committed head. The read-only Git index still has unmerged entries;
+working files are resolved and ready for the launcher's staging and merge commit.

@@ -5,7 +5,7 @@ Only the owner command dispatcher can elect through the checked SQL routine;
 source triggers serialize on the existing case advisory lock. Historical pursuit
 messages/events and progressed legacy cases backfill start markers. No earlier migration is edited. Direct runtime writes are revoked. Existing
 LP-0, tenancy and SERIOUS-B5 expectations are unioned through the explicit
-0568_managed_recovery_election.proof.json fragment; the entitlement upgrade
+0598_managed_recovery_election.proof.json fragment; the entitlement upgrade
 retains its two exact empty-table additions.
 
 The repository requires the server's opaque session digest alongside the verified

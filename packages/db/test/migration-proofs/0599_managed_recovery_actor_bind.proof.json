@@ -1,5 +1,5 @@
 {
-  "migration": "0569_managed_recovery_actor_bind.sql",
+  "migration": "0599_managed_recovery_actor_bind.sql",
   "lp0": [
     {
       "section": "entries",
