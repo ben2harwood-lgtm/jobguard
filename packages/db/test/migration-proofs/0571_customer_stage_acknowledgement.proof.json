@@ -51,14 +51,6 @@
       "section": "entries",
       "before": null,
       "after": {
-        "key": "owner|routine|function:app.customer_stage_snapshot(uuid,uuid,uuid)|jobguard_migration",
-        "group": "a-owner-routines"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
         "key": "owner|routine|function:identity.customer_stages(uuid,uuid,uuid,text,uuid,uuid,text)|jobguard_migration",
         "group": "a-owner-routines"
       }
@@ -178,7 +170,8 @@
         "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_identity=X/jobguard_migration}",
         "prosecdef": true,
         "proconfig": [
-          "search_path=pg_catalog"
+          "search_path=pg_catalog",
+          "app.customer_stage_read=on"
         ]
       }
     },
@@ -254,7 +247,7 @@
         "permissive": "PERMISSIVE",
         "roles": "{jobguard_migration}",
         "cmd": "SELECT",
-        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "qual": "((tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid) AND (current_setting('app.customer_stage_read'::text, true) = 'on'::text))",
         "with_check": null
       }
     },
@@ -268,7 +261,7 @@
         "permissive": "PERMISSIVE",
         "roles": "{jobguard_migration}",
         "cmd": "SELECT",
-        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "qual": "((tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid) AND (current_setting('app.customer_stage_read'::text, true) = 'on'::text))",
         "with_check": null
       }
     },
@@ -282,7 +275,7 @@
         "permissive": "PERMISSIVE",
         "roles": "{jobguard_migration}",
         "cmd": "SELECT",
-        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "qual": "((tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid) AND (current_setting('app.customer_stage_read'::text, true) = 'on'::text))",
         "with_check": null
       }
     },
@@ -296,7 +289,7 @@
         "permissive": "PERMISSIVE",
         "roles": "{jobguard_migration}",
         "cmd": "SELECT",
-        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "qual": "((tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid) AND (current_setting('app.customer_stage_read'::text, true) = 'on'::text))",
         "with_check": null
       }
     }

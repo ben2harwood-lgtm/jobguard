@@ -74,19 +74,15 @@ describe("LP-0 grant freeze guard against the fully migrated database", () => {
       expect(brief(result)).toEqual([]);
       expect(result.matched).toBe(profile.length);
     }
-    // No stale entries: profile-only reductions are the other role-login key and the private stage helper owner fact.
+    // No stale entries: the only inventory keys absent from a live profile are the OTHER profile's role-login key.
     // A closing LP card must therefore remove its inventory entries in the same change; a closed exception left
     // in the file (which a later migration could silently re-grant) makes the base fail.
     const roleKeys = (facts: Fact[]) => facts.filter(f => f.category === "role" && f.object === APPLICATION_ROLE).map(f => f.key).sort();
     expect(roleKeys(baselineMigrationOnly).length).toBe(1);
     expect(roleKeys(baselineBootstrapLogin).length).toBe(1);
-    const migrationOnlyReductions = [
-      ...roleKeys(baselineBootstrapLogin),
-      "owner|routine|function:app.customer_stage_snapshot(uuid,uuid,uuid)|jobguard_migration",
-    ].sort();
-    expect(compareInventory(inventory, baselineMigrationOnly).reductions).toEqual(migrationOnlyReductions);
+    expect(compareInventory(inventory, baselineMigrationOnly).reductions).toEqual(roleKeys(baselineBootstrapLogin));
     expect(compareInventory(inventory, baselineBootstrapLogin).reductions).toEqual(roleKeys(baselineMigrationOnly));
-    expect(staleEntries(compareInventory(inventory, baselineMigrationOnly), migrationOnlyReductions)).toEqual([]);
+    expect(staleEntries(compareInventory(inventory, baselineMigrationOnly), roleKeys(baselineBootstrapLogin))).toEqual([]);
     expect(staleEntries(compareInventory(inventory, baselineBootstrapLogin), roleKeys(baselineMigrationOnly))).toEqual([]);
     // The expected value is the committed file, never the live read: a missing, malformed or wrong-version file is refused.
     expect(() => parseInventory(undefined)).toThrow();
@@ -400,10 +396,8 @@ describe("LP-0 grant freeze guard against the fully migrated database", () => {
     expect(exceptions.has(closedTransition)).toBe(false);
     expect(baselineBootstrapLogin.some(fact => fact.key === closedTransition)).toBe(false);
     expect((await db.admin.query("SELECT has_function_privilege('jobguard_runtime','app.transition_job(uuid,uuid,integer,varchar,varchar,uuid,bigint,varchar,bigint)','EXECUTE') allowed")).rows).toEqual([{ allowed: false }]);
-    // Reads and the private MON-5 stage routines are approved current capabilities, not exceptions.
+    // Reads and the MON-5 identity stage routine are approved current capabilities, not exceptions.
     expect(find("acl|rel|table|app.job|jobguard_runtime|SELECT|-")).toMatchObject({ disposition: "approved_current" });
-    expect(find("owner|routine|function:app.customer_stage_snapshot(uuid,uuid,uuid)|jobguard_migration"))
-      .toMatchObject({ disposition: "approved_current", group: "a-owner-routines" });
     expect(find("owner|routine|function:identity.customer_stages(uuid,uuid,uuid,text,uuid,uuid,text)|jobguard_migration"))
       .toMatchObject({ disposition: "approved_current", group: "a-owner-routines" });
     expect(find("acl|routine|function:identity.customer_stages(uuid,uuid,uuid,text,uuid,uuid,text)|jobguard_identity|EXECUTE|-"))

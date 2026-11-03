@@ -83,7 +83,7 @@ describe("CH-4 own-migration upgrade",()=>{
   const customerStagePolicies=["stage_completion","evidence_link","stage_review_event","evidence_invalidation"]
    .filter(table=>oldPolicyTables.has(`app.${table}`)).map(table=>({
     name:`app.${table}.customer_stage_source`,permissive:"PERMISSIVE",roles:["jobguard_migration"],cmd:"SELECT",
-    qual:"(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",with_check:null,
+    qual:"((tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid) AND (current_setting('app.customer_stage_read'::text, true) = 'on'::text))",with_check:null,
    }));
   await migrate(f.admin);await migrate(f.admin);await compare(f.admin,before);await compareOldPolicies(f.admin,[...meterSourcePolicies,...customerStagePolicies,...lp5Policies().filter(policy=>oldPolicyTables.has(policy.name.split(".").slice(0,2).join("."))),{
    ...originalPolicies.find(policy=>policy.name==="app.audit_event.tenant_isolation")!,

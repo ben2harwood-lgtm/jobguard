@@ -26,7 +26,7 @@ CREATE TRIGGER customer_stage_acknowledgement_immutable BEFORE UPDATE OR DELETE 
 -- Source reads only; preserve existing runtime policies and grants.
 DO $$ DECLARE tab text; BEGIN
  FOREACH tab IN ARRAY ARRAY['stage_completion','evidence_link','stage_review_event','evidence_invalidation'] LOOP
-  EXECUTE format('CREATE POLICY customer_stage_source ON app.%I FOR SELECT TO jobguard_migration USING(tenant_id=nullif(current_setting(''app.tenant_id'',true),'''')::uuid)',tab);
+  EXECUTE format('CREATE POLICY customer_stage_source ON app.%I FOR SELECT TO jobguard_migration USING(tenant_id=nullif(current_setting(''app.tenant_id'',true),'''')::uuid AND current_setting(''app.customer_stage_read'',true)=''on'')',tab);
  END LOOP;
 END $$;
 
@@ -53,7 +53,7 @@ CREATE FUNCTION app.customer_stage_snapshot(t uuid,j uuid,completion uuid) RETUR
 $$;
 
 CREATE FUNCTION identity.customer_stages(t uuid,j uuid,c uuid,digest text,completion uuid,command uuid,expected_hash text) RETURNS jsonb
- LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog SET app.customer_stage_read='on' AS $$
 DECLARE s app.stage_completion; prior app.customer_stage_acknowledgement; view jsonb; sid uuid; ack uuid:=gen_random_uuid();
 BEGIN
  -- Reuse the existing authority boundary inside this transaction, including its job lock.

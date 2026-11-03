@@ -30,10 +30,10 @@ export async function seedStage(admin: Pool, tenant: string, job: string) {
   try {
    await stageDb.query("BEGIN"); await stageDb.query("SELECT set_config('app.tenant_id',$1,true)",[tenant]);
   await stageDb.query("INSERT INTO app.scope_identity(tenant_id,id,job_id,state) VALUES($1,$2,$3,'confirmed')", [tenant,scope,job]);
-  await stageDb.query(`INSERT INTO app.evidence_upload(tenant_id,id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at,state,object_version_id,server_verified_at)
-    VALUES($1,$2,$3,$4,$2::text,$5,'image/png',100,'standard_evidence',clock_timestamp()+interval '1 day','verified',$6,clock_timestamp())`, [tenant,evidence,job,scope,"a".repeat(64),objectVersion]);
-  await stageDb.query(`INSERT INTO app.evidence_object(tenant_id,id,upload_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_verified_at)
-    VALUES($1,$2,$2,$3,$4,'original','pre_cover_photo',$2::text,$5,$6,80,'image/png','standard_evidence',clock_timestamp())`, [tenant,evidence,job,scope,objectVersion,"a".repeat(64)]);
+  await stageDb.query(`INSERT INTO app.evidence_upload(tenant_id,id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at,state,object_version_id,server_received_at,server_verified_at)
+    VALUES($1,$2::uuid,$3,$4,$2::text,$5,'image/png',100,'standard_evidence',clock_timestamp()+interval '1 day','verified',$6,clock_timestamp(),clock_timestamp())`, [tenant,evidence,job,scope,"a".repeat(64),objectVersion]);
+  await stageDb.query(`INSERT INTO app.evidence_object(tenant_id,id,upload_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)
+    VALUES($1,$2::uuid,$2::uuid,$3,$4,'original','pre_cover_photo',$2::text,$5,$6,80,'image/png','standard_evidence',clock_timestamp(),clock_timestamp())`, [tenant,evidence,job,scope,objectVersion,"a".repeat(64)]);
   await stageDb.query("INSERT INTO app.evidence_link(tenant_id,id,evidence_id,job_id,scope_item_id,required_evidence_type) VALUES($1,$2,$3,$4,$5,'pre_cover_photo')", [tenant,evidenceLink,evidence,job,scope]);
   await stageDb.query("INSERT INTO app.stage_completion(tenant_id,id,job_id,scope_item_id,stage,evidence_link_id,command_id) VALUES($1,$2,$3,$4,'Fictional pre-cover stage',$5,$6)", [tenant,completion,job,scope,evidenceLink,randomUUID()]);
    await stageDb.query("COMMIT");
