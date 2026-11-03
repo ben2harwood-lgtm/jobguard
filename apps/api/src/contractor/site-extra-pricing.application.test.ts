@@ -190,3 +190,23 @@ describe("ENT-3c single path and seam", () => {
     expect(queries).not.toMatch(/\b(?:INSERT|UPDATE|DELETE)\b/iu); expect(queries).not.toMatch(/LogSiteExtra|commandType/u);
   });
 });
+
+
+it("ENT-3 v2 keeps verified-photo, shown-hash and visit bindings through the application", async () => {
+  vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
+  const pool = new Pool(), m = member(), sessionId = uuid(), jobId = uuid();
+  vi.spyOn(ContractorRepository.prototype, "resolveSession").mockResolvedValue(m);
+  const raw = body({ version: "log-sor-site-extra.v2", description: "Fictional reviewed description", photoEvidenceId: uuid(), residentConfirmation: { shownContentSha256: "a".repeat(64) }, siteVisitId: uuid() });
+  const repo = vi.spyOn(SiteExtraRepository.prototype, "logSorSiteExtra").mockResolvedValue(stored(jobId));
+  const app = createWorkspaceApplication({ pool, sessionId });
+  await app.siteExtras.logSor(jobId, raw);
+  expect(repo.mock.calls[0]![1]).toBe(m);
+  expect(repo.mock.calls[0]![2]).toEqual({ ...raw, jobId });
+  await pool.end();
+});
+
+it("ENT-3 documents both strict versions with the exact controller schema", () => {
+  const parameters = Reflect.getMetadata("swagger/apiParameters", SiteExtraPricingController.prototype.logSor) as Array<{ in: string; schema: unknown }>;
+  const spec = JSON.parse(readFileSync(resolve(process.cwd(), "openapi.json"), "utf8"));
+  expect(spec.paths["/contractor/jobs/{id}/site-extras/sor"].post.requestBody.content["application/json"].schema).toEqual(parameters.find(p => p.in === "body")!.schema);
+});

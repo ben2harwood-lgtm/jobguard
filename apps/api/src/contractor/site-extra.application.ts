@@ -84,7 +84,7 @@ export class SiteExtraApplication {
  }
  private sorError(error: unknown): SorSiteExtraError {
   if (error instanceof SorSiteExtraError) return error;
-  if (error instanceof SiteExtraError && (error.code === "UNAUTHENTICATED" || error.code === "EXTRA_FORBIDDEN")) return new SorSiteExtraError(error.code);
+  if (error instanceof SiteExtraError && (error.code === "UNAUTHENTICATED" || error.code === "EXTRA_FORBIDDEN" || error.code === "PHOTO_NOT_ACCEPTED" || error.code === "CONFIRMATION_MISMATCH")) return new SorSiteExtraError(error.code);
   if ((error as { code?: string } | null)?.code === "UNAUTHENTICATED") return new SorSiteExtraError("UNAUTHENTICATED");
   return new SorSiteExtraError("SITE_PRICING_UNAVAILABLE");
  }
@@ -96,7 +96,7 @@ export class SiteExtraApplication {
    const job = z.guid({ error: "Invalid uuid" }).safeParse(jobId); if (!job.success) throw new SorSiteExtraError("NOT_FOUND");
    await this.requireSiteOrigin(sessionId);
    const context = await this.resolveContext(sessionId, member);
-   const result = await this.repository.logSorSiteExtra(context, member, { commandId: body.commandId, jobId: job.data, sorCode: body.sorCode, quantity: body.quantity, ...(body.orderLineScopeItemId ? { orderLineScopeItemId: body.orderLineScopeItemId } : {}), note: body.note });
+   const result = await this.repository.logSorSiteExtra(context, member, { commandId: body.commandId, jobId: job.data, sorCode: body.sorCode, quantity: body.quantity, ...(body.orderLineScopeItemId ? { orderLineScopeItemId: body.orderLineScopeItemId } : {}), note: body.note, ...(body.version === "log-sor-site-extra.v2" ? { version: body.version, description: body.description, photoEvidenceId: body.photoEvidenceId, residentConfirmation: body.residentConfirmation, ...(body.siteVisitId ? { siteVisitId: body.siteVisitId } : {}) } : {}) });
    return sorSiteExtraLoggedV1.parse({ version: "sor-site-extra-logged.v1", environment: "synthetic_demo", realExternalActions: 0, jobId: job.data, extraId: result.variationId, state: "logged", priceSource: result.priceSource,
     orderCheck: { outcome: result.coverage === "new" ? "new" : "more_than_ordered", sorCode: result.sorCode, unit: result.unit, claimedQuantity: result.claimedQuantity, instructedQuantity: result.instructedQuantity, extraQuantity: result.extraQuantity, orderLineScopeItemId: result.orderLineScopeItemId } });
   } catch (error) { throw this.sorError(error); }

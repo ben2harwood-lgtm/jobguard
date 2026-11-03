@@ -229,7 +229,8 @@ export class SiteExtraRepository {
  /** Logs a schedule-item extra: the server compares the amount with the order, prices the extra quantity alone, and keeps the price in the raising transaction. */
  async logSorSiteExtra(context: VerifiedTenantContext, actor: AuthenticatedMembership, raw: unknown): Promise<StoredSorExtra> {
   const input = parseSorSiteExtraInput(raw);
-  const requestHash = sha256Hex(canonicalJson({ version: "log-sor-site-extra.v1", jobId: input.jobId.toLowerCase(), sorCode: input.sorCode, quantity: input.quantity, orderLineScopeItemId: input.orderLineScopeItemId?.toLowerCase() ?? null, note: input.note }));
+  const capture = "version" in input ? input : undefined;
+  const requestHash = sha256Hex(canonicalJson({ version: capture?.version ?? "log-sor-site-extra.v1", jobId: input.jobId.toLowerCase(), sorCode: input.sorCode, quantity: input.quantity, orderLineScopeItemId: input.orderLineScopeItemId?.toLowerCase() ?? null, note: input.note, ...(capture ? { description: capture.description, photoEvidenceId: capture.photoEvidenceId.toLowerCase(), residentConfirmation: capture.residentConfirmation, siteVisitId: capture.siteVisitId?.toLowerCase() ?? null } : {}) }));
   // recordRefusal reads only the command id and the job; the other fields are the typed shape it was written against.
   const refusalInput: Input = { commandId: input.commandId, jobId: input.jobId, note: input.note, description: input.sorCode };
   const refuse = async (refusal: Refusal): Promise<never> => { await this.recordRefusal(context, actor, refusalInput, refusal.reason); throw new SorSiteExtraError(refusal.code); };
@@ -245,6 +246,10 @@ export class SiteExtraRepository {
   }
   if (replay.receiptExists) throw new SorSiteExtraError("IDEMPOTENCY_CONFLICT");
   if (!authority.live) throw new SorSiteExtraError("JOB_NOT_LIVE");
+  if (capture?.siteVisitId) {
+   const visitAuthority = await this.precheck(context, actor, input.jobId, capture.siteVisitId);
+   if ("code" in visitAuthority) return refuse(visitAuthority);
+  }
   let planned;
   try {
    planned = await withTenant(this.pool, context, async db => {
@@ -261,15 +266,26 @@ export class SiteExtraRepository {
    if (error instanceof WatchdogError && error.code === "JOB_NOT_LIVE") throw new SorSiteExtraError("JOB_NOT_LIVE");
    throw error;
   }
+  const evidenceInput = capture ? { commandId: input.commandId, jobId: input.jobId, note: input.note, description: capture.description, photoEvidenceId: capture.photoEvidenceId, shownContentSha256: capture.residentConfirmation.shownContentSha256 } : undefined;
+  let gate: Gate | SiteExtraRefusal = { raise: {} };
+  try { if (evidenceInput) gate = await this.evidenceGate(context, actor, evidenceInput); }
+  catch (error) {
+   if (error instanceof SiteExtraError && error.code === "COMMAND_CONFLICT") throw new SorSiteExtraError("IDEMPOTENCY_CONFLICT");
+   throw error;
+  }
+  if ("code" in gate) {
+   await this.recordRefusal(context, actor, refusalInput, gate.reason);
+   throw new SorSiteExtraError(gate.code);
+  }
   // merged raiseExtra rewrites every error it does not know, so each seam step remembers its own exact refusal in this one call's local variable.
   let seamFailure: string | undefined;
   const remember = (error: unknown): never => { seamFailure = error instanceof Error ? error.message : undefined; throw error; };
   let raised: { variationId: string };
   try {
-   raised = await new ExtraRepository(this.pool).raiseExtra(context, { version: "raise-extra.v1", commandId: input.commandId, commandType, jobId: input.jobId, actorMembershipId: actor.membershipId, grantId: authority.grant, note: input.note, description: planned.description,
+   raised = await new ExtraRepository(this.pool).raiseExtra(context, { version: "raise-extra.v1", commandId: input.commandId, commandType, jobId: input.jobId, actorMembershipId: actor.membershipId, grantId: authority.grant, note: input.note, description: capture?.description ?? planned.description, ...gate.raise, ...(capture?.siteVisitId ? { siteVisitId: capture.siteVisitId } : {}),
     sorItem: { versionId: planned.versionId, code: input.sorCode }, ...(planned.check.outcome === "more_than_ordered" ? { excessOfScopeItemId: planned.check.orderLineScopeItemId } : {}) }, async (db, fact) => {
     try { await requireLiveJob(db, fact.jobId); } catch (error) { remember(error); }
-    try { await siteExtraBaseAuthoritySeam(db, fact); } catch (error) { remember(error); }
+    try { if (capture) await siteExtraAuthoritySeam(db, fact); else await siteExtraBaseAuthoritySeam(db, fact); } catch (error) { remember(error); }
     try { await db.$client.query("SELECT app.ent3c_record_sor_revision($1,$2,$3,$4)", [fact.jobId, fact.variationId, input.quantity, requestHash]); } catch (error) { remember(error); }
    });
   } catch (error) {

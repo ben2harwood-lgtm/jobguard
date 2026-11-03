@@ -1,0 +1,30 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-3e-screens": {
+      "branches": [
+        "codex/sandbox/ent-3e-screens"
+      ],
+      "note": "ENT-3e priced evidence v2 and operative screens; RED; remaining acceptance is listed in the contract and handoff.",
+      "allow": [
+        "apps/api/openapi.json",
+        "apps/api/src/contractor/site-extra-pricing.application.test.ts",
+        "apps/api/src/contractor/site-extra-pricing.controller.ts",
+        "apps/api/src/contractor/site-extra.application.ts",
+        "apps/web/app/api/contractor/jobs/[id]/site-extras/sor/route.test.ts",
+        "apps/web/app/northside/northside.module.css",
+        "apps/web/app/site/extra/site-extra.tsx",
+        "apps/web/app/site/extra/site-visit.test.tsx",
+        "apps/web/app/site/extra/site-visit.tsx",
+        "apps/web/e2e/ENT-3.spec.ts",
+        "docs/contracts/site-extra-pricing-v2.md",
+        "packages/core/src/site-extra-priced-evidence.test.ts",
+        "packages/core/src/site-extra-pricing.test.ts",
+        "packages/core/src/site-extra-pricing.ts",
+        "packages/db/src/site-extra-repository.ts",
+        "packages/db/test/site-extra-priced-evidence.integration.test.ts",
+        "packages/db/test/site-extra-priced-evidence.test.ts"
+      ]
+    }
+  }
+}
