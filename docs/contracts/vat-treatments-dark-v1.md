@@ -110,7 +110,7 @@ for the exact `retentionProfileId` that authorized it. Any linked receipt revers
 that release in this combined check; the retention book's released balances remain unchanged.
 Released principal must equal the decrease in VAT retained principal, released tax must
 equal the increase in supplier VAT, and their sum must equal the increase in expected cash.
-Customer-accounted DRC VAT is separate from supplier tax. Standalone
+The final VAT retained principal and deferred supplier VAT must also match the retention book’s remaining principal and tax, including already-billed amounts and releases. Customer-accounted DRC VAT is separate from supplier tax. Standalone
 `reconcileVatTreatmentFixtures` remains a VAT calculation only, without source verification.
 Neither entry point enables issue or chooses the pending D02 credit-rounding policy.
 

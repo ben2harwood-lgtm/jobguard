@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-dark-calculator-fixes": {
+      "branches": [
+        "codex/sandbox/m4-dark-calculator-fixes"
+      ],
+      "allow": [
+        "apps/api/src/accounting-export.sandbox.test.ts",
+        "apps/api/src/accounting-export.sandbox.ts",
+        "apps/api/src/fee-collection/executor.test.ts",
+        "apps/api/src/fee-collection/executor.ts",
+        "docs/contracts/accounting-export-v1.md",
+        "docs/contracts/cis-deductions-dark-v1.md",
+        "docs/contracts/vat-treatments-dark-v1.md",
+        "packages/core/src/cis-deductions.test.ts",
+        "packages/core/src/cis-deductions.ts",
+        "packages/core/src/interim-applications.test.ts",
+        "packages/core/src/interim-applications.ts",
+        "packages/core/src/vat-treatments.test.ts",
+        "packages/core/src/vat-treatments.ts"
+      ]
+    }
+  }
+}
