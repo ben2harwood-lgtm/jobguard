@@ -1,3 +1,4 @@
+import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -71,6 +72,7 @@ beforeEach(async () => {
   catch (error) { await reset.query("ROLLBACK"); throw error; }
   finally { reset.release(); }
   a = await contractor.startPractice(randomUUID()); b = await contractor.startPractice(randomUUID());
+  await seedActiveContractorAgreement(admin,a.tenantId); await seedActiveContractorAgreement(admin,b.tenantId);
 });
 afterAll(async () => {
   try { if (admin) expect(await catalog()).toEqual(priorCatalog); }

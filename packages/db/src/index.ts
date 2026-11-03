@@ -155,6 +155,7 @@ export * from "./enterprise-baseline-repository.js";
 export { IMPORT_CATCH_HOLD_REASON, JobImportV3Repository, JobImportV3Error } from "./job-import-v3-repository.js";
 export * from "./import-pre-adoption-repository.js";
 
+export * from "./plan-entitlement-service.js";
 export * from "./payment-fee-repository.js";
 export * from "./small-builder-demo-repository.js";
 export { reviewOfflineCommercialIntent } from "./offline-upload.js";
