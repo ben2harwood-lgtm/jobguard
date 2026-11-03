@@ -1,5 +1,5 @@
 {
-  "migration": "0581_dunning_workbench.sql",
+  "migration": "0563_dunning_workbench.sql",
   "lp0": [
     {
       "section": "groups",
@@ -23,7 +23,7 @@
         },
         "downstream": "One synthetic-only session-checked entry point reads private invoice projections, creates immutable reminder snapshots and stored Decisions, approves previews and appends audit events. No send, retry, outbox or financial authorization.",
         "sources": [
-          "packages/db/migrations/0581_dunning_workbench.sql",
+          "packages/db/migrations/0563_dunning_workbench.sql",
           "packages/db/src/dunning-repository.ts"
         ],
         "tests": [
@@ -68,7 +68,7 @@
           "LP-12": "Review fixed search_path, migration-owned private tables and helpers, and absence of runtime direct writes."
         },
         "sources": [
-          "packages/db/migrations/0581_dunning_workbench.sql",
+          "packages/db/migrations/0563_dunning_workbench.sql",
           "packages/db/src/dunning-repository.ts"
         ],
         "tests": [
@@ -96,16 +96,14 @@
         "otherExecute": [],
         "definitionSha256": null,
         "staticWrites": [
-          "app.audit_event",
           "app.command_receipt",
           "app.decision",
           "app.decision_resolution",
           "app.dunning_reminder"
         ],
         "staticCalls": [
-          "app.advance_audit_head",
           "app.final_lock_hash",
-          "app.lock_audit_head",
+          "app.lp4_seal_audit",
           "app.mon1_company_actor"
         ]
       }

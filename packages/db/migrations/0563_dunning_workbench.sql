@@ -40,7 +40,7 @@ CREATE FUNCTION app.dunning_workbench(t uuid,digest text,j uuid,operation text,v
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE actor uuid; cid uuid; iid uuid; did uuid; source jsonb; fingerprint text; request_hash text;
  prior app.command_receipt; draft app.dunning_reminder; result jsonb;
- seq bigint; previous text; ts timestamptz; payload jsonb; ph text; eh text;
+ payload jsonb;
 BEGIN
  IF current_database()<>'jobguard_synthetic_demo' THEN RAISE EXCEPTION 'DUNNING_DARK'; END IF;
  actor:=app.mon1_company_actor(t,digest);
@@ -126,13 +126,10 @@ BEGIN
  INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,result,actor_membership_id,completed_at)
  VALUES(cid,t,'dunning.'||operation,cid::text,request_hash,'succeeded',result,actor,clock_timestamp());
  -- Audit takes the final contending lock. Payload contains references and hashes only.
- SELECT sequence,event_hash INTO seq,previous FROM app.lock_audit_head();
- seq:=seq+1; ts:=date_trunc('milliseconds',clock_timestamp());
- payload:=jsonb_build_object('references',jsonb_build_object('commandId',cid::text,'decisionId',draft.decision_id::text),'hashes',jsonb_build_object('snapshot',fingerprint,'request',request_hash)); ph:=app.final_lock_hash(payload);
- eh:=encode(sha256(convert_to(concat_ws(chr(31),'audit.v1',t::text,seq::text,'membership:'||actor::text,'dunning.'||operation,'dunning_invoice',iid::text,to_char(ts AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),ph,coalesce(previous,'')),'UTF8')),'hex');
- INSERT INTO app.audit_event(id,tenant_id,sequence,version,actor_ref,event_type,subject_type,subject_ref,occurred_at,payload,payload_hash,previous_hash,event_hash)
- VALUES(gen_random_uuid(),t,seq,'audit.v1','membership:'||actor::text,'dunning.'||operation,'dunning_invoice',iid::text,ts,payload,ph,previous,eh);
- PERFORM app.advance_audit_head(seq,eh);
+ payload:=jsonb_build_object('references',jsonb_build_object('commandId',cid::text,'decisionId',draft.decision_id::text),'hashes',jsonb_build_object('snapshot',fingerprint,'request',request_hash));
+ PERFORM app.lp4_seal_audit(jsonb_build_array(jsonb_build_object('id',gen_random_uuid(),'version','audit.v1',
+  'actorRef','membership:'||actor::text,'eventType','dunning.'||operation,'subjectType','dunning_invoice',
+  'subjectRef',iid::text,'payload',payload)),'checked_operation');
  RETURN result;
 END $$;
 ALTER FUNCTION app.dunning_workbench(uuid,text,uuid,text,jsonb) OWNER TO jobguard_migration;

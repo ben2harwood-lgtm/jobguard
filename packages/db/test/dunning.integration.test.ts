@@ -60,6 +60,12 @@ describe("M4-16 durable synthetic dunning",()=>{
   expect(counts.rows[0]).toEqual({drafts:1,resolutions:1,audits:3});
   const events=(await c.admin.query<AuditEvent>(`SELECT id,version,actor_ref AS "actorRef",event_type AS "eventType",subject_type AS "subjectType",subject_ref AS "subjectRef",payload,tenant_id AS "tenantId",sequence::int,occurred_at AS "occurredAt",payload_hash AS "payloadHash",previous_hash AS "previousHash",event_hash AS "eventHash" FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence`,[a.tenantId])).rows;
   verifyAuditChain(events);
+  const dunningEvents=events.filter(event=>event.eventType.startsWith("dunning."));
+  expect(dunningEvents).toHaveLength(3);
+  for(const event of dunningEvents){
+   expect(event.version).toBe("audit.v2");
+   expect(event.payload).toMatchObject({references:{auditTrust:"checked_operation"}});
+  }
   await migrate(c.admin);expect((await read(a)).invoices[0]!.snapshotHash).toBe(row.snapshotHash);
  });
  it.each([{disputed:true},{reversed:true},{outstandingPence:0},{pilotNoCharge:true},{refundPending:true},{attemptState:"pending"},{attemptState:"outcome_unknown"}])("does not draft suppressed amounts %j",async changed=>{
