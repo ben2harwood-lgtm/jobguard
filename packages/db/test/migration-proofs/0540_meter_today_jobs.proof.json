@@ -1,5 +1,5 @@
 {
-  "migration": "0612_meter_today_jobs.sql",
+  "migration": "0540_meter_today_jobs.sql",
   "lp0": [
     {
       "section": "entries",
