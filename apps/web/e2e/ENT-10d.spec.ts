@@ -1,3 +1,4 @@
+import { seedActiveContractorAgreement } from "../../../packages/db/test/contractor-agreement-test-fixture.js";
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { Pool } from "pg";
@@ -39,6 +40,7 @@ async function owner(context: BrowserContext) {
       await db.$client.query("INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at) VALUES($1,$2,'synthetic_demo',$3,$4,clock_timestamp()+interval '1 day')", [randomUUID(), userId, digest, csrfToken]);
       await appendAuditBatch(db,[{id:assignmentId,version:"audit.v1",actorRef:"ENT-10d:e2e-fixture",eventType:"commercial_track.assigned",subjectType:"tenant",subjectRef:tenantId,payload:{references:{assignment:assignmentId,environment:"synthetic_demo"},classifications:{action:"security"}}}]);
     });
+    await seedActiveContractorAgreement(pool, tenantId);
   } finally { await pool.end(); }
   await context.addCookies([{ name: "jobguard_session", value: token, url: "http://127.0.0.1:3000", httpOnly: true, secure: true, sameSite: "Strict" }]);
   return { tenantId, csrfToken, email, token };

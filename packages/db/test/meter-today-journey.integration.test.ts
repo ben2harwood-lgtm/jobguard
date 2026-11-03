@@ -4,7 +4,7 @@ import { finalizeMeterLifecycleOwnership } from "../src/demo-bootstrap.js";
 import { MeterTodayRepository } from "../src/meter-today-repository.js";
 import { JobWorkStateRepository } from "../src/job-work-state-repository.js";
 import { createWorkFixture, closeWorkFixture, workTenant, insertPhoto, type WorkFixture } from "./job-work-state-fixtures.js";
-import { meterCompany } from "./meter-persistence-fixtures.js";
+import { meterCompany, meterInput, storeMeter, refreshMeter, readMeter } from "./meter-persistence-fixtures.js";
 import { historicalAgreement } from "./subscription-persistence-fixtures.js";
 import { activateMeterJob } from "./meter-journey-fixtures.js";
 let f: WorkFixture;
@@ -61,4 +61,58 @@ it("fresh capture is a finalized narrow entrypoint, with no direct runtime table
  expect((await f.admin.query(`SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
   WHERE n.nspname='app' AND c.relkind IN ('r','p','v','m') AND c.relname LIKE 'shadow%'
   AND has_table_privilege('jobguard_meter_owner',c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE')`)).rows).toEqual([]);
+});
+
+
+it("MON1-J drill-down stays company-scoped and signals change neither its rows nor the bill", async () => {
+ const a = await meterCompany(f), b = await meterCompany(f);
+ for (const company of [a, b]) {
+  await historicalAgreement(f, company, "Builder"); await activateMeterJob(f, company);
+  await insertPhoto(f, company, "now");
+ }
+ const reader = new MeterTodayRepository(f.runtime);
+ const before = await reader.readJobs(a.context, a.digest);
+ expect(before.meter).toMatchObject({ countedPlaces: 1, freeSmallPlaces: 0 });
+ expect(before.places).toEqual([{ kind: "place", jobIds: [a.jobId] }]);
+ expect((await reader.readJobs(b.context, b.digest)).places).toEqual([{ kind: "place", jobIds: [b.jobId] }]);
+ // Explicit synthetic billing fixture: compare the full persisted pricing result,
+ // independently of the fresh work-command projection used by the screen.
+ await storeMeter(f, a, meterInput(a.tenantId));
+ const bill = (await readMeter(f, a, await refreshMeter(f, a))).result;
+ await workTenant(f.admin, a.tenantId, db => db.query(`INSERT INTO app.shadow_commercial_signal
+  (tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state)
+  VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic.v1',clock_timestamp(),'Fictional hidden extra','low','held_for_final_check')`,
+  [a.tenantId, a.jobId, randomUUID(), randomUUID()]));
+ expect(await reader.readJobs(a.context, a.digest)).toEqual(before);
+ expect((await readMeter(f, a, await refreshMeter(f, a))).result).toEqual(bill);
+ await expect(reader.readJobs(b.context, a.digest)).rejects.toThrow("METER_FORBIDDEN");
+ await expect(f.runtime.query("SELECT app.mon1_today_jobs($1,$2)", [a.tenantId, a.digest])).rejects.toThrow("METER_FORBIDDEN");
+ await f.admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [a.tenantId, a.actorId]);
+ await expect(reader.readJobs(a.context, a.digest)).rejects.toThrow("METER_FORBIDDEN");
+ await f.admin.query("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE id=$1", [b.sessionId]);
+ await expect(reader.readJobs(b.context, b.digest)).rejects.toThrow("METER_FORBIDDEN");
+});
+
+it("drill-down grants only checked execution; its only business input is the meter work ledger", async () => {
+ const empty = await meterCompany(f);
+ await expect(workTenant(f.runtime, empty.tenantId, db => db.query("SELECT app.mon1_today_jobs($1,$2)", [empty.tenantId, empty.digest]))).rejects.toThrow("METER_UNAVAILABLE");
+ const row = (await f.admin.query(`SELECT pg_get_functiondef(oid) definition,prosecdef,proconfig,
+  pg_get_userbyid(proowner) owner,has_function_privilege('jobguard_runtime',oid,'EXECUTE') runtime,
+  has_function_privilege('jobguard_infrastructure',oid,'EXECUTE') infrastructure,
+  EXISTS(SELECT 1 FROM aclexplode(proacl) WHERE grantee=0 AND privilege_type='EXECUTE') public
+  FROM pg_proc WHERE oid='app.mon1_today_jobs(uuid,text)'::regprocedure`)).rows[0];
+ expect(row).toMatchObject({ prosecdef: true, proconfig: ["search_path=pg_catalog"], owner: "jobguard_migration",
+  runtime: true, infrastructure: false, public: false });
+ const inputs = [...String(row.definition).matchAll(/\b(?:FROM|JOIN)\s+app\.([a-z_]+)/giu)].map(match => match[1]);
+ expect(inputs).toEqual(["meter_work_ledger"]);
+ expect(row.definition.indexOf("PERFORM app.mon1_company_actor")).toBeLessThan(row.definition.indexOf("SELECT * INTO"));
+ expect(row.definition).not.toMatch(/app\.(shadow|finding|recovery|eligibility)/u);
+ expect((await f.admin.query(`SELECT has_table_privilege('jobguard_runtime','app.meter_work_ledger','SELECT,INSERT,UPDATE,DELETE,TRUNCATE') allowed`)).rows).toEqual([{ allowed: false }]);
+ // The read migration must not change the restricted meter roles' shadow grants.
+ for (const role of ["jobguard_runtime", "jobguard_meter", "jobguard_meter_owner"]) {
+  expect((await f.admin.query(`SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+   WHERE n.nspname='app' AND c.relkind IN ('r','p','v','m') AND c.relname LIKE 'shadow%'
+   AND (has_table_privilege($1,c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE')
+     OR has_any_column_privilege($1,c.oid,'SELECT,INSERT,UPDATE,REFERENCES'))`, [role])).rows).toEqual([]);
+ }
 });

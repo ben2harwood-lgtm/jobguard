@@ -34,9 +34,9 @@ export async function recoveryFeeFixture(f:FinalCheckFixture,settleReceipts=true
   }
   payments.push(payment);
  }
- const allocate=async(index:number)=>{
+ const allocate=async(index:number,evidenceId=x.evidence)=>{
   const c=opened[index]!;
-  const command={version:"recovery-allocation-command.v1",action:"review",commandId:randomUUID(),caseId:c.id,paymentId:payments[index]!,evidenceId:x.evidence,expectedCaseRevision:c.revision,grossPence:index===0?38400:300000};
+  const command={version:"recovery-allocation-command.v1",action:"review",commandId:randomUUID(),caseId:c.id,paymentId:payments[index]!,evidenceId,expectedCaseRevision:c.revision,grossPence:index===0?38400:300000};
   const review=await allocator.command(x.context,x.actor,x.auth.digest,x.jobId,command);
   return allocator.command(x.context,x.actor,x.auth.digest,x.jobId,{...command,action:"allocate",commandId:randomUUID(),approvalHash:review.review!.approvalHash});
  };
