@@ -5,7 +5,8 @@ import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { migrate, SupplierDocumentRepository, withTenant } from "../src/index.js";
+import { migrate, SupplierDocumentRepository, EvidencePackRepository, withTenant } from "../src/index.js";
+import { seedEvidencePackFixture } from "./evidence-pack-fixture.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { importWatchdogFixtureJob } from "./watchdog-fixtures.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
@@ -17,6 +18,9 @@ const context = testTenantContext(tenant), otherContext = testTenantContext(othe
 const previousEnvironment = process.env.JOBGUARD_ENV;
 let preserved: Awaited<ReturnType<typeof proofBefore>>;
 let originalId: string;
+let packFixture: Awaited<ReturnType<typeof seedEvidencePackFixture>>;
+let approvedPack: Awaited<ReturnType<EvidencePackRepository["list"]>>;
+let documentBytes: unknown;
 beforeAll(async () => {
   process.env.JOBGUARD_ENV = "synthetic_demo";
   const directory = await mkdtemp(join(tmpdir(), "jg-merchant-")), port = await freePort(61900, 80);
@@ -32,6 +36,14 @@ beforeAll(async () => {
   await admin.query("CREATE ROLE merchant_test_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_runtime TO merchant_test_login");
   runtime = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "merchant_test_login", password: "synthetic" });
   await withTenant(runtime, context, db => db.$client.query("INSERT INTO app.supplier_document(id,tenant_id,job_id,supplier_context,document_type,document_number,content_hash,status) VALUES($1,$2,$3,'fictional-merchant','invoice','OLD-SYNTHETIC',$4,'ready')", [randomUUID(), tenant, job, "a".repeat(64)]));
+  await withTenant(admin, context, db => db.$client.query("INSERT INTO app.supplier_document_intake(id,tenant_id,job_id,document_id,fixture_id,channel,result) SELECT $1,tenant_id,job_id,id,'materials-B-invoice','picker','ready' FROM app.supplier_document WHERE document_number='OLD-SYNTHETIC'", [randomUUID()]));
+  packFixture = await seedEvidencePackFixture(admin, { withVariation: false });
+  const packs = new EvidencePackRepository(runtime), packContext = testTenantContext(packFixture.tenantId);
+  const pack = await packs.generate(packContext, packFixture.caseId, { commandId: randomUUID() }, "fixture-owner");
+  await packs.approveAttachment(packContext, packFixture.caseId, pack.id, { commandId: randomUUID(), expectedManifestHash: pack.manifestHash, expectedContentHash: pack.contentHash }, "fixture-owner");
+  approvedPack = await packs.list(packContext, packFixture.caseId);
+  expect(approvedPack[0]).toMatchObject({ attachmentApprovalValid: true });
+  documentBytes = (await admin.query("SELECT jsonb_agg(to_jsonb(d) ORDER BY id) AS data FROM app.supplier_document d")).rows;
   preserved = await proofBefore(admin, ["app.supplier_document", "app.supplier_document_intake", "app.goods_receipt", "app.purchase_order_revision"]);
   await migrate(admin);
 }, 120000);
@@ -46,8 +58,11 @@ async function intake(fixtureId: SupplierDocumentIntake["fixtureId"], channel: S
     ...(channel === "fixture_mail" ? { alias: "materials@fictional-builder.invalid" } : {}), expectedRevision: view.intakeRevision });
 }
 it("upgrades existing documents without changing prior rows, money, orders or delivery history", async () => {
+  expect((await admin.query("SELECT jsonb_agg(to_jsonb(d) ORDER BY id) AS data FROM app.supplier_document d")).rows).toEqual(documentBytes);
+  expect(await new EvidencePackRepository(runtime).list(testTenantContext(packFixture.tenantId), packFixture.caseId)).toEqual(approvedPack);
   expect(await proofDifferences(admin, preserved)).toEqual({ rows: [], types: [] });
-  expect((await admin.query("SELECT canonical_document_id FROM app.supplier_document WHERE document_number='OLD-SYNTHETIC'")).rows).toEqual([{ canonical_document_id: null }]);
+  expect((await admin.query("SELECT canonical_document_id,source_schema_version FROM app.supplier_document_intake WHERE tenant_id=$1 AND fixture_id='materials-B-invoice'", [tenant])).rows).toEqual([{ canonical_document_id: null, source_schema_version: null }]);
+  expect((await admin.query("SELECT to_jsonb(d) ? 'canonical_document_id' AS linked FROM app.supplier_document d WHERE document_number='OLD-SYNTHETIC'")).rows).toEqual([{ linked: false }]);
 });
 it("deduplicates upload/mail/portal and concurrent exact replays while retaining each arrival", async () => {
   originalId = (await intake("materials-B-invoice", "picker")).documentId;
@@ -70,6 +85,7 @@ it("quarantines changed content, identity/version drift and malformed amounts; n
   const view = await repo().view(context, job), held = view.documents.find(d => d.id === changed.documentId);
   expect(held).toMatchObject({ canonical_document_id: originalId, status: "held", hold_reason: "Merchant review: changed_document", recognizedDebtPence: 0 });
   expect((await admin.query("SELECT source_schema_version FROM app.supplier_document_intake WHERE tenant_id=$1 AND fixture_id='merchant-schema-drift'", [tenant])).rows).toEqual([{ source_schema_version: "merchant-feed.v2" }]);
+  expect((await admin.query("SELECT canonical_document_id FROM app.supplier_document_intake WHERE tenant_id=$1 AND document_id=$2 AND result='held'", [tenant, changed.documentId])).rows).toEqual([{ canonical_document_id: originalId }]);
   expect(view.facts).toHaveLength(1); expect(view.facts[0].source_text).toContain("GBP 25.00");
   await expect(repo().confirm(context, job, { version: "supplier-fact-correction.v1", commandId: randomUUID(), documentId: changed.documentId, documentType: "invoice", quantity: "10", unitPricePence: 9900, netPence: 99000, expectedRevision: 0 })).rejects.toThrow("SUPPLIER_PROPOSAL_NOT_FOUND");
   expect(await proofBefore(admin, Object.keys(before))).toEqual(before);
@@ -86,9 +102,16 @@ it("refuses cross-tenant job access, RLS writes, cross-job canonical links and r
   await expect(repo().intake(otherContext, job, { version: "supplier-document-intake.v1", fixtureId: "materials-B-invoice", channel: "fixture_portal", expectedRevision: 0 })).rejects.toThrow("JOB_NOT_FOUND");
   const own = await repo().intake(otherContext, otherJob, { version: "supplier-document-intake.v1", fixtureId: "materials-B-invoice", channel: "fixture_portal", expectedRevision: 0 }); expect(own.documentId).not.toBe(originalId);
   const sameTenant = await repo().intake(context, sameTenantJob, { version: "supplier-document-intake.v1", fixtureId: "materials-B-invoice", channel: "fixture_portal", expectedRevision: 0 });
-  await expect(withTenant(runtime, context, db => db.$client.query("INSERT INTO app.supplier_document(id,tenant_id,job_id,supplier_context,document_type,document_number,content_hash,status,canonical_document_id) VALUES($1,$2,$3,'fictional-merchant','invoice','WRONG-JOB',$4,'held',$5)", [randomUUID(), tenant, job, "d".repeat(64), sameTenant.documentId]))).rejects.toMatchObject({ code: "23503" });
-  await expect(withTenant(runtime, context, db => db.$client.query("UPDATE app.supplier_document SET canonical_document_id=$1 WHERE tenant_id=$2", [originalId, tenant]))).rejects.toMatchObject({ code: "42501" });
-  await expect(withTenant(runtime, context, db => db.$client.query("INSERT INTO app.supplier_document(id,tenant_id,job_id,supplier_context,document_type,document_number,content_hash,status,canonical_document_id) VALUES($1,$2,$3,'fictional-merchant','invoice','FOREIGN',$4,'held',$5)", [randomUUID(), tenant, job, "b".repeat(64), own.documentId]))).rejects.toMatchObject({ code: "23503" });
+  const linkedArrival = (canonicalId: string, result = "held") => withTenant(runtime, context, db => db.$client.query(
+    "INSERT INTO app.supplier_document_intake(id,tenant_id,job_id,document_id,fixture_id,channel,result,canonical_document_id) VALUES($1,$2,$3,$4,'merchant-changed-invoice','fixture_portal',$5,$6)",
+    [randomUUID(), tenant, job, originalId, result, canonicalId]));
+  await expect(linkedArrival(sameTenant.documentId)).rejects.toMatchObject({ code: "23503" });
+  await expect(withTenant(runtime, context, db => db.$client.query("UPDATE app.supplier_document_intake SET canonical_document_id=$1 WHERE tenant_id=$2", [originalId, tenant]))).rejects.toMatchObject({ code: "42501" });
+  await expect(linkedArrival(own.documentId)).rejects.toMatchObject({ code: "23503" });
+  await expect(linkedArrival(originalId)).rejects.toMatchObject({ code: "23514" });
+  const changedId = (await repo().view(context, job)).documents.find(d => d.hold_reason === "Merchant review: changed_document")!.id;
+  await expect(linkedArrival(changedId, "ready")).rejects.toMatchObject({ code: "23514" });
+  await expect(linkedArrival(changedId, "duplicate")).rejects.toMatchObject({ code: "23514" });
   await expect(withTenant(runtime, context, db => db.$client.query("INSERT INTO app.supplier_document(id,tenant_id,job_id,supplier_context,document_type,content_hash,status) VALUES($1,$2,$3,'fictional-merchant','invoice',$4,'held')", [randomUUID(), other, otherJob, "c".repeat(64)]))).rejects.toMatchObject({ code: "42501" });
 });
 it("retains the existing forced RLS, owner and append-only runtime privileges", async () => {

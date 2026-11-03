@@ -1,3 +1,4 @@
+import { laterEmptyTables } from "./later-empty-tables.js";
 import { afterAll, expect, it } from "vitest";
 import { startBeforeMigration, applyMigration, snapshot, type Cluster } from "./contractor-entitlement-fixtures.js";
 import { firstTrialFixture } from "./free-first-job-lifecycle-fixtures.js";
@@ -23,5 +24,5 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   expect(await service(f, trial).require(request("final_check", trial.jobId))).toMatchObject({ executable: true });
   expect(await service(f, paid).require(request("invoices", paid.jobId))).toMatchObject({ executable: true });
   await migrate(c.admin); await migrate(c.admin);
-  expect(await snapshot(c.admin)).toEqual(before); expect(await catalogue()).toEqual(security);
+  expect(await snapshot(c.admin)).toEqual({ ...before, ...laterEmptyTables }); expect(await catalogue()).toEqual(security);
 }, 120000);

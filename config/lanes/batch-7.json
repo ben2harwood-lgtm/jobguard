@@ -44,6 +44,7 @@
         "packages/db/test/accounting-export.integration.test.ts",
         "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
         "packages/db/test/later-empty-tables.ts",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
         "packages/db/test/merchant-ingestion.integration.test.ts",
         "packages/db/test/migration-proofs/0558_accounting_export_persistence.proof.json",
         "packages/db/test/migration-proofs/0559_merchant_ingestion_hardening.proof.json",

@@ -1,3 +1,5 @@
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { createHmac, randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { Pool } from "pg";
@@ -5,11 +7,6 @@ import { E2E_ADMIN_DATABASE_URL, E2E_RUNTIME_URL, E2E_AUTH_CODE_SECRET } from ".
 import { meterCompany } from "../../../packages/db/test/meter-persistence-fixtures.js";
 import type { WorkFixture } from "../../../packages/db/test/job-work-state-fixtures.js";
 import { closeTestPools } from "../../../packages/db/test/pool-test-utils.js";
-import { AccountingExportRepository, storedAccountingExportV1 } from "../../../packages/db/src/accounting-export-repository.js";
-import { AccountingExportSandbox } from "../../api/src/accounting-export.sandbox.js";
-import { FakeCodatAdapter } from "../../api/src/accounting-export.fake.js";
-import { FakeAccountingExportInbox, pushStoredAccountingExport } from "../../api/src/accounting-export.persisted.js";
-import { ctx, source, scope, consent } from "../../api/src/accounting-export.test-fixtures.js";
 
 test.setTimeout(180_000);
 let f: WorkFixture;
@@ -20,6 +17,13 @@ test.afterAll(() => closeTestPools(f.runtime, f.admin));
 // Runs through the real Next routes, company identity and checked PostgreSQL function in both
 // configured projects (360 and 1280). No route mocks, live adapter or privileged web credential.
 test("human confirmation binds exact bytes; stale approval fails; fake retries and conflicts stay visible", async ({ page, context, baseURL }) => {
+  // Use native ESM for the built API/db graph, matching CH-9 and DEMO-J3.
+  const nativeImport = new Function("specifier", "return import(specifier)") as <T>(specifier: string) => Promise<T>;
+  const { AccountingExportRepository, storedAccountingExportV1 } = await nativeImport<typeof import("../../../packages/db/src/accounting-export-repository.js")>(pathToFileURL(join(process.cwd(), "../../packages/db/dist/accounting-export-repository.js")).href);
+  const { AccountingExportSandbox } = await nativeImport<typeof import("../../api/src/accounting-export.sandbox.js")>(pathToFileURL(join(process.cwd(), "../api/dist/accounting-export.sandbox.js")).href);
+  const { FakeCodatAdapter } = await nativeImport<typeof import("../../api/src/accounting-export.fake.js")>(pathToFileURL(join(process.cwd(), "../api/dist/accounting-export.fake.js")).href);
+  const { FakeAccountingExportInbox, pushStoredAccountingExport } = await nativeImport<typeof import("../../api/src/accounting-export.persisted.js")>(pathToFileURL(join(process.cwd(), "../api/dist/accounting-export.persisted.js")).href);
+  const { ctx, source, scope, consent } = await nativeImport<typeof import("../../api/src/accounting-export.test-fixtures.js")>(pathToFileURL(join(process.cwd(), "../api/dist/accounting-export.test-fixtures.js")).href);
   const a = await meterCompany(f), token = randomUUID();
   const digest = createHmac("sha256", E2E_AUTH_CODE_SECRET).update(`session:${token}`).digest("hex");
   await f.admin.query("UPDATE identity.session SET token_digest=$1 WHERE id=$2", [digest, a.sessionId]);
