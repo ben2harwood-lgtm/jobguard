@@ -99,6 +99,13 @@ export async function runSyntheticRestoreRehearsal(options = {}, api, fixture) {
     let admin = pool(sourcePort);
     const postgresVersion = (await admin.query("SHOW server_version")).rows[0].server_version;
     assert.match(postgresVersion, /^16\./);
+    // Match current migration prerequisites in this disposable cluster. These
+    // non-login writer roles never become runtime credentials or memberships.
+    for (const role of ["jobguard_audit_writer", "jobguard_command_writer"]) {
+      await admin.query(`DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='${role}') THEN
+        CREATE ROLE ${role} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+        END IF; END $$`);
+    }
     await api.migrate(admin);
     const migrationNames = (await admin.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map(row => row.migration_name);
     assert.deepEqual(migrationNames, api.MIGRATION_URLS.map(url => url.pathname.split("/").at(-1)));

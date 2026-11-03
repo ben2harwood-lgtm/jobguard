@@ -3,7 +3,7 @@ import { migrate } from "../src/migrate.js";
 import { startBeforeMigration, applyMigration, type Cluster } from "./contractor-practice-session-fixtures.js";
 import { snapshot, predecessorCatalogue } from "./contractor-entitlement-fixtures.js";
 
-const own = "0474_commercial_outbound_pause.sql";
+const own = "0575_commercial_outbound_pause.sql";
 let cluster: Cluster;
 beforeAll(async () => { cluster = await startBeforeMigration(own); }, 120_000);
 afterAll(async () => { await cluster?.close(); });

@@ -1222,7 +1222,7 @@ Q2 non-catch authority and Q3 negative execution remain held. Forward fix:
 disable the route and append a reviewed migration; preserve any future financial
 history. Never enable posting by removing the refusal alone.
 
-### 0310 — M4-17-S dependency availability (renumbered from 0222 → 0252)
+### `0576_money_trail_reconciliation.sql` — M4-17-S dependency availability
 
 C262 adds only `app.read_money_trail_availability(uuid,text)`, discovered from
 this directory without changing the closed historical migration list. It calls
@@ -1255,18 +1255,18 @@ Adds `recovery_timeline_run` and `recovery_timeline_signal`, owned by `jobguard_
 
 Expand-only forward fix: disable the unregistered synthetic runtime if necessary; retain both history tables and apply a new migration to repair defects. Do not drop history or edit this migration after merge. Populated predecessor/privilege preservation is covered by the SERIOUS-B5 upgrade suite; real PostgreSQL behavior is covered in recovery-follow-up.integration.test.ts and tenancy/catalogue checks. These are CI gates, not locally executed PostgreSQL evidence.
 
-## M4-17 report catch-up — 0593 and 0594 (RED, dark)
+## M4-17 report catch-up — availability and reference queue (RED, dark)
 
-The branch-only availability migration is now `0593_money_trail_reconciliation.sql`;
+The branch-only availability migration is now `0576_money_trail_reconciliation.sql`;
 the branch-only reference queue migration is now
-`0594_financial_reconciliation_queue.sql`. Both retain their original SQL bytes.
+`0577_financial_reconciliation_queue.sql`. Both retain their original SQL bytes.
 Main's `0512_simulation_money_trail_run.sql` remains unchanged: its simulation-run
 routine does not define either of these two entry points. No existing routine is
 re-created, and no main migration is edited. The two matching migration proof
 files carry exact additive LP-0, upgrade and tenancy expectations; the protected
 baseline lists stay unchanged.
 
-0594 adds the five private, forced-RLS, immutable reference queue tables, their
+`0577_financial_reconciliation_queue.sql` adds the five private, forced-RLS, immutable reference queue tables, their
 indexes/policies and the finance-session checked queue routine. It adds no money
 posting or external execution. No historical data is backfilled. Forward fix:
 disable the reference path and append a reviewed migration while retaining all

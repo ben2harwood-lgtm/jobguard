@@ -304,7 +304,7 @@ were not executed here. The pnpm launcher stalled before invoking checks and
 was interrupted; verification used the already-installed Vitest and TypeScript
 binaries from the repository's package scripts. No package was downloaded.
 
-## M4-17 queue persistence (0479; synthetic reference analysis only)
+## M4-17 queue persistence (`0577_financial_reconciliation_queue.sql`; synthetic reference analysis only)
 
 The `FinancialReconciliationQueueRepository` stores the existing supplied fake
 snapshots and deterministic reports, plus each report's unexplained differences.
@@ -313,7 +313,7 @@ No authoritative source adapter, route, scheduler, provider or live execution is
 added. Every report retains all four reference/disabled flags. This extends only
 the dark M4-17 seam; the accepted-source/production run holds above remain.
 
-0479 adds five append-only, FORCE-RLS tables: `financial_reconciliation_run`,
+`0577_financial_reconciliation_queue.sql` adds five append-only, FORCE-RLS tables: `financial_reconciliation_run`,
 `financial_reconciliation_difference`, `financial_reconciliation_adjustment`,
 `financial_reconciliation_approval`, and `financial_reconciliation_command`.
 The last retains exact command payloads, identity and result references, including

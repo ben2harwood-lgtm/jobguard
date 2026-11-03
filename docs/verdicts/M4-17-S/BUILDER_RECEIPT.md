@@ -934,7 +934,7 @@ No fetch, commit, push, PR, PostgreSQL, browser, provider or release action ran.
 
 Main has no `read_money_trail_availability` or `financial_reconciliation_queue`
 definition. Retained their unique additive migrations under the claimed stems
-`0593_money_trail_reconciliation` and `0594_financial_reconciliation_queue`.
+`0576_money_trail_reconciliation` and `0577_financial_reconciliation_queue`.
 A byte comparison against HEAD's original migrations passes for both SQL files;
 all main migration files remain byte-identical to origin/main. Added explicit
 proof fragments for LP-0, upgrade and tenancy; restored main's protected LP-0,

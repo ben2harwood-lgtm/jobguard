@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MAX_MONEY_PENCE, exactPenceInputV1 } from "@jobguard/core";
+import { MAX_MONEY_PENCE, exactPenceInputV1, landingSuggestionV1 } from "@jobguard/core";
 export { recoveryAllocationCommandV1 } from "@jobguard/core";
 const id = z.guid({ error: "Invalid uuid" });
 const pence = z.number().int().safe().nonnegative().max(MAX_MONEY_PENCE);
@@ -9,6 +9,7 @@ const hash = z.string().regex(/^[a-f0-9]{64}$/u);
 export const recoveryAllocationViewV1 = z.object({
   version: z.literal("recovery-allocation-view.v1"), environment: z.literal("synthetic_demo"), realExternalActions: z.literal(0), jobId: id,
   grossMovementsPence: pence, eligibleNetPence: pence, allocatedTaxPence: pence, invoiceBalancePence: signedPence, paused: z.boolean(),
+  suggestions: z.array(landingSuggestionV1).optional(),
   availableEvidence: z.array(z.object({ evidenceId: id, objectVersionId: z.string().min(1), evidenceHash: hash, label: z.string().min(1) }).strict()),
   reversalSources: z.array(z.object({ allocationId: id, sourceId: id, kind: z.enum(["payment_reversal", "credit_note"]), availableGrossPence: pence }).strict()),
   receipts: z.array(z.object({ paymentId: id, invoiceId: id, grossPence: pence, availablePence: pence, movementId: id, movementHash: hash, reversed: z.boolean() }).strict()),

@@ -1,11 +1,11 @@
-// CI only: apply 0479 alone, preserve populated predecessor rows and routine bodies,
+// CI only: apply 0577_financial_reconciliation_queue.sql alone, preserve populated predecessor rows and routine bodies,
 // then apply all successors twice. No PostgreSQL startup in the builder sandbox.
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { startBeforeMigration, applyMigration, startSession, type Cluster } from "./contractor-practice-session-fixtures.js";
 import { proofBefore, proofDifferences } from "./upgrade-proof-utils.js";
 import { migrate } from "../src/migrate.js";
 let c:Cluster;
-const own="0594_financial_reconciliation_queue.sql";
+const own="0577_financial_reconciliation_queue.sql";
 const tables=["financial_reconciliation_run","financial_reconciliation_difference","financial_reconciliation_adjustment","financial_reconciliation_approval","financial_reconciliation_command"];
 beforeAll(async()=>{process.env.JOBGUARD_ENV="synthetic_demo";c=await startBeforeMigration(own);},240000);
 afterAll(async()=>{await c?.close();});
