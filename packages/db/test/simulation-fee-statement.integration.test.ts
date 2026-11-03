@@ -160,7 +160,7 @@ it("renewal rechecks changed sources before creating any new Decision or authori
 // rollback-only owner fixtures for two reviewed principals and a controlled live
 // source adapter. This proves the statement routine's own per-source guard;
 // the real-writer reversal test above separately proves the complete source path.
-it.each([10000,30000])("after 0523, a £500 reversal with live B=%ip cannot offset B's reviewed £100 limit",async liveB=>{
+it.each([10000,30000])("after 0522, a £500 reversal with live B=%ip cannot offset B's reviewed £100 limit",async liveB=>{
  const x=await posted();
  expect((await f.admin.query("SELECT count(*)::int n FROM public.jobguard_schema_migration WHERE migration_name='0514_withheld_payment_statement_source.sql'")).rows).toEqual([{n:1}]);
  const run=()=>rolledBack(f.admin,async db=>{

@@ -16,14 +16,14 @@ describe("CH5-P source-only application boundary (scripted transport)", () => {
     const f = scriptedImportPool(), result = await new JobImportV3Repository(f.pool).preview(f.context, D, J.toUpperCase(), { ...preview, expectedBindingId: parties.bindingId.toUpperCase() });
     expect(result.snapshot).toEqual(approved); expect(result.previewHash).toBe(intent.previewHash);
     expect(result).toMatchObject({ availability: { code: "METER_PLACE_SOURCE_HANDOFF_HELD", status: "held" }, realExternalActions: 0 });
-    expect(f.query.mock.calls.some(([sql]) => /INSERT|UPDATE|DELETE|pg_advisory/u.test(sql))).toBe(false);
+    expect(f.query.mock.calls.some(([sql]) => /INSERT|UPDATE|DELETE/u.test(sql))).toBe(false);
     expect(f.query.mock.calls.find(([sql]) => sql.includes("FROM practice_owned_job"))?.[1]).toEqual([T, J, D]);
   });
   it.each(["live"] as const)("%s adoption refuses before receipt or authorization creation", async lifecyclePoint => {
     const f = scriptedImportPool(), input = importFixtureV3(J, parties, lifecyclePoint, preview.fixtureId);
     await expect(new JobImportV3Repository(f.pool).adopt(f.context, D, J, { ...intent, lifecyclePoint, previewHash: importActionHashV3(input) })).rejects.toMatchObject({ code: "METER_PLACE_SOURCE_HANDOFF_HELD" });
     expect(f.query.mock.calls.some(([sql]) => /INSERT|UPDATE|DELETE|adopt_in_flight|mon1_admit_place/u.test(sql))).toBe(false);
-    expect(f.query.mock.calls.filter(([sql]) => sql === "BEGIN")).toHaveLength(2);
+    expect(f.query.mock.calls.filter(([sql]) => sql === "BEGIN")).toHaveLength(3);
   });
   it.each(["revoked", "unowned"])("%s authorization is checked before informative input errors", async kind => {
     const f = scriptedImportPool(); if (kind === "revoked") f.state.authenticated = false; else f.state.owns = false;
@@ -31,6 +31,21 @@ describe("CH5-P source-only application boundary (scripted transport)", () => {
     for (const action of [() => repo.preview(f.context, D, J, {}), () => repo.adopt(f.context, D, J, {}), () => repo.read(f.context, D, J)])
       await expect(action()).rejects.toMatchObject({ code: "FORBIDDEN" });
     expect(f.query.mock.calls.some(([sql]) => sql.includes("job_party_current"))).toBe(false);
+  });
+  it("an imported source cannot chain through preview, adoption or direct mutation", async () => {
+    const f = scriptedImportPool(), repo = new JobImportV3Repository(f.pool);
+    f.state.provenance = "imported";
+    const mutation = new AdoptInFlightJobV3Mutation(T, D, J, intent, approved);
+    await expect(repo.preview(f.context, D, J, preview)).rejects.toMatchObject({ code: "IMPORT_ALREADY_ADOPTED" });
+    await expect(repo.adopt(f.context, D, J, intent)).rejects.toMatchObject({ code: "IMPORT_ALREADY_ADOPTED" });
+    await withTenant(f.pool, f.context, async db => {
+      await expect(mutation.lock(db, command)).rejects.toMatchObject({ code: "IMPORT_ALREADY_ADOPTED" });
+      await expect(mutation.mutate(db, command)).rejects.toMatchObject({ code: "IMPORT_ALREADY_ADOPTED" });
+    });
+    expect(f.query.mock.calls.some(([sql]) => /INSERT|UPDATE|DELETE|pg_advisory|adopt_invoiced_job_v3/u.test(sql))).toBe(false);
+    // Ownership denial still wins over the informative source-state error.
+    f.state.owns = false;
+    await expect(repo.preview(f.context, D, J, preview)).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
   it("strict request, binding and preview hash cannot be overridden", async () => {
     const f = scriptedImportPool(), repo = new JobImportV3Repository(f.pool);

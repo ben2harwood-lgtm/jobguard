@@ -1,7 +1,7 @@
 import type { Pool } from "pg";
 import { z } from "zod";
 import { ShadowDemoApprovalReader, ValueV3Reader } from "@jobguard/db";
-import { recoveryAttributionRevisionV1 } from "@jobguard/core";
+import { receiptBaseSources, recoveryAttributionRevisionV1 } from "@jobguard/core";
 import { PracticeAccess } from "./practice-access.js";
 import { FinalAccountLockApplication } from "./final-account-lock.application.js";
 import { FinalCheckApplication } from "./final-check.application.js";
@@ -55,7 +55,7 @@ export function shadowJourneyComplete({ account: view, invoices, value, customer
   invoices.invoices.length === 1 && invoice !== undefined && invoice.finalAccountRevisionId === account.id && invoice.netPence === 3440000 && invoice.totalPence === 4128000 && invoice.balancePence === 0,
   assessments.every(({ assessment }) => assessment.assessmentOutcome === "eligible_for_review" && assessment.facts.facts.customer_payment_settled_and_allocated_to_that_line?.holds === true),
   // 8. Current Q, fee and retained figures, not old assessments.
-  receipt.sources.foundComplete && receipt.sources.assessments.every(row => row.current) && receipt.found.state === "mapped"
+  receiptBaseSources(receipt).foundComplete && receiptBaseSources(receipt).assessments.every(row => row.current) && receipt.found.state === "mapped"
    && receipt.found.recovered?.pence === 80000 && receipt.found.fee?.pence === 8000 && receipt.found.yoursBeforeVatAndTax?.pence === 72000,
   // 9. £3,600 fee-free, and an approved pack proving each catch's own chain.
   receipt.tracked.pence === 360000 && receipt.trackedFee.pence === 0,
@@ -82,7 +82,7 @@ export class ShadowDemoApplication {
   const value = account.lock
    ? await new ValueV3Application(this.pool, this.sessionId, new ValueV3Reader(this.pool, this.sessionId)).readJob(jobId)
    : heldJobValueV3(jobId);
-  if (value.status === "mapped" && value.receipt.sources.lockId !== account.lock?.id) throw new Error("SHADOW_DEMO_SOURCE_REJECTED");
+  if (value.status === "mapped" && receiptBaseSources(value.receipt).lockId !== account.lock?.id) throw new Error("SHADOW_DEMO_SOURCE_REJECTED");
   // These are builder-visible records. Holding a signal cannot alter them.
   const visible = {
    version: "shadow-demo-report.v2" as const, environment: "synthetic_demo" as const,

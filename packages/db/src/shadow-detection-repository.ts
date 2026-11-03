@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { detectShadowObservations, groupShadowProposals, observationMustSurface, observationV1, reconcileFinalCheck, shadowProposalV1, shadowCaptureV1, shadowDetectionId, type DetectionGroup } from "@jobguard/core";
 import { FinalCheckRepository, type FinalCheckManifest, type FinalCheckSourceResult } from "./final-check-repository.js";
 import { decodePracticePhoto } from "./practice-photo-observation.js";
-import { decodeJobSourceFixture } from "./job-source-fixtures.js";
+import { decodeFinalCheckSourceFixture, decodeJobSourceFixture } from "./job-source-fixtures.js";
 import { readPracticeStructuredSource } from "./final-check-practice-readers.js";
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 import { finalCheckPersistenceErrorCodes, FinalCheckPersistenceError, type FinalCheckPersistenceErrorCode, type FinalCheckManifestView } from "./final-check-completion-repository.js";
@@ -167,6 +167,8 @@ export function practiceFinalCheckPorts(shadowPool: Pool, runtimePool: Pool, pra
       const decoded = row ? decodeJobSourceFixture(row.ref, row.text, kind) : null;
       return decoded ? observationV1.parse({ ...base, kind, ...decoded }) : null;
     }
+    const fixture = s.sha256 ? decodeFinalCheckSourceFixture(s.sourceKind,s.sha256) : null;
+    if(fixture)return observationV1.parse({...base,kind:s.sourceKind==="completion_photo"?"completion_photo":"note_or_voice",...fixture});
     const photo = s.sha256 ? decodePracticePhoto(s.sha256, practicePhotoSha256, drainagePhotoSha256) : null;
     if (photo) return observationV1.parse({ ...base, kind: "completion_photo", ...photo });
     return null;
