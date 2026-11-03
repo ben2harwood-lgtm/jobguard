@@ -1,3 +1,4 @@
+import { applyOutboundPause } from "./outbound-pause-fixture.js";
 // CI: real PostgreSQL, genuine writers; only evidence/classifier inputs are fixtures.
 import {beforeAll,afterAll,expect,it} from "vitest";
 import {ReceiptCaseAllocationApplication} from "../../../apps/api/src/receipt-case-allocation.application.js";
@@ -250,6 +251,7 @@ it("upgrades populated predecessors without changing stored rows, then retains t
    await upgrade.admin.query(name.startsWith("0095_")?sql.replace("BEGIN;","BEGIN; SELECT set_config('app.deployment_mode','details_needed',true);"):sql);
    await upgrade.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)",[name]);
   }
+  await applyOutboundPause(upgrade.admin);
   for(const [pool,role] of [[upgrade.runtime,"jobguard_runtime"],[upgrade.shadow,"jobguard_shadow"]] as const){
    const grant=(await upgrade.admin.query("SELECT format('GRANT %I TO %I',$1::text,$2::text) sql",[role,pool.options.user])).rows[0].sql as string;
    await upgrade.admin.query(grant);
