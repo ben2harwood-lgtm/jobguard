@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "m5-12-findings-gate": {
+      "branches": ["codex/sandbox/m5-12-findings-gate"],
+      "note": "M5-12 AMBER offline findings release check; no migration, real assessment or activation. NOPR=1. The lane file itself is implicitly allowed by the lane checker.",
+      "allow": [
+        "config/security-findings.v1.json",
+        "docs/security/findings-workflow.md",
+        "packages/config/src/index.ts",
+        "packages/config/src/release-inventory.ts",
+        "packages/config/src/security-findings.test.ts",
+        "tools/security-findings.test.mjs"
+      ]
+    }
+  }
+}
