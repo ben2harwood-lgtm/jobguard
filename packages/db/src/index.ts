@@ -159,6 +159,7 @@ export * from "./plan-entitlement-service.js";
 export * from "./payment-fee-repository.js";
 export * from "./small-builder-demo-repository.js";
 export * from "./recovery-billability-repository.js";
+export * from "./managed-recovery-repository.js";
 export { reviewOfflineCommercialIntent } from "./offline-upload.js";
 export * from "./resumable-evidence.js";
 export * from "./mobile-auth-store.js";

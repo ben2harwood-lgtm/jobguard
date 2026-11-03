@@ -133,6 +133,7 @@ export * from "./evidence-pack-v3-assembly.js";
 export * from "./meter-today.js";
 
 export * from "./small-builder-demo-lifecycle.js";
+export * from "./managed-recovery.js";
 export * from "./inbox-outcome-metrics.js";
 
 export * from "./dunning.js";
