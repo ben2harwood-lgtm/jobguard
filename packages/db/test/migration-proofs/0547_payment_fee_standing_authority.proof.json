@@ -1,5 +1,5 @@
 {
-  "migration": "0614_payment_fee_standing_authority.sql",
+  "migration": "0547_payment_fee_standing_authority.sql",
   "lp0": [
     {
       "section": "entries",
@@ -239,7 +239,7 @@
       "before": null,
       "after": {
         "nspname": "app",
-        "relname": "payment_fee_authority_tenant_id_revision_key",
+        "relname": "payment_fee_authority_tenant_id_session_digest_revision_key",
         "relowner": "jobguard_migration",
         "relacl": null,
         "relrowsecurity": false,

@@ -25,8 +25,8 @@ export async function writeSimulationFeeCollection(jobId:string,command:unknown)
  return response;
 }
 export function SimulationFeeCollection({jobId,statementId,statementHash}:{jobId:string;statementId:string;statementHash:string}){
- const [receiptFees,setReceiptFees]=useState<Awaited<ReturnType<typeof readPaymentFeeView>>|null>(null),[receiptStatementId,setReceiptStatementId]=useState("");
  const [view,setView]=useState<SimulationFeeCollectionView|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState("");
+ const [receiptFees,setReceiptFees]=useState<Awaited<ReturnType<typeof readPaymentFeeView>>|null>(null),[receiptStatementId,setReceiptStatementId]=useState("");
  async function load(){
   const [collection,fees]=await Promise.all([readSimulationFeeCollection(jobId),readPaymentFeeView(jobId).catch(()=>null)]);
   setView(collection);setReceiptFees(fees);

@@ -11,7 +11,7 @@ CREATE TABLE app.payment_fee_authority (
  policy_version text NOT NULL CHECK(policy_version='reference_fee_policy_v3'),
  expires_at timestamptz NOT NULL, payload jsonb NOT NULL, result jsonb NOT NULL,
  created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
- PRIMARY KEY(tenant_id,command_id), UNIQUE(tenant_id,revision),
+ PRIMARY KEY(tenant_id,command_id), UNIQUE(tenant_id,session_digest,revision),
  FOREIGN KEY(tenant_id,job_id) REFERENCES app.job(tenant_id,id),
  FOREIGN KEY(tenant_id,actor_membership_id) REFERENCES app.membership(tenant_id,id)
 );
@@ -49,11 +49,12 @@ BEGIN
  cid:=(p->>'commandId')::uuid;
  SELECT * INTO prior FROM app.payment_fee_authority WHERE tenant_id=t AND command_id=cid;
  IF FOUND THEN
-  IF prior.job_id<>j OR prior.actor_membership_id<>actor OR prior.payload<>p
+  IF prior.job_id<>j OR prior.session_digest<>d OR prior.actor_membership_id<>actor OR prior.payload<>p
   THEN RAISE EXCEPTION 'PAYMENT_FEE_IDEMPOTENCY_CONFLICT' USING ERRCODE='23514'; END IF;
   RETURN prior.result;
  END IF;
- SELECT * INTO latest FROM app.payment_fee_authority WHERE tenant_id=t ORDER BY revision DESC LIMIT 1;
+ -- Practice sessions share a tenant, so consent belongs to the session that gave it.
+ SELECT * INTO latest FROM app.payment_fee_authority WHERE tenant_id=t AND session_digest=d ORDER BY revision DESC LIMIT 1;
  IF latest.command_id IS DISTINCT FROM (p->>'expectedAuthorityId')::uuid OR (p->>'action'='revoke' AND latest.command_id IS NULL)
  THEN RAISE EXCEPTION 'PAYMENT_FEE_AUTHORITY_STALE' USING ERRCODE='23514'; END IF;
  SELECT least(s.expires_at,m.expires_at) INTO deadline FROM control_plane.practice_session s
@@ -143,7 +144,7 @@ CREATE OR REPLACE FUNCTION app.read_payment_fees(j uuid,d text) RETURNS jsonb
 DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; actor uuid; result jsonb; authority app.payment_fee_authority; authority_view jsonb;
 BEGIN
  actor:=app.payment_fee_actor(j,d);
- SELECT * INTO authority FROM app.payment_fee_authority WHERE tenant_id=t ORDER BY revision DESC LIMIT 1;
+ SELECT * INTO authority FROM app.payment_fee_authority WHERE tenant_id=t AND session_digest=d ORDER BY revision DESC LIMIT 1;
  IF authority.command_id IS NOT NULL THEN
   authority_view:=authority.result||jsonb_build_object('state',CASE WHEN authority.action='revoke' THEN 'revoked'
    WHEN authority.expires_at<=clock_timestamp() OR NOT EXISTS(SELECT 1 FROM control_plane.practice_session s WHERE s.token_digest=authority.session_digest AND s.revoked_at IS NULL AND s.expires_at>clock_timestamp()) OR NOT EXISTS(SELECT 1 FROM app.membership m WHERE m.tenant_id=t AND m.id=authority.actor_membership_id AND m.role='owner' AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp())) THEN 'stale' ELSE 'active' END);
@@ -214,7 +215,7 @@ BEGIN
   RETURN prior.result||jsonb_build_object('replayed',true);
  END IF;
  IF standing THEN
-  SELECT * INTO authority FROM app.payment_fee_authority WHERE tenant_id=t ORDER BY revision DESC LIMIT 1;
+  SELECT * INTO authority FROM app.payment_fee_authority WHERE tenant_id=t AND session_digest=p_session ORDER BY revision DESC LIMIT 1;
   IF authority.action='revoke' THEN RAISE EXCEPTION 'PAYMENT_FEE_AUTHORITY_REVOKED' USING ERRCODE='23514'; END IF;
   IF authority.command_id IS NULL OR authority.command_id IS DISTINCT FROM (p_command->>'authorityId')::uuid
    OR authority.expires_at<=clock_timestamp()

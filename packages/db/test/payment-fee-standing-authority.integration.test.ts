@@ -76,7 +76,9 @@ it.each(["receipt","case","attribution"] as const)("an open %s dispute stops sta
  const x=await setup(),a=await x.authority(await x.authorityCommand());
  if(kind==="receipt")await x.fees.command(x.context,x.jobId,x.auth.digest,{version:"payment-fee-command.v1",action:"dispute",commandId:randomUUID(),statementId:x.receipt.statementId});
  else if(kind==="case"){
-  await new RecoveryCaseRepository(x.scoped).command(x.context,x.jobId,{version:"recovery-case-command.v1",commandId:randomUUID(),action:"transition",caseId:x.caseId,eventType:"dispute",expectedRevision:x.assessment.caseRevision},x.actor);
+  const cases=new RecoveryCaseRepository(x.scoped);
+  const assembled=await cases.command(x.context,x.jobId,{version:"recovery-case-command.v1",commandId:randomUUID(),action:"transition",caseId:x.caseId,eventType:"assemble_evidence",expectedRevision:x.assessment.caseRevision},x.actor);
+  await cases.command(x.context,x.jobId,{version:"recovery-case-command.v1",commandId:randomUUID(),action:"transition",caseId:x.caseId,eventType:"dispute",expectedRevision:assembled.revision},x.actor);
  }else await finalCheckTenant(f.admin,x.context.tenantId,async db=>{
   const signal=(await db.query("SELECT source_signal_id FROM app.extra_origin WHERE tenant_id=$1 AND job_id=$2 AND kind='jobguard_catch'",[x.context.tenantId,x.jobId])).rows[0].source_signal_id;
   await db.query("INSERT INTO app.shadow_signal_ineligibility(tenant_id,job_id,id,signal_id,reason,source_ref) VALUES($1,$2,$3,$4,'attribution_disputed',$5)",[x.context.tenantId,x.jobId,randomUUID(),signal,randomUUID()]);
@@ -122,4 +124,17 @@ it("each verified withheld receipt has its own cap within the cumulative stateme
   await collection.command(x.context,x.jobId,x.auth.digest,p);
  }
  expect(await collection.view(x.context,x.jobId,x.auth.digest)).toMatchObject({collectionReserved:28200,settledPrincipal:0});
+});
+
+it("another practice session in the shared tenant cannot see, use or revoke this session's consent",async()=>{
+ const a=await setup(),b=await setup();
+ expect(a.context.tenantId).toBe(b.context.tenantId);expect(a.auth.digest).not.toBe(b.auth.digest);
+ const authority=await a.authority(await a.authorityCommand());
+ expect((await b.view()).standingAuthority).toBeNull();
+ await expect(b.run(b.collect(authority.authorityId))).rejects.toThrow("PAYMENT_FEE_AUTHORITY_STALE");
+ expect((await b.collection.view(b.context,b.jobId,b.auth.digest)).collectionReserved).toBe(0);
+ await expect(b.authority({...await b.authorityCommand("revoke"),expectedAuthorityId:authority.authorityId})).rejects.toThrow("PAYMENT_FEE_AUTHORITY_STALE");
+ expect((await a.view()).standingAuthority).toEqual(authority);
+ const own=await b.authority(await b.authorityCommand());
+ expect((await b.view()).standingAuthority).toEqual(own);expect((await a.view()).standingAuthority).toEqual(authority);
 });

@@ -20,12 +20,13 @@
         "packages/core/src/simulation-fee-collection.test.ts",
         "packages/core/src/simulation-fee-collection.ts",
         "packages/core/src/success-fee-posting.ts",
-        "packages/db/migrations/0614_payment_fee_standing_authority.sql",
+        "packages/db/migrations/0547_payment_fee_standing_authority.sql",
         "packages/db/src/payment-fee-repository.ts",
         "packages/db/src/simulation-fee-collection-repository.ts",
-        "packages/db/test/migration-proofs/0614_payment_fee_standing_authority.proof.json",
+        "packages/db/test/migration-proofs/0547_payment_fee_standing_authority.proof.json",
         "packages/db/test/payment-fee-standing-authority-upgrade.integration.test.ts",
-        "packages/db/test/payment-fee-standing-authority.integration.test.ts"
+        "packages/db/test/payment-fee-standing-authority.integration.test.ts",
+        "packages/db/test/withheld-payment-statement-source-catalog.test.ts"
       ]
     }
   }
