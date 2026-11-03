@@ -1,0 +1,40 @@
+{
+  "version": 2,
+  "lanes": {
+    "demo-sv5b": {
+      "branches": [
+        "codex/sandbox/demo-sv5b"
+      ],
+      "note": "SV-5 RED: browser Tests I/J/L and synthetic historical evidence import; must-surface remains practice-only.",
+      "allow": [
+        "apps/api/openapi.json",
+        "apps/api/src/job-source.application.ts",
+        "apps/api/src/job-source.controller.ts",
+        "apps/api/src/late-source-import.application.test.ts",
+        "apps/api/src/shadow-detection.worker.test.ts",
+        "apps/api/src/worker.ts",
+        "apps/api/src/workspace/application.ts",
+        "apps/web/app/api/jobs/[id]/historical-evidence/route.test.ts",
+        "apps/web/app/api/jobs/[id]/historical-evidence/route.ts",
+        "apps/web/app/api/jobs/[id]/shadow-demo/source-hold/route.test.ts",
+        "apps/web/app/ui/final-check-reveal.tsx",
+        "apps/web/app/ui/shadow-journey.tsx",
+        "apps/web/e2e/SV-5.spec.ts",
+        "docs/contracts/job-source-intake-persistence-v1.md",
+        "packages/core/src/job-sources.ts",
+        "packages/core/src/late-source-import.test.ts",
+        "packages/core/src/watchdog.ts",
+        "packages/db/migrations/0613_late_source_import.sql",
+        "packages/db/src/index.ts",
+        "packages/db/src/job-source-fixtures.ts",
+        "packages/db/src/late-source-import.test.ts",
+        "packages/db/src/late-source-import.ts",
+        "packages/db/src/shadow-detection-repository.ts",
+        "packages/db/test/job-source-fixtures.test.ts",
+        "packages/db/test/late-source-import-migration.test.ts",
+        "packages/db/test/late-source-import.integration.test.ts",
+        "packages/db/test/migration-proofs/0613_late_source_import.proof.json"
+      ]
+    }
+  }
+}
