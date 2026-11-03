@@ -71,7 +71,7 @@ The original pure matcher remains unchanged. The dark synthetic correction seam
 is specified below. Inline fixtures are development regression tests, not frozen
 human ground truth, a held-out benchmark or G2 release evidence.
 
-## M2-4 stored reviewer corrections (0494)
+## M2-4 stored reviewer corrections (0599_supplier_line_corrections)
 
 `SupplierLineCorrectionRepository` stores an immutable, server-owned confirmed
 synthetic snapshot using `supplier-line-snapshot.v1`. The caller supplies a verified
@@ -104,7 +104,7 @@ same match and discrepancy IDs. New confirmed source versions require a new
 snapshot, never edits to a stored one. No finding, debt, invoice, payment or fee
 is created by these proposal corrections.
 
-Migration 0494 adds only `supplier_line_match_snapshot`,
+Migration `0599_supplier_line_corrections.sql` adds only `supplier_line_match_snapshot`,
 `supplier_line_match_correction` and their trigger guard. Tenant-qualified job,
 snapshot, actor and deferred audit foreign keys, FORCE RLS, append-only grants,
 immutable triggers, revision uniqueness and audit actor/type/subject/command/hash
@@ -116,9 +116,9 @@ not evidence of agreed debt or verified original bytes.
 
 Upgrade is additive and backfills no source or financial data. Roll forward with
 a new migration to repair defects; keep the existing tables/history and disable
-the dark caller if necessary. Never edit 0494 after merge. PostgreSQL integration,
+the dark caller if necessary. Never edit `0599_supplier_line_corrections.sql` after merge. PostgreSQL integration,
 full migration/catalogue CI and one independent RED review remain required before
-merge. The original 0494 piece added no browser change or provider route.
+merge. The original stored-corrections piece added no browser change or provider route.
 
 ## M2-3/M2-4 dark line-review screen (m2-lines-review)
 
@@ -142,7 +142,7 @@ An explicit `supplier-lines-confirm.v1` command supplies command/snapshot IDs an
 every reviewed line version exactly once. The server retains the source facts;
 HTTP cannot supply or replace them. The screen requires an individual review
 checkbox for every proposed line. Only that human action creates the immutable
-snapshot and audit event through 0494; reading or computing AI/match output
+snapshot and audit event through `0599_supplier_line_corrections.sql`; reading or computing AI/match output
 confirms nothing. The screen displays original quantities, packs, net basis,
 source citations, each group's flags and unresolved sources independently of
 the overall match completeness. A complete relationship can still flag short
@@ -150,8 +150,18 @@ or excess delivery/billing. Confirmation does not assert actual delivery or debt
 
 Corrections use the existing strict `supplier-line-correction.v1` command, allow
 an explicit order choice or withdrawal to automatic matching, and retain all
-0494 locking, replay, revision, append-only audit and source immutability rules.
+stored-correction locking, replay, revision, append-only audit and source immutability rules.
 A stale revision returns HTTP 409 and requires reloading the current review.
-No migration is introduced (0605 remains unused). No money or external action
+The review screen introduces no migration. Its inherited order and correction migrations
+are reserved as `0598_dark_merchant_order.sql` and `0599_supplier_line_corrections.sql` for this catch-up. No money or external action
 path is added; G0–G5 stay closed. PostgreSQL and browser suites plus independent
 RED review remain required; local mocked tests do not prove database isolation.
+
+The inherited dark order command uses the M2-1 checked protocol: migration 0598
+registers `purchase_order.send.dark`, and approval uses `app.begin_command`,
+`app.append_audit` and `app.complete_command`. Its immutable merchant artifact
+binds `revisionAuthorityHash` to the persisted revision; checked completion also
+verifies the exact approved artifact hash and outbox effect. Legacy purchase-order
+completion and the other main result adapters retain their existing checks.
+Manual attestation receives its actor from the trusted authenticated caller,
+separately from the strict request DTO, and rechecks current owner membership.

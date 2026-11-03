@@ -29,7 +29,7 @@ beforeAll(async () => {
   admin = new Pool({ ...connection, user: "postgres" });
   // Upgrade from the complete base; preserve its jobs and membership rows byte-for-byte.
   await migrate({ query: async (sql: string, values?: unknown[]) => {
-    if (sql.startsWith("SELECT 1 FROM public.jobguard_schema_migration") && String(values?.[0]) === "0494_supplier_line_corrections.sql")
+    if (sql.startsWith("SELECT 1 FROM public.jobguard_schema_migration") && String(values?.[0]) === "0599_supplier_line_corrections.sql")
       return { rows: [{}], rowCount: 1 };
     return admin.query(sql, values);
   } } as Pick<Pool, "query">);

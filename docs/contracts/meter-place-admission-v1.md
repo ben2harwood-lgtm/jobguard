@@ -121,6 +121,16 @@ locks and before its receipt, refresh and audit, including without withTenant. N
 Grace upgrade Decision delivery and immediate Builder track-review Decision
 creation remain unimplemented follow-up; this repair does not claim them.
 
+## CH-5 part 2, migration 0328
+
+Committed admission now includes verified imported baselines and v3 adoption
+snapshots, using their server adoption/receive anchor and immutable customer/site
+binding. Invoiced imports do not enter the committed source. Unknown imports still
+make admission unavailable; classified imports no longer block unrelated starts.
+The checked v3 writer invokes the existing MON-1 admission routine atomically.
+This does not enable the independent imported counted-day/period source reader,
+which continues to refuse rather than zero-fill unsupported bill inputs.
+
 ## CI repair: scope the capacity serializer to source commands
 
 `withTenant` only installs verified tenant context; it does not acquire lock 184.
