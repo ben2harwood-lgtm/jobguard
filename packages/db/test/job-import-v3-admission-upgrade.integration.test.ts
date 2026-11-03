@@ -10,7 +10,7 @@ let f: WorkFixture;
 beforeAll(async () => { f = await createWorkFixture(false); }, 60000);
 afterAll(async () => closeWorkFixture(f));
 it("0328 preserves stored invoiced imports, policies, owners and grants on upgrade and repeat", async () => {
- const own = "0536_import_work_admission.sql", index = MIGRATION_URLS.findIndex(u => u.pathname.endsWith(own));
+ const own = "0534_import_work_admission.sql", index = MIGRATION_URLS.findIndex(u => u.pathname.endsWith(own));
  expect(index).toBeGreaterThan(0);
  await f.admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
  for (const url of MIGRATION_URLS.slice(0, index)) {

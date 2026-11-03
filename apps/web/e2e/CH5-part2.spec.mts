@@ -47,7 +47,7 @@ test("CH5-J: Solo grace persists, duplicate replays retain IDs, and the next imp
   await expect(main.getByText(`Baseline reference: ${imported.baselineId}`, { exact: true })).toBeVisible();
   await expect(main.getByRole("link", { name: `Linked overlapping job: ${f.jobId}`, exact: true })).toHaveAttribute("href", `/jobs/${f.jobId}`);
   const headers = response.request().headers();
-  const authHeaders = { origin: headers.origin!, "x-csrf-token": headers["x-csrf-token"]!, "x-tenant-id": headers["x-tenant-id"]! };
+  const authHeaders = { origin: new URL(response.url()).origin, "x-csrf-token": headers["x-csrf-token"]!, "x-tenant-id": headers["x-tenant-id"]! };
   const replay = await page.request.fetch(response.url(), { method: "POST", headers: authHeaders, data: response.request().postDataJSON() });
   expect(replay.status()).toBe(200); expect(await replay.json()).toEqual(imported);
   await main.getByRole("button", { name: "Check imported catch", exact: true }).click();

@@ -21,7 +21,7 @@ beforeAll(async () => {
   // Apply main's successors first; retain its exact preservation assertion before seeding legacy credentials.
   for (const url of MIGRATION_URLS) {
     const name = url.pathname.split("/").at(-1)!;
-    if (name > own && name < "0535_customer_signin_redact.sql") await applyMigration(c, name);
+    if (name > own && name < "0533_customer_signin_redact.sql") await applyMigration(c, name);
   }
   const registry = (await c.admin.query("SELECT jsonb_agg(value ORDER BY value::text) data FROM jsonb_array_elements($1::jsonb)", [JSON.stringify(lp5RegistryRows)])).rows[0].data;
   const successors = { ...expected, "app.customer_variation_approval": [], "app.activation_acceptance_operation_use": [], "app.command_lifecycle_claim": [], "app.command_type_registry": registry, "app.repository_operational_record": [] };

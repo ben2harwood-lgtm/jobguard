@@ -917,7 +917,7 @@
             "description": ""
           }
         },
-        "summary": "Import a fictional invoiced job under v3 terms; live capacity admission remains unavailable",
+        "summary": "Import a fictional v3 job; company live imports use checked capacity admission",
         "tags": [
           "job-import-v3"
         ]

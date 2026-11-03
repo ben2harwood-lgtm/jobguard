@@ -394,7 +394,7 @@ successors are applied before the branch forward fix so the fixture exercises
 the latest main schema. No test expectation was weakened or replaced.
 
 Renamed only the branch migration filename stem from
-`0388_customer_signin_redact` to `0535_customer_signin_redact` and updated the lane.
+`0388_customer_signin_redact` to `0533_customer_signin_redact` and updated the lane.
 The SQL bytes are unchanged (SHA-256
 `a6d5b244e35060b26f3eb9cd34b760d86c5a0f4bfe18e46839326b761941b269`).
 The latest main issuer body is still in 0387; the branch body retains that
@@ -431,9 +431,9 @@ closed.
 RED. Plan piece CH-5, with the retained sign-in redaction and fee safety fixes.
 This follow-up supersedes the older migration-number and audit-route statements above.
 
-- Renumbered only the five full filename stems to 0535_customer_signin_redact,
-  0536_import_work_admission, 0537_import_pre_adoption,
-  0538_success_fee_cap_nets_reversals and 0539_fee_invalid_proof_reduction,
+- Renumbered only the five full filename stems to 0533_customer_signin_redact,
+  0534_import_work_admission, 0535_import_pre_adoption,
+  0536_success_fee_cap_nets_reversals and 0537_fee_invalid_proof_reduction,
   including proofs, notes, tests and lane references. No bare-digit substitution.
 - Historical outbox redaction now submits its security events through
   app.lp4_seal_audit with checked_operation, following 0521/0522. It no longer
@@ -483,3 +483,50 @@ No PostgreSQL, database migration suite or browser suite ran: this sandbox canno
 start PostgreSQL or bind localhost. GitHub CI must run those after router push.
 No git writes, fetch, provider actions or releases. Router stages/commits/pushes;
 one independent exact-head RED review and green CI remain required before merge.
+
+## PR #531 batch-4b — remaining review fixes, 3 November 2026
+
+READY. RED; plan piece CH-5. Confirmed the prior IF NOT EXISTS role setup and
+optional rows[0]?.id fixes remain present. Regenerated OpenAPI (one summary
+line), added the reviewer's deliveredCustomerLink helper and both call sites,
+and derived the CH5 replay Origin from the response URL. Assertions remain intact.
+Renumbered the five complete filename stems to 0533_customer_signin_redact,
+0534_import_work_admission, 0535_import_pre_adoption,
+0536_success_fee_cap_nets_reversals and 0537_fee_invalid_proof_reduction in
+filenames, proofs, notes, tests and the lane. No bare-number substitutions.
+All five renamed SQL files are byte-identical to their HEAD originals.
+
+Validation actually executed, using installed dependencies, Vitest 4.1.12,
+maxWorkers=1 and at most one Vitest process at a time:
+
+- packages/db: ./node_modules/.bin/vitest run --maxWorkers=1
+  test/success-fee-cap-net-reversals.test.ts
+  test/fee-invalid-proof-reduction.test.ts test/job-import-v3-admission.test.ts
+  — 3 files, 14 tests passed.
+- packages/db: ./node_modules/.bin/vitest run --maxWorkers=1
+  test/migration-proof-loader.test.ts test/lp-0-catalog.test.ts src/outbox.test.ts
+  — 3 files, 116 tests passed.
+- ./node_modules/.bin/tsc -p apps/web/tsconfig.json --noEmit and
+  ./node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit — passed.
+- Requested pnpm --filter @jobguard/api openapi:generate stalled before script
+  execution and was interrupted. In apps/api, node --import tsx
+  src/generate-openapi.ts and the same command with --check both passed.
+- In apps/web, ./node_modules/.bin/playwright test --list --workers=1
+  customer-extra-approval.spec.ts DEMO-A1-rest DEMO-J3-integrity
+  customer-signin.spec.ts CH-5.spec.ts CH5-part2.spec.mts — 28 tests collected
+  across six files and both widths; collection only, no browser execution.
+- Core purity, money arithmetic, commercial boundary, AI provider boundary,
+  PL/pgSQL CASE-in-IF (192 migrations) and git diff --check passed.
+- Full node tools/lint.mjs stopped at local lane checking: it unions committed
+  paths with unstaged deletions, so it still counts all 12 old rename paths.
+  Read-only verification of the final existing changed paths against available
+  origin/main found all paths covered by the lane. Old complete stems are absent.
+  Router must rerun normal lane lint after staging/committing the renames.
+  Available origin/main is stale (highest migration 0522); the requested batch
+  range is contiguous 0533–0537. No fetch was performed.
+
+No PostgreSQL or browser suites executed: the sandbox cannot start PostgreSQL
+or bind localhost. GitHub CI must run those after router push. No git-writing
+commands, dependency downloads, live providers or releases. Router owns commit,
+push and the resulting head; green CI and independent exact-head RED review
+remain required before merge.

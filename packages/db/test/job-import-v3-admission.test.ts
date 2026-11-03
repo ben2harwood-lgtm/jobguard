@@ -72,7 +72,7 @@ describe("CH-5 part 2 source/authority boundaries (scripted transport only)", ()
 });
 
 it("the replacement SQL keeps the original-source refusal under the job lock", () => {
- const sql = readFileSync(new URL("../migrations/0536_import_work_admission.sql", import.meta.url), "utf8");
+ const sql = readFileSync(new URL("../migrations/0534_import_work_admission.sql", import.meta.url), "utf8");
  const body = sql.slice(sql.indexOf("CREATE OR REPLACE FUNCTION app.adopt_invoiced_job_v3"));
  const lock = body.indexOf("PERFORM 1 FROM app.job WHERE tenant_id=t AND id=source_job FOR UPDATE;");
  const refusal = body.indexOf("IF EXISTS(SELECT 1 FROM app.job WHERE tenant_id=t AND id=source_job AND provenance='imported') THEN\n  RAISE EXCEPTION 'IMPORT_ALREADY_ADOPTED'; END IF;");

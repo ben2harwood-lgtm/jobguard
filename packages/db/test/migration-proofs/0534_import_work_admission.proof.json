@@ -1,5 +1,5 @@
 {
-  "migration": "0536_import_work_admission.sql",
+  "migration": "0534_import_work_admission.sql",
   "lp0": [
     {
       "section": "entries",
