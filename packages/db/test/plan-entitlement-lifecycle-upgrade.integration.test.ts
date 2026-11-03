@@ -15,7 +15,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   const f = c as unknown as WorkFixture, trial = await firstTrialFixture(f), paid = await meterCompany(f);
   await command(f, paid, terms(paid)); await retainedExport(f, trial);
   const before = await snapshot(c.admin);
-  const catalogue = async () => (await c!.admin.query(`SELECT n.nspname,p.proname,p.oid,p.proowner,p.proacl,p.prosecdef,p.proconfig,pg_get_function_arguments(p.oid) args,
+  const catalogue = async () => (await c!.admin.query(`SELECT n.nspname,p.proname,p.oid,p.proowner,p.proacl,p.prosecdef,p.proconfig,pg_get_function_identity_arguments(p.oid) args,
     CASE WHEN p.oid<>'app.mon8_company_feature(text,text,uuid)'::regprocedure THEN pg_get_functiondef(p.oid) END definition
     FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname IN('app','identity','control_plane','audit_control') AND p.prokind='f' ORDER BY p.oid`)).rows;
   const security = await catalogue();
