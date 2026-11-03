@@ -27,6 +27,22 @@ it("never substitutes zero for a missing session, missing ledger or malformed re
     await expect(loadMeter(vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(session)).mockResolvedValueOnce(response))).rejects.toThrow();
   }
 });
+it.each([401, 503])("finishes the rejected session response body (%s)", async status => {
+  const response = Response.json({ code: "UNAUTHENTICATED" }, { status });
+  const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(response);
+  await expect(loadMeter(fetcher)).rejects.toThrow(status === 401 ? "SIGN_IN_REQUIRED" : "READ_UNAVAILABLE");
+  expect(response.bodyUsed).toBe(true);
+  expect(fetcher).toHaveBeenCalledTimes(1);
+});
+it.each([401, 403, 503])("finishes rejected count and drill-down response bodies (%s)", async status => {
+  for (const load of [loadMeter, loadMeterJobs]) {
+    const response = Response.json({ code: "METER_UNAVAILABLE" }, { status });
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(session)).mockResolvedValueOnce(response);
+    await expect(load(fetcher)).rejects.toThrow(status < 500 ? "SIGN_IN_REQUIRED" : "READ_UNAVAILABLE");
+    expect(response.bodyUsed).toBe(true);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  }
+});
 it("shows a loading state without company numbers before authentication", () => {
   const html = renderToStaticMarkup(<MeterScreen />);
   expect(html).toContain('role="status"'); expect(html).toContain("hypothetical"); expect(html).not.toContain("of 7 jobs");

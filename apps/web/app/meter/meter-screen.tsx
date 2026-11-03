@@ -4,13 +4,20 @@ import { meterTodayReadV1, meterTodayLabels, type MeterTodayRead, meterTodayJobs
 
 async function loadMeterResponse(fetcher: typeof fetch, endpoint: string) {
   const sessionResponse = await fetcher("/api/auth/session", { cache: "no-store", credentials: "same-origin" });
-  if (!sessionResponse.ok) throw new Error(sessionResponse.status < 500 ? "SIGN_IN_REQUIRED" : "READ_UNAVAILABLE");
+  if (!sessionResponse.ok) {
+    // Finish the fetch before hiding the optional meter on a refused read.
+    await sessionResponse.text();
+    throw new Error(sessionResponse.status < 500 ? "SIGN_IN_REQUIRED" : "READ_UNAVAILABLE");
+  }
   const session = await sessionResponse.json() as { csrfToken?: string; memberships?: { tenantId: string }[] };
   const tenantId = session.memberships?.[0]?.tenantId;
   if (!session.csrfToken || !tenantId) throw new Error("SIGN_IN_REQUIRED");
   const response = await fetcher(endpoint, { cache: "no-store", credentials: "same-origin",
     headers: { "x-csrf-token": session.csrfToken, "x-tenant-id": tenantId } });
-  if (!response.ok) throw new Error(response.status === 401 || response.status === 403 ? "SIGN_IN_REQUIRED" : "READ_UNAVAILABLE");
+  if (!response.ok) {
+    await response.text();
+    throw new Error(response.status === 401 || response.status === 403 ? "SIGN_IN_REQUIRED" : "READ_UNAVAILABLE");
+  }
   return response.json() as Promise<unknown>;
 }
 export async function loadMeter(fetcher: typeof fetch = fetch): Promise<MeterTodayRead> {
