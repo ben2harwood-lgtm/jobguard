@@ -12,7 +12,7 @@ whose job ID matches the selected job. The schedule's own strict response must
 also match that ID. No fixture is rendered as the selected job's schedule.
 
 M4-18 remains an in-memory draft model and disabled. It has no saved dated stage
-schedule to read. Migration 0555 therefore adds a separate, minimal operational
+schedule to read. Migration 0550 therefore adds a separate, minimal operational
 forecast history, `app.practice_exposure_schedule`, with tenant-qualified job
 keys, forced RLS and runtime SELECT/INSERT only. Existing immutable-record
 triggers also refuse updates/deletes. This is not an accepted commercial schedule,

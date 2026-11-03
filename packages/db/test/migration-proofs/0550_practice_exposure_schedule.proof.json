@@ -1,5 +1,5 @@
 {
-  "migration": "0555_practice_exposure_schedule.sql",
+  "migration": "0550_practice_exposure_schedule.sql",
   "lp0": [
     {
       "section": "entries",

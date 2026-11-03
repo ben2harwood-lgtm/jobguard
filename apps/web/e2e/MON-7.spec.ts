@@ -74,7 +74,11 @@ test("MON-7a leaves VALUE-1 and saved fee illustration figures unchanged",async(
   await B(page,"Save draft revision").click();await expect(page.getByTestId("quote-revision")).toHaveText("1");
   await page.getByLabel("Unit rate Clean site").fill("200.00");await B(page,"Save draft revision").click();await expect(page.getByTestId("quote-revision")).toHaveText("2");
   await B(page,"Preview immutable quote").click();await B(page,"Simulate sending this quote").click();await B(page,"Continue fake worker").click();
-  await expect(page.getByTestId("quote-delivery")).toHaveText("Simulated delivery — nothing sent");await B(page,"Record practice acceptance").click();await B(page,"Start this practice job").click();
+  await expect(page.getByTestId("quote-delivery")).toHaveText("Simulated delivery — nothing sent");await B(page,"Record practice acceptance").click();
+  // The saved v1 sample defaults to pilot_no_charge; work-state reads require
+  // a synthetic_demo track, supplied by this existing simulated scenario.
+  await page.getByLabel("Practice activation scenario").selectOption("simulated_base_obligation");
+  await B(page,"Start this practice job").click();
   await expect(page.getByRole("heading",{name:"Live · baseline frozen",exact:true})).toBeVisible();
   const id=(await page.locator(".quote-editor").getAttribute("data-job-id"))!;
   // Establish a nonzero VALUE-1 figure through the existing explicit variation path.
@@ -91,7 +95,7 @@ test("MON-7a leaves VALUE-1 and saved fee illustration figures unchanged",async(
   await page.goto(`/jobs/${id}/value`);await expect(page.getByTestId("value-invoiced-gross")).toBeVisible();await expect(page.getByTestId("value-approved-extras")).toHaveText("£125.00");const valueBefore=await page.locator(".value-card").allTextContents();
   // Forecasts must also leave fees, value and the work meter unchanged.
   const meterBefore = await page.request.get(`/api/jobs/${id}/work-state`);
-  expect(meterBefore.ok()).toBe(true); const workBefore = await meterBefore.json();
+  expect(meterBefore.ok(), await meterBefore.text()).toBe(true); const workBefore = await meterBefore.json();
   const forecast = await page.request.post(`/api/jobs/${id}/exposure-schedule`, { data: {
     version: "exposure-schedule-command.v1", commandId: crypto.randomUUID(), expectedRevision: 0,
     stages: [{ id: "quote-stage", label: "Fictional quote work", date: "2026-12-01",

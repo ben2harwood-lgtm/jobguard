@@ -303,6 +303,22 @@ describe("MON-7 saved practice exposure schedules", () => {
   const request = (stages: unknown[], expectedRevision = 0) => ({ version: "exposure-schedule-command.v1", commandId: randomUUID(), expectedRevision, stages });
   const stages = () => [{ id: "builder-stage", label: "Fictional roof", date: "2026-12-01",
     cumulativeWorkValue: { pence: 72123, currency: "GBP" }, cumulativeReceipts: { pence: 12300, currency: "GBP" } }];
+  it("keeps the forecast table migration-owned, tenant-isolated and append-only after all LP-5 migrations", async () => {
+    expect((await admin.query(`SELECT r.rolname owner,c.relrowsecurity,c.relforcerowsecurity,
+      has_table_privilege('jobguard_runtime',c.oid,'SELECT') can_select,
+      has_table_privilege('jobguard_runtime',c.oid,'INSERT') can_insert,
+      has_table_privilege('jobguard_runtime',c.oid,'UPDATE,DELETE,TRUNCATE') can_mutate,
+      has_table_privilege('jobguard_command_writer',c.oid,'INSERT') command_writer_insert
+      FROM pg_class c JOIN pg_roles r ON r.oid=c.relowner
+      WHERE c.oid='app.practice_exposure_schedule'::regclass`)).rows).toEqual([{
+      owner: "jobguard_migration", relrowsecurity: true, relforcerowsecurity: true,
+      can_select: true, can_insert: true, can_mutate: false, command_writer_insert: false,
+    }]);
+    const j = await job();
+    await prevention.exposureSchedule(context, member, j.id, undefined, request(stages()));
+    await expect(admin.query("DELETE FROM app.practice_exposure_schedule WHERE tenant_id=$1 AND job_id=$2", [tenant, j.id]))
+      .rejects.toMatchObject({ code: "55000" });
+  });
   it("starts unknown, persists exact job forecasts, rejects stale edits and conflicting replays", async () => {
     const first = await job(), second = await job();
     const read = (id: string) => prevention.exposureSchedule(context, member, id, undefined);

@@ -1,24 +1,30 @@
 {
-  "branches": [
-    "codex/sandbox/demo-mon7-curve"
-  ],
-  "allow": [
-    "apps/api/src/prevention-check.application.test.ts",
-    "apps/api/src/prevention-check.application.ts",
-    "apps/api/src/workspace/application.ts",
-    "apps/web/app/api/jobs/[id]/exposure-schedule/route.ts",
-    "apps/web/app/ui/exposure-curve-preview.tsx",
-    "apps/web/app/ui/exposure-curve.test.tsx",
-    "apps/web/app/ui/job-exposure-curve.tsx",
-    "apps/web/app/ui/prevention-checks.tsx",
-    "apps/web/e2e/MON-7.spec.ts",
-    "docs/contracts/prevention-checks-v1.md",
-    "packages/core/src/exposure-curve.test.ts",
-    "packages/core/src/exposure-curve.ts",
-    "packages/db/migrations/0555_practice_exposure_schedule.sql",
-    "packages/db/src/prevention-check-repository.ts",
-    "packages/db/test/migration-proofs/0555_practice_exposure_schedule.proof.json",
-    "packages/db/test/prevention-checks.integration.test.ts"
-  ],
-  "note": "MON-7 practice job saved forecasts and exposure curve; migration 0555. RED: new tenant-scoped storage."
+  "version": 2,
+  "lanes": {
+    "demo-mon7-curve": {
+      "branches": [
+        "codex/sandbox/demo-mon7-curve"
+      ],
+      "note": "MON-7 practice job saved forecasts and exposure curve; migration 0550. RED: new tenant-scoped storage.",
+      "allow": [
+        "apps/api/src/prevention-check.application.test.ts",
+        "apps/api/src/prevention-check.application.ts",
+        "apps/api/src/workspace/application.ts",
+        "apps/web/app/api/jobs/[id]/exposure-schedule/route.ts",
+        "apps/web/app/ui/exposure-curve-preview.tsx",
+        "apps/web/app/ui/exposure-curve.test.tsx",
+        "apps/web/app/ui/job-exposure-curve.tsx",
+        "apps/web/app/ui/prevention-checks.tsx",
+        "apps/web/e2e/MON-7.spec.ts",
+        "docs/contracts/prevention-checks-v1.md",
+        "packages/core/src/exposure-curve.test.ts",
+        "packages/core/src/exposure-curve.ts",
+        "packages/db/migrations/0550_practice_exposure_schedule.sql",
+        "packages/db/src/prevention-check-repository.ts",
+        "packages/db/test/migration-proofs/0550_practice_exposure_schedule.proof.json",
+        "packages/db/test/prevention-checks.integration.test.ts",
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts"
+      ]
+    }
+  }
 }

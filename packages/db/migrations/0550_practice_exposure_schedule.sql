@@ -1,5 +1,4 @@
 BEGIN;
-SET LOCAL ROLE jobguard_migration;
 
 -- MON-7: append-only operational forecasts for practice jobs. No financial grants.
 CREATE TABLE app.practice_exposure_schedule (
@@ -14,6 +13,7 @@ CREATE TABLE app.practice_exposure_schedule (
  CONSTRAINT exposure_schedule_command_key UNIQUE(tenant_id,command_id),
  CONSTRAINT exposure_schedule_job_fk FOREIGN KEY(tenant_id,job_id) REFERENCES app.job(tenant_id,id)
 );
+ALTER TABLE app.practice_exposure_schedule OWNER TO jobguard_migration;
 ALTER TABLE app.practice_exposure_schedule ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app.practice_exposure_schedule FORCE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON app.practice_exposure_schedule FOR ALL TO jobguard_runtime,jobguard_migration
