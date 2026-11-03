@@ -169,3 +169,53 @@ catalog/grant/RLS/audit behavior, database integration, browser journeys and the
 full required checks/build against current main; an independent exact-head RED
 review remains required when this group's turn comes. No fetch, commit, push,
 PR, live service or real data was used by this session.
+
+## Batch-7 PR handoff — 3 November 2026 (RED)
+
+This group's turn supersedes the earlier NOPR handoff above. The launcher has
+already completed the main merge: HEAD is `09746bfaf`, containing `origin/main`
+`9e1c588c2` (LP-5c, MON-8, batch 6 and MON-7). No unresolved merge entries or
+conflict markers remain. No product behavior needed changing in this handoff.
+The lane note now identifies the second small group; its allowlist exactly
+matches all 47 changed non-lane paths against the merged `origin/main`.
+
+Migrations and matching proofs remain consecutive at 0558–0561. All eight new
+empty app tables remain in `packages/db/test/later-empty-tables.ts`. The
+contractor-entitlement upgrade test preserves main's successor expectations
+and adds the shared later-table keys. Source inspection found no direct runtime
+INSERT into command_receipt, decision_resolution or action_authorization, or
+UPDATE of command_receipt, in this batch's changed code/tests. Mandate writes
+run through migration-owned SECURITY DEFINER routines; fixture setup uses the
+owner. No privilege or test assertion was weakened. Earlier LATER items remain
+LATER.
+
+Current local tests used installed Node 24.17.0 and Vitest 4.1.12 directly,
+with `--maxWorkers=1`, at most three named files per run and two runs at once.
+Twelve files passed, 205 tests total:
+
+- core: merchant-connectors, subscription-agreement, supplier-documents (14);
+- db: merchant-ingestion, subscription-mandate, subscription-mandate-db-gate (17),
+  accounting-export-executor and migration-proof-loader (87);
+- API: accounting-export.application, fee-collection/executor,
+  fee-collection/m4-23-sb-rails (82);
+- web: app/api/accounting-exports/[sourceId]/route.test.ts (5).
+
+Installed TypeScript (`node node_modules/typescript/bin/tsc -p tsconfig.json
+--noEmit` from each package) passed for core, db and web. API typecheck produced
+no diagnostics but did not finish during the local run and was interrupted;
+CI must complete it. Core purity and money arithmetic lints passed. Additional
+commercial/AI boundary scans were interrupted without a completed result; no
+pass is claimed. The pnpm version probe attempted an automatic version switch
+and failed signature verification because registry fetches were unavailable;
+no packages were installed, and all actual checks used existing executables.
+Final `git diff --check origin/main`, conflict-marker, migration/proof-stem and
+exact lane checks passed.
+
+READY for the router to commit, push and open this group's PR with title
+`chore: batch 7, second small group with migrations`. No git writes, fetch,
+PostgreSQL, browser, live provider or real customer data were used. CI must
+prove fresh and upgrade migrations, actual catalog/grant/RLS/audit behavior,
+the batch's database integration suites, the export-preview browser journey
+and all required typecheck/lint/test/build checks against current main.
+Independent RED review must PASS at the exact resulting head before merge;
+this local source inspection and deterministic testing are not that review.

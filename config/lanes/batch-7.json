@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/batch-7"
       ],
-      "note": "Built ahead NOPR: M5-1 persistence and export preview, M5-4 merchant ingestion, M4-13 database gate. RED; independent review and CI required.",
+      "note": "Second small group: M5-1 persistence and export preview, M5-4 merchant ingestion, M4-13 database gate. RED; independent review and CI required.",
       "allow": [
         "apps/api/package.json",
         "apps/api/src/accounting-export.application.test.ts",
