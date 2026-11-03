@@ -1,4 +1,5 @@
 // Scripted adapter tests only; grants and real writers run in PostgreSQL CI.
+import { receiptBaseSources } from "@jobguard/core";
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { expect, it, vi } from "vitest";
@@ -39,7 +40,20 @@ it("the company job adapter binds the returned tenant/job and keeps pre-lock abs
  f.query.mockImplementation(async sql=>({rows:sql.startsWith("SELECT app.read_value_job")?[{result:raw}]:[]}));
  expect(await f.reader.readJob(f.context,"a".repeat(64),jobId)).toBeNull();
  raw={tenantId:f.context.tenantId,jobId,lockId:randomUUID(),lockedRevisionId:randomUUID(),lockedAt:"2026-10-01T00:00:00Z",foundComplete:true,checkId:randomUUID(),checkedAt:"2026-10-02T00:00:00Z",checked:[],tracked:[],assessments:[]};
- expect((await f.reader.readJob(f.context,"a".repeat(64),jobId))?.sources.jobId).toBe(jobId);
+ const receipt=await f.reader.readJob(f.context,"a".repeat(64),jobId);
+ expect(receipt&&receiptBaseSources(receipt).jobId).toBe(jobId);
  raw={...(raw as Record<string,unknown>),jobId:randomUUID()};
  await expect(f.reader.readJob(f.context,"a".repeat(64),jobId)).rejects.toThrow("VALUE_SCOPE_MISMATCH");
+});
+
+it("business totals upgrade only enumerated same-company jobs, preserving period-only subscription",async()=>{
+ const f=fixture(),jobId=randomUUID();
+ const base={tenantId:f.context.tenantId,jobId,lockId:randomUUID(),lockedRevisionId:randomUUID(),lockedAt:"2026-10-01T00:00:00Z",foundComplete:true,checkId:randomUUID(),checkedAt:"2026-10-02T00:00:00Z",checked:[],tracked:[],assessments:[]};
+ const source={base,supplier:{reason:"Missing supplier source",balances:[]},withheld:{reason:null,balances:[{tenantId:f.context.tenantId,jobId,derivationId:randomUUID(),revision:1,at:"2026-10-03T00:00:00Z",recovered:{pence:282000,currency:"GBP"},fee:{pence:28200,currency:"GBP"},allocationIds:[randomUUID()],statementHash:"a".repeat(64)}]}};
+ f.query.mockImplementation(async sql=>({rows:sql.startsWith("SELECT app.read_value_business")?[{result:{billing:f.billing,jobs:[base]}}]:sql.startsWith("SELECT app.read_value_job_v2")?[{result:source}]:[]}));
+ const result=await f.reader.readBusiness(f.context,"a".repeat(64));
+ expect(result.summary).toMatchObject({withheld:{recovered:{pence:282000},fee:{pence:28200},yoursBeforeVatAndTax:{pence:253800}}});
+ expect(result.jobs[0]?.receipt).not.toHaveProperty("subscription");
+ expect(result.subscription[0]?.amount.pence).toBe(6900);
+ expect(f.connect).toHaveBeenCalledTimes(1);
 });

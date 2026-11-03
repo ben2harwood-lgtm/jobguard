@@ -17,8 +17,9 @@ function captured() {
  for (const job of source.jobs) Object.assign(job,{events:[{version:"job-work-state-event.v1",id:randomUUID(),jobId:job.jobId,sequence:1,kind:"first_site_evidence",factAt:at,recordedAt:at,sourceReceiptId:randomUUID(),commandId:null,predecessorId:null,closeReason:null,closeNote:null}]});
  return {date:view.date,stored:{version:"meter-lifecycle-stored.v1",sourceId:randomUUID(),computationId:randomUUID(),sourceHash:"a".repeat(64),sourceRevision:1,source,alerts:[]}};
 }
-function fixture(raw: unknown = captured(), error?: Error) {
+function fixture(raw: unknown = captured(), error?: Error, ledger?: unknown) {
   const query = vi.fn(async (sql: string, _values?: unknown[]) => {
+    if (sql.includes("mon1_today_jobs")) return { rows: [{ result: ledger }] };
     if (sql.includes("mon1_today_source")) { if (error) throw error; return { rows: [{ result: raw }] }; }
     return { rows: [] };
   });
@@ -72,4 +73,53 @@ it("refuses a photo timestamp truncated to before its microsecond activation", a
  // A later JS Date in this same millisecond still serializes .000Z.
  // Evidence predating activation must remain invalid.
  await expect(fixture(raw).repository.read(context,digest)).rejects.toThrow("METER_PROJECTION_MISMATCH");
+});
+
+function jobsFixture() {
+ const raw = captured();
+ const ledger = { date: raw.date, plan: raw.stored.source.plan, jobs: raw.stored.source.jobs.map(job => ({
+  jobId: job.jobId, customerId: job.activation.customerId, siteId: job.activation.siteId, small: job.activation.small, committed: true,
+ })) };
+ return { raw, ledger };
+}
+it("drill-down uses the same counted day, excluding reserved unstarted jobs", async () => {
+ const { raw, ledger } = jobsFixture();
+ ledger.jobs.push({ ...ledger.jobs[0]!, jobId: randomUUID() });
+ const f = fixture(raw, undefined, ledger);
+ const result = await f.repository.readJobs(context, digest);
+ expect(result.meter).toEqual(view);
+ expect(result.places).toHaveLength(5);
+ expect(result.places.flatMap(place => place.jobIds)).toEqual(expect.arrayContaining(raw.stored.source.jobs.map(job => job.jobId)));
+ expect(result.places.flatMap(place => place.jobIds)).not.toContain(ledger.jobs[5]!.jobId);
+ expect(f.query).toHaveBeenCalledWith("SELECT app.mon1_today_jobs($1,$2) result", [tenantId, digest]);
+});
+it("drill-down preserves shared references and the free small allowance", async () => {
+ const { raw, ledger } = jobsFixture();
+ const first = raw.stored.source.jobs[0]!, second = raw.stored.source.jobs[1]!;
+ second.activation.customerId = first.activation.customerId;
+ second.activation.siteId = first.activation.siteId;
+ ledger.jobs[1]!.customerId = first.activation.customerId;
+ ledger.jobs[1]!.siteId = first.activation.siteId;
+ raw.stored.source.jobs[2]!.activation.small = true;
+ ledger.jobs[2]!.small = true;
+ const result = await fixture(raw, undefined, ledger).repository.readJobs(context, digest);
+ expect(result.meter).toMatchObject({ countedPlaces: 3, freeSmallPlaces: 1 });
+ expect(result.places).toHaveLength(4);
+ expect(result.places).toContainEqual({ kind: "shared_place", jobIds: [first.jobId, second.jobId].sort() });
+ expect(result.places).toContainEqual({ kind: "free_small_place", jobIds: [raw.stored.source.jobs[2]!.jobId] });
+});
+it("drill-down refuses missing, stale or foreign ledger facts instead of inventing rows", async () => {
+ for (const mutate of [
+  (ledger: ReturnType<typeof jobsFixture>["ledger"]) => { ledger.date = "2026-10-27"; },
+  (ledger: ReturnType<typeof jobsFixture>["ledger"]) => { ledger.jobs.pop(); },
+  (ledger: ReturnType<typeof jobsFixture>["ledger"]) => { ledger.jobs.push(ledger.jobs[0]!); },
+  (ledger: ReturnType<typeof jobsFixture>["ledger"]) => { ledger.jobs[0]!.small = true; },
+  (ledger: ReturnType<typeof jobsFixture>["ledger"]) => { ledger.jobs[0]!.customerId = randomUUID(); },
+ ]) {
+  const { raw, ledger } = jobsFixture(); mutate(ledger);
+  const f = fixture(raw, undefined, ledger);
+  await expect(f.repository.readJobs(context, digest)).rejects.toThrow(/METER_(UNAVAILABLE|PROJECTION_MISMATCH)/);
+  expect(f.query).toHaveBeenLastCalledWith("ROLLBACK");
+ }
+ await expect(fixture({ view }).repository.readJobs(context, digest)).rejects.toThrow("METER_UNAVAILABLE");
 });

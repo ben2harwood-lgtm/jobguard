@@ -25,6 +25,7 @@ export * from "./recovery.js";
 export * from "./recovery-case.js";
 export * from "./recovery-eligibility.js";
 export * from "./commercial-integrity.js";
+export * from "./commercial-integrity-v3.js";
 export * from "./job-import.js";
 
 export * from "./materials.js";
@@ -132,7 +133,6 @@ export * from "./evidence-pack-v3-assembly.js";
 export * from "./meter-today.js";
 
 export * from "./small-builder-demo-lifecycle.js";
-export * from "./platform-tax-invoice.js";
 export * from "./inbox-outcome-metrics.js";
 
 export * from "./dunning.js";
@@ -147,7 +147,19 @@ export * from "./issued-simulation-fee-statement.js";
 export * from "./small-builder-trial-demo.js";
 export * from "./simulation-fee-collection.js";
 export * from "./customer-approval-method.js";
+
+export * from "./customer-quote-acceptance.js";
 export * from "./simulation-money-run.js";
 export * from "./customer-variation-approval.js";
+export * from "./interim-applications.js";
+export * from "./construction-notices.js";
+export * from "./retention-balances.js";
+export * from "./vat-treatments.js";
+export * from "./cis-deductions.js";
+export * from "./exposure-curve.js";
 
+export * from "./pay-now-synthetic.js";
 export * from "./contractor-mandate.js";
+
+export * from "./cancellation-kit.js";
+export * from "./value-source-receipt-v2.js";

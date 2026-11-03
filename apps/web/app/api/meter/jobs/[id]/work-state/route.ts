@@ -22,3 +22,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json(failure.body, { status: failure.status, headers });
   }
 }
+
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    return NextResponse.json(await meterWorkApplication().read({ ...await identityCredentials(request),
+      origin: request.headers.get("origin") ?? identityApplication().allowedOrigin }, (await params).id), { headers });
+  } catch (error) {
+    const failure = jobWorkStateFailure(error) ?? meterTodayFailure(error);
+    return NextResponse.json(failure.body, { status: failure.status, headers });
+  }
+}

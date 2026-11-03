@@ -2,7 +2,7 @@ import { projectRecoveryWorkbench, recoveryWorkbenchHistorySql, type RecoveryWor
 import { readRecoveryEligibilityV3, type RecoveryEligibilityV3Review } from "./recovery-eligibility-v3-repository.js";
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
-import { assertRecoverySources, classifyReferenceD03, RecoverySourceError, recoveryCaseCommandV1, recoveryEligibilityCommandV1, stateAfterClaimAmendment, transitionRecoveryCase, type RecoveryEligibilityCommand, type RecoveryCaseState } from "@jobguard/core";
+import { assertRecoverySources, classifyReferenceD03, RecoverySourceError, RecoveryTransitionError, recoveryCaseCommandV1, recoveryEligibilityCommandV1, stateAfterClaimAmendment, transitionRecoveryCase, type RecoveryEligibilityCommand, type RecoveryCaseState } from "@jobguard/core";
 import { appendAuditBatch } from "./audit.js";
 import { resolveFinalCheckRecoverySources, resolveRecoverySources, type RecoverySourceView } from "./recovery-case-sources.js";
 import { SyntheticDemoReadError } from "./demo-runtime.js";
@@ -99,9 +99,19 @@ export class RecoveryCaseRepository{
  async command(context:VerifiedTenantContext,jobId:string,raw:unknown,reviewer:Readonly<{membershipId:string;identityUserId:string}>):Promise<RecoveryCaseView>{
   if(!reviewer?.membershipId||!reviewer?.identityUserId)throw new RecoveryReviewerError("RECOVERY_REVIEWER_FORBIDDEN");
   // The caller supplies the server-selected principal; any client reviewer field is ignored and replaced below.
-  const sent=recoveryCaseCommandV1.parse(raw),parsed=canonicalIds(sent);let caseId="";await withTenant(this.pool,context,async db=>{
+  const sent=recoveryCaseCommandV1.parse(raw),parsed=canonicalIds(sent);let caseId="";
+  try {await withTenant(this.pool,context,async db=>{
    caseId=(await this.commandBody(db,context,jobId,sent,parsed,reviewer)).caseId;
-  });return this.committedCase(context,jobId,caseId,reviewer)}
+  });} catch(error) {
+   // Only this exact pre-commit database guard is a known transition refusal.
+   // Connection/commit ambiguity must retain the existing unknown-outcome path.
+   if(error instanceof Error && "code" in error && error.code==="23514" && error.message==="RECOVERY_PREVENTION_HAS_STORED_CASH")
+    throw new RecoveryTransitionError("identified","prevent");
+   if(error instanceof Error && "code" in error && error.code==="23514" && error.message==="RECOVERY_WRITE_OFF_HAS_STORED_CASH")
+    throw new RecoveryTransitionError("pursuing","write_off");
+   throw error;
+  }
+  return this.committedCase(context,jobId,caseId,reviewer)}
 
  /**
   * (i) the caller opens the transaction with withTenant (through practiceMaterialPool when it needs the practice setting; the joined call installs no setting of its own) and ends it;

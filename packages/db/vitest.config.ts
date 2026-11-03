@@ -11,7 +11,7 @@ const source = (path: string) => fileURLToPath(new URL(path, import.meta.url));
 export default defineConfig({
   // Upgrade proofs install every predecessor migration (and some a fresh database twice); the 5 s default times out
   // under CI load. One suite-wide budget instead of per-test patches; tests with their own timeout keep it.
-  test: { testTimeout: 120_000 },
+  test: { testTimeout: 120_000, setupFiles: [source("./test/administrative-role-setup.ts")] },
   resolve: {
     alias: [
       { find: /^@jobguard\/db$/u, replacement: source("./src/index.ts") },

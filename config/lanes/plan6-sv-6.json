@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "lanes": {
+    "plan6-sv-6": {
+      "branches": [
+        "codex/sandbox/demo-sv6"
+      ],
+      "note": "RED SV-6 Tests G and M; synthetic only, no fee or allocator changes.",
+      "allow": [
+        "packages/core/src/practice-feed.ts",
+        "packages/core/src/sv6-settlements.test.ts",
+        "packages/db/src/practice-feed-repository.ts",
+        "packages/db/migrations/0538_sv6_partial_settlements.sql",
+        "packages/db/test/migration-proofs/0538_sv6_partial_settlements.proof.json",
+        "packages/db/test/stored-receipt-case-fixture.ts",
+        "packages/db/test/recovery-attribution-hookup.integration.test.ts",
+        "apps/web/e2e/SV-6.spec.ts",
+        "apps/api/src/practice-feed.contracts.ts"
+      ]
+    }
+  }
+}
