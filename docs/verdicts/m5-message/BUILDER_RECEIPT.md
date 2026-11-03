@@ -133,7 +133,7 @@ The Git index is untouched because the sandbox makes .git read-only; the router
 must stage resolved paths. origin/main and MERGE_HEAD both identify
 e9d6c8b2bec984fb2edc604a1fe90005e67e7f0f. No fetch, git write or PR was attempted.
 
-Renamed 0391_customer_portal_message.sql to 0545_customer_portal_message.sql
+Renamed 0391_customer_portal_message.sql to 0547_customer_portal_message.sql
 without changing SQL bytes, updated filename lookups, and added the strict proof
 fragment with seven LP-0 changes, two explicit routine additions and no tenancy
 changes (no tables are added). LP-0 baseline is current main; the proof composes

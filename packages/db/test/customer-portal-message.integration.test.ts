@@ -34,8 +34,8 @@ describe("MON-5 customer messages through checked SV-7A",()=>{
   await f.admin.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING",[member.identity_user_id,t,auth.membershipId]);
   await f.admin.query("INSERT INTO identity.session(id,user_id,token_digest,csrf_token,expires_at,environment) VALUES($1,$2,$3,'fixture-csrf',clock_timestamp()+interval '1 hour','synthetic_demo')",[randomUUID(),member.identity_user_id,digest]);
   const c=(await f.admin.query("SELECT b.customer_id FROM app.job_party_current pc JOIN app.job_party_binding b ON(b.tenant_id,b.job_id,b.id)=(pc.tenant_id,pc.job_id,pc.binding_id) WHERE pc.tenant_id=$1 AND pc.job_id=$2",[t,jobId])).rows[0].customer_id as string;
-  const secret="a".repeat(43),linkDigest=hash(randomUUID()),sessionDigest=hash(randomUUID());
-  const grant=(await identityQuery("SELECT identity.customer_portal_issue($1,$2,$3,$4,$5,$6) id",[t,digest,jobId,c,linkDigest,`/customer/sign-in#${t}/${jobId}/${c}/${secret}`])).rows[0].id;
+  const reference=`customer-signin-reference.v1:${t}/${jobId}/${c}/${"a".repeat(43)}`,linkDigest=hash(randomUUID()),sessionDigest=hash(randomUUID());
+  const grant=(await identityQuery("SELECT identity.customer_portal_issue($1,$2,$3,$4,$5,$6) id",[t,digest,jobId,c,linkDigest,reference])).rows[0].id;
   await identityQuery("SELECT identity.customer_portal_use($1,$2,$3,$4,$5,'redeem')",[t,jobId,c,linkDigest,sessionDigest]);
   return {t,j:jobId,c,digest:sessionDigest,grant,practice};
  }
@@ -97,8 +97,8 @@ describe("MON-5 customer messages through checked SV-7A",()=>{
  });
 });
 it("0391 upgrade adds only two routines, keeps populated rows/ACLs and supports rerun",async()=>{
- const c=await startBeforeMigration("0545_customer_portal_message.sql");
- try{const before=await snapshot(c.admin);await applyMigration(c,"0545_customer_portal_message.sql");expect(await snapshot(c.admin)).toEqual(before);await migrate(c.admin);expect(await snapshot(c.admin)).toEqual(before);
+ const c=await startBeforeMigration("0547_customer_portal_message.sql");
+ try{const before=await snapshot(c.admin);await applyMigration(c,"0547_customer_portal_message.sql");expect(await snapshot(c.admin)).toEqual(before);await migrate(c.admin);expect(await snapshot(c.admin)).toEqual(before);
   for(const fn of ["app.sv7a_require_source_owner(uuid,uuid,text,text)","identity.customer_portal_message(uuid,uuid,uuid,text,jsonb)"]){for(const role of ["jobguard_runtime","jobguard_infrastructure"]){expect((await c.admin.query("SELECT has_function_privilege($1,$2,'EXECUTE') allowed",[role,fn])).rows[0].allowed).toBe(false);}}
  }finally{await c.close();}
 },120000);

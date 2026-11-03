@@ -8,7 +8,7 @@ import { UserCommandDispatcher } from "../src/commands.js";
 import { IssueQuoteMutation } from "../src/quote-document-repository.js";
 import { renderQuotePdf } from "@jobguard/core";
 import { testTenantContext } from "./tenant-context-test-utils.js";
-const own = "0543_customer_quote_acceptance.sql";
+const own = "0545_customer_quote_acceptance.sql";
 const hmac = (v: string) => createHmac("sha256", "fictional-customer-secret-at-least-32-bytes").update(v).digest("hex");
 let c: Cluster;
 beforeAll(async()=>{c=await startBeforeMigration(own); const before=await snapshot(c.admin);await applyMigration(c,own);expect(await snapshot(c.admin)).toEqual({...before,"app.customer_quote_approval":[]});await migrate(c.admin);await migrate(c.admin);expect(await snapshot(c.admin)).toEqual({...before,"app.customer_quote_approval":[],"app.customer_stage_acknowledgement":[]});},120000);
@@ -33,9 +33,9 @@ async function world(role = "owner") {
 }
 type World = Awaited<ReturnType<typeof world>>;
 async function issue(w: World) {
-  const token = randomBytes(32).toString("base64url"), digest = hmac(`customer-link:${token}`), path = `/customer/sign-in#${w.tenant}/${w.job}/${w.customer}/${token}`;
-  const grant = (await identityQuery("SELECT identity.customer_portal_issue($1,$2,$3,$4,$5,$6) id", [w.tenant, w.digest, w.job, w.customer, digest, path])).rows[0].id as string;
-  return { grant, digest, path, sessionDigest: hmac(randomUUID()) };
+  const token = randomBytes(32).toString("base64url"), digest = hmac(`customer-link:${token}`), reference = `customer-signin-reference.v1:${w.tenant}/${w.job}/${w.customer}/${token}`;
+  const grant = (await identityQuery("SELECT identity.customer_portal_issue($1,$2,$3,$4,$5,$6) id", [w.tenant, w.digest, w.job, w.customer, digest, reference])).rows[0].id as string;
+  return { grant, digest, reference, sessionDigest: hmac(randomUUID()) };
 }
 const use = (w: World, k: Awaited<ReturnType<typeof issue>>, operation = "redeem", changes: Partial<World> = {}) => {
   const x = { ...w, ...changes };

@@ -24,7 +24,7 @@ beforeAll(async () => {
     if (name > own && name < "0533_customer_signin_redact.sql") await applyMigration(c, name);
   }
   const registry = (await c.admin.query("SELECT jsonb_agg(value ORDER BY value::text) data FROM jsonb_array_elements($1::jsonb)", [JSON.stringify(lp5RegistryRows)])).rows[0].data;
-  const successors = { ...expected, "app.customer_quote_approval": [], "app.customer_stage_acknowledgement": [], "app.customer_variation_approval": [], "app.activation_acceptance_operation_use": [], "app.command_lifecycle_claim": [], "app.command_type_registry": registry, "app.repository_operational_record": [] };
+  const successors = { ...expected, "app.customer_variation_approval": [], "app.activation_acceptance_operation_use": [], "app.command_lifecycle_claim": [], "app.command_type_registry": registry, "app.repository_operational_record": [] };
   expect(await snapshot(c.admin, Object.keys(successors))).toEqual(successors);
   const w = await world();
   const token = randomBytes(32).toString("base64url"), path = `/customer/sign-in#${w.tenant}/${w.job}/${w.customer}/${token}`;

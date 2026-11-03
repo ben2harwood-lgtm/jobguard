@@ -1,5 +1,5 @@
 {
-  "migration": "0544_customer_stage_acknowledgement.sql",
+  "migration": "0546_customer_stage_acknowledgement.sql",
   "lp0": [
     {
       "section": "groups",
@@ -18,7 +18,7 @@
           "LP-12": "Keep tables/helpers private and EXECUTE limited to the identity login."
         },
         "sources": [
-          "packages/db/migrations/0544_customer_stage_acknowledgement.sql",
+          "packages/db/migrations/0546_customer_stage_acknowledgement.sql",
           "apps/api/src/auth/customer-stages.ts"
         ],
         "tests": [
@@ -72,7 +72,7 @@
           "LP-12": "Keep tables/helpers private and EXECUTE limited to the identity login."
         },
         "sources": [
-          "packages/db/migrations/0544_customer_stage_acknowledgement.sql",
+          "packages/db/migrations/0546_customer_stage_acknowledgement.sql",
           "apps/api/src/auth/customer-stages.ts"
         ],
         "tests": [

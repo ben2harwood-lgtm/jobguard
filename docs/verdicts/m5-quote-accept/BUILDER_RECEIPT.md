@@ -42,11 +42,11 @@ No fetch, commit, push, PR, database server or browser server was attempted.
 Preserved main's variation portal, shared exports, registries, latest Next proxy and test expectations,
 and added quote acceptance alongside them. Both review links remain on customer sign-in.
 Renamed only the migration filename stem from `0388_customer_quote_acceptance` to
-`0543_customer_quote_acceptance` and updated its test/lane lookups. SQL bytes are unchanged
+`0545_customer_quote_acceptance` and updated its test/lane lookups. SQL bytes are unchanged
 (SHA-256 `1f4775e4372add24634ab4f93f76067080887a1a6440d20e4bc42561277c90e5`).
 No main migration changed. No existing routine is recreated by this catch-up.
 
-The new `0543_customer_quote_acceptance.proof.json` supplies explicit LP-0, upgrade and tenancy
+The new `0545_customer_quote_acceptance.proof.json` supplies explicit LP-0, upgrade and tenancy
 changes. It owns the quote routine/RLS and additive catalog expectations, leaving main's frozen
 LP-0 inventory and historical SERIOUS-B5/tenancy baselines intact. The known main 0510 missing
 proof is unchanged. `docs/contracts/lp-downstream-effects-v1.md` is unchanged.

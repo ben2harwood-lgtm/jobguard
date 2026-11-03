@@ -4,7 +4,7 @@ import { beforeAll, afterAll, expect, it } from "vitest";
 import { startBeforeMigration, applyMigration, type Cluster } from "./contractor-practice-session-fixtures.js";
 import { snapshot } from "./contractor-entitlement-fixtures.js";
 import { migrate } from "../src/migrate.js";
-const own="0544_customer_stage_acknowledgement.sql",hash=(v:string)=>createHash("sha256").update(v).digest("hex");
+const own="0546_customer_stage_acknowledgement.sql",hash=(v:string)=>createHash("sha256").update(v).digest("hex");
 let c:Cluster;
 beforeAll(async()=>{
  c=await startBeforeMigration(own);const before=await snapshot(c.admin);await applyMigration(c,own);
@@ -30,7 +30,8 @@ async function world() {
  await c.admin.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','synthetic_demo','backfilled_synthetic_fixture') ON CONFLICT DO NOTHING",[t,j]);
  const party=(await c.admin.query("SELECT b.customer_id FROM app.job_party_current p JOIN app.job_party_binding b ON(b.tenant_id,b.id)=(p.tenant_id,p.binding_id) WHERE p.tenant_id=$1 AND p.job_id=$2",[t,j])).rows[0];
  const customer=party.customer_id as string,link=hash(randomBytes(32).toString("base64url")),d=hash(randomUUID());
- await identity("SELECT identity.customer_portal_issue($1,$2,$3,$4,$5,$6)",[t,b,j,customer,link,`/customer/sign-in#${t}/${j}/${customer}/${"a".repeat(43)}`]);
+ const reference=`customer-signin-reference.v1:${t}/${j}/${customer}/${"a".repeat(43)}`;
+ await identity("SELECT identity.customer_portal_issue($1,$2,$3,$4,$5,$6)",[t,b,j,customer,link,reference]);
  await identity("SELECT identity.customer_portal_use($1,$2,$3,$4,$5,'redeem')",[t,j,customer,link,d]);
  return {t,j,customer,d,m};
 }

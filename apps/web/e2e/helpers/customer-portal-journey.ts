@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { expect, type Page } from "@playwright/test";
+import { deliveredCustomerLink } from "./customer-signin-link";
 export const portal = (page: Page, action: string, body: unknown, csrf?: string) => page.evaluate(async ({ action, body, csrf }) => {
  const response = await fetch(`/api/customer-portal/${action}`, { method: "POST", headers: { "Content-Type": "application/json", ...(csrf ? { "x-csrf-token": csrf } : {}) }, body: JSON.stringify(body) });
  return { status: response.status, body: await response.json() };
@@ -93,8 +94,9 @@ export async function issueLink(admin: Pool, page: Page, job: string, customer: 
     JOIN app.action_outbox o ON(o.tenant_id,o.id)=(g.tenant_id,g.outbox_id) WHERE g.tenant_id=$1 AND g.id=$2`, [portalTenant,issued.body.grantId])).rows[0];
   expect(outbox.adapter).toBe("fake_email");
   expect(outbox.recipient).toMatch(/@[^@]+\.invalid$/u);
-  const [tenantId,jobId,customerId,token] = (outbox.immutable_content as string).split("#")[1]!.split("/");
-  return { path: outbox.immutable_content as string, grant: issued.body.grantId as string,
+  const path = await deliveredCustomerLink(outbox.immutable_content as string);
+  const [tenantId,jobId,customerId,token] = path.split("#")[1]!.split("/");
+  return { path, grant: issued.body.grantId as string,
     credential: {version:"customer-signin.v1",tenantId,jobId,customerId,token} };
 }
 
