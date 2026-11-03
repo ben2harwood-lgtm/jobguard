@@ -7,7 +7,7 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { migrate, PracticeInvoiceRepository, CustomerBillingCommandService, withTenant } from "../src/index.js";
 import { prepareBaselineInvoice } from "./sv5pre-fixtures.js";
-import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
+import { closeTestPools, freePort, installLegacySyntheticPartyFixtures, syntheticOwnerPool } from "./pool-test-utils.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 
 const T = randomUUID(), A = randomUUID(), U = randomUUID(), M = randomUUID(), H = "a".repeat(64);
@@ -18,14 +18,14 @@ beforeAll(async () => {
  pg = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: credential, persistent: false,
   createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
  await pg.initialise(); await pg.start();
- admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password: credential });
+ admin = await syntheticOwnerPool({ host: "127.0.0.1", port, user: "postgres", password: credential });
  await migrate(admin); await installLegacySyntheticPartyFixtures(admin);
  await admin.query(`INSERT INTO control_plane.tenant(id) VALUES($1)`, [T]);
  await admin.query(`INSERT INTO identity.identity_user(id) VALUES($1)`, [U]);
  await admin.query(`INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Synthetic later invoice')`, [A,T]);
  await admin.query(`INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')`, [M,T,A,U]);
  await admin.query(`CREATE ROLE invoice_later_login LOGIN PASSWORD '${credential}' NOSUPERUSER NOBYPASSRLS; GRANT jobguard_runtime TO invoice_later_login`);
- runtime = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "invoice_later_login", password: credential, max: 4 });
+ runtime = new Pool({ host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "invoice_later_login", password: credential, max: 4 });
  repo = new PracticeInvoiceRepository(runtime);
 }, 60000);
 afterAll(async () => { await closeTestPools(runtime, admin); await pg?.stop(); });
@@ -224,4 +224,14 @@ describe("LATER-B16 persisted invoice facts", () => {
   await expect(withTenant(runtime,testTenantContext(randomUUID()),db=>db.$client.query(`SELECT * FROM app.issue_practice_customer_credit_note($1,$2,$3,$4,$5,$6,$7,$8)`,
    [T,foreign.jobId,foreign.invoice.id,M,randomUUID(),1,"Synthetic correction",H]))).rejects.toThrow("tenant context mismatch");
  });
+});
+
+it("LP-5a payment-reversal retries retain the original server-generated grant expiry",async()=>{
+ const f=await fresh(),service=new CustomerBillingCommandService(runtime);
+ const payment=await service.recordPayment(context,{version:"customer-payment.record.v1",commandId:randomUUID(),actorMembershipId:M,
+  jobId:f.jobId,invoiceId:f.invoice.id,paidOn:"2026-10-16",amountPence:100,currency:"GBP",method:"bank_transfer",reference:"Fictional LP5 receipt",builderAttestsReceived:true});
+ const command={version:"customer-payment.reverse.v1",commandId:randomUUID(),actorMembershipId:M,jobId:f.jobId,paymentId:payment.paymentId,reason:"Fictional correction"};
+ const [first,duplicate]=await Promise.all([service.reversePayment(context,command),service.reversePayment(context,command)]);
+ expect(duplicate).toEqual(first);expect(await service.reversePayment(context,command)).toEqual(first);
+ expect((await admin.query("SELECT count(*)::int n FROM app.customer_payment_reversal WHERE tenant_id=$1 AND payment_id=$2",[T,payment.paymentId])).rows[0].n).toBe(1);
 });

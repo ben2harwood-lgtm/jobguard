@@ -13,7 +13,7 @@ function harness(options: { cancelled?: boolean; databaseFailure?: boolean } = {
   const statements: string[] = [];
   const query = vi.fn(async (sql: string, _values?: unknown[]) => {
     statements.push(sql);
-    if (sql.startsWith("SELECT o.* FROM app.action_outbox")) {
+    if (sql.startsWith("SELECT o.*,a.actor_membership_id AS authorization_actor FROM app.action_outbox")) {
       if (options.databaseFailure) throw new Error("synthetic authority lookup unavailable");
       return { rows: [] };
     }
