@@ -1,4 +1,4 @@
-# M4-13 dark subscription mandate persistence (`0561_subscription_mandate`)
+# M4-13 dark subscription mandate persistence (`0560_subscription_mandate`)
 
 Add tenant-scoped FORCE-RLS immutable terms and mandate lifecycle history. Runtime
 has no direct table grants. Session-bound functions recheck active membership
@@ -38,8 +38,8 @@ in this sandbox. No database guarantee is claimed from a fake.
 Catch-up to incoming main `111865cf65f5e68a28ce1891bd52aad0ac7a0f10`:
 keep main's exports alongside the mandate repository; retain the existing exact
 agreement/revision/hash statement binding. The persistence and database gate now
-use reserved stems `0561_subscription_mandate` and
-`0562_subscription_mandate_db_gate`. Both tables are explicitly registered in the
+use reserved stems `0560_subscription_mandate` and
+`0561_subscription_mandate_db_gate`. Both tables are explicitly registered in the
 migration proof's tenancy list, which supplies the exact RLS and owner lists in
 `tenancy.integration.test.ts`; their policy records are included in the LP-0 proof.
 The existing `mon2_audit` call uses main's LP-4 sealer and does not restore a legacy

@@ -72,6 +72,20 @@ The stored boundary also refuses unlocked final-account references and preserves
 
 Follow-up validation (m5-1-persist, RED): executor regressions cover rejecting caller-supplied matches, failed lookups preserving unknown outcome, inbox binding and invalid-observation refusal. PostgreSQL regressions also cover forged direct SQL matches, another tenant with the same attempt UUID, another attempt in the same tenant, missing-observation holds, private immutable inbox catalogs and the unchanged no-repush rule. The exact SERIOUS-B5/tenancy/upgrade catalog unions add only the inbox table and its primary index; LP-0 gains no routine or runtime privilege. Database execution and independent RED review remain CI/reviewer gates.
 
+## M5-1 human-confirmed preview (dark synthetic screen)
+
+`/accounting-exports/<demo-source-id>` now shows the entire stored artifact, target company, source and mapping revisions, and the database preview hash. The company selector uses current authenticated memberships. The person must confirm the exact artifact before approving. Approval sends the hash and one stable Decision ID/expiry; a retry after a lost response reuses those bytes. Reloading a changed source requires a new preview. Existing immutable reservations still cannot be replaced or recreated by approving a different revision.
+
+The Next routes at `/api/accounting-exports/<demo-source-id>` expose only GET `view=preview`, GET `view=read`, and POST approval. Every request uses the existing company-session/membership/CSRF bridge; POST also requires an explicit matching Origin. Responses are `no-store`. The server re-resolves the current artifact before approval and SQL atomically rechecks the exact hash under its existing lock. Unsupported tax tags, unsupported target objects and inconsistent tax mappings fail explicitly. Artifact tenant/source/company/mapping references are checked before confirmation. Request-supplied tenants, artifacts, amounts, execution operations and approval-shaped extra fields cannot grant authority.
+
+The screen displays pending, pushed, outcome_unknown, confirmed_absent, external_edit, duplicate_import and reference_conflict. Refresh reads status only. There is no push, retry, observation-ingress or reconciliation endpoint, no provider SDK/network call, no consent screen, no scheduler, and no privileged fixture credential in the web runtime. Fake execution/reconciliation remains with the existing trusted fixture harness. External paid flags are never shown as settlement or qualifying recovery proof. Production remains disabled; G0–G5, D02, provider consent/data-flow approval and independent RED review remain closed/pending as applicable. No migration is needed.
+
+Validation (2 November 2026 resume): preserved the existing implementation and resolved the inherited conflict in `packages/db/src/index.ts` as an exact union, retaining both accounting-export and shadow-demo-guide exports. API, web and database TypeScript checks pass using the installed TypeScript executable (`tsc -p <package>/tsconfig.json --noEmit`). Installed Vitest 4.1.12 with `--maxWorkers=1` passes 95 application/conformance tests, five Next-route tests and 11 persisted-executor tests (111 total). Core purity, money arithmetic, commercial boundary, AI provider boundary and PL/pgSQL condition lints pass; `git diff --check` passes. No dependency downloads or git writes were performed.
+
+The full lint entrypoint stops at the lane boundary: the inherited base branches and staged main merge contain unrelated paths outside this piece's lane. Those paths have not been added to this lane or changed by this resume. The router must complete/stage the union merge and validate the piece against its integrated base; the worktree content contains no remaining conflict markers, but the read-only Git index still reports the inherited unmerged file. This is not a claim that the lane gate or full CI is green.
+
+The real PostgreSQL/Next browser spec `apps/web/e2e/m5-1-export-preview.spec.ts` covers both configured widths (360 and 1280), stale approval, replay, unknown outcome, conflict statuses, unsupported mappings and foreign-company refusal. Database/browser execution is deferred because this sandbox cannot start PostgreSQL or bind localhost; no browser or database pass is claimed. Full builds and repository-wide suites remain CI gates, and independent RED review is still required before merge.
+
 ## M5-3 direct QuickBooks dark slice
 
 Built ahead on `codex/sandbox/m5-3-quickbooks` from the M5-2 Xero branch. Changes to shared transport route types, preview tax refusal, common tests and this contract serialize with M5-2 repairs. No migration, dependency, provider registration or external network path is added. This is RED (money, authorization and tenant boundaries); CI and a fresh independent Claude review of the exact head remain required before merge.
@@ -101,3 +115,57 @@ Incoming main is `111865cf6` (`MERGE_HEAD`); local `main` is stale and was not u
 Local verification: installed Vitest 4.1.12, one worker per run (two runs concurrently), passed `test/accounting-export-executor.test.ts` and `test/migration-proof-loader.test.ts` (87 tests), plus API `src/accounting-export.sandbox.test.ts`, `src/accounting-xero.fake.test.ts` and `src/accounting-quickbooks.fake.test.ts` (163 tests). Installed `tsc` passed `-p packages/db/tsconfig.json --noEmit` and `-p apps/api/tsconfig.json --noEmit`. Money arithmetic, commercial boundary and PL/pgSQL CASE-in-IF lints passed. Whitespace, conflict-marker, old migration-stem and exact lane-path checks passed against incoming main plus untracked files. The initial pnpm invocations stalled before starting scripts and were interrupted; the installed local executables ran the checks successfully without downloading packages.
 
 PostgreSQL fresh/upgrade/catalogue/RLS and audit regression execution, browser suites, full CI and exact-head independent RED review remain unproved locally. No database or browser was started. The standard lane gate must run after the router stages and completes the merge: the current read-only index still holds the pre-resolution merge entries. NOPR handoff only; no commit, push, fetch or PR was performed here.
+
+M5-1 catch-up (3 November 2026): integrated merge target `111865cf6` (the sandbox's local `main` ref is older). Kept main's Codat/Xero/QuickBooks contracts and tests, plus this branch's preview and its required persistence base, which is not yet present on the target. The persistence migration is now `0558_accounting_export_persistence.sql`, with its matching proof; earlier numeric references above describe the original slice. The new audit helper delegates to `app.lp4_seal_audit` rather than writing the chain directly, preserving LP-4 ownership and checked-operation sealing. Existing main routines, entitlement decisions and command authority are unchanged. The six new private export tables are explicitly included in the successor-table assertions and migration proof. The inherited persistence lane has been removed; the preview lane lists exactly this candidate's paths relative to the merge target.
+
+Catch-up validation: installed Vitest 4.1.12, `--maxWorkers=1`, at most three named files per run: application, common sandbox and QuickBooks tests (158); persisted executor and migration-proof loader (87); Next route (5); Xero (20): 270 tests passed. Installed TypeScript checks passed for API, web and db. Core purity, money arithmetic, commercial boundary, AI provider boundary, PL/pgSQL condition lint and `git diff --check MERGE_HEAD` passed. The pnpm shim stalled before invoking scripts and was interrupted; checks used the installed package executables directly, without downloading dependencies. Full lint stopped at the lane boundary because the pending merge's index/HEAD still includes inherited paths; the router must stage the resolved merge and rerun against current main. The Git index remains unmerged because this sandbox forbids Git writes; both conflicted files are resolved on disk. PostgreSQL fresh/upgrade/catalog and browser execution, full CI and exact-head independent RED review remain unproved here.
+
+
+## Batch-7 built-ahead union — 3 November 2026 (RED, NOPR)
+
+Batch base is the already-present `origin/main` at `bc8993090`; local `main` is older.
+Resolved the export-preview merge as a union with M5-1 persistence, M5-4 merchant
+hardening and M4-13 database gate. The duplicate persistence migration/proof is
+kept once as `0558_accounting_export_persistence`. Whole-stem replacements put
+merchant ingestion at `0559_merchant_ingestion_hardening`, mandate persistence at
+`0560_subscription_mandate` and its database gate at
+`0561_subscription_mandate_db_gate`, each with its matching proof. No migration
+already on the batch base was edited. The accounting audit helper retains its
+tenant-context check and delegates to `app.lp4_seal_audit`; the gate's recreated
+mandate bodies preserve their latest definition apart from the database check.
+Main's MON-8 entitlement and LP-3/LP-5 command authority remain intact.
+
+The shared `later-empty-tables.ts` contains all eight new empty app tables;
+existing snapshot assertions retain their union, including the contractor
+successor checks. One existing fee-collection fixture needed the exact agreement
+ID, terms revision and hash now required by the inherited agreement schema. It
+uses its existing selection/hash, preserving the stricter approval binding.
+Piece lanes are replaced by `config/lanes/batch-7.json`, with all 47 changed
+non-lane paths relative to the batch base.
+
+Local validation used installed Node 24.17.0, TypeScript 5.8.3 and Vitest 4.1.12,
+without downloads. Fifteen named Vitest files passed, 368 tests total, with one
+worker per run and at most two runs concurrently (at most three files per run):
+core merchant-connectors, subscription-agreement and supplier-documents; db
+accounting-export-executor, migration-proof-loader, subscription-mandate-db-gate,
+subscription-mandate and merchant-ingestion; API accounting-export.application,
+accounting-export.sandbox, accounting-quickbooks.fake, accounting-xero.fake,
+fee-collection/executor and fee-collection/m4-23-sb-rails; web
+`app/api/accounting-exports/[sourceId]/route.test.ts`.
+Installed `tsc -p <package>/tsconfig.json` passed for core, storage, config, db,
+ai and API; web passed with `--noEmit`. Core purity, money arithmetic, commercial
+boundary, AI provider boundary and PL/pgSQL CASE-in-IF lints passed, as did
+`git diff --check origin/main` and deterministic disk-level lane/stem/proof and
+conflict-marker checks. Initial db test loading lacked dependency builds; after
+building existing packages those suites passed. Initial API compilation found
+the fixture mismatch above; after completing that fixture the compiler and
+consumer tests passed. No assertion was weakened.
+
+READY for router staging/completion of the existing merge, NOPR. The index still
+contains unresolved entries because Git writes are prohibited here; working
+files are resolved. The router must rerun the standard lane gate after staging.
+No PostgreSQL or browser ran. CI must prove fresh/upgrade migrations, actual
+catalog/grant/RLS/audit behavior, database integration, browser journeys and the
+full required checks/build against current main; an independent exact-head RED
+review remains required when this group's turn comes. No fetch, commit, push,
+PR, live service or real data was used by this session.

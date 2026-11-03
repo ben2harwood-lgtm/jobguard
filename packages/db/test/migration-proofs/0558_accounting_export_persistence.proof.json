@@ -100,9 +100,9 @@
           "app.accounting_export_outbox"
         ],
         "staticCalls": [
+          "app.accounting_export_audit",
           "app.final_lock_hash",
-          "app.mon1_company_actor",
-          "app.accounting_export_audit"
+          "app.mon1_company_actor"
         ]
       }
     },
