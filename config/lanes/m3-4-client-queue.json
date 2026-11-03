@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "m3-4-client-queue": {
+      "branches": [
+        "codex/sandbox/m3-4-client-queue"
+      ],
+      "note": "M3-4 synthetic pure client queue rules only; encrypted store and reconciliation screen remain native work. NOPR. No migrations.",
+      "allow": [
+        "packages/core/src/offline-client-queue.ts",
+        "packages/core/src/offline-client-queue.test.ts",
+        "packages/core/src/index.ts",
+        "apps/api/src/offline-client-queue.compat.test.ts",
+        "docs/contracts/offline-contract-v1.md"
+      ]
+    }
+  }
+}
