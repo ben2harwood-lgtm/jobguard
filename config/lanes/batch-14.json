@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/batch-14"
       ],
-      "note": "Built ahead: M2-5 benchmark and M2-6 edge facts/store only. RED. M2-7 metrics-store and dashboard remain for the router. NOPR.",
+      "note": "Built ahead: M2-5 benchmark, M2-6 edge facts/store and M2-7 metrics-store. RED. M2-7 dashboard remains for the router. NOPR.",
       "allow": [
         "apps/api/src/readiness-adapters.ts",
         "apps/api/src/readiness-scheduler.test.ts",
@@ -17,9 +17,15 @@
         "packages/core/src/supplier-benchmark.ts",
         "packages/core/src/test-fixtures/made-up-only-supplier-benchmark.ts",
         "packages/db/migrations/0699_scheduled_readiness_store.sql",
+        "packages/db/migrations/0700_inbox_metrics_store.sql",
+        "packages/db/src/inbox-metrics-repository.ts",
+        "packages/db/src/index.ts",
         "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/inbox-metrics.integration.test.ts",
+        "packages/db/test/inbox-metrics.test.ts",
         "packages/db/test/later-empty-tables.ts",
         "packages/db/test/migration-proofs/0699_scheduled_readiness_store.proof.json",
+        "packages/db/test/migration-proofs/0700_inbox_metrics_store.proof.json",
         "packages/db/test/readiness-store.integration.test.ts",
         "tools/supplier-benchmark.mjs"
       ]

@@ -156,6 +156,7 @@ it("actual catalogs retain least privilege",async()=>{
 const emptySuccessors=[
  "app.scheduled_readiness_plan",
  "app.scheduled_readiness_proposal",
+ "app.inbox_metric_receipt",
  "app.practice_exposure_schedule",
  "app.customer_quote_approval",
  "app.customer_stage_acknowledgement",
