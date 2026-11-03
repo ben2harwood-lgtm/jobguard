@@ -103,6 +103,7 @@ export async function addIntegrityLock(f:IntegrityFixture,x:Awaited<ReturnType<t
  await withTenant(f.admin,f.auth.context,async db=>{
   await db.$client.query(`INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,result,actor_membership_id,completed_at)
    VALUES($1,$2,'synthetic.ch6.lock-fixture',$1::uuid::text,repeat('a',64),'succeeded','{}',$3,clock_timestamp())`,[command,tenant,member]);
+  await db.$client.query("SELECT app.accept_final_check_terms($1,$2,$3,$4)",[tenant,member,randomUUID(),"synthetic_final_check_terms.v1"]);
   await db.$client.query(`INSERT INTO app.final_account_lock(tenant_id,job_id,id,final_account_revision_id,baseline_quote_version_id,capture_register_hash,line_set_hash,scope_disposition_hash,snapshot_digest,snapshot,declaration,declaration_version,onboarding_terms_version,locking_membership_id,locked_at,command_id,audit_event_id)
    VALUES($1,$2,$3,$4,$5,repeat('a',64),repeat('a',64),repeat('a',64),repeat('a',64),'{}','I''ve reviewed the work and extras on this job and this is my complete final account.','final_account_declaration.v1','synthetic_final_check_terms.v1',$6,clock_timestamp(),$7,$8)`,[tenant,x.job,id,x.revision,x.quote,member,command,event]);
   await appendAuditBatch(db,[{id:event,version:"audit.v1",actorRef:`membership:${member}`,eventType:"synthetic.ch6.lock_fixture",subjectType:"job",subjectRef:x.job,payload:{references:{jobId:x.job}}}]);
