@@ -17,7 +17,7 @@ export async function POST(request: Request, context: { params: Promise<{ action
     if (!session || !z.guid().safeParse(session).success) throw new EnterpriseFeeError("EXTRA_FORBIDDEN");
     const raw: unknown = await request.json().catch(() => { throw new EnterpriseFeeError("INVALID_FEE_INPUT"); });
     const { action } = await context.params;
-    if (!["derive", "prepare", "read", "approve", "post", "dispute"].includes(action)) throw new EnterpriseFeeError("INVALID_FEE_INPUT");
+    if (!["derive", "prepare", "read", "approve", "post", "dispute", "simulate-invoice"].includes(action)) throw new EnterpriseFeeError("INVALID_FEE_INPUT");
     const pool = syntheticPool(), tenant = await contractorSessionContext(pool, session), repo = new EnterpriseFeeRepository(pool);
     let result: unknown;
     if (action === "read") {
@@ -38,6 +38,7 @@ export async function POST(request: Request, context: { params: Promise<{ action
       result = await repo.approveStatement(tenant, session, input.data);
     }
     else if (action === "post") result = await repo.postStatement(tenant, session, raw);
+    else if (action === "simulate-invoice") result = await repo.simulateInvoice(tenant, session, raw, process.env.JOBGUARD_ENV);
     else result = await repo.disputeStatement(tenant, session, raw);
     return NextResponse.json(result, { headers });
   } catch (error) {

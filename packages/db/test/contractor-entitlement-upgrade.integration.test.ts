@@ -34,6 +34,7 @@ it("repeat migration and later successors succeed",async()=>{const before=await 
  "app.customer_portal_grant":[],
  "app.customer_portal_session":[],
  "app.job_import_v3":[],
+ "app.import_pre_adoption_evidence":[],
  "app.payment_fee_command":[],
  "app.payment_fee_statement":[],
  "app.lp_job_insert_permit":[],
