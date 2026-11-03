@@ -57,7 +57,7 @@ input or infer a persisted approval from a parsed record.
 
 ## Integration boundary
 
-The dark M4-2 integration uses `RecoveryBillabilityRepository` and migration `0580_recovery_billability_integration.sql`.
+The dark M4-2 integration uses `RecoveryBillabilityRepository` and migration `0565_recovery_billability_integration.sql`.
 A review request identifies a case/work/line and expected case revision; it cannot
 supply allocation state, capture/disclosure flags, a lock, a snapshot or authority.
 The private database resolver reads the current lock, stored case allocation and
@@ -83,7 +83,7 @@ line-net capacity, the unique case/work binding and the exact invoice/locked
 revision or supplementary descendant. It preserves the existing allocator locks
 and constraints. No earlier migration is edited. Fresh and upgrade proofs run in
 PostgreSQL CI; local pure tests do not prove these database controls. Migration
-`0580_recovery_billability_integration.sql` is additive with no backfill. A forward-fix migration is the recovery strategy;
+`0565_recovery_billability_integration.sql` is additive with no backfill. A forward-fix migration is the recovery strategy;
 keep immutable historical commands and approvals, and leave the path disabled
 while repairing it. It does not migrate or enable historical fee entitlement.
 

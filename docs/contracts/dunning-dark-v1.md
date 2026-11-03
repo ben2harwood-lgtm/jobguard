@@ -3,7 +3,7 @@
 This is a synthetic-only domain seam for BUILD_PLAN §11.5 M4-16. D05 remains
 proposed; M4-15 and the applicable G4 gate remain release dependencies. Nothing
 here approves terms, sends messages, retries a payment, suspends a real account,
-or adds a scheduling owner. The pure core itself needs no migration; the durable preview seam below uses migration `0578_dunning_workbench`.
+or adds a scheduling owner. The pure core itself needs no migration; the durable preview seam below uses migration `0563_dunning_workbench`.
 
 `dunning-reference.v1` uses fixture ticks (1, 3, 7) and a three-attempt ceiling.
 These are test values, not approved commercial deadlines. Retry evaluation
@@ -88,7 +88,7 @@ and one independent Claude RED review is required before merging.
 
 ## M4-16-persist: durable practice workbench and reminder Decisions
 
-Migration `0578_dunning_workbench.sql` adds exactly two private tenant-owned tables:
+Migration `0563_dunning_workbench.sql` adds exactly two private tenant-owned tables:
 `dunning_invoice` holds administrative synthetic invoice projections, and
 `dunning_reminder` preserves immutable snapshots bound to real `app.decision` rows.
 Both tables have tenant-qualified job/source keys and FORCE RLS. Runtime has no
@@ -151,7 +151,7 @@ Do not drop business evidence or edit an already merged migration.
 
 Local validation uses `dunning.test.ts`, `dunning-repository.test.ts` and the
 LP-0 catalogue comparator. `dunning-upgrade.integration.test.ts` preserves populated predecessors and existing
-routine bodies/grants across `0578_dunning_workbench` and repeated migration runs.
+routine bodies/grants across `0563_dunning_workbench` and repeated migration runs.
 `dunning.integration.test.ts` covers real PostgreSQL
 persistence/recreation, concurrent/replayed commands, suppression, changed
 balances, wrong Decision/tenant/session, expiry/dismissal, RLS/grants and audit
@@ -170,7 +170,7 @@ policy and amount, then creates and approves a stored preview Decision. Refresh
 loads current balances and live Decisions; failed commands clear displayed approval
 controls and require another read. No ledger, evidence or export grants change.
 
-Migration `0579_dunning_workbench_preview.sql` starts with the latest base routine,
+Migration `0564_dunning_workbench_preview.sql` starts with the latest base routine,
 including retirement of expired/dismissed/rejected previews under the company lock.
 It exposes only the current unexpired snapshot's live Decision for the screen.
 The existing partial unique index continues to prevent parallel live previews;
@@ -181,7 +181,7 @@ policies, static authority paths and predecessor rows. Rollback uses the same
 forward-only revoke-and-replace approach above.
 
 The base already included the expiry fix and its adversarial integration tests;
-`0579_dunning_workbench_preview` preserves that latest body rather than editing `0578_dunning_workbench`. Added upgrade coverage
+`0564_dunning_workbench_preview` preserves that latest body rather than editing `0563_dunning_workbench`. Added upgrade coverage
 checks populated history and expired-preview redraft/replay, and route coverage
 checks real identity-bridge failures with fake repositories. The browser spec uses
 real synthetic PostgreSQL/company sessions for approval, expiry, balance changes,
@@ -192,8 +192,8 @@ closed; exact-head independent RED review remains required.
 Catch-up handoff (3 November 2026): resolved against launcher main
 `111865cf65f5e68a28ce1891bd52aad0ac7a0f10` (the local `main` ref is older).
 Preserved main's exports and earlier stacked pieces. Renumbered only this branch's
-migrations and proofs to `0578_dunning_workbench` and
-`0579_dunning_workbench_preview`; no main migration was edited. Both routine
+migrations and proofs to `0563_dunning_workbench` and
+`0564_dunning_workbench_preview`; no main migration was edited. Both routine
 bodies now use main's `app.lp4_seal_audit` with `checked_operation` trust instead
 of inserting audit rows or advancing audit heads themselves. Session validation,
 preview-only commands, suppression, replay and expiration rules are preserved.
@@ -223,8 +223,8 @@ the router still owns staging and merge completion. Compared against the existin
 `origin/main` ref `bc8993090` (local `main` is stale; no fetch was run). The batch
 contains m4-16-persist, m4-16-workbench, m4-2-integrate and mon-9-persist.
 Kept one identical dunning base migration and numbered complete filename stems:
-`0578_dunning_workbench`, `0579_dunning_workbench_preview`,
-`0580_recovery_billability_integration`, `0581_managed_recovery_election`.
+`0563_dunning_workbench`, `0564_dunning_workbench_preview`,
+`0565_recovery_billability_integration`, `0566_managed_recovery_election`.
 Each has a matching proof. Main migrations remain byte-identical. Shared empty
 table expectations preserve both sides, and the batch lane replaces piece lanes.
 No provider, release, database or browser execution occurred.

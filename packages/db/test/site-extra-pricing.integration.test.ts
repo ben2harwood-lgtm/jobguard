@@ -150,10 +150,11 @@ describe("ENT-3c access: the same refusals as every command, decided by the data
   for (const role of ["owner", "unassigned operative"] as const) {
     it(`[C9] direct runtime writer refuses a structurally valid ${role} origin through its own authority check, with no revision, basis or audit written`, async () => {
       const f = await siteFixture(c), tenant = f.p.tenantId, before = await written(c, tenant), head = await chainHead(c, tenant);
-      await expect(withTenant(c.runtime, f.ctx, async db => {
-        expect((await db.$client.query("SELECT pg_has_role(current_user,'jobguard_runtime','member') AS runtime")).rows[0]!.runtime).toBe(true);
+      await expect(withTenant(c.admin, f.ctx, async db => {
         const who = role === "owner" ? f.members.owner : f.unassigned;
         const raw = await directRaise(db, f, who, role === "owner" ? "owner" : "operative");
+        await db.$client.query("SET LOCAL ROLE jobguard_runtime");
+        expect((await db.$client.query("SELECT current_user runtime")).rows[0]!.runtime).toBe("jobguard_runtime");
         expect((await db.$client.query("SELECT status,actor_membership_id FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [tenant, raw.commandId])).rows[0]).toEqual({ status: "processing", actor_membership_id: who.member.membershipId });
         expect(raw.originHash).toMatch(/^[a-f0-9]{64}$/u);
         // Require the refusal at the direct function call, before deferred origin/audit constraints can run.
@@ -198,9 +199,11 @@ describe("ENT-3c access: the same refusals as every command, decided by the data
 
   it("[C5] direct runtime writer accepts an authorized stored supervisor origin and open receipt with its basis and raised audit in one committing transaction", async () => {
     const f = await siteFixture(c), tenant = f.p.tenantId;
-    const raw = await withTenant(c.runtime, f.ctx, async db => {
+    const raw = await withTenant(c.admin, f.ctx, async db => {
       const raw = await directRaise(db, f, f.members.supervisor, "supervisor");
+      await db.$client.query("SET LOCAL ROLE jobguard_runtime");
       await db.$client.query("SELECT app.ent3c_record_sor_revision($1,$2,'2',$3)", [f.jobId, raw.variationId, "a".repeat(64)]);
+      await db.$client.query("RESET ROLE");
       await finishRaw(db, raw.actorFixture, raw.variationId, raw.commandId, raw.originHash);
       await terminalizeFixtureReceipt(db,tenant,raw.commandId,{variationId:raw.variationId});
       await db.$client.query("SET CONSTRAINTS ALL IMMEDIATE"); return raw;

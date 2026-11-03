@@ -1,6 +1,0 @@
-{
-  "migration": "0579_dunning_workbench_preview.sql",
-  "lp0": [],
-  "upgrade": [],
-  "tenancy": []
-}

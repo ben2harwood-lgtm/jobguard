@@ -156,6 +156,7 @@ it("actual catalogs retain least privilege",async()=>{
 // Preserve the union of main's explicit empty successor expectations and the general proof.
 const emptySuccessors=[
  ...Object.keys(laterEmptyTables),
+
  "app.customer_quote_approval",
  "app.customer_stage_acknowledgement",
  "app.payment_fee_authority",
