@@ -1,6 +1,6 @@
 # Commercial outbound pause (M0-13a, RED)
 
-Migration 0474 adds an app-wide control plane in `outbound_control`. It contains
+Migration `0552_commercial_outbound_pause` adds an app-wide control plane in `outbound_control`. It contains
 only operational role names, command IDs, revisions and timestamps, with no
 customer content. This is an infrastructure exception to tenant RLS. The
 business runtime can execute only `claims_enabled()`; it cannot read operator
@@ -20,12 +20,23 @@ Using those operator connections, inspect `outbound_control.state`, then call:
 SELECT outbound_control.command('<pause-command-id>', 'pause', 0);
 -- Operator A: request resume against the revision returned by pause.
 SELECT outbound_control.command('<request-command-id>', 'request_resume', 1);
--- Operator B: approve that exact request against its returned revision.
+-- Operator A: complete reconciliation and retain its receipt independently.
+-- Record that receipt UUID against this exact request (migration 0639_restore_reconciliation).
+SELECT outbound_control.record_reconciliation('<request-command-id>', '<reconciliation-receipt-id>');
+-- Operator B: inspect the receipt, then approve the exact request/revision.
 SELECT outbound_control.command('<approval-command-id>', 'approve_resume', 2, '<request-command-id>');
 ```
 
 The operator who paused or requested resume cannot approve it. A subsequent pause
-invalidates pending resume requests. Each successful command and its state change
+invalidates pending resume requests and their reconciliation facts. Migration `0639_restore_reconciliation`
+requires a recorded reconciliation fact for the exact current resume request;
+missing facts refuse approval with `OUTBOUND_RECONCILIATION_REQUIRED`. The fact
+records request UUID, independently retained receipt UUID, `session_user` and time.
+It is an operator attestation, not automatic proof of provider outcomes. Exact
+replays by that operator are harmless; different receipts or actors conflict.
+The business runtime cannot read or write these facts; operators can read them
+and use the checked routine, but cannot edit/delete them. See
+[restore-runbook.md](restore-runbook.md) for receipt contents and restore ordering. Each successful command and its state change
 commit atomically with an event attributed to `session_user`. Exact replays return
 the recorded revision without another effect; changed payloads or actors conflict.
 Operators can SELECT history but cannot UPDATE, DELETE or TRUNCATE either table.
@@ -33,7 +44,7 @@ Operators can SELECT history but cannot UPDATE, DELETE or TRUNCATE either table.
 `JOBGUARD_COMMERCIAL_OUTBOUND=paused` independently disables claims in the worker
 process. Only deployment configuration sets this value. `enabled` permits the
 database check; it never clears a database pause. An absent value preserves the
-existing fake-only worker behavior; invalid values fail closed. Migration 0474
+existing fake-only worker behavior; invalid values fail closed. Migration `0552_commercial_outbound_pause`
 preserves the existing enabled state on upgrade. Set `paused` explicitly before
 restoring or starting a deployment that must not dispatch. Keep deployment mode
 and all existing no-charge/settlement gates unchanged. This adds no live adapter.

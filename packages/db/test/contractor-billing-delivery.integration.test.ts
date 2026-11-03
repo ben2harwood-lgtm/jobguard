@@ -1,3 +1,4 @@
+import { resumeSyntheticOutbound } from "./commercial-outbound-fixture.js";
 import { assertLp4SealedEvents } from "./lp4-writer-catchup-fixture.js";
 import {afterAll,beforeAll,expect,it} from "vitest";
 import {randomUUID} from "node:crypto";
@@ -50,7 +51,7 @@ it("M0-13a paused contractor delivery keeps its queued artifact and records no a
   expect(calls).toBe(0);
   expect((await c.admin.query("SELECT * FROM app.action_outbox WHERE id=$1",[action.outboxActionId])).rows).toEqual(before);
   expect((await c.admin.query("SELECT count(*)::int n FROM app.action_attempt WHERE action_id=$1",[action.outboxActionId])).rows).toEqual([{n:0}]);
- }finally{await c.admin.query("UPDATE outbound_control.state SET paused=$1",[prior]);}
+ }finally{if(!prior)await resumeSyntheticOutbound(c.admin);}
  await executor.execute(w.ctx,w.session,w.s.jobId,action.outboxActionId);
  await executor.execute(w.ctx,w.session,w.s.jobId,action.outboxActionId);
  expect(calls).toBe(1);

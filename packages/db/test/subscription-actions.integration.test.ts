@@ -1,6 +1,7 @@
-import { assertLp4SealedEvents } from "./lp4-writer-catchup-fixture.js";
+import { resumeSyntheticOutbound } from "./commercial-outbound-fixture.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { SubscriptionExecutor } from "../src/subscription-executor.js";
+import { assertLp4SealedEvents } from "./lp4-writer-catchup-fixture.js";
 import { subscriptionConsentText } from "@jobguard/core";
 import { IdentityRepository, SubscriptionRepository } from "../src/index.js";
 import { PersistedAuthProvider } from "../../../apps/api/src/auth/persisted-auth-provider.js";
@@ -29,7 +30,7 @@ describe("MON-2A C2/C3 billing action races", () => {
   try{
    await expect(executor.execute(context,a.digest,commandId,approved.workId,1)).rejects.toThrow("SUBSCRIPTION_UNAVAILABLE");
    expect(calls).toBe(0);expect(await readSubscription(f,a)).toEqual(before);
-  }finally{await f.admin.query("UPDATE outbound_control.state SET paused=$1",[prior]);}
+  }finally{if(!prior)await resumeSyntheticOutbound(f.admin);}
   await executor.execute(context,a.digest,commandId,approved.workId,1);
   await expect(executor.execute(context,a.digest,commandId,approved.workId,1)).rejects.toThrow("SUBSCRIPTION_UNAVAILABLE");
   const after=await readSubscription(f,a);

@@ -1,0 +1,55 @@
+{
+  "version": 2,
+  "lanes": {
+    "batch-11": {
+      "branches": [
+        "codex/sandbox/batch-11"
+      ],
+      "note": "Built ahead NOPR: M5-5 conformance kit, M5-6 rate baseline, M5-10 exercises and M5-12 findings gate. RED. M5-11 DSAR/offboarding deferred to router.",
+      "allow": [
+        "config/security-findings.v1.json",
+        "docs/contracts/merchant-conformance-kit-v1.md",
+        "docs/contracts/merchant-connectors-v1.md",
+        "docs/contracts/rate-baseline-v1.md",
+        "docs/operations/commercial-outbound-pause.md",
+        "docs/operations/resilience-exercises.md",
+        "docs/operations/restore-runbook.md",
+        "docs/operations/synthetic-restore-rehearsal.md",
+        "docs/security/findings-workflow.md",
+        "packages/config/src/index.ts",
+        "packages/config/src/release-inventory.ts",
+        "packages/config/src/security-findings.test.ts",
+        "packages/core/src/index.ts",
+        "packages/core/src/merchant-conformance-fakes.ts",
+        "packages/core/src/merchant-conformance-kit.test.ts",
+        "packages/core/src/merchant-conformance-kit.ts",
+        "packages/core/src/merchant-connectors.test.ts",
+        "packages/core/src/merchant-connectors.ts",
+        "packages/core/src/rate-baseline-architecture.test.ts",
+        "packages/core/src/rate-baseline.test.ts",
+        "packages/core/src/rate-baseline.ts",
+        "packages/core/src/supplier-documents.ts",
+        "packages/db/migration-notes/0638_merchant_ingestion_hardening.md",
+        "packages/db/migrations/0638_merchant_ingestion_hardening.sql",
+        "packages/db/migrations/0639_restore_reconciliation.sql",
+        "packages/db/src/merchant-ingestion.test.ts",
+        "packages/db/src/supplier-document-repository.ts",
+        "packages/db/test/commercial-outbound-fixture.ts",
+        "packages/db/test/commercial-outbound-pause-upgrade.integration.test.ts",
+        "packages/db/test/contractor-billing-delivery.integration.test.ts",
+        "packages/db/test/merchant-ingestion.integration.test.ts",
+        "packages/db/test/migration-proofs/0638_merchant_ingestion_hardening.proof.json",
+        "packages/db/test/migration-proofs/0639_restore_reconciliation.proof.json",
+        "packages/db/test/outbox.integration.test.ts",
+        "packages/db/test/resilience-exercises.integration.test.ts",
+        "packages/db/test/resilience-exercises.test.ts",
+        "packages/db/test/restore-reconciliation-upgrade.integration.test.ts",
+        "packages/db/test/restore-rehearsal.integration.test.ts",
+        "packages/db/test/subscription-actions.integration.test.ts",
+        "packages/db/tools/resilience-exercises.mjs",
+        "packages/db/tools/synthetic-restore.mjs",
+        "tools/security-findings.test.mjs"
+      ]
+    }
+  }
+}

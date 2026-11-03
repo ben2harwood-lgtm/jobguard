@@ -97,6 +97,12 @@ export async function runSyntheticRestoreRehearsal(options = {}, api) {
     let admin = pool(sourcePort);
     const postgresVersion = (await admin.query("SHOW server_version")).rows[0].server_version;
     assert.match(postgresVersion, /^16\./);
+    // Administrative prerequisites shared with demo bootstrap; never delegated to runtime.
+    for (const role of ["jobguard_audit_writer", "jobguard_command_writer"]) {
+      await admin.query(`DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='${role}') THEN
+        CREATE ROLE ${role} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+        END IF; END $$`);
+    }
     await api.migrate(admin);
     const migrationNames = (await admin.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map(row => row.migration_name);
     assert.deepEqual(migrationNames, api.MIGRATION_URLS.map(url => url.pathname.split("/").at(-1)));
@@ -129,6 +135,10 @@ export async function runSyntheticRestoreRehearsal(options = {}, api) {
     await admin.query("UPDATE app.final_account_draft SET current_revision_id=$1,revision=1 WHERE tenant_id=$2 AND id=$3", [ids.revision, ids.tenant, ids.draft]);
     // Generated login exists only inside these disposable clusters. No deployment secrets are read.
     await admin.query(`CREATE ROLE rehearsal_runtime LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_runtime TO rehearsal_runtime`);
+    for (const name of ["rehearsal_operator_a", "rehearsal_operator_b"]) {
+      await admin.query(`CREATE ROLE ${name} LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_outbound_operator TO ${name}`);
+    }
+    assert.equal((await admin.query("SELECT outbound_control.claims_enabled() enabled")).rows[0].enabled, true);
     let runtime = pool(sourcePort, "rehearsal_runtime");
     const trackRows = connection => api.withTenant(connection, context, async db => (await db.$client.query("SELECT * FROM app.job_commercial_track WHERE tenant_id=$1 AND job_id=$2", [ids.tenant, ids.job])).rows);
     const sourceTrack = await trackRows(runtime);
@@ -217,11 +227,24 @@ export async function runSyntheticRestoreRehearsal(options = {}, api) {
     pass("corrupt-backup-refused", "A modified backup fails SHA-256 verification before any restore starts.");
     await rename(sourcePath, join(root, "original-offline"));
     const restoreStart = performance.now();
+    const dependencyMeasurements = {};
+    const measured = name => { dependencyMeasurements[name] = { status: "exercised", recoveryMilliseconds: performance.now() - restoreStart, dataLossMilliseconds: 0, boundary: "quiescent synthetic cold snapshot; no post-backup writes" }; };
     await copyStoppedCluster(backupPath, restoredPath); await verifyTree(restoredPath, manifest);
     await restored.start(); timings.restoreStartMilliseconds = Math.round(performance.now() - restoreStart);
-    admin = pool(restoredPort); runtime = pool(restoredPort, "rehearsal_runtime"); storage = new DatabaseSyntheticStorage(runtime);
+    // No worker/runtime connection exists until the restored database is paused.
+    // The cluster is isolated and only fixture operator connections can reach it.
+    admin = pool(restoredPort);
+    const operatorA = pool(restoredPort, "rehearsal_operator_a"), operatorB = pool(restoredPort, "rehearsal_operator_b");
+    const control = async (connection, operation, revision, request = null, commandId = randomUUID()) =>
+      (await connection.query("SELECT outbound_control.command($1,$2,$3,$4) revision", [commandId, operation, revision, request])).rows[0].revision;
+    const sourceOutbound = (await operatorA.query("SELECT * FROM outbound_control.state")).rows[0];
+    assert.equal(sourceOutbound.paused, false);
+    const pauseRevision = await control(operatorA, "pause", sourceOutbound.revision);
+    assert.equal((await admin.query("SELECT outbound_control.claims_enabled() enabled")).rows[0].enabled, false);
+    runtime = pool(restoredPort, "rehearsal_runtime"); storage = new DatabaseSyntheticStorage(runtime);
     assert.equal((await admin.query("SHOW server_version")).rows[0].server_version, postgresVersion);
     assert.deepEqual(await rowSnapshot(admin), before);
+    measured("database");
     assert.deepEqual(await trackRows(runtime), sourceTrack);
     assert.deepEqual(await api.withTenant(runtime, context, async db => (await db.$client.query("SELECT job_track,kind,provenance,raising_role,source_capture_hash FROM app.extra_origin WHERE tenant_id=$1 AND job_id=$2 AND variation_id=$3", [ids.tenant, ids.job, ids.variation])).rows), sourceOrigin);
     await createBuilderOrigin(runtime, randomUUID());
@@ -245,7 +268,9 @@ export async function runSyntheticRestoreRehearsal(options = {}, api) {
     assert.equal(await new api.EvidenceService(runtime, storage).cleanupExpiredOrphans(context, new Date("2100-01-01T00:00:00Z")), 0);
     assert.equal(digest((await storage.readExactVersion(upload.objectKey, objectVersion)).bytes), digest(bytes));
     pass("retained-evidence-preserved", "Expired-orphan cleanup does not select or remove the finalized retained original, even with a future test clock.");
+    measured("evidenceVersions");
     const restoredAudit = await auditRows(runtime); api.verifyAuditChain(restoredAudit, checkpoint);
+    measured("auditCheckpoint");
     assert.throws(() => api.verifyAuditChain(restoredAudit.map((event, i) => i === 0 ? { ...event, payload: { references: { changed: "fixture" } } } : event), checkpoint), /Invalid audit chain/);
     pass("audit-checkpoint-restored", "The restored audit chain matches the checkpoint recorded outside the copied cluster; altered payloads fail verification. The checkpoint is a local fixture, not an external signed attestation.");
     const role = (await runtime.query("SELECT rolsuper,rolbypassrls,rolcreaterole,rolcreatedb FROM pg_roles WHERE rolname=current_user")).rows[0];
@@ -264,20 +289,35 @@ export async function runSyntheticRestoreRehearsal(options = {}, api) {
     exportReceipt = { format: exported.version, sha256: digest(canonical(exported)), jobCount: exported.jobs.length, evidenceCount: exported.evidence.length };
     pass("tenant-scoped-export-slice", "The fixture export contains only the selected tenant's job and evidence references; no credentials or other-tenant job are exported.");
     const queue = () => api.withTenant(runtime, context, async db => (await db.$client.query("SELECT id,status FROM app.action_outbox ORDER BY id")).rows);
-    const queueBefore = await queue(); let allowRehearsalExecution = false, fakeDeliveries = 0;
+    const queueBefore = await queue(); let fakeDeliveries = 0;
+    const attemptsBefore = (await admin.query("SELECT * FROM app.action_attempt ORDER BY id")).rows;
     const adapter = { name: "fake_restore", supportsProviderDeduplication: false, deliver: async () => { fakeDeliveries++; return { kind: "succeeded", providerReference: "synthetic-after-restore" }; }, reconcile: async () => "unknown" };
     const executor = new api.ActionExecutor(runtime, new Map([["fake_restore", adapter]]), { emit() {} });
-    const executeRestored = async id => { if (!allowRehearsalExecution) throw new Error("RESTORE_NOT_VERIFIED"); await executor.execute(context, id); };
-    await assert.rejects(executeRestored(actionIds[0]), /RESTORE_NOT_VERIFIED/);
+    const executeRestored = id => executor.execute(context, id);
+    await executeRestored(actionIds[0]);
     assert.equal(fakeDeliveries, 0); assert.deepEqual(await queue(), queueBefore);
-    pass("restore-harness-starts-paused", "The rehearsal wrapper refuses dispatch and leaves restored pending work unchanged until its verification finishes. This is not a global application kill switch.");
-    allowRehearsalExecution = true;
+    assert.deepEqual((await admin.query("SELECT * FROM app.action_attempt ORDER BY id")).rows, attemptsBefore);
+    pass("restore-database-starts-paused", "Source sending was ON. The isolated restored database is paused before any runtime connects; actual executor dispatch makes no claim, attempt or fake delivery.");
+    // Reconcile every restored action before requesting dispatch. Unknown work
+    // remains held, completed work is not resent; only the pending fake may run.
+    assert.equal(await api.reconcileOutbox(runtime, context, actionIds[1], adapter), "unknown");
+    assert.equal((await queue()).find(row => row.id === actionIds[2]).status, "succeeded");
+    const resumeRequest = randomUUID(), reconciliationReceipt = randomUUID();
+    const requested = await control(operatorA, "request_resume", pauseRevision, null, resumeRequest);
+    await assert.rejects(control(operatorB, "approve_resume", requested, resumeRequest), /OUTBOUND_RECONCILIATION_REQUIRED/);
+    await operatorA.query("SELECT outbound_control.record_reconciliation($1,$2)", [resumeRequest, reconciliationReceipt]);
+    await assert.rejects(control(operatorA, "approve_resume", requested, resumeRequest), /OUTBOUND_SECOND_PERSON_REQUIRED/);
+    await control(operatorB, "approve_resume", requested, resumeRequest);
     await Promise.all([executeRestored(actionIds[0]), executeRestored(actionIds[0])]); await executeRestored(actionIds[0]);
     await executeRestored(actionIds[1]); await executeRestored(actionIds[2]); assert.equal(fakeDeliveries, 1);
     await assert.rejects(api.operateOutbox(runtime, context, actionIds[1], "retry"), /UNSAFE_OUTBOX_COMMAND/);
     assert.equal(await api.reconcileOutbox(runtime, context, actionIds[1], adapter), "unknown");
     await executeRestored(actionIds[1]); assert.equal(fakeDeliveries, 1);
     pass("pending-replay-and-unknown-outcome", "Concurrent/repeated dispatch produces one fake effect for the pending action; completed work is not resent and unknown work stays held without a blind retry.");
+    // Leave the rehearsal dark even after exercising a controlled fake resume.
+    const finalRevision = (await operatorA.query("SELECT revision FROM outbound_control.state")).rows[0].revision;
+    await control(operatorA, "pause", finalRevision);
+    assert.equal((await admin.query("SELECT outbound_control.claims_enabled() enabled")).rows[0].enabled, false);
     timings.totalMilliseconds = Math.round(performance.now() - started);
     return {
       schema: "jobguard-synthetic-restore-receipt.v1", recordedAt: new Date().toISOString(), environment,
@@ -286,11 +326,13 @@ export async function runSyntheticRestoreRehearsal(options = {}, api) {
       backup: { manifestSha256: manifestHash, fileCount: manifest.length, byteCount: manifest.reduce((n, file) => n + file.bytes, 0), verifiedBeforeStart: true },
       checkpoint: { sequence: checkpoint.sequence, eventHash: checkpoint.eventHash }, exportReceipt,
       financialFixture: { invoiceGrossPence: 12000, manualReceiptPence: 5000, outstandingPence: 7000, invoicePdfSha256: invoicePdfHash, qualifyingRecoveryProof: false, platformFeeSettlement: false },
-      fakeDeliveryCallsAfterRestore: fakeDeliveries, liveProviderCalls: 0, timings, checks,
+      outboundControl: { sourceClaimsEnabled: true, restoredPausedBeforeRuntime: true, finalPaused: true, attemptsWhilePaused: 0,
+        reconciliationReceipt, resumeRequest, pauseRevision, independentlyApprovedByFixtureOperator: true },
+      fakeDeliveryCallsAfterRestore: fakeDeliveries, liveProviderCalls: 0, timings, dependencyMeasurements, checks,
       notRun: [
         "Hosted deployment backup/restore, replication and point-in-time recovery",
         "MinIO/S3/object-version restore; this run restores the current DB-backed synthetic storage path",
-        "Application-wide outbound kill switch and independently authorized unpause",
+        "Deployed restore, reconciliation and independently authorized unpause; fixture operators only",
         "Full privacy export/deletion/retention/legal-hold workflow",
         "Physical-device/offline, independent Claude verdict and founder release acceptance",
       ],
