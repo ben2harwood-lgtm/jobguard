@@ -1,0 +1,32 @@
+{
+  "version": 2,
+  "lanes": {
+    "demo-mon4ab": {
+      "branches": [
+        "codex/sandbox/demo-mon4ab"
+      ],
+      "note": "MON-4A RED: clean-base transplant of capped synthetic standing authority, revocation and receipt-bound collection; migration 0614 retains latest main routine bodies.",
+      "allow": [
+        "apps/api/src/payment-fee.application.test.ts",
+        "apps/api/src/payment-fee.application.ts",
+        "apps/api/src/success-fee.application.test.ts",
+        "apps/api/src/success-fee.application.ts",
+        "apps/web/app/ui/payment-fee-statements.tsx",
+        "apps/web/app/ui/simulation-fee-collection.test.ts",
+        "apps/web/app/ui/simulation-fee-collection.tsx",
+        "apps/web/e2e/payment-fee-statements.spec.ts",
+        "packages/core/src/payment-fee-statements.test.ts",
+        "packages/core/src/payment-fee-statements.ts",
+        "packages/core/src/simulation-fee-collection.test.ts",
+        "packages/core/src/simulation-fee-collection.ts",
+        "packages/core/src/success-fee-posting.ts",
+        "packages/db/migrations/0614_payment_fee_standing_authority.sql",
+        "packages/db/src/payment-fee-repository.ts",
+        "packages/db/src/simulation-fee-collection-repository.ts",
+        "packages/db/test/migration-proofs/0614_payment_fee_standing_authority.proof.json",
+        "packages/db/test/payment-fee-standing-authority-upgrade.integration.test.ts",
+        "packages/db/test/payment-fee-standing-authority.integration.test.ts"
+      ]
+    }
+  }
+}
