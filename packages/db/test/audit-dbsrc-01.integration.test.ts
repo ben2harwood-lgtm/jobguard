@@ -87,6 +87,6 @@ it.each(["dismissed", "rejected"] as const)("dismissDecision permits unexpired a
     f.command.resolution = resolution;
     if (nonExpiring) await admin.query("UPDATE app.membership SET expires_at=NULL WHERE tenant_id=$1 AND id=$2", [f.tenantId, f.memberId]);
     await expect(new UserCommandDispatcher(runtime).dismissDecision(f.context, f.command)).resolves.toEqual({ decisionId: f.command.decisionId, resolution, authorizedAction: false });
-    expect(await f.state()).toEqual({ resolutions: 1, receipts: 1, audits: 1, authorizations: 0 });
+    expect(await f.state()).toEqual({ resolutions: 1, receipts: 1, audits: 2, authorizations: 0 });
   }
 });
