@@ -32,6 +32,8 @@ it("[A17] tampered tenant/member/role in every transport place cannot select con
  const { Pool } = await import("pg"), { ContractorRepository, SiteExtraRepository, withTenant } = await import("@jobguard/db"), { createWorkspaceApplication } = await import("@jobguard/api/workspace");
  const pool = new Pool(), sessionId = crypto.randomUUID();
  const persisted = { tenantId: crypto.randomUUID(), membershipId: crypto.randomUUID(), identityUserId: crypto.randomUUID() } as AuthenticatedMembership;
+ // This context-stamp fixture explicitly permits synthetic site-origin capture.
+ vi.spyOn(bridge.ContractorEntitlementAuthorityRepository.prototype, "requireFeature").mockResolvedValue();
  const lookup = vi.spyOn(ContractorRepository.prototype, "resolveSession").mockResolvedValue(persisted);
  const context = vi.spyOn(bridge, "contractorSessionContext");
  const marker = new Error("stamp accepted before connection"); vi.spyOn(pool, "connect").mockRejectedValue(marker);

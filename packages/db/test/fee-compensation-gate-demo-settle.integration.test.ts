@@ -91,11 +91,11 @@ it("hard gate: after proof is invalidated and the allocation fully reversed, a r
  expect(report.successFee).toMatchObject({postedPence:0,refundedPence:3200});
  expect(report.differences.map(d=>d.code)).not.toContain("FEE_COMPENSATION_REQUIRED");
 });
-it("hard gate: invalid proof still refuses new positive entitlement and any landing not fully reversed",async()=>{
+it("hard gate: invalid proof permits only a reduction and refuses new positive entitlement",async()=>{
  const x=await recoveryFeeFixture(f);await x.allocate(0);await x.approve(await x.review());
  await x.allocate(1);await invalidate(x);
- // Landing 1 is live on invalid proof: no fee movement in either direction until it is reversed.
- await expect(x.review(1)).rejects.toThrow("SUCCESS_FEE_SOURCE_CHANGED");
+ // Both landings lost proof, so even the still-held receipt contributes zero.
+ expect((await x.review(1)).statement).toMatchObject({feePence:0,deltaPence:-3200});
  const y=await recoveryFeeFixture(f);await y.allocate(0);await invalidate(y);
  await expect(y.review(0)).rejects.toThrow("SUCCESS_FEE_SOURCE_CHANGED");
  expect((await f.admin.query("SELECT count(*)::int n FROM app.success_fee_journal WHERE tenant_id=$1 AND job_id=$2",[y.context.tenantId,y.jobId])).rows[0].n).toBe(0);

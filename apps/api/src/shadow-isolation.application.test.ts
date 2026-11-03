@@ -105,7 +105,9 @@ beforeAll(async()=>{
  await owner.query("ALTER SYSTEM SET log_line_prefix='SV3:%u:%d:%c: '");await owner.query("SELECT pg_reload_conf()");
  await owner.query(`CREATE ROLE sv3_isolation_runtime LOGIN PASSWORD '${credential}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS`);
  await owner.query("ALTER ROLE sv3_isolation_runtime SET log_statement='all'");
- await owner.query("CREATE DATABASE jobguard_synthetic_demo");const p=pool("postgres","jobguard_synthetic_demo");try{await migrate(p);await installLegacySyntheticPartyFixtures(p);
+ await owner.query("CREATE DATABASE jobguard_synthetic_demo");const p=pool("postgres","jobguard_synthetic_demo");try{
+ for(const role of ["jobguard_audit_writer","jobguard_command_writer"])await p.query(`CREATE ROLE ${role} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS`);
+ await migrate(p);await installLegacySyntheticPartyFixtures(p);
  await p.query("GRANT jobguard_runtime TO sv3_isolation_runtime");
  await p.query("INSERT INTO control_plane.tenant(id) VALUES($1)",[DEMO_TENANT_ID]);await p.query("INSERT INTO identity.identity_user(id) VALUES($1)",[DEMO_IDENTITY_USER_ID]);
  await p.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional SV-3 builder')",[DEMO_ACCOUNT_ID,DEMO_TENANT_ID]);
@@ -432,8 +434,8 @@ it("Test Q: successful mutations, exports, delivery/retry telemetry and every mu
    for(const table of ["action_outbox","action_attempt"])trace.outbox.push({table,rows:(await inspect.query(`SELECT row_to_json(t)::text bytes FROM app.${table} t ORDER BY row_to_json(t)::text`)).rows});
    const tables=(await inspect.query("SELECT schemaname,tablename FROM pg_tables WHERE schemaname IN ('app','infrastructure') AND tablename NOT LIKE 'shadow_%' ORDER BY schemaname,tablename")).rows;
    for(const table of tables){const name=`"${table.schemaname}"."${table.tablename}"`;
-    // claimed_xact stores the cluster-wide PostgreSQL transaction number, which differs between any two replays in one cluster whatever the signals; every other byte of every row is compared.
-    const bytes=table.tablename==="watchdog_command_identity"?"(to_jsonb(t)-'claimed_xact')::text":"row_to_json(t)::text";
+    // claimed_xact and transaction_id store the cluster-wide PostgreSQL transaction number, which differs between any two replays in one cluster whatever the signals; every other byte of every row is compared.
+    const bytes=table.tablename==="watchdog_command_identity"?"(to_jsonb(t)-'claimed_xact')::text":table.tablename==="command_lifecycle_claim"?"(to_jsonb(t)-'transaction_id')::text":"row_to_json(t)::text";
     trace.publicRows.push({table:name,rows:(await inspect.query(`SELECT ${bytes} bytes FROM ${name} t ORDER BY 1`)).rows})}
    // Analytics has no separate persisted or network emitter in the current builder composition; public facts cover its inputs.
    trace.analytics.push(relevance);
