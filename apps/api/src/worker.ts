@@ -1,5 +1,6 @@
 import { executeEvidencePackV3 } from "./evidence-pack-v3.worker.js";
 import { EvidencePackV3WorkerRepository } from "@jobguard/db";
+import { readLateSourceObservations } from "@jobguard/db";
 import { detectShadowObservations } from "@jobguard/core";
 import { readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
@@ -14,8 +15,8 @@ import { run, type TaskList } from "graphile-worker";
 import { Pool } from "pg";
 import { z } from "zod";
 import { registerFinalCheckTask } from "./worker-task-extensions.js";
-import { requireOutboxSettlementEligibility } from "./production-settlement-guard.js";
 import { executeFinalCheckTask, type FinalCheckExecutionPorts } from "./final-check-task-executor.js";
+import { requireOutboxSettlementEligibility } from "./production-settlement-guard.js";
 import { RedactingLogger, redactingWorkerLogger, redactingTasks, redactedWorkerError } from "./safe-logging.js";
 
 const logger = new RedactingLogger();
@@ -102,11 +103,16 @@ tasks.discover_demo_source_holds=async(_payload,helpers)=>{
 tasks.hold_demo_sources=async(payload,helpers)=>{
  if(finalCheckEnvironment!=="synthetic_demo")throw new FinalCheckError("FINAL_CHECK_FORBIDDEN");
  const task=demoHoldTaskV1.parse(payload),context=queueContext({tenantId:task.tenantId});
- try{
+ const late=await readLateSourceObservations(runtimePool,context,task.jobId);
+ if(late.length){
+  if(!await practiceHoldReader.hasAcceptedTerms(context))throw new Error("SHADOW_TERMS_NOT_ACCEPTED");
+  await detectionRepository.persist(context,{version:"shadow-detection-batch.v1",jobId:task.jobId,observations:late,captures:[],
+   proposals:detectShadowObservations(late,[],new Date().toISOString())});
+ }else try{
   const {observations,captures}=await practiceHoldReader.read(context,{version:"shadow-observation-read.v1",jobId:task.jobId});
   await detectionRepository.persist(context,{version:"shadow-detection-batch.v1",jobId:task.jobId,observations,captures,proposals:detectShadowObservations(observations,captures,new Date().toISOString())});
  }catch(error){
-  // Locked since the request: the Final Check run now examines these sources itself.
+  // Locked since the request: the Final Check run now examines the pre-lock sources itself.
   if((error as {code?:string}).code!=="DETECTION_LOCKED_JOB")throw error;
  }
  await helpers.withPgClient(client=>client.query("UPDATE infrastructure.demo_source_hold_request SET finished_at=clock_timestamp() WHERE id=$1",[task.requestId]));

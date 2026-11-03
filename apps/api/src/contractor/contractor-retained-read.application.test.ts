@@ -31,5 +31,6 @@ it("commands do not use retained-read authority",async()=>{
  const f=setup();const member={tenantId:id,membershipId:id,identityUserId:id} as db.AuthenticatedMembership;
  vi.spyOn(db.ContractorRepository.prototype,"resolveSession").mockResolvedValue(member);
  const command=vi.spyOn(db.ContractorRepository.prototype,"command").mockRejectedValue(new Error("command boundary"));
- await expect(f.app.command(principal,{})).rejects.toThrow("command boundary");expect(command).toHaveBeenCalledWith(member,{});expect(f.read).not.toHaveBeenCalled();expect(f.resume).not.toHaveBeenCalled();
+ const raw={version:"contractor-command.v1",environment:"synthetic_demo",commandId:id,id,expectedRevision:0,kind:"grant.revoke",grantId:id};
+ await expect(f.app.command(principal,raw)).rejects.toThrow("command boundary");expect(command).toHaveBeenCalledWith(member,raw);expect(f.read).not.toHaveBeenCalled();expect(f.resume).not.toHaveBeenCalled();
 });
