@@ -128,3 +128,44 @@ it("#368 same-job foreign keys cannot substitute a line from outside the bound b
   await db.query("SELECT app.recovery_attribution_sources($1,$2,$3,$4)",[x.context.tenantId,x.jobId,p,x.actor.membershipId]);
  })).rejects.toThrow("STORED_RECEIPT_LINE_BINDING_REQUIRED");
 });
+
+async function reviewAssessment(x:Fixture,assessment:Awaited<ReturnType<typeof assess>>){
+ const reviewArtifactHash=(await f.admin.query("SELECT app.final_lock_hash($1::jsonb) hash",[assessment])).rows[0].hash;
+ return new RecoveryAttributionRepository(f.runtime).approveReview(x.context,x.jobId,x.auth.digest,{
+  ...await command(x,assessment.revision),action:"approve_review",assessmentId:assessment.assessmentId,
+  expectedSourceHash:assessment.sourceHash,reviewArtifactHash,
+ });
+}
+it("SV-6 G: two distinct £400 net settlements create reviewed £40 then cumulative £80 immutable illustrations",async()=>{
+ const x=await realReceiptFixture(f,"F7",3360000,false,false,undefined,{partial:true});
+ expect(x.fact.net).toEqual({numerator:"40000",denominator:"1"});
+ await allocate(x);const first=await assess(x,await command(x));
+ expect(attributionValueReceipt(first).display).toEqual({recovered:"£400.00",fee:"£40.00",yoursBeforeVatAndTax:"£360.00"});
+ expect(await reviewAssessment(x,first)).toMatchObject({effect:"review_recorded",assessmentId:first.assessmentId,realExternalActions:0});
+ const secondPayment=await x.receipt(48000,"receipt-480-b");await x.produce(secondPayment);
+ const snapshot=await x.producer.readCurrent(x.context,x.actor,x.auth.digest,{jobId:x.jobId});
+ const secondFact=snapshot.rows.find(row=>row.paymentId===secondPayment&&row.lineId===x.line)!;
+ expect(secondFact.movementId).not.toBe(x.fact.movementId);
+ expect(secondFact.net).toEqual({numerator:"40000",denominator:"1"});
+ await allocate(x,secondFact.lineAllocationId);const next=await assess(x,await command(x,1));
+ expect(next.previousAssessmentId).toBe(first.assessmentId);expect(next.revision).toBe(2);
+ expect(attributionValueReceipt(next).display).toEqual({recovered:"£800.00",fee:"£80.00",yoursBeforeVatAndTax:"£720.00"});
+ expect(await reviewAssessment(x,next)).toMatchObject({effect:"review_recorded",assessmentId:next.assessmentId});
+ expect(await new RecoveryAttributionRepository(f.runtime).history(x.context,x.jobId,x.auth.digest)).toEqual([first,next]);
+});
+it("SV-6 M: blended partial cash uses the stored exact pro-rata catch share; unallocated lines earn nothing",async()=>{
+ const x=await realReceiptFixture(f,"F7",240000,false,false,undefined,{combined:true});
+ // £3,200 net blended bill: £800 catch + £2,400 baseline. £960 gross receipt
+ // is only part payment. Only its £240 gross catch share is case-allocated.
+ expect(x.produced.input.lines.reduce((sum,line)=>sum+line.netPence,0)).toBe(320000);
+ expect(x.fact).toMatchObject({rule:"pro_rata",gross:{numerator:"24000",denominator:"1"},net:{numerator:"20000",denominator:"1"}});
+ const saved=await allocate(x);const result=await assess(x,await command(x));
+ expect(result.sourceManifest).toContainEqual(expect.objectContaining({kind:"line_allocation",sourceId:saved.allocationId}));
+ expect(result.remainingPrincipal).toEqual(x.fact.net);
+ expect(attributionValueReceipt(result)).toMatchObject({recovered:x.fact.net,fee:{pence:2000},yoursBeforeVatAndTax:{numerator:"18000",denominator:"1"},
+  display:{recovered:"£200.00",fee:"£20.00",yoursBeforeVatAndTax:"£180.00"}});
+ expect(await reviewAssessment(x,result)).toMatchObject({effect:"review_recorded",realExternalActions:0});
+ expect((await f.admin.query("SELECT fact_line_id FROM app.stored_receipt_case_allocation WHERE tenant_id=$1 AND job_id=$2",[x.context.tenantId,x.jobId])).rows).toEqual([{fact_line_id:x.fact.lineAllocationId}]);
+ expect(x.produced.lines.filter(line=>line.lineId!==x.line).length).toBeGreaterThan(0);
+ expect(await new RecoveryAttributionRepository(f.runtime).history(x.context,x.jobId,x.auth.digest)).toEqual([result]);
+});

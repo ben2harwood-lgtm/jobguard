@@ -1,3 +1,4 @@
+import { installAuditCommandWriterRoles } from "./pool-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -18,6 +19,7 @@ export async function cluster(beforeOwn = false) {
  const config = { host: "127.0.0.1", port, user: "postgres", password: "synthetic" };
  const control = new Pool(config); await control.query("CREATE DATABASE jobguard_synthetic_demo"); await control.end();
  const admin = new Pool({ ...config, database: "jobguard_synthetic_demo" });
+ await installAuditCommandWriterRoles(admin);
  if (beforeOwn) {
   await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
   for (const url of MIGRATION_URLS.filter(u => u.pathname.split("/").at(-1)! < "0122_extra_origin_persistence.sql")) {

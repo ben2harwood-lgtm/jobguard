@@ -1,3 +1,4 @@
+import { installAuditCommandWriterRoles } from "./pool-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { proofEvidenceTypeSchema } from "../../core/src/proof.js";
 import { mkdtemp } from "node:fs/promises";
@@ -17,6 +18,7 @@ export async function createWorkFixture(install = true, database = "jobguard_syn
  const postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: credential, persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
  await postgres.initialise(); await postgres.start(); if (database !== "postgres") await postgres.createDatabase(database);
  const admin = new Pool(connection), login = `ch4_${randomUUID().replaceAll("-", "")}`;
+ await installAuditCommandWriterRoles(admin);
  if (install) {
   const { migrate } = await import("../src/migrate.js");
   await migrate(admin); await installLegacySyntheticPartyFixtures(admin);
@@ -51,13 +53,15 @@ export async function seedWorkJob(f: WorkFixture, tenantId: string = randomUUID(
  return { tenantId, actorId, jobId, scopeId, context: testTenantContext(tenantId) };
 }
 export type WorkJob = Awaited<ReturnType<typeof seedWorkJob>>;
-export async function insertPhoto(f: WorkFixture, a: WorkJob, receivedAt = "2026-10-13T10:00:00.000001Z", type: string = proofEvidenceTypeSchema.enum.pre_cover_photo) {
+export async function insertPhoto(f: WorkFixture, a: WorkJob, receivedAt = "2026-10-13T10:00:00.000001Z", type: string = proofEvidenceTypeSchema.enum.pre_cover_photo, capturedAt: string | null = null, historicalImportFixture = false) {
  const id = randomUUID(), version = randomUUID();
  await workTenant(f.admin, a.tenantId, async db => {
-  await db.query(`INSERT INTO app.evidence_upload(id,tenant_id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at,state,object_version_id,server_received_at,server_verified_at)
-   VALUES($1,$2,$3,$4,$5,$6,'image/png',100,'standard_evidence',clock_timestamp()+interval '1 day','verified',$7,$8,clock_timestamp())`, [id,a.tenantId,a.jobId,a.scopeId,`synthetic/ch4/${id}`,CH4_HASH,version,receivedAt]);
-  await db.query(`INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)
-   VALUES($1,$2,$1,$3,$4,'original',$5,$6,$7,$8,80,'image/png','standard_evidence',$9,clock_timestamp())`,[id,a.tenantId,a.jobId,a.scopeId,type,`synthetic/ch4/${id}`,version,CH4_HASH,receivedAt]);
+  // Owner-only historical import setup; ordinary site evidence still runs every guard.
+  if (historicalImportFixture) await db.query("SET LOCAL session_replication_role='replica'");
+  await db.query(`INSERT INTO app.evidence_upload(id,tenant_id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at,state,object_version_id,server_received_at,server_verified_at,device_captured_at)
+   VALUES($1,$2,$3,$4,$5,$6,'image/png',100,'standard_evidence',clock_timestamp()+interval '1 day','verified',$7,$8,clock_timestamp(),$9)`, [id,a.tenantId,a.jobId,a.scopeId,`synthetic/ch4/${id}`,CH4_HASH,version,receivedAt,capturedAt]);
+  await db.query(`INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at,device_captured_at)
+   VALUES($1,$2,$1,$3,$4,'original',$5,$6,$7,$8,80,'image/png','standard_evidence',$9,clock_timestamp(),$10)`,[id,a.tenantId,a.jobId,a.scopeId,type,`synthetic/ch4/${id}`,version,CH4_HASH,receivedAt,capturedAt]);
  }); return id;
 }
 export async function workEvents(f: WorkFixture, a: WorkJob) {
