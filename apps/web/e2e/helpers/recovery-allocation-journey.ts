@@ -35,8 +35,8 @@ export async function readyAllocations(page: Page) {
 /** Synthetic source setup uses real quote, proof, invoice, eligibility and feed commands.
  * No success response or allocation output is mocked. All workbench allocations use its public routes.
  */
-export async function recovery18800(page: Page, matchingCustomer = false) {
-  const { parsePoundsToPence } = await loadCore();
+export async function recovery18800(page: Page, matchingCustomer = false, feeTerms = false) {
+  const { parsePoundsToPence, recoveryCaseTermsHash } = await loadCore();
   await openQuotingWatchdogJob(page);
   for (const input of await page.getByLabel(/Unit rate/u).all()) await input.fill("1.00");
   const clean = page.getByLabel("Unit rate Clean site", { exact: true });
@@ -75,6 +75,12 @@ export async function recovery18800(page: Page, matchingCustomer = false) {
   for (const [net, gross, movement, evidenceId] of [[32000, 38400, "receipt-384", evidence1], [250000, 300000, "receipt-3000", evidence2]] as const) {
     const opened = await post(page, `/api/jobs/${jobId}/recovery-cases`, { version: "recovery-case-command.v1", action: "open", commandId: id(), caseType: "withheld_customer_payment", claimedNetPence: net, counterparty: "Fictional customer", book: "builder_customer", sourceType: "customer_invoice", sourceRefs: [invoiceId], expectedRevision: 0 });
     const caseId = opened.affectedCaseId as string;
+    // Fee-bearing fixtures must approve terms before the settled event exists.
+    if(feeTerms)await post(page, `/api/jobs/${jobId}/recovery-cases/terms`, {
+      version:"recovery-case-terms-command.v1",action:"approve",commandId:id(),caseId,
+      termsVersion:"synthetic_recovery_fee_terms.v1",feePolicyVersion:"reference_fee_policy_v3",
+      eligibilityPolicyVersion:"reference_recovery_eligibility_policy_v3",termsHash:recoveryCaseTermsHash(caseId),
+    });
     let current = opened.cases.find((row: { id: string }) => row.id === caseId);
     const assembled = await post(page, `/api/jobs/${jobId}/recovery-cases`, { version: "recovery-case-command.v1", action: "transition", commandId: id(), caseId, eventType: "assemble_evidence", expectedRevision: current.revision });
     current = assembled.cases.find((row: { id: string }) => row.id === caseId);
@@ -134,4 +140,30 @@ export async function allocationDatabase(jobId: string) {
       throw error;
     } finally { client.release(); }
   } finally { await pool.end(); }
+}
+
+/** CH-9: extend the fresh recovery recipe with real terms, line splits and v3
+ * fee approvals. These are synthetic commands, never seeded accounting rows. */
+export async function recovery18800Value(page: Page) {
+  const fixture=await recovery18800(page,false,true);
+  for(const gross of [38400,300000])await splitRecoveryValueReceipt(page,fixture.jobId,gross);
+  await page.goto(`/jobs/${fixture.jobId}#recovery-allocations`);await readyAllocations(page);
+  await allocateThroughUi(page,fixture.cases[0]!,"384.00","£384.00 = £320.00 net + £64.00 tax");
+  await allocateThroughUi(page,fixture.cases[1]!,"3000.00","£3,000.00 = £2,500.00 net + £500.00 tax");
+  await approveRecoveryValueFee(page,fixture.jobId,"£282.00");
+  return fixture;
+}
+export async function splitRecoveryValueReceipt(page:Page,jobId:string,gross:number,reversed=false){
+  await page.goto(`/jobs/${jobId}/recovery-journey`);
+  const row=page.locator(`[data-receipt-lines="${gross}"]`);
+  await row.getByRole("button",{name:reversed?/^Review line split reversal/u:/^Review line split for/u}).click();
+  await page.getByRole("button",{name:"Approve this exact line split",exact:true}).click();
+  await expect(row.getByTestId("receipt-lines-state")).toHaveText(reversed?"Split and reversal saved":"Split saved");
+}
+export async function approveRecoveryValueFee(page:Page,jobId:string,fee:string){
+  await page.goto(`/jobs/${jobId}/recovery-journey`);
+  await page.getByRole("button",{name:"Review success fee",exact:true}).click();
+  await expect(page.getByTestId("fee-review-cumulative")).toHaveText(fee);
+  await page.getByRole("button",{name:"Approve this exact fee posting",exact:true}).click();
+  await expect(page.getByTestId("fee-posting-saved")).toContainText(`Cumulative fee ${fee};`);
 }

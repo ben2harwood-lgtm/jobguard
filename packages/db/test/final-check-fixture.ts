@@ -1,3 +1,4 @@
+import { installAuditCommandWriterRoles } from "./pool-test-utils.js";
 import {createHash,randomUUID} from "node:crypto";
 import {mkdtemp} from "node:fs/promises";
 import {tmpdir} from "node:os";
@@ -17,6 +18,7 @@ export async function createFinalCheckFixture(install=true):Promise<FinalCheckFi
  await postgres.initialise();await postgres.start();
  const config={host:"127.0.0.1",port,user:"postgres",password:credential},bootstrap=new Pool({...config,database:"postgres"});
  await bootstrap.query('CREATE DATABASE jobguard_synthetic_demo');await bootstrap.end();const admin=new Pool({...config,database:"jobguard_synthetic_demo"});
+ await installAuditCommandWriterRoles(admin);
  if(install){await migrate(admin);await installLegacySyntheticPartyFixtures(admin);}
  const runtimeLogin=`sv5_runtime_${randomUUID().replaceAll("-","")}`,shadowLogin=`sv5_shadow_${randomUUID().replaceAll("-","")}`;
  // Parameterized server-side format creates generated fixture logins; no literal credential in SQL.

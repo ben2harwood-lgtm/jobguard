@@ -1,12 +1,13 @@
-import { lp5RegistryRows } from "./lp5-command-catalog.js";
+import { currentCommandRegistryRows, lp5RegistryRows } from "./lp5-command-catalog.js";
 import { assertLp4SealedEvents } from "./lp4-writer-catchup-fixture.js";
-import { ActionExecutor, type OutboundAdapter } from "../src/outbox.js";
+import { customerSigninLink, ActionExecutor, type OutboundAdapter } from "../src/outbox.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 // CI only: real PostgreSQL proves atomic consumption, RLS, current binding and upgrade behavior.
-import { createHmac, randomBytes, randomUUID } from "node:crypto";
+import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import { beforeAll, afterAll, expect, it, vi } from "vitest";
 import { startBeforeMigration, applyMigration, startSession, ownerTx, type Cluster } from "./contractor-practice-session-fixtures.js";
-import { migrate } from "../src/migrate.js";
+import { MIGRATION_URLS, migrate } from "../src/migrate.js";
+import { verifyAuditChain } from "../src/audit.js";
 import { snapshot } from "./contractor-entitlement-fixtures.js";
 const own = "0387_customer_signin.sql";
 const hmac = (v: string) => createHmac("sha256", "fictional-customer-secret-at-least-32-bytes").update(v).digest("hex");
@@ -17,10 +18,63 @@ beforeAll(async () => {
   const expected = { ...before, "app.customer_portal_grant": [], "app.customer_portal_session": [] };
   await applyMigration(c, own);
   expect(await snapshot(c.admin)).toEqual(expected);
-  await migrate(c.admin); await migrate(c.admin);
+  // Apply main's successors first; retain its exact preservation assertion before seeding legacy credentials.
+  for (const url of MIGRATION_URLS) {
+    const name = url.pathname.split("/").at(-1)!;
+    if (name > own && name < "0533_customer_signin_redact.sql") await applyMigration(c, name);
+  }
   const registry = (await c.admin.query("SELECT jsonb_agg(value ORDER BY value::text) data FROM jsonb_array_elements($1::jsonb)", [JSON.stringify(lp5RegistryRows)])).rows[0].data;
   const successors = { ...expected, "app.customer_variation_approval": [], "app.activation_acceptance_operation_use": [], "app.command_lifecycle_claim": [], "app.command_type_registry": registry, "app.repository_operational_record": [] };
   expect(await snapshot(c.admin, Object.keys(successors))).toEqual(successors);
+  const w = await world();
+  const token = randomBytes(32).toString("base64url"), path = `/customer/sign-in#${w.tenant}/${w.job}/${w.customer}/${token}`;
+  const grant = (await identityQuery("SELECT identity.customer_portal_issue($1,$2,$3,$4,$5,$6) id", [w.tenant,w.digest,w.job,w.customer,hmac(`customer-link:${token}`),path])).rows[0].id;
+  const credential = { grant, digest:hmac(`customer-link:${token}`),path,reference:"",sessionDigest:hmac(randomUUID()) };
+  await use(w,credential);
+  const beforeUpgrade = await snapshot(c.admin);
+  await migrate(c.admin); await migrate(c.admin);
+  const stored = (await c.admin.query("SELECT o.* FROM app.customer_portal_grant g JOIN app.action_outbox o ON(o.tenant_id,o.id)=(g.tenant_id,g.outbox_id) WHERE g.tenant_id=$1 AND g.id=$2",[w.tenant,grant])).rows[0];
+  const originalHash = createHash("sha256").update(path).digest("hex");
+  const redactedContent = `customer-signin-redacted.v1:${originalHash}`;
+  const redactedHash = createHash("sha256").update(redactedContent).digest("hex");
+  expect(stored.immutable_content).toBe(redactedContent);
+  expect(stored.content_hash).toBe(redactedHash);
+  expect(stored.content_hash).not.toBe(originalHash);
+  const history = (await c.admin.query("SELECT * FROM app.audit_event WHERE tenant_id=$1 AND event_type='action_outbox.redacted'",[w.tenant])).rows;
+  expect(history).toHaveLength(1);
+  await assertLp4SealedEvents(c.admin,w.tenant,"action_outbox.redacted");
+  await assertLp4SealedEvents(c.admin,w.tenant,"customer_portal.redacted");
+  expect(history[0]).toMatchObject({subject_type:"action_outbox",subject_ref:stored.id,payload:{
+    references:{outboxId:stored.id}, hashes:{originalContentHash:originalHash,redactedContentHash:redactedHash},
+    classifications:{action:"security"}
+  }});
+  // The new history uses the existing append-only chain, not a mutable replacement record.
+  await expect(c.admin.query("UPDATE app.audit_event SET payload=payload WHERE tenant_id=$1 AND id=$2",[w.tenant,history[0].id])).rejects.toMatchObject({code:"55000"});
+  const chain = (await c.admin.query(`SELECT id,tenant_id AS "tenantId",sequence::int,version,
+    actor_ref AS "actorRef",event_type AS "eventType",subject_type AS "subjectType",subject_ref AS "subjectRef",
+    occurred_at AS "occurredAt",payload,trim(payload_hash) AS "payloadHash",trim(previous_hash) AS "previousHash",trim(event_hash) AS "eventHash"
+    FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence`,[w.tenant])).rows;
+  expect(() => verifyAuditChain(chain)).not.toThrow();
+  expect(stored.status).toBe("cancelled");expect(JSON.stringify(stored)).not.toContain(token);
+  await expect(use(w,credential,"resolve")).rejects.toMatchObject({code:"42501"});
+  const after = await snapshot(c.admin);
+  // Retain the predecessor data-preservation assertion, with only the explicit redaction effects.
+  for (const table of Object.keys(beforeUpgrade)) {
+    const rows = beforeUpgrade[table] as Record<string,unknown>[];
+    if (table === "app.customer_portal_grant") expect(after[table]).toEqual(rows.map(row => row.tenant_id===w.tenant ? {...row,revoked_at:expect.any(String)} : row));
+    else if (table === "app.action_outbox") expect(after[table]).toEqual(rows.map(row => row.tenant_id===w.tenant ? {...row,immutable_content:redactedContent,content_hash:redactedHash,status:"cancelled",updated_at:expect.any(String)} : row));
+    else if (table === "app.command_type_registry") expect(after[table]).toEqual((await c.admin.query("SELECT jsonb_agg(value ORDER BY value::text) data FROM jsonb_array_elements($1::jsonb)",[JSON.stringify(currentCommandRegistryRows)])).rows[0].data);
+    else if (table === "app.audit_event") {
+      expect(after[table]).toEqual(expect.arrayContaining(rows));
+      expect((after[table] as unknown[]).length).toBe(rows.length+2);
+      expect(JSON.stringify(after[table])).not.toContain(token);
+    } else if (table === "audit_control.audit_head") {
+      expect(after[table]).toEqual(rows.map(row => row.tenant_id===w.tenant ? {...row,sequence:Number(row.sequence)+2,event_hash:expect.stringMatching(/^[a-f0-9]{64}$/u)} : row));
+    } else expect(after[table]).toEqual(rows);
+  }
+  expect(JSON.stringify(after)).not.toContain(token);
+  expect(JSON.stringify(after)).not.toContain(path);
+  await migrate(c.admin); expect(await snapshot(c.admin)).toEqual(after);
 }, 120000);
 afterAll(async () => { await c?.close(); });
 async function identityQuery(sql: string, args: unknown[]) {
@@ -46,9 +100,10 @@ async function world(role = "owner") {
 }
 type World = Awaited<ReturnType<typeof world>>;
 async function issue(w: World) {
-  const token = randomBytes(32).toString("base64url"), digest = hmac(`customer-link:${token}`), path = `/customer/sign-in#${w.tenant}/${w.job}/${w.customer}/${token}`;
-  const grant = (await identityQuery("SELECT identity.customer_portal_issue($1,$2,$3,$4,$5,$6) id", [w.tenant, w.digest, w.job, w.customer, digest, path])).rows[0].id as string;
-  return { grant, digest, path, sessionDigest: hmac(randomUUID()) };
+  const reference = `customer-signin-reference.v1:${w.tenant}/${w.job}/${w.customer}/${randomBytes(32).toString("base64url")}`;
+  const path = customerSigninLink(reference, hmac), digest = hmac(`customer-link:${path.split("/").at(-1)}`);
+  const grant = (await identityQuery("SELECT identity.customer_portal_issue($1,$2,$3,$4,$5,$6) id", [w.tenant, w.digest, w.job, w.customer, digest, reference])).rows[0].id as string;
+  return { grant, digest, path, reference, sessionDigest: hmac(randomUUID()) };
 }
 const use = (w: World, k: Awaited<ReturnType<typeof issue>>, operation = "redeem", changes: Partial<World> = {}) => {
   const x = { ...w, ...changes };
@@ -70,9 +125,17 @@ it.each(["owner", "finance"])("%s can issue only an outbox fake email, no plaint
   expect(grant.company_id).toBe(w.account);
   expect(new Date(grant.expires_at).getTime() - new Date(grant.issued_at).getTime()).toBe(600000);
   const outbox = (await c.admin.query("SELECT * FROM app.action_outbox WHERE tenant_id=$1 AND id=$2", [w.tenant, grant.outbox_id])).rows[0];
-  expect(outbox).toMatchObject({ adapter: "fake_email", recipient: "practice-customer@example.invalid", immutable_content: k.path, status: "pending" });
+  expect(outbox).toMatchObject({ adapter: "fake_email", recipient: "practice-customer@example.invalid", immutable_content: k.reference, status: "pending" });
+  expect(JSON.stringify(outbox)).not.toContain(k.path.split("/").at(-1));
+  await expect(use(w, { ...k, digest: hmac(`customer-link:${k.reference.split("/").at(-1)}`) })).rejects.toMatchObject(refused);
   const audit = JSON.stringify((await c.admin.query("SELECT payload FROM app.audit_event WHERE tenant_id=$1", [w.tenant])).rows);
+  expect(audit).not.toContain(k.path.split("/").at(-1));
   expect(audit).not.toMatch(/email|customer-link|token|Fictional|practice-customer/);
+});
+it("refuses the legacy plaintext issue format without creating durable work", async () => {
+  const w=await world(),token=randomBytes(32).toString("base64url");
+  await expect(identityQuery("SELECT identity.customer_portal_issue($1,$2,$3,$4,$5,$6)",[w.tenant,w.digest,w.job,w.customer,hmac(`customer-link:${token}`),`/customer/sign-in#${w.tenant}/${w.job}/${w.customer}/${token}`])).rejects.toMatchObject(refused);
+  expect((await c.admin.query("SELECT count(*)::int n FROM app.action_outbox WHERE tenant_id=$1",[w.tenant])).rows[0].n).toBe(0);
 });
 it("concurrent double redemption has exactly one winner; replay and second session are refused", async () => {
   const w = await world(), k = await issue(w);
@@ -122,9 +185,12 @@ it("finance can execute only the exact fake sign-in email; unrelated sends remai
  const w=await world("finance"),k=await issue(w);
  const outbox=(await c.admin.query("SELECT outbox_id FROM app.customer_portal_grant WHERE tenant_id=$1 AND id=$2",[w.tenant,k.grant])).rows[0].outbox_id;
  let deliveries=0;
- const adapter:OutboundAdapter={name:"fake_email",supportsProviderDeduplication:false,deliver:async action=>{expect(action.immutableContent).toBe(k.path);deliveries++;return {kind:"succeeded",providerReference:"fictional-delivery"};},reconcile:async()=>"unknown"};
- const executor=new ActionExecutor(c.runtime,new Map([[adapter.name,adapter]]),{emit:()=>undefined});
+ const adapter:OutboundAdapter={name:"fake_email",supportsProviderDeduplication:false,deliver:async (action, link)=>{expect(action.immutableContent).toBe(k.reference);expect(link).toBe(k.path);deliveries++;return {kind:"succeeded",providerReference:"fictional-delivery"};},reconcile:async()=>"unknown"};
+ const executor=new ActionExecutor(c.runtime,new Map([[adapter.name,adapter]]),{emit:()=>undefined},hmac);
  await executor.execute(testTenantContext(w.tenant),outbox);expect(deliveries).toBe(1);
+ await executor.execute(testTenantContext(w.tenant),outbox);expect(deliveries).toBe(1);
+ // Redeem the actual delivered link once; replay cannot create another session.
+ await use(w,k);await expect(use(w,k)).rejects.toMatchObject(refused);
  expect((await c.admin.query("SELECT status FROM app.action_outbox WHERE tenant_id=$1 AND id=$2",[w.tenant,outbox])).rows[0].status).toBe("succeeded");
  for(const variant of [
   {action:"quote.send",policy:"customer-signin.synthetic.v1",recipient:"fixture@example.invalid",amount:null},

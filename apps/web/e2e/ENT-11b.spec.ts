@@ -260,6 +260,8 @@ for (const width of [360, 1280]) test(`ENT-11b full Northside through billing, s
   await expect(page.getByRole("button", { name: "Post approved statement (practice)" })).toBeVisible();
   await page.getByRole("button", { name: "Post approved statement (practice)" }).click();
   await expect(page.getByText(`accrual: ${pounds(rate * 6 / 10)}`, { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Simulate invoice for approved statement (practice)", exact: true }).click();
+  await expect(page.getByRole("status")).toHaveText(`Simulated invoice: ${pounds(rate * 6 / 10)}. No payment due.`);
   const statementId = (await db.query("SELECT id FROM app.enterprise_fee_statement WHERE tenant_id=$1", [tenant])).rows[0].id;
   await page.reload(); await page.getByLabel("Stored statement ID").fill(statementId);
   await page.getByRole("button", { name: "Reload stored statement", exact: true }).click();

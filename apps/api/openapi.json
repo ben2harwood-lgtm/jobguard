@@ -908,6 +908,36 @@
         ]
       }
     },
+    "/jobs/{id}/parties/import-v3/source": {
+      "get": {
+        "operationId": "JobImportV3Controller_source",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read an owned source job binding for the synthetic import screen",
+        "tags": [
+          "job-import-v3"
+        ]
+      }
+    },
+    "/jobs/{id}/parties/import-v3/catch": {
+      "post": {
+        "operationId": "JobImportV3Controller_assessCatch",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Assess a stored pre-adoption catch at GBP 0; other imported attribution remains unavailable",
+        "tags": [
+          "job-import-v3"
+        ]
+      }
+    },
     "/jobs/{id}/parties/import-v3/preview": {
       "post": {
         "operationId": "JobImportV3Controller_preview",
@@ -932,7 +962,7 @@
             "description": ""
           }
         },
-        "summary": "Import a fictional invoiced job under v3 terms; live capacity admission remains unavailable",
+        "summary": "Import a fictional v3 job; company live imports use checked capacity admission",
         "tags": [
           "job-import-v3"
         ]
@@ -1937,6 +1967,94 @@
           }
         },
         "summary": "Record a message from a named fictional customer, entered by the job owner, on a live, unlocked synthetic job",
+        "tags": [
+          "JobSource"
+        ]
+      }
+    },
+    "/jobs/{id}/historical-evidence": {
+      "get": {
+        "operationId": "JobSourceController_historical",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read imported fictional historical messages and their original receive times",
+        "tags": [
+          "JobSource"
+        ]
+      },
+      "post": {
+        "operationId": "JobSourceController_importHistorical",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "version",
+                  "commandId",
+                  "fictionalCustomer",
+                  "text",
+                  "statedSentAt"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "late-source-import.v1"
+                    ]
+                  },
+                  "commandId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "fictionalCustomer": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "kind",
+                      "name"
+                    ],
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "named_fictional_customer"
+                        ]
+                      },
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 160
+                      }
+                    }
+                  },
+                  "text": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 8000
+                  },
+                  "statedSentAt": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Import an old fictional message as evidence on a locked job; no site activity or fee eligibility",
         "tags": [
           "JobSource"
         ]

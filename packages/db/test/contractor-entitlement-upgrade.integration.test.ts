@@ -1,4 +1,4 @@
-import { lp5RegistryRows } from "./lp5-command-catalog.js";
+import { currentCommandRegistryRows } from "./lp5-command-catalog.js";
 import { afterAll,beforeAll,expect,it } from "vitest";
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
@@ -162,6 +162,7 @@ const emptySuccessors=[
  "app.ch6_identifier_assertion",
  "app.ch6_line_correction_source",
  "app.activation_acceptance_operation_use",
+ "app.import_pre_adoption_evidence",
 
  "app.platform_fee_attempt",
  "app.platform_fee_attempt_event",
@@ -308,7 +309,7 @@ it("repeat migration and later successors succeed",async()=>{
  for (let pass=0;pass<2;pass++) {
   await migrate(c.admin);
   for(const table of emptySuccessors) expect((await c.admin.query(`SELECT * FROM ${tableIdent(table)}`)).rows,table).toEqual([]);
-  expect((await c.admin.query("SELECT jsonb_agg(value ORDER BY value::text) data FROM jsonb_array_elements($1::jsonb)",[JSON.stringify(lp5RegistryRows)])).rows[0].data).toEqual((await snapshot(c.admin,["app.command_type_registry"]))["app.command_type_registry"]);
+  expect((await c.admin.query("SELECT jsonb_agg(value ORDER BY value::text) data FROM jsonb_array_elements($1::jsonb)",[JSON.stringify(currentCommandRegistryRows)])).rows[0].data).toEqual((await snapshot(c.admin,["app.command_type_registry"]))["app.command_type_registry"]);
   expect(await proofDifferences(c.admin,original)).toEqual(preserved);
   expect(await proofDifferences(c.admin,before)).toEqual(preserved);
   expect((await c.admin.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map(r=>r.migration_name)).toEqual(MIGRATION_URLS.map(url=>url.pathname.split("/").at(-1)!));

@@ -152,7 +152,8 @@ export { MeterLifecyclePersistenceError } from "./meter-lifecycle-source.js";
 
 export * from "./value-v3-reader.js";
 export * from "./enterprise-baseline-repository.js";
-export { JobImportV3Repository, JobImportV3Error } from "./job-import-v3-repository.js";
+export { IMPORT_CATCH_HOLD_REASON, JobImportV3Repository, JobImportV3Error } from "./job-import-v3-repository.js";
+export * from "./import-pre-adoption-repository.js";
 
 export * from "./plan-entitlement-service.js";
 export * from "./payment-fee-repository.js";
@@ -171,3 +172,5 @@ export * from "./simulation-fee-collection-repository.js";
 export * from "./simulation-money-run-repository.js";
 export { ShadowDemoApprovalReader } from "./shadow-demo-approval-reader.js";
 export { ShadowDemoGuideRepository } from "./shadow-demo-guide-repository.js";
+
+export { importLateSource, readLateSourceObservations, readLateSources } from "./late-source-import.js";

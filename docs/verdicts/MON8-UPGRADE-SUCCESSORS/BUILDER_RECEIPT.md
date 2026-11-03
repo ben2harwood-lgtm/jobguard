@@ -1155,7 +1155,7 @@ and all 385 main migration/lane files remain present and unchanged. MERGE_HEAD
 matches the already-fetched origin/main. No fetch or Git write was run.
 
 Renamed this branch's 0408/0409 migrations to
-0616_server_plan_entitlements.sql and 0617_contractor_feature_guards.sql.
+0548_server_plan_entitlements.sql and 0549_contractor_feature_guards.sql.
 Both files compare byte-for-byte with their starting HEAD versions. Updated active
 filename consumers and the lane. No main migration or
 `docs/contracts/lp-downstream-effects-v1.md` was edited. The filesystem diff against
@@ -1269,7 +1269,7 @@ launcher merge parent is 7f6c8f95001f648ef648a1b82b05f96802b1f527.
 The unmerged index entry is intentionally left for the router to stage.
 
 - Renumbered the two branch migration filename stems to
-  0616_server_plan_entitlements and 0617_contractor_feature_guards, including
+  0548_server_plan_entitlements and 0549_contractor_feature_guards, including
   every tracked lookup, test, contract, receipt and lane reference.
   No bare-digit substitutions.
 - The contractor upgrade resolution is exactly reviewed HEAD plus incoming
@@ -1315,7 +1315,7 @@ No Git write, fetch, install, provider action or release was performed.
 
 Resolved the ten launcher merge conflicts against origin/main `be69b8d91d91f77bf2765a13b0a2074545c40fbe`. Preserved MON-8 entitlement guards together with main's repository command lifecycle, replay handling, synthetic-owner pool helpers, LP-3 catalogue assertions, CH-6 routine assertions and LP-5 registry/empty-successor assertions. Kept MON-8's populated predecessor/multiset proofs and negative controls. Test assertions were not weakened or changed to accept a different outcome. Adapted the existing MON-8 outbox unit double to main's `fakeAuditAppend` helper. Privilege metadata is the union without duplicate keys/identities; removed obsolete scanner entries for calls absent from the merged source, retaining main's other entries. No new product behavior.
 
-Kept migrations `0616_server_plan_entitlements.sql` and `0617_contractor_feature_guards.sql`; no migration present on origin/main was edited. Router owns landing renumbering. Updated this piece's lane to all 98 non-lane paths differing from origin/main. No other lane files differ from origin/main, so none needed removal.
+Kept migrations `0548_server_plan_entitlements.sql` and `0549_contractor_feature_guards.sql`; no migration present on origin/main was edited. Router owns landing renumbering. Updated this piece's lane to all 98 non-lane paths differing from origin/main. No other lane files differ from origin/main, so none needed removal.
 
 Actual local checks (installed Node 24.17.0, Vitest 4.1.12, maxWorkers=1):
 
@@ -1331,3 +1331,65 @@ Actual local checks (installed Node 24.17.0, Vitest 4.1.12, maxWorkers=1):
 `LANE_BASE_REF=origin/main node tools/lint.mjs` ran core purity successfully, then stopped at lane checking: before the router stages/commits this merge, the unchanged checker also includes incoming-main paths from the index and the old HEAD's merge-base range. This is not a completed full lint pass. Router must rerun normal lane/full lint against the committed merge. No checker changes or broad lane grants were made. The pnpm wrapper stalled without starting either requested check and was interrupted; the checks above ran directly through the installed repository compiler and Vitest instead, without downloads.
 
 RED: router must stage the resolved files (the read-only Git index still records unmerged entries), commit, push, open the PR and arrange independent review at the exact resulting head. PostgreSQL/migration, browser, full repository checks and build remain GitHub CI work under the issued sandbox restriction. No localhost/database attempt, git fetch, Git write, provider call or real data use occurred. This handoff is source inspection and deterministic local test evidence, not independent review or release approval.
+
+
+### 3 November 2026 — final-number exact union with incoming main 71de973f
+
+MON-8 / PR #302, RED. Incoming `MERGE_HEAD` and observed `origin/main` both equal
+`71de973ffb5c3e9d89aa314882ac5af7549c2cc5` (no fetch). Resolved all four working-tree
+conflicts as an exact union. Router must stage them because this sandbox's Git index
+is read-only. No new product behavior or changed refusal/success expectations.
+
+Renamed filename stems only: `0548_server_plan_entitlements` and
+`0549_contractor_feature_guards`, across SQL filenames, contracts, historical receipt
+references, migration lists, legacy-migrations.json and test lookups. Both SQL files
+remain byte-identical to their branch-HEAD predecessors. All 208 incoming-main SQL
+migrations remain byte-identical. The lane lists all 101 non-lane endpoint changes,
+including both renamed migrations; endpoint lane and migration-order validation pass.
+
+Main's carried changes are the customer-sign-in redaction/delivery-reference tests,
+the audit-writer fixture setup, `import_pre_adoption_evidence` as an explicitly empty
+successor, and the current command registry including late-source import. Kept the
+branch's stronger populated predecessor, multiset and negative-control proofs.
+Adapted main's new outbox query double to MON-8's existing authorization-actor SELECT
+and existing fakeAuditAppend helper; every assertion stays intact.
+
+Compared all 31 recreated existing routine definitions with their latest main
+bodies. Their source migrations are 0054 (membership/grant), 0102 (parties), 0110
+(import/commit), 0120/0129 (SSO commands), 0135 (extra authority), 0138 (admin),
+0150 (invitation/provisioning), 0158 (approval), 0165 (worker switch), 0196 (live
+prompts/origin), 0198 (status guard), 0243 (billing authority), 0276/0290 (fee
+actor/readers), 0296 (baseline), 0332 (worker decision), 0347 (OIDC), 0356 (work-order
+begin), and 0522 (site visits). The existing MON-8 guards and retained-read paths
+are the only branch differences. In particular, main's latest LP-5b `lp5_bind_effect`
+calls remain in `app.ent3b_start_visit` and `app.ent3b_complete_visit`; the full
+0347 `identity.sso_complete` and `identity.oidc_create` bodies remain beneath the
+existing entitlement changes. No additional routine-body edit was needed.
+
+Actual local validation, Node 24.17.0 / Vitest 4.1.12, maxWorkers=1:
+
+- Database Vitest: `test/mon8-combined-migration.test.ts`,
+  `src/plan-entitlement-service.test.ts`, `src/outbox.test.ts`: 24 passed.
+  Initial run exposed the incoming query-double incompatibility described above.
+- Database Vitest: `test/lp-0-catalog.test.ts`: 31 passed.
+- API Vitest: `src/plan-entitlements.persisted.test.ts`,
+  `src/auth/context-boundary.test.ts`, `src/contractor/site-extra.application.test.ts`:
+  188 passed. Initial import failure came from stale core dist; compiled the existing
+  core package with its installed tsc, then reran successfully. No source repair.
+- `node packages/db/node_modules/typescript/bin/tsc -p packages/db/tsconfig.json --noEmit`:
+  passed, including final run after resolving the doubles.
+- Strict standalone TypeScript compilation of contractor-entitlement-upgrade,
+  customer-signin and extra-fixtures with `--noEmit --strict --noUncheckedIndexedAccess
+  --exactOptionalPropertyTypes --skipLibCheck --target ES2023 --module NodeNext
+  --moduleResolution NodeNext`: passed. No PostgreSQL execution claimed.
+- Current-source integrity guard: 86 roots, zero diagnostics, eight baseline cases;
+  commercial boundary lint passed; PL/pgSQL lint passed across 210 migrations.
+- Endpoint lane validation through existing loadLanePolicy/lanePathAllowed and
+  migrationOrderViolations exports passed for 102 paths; source byte checks and
+  old-stem/conflict-marker scans passed. `git diff --check origin/main` passed.
+
+PostgreSQL/migration, browser, full repository checks and build remain GitHub CI
+work after the router stages and pushes. RED still requires independent review at
+the resulting exact head. This is deterministic local evidence, not an independent
+review or merge authorization. No Git writes, fetch, downloads, database/localhost
+startup, provider actions or real customer data were used.
