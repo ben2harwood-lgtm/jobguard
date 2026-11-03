@@ -1,4 +1,4 @@
-# 0588 — M4-10 dark platform invoice storage (RED)
+# 0571 — M4-10 dark platform invoice storage (RED)
 
 Adds tenant-owned `platform_invoice_issuer`, `platform_invoice_document` and
 `platform_invoice_source` in the platform statement namespace. No earlier
@@ -31,3 +31,20 @@ no migration already on main is edited.
 CI must run the real PostgreSQL invoice, upgrade, migration and tenancy suites.
 Local syntax/type/unit checks do not prove PostgreSQL behavior. D02/G4 authority,
 complete fee adapters and independent RED review remain outstanding.
+
+Catch-up to main (3 November 2026): preserves the dark fixture scope. Keeps main's
+LP-3–LP-5 and MON-8 routines unchanged. The existing `ef_audit` helper seals via
+`lp4_seal_audit`; invoice metadata now uses its references/hashes payload contract.
+The integration assertion checks audit.v2, checked-operation trust and the exact
+document hash. The migration proof adds all three tables to main's generated
+exact tenancy and ownership lists; their baseline arrays remain unchanged.
+
+Local validation: installed Vitest 4.1.12, maxWorkers=2: core
+`src/platform-tax-invoice.test.ts` (9 passed); db
+`test/migration-proof-loader.test.ts` and `src/lp4-audit.test.ts` (87 passed).
+Core and db `tsc -p tsconfig.json --noEmit` passed. Core/storage dependency builds
+passed. Initial db unit imports needed those builds; the unchanged rerun passed.
+The pnpm launcher stalled before checks started and was cancelled; checks used
+installed package binaries, without downloads. Database, migration/upgrade and
+browser suites were not run: this sandbox cannot start PostgreSQL or bind ports.
+NOPR handoff; CI and independent RED review remain required.

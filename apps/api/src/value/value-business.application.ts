@@ -1,7 +1,7 @@
 import type { Pool } from "pg";
 import type { ValueBusinessReader } from "@jobguard/db";
 import { z } from "zod";
-import { valueWindowV1, mapValueReceipt, mappedBusinessSummaryV1, mapBusinessValueSummary, type ValueWindowV1 } from "@jobguard/core";
+import { receiptBaseSources, valueWindowV1, mapCurrentValueReceipt, mappedBusinessSummary, mapCurrentBusinessValueSummary, type ValueWindowV1 } from "@jobguard/core";
 import { valueJobResponseV3, heldJobValueV3, ValueV3ReadError } from "./value-v3.application.js";
 import { resolveVerifiedTenantContext } from "../auth/principal-bridge.js";
 import { PracticeAccess } from "../practice-access.js";
@@ -18,7 +18,7 @@ const unavailableBusinessValueResultV1 = z.object({
 }).strict();
 export const businessValueResultV1=z.union([unavailableBusinessValueResultV1,z.object({
  version:z.literal("business-value-result.v1"),state:z.literal("mapped"),tenantId:z.string().uuid(),label:z.literal("mapped, inspectable"),environment:z.literal("synthetic_demo"),
- jobs:z.array(valueJobResponseV3),summary:mappedBusinessSummaryV1.optional(),subscription:z.array(z.object({periodId:z.string().uuid(),from:z.string(),toExclusive:z.string(),sourceId:z.string().uuid(),statementId:z.string().uuid(),policyVersion:z.literal("subscription_pricing_policy_v4"),derivationVersion:z.literal("MON-1/MON-2A"),amount:z.object({pence:z.number().int().min(0).max(16900),currency:z.literal("GBP")}).strict(),lines:z.array(z.record(z.string(),z.unknown()))}).strict()),
+ jobs:z.array(valueJobResponseV3),summary:mappedBusinessSummary.optional(),subscription:z.array(z.object({periodId:z.string().uuid(),from:z.string(),toExclusive:z.string(),sourceId:z.string().uuid(),statementId:z.string().uuid(),policyVersion:z.literal("subscription_pricing_policy_v4"),derivationVersion:z.literal("MON-1/MON-2A"),amount:z.object({pence:z.number().int().min(0).max(16900),currency:z.literal("GBP")}).strict(),lines:z.array(z.record(z.string(),z.unknown()))}).strict()),
 }).strict()]);
 type Code = z.infer<typeof unavailableBusinessValueResultV1>["code"];
 const unavailable = (code: Code) => businessValueResultV1.parse({ version: "business-value-result.v1", state: "unavailable", code });
@@ -72,8 +72,8 @@ export class CompanyValueApplication {
   const receipt=await this.reader.readJob(context,current.digest,jobId,window.success?window.data:null);
   if(receipt===null)return heldJobValueV3(jobId);
   const result=valueJobResponseV3.parse({version:"job-value.v3",environment:"synthetic_demo",jobId,status:"mapped",receipt});
-  if(result.status!=="mapped"||result.receipt.sources.tenantId!==context.tenantId)throw new ValueV3ReadError("VALUE_V3_SOURCE_REJECTED");
-  const expected=mapValueReceipt(result.receipt.sources,window.success?window.data:null);
+  if(result.status!=="mapped"||receiptBaseSources(result.receipt).tenantId!==context.tenantId)throw new ValueV3ReadError("VALUE_V3_SOURCE_REJECTED");
+  const expected=mapCurrentValueReceipt(result.receipt.sources,window.success?window.data:null);
   if(JSON.stringify(expected)!==JSON.stringify(result.receipt))throw new ValueV3ReadError("VALUE_V3_SOURCE_REJECTED");
   return result;
  }
@@ -86,15 +86,15 @@ export class CompanyValueApplication {
   const window=selection.data.from&&selection.data.toExclusive?valueWindowV1.safeParse({from:selection.data.from,toExclusive:selection.data.toExclusive}):null;
   if(window&&!window.success)return unavailable("INVALID_BUSINESS_VALUE_SELECTION");
   const result=businessValueResultV1.parse(await this.reader.readBusiness(context,current.digest,selection.data.periodId,window?.success?window.data:null));
-  if(result.state!=="mapped" || result.tenantId!==context.tenantId || result.jobs.some(j=>j.status==="mapped"&&j.receipt.sources.tenantId!==context.tenantId)
+  if(result.state!=="mapped" || result.tenantId!==context.tenantId || result.jobs.some(j=>j.status==="mapped"&&receiptBaseSources(j.receipt).tenantId!==context.tenantId)
    ||new Set(result.jobs.map(j=>j.jobId)).size!==result.jobs.length||new Set(result.subscription.map(p=>p.periodId)).size!==result.subscription.length)throw new Error("VALUE_SCOPE_MISMATCH");
   for(const job of result.jobs){
    if(job.status!=="mapped")continue;
-   const expected=mapValueReceipt(job.receipt.sources,window?.success?window.data:null);
+   const expected=mapCurrentValueReceipt(job.receipt.sources,window?.success?window.data:null);
    if(JSON.stringify(expected)!==JSON.stringify(job.receipt))throw new Error("VALUE_RECEIPT_SOURCE_MISMATCH");
   }
   if(result.summary){
-   const expected=mapBusinessValueSummary(result.jobs.flatMap(j=>j.status==="mapped"?[j.receipt]:[]));
+   const expected=mapCurrentBusinessValueSummary(result.jobs.flatMap(j=>j.status==="mapped"?[j.receipt]:[]));
    if(JSON.stringify(expected)!==JSON.stringify(result.summary))throw new Error("VALUE_SUMMARY_SOURCE_MISMATCH");
   }
   return result;

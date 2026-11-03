@@ -64,7 +64,7 @@ export class PlatformTaxInvoiceFixtureRepository {
         throw error;
       }
       await client.query("SELECT app.ef_audit($1,$2,'platform_invoice_document',$3,$4::jsonb)", [command.actorMembershipId,
-        `platform_invoice.simulation_${command.kind}`, command.commandId, JSON.stringify({ number: document.number, documentHash: downloadPlatformInvoice(document).hash })]);
+        `platform_invoice.simulation_${command.kind}`, command.commandId, JSON.stringify({ references: { number: document.number }, hashes: { documentHash: downloadPlatformInvoice(document).hash } })]);
       return document;
     });
   }

@@ -32,7 +32,7 @@ its numbering, document history and credits. Invoices and credit notes share one
 number series. A globally unique fictional issuer belongs to one fixture tenant;
 real shared issuer identity/number-series activation remains gated.
 
-Migration 0430 has an immutable `platform_invoice_source` table keyed by
+Migration `0571_platform_tax_invoice.sql` has an immutable `platform_invoice_source` table keyed by
 `(tenant_id, source_kind, source_id)` across **all** issuers. Every invoice insert
 reserves its statement sources through a mandatory database trigger. Conflicting
 inserts roll back the document and audit together. Credits never release source

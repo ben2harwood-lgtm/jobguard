@@ -24,6 +24,12 @@ it("derives amounts and provenance from a real immutable subscription statement"
   const source = (await f.admin.query("SELECT artifact_hash,amount_pence FROM app.platform_statement WHERE tenant_id=$1 AND id=$2", [t.a.tenantId, r.lines[0]!.sourceId])).rows[0];
   expect(invoice.request.lines[0]!.provenance.statement.hash).toBe(source.artifact_hash);
   expect(invoice.principalPence).toBe(Number(source.amount_pence));
+  const audit = (await f.admin.query("SELECT version,payload FROM app.audit_event WHERE tenant_id=$1 AND event_type='platform_invoice.simulation_invoice'", [t.a.tenantId])).rows;
+  expect(audit).toHaveLength(1);
+  expect(audit[0]).toMatchObject({ version: "audit.v2", payload: {
+    references: { number: invoice.number, auditTrust: "checked_operation" },
+    hashes: { documentHash: downloadPlatformInvoice(invoice).hash },
+  } });
   const trace = invoice.request.lines[0]!.provenance;
   expect(trace.kind).toBe("subscription");
   if (trace.kind !== "subscription") throw new Error("Wrong trace");
