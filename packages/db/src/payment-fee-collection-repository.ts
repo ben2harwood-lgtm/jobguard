@@ -61,6 +61,21 @@ export class PaymentFeeCollectionRepository {
       FOR SHARE OF a`, [tenantId, jobId, statementId, saved.decision_id, actor, s.statementHash, s.feePence])).rows[0];
     if (!a) return refuse();
     if (a.revoked_at !== null) return refuse("AUTHORITY_REVOKED");
+    try {
+      await db.query(`SELECT app.payment_fee_review_deadline(tenant_id,job_id,sources,$4)
+        FROM app.payment_fee_statement WHERE tenant_id=$1 AND job_id=$2 AND id=$3`,
+      [tenantId, jobId, statementId, actor]);
+    } catch (error) {
+      if (error instanceof Error && error.message === "PAYMENT_FEE_REVIEW_REQUIRED") return refuse();
+      throw error;
+    }
+    // Use a separate statement after all authorization locks return: a target-list clock
+    // expression could have been evaluated before waiting for the row lock.
+    const expired = (await db.query<{ expired: boolean }>(
+      "SELECT expires_at<=clock_timestamp() expired FROM app.action_authorization WHERE tenant_id=$1 AND id=$2",
+      [tenantId, a.id])).rows[0];
+    if (!expired) return refuse();
+    if (expired.expired) return refuse("AUTHORITY_EXPIRED");
     return {
       version: "success-fee-collection-sources.v1", tenantId, jobId, invoiceId: statementId,
       invoiceHash: s.statementHash, paymentId: s.paymentId,

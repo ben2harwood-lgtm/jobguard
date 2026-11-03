@@ -215,3 +215,83 @@ package downloads. PostgreSQL, browser and full CI suites remain unproved here.
 Exact-head independent RED review and green CI remain required before merge.
 READY for router staging and commit; the read-only index still records the DB
 barrel as unmerged even though its working-tree conflict markers are resolved.
+
+Catch-up verification (3 November 2026): MON-4B, RED, NOPR. Incoming main is
+111865cf65f5e68a28ce1891bd52aad0ac7a0f10 (MERGE_HEAD/origin/main; the local main
+ref is older). Core exports now match incoming main exactly; DB exports retain
+main's offline-intent review and MON-4B's collection repository. Removed the
+inherited MON-4B lane in favour of the exact mon-4b-collect-recheck lane.
+
+Renamed only the branch migration/proof stem from
+0601_payment_fee_collect_recheck to 0678_payment_fee_collect_recheck, and updated
+the upgrade test to main's 0527_payment_fee_collect_review predecessor. No main
+migration was edited; no new table or second migration is needed. Source comparison
+verified that the recreated writer equals main's latest 0527 body except for
+replacing its inline review loop with the shared current-review helper. Existing
+payment_fee_actor authentication/locking, command identity, fee calculation and
+append_final_check_audit are preserved. The latter's latest 0520 implementation
+calls app.lp4_seal_audit with checked_operation; this branch does not replace or
+bypass it. No entitlement, command-authority or audit helper is recreated.
+Main's standing-authority support remains intact; MON-4B's existing reader still
+requires an exact statement authorization and enables no production collection.
+
+Installed Vitest 4.1.12 runs, each with --maxWorkers=2 and no more than three
+named files: DB src/payment-fee-collection-repository.test.ts plus
+test/migration-proof-loader.test.ts passed 89 tests; API executor.test.ts,
+success-fee-direct-debit.test.ts and success-fee-composition.test.ts passed 94;
+API fake-gocardless.test.ts passed 37. Total: 220 tests. Core, DB and API package
+TypeScript checks passed using installed tsc; core, DB and config build output
+was generated locally for package imports. The first API test attempt found
+missing config build output and ran no tests; after the config build all passed.
+The pnpm version probe stalled and was stopped; no packages were downloaded.
+Money arithmetic and commercial-boundary checks passed. No expectations were
+weakened; integration-test edits only update migration references and its label.
+
+READY for router staging and commit, NOPR. Conflict markers are resolved in the
+working files; the read-only index still requires router staging. PostgreSQL and
+browser suites, full CI and independent RED review of the exact resulting head
+remain required before merge. No live services, real data or production approvals
+were used. Shared collection files still serialize integration with other pieces.
+Working-tree lane validation against incoming main passed for all 15 non-lane
+paths, with only this piece's lane added, no conflict markers, valid migration
+ordering and clean diff whitespace. This is a deterministic working-tree check;
+the standard committed-head lane gate remains for CI after router staging.
+
+
+Batch-13 union verification (3 November 2026), MON-4B collect recheck, RED, NOPR:
+The two preceding catch-up receipts are historical. This batch uses the available
+origin/main bc8993090 (local main is stale); no fetch was run. Kept both sides'
+contract notes and all HEAD DB exports, including resumable evidence, offline
+review and the collection repository. No new collection behavior was introduced.
+The branch-only migration and proof are now 0678_payment_fee_collect_recheck;
+all main migration bytes are unchanged. The writer matches main's latest 0527
+body after substituting the shared review helper for its inline loop. Existing
+entitlements, command authority and LP4-sealed audit remain in place. No new
+tables need later-empty-tables registration. Removed the incoming piece lane;
+batch-13's lane covers exactly all 49 non-lane paths differing from origin/main,
+including pre-existing batch work retained by this union.
+
+Local verification used installed Vitest 4.1.12, --maxWorkers=2, sequential runs
+of at most three named files: DB payment-fee-collection-repository and
+migration-proof-loader (89 passed); API executor, success-fee-direct-debit and
+success-fee-composition (94 passed); API fake-gocardless and m4-23-sb-rails
+(40 passed). Total: 223 tests. Money arithmetic, commercial-boundary and
+working-tree lane/proof/main-SQL checks passed. No test was weakened.
+The initial API typecheck read an incomplete DB barrel during conflict
+resolution; the complete barrel was restored before the final typechecks.
+
+Final installed package checks: packages/core, packages/db and apps/api each
+passed `./node_modules/.bin/tsc -p tsconfig.json --noEmit` in its own directory.
+DB was checked again after restoring the complete barrel; the final API run
+passed. `node tools/money-arithmetic-lint.mjs`,
+`node tools/commercial-boundary-lint.mjs` and `git diff --check` passed.
+
+READY for router staging and merge completion, RED, NOPR. The read-only index
+still records unmerged entries; resolved working files are the handoff. CI must
+prove real PostgreSQL fresh/upgrade/proof/catalog/privilege behavior, including
+success-fee-direct-debit.integration.test.ts's stale/revoked/expired and row-lock
+wait cases, plus mandatory full checks and applicable browser journeys. An
+independent RED review must pass at the exact resulting head before merge.
+No database/browser suite was run locally, and no live service or real data was
+used. Forward fix or revert the new migration only before deployment; do not
+edit previously applied main migrations.
