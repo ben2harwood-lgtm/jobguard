@@ -426,8 +426,12 @@ describe("LP-0 grant freeze guard against the fully migrated database", () => {
     expect(exceptions.has(closedTransition)).toBe(false);
     expect(baselineBootstrapLogin.some(fact => fact.key === closedTransition)).toBe(false);
     expect((await db.admin.query("SELECT has_function_privilege('jobguard_runtime','app.transition_job(uuid,uuid,integer,varchar,varchar,uuid,bigint,varchar,bigint)','EXECUTE') allowed")).rows).toEqual([{ allowed: false }]);
-    // Reads are approved current capability, rebound at LP-11; they are not an exception.
+    // Reads and the MON-5 identity stage routine are approved current capabilities, not exceptions.
     expect(find("acl|rel|table|app.job|jobguard_runtime|SELECT|-")).toMatchObject({ disposition: "approved_current" });
+    expect(find("owner|routine|function:identity.customer_stages(uuid,uuid,uuid,text,uuid,uuid,text)|jobguard_migration"))
+      .toMatchObject({ disposition: "approved_current", group: "a-owner-routines" });
+    expect(find("acl|routine|function:identity.customer_stages(uuid,uuid,uuid,text,uuid,uuid,text)|jobguard_identity|EXECUTE|-"))
+      .toMatchObject({ disposition: "approved_current", group: "a-customer-stage" });
     // Target state is a separate section and names no live key.
     expect(inventory.targetState.length).toBeGreaterThan(5);
     for (const t of inventory.targetState) { expect(t.statement).not.toMatch(/^acl\|/); for (const gid of t.groups) expect(groups.has(gid)).toBe(true); }

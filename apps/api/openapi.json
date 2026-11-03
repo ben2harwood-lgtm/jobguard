@@ -121,6 +121,79 @@
         ]
       }
     },
+    "/customer-portal/messages": {
+      "post": {
+        "operationId": "CustomerMessageController_post",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "job-source-intake-receipt.v1: saved message and exact checked evidence"
+          },
+          "401": {
+            "description": "CUSTOMER_REFUSED: no credential or scope diagnostics"
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE or a conflicting command replay",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE",
+                        "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "POST_LOCK_WORK_REQUIRES_LINKED_JOB"
+          }
+        },
+        "summary": "Save a fictional customer message and its checked original through SV-7A",
+        "tags": [
+          "customer portal"
+        ]
+      }
+    },
+    "/customer-portal/stages": {
+      "post": {
+        "operationId": "CustomerStagesController_stages",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read the signed-in customer's recorded stage snapshots and review status",
+        "tags": [
+          "customer portal"
+        ]
+      }
+    },
+    "/customer-portal/stage-acknowledge": {
+      "post": {
+        "operationId": "CustomerStagesController_acknowledge",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Acknowledge one exact verified stage snapshot; no payment, certification or waiver",
+        "tags": [
+          "customer portal"
+        ]
+      }
+    },
     "/small-builder-demo/trial": {
       "post": {
         "operationId": "SmallBuilderTrialDemoController_command",
@@ -132,6 +205,42 @@
         },
         "tags": [
           "SmallBuilderTrialDemo"
+        ]
+      }
+    },
+    "/customer-portal/quote": {
+      "post": {
+        "operationId": "CustomerQuoteController_quote",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "401": {
+            "description": "CUSTOMER_REFUSED: no credential or scope diagnostics"
+          }
+        },
+        "summary": "Read the current exact issued quote for this customer session",
+        "tags": [
+          "customer portal"
+        ]
+      }
+    },
+    "/customer-portal/quote-accept": {
+      "post": {
+        "operationId": "CustomerQuoteController_accept",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "401": {
+            "description": "CUSTOMER_REFUSED: no credential or scope diagnostics"
+          }
+        },
+        "summary": "Accept the exact quote revision and hash through the customer session",
+        "tags": [
+          "customer portal"
         ]
       }
     },
