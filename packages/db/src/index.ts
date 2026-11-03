@@ -38,6 +38,8 @@ export * from "./demo-seed.js";
 export * from "./demo-bootstrap.js";
 export * from "./demo-runtime.js";
 export * from "./commercial-integrity-repository.js";
+export * from "./commercial-integrity-v3-repository.js";
+export { CommercialIntegrityPersistenceError } from "./commercial-integrity-v3-sources.js";
 export * from "./job-import-repository.js";
 export * from "./sandbox-repository.js";
 
@@ -138,7 +140,6 @@ export * from "./free-first-job-eligibility-repository.js";
 export * from "./free-first-job-lifecycle-repository.js";
 export * from "./recovery-attribution-repository.js";
 export * from "./success-fee-repository.js";
-export * from "./money-trail-repository.js";
 export * from "./final-check-repository.js";
 export * from "./final-check-source-reader.js";
 
@@ -151,12 +152,13 @@ export { MeterLifecyclePersistenceError } from "./meter-lifecycle-source.js";
 
 export * from "./value-v3-reader.js";
 export * from "./enterprise-baseline-repository.js";
+export { IMPORT_CATCH_HOLD_REASON, JobImportV3Repository, JobImportV3Error } from "./job-import-v3-repository.js";
+export * from "./import-pre-adoption-repository.js";
 
-export * from "./financial-reconciliation-queue-repository.js";
-export { JobImportV3Repository, JobImportV3Error } from "./job-import-v3-repository.js";
-
+export * from "./plan-entitlement-service.js";
 export * from "./payment-fee-repository.js";
 export * from "./small-builder-demo-repository.js";
+export { reviewOfflineCommercialIntent } from "./offline-upload.js";
 export * from "./mobile-auth-store.js";
 
 export * from "./evidence-bundle.js";
@@ -170,3 +172,8 @@ export * from "./simulation-fee-collection-repository.js";
 export * from "./simulation-money-run-repository.js";
 export { ShadowDemoApprovalReader } from "./shadow-demo-approval-reader.js";
 export { ShadowDemoGuideRepository } from "./shadow-demo-guide-repository.js";
+
+export { importLateSource, readLateSourceObservations, readLateSources } from "./late-source-import.js";
+
+export * from "./financial-reconciliation-queue-repository.js";
+export * from "./money-trail-repository.js";

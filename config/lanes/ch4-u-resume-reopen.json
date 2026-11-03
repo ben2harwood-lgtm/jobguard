@@ -1,0 +1,33 @@
+{
+  "version": 2,
+  "lanes": {
+    "ch4-u-resume-reopen": {
+      "branches": [
+        "codex/sandbox/ch4-u-resume-reopen"
+      ],
+      "note": "CH-4-U RED: command-built company capture fixture, authenticated saved site-work view, and read bridge using existing CH-4 company command authority. Preserve practice access, meter cap/refusal, post-lock and exact replay controls.",
+      "allow": [
+        "apps/api/src/customer-invoice-sv5pre.filter.test.ts",
+        "apps/api/src/meter-today.application.ts",
+        "apps/api/src/meter-work-state.application.test.ts",
+        "apps/web/app/api/jobs/[id]/customer-invoices/route.test.ts",
+        "apps/web/app/api/meter/jobs/[id]/work-state/route.test.ts",
+        "apps/web/app/api/meter/jobs/[id]/work-state/route.ts",
+        "apps/web/app/jobs/[id]/page.tsx",
+        "apps/web/app/ui/job-work-state.tsx",
+        "apps/web/e2e/CH-4.spec.ts",
+        "apps/web/e2e/helpers/ch4-company-fixture.ts",
+        "packages/core/src/final-account-lock.ts",
+        "packages/db/migrations/0523_ch4_company_workspace_read.sql",
+        "packages/db/migrations/0524_practice_invoice_closed_job.sql",
+        "packages/db/src/guarded-practice-invoice-repository.test.ts",
+        "packages/db/src/guarded-practice-invoice-repository.ts",
+        "packages/db/src/job-work-state-repository.ts",
+        "packages/db/test/ch4-company-read.integration.test.ts",
+        "packages/db/test/job-work-state-fixtures.ts",
+        "packages/db/test/migration-proofs/0523_ch4_company_workspace_read.proof.json",
+        "packages/db/test/migration-proofs/0524_practice_invoice_closed_job.proof.json"
+      ]
+    }
+  }
+}

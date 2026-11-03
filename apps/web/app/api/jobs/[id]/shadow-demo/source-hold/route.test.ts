@@ -33,3 +33,24 @@ it("sanitises failures", async () => {
  const failed = await hold.GET(new Request("https://fictional.invalid"), params);
  expect(failed.status).toBe(503); expect(await failed.json()).toEqual({ code: "SHADOW_GUIDE_UNAVAILABLE" });
 });
+
+it("SV-5 Test I: must-surface requests stay off in every non-practice environment", async () => {
+ for (const environment of ["production_billing", "pilot_no_charge", "provider_sandbox", "disabled", ""]) {
+  vi.stubEnv("JOBGUARD_ENV", environment);
+  for (const response of [await hold.GET(new Request("https://fictional.invalid"), params), await hold.POST(post(), params)]) {
+   expect(response.status).toBe(403);
+   expect(await response.json()).toEqual({ code: "SYNTHETIC_MODE_REQUIRED" });
+   expect(response.headers.get("cache-control")).toBe("no-store");
+  }
+ }
+ expect(state.pool).not.toHaveBeenCalled();
+ expect(state.hold).not.toHaveBeenCalled();
+ expect(state.read).not.toHaveBeenCalled();
+});
+it("SV-5 Test I: practice mode uses the existing authorized worker request", async () => {
+ state.hold.mockResolvedValue({ state: "requested", realExternalActions: 0 });
+ const response = await hold.POST(post(), params);
+ expect(response.status).toBe(200);
+ expect(await response.json()).toEqual({ state: "requested", realExternalActions: 0 });
+ expect(state.hold).toHaveBeenCalledExactlyOnceWith("saved-job");
+});

@@ -415,3 +415,44 @@ come from SQL and committed reviewed records, never a running database.
 one routine, five policies and five forced-RLS tenancy postures. Neither
 migration on main is edited. PostgreSQL execution and exact-head RED review
 remain required before merge.
+
+
+## M4-17 catch-up, 3 November 2026
+
+The incoming main is `111865cf65f5e68a28ce1891bd52aad0ac7a0f10` (the
+launcher's merge target; the local `main` reference is older). Current migration
+identities are `0572_money_trail_reconciliation` and
+`0573_financial_reconciliation_queue`; earlier numbered references above are
+historical. Neither migration replaces a main routine. The queue still calls
+main's current `app.ef_actor` and `app.ef_audit`; the latter seals through
+`app.lp4_seal_audit` following LP-4. Main's privilege baseline and upgrade proof
+are preserved, with all five new tables included in the empty-successor list
+and migration proof fragments covering the exact table catalogues.
+
+The earlier pure fee-collection reference is retained as a dependency of the
+money-trail reference; it does not replace main's implemented simulation
+collection or money-trail command paths. Other inherited lane files are removed
+from the active lane directory. No production action or new behaviour is added.
+
+LATER / SIMPLICITY: `FinancialReconciliationQueueRepository.stored` has its own
+canonical JSON encoder alongside the core reconciliation encoder. A future
+focused change could reuse one reviewed encoder, reducing maintenance of
+equivalent comparison rules. This does not block the catch-up.
+
+Validation for this catch-up (installed local binaries, no package downloads):
+
+- Core: `tsc -p tsconfig.json` passed (compile and typecheck).
+- DB and API: `tsc -p tsconfig.json --noEmit` passed in each package.
+- Core Vitest 4.1.12, `--maxWorkers=2`: financial-reconciliation,
+  money-trail-reconciliation and fee-collection: 78 tests passed.
+- DB Vitest 4.1.12, `--maxWorkers=2`: financial-reconciliation-queue-repository,
+  money-trail-repository and migration-proof-loader: 89 tests passed.
+- API Vitest 4.1.12, `--maxWorkers=2`: fee-collection-fake-adapter: 10 tests passed.
+- `git diff --check MERGE_HEAD` passed. Conflict markers are resolved in the
+  three conflicted files; the launcher must stage them to clear the read-only
+  unmerged index. PostgreSQL migration/privilege/upgrade tests, browser suites,
+  full CI and independent exact-head RED review remain outstanding.
+
+The global pnpm launcher stalled before starting its commands and was stopped;
+checks above used existing package-local `.bin` executables. No tests failed,
+no expectations were weakened, and no git write or network action was run.
