@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState, type ReactNode } from "react";
 import { subscriptionPlanView, type SubscriptionPlanView } from "@jobguard/core";
+import { SubscriptionOnboarding } from "./subscription-onboarding";
 
 type CompanyMembership = { tenantId: string; name?: string };
 export async function loadSubscriptionWorkspace(fetcher: typeof fetch = fetch, selectedTenantId?: string,
@@ -110,6 +111,7 @@ export function PlanScreen({ consentTerms, consentText }: { consentTerms?: React
     {error ? <p role="alert">{error === "sign-in" ? <>Sign in to an authorised company to read its subscription. <a href="/sign-in">Company sign-in</a></>
       : "Subscription details are unavailable. Reload to try again."}</p>
       : view ? <><PlanDetails view={view} />
+        {!view.agreement && <SubscriptionOnboarding />}
         <section aria-label="Manage subscription"><h2>Manage subscription</h2>
           {consentTerms}
           <label>Plan <select aria-label="Plan" value={plan} disabled={busy} onChange={e => { setPlan(e.target.value as "Solo" | "Builder"); setConsent(false); }}><option>Solo</option><option>Builder</option></select></label>

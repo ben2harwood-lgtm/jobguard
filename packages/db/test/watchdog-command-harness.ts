@@ -125,7 +125,7 @@ const cases: Case[] = [
     prepare: async job => { await pre.requirement(job); },
     run: async (job, id, variant) => po.revise(ctx, job, orderInput(st(job).requirement, 0, id, variant === "changed" ? "11" : "10")),
     later: async job => { await po.revise(ctx, job, orderInput(st(job).requirement, 1, randomUUID(), "12")); } },
-  { key: "purchase-order-repository.ts#place", registry: ["/api/jobs/[id]/purchase-orders/placement", "nest:/jobs/:id/purchase-orders/placement", "command:purchase_order.simulate"],
+  { key: "purchase-order-repository.ts#place", registry: ["/api/jobs/[id]/purchase-orders/placement", "nest:/jobs/:id/purchase-orders/placement", "command:purchase_order.simulate", "command:purchase_order.place"],
     prepare: async job => { await pre.order(job); },
     run: async (job, id, variant) => po.place(ctx, job, placeCommand(job, id, variant) as any),
     later: async job => { await po.revise(ctx, job, orderInput(st(job).requirement, 1, randomUUID(), "12")); },
@@ -200,7 +200,7 @@ const cases: Case[] = [
     run: async (job, id, variant) => proof.complete(ctx, { version: "proof.complete.v1", commandId: id, actorMembershipId: member, jobId: job, scopeItemId: st(job).scope, stage: variant === "changed" ? "other-stage" : "electrical-stage", evidenceId: st(job).upload.id, requiredEvidenceType: "electrical_certificate", decisionId: null }),
     later: async job => { await proof.invalidate(ctx, { version: "proof.invalidate.v1", commandId: randomUUID(), actorMembershipId: member, evidenceId: st(job).upload.id, reasonCode: "verification_invalid" }); } },
   // SV-7A: one intake routine for both kinds; diary is replayed, a customer message is the later command.
-  { key: "job-source-repository.ts#intake", registry: ["/api/jobs/[id]/diary", "nest:/jobs/:id/diary", "command:JobSource.diary", "/api/jobs/[id]/customer-messages", "nest:/jobs/:id/customer-messages", "command:JobSource.customer_message"],
+  { key: "job-source-repository.ts#intake", registry: ["/api/jobs/[id]/diary", "nest:/jobs/:id/diary", "command:JobSource.diary", "/api/jobs/[id]/customer-messages", "nest:/jobs/:id/customer-messages", "/api/customer-portal/messages", "nest:/customer-portal/messages", "command:JobSource.customer_message"],
     prepare: async () => {},
     run: async (job, id, variant) => new JobSourceRepository(observed.pool).intake(ctx, job, member, "diary", { version: "job-diary-input.v1", commandId: id, entryMode: "typed", onSite: false, text: variant === "changed" ? "Fictional off-site note, changed." : "Fictional off-site note." }),
     later: async job => { await new JobSourceRepository(observed.pool).intake(ctx, job, member, "customer_message", { version: "customer-message-input.v1", commandId: randomUUID(), fictionalCustomer: { kind: "named_fictional_customer", name: "Fictional customer" }, text: "Fictional customer message." }); } },
@@ -212,7 +212,8 @@ async function boot() {
   const port = await freePort(portBase, 400);
   pg = new EmbeddedPostgres({ databaseDir: dir, port, user: "postgres", password: "synthetic", persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
   await pg.initialise(); await pg.start();
-  admin = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "postgres", password: "synthetic", max: 4 });
+  await pg.createDatabase("jobguard_synthetic_demo");
+  admin = new Pool({ host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "postgres", password: "synthetic", max: 4 });
   await migrate(admin);
   await admin.query("INSERT INTO control_plane.tenant(id)VALUES($1)", [tenant]);
   const user = randomUUID(), account = randomUUID();
@@ -220,7 +221,7 @@ async function boot() {
   await admin.query("INSERT INTO app.account(id,tenant_id,name)VALUES($1,$2,'Fictional builder')", [account, tenant]);
   for (const id of [member, otherMember]) await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)VALUES($1,$2,$3,$4,'owner')", [id, tenant, account, user]);
   await admin.query("CREATE ROLE replay_contract_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;GRANT jobguard_runtime TO replay_contract_login");
-  runtime = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "replay_contract_login", password: "synthetic", max: 8 });
+  runtime = new Pool({ host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "replay_contract_login", password: "synthetic", max: 8 });
   observed = new ObservedPool(runtime, admin); const pool = observed.pool;
   po = new PurchaseOrderRepository(pool); docs = new SupplierDocumentRepository(pool); match = new SupplierMatchRepository(pool); checks = new DiscrepancyRepository(pool);
   readiness = new ReadinessRepository(pool); inbox = new InboxRelevanceRepository(pool); evidence = new EvidenceService(pool, storage); proof = new ProofCommandService(pool, storage); materials = new MaterialRepository(pool);
