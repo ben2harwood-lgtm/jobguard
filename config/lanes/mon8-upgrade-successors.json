@@ -6,7 +6,7 @@
         "codex/sandbox/mon8-upgrade-successors"
       ],
       "receipt": "docs/verdicts/MON8-UPGRADE-SUCCESSORS/BUILDER_RECEIPT.md",
-      "note": "MON-8 RED exact-union catch-up against origin/main 71de973ffb5c3e9d89aa314882ac5af7549c2cc5; final migration stems 0548_server_plan_entitlements and 0549_contractor_feature_guards. Router stages, commits, pushes and runs CI and exact-head RED review.",
+      "note": "MON-8 RED exact-union catch-up against origin/main 755f063d0d897f98e31fae4ac89a040cf4d10eed; final migration stems 0548_server_plan_entitlements and 0549_contractor_feature_guards. Router stages, commits, pushes and runs CI and exact-head RED review.",
       "allow": [
         "apps/api/src/auth/context-boundary.test.ts",
         "apps/api/src/contractor/contractor-retained-read.application.test.ts",

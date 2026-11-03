@@ -1393,3 +1393,41 @@ work after the router stages and pushes. RED still requires independent review a
 the resulting exact head. This is deterministic local evidence, not an independent
 review or merge authorization. No Git writes, fetch, downloads, database/localhost
 startup, provider actions or real customer data were used.
+
+### 3 November 2026 — PR #302 incoming-main successor union at 755f063d
+
+MON-8, RED, catch-up only. Incoming MERGE_HEAD and observed origin/main are
+755f063d0d897f98e31fae4ac89a040cf4d10eed. Resolved the one remaining working-tree
+conflict in contractor-entitlement-upgrade.integration.test.ts by preserving the
+branch's explicit successor list and predecessor proofs, with main's
+customer_quote_approval and customer_stage_acknowledgement entries. Added
+payment_fee_authority from #537's 0544 migration in the same empty-successor form.
+#523's 0547 migration adds no table. Incoming migrations add no command registry
+rows; the existing currentCommandRegistryRows source remains identical to main.
+All assertions following the successor list remain byte-identical to branch HEAD.
+No behavior, expected outcome, migration SQL or migration number changed.
+
+Updated the existing lane to incoming main and all 101 changed non-lane paths.
+Byte comparison confirms all 212 main migrations and branch migrations 0548–0549
+are unchanged. Both sides' explicit successor entries remain. Existing endpoint
+lane/migration-order helpers, conflict-marker scan and git diff --check origin/main
+pass. Git index is read-only and still requires router staging to clear UU.
+
+Actual local checks (Node 24.17.0, installed Vitest 4.1.12):
+- From packages/db: node node_modules/vitest/vitest.mjs run --maxWorkers=1
+  test/mon8-combined-migration.test.ts src/plan-entitlement-service.test.ts
+  src/outbox.test.ts — 3 files, 24 tests passed. An initial invocation used a
+  root-relative runner path from packages/db and failed before running tests;
+  corrected the path for this successful run.
+- node packages/db/node_modules/typescript/bin/tsc -p packages/db/tsconfig.json
+  --noEmit — passed.
+- node packages/db/node_modules/typescript/bin/tsc --noEmit --strict
+  --noUncheckedIndexedAccess --exactOptionalPropertyTypes --skipLibCheck
+  --target ES2023 --module NodeNext --moduleResolution NodeNext
+  packages/db/test/contractor-entitlement-upgrade.integration.test.ts — passed.
+
+READY for router staging, commit and push. PostgreSQL/migration and browser
+execution, full CI and independent RED review at the resulting exact head remain
+required. No Git writes, fetch, package downloads, database/localhost startup,
+provider actions or real customer data were used. These are deterministic local
+checks, not independent review or release approval.
