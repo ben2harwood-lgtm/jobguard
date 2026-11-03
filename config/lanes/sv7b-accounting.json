@@ -5,18 +5,18 @@
       "branches": [
         "codex/sandbox/sv7b-accounting"
       ],
-      "note": "RED SV-7B catch-up: disabled synthetic accounting connector; unchanged SQL renumbered to 0596, with explicit LP-0, upgrade and tenancy proof. Router handles commit/push; NOPR=1, no CI use during freeze. PostgreSQL, browser and independent RED review remain pending.",
+      "note": "RED SV-7B catch-up: disabled synthetic accounting connector; unchanged SQL renumbered to 0609, with explicit LP-0, upgrade and tenancy proof. Router handles commit/push; NOPR=1, no PR or CI use until the router opens this group. PostgreSQL, browser and independent RED review remain pending.",
       "allow": [
         "apps/api/src/accounting-observation-connector.test.ts",
         "apps/api/src/accounting-observation-connector.ts",
         "docs/operations/accounting-observation-data-flow.md",
         "packages/db/MIGRATIONS.md",
-        "packages/db/migrations/0596_accounting_observation_receipt.sql",
+        "packages/db/migrations/0609_accounting_observation_receipt.sql",
         "packages/db/src/accounting-observation-receipt-repository.ts",
         "packages/db/src/index.ts",
         "packages/db/test/accounting-observation-receipt.integration.test.ts",
         "packages/db/test/accounting-observation-receipt.test.ts",
-        "packages/db/test/migration-proofs/0596_accounting_observation_receipt.proof.json"
+        "packages/db/test/migration-proofs/0609_accounting_observation_receipt.proof.json"
       ]
     }
   }

@@ -1222,7 +1222,7 @@ Q2 non-catch authority and Q3 negative execution remain held. Forward fix:
 disable the route and append a reviewed migration; preserve any future financial
 history. Never enable posting by removing the refusal alone.
 
-### 0596 — SV-7B synthetic accounting observation receipts (branch-owned)
+### 0609 — SV-7B synthetic accounting observation receipts (branch-owned)
 
 Adds an append-only receipt keyed by tenant/evidence/object version, with a job
 foreign key and observation hash for conflicting replay detection. Forced tenant
