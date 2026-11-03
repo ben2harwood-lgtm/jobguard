@@ -3,10 +3,10 @@ import { MeterWorkStateApplication } from "./meter-today.application.js";
 const tenant="00000000-0000-4000-8000-000000000001", actor="00000000-0000-4000-8000-000000000002";
 const credentials={sessionToken:"s".repeat(32),csrfToken:"c".repeat(24),tenantHeader:tenant,origin:"https://company.invalid"};
 function fixture() {
- const command=vi.fn(async()=>({saved:true}));
+ const command=vi.fn(async()=>({saved:true})), read=vi.fn(async()=>({saved:true}));
  const authenticate=vi.fn(async(token:string)=>token===credentials.sessionToken?{identityUserId:tenant,sessionId:tenant,csrfToken:credentials.csrfToken}:undefined);
  const findMembership=vi.fn(async(_:unknown,id:string)=>id===tenant?{id:actor,identityUserId:tenant,tenantId:tenant,role:"owner"}:undefined);
- return {command,authenticate,findMembership,app:new MeterWorkStateApplication({allowedOrigin:credentials.origin,provider:{authenticate,findMembership}} as never,{command} as never)};
+ return {command,read,authenticate,findMembership,app:new MeterWorkStateApplication({allowedOrigin:credentials.origin,provider:{authenticate,findMembership}} as never,{command,read} as never)};
 }
 afterEach(()=>vi.unstubAllEnvs());
 it("derives company and actor from verified session authority, not the command body",async()=>{
@@ -30,4 +30,15 @@ it("rechecks membership and session; refuses production",async()=>{
  revoked.authenticate.mockResolvedValueOnce({identityUserId:tenant,sessionId:tenant,csrfToken:credentials.csrfToken}).mockResolvedValueOnce(undefined);
  await expect(revoked.app.command(credentials,tenant,{})).rejects.toThrow("METER_FORBIDDEN");expect(revoked.command).not.toHaveBeenCalled();
  vi.stubEnv("JOBGUARD_ENV","production");await expect(f.app.command(credentials,tenant,{})).rejects.toThrow("METER_FORBIDDEN");
+});
+
+it("company reads derive the owner from the current session and reject invalid credentials", async () => {
+ vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); const f = fixture();
+ expect(await f.app.read(credentials, actor)).toEqual({saved:true});
+ expect(f.read).toHaveBeenCalledWith(expect.objectContaining({tenantId:tenant}), actor, actor);
+ f.read.mockClear();
+ for (const change of [{sessionToken:undefined}, {csrfToken:undefined}, {tenantHeader:actor}, {origin:"https://foreign.invalid"}]) {
+  await expect(f.app.read({...credentials,...change}, actor)).rejects.toThrow();
+ }
+ expect(f.read).not.toHaveBeenCalled();
 });
