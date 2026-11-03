@@ -747,10 +747,11 @@ describe("round 9 saved proof response and legacy readiness adapter conflicts", 
   });
   it.each(["foreign job", "dispatcher receipt"])("purchase-order %s replay conflict is typed at the Nest boundary", async conflict => {
     const { pool, statements } = replayPool(sql => {
-      if (sql.startsWith("SELECT role FROM app.membership")) return [{ role: "owner" }];
+      if (sql.startsWith("SELECT 1 FROM app.membership")) return [{}];
       if (sql.startsWith("SELECT 1 FROM app.command_receipt c")) return conflict === "foreign job" ? [{}] : [];
-      if (sql.startsWith("INSERT INTO app.command_receipt")) return [];
       if (sql.startsWith("SELECT request_hash,status,result FROM app.command_receipt")) return [{ request_hash: "different", status: "succeeded", result: { privateOriginal: true } }];
+      // LP-5a owns receipt claims and rejects a mismatched prior digest in begin_command.
+      if (sql.startsWith("SELECT app.begin_command(")) throw Object.assign(new Error("COMMAND_CONFLICT"), { code: "23505" });
       return undefined;
     });
     const command = { version: "command.v1", commandId: replayCommand, commandType: "purchase_order.place", semanticKey: "synthetic-order",

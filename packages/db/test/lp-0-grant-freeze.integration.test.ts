@@ -99,6 +99,36 @@ describe("LP-0 grant freeze guard against the fully migrated database", () => {
     expect(role).toMatchObject({ super: false, bypassrls: false, createrole: false, createdb: false, replication: false, inherit: false });
   });
 
+  it("[CH-5] pre-adoption exclusion retains its inventoried FORCE RLS and tenant policy", async () => {
+    const relation = "app.import_pre_adoption_evidence";
+    // Bounded CH-5 regression; the general LP0-13 comparator hold is unchanged.
+    const assertProtection = async (client: PoolClient | Lp0Database["admin"]) => {
+      const catalogue = await readCatalogue(client);
+      const table = catalogue.relations.find(r => `${r.schema}.${r.name}` === relation);
+      expect(table, "CH-5 exclusion requires ENABLE and FORCE RLS").toMatchObject({ rlsEnabled: true, rlsForced: true });
+      expect(inventory.recorded.rls).toContain(`${relation}|rls=t|forced=t`);
+      const policies = catalogue.policies.filter(p => p.relation === relation);
+      expect(policies, "CH-5 exclusion requires its sole tenant policy").toHaveLength(1);
+      const policy = policies[0]!;
+      expect(policy).toMatchObject({ name: "tenant_isolation", permissive: true, command: "ALL", roles: ["jobguard_migration"] });
+      expect(inventory.recorded.policies).toContain(`${relation}|${policy.name}|PERMISSIVE|ALL|jobguard_migration|${policy.digest.slice(0, 16)}`);
+    };
+    await assertProtection(db.admin);
+    for (const defect of [
+      `DROP POLICY tenant_isolation ON ${relation}`,
+      `ALTER TABLE ${relation} NO FORCE ROW LEVEL SECURITY`,
+      `ALTER TABLE ${relation} DISABLE ROW LEVEL SECURITY`,
+      `ALTER POLICY tenant_isolation ON ${relation} USING (true) WITH CHECK (true)`,
+    ]) {
+      await rolledBack(db.admin, async client => {
+        await assertProtection(client);
+        await client.query(defect);
+        await expect(assertProtection(client), defect).rejects.toThrow();
+      });
+      await assertProtection(db.admin);
+    }
+  });
+
   it("[LP0-meter-revoke] the retired reader is refused and re-granting it fails the freeze", async () => {
     const signature = "app.mon1_counted_meter_today(uuid,text)";
     expect((await db.admin.query(`SELECT has_function_privilege('${APPLICATION_ROLE}',$1,'EXECUTE') AS allowed`, [signature])).rows).toEqual([{ allowed: false }]);
@@ -354,7 +384,7 @@ describe("LP-0 grant freeze guard against the fully migrated database", () => {
     const find = (key: string) => rows.find(r => r.key === key);
     // Existing powers are reported as what they are, not as SELECT/INSERT-only and not as the final state.
     for (const [key, cards] of [
-      ["acl|rel|table|app.audit_event|jobguard_runtime|INSERT|-", ["LP-4", "LP-6e"]],
+      ["acl|rel|table|app.audit_event|jobguard_audit_writer|INSERT|-", ["LP-4", "LP-6e"]],
       ["acl|rel|table|app.command_receipt|jobguard_runtime|INSERT|-", ["LP-5a", "LP-5b", "LP-5c"]],
       ["acl|col|app.command_receipt.status|jobguard_runtime|UPDATE|-", ["LP-5c"]],
       ["acl|rel|table|app.customer_invoice|jobguard_runtime|INSERT|-", ["LP-8a"]],
@@ -367,6 +397,9 @@ describe("LP-0 grant freeze guard against the fully migrated database", () => {
       expect(row!.cards, key).toEqual(expect.arrayContaining([...cards]));
       expect(row!.target).not.toBe("retain");
     }
+    // LP-4 deliberately withdraws direct runtime audit INSERT; its dedicated
+    // NOLOGIN writer is the remaining, separately reviewed capability above.
+    expect(find("acl|rel|table|app.audit_event|jobguard_runtime|INSERT|-")).toBeUndefined();
     // LP-1 closed these broad powers; neither live facts nor the reviewed exceptions may retain them.
     for (const key of [
       "acl|rel|table|app.membership|jobguard_runtime|DELETE|-",
@@ -393,8 +426,12 @@ describe("LP-0 grant freeze guard against the fully migrated database", () => {
     expect(exceptions.has(closedTransition)).toBe(false);
     expect(baselineBootstrapLogin.some(fact => fact.key === closedTransition)).toBe(false);
     expect((await db.admin.query("SELECT has_function_privilege('jobguard_runtime','app.transition_job(uuid,uuid,integer,varchar,varchar,uuid,bigint,varchar,bigint)','EXECUTE') allowed")).rows).toEqual([{ allowed: false }]);
-    // Reads are approved current capability, rebound at LP-11; they are not an exception.
+    // Reads and the MON-5 identity stage routine are approved current capabilities, not exceptions.
     expect(find("acl|rel|table|app.job|jobguard_runtime|SELECT|-")).toMatchObject({ disposition: "approved_current" });
+    expect(find("owner|routine|function:identity.customer_stages(uuid,uuid,uuid,text,uuid,uuid,text)|jobguard_migration"))
+      .toMatchObject({ disposition: "approved_current", group: "a-owner-routines" });
+    expect(find("acl|routine|function:identity.customer_stages(uuid,uuid,uuid,text,uuid,uuid,text)|jobguard_identity|EXECUTE|-"))
+      .toMatchObject({ disposition: "approved_current", group: "a-customer-stage" });
     // Target state is a separate section and names no live key.
     expect(inventory.targetState.length).toBeGreaterThan(5);
     for (const t of inventory.targetState) { expect(t.statement).not.toMatch(/^acl\|/); for (const gid of t.groups) expect(groups.has(gid)).toBe(true); }

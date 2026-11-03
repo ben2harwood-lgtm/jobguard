@@ -1,3 +1,4 @@
+import { beforeTermsCommitPool } from "./recovery-terms-timing-fixture.js";
 import { permitImportedJob } from "./lp-practice-home-job-fixture.js";
 // PostgreSQL suites are NOT RUN locally by dispatcher instruction. No mocked database proof.
 import { createHash, randomUUID } from "node:crypto";
@@ -146,23 +147,68 @@ it("TermsReviewConcurrency: shared case lock blocks review until rollback",async
   expect(await reviewing).toMatchObject({result:{qualifyingPrincipal:{pence:0},reason:note}});
  }finally{await held.query("ROLLBACK");held.release();await reviewing;}
 });
-it.todo("LaterApprovalPreservesEarlierReview: historical replay covered by the upgrade suite (the missing-approval case is no longer a STOP: ruling 130 option B)");
-it.todo("TermsReviewConcurrency: reversed transaction-start/commit order remains undecided; approval/settlement equality is not excluded under ruling 130's strictly-after rule (no natural equality to construct)");
+it("LaterApprovalPreservesEarlierReview: later approval leaves the saved version and outcome unchanged",async()=>{
+ const f=await fixture();await f.advance("receipt-3000");
+ const command=review(f.c,"F18"),earlier=await save(f,command);
+ expect(earlier.result).toMatchObject({policyVersion:"reference_recovery_eligibility_policy_v3",outcome:"eligible_for_review",qualifyingPrincipal:{pence:250000}});
+ const historical=async()=>(await admin.query("SELECT row_to_json(r)::text bytes FROM app.recovery_eligibility_v3_review r WHERE tenant_id=$1 AND id=$2",[T,earlier.id])).rows[0].bytes;
+ const before=await historical(),approval=await approve(f);
+ const client=await admin.connect();try{
+  await client.query("BEGIN");await client.query("SET LOCAL session_replication_role=replica");
+  await client.query("UPDATE app.recovery_case_terms_approval a SET approved_at=e.created_at+interval '1 microsecond' FROM app.practice_feed_event e WHERE a.tenant_id=$1 AND a.id=$2 AND e.tenant_id=a.tenant_id AND e.id=$3",[T,approval.id,await source(f)]);
+  await client.query("COMMIT");
+ }catch(error){await client.query("ROLLBACK");throw error;}finally{client.release();}
+ const later=await save(f,review(f.c,"F18",earlier.revision));
+ expect(later.result).toMatchObject({outcome:"excluded",qualifyingPrincipal:{pence:0},reason:note});
+ expect(later.revision).toBe(earlier.revision+1);
+ expect(await historical()).toBe(before);
+ expect(await save(f,command)).toEqual(earlier);
+ expect((await f.cases.listForMember(ctx,f.jobId,actor)).find(c=>c.id===f.c.id)?.eligibilityV3).toEqual(later);
+});
+it("TermsReviewConcurrency: settlement starts first and commits after approval without qualifying the earlier receipt",async()=>{
+ const f=await fixture();
+ let started!:()=>void,resume!:()=>void;
+ const atStart=new Promise<void>(resolve=>{started=resolve;}),continueSettlement=new Promise<void>(resolve=>{resume=resolve;});
+ // Pause the real feed transaction immediately after BEGIN, before business/audit locks.
+ // Its stored transaction timestamp precedes approval even though it commits last.
+ const intercepted=new Proxy(runtime,{
+  get(pool,key){
+   if(key==="connect")return async()=>{
+    const client=await pool.connect();
+    return new Proxy(client,{get(connection,property){
+     if(property==="query")return async(...args:unknown[])=>{
+      const result=await Reflect.apply(connection.query,connection,args);
+      if(args[0]==="BEGIN"){started();await continueSettlement;}
+      return result;
+     };
+     const value=Reflect.get(connection,property);return typeof value==="function"?value.bind(connection):value;
+    }});
+   };
+   const value=Reflect.get(pool,key);return typeof value==="function"?value.bind(pool):value;
+  },
+ });
+ const feed=new PracticeFeedRepository(intercepted,"synthetic_demo"),{revision}=await new PracticeFeedRepository(runtime,"synthetic_demo").view(ctx,actor,f.auth.digest,f.jobId);
+ const settling=feed.command(ctx,actor,f.auth.digest,f.jobId,{version:"practice-feed-command.v1",commandId:randomUUID(),expectedRevision:revision,action:"advance",movement:"receipt-3000",step:"settled"});
+ // Attach rejection handling while waiting for the barrier, so an early failure cannot hang it.
+ const completed=settling.then(()=>"committed",error=>{throw error;});
+ try{
+  await Promise.race([atStart,completed.then(()=>{throw new Error("Settlement completed before start barrier");})]);
+  const approval=await approve(f);
+  resume();await completed;
+  expect((await admin.query("SELECT a.approved_at>e.created_at later FROM app.recovery_case_terms_approval a JOIN app.practice_feed_event e ON e.tenant_id=a.tenant_id AND e.id=$3 WHERE a.tenant_id=$1 AND a.id=$2",[T,approval.id,await source(f)])).rows[0].later).toBe(true);
+  const saved=await save(f);
+  expect(saved.result).toMatchObject({outcome:"excluded",qualifyingPrincipal:{pence:0,currency:"GBP"},reason:note});
+  expect(saved.result.lines[0]).toMatchObject({kind:"principal",qualifyingPrincipal:{pence:0},reason:note});
+ }finally{resume();await completed;}
+});
 it.each(["commit","rollback"] as const)("TermsReviewConcurrency: authorized approval %s serializes with review",async outcome=>{
  const f=await fixture();await f.advance("receipt-3000");
  let ready!:()=>void,rollback!:()=>void;
  const atCommit=new Promise<void>(resolve=>{ready=resolve;}),releaseCommit=new Promise<void>(resolve=>{rollback=resolve;});
- const intercepted=Object.create(runtime) as Pool;
- intercepted.connect=(async()=>{
-  const client=await runtime.connect();
-  return new Proxy(client,{get(target,key){
-   if(key==="query")return async(...args:unknown[])=>{
-    if(args[0]==="COMMIT"){ready();await releaseCommit;if(outcome==="rollback"){await target.query("ROLLBACK");throw new Error("DW3 injected rollback");}}
-    return Reflect.apply(target.query,target,args);
-   };
-   const value=Reflect.get(target,key);return typeof value==="function"?value.bind(target):value;
-  }});
- }) as Pool["connect"];
+ const intercepted=beforeTermsCommitPool(runtime,async client=>{
+  ready();await releaseCommit;
+  if(outcome==="rollback"){await client.query("ROLLBACK");throw new Error("DW3 injected rollback");}
+ });
  const approval=new RecoveryCaseTermsRepository(practiceMaterialPool(intercepted,f.auth.digest)).approve(ctx,f.jobId,termsCommand(f.c.id),actor).then(()=>"committed",error=>(error as Error).message);
  await Promise.race([atCommit,approval.then(result=>{throw new Error(`Approval completed before barrier: ${result}`);})]);
  const reviewing=save(f).then(value=>value.result.qualifyingPrincipal.pence,error=>(error as Error).message);

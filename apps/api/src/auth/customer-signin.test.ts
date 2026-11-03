@@ -1,3 +1,5 @@
+import { createHmac } from "node:crypto";
+import { customerSigninLink } from "@jobguard/db";
 import { customerApprovalMethodV1 } from "@jobguard/core";
 import { variationCommandV1 } from "../variation/contracts.js";
 import { BadRequestException, type ArgumentsHost } from "@nestjs/common";
@@ -22,7 +24,7 @@ const headers = { origin, cookie: `jobguard_customer=${cookie}` };
 function fixture(environment = "synthetic_demo") {
   const query = vi.fn().mockResolvedValue({ rows: [{ result: { version: "customer-session.v1", jobId: job } }] });
   const context = vi.fn().mockResolvedValue({});
-  const digest = vi.fn((v: string) => `hmac:${v}`);
+  const digest = vi.fn((v: string) => createHmac("sha256", "fictional-test-secret").update(v).digest("hex"));
   const identity = { allowedOrigin: origin, context, provider: { digest, repository: { pool: { query } } } } as unknown as IdentityApplication;
   return { query, context, digest, identity, app: new CustomerSigninApplication(identity, environment) };
 }
@@ -50,8 +52,10 @@ describe("MON-5 customer credential boundary (transport tests; PostgreSQL author
     expect(result).toEqual({ body: { version: "customer-link-issued.v1", grantId: customer } });
     expect(f.context).toHaveBeenCalledWith({ sessionToken: "builder", requestedTenantId: tenant, origin, csrfToken: "csrf" });
     const args = f.query.mock.calls[0]![1] as string[];
-    expect(args[5]).toMatch(new RegExp(`^/customer/sign-in#${tenant}/${job}/${customer}/[A-Za-z0-9_-]{43}$`));
-    expect(f.digest).toHaveBeenCalledWith(`customer-link:${args[5]!.split("/").at(-1)}`);
+    expect(args[5]).toMatch(new RegExp(`^customer-signin-reference\\.v1:${tenant}/${job}/${customer}/[A-Za-z0-9_-]{43}$`));
+    const path = customerSigninLink(args[5]!, f.digest);
+    expect(f.digest).toHaveBeenCalledWith(`customer-link:${path.split("/").at(-1)}`);
+    expect(JSON.stringify(f.query.mock.calls)).not.toContain(path.split("/").at(-1)!);
     expect(JSON.stringify(result)).not.toContain(args[5]!);
   });
   it.each(["issue", "revoke"] as const)("rejects a customer cookie on %s even with builder credentials", async action => {
@@ -96,6 +100,18 @@ describe("MON-5 customer credential boundary (transport tests; PostgreSQL author
       await expect(guard.canActivate(context)).rejects.toMatchObject({ status: 401 });
     }
   });
+  it.each(["issue", "revoke", "signin", "signout", "read", "messages", "quote", "quote-accept", "variations/read", "variation-approvals"])("delegates only exact POST %s to the customer boundary", async action => {
+    const guard = new ApplicationAuthGuard(() => { throw new Error("builder authentication must not run"); });
+    const context = (path: string, method: string) => ({ switchToHttp: () => ({ getRequest: () => ({ path, method, headers }) }) }) as ExecutionContext;
+    const path = `/customer-portal/${action}`;
+    await expect(guard.canActivate(context(path, "POST"))).resolves.toBe(true);
+    for (const method of ["GET", "PUT", "PATCH", "DELETE", "OPTIONS"]) {
+      await expect(guard.canActivate(context(path, method))).rejects.toMatchObject({ status: 401 });
+    }
+    for (const suffix of ["/", "/extra"]) {
+      await expect(guard.canActivate(context(`${path}${suffix}`, "POST"))).rejects.toMatchObject({ status: 401 });
+    }
+  });
   it.each(["issue", "revoke", "signin", "signout", "read"] as const)("production Next %s adapter preserves the SQL refusal", async action => {
     const f = fixture(); f.query.mockRejectedValue({ code: "42501" }); routeIdentity.current = f.identity;
     const previous = process.env.JOBGUARD_ENV; process.env.JOBGUARD_ENV = "synthetic_demo";
@@ -108,13 +124,13 @@ describe("MON-5 customer credential boundary (transport tests; PostgreSQL author
       expect(f.query).toHaveBeenCalledOnce(); expect(result.headers.get("cache-control")).toBe("no-store");
     } finally { if(previous===undefined) delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=previous; }
   });
-  it("malformed JSON gets the same generic refusal before Nest controllers or Next applications", async () => {
+  it.each(["signin", "messages", "quote", "quote-accept", "variations/read", "variation-approvals"])("malformed JSON on %s gets the same generic refusal before Nest controllers or Next applications", async action => {
     const f=fixture();
     const next=await customerHttp(f.app,"signin",new Request(`${origin}/api/customer-portal/signin`,{method:"POST",headers:{origin,"Content-Type":"application/json"},body:"{"}));
     expect(next.status).toBe(401);expect(await next.json()).toEqual({code:"CUSTOMER_REFUSED"});expect(f.query).not.toHaveBeenCalled();
     const response={setHeader:vi.fn(),status:vi.fn().mockReturnThis(),json:vi.fn()};
     const filter=new OidcParseExceptionFilter(()=>{throw new Error("OIDC must not run");}, {} as never);
-    await filter.catch(new BadRequestException(),{switchToHttp:()=>({getRequest:()=>({path:"/customer-portal/signin"}),getResponse:()=>response})} as ArgumentsHost);
+    await filter.catch(new BadRequestException(),{switchToHttp:()=>({getRequest:()=>({path:`/customer-portal/${action}`}),getResponse:()=>response})} as ArgumentsHost);
     expect(response.status).toHaveBeenCalledWith(401);expect(response.json).toHaveBeenCalledWith({code:"CUSTOMER_REFUSED"});
     expect(response.setHeader).toHaveBeenCalledWith("Cache-Control","no-store");
   });
@@ -148,7 +164,7 @@ describe("MON-5 customer credential boundary (transport tests; PostgreSQL author
     expect(f.query).not.toHaveBeenCalled();
     await f.app.run("issue",{version:"customer-link-issue.v1",...scope,tenantId:"ABCDEF00-0000-4000-8000-000000000001"},{headers:{origin,cookie:"jobguard_session=builder"}});
     expect(f.query.mock.calls[0]![1][0]).toBe("abcdef00-0000-4000-8000-000000000001");
-    expect(f.query.mock.calls[0]![1][5]).toContain("#abcdef00-0000-4000-8000-000000000001/");
+    expect(f.query.mock.calls[0]![1][5]).toContain(":abcdef00-0000-4000-8000-000000000001/");
   });
 
 });
