@@ -1,3 +1,4 @@
+import { pauseOutboundFixture } from "./outbound-pause-fixture.js";
 import { assertLp4SealedEvents } from "./lp4-writer-catchup-fixture.js";
 import {afterAll,beforeAll,expect,it} from "vitest";
 import {randomUUID} from "node:crypto";
@@ -39,18 +40,17 @@ it("M0-13a paused contractor delivery keeps its queued artifact and records no a
  const w=await world(c),batch=await w.exported(),view=await w.repo.read(w.ctx,w.session,w.s.jobId);
  const action=await w.repo.approveDelivery(w.ctx,w.session,w.s.jobId,{version:"billing-approve-delivery.v1",commandId:randomUUID(),batchId:batch.batchId,channel:"fake_api",destination:"fictional.invalid",contentHash:view.exports[0]!.jsonHash,expiresAt:new Date(Date.now()+3600000).toISOString()});
  const before=(await c.admin.query("SELECT * FROM app.action_outbox WHERE id=$1",[action.outboxActionId])).rows;
- const prior=(await c.admin.query("SELECT paused FROM outbound_control.state")).rows[0].paused;
  let calls=0;
  const adapter:OutboundAdapter={name:"fake_api",supportsProviderDeduplication:true,async deliver(){calls++;return {kind:"succeeded",providerReference:"fictional-pause"};},async reconcile(){return "unknown";}};
  const executor=new ContractorBillingDelivery(c.runtime,new Map([[adapter.name,adapter]]));
- await c.admin.query("UPDATE outbound_control.state SET paused=true");
+ const resume = await pauseOutboundFixture(c.admin);
  try{
   await executor.execute(w.ctx,w.session,w.s.jobId,action.outboxActionId);
   await executor.execute(w.ctx,w.session,w.s.jobId,action.outboxActionId);
   expect(calls).toBe(0);
   expect((await c.admin.query("SELECT * FROM app.action_outbox WHERE id=$1",[action.outboxActionId])).rows).toEqual(before);
   expect((await c.admin.query("SELECT count(*)::int n FROM app.action_attempt WHERE action_id=$1",[action.outboxActionId])).rows).toEqual([{n:0}]);
- }finally{await c.admin.query("UPDATE outbound_control.state SET paused=$1",[prior]);}
+ }finally{await resume();}
  await executor.execute(w.ctx,w.session,w.s.jobId,action.outboxActionId);
  await executor.execute(w.ctx,w.session,w.s.jobId,action.outboxActionId);
  expect(calls).toBe(1);
