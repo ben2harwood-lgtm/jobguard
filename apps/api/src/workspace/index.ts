@@ -100,7 +100,7 @@ export * from "../contractor/billing.application.js";
 export * from "../meter-today.application.js";
 export * from "../recovery-attribution.application.js";
 export * from "../recovery-attribution.contracts.js";
-export { JobImportV3Application } from "../job-import-v3.application.js";
+export { JobImportV3Application, CompanyJobImportV3Application } from "../job-import-v3.application.js";
 export { JobImportV3Error } from "@jobguard/db";
 
 export { jobWorkStateFailure } from "../job-work-state.failure.js";

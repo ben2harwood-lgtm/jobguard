@@ -6,11 +6,11 @@ import type { WorkFixture } from "./job-work-state-fixtures.js";
 import { meterCompany } from "./meter-persistence-fixtures.js";
 import { proofBefore, proofDifferences } from "./upgrade-proof-utils.js";
 import { DunningRepository } from "../src/dunning-repository.js";
-const migration = "0607_dunning_workbench_preview.sql";
+const migration = "0565_dunning_workbench_preview.sql";
 let c: Cluster;
 beforeAll(async () => { c = await startBeforeMigration(migration); }, 240000);
 afterAll(async () => { await c?.close(); });
-it("0607 preserves populated history, redrafts expired previews once and reports the current Decision", async () => {
+it("0565_dunning_workbench_preview preserves populated history, redrafts expired previews once and reports the current Decision", async () => {
   const a = await meterCompany(c as unknown as WorkFixture), iid = randomUUID(), did = randomUUID();
   const p = { version: "dunning-invoice.v1", environment: "synthetic_demo", tenantId: a.tenantId, jobId: a.jobId, invoiceId: iid,
     revision: 1, sourceRevision: 1, sourceHash: "a".repeat(64), sourceState: "issued_invoice", finalAccountLockId: null,
