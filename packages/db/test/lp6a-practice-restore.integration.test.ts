@@ -47,10 +47,10 @@ it("home digests and raw contractor IDs bind only their practice principals, nev
 });
 
 it("upgrades dark, round-trips a logical binding-table dump into a fresh cluster and rejects carried rows even at a colliding xid8",async()=>{
-  const source=await db.runtime.connect(),other=await jobDoorsDatabase(false,"0698_lp6a_request_binding.sql");
+  const source=await db.runtime.connect(),other=await jobDoorsDatabase(false,"0564_lp6a_request_binding.sql");
   try{
     const old=(await other.owner.query("SELECT pg_get_functiondef('app.contractor_session(uuid)'::regprocedure) definition")).rows[0].definition;
-    await other.owner.query(await readFile(new URL("../migrations/0698_lp6a_request_binding.sql",import.meta.url),"utf8"));
+    await other.owner.query(await readFile(new URL("../migrations/0564_lp6a_request_binding.sql",import.meta.url),"utf8"));
     expect((await other.owner.query("SELECT pg_get_functiondef('app.contractor_session(uuid)'::regprocedure) definition")).rows[0].definition).toBe(old);
     const digest=randomBytes(32).toString("hex");
     await db.owner.query("INSERT INTO control_plane.practice_session(token_digest) VALUES($1)",[digest]);

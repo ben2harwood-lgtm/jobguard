@@ -377,7 +377,7 @@ validate index coverage, references, lane scope and existing pure comparator/
 context regressions; they do not establish SQL refusal, locks, signatures,
 financial correctness or independent review. PostgreSQL/browser suites cannot run
 in this sandbox. All implementation, migration, cutover, RED implementation
-reviews and whole-track real-data gates remain outstanding. The recorded review above permits the LP-5 interface with its eight findings applied; the design delta check and RED implementation review remain required. LP-6a design decisions are closed by §20; implementation review remains outstanding. The original design-only slice had no migration; the dark foundation uses 0698.
+reviews and whole-track real-data gates remain outstanding. The recorded review above permits the LP-5 interface with its eight findings applied; the design delta check and RED implementation review remain required. LP-6a design decisions are closed by §20; implementation review remains outstanding. The original design-only slice had no migration; the dark foundation uses 0564.
 
 ## 20. LP-6a reviewed implementation contract (30 October review applied)
 
@@ -439,7 +439,7 @@ runtime cleanup). Failed binds roll back helper GUC changes. Successful binds
 restore helper GUCs: existing tenant settings remain transitional, not binding
 inputs. No signature format or caller-set signed-context value is accepted.
 
-Migration 0698 is forward-only and installs dark: no existing route, RLS policy,
+Migration 0564 is forward-only and installs dark: no existing route, RLS policy,
 command, audit writer or bridge switches to this binding. Rollback of a dark
 application needs no database downgrade. Before real-data activation, complete
 LP-6b–6e/LP-9–13, renumber the LP block contiguously, run the whole PostgreSQL
@@ -464,7 +464,7 @@ It also rejects any runtime, worker, identity or infrastructure USAGE/SET path.
 
 Bootstrap grants the migration membership only for migrations and revokes it in
 finally on success and failure, then rechecks that only the creator row remains.
-Temporary schema CREATE needed for ownership transfer is revoked inside 0698.
+Temporary schema CREATE needed for ownership transfer is revoked inside 0564.
 A real restricted-bootstrap catalogue assertion checks the creator row's exact
 member, grantor and option flags, absence of outgoing membership, absence of
 service/migration assumption paths and absence of retained schema CREATE.
@@ -483,7 +483,7 @@ hold itself is closed by the clarification and implementation.
 Reconciled against incoming main `bc8993090` (the merge parent), preserving its
 LP-3–LP-5b bodies. LP-5c is stacked from saved branch head `23d261272`, including
 0557 and its fixture repairs; its earlier unmerged 0508 name is retired. LP-6a
-uses 0698 with a migration proof, leaving the frozen LP-0 JSON unchanged. The
+originally used 0698 with a migration proof, leaving the frozen LP-0 JSON unchanged. The PR preparation below renumbers it to 0564. The
 lane lists only LP-6a paths, including the shared contract's LP-6a delta. No
 LP-6b scanner/pin or LP-6c/6d bridge conversion is included.
 
@@ -516,9 +516,51 @@ CI must prove the complete PostgreSQL suite, upgrade/catalogue/privilege proofs,
 real dump/restore, revocation and SCIM races, and existing watchdog lock order.
 Full required CI and independent exact-head RED review remain pending. No local
 database/browser execution, independent review or live-service claim is made.
-NOPR remains until LP-5c #540 lands, followed by another catch-up.
+That run remained NOPR until LP-5c #540 landed; the PR preparation below supersedes that status.
 
 LATER / SIMPLICITY — packages/db/src/demo-bootstrap.ts: share the repeated
 restricted-role list between provisioning and posture/holder checks in a future
 scoped change; one list reduces the chance of omitting a role from a check.
 This does not block LP-6a.
+
+
+### LP-6a PR preparation after LP-5c landed (3 November 2026)
+
+Incoming main / merge parent: `9e1c588c2ab42ab91436b4120251ce8def1cbfc1`.
+The only merge conflict was `docs/verdicts/LP-5C/TEST_REPAIR.md`; its working
+copy now equals incoming main byte-for-byte. All LP-5c and earlier files retain
+main's versions outside LP-6a's reviewed additions. The router must stage the
+resolved file and complete the merge because this sandbox cannot write `.git`.
+
+Renumbered the dark migration and matching proof from 0698 to reserved 0564,
+including test, inventory-source and lane references. The SQL body is unchanged.
+Added empty `control_plane.request_binding` to the existing
+`later-empty-tables.ts` helper used by full-upgrade row snapshots. No source
+pins, frozen LP-0 JSON, existing routine bodies or authorization behavior changed.
+The earlier independent design review and its bootstrap clarification remain.
+LP-6a is ready to open its RED PR; the previous NOPR restriction has ended.
+Requested title: `feat(auth): add dark session binding, finishes LP-6a`.
+
+Local checks use installed Node 24.17.0, Vitest 4.1.12 and TypeScript 5.8.3;
+no package downloads, PostgreSQL, browser or live services were used:
+
+- From `packages/db`, `node node_modules/vitest/vitest.mjs run --maxWorkers=1 test/lp6a-binding.test.ts test/lp5c-revoke.test.ts test/migration-proof-loader.test.ts`:
+  **81 passed, three files**. Includes proof discovery and dark-binding inventory.
+- From `packages/db`, `node node_modules/vitest/vitest.mjs run --maxWorkers=1 test/demo-bootstrap.integration.test.ts -t 'bootstrap SQL trace'`:
+  **seven passed**; three PostgreSQL tests were unselected by the name filter.
+  This is protocol evidence, not database execution.
+- From `packages/db`, `node node_modules/typescript/bin/tsc -p tsconfig.json --noEmit`: **passed** (slow under current load, no diagnostics).
+- `node tools/plpgsql-case-in-if-lint.mjs`: **223 migrations passed**.
+- The existing lane loader plus a read-only comparison against the merge parent
+  validated the lane schema and its **13 exact changed paths** (excluding lane
+  files), including the new migration/proof. Full lane CI needs the finished merge.
+- `git diff --check`: passed; the conflict file has no remaining markers.
+
+CI must prove the complete PostgreSQL suite and migration/upgrade/catalogue
+proofs, restricted bootstrap, practice/real separation, actual pg_dump/psql
+restore and carried-row refusal, pool/savepoint/rebinding boundaries, revocation
+and SCIM races, existing watchdog lock order and all five later-empty-table
+snapshot consumers. Required monorepo checks and one independent RED review
+must pass against the exact final head before merge. Migration 0564 is reserved
+for this preparation and must be reconciled with landing order by the router.
+No independent implementation review or database pass is claimed locally.

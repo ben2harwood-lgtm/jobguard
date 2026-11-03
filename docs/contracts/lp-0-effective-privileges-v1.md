@@ -504,7 +504,7 @@ Remaining runtime column UPDATE inventory (catalogue comparison remains LP-0):
 | app.variation.current_revision_id | LP-5c, LP-6d |
 | app.variation.state | LP-5c, LP-6d |
 
-## LP-6a dark binding delta (0698)
+## LP-6a dark binding delta (0564)
 
 The machine inventory adds exactly the following capabilities, in group
 `a-lp6a-request-binding`. They are source-derived expectations, pending real

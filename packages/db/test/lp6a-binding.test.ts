@@ -18,7 +18,7 @@ it("records the dark binding as an explicit authority path without broadening bu
 });
 
 it("keeps SQL additions dark and credentials out of the binding store and error text",()=>{
-  const sql=readFileSync(new URL("../migrations/0698_lp6a_request_binding.sql",import.meta.url),"utf8");
+  const sql=readFileSync(new URL("../migrations/0564_lp6a_request_binding.sql",import.meta.url),"utf8");
   expect(sql).not.toMatch(/CREATE OR REPLACE|CREATE POLICY|ALTER POLICY|ALTER TABLE app\./);
   const table=sql.slice(sql.indexOf("CREATE UNLOGGED TABLE"),sql.indexOf("ALTER TABLE control_plane.request_binding"));
   expect(table).not.toMatch(/token_digest|session_digest|p_credential|signature/);
