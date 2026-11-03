@@ -5,7 +5,6 @@
       "branches": ["codex/sandbox/m2-5-benchmark"],
       "note": "AMBER, NOPR=1: pure dark made-up-only benchmark harness; no migration or live integration.",
       "allow": [
-        "config/lanes/m2-5-benchmark.json",
         "docs/operations/supplier-benchmark.md",
         "packages/core/src/supplier-benchmark.ts",
         "packages/core/src/supplier-benchmark.test.ts",
