@@ -90,9 +90,9 @@ const REVIEWED_PRACTICE_SOURCES: Readonly<Record<string, string>> = {
   "packages/db/src/practice-session.ts": "9b765f410777c28334f9f7d8388e0a3c6e30f52bb6d4b4070c9b69e4ecbf1b14",
   "packages/db/src/contractor-repository.ts": "56b95b80360434f0cf58376ef2ec44d0354b194e5080bcfd9414ac283971006c",
   "packages/db/src/contractor-party-repository.ts": "e5852288e5355b53f7548c4d5741aef54ee55a2b8a66dd56a54b08963cd1fdb0",
-  "packages/db/src/work-order-repository.ts": "9e4d46c5290e25647d714810d67b2efee6f674a1d52f654142297d22c476e22e",
-  "packages/db/src/sor-repository.ts": "122322172cea27dc52754ff19629abbbe049b8d96997a1a2e42a8887ac5a62d2",
-  "packages/db/src/job-scheduling-repository.ts": "ce9b3fee004db9e7e303511f169d55b4a8a2339521927816c9b378b79517e52d",
+  "packages/db/src/work-order-repository.ts": "6f769b3b5261219e8e277b3c8460b19b917fe93e66245d15285af5a04c098418",
+  "packages/db/src/sor-repository.ts": "b66552d4d408c5e476ab9bff44324cf160b741561b5a03926c0697853e31514f",
+  "packages/db/src/job-scheduling-repository.ts": "7517df3c6597af44f651c8b704c9bd91c4f40894ce5aa58e3b4fcea16cc9eb57",
   "packages/db/src/work-order-fixtures.ts": "703b2f726e9d4256cbd0a1908676f2cd401d64bad28741853f8131183cd0a0ea",
   "packages/db/src/contractor-session-context.ts": "a1c76687dc593763d97603cf196c7ef015087359191051d882f6229cac6adf4c",
 };
