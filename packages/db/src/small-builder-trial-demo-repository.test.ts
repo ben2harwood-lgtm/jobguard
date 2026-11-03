@@ -22,6 +22,22 @@ describe("DEMO-J5 attacks against command and source boundaries",()=>{
  it("missing start remains visibly incomplete without inventing a clock or settlement",()=>{
   const report=trialDemoReport(tenant,run,raw());expect(report.status).toBe("incomplete");expect(report.first.timeline).toBeNull();expect(report.deadlinePreview).toBeNull();expect(report.subscription.results).toEqual([]);
  });
+ it("accepted monthly terms and a real trial end do not invent a pro-ration figure or complete Final Check",()=>{
+  const base=raw(),startedAt="2026-03-01T12:00:00.000000Z";
+  const input={...base,first:{...base.first,start:{trialId:randomUUID(),activationId:randomUUID(),startedAt,deadlineAt:trialDeadlineV1(startedAt,approvedTrialClockV1).deadlineAt},
+   events:[{sourceId:randomUUID(),kind:"second_activation",tenantId:tenant,jobId:second,effectiveAt:"2026-03-20T12:00:00.000000Z",recordedAt:"2026-03-20T12:00:00.000001Z"}]},
+   subscription:{...base.subscription,agreements:[{id:randomUUID(),plan:"Builder",cadence:"monthly",effective_date:"2026-03-20"}]}};
+  const report=trialDemoReport(tenant,run,input);
+  expect(report.first.timeline?.active).toBe(false);
+  expect(report.status).toBe("incomplete");
+  expect(report.missing).toEqual([
+   "Final Check: a company job has no public final account route yet, so lock and Final Check cannot end a trial from this guide.",
+   "Pro-ration: no billing period is issued yet. A period can only be issued after it ends; conversion rules stay on the accepted terms.",
+  ]);
+  expect(report.subscription.agreements).toEqual(input.subscription.agreements);
+  expect(report.subscription.periods).toEqual([]);expect(report.subscription.statements).toEqual([]);expect(report.subscription.results).toEqual([]);
+  expect(trialDemoReport(tenant,run,JSON.parse(JSON.stringify(input)))).toEqual(report);
+ });
  it("projects the stored London deadline across DST without mutating source or accepted terms",()=>{
   const base=raw(),startedAt="2026-03-01T12:00:00.123456Z",start={trialId:randomUUID(),activationId:randomUUID(),startedAt,deadlineAt:trialDeadlineV1(startedAt,approvedTrialClockV1).deadlineAt};
   const input={...base,first:{...base.first,start}};const before=JSON.stringify(input);

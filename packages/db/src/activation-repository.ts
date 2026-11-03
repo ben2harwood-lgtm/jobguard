@@ -1,3 +1,4 @@
+import { lp3MutationHash } from "./lp3-operation.js";
 import { FreeFirstJobPersistenceError } from "./free-first-job-repository.js";
 import { activationTermsV1, switchLiveV3, type ActivationTermsV1 } from "@jobguard/core";
 import { randomUUID } from "node:crypto";
@@ -15,20 +16,22 @@ const audit=(command:ConsequentialCommand,eventType:string,subjectRef:string,ref
 
 export class SwitchJobLiveMutation implements CommandMutation<Record<string,unknown>> {
   constructor(private readonly tenantId:string,private readonly deploymentMode:Exclude<DeploymentMode,"production_billing">,private readonly raw:unknown){}
+  inputHash(command:ConsequentialCommand){return lp3MutationHash(this.tenantId,command.actorMembershipId,this.raw as Record<string,unknown>);}
   async mutate(db:TenantTransaction,command:ConsequentialCommand){const input=switchLiveV1.parse(this.raw);assertSwitchLiveTerms(input);
     if(input.mode!==this.deploymentMode)throw new Error("DEPLOYMENT_MODE_MISMATCH");
     const expectedAmount=input.mode==="synthetic_demo"?7900:null;
     if(command.action.actionType!=="job.switch_live"||command.subjectType!=="job"||command.subjectRef!==input.jobId||command.action.contentHash!==input.acceptedDocumentHash||command.action.aggregateRevision!==input.acceptedDocumentVersion||command.action.amountPence!==expectedAmount||command.action.currency!==(expectedAmount===null?null:"GBP")||command.action.policyVersion!==input.activationTermsVersion)throw new Error("EXACT_ACTIVATION_AUTHORIZATION_MISMATCH");
-    await db.$client.query(`SELECT * FROM app.switch_job_live($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,[this.tenantId,input.activationId,input.capSnapshotId,input.syntheticObligationId,input.jobId,input.acceptedDocumentId,input.acceptedDocumentVersion,input.acceptedDocumentHash,input.expectedJobRevision,input.acceptedNetValuePence,input.recoveryCapPence,input.mode,input.activationTermsVersion,input.feePolicyVersion,command.actorMembershipId,input.activatedAt]);
+    await db.$client.query(`SELECT * FROM app.switch_job_live($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,[this.tenantId,input.activationId,input.capSnapshotId,input.syntheticObligationId,input.jobId,input.acceptedDocumentId,input.acceptedDocumentVersion,input.acceptedDocumentHash,input.expectedJobRevision,input.acceptedNetValuePence,input.recoveryCapPence,input.mode,input.activationTermsVersion,input.feePolicyVersion,command.actorMembershipId,input.activatedAt,command.commandId,command.authorizationId]);
     return{activationId:input.activationId,capSnapshotId:input.capSnapshotId,syntheticObligationId:input.syntheticObligationId,jobId:input.jobId,state:"live",mode:input.mode,acceptedNetValuePence:input.acceptedNetValuePence,recoveryCapPence:input.recoveryCapPence,label:input.mode==="pilot_no_charge"?"no charge":"illustrative only"};}
   auditEvents(_result:Record<string,unknown>,command:ConsequentialCommand){const input=switchLiveV1.parse(this.raw);return[audit(command,"job.switched_live",input.jobId,{activationId:input.activationId,capSnapshotId:input.capSnapshotId,acceptedDocumentId:input.acceptedDocumentId},input.acceptedDocumentHash)];}
 }
 
 export class RecordSimulatedSettlementMutation implements CommandMutation<Record<string,unknown>> {
   constructor(private readonly tenantId:string,private readonly deploymentMode:DeploymentMode,private readonly raw:unknown){}
+  inputHash(command:ConsequentialCommand){return lp3MutationHash(this.tenantId,command.actorMembershipId,this.raw as Record<string,unknown>);}
   async mutate(db:TenantTransaction,command:ConsequentialCommand){if(this.deploymentMode!=="synthetic_demo")throw new Error("SIMULATED_SETTLEMENT_ENVIRONMENT_FORBIDDEN");const input=simulatedSettlementV1.parse(this.raw);
     if(command.action.actionType!=="synthetic_obligation.simulate_settlement"||command.subjectRef!==input.obligationId||command.action.amountPence!==input.amountPence||command.action.currency!=="GBP"||command.action.policyVersion!=="synthetic_demo_illustrative.v1")throw new Error("EXACT_SIMULATION_AUTHORIZATION_MISMATCH");
-    await db.$client.query(`SELECT * FROM app.record_simulated_settlement($1,$2,$3,$4,$5,$6)`,[this.tenantId,input.settlementId,input.obligationId,input.providerEventId,input.amountPence,input.simulatedAt]);return{settlementId:input.settlementId,obligationId:input.obligationId,label:"simulated — not collected"};}
+    await db.$client.query(`SELECT * FROM app.record_simulated_settlement($1,$2,$3,$4,$5,$6,$7,$8,$9)`,[this.tenantId,input.settlementId,input.obligationId,input.providerEventId,input.amountPence,input.simulatedAt,command.actorMembershipId,command.commandId,command.authorizationId]);return{settlementId:input.settlementId,obligationId:input.obligationId,label:"simulated — not collected"};}
   auditEvents(_result:Record<string,unknown>,command:ConsequentialCommand){const input=simulatedSettlementV1.parse(this.raw);return[audit(command,"synthetic_obligation.simulated_settlement",input.obligationId,{settlementId:input.settlementId,providerEventId:input.providerEventId})];}
 }
 

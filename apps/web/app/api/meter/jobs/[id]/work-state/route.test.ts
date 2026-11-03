@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { MeterWorkStateApplication } from "../../../../../../../api/src/meter-today.application.js";
 
-const state = vi.hoisted(() => ({ command: vi.fn(), authenticate: vi.fn(), findMembership: vi.fn() }));
+const state = vi.hoisted(() => ({ command: vi.fn(), read: vi.fn(), authenticate: vi.fn(), findMembership: vi.fn() }));
 const tenant = "00000000-0000-4000-8000-000000000001";
 const origin = "https://company.invalid";
 vi.mock("@jobguard/api/workspace", async () => ({
@@ -18,9 +18,9 @@ vi.mock("../../../../../lib/identity-server", () => ({
 vi.mock("../../../../../lib/meter-server", () => ({
   meterWorkApplication: () => new MeterWorkStateApplication({
     allowedOrigin: origin, provider: { authenticate: state.authenticate, findMembership: state.findMembership },
-  } as never, { command: state.command }),
+  } as never, { command: state.command, read: state.read }),
 }));
-import { POST } from "./route";
+import { POST, GET } from "./route";
 
 const params = { params: Promise.resolve({ id: tenant }) };
 const body = { version: "job-work-state-command.v1", commandId: tenant, expectedRevision: 0, action: "finish" };
@@ -50,4 +50,14 @@ it("accepts a matching Origin and forwards the verified command", async () => {
   expect(response.headers.get("Cache-Control")).toBe("no-store");
   expect(await response.json()).toEqual({ saved: true });
   expect(state.command).toHaveBeenCalledWith(expect.objectContaining({ tenantId: tenant }), tenant, tenant, body);
+});
+
+it("company GET uses the same session/tenant boundary and never caches facts", async () => {
+ state.read.mockResolvedValue({saved:true});
+ const response = await GET(new Request(`${origin}/api/meter/jobs/${tenant}/work-state`), params);
+ expect(response.status).toBe(200);
+ expect(response.headers.get("Cache-Control")).toBe("no-store");
+ expect(state.read).toHaveBeenCalledWith(expect.objectContaining({tenantId:tenant}),tenant,tenant);
+ state.authenticate.mockResolvedValue(undefined);
+ expect((await GET(new Request(`${origin}/api/meter/jobs/${tenant}/work-state`), params)).status).toBe(401);
 });

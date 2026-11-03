@@ -70,8 +70,9 @@ describe("M0-13c synthetic PostgreSQL privacy rehearsal", () => {
     const execute = { action: "execute", requestId: req.requestId, expectedRevision: 0, commandId: randomUUID() };
     const both = await Promise.all([command(a,execute), command(a,execute)]); expect(both[0]).toEqual(both[1]);
     await expect(command(a,{ ...execute, commandId: randomUUID() })).rejects.toMatchObject({ code: "PRIVACY_CONFLICT" });
-    const events = (await f.admin.query("SELECT payload FROM app.audit_event WHERE tenant_id=$1 AND event_type='privacy.execute'", [a.tenantId])).rows;
-    expect(events).toHaveLength(1); expect(JSON.stringify(events)).not.toContain("fictional");
+    const events = (await f.admin.query("SELECT version,payload FROM app.audit_event WHERE tenant_id=$1 AND event_type='privacy.execute'", [a.tenantId])).rows;
+    expect(events).toHaveLength(1); expect(events[0]).toMatchObject({ version: "audit.v2", payload: { references: { auditTrust: "checked_operation" } } });
+    expect(JSON.stringify(events)).not.toContain("fictional");
   });
   it("refuses direct table access, forged tenant context/digest, revoked membership/session and malformed SQL input", async () => {
     const a = await meterCompany(f), b = await meterCompany(f), id = await subject(a);
@@ -89,7 +90,7 @@ describe("M0-13c synthetic PostgreSQL privacy rehearsal", () => {
   it("upgrades the immediately preceding schema without changing existing rows and can rerun migrate", async () => {
     const upgrade = await createWorkFixture(false, "postgres");
     try {
-      const index = MIGRATION_URLS.findIndex(url => url.pathname.endsWith("0539_privacy_operations.sql")); expect(index).toBeGreaterThan(0);
+      const index = MIGRATION_URLS.findIndex(url => url.pathname.endsWith("0605_privacy_operations.sql")); expect(index).toBeGreaterThan(0);
       await upgrade.admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
       for (const url of MIGRATION_URLS.slice(0,index)) {
         await upgrade.admin.query(await readFile(url,"utf8"));

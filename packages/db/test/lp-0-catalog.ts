@@ -1,3 +1,4 @@
+import { installAuditCommandWriterRoles } from "./pool-test-utils.js";
 import { combineLp0, loadMigrationProofs } from "./migration-proof-loader.js";
 /**
  * LP-0 grant freeze guard: test-only catalogue reader, fact model, strict reviewed-inventory boundary and comparator.
@@ -673,6 +674,7 @@ export async function startLp0Database(portBase: number): Promise<Lp0Database> {
   const control = new Pool({ host: "127.0.0.1", port, user: "postgres", password: "synthetic", database: "postgres" });
   await control.query(`CREATE DATABASE ${databaseName}`); await control.end();
   const admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password: "synthetic", database: databaseName, max: 4 });
+  await installAuditCommandWriterRoles(admin);
   await migrate(admin);
   const bootstrap = await admin.connect();
   try { await finalizeMeterLifecycleOwnership(bootstrap); } finally { bootstrap.release(); }
