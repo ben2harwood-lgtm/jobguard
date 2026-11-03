@@ -82,7 +82,7 @@ export function ShadowJourney({ jobId }: { jobId: string }) {
   </section>
 
   <section aria-label="Hold signals"><h2>Hold signals from saved sources</h2>
-   <p>After the supplier document, photo and diary note are saved and the final check terms accepted. The answer never says what was found, because findings stay hidden until lock.</p>
+   <p>After the supplier document, photo and diary note are saved and the final check terms accepted. The answer never says what was found. Ordinary findings stay hidden until lock; a must-surface rule creates a mandatory Decision straight away.</p>
    <p role="status" data-testid="guide-hold-state">{data.hold?.state === "finished" ? "Saved sources examined" : data.hold?.state === "requested" ? "Asked for. It takes about a minute." : "Not asked for yet"}</p>
    <button disabled={busy || !!lock || data.hold?.state === "requested"} onClick={() => void act(async () => { await send(`${base}/shadow-demo/source-hold`, {}); })}>Hold signals from saved sources</button>
   </section>

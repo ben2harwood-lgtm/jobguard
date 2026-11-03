@@ -5,20 +5,36 @@
       "branches": [
         "codex/sandbox/m5-11-dsar-offboarding"
       ],
-      "note": "RED M5-11 dark synthetic expanded DSAR and tenant exit on M0-13c; no live providers, real erasure or charges.",
+      "note": "RED M5-11 NOPR catch-up to main; retained unmerged M0-13c synthetic dependency; no live providers, erasure or charges.",
       "allow": [
+        ".env.example",
+        "apps/api/openapi.json",
+        "apps/api/src/app.module.ts",
+        "apps/api/src/auth/application-auth.guard.ts",
+        "apps/api/src/privacy-operations.application.test.ts",
+        "apps/api/src/privacy-operations.application.ts",
+        "apps/api/src/privacy-operations.controller.ts",
         "docs/operations/privacy-operations.md",
+        "packages/core/src/index.ts",
         "packages/core/src/privacy-operations.test.ts",
         "packages/core/src/privacy-operations.ts",
+        "packages/db/migration-notes/0589_privacy_operations.md",
+        "packages/db/migration-notes/0590_dsar_offboarding.md",
+        "packages/db/migrations/0589_privacy_operations.sql",
+        "packages/db/migrations/0590_dsar_offboarding.sql",
+        "packages/db/src/index.ts",
         "packages/db/src/privacy-operations-repository.ts",
-        "packages/db/migration-notes/0546_dsar_offboarding.md",
-        "packages/db/migrations/0546_dsar_offboarding.sql",
-        "packages/db/test/dsar-offboarding.integration.test.ts",
-        "config/lanes/m5-11-dsar-offboarding.json",
-        "packages/db/test/migration-proofs/0539_privacy_operations.proof.json",
-        "packages/db/test/migration-proofs/0546_dsar_offboarding.proof.json",
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/customer-portal-message.integration.test.ts",
+        "packages/db/test/customer-quote-acceptance.integration.test.ts",
+        "packages/db/test/customer-stage-acknowledgement.integration.test.ts",
         "packages/db/test/dsar-migration-proofs.test.ts",
-        "packages/db/test/privacy-operations.integration.test.ts"
+        "packages/db/test/dsar-offboarding.integration.test.ts",
+        "packages/db/test/migration-proofs/0589_privacy_operations.proof.json",
+        "packages/db/test/migration-proofs/0590_dsar_offboarding.proof.json",
+        "packages/db/test/operative-entitlements-upgrade.integration.test.ts",
+        "packages/db/test/privacy-operations.integration.test.ts",
+        "packages/db/test/server-entitlement-upgrade.integration.test.ts"
       ]
     }
   }

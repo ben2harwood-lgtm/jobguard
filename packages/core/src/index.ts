@@ -1,6 +1,7 @@
 /** Domain-only package. Network, database, vendor and platform imports are forbidden. */
 export const CORE_PACKAGE = "@jobguard/core" as const;
 export * from "./shadow-pilot-measurement.js";
+export * from "./shadow-pilot-report.js";
 export * from "./allocation.js";
 export * from "./fee.js";
 export * from "./fee-statement.js";
@@ -24,6 +25,7 @@ export * from "./recovery.js";
 export * from "./recovery-case.js";
 export * from "./recovery-eligibility.js";
 export * from "./commercial-integrity.js";
+export * from "./commercial-integrity-v3.js";
 export * from "./job-import.js";
 
 export * from "./materials.js";
@@ -64,6 +66,7 @@ export * from "./recovery-case-terms.js";
 export * from "./contractor-practice-session.js";
 export * from "./site-extra.js";
 export * from "./recovery-allocation.js";
+export * from "./landing-suggestions.js";
 export * from "./site-extra-pricing.js";
 export * from "./site-visit.js";
 export * from "./site-extra-evidence.js";
@@ -130,6 +133,10 @@ export * from "./evidence-pack-v3-assembly.js";
 export * from "./meter-today.js";
 
 export * from "./small-builder-demo-lifecycle.js";
+export * from "./inbox-outcome-metrics.js";
+
+export * from "./dunning.js";
+export * from "./subscription-agreement.js";
 export * from "./recovery-billability-policy.js";
 export * from "./mobile-auth-state.js";
 export { demoMeterPreviewV1, previewDemoMeter, type DemoMeterPreview } from "./small-builder-demo-meter.js";
@@ -140,8 +147,20 @@ export * from "./issued-simulation-fee-statement.js";
 export * from "./small-builder-trial-demo.js";
 export * from "./simulation-fee-collection.js";
 export * from "./customer-approval-method.js";
+
+export * from "./customer-quote-acceptance.js";
 export * from "./simulation-money-run.js";
 export * from "./customer-variation-approval.js";
+export * from "./interim-applications.js";
+export * from "./construction-notices.js";
+export * from "./retention-balances.js";
+export * from "./vat-treatments.js";
+export * from "./cis-deductions.js";
+export * from "./exposure-curve.js";
 
-export * from "./privacy-operations.js";
+export * from "./pay-now-synthetic.js";
 export * from "./contractor-mandate.js";
+
+export * from "./cancellation-kit.js";
+export * from "./value-source-receipt-v2.js";
+export * from "./privacy-operations.js";

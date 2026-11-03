@@ -96,7 +96,7 @@ describe("M5-11 expanded dark DSAR and tenant exit", () => {
   it("upgrades 0539 without rewriting inventory, preserves table isolation and exposes no new runtime privilege",async()=>{
     const upgrade=await createWorkFixture(false,"postgres");
     try {
-      const index=MIGRATION_URLS.findIndex(u=>u.pathname.endsWith("0546_dsar_offboarding.sql")); expect(index).toBeGreaterThan(0);
+      const index=MIGRATION_URLS.findIndex(u=>u.pathname.endsWith("0590_dsar_offboarding.sql")); expect(index).toBeGreaterThan(0);
       for(const url of MIGRATION_URLS.slice(0,index)) await upgrade.admin.query(await readFile(url,"utf8"));
       const tenant=randomUUID(), subjectId=randomUUID(), artifactId=randomUUID();
       await upgrade.admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)",[tenant]);

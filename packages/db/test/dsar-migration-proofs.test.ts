@@ -6,11 +6,19 @@ import { fileURLToPath } from "node:url";
 
 // Validate the full registry, then compose only this piece and its dependency.
 const proofs = loadMigrationProofs(PROOF_DIRECTORY).proofs.filter(proof =>
-  ["0539_privacy_operations.sql", "0546_dsar_offboarding.sql"].includes(proof.migration));
+  ["0589_privacy_operations.sql", "0590_dsar_offboarding.sql"].includes(proof.migration));
 const tables = ["privacy_artifact", "privacy_command", "privacy_request", "privacy_subject"];
 const owner = "jobguard_migration";
 
 describe("M5-11 and its M0-13c dependency proof composition", () => {
+  it("uses main's sealed audit writer for both new privacy command bodies", () => {
+    for (const stem of ["0589_privacy_operations", "0590_dsar_offboarding"]) {
+      const sql = readFileSync(new URL(`../migrations/${stem}.sql`, import.meta.url), "utf8");
+      expect(sql).toContain("PERFORM app.lp4_seal_audit(");
+      expect(sql).toContain("'checked_operation'");
+      expect(sql).not.toMatch(/INSERT INTO app\.audit_event|app\.(?:lock_audit_head|advance_audit_head)\(/);
+    }
+  });
   it("combines exact capabilities into a complete inventory without direct privacy table grants", () => {
     const baseline = parseInventory(JSON.parse(readFileSync(new URL("../../../docs/contracts/lp-0-effective-privileges-v1.json", import.meta.url), "utf8")));
     const inventory = parseInventory(combineLp0(baseline, proofs));
@@ -21,7 +29,7 @@ describe("M5-11 and its M0-13c dependency proof composition", () => {
     ]);
   });
   it("keeps the dependency proof separate from M5-11's private fence", () => {
-    expect(proofs[0]!.lp0.some(c => JSON.stringify(c).includes("0546_dsar_offboarding.sql"))).toBe(false);
+    expect(proofs[0]!.lp0.some(c => JSON.stringify(c).includes("0590_dsar_offboarding.sql"))).toBe(false);
     expect(proofs[1]!.lp0.filter(c => c.section === "routines")).toEqual([
       expect.objectContaining({ before: null, after: expect.objectContaining({
         identity: "function:app.privacy_inventory_fence()", runtimeExecute: false, publicExecute: false,
