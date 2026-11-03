@@ -1,3 +1,4 @@
+import { fakeAuditAppend } from "../src/audit-protocol-test-fixture.js";
 import { readFileSync } from "node:fs";
 import type { Pool } from "pg";
 import { expect, it, vi } from "vitest";
@@ -15,7 +16,8 @@ it.each(["retryable", "outcome_unknown"] as const)("actual outbox %s failure rea
     content_hash: "a".repeat(64), immutable_content: "Fictional quote", aggregate_revision: 1,
     amount_pence: null, currency: null, policy_version: "synthetic.v1",
     created_at: new Date(), authorization_expires_at: new Date("2099-01-01") };
-  const query = vi.fn(async (sql: string) => {
+  const query = vi.fn(async (sql: string, values: unknown[] = []) => {
+    if (sql.includes("FROM app.append_audit(")) return { rows: fakeAuditAppend(String(values[0]), tenant) };
     if (sql === "SELECT outbound_control.claims_enabled() AS enabled") return { rows: [{ enabled: true }] };
     if (sql.startsWith("SELECT o.*")) return { rows: [row] };
     if (sql.startsWith("SELECT count(*)")) return { rows: [{ n: 4 }] };

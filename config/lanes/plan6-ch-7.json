@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "plan6-ch-7": {
+      "branches": [
+        "codex/sandbox/demo-ch7"
+      ],
+      "note": "AMBER CH-7: missing F14/F16 browser coverage and historical terms-review regression; thin existing v3 controls only, no eligibility rule or migration changes.",
+      "allow": [
+        "apps/web/app/ui/recovery-cases.tsx",
+        "apps/web/e2e/CH-7.spec.ts",
+        "packages/db/test/recovery-terms-timing.integration.test.ts"
+      ]
+    }
+  }
+}

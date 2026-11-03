@@ -8,7 +8,9 @@ type View = ReturnType<typeof workStateView>;
 const when = (value: string) => new Date(value).toLocaleString("en-GB", { timeZone: "Europe/London", dateStyle: "medium", timeStyle: "short" });
 
 /** Work-state controls over the persisted CH-4 commands. The server picks actor, tenant and time. */
-export function JobWorkState({ jobId }: { jobId: string }) {
+export function JobWorkState({ jobId, company }: { jobId: string; company?: { tenantId: string; csrfToken: string } }) {
+ const endpoint = company ? `/api/meter/jobs/${jobId}/work-state` : `/api/jobs/${jobId}/work-state`;
+ const tenantId = company?.tenantId, csrfToken = company?.csrfToken;
  const [view, setView] = useState<View | null>(null), [busy, setBusy] = useState(true), [error, setError] = useState(""), [offer, setOffer] = useState(false);
  const [reason, setReason] = useState<CloseReason>("cancelled_by_customer"), [note, setNote] = useState("");
  const currentJob = useRef(jobId), inFlight = useRef(false), epoch = useRef(0), pending = useRef<Record<string, unknown> | null>(null);
@@ -17,21 +19,21 @@ export function JobWorkState({ jobId }: { jobId: string }) {
  const read = useCallback(async () => {
   const requestEpoch = ++epoch.current; inFlight.current = true; setBusy(true);
   try {
-   const response = await fetch(`/api/jobs/${jobId}/work-state`, { cache: "no-store" });
+   const response = await fetch(endpoint, { cache: "no-store", headers: tenantId && csrfToken ? { "x-tenant-id": tenantId, "x-csrf-token": csrfToken } : {} });
    if (!response.ok) throw new Error("Site work could not load. Try loading it again.");
    const saved = jobWorkStateReadV1.parse(await response.json());
    if (saved.jobId !== jobId) throw new Error("Unexpected job response.");
    if (current(requestEpoch)) setView(workStateView(saved));
   } catch (e) { if (current(requestEpoch)) setError(e instanceof Error ? e.message : "Site work could not load."); }
   finally { if (epoch.current === requestEpoch) { inFlight.current = false; setBusy(false); } }
- }, [jobId]);
+ }, [jobId, endpoint, tenantId, csrfToken]);
  useEffect(() => { pending.current = null; setView(null); setError(""); setOffer(false); void read(); return () => { epoch.current++; }; }, [read]);
  // A retry after an unknown outcome resends the exact pending command, never a new identity.
  const send = async (command: Record<string, unknown>) => {
   if (inFlight.current) return;
   const requestEpoch = ++epoch.current; inFlight.current = true; pending.current = command; setBusy(true); setError("");
   try {
-   const response = await fetch(`/api/jobs/${jobId}/work-state`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(command) });
+   const response = await fetch(endpoint, { method: "POST", headers: { "content-type": "application/json", ...(tenantId && csrfToken ? { "x-tenant-id": tenantId, "x-csrf-token": csrfToken } : {}) }, body: JSON.stringify(command) });
    if (response.status >= 400 && response.status < 500) {
     const body = await response.json().catch(() => ({})) as { code?: string };
     if (!current(requestEpoch)) return;
@@ -51,7 +53,7 @@ export function JobWorkState({ jobId }: { jobId: string }) {
   } catch { if (current(requestEpoch)) setError("The result is unknown. Retry the same action, or load the saved state first."); }
   finally { if (epoch.current === requestEpoch) { inFlight.current = false; setBusy(false); } }
  };
- const act = (action: "finish" | "cancel_finish" | "close" | "reopen", extra: Record<string, unknown> = {}) => {
+ const act = (action: "finish" | "cancel_finish" | "close" | "reopen" | "resume", extra: Record<string, unknown> = {}) => {
   if (!view) return;
   void send(jobWorkStateCommandV1.parse({ version: "job-work-state-command.v1", commandId: crypto.randomUUID(), expectedRevision: view.revision, action, ...extra }));
  };
@@ -65,10 +67,10 @@ export function JobWorkState({ jobId }: { jobId: string }) {
    <div className={styles.actions}>
     {!closed && !view.finishedMarkerId && <button type="button" disabled={busy} onClick={() => act("finish")}>Finished on site</button>}
     {!closed && view.finishedMarkerId && <button type="button" disabled={busy} onClick={() => act("cancel_finish", { markerId: view.finishedMarkerId })}>Cancel finished on site</button>}
-    {closed && <button type="button" disabled={busy || !view.locked} onClick={() => act("reopen", { closeEventId: view.closedEventId })}>Reopen job</button>}
-    <button type="button" disabled>Resume site work</button>
+    {closed && <button type="button" disabled={busy} onClick={() => act("reopen", { closeEventId: view.closedEventId })}>Reopen job</button>}
+    {!closed && <button type="button" disabled={busy || view.locked} onClick={() => act("resume")}>Resume site work</button>}
    </div>
-   <p>Resume site work is not available yet: it waits for the jobs-on-the-go meter.{closed && !view.locked ? " Reopening a closed job waits for it too." : ""}</p>
+   <p>{view.locked ? "Reopening permits administration only. New site work needs a linked job." : "Resuming or reopening checks the saved jobs-on-the-go meter before it records the event."}</p>
    {!closed && <fieldset className={styles.actions}>
     <legend>Close job</legend>
     <div className={styles.field}><label htmlFor="close-reason">Reason</label><select id="close-reason" value={reason} disabled={busy} onChange={e => setReason(e.target.value as CloseReason)}>{(Object.keys(closeReasonLabels) as CloseReason[]).map(key => <option key={key} value={key}>{closeReasonLabels[key]}</option>)}</select></div>

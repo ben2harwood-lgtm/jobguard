@@ -22,3 +22,16 @@ it.each([
 ])("renders the exact catch fee share without rounding: %j",(share,expected)=>{
  expect(mappedFeeShare(share)).toBe(expected);
 });
+
+it("renders v2 recovery money, sources and one explicit reversal with qualified copy",async()=>{
+ const {mapValueReceiptV2}=await import("@jobguard/core");
+ const money=(pence:number)=>({pence,currency:"GBP" as const});
+ const receipt=mapValueReceiptV2({base:{tenantId:id(1),jobId:id(2),lockId:id(3),lockedRevisionId:id(4),lockedAt:"2026-10-01T00:00:00Z",foundComplete:true,checkId:id(5),checkedAt:"2026-10-02T00:00:00Z",checked:[],tracked:[],assessments:[]},supplier:{reason:"No supplier derivation",balances:[]},withheld:{reason:null,balances:[
+  {tenantId:id(1),jobId:id(2),derivationId:id(6),revision:1,at:"2026-10-03T00:00:00Z",recovered:money(282000),fee:money(28200),allocationIds:[id(8)],statementHash:"a".repeat(64)},
+  {tenantId:id(1),jobId:id(2),derivationId:id(7),revision:2,at:"2026-10-04T00:00:00Z",recovered:money(32000),fee:money(3200),allocationIds:[id(8)],statementHash:"b".repeat(64)},
+ ]}});
+ const html=renderToStaticMarkup(<MappedReceipt receipt={receipt}/>);
+ expect(html).toContain('withheld-recovered">£320.00');expect(html).toContain('withheld-fee">£32.00');expect(html).toContain('withheld-yours-before-tax">£288.00');
+ expect(html.match(/reversal ·/gu)).toHaveLength(1);expect(html).toContain(id(7));
+ expect(html).toContain("No supplier derivation");expect(html).not.toMatch(/saved you|would have forgotten|you kept/i);
+});

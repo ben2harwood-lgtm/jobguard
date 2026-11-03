@@ -37,7 +37,7 @@ describe("SERIOUS-B7 regressions", () => {
       if (sql.includes("AS occurred_at")) return { rows: [{ occurred_at: new Date() }], rowCount: 1 };
       if (sql.startsWith("SELECT * FROM app.evidence_pack_revision")) return { rows: [pack], rowCount: 1 };
       if (sql.includes("INSERT INTO app.evidence_pack_attachment_approval")) writes.push("approval");
-      if (sql.includes("INSERT INTO app.audit_event")) writes.push("audit");
+      if ((sql.includes("INSERT INTO app.audit_event") || sql.includes("FROM app.append_audit("))) writes.push("audit");
       return { rows: [], rowCount: 0 };
     });
     const client = { query, release: vi.fn() }, pool = { connect: async () => client } as unknown as Pool;

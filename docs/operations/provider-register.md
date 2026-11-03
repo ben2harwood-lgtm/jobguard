@@ -21,6 +21,7 @@ fallbacks and approval gaps. Missing detail is a gate, never implicit approval.
 | [email-forwarding-data-flow.md](email-forwarding-data-flow.md) | Local synthetic fixtures only; live region **not chosen** | fd66c04acd0204bb06f899f0df5a1919ce3eac14299798c7efcee99b7e8f54aa |
 | [identity-email-data-flow.md](identity-email-data-flow.md) | Local synthetic fixtures only; live region **not chosen** | 63027212d40b221787bbcd3a56e8e9e49fa72fbedeac1c2ca1e04a3ac5a4ecb4 |
 | [job-sources-data-flow.md](job-sources-data-flow.md) | Local synthetic fixtures only; live region **not chosen** | 8ba3231cb37d50abde25a94f2ff97a7d64dbe00796b374c6961d0c3f825b78aa |
+| [messaging-observation-data-flow.md](messaging-observation-data-flow.md) | Local synthetic fixtures only; live region **not chosen** | c5497d620cae0c1b1036b959d3e389328de17defd7592dbbda166a89abbce853 |
 | [oidc-data-flow.md](oidc-data-flow.md) | Local synthetic fixtures only; live region **not chosen** | c9b22ee61a6ecf3763070256d19f0a5b7fad949329d9e105b58fcee90d36f838 |
 | [sso-data-flow.md](sso-data-flow.md) | Local synthetic fixtures only; live region **not chosen** | 2800335b4ce04b76ecac9af42b49a1dfc022b1c538f0fe8e9b103925dbaae22c |
 
