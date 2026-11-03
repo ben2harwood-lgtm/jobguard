@@ -15,6 +15,29 @@ describe("SV-3 worker boundary and terms gate", () => {
     expect(p.read).toHaveBeenCalledWith(context,{version:"shadow-observation-read.v1",jobId});
     expect(p.persist).toHaveBeenCalledTimes(2);expect(vi.mocked(p.persist).mock.calls[0]![1]).toEqual(vi.mocked(p.persist).mock.calls[1]![1]);
   });
+  it("SV-5 Test I: must-surface processing remains off outside practice, even for a qualifying request", async () => {
+    const mustSurface = parseObservation({ ...observation, kind: "customer_request", facts: {
+      ...observation.facts, status: "requested", estimatedValuePence: 800000,
+      customerClearlyRequested: true, needsPriorWrittenAgreement: true,
+      significantWork: { basis: "synthetic_fixture", sourceRef: "practice:garden-room", significant: true },
+    } });
+    for (const environment of ["production_billing", "pilot_no_charge", "provider_sandbox", "disabled", ""]) {
+      const p = ports();
+      vi.mocked(p.read).mockResolvedValue({ observations: [mustSurface], captures: [] });
+      const worker = new ShadowDetectionWorker(p, environment);
+      await expect(worker.execute(testTenantContext(tenantId), task)).rejects.toThrow("SHADOW_SYNTHETIC_ONLY");
+      expect(p.hasAcceptedTerms).not.toHaveBeenCalled();
+      expect(p.read).not.toHaveBeenCalled();
+      expect(p.propose).not.toHaveBeenCalled();
+      expect(p.persist).not.toHaveBeenCalled();
+    }
+    const p = ports();
+    vi.mocked(p.read).mockResolvedValue({ observations: [mustSurface], captures: [] });
+    await new ShadowDetectionWorker(p, "synthetic_demo", () => at).execute(testTenantContext(tenantId), task);
+    expect(p.persist).toHaveBeenCalledWith(expect.objectContaining({ tenantId }), expect.objectContaining({
+      observations: [mustSurface], proposals: [expect.objectContaining({ confidenceBand: "low", estimatedValuePence: 800000 })],
+    }));
+  });
   it("refuses unaccepted terms before reading, detecting or writing",async()=>{
     const p=ports();vi.mocked(p.hasAcceptedTerms).mockResolvedValue(false);
     await expect(new ShadowDetectionWorker(p,"synthetic_demo").execute(testTenantContext(tenantId),task)).rejects.toThrow("SHADOW_TERMS_NOT_ACCEPTED");

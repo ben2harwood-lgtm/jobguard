@@ -67,18 +67,24 @@ export function loadMigrationProofs(directory = PROOF_DIRECTORY, migrations = MI
     sources.push(path);
     return proof;
   });
-  // Refuse two fragments claiming the same identity. Changes within a single fragment must also be unique.
-  const claims: string[] = [];
+  // Replacements must chain exact reviewed records across strictly later migrations.
+  const claims = new Map<string, { migration: string; after: unknown }>();
+  function claim(key: string, before: unknown, after: unknown, migration: string) {
+    const previous = claims.get(key);
+    if (previous && (migration <= previous.migration || before === null || !isDeepStrictEqual(before, previous.after))) {
+      throw new Error(`duplicate proof identity: ${key}`);
+    }
+    claims.set(key, { migration, after });
+  }
   for (const proof of proofs) {
-    for (const c of proof.lp0) claims.push(`lp0:${c.section}:${lpIdentity(c.section, c.after ?? c.before)}`);
+    for (const c of proof.lp0) claim(`lp0:${c.section}:${lpIdentity(c.section, c.after ?? c.before)}`, c.before, c.after, proof.migration);
     for (const c of proof.upgrade) {
       const a = c.after ?? c.before;
       if (c.before && c.after && upgradeIdentity(c.section, c.before) !== upgradeIdentity(c.section, c.after)) throw new Error("changed upgrade identity");
-      claims.push(`upgrade:${c.section}:${upgradeIdentity(c.section, a)}`);
+      claim(`upgrade:${c.section}:${upgradeIdentity(c.section, a)}`, c.before, c.after, proof.migration);
     }
-    for (const c of proof.tenancy) claims.push(`tenancy:${c.relname}`);
+    for (const c of proof.tenancy) claim(`tenancy:${c.relname}`, c.before, c.after, proof.migration);
   }
-  unique(claims, "proof identity");
   return { proofs, sources, legacy };
 }
 

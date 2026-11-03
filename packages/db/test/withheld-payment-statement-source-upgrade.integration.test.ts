@@ -1,3 +1,4 @@
+import { applyOutboundPause } from "./outbound-pause-fixture.js";
 import {randomUUID} from "node:crypto";
 import {readFile} from "node:fs/promises";
 import {afterAll,beforeAll,expect,it} from "vitest";
@@ -18,6 +19,7 @@ it("0497 preserves genuine pre-upgrade withheld allocations and fee postings, an
   await f.admin.query(name.startsWith('0095_')?sql.replace('BEGIN;',"BEGIN; SELECT set_config('app.deployment_mode','details_needed',true);"):sql);
   await f.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)",[name]);
  }
+ await applyOutboundPause(f.admin);
  for(const [pool,role] of [[f.runtime,"jobguard_runtime"],[f.shadow,"jobguard_shadow"]] as const){
   const login=(await pool.query("SELECT current_user name")).rows[0].name as string;
   await f.admin.query(`GRANT ${role} TO "${login.replaceAll('"','""')}"`);

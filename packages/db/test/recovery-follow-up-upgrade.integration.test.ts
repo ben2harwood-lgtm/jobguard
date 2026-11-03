@@ -1,3 +1,4 @@
+import { applyOutboundPause } from "./outbound-pause-fixture.js";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -128,6 +129,7 @@ beforeAll(async () => {
     await admin.query(name === "0095_job_parties.sql" ? sql.replace("BEGIN;", "BEGIN; SELECT set_config('app.deployment_mode','details_needed',true);") : sql);
     await admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)", [name]);
   }
+  await applyOutboundPause(admin);
   await installLegacySyntheticPartyFixtures(admin);
   await admin.query("CREATE ROLE follow_up_upgrade_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_runtime TO follow_up_upgrade_login");
   runtime = new Pool({ host: "127.0.0.1", port, user: "follow_up_upgrade_login", password: "synthetic", database: "postgres" });

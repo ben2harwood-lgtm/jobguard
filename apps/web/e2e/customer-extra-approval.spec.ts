@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { expect, test } from "@playwright/test";
+import { deliveredCustomerLink } from "./helpers/customer-signin-link";
 async function seedJob(admin: Pool, tenant: string) {
  const job = randomUUID(), customer = randomUUID(), cr = randomUUID(), site = randomUUID(), sr = randomUUID(), binding = randomUUID();
  const db = await admin.connect();
@@ -39,7 +40,7 @@ test("customer reviews and approves one exact signed extra; builder history reco
   const issue=await page.evaluate(async({tenant,fixture,csrf})=>{const r=await fetch("/api/customer-portal/issue",{method:"POST",headers:{"Content-Type":"application/json","x-csrf-token":csrf},body:JSON.stringify({version:"customer-link-issue.v1",tenantId:tenant,jobId:fixture.job,customerId:fixture.customer})});return {status:r.status,body:await r.json()};},{tenant,fixture,csrf:session.csrfToken});
   expect(issue.status).toBe(200);
   const path=(await admin.query("SELECT o.immutable_content FROM app.customer_portal_grant g JOIN app.action_outbox o ON(o.tenant_id,o.id)=(g.tenant_id,g.outbox_id) WHERE g.tenant_id=$1 AND g.id=$2",[tenant,issue.body.grantId])).rows[0].immutable_content;
-  const customer=await context.newPage();await customer.goto(`${baseURL}${path}`);await customer.getByRole("button",{name:"Sign in",exact:true}).click();
+  const customer=await context.newPage();await customer.goto(`${baseURL}${await deliveredCustomerLink(path)}`);await customer.getByRole("button",{name:"Sign in",exact:true}).click();
   await customer.getByRole("link",{name:"Review extras",exact:true}).click();
   await expect(customer.getByRole("heading",{name:"Fictional extra socket"})).toBeVisible();
   await expect(customer.getByText(`Content hash: ${contentHash}`)).toBeVisible();

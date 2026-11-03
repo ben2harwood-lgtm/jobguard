@@ -1,3 +1,6 @@
+import { assertLp4SealedEvents } from "./lp4-writer-catchup-fixture.js";
+import { testTenantContext } from "./tenant-context-test-utils.js";
+import { SubscriptionExecutor } from "../src/subscription-executor.js";
 import { subscriptionConsentText } from "@jobguard/core";
 import { IdentityRepository, SubscriptionRepository } from "../src/index.js";
 import { PersistedAuthProvider } from "../../../apps/api/src/auth/persisted-auth-provider.js";
@@ -9,8 +12,29 @@ import { command, count, historicalAgreement, meterCompany, preparedPeriod, read
 
 describe("MON-2A C2/C3 billing action races", () => {
  let f: WorkFixture;
- beforeAll(async () => { f=await createWorkFixture(); },60000);
+ beforeAll(async () => { f=await createWorkFixture(true, "jobguard_synthetic_demo"); },60000);
  afterAll(async () => closeWorkFixture(f));
+ it("M0-13a pause refuses subscription execution without consuming queued work, then resumes one effect",async()=>{
+  const {a,issued}=await preparedPeriod(f);
+  const approved=await command(f,a,{version:"subscription-command.v1",kind:"approve_simulation",statementId:issued.statementId,contentHash:issued.artifactHash,amountPence:issued.amountPence,expectedRevision:1});
+  const before=await readSubscription(f,a),context=testTenantContext(a.tenantId);
+  let calls=0;
+  const executor=new SubscriptionExecutor(new SubscriptionRepository(f.runtime),{
+   async execute(work){calls++;return {version:"subscription-simulated-result.v1" as const,synthetic:true as const,workId:work.workId,resultId:randomUUID(),outcome:"settled" as const};},
+   async reconcile(){throw new Error("unexpected reconciliation");},
+  });
+  const prior=(await f.admin.query("SELECT paused FROM outbound_control.state")).rows[0].paused;
+  const commandId=randomUUID();
+  await f.admin.query("UPDATE outbound_control.state SET paused=true");
+  try{
+   await expect(executor.execute(context,a.digest,commandId,approved.workId,1)).rejects.toThrow("SUBSCRIPTION_UNAVAILABLE");
+   expect(calls).toBe(0);expect(await readSubscription(f,a)).toEqual(before);
+  }finally{await f.admin.query("UPDATE outbound_control.state SET paused=$1",[prior]);}
+  await executor.execute(context,a.digest,commandId,approved.workId,1);
+  await expect(executor.execute(context,a.digest,commandId,approved.workId,1)).rejects.toThrow("SUBSCRIPTION_UNAVAILABLE");
+  const after=await readSubscription(f,a);
+  expect(calls).toBe(1);expect(after.attempts).toHaveLength(1);expect(after.results).toHaveLength(1);
+ });
  it("public terms hash matches SQL and payment replay produces one durable settlement",async()=>{
   const {a,issued}=await preparedPeriod(f);
   const provider=new PersistedAuthProvider(new IdentityRepository(f.admin),"synthetic-subscription-key-with-32-characters");
@@ -24,6 +48,7 @@ describe("MON-2A C2/C3 billing action races", () => {
   expect(await app.command({},id,action)).toEqual(first);
   const saved=await readSubscription(f,company);
   expect(saved.work).toHaveLength(1);expect(saved.attempts).toHaveLength(1);expect(saved.results).toHaveLength(1);
+ await assertLp4SealedEvents(f.admin, a.tenantId, "subscription.approve_simulation");
   expect(saved.results[0].outcome).toBe("settled");
   const b=await meterCompany(f),tokenB=randomUUID(),digestB=provider.digest(`session:${tokenB}`);
   await f.admin.query("UPDATE identity.session SET token_digest=$2,csrf_token=$3 WHERE id=$1",[b.sessionId,digestB,csrfToken]);

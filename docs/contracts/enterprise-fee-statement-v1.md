@@ -102,3 +102,51 @@ it is not a collection start or a human agreement writer. This terms/notice and
 statement preflight does not grant its retry/refund authority or alter that reducer.
 Its existing `contractor-mandate.test.ts` also passed separately with
 `--maxWorkers=2` (24 tests); total 65 passing tests across the two bounded runs.
+
+### ENT-14 catch-up validation — 3 November 2026
+
+Preserved the original mandate source and tests from `b31189d43`, main's simulated
+invoice hook and exports, and the caught-up M4-23 acceptance test verbatim from
+`origin/codex/sandbox/m4-23-ent-collect`. That parent explicitly excludes the inherited
+M4-10 invoice slice; this catch-up follows that exclusion, including its unused
+`0588_platform_tax_invoice` migration, rather than introducing or renumbering a migration.
+Inherited lane files are excluded; the ENT-14 lane names every remaining changed path.
+No command registration, grant, database routine or production behavior was added.
+
+Installed Vitest 4.1.12 with `--maxWorkers=2`: mandate, subscription-agreement and
+enterprise-fee-statement tests passed (41); contractor-mandate and contractor-billing
+passed (33). Core and database `tsc --noEmit` passed. Core/storage compilation refreshed
+ignored package artifacts for database test discovery. Core purity, money, commercial,
+AI-provider and PL/pgSQL CASE lint passed. The full lint wrapper stops at the lane
+boundary because its comparison includes the unfinished merge index and inherited
+branch history; the exact working-tree allow list was checked directly against main.
+`git diff origin/main --check` passed. Database execution, migrations, browser journeys,
+full CI and independent exact-head RED review remain unproved and required before landing.
+The human/legal approvals listed above remain open; this is NOPR catch-up evidence only.
+
+## Simulated invoice hook — 2 November 2026
+
+Ben's `jobguard-ent-7-invoice-hook-q02-2026-11-02` instruction ("Run simulated hook")
+opens the fictional invoice projection only. The earlier Q-02 refusal description
+above remains applicable to the supplied-reference executor, which cannot establish
+persisted authority. The working hook is `EnterpriseFeeRepository.simulateInvoice`,
+called by the cookie-scoped `statements/simulate-invoice` route and the practice
+statement screen. This is not a real invoice issuance or provider integration.
+
+The strict `enterprise-fee-simulate-invoice.v1` command accepts command, statement
+and authorization IDs only. In one tenant transaction it calls the existing
+`ef_post_statement` command and reads the immutable statement. Posting owns the
+finance/session, exact Decision/authorization, expiry/revocation, content hash,
+revision, stale-facts, dispute, replay, locking and audit checks. A previously
+unposted statement therefore posts its authorized synthetic journals; existing
+postings replay without another financial effect. The returned invoice uses the
+statement ID as its stable simulation identity, and binds its revision, hash,
+authorization, exact signed delta and GBP. Zero stays zero. No VAT treatment,
+provider reference, payment marker, real invoice number or collection is inferred.
+The artifact is a projection of durable statement/posting facts, not another store.
+
+Both the route and repository refuse pilot/live/unknown environments; even a
+synthetic caller cannot bypass the existing SQL check for the actual
+`jobguard_synthetic_demo` database. The reference-only executor and general
+`refuseEnterpriseFeeExecution` remain closed. No policy record, production gate,
+provider configuration, migration, grant or small-builder fee path changes.

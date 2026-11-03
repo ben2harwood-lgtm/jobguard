@@ -1,3 +1,4 @@
+import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
 import { randomUUID } from "node:crypto";
 import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -14,6 +15,7 @@ const provider = () => new PersistedAuthProvider(new IdentityRepository(identity
 const application = () => new IdentityApplication(provider(), origin);
 async function fixture() {
   const repo = new ContractorRepository(c.runtime), p = await repo.startPractice(randomUUID());
+  await seedActiveContractorAgreement(c.admin,p.tenantId);
   const address = `${randomUUID()}@fixture.invalid`, sessionToken = randomUUID(), csrfToken = randomUUID(), sessionId = randomUUID();
   await c.admin.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", [address, p.identityUserId]);
   await c.admin.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3)", [p.identityUserId,p.tenantId,p.membershipId]);
