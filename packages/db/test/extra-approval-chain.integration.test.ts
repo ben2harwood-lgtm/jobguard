@@ -206,9 +206,10 @@ it("E5B-09 Standard F: runtime reads only, routines re-check the actor, helpers 
   const s = await submitted(c, w, 40000);
   // A runtime caller who skips the repository (no processing receipt) or names someone else's receipt is refused by the routine itself.
   await expect(withTenant(c.runtime, ctx, db => db.$client.query("SELECT app.xa_approve($1,$2,$3,$4,0,$5,$6,false,NULL)", [s.jobId, s.requestId, randomUUID(), sup().membershipId, s.hash, s.net]))).rejects.toMatchObject({ message: "INVALID_COMMAND" });
-  await expect(withTenant(c.runtime, ctx, async db => {
+  await expect(withTenant(c.admin, ctx, async db => {
     const id = randomUUID();
     await db.$client.query("INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,'ApproveExtraStep',$3,$4,'processing',$5)", [w.p.tenantId, id, `forged:${id}`, "a".repeat(64), sup2().membershipId]);
+    await db.$client.query("SET LOCAL ROLE jobguard_runtime");
     await db.$client.query("SELECT app.xa_approve($1,$2,$3,$4,0,$5,$6,false,NULL)", [s.jobId, s.requestId, id, sup().membershipId, s.hash, s.net]);
   })).rejects.toMatchObject({ message: "INVALID_COMMAND" });
   for (const fn of ["xa_begin", "xa_open_request", "xa_event", "xa_open_decision", "xa_resolve_decision", "xa_requirement", "xa_fact_guard"])

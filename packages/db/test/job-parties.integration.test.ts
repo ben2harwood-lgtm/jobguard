@@ -340,7 +340,7 @@ describe("CH-3a adoption authorization boundary (round 2)",()=>{
     const seeds=new Set([stagedAuthority.get(command),stagedAuthority.get(authorization)]);
     for(const seed of seeds)if(seed)await seed(db);
   };
-  const callAdopt=(a:{job:string;hash:string;customer:string;site:string;command:string;authorization:string;actor?:string;net?:number;policy?:string;baseline?:string})=>withTenant(runtime,context,async db=>{
+  const callAdopt=(a:{job:string;hash:string;customer:string;site:string;command:string;authorization:string;actor?:string;net?:number;policy?:string;baseline?:string})=>withTenant(admin,context,async db=>{
     await materializeAuthority(db,a.command,a.authorization);
     return db.$client.query(`SELECT app.adopt_in_flight_job($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
       [tenant,a.job,a.baseline??randomUUID(),"Fictional import","live",a.hash,"Fictional baseline",a.net??100000,1500,"reference_fee_policy_v1",a.policy??OWNER_POLICY,a.actor??member,new Date(0),a.customer,a.site,null,a.command,a.authorization]);
@@ -367,7 +367,7 @@ describe("CH-3a adoption authorization boundary (round 2)",()=>{
     return id;
   }
   // Everything the dispatcher does in one transaction: the routine, the audit events and the receipt completion.
-  const executeDirect=(a:{job:string;hash:string;customer:string;site:string;command:string;authorization:string},steps:{audit?:boolean;receipt?:boolean;auditedAuthorization?:string}={})=>withTenant(runtime,context,async db=>{
+  const executeDirect=(a:{job:string;hash:string;customer:string;site:string;command:string;authorization:string},steps:{audit?:boolean;receipt?:boolean;auditedAuthorization?:string}={})=>withTenant(admin,context,async db=>{
     await materializeAuthority(db,a.command,a.authorization);
     const baseline=randomUUID();
     await db.$client.query(`SELECT app.adopt_in_flight_job($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,[tenant,a.job,baseline,"Fictional import","live",a.hash,"Fictional baseline",100000,1500,"reference_fee_policy_v1",OWNER_POLICY,member,new Date(0),a.customer,a.site,null,a.command,a.authorization]);
@@ -449,7 +449,7 @@ describe("CH-3a binding changes leave their record (round 4)",()=>{
   const bindDirect=async(job:string,customerRevision:string,siteRevision:string,steps:Steps={})=>{
     const command=randomUUID(),binding=randomUUID(),other=randomUUID();
     const expected=(await repository.view(context,member,job)).jobRevision;
-    await withTenant(runtime,context,async db=>{
+    await withTenant(admin,context,async db=>{
       await db.$client.query(`INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,'job.parties',$3,$4,'processing',$5)`,[command,tenant,command,"d".repeat(64),member]);
       const bind=(id:string,revision:number)=>db.$client.query(`SELECT app.bind_job_parties($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,[tenant,job,id,revision,customerRevision,null,siteRevision,false,null,member,command]);
       await bind(binding,expected);
@@ -507,16 +507,19 @@ describe("CH-3a a null correction flag cannot bypass the post-live guard (round 
   type BindRoute="routine"|"runtime-insert"|"owner-insert";
   const bindWithFlag=async(job:string,customerRevision:string,siteRevision:string,flag:boolean|null,reason:string|null,eventType="job.parties.bind",route:BindRoute="routine")=>{
     const command=randomUUID(),binding=randomUUID(),expected=(await repository.view(context,member,job)).jobRevision;
-    await withTenant(route==="owner-insert"?admin:runtime,context,async db=>{
+    await withTenant(admin,context,async db=>{
       await db.$client.query(`INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,'job.parties',$3,$4,'processing',$5)`,[command,tenant,command,"d".repeat(64),member]);
       if (route==="owner-insert") {
         await db.$client.query("SET LOCAL ROLE jobguard_migration");
         expect((await db.$client.query("SELECT current_user")).rows[0]).toEqual({ current_user: "jobguard_migration" });
-      } else expect((await db.$client.query("SELECT current_user,pg_has_role(current_user,'jobguard_runtime','USAGE') AS runtime_role")).rows[0]).toEqual({ current_user: "ch3a_login", runtime_role: true });
+      } else {
+        await db.$client.query("SET LOCAL ROLE ch3a_login");
+        expect((await db.$client.query("SELECT current_user,pg_has_role(current_user,'jobguard_runtime','USAGE') AS runtime_role")).rows[0]).toEqual({ current_user: "ch3a_login", runtime_role: true });
+      }
       if (route!=="routine") await db.$client.query(`INSERT INTO app.job_party_binding(tenant_id,id,job_id,revision,customer_id,customer_revision_id,paying_party_id,paying_party_revision_id,site_id,site_revision_id,provenance,correction_reason,command_id)
         SELECT $1,$2,$3,$4,c.customer_id,c.id,c.customer_id,c.id,s.site_id,s.id,'entered',$7,$8 FROM app.customer_revision c,app.site_revision s WHERE c.tenant_id=$1 AND c.id=$5 AND s.tenant_id=$1 AND s.id=$6`, [tenant,binding,job,expected+1,customerRevision,siteRevision,reason,command]);
       else await db.$client.query(`SELECT app.bind_job_parties($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,[tenant,job,binding,expected,customerRevision,null,siteRevision,flag,reason,member,command]);
-      if (route==="owner-insert") await db.$client.query("RESET ROLE");
+      await db.$client.query("RESET ROLE");
       await db.$client.query(`UPDATE app.command_receipt SET status='succeeded',result=$3::jsonb,completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2`,[tenant,command,JSON.stringify({id:binding})]);
       await appendAuditBatch(db,[{id:randomUUID(),version:"audit.v1",actorRef:`membership:${member}`,eventType,subjectType:"job",subjectRef:job,payload:{references:{commandId:command,identityId:binding},hashes:{request:"d".repeat(64)},classifications:{action:"operational"}}}]);
     });

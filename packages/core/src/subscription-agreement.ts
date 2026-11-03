@@ -69,6 +69,7 @@ export const subscriptionAgreementCheckV1 = z.object({
   amountPence: pence, reservedAndCollectedPeriodPence: pence,
   currentStatement: statement.optional(),
   statementApproval: z.object({ ...statement.shape, resolution: z.literal("approved"),
+    agreementId: id, termsRevision: revision, termsHash: hash,
     tenantId: id, recipientRef: id, expiresAt: utcDatetimeV1, decisionId: id }).strict().optional(),
 }).strict();
 
@@ -93,6 +94,8 @@ export function checkSyntheticSubscriptionAgreement(raw: unknown) {
     const approval = input.statementApproval;
     if (!current || !approval) return reject();
     if (approval.tenantId !== input.tenantId || approval.recipientRef !== terms.recipientRef
+      || approval.agreementId !== terms.agreementId || approval.termsRevision !== terms.revision
+      || approval.termsHash !== record.termsHash
       || Date.parse(approval.expiresAt) <= time || Object.keys(statement.shape).some(key => current[key as keyof typeof current] !== approval[key as keyof typeof current])
       || BigInt(current.principalPence) + BigInt(current.taxPence) !== BigInt(input.amountPence)
       || input.amountPence === 0) reject();
