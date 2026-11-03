@@ -1,9 +1,13 @@
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { join } from "node:path";
 import { randomBytes, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { jobDoorsActor, jobDoorsDatabase, type JobDoorsDatabase } from "./lp-job-doors-fixtures.js";
 import { DEMO_TENANT_ID, DEMO_ACCOUNT_ID, DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID } from "../src/index.js";
 
+const execute = promisify(execFile);
 let db: JobDoorsDatabase;
 beforeAll(async () => {
   db=await jobDoorsDatabase(true);
@@ -43,20 +47,30 @@ it("home digests and raw contractor IDs bind only their practice principals, nev
 });
 
 it("upgrades dark, round-trips a logical binding-table dump into a fresh cluster and rejects carried rows even at a colliding xid8",async()=>{
-  const source=await db.runtime.connect(),other=await jobDoorsDatabase(false,"0520_lp6a_request_binding.sql");
+  const source=await db.runtime.connect(),other=await jobDoorsDatabase(false,"0698_lp6a_request_binding.sql");
   try{
     const old=(await other.owner.query("SELECT pg_get_functiondef('app.contractor_session(uuid)'::regprocedure) definition")).rows[0].definition;
-    await other.owner.query(await readFile(new URL("../migrations/0520_lp6a_request_binding.sql",import.meta.url),"utf8"));
+    await other.owner.query(await readFile(new URL("../migrations/0698_lp6a_request_binding.sql",import.meta.url),"utf8"));
     expect((await other.owner.query("SELECT pg_get_functiondef('app.contractor_session(uuid)'::regprocedure) definition")).rows[0].definition).toBe(old);
     const digest=randomBytes(32).toString("hex");
     await db.owner.query("INSERT INTO control_plane.practice_session(token_digest) VALUES($1)",[digest]);
     await source.query("BEGIN");await source.query("SELECT app.bind_request('practice',$1,$2)",[digest,DEMO_TENANT_ID]);
     await source.query("COMMIT");
-    // SQL logical dump and restore of this table's rows, deliberately including
-    // stale UNLOGGED data (a logical dump can carry it, unlike physical backup).
+    // A real logical dump must carry stale UNLOGGED rows without carrying
+    // authority into the destination postmaster/database. No credentials in argv.
+    const dumpFile=join(db.directory,"binding.sql");
+    const connectionArgs=(database:JobDoorsDatabase)=>[
+      "--host=127.0.0.1",`--port=${database.owner.options.port}`,
+      "--username=postgres",`--dbname=${database.owner.options.database}`,
+    ];
+    await execute("pg_dump",[...connectionArgs(db),"--data-only","--inserts",
+      "--no-owner","--no-privileges","--table=control_plane.request_binding",`--file=${dumpFile}`],
+      {env:{...process.env,PGPASSWORD:String(db.owner.options.password)},timeout:30_000});
+    await execute("psql",[...connectionArgs(other),"-X","--set=ON_ERROR_STOP=on",`--file=${dumpFile}`],
+      {env:{...process.env,PGPASSWORD:String(other.owner.options.password)},timeout:30_000});
     const dump=(await db.owner.query("SELECT coalesce(json_agg(row_to_json(b)),'[]'::json) payload FROM control_plane.request_binding b")).rows[0].payload;
     expect(dump.length).toBeGreaterThan(0);
-    await other.owner.query("INSERT INTO control_plane.request_binding SELECT * FROM json_populate_recordset(NULL::control_plane.request_binding,$1::json)",[JSON.stringify(dump)]);
+    expect((await other.owner.query("SELECT count(*)::int n FROM control_plane.request_binding")).rows[0].n).toBe(dump.length);
     expect((await other.owner.query("SELECT extract(epoch FROM pg_postmaster_start_time())::text||':'||(SELECT d.oid::text FROM pg_catalog.pg_database d WHERE d.datname=current_database()) environment")).rows[0].environment).not.toBe(dump[0].environment_id);
     const target=await other.runtime.connect();
     try{

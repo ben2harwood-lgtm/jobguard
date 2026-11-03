@@ -9,7 +9,7 @@ it("records the dark binding as an explicit authority path without broadening bu
   expect(entries).toHaveLength(18);
   const runtime=entries.filter(e=>e.key.includes("|jobguard_runtime|"));
   expect(runtime.map(e=>e.key).sort()).toEqual([
-    "acl|routine|function:app.bind_request(p_kind text, p_credential text, p_tenant uuid)|jobguard_runtime|EXECUTE|-",
+    "acl|routine|function:app.bind_request(text,text,uuid)|jobguard_runtime|EXECUTE|-",
     "acl|routine|function:app.current_actor()|jobguard_runtime|EXECUTE|-",
     "acl|routine|function:app.current_tenant()|jobguard_runtime|EXECUTE|-",
   ]);
@@ -18,7 +18,7 @@ it("records the dark binding as an explicit authority path without broadening bu
 });
 
 it("keeps SQL additions dark and credentials out of the binding store and error text",()=>{
-  const sql=readFileSync(new URL("../migrations/0520_lp6a_request_binding.sql",import.meta.url),"utf8");
+  const sql=readFileSync(new URL("../migrations/0698_lp6a_request_binding.sql",import.meta.url),"utf8");
   expect(sql).not.toMatch(/CREATE OR REPLACE|CREATE POLICY|ALTER POLICY|ALTER TABLE app\./);
   const table=sql.slice(sql.indexOf("CREATE UNLOGGED TABLE"),sql.indexOf("ALTER TABLE control_plane.request_binding"));
   expect(table).not.toMatch(/token_digest|session_digest|p_credential|signature/);

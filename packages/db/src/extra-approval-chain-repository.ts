@@ -79,6 +79,7 @@ export class ExtraApprovalRepository {
     const member = this.checkActor(context, actor), tenant = lc(context.tenantId), legacyJson = canonicalJson({ type, actor: member, content });
     try {
       return await withTenant(this.pool, context, async db => {
+        if (type !== "RevokeClientApproval") await db.$client.query("SELECT app.mon8_require_feature($1,'approval_chains')", [member]);
         const claimed=await beginRepositoryCommand<Result>(db,{tenantId:tenant,actorMembershipId:member,commandId,
           commandType:type,semanticKey:semantic,jobId:(content as {jobId:string}).jobId,legacyJson});
         if(claimed.kind==="replay")return claimed.result;
@@ -155,7 +156,7 @@ export class ExtraApprovalRepository {
       const command: ConsequentialCommand = { version: "command.v1", commandId: i.commandId, commandType: "IssueClientApproval", semanticKey: `extra-client-approval:${i.requestId}:${i.commandId}`, actorMembershipId: member, subjectType: "extra", subjectRef: request.variation_id,
         action: { actionType: "extra.client_approval_request.send", recipient: i.recipient, contentHash, aggregateRevision: request.request_revision, amountPence: net, currency: "GBP", policyVersion: "extra-client-approval-send.v1", expiresAt: i.expiresAt } };
       const handler: CommandMutation<Result> = {
-        lock: async db => { await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text||':'||$2::uuid::text,417))", [tenant, i.jobId]); },
+        lock: async db => { await db.$client.query("SELECT app.mon8_require_feature($1,'approval_chains')", [member]); await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text||':'||$2::uuid::text,417))", [tenant, i.jobId]); },
         mutate: async (db, c) => {
           await appendOutboundAction(db, tenant, { version: "outbound-action.v1", id: outboxId, authorizationId: c.authorizationId!, adapter: "fake_email", providerEffectKey: `extra-client-link:${linkId}`, actionType: c.action.actionType, recipient: i.recipient,
             contentHash, immutableContent: content, aggregateRevision: request.request_revision, amountPence: net, currency: "GBP", policyVersion: "extra-client-approval-send.v1", authorizationExpiresAt: i.expiresAt });

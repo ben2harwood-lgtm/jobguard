@@ -322,6 +322,8 @@ Quote-delivery and payment-reversal grant expiries are server-generated. Their r
 
 For the v3 activation, proposal review and legacy import routines, a private migration-owner handoff binds the effect to its processing claim. It is unavailable to runtime. Completion derives its stored result and a bounded private proof reference from those business rows; it never persists handler JSON. Existing server-proven activation, invoice and order no-ops retain their first effects and record a no-op reason. The historical synthetic lock-test command is explicitly registered as an operational no-op and cannot create a commercial authorization.
 
+Implementation source map (31 October 2026): LP-5a is `packages/db/migrations/0521_lp5a_commands.sql`; LP-5b is `packages/db/migrations/0522_lp5b_writers.sql`. The filename-only move puts both after main's 0505 source-intake admission definition. It changes no command signature, stored format or release gate.
+
 LP-5a converts dispatcher creation, dismiss/reject and completion. LP-5b traces
 all TypeScript and owner-side SQL writers, including later contractor wrappers,
 seed and restore tooling; preserves replay, membership-lock and watchdog/deferred
@@ -375,7 +377,7 @@ validate index coverage, references, lane scope and existing pure comparator/
 context regressions; they do not establish SQL refusal, locks, signatures,
 financial correctness or independent review. PostgreSQL/browser suites cannot run
 in this sandbox. All implementation, migration, cutover, RED implementation
-reviews and whole-track real-data gates remain outstanding. The recorded review above permits the LP-5 interface with its eight findings applied; the design delta check and RED implementation review remain required. LP-6a design decisions are closed by §20; implementation review remains outstanding. The original design-only slice had no migration; the dark foundation uses 0520.
+reviews and whole-track real-data gates remain outstanding. The recorded review above permits the LP-5 interface with its eight findings applied; the design delta check and RED implementation review remain required. LP-6a design decisions are closed by §20; implementation review remains outstanding. The original design-only slice had no migration; the dark foundation uses 0698.
 
 ## 20. LP-6a reviewed implementation contract (30 October review applied)
 
@@ -437,7 +439,7 @@ runtime cleanup). Failed binds roll back helper GUC changes. Successful binds
 restore helper GUCs: existing tenant settings remain transitional, not binding
 inputs. No signature format or caller-set signed-context value is accepted.
 
-Migration 0520 is forward-only and merged dark: no existing route, RLS policy,
+Migration 0698 is forward-only and installs dark: no existing route, RLS policy,
 command, audit writer or bridge switches to this binding. Rollback of a dark
 application needs no database downgrade. Before real-data activation, complete
 LP-6b–6e/LP-9–13, renumber the LP block contiguously, run the whole PostgreSQL
@@ -462,7 +464,7 @@ It also rejects any runtime, worker, identity or infrastructure USAGE/SET path.
 
 Bootstrap grants the migration membership only for migrations and revokes it in
 finally on success and failure, then rechecks that only the creator row remains.
-Temporary schema CREATE needed for ownership transfer is revoked inside 0520.
+Temporary schema CREATE needed for ownership transfer is revoked inside 0698.
 A real restricted-bootstrap catalogue assertion checks the creator row's exact
 member, grantor and option flags, absence of outgoing membership, absence of
 service/migration assumption paths and absence of retained schema CREATE.
@@ -474,3 +476,49 @@ The control-file grant and its helper are removed entirely. The logical table
 row restore and forced-xid carried-row replay tests remain. PostgreSQL execution
 and independent exact-head RED review are still required in CI; the provisioning
 hold itself is closed by the clarification and implementation.
+
+
+### LP-6a catch-up receipt (3 November 2026)
+
+Reconciled against incoming main `bc8993090` (the merge parent), preserving its
+LP-3–LP-5b bodies. LP-5c is stacked from saved branch head `23d261272`, including
+0557 and its fixture repairs; its earlier unmerged 0508 name is retired. LP-6a
+uses 0698 with a migration proof, leaving the frozen LP-0 JSON unchanged. The
+lane lists only LP-6a paths, including the shared contract's LP-6a delta. No
+LP-6b scanner/pin or LP-6c/6d bridge conversion is included.
+
+Source inspection confirms review changes 1(a)–(g), 2 and the bootstrap ruling
+in §20. The restore regression now runs actual `pg_dump` and `psql` against two
+fresh fictional clusters, then forces a colliding xid with the carried source
+environment. CI needs compatible PostgreSQL client tools available on PATH;
+missing tools fail the test rather than skipping it.
+
+Executed with installed Node 24.17.0, Vitest 4.1.12 and TypeScript 5.8.3:
+
+- `node node_modules/vitest/vitest.mjs run --maxWorkers=1 test/lp6a-binding.test.ts test/lp5c-revoke.test.ts test/migration-proof-loader.test.ts`
+  from packages/db: 81 passed across three files.
+- `node node_modules/vitest/vitest.mjs run --maxWorkers=1 test/demo-bootstrap.integration.test.ts -t 'bootstrap SQL trace'`
+  from packages/db: seven trace tests passed; three database tests deliberately
+  unselected. This is protocol evidence, not PostgreSQL execution.
+- `node node_modules/typescript/bin/tsc -p tsconfig.json --noEmit` from
+  packages/db: passed.
+- `node tools/plpgsql-case-in-if-lint.mjs`: 222 migrations passed; lane loader
+  validated the LP-6a schema and 12 exact paths.
+- `node tools/lint.mjs`: core purity passed; lane check fails on the unfinished
+  merge index, which still includes incoming main and stacked LP-5c changes.
+  The router must stage and finish the merge and rerun against the correct base.
+- The pnpm commands could not start their runners: the installed launcher tried
+  to verify/switch to pinned pnpm through an unreachable registry. The installed
+  repository runners above were used directly; no packages were installed and
+  no package-manager settings were changed.
+
+CI must prove the complete PostgreSQL suite, upgrade/catalogue/privilege proofs,
+real dump/restore, revocation and SCIM races, and existing watchdog lock order.
+Full required CI and independent exact-head RED review remain pending. No local
+database/browser execution, independent review or live-service claim is made.
+NOPR remains until LP-5c #540 lands, followed by another catch-up.
+
+LATER / SIMPLICITY — packages/db/src/demo-bootstrap.ts: share the repeated
+restricted-role list between provisioning and posture/holder checks in a future
+scoped change; one list reduces the chance of omitting a role from a check.
+This does not block LP-6a.
