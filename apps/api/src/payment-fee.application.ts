@@ -1,5 +1,5 @@
 import type { Pool } from "pg";
-import { parsePaymentFeeCommand, PaymentFeeStatementError } from "@jobguard/core";
+import { paymentFeeRequestV1, PaymentFeeStatementError } from "@jobguard/core";
 import { PaymentFeeRepository, PracticeAccessError } from "@jobguard/db";
 import { z } from "zod";
 import { PracticeAccess } from "./practice-access.js";
@@ -10,6 +10,7 @@ export function paymentFeeFailure(error:unknown):{status:number;body:{code:strin
   if(["FINAL_CHECK_FORBIDDEN","PAYMENT_FEE_FORBIDDEN"].includes(error.message))return {status:404,body:{code:"NOT_FOUND"}};
   if(error.message==="INVALID_PAYMENT_FEE_COMMAND")return {status:400,body:{code:error.message}};
   if(["PAYMENT_FEE_SOURCE_REQUIRED","PAYMENT_FEE_ATTRIBUTION_REQUIRED","PAYMENT_FEE_REVIEW_REQUIRED","PAYMENT_FEE_SOURCE_CHANGED","PAYMENT_FEE_PAUSED","PAYMENT_FEE_APPROVAL_CHANGED","PAYMENT_FEE_REASSESSMENT_REQUIRED","PAYMENT_FEE_IDEMPOTENCY_CONFLICT"].includes(error.message))return {status:409,body:{code:error.message}};
+  if(["PAYMENT_FEE_AUTHORITY_STALE","PAYMENT_FEE_SOURCE_REQUIRED","PAYMENT_FEE_ATTRIBUTION_REQUIRED","PAYMENT_FEE_SOURCE_CHANGED","PAYMENT_FEE_PAUSED","PAYMENT_FEE_APPROVAL_CHANGED","PAYMENT_FEE_REASSESSMENT_REQUIRED","PAYMENT_FEE_IDEMPOTENCY_CONFLICT"].includes(error.message))return {status:409,body:{code:error.message}};
  }
  return null;
 }
@@ -28,6 +29,10 @@ export class PaymentFeeApplication {
  }
  async command(jobId:string,raw:unknown,query:unknown={}){
   this.check(query);const auth=await this.access.job(jobId);
-  return this.repository.command(auth.context,jobId,auth.digest,parsePaymentFeeCommand(raw));
+  const parsed=paymentFeeRequestV1.safeParse(raw);
+  if(!parsed.success)throw new PaymentFeeStatementError();
+  return parsed.data.version==="payment-fee-authority-command.v1"
+   ?this.repository.authority(auth.context,jobId,auth.digest,parsed.data)
+   :this.repository.command(auth.context,jobId,auth.digest,parsed.data);
  }
 }
