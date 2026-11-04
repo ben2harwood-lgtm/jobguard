@@ -592,7 +592,11 @@ export const darkOrderRegistryRow = {
   command_type: "purchase_order.send.dark", version: "command.v1", permission_rule: "owner",
   lock_adapter: "route_before_begin", completion_adapter: "purchase_order", audit_class: "commercial", outbox_class: "fake_merchant_order",
 };
-export const currentCommandRegistryRows = [...lp5RegistryRows, lateSourceRegistryRow, darkOrderRegistryRow];
+export const managedRecoveryRegistryRow = {
+  command_type: "managed_recovery.elect", version: "command.v1", permission_rule: "owner",
+  lock_adapter: "route_before_begin", completion_adapter: "managed_recovery", audit_class: "commercial", outbox_class: null,
+};
+export const currentCommandRegistryRows = [...lp5RegistryRows, lateSourceRegistryRow, managedRecoveryRegistryRow, darkOrderRegistryRow];
 export const lp5bRoutines = [
   {
     "signature": "app.lp5b_bind_follow_up_cancel()",

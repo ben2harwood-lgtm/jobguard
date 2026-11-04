@@ -22,13 +22,14 @@ function fixture() {
   let state = { receipts: [] as any[], effects: [] as any[], placements: [] as any[], attestations: [] as any[],
     identities: [] as any[], results: [] as any[], audits: [] as any[], grants: [] as any[], attempts: [] as any[] };
   let snapshot = structuredClone(state), active = false;
-  let current = true, locked = false, owner = true;
+  let current = true, locked = false, owner = true, claimsEnabled = true;
   const query = vi.fn(async (sql: string, values: any[] = []) => {
     const result = (rows: any[] = [], rowCount = rows.length) => ({ rows, rowCount });
     if (sql === "BEGIN") { snapshot = structuredClone(state); active = true; return result(); }
     if (sql === "ROLLBACK") { state = snapshot; active = false; return result(); }
     if (sql === "COMMIT") { active = false; return result(); }
     if (sql.includes("set_config") || sql.includes("pg_advisory_xact_lock") || sql.includes("require_watchdog_live")) return result();
+    if (sql === "SELECT outbound_control.claims_enabled() AS enabled") return result([{ enabled: claimsEnabled }]);
     if (sql.startsWith("SELECT 1 FROM app.final_account_lock")) return result(locked ? [{}] : []);
     if (sql.startsWith("SELECT r.id,r.draft_id")) return result(current && values[0] === tenant && values[1] === job && values[2] === revision ? [{ ...orderRow }] : []);
     if (sql.startsWith("SELECT role FROM app.membership")) return result(owner ? [{ role: "owner" }] : []);
@@ -110,12 +111,22 @@ function fixture() {
         aggregateRevision: 1, amountPence: view.amountPence, currency: "GBP", policyVersion: "dark-merchant-order.v1", expiresAt: new Date("2099-01-01") } };
   }
   return { repo, context, member, scope, command, orderRow, query, pool, port, deliver, executor, state: () => state,
+    pause: () => { claimsEnabled = false; },
     supersede: () => { current = false; }, lock: () => { locked = true; }, revoke: () => { owner = false; },
     manual: { version: "manual-order-attestation.v1", jobId: job, revisionId: revision, commandId: randomUUID(),
       supplierReference: "synthetic-order-1" } };
 }
 
 describe("M2-1 dark exact approved merchant action", () => {
+  it("a paused outbound control keeps an approved dark order pending without a delivery attempt", async () => {
+    const f = fixture(), command = await f.command();
+    const queued = await f.repo.approve(f.context, f.scope, command);
+    const before = structuredClone(f.state());
+    f.pause();
+    await f.executor.execute(testTenantContext(f.context.tenantId), queued.outboxActionId);
+    expect(f.state()).toEqual(before);
+    expect(f.deliver).not.toHaveBeenCalled();
+  });
   it("binds cited merchant, rate, item and delivery details; unknown availability and prevention stay fee-free", async () => {
     const f = fixture(), view = await f.repo.preview(f.context, f.scope);
     expect(view).toMatchObject({ stock: "unknown", leadTime: "unknown", realExternalActions: 0,

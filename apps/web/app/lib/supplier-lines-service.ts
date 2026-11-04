@@ -1,3 +1,4 @@
+import "server-only";
 import { createHash } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";

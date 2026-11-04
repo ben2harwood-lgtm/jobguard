@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it } from "vitest";
-import { currentCommandRegistryRows, lp5RegistryRows, lateSourceRegistryRow } from "./lp5-command-catalog.js";
+import { currentCommandRegistryRows, lp5RegistryRows, lateSourceRegistryRow, managedRecoveryRegistryRow } from "./lp5-command-catalog.js";
 import { parseInventory } from "./lp-0-catalog.js";
 import { applyTenancyProofs, applyUpgradeProofs, combineLp0, loadMigrationProofs } from "./migration-proof-loader.js";
 
@@ -26,8 +26,8 @@ it("M2-4 and its sibling proofs preserve main and keep tables guarded and routin
     const registryChange = proofs[0]!.upgrade.find(change => change.section === "rows" && change.before?.table === "app.command_type_registry");
     if (registryChange?.section !== "rows") throw new Error("Missing registry upgrade proof");
     const registryBefore = registryChange.before!.data;
-    expect(registryBefore).toHaveLength(lp5RegistryRows.length + 1);
-    expect(registryBefore).toEqual(expect.arrayContaining([...lp5RegistryRows, lateSourceRegistryRow]));
+    expect(registryBefore).toHaveLength(lp5RegistryRows.length + 2);
+    expect(registryBefore).toEqual(expect.arrayContaining([...lp5RegistryRows, lateSourceRegistryRow, managedRecoveryRegistryRow]));
     const expected = applyUpgradeProofs({ rows: { "app.command_type_registry": registryBefore }, routines: [], relations: [], policies: [] }, proofs, { jobguard_migration: 42 });
     expect(Object.keys(expected.rows).sort()).toEqual([
       "app.command_type_registry", "app.purchase_order_manual_attestation", "app.supplier_line_match_correction", "app.supplier_line_match_snapshot",

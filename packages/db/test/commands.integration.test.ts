@@ -50,7 +50,8 @@ describe("consequential command authorization",()=>{
   await expect(dispatcher.dispatch(context,command("87000000-0000-4000-8000-000000000004",{action:{...base.action,contentHash:"b".repeat(64)}}),transition)).rejects.toMatchObject({code:"COMMAND_CONFLICT"});
  });
  it("rejects dismissed, changed, expired, revoked, and expired-member grants before invocation",async()=>{
-  await withTenant(runtime,context,async d=>{
+  // Owner fixture lets the authorization trigger remain the refusing boundary.
+  await withTenant(admin,context,async d=>{
    const auth=(await d.$client.query<{id:string}>("SELECT id FROM app.action_authorization LIMIT 1")).rows[0]!.id;
    let calls=0; const requested=command("87000000-0000-4000-8000-000000000005").action;
    await expect(executeAuthorizedCommercialAction(d,auth,requested,async()=>++calls)).resolves.toBe(1);

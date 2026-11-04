@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/m2-lines-review"
       ],
-      "note": "M2-3/M2-4 RED line review, retaining stacked M2-1 through M2-4 dependencies. Catch-up migrations 0598 and 0599. M2-1 checked command protocol aligned with c70d7d20; PostgreSQL/browser CI and independent RED review remain required.",
+      "note": "M2-3/M2-4 RED tenant line review with stacked dark M2-1 order base. Catch-up against origin/main fb61ec36 preserves managed recovery and outbound pause. Migrations remain 0598 and 0599; PostgreSQL/browser CI and exact-head independent RED review remain required.",
       "allow": [
         "apps/web/app/api/jobs/[id]/supplier-lines/route.test.ts",
         "apps/web/app/api/jobs/[id]/supplier-lines/route.ts",
@@ -26,6 +26,7 @@
         "packages/core/src/supplier-line-matching.ts",
         "packages/core/src/supplier-match-corrections.test.ts",
         "packages/core/src/supplier-match-corrections.ts",
+        "packages/core/src/watchdog.ts",
         "packages/db/migrations/0598_dark_merchant_order.sql",
         "packages/db/migrations/0599_supplier_line_corrections.sql",
         "packages/db/src/index.ts",
@@ -37,6 +38,7 @@
         "packages/db/src/supplier-line-correction-repository.ts",
         "packages/db/src/watchdog.ts",
         "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/later-empty-tables.ts",
         "packages/db/test/lp5-command-catalog.ts",
         "packages/db/test/m2-1-migration-proof.test.ts",
         "packages/db/test/merchant-intake-port.test.ts",

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Pool } from "pg";
+vi.mock("server-only", () => ({}));
 const state = vi.hoisted(() => ({ authorize: vi.fn(), query: vi.fn(), create: vi.fn(), read: vi.fn(), correct: vi.fn() }));
 vi.mock("@jobguard/db", () => ({
   authorizePracticeJob: state.authorize,

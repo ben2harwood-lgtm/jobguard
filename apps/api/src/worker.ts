@@ -15,8 +15,8 @@ import { run, type TaskList } from "graphile-worker";
 import { Pool } from "pg";
 import { z } from "zod";
 import { registerFinalCheckTask } from "./worker-task-extensions.js";
-import { requireOutboxSettlementEligibility } from "./production-settlement-guard.js";
 import { executeFinalCheckTask, type FinalCheckExecutionPorts } from "./final-check-task-executor.js";
+import { requireOutboxSettlementEligibility } from "./production-settlement-guard.js";
 import { RedactingLogger, redactingWorkerLogger, redactingTasks, redactedWorkerError } from "./safe-logging.js";
 
 const logger = new RedactingLogger();

@@ -786,7 +786,7 @@ describe("M4-6-S tenant, access and database boundaries", () => {
     // Once it has, a Decision that already carries a resolution, or is named for another follow-up, is still refused: elapsed time never creates consent.
     await admin.query("ALTER TABLE app.sandbox_run_event DISABLE TRIGGER recovery_follow_up_due_on_advance");
     try { await sandbox.advance(token, base.runId, randomUUID()); } finally { await admin.query("ALTER TABLE app.sandbox_run_event ENABLE TRIGGER recovery_follow_up_due_on_advance"); }
-    await expect(withTenant(runtime, ctx, async db => rawDue(await decide(db, `${base.followUp.id}:1`, true), 1)(db))).rejects.toThrow("RECOVERY_FOLLOW_UP_DUE_INVALID");
+    await expect(withTenant(admin, ctx, async db => rawDue(await decide(db, `${base.followUp.id}:1`, true), 1)(db))).rejects.toThrow("RECOVERY_FOLLOW_UP_DUE_INVALID");
     await expect(withTenant(runtime, ctx, async db => rawDue(await decide(db, `${randomUUID()}:1`), 1)(db))).rejects.toThrow("RECOVERY_FOLLOW_UP_DUE_INVALID");
     await expect(withTenant(runtime, ctx, async db => rawDue(await decide(db, `${base.followUp.id}:1`), 3)(db))).rejects.toThrow("RECOVERY_FOLLOW_UP_DUE_INVALID");
     expect(await dueDecisions(base.followUp.id)).toBe(0);

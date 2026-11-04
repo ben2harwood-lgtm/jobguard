@@ -57,9 +57,12 @@ describe("M2-1 checked command compatibility", () => {
       const start = sql.indexOf("CREATE OR REPLACE FUNCTION app.lp5_command_result(");
       return sql.slice(start, sql.indexOf("END $$;", start) + 8);
     };
+    const managedMigration = readFileSync(new URL("../migrations/0566_managed_recovery_election.sql", import.meta.url), "utf8");
+    const managedBranch = managedMigration.split("$branch$")[1]!;
+    const latestBody = body(current).replace("CASE adapter\n", managedBranch);
     const withoutDark = body(migration).replace(/  IF r\.command_type='purchase_order\.send\.dark' THEN[\s\S]*?  ELSE\n/u, "")
       .replace("  END IF;\n WHEN 'recovery_terms' THEN", " WHEN 'recovery_terms' THEN");
-    expect(withoutDark).toBe(body(current));
+    expect(withoutDark).toBe(latestBody);
     expect(migration).not.toMatch(/CREATE (?:OR REPLACE )?FUNCTION app\.(?:begin_command|complete_command|lp5_check_command_completion)\(/u);
     expect(migration).toContain("AND (o.immutable_content::jsonb)->>'revisionAuthorityHash'=v.authority_hash");
     expect(migration).toContain("o.content_hash=encode(sha256(convert_to(o.immutable_content,'UTF8')),'hex')");
