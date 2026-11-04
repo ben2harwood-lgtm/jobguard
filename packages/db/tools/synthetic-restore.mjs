@@ -231,6 +231,8 @@ export async function runSyntheticRestoreRehearsal(options = {}, api, fixture) {
     pass("corrupt-backup-refused", "A modified backup fails SHA-256 verification before any restore starts.");
     await rename(sourcePath, join(root, "original-offline"));
     const restoreStart = performance.now();
+    const dependencyMeasurements = {};
+    const measured = name => { dependencyMeasurements[name] = { status: "exercised", recoveryMilliseconds: performance.now() - restoreStart, dataLossMilliseconds: 0, boundary: "quiescent synthetic cold snapshot; no post-backup writes" }; };
     await copyStoppedCluster(backupPath, restoredPath); await verifyTree(restoredPath, manifest);
     await restored.start(); timings.restoreStartMilliseconds = Math.round(performance.now() - restoreStart);
     // No worker/runtime connection exists until the restored database is paused.
@@ -246,6 +248,7 @@ export async function runSyntheticRestoreRehearsal(options = {}, api, fixture) {
     runtime = pool(restoredPort, "rehearsal_runtime"); storage = new DatabaseSyntheticStorage(runtime);
     assert.equal((await admin.query("SHOW server_version")).rows[0].server_version, postgresVersion);
     assert.deepEqual(await rowSnapshot(admin), before);
+    measured("database");
     await fixture?.afterRestore({ admin, postgres: restored, directory: restoredPath, pool: (user, database) => pool(restoredPort, user, database) });
     assert.deepEqual(await trackRows(runtime), sourceTrack);
     assert.deepEqual(await api.withTenant(runtime, context, async db => (await db.$client.query("SELECT job_track,kind,provenance,raising_role,source_capture_hash FROM app.extra_origin WHERE tenant_id=$1 AND job_id=$2 AND variation_id=$3", [ids.tenant, ids.job, ids.variation])).rows), sourceOrigin);
@@ -270,7 +273,9 @@ export async function runSyntheticRestoreRehearsal(options = {}, api, fixture) {
     assert.equal(await new api.EvidenceService(runtime, storage).cleanupExpiredOrphans(context, new Date("2100-01-01T00:00:00Z")), 0);
     assert.equal(digest((await storage.readExactVersion(upload.objectKey, objectVersion)).bytes), digest(bytes));
     pass("retained-evidence-preserved", "Expired-orphan cleanup does not select or remove the finalized retained original, even with a future test clock.");
+    measured("evidenceVersions");
     const restoredAudit = await auditRows(runtime); api.verifyAuditChain(restoredAudit, checkpoint);
+    measured("auditCheckpoint");
     assert.throws(() => api.verifyAuditChain(restoredAudit.map((event, i) => i === 0 ? { ...event, payload: { references: { changed: "fixture" } } } : event), checkpoint), /Invalid audit chain/);
     pass("audit-checkpoint-restored", "The restored audit chain matches the checkpoint recorded outside the copied cluster; altered payloads fail verification. The checkpoint is a local fixture, not an external signed attestation.");
     const role = (await runtime.query("SELECT rolsuper,rolbypassrls,rolcreaterole,rolcreatedb FROM pg_roles WHERE rolname=current_user")).rows[0];
@@ -328,7 +333,7 @@ export async function runSyntheticRestoreRehearsal(options = {}, api, fixture) {
       financialFixture: { invoiceGrossPence: 12000, manualReceiptPence: 5000, outstandingPence: 7000, invoicePdfSha256: invoicePdfHash, qualifyingRecoveryProof: false, platformFeeSettlement: false },
       outboundControl: { sourceClaimsEnabled: true, restoredPausedBeforeRuntime: true, finalPaused: true, attemptsWhilePaused: 0,
         reconciliationReceipt, resumeRequest, pauseRevision, independentlyApprovedByFixtureOperator: true },
-      fakeDeliveryCallsAfterRestore: fakeDeliveries, liveProviderCalls: 0, timings, checks,
+      fakeDeliveryCallsAfterRestore: fakeDeliveries, liveProviderCalls: 0, timings, dependencyMeasurements, checks,
       notRun: [
         "Hosted deployment backup/restore, replication and point-in-time recovery",
         "MinIO/S3/object-version restore; this run restores the current DB-backed synthetic storage path",

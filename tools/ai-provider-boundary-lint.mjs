@@ -8,6 +8,16 @@ import ts from "typescript";
 export function checkAiProviderBoundarySource(file, text) {
   const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const failures = [];
+  // The testing subpath is not application authority, including aliased/namespace imports.
+  if (!/\.(?:test|spec)\.[cm]?[jt]sx?$/.test(file) && file !== "packages/ai/src/testing.ts") {
+    for (const statement of source.statements) {
+      if ((ts.isImportDeclaration(statement) || ts.isExportDeclaration(statement)) && statement.moduleSpecifier &&
+        (/(?:^|\/)testing(?:\.[cm]?[jt]s)?$/.test(statement.moduleSpecifier.text) ||
+          statement.getText(source).includes("fixtureAiSession"))) {
+        failures.push(`${file}: fixtureAiSession is test-only`);
+      }
+    }
+  }
   const providerNamespaces = new Set(["ai"]);
   for (const statement of source.statements) {
     if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) continue;
