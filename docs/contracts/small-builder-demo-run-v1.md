@@ -239,3 +239,5 @@ verdict and two builder observations are still missing.
 
 Receipt-fact commands run SERIALIZABLE and lock the tenant's audit head, so another writer on the shared practice
 tenant can abort one. The repository re-runs that rolled-back command up to five attempts with the same command id.
+
+Saved selection reports now point recovery-18800 to its practice guide, explicitly noting that the selection is not tied to one job and saved results belong to the job’s own guide. Shadow-30000 points to “Create or resume and read saved results” on the selection; only core and shadow direct readers to controls below. Snapshots still record selection metadata only. DEMO-S remains open for two builder observations and a fresh verdict.
