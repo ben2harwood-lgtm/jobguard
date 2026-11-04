@@ -38,6 +38,16 @@ export async function searchItems(db: TenantTransaction, tenant: string, version
   return { items: rows.slice(0, 50), truncated: rows.length > 50 };
 }
 
+/** Only the resolved operative's history; the current job's price list supplies all displayed fields. */
+export async function recentItems(db: TenantTransaction, tenant: string, versionId: string, membershipId: string): Promise<Array<{ code: string; description: string; unit: string }>> {
+  return (await db.$client.query<{ code: string; description: string; unit: string }>(
+    `SELECT i.code,i.description,i.unit FROM app.sor_item i
+     JOIN (SELECT sor_code,max(server_recorded_at) AS last_raised FROM app.extra_sor_revision
+           WHERE tenant_id=$1 AND raising_membership_id=$3 GROUP BY sor_code) r ON r.sor_code=i.code
+     WHERE i.tenant_id=$1 AND i.version_id=$2
+     ORDER BY r.last_raised DESC,i.code COLLATE "C" LIMIT 5`, [tenant, versionId, membershipId])).rows;
+}
+
 export type SorReplay = { revision?: { variationId: string; jobId: string; raisingMembershipId: string; requestHash: string }; receiptExists: boolean };
 /** What the database already holds under a command id: the priced revision (if any) and whether any receipt, of any command, uses the id. */
 export async function readReplay(db: TenantTransaction, tenant: string, commandId: string): Promise<SorReplay> {
