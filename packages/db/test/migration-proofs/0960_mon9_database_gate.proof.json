@@ -1,0 +1,85 @@
+{
+  "migration": "0960_mon9_database_gate.sql",
+  "lp0": [
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.mon9_elect(text,uuid,uuid,uuid,uuid,uuid,text,integer,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.mon9_session"
+        ]
+      },
+      "after": {
+        "identity": "function:app.mon9_elect(text,uuid,uuid,uuid,uuid,uuid,text,integer,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.mon9_session"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.mon9_elect(uuid,uuid,uuid,uuid,uuid,text,integer,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.managed_recovery_election"
+        ],
+        "staticCalls": [
+          "app.lp4_seal_audit"
+        ]
+      },
+      "after": {
+        "identity": "function:app.mon9_elect(uuid,uuid,uuid,uuid,uuid,text,integer,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.managed_recovery_election"
+        ],
+        "staticCalls": [
+          "app.lp4_seal_audit"
+        ]
+      }
+    }
+  ],
+  "upgrade": [],
+  "tenancy": []
+}

@@ -122,3 +122,32 @@ it("split reversal names each cancelled derivation, refuses a mismatched link, a
  const zero=await x.execute({...x.command,commandId:randomUUID(),expectedPostingRevision:3});
  await x.execute(approve(zero));expect(await journals(x)).toEqual(after);
 });
+
+it("the fee writer itself refuses changed proof rebounding below the original approval after compensation",async()=>{
+ const x=await catchFeeFixture(f);await x.execute(approve(await x.execute()));
+ await rolledBack(f.admin,async db=>{
+  await db.query("SELECT set_config('app.tenant_id',$1,true)",[x.context.tenantId]);
+  const a=x.assessment;
+  const live=(await db.query("SELECT app.recovery_attribution_sources($1,$2,$3,$4) source",[x.context.tenantId,x.jobId,{caseId:a.caseId,workId:a.workId,lineId:a.lineId,lockId:a.lockId},x.actor.membershipId])).rows[0].source;
+  // Isolate the writer from the allocator's separate refusal. Only this rollback
+  // transaction substitutes a source function; real approval, ledger and locks remain.
+  const replace=async(n:string)=>{
+   const value=JSON.stringify({...live,sourceHash:"b".repeat(64),remainingPrincipal:{numerator:n,denominator:"1"}}).replaceAll("'","''");
+   await db.query(`CREATE OR REPLACE FUNCTION app.recovery_attribution_sources(t uuid,j uuid,p jsonb,actor uuid) RETURNS jsonb LANGUAGE plpgsql SET search_path=pg_catalog,app AS $body$ BEGIN RETURN '${value}'::jsonb; END $body$`);
+  };
+  await replace("40000");
+  const command={...x.command,commandId:randomUUID(),expectedPostingRevision:1};
+  const review=(await db.query("SELECT app.write_success_fee_v3($1,$2,$3,NULL) result",[x.jobId,x.auth.digest,command])).rows[0].result;
+  expect(review.statement).toMatchObject({priorPence:8000,feePence:4000,deltaPence:-4000});
+  await db.query("SELECT app.write_success_fee_v3($1,$2,$3,NULL)",[x.jobId,x.auth.digest,approve(review)]);
+  await db.query("SET CONSTRAINTS ALL IMMEDIATE");
+  const before=(await db.query("SELECT to_jsonb(j) row FROM app.success_fee_journal j WHERE tenant_id=$1 ORDER BY id",[x.context.tenantId])).rows;
+  const zero=(await db.query("SELECT app.write_success_fee_v3($1,$2,$3,NULL) result",[x.jobId,x.auth.digest,{...command,commandId:randomUUID(),expectedPostingRevision:2}])).rows[0].result;
+  expect(zero.statement.deltaPence).toBe(0);
+  await replace("60000");
+  await db.query("SAVEPOINT rebound");
+  await expect(db.query("SELECT app.write_success_fee_v3($1,$2,$3,NULL)",[x.jobId,x.auth.digest,{...command,commandId:randomUUID(),expectedPostingRevision:2}])).rejects.toThrow("SUCCESS_FEE_SOURCE_CHANGED");
+  await db.query("ROLLBACK TO SAVEPOINT rebound");
+  expect((await db.query("SELECT to_jsonb(j) row FROM app.success_fee_journal j WHERE tenant_id=$1 ORDER BY id",[x.context.tenantId])).rows).toEqual(before);
+ });
+});

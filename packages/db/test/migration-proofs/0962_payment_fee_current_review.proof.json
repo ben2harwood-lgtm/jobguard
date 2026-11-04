@@ -1,0 +1,45 @@
+{
+  "migration": "0962_payment_fee_current_review.sql",
+  "lp0": [
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.payment_fee_current(uuid,uuid,uuid,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.payment_fee_receipt_sources"
+        ]
+      },
+      "after": {
+        "identity": "function:app.payment_fee_current(uuid,uuid,uuid,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.payment_fee_receipt_sources",
+          "app.payment_fee_review_deadline"
+        ]
+      }
+    }
+  ],
+  "upgrade": [],
+  "tenancy": []
+}

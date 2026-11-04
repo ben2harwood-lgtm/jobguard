@@ -46,6 +46,10 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     if (prior.nspname === "app" && prior.proname === "write_success_fee_v3" &&
       prior.args === "p_job uuid, p_session text, p_command jsonb, p_artifact jsonb") {
       expect(current?.definition).not.toEqual(prior.definition);
+    } else if (prior.nspname === "app" && prior.proname === "payment_fee_current" &&
+      prior.args === "t uuid, j uuid, s uuid, actor uuid") {
+      const sql = await readFile(new URL("../migrations/0962_payment_fee_current_review.sql", import.meta.url), "utf8");
+      expect(current?.definition?.split("$function$")[1]).toEqual(sql.split("AS $$")[1]!.split("$$;")[0]);
     } else if (prior.oid === paymentFeeWriterOid) {
       expect(current?.definition?.split("$function$")[1]).toEqual(paymentFeeWriterBody);
     } else if (prior.oid === settlementOid) {
