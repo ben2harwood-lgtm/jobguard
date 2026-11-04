@@ -57,3 +57,81 @@ D01/D02/D03/D08/D09/D16 and G5 stay closed; no real data, credentials/endpoints,
 ## Final handoff
 
 Sub-order A implementation/configuration execution is ready for independent review, with full technical acceptance held by the recorded root-test failures, post-commit lane checks, CI preservation and independent actor records. Final HEAD remains `b881f90be0a6d368838ca4392338147ef819bd3a`; all 11 task paths remain uncommitted. The final diff/allow-list check passes; no independent verdict or acceptance is claimed.
+
+## ENT-13a-machine follow-on — 4 November 2026 (RED, NOPR)
+
+This follow-on adopts only the supplied fictional Q2/H1, Q3/H2, Q4/H3 and Q7/H5
+rulings, recorded in the capability contract. Historical configuration-only evidence
+above is unchanged. Added an unregistered raw-body machine route/application,
+member-guard refusal, normal membership bridge for owner management, and additive
+0940 persistence/proof. 0941–0944 unused. No Git writes, PR, real credential, network
+call, database/browser run or G5 activation. Existing intake is reused with zero
+domain effects; there is no ENT-2 promotion/origin write, job mutation or new job
+command type to register. Management command IDs/receipts are connection control
+plane records, not generic commercial command receipts.
+
+Authority: distinct generated machine actor, separate sponsor, tenant/environment/
+client binding, append-only capability versions, owner provision/widen/rotate/
+revoke/disconnect with idempotent receipt plus audit. HMAC method/path/timestamp/
+nonce/body hash and authority selectors; ±300 seconds, nonce ≥600 seconds, old key
+cutoff ≤24 hours, 1 MiB transport limit plus unchanged domain envelope validation.
+Only fixture key labels persist. Dedicated NOLOGIN machine role cannot call legacy
+intake or member SQL. SQL rechecks authenticated binding token, authority/key set,
+capability, timestamp and nonce under connection locks. Trusted adapter credentials
+remain outside the end-user HMAC boundary. No claim of safety against their compromise.
+No fingerprinted row-shape, protected source pin or scanner change. No data migration
+or backfill; additive forward-fix strategy is in the migration note.
+
+Local checks used installed Node v24.17.0 and cached pinned pnpm 10.28.1 via temporary
+PATH shim `/tmp/ent13-machine-bin`. Default global pnpm stalled (both commands
+interrupted, exit 130, no test result). Initial Vitest attempts could not resolve
+unbuilt workspace package exports: zero assertions executed. Built existing core,
+storage, DB, AI and config dependencies (all successful); no package downloaded.
+Turbo reported cache I/O sandbox warnings, with 4/4 builds executed successfully.
+
+- API typecheck: PASS.
+- API Vitest `machine.test.ts inbound.test.ts identity.test.ts --maxWorkers=2`:
+  PASS, 62 tests across 3 files, after dependency builds.
+- DB Vitest `migration-proof-loader.test.ts connector-intake-proof.test.ts
+  --maxWorkers=2`: PASS, 80 tests across 2 files (no database involved).
+- API Vitest `auth/context-boundary.test.ts --maxWorkers=2`: PASS, 145 tests;
+  protected bridges and fingerprints unchanged.
+
+New database test coverage is authored, not executed here: immediate predecessor
+upgrade and unchanged existing routine bodies/row snapshots, repeat migration,
+owner and cross-tenant management, immutable capability revision and idempotent
+commands/audit, concurrent nonce refusal, wrong tenant/environment/contract/capability,
+skew, credential refusal, rotation overlap/expiry, revoke/disconnect, atomic failed
+staging and source deduplication, direct SQL privilege/RLS refusal. Existing intake
+catalogue test now asserts all five added private FORCE-RLS tables explicitly.
+Transport tests cover bad signature, timestamp, tenant/environment/contract,
+capability, bytes/size/method/path and sanitised persisted refusals. Global and tenant
+member guards are exercised for every method/path in the current OpenAPI document,
+including a practice cookie. No browser/listener is started.
+
+### Named holds for landing
+
+CI must prove real PostgreSQL tests, fresh/upgrade migration and catalogue/privilege
+checks, existing mandatory suites and green current-main CI. Independent RED review
+must bind to the exact router-committed head. Local SQL source inspection and fake
+store responses are not PostgreSQL or independent review proof. SFTP, domain
+promotion/reconciliation, real credential store/endpoints, operational approvals and
+G5 remain held. No scanner or protected pin edit was needed. This is readiness for
+router commit/push and checking, not acceptance or aggregate ENT-13a completion.
+
+Final local verification:
+- API typecheck rerun after final boundary tests: PASS.
+- Final `machine.test.ts watchdog-registry.test.ts --maxWorkers=2`: PASS,
+  146 tests across 2 files (includes inclusive ±300-second and newline refusal tests).
+- New PostgreSQL integration file and its imported fixtures typechecked with a
+  temporary tsconfig extending the repository configuration: PASS; not DB execution.
+- PL/pgSQL CASE-in-IF lint: PASS, 255 migrations. Commercial-boundary lint,
+  money-arithmetic lint and `git diff --check`: PASS.
+- Standard lane lint was run and correctly REFUSED self-comparison: HEAD equals
+  origin/main and all task changes are uncommitted. No scanner/pin was edited.
+  Exact working-tree coverage validated with the existing exported lane loader and
+  lanePathAllowed: PASS, all 14 task paths plus implicit own lane; no extra entries.
+  Named landing hold: router must rerun the standard lane check after committing.
+
+READY for router commit/push and CI/RED checking; not independently reviewed,
+merged, released or aggregate ENT-13a complete.

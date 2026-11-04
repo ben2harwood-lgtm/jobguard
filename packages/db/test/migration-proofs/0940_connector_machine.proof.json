@@ -1,0 +1,256 @@
+{
+  "migration": "0940_connector_machine.sql",
+  "lp0": [
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "id": "a-ent13a-machine",
+        "title": "ENT-13a dark fictional machine connection authority",
+        "kind": "authority",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Only migration 0415 source-staging capabilities; PostgreSQL CI and exact-head RED review remain required."
+        },
+        "cards": [
+          "LP-6d",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-6d": "Preserve binding-authenticated staging only; no human commands, statements or shadow access.",
+          "LP-12": "Verify exact connector role, schema ownership, grants and migration-owned intake boundary."
+        },
+        "downstream": "Owner-only synthetic connection commands; separate NOLOGIN machine role with only authenticated authority lookup and capability-scoped staging. No member session, real credential, endpoint, origin, commercial effect or G5 activation.",
+        "sources": [
+          "packages/db/migrations/0940_connector_machine.sql"
+        ],
+        "tests": [
+          "packages/db/test/connector-machine.integration.test.ts"
+        ],
+        "gaps": [
+          "CI PostgreSQL proof and exact-head independent RED review remain required."
+        ],
+        "path": "ap-roles-owners-schema"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "role|jobguard_machine|super=f,inherit=f,createrole=f,createdb=f,login=f,replication=f,bypassrls=f,connlimit=-1,settings=",
+        "group": "a-ent13a-machine"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|schema|connector|jobguard_machine|USAGE|-",
+        "group": "a-ent13a-machine"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.connector_machine_command(uuid,text,uuid,uuid,text,jsonb)|jobguard_runtime|EXECUTE|-",
+        "group": "a-ent13a-machine"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.connector_machine_command(uuid,text,uuid,uuid,text,jsonb)|jobguard_migration",
+        "group": "a-ent13a-machine"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.connector_machine_command(uuid,text,uuid,uuid,text,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "connector.binding",
+          "connector.machine_capability",
+          "connector.machine_command",
+          "connector.machine_connection",
+          "connector.machine_key"
+        ],
+        "staticCalls": [
+          "app.final_lock_hash",
+          "app.lp4_seal_audit",
+          "app.mon1_company_actor"
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:connector.machine_authority(uuid,text)|jobguard_machine|EXECUTE|-",
+        "group": "a-ent13a-machine"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:connector.machine_authority(uuid,text)|jobguard_migration",
+        "group": "a-ent13a-machine"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:connector.machine_authority(uuid,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_machine"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:connector.machine_stage(uuid,text,jsonb,text,text,bigint,jsonb)|jobguard_machine|EXECUTE|-",
+        "group": "a-ent13a-machine"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:connector.machine_stage(uuid,text,jsonb,text,text,bigint,jsonb)|jobguard_migration",
+        "group": "a-ent13a-machine"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:connector.machine_stage(uuid,text,jsonb,text,text,bigint,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_machine"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [
+          "connector.machine_nonce"
+        ],
+        "staticCalls": [
+          "connector.intake",
+          "connector.machine_authority"
+        ]
+      }
+    },
+    {
+      "section": "rls",
+      "before": null,
+      "after": "connector.machine_connection|rls=t|forced=t"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "connector.machine_connection|machine_control|PERMISSIVE|ALL|jobguard_migration|source-inspected-digest-pending"
+    },
+    {
+      "section": "rls",
+      "before": null,
+      "after": "connector.machine_capability|rls=t|forced=t"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "connector.machine_capability|machine_control|PERMISSIVE|ALL|jobguard_migration|source-inspected-digest-pending"
+    },
+    {
+      "section": "rls",
+      "before": null,
+      "after": "connector.machine_key|rls=t|forced=t"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "connector.machine_key|machine_control|PERMISSIVE|ALL|jobguard_migration|source-inspected-digest-pending"
+    },
+    {
+      "section": "rls",
+      "before": null,
+      "after": "connector.machine_nonce|rls=t|forced=t"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "connector.machine_nonce|machine_control|PERMISSIVE|ALL|jobguard_migration|source-inspected-digest-pending"
+    },
+    {
+      "section": "rls",
+      "before": null,
+      "after": "connector.machine_command|rls=t|forced=t"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "connector.machine_command|machine_control|PERMISSIVE|ALL|jobguard_migration|source-inspected-digest-pending"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "connector.machine_capability|immutable_rows|app.reject_audit_mutation|BEFORE DELETE/UPDATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "connector.machine_command|immutable_rows|app.reject_audit_mutation|BEFORE DELETE/UPDATE|O"
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "connector_machine_command",
+        "args": "t uuid, digest text, command_id uuid, c uuid, op text, v jsonb",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    }
+  ],
+  "tenancy": []
+}
