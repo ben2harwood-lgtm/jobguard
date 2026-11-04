@@ -1,3 +1,4 @@
+import { historicalPracticeSeed } from "./historical-practice-fixture.js";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -35,8 +36,8 @@ export async function createIntegrityFixture(throughCurrent=true, encoding: "UTF
  await admin.query(`ALTER ROLE ${login} SET log_statement='all'`);
  const runtime=new Pool({host:"127.0.0.1",port,user:login,password,database:"jobguard_synthetic_demo",max:2});
  const previous=process.env.JOBGUARD_ENV;process.env.JOBGUARD_ENV="synthetic_demo";
- const token=await issuePracticeSession(runtime),auth=await authenticatePracticeSession(runtime,token);
- const otherToken=await issuePracticeSession(runtime),other=await authenticatePracticeSession(runtime,otherToken);
+ const token=await issuePracticeSession(runtime),verifiedAuth=await authenticatePracticeSession(runtime,token),auth=throughCurrent?verifiedAuth:historicalPracticeSeed(verifiedAuth);
+ const otherToken=await issuePracticeSession(runtime),verifiedOther=await authenticatePracticeSession(runtime,otherToken),other=throughCurrent?verifiedOther:historicalPracticeSeed(verifiedOther);
  const repo=new CommercialIntegrityV3Repository(runtime);
  return {admin,runtime,repo,auth,other,logs,login,runtimeConfig:{host:"127.0.0.1",port,user:login,password,database:"jobguard_synthetic_demo"},async close(){if(previous===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=previous;await closeTestPools(runtime,admin);await pg.stop();await rm(dir,{recursive:true,force:true});}};
 }

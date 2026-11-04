@@ -5,7 +5,7 @@ import { FinalAccountLockApplication } from "./final-account-lock.application.js
 const session="18000000-0000-4000-8000-000000000001",job="18000000-0000-4000-8000-000000000002",commandId="18000000-0000-4000-8000-000000000003",scopeItemId="18000000-0000-4000-8000-000000000004",revisionId="18000000-0000-4000-8000-000000000005";
 function fixture(owns=true,authenticates=true){
  vi.stubEnv("JOBGUARD_ENV","synthetic_demo");
- const query=vi.fn(async(sql:string)=>({rows:sql.includes("authenticate_practice_session")&&authenticates?[{tenant_id:DEMO_TENANT_ID,membership_id:DEMO_MEMBERSHIP_ID,identity_user_id:DEMO_IDENTITY_USER_ID}]:sql.startsWith(practiceOwnedJobsSql())&&owns?[{id:job}]:[]}));
+ const query=vi.fn(async(sql:string)=>({rows:sql==="SELECT app.current_actor() actor, app.current_tenant() tenant"?[{actor:DEMO_MEMBERSHIP_ID,tenant:DEMO_TENANT_ID}]:sql.includes("authenticate_practice_session")&&authenticates?[{tenant_id:DEMO_TENANT_ID,membership_id:DEMO_MEMBERSHIP_ID,identity_user_id:DEMO_IDENTITY_USER_ID}]:sql.startsWith(practiceOwnedJobsSql())&&owns?[{id:job}]:[]}));
  const pool={query,connect:vi.fn(async()=>({query,release:vi.fn()}))} as unknown as Pool;
  return {query,app:new FinalAccountLockApplication(pool,session)};
 }
@@ -50,6 +50,7 @@ it("PRE-Q4-05 r2 lock-bound issue carries only the authenticated session digest 
  vi.spyOn(PracticeInvoiceRepository.prototype,"list").mockResolvedValue([]);
  let supplied:string|undefined;
  const query=vi.fn(async(sql:string,values?:unknown[])=>{
+  if(sql==="SELECT app.current_actor() actor, app.current_tenant() tenant")return {rows:[{actor:DEMO_MEMBERSHIP_ID,tenant:DEMO_TENANT_ID}]};
   if(sql.includes("authenticate_practice_session"))return {rows:[{tenant_id:DEMO_TENANT_ID,membership_id:DEMO_MEMBERSHIP_ID,identity_user_id:DEMO_IDENTITY_USER_ID}]};
   if(sql.startsWith(practiceOwnedJobsSql()))return {rows:[{id:job}]};
   if(sql.includes("app.practice_material_digest"))supplied=String(values?.[0]);

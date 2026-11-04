@@ -46,3 +46,12 @@ describe("extra persistence boundaries", () => {
   expect(extraOriginHashV1({ ...hashVector, deviceId: null })).not.toBe(extraOriginHashV1({ ...hashVector, deviceId: "" }));
  });
 });
+
+it("ENT-3 uses a separate strict persistence version; v1 never accepts status", async () => {
+ const { raiseExtraV2 } = await import("./extra-persistence.js");
+ const body = { ...minimal, version: "raise-extra.v2", workStatus: "finished" };
+ expect(raiseExtraV2.parse(body)).toEqual(body);
+ expect(raiseExtraV1.safeParse({ ...minimal, workStatus: "finished" }).success).toBe(false);
+ expect(raiseExtraV2.safeParse({ ...body, commandType: "RecordOfficeExtra" }).success).toBe(false);
+ for (const key of ["origin", "time", "actor", "role", "track", "price"]) expect(raiseExtraV2.safeParse({ ...body, [key]: "forged" }).success).toBe(false);
+});

@@ -3,7 +3,7 @@ import { utcDatetimeV1 } from "@jobguard/core";
 import { createHash, generateKeyPairSync, randomUUID, sign, verify, createPublicKey } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import { z } from "zod";
-import { appendAuditBatch, auditEventTrust, auditStoredInputSchema, verifyAuditChain, type AuditCheckpoint, type AuditEvent } from "./audit.js";
+import { appendAuditBatch, auditActorAttribution, auditEventTrust, auditStoredInputSchema, verifyAuditChain, type AuditCheckpoint, type AuditEvent } from "./audit.js";
 import type { TenantTransaction, VerifiedTenantContext } from "./tenant-context.js";
 
 export const AUDIT_EXPORT_NOTICE = "The signature proves export integrity only";
@@ -59,7 +59,7 @@ export function verifySignedAuditExport(raw: unknown, trustedPublicKeyPem?: stri
     for (const checkpoint of payload.checkpoints) verifyAuditChain(events, { ...checkpoint, recordedAt: new Date(checkpoint.recordedAt) });
     const tail = events.at(-1)!;
     if (tail.eventHash !== payload.headHash || tail.id !== payload.exportId || tail.eventType !== "audit.export.created" || tail.subjectRef !== payload.exportId || tail.occurredAt.toISOString() !== payload.createdAt) throw new Error();
-    return { version: "audit-export-verification.v1" as const, integrityValid: true, complete: trustedPublicKeyPem !== undefined, signerTrusted: trustedPublicKeyPem !== undefined, checkpointTrust: "signer attests restricted handoff; no external timestamp" as const, notice: AUDIT_EXPORT_NOTICE, evidenceTrust: events.map(event => ({ id: event.id, trust: auditEventTrust(event) })), payload };
+    return { version: "audit-export-verification.v1" as const, integrityValid: true, complete: trustedPublicKeyPem !== undefined, signerTrusted: trustedPublicKeyPem !== undefined, checkpointTrust: "signer attests restricted handoff; no external timestamp" as const, actorAttribution: events.map(event => ({ id: event.id, actorRef: event.actorRef, kind: auditActorAttribution(event) })), notice: AUDIT_EXPORT_NOTICE, evidenceTrust: events.map(event => ({ id: event.id, trust: auditEventTrust(event) })), payload };
   } catch { throw new AuditExportError("AUDIT_EXPORT_INVALID"); }
 }
 export interface AuditExportActor { membershipId: string; identityUserId: string; }
@@ -93,7 +93,7 @@ export class AuditExportRepository {
       // The verified session supplies the tenant even if its historical actor no longer matches.
       // As in the authorization refusal path, never copy an unknown/foreign actor into the chain.
       await appendAuditBatch(db, [{ id: randomUUID(), version: "audit.v1", actorRef: member.rowCount ? `membership:${actor.membershipId}` : "security:unverified-member", eventType: "audit.export.refused", subjectType: "audit-export", subjectRef: context.tenantId, payload: { references: { action }, classifications: { action: "security" } } }]);
-    });
+    }, "audit-export-refusal");
   }
   private async authorized(db: TenantTransaction, context: VerifiedTenantContext, actor: AuditExportActor, action: "create" | "list"): Promise<boolean> {
     const allowed = (await db.$client.query<{ allowed: boolean; knownMember: boolean }>(`SELECT EXISTS(SELECT 1 FROM app.membership m JOIN app.role_grant g ON (g.tenant_id,g.membership_id)=(m.tenant_id,m.id)

@@ -1,3 +1,4 @@
+import { requestContext } from "./practice-worker-switch-fixtures.js";
 import { assignedJobsQuery } from "../src/site-visit-repository.js";
 import { SiteVisitRepository } from "../src/index.js";
 import { randomUUID } from "node:crypto";
@@ -55,7 +56,7 @@ const legacyAssignedJobsQuery = `SELECT w.job_id,w.id work_order_id,w.reference,
 it("FLAKE-DIAG-1 measures legacy/new reads and preserves allowed AND denied seeded jobs", async () => {
   const { session, seed } = await seeded();
   const switches = new PracticeWorkerSwitchRepository(c.runtime);
-  await switches.switchOn(session.context, session.p, session.session, { version: "practice-worker-switch-on.v1", commandId: randomUUID(), workerId: seed.journey.operativeMembershipId });
+  await switches.switchOn(await requestContext(c, session), session.p, session.session, { version: "practice-worker-switch-on.v1", commandId: randomUUID(), workerId: seed.journey.operativeMembershipId });
   try {
     const context = await contractorSessionContext(c.runtime, session.session);
     const actor = await new ContractorRepository(c.runtime).resolveSession(session.session);
@@ -104,7 +105,7 @@ it("FLAKE-DIAG-1 measures legacy/new reads and preserves allowed AND denied seed
     const actual = await new SiteVisitRepository(c.runtime).assignedJobs(context, actor);
     expect(actual).toEqual({ truncated: false, jobs: expected.map(row => ({ jobId: row.job_id, workOrderId: row.work_order_id, reference: row.reference, priority: row.priority, issuedOn: row.issued_on, dueOn: row.due_on, openVisitId: row.open_visit })) });
   } finally {
-    await switches.switchOff(session.context, session.p, session.session, { version: "practice-worker-switch-off.v1", commandId: randomUUID() });
+    await switches.switchOff(await requestContext(c, session), session.p, session.session, { version: "practice-worker-switch-off.v1", commandId: randomUUID() });
   }
 }, 600_000);
 
@@ -112,8 +113,8 @@ async function reworkWorld() {
   const { session: f, seed } = await seeded();
   const switches = new PracticeWorkerSwitchRepository(c.runtime), repo = new ExtraApprovalRepository(c.runtime);
   const act = async (target?: string) => {
-    if ((await switches.state(f.context, f.session)).state !== "owner") await switches.switchOff(f.context, f.p, f.session, { version: "practice-worker-switch-off.v1", commandId: randomUUID() });
-    if (target) await switches.switchOn(f.context, f.p, f.session, { version: "practice-worker-switch-on.v1", commandId: randomUUID(), workerId: target });
+    if ((await switches.state(await requestContext(c, f), f.session)).state !== "owner") await switches.switchOff(await requestContext(c, f), f.p, f.session, { version: "practice-worker-switch-off.v1", commandId: randomUUID() });
+    if (target) await switches.switchOn(await requestContext(c, f), f.p, f.session, { version: "practice-worker-switch-on.v1", commandId: randomUUID(), workerId: target });
     return new ContractorRepository(c.runtime).resolveSession(f.session);
   };
   const ctx = () => contractorSessionContext(c.runtime, f.session);
@@ -197,7 +198,8 @@ it("CLIENT-ISOLATION permits a second client's own extra and denies cross-client
   const sup = (await invite({ kind: "member.invite", role: "supervisor", email: "second.supervisor@fictional.invalid", scope: { kind: "team", id: team }, clientId: null, contractId: null })).id;
   const clientId = (await invite({ kind: "member.invite", role: "client_approver", email: "second.approver@fictional.invalid", scope: { kind: "client", id: secondOrder.client_id }, clientId: secondOrder.client_id, contractId: secondOrder.contract_id })).id;
   const op = await act(secondOrder.membership_id), extra = await log(secondOrder.job_id, op);
-  await repo.priceExtra(await ctx(), await act(sv), { version: "price-extra.v1", commandId: randomUUID(), jobId: extra.jobId, extraId: extra.extraId, netPence: 108000 });
+  const secondSurveyor = await act(sv);
+  await repo.priceExtra(await ctx(), secondSurveyor, { version: "price-extra.v1", commandId: randomUUID(), jobId: extra.jobId, extraId: extra.extraId, netPence: 108000 });
   const supervisor = await act(sup);
   const submitted = await repo.submitExtra(await ctx(), supervisor, { version: "submit-extra.v1", commandId: randomUUID(), jobId: extra.jobId, extraId: extra.extraId });
   await repo.approveExtraStep(await ctx(), supervisor, { version: "approve-extra-step.v1", commandId: randomUUID(), jobId: extra.jobId, requestId: submitted.requestId, stepIndex: 0, revisionHash: submitted.revisionHash, netPence: 108000 });
@@ -257,7 +259,7 @@ it("RESET-HISTORY starts a new run while retaining earlier attribution, settings
   const { f, act } = world; await act();
   const { proofBefore, proofDifferences } = await import("./upgrade-proof-utils.js");
   const before = await proofBefore(c.admin, ["app.northside_run", "app.northside_action_attribution", "app.extra_origin", "app.evidence_object", "app.audit_event"]);
-  await new ContractorPracticeSessionRepository(c.runtime).revoke(f.context, f.session);
+  await new ContractorPracticeSessionRepository(c.runtime).revoke(await requestContext(c, f), f.session);
   const fresh = await startSession(c); await seedNorthsideDemo(c.runtime, fresh.p, fresh.context);
   expect(fresh.p.tenantId).not.toBe(f.p.tenantId);
   expect(await proofDifferences(c.admin, before)).toEqual({ rows: [], types: [] });

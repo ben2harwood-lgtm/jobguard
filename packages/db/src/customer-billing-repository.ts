@@ -9,6 +9,10 @@ export class CustomerBillingCommandService{
  async recordPayment(context:VerifiedTenantContext,raw:unknown){
   const p=customerPaymentV1.parse(raw);
   try{return await withTenant(this.pool,context,async db=>{
+   // Bind compatibility replay before reading its stored result, just as LP-6d
+   // does for the controlled receipt routine. Active membership alone is not identity.
+   const bound=(await db.$client.query<{actor:string;tenant:string}>("SELECT app.current_actor() actor, app.current_tenant() tenant")).rows[0];
+   if(!bound||bound.actor!==p.actorMembershipId||bound.tenant!==context.tenantId)throw new CommandError("FORBIDDEN");
    const member=(await db.$client.query<{role:string}>(`SELECT role FROM app.membership WHERE tenant_id=$1 AND id=$2 AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp())`,[context.tenantId,p.actorMembershipId])).rows[0];
    if(!member||member.role!=="owner")throw new CommandError("FORBIDDEN");
    // Previously dispatched service receipts used a different request hash from

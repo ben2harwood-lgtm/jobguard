@@ -22,6 +22,10 @@ export class IdentityController {
   @Get("session") @ApiOperation({summary:"Read persisted session and current memberships"})
   @ApiResponse({status:200,description:"identity-session.v1; never honours a synthetic cookie"})
   session(@Req() request:IdentityHttpRequest) {return this.run(()=>this.application().session(cookieToken(request)));}
+  @Post("members/commands") @ApiOperation({summary:"Verified owner removes or changes a member; last owner is protected"})
+  @ApiBody({schema:{type:"object",required:["version","action","requested_tenant_id","membershipId"],additionalProperties:false,properties:{version:{type:"string",enum:["member-administration.v1"]},action:{type:"string",enum:["remove","change_role"]},requested_tenant_id:{type:"string",format:"uuid"},membershipId:{type:"string",format:"uuid"},role:{type:"string",enum:["admin","estimator","foreman","operative","finance","read_only"]}}}})
+  @ApiResponse({status:201,description:"Membership and checked audit committed atomically"})
+  administerMember(@Body() body:unknown,@Req() request:IdentityHttpRequest) {return this.run(()=>this.application().administerMember(body,{sessionToken:cookieToken(request),tenantHeader:request.headers["x-tenant-id"],csrfToken:request.headers["x-csrf-token"],origin:request.headers.origin}));}
   @Post("invitations") @ApiOperation({summary:"Owner-authorized invitation binds email, tenant and role"})
   @ApiBody({schema:{type:"object",required:["version","requested_tenant_id","email","role"],properties:{version:{type:"string",enum:["identity-invitation.v1"]},requested_tenant_id:{type:"string",format:"uuid"},email:{type:"string",format:"email"},role:{type:"string",enum:["admin","estimator","foreman","operative","finance","read_only"]}},additionalProperties:false}})
   @ApiResponse({status:201,description:"Immutable invitation; no real email dispatch"})
