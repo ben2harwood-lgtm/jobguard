@@ -1,3 +1,4 @@
+import { currentCommandRegistryRows } from "./lp5-command-catalog.js";
 import { laterEmptyTables } from "./later-empty-tables.js";
 // CI only: real PostgreSQL. Messages are always submitted through the checked intake.
 import {createHash,randomUUID} from "node:crypto";
@@ -99,7 +100,7 @@ describe("MON-5 customer messages through checked SV-7A",()=>{
 });
 it("0391 upgrade adds only two routines, keeps populated rows/ACLs and supports rerun",async()=>{
  const c=await startBeforeMigration("0547_customer_portal_message.sql");
- try{const before=await snapshot(c.admin);await applyMigration(c,"0547_customer_portal_message.sql");expect(await snapshot(c.admin)).toEqual(before);await migrate(c.admin);expect(await snapshot(c.admin)).toEqual({...before,...laterEmptyTables});
+ try{const before=await snapshot(c.admin);await applyMigration(c,"0547_customer_portal_message.sql");expect(await snapshot(c.admin)).toEqual(before);await migrate(c.admin);expect(await snapshot(c.admin)).toEqual({...before,...laterEmptyTables,"app.command_type_registry":(await c.admin.query("SELECT jsonb_agg(value ORDER BY value::text) data FROM jsonb_array_elements($1::jsonb)", [JSON.stringify(currentCommandRegistryRows)])).rows[0].data});
   for(const fn of ["app.sv7a_require_source_owner(uuid,uuid,text,text)","identity.customer_portal_message(uuid,uuid,uuid,text,jsonb)"]){for(const role of ["jobguard_runtime","jobguard_infrastructure"]){expect((await c.admin.query("SELECT has_function_privilege($1,$2,'EXECUTE') allowed",[role,fn])).rows[0].allowed).toBe(false);}}
  }finally{await c.close();}
 },120000);
