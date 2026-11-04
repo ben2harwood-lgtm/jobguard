@@ -22,6 +22,11 @@ it("free-text statuses replay one immutable server statement, remain unpriced, a
   expect(await repo.logSiteExtra(f.ctx, actor, raw)).toEqual(first);
   await expect(repo.logSiteExtra(f.ctx, actor, { ...raw, workStatus: workStatus === "finished" ? "not_started" : "finished" })).rejects.toMatchObject({ code: "COMMAND_CONFLICT" });
   expect(await read()).toEqual(stored);
+  const audit = await c.admin.query("SELECT payload FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='contractor.extra.work_status_recorded'", [f.p.tenantId, first.variationId]);
+  expect(audit.rows).toEqual([{ payload: {
+   references: { job: f.jobId, extra: first.variationId, command: raw.commandId, workStatus, source: "operative_statement", auditTrust: "checked_operation" },
+   classifications: { action: "operational" },
+  } }]);
   expect((await c.admin.query("SELECT kind FROM app.extra_event WHERE tenant_id=$1 AND variation_id=$2 ORDER BY sequence", [f.p.tenantId, first.variationId])).rows).toEqual([{ kind: "logged" }]);
   for (const table of ["extra_sor_revision", "extra_approval_request"]) expect((await c.admin.query(`SELECT 1 FROM app.${table} WHERE tenant_id=$1 AND variation_id=$2`, [f.p.tenantId, first.variationId])).rows).toEqual([]);
   for (const key of ["origin", "time", "actor", "role", "track"]) await expect(repo.logSiteExtra(f.ctx, actor, { ...raw, commandId: randomUUID(), [key]: "forged" })).rejects.toMatchObject({ code: "INVALID_COMMAND" });

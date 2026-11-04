@@ -55,8 +55,9 @@ BEGIN
   -- appends its existing audit and completes its receipt after this seam.
   PERFORM app.lp4_seal_audit(jsonb_build_array(jsonb_build_object('id',gen_random_uuid(),'version','audit.v1',
    'actorRef','membership:'||p_actor::text,'eventType','contractor.extra.work_status_recorded','subjectType','extra','subjectRef',p_extra::text,
-   'payload',jsonb_build_object('references',jsonb_build_object('job',p_job,'extra',p_extra,'command',o.command_id),
-    'classifications',jsonb_build_object('workStatus',p_status,'source','operative_statement')))),'checked_operation');
+   'payload',jsonb_build_object('references',jsonb_build_object('job',p_job,'extra',p_extra,'command',o.command_id,
+    'workStatus',p_status,'source','operative_statement'),
+    'classifications',jsonb_build_object('action','operational')))),'checked_operation');
  END IF;
  SELECT coalesce(jsonb_agg(jsonb_build_object('extraId',x.variation_id,'workStatus',x.work_status,
   'operativeMembershipId',x.operative_membership_id,'recordedAt',to_char(x.recorded_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),

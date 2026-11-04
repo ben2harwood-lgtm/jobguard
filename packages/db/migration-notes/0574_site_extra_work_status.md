@@ -8,7 +8,8 @@ permission is accepted.
 `ent3_work_status` writes only during the still-processing LogSiteExtra's own
 transaction, bound to its origin, operative and processing command receipt. The log seam
 records status after server pricing and before completion. A status audit event
-uses lp4_seal_audit after all business writes. The existing request hash includes
+uses lp4_seal_audit after all business writes, with action classified operational
+and the immutable workStatus/source values retained under references. The existing request hash includes
 status, so exact replay returns the original log and changed status conflicts.
 Updates/deletes are refused, including by the table owner. Runtime has EXECUTE
 only, with forced RLS, tenant-qualified references and scoped supervisor reads.
