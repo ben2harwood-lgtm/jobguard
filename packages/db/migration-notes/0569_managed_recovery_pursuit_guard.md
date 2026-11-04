@@ -1,6 +1,6 @@
 MON-9 / mon-9-guard-live — RED, synthetic preparation only
 
-0609 replaces the latest mon9_pursuit_guard body from 0584 and repeats its
+0569 replaces the latest mon9_pursuit_guard body from 0566 and repeats its
 idempotent tenant-by-tenant backfill without the database-name predicate.
 Eligibility still requires a synthetic withheld-customer-payment case, synthetic
 small-builder track and reference_fee_policy_v3. No grants, RLS, terms, election

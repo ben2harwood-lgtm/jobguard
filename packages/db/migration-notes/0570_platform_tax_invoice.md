@@ -1,4 +1,4 @@
-# 0571 — M4-10 dark platform invoice storage (RED)
+# 0570 — M4-10 dark platform invoice storage (RED)
 
 Adds tenant-owned `platform_invoice_issuer`, `platform_invoice_document` and
 `platform_invoice_source` in the platform statement namespace. No earlier

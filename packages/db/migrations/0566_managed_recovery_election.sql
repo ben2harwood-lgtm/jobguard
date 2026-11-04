@@ -31,6 +31,37 @@ DO $$ DECLARE n text; BEGIN
   EXECUTE format('CREATE TRIGGER managed_recovery_immutable BEFORE UPDATE OR DELETE ON app.%I FOR EACH ROW EXECUTE FUNCTION app.reject_immutable_commercial_mutation()',n);
  END LOOP;
 END $$;
+-- The existing command writer reads only the election to prove completion.
+GRANT SELECT ON app.managed_recovery_election TO jobguard_command_writer;
+CREATE POLICY mon9_command_read ON app.managed_recovery_election FOR SELECT TO jobguard_command_writer
+ USING(tenant_id=nullif(current_setting('app.tenant_id',true),'')::uuid);
+INSERT INTO app.command_type_registry VALUES
+ ('managed_recovery.elect','command.v1','owner','route_before_begin','managed_recovery','commercial',NULL);
+-- Extend the installed, latest result adapter, preserving all earlier branches.
+DO $extend$ DECLARE original text; changed text; BEGIN
+ original:=pg_get_functiondef('app.lp5_command_result(uuid,jsonb)'::regprocedure);
+ changed:=replace(original,'CASE adapter'||chr(10),$branch$CASE adapter
+ WHEN 'managed_recovery' THEN
+  SELECT jsonb_build_object('version','managed-recovery-state.v1','environment','synthetic_demo',
+   'tenantId',e.tenant_id,'jobId',e.job_id,'caseId',e.case_id,'pursuitStartedAt',NULL,
+   'election',jsonb_build_object('tenantId',e.tenant_id,'jobId',e.job_id,'caseId',e.case_id,
+    'commandId',e.command_id,'actorMembershipId',e.actor_membership_id,
+    'electedAt',to_char(e.elected_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+    'termsVersion',e.terms_version,'selection',jsonb_build_object('service',e.service,'points',e.points),
+    'bindingHash',encode(sha256(convert_to(replace(jsonb_build_array('managed-recovery-election.v1',
+     e.tenant_id,e.job_id,e.case_id,e.command_id,e.actor_membership_id,
+     to_char(e.elected_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+     e.terms_version,e.service,e.points)::text,', ',','),'UTF8')),'hex'))) INTO value
+  FROM app.managed_recovery_election e
+  WHERE e.tenant_id=t AND e.case_id=subject::uuid AND e.command_id=p_command_id
+   AND e.actor_membership_id=c.actor_membership_id AND e.authorization_id=c.authorization_id
+   AND e.xmin::text=pg_current_xact_id()::text AND expected_revision=1
+   AND a->>'actionType'='managed_recovery.elect' AND a->>'policyVersion'=e.terms_version
+   AND a->>'contentHash'=encode(sha256(convert_to('managed-recovery-election-command.v1'||chr(10)||e.job_id::text||chr(10)||e.case_id::text||chr(10)||e.service||chr(10)||e.points::text||chr(10)||e.terms_version,'UTF8')),'hex');
+$branch$);
+ IF changed=original THEN RAISE EXCEPTION 'MON9_RESULT_ADAPTER_NOT_FOUND'; END IF;
+ EXECUTE changed;
+END $extend$;
 -- Same advisory key as the existing case and message commands. Pin a durable
 -- start even when delivery is later cancelled, fails or has an unknown outcome.
 CREATE FUNCTION app.mon9_pursuit_guard() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
@@ -123,14 +154,17 @@ BEGIN
  THEN RAISE EXCEPTION 'PURSUIT_ALREADY_STARTED' USING ERRCODE='23514'; END IF;
  INSERT INTO app.managed_recovery_election(tenant_id,job_id,case_id,command_id,actor_membership_id,authorization_id,service,points,terms_version)
  VALUES(t,j,c,command,actor,auth_id,service,points,terms) RETURNING * INTO prior;
- PERFORM app.lp4_seal_audit(jsonb_build_array(jsonb_build_object(
-  'id',gen_random_uuid(),'version','audit.v1','actorRef','membership:'||actor::text,
-  'eventType','managed_recovery.elected','subjectType','recovery_case','subjectRef',c::text,
-  'payload',jsonb_build_object('references',jsonb_build_object('jobId',j,'commandId',command),
-   'hashes',jsonb_build_object('election',encode(sha256(convert_to(app.final_lock_canonical(jsonb_build_array(
+ -- No further business writes follow the audit seal; completion appends its own
+ -- checked event through the existing LP-5 boundary.
+ PERFORM app.lp4_seal_audit(jsonb_build_array(jsonb_build_object('id',gen_random_uuid(),'version','audit.v1',
+  'actorRef','membership:'||actor::text,'eventType','managed_recovery.elected',
+  'subjectType','recovery_case','subjectRef',c::text,'payload',jsonb_build_object(
+   'references',jsonb_build_object('jobId',j::text,'commandId',command::text),
+   'hashes',jsonb_build_object('election',encode(sha256(convert_to(replace(jsonb_build_array(
     'managed-recovery-election.v1',t,j,c,command,actor,
-    to_char(prior.elected_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),terms,service,points)),'UTF8')),'hex')),'classifications',jsonb_build_object('action','commercial')))),
-  'checked_operation');
+    to_char(prior.elected_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+    terms,service,points)::text,', ',','),'UTF8')),'hex')),
+   'classifications',jsonb_build_object('action','commercial')))),'checked_operation');
  RETURN prior;
 END $$;
 ALTER FUNCTION app.mon9_elect(uuid,uuid,uuid,uuid,uuid,text,integer,text) OWNER TO jobguard_migration;
@@ -156,35 +190,4 @@ END $$;
 ALTER FUNCTION app.mon9_session(text,uuid) OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.mon9_session(text,uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION app.mon9_session(text,uuid) TO jobguard_runtime;
--- Register MON-9 with main's checked command lifecycle. No existing adapter body
--- is copied or replaced; the latest (0541) implementation remains the delegate.
-INSERT INTO app.command_type_registry VALUES
- ('managed_recovery.elect','command.v1','owner','route_before_begin','managed_recovery','commercial',NULL);
-GRANT SELECT ON app.managed_recovery_election TO jobguard_command_writer;
-CREATE POLICY mon9_command_read ON app.managed_recovery_election FOR SELECT TO jobguard_command_writer
- USING(tenant_id=nullif(current_setting('app.tenant_id',true),'')::uuid);
-ALTER FUNCTION app.lp5_command_result(uuid,jsonb) RENAME TO lp5_command_result_before_mon9;
-CREATE FUNCTION app.lp5_command_result(p_command_id uuid,p_outcome jsonb) RETURNS jsonb
- LANGUAGE plpgsql SET search_path=pg_catalog,pg_temp AS $$
-DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; c app.command_lifecycle_claim;
- r app.command_receipt; value jsonb;
-BEGIN
- SELECT * INTO r FROM app.command_receipt WHERE tenant_id=t AND command_id=p_command_id;
- IF r.command_type IS DISTINCT FROM 'managed_recovery.elect' THEN
-  RETURN app.lp5_command_result_before_mon9(p_command_id,p_outcome);
- END IF;
- SELECT * INTO c FROM app.command_lifecycle_claim WHERE tenant_id=t AND command_id=p_command_id;
- IF c.command_id IS NULL OR c.actor_membership_id IS DISTINCT FROM r.actor_membership_id
-  OR c.transaction_id IS DISTINCT FROM pg_current_xact_id() THEN
-  RAISE EXCEPTION 'AUTHORIZATION_INVALID' USING ERRCODE='23514'; END IF;
- SELECT to_jsonb(e) INTO value FROM app.managed_recovery_election e
- WHERE e.tenant_id=t AND e.case_id=(c.resource->>'subjectRef')::uuid
-  AND c.resource->>'subjectType'='recovery_case' AND e.command_id=p_command_id
-  AND e.actor_membership_id=c.actor_membership_id AND e.authorization_id=c.authorization_id
-  AND e.xmin::text=pg_current_xact_id()::text;
- IF value IS NULL THEN RAISE EXCEPTION 'AUTHORIZATION_INVALID' USING ERRCODE='23514'; END IF;
- RETURN value;
-END $$;
-ALTER FUNCTION app.lp5_command_result(uuid,jsonb) OWNER TO jobguard_command_writer;
-REVOKE ALL ON FUNCTION app.lp5_command_result(uuid,jsonb) FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure;
 COMMIT;

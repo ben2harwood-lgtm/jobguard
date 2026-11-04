@@ -1,5 +1,5 @@
 {
-  "migration": "0599_managed_recovery_actor_bind.sql",
+  "migration": "0568_managed_recovery_actor_bind.sql",
   "lp0": [
     {
       "section": "entries",
@@ -51,7 +51,6 @@
           "app.managed_recovery_election"
         ],
         "staticCalls": [
-          "app.final_lock_canonical",
           "app.lp4_seal_audit"
         ]
       },
@@ -71,7 +70,6 @@
           "app.managed_recovery_election"
         ],
         "staticCalls": [
-          "app.final_lock_canonical",
           "app.lp4_seal_audit"
         ]
       }

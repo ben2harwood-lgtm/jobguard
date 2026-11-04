@@ -421,8 +421,8 @@ remain required before merge.
 
 The incoming main is `111865cf65f5e68a28ce1891bd52aad0ac7a0f10` (the
 launcher's merge target; the local `main` reference is older). Current migration
-identities are `0602_money_trail_reconciliation` and
-`0603_financial_reconciliation_queue`; earlier numbered references above are
+identities are `0571_money_trail_reconciliation` and
+`0572_financial_reconciliation_queue`; earlier numbered references above are
 historical. Neither migration replaces a main routine. The queue still calls
 main's current `app.ef_actor` and `app.ef_audit`; the latter seals through
 `app.lp4_seal_audit` following LP-4. Main's privilege baseline and upgrade proof

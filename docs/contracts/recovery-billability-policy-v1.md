@@ -40,7 +40,7 @@ input or infer a persisted approval from a parsed record.
    exact case/evidence/policy binding, category and attribution snapshot,
    deterministic classification/exclusions, claimed eligible principal, reasons,
    and reviewer membership/identity. It can record a non-billable review.
-3. `approveBillability` requires that review, the same current authorized reviewer,
+3. `approveBillability` requires that review, a different current authorized reviewer membership,
    exact bindings, and a byte-equivalent canonical snapshot. Every deterministic
    rule must pass and the human amount must be positive and within the exact
    qualifying principal. This is a synthetic policy approval, not fee authority.
@@ -57,15 +57,35 @@ input or infer a persisted approval from a parsed record.
 
 ## Integration boundary
 
-This change adds no database storage or runtime adapter. Durable review/audit
-writes and authenticated source resolution remain required before exposing the
-workflow. In particular, the merged SV-6 assessment adapter still refuses
-`approve_review`; this policy module does not remove that refusal or promote an
-assessment into a qualifying persisted source. The M4-1-dependent integration
-must persist command/review/approval and audit atomically, recheck authorization
-on replay, and read sources under their accepted locks. No model output can be
-substituted for those sources. Domain tests do not establish PostgreSQL or
-provider guarantees.
+The dark M4-2 integration uses `RecoveryBillabilityRepository` and migration `0565_recovery_billability_integration.sql`.
+A review request identifies a case/work/line and expected case revision; it cannot
+supply allocation state, capture/disclosure flags, a lock, a snapshot or authority.
+The private database resolver reads the current lock, stored case allocation and
+D13 source facts through the existing attribution resolver. Non-catch categories
+remain on their existing synthetic review paths; this slice does not extend their
+stored-fact adapters. Fractional allocations conservatively stay non-billable if
+the full exact principal exceeds the whole-penny available amount.
+
+One tenant transaction holds the case and allocator locks, evaluates the pure
+policy and saves its immutable result plus audit. A database primary key enforces
+`(tenant_id, command_id)` uniqueness across review and approval actions. Replays
+reauthenticate and return the first result; different inputs conflict. Approval
+re-reads the current sources and rejects a changed snapshot. Review uses the
+existing practice principal; second-person approval uses an existing synthetic
+identity session joined to a current owner membership of the same tenant, since
+practice sessions deliberately map to a single fixed membership. Both the domain
+policy and database forbid approval by the requesting membership. Runtime has
+no direct table access. Audit contains references and a source hash, never review
+reasons or shadow facts. The old `approve_review` attribution seam stays closed.
+
+The new allocation INSERT trigger independently checks tenant/job feed ownership,
+line-net capacity, the unique case/work binding and the exact invoice/locked
+revision or supplementary descendant. It preserves the existing allocator locks
+and constraints. No earlier migration is edited. Fresh and upgrade proofs run in
+PostgreSQL CI; local pure tests do not prove these database controls. Migration
+`0565_recovery_billability_integration.sql` is additive with no backfill. A forward-fix migration is the recovery strategy;
+keep immutable historical commands and approvals, and leave the path disabled
+while repairing it. It does not migrate or enable historical fee entitlement.
 
 No builder-facing list/read response is added. Internal snapshots, proposals,
 reviews and policy exclusions contain shadow information and must never be

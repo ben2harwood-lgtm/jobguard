@@ -589,13 +589,8 @@ export const lateSourceRegistryRow = {
   lock_adapter: "route_before_begin", completion_adapter: "source_intake", audit_class: "operational", outbox_class: null,
 };
 export const managedRecoveryRegistryRow = {
-  "command_type": "managed_recovery.elect",
-  "version": "command.v1",
-  "permission_rule": "owner",
-  "lock_adapter": "route_before_begin",
-  "completion_adapter": "managed_recovery",
-  "audit_class": "commercial",
-  "outbox_class": null
+  command_type: "managed_recovery.elect", version: "command.v1", permission_rule: "owner",
+  lock_adapter: "route_before_begin", completion_adapter: "managed_recovery", audit_class: "commercial", outbox_class: null,
 };
 export const currentCommandRegistryRows = [...lp5RegistryRows, lateSourceRegistryRow, managedRecoveryRegistryRow];
 export const lp5bRoutines = [

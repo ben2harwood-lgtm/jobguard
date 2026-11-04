@@ -1,5 +1,5 @@
 {
-  "migration": "0598_managed_recovery_election.sql",
+  "migration": "0566_managed_recovery_election.sql",
   "lp0": [
     {
       "section": "groups",
@@ -26,7 +26,8 @@
           "packages/db/migrations/0134_recovery_case_terms.sql:61",
           "packages/db/migrations/0018_recovery_outcomes.sql:41",
           "packages/db/migrations/0335_stored_receipt_case_allocation.sql",
-          "packages/db/migrations/0359_payment_fee_statements.sql"
+          "packages/db/migrations/0359_payment_fee_statements.sql",
+          "packages/db/migrations/0565_recovery_billability_integration.sql"
         ],
         "tests": [
           "packages/db/test/recovery-allocation.integration.test.ts",
@@ -34,7 +35,8 @@
           "packages/db/test/recovery-cases.integration.test.ts",
           "packages/db/test/recovery-insurer-money.integration.test.ts",
           "packages/db/test/stored-receipt-case-allocation.integration.test.ts",
-          "packages/db/test/payment-fee-statements.integration.test.ts"
+          "packages/db/test/payment-fee-statements.integration.test.ts",
+          "packages/db/test/recovery-billability.integration.test.ts"
         ],
         "gaps": [],
         "path": "ap-recovery-money"
@@ -63,7 +65,8 @@
           "packages/db/migrations/0018_recovery_outcomes.sql:41",
           "packages/db/migrations/0335_stored_receipt_case_allocation.sql",
           "packages/db/migrations/0359_payment_fee_statements.sql",
-          "packages/db/migrations/0598_managed_recovery_election.sql",
+          "packages/db/migrations/0565_recovery_billability_integration.sql",
+          "packages/db/migrations/0566_managed_recovery_election.sql",
           "packages/db/src/managed-recovery-repository.ts"
         ],
         "tests": [
@@ -73,7 +76,8 @@
           "packages/db/test/recovery-cases.integration.test.ts",
           "packages/db/test/recovery-insurer-money.integration.test.ts",
           "packages/db/test/stored-receipt-case-allocation.integration.test.ts",
-          "packages/db/test/payment-fee-statements.integration.test.ts"
+          "packages/db/test/payment-fee-statements.integration.test.ts",
+          "packages/db/test/recovery-billability.integration.test.ts"
         ],
         "gaps": [],
         "path": "ap-recovery-money"
@@ -162,7 +166,6 @@
           "app.managed_recovery_election"
         ],
         "staticCalls": [
-          "app.final_lock_canonical",
           "app.lp4_seal_audit"
         ]
       }
@@ -258,76 +261,6 @@
       "section": "triggers",
       "before": null,
       "after": "app.recovery_message|mon9_pursuit_start|app.mon9_pursuit_guard|BEFORE INSERT|O"
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "owner|routine|function:app.lp5_command_result_before_mon9(uuid,jsonb)|jobguard_command_writer",
-        "group": "a-lp5-command-lifecycle"
-      }
-    },
-    {
-      "section": "routines",
-      "before": {
-        "identity": "function:app.lp5_command_result(uuid,jsonb)",
-        "owner": "jobguard_command_writer",
-        "securityDefiner": false,
-        "searchPath": "search_path=pg_catalog, pg_temp",
-        "returnsTrigger": false,
-        "extension": null,
-        "reachable": false,
-        "runtimeExecute": false,
-        "publicExecute": false,
-        "otherExecute": [],
-        "definitionSha256": null,
-        "staticWrites": [],
-        "staticCalls": [
-          "app.final_lock_canonical",
-          "app.lp5b_contractor_result",
-          "app.lp5b_projection_result"
-        ]
-      },
-      "after": {
-        "identity": "function:app.lp5_command_result(uuid,jsonb)",
-        "owner": "jobguard_command_writer",
-        "securityDefiner": false,
-        "searchPath": "search_path=pg_catalog, pg_temp",
-        "returnsTrigger": false,
-        "extension": null,
-        "reachable": false,
-        "runtimeExecute": false,
-        "publicExecute": false,
-        "otherExecute": [],
-        "definitionSha256": null,
-        "staticWrites": [],
-        "staticCalls": [
-          "app.lp5_command_result_before_mon9"
-        ]
-      }
-    },
-    {
-      "section": "routines",
-      "before": null,
-      "after": {
-        "identity": "function:app.lp5_command_result_before_mon9(uuid,jsonb)",
-        "owner": "jobguard_command_writer",
-        "securityDefiner": false,
-        "searchPath": "search_path=pg_catalog, pg_temp",
-        "returnsTrigger": false,
-        "extension": null,
-        "reachable": false,
-        "runtimeExecute": false,
-        "publicExecute": false,
-        "otherExecute": [],
-        "definitionSha256": null,
-        "staticWrites": [],
-        "staticCalls": [
-          "app.final_lock_canonical",
-          "app.lp5b_contractor_result",
-          "app.lp5b_projection_result"
-        ]
-      }
     },
     {
       "section": "entries",
@@ -502,21 +435,6 @@
         "prosecdef": true,
         "proconfig": [
           "search_path=pg_catalog, app"
-        ]
-      }
-    },
-    {
-      "section": "routines",
-      "before": null,
-      "after": {
-        "nspname": "app",
-        "proname": "lp5_command_result_before_mon9",
-        "args": "p_command_id uuid, p_outcome jsonb",
-        "proowner": "jobguard_command_writer",
-        "proacl": "{jobguard_command_writer=X/jobguard_command_writer}",
-        "prosecdef": false,
-        "proconfig": [
-          "search_path=pg_catalog, pg_temp"
         ]
       }
     },

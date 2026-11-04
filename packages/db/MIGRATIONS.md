@@ -1222,7 +1222,7 @@ Q2 non-catch authority and Q3 negative execution remain held. Forward fix:
 disable the route and append a reviewed migration; preserve any future financial
 history. Never enable posting by removing the refusal alone.
 
-### 0602_money_trail_reconciliation — M4-17-S dependency availability
+### 0571_money_trail_reconciliation — M4-17-S dependency availability
 
 C262 adds only `app.read_money_trail_availability(uuid,text)`, discovered from
 this directory without changing the closed historical migration list. It calls
@@ -1257,7 +1257,7 @@ Adds `recovery_timeline_run` and `recovery_timeline_signal`, owned by `jobguard_
 
 Expand-only forward fix: disable the unregistered synthetic runtime if necessary; retain both history tables and apply a new migration to repair defects. Do not drop history or edit this migration after merge. Populated predecessor/privilege preservation is covered by the SERIOUS-B5 upgrade suite; real PostgreSQL behavior is covered in recovery-follow-up.integration.test.ts and tenancy/catalogue checks. These are CI gates, not locally executed PostgreSQL evidence.
 
-### 0603_financial_reconciliation_queue — M4-17 reference queue (RED)
+### 0572_financial_reconciliation_queue — M4-17 reference queue (RED)
 
 Adds five initially empty, append-only, FORCE-RLS financial reconciliation tables
 and one checked runtime entrypoint, `app.financial_reconciliation_queue`.

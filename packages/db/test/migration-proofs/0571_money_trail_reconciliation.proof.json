@@ -1,5 +1,5 @@
 {
-  "migration": "0602_money_trail_reconciliation.sql",
+  "migration": "0571_money_trail_reconciliation.sql",
   "lp0": [
     {
       "section": "groups",
@@ -16,7 +16,7 @@
           "LP-8b": "Expose availability only; no financial write or run authority"
         },
         "sources": [
-          "packages/db/migrations/0602_money_trail_reconciliation.sql"
+          "packages/db/migrations/0571_money_trail_reconciliation.sql"
         ],
         "tests": [
           "packages/db/test/money-trail-security.integration.test.ts",
@@ -88,7 +88,7 @@
           "LP-8b": "Expose availability only; no financial write or run authority"
         },
         "sources": [
-          "packages/db/migrations/0602_money_trail_reconciliation.sql"
+          "packages/db/migrations/0571_money_trail_reconciliation.sql"
         ],
         "tests": [
           "packages/db/test/money-trail-security.integration.test.ts",

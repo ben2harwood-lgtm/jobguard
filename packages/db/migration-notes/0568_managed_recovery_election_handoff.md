@@ -1,3 +1,19 @@
+Batch-9 landing update, 4 November 2026. This update supersedes the historical
+numbering and adapter-installation account below. Main fb61ec367 already includes
+the complete 0566 election, registry, checked audit and strict result projection.
+Its SQL and proof are retained byte-for-byte. The duplicate built-ahead base is
+absorbed by main, rather than replayed or installed again. The remaining migration
+stems are 0568 actor binding, 0569 pursuit guard, 0570 platform tax invoice,
+0571 money-trail availability and 0572 reconciliation queue; 0567 is reserved
+for #546. Those five SQL bodies are unchanged from the hardened batch.
+The repository passes the session digest to the new overload and uses main's
+stored state result; regressions retain the same exact identity/points assertions
+on that state. The stale-approval fixture executes as the test owner, so it tests
+the business refusal without bypassing runtime authority-write restrictions.
+No original migration, fingerprint guard or product policy is changed.
+
+Historical builder notes follow.
+
 MON-9 persistence (RED money), BUILD_PLAN.md MON-9.
 
 Adds tenant-qualified, forced-RLS election and permanent pursuit-start tables.
@@ -96,3 +112,36 @@ Unproved here: real PostgreSQL compilation, migration upgrades/backfill,
 concurrency, privileges/RLS and durable replay; browser journeys; full CI.
 The new stored-effect refusal and checked-audit assertions await PostgreSQL CI.
 Independent RED review and green CI at the exact resulting head remain required.
+
+Batch-9 local landing validation, 4 November 2026:
+
+- Installed tsc passed core, db, API and web with --noEmit; core, AI, db and API
+  also compiled to ignored dist so unit imports used current package output.
+- Installed Vitest 4.1.12, every run --maxWorkers=2, at most three named files:
+  API watchdog-registry/context-boundary/identity: 278 passed; API fee-collection
+  fake-adapter/recovery-message.application: 35 passed.
+- DB migration-proof-loader/managed-recovery-repository/financial-reconciliation
+  queue repository: 91 passed; proof-loader/managed-recovery/money-trail
+  repositories: 94 passed. These are unit/source guards, not database execution.
+- Core fee-collection/financial-reconciliation/platform-tax-invoice: 68 passed;
+  money-trail-reconciliation/watchdog/managed-recovery: 39 passed.
+- AI pursuit-draft: 24 passed. Web recovery-messages: 89 passed.
+- PL/pgSQL CASE-in-IF, core purity, money arithmetic, commercial boundary and AI
+  provider boundary lints passed. git diff --check MERGE_HEAD passed.
+- Initial API watchdog and web UI runs found stale/missing compiled package
+  exports; both passed after rebuilding local workspace output. No test weakened.
+- Standard lane lint was run and reports incoming-main/stale index paths while
+  the merge remains uncommitted. It must be rerun after router staging/completion.
+  Direct resolved-tree comparison against MERGE_HEAD verifies the exact lane,
+  unchanged main migration bytes, unchanged five successor SQL bodies and valid
+  migration order. No config/lanes path is listed in the lane's allow array.
+
+CI must prove fresh and predecessor upgrades, SQL compilation/backfill/replay,
+catalog privileges and FORCE RLS, cross-tenant access refusal, LP-5c command
+authority, fingerprinted-row-shape, final-account-lock-upgrade and recovery-
+pursuit-terms-upgrade, election/collection/reconciliation concurrency, financial
+integration and affected phone/desktop browser journeys. Full required CI and
+an independent RED PASS at the exact final head remain merge requirements.
+No database/browser suite, live provider, real money or release ran locally.
+The router stages resolutions, completes the merge, commits, pushes and opens
+the PR. This worker ran no git write or fetch command.

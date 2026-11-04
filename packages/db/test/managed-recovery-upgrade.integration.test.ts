@@ -5,7 +5,7 @@ import { startBeforeMigration, applyMigration } from "./contractor-practice-sess
 import { fixture, newCase, start, command, type Cluster } from "./managed-recovery-fixtures.js";
 import { migrate, MIGRATION_URLS } from "../src/migrate.js";
 import { ManagedRecoveryRepository } from "../src/managed-recovery-repository.js";
-const own='0598_managed_recovery_election.sql';
+const own='0566_managed_recovery_election.sql';
 let c: Cluster;
 afterAll(async()=>{await c?.close();});
 it('backfills a permanent start, preserves exact history and replays migration safely',async()=>{
@@ -13,16 +13,14 @@ it('backfills a permanent start, preserves exact history and replays migration s
  const ordinary=await newCase(c,f,'merchant_overcharge');await start(c,f,ordinary);
  const history=()=>c.admin.query('SELECT to_jsonb(e) row FROM app.recovery_case_event e WHERE tenant_id=$1 AND case_id=$2',[f.tenant,id]);
  const before=(await history()).rows;
- const predecessorBody=(await c.admin.query("SELECT prosrc FROM pg_proc WHERE oid='app.lp5_command_result(uuid,jsonb)'::regprocedure")).rows[0].prosrc;
  await applyMigration(c,own);expect((await history()).rows).toEqual(before);
- expect((await c.admin.query("SELECT prosrc FROM pg_proc WHERE oid='app.lp5_command_result_before_mon9(uuid,jsonb)'::regprocedure")).rows[0].prosrc).toBe(predecessorBody);
  const marker=(await c.admin.query('SELECT * FROM app.managed_recovery_pursuit WHERE tenant_id=$1 AND case_id=$2',[f.tenant,id])).rows;
  expect(marker).toHaveLength(1);
  expect((await c.admin.query('SELECT * FROM app.managed_recovery_pursuit WHERE tenant_id=$1 AND case_id=$2',[f.tenant,ordinary])).rows).toEqual([]);
  await migrate(c.admin);expect((await history()).rows).toEqual(before);
- expect((await c.admin.query('SELECT * FROM app.managed_recovery_pursuit WHERE tenant_id=$1 AND case_id=$2',[f.tenant,id])).rows).toEqual(marker);
  await expect(new ManagedRecoveryRepository(c.runtime,f.sessionDigest).elect(f.context,f.job,command(id),f.actor)).rejects.toMatchObject({code:'PURSUIT_ALREADY_STARTED'});
- // The predecessor is private; only the session-bound overload is executable.
+ expect((await c.admin.query('SELECT * FROM app.managed_recovery_pursuit WHERE tenant_id=$1 AND case_id=$2',[f.tenant,id])).rows).toEqual(marker);
+ // Checked election/session routes; the existing LP-5 result adapter is extended.
  const privileges=(await c.admin.query(`SELECT p.proname,p.prosecdef,has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') runtime,
   EXISTS(SELECT 1 FROM aclexplode(p.proacl) WHERE grantee=0 AND privilege_type='EXECUTE') public
   FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='app' AND p.proname IN('mon9_elect','mon9_pursuit_guard','mon9_session') ORDER BY 1,p.pronargs`)).rows;

@@ -1,5 +1,5 @@
 {
-  "migration": "0601_platform_tax_invoice.sql",
+  "migration": "0570_platform_tax_invoice.sql",
   "lp0": [],
   "upgrade": [
     {

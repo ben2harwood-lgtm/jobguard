@@ -928,9 +928,9 @@ PostgreSQL pass claimed. Earlier work in this worktree is preserved.
 
 Compared against available origin/main f94b2d577ed4be9e7020f3578a56c415710b524b
 without fetching. Local main 694e9e17 is stale. Neither retained migration
-0602_money_trail_reconciliation.sql (SHA-256
+0571_money_trail_reconciliation.sql (SHA-256
  a67fead829fe896aa8a0ba0dd665c1d4ac5155602d9ab724f5f38f63b5f4027e)
-nor the queue branch's 0603_financial_reconciliation_queue.sql (SHA-256
+nor the queue branch's 0572_financial_reconciliation_queue.sql (SHA-256
  f5a196593d2825a68f306499ad548c4314437bea240dac1c03b155ffc803c162)
 has a byte-identical SQL body anywhere on origin/main. Neither availability
 routine nor financial_reconciliation_run appears in its SQL. Main's #500
@@ -939,7 +939,7 @@ routines and tables. 0479 belongs only to codex/sandbox/m4-17-queue; it is not
 part of this worktree and no proof for that absent migration is introduced.
 This branch still adds reconciliation code beyond main and is not redundant.
 
-Added 0602_money_trail_reconciliation.proof.json from the retained SQL and
+Added 0571_money_trail_reconciliation.proof.json from the retained SQL and
 source expectations only, never a database. Its explicit lp0 section contains
 the two exact capabilities, protected routine attributes and a separate narrow
 authority path. Its upgrade section fixes the exact identity, owner, ACL,
@@ -986,8 +986,8 @@ new exports. Main's simulation money run is a separate implemented path; the
 retained reference comparison and availability routine are not duplicate SQL.
 No new product behavior or test expectation changes.
 
-Moved only full migration stems from 0602_money_trail_reconciliation to
-0602_money_trail_reconciliation in SQL/proof filenames and references, retaining
+Moved only full migration stems from 0571_money_trail_reconciliation to
+0571_money_trail_reconciliation in SQL/proof filenames and references, retaining
 the exact SQL body. No existing routine is re-created, no audit writer or table
 is added, and the current read_success_fee_v3 access check remains delegated.
 All 215 incoming-main migration files compare byte-identically. The historical
@@ -1030,9 +1030,9 @@ behaviour. M4-17-queue remains unmerged because of its conflicts; the router tak
 it next. No new product behaviour, live action, database or browser run.
 
 Migration filename stems and all matching references were moved, with names
-preserved, to 0598_managed_recovery_election, 0599_managed_recovery_actor_bind,
-0600_managed_recovery_pursuit_guard, 0601_platform_tax_invoice and
-0602_money_trail_reconciliation. Each retains its corresponding migration proof.
+preserved, to 0598_managed_recovery_election, 0568_managed_recovery_actor_bind,
+0569_managed_recovery_pursuit_guard, 0570_platform_tax_invoice and
+0571_money_trail_reconciliation. Each retains its corresponding migration proof.
 Added all five new empty app tables to later-empty-tables.ts. Replaced the five
 component lanes with batch-9, listing the final changed paths against the local
 origin/main base bc8993090. The older local main ref is stale; no fetch was run.

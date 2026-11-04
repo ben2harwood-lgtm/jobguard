@@ -7,7 +7,7 @@ import { MIGRATION_URLS, migrate } from "../src/migrate.js";
 import { startBeforeMigration, applyMigration } from "./contractor-practice-session-fixtures.js";
 import { fixture, newCase, start, command, type Cluster, type Fixture } from "./managed-recovery-fixtures.js";
 
-const own = '0600_managed_recovery_pursuit_guard.sql';
+const own = '0569_managed_recovery_pursuit_guard.sql';
 let c: Cluster;
 afterAll(async () => { await c?.close(); });
 
@@ -51,7 +51,7 @@ it('records pursuit and backfills missed starts on a differently named database,
  await expect(elect(f, old)).rejects.toMatchObject({message: 'PURSUIT_ALREADY_STARTED'});
  await expect(elect(other, otherOld)).rejects.toMatchObject({message: 'PURSUIT_ALREADY_STARTED'});
  // A positive control proves that refusal is pursuit-specific, not a blanket block.
- expect(await elect(f, untouched)).toMatchObject({case_id: untouched, points: 5});
+ expect(await elect(f, untouched)).toMatchObject({caseId: untouched, election: {selection: {points: 5}}});
  await start(c, f, fresh);
  expect((await markers()).rows.map(r => r.case_id)).toContain(fresh);
  await expect(elect(f, fresh)).rejects.toMatchObject({message: 'PURSUIT_ALREADY_STARTED'});

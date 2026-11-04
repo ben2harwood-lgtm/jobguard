@@ -24,7 +24,12 @@ it("persists the exact election; concurrent replays produce one authorization an
  expect(after.recovery_fee_derivation).toBe(before.recovery_fee_derivation);
  expect(after.journal).toBe(before.journal);
  // A new repository reads the stored choice; projection cannot issue anything.
- expect((await repo().preview(f.context,f.job,id,f.actor)).serviceChargeInvoice?.points).toBe(5);
+ const preview=await repo().preview(f.context,f.job,id,f.actor);
+ expect(preview.serviceChargeInvoice?.points).toBe(5);
+ expect(preview.serviceChargeInvoice?.electionHash).toBe(results[0]!.election!.bindingHash);
+ const audit=(await c.admin.query("SELECT version,payload FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='managed_recovery.elected'",[f.tenant,id])).rows;
+ expect(audit).toEqual([{version:'audit.v2',payload:{references:{jobId:f.job,commandId:input.commandId,auditTrust:'checked_operation'},
+  hashes:{election:results[0]!.election!.bindingHash},classifications:{action:'commercial'}}}]);
 });
 it("no election means no service-charge document, and the success fee stays identical", async () => {
  const id = await newCase(c,f), before = await repo().preview(f.context,f.job,id,f.actor);
@@ -194,7 +199,7 @@ it('requires session ownership even with a matching processing receipt and appro
  const other=await fixture(c),id=await newCase(c,f),input=command(id);
  const h=createHash('sha256').update(['managed-recovery-election-command.v1',f.job,id,
   input.selection.service,input.selection.points,input.termsVersion].join('\n')).digest('hex');
- const elected=await new UserCommandDispatcher(c.runtime).dispatch(f.context,{
+ const elected=await new UserCommandDispatcher(c.admin).dispatch(f.context,{
   version:'command.v1',commandId:input.commandId,commandType:'managed_recovery.elect',
   semanticKey:`managed-recovery:${f.job}:${id}`,actorMembershipId:f.actor.membershipId,
   subjectType:'recovery_case',subjectRef:id,
@@ -218,7 +223,7 @@ it('requires session ownership even with a matching processing receipt and appro
   await db.$client.query('RELEASE SAVEPOINT stale_approval');
   return (await call(f.sessionDigest)).rows[0];
  }});
- expect(elected).toMatchObject({case_id:id,actor_membership_id:f.actor.membershipId,points:5});
+ expect(elected).toMatchObject({caseId:id,election:{actorMembershipId:f.actor.membershipId,selection:{points:5}}});
 });
 
 // LP-5 completion must derive an immutable effect, even if a route hands it a
