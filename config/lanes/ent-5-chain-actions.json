@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-5-chain-actions": {
+      "branches": [
+        "codex/sandbox/ent-5-chain-actions"
+      ],
+      "allow": [
+        "apps/web/app/api/northside/extras/[extraId]/[action]/route.ts",
+        "apps/web/app/api/northside/extras/[extraId]/[action]/chain-actions.test.ts",
+        "apps/web/app/approvals/extras/extra-approvals.tsx",
+        "apps/web/e2e/ENT-5-chain-actions.spec.ts",
+        "docs/contracts/extra-approval-chain-v1.md"
+      ]
+    }
+  }
+}

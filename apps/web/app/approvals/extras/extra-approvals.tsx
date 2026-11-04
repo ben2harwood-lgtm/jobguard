@@ -8,9 +8,9 @@ import styles from "../../northside/northside.module.css";
 type Extra = { extraId: string; jobId: string; orderReference: string; description: string; note: string; state: string; hasPhoto: boolean; residentConfirmed: boolean; quotedPence: number | null; netPence: number | null; requestId: string | null; revisionHash: string | null;
   steps: Array<{ index: number; role: string; done: boolean }>; nextStepIndex: number | null; nextStepRole: string | null; clientRequired: boolean; linkIssued: boolean; linkClosed: string | null; outcome: string | null };
 type Rate = { code: string; description: string; unit: string; ratePence: number };
-const words: Record<string, string> = { logged: "Logged", awaiting_approval: "Waiting for approval", approved: "Approved", rejected: "Not approved" };
+const words: Record<string, string> = { logged: "Logged", awaiting_approval: "Waiting for approval", approved: "Approved", rejected: "Not approved", withdrawn: "Withdrawn" };
 async function act(extra: Extra, action: string, body: Record<string, unknown>) {
-  const r = await fetch(`/api/northside/extras/${extra.extraId}/${action}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ version: "northside-command.v1", jobId: extra.jobId, commandId: crypto.randomUUID(), ...((action === "approve" || action === "send") ? { requestId: extra.requestId, revisionHash: extra.revisionHash, netPence: extra.netPence, ...(action === "approve" ? { stepIndex: extra.nextStepIndex } : {}) } : {}), ...body }) });
+  const r = await fetch(`/api/northside/extras/${extra.extraId}/${action}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ version: "northside-command.v1", jobId: extra.jobId, commandId: crypto.randomUUID(), ...((action === "approve" || action === "send" || action === "reject") ? { requestId: extra.requestId, revisionHash: extra.revisionHash, netPence: extra.netPence, ...(action === "approve" || action === "reject" ? { stepIndex: extra.nextStepIndex } : {}) } : {}), ...body }) });
   return { ok: r.ok, body: await r.json().catch(() => ({})) };
 }
 
@@ -19,19 +19,30 @@ export function ExtraApprovals() {
   const [role, setRole] = useState(""), [extras, setExtras] = useState<Extra[] | null>(null), [rates, setRates] = useState<Record<string, Rate[]>>({}), [error, setError] = useState(""), [busy, setBusy] = useState(false);
   const [queue, setQueue] = useState<Array<{ variation_id: string; request_id: string; step_index: number }>>([]);
   const [links, setLinks] = useState<Record<string, { extraId: string; path: string; recipient: string }>>({});
+  const [reason, setReason] = useState<Record<string, string>>({}), [outcome, setOutcome] = useState("");
   const [pick, setPick] = useState<Record<string, { code: string; quantity: string }>>({});
   const load = useCallback(async () => {
     const r = await fetch("/api/northside/extras", { cache: "no-store" });
     if (r.status === 401) { setError("Sign in to the practice first (open the practice hub)."); setExtras([]); return; }
-    const body = await r.json(); setRole(body.role); setExtras(body.extras); setRates(body.rates ?? {}); setQueue(body.queue ?? []); setLinks(Object.fromEntries((body.localLinks ?? []).map((link: { extraId: string; path: string; recipient: string }) => [link.extraId, link])));
+    const body = await r.json();
+    if (!r.ok) throw new Error(`Extras unavailable (${body.code}).`);
+    if (body.role === "surveyor") for (const extra of body.extras as Extra[]) {
+      if (!["approved", "rejected"].includes(extra.outcome ?? extra.state) || body.rates?.[extra.jobId]) continue;
+      const response = await fetch(`/api/northside/extras/${extra.extraId}/revise`, { cache: "no-store" });
+      const revision = await response.json();
+      if (!response.ok) throw new Error(`Revision rates unavailable (${revision.code}).`);
+      body.rates ??= {}; body.rates[extra.jobId] = revision.rates;
+    }
+    setRole(body.role); setExtras(body.extras); setRates(body.rates ?? {}); setQueue(body.queue ?? []); setLinks(Object.fromEntries((body.localLinks ?? []).map((link: { extraId: string; path: string; recipient: string }) => [link.extraId, link])));
   }, []);
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void load().catch(e => setError((e as Error).message)); }, [load]);
   async function run(extra: Extra, action: string, body: Record<string, unknown> = {}) {
-    setBusy(true); setError("");
+    setBusy(true); setError(""); setOutcome("");
     try {
       const r = await act(extra, action, body); if (!r.ok) throw new Error(`That step was refused (${r.body.code}).`);
       if (action === "send") setLinks(previous => ({ ...previous, [extra.extraId]: { extraId: extra.extraId, path: r.body.path, recipient: r.body.recipient } }));
       await load();
+      if (["reject", "withdraw", "revise"].includes(action)) setOutcome(action === "revise" ? "Price revised. A new approval request was created." : action === "reject" ? "Extra rejected." : "Extra withdrawn.");
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
   return <main className={styles.page}>
@@ -40,6 +51,7 @@ export function ExtraApprovals() {
     <h1>Extras to move along</h1>
     <p className={styles.note}>Practice data. You are signed in as <strong data-testid="approvals-role">{role || "…"}</strong>. Nothing is sent: the client link below is local. A pending fake outbox record is not delivery.</p>
     {error && <p role="alert" className={styles.error}>{error}</p>}
+    {outcome && <p role="status" className={styles.ok}>{outcome}</p>}
     {extras === null ? <p role="status">Loading…</p> : extras.length === 0 ? <p data-testid="no-extras">No extras to show.</p> : extras.map(x => {
       const link = links[x.extraId];
       const card = pick[x.extraId] ?? { code: rates[x.jobId]?.[0]?.code ?? "", quantity: "1" };
@@ -58,6 +70,20 @@ export function ExtraApprovals() {
           <div className={styles.actions}><button disabled={busy || total === null} onClick={() => void run(x, "price", { sorCode: card.code, quantity: qty })}>Price this extra</button></div></div>}
         {role === "supervisor" && x.state === "logged" && x.quotedPence !== null && x.requestId === null && <div className={styles.actions}><button disabled={busy} onClick={() => void run(x, "submit")}>Submit for approval</button></div>}
         {x.state === "awaiting_approval" && queue.some(q => q.variation_id === x.extraId && q.request_id === x.requestId && q.step_index === x.nextStepIndex) && <div className={styles.actions}><button disabled={busy} onClick={() => void run(x, "approve")}>Approve as {role.replace("_", " ")}</button></div>}
+        {x.state === "awaiting_approval" && queue.some(q => q.variation_id === x.extraId && q.request_id === x.requestId && q.step_index === x.nextStepIndex) && <div>
+          <div className={styles.row}><label htmlFor={`reject-${x.extraId}`}>Reason for rejection</label><select id={`reject-${x.extraId}`} required value={reason[`reject-${x.extraId}`] ?? ""} onChange={e => setReason({ ...reason, [`reject-${x.extraId}`]: e.target.value })}><option value="">Choose a reason</option><option value="not_agreed">Not agreed</option></select></div>
+          <button disabled={busy || !reason[`reject-${x.extraId}`]} onClick={() => void run(x, "reject", { reasonCode: reason[`reject-${x.extraId}`] })}>Reject this extra</button>
+        </div>}
+        {role === "supervisor" && ["logged", "awaiting_approval"].includes(x.state) && <div>
+          <div className={styles.row}><label htmlFor={`withdraw-${x.extraId}`}>Reason for withdrawal</label><select id={`withdraw-${x.extraId}`} required value={reason[`withdraw-${x.extraId}`] ?? ""} onChange={e => setReason({ ...reason, [`withdraw-${x.extraId}`]: e.target.value })}><option value="">Choose a reason</option><option value="not_done">Not done</option><option value="raised_in_error">Raised in error</option><option value="resident_cancelled">Resident cancelled</option><option value="already_on_order">Already on order</option></select></div>
+          <button disabled={busy || !reason[`withdraw-${x.extraId}`]} onClick={() => void run(x, "withdraw", { reasonCode: reason[`withdraw-${x.extraId}`] })}>Withdraw this extra</button>
+        </div>}
+        {role === "surveyor" && ["approved", "rejected"].includes(x.outcome ?? x.state) && rates[x.jobId] && <div>
+          <div className={styles.row}><label htmlFor={`revise-rate-${x.extraId}`}>Revised rate card item</label><select id={`revise-rate-${x.extraId}`} value={card.code} onChange={e => setPick({ ...pick, [x.extraId]: { ...card, code: e.target.value } })}>{rates[x.jobId]!.map(r => <option key={r.code} value={r.code}>{r.code} - {r.description} ({pounds(r.ratePence)} per {r.unit})</option>)}</select></div>
+          <div className={styles.row}><label htmlFor={`revise-qty-${x.extraId}`}>Revised quantity measured</label><input id={`revise-qty-${x.extraId}`} inputMode="numeric" value={card.quantity} onChange={e => setPick({ ...pick, [x.extraId]: { ...card, quantity: e.target.value } })} /></div>
+          <p>The server calculates the revised amount from the rate card.</p>
+          <button disabled={busy} onClick={() => void run(x, "revise", { sorCode: card.code, quantity: qty })}>Revise this extra</button>
+        </div>}
         {role === "owner" && x.state === "awaiting_approval" && x.nextStepRole === "client_approver" && !x.linkIssued && <div className={styles.actions}><button disabled={busy} onClick={() => void run(x, "send")}>Approve sending to the client (practice)</button></div>}
         {x.linkIssued && x.state === "awaiting_approval" && <p data-testid="link-issued">Local client link prepared (practice - nothing was emailed).</p>}
         {link?.extraId === x.extraId && <p>Practice client link for {link.recipient}: <a data-testid="client-link" className={styles.link} href={link.path}>{link.path}</a></p>}
