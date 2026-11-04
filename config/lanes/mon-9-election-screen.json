@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "lanes": {
+    "mon-9-election-screen": {
+      "branches": ["codex/sandbox/mon-9-election-screen"],
+      "note": "MON-9 practice-only per-case election surface. RED; NOPR. Offering remains held; no migrations.",
+      "allow": [
+        "apps/web/app/api/jobs/[id]/recovery-cases/[caseId]/managed-recovery/route.ts",
+        "apps/web/app/api/jobs/[id]/recovery-cases/[caseId]/managed-recovery/route.test.ts",
+        "apps/web/app/api/jobs/[id]/recovery-cases/[caseId]/managed-recovery/route.integration.test.ts",
+        "apps/web/app/lib/managed-recovery-server.ts",
+        "apps/web/app/lib/managed-recovery-server.test.ts",
+        "apps/web/app/jobs/[id]/recovery-cases/[caseId]/managed-recovery/page.tsx",
+        "apps/web/app/jobs/[id]/recovery-cases/[caseId]/managed-recovery/managed-recovery-screen.tsx",
+        "apps/web/app/jobs/[id]/recovery-cases/[caseId]/managed-recovery/managed-recovery-screen.test.tsx",
+        "apps/web/e2e/MON-9-election-screen.spec.ts",
+        "packages/core/src/watchdog.ts",
+        "docs/contracts/managed-recovery-v1.md"
+      ]
+    }
+  }
+}
