@@ -1,4 +1,4 @@
-# 0748 office prompt signal read — ENT-8a (RED)
+# 0840 office prompt signal read — ENT-8a (RED)
 
 CREATE-only additive function; no table, trigger, existing routine, origin, fee, inbox or notification changes. Runtime EXECUTE only, migration ownership, SECURITY DEFINER with pg_catalog search path. It calls lp_authority(session, job, 'detail') before querying and uses transaction-local app.tenant_id. No business-table grants change.
 
