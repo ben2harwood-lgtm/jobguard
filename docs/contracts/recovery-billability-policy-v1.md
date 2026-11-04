@@ -94,3 +94,51 @@ force. Owner/adviser approval evidence for D01–D03/D13 and G4-S are still requ
 for production. Stored commercial approval evidence would not enable this leaf:
 its environment is restricted to `synthetic_demo` and all results carry
 `productionEnabled: false`.
+
+## M4-2 synthetic human review surface
+
+The direct URL `/jobs/:jobId/recovery-cases/:caseId/billability` now provides a
+human review form and stored-review approval view. It has no main-navigation
+link. Its session-only, no-store GET/POST adapter delegates to the existing strict
+`recovery-billability-command.v1` repository command; it introduces no command,
+policy, classifier, fee consumer or commercial authorization. The server requires
+`synthetic_demo`; POST also requires the configured trusted browser origin.
+Tenant, reviewer and session digest come from authenticated sessions only.
+
+A practice reviewer selects a stored bound line, enters whole pence and reasons,
+and records the existing immutable policy assessment. An independently signed-in
+synthetic owner can read that stored review and request approval. Identity access
+requires one unambiguous owner membership; no request tenant selector is accepted.
+The repository/database still enforce different identities as well as memberships,
+current source bindings, expected revisions, reversals and allocation constraints.
+Other categories whose stored-fact adapters remain closed are refused; this page
+does not create alternate adapters or fixtures to make them qualify. Non-billable
+reviews are displayed as non-billable, never described as approved entitlement.
+
+Existing reads expose neither billability reviews nor a second owner's review
+projection. Migration `0750_recovery_billability_read.sql` therefore adds one
+read-only routine with runtime EXECUTE only. It checks current session/owner,
+tenant/job/case, owning practice session where applicable, and final-account lock
+before reading bound work/line identities and immutable review results. Unknown,
+other-tenant, refused-role and unavailable-session requests share not-found.
+The proof and migration note describe fresh/upgrade privilege expectations and
+forward-fix recovery. Existing migrations, policy checks and fee writers are
+unchanged. Historical simulation approval on the page does not prove current
+entitlement; future consumers must still recheck current facts.
+
+The page stores the exact pending command in tab session storage before sending.
+Lost, unreadable and 5xx answers retain it across reloads. Once an outcome is
+uncertain, a later refusal also keeps that exact request available for replay.
+Only a matching confirmed success clears an uncertain attempt. Server refusals
+are shown in plain words. All displayed money comes from stored server results;
+the client does not calculate eligibility or fees.
+
+Validation receipt: local unit/guard and typecheck results are recorded in the
+M4-2 handoff commit message. PostgreSQL route tests and the headless mobile-360 /
+desktop spec are authored for CI; transport browser fixtures prove rendering and
+retry behavior, not source eligibility. Browser accessibility assertions cover
+labels/names, landmarks, language, headings and 44px targets, rather than claiming
+a full external accessibility audit. No database or browser was run in this
+sandbox. CI must prove fresh/upgrade/catalog/tenancy checks, the real PostgreSQL
+route journey and rendered browser behavior. Independent RED review, D01–D03/D13
+owner/adviser evidence, G4-S and all live gates remain outstanding.
