@@ -1,0 +1,209 @@
+{
+  "migration": "0754_notice_fixture_records.sql",
+  "lp0": [
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "id": "a-m4-19-fixture-records",
+        "title": "M4-19 durable synthetic notice records",
+        "kind": "authority",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Bounded synthetic lifecycle dispatch; exact-head RED review and PostgreSQL CI remain required."
+        },
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Verify tenant context, session-derived actor, exact stored revision/decision and append-only replay.",
+          "LP-12": "Review the one runtime routine, fixed search path, FORCE RLS and private table."
+        },
+        "downstream": "One private append-only fixture book. Read uses verified tenant context; writes authenticate a synthetic human session. No notice generation, authorization, outbox or provider.",
+        "sources": [
+          "packages/db/migrations/0754_notice_fixture_records.sql",
+          "packages/db/src/notice-fixture-repository.ts"
+        ],
+        "tests": [
+          "packages/db/test/notice-fixture-records.integration.test.ts",
+          "packages/db/test/notice-fixture-repository.test.ts"
+        ],
+        "gaps": [
+          "Actual PostgreSQL catalogue execution and follow-up RED review remain required."
+        ],
+        "path": "ap-m4-19-fixture-records"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.notice_fixture_records(uuid,uuid,text,text,jsonb)|jobguard_runtime|EXECUTE|-",
+        "group": "a-m4-19-fixture-records"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.notice_fixture_records(uuid,uuid,text,text,jsonb)|jobguard_migration",
+        "group": "a-m4-19-fixture-records"
+      }
+    },
+    {
+      "section": "authorityPaths",
+      "before": null,
+      "after": {
+        "id": "ap-m4-19-fixture-records",
+        "title": "M4-19 durable synthetic notice records",
+        "description": "One private append-only fixture book. Read uses verified tenant context; writes authenticate a synthetic human session. No notice generation, authorization, outbox or provider.",
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Verify tenant context, session-derived actor, exact stored revision/decision and append-only replay.",
+          "LP-12": "Review the one runtime routine, fixed search path, FORCE RLS and private table."
+        },
+        "sources": [
+          "packages/db/migrations/0754_notice_fixture_records.sql",
+          "packages/db/src/notice-fixture-repository.ts"
+        ],
+        "tests": [
+          "packages/db/test/notice-fixture-records.integration.test.ts",
+          "packages/db/test/notice-fixture-repository.test.ts"
+        ],
+        "gaps": [
+          "Actual PostgreSQL catalogue execution and follow-up RED review remain required."
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.notice_fixture_records(uuid,uuid,text,text,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.notice_fixture_record"
+        ],
+        "staticCalls": [
+          "app.mon1_company_actor"
+        ]
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.notice_fixture_record|tenant_isolation|PERMISSIVE|ALL|jobguard_migration|f4b6ad5879e052e3"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.notice_fixture_record|immutable|app.reject_immutable_authorization_record|BEFORE DELETE/UPDATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.notice_fixture_record|immutable_table|app.reject_immutable_authorization_record|BEFORE TRUNCATE|O"
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "app.notice_fixture_record",
+        "data": []
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "notice_fixture_records",
+        "args": "j uuid, n uuid, digest text, operation text, v jsonb",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "notice_fixture_record",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "notice_fixture_record_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "notice_fixture_command",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "notice_fixture_record",
+        "policyname": "tenant_isolation",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
+      }
+    }
+  ],
+  "tenancy": [
+    {
+      "relname": "notice_fixture_record",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    }
+  ]
+}

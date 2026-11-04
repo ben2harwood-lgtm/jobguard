@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-19-draft-store": {
+      "branches": [
+        "codex/sandbox/m4-19-draft-store"
+      ],
+      "note": "M4-19 RED durable synthetic fixture records only; NOPR; professional review, templates and sending stay held.",
+      "allow": [
+        "docs/contracts/notice-fixture-records-dark-v1.md",
+        "packages/db/migration-notes/0754_notice_fixture_records.md",
+        "packages/db/migrations/0754_notice_fixture_records.sql",
+        "packages/db/src/index.ts",
+        "packages/db/src/notice-fixture-repository.ts",
+        "packages/db/test/later-empty-tables.ts",
+        "packages/db/test/migration-proofs/0754_notice_fixture_records.proof.json",
+        "packages/db/test/notice-fixture-records.integration.test.ts",
+        "packages/db/test/notice-fixture-repository.test.ts"
+      ]
+    }
+  }
+}
