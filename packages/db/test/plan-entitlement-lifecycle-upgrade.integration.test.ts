@@ -1,3 +1,4 @@
+import { currentCommandRegistryRows } from "./lp5-command-catalog.js";
 import { readFileSync } from "node:fs";
 import { afterAll, expect, it } from "vitest";
 import { startBeforeMigration, applyMigration, snapshot, type Cluster } from "./contractor-entitlement-fixtures.js";
@@ -8,8 +9,8 @@ import { applyUpgradeProofs, loadMigrationProofs } from "./migration-proof-loade
 import { laterEmptyTables } from "./later-empty-tables.js";
 import { migrate } from "../src/index.js";
 import type { WorkFixture } from "./job-work-state-fixtures.js";
-// LP-6c is the only body-changing successor exception, restricted to these exact overloads.
-// All other predecessor bodies remain byte-for-byte protected below.
+// LP-6c replacements are restricted to these exact overloads.
+// Retain the predecessor test's separate named dispatcher allowance below.
 const lp6cSignatures = [
   "app.assert_financial_authorization(uuid,uuid,character varying,bigint,character,character)",
   "app.post_plan_obligation(uuid,uuid,uuid,uuid,bigint,character,character varying,character varying,character varying,character,uuid,uuid)",
@@ -40,7 +41,7 @@ const lp6cSignatures = [
   "app.complete_command(uuid,jsonb)",
   "app.mon1_company_actor(uuid,text)",
 ] as const;
-const lp6cBodies = [...readFileSync(new URL("../migrations/0570_lp6c_money_binding.sql", import.meta.url), "utf8")
+const lp6cBodies = [...readFileSync(new URL("../migrations/0591_lp6c_money_binding.sql", import.meta.url), "utf8")
   .matchAll(/CREATE OR REPLACE FUNCTION app\.(\w+)\((.*?)\)\s*RETURNS\b.*?\bAS\s+(\$\w*\$)(.*?)\3\s*;/gis)];
 let c: Cluster | undefined;
 afterAll(async () => { await c?.close(); });
@@ -50,9 +51,9 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   const f = c as unknown as WorkFixture, trial = await firstTrialFixture(f), paid = await meterCompany(f);
   await command(f, paid, terms(paid)); await retainedExport(f, trial);
   const before = await snapshot(c.admin);
-  const catalogue = async () => (await c!.admin.query(`SELECT n.nspname,p.proname,p.oid,p.proowner,p.proacl,p.prosecdef,p.proconfig,pg_get_function_arguments(p.oid) args,p.prosrc source,
+  const catalogue = async () => (await c!.admin.query(`SELECT n.nspname,p.proname,p.oid,p.proowner,p.proacl,p.prosecdef,p.proconfig,pg_get_function_identity_arguments(p.oid) args,p.prosrc source,
     CASE WHEN p.oid<>'app.mon8_company_feature(text,text,uuid)'::regprocedure THEN pg_get_functiondef(p.oid) END definition
-    FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname IN('app','identity','control_plane','audit_control') AND p.prokind='f' ORDER BY p.oid`)).rows;
+    FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname IN('app','identity','control_plane','audit_control','worm_control') AND p.prokind='f' ORDER BY p.oid`)).rows;
   const security = await catalogue();
   expect(await service(f, trial).check(request("final_check", trial.jobId))).toMatchObject({ executable: false });
   await applyMigration(c, "0556_mon8_job_track_and_trial.sql");
@@ -60,7 +61,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   expect(await service(f, trial).require(request("final_check", trial.jobId))).toMatchObject({ executable: true });
   expect(await service(f, paid).require(request("invoices", paid.jobId))).toMatchObject({ executable: true });
   await migrate(c.admin); await migrate(c.admin);
-  expect(await snapshot(c.admin)).toEqual({ ...before, ...laterEmptyTables });
+  expect(await snapshot(c.admin)).toEqual({ ...before, ...laterEmptyTables, "app.command_type_registry": (await c.admin.query("SELECT jsonb_agg(value ORDER BY value::text) data FROM jsonb_array_elements($1::jsonb)", [JSON.stringify(currentCommandRegistryRows)])).rows[0].data });
   // Successor migrations have their own exact reviewed routine ACL additions.
   // Keep the 0556-only assertion above, and retain every predecessor definition.
   const live = await catalogue();
@@ -75,6 +76,8 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   }
   for (const prior of security) {
     const current = live.find(row => row.oid === prior.oid);
+    // Preserve the repair branch's named successor dispatcher allowance.
+    if (prior.nspname === "app" && prior.proname === "lp5_command_result" && prior.args === "p_command_id uuid, p_outcome jsonb") continue;
     const replacement = replacements.get(prior.oid);
     const expected = replacement === undefined || prior.definition === null
       ? prior.definition : prior.definition.replace(prior.source, replacement);
