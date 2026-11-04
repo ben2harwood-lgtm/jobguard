@@ -115,7 +115,7 @@ and exact-head independent RED review; local transport fakes are contract eviden
 `connector-input.v1` also accepts `materials_issue`, with exactly the same fields and
 fixture-only document label as `work_order`. Strict TypeScript and SQL validation
 refuse raw content and additional money, allocation, tenant/job/bill/statement,
-origin or approval fields. Migration 0743 widens staging only; no materials fact or
+origin or approval fields. Migration 0761 widens staging only; no materials fact or
 prompt is created and the connector gains no privileges.
 
 `stageSftpFixturePull` is an internal synthetic projection of one scope-checked

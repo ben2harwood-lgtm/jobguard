@@ -1,5 +1,5 @@
 {
-  "migration": "0746_extra_escalation_discovery.sql",
+  "migration": "0760_extra_escalation_discovery.sql",
   "lp0": [
     {
       "section": "groups",
@@ -21,7 +21,7 @@
         },
         "downstream": "Queues tenant identifiers; existing xa_escalate owns deadlines and escalation authority.",
         "sources": [
-          "packages/db/migrations/0746_extra_escalation_discovery.sql"
+          "packages/db/migrations/0760_extra_escalation_discovery.sql"
         ],
         "tests": [
           "packages/db/test/extra-escalation-worker.integration.test.ts"

@@ -173,10 +173,10 @@ describe("ENT-13a RED dark connector PostgreSQL authority and durability", () =>
     expect(JSON.stringify(audit)).not.toContain(token);
     expect(JSON.stringify(audit)).not.toContain('paid');
   });
-  it("0743 preserves populated predecessor rows and privileges while widening staging only", async () => {
+  it("0761 preserves populated predecessor rows and privileges while widening staging only", async () => {
     const upgrade = await createWorkFixture(false);
     try {
-      const index = MIGRATION_URLS.findIndex(u => u.pathname.endsWith("0743_connector_materials_stage.sql"));
+      const index = MIGRATION_URLS.findIndex(u => u.pathname.endsWith("0761_connector_materials_stage.sql"));
       expect(index).toBeGreaterThan(0);
       for (const url of MIGRATION_URLS.slice(0, index)) await upgrade.admin.query(await readFile(url, "utf8"));
       const tenant = randomUUID(), id = randomUUID();

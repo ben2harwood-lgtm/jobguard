@@ -1,4 +1,4 @@
-# 0743 connector materials staging — ENT-13a (RED)
+# 0761 connector materials staging — ENT-13a (RED)
 
 Adds materials_issue to connector.input_event.kind and replaces connector.intake with
 0554's latest main body, widening only kind validation and the document-label branch.
@@ -14,13 +14,13 @@ kind CHECK and validation body change is tested separately. Expectations are sou
 reviewed, never derived from a database. No baseline or legacy list is changed.
 
 CI must execute connector-intake.integration.test.ts, including a populated immediate
-predecessor upgrade applying 0743 alone, and the mandatory full PostgreSQL migration,
+predecessor upgrade applying 0761 alone, and the mandatory full PostgreSQL migration,
 tenancy and effective-privilege suites. Local source/proof tests do not establish SQL
 execution. No database or browser is available in the build sandbox.
 
 Forward fix: preserve immutable source facts and receipts. If materials intake must
 be disabled, a later migration should refuse new materials events in intake while
-retaining the widened CHECK and existing rows. Do not drop facts or rewrite 0743.
+retaining the widened CHECK and existing rows. Do not drop facts or rewrite 0761.
 No data backfill or application activation. Q2/H1, Q3, Q4, Q7 and G5 remain held;
 ENT-13a stays open and requires independent exact-head RED review.
 
@@ -29,7 +29,7 @@ ENT-13a stays open and requires independent exact-head RED review.
 Inspected the completed merge against its current-main parent `155a3eb06`
 (`origin/main`; local `main` is stale). No conflict or product-code correction was
 needed. The only intake definition on that base is 0554; the source proof confirms
-0743 retains its complete body with only the two kind-validation changes. No
+0761 retains its complete body with only the two kind-validation changes. No
 fingerprinted row shape, command registry, context binding, client/server boundary,
 new-table allowance or privilege proof needs widening. Only this piece's lane file
 differs from the merged base, and its allow list exactly covers the ten non-lane

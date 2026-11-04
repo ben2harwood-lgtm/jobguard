@@ -1,0 +1,39 @@
+{
+  "version": 2,
+  "lanes": {
+    "batch-c2": {
+      "branches": [
+        "codex/sandbox/batch-c2"
+      ],
+      "note": "RED, NOPR partial group; remaining four slices are not merged. Router completes the pending merge and stages the renumbered paths.",
+      "allow": [
+        "apps/api/src/connectors/inbound.test.ts",
+        "apps/api/src/connectors/inbound.ts",
+        "apps/api/src/connectors/sftp.stage.ts",
+        "apps/api/src/connectors/sftp.synthetic.test.ts",
+        "apps/api/src/extra-escalation-task.test.ts",
+        "apps/api/src/extra-escalation-task.ts",
+        "apps/api/src/offline-client-queue.compat.test.ts",
+        "apps/api/src/worker.ts",
+        "docs/contracts/connector-capabilities-v1.md",
+        "docs/contracts/extra-approval-chain-v1.md",
+        "docs/contracts/offline-contract-v1.md",
+        "docs/contracts/sync-download-v1.md",
+        "packages/core/src/index.ts",
+        "packages/core/src/offline-client-queue.test.ts",
+        "packages/core/src/offline-client-queue.ts",
+        "packages/core/src/sync-device-cache.test.ts",
+        "packages/core/src/sync-device-cache.ts",
+        "packages/db/migration-notes/0760_extra_escalation_discovery.md",
+        "packages/db/migration-notes/0761_connector_materials_stage.md",
+        "packages/db/migrations/0760_extra_escalation_discovery.sql",
+        "packages/db/migrations/0761_connector_materials_stage.sql",
+        "packages/db/test/connector-intake-proof.test.ts",
+        "packages/db/test/connector-intake.integration.test.ts",
+        "packages/db/test/extra-escalation-worker.integration.test.ts",
+        "packages/db/test/migration-proofs/0760_extra_escalation_discovery.proof.json",
+        "packages/db/test/migration-proofs/0761_connector_materials_stage.proof.json"
+      ]
+    }
+  }
+}
