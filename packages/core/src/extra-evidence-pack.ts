@@ -3,10 +3,11 @@ import { buildEvidenceManifest, inspectEvidenceManifest, manifestDigest, renderS
 import { readExtraConstraint, ExtraApprovalConstraintError } from "./extra-approval.js";
 
 const reference = z.string().min(1).max(300);
-const heldSources = "Approval requirement, steps and extra work timing HELD";
+const legacyHeldSources = "Approval requirement, steps and extra work timing HELD";
+const heldSources = "Extra work timing HELD";
 export const extraSourcePackV1 = z.object({ version: z.literal("extra-source-pack.v1"), subject: z.object({ kind: z.literal("extra"), jobId: reference, extraId: reference }).strict(),
   completeApprovalPack: z.literal(false), integrity: standaloneEvidencePackV1 }).strict().superRefine((v, ctx) => {
-    if (v.integrity.manifest.jobId !== v.subject.jobId || v.integrity.manifest.caseId !== extraIntegrityKey(v.subject.extraId) || !v.integrity.manifest.omissions?.includes(heldSources)) ctx.addIssue({ code: "custom", message: "Invalid extra integrity subject or missing held-source label" });
+    if (v.integrity.manifest.jobId !== v.subject.jobId || v.integrity.manifest.caseId !== extraIntegrityKey(v.subject.extraId) || ![heldSources, legacyHeldSources].some(label => v.integrity.manifest.omissions?.includes(label))) ctx.addIssue({ code: "custom", message: "Invalid extra integrity subject or missing held-source label" });
   });
 /** Only an internal identity key in the legacy verifier's schema; no database recovery subject is created. */
 const extraIntegrityKey = (id: string) => `extra:${id}`;

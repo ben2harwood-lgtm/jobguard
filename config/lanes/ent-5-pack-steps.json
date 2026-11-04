@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-5-pack-steps": {
+      "branches": [
+        "codex/sandbox/ent-5-pack-steps"
+      ],
+      "note": "ENT-5 requirement and approval-step sources only; RED; NOPR. Timing and remaining policy items stay held. No migration or grants.",
+      "allow": [
+        "packages/core/src/extra-evidence-pack.ts",
+        "packages/core/src/extra-evidence-pack.test.ts",
+        "packages/db/src/extra-evidence-pack-sources.ts",
+        "packages/db/test/extra-evidence-packs.integration.test.ts",
+        "docs/contracts/extra-evidence-pack-v1.md"
+      ]
+    }
+  }
+}
