@@ -1,5 +1,5 @@
 {
-  "migration": "0602_commercial_outbound_pause.sql",
+  "migration": "0552_commercial_outbound_pause.sql",
   "lp0": [
     {
       "section": "groups",
@@ -17,7 +17,7 @@
         "responsibilities": {},
         "downstream": "No customer rows. Runtime can only lock/read the enabled boolean. Operators have read-only state/history and one checked command routine; no direct table writes. RED review required for this addition. RLS is disabled on outbound_control.state and outbound_control.event because they are app-wide infrastructure state/history with no tenant or customer data; narrow grants and checked SECURITY DEFINER commands enforce access.",
         "sources": [
-          "packages/db/migrations/0602_commercial_outbound_pause.sql"
+          "packages/db/migrations/0552_commercial_outbound_pause.sql"
         ],
         "tests": [
           "packages/db/test/outbox.integration.test.ts"

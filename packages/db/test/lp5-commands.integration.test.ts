@@ -118,7 +118,7 @@ describe("LP-5a actual PostgreSQL command lifecycle", () => {
   it("a handler cannot store arbitrary success JSON, nor rewrite the terminal receipt", async () => {
     const f = await fixture(), c = commercial(f, { commandType: "synthetic.lock" });
     await expect(f.dispatcher.dispatch(f.context, c, { mutate: async () => ({ locked: f.job, injected: "not stored" }) })).resolves.toEqual({ locked: f.job });
-    await expect(withTenant(db.runtime, f.context, tx => tx.$client.query(`UPDATE app.command_receipt SET result='{"forged":true}' WHERE command_id=$1`, [c.commandId]))).rejects.toThrow();
+    await expect(withTenant(db.owner, f.context, tx => tx.$client.query(`UPDATE app.command_receipt SET result='{"forged":true}' WHERE command_id=$1`, [c.commandId]))).rejects.toMatchObject({ code: "23514", message: "AUTHORIZATION_INVALID" });
   });
   it("validates operational no-op input without minting a commercial authorization", async () => {
     const f = await fixture(), c = commercial(f, { commandType: "synthetic.lock" });
@@ -161,7 +161,7 @@ describe("LP-5a actual PostgreSQL command lifecycle", () => {
   it("cannot bypass a completed receipt's proof by switching tenant before commit", async () => {
     const f = await fixture(), other = await jobDoorsActor(db.owner), c = commercial(f, { commandType: "synthetic.lock" });
     const first = await f.dispatcher.dispatch(f.context, c, { mutate: async () => ({ locked: f.job }) });
-    await expect(withTenant(db.runtime, f.context, async tx => {
+    await expect(withTenant(db.owner, f.context, async tx => {
       await tx.$client.query("UPDATE app.command_receipt SET result='{\"forged\":true}' WHERE command_id=$1", [c.commandId]);
       await tx.$client.query("SELECT set_config('app.tenant_id',$1,true)", [other.tenant]);
     })).rejects.toMatchObject({ code: "23514", message: "AUTHORIZATION_INVALID" });

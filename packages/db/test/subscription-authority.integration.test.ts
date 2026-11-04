@@ -46,12 +46,12 @@ describe("MON-2A-P PostgreSQL authority", () => {
  it("worker cannot manufacture approval", async () => {
   const a = await meterCompany(f);
   await expect(command(f, a, { version: "subscription-command.v1", kind: "execute_simulation", workId: randomUUID(), expectedRevision: 0 })).rejects.toThrow();
-  // Legacy command_receipt INSERT is granted by 0005; this piece seals its own work tables.
+  // LP-5c also seals direct receipt creation alongside the subscription work tables.
   for (const table of ["subscription_agreement_revision", "subscription_simulated_work", "platform_statement", "subscription_simulated_attempt", "subscription_simulated_result"]) {
    expect((await f.admin.query("SELECT has_table_privilege('jobguard_runtime',$1,'INSERT,UPDATE,DELETE,TRUNCATE') allowed", [`app.${table}`])).rows[0].allowed).toBe(false);
   }
-  // Preserve the existing receipt boundary without claiming this task revoked INSERT.
-  expect((await f.admin.query("SELECT has_table_privilege('jobguard_runtime','app.command_receipt','INSERT') allowed")).rows[0].allowed).toBe(true);
+  // The current migration chain withdraws direct runtime receipt writes.
+  expect((await f.admin.query("SELECT has_table_privilege('jobguard_runtime','app.command_receipt','INSERT') allowed")).rows[0].allowed).toBe(false);
   expect((await f.admin.query("SELECT has_table_privilege('jobguard_runtime','app.command_receipt','DELETE,TRUNCATE') allowed")).rows[0].allowed).toBe(false);
  });
  it("shared practice cannot read a company summary", async () => {

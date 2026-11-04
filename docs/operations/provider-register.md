@@ -16,7 +16,7 @@ fallbacks and approval gaps. Missing detail is a gate, never implicit approval.
 | [accounting-observation-data-flow.md](accounting-observation-data-flow.md) | Local synthetic fixtures only; live region **not chosen** | 7934de25e9a8be495ee5553a718a6efc9f2492ae6af84679e4142adbdbbd585e |
 | [audit-export-data-flow.md](audit-export-data-flow.md) | Local synthetic fixtures only; live region **not chosen** | 3e737f01740a6e14275ba0b84a35100c96f82eed3a6a79b4314711f7e8b43aa8 |
 | [claude-data-flow.md](claude-data-flow.md) | Local synthetic fixtures only; live region **not chosen** | 79bc81c285f5885d6498533d7c3cb88e66959a869e99ff29b9ed816f9a724c04 |
-| [connector-data-flow.md](connector-data-flow.md) | Local synthetic fixtures only; live region **not chosen** | 724564a324e4b4ca69f1d3d1c20ee9df4208dc8ae921d33cf7eda701ee1dd29f |
+| [connector-data-flow.md](connector-data-flow.md) | Local synthetic fixtures only; live region **not chosen** | 68e542fe80365c2732d0ef0123c04fa50f2b330270806a396608f2d9dc36b997 |
 | [contractor-parties-data-flow.md](contractor-parties-data-flow.md) | Local synthetic fixtures only; live region **not chosen** | 3ee9b862c517165f25c58df6532809c4c5ae2837cd6cf8e57ed042db32487076 |
 | [email-forwarding-data-flow.md](email-forwarding-data-flow.md) | Local synthetic fixtures only; live region **not chosen** | fd66c04acd0204bb06f899f0df5a1919ce3eac14299798c7efcee99b7e8f54aa |
 | [identity-email-data-flow.md](identity-email-data-flow.md) | Local synthetic fixtures only; live region **not chosen** | 63027212d40b221787bbcd3a56e8e9e49fa72fbedeac1c2ca1e04a3ac5a4ecb4 |

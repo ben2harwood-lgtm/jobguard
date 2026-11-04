@@ -1,3 +1,4 @@
+import { applyOutboundPause } from "./outbound-pause-fixture.js";
 // CI ONLY: synthetic real-writer upgrade and adversarial storage/producer tests.
 import {randomUUID} from "node:crypto";
 import {readFile} from "node:fs/promises";
@@ -25,6 +26,7 @@ it("0532_receipt_movement_job_fk preserves populated F5/F7 and validates both mo
   await f.admin.query(name.startsWith("0095_")?sql.replace("BEGIN;","BEGIN; SELECT set_config('app.deployment_mode','details_needed',true);"):sql);
   await f.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)",[name]);
  }
+ await applyOutboundPause(f.admin);
  // The generated test logins are created before roles exist in this upgrade fixture.
  for(const [pool,role] of [[f.runtime,"jobguard_runtime"],[f.shadow,"jobguard_shadow"]] as const){
   const login=(await pool.query("SELECT current_user AS name")).rows[0].name as string;

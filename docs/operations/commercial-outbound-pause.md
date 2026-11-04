@@ -1,6 +1,6 @@
 # Commercial outbound pause (M0-13a, RED)
 
-Migration `0602_commercial_outbound_pause.sql` adds an app-wide control plane in `outbound_control`. It contains
+Migration `0552_commercial_outbound_pause.sql` adds an app-wide control plane in `outbound_control`. It contains
 only operational role names, command IDs, revisions and timestamps, with no
 customer content. This is an infrastructure exception to tenant RLS. The
 business runtime can execute only `claims_enabled()`; it cannot read operator
@@ -33,7 +33,7 @@ Operators can SELECT history but cannot UPDATE, DELETE or TRUNCATE either table.
 `JOBGUARD_COMMERCIAL_OUTBOUND=paused` independently disables claims in the worker
 process. Only deployment configuration sets this value. `enabled` permits the
 database check; it never clears a database pause. An absent value preserves the
-existing fake-only worker behavior; invalid values fail closed. Migration `0602_commercial_outbound_pause.sql`
+existing fake-only worker behavior; invalid values fail closed. Migration `0552_commercial_outbound_pause.sql`
 preserves the existing enabled state on upgrade. Set `paused` explicitly before
 restoring or starting a deployment that must not dispatch. Keep deployment mode
 and all existing no-charge/settlement gates unchanged. This adds no live adapter.

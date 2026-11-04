@@ -1,6 +1,6 @@
+import { assertLp4SealedEvents } from "./lp4-writer-catchup-fixture.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { SubscriptionExecutor } from "../src/subscription-executor.js";
-import { assertLp4SealedEvents } from "./lp4-writer-catchup-fixture.js";
 import { subscriptionConsentText } from "@jobguard/core";
 import { IdentityRepository, SubscriptionRepository } from "../src/index.js";
 import { PersistedAuthProvider } from "../../../apps/api/src/auth/persisted-auth-provider.js";
