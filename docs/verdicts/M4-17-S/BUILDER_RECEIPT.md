@@ -1161,3 +1161,69 @@ review and green CI remain gates. Local checks are deterministic evidence only.
 No database/browser startup, package download, provider/live action, Git write,
 PR or CI run was attempted. The index remains unmerged for router staging,
 as instructed; all working-file conflicts are resolved.
+
+### Batch-9 landing preparation — 4 November 2026 (RED, NOPR)
+
+READY for router staging and completion of the existing merge from saved
+origin/main c829a9394. Resolved four working-file conflicts as exact unions:
+core/database exports, the contractor upgrade's successor expectations and
+later-empty-tables. The index remains unmerged because this sandbox cannot
+write Git metadata. No product behavior or migration numbering changed.
+
+Added one exact named predecessor exception in
+plan-entitlement-lifecycle-upgrade.integration.test.ts for 0598's rename of
+app.lp5_command_result(p_command_id uuid, p_outcome jsonb) to
+lp5_command_result_before_mon9. The test still requires the same OID and exact
+predecessor definition after normalizing only that function's declared name;
+every other predecessor definition still compares unchanged. Existing routine
+privilege proofs remain in force. The lane contains exactly the 66 non-lane
+working-tree changes against saved origin/main and does not list itself.
+
+Source inspection found the batch already uses side tables, registers
+managed_recovery.elect in watchdog and currentCommandRegistryRows, and has no
+new web server module, browser spec or client database import. Its repositories
+use caller-supplied verified contexts and the merged command dispatcher rather
+than direct runtime writes to command receipts, resolutions or authorizations.
+Proof arguments contain no DEFAULT clauses. Private routine ownership entries
+remain only where LP-0's existing collector tracks ownership distinct from the
+schema owner. No guard was widened.
+
+Initial review — LATER / SIMPLICITY:
+packages/db/test/contractor-entitlement-upgrade.integration.test.ts,
+emptySuccessors repeats names already supplied by laterEmptyTables. A later
+focused cleanup can use the shared list once, reducing duplicate maintenance.
+Kept the exact union in this merge preparation; this observation does not block.
+
+Local deterministic checks using installed Node 24.17.0, TypeScript 5.8.3 and
+Vitest 4.1.12 (at most two workers and three named files per invocation):
+
+- API watchdog-registry, auth/context-boundary and auth/identity: 278 passed.
+- DB migration-proof-loader: 76 passed.
+- DB lp-0-catalog, managed-recovery-repository and
+  financial-reconciliation-queue-repository: 46 passed.
+- API recovery-message.application and fee-collection-fake-adapter: 35 passed.
+- AI pursuit-draft: 24 passed.
+- Direct installed tsc --noEmit for core, db, api, web, ai, config and storage:
+  all seven passed. Total: 459 passing tests across ten files.
+- git diff --check: passed; all four working-file conflicts have no markers.
+- agent-lane-boundary-lint.mjs syntax check passed. Its standard invocation
+  cannot pass before router merge completion: it includes incoming main paths
+  from the unmerged index/HEAD. Do not widen the lane for those paths. Checked
+  the final working-tree diff using the tool's exported lanePathAllowed,
+  selectLane and migrationOrderViolations: 66 exact non-lane paths and six
+  added migrations (0598–0603), passed.
+
+The requested pnpm invocations failed before launching runners: the installed
+wrapper attempted to switch to pinned pnpm 10.28.1 and registry access failed.
+The direct Turbo attempt was stopped while blocked on that wrapper. No package
+was installed; direct existing binaries supplied the completed checks above.
+
+Router must stage and finish the existing merge, then rerun standard lane lint
+and pinned CI. CI must prove real PostgreSQL fresh/upgrade/repeat migrations,
+row fingerprints, exact routine/privilege/RLS proofs, plan-entitlement lifecycle
+upgrade (including the exact renamed delegate), current command registry,
+LP-5c runtime write refusals and unchanged-state checks, managed-recovery and
+money-trail/queue isolation, replay, approval and audit atomicity, plus affected
+browser journeys and mandatory build/lint/test gates. No database or browser
+was started here. Exact-head independent RED review and green CI remain gates.
+No Git writes, fetch, push, PR, live provider or release action was performed.

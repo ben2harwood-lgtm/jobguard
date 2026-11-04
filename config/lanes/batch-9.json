@@ -70,6 +70,7 @@
         "packages/db/test/migration-proofs/0603_financial_reconciliation_queue.proof.json",
         "packages/db/test/money-trail-security.integration.test.ts",
         "packages/db/test/money-trail-upgrade.integration.test.ts",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
         "packages/db/test/platform-tax-invoice-upgrade.integration.test.ts",
         "packages/db/test/platform-tax-invoice.integration.test.ts"
       ]

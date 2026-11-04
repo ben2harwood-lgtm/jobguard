@@ -23,7 +23,7 @@ export async function createLockFixture(install = true): Promise<LockFixture> {
  const postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: credential, persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
  await postgres.initialise(); await postgres.start(); await postgres.createDatabase("jobguard_synthetic_demo"); const admin = new Pool(connection);
  if (install) {
-  for (const role of ["jobguard_audit_writer", "jobguard_command_writer"]) await admin.query(`DO $do$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='${role}') THEN CREATE ROLE ${role} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS; END IF; END $do$`);
+  for (const role of ["jobguard_audit_writer", "jobguard_command_writer", "jobguard_binding_owner"]) await admin.query(`DO $do$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='${role}') THEN CREATE ROLE ${role} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS; END IF; END $do$`);
   await migrate(admin); await installLegacySyntheticPartyFixtures(admin);
  }
  const pools: Pool[] = [];
