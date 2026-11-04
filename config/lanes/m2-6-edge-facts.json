@@ -14,6 +14,7 @@
         "apps/api/src/readiness-store.ts",
         "packages/db/migrations/0594_scheduled_readiness_store.sql",
         "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/later-empty-tables.ts",
         "packages/db/test/migration-proofs/0594_scheduled_readiness_store.proof.json",
         "packages/db/test/readiness-store.integration.test.ts"
       ]

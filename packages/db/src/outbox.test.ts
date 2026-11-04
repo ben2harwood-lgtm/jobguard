@@ -38,6 +38,7 @@ describe("ActionExecutor adapter ownership", () => {
     };
     const before = { ...row };
     const query = vi.fn(async (sql: string) => {
+      if (sql === "SELECT outbound_control.claims_enabled() AS enabled") return { rows: [{ enabled: true }] };
       if (sql.startsWith("SELECT o.*,a.actor_membership_id AS authorization_actor FROM app.action_outbox")) return { rows: [row] };
       if (sql.startsWith("SELECT count(*)::int n FROM app.action_attempt")) return { rows: [{ n: 0 }] };
       if (sql.startsWith("UPDATE ") || sql.startsWith("INSERT ")) return { rows: [] };
@@ -99,6 +100,7 @@ describe("ActionExecutor retry exhaustion", () => {
       if (sql === "SELECT sequence::text, event_hash FROM app.lock_audit_head()") return { rows: [] };
       if (sql === "SELECT clock_timestamp() AS occurred_at") return { rows: [{ occurred_at: new Date() }] };
       if (sql === "SELECT app.advance_audit_head($1, $2)") return { rows: [] };
+      if (sql === "SELECT outbound_control.claims_enabled() AS enabled") return { rows: [{ enabled: true }] };
       if (sql.startsWith("SELECT o.*,a.actor_membership_id AS authorization_actor FROM app.action_outbox")) return { rows: [row] };
       if (sql.startsWith("SELECT count(*)::int n FROM app.action_attempt")) return { rows: [{ n: 4 }] };
       if (sql.startsWith("UPDATE ") || sql.startsWith("INSERT ")) return { rows: [] };
@@ -139,6 +141,7 @@ it("MON-8 cancels an approval message before delivery or attempt creation after 
     status:"pending",created_at:"2026-01-01T00:00:00Z",authorization_expires_at:"2099-01-01T00:00:00Z"};
   const query=vi.fn(async(sql:string, values?: unknown[])=>{
     if(sql.includes("FROM app.append_audit("))return {rows:fakeAuditAppend(String(values?.[0]),context.tenantId)};
+    if(sql === "SELECT outbound_control.claims_enabled() AS enabled")return {rows:[{enabled:true}]};
     if(sql.startsWith("SELECT o.*"))return {rows:[row]};
     if(sql.startsWith("SELECT app.mon8_feature_decision"))return {rows:[{decision:{version:"plan-entitlement-decision.v1",environment:"synthetic_demo",feature:"approval_chains",entitlement:"held",executable:false,reason:"agreement_authority_held"}}]};
     if(sql.startsWith("SELECT nullif(current_setting"))return {rows:[{tenant_id:context.tenantId}]};
@@ -173,6 +176,7 @@ describe("customer sign-in delivery references", () => {
     const row={id,adapter:"fake_email",authorization_id:"97000000-0000-4000-8000-000000000003",provider_effect_key:"customer-signin:fictional",action_type:"customer_portal.signin.send",recipient:"fixture@example.invalid",content_hash:mode==="tampered-hash"?"a".repeat(64):createHash("sha256").update(reference).digest("hex"),immutable_content:reference,aggregate_revision:1,amount_pence:null,currency:null,policy_version:"customer-signin.synthetic.v1",created_at:"2026-01-01T00:00:00Z",authorization_expires_at:"2099-01-01T00:00:00Z",status:"pending"};
     const query=vi.fn(async(sql:string,values?:unknown[])=>{
       if(sql.includes("FROM app.append_audit("))return {rows:fakeAuditAppend(String(values?.[0]),context.tenantId)};
+      if(sql === "SELECT outbound_control.claims_enabled() AS enabled")return {rows:[{enabled:true}]};
       if(sql.startsWith("SELECT o.*,a.actor_membership_id AS authorization_actor FROM app.action_outbox"))return {rows:[row]};
       if(sql.startsWith("SELECT count(*)::int n FROM app.action_attempt"))return {rows:[{n:0}]};
       if(sql.startsWith("SELECT nullif(current_setting"))return {rows:[{tenant_id:context.tenantId}]};

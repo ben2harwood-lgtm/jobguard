@@ -1,3 +1,4 @@
+import { applyOutboundPause } from "./outbound-pause-fixture.js";
 // CI ONLY: upgrade a populated stored-cash catch without rewriting its history.
 import {randomUUID} from "node:crypto";
 import {readFile} from "node:fs/promises";
@@ -20,6 +21,7 @@ it("0564 preserves a populated predecessor and blocks prevention of its cash cat
   await f.admin.query(name.startsWith("0095_")?sql.replace("BEGIN;","BEGIN; SELECT set_config('app.deployment_mode','details_needed',true);"):sql);
   await f.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)",[name]);
  }
+ await applyOutboundPause(f.admin);
  await installLegacySyntheticPartyFixtures(f.admin);
  for(const [pool,role] of [[f.runtime,"jobguard_runtime"],[f.shadow,"jobguard_shadow"]] as const){
   const {rows}=await pool.query("SELECT current_user name");

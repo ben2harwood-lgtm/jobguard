@@ -1,3 +1,5 @@
+import { currentCommandRegistryRows } from "./lp5-command-catalog.js";
+import { laterEmptyTables } from "./later-empty-tables.js";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { ContractorRepository, migrate } from "../src/index.js";
 import { startBeforeMigration, applyMigration, status, snapshot, unchanged, type Cluster } from "./contractor-entitlement-fixtures.js";
@@ -14,7 +16,7 @@ beforeAll(async()=>{
 },120000);
 afterAll(async()=>{await c?.close();});
 it("combined upgrade and repeated migrator preserve every predecessor row without inventing active agreements",async()=>{
- expect(await snapshot(c.admin)).toEqual(before);await migrate(c.admin);await migrate(c.admin);expect(await snapshot(c.admin)).toEqual({...before,"app.practice_exposure_schedule":[]});
+ expect(await snapshot(c.admin)).toEqual(before);await migrate(c.admin);await migrate(c.admin);expect(await snapshot(c.admin)).toEqual({...before,...laterEmptyTables,"app.command_type_registry":(await c.admin.query("SELECT jsonb_agg(value ORDER BY value::text) data FROM jsonb_array_elements($1::jsonb)", [JSON.stringify(currentCommandRegistryRows)])).rows[0].data});
  const view=await new ContractorRepository(c.runtime).query(f.p,{version:"contractor-query.v1",tenantId:f.p.tenantId,resource:"organisation"});
  expect(view.members.some(m=>m.membership_id===f.members.operative)).toBe(true);
 });

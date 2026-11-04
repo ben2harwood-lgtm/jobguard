@@ -1,3 +1,4 @@
+import { laterEmptyTables } from "./later-empty-tables.js";
 import { currentCommandRegistryRows } from "./lp5-command-catalog.js";
 import { afterAll,beforeAll,expect,it } from "vitest";
 import { createHash, randomUUID } from "node:crypto";
@@ -156,7 +157,17 @@ it("actual catalogs retain least privilege",async()=>{
 const emptySuccessors=[
  "app.scheduled_readiness_plan",
  "app.scheduled_readiness_proposal",
+ "app.managed_recovery_election",
+ "app.managed_recovery_pursuit",
+ "app.financial_reconciliation_run",
+ "app.financial_reconciliation_difference",
+ "app.financial_reconciliation_adjustment",
+ "app.financial_reconciliation_approval",
+ "app.financial_reconciliation_command",
+
  "app.practice_exposure_schedule",
+ ...Object.keys(laterEmptyTables),
+
  "app.customer_quote_approval",
  "app.customer_stage_acknowledgement",
  "app.payment_fee_authority",
