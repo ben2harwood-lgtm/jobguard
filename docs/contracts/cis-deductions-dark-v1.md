@@ -21,9 +21,9 @@ not a claim about statutory verification expiry rules.
 The whole M4-21 VAT book and M4-20 retention book are parsed and reconciled using
 the existing calculators. Their tenant/job and fictional parties must match.
 Each CIS statement references a supplied VAT document and retention profile by ID;
-VAT release IDs must resolve to M4-20 release records. Final VAT retained net and
-deferred supplier VAT must match M4-20 remaining net/tax. Source VAT dates cannot
-be in the future and document lineage cannot go backwards. The VAT document
+VAT release IDs must resolve through the combined VAT/retention reconciliation to matching, unreversed M4-20 release allocations. Final VAT retained net and
+deferred supplier VAT must match M4-20 remaining net/tax. Each statement must cite the latest supplied VAT snapshot dated on or before its date; an already credited snapshot is refused. Source VAT dates cannot
+be in the future and document lineage cannot go backwards. Conflicting status records with overlapping validity for the same parties are refused, regardless of the cited ID. The VAT document
 retains M4-18 certification lineage. This module does not authenticate that
 certification, a human approval, evidence bytes or contractual authority.
 

@@ -1,6 +1,6 @@
 # Commercial outbound pause (M0-13a, RED)
 
-Migration `0552_commercial_outbound_pause` adds an app-wide control plane in `outbound_control`. It contains
+Migration `0552_commercial_outbound_pause.sql` adds an app-wide control plane in `outbound_control`. It contains
 only operational role names, command IDs, revisions and timestamps, with no
 customer content. This is an infrastructure exception to tenant RLS. The
 business runtime can execute only `claims_enabled()`; it cannot read operator
@@ -21,14 +21,14 @@ SELECT outbound_control.command('<pause-command-id>', 'pause', 0);
 -- Operator A: request resume against the revision returned by pause.
 SELECT outbound_control.command('<request-command-id>', 'request_resume', 1);
 -- Operator A: complete reconciliation and retain its receipt independently.
--- Record that receipt UUID against this exact request (migration 0639_restore_reconciliation).
+-- Record that receipt UUID against this exact request (migration `0581_restore_reconciliation.sql`).
 SELECT outbound_control.record_reconciliation('<request-command-id>', '<reconciliation-receipt-id>');
 -- Operator B: inspect the receipt, then approve the exact request/revision.
 SELECT outbound_control.command('<approval-command-id>', 'approve_resume', 2, '<request-command-id>');
 ```
 
 The operator who paused or requested resume cannot approve it. A subsequent pause
-invalidates pending resume requests and their reconciliation facts. Migration `0639_restore_reconciliation`
+invalidates pending resume requests and their reconciliation facts. Migration `0581_restore_reconciliation.sql`
 requires a recorded reconciliation fact for the exact current resume request;
 missing facts refuse approval with `OUTBOUND_RECONCILIATION_REQUIRED`. The fact
 records request UUID, independently retained receipt UUID, `session_user` and time.
@@ -44,7 +44,7 @@ Operators can SELECT history but cannot UPDATE, DELETE or TRUNCATE either table.
 `JOBGUARD_COMMERCIAL_OUTBOUND=paused` independently disables claims in the worker
 process. Only deployment configuration sets this value. `enabled` permits the
 database check; it never clears a database pause. An absent value preserves the
-existing fake-only worker behavior; invalid values fail closed. Migration `0552_commercial_outbound_pause`
+existing fake-only worker behavior; invalid values fail closed. Migration `0552_commercial_outbound_pause.sql`
 preserves the existing enabled state on upgrade. Set `paused` explicitly before
 restoring or starting a deployment that must not dispatch. Keep deployment mode
 and all existing no-charge/settlement gates unchanged. This adds no live adapter.

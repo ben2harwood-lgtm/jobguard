@@ -29,6 +29,34 @@ describe("DEMO-S chooser and honest lifecycle report", () => {
     const report = smallBuilderDemoReportV1.parse({ version: "small-builder-demo-report.v1", snapshotId: id, facts: { ...facts, scenario } });
     expect(renderToStaticMarkup(<LifecycleReport report={report} tenantId={id} />)).toContain(target);
   });
+  it.each([
+    ["core-1000", "Read saved core-1000 results", null, true],
+    ["recovery-18800", "Open the recovery practice guide", "/demo-s/recovery-18800", false],
+    ["shadow-30000", "Create or resume and read saved results", null, true],
+    ["meter", "Jobs on the go and account review", "/meter", false],
+    ["trial", "trial source report", `/demo-s/trial?tenantId=${id}&amp;runId=${id}`, false],
+  ] as const)("gives %s honest report directions and saved-screen links, including archived selections", (scenario, label, href, below) => {
+    for (const archived of [false, true]) {
+      const report = smallBuilderDemoReportV1.parse({ version: "small-builder-demo-report.v1", snapshotId: id,
+        facts: { ...facts, scenario, ...(archived ? { status: "archived", revision: 2, archivedAt: "2026-11-03T00:00:00Z" } : {}) } });
+      const html = renderToStaticMarkup(<LifecycleReport report={report} tenantId={id} />);
+      expect(html).toContain("Saved screens:");
+      expect(html).toContain(label);
+      if (href) expect(html).toContain(`href="${href}"`);
+      expect(html.includes("below")).toBe(below);
+      expect(html).toContain(below ? "using the saved-results control below" : scenario === "recovery-18800"
+        ? "Read saved results in the job’s own recovery practice guide." : "on the linked saved screens");
+      if (scenario === "recovery-18800") {
+        expect(html).toContain("This selection is not tied to one job");
+        expect(html).toContain("The job’s own recovery practice guide holds its saved results");
+        expect(html).not.toContain("jobId=");
+      }
+      expect(html).toContain("This snapshot records selection metadata only. It does not record whether a product journey ran.");
+      expect(html).toContain(`href="/demo-s?tenantId=${id}&amp;runId=${id}&amp;snapshotId=${id}"`);
+      expect(html).toContain("Independent verdict: missing");
+      expect(html).toContain("0 of 2 recorded");
+    }
+  });
   it("renders actual producer amounts, grace crossing and plain unavailable reasons without a settlement claim",()=>{
     const html=renderToStaticMarkup(<MeterPreview preview={previewDemoMeter({tenantId:id,runId:id})} />);
     for(const amount of ["£348.00","£828.00","£89.00","£79.00","£169.00","£49.00","£62.33","£69.65"])expect(html).toContain(amount);

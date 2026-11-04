@@ -6,13 +6,13 @@ import { fileURLToPath } from "node:url";
 
 // Validate the full registry, then compose only this piece and its dependency.
 const proofs = loadMigrationProofs(PROOF_DIRECTORY).proofs.filter(proof =>
-  ["0640_privacy_operations.sql", "0641_dsar_offboarding.sql"].includes(proof.migration));
+  ["0584_privacy_operations.sql", "0585_dsar_offboarding.sql"].includes(proof.migration));
 const tables = ["privacy_artifact", "privacy_command", "privacy_request", "privacy_subject"];
 const owner = "jobguard_migration";
 
 describe("M5-11 and its M0-13c dependency proof composition", () => {
   it("uses main's sealed audit writer for both new privacy command bodies", () => {
-    for (const stem of ["0640_privacy_operations", "0641_dsar_offboarding"]) {
+    for (const stem of ["0584_privacy_operations", "0585_dsar_offboarding"]) {
       const sql = readFileSync(new URL(`../migrations/${stem}.sql`, import.meta.url), "utf8");
       expect(sql).toContain("PERFORM app.lp4_seal_audit(");
       expect(sql).toContain("'checked_operation'");
@@ -29,7 +29,7 @@ describe("M5-11 and its M0-13c dependency proof composition", () => {
     ]);
   });
   it("keeps the dependency proof separate from M5-11's private fence", () => {
-    expect(proofs[0]!.lp0.some(c => JSON.stringify(c).includes("0641_dsar_offboarding.sql"))).toBe(false);
+    expect(proofs[0]!.lp0.some(c => JSON.stringify(c).includes("0585_dsar_offboarding.sql"))).toBe(false);
     expect(proofs[1]!.lp0.filter(c => c.section === "routines")).toEqual([
       expect.objectContaining({ before: null, after: expect.objectContaining({
         identity: "function:app.privacy_inventory_fence()", runtimeExecute: false, publicExecute: false,

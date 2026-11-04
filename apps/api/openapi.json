@@ -2599,46 +2599,130 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "version",
-                  "commandId",
-                  "sorCode",
-                  "quantity",
-                  "note"
-                ],
-                "properties": {
-                  "version": {
-                    "type": "string",
-                    "enum": [
-                      "log-sor-site-extra.v1"
-                    ]
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "sorCode",
+                      "quantity",
+                      "note"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "log-sor-site-extra.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "sorCode": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 80
+                      },
+                      "quantity": {
+                        "type": "string",
+                        "pattern": "^(0|[1-9][0-9]{0,11})(\\.[0-9]{1,6})?$"
+                      },
+                      "orderLineScopeItemId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "note": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 5000,
+                        "pattern": "\\S"
+                      }
+                    }
                   },
-                  "commandId": {
-                    "type": "string",
-                    "format": "uuid"
-                  },
-                  "sorCode": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 80
-                  },
-                  "quantity": {
-                    "type": "string",
-                    "pattern": "^(0|[1-9][0-9]{0,11})(\\.[0-9]{1,6})?$"
-                  },
-                  "orderLineScopeItemId": {
-                    "type": "string",
-                    "format": "uuid"
-                  },
-                  "note": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 5000,
-                    "pattern": "\\S"
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "sorCode",
+                      "quantity",
+                      "note",
+                      "description",
+                      "photoEvidenceId",
+                      "residentConfirmation",
+                      "workStatus"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "log-sor-site-extra.v2"
+                        ]
+                      },
+                      "workStatus": {
+                        "type": "string",
+                        "enum": [
+                          "not_started",
+                          "under_way",
+                          "finished"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "sorCode": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 80
+                      },
+                      "quantity": {
+                        "type": "string",
+                        "pattern": "^(0|[1-9][0-9]{0,11})(\\.[0-9]{1,6})?$"
+                      },
+                      "orderLineScopeItemId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "note": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 5000,
+                        "pattern": "\\S"
+                      },
+                      "description": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 500
+                      },
+                      "photoEvidenceId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "siteVisitId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "residentConfirmation": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "shownContentSha256"
+                        ],
+                        "properties": {
+                          "shownContentSha256": {
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{64}$"
+                          }
+                        }
+                      }
+                    }
                   }
-                }
+                ]
               }
             }
           }
@@ -2671,6 +2755,102 @@
           }
         },
         "summary": "Log a schedule-of-rates site extra in synthetic_demo; the server compares it with the order and prices the extra quantity alone",
+        "tags": [
+          "contractor-site-extras"
+        ]
+      }
+    },
+    "/contractor/jobs/{id}/supervisor-queries": {
+      "post": {
+        "operationId": "SiteExtraPricingController_recordQuery",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "version",
+                  "commandId",
+                  "orderLineScopeItemId",
+                  "sorCode",
+                  "quantity",
+                  "expectedOrderRevisionId"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "record-site-supervisor-query.v1"
+                    ]
+                  },
+                  "commandId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "orderLineScopeItemId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "sorCode": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "quantity": {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]{0,11})(\\.[0-9]{1,6})?$"
+                  },
+                  "expectedOrderRevisionId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Immutable within-order supervisor question recorded or replayed; no extra or price"
+          }
+        },
+        "summary": "Record a within-order question for the supervisor",
+        "tags": [
+          "contractor-site-extras"
+        ]
+      },
+      "get": {
+        "operationId": "SiteExtraPricingController_queries",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Immutable questions for a job in this supervisor's scope"
+          }
+        },
+        "summary": "Read a job's within-order supervisor questions",
         "tags": [
           "contractor-site-extras"
         ]

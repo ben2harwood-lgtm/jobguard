@@ -1222,8 +1222,100 @@ Q2 non-catch authority and Q3 negative execution remain held. Forward fix:
 disable the route and append a reviewed migration; preserve any future financial
 history. Never enable posting by removing the refusal alone.
 
+### 0571_money_trail_reconciliation — M4-17-S dependency availability
+
+C262 adds only `app.read_money_trail_availability(uuid,text)`, discovered from
+this directory without changing the closed historical migration list. It calls
+0302's accepted current-session/current-owner/owned synthetic v3 job read check
+and returns constant dependency metadata. No amounts, source counts, run result,
+source read, command, approval, audit append or outbound effect is introduced.
+It grants no permission to request a run. Runtime gets this exact EXECUTE only;
+PUBLIC/infrastructure get none, shadow gets none, ownership is migration-only
+and search_path is pg_catalog. No table, row, type, policy, existing routine or
+existing grant changes. FORCE RLS and tenant table catalogues have no new table
+to enumerate. LP-0 adds two exact ACL/owner keys, one routine protection record
+and path evidence through its migration proof; serious-B5 applies the exact
+committed routine attributes from that proof without a live-derived allowance.
+
+No backfill. Forward fix with an additive migration once authoritative sources
+and action authority are accepted; never enable runs by simply removing the
+hold. Source-backed tables, source validation, replay, audit atomicity, races,
+rebuild/restore and run/review transports remain held. Do not substitute a
+subscription statement, supplied reference facts or a private attribution row.
+Rule-9 upgrade and actual runtime privilege tests are authored for reviewer/CI;
+source inspection or scripted SQL tests are not installed PostgreSQL proof.
+
+The accompanying repository can separately read ten existing customer/M4-8-S
+source tables through unchanged runtime SELECT/RLS after that access check.
+One statement binds the available snapshot; the returned envelope is always
+incomplete and names absent adapters. This adds no definer source access,
+source grant or run permission, and cannot produce a completed report.
+
+### 0580 — SV-7B synthetic accounting observation receipts (branch-owned)
+
+Adds an append-only receipt keyed by tenant/evidence/object version, with a job
+foreign key and observation hash for conflicting replay detection. Forced tenant
+RLS and SELECT/INSERT only for jobguard_shadow; no runtime, infrastructure or
+emergency grant. Migration discovery registers this file. No existing rows need
+backfill: the previous adapter retained no durable receipts. Deployment must
+precede the synthetic emitter. Forward fix: leave the server entrypoint disabled
+and append a reviewed migration; retain receipts to preserve replay protection.
+No live provider, real-data approval or fee authority is introduced.
 ## 0519 — M4-6-store synthetic timeline history (RED)
 
 Adds `recovery_timeline_run` and `recovery_timeline_signal`, owned by `jobguard_migration`, with forced tenant RLS and tenant/subject-qualified foreign keys to the existing follow-up. Runtime has SELECT only on both tables and EXECUTE on apply_recovery_timeline_signal(uuid,jsonb). Direct run INSERT/UPDATE and signal INSERT are revoked; the old record_recovery_timeline_signal(uuid,uuid,uuid,text) helper is owner-only. The aggregate uses search_path=pg_catalog, checks the synthetic database, tenant, current persisted practice session and recursive job ownership, validates the full follow-up reference, derives state/references and computes the canonical normalized JSONB SHA-256 fingerprint before atomically upserting the run and recording the signal. No caller-chosen fingerprint or state is accepted. No DELETE/TRUNCATE, reference changes or signal edits are granted. A private invoker trigger makes stopped terminal. There are no provider, scheduling-owner, financial, audit or existing-routine changes. No backfill: existing in-memory fake history is not promoted to trusted database history.
 
 Expand-only forward fix: disable the unregistered synthetic runtime if necessary; retain both history tables and apply a new migration to repair defects. Do not drop history or edit this migration after merge. Populated predecessor/privilege preservation is covered by the SERIOUS-B5 upgrade suite; real PostgreSQL behavior is covered in recovery-follow-up.integration.test.ts and tenancy/catalogue checks. These are CI gates, not locally executed PostgreSQL evidence.
+
+## M4-17 report catch-up — availability and reference queue (RED, dark)
+
+The availability migration is already on main as `0571_money_trail_reconciliation.sql`;
+the reference queue migration is already on main as
+`0572_financial_reconciliation_queue.sql`. Both retain their original SQL bytes.
+Main's `0512_simulation_money_trail_run.sql` remains unchanged: its simulation-run
+routine does not define either of these two entry points. No existing routine is
+re-created, and no main migration is edited. The two matching migration proof
+files carry exact additive LP-0, upgrade and tenancy expectations; the protected
+baseline lists stay unchanged.
+
+`0572_financial_reconciliation_queue.sql` adds the five private, forced-RLS, immutable reference queue tables, their
+indexes/policies and the finance-session checked queue routine. It adds no money
+posting or external execution. No historical data is backfilled. Forward fix:
+disable the reference path and append a reviewed migration while retaining all
+run/proposal/approval history. PostgreSQL fresh/upgrade, RLS and privilege checks
+remain CI evidence requirements; local unit tests do not establish them.
+
+## Batch-10 migration order (RED, sixth small group)
+
+Incoming main at `f78c81684` already contains `0552_commercial_outbound_pause.sql`
+and byte-identical SQL for `0571_money_trail_reconciliation.sql` and
+`0572_financial_reconciliation_queue.sql`. Keep main's migrations and corrected
+proof fragments once; archived duplicate branch copies are not installed again.
+The remaining batch migrations follow main's 0580 consecutively. Only filename
+stems and exact references change; SQL behavior is preserved:
+
+- `0571_money_trail_reconciliation.sql`: dependency availability read.
+- `0572_financial_reconciliation_queue.sql`: private reference queue.
+- `0581_restore_reconciliation.sql`: extends the existing outbound pause control with independently recorded reconciliation before resume.
+- `0582_dark_ais.sql`: isolated synthetic AIS observations; no live rail.
+- `0583_success_fee_production_safety.sql`: extends main's latest `0537_fee_invalid_proof_reduction.sql` writer with independent derivation and posting guards, preserving reversal-netted caps, strictly negative invalid-proof compensation and existing command/audit authority.
+
+Each has its matching proof fragment in `test/migration-proofs/`. New empty app
+tables are registered in `test/later-empty-tables.ts`. No main migration is
+changed. No backfill or production enablement. Retain history and forward-fix
+with an additive migration; keep external execution disabled during restore.
+PostgreSQL fresh/upgrade, privilege/RLS and restore proofs remain CI gates.
+### 0572_financial_reconciliation_queue — M4-17 reference queue (RED)
+
+Adds five initially empty, append-only, FORCE-RLS financial reconciliation tables
+and one checked runtime entrypoint, `app.financial_reconciliation_queue`.
+Runtime has no direct table privileges. The entrypoint delegates finance/session
+and MON-8 entitlement checks to the current `app.ef_actor`, verifies stored invoice
+sources and independently recomputes the supplied fictional reference report.
+Proposal and second-actor approval records do not post adjustments or establish
+settlement. Audit delegates through the current `app.ef_audit` to
+`app.lp4_seal_audit`; no existing authority routine or grant is replaced.
+
+Forward fix only: retain run, difference, proposal, approval and command history.
+The committed proof and queue upgrade/integration tests require real PostgreSQL
+in CI. No live provider, scheduler or production capability is enabled.
