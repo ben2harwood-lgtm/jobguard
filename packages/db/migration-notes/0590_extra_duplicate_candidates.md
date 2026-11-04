@@ -1,4 +1,4 @@
-# 0747 — duplicate candidate read (ENT-3 / ENT-5, partial)
+# 0590 — duplicate candidate read (ENT-3 / ENT-5, partial)
 
 RED: approval authority, tenant isolation and billing-export eligibility. Synthetic
 practice database only; G0–G5 remain closed. No real data, provider or money.

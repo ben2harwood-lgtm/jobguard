@@ -1,5 +1,5 @@
 {
-  "migration": "0830_extra_duplicate_candidates.sql",
+  "migration": "0590_extra_duplicate_candidates.sql",
   "lp0": [
     {
       "section": "entries",

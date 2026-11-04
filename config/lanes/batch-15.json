@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/batch-15"
       ],
-      "note": "RED. Built-ahead ENT-3 recent items, ENT-5 chain actions, duplicates and pack steps, ENT-8a observation screen. Synthetic only; NOPR.",
+      "note": "RED. Built-ahead ENT-3 recent items, ENT-5 chain actions, duplicates and pack steps, ENT-8a observation screen. Synthetic only; ready for PR.",
       "allow": [
         "apps/api/openapi.json",
         "apps/api/src/contractor/site-extra-pricing.application.test.ts",
@@ -47,10 +47,10 @@
         "packages/core/src/site-extra-pricing.test.ts",
         "packages/core/src/site-extra-pricing.ts",
         "packages/core/src/watchdog.ts",
-        "packages/db/migration-notes/0830_extra_duplicate_candidates.md",
-        "packages/db/migration-notes/0831_contractor_job_evidence_read.md",
-        "packages/db/migrations/0830_extra_duplicate_candidates.sql",
-        "packages/db/migrations/0831_contractor_job_evidence_read.sql",
+        "packages/db/migration-notes/0590_extra_duplicate_candidates.md",
+        "packages/db/migration-notes/0591_contractor_job_evidence_read.md",
+        "packages/db/migrations/0590_extra_duplicate_candidates.sql",
+        "packages/db/migrations/0591_contractor_job_evidence_read.sql",
         "packages/db/src/enterprise-live-prompt-repository.test.ts",
         "packages/db/src/enterprise-live-prompt-repository.ts",
         "packages/db/src/extra-duplicate-candidates.test.ts",
@@ -62,8 +62,8 @@
         "packages/db/test/enterprise-live-prompt-repository.integration.test.ts",
         "packages/db/test/extra-duplicate-candidates.integration.test.ts",
         "packages/db/test/extra-evidence-packs.integration.test.ts",
-        "packages/db/test/migration-proofs/0830_extra_duplicate_candidates.proof.json",
-        "packages/db/test/migration-proofs/0831_contractor_job_evidence_read.proof.json",
+        "packages/db/test/migration-proofs/0590_extra_duplicate_candidates.proof.json",
+        "packages/db/test/migration-proofs/0591_contractor_job_evidence_read.proof.json",
         "packages/db/test/site-extra-recent-items.integration.test.ts"
       ]
     }
