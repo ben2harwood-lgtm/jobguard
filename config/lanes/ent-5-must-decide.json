@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-5-must-decide": {
+      "branches": [
+        "codex/sandbox/ent-5-must-decide"
+      ],
+      "allow": [
+        "packages/core/src/extra-approval-inbox.ts",
+        "packages/core/src/extra-approval-inbox.test.ts",
+        "packages/core/src/index.ts",
+        "apps/web/app/approvals/extras/must-decide.tsx",
+        "apps/web/app/approvals/extras/must-decide.test.tsx",
+        "apps/web/app/approvals/extras/extra-approvals.tsx",
+        "apps/web/e2e/ENT-5-must-decide.spec.ts",
+        "docs/contracts/extra-approval-chain-v1.md"
+      ]
+    }
+  }
+}

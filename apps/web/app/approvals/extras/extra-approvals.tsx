@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { MustDecide } from "./must-decide";
 import { NorthsidePractice } from "../../northside/northside-practice";
 import { pounds } from "../../lib/pounds";
 import styles from "../../northside/northside.module.css";
@@ -17,12 +18,12 @@ async function act(extra: Extra, action: string, body: Record<string, unknown>) 
 /** One list for the people who move an extra along: the surveyor prices it, the supervisor submits and approves, the owner sends it to the client. Each sees only the button for their step. */
 export function ExtraApprovals() {
   const [role, setRole] = useState(""), [extras, setExtras] = useState<Extra[] | null>(null), [rates, setRates] = useState<Record<string, Rate[]>>({}), [error, setError] = useState(""), [busy, setBusy] = useState(false);
-  const [queue, setQueue] = useState<Array<{ variation_id: string; request_id: string; step_index: number }>>([]);
+  const [queue, setQueue] = useState<Array<{ job_id: string; variation_id: string; request_id: string; step_index: number }>>([]);
   const [links, setLinks] = useState<Record<string, { extraId: string; path: string; recipient: string }>>({});
   const [pick, setPick] = useState<Record<string, { code: string; quantity: string }>>({});
   const load = useCallback(async () => {
     const r = await fetch("/api/northside/extras", { cache: "no-store" });
-    if (r.status === 401) { setError("Sign in to the practice first (open the practice hub)."); setExtras([]); return; }
+    if (r.status === 401) { setError("Sign in to the practice first (open the practice hub)."); setExtras([]); setQueue([]); return; }
     const body = await r.json(); setRole(body.role); setExtras(body.extras); setRates(body.rates ?? {}); setQueue(body.queue ?? []); setLinks(Object.fromEntries((body.localLinks ?? []).map((link: { extraId: string; path: string; recipient: string }) => [link.extraId, link])));
   }, []);
   useEffect(() => { void load(); }, [load]);
@@ -39,6 +40,7 @@ export function ExtraApprovals() {
     <Link href="/northside">Practice hub</Link>
     <h1>Extras to move along</h1>
     <p className={styles.note}>Practice data. You are signed in as <strong data-testid="approvals-role">{role || "…"}</strong>. Nothing is sent: the client link below is local. A pending fake outbox record is not delivery.</p>
+    <MustDecide queue={queue} />
     {error && <p role="alert" className={styles.error}>{error}</p>}
     {extras === null ? <p role="status">Loading…</p> : extras.length === 0 ? <p data-testid="no-extras">No extras to show.</p> : extras.map(x => {
       const link = links[x.extraId];
@@ -46,7 +48,7 @@ export function ExtraApprovals() {
       const rate = rates[x.jobId]?.find(r => r.code === card.code), qty = Number(card.quantity);
       const total = rate && Number.isInteger(qty) && qty > 0 ? rate.ratePence * qty : null;
       const status = x.outcome ? words[x.outcome] ?? x.outcome : x.state === "logged" && x.quotedPence !== null ? "Priced - ready to submit" : words[x.state] ?? x.state;
-      return <section key={x.extraId} className={styles.card} data-testid="extra-card" aria-label={`Extra on ${x.orderReference}`}>
+      return <section key={x.extraId} id={`extra-${x.extraId}`} tabIndex={-1} className={styles.card} data-testid="extra-card" aria-label={`Extra on ${x.orderReference}`}>
         <h2>{x.orderReference}: {x.description}</h2>
         <p>{x.note}</p>
         <p><span className={styles.pill} data-testid="extra-state">{status}</span> {x.hasPhoto && "Photo attached · "}{x.residentConfirmed && "Resident confirmed · "}{(x.netPence ?? x.quotedPence) !== null && <span data-testid="extra-amount">{pounds((x.netPence ?? x.quotedPence)!)}</span>}</p>

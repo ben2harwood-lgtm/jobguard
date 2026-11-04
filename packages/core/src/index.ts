@@ -170,3 +170,5 @@ export * from "./contractor-mandate.js";
 
 export * from "./cancellation-kit.js";
 export * from "./value-source-receipt-v2.js";
+
+export * from "./extra-approval-inbox.js";

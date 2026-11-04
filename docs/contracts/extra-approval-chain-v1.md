@@ -5,3 +5,34 @@ Built ahead on ENT-5 foundation (PR #215, migration 0157). Synthetic practice on
 Ben's adopted answers (BEN-ANSWERS-20261013, card jobguard-twenty-product-decisions-2026-10-13) as built: surveyors price (PriceExtra, ReviseExtra); supervisors withdraw (WithdrawExtra, wider roles refused); approvers stay separate across versions and never self-approve; company steps first, then the customer; start/finish uncertainty is NOT built (work-report source held); sends are owner-approved one by one (decision 18), links expire, a replacement cancels the earlier request; original approvers stay eligible and only the agreed alternates are added after the agreed wait; history survives loss of authority (facts are immutable, later actions refused); named fictional client roles are recorded together with the actual tester.
 
 Model: a request is created per priced revision (`extra_approval_request`, with the frozen requirement snapshot and the rule/contract versions in force). A step fact is one approval (unique per request and step; unique per person within a request). One outcome per request (approved, rejected, withdrawn, duplicate) is the single effect that approve/withdraw races resolve to. Staleness is "a later request exists". An extra submitted unpriced can be priced once by a surveyor (PriceExtra on a submitted, not-yet-decided, unpriced extra): that writes the price revision and a new request revision with a fresh requirement snapshot, the unpriced request becomes stale, and its open Decision is dismissed. Pricing an already priced or decided extra is refused (ReviseExtra is the only later change). The client approver is always the actor of the client step (`actor_kind=client_approver`); a contractor attestation is never written. The queue (`app.xa_queue`) is the mandatory lane filtered by stored grants and reads no advisory state. Escalation (`app.xa_escalate`, no time argument) fires once per step via a unique key.
+
+## ENT-5 mandatory lane (built ahead, 4 November 2026)
+
+The contractor `/approvals/extras` screen projects only the existing, server-filtered
+`ExtraApprovalRepository.queue` read into `InboxFinding`s and passes them through
+`groupInbox` with an advisory budget of zero. Each request and step has its own
+`sourceRevision`; separate extras on one job cannot coalesce. Replayed identical
+reads coalesce, and a fresh read replaces the old queue without retaining decisions
+or superseded requests. Findings contain `amount: null`, fixed wording and an
+anchor to the existing extra card; prices and arbitrary queue fields are not copied
+into the lane. Prices on the existing detailed cards are unchanged.
+
+The lane does not derive grants, escalation, timers, decisions or current revisions.
+Only rows returned for the authenticated member can appear. The server queue remains
+authoritative for tenant/job scope, revocation and listed alternates (original
+approvers remain eligible after escalation). Command authorization is rechecked by
+the existing approval path; a displayed link never grants authority.
+
+Coverage: pure projection/grouping tests exercise zero advisory budget, 200 advisory
+findings, distinct extras, replayed reads, request/step revisions, empty reads and
+price omission. Component tests cover separate links and empty replacement. The new
+`ENT-5-must-decide.spec.ts` runs on mobile-360 and desktop with synthetic transport
+fixtures, target sizes, keyboard anchor navigation, named regions/links, overflow
+checks and Chromium text-contrast auditing. It does not prove database authority or
+constitute a comprehensive accessibility audit. CI must also run the existing real
+PostgreSQL `extra-approval-chain.integration.test.ts` for grant filtering, stale
+revisions, tenant isolation, revocation, replay and escalation guarantees. No database
+or browser suite was run in the restricted builder sandbox. No migration, new
+command, grant, queue rule or escalation change. RED independent review and green CI
+remain required. ENT-5 remains open for held contracts and aggregate acceptance;
+G0–G5 stay closed, synthetic practice only.
