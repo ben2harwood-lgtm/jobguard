@@ -155,6 +155,7 @@ export function RecoveryMessages({ caseId, caseRevision, evidenceTick = 0 }: { c
   const canRun = !!view && (view.status === "queued" || view.status === "retryable");
   return <section className={styles.panel} aria-labelledby={`pursuit-heading-${caseId}`} id="recovery-messages" aria-busy={busy || loading}>
     <h4 id={`pursuit-heading-${caseId}`}>Review a factual practice message</h4>
+    <p>Synthetic factual claim/reminder templates — D10 legal review pending.</p>
     <p>Practice only. The amount, sender, recipient and attachment come from this case and its approved evidence pack; nothing is sent to anyone, and a message does not prove that a claim is true.</p>
     {loading && !state && <p role="status">Loading saved messages…</p>}
     {error && <p className={styles.error} role="alert" tabIndex={-1} ref={errorRef}>{error}</p>}

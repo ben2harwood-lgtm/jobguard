@@ -219,10 +219,14 @@ it('denies a job UUID colliding with an ENT-1 team; team membership is not a job
 });
 it('refuses a runtime-forged succeeded receipt with no authoritative binding or audit',async()=>{
  const f=await setup();await parties.linkCustomer(f.p,f.client,linkInput(f.customer.revisionId!));
- await expect(withTenant(runtime,ctx(f.p),async db=>{
+ const before=await effects(f);
+ for(const pool of [runtime,admin]){
+ await expect(withTenant(pool,ctx(f.p),async db=>{
   const hash=(await db.$client.query("SELECT encode(sha256(convert_to($1::jsonb::text,'UTF8')),'hex') h",[JSON.stringify(f.input)])).rows[0].h;
   await db.$client.query("INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,result,actor_membership_id) VALUES($1::uuid,$2,'contractor_parties.bind',$6::text,$3,'succeeded',$4::jsonb,$5)",[f.input.commandId,f.p.tenantId,hash,JSON.stringify({version:'contractor-party-result.v1',environment:'synthetic_demo',commandId:f.input.commandId,id:randomUUID(),realExternalActions:0}),f.p.membershipId,f.input.commandId]);
- })).rejects.toMatchObject({code:'23514'});
+ })).rejects.toMatchObject({code:pool===runtime?'42501':'23514'});
+ expect(await effects(f)).toEqual(before);
+ }
  await expect(parties.bind(f.p,f.input)).resolves.toMatchObject({realExternalActions:0});
 });
 
