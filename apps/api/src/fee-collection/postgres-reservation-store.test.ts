@@ -25,13 +25,12 @@ describe("PostgresReservationStore transaction adapter", () => {
     const context = { tenantId: ctx.tenantId } as VerifiedTenantContext;
     mocks.withTenant.mockImplementation(async (_pool, _ctx, work) => work(db));
     const sources = vi.fn(() => ({ collection: async () => fixture().source, credit: async () => fixture().credit }));
-    const resolve = vi.fn(async () => context);
-    return { persisted, query, db, context, resolve, sources, store: new PostgresReservationStore({} as Pool, resolve, sources) };
+    return { persisted, query, db, context, sources, store: new PostgresReservationStore({} as Pool, context, sources) };
   }
   it("binds current sources to the locked transaction and persists before the final audit lock", async () => {
     const f = setup();
     expect(await f.store.transaction(ctx.tenantId, async (_book, sources) => sources.collection(id(5), id(6)))).toMatchObject({ tenantId: ctx.tenantId });
-    expect(f.sources).toHaveBeenCalledWith(f.db, f.context);
+    expect(f.sources).toHaveBeenCalledWith(f.db);
     expect(f.query.mock.calls.map(([sql]) => sql.split(" ")[0])).toEqual(["INSERT", "SELECT", "SELECT", "UPDATE"]);
     expect(f.query.mock.calls[1]![0]).toContain("FOR UPDATE");
     expect(f.query.mock.invocationCallOrder.at(-1)!).toBeLessThan(mocks.appendAuditBatch.mock.invocationCallOrder[0]!);

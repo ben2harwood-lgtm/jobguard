@@ -72,10 +72,11 @@ files; the read-only git index still needs the router to stage the resolution.
 
 M4-12 reservation persistence (0478): `PostgresReservationStore` implements the
 shared seam with one tenant row lock, including concurrent first use. It is an
-explicit server composition dependency, with no default registration. Its context
-resolver must verify the caller's tenant authority; the executor separately checks
-the current session/membership. Its source factory must read and lock current
-invoice/statement/terms/credit revisions through the supplied transaction. A fake
+explicit server composition dependency, with no default registration. Its caller
+supplies the whole verified tenant context; the executor separately checks
+the current session/membership. Its source factory captures that caller context
+and must read and lock current invoice/statement/terms/credit revisions through
+the supplied transaction. A fake
 source factory in the PostgreSQL tests is not a production source implementation.
 Both rails must receive the same database-backed store. Provider calls remain
 outside its transaction. Book state, event fingerprints and appended chain audit
@@ -120,3 +121,34 @@ PostgreSQL concurrency, populated upgrade, rollback, RLS and catalogue tests are
 added for CI; this sandbox cannot execute them. Independent RED review and green
 CI against current main remain required. Fake sources/adapters only; no live rail,
 real money, production source reader or release is enabled.
+
+
+M4-12 reserve cleanup landing preparation, 4 November 2026 (NOPR, RED):
+resolved the contractor-entitlement upgrade merge as the union of both lists;
+registered the two reservation tables in later-empty-tables. The dark store now
+captures the caller-supplied verified context and transaction source factory,
+rather than retaining context-bearing callbacks as class properties. All local
+callers are synthetic fixtures; no application route composes this store. Tenant
+matching, withTenant verification, source locking, reservation and replay behavior
+remain covered without weakening the context guard. No migration was changed or
+added in this preparation; 0607/0608 and their proof fragments remain intact.
+
+Local deterministic evidence: installed Vitest 4.1.12 with --maxWorkers=2 passed
+context-boundary, postgres-reservation-store and executor (221 tests),
+watchdog-registry and identity (133 tests), and migration-proof-loader (76 tests).
+Initial runs used stale dependency output and failed; rebuilding the five library
+packages with installed tsc resolved the import/schema failures. The context
+boundary failure was repaired in the store, without guard exemptions. PL/pgSQL
+CASE lint passed all 233 migrations, and git diff --check passed.
+
+The pnpm typecheck and pnpm test wrappers stalled after their package-settings
+warning; installed binaries were used instead. Direct tsc compilation/typechecking
+passed for core, config, storage, db, ai, api and web. The normal lane tool was run and
+refused incoming main files still staged against the pre-merge HEAD. A separate
+read-only comparison against origin/main verifies the lane allow equals exactly
+all eleven changed non-lane files and only this piece's lane differs. The router
+must stage the resolved file, finish the merge and rerun the normal lane check.
+No Git writes, fetch, database, browser, live provider or paid call were made.
+CI must prove PostgreSQL concurrency, RLS/grants, atomic rollback, populated
+upgrades and preservation proofs, plus the full required suites. Independent RED
+review at the final head remains required before landing.

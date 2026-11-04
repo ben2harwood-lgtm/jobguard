@@ -28,7 +28,7 @@ describe("M4-12 reservation archive populated upgrade", () => {
       expect(chain).toHaveLength(3);
       await applyMigration(db, own);
       expect((await db.admin.query("SELECT book FROM app.fee_reservation_book WHERE tenant_id=$1", [ctx.tenantId])).rows[0]?.book).toEqual(legacy);
-      const store = new PostgresReservationStore(db.runtime, async () => testTenantContext(ctx.tenantId), () => ({
+      const store = new PostgresReservationStore(db.runtime, testTenantContext(ctx.tenantId), () => ({
         collection: async () => f.source, credit: async () => f.credit,
       }));
       const read = () => store.transaction(ctx.tenantId, async book => structuredClone(book));

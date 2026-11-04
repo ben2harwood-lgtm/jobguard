@@ -172,3 +172,25 @@ No historical rows are backfilled. On failure, revert the unshipped candidate;
 after installation use a reviewed forward migration preserving immutable facts.
 PostgreSQL upgrade, concurrency, retained-read and revocation assertions execute
 in CI, followed by one independent RED review of the resulting head.
+
+## 3 November 2026 — fixed job terms and retained trial access (0556, RED)
+
+`mon8_company_feature` preserves all company-level decisions and contractor guards.
+A supplied job must belong to the authenticated company, be outside practice, and
+have a `synthetic_demo` commercial-track row; otherwise it refuses without a result.
+Small-builder features on a contractor job are excluded regardless of the company's
+current track. On a fixed small-builder job they are included with an effective
+subscription agreement, or for that company's persisted `trial_start` job, during
+and after its trial. Pending plan changes are not effective terms. The trial grant
+covers that job alone, never company checks or other jobs. Pay-now and new accounting
+exports remain `feature_disabled`; retained reads and exports keep `retained_read`
+and their existing resource permissions. Contractor features on a small-builder job
+are excluded; a contractor job never widens the existing company decision.
+
+The adapter reads terms after the existing lock waits and rechecks the company
+session. No backfill, public flag endpoint, routes or practice gates are added.
+`companyPlanEntitlements` has no runtime caller yet. Any future normal-company
+Final Check, invoice or recovery route must call this service inside its authorized
+command boundary. Contractor agreement status has no runtime writer (fixtures only,
+29 October ruling); a real signed agreement remains for people and ENT-14. All
+release gates remain closed. This supersedes the stale absent-trial statement above.

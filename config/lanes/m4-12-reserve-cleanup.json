@@ -15,6 +15,7 @@
         "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
         "packages/db/test/fee-reservation-archive-upgrade.integration.test.ts",
         "packages/db/test/fee-reservation.integration.test.ts",
+        "packages/db/test/later-empty-tables.ts",
         "packages/db/test/migration-proofs/0607_fee_reservation_book.proof.json",
         "packages/db/test/migration-proofs/0608_fee_reservation_archive.proof.json"
       ]

@@ -44,10 +44,7 @@ describe("M4-12 PostgreSQL shared reservation store", () => {
       collection: async () => (await tx.$client.query("SELECT value FROM public.fee_source_fixture WHERE tenant_id=$1 FOR UPDATE", [tenantId])).rows[0]?.value,
       credit: async () => ({ ...f.credit, tenantId }),
     });
-    const store = () => new PostgresReservationStore(db.runtime, async requested => {
-      if (requested !== tenantId) throw new Error("COLLECTION_REFUSED");
-      return testTenantContext(tenantId);
-    }, readers);
+    const store = () => new PostgresReservationStore(db.runtime, testTenantContext(tenantId), readers);
     const dd = new FakeGoCardlessRail("fake-dd-test");
     const executor = () => new DarkFeeCollectionExecutor(store(), [f.rail, dd], () => new Date("2026-10-29T00:00:00Z"), sessions);
     const read = () => store().transaction(tenantId, async book => structuredClone(book));
@@ -73,7 +70,7 @@ describe("M4-12 PostgreSQL shared reservation store", () => {
     const { Pool } = await import("pg");
     const restartedPool = new Pool(db.runtime.options);
     try {
-      const restarted = new PostgresReservationStore(restartedPool, async () => testTenantContext(f.tenantId), () => ({ collection: async () => f.source, credit: async () => f.credit }));
+      const restarted = new PostgresReservationStore(restartedPool, testTenantContext(f.tenantId), () => ({ collection: async () => f.source, credit: async () => f.credit }));
       expect(await restarted.transaction(f.tenantId, async book => book.attempts[0])).toEqual(first);
     } finally { await restartedPool.end(); }
     expect(await f.executor().reserve(f.context, f.intent)).toEqual(first);
