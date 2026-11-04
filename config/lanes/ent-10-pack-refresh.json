@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-10-pack-refresh": {
+      "branches": [
+        "codex/sandbox/ent-10-pack-refresh"
+      ],
+      "note": "ENT-10 AMBER draft evidence refresh only; NOPR; approval and release gates remain held.",
+      "allow": [
+        "docs/security/README.md",
+        "docs/security/evidence-map.md",
+        "docs/security/not-claimed-register.md",
+        "docs/security/buyer-questionnaire.md"
+      ]
+    }
+  }
+}
