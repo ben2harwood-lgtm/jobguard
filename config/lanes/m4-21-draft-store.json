@@ -15,7 +15,19 @@
         "packages/db/migrations/0755_vat_fixture_records.sql",
         "packages/db/test/migration-proofs/0755_vat_fixture_records.proof.json",
         "packages/db/migration-notes/0755_vat_fixture_records.md",
-        "docs/contracts/vat-fixture-records-dark-v1.md"
+        "docs/contracts/vat-fixture-records-dark-v1.md",
+        "apps/api/src/vat-fixture.application.ts",
+        "apps/api/src/vat-fixture.application.test.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/web/app/api/jobs/[id]/vat-fixtures/route.ts",
+        "apps/web/app/api/jobs/[id]/vat-fixtures/route.test.ts",
+        "apps/web/app/lib/vat-fixture-server.ts",
+        "apps/web/app/jobs/[id]/vat-fixtures/page.tsx",
+        "apps/web/app/jobs/[id]/vat-fixtures/screen.tsx",
+        "apps/web/app/jobs/[id]/vat-fixtures/screen.test.tsx",
+        "apps/web/e2e/M4-21-vat-fixtures.spec.ts",
+        "packages/core/src/watchdog.ts",
+        "packages/db/test/vat-fixture-route.integration.test.ts"
       ]
     }
   }
