@@ -1,3 +1,4 @@
+import { laterEmptyTables } from "./later-empty-tables.js";
 import { currentCommandRegistryRows } from "./lp5-command-catalog.js";
 import { afterAll,beforeAll,expect,it } from "vitest";
 import { createHash, randomUUID } from "node:crypto";
@@ -154,12 +155,8 @@ it("actual catalogs retain least privilege",async()=>{
 });
 // Preserve the union of main's explicit empty successor expectations and the general proof.
 const emptySuccessors=[
- "app.privacy_artifact",
- "app.privacy_command",
- "app.privacy_request",
- "app.privacy_subject",
+ ...Object.keys(laterEmptyTables),
 
- "app.practice_exposure_schedule",
  "app.customer_quote_approval",
  "app.customer_stage_acknowledgement",
  "app.payment_fee_authority",
