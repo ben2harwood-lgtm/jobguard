@@ -29,6 +29,7 @@
         "apps/web/app/api/meter/jobs/[id]/work-state/route.test.ts",
         "apps/web/app/lib/recovery-case-routes.test.ts",
         "docs/contracts/lp-command-binding-design-v1.md",
+        "docs/review/LP-6B-REPAIR-WIP-2026-11-04.md",
         "packages/db/migration-notes/0584_lp6b_effective_session_actor.md",
         "packages/db/migrations/0584_lp6b_effective_session_actor.sql",
         "packages/db/src/audit-export-repository.ts",
