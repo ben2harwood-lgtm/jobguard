@@ -1,0 +1,6 @@
+{
+  "migration": "0569_managed_recovery_pursuit_guard.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}
