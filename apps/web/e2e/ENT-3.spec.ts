@@ -36,21 +36,24 @@ test("priced capture binds the displayed evidence in at most four taps, with exa
   await page.route("**/api/northside/extras", route => route.fulfill({ json: { extras: [], settings: { settings: { rules: { proceedLimit: { pence: 25000 } } } } } }));
   await page.route(`**/api/contractor/jobs/${jobId}/order-lines`, route => route.fulfill({ json: { version: "site-order-lines.v1", ...head, jobId, workOrderId: jobId, revision: 1, lines: [] } }));
   await page.route(`**/api/contractor/jobs/${jobId}/sor-items?*`, route => route.fulfill({ json: { version: "site-sor-items.v1", ...head, jobId, sorVersionId: jobId, items: [{ code: "FIT-LOCK", description: "Fictional lock", unit: "each" }], truncated: false } }));
-  const orderCheck = { outcome: "new", sorCode: "FIT-LOCK", unit: "each", claimedQuantity: "1", instructedQuantity: null, extraQuantity: "1", orderLineScopeItemId: null };
+  const orderCheck = { proceedComparison: "within", outcome: "new", sorCode: "FIT-LOCK", unit: "each", claimedQuantity: "1", instructedQuantity: null, extraQuantity: "1", orderLineScopeItemId: null };
   await page.route(`**/api/contractor/jobs/${jobId}/order-check?*`, route => route.fulfill({ json: { version: "site-order-check.v1", ...head, jobId, orderCheck } }));
   const hash = "a".repeat(64);
   await page.route("**/api/northside/photo", route => route.fulfill({ json: { photoEvidenceId: visitId, photoSha256: "b".repeat(64), shownContentSha256: hash } }));
   await page.route(`**/api/contractor/jobs/${jobId}/site-extras/sor`, async route => {
     attempts.push(route.request().postDataJSON());
     if (attempts.length === 1) return route.fulfill({ status: 503, json: { code: "SITE_PRICING_UNAVAILABLE" } });
-    return route.fulfill({ status: 201, json: { version: "sor-site-extra-submitted.v2", ...head, jobId, extraId: jobId, requestId: visitId, state: "awaiting_approval", priceSource: "server_sor", orderCheck } });
+    return route.fulfill({ status: 201, json: { version: "sor-site-extra-submitted.v2", ...head, jobId, extraId: jobId, requestId: visitId, state: "awaiting_approval", priceSource: "server_sor", orderCheck: { ...orderCheck, proceedComparison: undefined } } });
   });
   await page.goto("/site/extra");
   await page.getByLabel("Search schedule of rates").fill("lock");
   let taps = 0;
   await page.getByRole("button", { name: "FIT-LOCK: Fictional lock (each)", exact: true }).click(); taps++;
   await expect(page.getByText("New extra", { exact: true })).toBeVisible();
-  await expect(page.getByText(/Proceed limit: £250.00/)).toBeVisible();
+  await expect(page.getByTestId("proceed-comparison")).toContainText("within the limit");
+  const status = page.getByRole("button", { name: "Finished", exact: true });
+  const box = await status.boundingBox(); expect(box!.height).toBeGreaterThanOrEqual(44); expect(box!.width).toBeGreaterThanOrEqual(44);
+  await status.click(); taps++;
   await page.getByRole("button", { name: "Attach practice photo" }).click(); // Photo excluded by the card.
   await expect(page.getByText(`Content hash: ${hash}`)).toBeVisible();
   await expect(page.getByRole("button", { name: "Log extra", exact: true })).toBeDisabled();
@@ -63,7 +66,7 @@ test("priced capture binds the displayed evidence in at most four taps, with exa
   await expect(page.getByTestId("extra-logged")).toContainText("priced by the server");
   expect(attempts).toHaveLength(2);
   expect(attempts[0]).toEqual(attempts[1]);
-  expect(attempts[0]).toMatchObject({ version: "log-sor-site-extra.v2", photoEvidenceId: visitId, residentConfirmation: { shownContentSha256: hash }, siteVisitId: visitId });
+  expect(attempts[0]).toMatchObject({ version: "log-sor-site-extra.v2", workStatus: "finished", photoEvidenceId: visitId, residentConfirmation: { shownContentSha256: hash }, siteVisitId: visitId });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
@@ -108,11 +111,39 @@ test("supervisor reads immutable questions on the existing job extras screen", a
  await page.route("**/api/northside", route => route.fulfill({ status: 401, json: {} }));
  await page.route("**/api/contractor/practice/acting-as", route => route.fulfill({ json: { state: "acting" } }));
  await page.route("**/api/contractor/site/jobs", route => route.fulfill({ json: { jobs: [{ jobId, reference: "Fictional order", openVisitId: null }] } }));
- await page.route("**/api/northside/extras", route => route.fulfill({ json: { extras: [], role: "supervisor" } }));
+ await page.route("**/api/northside/extras", route => route.fulfill({ json: { extras: [{ extraId: visitId, jobId, orderReference: "Fictional order", description: "Fictional extra", state: "approved", outcome: "approved", hasPhoto: true, residentConfirmed: true, quotedPence: null }], role: "supervisor" } }));
  await page.route(`**/api/contractor/jobs/${jobId}/order-lines`, route => route.fulfill({ json: { version: "site-order-lines.v1", ...head, jobId, workOrderId: jobId, revision: 1, lines: [] } }));
- await page.route(`**/api/contractor/jobs/${jobId}/supervisor-queries`, route => route.fulfill({ json: { version: "site-supervisor-queries.v1", ...head, jobId, queries: [{ version: "site-supervisor-query.v1", ...head, queryId: visitId, jobId, orderLineScopeItemId: visitId, sorCode: "FIT-LOCK", quantity: "1", orderRevisionId: jobId, operativeMembershipId: visitId, recordedAt: "2026-11-03T10:00:00.000Z" }] } }));
+ await page.route(`**/api/contractor/jobs/${jobId}/supervisor-queries`, route => route.fulfill({ json: { version: "site-supervisor-queries.v1", ...head, jobId, workStatuses: [{ extraId: visitId, workStatus: "finished", operativeMembershipId: jobId, recordedAt: "2026-11-03T10:00:00.000Z", source: "operative_statement" }], queries: [{ version: "site-supervisor-query.v1", ...head, queryId: visitId, jobId, orderLineScopeItemId: visitId, sorCode: "FIT-LOCK", quantity: "1", orderRevisionId: jobId, operativeMembershipId: visitId, recordedAt: "2026-11-03T10:00:00.000Z" }] } }));
  await page.goto("/site/extra");
  await expect(page.getByRole("heading", { name: "My extras", exact: true })).toBeVisible();
+ await expect(page.getByTestId("my-extra")).toContainText("Operative statement: Finished");
+ await expect(page.getByTestId("my-extra")).toContainText("later approval does not erase a breach");
+ await expect(page.getByTestId("my-extra").getByRole("button")).toHaveCount(0);
  await expect(page.getByTestId("supervisor-query")).toContainText("FIT-LOCK: claimed quantity 1");
  await expect(page.getByText("These are within the order. No extra or price was created. Resolving questions is not available yet.")).toBeVisible();
 });
+
+for (const comparison of ["within", "above", "unpriced"] as const) {
+ test(`proceed comparison ${comparison} gives no work permission`, async ({ page }) => {
+  await page.route("**/api/northside", route => route.fulfill({ status: 401, json: {} }));
+  await page.route("**/api/contractor/practice/acting-as", route => route.fulfill({ json: { state: "acting" } }));
+  await page.route("**/api/contractor/site/jobs", route => route.fulfill({ json: { jobs: [{ jobId, reference: "Fictional order", openVisitId: null }] } }));
+  await page.route("**/api/northside/extras", route => route.fulfill({ json: { extras: [] } }));
+  await page.route(`**/api/contractor/jobs/${jobId}/order-lines`, route => route.fulfill({ json: { version: "site-order-lines.v1", ...head, jobId, workOrderId: jobId, revision: 1, lines: [] } }));
+  await page.route(`**/api/contractor/jobs/${jobId}/sor-items?*`, route => route.fulfill({ json: { version: "site-sor-items.v1", ...head, jobId, sorVersionId: jobId, items: [{ code: "FIT-LOCK", description: "Fictional lock", unit: "each" }], truncated: false } }));
+  await page.route(`**/api/contractor/jobs/${jobId}/order-check?*`, route => route.fulfill({ json: { version: "site-order-check.v1", ...head, jobId, orderCheck: { outcome: "new", sorCode: "FIT-LOCK", unit: "each", claimedQuantity: "1", instructedQuantity: null, extraQuantity: "1", orderLineScopeItemId: null, proceedComparison: comparison === "within" ? "within" : "above" } } }));
+  await page.goto("/site/extra");
+  if (comparison !== "unpriced") {
+   await page.getByLabel("Search schedule of rates").fill("lock");
+   await page.getByRole("button", { name: "FIT-LOCK: Fictional lock (each)", exact: true }).click();
+   for (const name of ["Not started", "Under way", "Finished"]) {
+    const button = page.getByRole("button", { name, exact: true }), box = await button.boundingBox();
+    expect(box!.height).toBeGreaterThanOrEqual(44); expect(box!.width).toBeGreaterThanOrEqual(44);
+    await button.click(); await expect(button).toHaveAttribute("aria-pressed", "true");
+   }
+  }
+  await expect(page.getByTestId("proceed-comparison")).toContainText(comparison === "within" ? "within the limit" : comparison === "unpriced" ? "above the limit (unpriced)" : "above the limit");
+  await expect(page.getByTestId("proceed-comparison")).toContainText("This is a comparison and does not grant permission to proceed.");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+ });
+}

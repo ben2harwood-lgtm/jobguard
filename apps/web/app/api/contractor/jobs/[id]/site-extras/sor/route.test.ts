@@ -12,12 +12,12 @@ beforeEach(() => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); vi.stubEnv("VER
 afterEach(() => vi.unstubAllEnvs());
 describe("ENT-3c thin Next adapter for the priced log", () => {
   it("ENT-3 v2 forwards only the reviewed capture and evidence fields", async () => {
-    const body = raw({ version: "log-sor-site-extra.v2", description: "Fictional description", photoEvidenceId: crypto.randomUUID(), residentConfirmation: { shownContentSha256: "a".repeat(64) }, siteVisitId: crypto.randomUUID() });
+    const body = raw({ version: "log-sor-site-extra.v2", workStatus: "finished", description: "Fictional description", photoEvidenceId: crypto.randomUUID(), residentConfirmation: { shownContentSha256: "a".repeat(64) }, siteVisitId: crypto.randomUUID() });
     expect((await post(JSON.stringify(body))).status).toBe(201);
     expect(logSor).toHaveBeenCalledExactlyOnceWith(jobId, body);
   });
   it.each(["photoEvidenceId", "residentConfirmation"])("ENT-3 v2 refuses missing %s before composition", async field => {
-    const body: Record<string, unknown> = raw({ version: "log-sor-site-extra.v2", description: "Fictional description", photoEvidenceId: crypto.randomUUID(), residentConfirmation: { shownContentSha256: "a".repeat(64) } });
+    const body: Record<string, unknown> = raw({ version: "log-sor-site-extra.v2", workStatus: "finished", description: "Fictional description", photoEvidenceId: crypto.randomUUID(), residentConfirmation: { shownContentSha256: "a".repeat(64) } });
     delete body[field];
     expect((await post(JSON.stringify(body))).status).toBe(400);
     expect(workspace).not.toHaveBeenCalled();

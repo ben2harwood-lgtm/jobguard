@@ -211,7 +211,9 @@ export class SiteExtraRepository {
   return recordSupervisorQuery(this.pool, context, actor, jobId, raw);
  }
  async supervisorQueries(context: VerifiedTenantContext, actor: AuthenticatedMembership, jobId: string) {
-  return readSupervisorQueries(this.pool, context, actor, jobId);
+  const result = await readSupervisorQueries(this.pool, context, actor, jobId);
+  const workStatuses = await withTenant(this.pool, context, async db => (await db.$client.query("SELECT app.ent3_work_status($1,$2,NULL,NULL) result", [jobId, actor.membershipId])).rows[0]?.result);
+  return { ...result, workStatuses };
  }
  // ---- ENT-3c additions (append-only): the order check, the server-priced log and the two site reads. Authority first, through the private pre-check; nothing below restates the access rule. ----
  private async sorAuthority(context: VerifiedTenantContext, actor: AuthenticatedMembership, jobId: string, retained = false): Promise<{ grant: string; live: boolean } | Refusal> {
@@ -237,7 +239,7 @@ export class SiteExtraRepository {
  async logSorSiteExtra(context: VerifiedTenantContext, actor: AuthenticatedMembership, raw: unknown): Promise<StoredSorExtra> {
   const input = parseSorSiteExtraInput(raw);
   const capture = "version" in input ? input : undefined;
-  const requestHash = sha256Hex(canonicalJson({ version: capture?.version ?? "log-sor-site-extra.v1", jobId: input.jobId.toLowerCase(), sorCode: input.sorCode, quantity: input.quantity, orderLineScopeItemId: input.orderLineScopeItemId?.toLowerCase() ?? null, note: input.note, ...(capture ? { description: capture.description, photoEvidenceId: capture.photoEvidenceId.toLowerCase(), residentConfirmation: capture.residentConfirmation, siteVisitId: capture.siteVisitId?.toLowerCase() ?? null } : {}) }));
+  const requestHash = sha256Hex(canonicalJson({ version: capture?.version ?? "log-sor-site-extra.v1", jobId: input.jobId.toLowerCase(), sorCode: input.sorCode, quantity: input.quantity, orderLineScopeItemId: input.orderLineScopeItemId?.toLowerCase() ?? null, note: input.note, ...(capture ? { description: capture.description, workStatus: capture.workStatus, photoEvidenceId: capture.photoEvidenceId.toLowerCase(), residentConfirmation: capture.residentConfirmation, siteVisitId: capture.siteVisitId?.toLowerCase() ?? null } : {}) }));
   // recordRefusal reads only the command id and the job; the other fields are the typed shape it was written against.
   const refusalInput: Input = { commandId: input.commandId, jobId: input.jobId, note: input.note, description: input.sorCode };
   const refuse = async (refusal: Refusal): Promise<never> => { await this.recordRefusal(context, actor, refusalInput, refusal.reason); throw new SorSiteExtraError(refusal.code); };
@@ -294,6 +296,7 @@ export class SiteExtraRepository {
     try { await requireLiveJob(db, fact.jobId); } catch (error) { remember(error); }
     try { if (capture) await siteExtraAuthoritySeam(db, fact); else await siteExtraBaseAuthoritySeam(db, fact); } catch (error) { remember(error); }
     try { await db.$client.query("SELECT app.ent3c_record_sor_revision($1,$2,$3,$4)", [fact.jobId, fact.variationId, input.quantity, requestHash]); } catch (error) { remember(error); }
+    try { if (capture) await db.$client.query("SELECT app.ent3_work_status($1,$2,$3,$4)", [fact.jobId, actor.membershipId, fact.variationId, capture.workStatus]); } catch (error) { remember(error); }
    });
   } catch (error) {
    const recorded: Record<string, SorSiteExtraErrorCode> = { JOB_NOT_LIVE: "JOB_NOT_LIVE", ALREADY_ON_ORDER: "ALREADY_ON_ORDER", EXTRA_NOT_POSITIVE: "EXTRA_NOT_POSITIVE", MONEY_OUT_OF_RANGE: "MONEY_OUT_OF_RANGE", INVALID_QUANTITY: "INVALID_QUANTITY", ORDER_CHECK_STALE: "SITE_PRICING_UNAVAILABLE" };
@@ -339,9 +342,12 @@ export class SiteExtraRepository {
    if (!facts.item) throw new SorSiteExtraError("SOR_ITEM_NOT_FOUND");
    const check = orderCheckV1({ sorCode: query.sorCode, quantity: query.quantity, ...(query.orderLine ? { orderLineScopeItemId: query.orderLine } : {}), lines: facts.lines });
    const claimedQuantity = canonicalSorQuantity(query.quantity);
-   if (check.outcome === "new") return { outcome: "new" as const, sorCode: query.sorCode, unit: facts.item.unit, claimedQuantity, instructedQuantity: null, extraQuantity: check.extraQuantity, orderLineScopeItemId: null };
-   if (check.outcome === "more_than_ordered") return { outcome: "more_than_ordered" as const, sorCode: query.sorCode, unit: facts.item.unit, claimedQuantity, instructedQuantity: check.instructedQuantity, extraQuantity: check.extraQuantity, orderLineScopeItemId: check.orderLineScopeItemId };
-   return { orderRevisionId: facts.revisionId, outcome: "already_on_order" as const, sorCode: query.sorCode, unit: facts.item.unit, claimedQuantity, instructedQuantity: check.instructedQuantity, orderLineScopeItemId: check.orderLineScopeItemId };
+   const comparison = (await db.$client.query("SELECT app.ent3_proceed_comparison($1,$2,$3,$4) comparison", [jobId, actor.membershipId, query.sorCode, check.outcome === "already_on_order" ? null : check.extraQuantity])).rows[0]?.comparison;
+   if (comparison !== "within" && comparison !== "above") throw new SorSiteExtraError("SITE_PRICING_UNAVAILABLE");
+   const proceedComparison = comparison as "within" | "above";
+   if (check.outcome === "new") return { proceedComparison, outcome: "new" as const, sorCode: query.sorCode, unit: facts.item.unit, claimedQuantity, instructedQuantity: null, extraQuantity: check.extraQuantity, orderLineScopeItemId: null };
+   if (check.outcome === "more_than_ordered") return { proceedComparison, outcome: "more_than_ordered" as const, sorCode: query.sorCode, unit: facts.item.unit, claimedQuantity, instructedQuantity: check.instructedQuantity, extraQuantity: check.extraQuantity, orderLineScopeItemId: check.orderLineScopeItemId };
+   return { proceedComparison, orderRevisionId: facts.revisionId, outcome: "already_on_order" as const, sorCode: query.sorCode, unit: facts.item.unit, claimedQuantity, instructedQuantity: check.instructedQuantity, orderLineScopeItemId: check.orderLineScopeItemId };
   });
  }
 }

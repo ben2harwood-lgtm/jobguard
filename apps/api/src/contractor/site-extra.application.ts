@@ -96,7 +96,7 @@ export class SiteExtraApplication {
    const job = z.guid({ error: "Invalid uuid" }).safeParse(jobId); if (!job.success) throw new SorSiteExtraError("NOT_FOUND");
    await this.requireSiteOrigin(sessionId);
    const context = await this.resolveContext(sessionId, member);
-   const result = await this.repository.logSorSiteExtra(context, member, { commandId: body.commandId, jobId: job.data, sorCode: body.sorCode, quantity: body.quantity, ...(body.orderLineScopeItemId ? { orderLineScopeItemId: body.orderLineScopeItemId } : {}), note: body.note, ...(body.version === "log-sor-site-extra.v2" ? { version: body.version, description: body.description, photoEvidenceId: body.photoEvidenceId, residentConfirmation: body.residentConfirmation, ...(body.siteVisitId ? { siteVisitId: body.siteVisitId } : {}) } : {}) });
+   const result = await this.repository.logSorSiteExtra(context, member, { commandId: body.commandId, jobId: job.data, sorCode: body.sorCode, quantity: body.quantity, ...(body.orderLineScopeItemId ? { orderLineScopeItemId: body.orderLineScopeItemId } : {}), note: body.note, ...(body.version === "log-sor-site-extra.v2" ? { version: body.version, description: body.description, workStatus: body.workStatus, photoEvidenceId: body.photoEvidenceId, residentConfirmation: body.residentConfirmation, ...(body.siteVisitId ? { siteVisitId: body.siteVisitId } : {}) } : {}) });
    // The log has committed. Submission has its own durable receipt, so failures leave
    // that log intact and retries use the identical submit command (also on log replay).
    let submission: Record<string, unknown> | undefined;

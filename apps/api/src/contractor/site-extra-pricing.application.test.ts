@@ -197,7 +197,7 @@ it("ENT-3 v2 keeps verified-photo, shown-hash and visit bindings through the app
   const pool = new Pool(), m = member(), sessionId = uuid(), jobId = uuid();
   vi.spyOn(ContractorRepository.prototype, "resolveSession").mockResolvedValue(m);
   vi.spyOn(ExtraApprovalRepository.prototype, "submitExtra").mockResolvedValue({ requestId: uuid(), state: "awaiting_approval" });
-  const raw = body({ version: "log-sor-site-extra.v2", description: "Fictional reviewed description", photoEvidenceId: uuid(), residentConfirmation: { shownContentSha256: "a".repeat(64) }, siteVisitId: uuid() });
+  const raw = body({ version: "log-sor-site-extra.v2", workStatus: "finished", description: "Fictional reviewed description", photoEvidenceId: uuid(), residentConfirmation: { shownContentSha256: "a".repeat(64) }, siteVisitId: uuid() });
   const repo = vi.spyOn(SiteExtraRepository.prototype, "logSorSiteExtra").mockResolvedValue(stored(jobId));
   const app = createWorkspaceApplication({ pool, sessionId });
   await app.siteExtras.logSor(jobId, raw);
@@ -222,7 +222,7 @@ it("ENT-3 priced v2 keeps its log after a failed submit and retries one exact su
   .mockRejectedValueOnce(new Error("submit unavailable"))
   .mockResolvedValue({ requestId, state: "awaiting_approval" });
  const app = new SiteExtraApplication(pool), principal = { version: "contractor-principal.v1", sessionId };
- const raw = body({ version: "log-sor-site-extra.v2", description: "Fictional lock", photoEvidenceId: uuid(), residentConfirmation: { shownContentSha256: "a".repeat(64) } });
+ const raw = body({ version: "log-sor-site-extra.v2", workStatus: "finished", description: "Fictional lock", photoEvidenceId: uuid(), residentConfirmation: { shownContentSha256: "a".repeat(64) } });
  await expect(app.logSor(principal, jobId, raw)).rejects.toMatchObject({ code: "SITE_PRICING_UNAVAILABLE" });
  expect(log).toHaveBeenCalledOnce();
  const answer = await app.logSor(principal, jobId, raw);
@@ -245,7 +245,7 @@ it("ENT-3 a rejected log never attempts submission", async () => {
  vi.spyOn(ContractorRepository.prototype, "resolveSession").mockResolvedValue(member());
  vi.spyOn(SiteExtraRepository.prototype, "logSorSiteExtra").mockRejectedValue(new SorSiteExtraError("IDEMPOTENCY_CONFLICT"));
  const submit = vi.spyOn(ExtraApprovalRepository.prototype, "submitExtra");
- await expect(new SiteExtraApplication(pool).logSor({ version: "contractor-principal.v1", sessionId }, uuid(), body({ version: "log-sor-site-extra.v2", description: "Fictional", photoEvidenceId: uuid(), residentConfirmation: { shownContentSha256: "a".repeat(64) } }))).rejects.toMatchObject({ code: "IDEMPOTENCY_CONFLICT" });
+ await expect(new SiteExtraApplication(pool).logSor({ version: "contractor-principal.v1", sessionId }, uuid(), body({ version: "log-sor-site-extra.v2", workStatus: "finished", description: "Fictional", photoEvidenceId: uuid(), residentConfirmation: { shownContentSha256: "a".repeat(64) } }))).rejects.toMatchObject({ code: "IDEMPOTENCY_CONFLICT" });
  expect(submit).not.toHaveBeenCalled(); await pool.end();
 });
 

@@ -59,11 +59,12 @@ export const logSorSiteExtraV1 = z.object({
   version: z.literal("log-sor-site-extra.v1"), commandId: uuid, sorCode: codeText, quantity: positiveQuantityV1, orderLineScopeItemId: uuid.optional(), note: reviewedText(5000),
 }).strict();
 /** v2 binds the reviewed text, verified photo and resident confirmation to priced capture. v1 remains strict and unchanged. */
+export const siteExtraWorkStatusV1 = z.enum(["not_started", "under_way", "finished"]);
 export const logSorSiteExtraV2 = logSorSiteExtraV1.extend({
   version: z.literal("log-sor-site-extra.v2"), description: logSiteExtraV3.shape.description,
   photoEvidenceId: logSiteExtraV3.shape.photoEvidenceId.unwrap(),
   residentConfirmation: logSiteExtraV3.shape.residentConfirmation.unwrap(),
-  siteVisitId: uuid.optional(),
+  siteVisitId: uuid.optional(), workStatus: siteExtraWorkStatusV1,
 }).strict();
 export type LogSorSiteExtra = z.infer<typeof logSorSiteExtraV1> | z.infer<typeof logSorSiteExtraV2>;
 const logSorHead = z.union([logSorSiteExtraV1.extend({ quantity: z.unknown().optional() }), logSorSiteExtraV2.extend({ quantity: z.unknown().optional() })]);
@@ -122,7 +123,7 @@ const resultHead = { environment: z.literal("synthetic_demo"), realExternalActio
 const quantityText = sorQuantityV1;
 const orderCheckBodyV1 = z.object({
   outcome: z.enum(["new", "more_than_ordered", "already_on_order"]), sorCode: codeText, unit: z.string().min(1).max(40), claimedQuantity: quantityText, instructedQuantity: quantityText.nullable(),
-  extraQuantity: quantityText.optional(), orderLineScopeItemId: uuid.nullable(), orderRevisionId: uuid.optional(),
+  extraQuantity: quantityText.optional(), orderLineScopeItemId: uuid.nullable(), orderRevisionId: uuid.optional(), proceedComparison: z.enum(["within", "above"]).optional(),
 }).strict().superRefine((value, context) => {
   if ((value.outcome === "already_on_order") === (value.extraQuantity !== undefined)) context.addIssue({ code: "custom", path: ["extraQuantity"], message: "extra quantity exists exactly when there is an extra" });
 });
@@ -164,6 +165,7 @@ export const siteSupervisorQueryV1 = z.object({
 export const siteSupervisorQueriesV1 = z.object({
  version: z.literal("site-supervisor-queries.v1"), ...resultHead, jobId: uuid,
  queries: z.array(siteSupervisorQueryV1),
+ workStatuses: z.array(z.object({ extraId: uuid, workStatus: siteExtraWorkStatusV1, operativeMembershipId: uuid, recordedAt: z.iso.datetime(), source: z.literal("operative_statement") }).strict()).optional(),
 }).strict();
 export const sorSiteExtraSubmittedV2 = sorSiteExtraLoggedV1.extend({
  version: z.literal("sor-site-extra-submitted.v2"), state: z.enum(["awaiting_approval", "approved"]), requestId: uuid,

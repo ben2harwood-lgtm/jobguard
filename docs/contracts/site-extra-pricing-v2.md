@@ -7,7 +7,8 @@ approval chain's first state (`awaiting_approval`, or `approved` if its existing
 contract rule supplies the approval). Neither answer returns prices.
 
 V2 adds reviewed `description`, required `photoEvidenceId`, required
-`residentConfirmation: { shownContentSha256 }`, and optional `siteVisitId`.
+`residentConfirmation: { shownContentSha256 }`, required strict `workStatus`
+(`not_started`, `under_way`, `finished`), and optional `siteVisitId`.
 It uses existing `site-extra-content.v1` and server-written
 `resident-confirmation.v1` formats. Resident identity is not verified. All v1
 fields retain their meaning, including total claimed quantity. Neither version
@@ -28,7 +29,7 @@ submit failure returns a typed `SITE_PRICING_UNAVAILABLE` error without undoing 
 log. Retry the exact v2 body: the log replays first, then the same SubmitExtra
 receipt replays or completes. Concurrent replay makes one log and one approval
 request; a different submit command cannot submit that extra again. The request
-hash includes every v2 evidence/text/visit field and preserves the v1 hash bytes.
+hash includes every v2 evidence/text/visit/status field and preserves the v1 hash bytes.
 A changed log payload conflicts before any submission. Submission still checks
 the existing approval_chains entitlement and current authority. No approval,
 sending, fee or work permission is inferred by the application.
@@ -76,9 +77,25 @@ resolve/close workflow. Every API response uses Cache-Control no-store.
 
 ## Remaining ENT-3 acceptance
 
-Q10 still requires typed SoR search; no recent-item list. Work status remains
-honestly not recorded; Ben's timing-source card and ENT-5 not_derived stay unchanged.
-The proceed limit is a fictional comparison and grants no work permission.
+Q10 still requires typed SoR search; no recent-item list. Priced v2 work status
+is an immutable operative statement with server time and session operative, written
+in the log transaction (migration 0745). It is not visit timing or a preapproval
+breach determination. Same-ID/different-status conflicts; replay preserves the
+first statement. Finished above the limit is recorded; later approval cannot alter
+it or the original requirement comparisons. ENT-5 not_derived stays unchanged.
+Free-text work status remains open: its strict v1/v2/v3 contracts are unchanged.
+
+The order-check response adds optional proceedComparison (within/above), computed
+on the server using the job's bound rules and exact price, with unpriced above.
+The screen labels this as a comparison giving no permission to work. Free text is
+unpriced and shown above. The old generic Northside demo-setting limit is no longer
+used as this job's comparison. The existing supervisor-queries GET adds optional
+workStatuses, scoped to that supervisor's job, for read-only display alongside the
+existing extras list. No commercial/timing consumer reads these statements.
+
+The first priced capture now uses exactly four taps: choose SoR result, choose
+work status, confirm resident, log; photo and typed search excluded by the card.
+This count is authored in the mobile-360/desktop browser spec, awaiting CI.
 Resolve/close, dictation, candidate duplicates, offline capture and real sending
 remain open/out of scope. This partial work does not finish ENT-3.
 

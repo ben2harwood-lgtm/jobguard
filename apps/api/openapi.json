@@ -2623,13 +2623,22 @@
                       "note",
                       "description",
                       "photoEvidenceId",
-                      "residentConfirmation"
+                      "residentConfirmation",
+                      "workStatus"
                     ],
                     "properties": {
                       "version": {
                         "type": "string",
                         "enum": [
                           "log-sor-site-extra.v2"
+                        ]
+                      },
+                      "workStatus": {
+                        "type": "string",
+                        "enum": [
+                          "not_started",
+                          "under_way",
+                          "finished"
                         ]
                       },
                       "commandId": {
