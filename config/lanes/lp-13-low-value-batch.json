@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/lp-13-low-value-batch"
       ],
-      "note": "LP-13 RED built ahead; serialize/restack after LP-12. HELD-FOR-BEN source-pin refresh; whole PostgreSQL CI and exact-head independent review required.",
+      "note": "LP-13 RED on inherited LP-12; reserved 0820 is a no-op, preserving predecessor bodies and grants. NOPR held for inherited bootstrap fixes, whole PostgreSQL CI and exact-head independent review.",
       "allow": [
         "docs/contracts/lp13-downstream-effects-v1.md",
         "packages/db/migrations/0820_lp13_low_value_batch.sql",

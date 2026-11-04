@@ -42,36 +42,29 @@ async function begin(c: PoolClient, p: Principal, command = invoiceCommand(p)) {
     { aggregateRevision:1 },command]);
 }
 
-it("refuses standalone number-burning and allocates only once inside a checked invoice command", async () => {
-  const p = await principal();
+it("preserves LP-8a number-burning refusal even inside a checked command with forged actor settings", async () => {
+  const p = await principal(), other = await principal();
   const issued = (await db.owner.query("SELECT id,invoice_number,pdf_sha256 FROM app.customer_invoice ORDER BY tenant_id,id")).rows;
-  await request(p,async c => {
+  await request(p, async c => {
     for (let i=0;i<20;i++) await refused(c,"SELECT app.reserve_customer_invoice_number($1)",[p.tenant]);
-    expect((await c.query("SELECT next_number FROM app.customer_invoice_sequence WHERE tenant_id=$1",[p.tenant])).rows).toEqual([]);
     await begin(c,p);
-    for (let i=0;i<100;i++) expect((await c.query("SELECT app.reserve_customer_invoice_number($1) n",[p.tenant])).rows[0].n).toBe("1");
-    expect((await c.query("SELECT next_number FROM app.customer_invoice_sequence WHERE tenant_id=$1",[p.tenant])).rows[0].next_number).toBe("2");
-    // The LP-5 deferred proof prevents committing a reservation without issuance.
+    await c.query("SELECT set_config('app.actor_id',$1,true)",[other.member]);
+    for (const tenant of [p.tenant,other.tenant]) {
+      await refused(c,"SELECT app.reserve_customer_invoice_number($1)",[tenant]);
+      await refused(c,"INSERT INTO app.customer_invoice_sequence(id,tenant_id,next_number) VALUES($1,$2,2)",[randomUUID(),tenant]);
+      await refused(c,"UPDATE app.customer_invoice_sequence SET next_number=next_number+1 WHERE tenant_id=$1",[tenant]);
+      await refused(c,"DELETE FROM app.customer_invoice_sequence WHERE tenant_id=$1",[tenant]);
+    }
+    await c.query("SELECT set_config('app.tenant_id',$1,true)",[other.tenant]);
+    await refused(c,"SELECT app.reserve_customer_invoice_number($1)",[p.tenant]);
+    await c.query("SELECT set_config('app.tenant_id',$1,true)",[p.tenant]);
+    await begin(c,p); // Multiple claims cannot restore a withdrawn capability.
+    await refused(c,"SELECT app.reserve_customer_invoice_number($1)",[p.tenant]);
     await refused(c,"SET CONSTRAINTS ALL IMMEDIATE",[],"23514");
-    await refused(c,"UPDATE app.command_lifecycle_claim SET reserved_invoice_number=NULL WHERE tenant_id=$1",[p.tenant]);
-    await refused(c,"SELECT app.reserve_customer_invoice_number($1)",[randomUUID()]);
+    await refused(c,"UPDATE app.command_lifecycle_claim SET effect_ref='forged' WHERE tenant_id=$1",[p.tenant]);
   });
   expect((await db.owner.query("SELECT next_number FROM app.customer_invoice_sequence WHERE tenant_id=$1",[p.tenant])).rows).toEqual([]);
   expect((await db.owner.query("SELECT id,invoice_number,pdf_sha256 FROM app.customer_invoice ORDER BY tenant_id,id")).rows).toEqual(issued);
-});
-
-it("refuses ambiguous invoice claims and a stale compatibility tenant without consuming a number", async () => {
-  const p = await principal(), other = await principal();
-  await request(p, async c => {
-    await begin(c, p);
-    await c.query("SELECT set_config('app.tenant_id',$1,true)", [other.tenant]);
-    await refused(c, "SELECT app.reserve_customer_invoice_number($1)", [p.tenant]);
-    await c.query("SELECT set_config('app.tenant_id',$1,true)", [p.tenant]);
-    await begin(c, p);
-    await refused(c, "SELECT app.reserve_customer_invoice_number($1)", [p.tenant]);
-    expect((await c.query("SELECT next_number FROM app.customer_invoice_sequence WHERE tenant_id=$1", [p.tenant])).rows).toEqual([]);
-  });
-  expect((await db.owner.query("SELECT next_number FROM app.customer_invoice_sequence WHERE tenant_id=$1", [p.tenant])).rows).toEqual([]);
 });
 
 it("refuses an unbound forged progress context before revealing whether the scope exists", async () => {
@@ -114,6 +107,9 @@ it("keeps progress operational despite forged actor settings, and refuses cross-
     await c.query("SELECT set_config('app.actor_id',$1,true)",[randomUUID()]);
     const row=(await c.query("SELECT * FROM app.transition_scope_progress($1,$2,$3,0,'in_progress','start')",[p.tenant,job,scope])).rows[0];
     expect(row).toMatchObject({stage:"in_progress",revision:1});
+    await c.query("SELECT set_config('app.tenant_id',$1,true)",[randomUUID()]);
+    await refused(c,"SELECT app.transition_scope_progress($1,$2,$3,1,'complete','complete')",[p.tenant,job,scope]);
+    await c.query("SELECT set_config('app.tenant_id',$1,true)",[p.tenant]);
     await refused(c,"SELECT app.transition_scope_progress($1,$2,$3,1,'complete','actor:forged')",[p.tenant,job,scope],"22023");
     await refused(c,"SELECT app.transition_scope_progress($1,$2,$3,0,'complete','complete')",[p.tenant,job,scope],"40001");
     expect((await c.query("SELECT * FROM app.transition_scope_progress($1,$2,$3,1,'complete','complete')",[p.tenant,job,scope])).rows[0]).toMatchObject({stage:"complete",revision:2});
@@ -186,6 +182,11 @@ it("checks another actor's replay key before returning any stored result and rep
     (SELECT count(*)::int FROM app.audit_event WHERE tenant_id=$1) audits`,[p.tenant])).rows;
   const before=await counts();
   await request(other,async c=>{
+    // A claimed original actor cannot replace the currently bound second actor.
+    await refused(c,"SELECT app.begin_command($1,$2,$3,$4,$5,$6,$7)",
+      [command.version,command.commandId,command.commandType,command.semanticKey,
+        {tenantId:p.tenant,actorMembershipId:p.member,subjectType:command.subjectType,subjectRef:command.subjectRef},
+        {aggregateRevision:1},command]);
     await c.query("SAVEPOINT replay");
     await expect(begin(c,other,{...command,actorMembershipId:other.member})).rejects.toMatchObject({code:"23505",message:"COMMAND_CONFLICT"});
     await c.query("ROLLBACK TO replay; RELEASE replay");

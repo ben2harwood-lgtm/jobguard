@@ -1,65 +1,6 @@
 {
   "migration": "0820_lp13_low_value_batch.sql",
   "lp0": [],
-  "upgrade": [
-    {
-      "section": "routines",
-      "before": {
-        "nspname": "app",
-        "proname": "reserve_customer_invoice_number",
-        "args": "p_tenant uuid",
-        "proowner": "jobguard_migration",
-        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
-        "prosecdef": true,
-        "proconfig": [
-          "search_path=pg_catalog, app"
-        ]
-      },
-      "after": {
-        "nspname": "app",
-        "proname": "reserve_customer_invoice_number",
-        "args": "p_tenant uuid",
-        "proowner": "jobguard_command_writer",
-        "proacl": "{jobguard_command_writer=X/jobguard_command_writer,jobguard_runtime=X/jobguard_command_writer}",
-        "prosecdef": true,
-        "proconfig": [
-          "search_path=pg_catalog, app"
-        ]
-      }
-    },
-    {
-      "section": "relations",
-      "before": {
-        "nspname": "app",
-        "relname": "customer_invoice_sequence",
-        "relowner": "jobguard_migration",
-        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=ar/jobguard_migration}",
-        "relrowsecurity": true,
-        "relforcerowsecurity": true
-      },
-      "after": {
-        "nspname": "app",
-        "relname": "customer_invoice_sequence",
-        "relowner": "jobguard_migration",
-        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=ar/jobguard_migration,jobguard_command_writer=ar/jobguard_migration}",
-        "relrowsecurity": true,
-        "relforcerowsecurity": true
-      }
-    },
-    {
-      "section": "policies",
-      "before": null,
-      "after": {
-        "schemaname": "app",
-        "tablename": "customer_invoice_sequence",
-        "policyname": "lp13_invoice_number",
-        "permissive": "PERMISSIVE",
-        "roles": "{jobguard_command_writer}",
-        "cmd": "ALL",
-        "qual": "(tenant_id = app.current_tenant())",
-        "with_check": "(tenant_id = app.current_tenant())"
-      }
-    }
-  ],
+  "upgrade": [],
   "tenancy": []
 }
