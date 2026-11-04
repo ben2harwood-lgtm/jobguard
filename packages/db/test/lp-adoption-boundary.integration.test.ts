@@ -18,21 +18,21 @@ describe("LP-2 imported insertion boundary", () => {
   ];
   it.each(invalidAuthority)("[LP2-A05] SQL itself refuses %s and preserves every pre-call effect count", async (_name, change) => {
     const f = await adoptionAuthority(db, change), before = await jobDoorCounts(db.owner, f.actor.tenant);
-    await expect(transaction(db.runtime, f.actor.tenant, client => callAdoption(client, f))).rejects.toMatchObject({ code: "42501" });
+    await expect(transaction(db.owner, f.actor.tenant, client => callAdoption(client, f))).rejects.toMatchObject({ code: "42501" });
     expect(await jobDoorCounts(db.owner, f.actor.tenant)).toEqual(before);
   });
 
   it("[LP2-A05] a valid actor and approval do not authorize a foreign tenant", async () => {
     const f = await adoptionAuthority(db), other = await jobDoorsActor(db.owner);
     const before = await jobDoorCounts(db.owner, f.actor.tenant), otherBefore = await jobDoorCounts(db.owner, other.tenant);
-    await expect(transaction(db.runtime, f.actor.tenant, client => callAdoption(client, f, { tenant: other.tenant }))).rejects.toMatchObject({ code: "42501" });
+    await expect(transaction(db.owner, f.actor.tenant, client => callAdoption(client, f, { tenant: other.tenant }))).rejects.toMatchObject({ code: "42501" });
     expect(await jobDoorCounts(db.owner, f.actor.tenant)).toEqual(before);
     expect(await jobDoorCounts(db.owner, other.tenant)).toEqual(otherBefore);
   });
 
   it.each(["customer", "site", "payer"] as const)("[LP2-A05] missing %s refuses before a job or party effect", async name => {
     const f = await adoptionAuthority(db), before = await jobDoorCounts(db.owner, f.actor.tenant);
-    await expect(transaction(db.runtime, f.actor.tenant, client => callAdoption(client, f, { [name]: randomUUID() }))).rejects.toMatchObject({ code: "22023", message: "JOB_PARTIES_REQUIRED" });
+    await expect(transaction(db.owner, f.actor.tenant, client => callAdoption(client, f, { [name]: randomUUID() }))).rejects.toMatchObject({ code: "22023", message: "JOB_PARTIES_REQUIRED" });
     expect(await jobDoorCounts(db.owner, f.actor.tenant)).toEqual(before);
   });
 
