@@ -116,6 +116,8 @@ export * from "./free-first-job-conversion.js";
 export * from "./recovery-attribution-persistence.js";
 export * from "./success-fee-posting.js";
 export * from "./simulation-fee-statement.js";
+export * from "./fee-collection.js";
+export * from "./money-trail-reconciliation.js";
 export * from "./payment-fee-authority.js";
 export * from "./final-check.js";
 
@@ -134,6 +136,7 @@ export * from "./meter-today.js";
 
 export * from "./small-builder-demo-lifecycle.js";
 export * from "./managed-recovery.js";
+export * from "./platform-tax-invoice.js";
 export * from "./merchant-connectors.js";
 export * from "./inbox-outcome-metrics.js";
 
@@ -153,6 +156,8 @@ export * from "./customer-approval-method.js";
 export * from "./customer-quote-acceptance.js";
 export * from "./simulation-money-run.js";
 export * from "./customer-variation-approval.js";
+export * from "./financial-reconciliation.js";
+
 export * from "./interim-applications.js";
 export * from "./construction-notices.js";
 export * from "./retention-balances.js";
