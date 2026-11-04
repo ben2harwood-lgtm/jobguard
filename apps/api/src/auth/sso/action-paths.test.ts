@@ -1,3 +1,4 @@
+import { sourceFixtureUrl } from "../../source-fixture-url.js";
 import { readFile } from "node:fs/promises";
 import { runInNewContext } from "node:vm";
 import { transpileModule, ModuleKind } from "typescript";
@@ -183,10 +184,10 @@ describe("Round 1 / shared Nest and Next factory composition",()=>{
  it("both server compositions use the binding-aware persisted provider even before the SSO service is constructed",async()=>{
   const environment={JOBGUARD_ENV:'synthetic_demo',IDENTITY_DATABASE_URL:'postgresql://jobguard_identity:fixture@db.fixture.invalid/jobguard_synthetic_demo',AUTH_CODE_SECRET:'factory-fixture-key-longer-than-thirty-two',AUTH_ALLOWED_ORIGIN:boundaryOrigin};
   // This is Nest's IDENTITY_APPLICATION factory; no connection or SSO service is needed.
-  const module=await readFile(new URL('../../app.module.ts',import.meta.url),'utf8');
+  const module=await readFile(sourceFixtureUrl('../../app.module.ts', import.meta.url),'utf8');
   expect(module).toContain('createIdentityApplication(process.env)');
   const nest=createIdentityApplication(environment);
-  const source=await readFile(new URL('../../../../web/app/lib/identity-server.ts',import.meta.url),'utf8');
+  const source=await readFile(sourceFixtureUrl('../../../../web/app/lib/identity-server.ts', import.meta.url),'utf8');
   const exports:Record<string,any>={};
   runInNewContext(transpileModule(source,{compilerOptions:{module:ModuleKind.CommonJS}}).outputText,{
    exports,process:{env:environment},require:(id:string)=>{

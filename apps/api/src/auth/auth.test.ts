@@ -1,3 +1,4 @@
+import { sourceFixtureUrl } from "../source-fixture-url.js";
 import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
@@ -116,7 +117,7 @@ describe("principal to tenant bridge", () => {
   });
 
   it("keeps the db context constructor call confined to the principal bridge", async () => {
-    const authDirectory = new URL(".", import.meta.url);
+    const authDirectory = sourceFixtureUrl(".", import.meta.url);
     const files = (await readdir(authDirectory)).filter((file) => file.endsWith(".ts") && !file.endsWith(".test.ts"));
     const callers: string[] = [];
     for (const file of files) {
@@ -195,7 +196,7 @@ describe("principal to tenant bridge", () => {
   });
 
   it("allows only the worker to call the queued-system-job context constructor", async () => {
-    const root = new URL("../../../../", import.meta.url);
+    const root = sourceFixtureUrl("../../../../", import.meta.url);
     const callers: string[] = [];
     async function inspect(directory: string): Promise<void> {
       for (const entry of await readdir(join(root.pathname, directory), { withFileTypes: true })) {

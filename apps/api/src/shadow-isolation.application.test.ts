@@ -1,3 +1,4 @@
+import { sourceFixtureUrl } from "./source-fixture-url.js";
 import "reflect-metadata";
 import crypto, { createHash, randomUUID } from "node:crypto";
 import { createRequire, syncBuiltinESMExports } from "node:module";
@@ -12,7 +13,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { DEMO_TENANT_ID, DEMO_ACCOUNT_ID, DEMO_MEMBERSHIP_ID, DEMO_IDENTITY_USER_ID, migrate } from "@jobguard/db";
 // Build what this file needs when it is absent (repair round 5, 13 Oct 2026). CI runs `pnpm test` BEFORE `pnpm build`, and turbo's test task depends only on the packages' builds (^build), so on a clean checkout neither apps/api/dist nor apps/web/.next exists when this file starts (CI run 38322571867: ERR_MODULE_NOT_FOUND on the import below).
 // Each output is built at most once per run of this file, with the command CI itself uses, from the repository root, and only when its marker file is absent (nothing is rebuilt when it is present). A failed build fails the file with the build's own output. The environment is CI's build environment: vitest's NODE_ENV=test and this file's own JOBGUARD_ENV/DATABASE_URL are not passed to a build.
-const repoRoot=fileURLToPath(new URL("../../../",import.meta.url)),BUILD_TIMEOUT_MS=8*60_000,BUILD_HOOK_TIMEOUT_MS=10*60_000;
+const repoRoot=fileURLToPath(sourceFixtureUrl("../../../", import.meta.url)),BUILD_TIMEOUT_MS=8*60_000,BUILD_HOOK_TIMEOUT_MS=10*60_000;
 const present=(file:URL)=>access(file).then(()=>true,()=>false);
 function buildEnvironment(){const env={...process.env};for(const key of Object.keys(env))if(key==="NODE_ENV"||key==="JOBGUARD_ENV"||key==="DATABASE_URL"||key.startsWith("VITEST"))delete env[key];return env}
 async function buildIfAbsent(label:string,filter:string,marker:URL){
@@ -22,20 +23,39 @@ async function buildIfAbsent(label:string,filter:string,marker:URL){
  if(built.error||built.status!==0)throw new Error(`${label} build failed: pnpm --filter ${filter} build (exit ${built.status}, signal ${built.signal}${built.error?`, ${built.error.message}`:""}). This test needs it and CI runs tests before builds. Build output (last 6000 characters):\n${tail}`);
  if(!await present(marker))throw new Error(`${label} build finished but ${fileURLToPath(marker)} is still missing. Build output (last 6000 characters):\n${tail}`);
 }
-await buildIfAbsent("API","@jobguard/api",new URL("../dist/app.module.js",import.meta.url));
+await buildIfAbsent("API","@jobguard/api",sourceFixtureUrl("../dist/app.module.js", import.meta.url));
 // The compiled application: dependency injection here relies on tsc's emitDecoratorMetadata, which vitest's transform does not emit (a source import leaves every controller's pool undefined).
-const {AppModule}=await import(new URL("../dist/app.module.js",import.meta.url).href);
-const requireDb=createRequire(new URL("../../../packages/db/package.json",import.meta.url));
+const {AppModule}=await import(sourceFixtureUrl("../dist/app.module.js", import.meta.url).href);
+const requireDb=createRequire(sourceFixtureUrl("../../../packages/db/package.json", import.meta.url));
 const EmbeddedPostgres=requireDb("embedded-postgres").default;
-const {withTenant}=await import(new URL("../../../packages/db/src/tenant-context.ts",import.meta.url).href);
-const {testTenantContext}=await import(new URL("../../../packages/db/test/tenant-context-test-utils.ts",import.meta.url).href);
-const {freePort,closeTestPools,installLegacySyntheticPartyFixtures}=await import(new URL("../../../packages/db/test/pool-test-utils.ts",import.meta.url).href);
+const {withTenant}=await import(sourceFixtureUrl("../../../packages/db/src/tenant-context.ts", import.meta.url).href);
+const {testTenantContext}=await import(sourceFixtureUrl("../../../packages/db/test/tenant-context-test-utils.ts", import.meta.url).href);
+const {freePort,closeTestPools,installLegacySyntheticPartyFixtures}=await import(sourceFixtureUrl("../../../packages/db/test/pool-test-utils.ts", import.meta.url).href);
 const statementsLog:string[]=[];
 const proposalId=randomUUID(),scopeItemId=randomUUID(),baselineScopeId=randomUUID();
 const credential=randomUUID(),session=randomUUID(),jobId=randomUUID(),digest=createHash("sha256").update(session).digest("hex"),fixed="2026-10-01T00:00:00Z";
 let postgres:InstanceType<typeof EmbeddedPostgres>,owner:Pool,dir:string,port:number;
 const pool=(user:string,database:string)=>new Pool({host:"127.0.0.1",port,database,user,password:credential,max:2});
 function connection(user:string,database:string){const u=new URL("postgresql://127.0.0.1");u.username=user;u.password=credential;u.port=String(port);u.pathname=database;return u.href;}
+// Only fixture placement changes: each replay uses the real trusted practice database name.
+// The route responses, every logged statement/parameter and all comparison rules stay exact.
+async function replayPracticeDatabase<T>(database: string, replay: (activeDatabase: string) => Promise<T>): Promise<T> {
+ if(database === "jobguard_synthetic_demo") return replay(database);
+ // Replay closes its Nest/Next servers and pools before this wrapper restores the names.
+ await owner.query("ALTER DATABASE jobguard_synthetic_demo RENAME TO sv3_fixture_home");
+ let moved = false;
+ try {
+  await owner.query(`ALTER DATABASE "${database}" RENAME TO jobguard_synthetic_demo`);
+  moved = true;
+  return await replay("jobguard_synthetic_demo");
+ } finally {
+  try {
+   if(moved) await owner.query(`ALTER DATABASE jobguard_synthetic_demo RENAME TO "${database}"`);
+  } finally {
+   await owner.query("ALTER DATABASE sv3_fixture_home RENAME TO jobguard_synthetic_demo");
+  }
+ }
+}
 async function nextRoutes(path:string,prefix="/api",method:"GET"|"POST"="GET"):Promise<string[]>{const routes:string[]=[];for(const e of await readdir(path,{withFileTypes:true})){
  if(e.isDirectory())routes.push(...await nextRoutes(join(path,e.name),`${prefix}/${e.name}`,method));
  else if(e.name==="route.ts" && new RegExp(`export\\s+(?:(?:async\\s+)?function\\s+${method}\\b|const\\s+${method}\\b)`,"u").test(await readFile(join(path,e.name),"utf8")))routes.push(prefix);
@@ -93,12 +113,12 @@ function checkRetrievedAt(r:Retrieval):string{
 }
 async function startNext(database:string):Promise<{child:ChildProcess;base:string}>{
  const httpPort=await freePort(31000,500),base=`http://127.0.0.1:${httpPort}`;
- const child=spawn(process.execPath,[new URL("../../web/node_modules/next/dist/bin/next",import.meta.url).pathname,"start","--hostname","127.0.0.1","--port",String(httpPort)],{cwd:new URL("../../web/",import.meta.url).pathname,env:{...process.env,JOBGUARD_ENV:"synthetic_demo",DATABASE_URL:connection("sv3_isolation_runtime",database)},stdio:"pipe"});
+ const child=spawn(process.execPath,[sourceFixtureUrl("../../web/node_modules/next/dist/bin/next", import.meta.url).pathname,"start","--hostname","127.0.0.1","--port",String(httpPort)],{cwd:sourceFixtureUrl("../../web/", import.meta.url).pathname,env:{...process.env,JOBGUARD_ENV:"synthetic_demo",DATABASE_URL:connection("sv3_isolation_runtime",database)},stdio:"pipe"});
  await new Promise<void>((resolve,reject)=>{child.once("exit",()=>reject(new Error("NEXT_START_FAILED")));child.stdout?.on("data",chunk=>{if(String(chunk).includes("Ready in"))resolve()});child.stderr?.on("data",()=>undefined)});
  return {child,base};
 }
 // The production web build that startNext serves (`next start` needs apps/web/.next/BUILD_ID); built once for the file, before the database hook, when absent.
-beforeAll(()=>buildIfAbsent("Web production","@jobguard/web",new URL("../../web/.next/BUILD_ID",import.meta.url)),BUILD_HOOK_TIMEOUT_MS);
+beforeAll(()=>buildIfAbsent("Web production","@jobguard/web",sourceFixtureUrl("../../web/.next/BUILD_ID", import.meta.url)),BUILD_HOOK_TIMEOUT_MS);
 beforeAll(async()=>{
  process.env.JOBGUARD_ENV="synthetic_demo";dir=await mkdtemp(join(tmpdir(),"sv3-isolation-"));port=await freePort(58000,500);
  postgres=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:credential,persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:(line:string)=>statementsLog.push(line)});await postgres.initialise();await postgres.start();owner=pool("postgres","postgres");
@@ -147,9 +167,9 @@ beforeAll(async()=>{
 afterAll(async()=>{await closeTestPools(owner);await postgres?.stop();if(dir)await rm(dir,{recursive:true,force:true})});
 describe("SV-3 Test Q: signed-in builder HTTP surfaces",()=>{
  it("replays every OpenAPI builder GET and Next job GET with byte-identical status, headers and body (named limit: retrievedAt and its etag on the two prevention-checks GETs, asserted separately)",async()=>{
-  const api=JSON.parse(await readFile(new URL("../openapi.json",import.meta.url),"utf8")) as {paths:Record<string,Record<string,unknown>>};
+  const api=JSON.parse(await readFile(sourceFixtureUrl("../openapi.json", import.meta.url),"utf8")) as {paths:Record<string,Record<string,unknown>>};
   const nestRoutes=Object.entries(api.paths).filter(([path,ops])=>ops.get && !path.startsWith('/auth/') && path!=="/healthz").map(([path])=>pathFor(path));
-  const webRoutes=(await nextRoutes(new URL("../../web/app/api",import.meta.url).pathname)).filter(path=>path.startsWith('/api/jobs/')).map(pathFor);
+  const webRoutes=(await nextRoutes(sourceFixtureUrl("../../web/app/api", import.meta.url).pathname)).filter(path=>path.startsWith('/api/jobs/')).map(pathFor);
   expect(nestRoutes.length).toBeGreaterThan(0);expect(webRoutes.length).toBeGreaterThan(0);
   async function replay(database:string){
    const logStart=statementsLog.length;
@@ -177,7 +197,7 @@ describe("SV-3 Test Q: signed-in builder HTTP surfaces",()=>{
     return {compared:{output,statements},retrievals,nestEtagOf:(text:string)=>nestEtag(Buffer.from(text,"utf8"))};
    }finally{if(next){next.child.kill("SIGTERM");await new Promise<void>(resolve=>next!.child.once("exit",()=>resolve()))}await app.close();await closeTestPools(runtime)}
   }
-  const many=await replay("sv3_isolation_many"),zero=await replay("jobguard_synthetic_demo");
+  const many=await replayPracticeDatabase("sv3_isolation_many",replay),zero=await replayPracticeDatabase("jobguard_synthetic_demo",replay);
   // Everything compared exactly, except the two named-limit items (placeholders stand in for them on exactly the two prevention-checks GETs).
   expect(many.compared).toEqual(zero.compared);
   for(const route of retrievedAtRoutes){
@@ -200,7 +220,7 @@ describe("SV-3 Test Q: signed-in builder HTTP surfaces",()=>{
  it("successful Log an extra, retries, mutation errors and current builder counts/inbox responses ignore held signals",async()=>{
   const {createWorkspaceApplication}=await import("./workspace/application.js");
   const responses=[];
-  for(const database of ["jobguard_synthetic_demo","sv3_isolation_many"]){const p=pool("sv3_isolation_runtime",database);try{
+  for(const database of ["jobguard_synthetic_demo","sv3_isolation_many"])await replayPracticeDatabase(database,async activeDatabase=>{const p=pool("sv3_isolation_runtime",activeDatabase);try{
    const app=createWorkspaceApplication({pool:p,sessionId:session}),out:unknown[]=[];
    const extra={version:"variation-command.v1",action:"propose",proposalId,scopeItemId,existingScopeItemId:null,lineageParentScopeItemId:null,description:"Fictional builder addition",captureText:"Fictional builder addition",price:null};
    const initial=await app.variation.command(jobId,extra);expect(initial.variations.some(v=>v.id===proposalId)).toBe(true);out.push(initial);
@@ -210,9 +230,9 @@ describe("SV-3 Test Q: signed-in builder HTTP surfaces",()=>{
     try{out.push(await app.decisions.dismiss(command))}catch(e){out.push({code:(e as {code:string}).code})}
    }
    out.push(await app.value.read(jobId));
-   const inspect=pool("postgres",database);try{out.push((await inspect.query("SELECT row_to_json(t)::text value FROM (SELECT * FROM app.action_outbox ORDER BY tenant_id,id) t")).rows)}finally{await closeTestPools(inspect)}
+   const inspect=pool("postgres",activeDatabase);try{out.push((await inspect.query("SELECT row_to_json(t)::text value FROM (SELECT * FROM app.action_outbox ORDER BY tenant_id,id) t")).rows)}finally{await closeTestPools(inspect)}
    responses.push(JSON.stringify(out));
-  }finally{await closeTestPools(p)}}
+  }finally{await closeTestPools(p)}});
   expect(responses[1]).toBe(responses[0]);
  });
 });
@@ -291,8 +311,8 @@ describe("SV-3 Test Q-LOG: runtime statement log normalisation (pure)",()=>{
 });
 
 it("Test Q: successful mutations, exports, delivery/retry telemetry and every mutation error surface are identical",async()=>{
- const {seedAccount}=await import(new URL("../../../packages/db/test/final-account-lock.integration.test.ts",import.meta.url).href);
- const {createWorkspaceApplication}=await import("./workspace/application.js"),{ActionExecutor}=await import(new URL("../../../packages/db/src/outbox.ts",import.meta.url).href);
+ const {seedAccount}=await import(sourceFixtureUrl("../../../packages/db/test/final-account-lock.integration.test.ts", import.meta.url).href);
+ const {createWorkspaceApplication}=await import("./workspace/application.js"),{ActionExecutor}=await import(sourceFixtureUrl("../../../packages/db/src/outbox.ts", import.meta.url).href);
  // A fresh public fixture and two exact clones. No prior HTTP test can change the compared history.
  const initial=pool("postgres","jobguard_synthetic_demo"),a=await seedAccount(initial,DEMO_TENANT_ID,100000);
  const signalEvidence=randomUUID(),signalUpload=randomUUID(),queued=randomUUID(),authority=randomUUID(),approval=randomUUID(),decision=randomUUID(),artifact="Fictional approved notification";
@@ -401,7 +421,7 @@ it("Test Q: successful mutations, exports, delivery/retry telemetry and every mu
    await executor.execute(testTenantContext(DEMO_TENANT_ID),queued);
    expect(trace.notifications).toHaveLength(2);expect(trace.telemetry).toContainEqual(expect.objectContaining({name:"outbox.retry"}));
    // Setup only: simulate authoritative processing of every frozen source without advancing public UUIDs per signal.
-   const {publishFixtureCompletion}=await import(new URL("../../../packages/db/test/sv5pre-fixtures.ts",import.meta.url).href);
+   const {publishFixtureCompletion}=await import(sourceFixtureUrl("../../../packages/db/test/sv5pre-fixtures.ts", import.meta.url).href);
    const completionWorker=pool("sv3_isolation_shadow",database);
    try{await publishFixtureCompletion(completionWorker,inspect,DEMO_TENANT_ID,a.jobId,{deterministicIds:true})}finally{await closeTestPools(completionWorker)}
    await success("issue customer invoice",()=>app.customerInvoice.issue(a.jobId,{version:"practice-customer-invoice.issue.v1",commandId:randomUUID(),finalAccountRevisionId:rebuilt.revisionId,expectedSourceHash:rebuilt.sourceHash,recipient:"fixture@example.invalid",issuedOn:"2026-10-13"}));
@@ -416,7 +436,7 @@ it("Test Q: successful mutations, exports, delivery/retry telemetry and every mu
    trace.counts.push(inbox.counts,relevance,proof,await app.value.read(a.jobId),await app.practiceFeed.view(session,a.jobId,{version:"practice-feed-query.v1",limit:50}));trace.badges.push(inbox.counts,relevance,proof.mandatoryDecisionCount);
    // Every mutating HTTP boundary is replayed with the same malformed command; no omitted error/cache path.
    const module=await Test.createTestingModule({imports:[AppModule]}).overrideProvider(Pool).useValue(runtime).compile();nest=module.createNestApplication({logger:false});await nest.init();await nest.listen(await freePort(33000,500),"127.0.0.1");
-   const api=JSON.parse(await readFile(new URL("../openapi.json",import.meta.url),"utf8")) as {paths:Record<string,Record<string,unknown>>};
+   const api=JSON.parse(await readFile(sourceFixtureUrl("../openapi.json", import.meta.url),"utf8")) as {paths:Record<string,Record<string,unknown>>};
    for(const [path,ops] of Object.entries(api.paths))if(ops.post&&!path.startsWith("/auth/")&&!path.startsWith("/contractor")){
     const url=new URL(pathFor(path).replaceAll(jobId,a.jobId),await nest.getUrl());
     const response=await fetch(url,{method:"POST",headers:{cookie:`jg_session=${session}`,"content-type":"application/json"},body:JSON.stringify({version:"invalid"})});
@@ -424,7 +444,7 @@ it("Test Q: successful mutations, exports, delivery/retry telemetry and every mu
     trace.errors.push({path,status:response.status,body:Buffer.from(await response.arrayBuffer()).toString("base64")});trace.cache.push({path,headers:stableHeaders(Object.fromEntries(response.headers))});
    }
    next=await startNext(database);
-   const webMutations=(await nextRoutes(new URL("../../web/app/api",import.meta.url).pathname,"/api","POST")).filter(path=>/^\/api\/(?:jobs|decisions|material-rates|recovery-cases|sandbox|quotes)(?:\/|$)/u.test(path));
+   const webMutations=(await nextRoutes(sourceFixtureUrl("../../web/app/api", import.meta.url).pathname,"/api","POST")).filter(path=>/^\/api\/(?:jobs|decisions|material-rates|recovery-cases|sandbox|quotes)(?:\/|$)/u.test(path));
    expect(webMutations.length).toBeGreaterThan(0);
    for(const path of webMutations){
     const response=await fetch(new URL(pathFor(path).replaceAll(jobId,a.jobId),next.base),{method:"POST",headers:{cookie:`jg_session=${session}`,"content-type":"application/json"},body:JSON.stringify({version:"invalid"})});
@@ -445,5 +465,5 @@ it("Test Q: successful mutations, exports, delivery/retry telemetry and every mu
    return trace;
   }finally{if(next){next.child.kill("SIGTERM");await new Promise<void>(resolve=>next!.child.once("exit",()=>resolve()))}await nest?.close();await closeTestPools(runtime,inspect);uuidMock.mockRestore();syncBuiltinESMExports();expect(crypto.randomUUID).toBe(originalUuid);vi.useRealTimers()}
  }
- try{const zero=await replay(databases[0]!),many=await replay(databases[1]!);assertIsolation(zero,many)}finally{for(const name of databases)await owner.query(`DROP DATABASE ${name}`)}
+ try{const zero=await replayPracticeDatabase(databases[0]!,replay),many=await replayPracticeDatabase(databases[1]!,replay);assertIsolation(zero,many)}finally{for(const name of databases)await owner.query(`DROP DATABASE ${name}`)}
 },180000);
