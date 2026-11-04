@@ -38,8 +38,28 @@ No existing SQL routine is replaced; main's LP-4 audit sealing, LP-3/LP-5 comman
 authority and MON-8 entitlements are retained. The new production routine always
 raises before any business operation and needs no command registration.
 
-Local checks: installed Vitest 4.1.12, one worker, five named unit files in
-two runs (93 tests passed); installed TypeScript 5.8.3 database package
-`--noEmit` passed; PL/pgSQL CASE-condition lint passed (221 migrations).
-The pnpm wrapper stalled before running checks; the same installed executables
-were invoked directly. Database and browser suites were not run in this sandbox.
+Landing preparation (4 November 2026): the merge is complete against local
+`origin/main` fb61ec367. The six non-lane paths exactly match this piece's lane;
+no other piece's lane file differs from that base. The migration adds no columns
+or tables and replaces no existing routine. Its proof uses identity arguments
+without defaults and records an owner entry only for the runtime-reachable
+production stub. There is no new job mutation, registered command, application
+service, client module or browser spec. The production stub raises before any
+mutation or command receipt; its caller takes an existing verified context.
+Neither the repository addition nor its tests write command/decision authority
+as the runtime login. No compatibility correction or behaviour change was needed.
+
+Local checks: installed Vitest 4.1.12, one worker per run and at most two test
+workers total; watchdog-registry (126), context-boundary and identity (152),
+migration-proof-loader and enterprise-fee-repository (83): 361 tests passed.
+Missing/stale ignored workspace builds initially prevented suite imports;
+rebuilding core, config, storage, db and ai with installed TypeScript resolved
+them. Database `--noEmit`, lane boundary and PL/pgSQL CASE-condition lint passed
+(232 migrations). The pnpm typecheck wrapper stalled; installed TypeScript
+compiled core, config, storage, db and ai successfully, and direct API and web
+`--noEmit` checks passed (web with incremental output disabled).
+PostgreSQL and browser suites were not run in this sandbox. CI must still prove
+the populated upgrade/fingerprint and LP catalog guards, contractor concurrency,
+receipt splitting/replay, origin exclusions, exact authorization and reversal
+compensation against real PostgreSQL; required browser journeys and green CI
+against current main precede landing, with an independent exact-head RED review.
