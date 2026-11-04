@@ -84,3 +84,50 @@ LATER / SIMPLICITY (initial review): `PayNowAttemptApplication.read` could later
 use a repository current-options projection instead of inline prepare SQL plus
 a separate balance read, keeping stored projection in one place. That requires
 a separately scoped repository-interface change outside this brief.
+
+## Customer practice display (4 November 2026; MON-6 remains open)
+
+`GET /api/customer-portal/practice-pay-now` and
+`/customer/practice-pay-now` are synthetic_demo only. They accept no invoice,
+tenant, job or customer locator. The existing customer cookie and persisted
+session digest bind the scope; supplied query parameters or tenant headers are
+refused before application access. Missing, malformed, expired, revoked and
+foreign-scope customer credentials share the portal's public refusal. Responses
+are no-store and no-referrer. No customer link or message is created or sent.
+
+Migration 0766 adds one bounded identity-only read routine, reusing portal resolve
+and its authority locks before invoice access. It selects the bound job's latest
+synthetic final invoice by issue date and invoice number, subtracts credits and
+unreversed receipts, and returns only invoice number and amount due. No role,
+table grant, table, column or earlier routine changes; only EXECUTE on this new
+read entrypoint is granted to the existing identity login. Its proof and note
+record the expected catalogue change for CI verification.
+
+The application projects only rail and customer total from `payNowOptions`.
+Core's required identity fields use session-bound local placeholders for this
+arithmetic projection; no stored invoice identity or catch classification is
+needed. Builder fees, tariffs, surcharge lines, destinations, attempts and hidden
+data never enter the public body. Positive balances offer bank transfer, card
+and pay by bank in core's existing order; a zero balance offers none. All options
+have identical list markup, spacing and font weight. There are no payment actions,
+links, browser storage writes, attempt starts or other effects of visiting.
+
+Local evidence: seven package TypeScript checks passed using installed binaries.
+436 focused Vitest tests passed (application and authorization guards, identity,
+repository and migration-proof loader, core cap/dark guards, route and rendering).
+Runs used at most two workers and at most three named files. Browser listing
+finds the new spec in mobile-360 and desktop; the native seed subprocess passes
+`node --check`. Listing/syntax checks do not establish database/browser execution.
+
+CI must execute `packages/db/test/customer-practice-pay-now.integration.test.ts`
+and `apps/web/e2e/MON-6-customer-practice-pay-now.spec.ts` headless at both widths,
+plus the existing required PostgreSQL fresh/upgrade/catalogue/RLS suites and
+normal checks. The new database cases cover 1, 12,000 and 1,000,000,000,000 pence,
+catch/ordinary byte equality, current balances after credits/receipts/reversals,
+identity-only access, uniform session refusals and unchanged stored rows.
+The browser spec uses actual stored fictional invoices and customer sessions,
+checks equal options, no actions or disclosure, revoked/signed-out refusal and
+no new attempts. Neither suite can execute in this sandbox. Exact-head independent
+RED review remains required. CustomerInvoicePayNow and PAY_NOW_ENABLED stay dark;
+real invoice UI, provider evidence, live rails/links, stages, tariff/VAT and all
+G0-G5 release gates remain held. This does not finish MON-6.
