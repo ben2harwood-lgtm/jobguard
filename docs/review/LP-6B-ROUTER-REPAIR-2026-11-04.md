@@ -27,7 +27,7 @@ Other DB failures:
 - J10 observed a membership lock rather than the expected advisory lock once under full load; the unchanged full recovery-case-join file passes on the lower-load recheck. It is not reported as a proven deterministic product repair.
 - Three S22 failures and the SERIOUS teardown hook were cascades after the blocked S21 operations. All three S22 cases pass in isolation without a hook failure.
 - The dashboard race fixture's uncaught 57P01 came from stopping PostgreSQL before final client socket-end events drained. The fixture now waits for actual Client end events before stopping PostgreSQL, without swallowing errors or increasing test timeouts.
-- Money-trail's strict six-query trace predates the two mandatory binding/actor statements. Every executed SQL statement must remain observed; no query is hidden to satisfy that trace.
+- Money-trail's strict six-query trace predated two mandatory binding/actor statements. The updated exact eight-query proof retains every observed statement, asserts BEGIN/bind/actor ordering and preserves all business-query restrictions. Job-source revocation now checks the repository public error and separately retains the direct SQL JOB_SOURCE_FORBIDDEN/42501 assertion. Both full files pass (15 tests).
 
 ## Main merge and migration
 
