@@ -1,0 +1,118 @@
+{
+  "migration": "0876_retention_review_timer.sql",
+  "lp0": [
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:infrastructure.discover_retention_reviews()|jobguard_infrastructure|EXECUTE|-",
+        "group": "a-m4-20-records"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:infrastructure.discover_retention_reviews()|jobguard_migration",
+        "group": "a-m4-20-records"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:infrastructure.discover_retention_reviews()",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_infrastructure"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:infrastructure.retention_timer(uuid,uuid,jsonb,text)|jobguard_infrastructure|EXECUTE|-",
+        "group": "a-m4-20-records"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:infrastructure.retention_timer(uuid,uuid,jsonb,text)|jobguard_migration",
+        "group": "a-m4-20-records"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:infrastructure.retention_timer(uuid,uuid,jsonb,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_infrastructure"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.retention_record"
+        ],
+        "staticCalls": [
+          "app.final_lock_hash",
+          "app.lp4_seal_audit",
+          "app.retention_records"
+        ]
+      }
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "infrastructure",
+        "proname": "discover_retention_reviews",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_infrastructure=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "infrastructure",
+        "proname": "retention_timer",
+        "args": "t uuid, j uuid, v jsonb, expected text",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_infrastructure=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    }
+  ],
+  "tenancy": []
+}
