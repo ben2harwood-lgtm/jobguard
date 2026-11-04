@@ -1,0 +1,27 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-17-adjustment-screen": {
+      "branches": [
+        "codex/sandbox/m4-17-adjustment-screen"
+      ],
+      "note": "M4-17 partial RED synthetic proposal/approval surface; NOPR, no posting or run-start route.",
+      "allow": [
+        "apps/web/app/api/jobs/[id]/reconciliation/[runId]/adjustments/route.test.ts",
+        "apps/web/app/api/jobs/[id]/reconciliation/[runId]/adjustments/route.ts",
+        "apps/web/app/jobs/[id]/reconciliation/[runId]/adjustments/adjustments-screen.test.tsx",
+        "apps/web/app/jobs/[id]/reconciliation/[runId]/adjustments/adjustments-screen.tsx",
+        "apps/web/app/jobs/[id]/reconciliation/[runId]/adjustments/page.tsx",
+        "apps/web/app/lib/financial-reconciliation-adjustments-server.ts",
+        "apps/web/e2e/M4-17-adjustments.spec.ts",
+        "docs/contracts/money-trail-reconciliation-v1.md",
+        "packages/core/src/watchdog.ts",
+        "packages/db/migration-notes/0759_financial_reconciliation_adjustments_read.md",
+        "packages/db/migrations/0759_financial_reconciliation_adjustments_read.sql",
+        "packages/db/src/financial-reconciliation-queue-repository.ts",
+        "packages/db/test/financial-reconciliation-adjustments.integration.test.ts",
+        "packages/db/test/migration-proofs/0759_financial_reconciliation_adjustments_read.proof.json"
+      ]
+    }
+  }
+}
