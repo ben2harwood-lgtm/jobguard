@@ -2,14 +2,25 @@
   "version": 2,
   "lanes": {
     "m5-6-rate-baseline": {
-      "branches": ["codex/sandbox/m5-6-rate-baseline"],
+      "branches": [
+        "codex/sandbox/m5-6-rate-baseline"
+      ],
       "allow": [
         "packages/core/src/rate-baseline.ts",
         "packages/core/src/rate-baseline.test.ts",
         "packages/core/src/rate-baseline-architecture.test.ts",
-        "docs/contracts/rate-baseline-v1.md"
+        "docs/contracts/rate-baseline-v1.md",
+        "packages/core/src/index.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/rate-suggestion-repository.ts",
+        "packages/db/test/rate-suggestion.test.ts",
+        "packages/db/test/rate-suggestion.integration.test.ts",
+        "packages/db/test/later-empty-tables.ts",
+        "packages/db/migrations/0762_rate_suggestion_acceptance.sql",
+        "packages/db/test/migration-proofs/0762_rate_suggestion_acceptance.proof.json",
+        "packages/db/migration-notes/0762_rate_suggestion_acceptance.md"
       ],
-      "note": "M5-6 AMBER: dark deterministic descriptive baseline; no persistence or live wiring. Own lane file is implicitly allowed."
+      "note": "M5-6 RED: dark stored observations and append-only human acceptance; drift, merchant scoring and M5-5 held. No live composition."
     }
   }
 }

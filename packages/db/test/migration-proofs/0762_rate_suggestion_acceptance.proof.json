@@ -1,0 +1,224 @@
+{
+  "migration": "0762_rate_suggestion_acceptance.sql",
+  "lp0": [
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.accept_rate_suggestion(uuid,text,jsonb)|jobguard_migration",
+        "group": "a-owner-routines"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.accept_rate_suggestion(uuid,text,jsonb)|jobguard_runtime|EXECUTE|-",
+        "group": "a-rate-suggestion"
+      }
+    },
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "id": "a-rate-suggestion",
+        "title": "M5-6 dark human rate acceptance",
+        "cards": [
+          "LP-5b",
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-5b": "Recompute stored descriptive baseline and exact accepted rate.",
+          "LP-11": "Derive active human owner from persisted session and bind exact tenant/job/item/revision.",
+          "LP-12": "Only the append routine writes this private immutable table."
+        },
+        "sources": [
+          "packages/db/migrations/0762_rate_suggestion_acceptance.sql",
+          "packages/db/src/rate-suggestion-repository.ts"
+        ],
+        "tests": [
+          "packages/db/test/rate-suggestion.integration.test.ts",
+          "packages/db/test/rate-suggestion.test.ts"
+        ],
+        "gaps": [
+          "Real PostgreSQL CI and exact-head independent RED review remain required."
+        ],
+        "kind": "authority",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Dark synthetic foundation only; M5-6 remains open."
+        },
+        "downstream": "Append-only synthetic suggestion acceptance; no commercial scope, rate-book, quote, invoice or cap writes.",
+        "path": "ap-rate-suggestion"
+      }
+    },
+    {
+      "section": "authorityPaths",
+      "before": null,
+      "after": {
+        "id": "ap-rate-suggestion",
+        "title": "M5-6 dark human rate acceptance",
+        "cards": [
+          "LP-5b",
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-5b": "Recompute exact suggestion.",
+          "LP-11": "Persisted human session and tenant-qualified sources.",
+          "LP-12": "Private table, narrow EXECUTE."
+        },
+        "sources": [
+          "packages/db/migrations/0762_rate_suggestion_acceptance.sql"
+        ],
+        "tests": [
+          "packages/db/test/rate-suggestion.integration.test.ts"
+        ],
+        "gaps": [
+          "PostgreSQL CI and independent RED review remain."
+        ],
+        "description": "No live composition or commercial writes."
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.accept_rate_suggestion(uuid,text,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.rate_suggestion_acceptance"
+        ],
+        "staticCalls": [
+          "app.ch5_import_actor",
+          "app.lp4_seal_audit"
+        ]
+      }
+    },
+    {
+      "section": "rls",
+      "before": null,
+      "after": "app.rate_suggestion_acceptance|rls=t|forced=t"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.rate_suggestion_acceptance|tenant_isolation|PERMISSIVE|ALL|jobguard_migration|6fa387f2f629fba6"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.rate_suggestion_acceptance|rate_suggestion_acceptance_immutable|app.reject_immutable_commercial_mutation|BEFORE DELETE/UPDATE|O"
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "app.rate_suggestion_acceptance",
+        "data": []
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "accept_rate_suggestion",
+        "args": "t uuid, digest text, input jsonb",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "rate_suggestion_acceptance",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "rate_suggestion_acceptance_pk",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "rate_suggestion_acceptance_command_uq",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "rate_suggestion_acceptance_revision_uq",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "rate_suggestion_acceptance",
+        "policyname": "tenant_isolation",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
+      }
+    }
+  ],
+  "tenancy": [
+    {
+      "relname": "rate_suggestion_acceptance",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    }
+  ]
+}
