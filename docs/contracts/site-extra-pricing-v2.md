@@ -83,7 +83,7 @@ in the log transaction (migration 0574). It is not visit timing or a preapproval
 breach determination. Same-ID/different-status conflicts; replay preserves the
 first statement. Finished above the limit is recorded; later approval cannot alter
 it or the original requirement comparisons. ENT-5 reads the statement for one
-extra through tenant/job/extra-scoped ent5_extra_work_status after client link and
+extra through tenant/job/extra-scoped ent3_extra_work_status after client link and
 job authority checks. Visit bounds still determine approval timing. A true breach
 also requires an operative statement of under_way or finished; not_started or no
 statement stays uncertain even after the visit finishes and approval arrives.

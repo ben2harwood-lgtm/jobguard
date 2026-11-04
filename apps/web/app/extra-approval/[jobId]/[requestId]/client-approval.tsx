@@ -60,7 +60,7 @@ export function ClientApproval({ jobId, requestId }: { jobId: string; requestId:
 /** Shows the server-derived result without treating the visit bounds as exact extra times. */
 export function ClientWorkTiming({ view }: { view: Pick<View, "workTiming" | "doneWithoutRequiredPreapproval" | "approvalTimings"> }) {
   return (<div data-testid="client-work-timing">
-          {view.workTiming ? <p>Work was during this visit: {view.workTiming.startedAt} to {view.workTiming.finishedAt ?? "finish not recorded"}. Exact times for this extra are uncertain.</p> : <p>Work timing is unavailable; no linked visit.</p>}
+          {view.workTiming ? <p>Logged during this visit: {view.workTiming.startedAt} to {view.workTiming.finishedAt ?? "finish not recorded"}. Exact times for this extra are uncertain.</p> : <p>Work timing is unavailable; no linked visit.</p>}
           <p>{view.doneWithoutRequiredPreapproval === true ? "Work was done without required client preapproval. Later approval does not erase this breach." : view.doneWithoutRequiredPreapproval === false ? "No required client preapproval breach was found from the visit times." : view.doneWithoutRequiredPreapproval === "uncertain" ? "Whether work preceded required client preapproval cannot be told from the visit times." : "Approval-before-work has not been derived."}</p>
           {view.approvalTimings.map(a => <p key={a.stepIndex}>Approval step {a.stepIndex + 1}: {timingLabels[a.timing]}.</p>)}
         </div>);

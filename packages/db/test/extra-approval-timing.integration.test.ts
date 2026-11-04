@@ -40,9 +40,9 @@ it.each(["not_started", undefined, "under_way", "finished"] as const)("ENT-5 sha
   expect(await view()).toMatchObject({ doneWithoutRequiredPreapproval: expected });
   await expect(approvals.clientApprovalView(await foreign.ctx, foreign.members.client_approver.member, { version: "client-approval-view.v1", jobId, requestId: s.requestId, linkToken: token, email })).rejects.toMatchObject({ code: "LINK_INVALID" });
   await expect(c.runtime.query("SELECT * FROM app.site_extra_work_status")).rejects.toMatchObject({ code: "42501" });
-  const statement = await withTenant(c.runtime, context, db => db.$client.query("SELECT app.ent5_extra_work_status($1,$2) status", [jobId, extra.variationId]));
+  const statement = await withTenant(c.runtime, context, db => db.$client.query("SELECT app.ent3_extra_work_status($1,$2) status", [jobId, extra.variationId]));
   expect(statement.rows).toEqual([{ status: workStatus ?? null }]);
-  const hiddenStatement = await withTenant(c.runtime, await foreign.ctx, db => db.$client.query("SELECT app.ent5_extra_work_status($1,$2) status", [jobId, extra.variationId]));
+  const hiddenStatement = await withTenant(c.runtime, await foreign.ctx, db => db.$client.query("SELECT app.ent3_extra_work_status($1,$2) status", [jobId, extra.variationId]));
   expect(hiddenStatement.rows).toEqual([{ status: null }]);
   const wrongJob = await withTenant(c.runtime, context, db => readExtraApprovalTiming(db, w.p.tenantId, w.otherJob, extra.variationId, s.requestId));
   expect(wrongJob).toMatchObject({ doneWithoutRequiredPreapproval: "not_derived", workTiming: null, approvalTimings: [] });

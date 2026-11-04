@@ -63,6 +63,6 @@ export async function readExtraApprovalTiming(db: TenantTransaction, tenant: str
     `SELECT request_id,step_index,step_role,(extract(epoch FROM server_recorded_at)*1000000)::bigint::text at_us
      FROM app.extra_approval_step_fact WHERE tenant_id=$1 AND job_id=$2 AND variation_id=$3 ORDER BY step_index`, [tenant, job, extra])).rows;
   const workStatus = (await db.$client.query<{ work_status: OperativeWorkStatus | null }>(
-    "SELECT app.ent5_extra_work_status($1,$2) work_status", [job, extra])).rows[0]?.work_status;
+    "SELECT app.ent3_extra_work_status($1,$2) work_status", [job, extra])).rows[0]?.work_status;
   return deriveVisitApprovalTiming(visit, requests, facts, requestId, workStatus ?? undefined);
 }

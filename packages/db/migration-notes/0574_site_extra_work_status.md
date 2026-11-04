@@ -21,7 +21,7 @@ uses sor_line_net_pence and xa_requirement, matching submission. It returns only
 within/above; NULL (unpriced) is above. The displayed preview may become stale;
 submission still evaluates its own rules. Neither comparison nor statement grants
 permission or supplies exact work timing, approval, origin, fees or meter data.
-ENT-5 reads one statement through ent5_extra_work_status, scoped to the verified
+ENT-5 reads one statement through ent3_extra_work_status, scoped to the verified
 tenant, job and extra, after client link/job checks. No runtime table grant is
 added. A visit alone cannot prove work: not_started or missing stays uncertain;
 under_way or finished can qualify a breach, which later approval cannot erase. Finished above the limit is accepted, and later approval preserves the

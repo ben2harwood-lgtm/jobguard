@@ -95,7 +95,7 @@
       "section": "entries",
       "before": null,
       "after": {
-        "key": "acl|routine|function:app.ent5_extra_work_status(uuid,uuid)|jobguard_runtime|EXECUTE|-",
+        "key": "acl|routine|function:app.ent3_extra_work_status(uuid,uuid)|jobguard_runtime|EXECUTE|-",
         "group": "a-exec-site-extra-routines"
       }
     },
@@ -103,7 +103,7 @@
       "section": "entries",
       "before": null,
       "after": {
-        "key": "owner|routine|function:app.ent5_extra_work_status(uuid,uuid)|jobguard_migration",
+        "key": "owner|routine|function:app.ent3_extra_work_status(uuid,uuid)|jobguard_migration",
         "group": "a-owner-routines"
       }
     },
@@ -111,7 +111,7 @@
       "section": "routines",
       "before": null,
       "after": {
-        "identity": "function:app.ent5_extra_work_status(uuid,uuid)",
+        "identity": "function:app.ent3_extra_work_status(uuid,uuid)",
         "owner": "jobguard_migration",
         "securityDefiner": true,
         "searchPath": "search_path=pg_catalog, pg_temp",
@@ -221,7 +221,7 @@
       "before": null,
       "after": {
         "nspname": "app",
-        "proname": "ent5_extra_work_status",
+        "proname": "ent3_extra_work_status",
         "args": "p_job uuid, p_extra uuid",
         "proowner": "jobguard_migration",
         "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",

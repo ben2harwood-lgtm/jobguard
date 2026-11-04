@@ -97,14 +97,14 @@ REVOKE ALL ON FUNCTION app.ent3_proceed_comparison(uuid,uuid,text,text) FROM PUB
 GRANT EXECUTE ON FUNCTION app.ent3_proceed_comparison(uuid,uuid,text,text) TO jobguard_runtime;
 -- One-extra statement read for ENT-5, after the caller checks client link/job authority.
 -- The tenant comes only from the verified transaction; no table grant is added.
-CREATE FUNCTION app.ent5_extra_work_status(p_job uuid,p_extra uuid) RETURNS text
+CREATE FUNCTION app.ent3_extra_work_status(p_job uuid,p_extra uuid) RETURNS text
  LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
  SELECT x.work_status FROM app.site_extra_work_status x
  WHERE current_database()='jobguard_synthetic_demo'
   AND x.tenant_id=nullif(current_setting('app.tenant_id',true),'')::uuid
   AND x.job_id=p_job AND x.variation_id=p_extra
 $$;
-ALTER FUNCTION app.ent5_extra_work_status(uuid,uuid) OWNER TO jobguard_migration;
-REVOKE ALL ON FUNCTION app.ent5_extra_work_status(uuid,uuid) FROM PUBLIC,jobguard_identity,jobguard_infrastructure;
-GRANT EXECUTE ON FUNCTION app.ent5_extra_work_status(uuid,uuid) TO jobguard_runtime;
+ALTER FUNCTION app.ent3_extra_work_status(uuid,uuid) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.ent3_extra_work_status(uuid,uuid) FROM PUBLIC,jobguard_identity,jobguard_infrastructure;
+GRANT EXECUTE ON FUNCTION app.ent3_extra_work_status(uuid,uuid) TO jobguard_runtime;
 COMMIT;
