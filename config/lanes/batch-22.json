@@ -1,0 +1,34 @@
+{
+  "version": 2,
+  "lanes": {
+    "batch-22": {
+      "branches": [
+        "codex/sandbox/batch-22"
+      ],
+      "note": "M4-19 draft-store synthetic notice records; RED; NOPR built ahead.",
+      "allow": [
+        "apps/api/src/notice-fixture.application.test.ts",
+        "apps/api/src/notice-fixture.application.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/web/app/api/jobs/[id]/notice-fixtures/route.test.ts",
+        "apps/web/app/api/jobs/[id]/notice-fixtures/route.ts",
+        "apps/web/app/jobs/[id]/notice-fixtures/page.tsx",
+        "apps/web/app/jobs/[id]/notice-fixtures/screen.test.tsx",
+        "apps/web/app/jobs/[id]/notice-fixtures/screen.tsx",
+        "apps/web/app/lib/notice-fixture-server.ts",
+        "apps/web/e2e/M4-19-notice-fixtures.spec.ts",
+        "docs/contracts/notice-fixture-records-dark-v1.md",
+        "packages/core/src/watchdog.ts",
+        "packages/db/migration-notes/0865_notice_fixture_records.md",
+        "packages/db/migrations/0865_notice_fixture_records.sql",
+        "packages/db/src/index.ts",
+        "packages/db/src/notice-fixture-repository.ts",
+        "packages/db/test/later-empty-tables.ts",
+        "packages/db/test/migration-proofs/0865_notice_fixture_records.proof.json",
+        "packages/db/test/notice-fixture-records.integration.test.ts",
+        "packages/db/test/notice-fixture-repository.test.ts",
+        "packages/db/test/notice-fixture-route.integration.test.ts"
+      ]
+    }
+  }
+}
