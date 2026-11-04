@@ -9,7 +9,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const sessionId = (await cookies()).get("jg_session")?.value;
   if (!hasSyntheticSession(sessionId)) return NextResponse.json({ code: "UNAUTHENTICATED" }, { status: 401, headers });
   try {
-    return NextResponse.json(await readInboxDashboard(syntheticPool(), sessionId, (await params).id), { headers });
+    // Keep retrieval time on the page, and unchanged metrics byte-stable in JSON.
+    const { asOf: _asOf, ...body } = await readInboxDashboard(syntheticPool(), sessionId, (await params).id);
+    return NextResponse.json(body, { headers });
   } catch (error) {
     return practiceFailure(error) ?? NextResponse.json({ code: "INBOX_METRICS_UNAVAILABLE" }, { status: 503, headers });
   }

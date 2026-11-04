@@ -35,6 +35,7 @@ it("derives one tenant/job from persisted ownership, excludes private fields and
   expect(mocks.read).toHaveBeenCalledExactlyOnceWith(context, { version: "inbox-metrics.v1", environment: "synthetic_demo", jobId, asOf: expect.any(String) });
   expect(mocks.view).toHaveBeenCalledExactlyOnceWith(context, jobId, "verified-member", "verified-digest");
   const body = await response.json();
+  expect(body).not.toHaveProperty("asOf");
   expect(body.mandatoryBlockers).toEqual([{ ruleId: "approval", ruleVersion: "v2", count: 1 }, { ruleId: "proof", ruleVersion: "v1", count: 2 }]);
   expect(body.byRule[0]).toMatchObject({ coalescedCount: 1, duplicateCount: 0, meanTimeToDecisionMs: null, laterOutcomes: { unknown: 1, recorded: null } });
   expect(JSON.stringify(body)).not.toMatch(/PRIVATE|recipient|customerName|message|signalToNoise|ingestion|tenantId|membershipId|digest/u);

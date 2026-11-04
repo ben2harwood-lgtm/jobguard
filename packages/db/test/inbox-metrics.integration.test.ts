@@ -104,4 +104,27 @@ describe("M2-7 durable synthetic metrics (real PostgreSQL)", () => {
     expect((await db.admin.query("SELECT pg_get_constraintdef(oid) def FROM pg_constraint WHERE conrelid=$1::regclass AND contype='f'", [table])).rows.map(r => r.def)).toContain("FOREIGN KEY (tenant_id, job_id) REFERENCES app.job(tenant_id, id)");
     await expect(db.admin.query("UPDATE app.inbox_metric_receipt SET rejection='INVALID_METRICS_INPUT'")).rejects.toThrow("INBOX_METRICS_IMMUTABLE");
   });
+  it("returns no metrics from a populated off-demo database and still refuses recording there", async () => {
+    const database = "inbox_metrics_non_demo";
+    await db.admin.query(`CREATE DATABASE ${database}`);
+    const admin = new Pool({ host: "127.0.0.1", port: db.port, database, user: "postgres", password: "synthetic" });
+    const reader = new Pool({ host: "127.0.0.1", port: db.port, database, user: "jobguard_runtime", password: RUNTIME_TEST_PASSWORD });
+    try {
+      // A deliberately readable test table isolates the database-name guard from RLS.
+      // Even rows visible to the runtime role must never enter off-demo metrics.
+      await admin.query(`CREATE SCHEMA app; CREATE TABLE app.inbox_metric_receipt
+        (tenant_id uuid,job_id uuid,event jsonb,rejection text);
+        GRANT USAGE ON SCHEMA app TO jobguard_runtime;
+        GRANT SELECT ON app.inbox_metric_receipt TO jobguard_runtime`);
+      await admin.query("INSERT INTO app.inbox_metric_receipt VALUES($1,$2,$3::jsonb,NULL)", [tenant, job, JSON.stringify(finding())]);
+      expect((await reader.query("SELECT event FROM app.inbox_metric_receipt")).rows).toHaveLength(1);
+      const repository = new InboxMetricsRepository(reader);
+      expect(await repository.read(context, readScope)).toMatchObject({ byRule: [], ingestion: { accepted: 0, rejected: 0 } });
+      await expect(repository.record(context, envelope(finding()))).rejects.toThrow("INVALID_METRICS_INPUT");
+      expect((await reader.query("SELECT event FROM app.inbox_metric_receipt")).rows).toHaveLength(1);
+    } finally {
+      await reader.end(); await admin.end();
+      await db.admin.query(`DROP DATABASE ${database}`);
+    }
+  });
 });

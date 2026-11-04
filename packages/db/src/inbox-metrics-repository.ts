@@ -86,9 +86,9 @@ export class InboxMetricsRepository {
     const parsed = scopeV1.safeParse(raw);
     if (!parsed.success) throw invalid();
     return withTenant(this.pool, context, async db => {
-      if ((await db.$client.query("SELECT current_database() name")).rows[0].name !== "jobguard_synthetic_demo") throw invalid();
+      // Off-demo reads expose no receipts; record() still rejects off-demo writes.
       const rows = (await db.$client.query<{ event: InboxMetricEvent | null; rejection: string | null }>(
-        "SELECT event,rejection FROM app.inbox_metric_receipt WHERE tenant_id=$1 AND job_id=$2", [context.tenantId, parsed.data.jobId])).rows;
+        "SELECT event,rejection FROM app.inbox_metric_receipt WHERE current_database()='jobguard_synthetic_demo' AND tenant_id=$1 AND job_id=$2", [context.tenantId, parsed.data.jobId])).rows;
       return { ...inboxOutcomeMetrics(scope(context.tenantId, parsed.data.jobId, parsed.data.asOf),
         rows.flatMap(row => row.event ? [row.event] : [])),
         // Receipt counters are lifetime ingestion counts; asOf applies only to business event metrics.
