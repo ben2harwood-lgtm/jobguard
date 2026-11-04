@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-13-mandate-screen": {
+      "branches": [
+        "codex/sandbox/m4-13-mandate-screen"
+      ],
+      "note": "M4-13 RED practice-only owner terms web surface; NOPR; wording and rails remain held. No migration.",
+      "allow": [
+        "apps/web/app/api/subscription-mandate/route.integration.test.ts",
+        "apps/web/app/api/subscription-mandate/route.ts",
+        "apps/web/app/lib/subscription-mandate-server.test.ts",
+        "apps/web/app/lib/subscription-mandate-server.ts",
+        "apps/web/app/plans/mandate/mandate-screen.test.tsx",
+        "apps/web/app/plans/mandate/mandate-screen.tsx",
+        "apps/web/app/plans/mandate/page.tsx",
+        "apps/web/e2e/M4-13-mandate-screen.spec.ts",
+        "docs/contracts/subscription-success-agreement-v1.md"
+      ]
+    }
+  }
+}
