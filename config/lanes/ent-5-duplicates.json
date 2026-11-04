@@ -1,0 +1,30 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-5-duplicates": {
+      "branches": [
+        "codex/sandbox/ent-5-duplicates"
+      ],
+      "note": "ENT-3 / ENT-5 duplicate candidates only; RED, NOPR. Dismissal and owner/admin visibility remain held.",
+      "allow": [
+        "apps/web/app/api/contractor/jobs/[id]/duplicate-candidates/route.test.ts",
+        "apps/web/app/api/contractor/jobs/[id]/duplicate-candidates/route.ts",
+        "apps/web/app/api/contractor/jobs/[id]/duplicate-candidates/transport.test.ts",
+        "apps/web/app/api/contractor/jobs/[id]/duplicate-candidates/transport.ts",
+        "apps/web/app/api/contractor/jobs/[id]/duplicate-unlinks/route.ts",
+        "apps/web/app/approvals/extras/duplicate-candidates.tsx",
+        "apps/web/app/approvals/extras/extra-approvals.tsx",
+        "apps/web/e2e/ENT-5-duplicate-candidates.spec.ts",
+        "docs/contracts/extra-unlink-v1.md",
+        "packages/core/src/watchdog.ts",
+        "packages/db/migration-notes/0747_extra_duplicate_candidates.md",
+        "packages/db/migrations/0747_extra_duplicate_candidates.sql",
+        "packages/db/src/extra-duplicate-candidates.test.ts",
+        "packages/db/src/extra-duplicate-candidates.ts",
+        "packages/db/src/index.ts",
+        "packages/db/test/extra-duplicate-candidates.integration.test.ts",
+        "packages/db/test/migration-proofs/0747_extra_duplicate_candidates.proof.json"
+      ]
+    }
+  }
+}
