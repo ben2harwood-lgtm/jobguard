@@ -138,9 +138,10 @@ export type RecoveryBillabilityApproval = ShadowReadonly<z.infer<typeof approval
 export function approveBillability(raw: unknown, review: unknown, current: unknown, authority: unknown): RecoveryBillabilityApproval {
   const s = snapshot(current), reviewer = authorize(authority, s), command = parse(approvalCommand, raw), r = parse(reviewRecord, review);
   if (!same(r.snapshot, s) || !same(r.command.expected, s.binding) || !same(command.expected, s.binding)
-    || command.reviewCommandId !== r.command.commandId || !same(r.reviewer, reviewer)
+    || command.reviewCommandId !== r.command.commandId
     || !same(r.assessment, evaluateBillabilityPolicy(s)))
     throw new RecoveryBillabilityError("BILLABILITY_STALE");
+  if (r.reviewer.membershipId === reviewer.membershipId || r.reviewer.identityUserId === reviewer.identityUserId) throw new RecoveryBillabilityError("BILLABILITY_FORBIDDEN");
   const p = r.command.claimedEligiblePrincipalPence;
   const principal = s.facts ? parseExactPence(createEligibilityFacts(s.facts).principalNet) : { numerator: 0n, denominator: 1n };
   if (evaluateBillabilityPolicy(s).classification !== "eligible_for_review" || p === 0
@@ -154,7 +155,7 @@ export function approveBillability(raw: unknown, review: unknown, current: unkno
 export function requireCurrentBillabilityApproval(raw: unknown, current: unknown, authority: unknown) {
   const a = parse(approvalRecord, raw);
   approveBillability(a.command, a.review, current, authority);
-  if (!same(a.approvedBy, a.review.reviewer)) throw new RecoveryBillabilityError("BILLABILITY_STALE");
+  if (!same(a.approvedBy, authorize(authority, snapshot(current)))) throw new RecoveryBillabilityError("BILLABILITY_STALE");
   return freezeShadow({ approvedPrincipal: money(a.review.command.claimedEligiblePrincipalPence), productionEnabled: false as const });
 }
 /** The durable command owner must enforce UNIQUE(tenant_id,command_id) under locks.
