@@ -157,6 +157,7 @@ export * from "./import-pre-adoption-repository.js";
 export * from "./plan-entitlement-service.js";
 export * from "./payment-fee-repository.js";
 export * from "./small-builder-demo-repository.js";
+export * from "./inbox-metrics-repository.js";
 export { PaymentFeeCollectionRepository, PaymentFeeCollectionSourceError } from "./payment-fee-collection-repository.js";
 export * from "./recovery-billability-repository.js";
 export * from "./managed-recovery-repository.js";
