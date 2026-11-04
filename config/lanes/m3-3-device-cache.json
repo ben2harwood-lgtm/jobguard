@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "m3-3-device-cache": {
+      "branches": ["codex/sandbox/m3-3-device-cache"],
+      "allow": [
+        "packages/core/src/sync-device-cache.ts",
+        "packages/core/src/sync-device-cache.test.ts",
+        "packages/core/src/index.ts",
+        "docs/contracts/sync-download-v1.md"
+      ]
+    }
+  }
+}
