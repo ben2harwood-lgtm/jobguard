@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "m5-4-held-delivery": {
+      "branches": [
+        "codex/sandbox/m5-4-held-delivery"
+      ],
+      "note": "AMBER: M5-4 held delivery intake must not record goods receipts. NOPR; real feeds and approvals remain held.",
+      "allow": [
+        "packages/db/src/supplier-document-repository.ts",
+        "packages/db/test/supplier-documents.integration.test.ts"
+      ]
+    }
+  }
+}
