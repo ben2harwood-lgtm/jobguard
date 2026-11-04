@@ -94,7 +94,7 @@ describe("bootstrap SQL trace (no PostgreSQL proof)", () => {
       if (sql.startsWith("SELECT app.complete_command(")) return { rowCount: 1, rows: [{ result: {} }] };
       if (sql.includes("FROM pg_roles WHERE rolname='jobguard_runtime'")) return { rowCount: 1, rows: [{ rolsuper: false, rolbypassrls: false, rolcreatedb: false, rolcreaterole: false, rolinherit: false, rolcanlogin: true }] };
       // Restricted shadow/meter roles: one posture row each; no holders in this trace.
-      if (sql.includes("SELECT rolsuper,rolbypassrls") && sql.includes("FROM pg_roles WHERE rolname=$1") && ["jobguard_shadow", "jobguard_shadow_emergency_access", "jobguard_meter", "jobguard_meter_owner", "jobguard_audit_writer", "jobguard_command_writer", "jobguard_binding_owner", "jobguard_binding_lookup_owner", "jobguard_money_owner"].includes(values[0] as string)) return { rowCount: 1, rows: [{ rolsuper: false, rolbypassrls: false, rolcreatedb: false, rolcreaterole: false, rolinherit: false, rolcanlogin: false, rolreplication: false, member: false }] };
+      if (sql.includes("SELECT rolsuper,rolbypassrls") && sql.includes("FROM pg_roles WHERE rolname=$1") && ["jobguard_shadow", "jobguard_shadow_emergency_access", "jobguard_meter", "jobguard_meter_owner", "jobguard_audit_writer", "jobguard_command_writer", "jobguard_outbound_operator", "jobguard_connector", "jobguard_binding_owner", "jobguard_binding_lookup_owner", "jobguard_money_owner"].includes(values[0] as string)) return { rowCount: 1, rows: [{ rolsuper: false, rolbypassrls: false, rolcreatedb: false, rolcreaterole: false, rolinherit: false, rolcanlogin: false, rolreplication: false, member: false }] };
       if (sql.includes("SELECT pg_get_userbyid(proowner) AS owner")) return { rowCount: 1, rows: [{ owner: "jobguard_migration" }] };
       if (sql === "SELECT current_user") return { rowCount: 1, rows: [{ current_user: "synthetic_owner" }] };
       if (sql.includes("SELECT 1 FROM public.jobguard_schema_migration")) return { rowCount: 1, rows: [{}] };
@@ -147,6 +147,17 @@ describe("bootstrap SQL trace (no PostgreSQL proof)", () => {
       expect(queries.findIndex(({sql,values}) => sql.includes('SELECT rolsuper,rolbypassrls') && values[0] === 'jobguard_meter'))
         .toBeLessThan(queries.findIndex(({sql}) => sql === 'SET ROLE jobguard_migration'));
       expect(queries.some(({sql}) => sql.includes('CREATE ROLE jobguard_meter_owner'))).toBe(true);
+      const migrationRole = queries.findIndex(({ sql }) => sql === 'SET ROLE jobguard_migration');
+      for (const role of ['jobguard_outbound_operator', 'jobguard_connector']) {
+        const created = queries.findIndex(({ sql }) => sql.includes(`CREATE ROLE ${role}`));
+        expect(created).toBeGreaterThanOrEqual(0);
+        expect(created).toBeLessThan(migrationRole);
+        for (const check of ['SELECT rolsuper,rolbypassrls', 'FROM pg_auth_members m WHERE m.roleid=']) {
+          const checked = queries.findIndex(({ sql, values }) => sql.includes(check) && values[0] === role);
+          expect(checked).toBeGreaterThan(created);
+          expect(checked).toBeLessThan(migrationRole);
+        }
+      }
       const reset = queries.findIndex(({sql}) => sql === 'RESET ROLE');
       const transfer = queries.findIndex(({sql}) => sql.includes('ALTER FUNCTION app.mon1_lifecycle_actor') && sql.includes('OWNER TO jobguard_meter_owner'));
       expect(transfer).toBeGreaterThan(reset);
@@ -195,7 +206,7 @@ describe("synthetic Vercel/Neon bootstrap", () => {
     const prerequisite = await admin.connect();
     try {
       expect((await prerequisite.query("SELECT rolname FROM pg_roles WHERE rolname IN ('jobguard_audit_writer','jobguard_command_writer','jobguard_binding_owner')")).rows).toEqual([]);
-      for (const [file, role] of [["0456_lp4_database_audit.sql", "jobguard_audit_writer"], ["0475_lp5a_commands.sql", "jobguard_command_writer"], ["0520_lp6a_request_binding.sql", "jobguard_binding_owner"]]) {
+      for (const [file, role] of [["0520_lp4_database_audit.sql", "jobguard_audit_writer"], ["0521_lp5a_commands.sql", "jobguard_command_writer"], ["0562_lp6a_request_binding.sql", "jobguard_binding_owner"]]) {
         const sql = await readFile(new URL(`../migrations/${file}`, import.meta.url), "utf8");
         await expect(prerequisite.query(sql)).rejects.toMatchObject({ code: "42704", message: `${role} is missing; run administrative ensureRoles before migrations` });
         await prerequisite.query("ROLLBACK");
@@ -211,6 +222,10 @@ describe("synthetic Vercel/Neon bootstrap", () => {
       firstSeed = (await firstSeedClient.query("SELECT command_id,semantic_key,status,result,completed_at FROM app.command_receipt WHERE tenant_id=$1 ORDER BY semantic_key", [DEMO_TENANT_ID])).rows;
     } finally { await firstSeedClient.query("ROLLBACK"); firstSeedClient.release(); }
     await expect(bootstrapSyntheticDemo({ ownerUrl, runtimeUrl })).resolves.toMatchObject({ migrations: MIGRATION_URLS.length });
+    expect((await admin.query("SELECT rolcanlogin,rolsuper,rolbypassrls,rolcreaterole,rolcreatedb,rolinherit,rolreplication FROM pg_roles WHERE rolname='jobguard_outbound_operator'")).rows)
+      .toEqual([{ rolcanlogin: false, rolsuper: false, rolbypassrls: false, rolcreaterole: false, rolcreatedb: false, rolinherit: false, rolreplication: false }]);
+    expect((await admin.query("SELECT pg_has_role('neondb_owner','jobguard_outbound_operator','SET') AS set,pg_has_role('neondb_owner','jobguard_outbound_operator','USAGE') AS usage,pg_has_role('jobguard_runtime','jobguard_outbound_operator','MEMBER') AS runtime_member,pg_has_role('jobguard_migration','jobguard_outbound_operator','MEMBER') AS migration_member")).rows)
+      .toEqual([{ set: false, usage: false, runtime_member: false, migration_member: false }]);
     const verifier = await admin.connect();
 
     await verifier.query("SET ROLE jobguard_migration");
@@ -254,13 +269,14 @@ describe("synthetic Vercel/Neon bootstrap", () => {
       pg_has_role('neondb_owner','jobguard_shadow_emergency_access','USAGE') AS emergency_usage,pg_has_role('neondb_owner','jobguard_shadow_emergency_access','SET') AS emergency_set`)).rows)
       .toEqual([{ shadow_usage: false, shadow_set: false, emergency_usage: false, emergency_set: false }]);
     expect((await admin.query("SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname='jobguard_runtime'")).rows).toEqual([{ rolsuper: false, rolbypassrls: false }]);
-    // Exact LP-5a ownership exceptions; every other business/control table remains migration-owned.
+    // Exact LP-5a/LP-6a ownership exceptions; every other business/control table remains migration-owned.
     expect((await admin.query(`SELECT schemaname,tablename,tableowner FROM pg_tables
       WHERE schemaname IN ('app','identity','control_plane','audit_control','infrastructure')
         AND tableowner <> 'jobguard_migration' ORDER BY schemaname,tablename`)).rows).toEqual([
       { schemaname: "app", tablename: "command_lifecycle_claim", tableowner: "jobguard_command_writer" },
       { schemaname: "app", tablename: "command_type_registry", tableowner: "jobguard_command_writer" },
       { schemaname: "app", tablename: "repository_operational_record", tableowner: "jobguard_command_writer" },
+      { schemaname: "control_plane", tablename: "request_binding", tableowner: "jobguard_binding_owner" },
     ]);
     expect((await admin.query(`SELECT count(*)::int AS count FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='app' AND c.relkind IN ('r','p') AND c.relname <> 'command_type_registry' AND (NOT c.relrowsecurity OR NOT c.relforcerowsecurity)`)).rows).toEqual([{ count: 0 }]);
     const catalogue = await admin.connect();

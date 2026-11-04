@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "lanes": {
+    "demo-j3-approval-read": {
+      "branches": [
+        "codex/sandbox/demo-j3-approval-read"
+      ],
+      "note": "RED DEMO-S / DEMO-J3 runtime approval read; portal provenance enforced by migration 0502, no new grants or migration.",
+      "allow": [
+        "apps/api/src/shadow-demo.application.ts",
+        "apps/api/src/shadow-demo.application.test.ts",
+        "apps/web/app/demo-s/shadow-30000/journey-model.ts",
+        "apps/web/app/demo-s/shadow-30000/journey.tsx",
+        "packages/db/src/index.ts",
+        "packages/db/src/shadow-demo-approval-reader.ts",
+        "packages/db/test/customer-variation-approval.integration.test.ts",
+        "apps/web/app/demo-s/shadow-30000/journey.test.tsx",
+        "apps/web/app/api/jobs/[id]/shadow-demo/route.test.ts",
+        "packages/db/src/shadow-demo-approval-reader.test.ts",
+        "apps/web/e2e/DEMO-A1-rest.spec.ts",
+        "apps/web/e2e/DEMO-J3-shadow.spec.ts"
+      ]
+    }
+  }
+}

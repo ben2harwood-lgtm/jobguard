@@ -3,6 +3,7 @@ import { z } from "zod";
 import { ContractorBillingError } from "@jobguard/core";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 import { outboundActionV1Schema,type OutboundAdapter,type FakeDeliveryResult } from "./outbox.js";
+import { commercialOutboundClaimsEnabled } from "./commercial-outbound-pause.js";
 import { billingDatabaseFailure } from "./contractor-billing-repository.js";
 const resultV1=z.discriminatedUnion("kind",[
  z.object({kind:z.literal("succeeded"),providerReference:z.string().min(1).max(300)}).strict(),
@@ -15,7 +16,10 @@ const resultV1=z.discriminatedUnion("kind",[
 export class ContractorBillingDelivery {
  constructor(private readonly pool:Pool,private readonly adapters:ReadonlyMap<string,OutboundAdapter>){}
  private async step(context:VerifiedTenantContext,session:string,job:string,id:string,step:string,result:unknown={}){
-  try{return await withTenant(this.pool,context,async db=>(await db.$client.query("SELECT app.cb_delivery_step($1,$2,$3,$4,$5::jsonb) result",[session,job,id,step,JSON.stringify(result)])).rows[0]?.result as Record<string,unknown>|null);}catch(e){billingDatabaseFailure(e);}
+  try{return await withTenant(this.pool,context,async db=>{
+   if(step==="claim" && !(await commercialOutboundClaimsEnabled(db)))return null;
+   return (await db.$client.query("SELECT app.cb_delivery_step($1,$2,$3,$4,$5::jsonb) result",[session,job,id,step,JSON.stringify(result)])).rows[0]?.result as Record<string,unknown>|null;
+  });}catch(e){billingDatabaseFailure(e);}
  }
  async execute(context:VerifiedTenantContext,session:string,job:string,id:string):Promise<void>{
   const row=await this.step(context,session,job,id,"claim");if(!row)return;

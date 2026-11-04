@@ -1,3 +1,4 @@
+import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
 // Written before implementation. NOT RUN in the builder sandbox: cannot start PostgreSQL.
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
@@ -5,16 +6,16 @@ import { sha256Hex } from "../src/work-order-repository.js";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { extraOriginHashV1, ExtraPersistenceError, extraOriginV1 } from "@jobguard/core";
 import { ExtraRepository, insertVariationProposal, withTenant, auditPayloadV1Schema, verifyAuditChain, appendAuditBatch, type AuditEvent, type TenantTransaction } from "../src/index.js";
-import { cluster, fixture, raise, rawVariation, rawOrigin, receipt, finishRaw, newTables, newOriginColumns, ownerTx, visitAndEvidence, originSql, originHashInput, noteCanary, descriptionCanary, extraIdFor, type Cluster, type Fixture } from "./extra-fixtures.js";
+import { cluster, fixture, raise, rawVariation, rawOrigin, receipt, finishRaw, terminalizeFixtureReceipt, newTables, newOriginColumns, ownerTx, visitAndEvidence, originSql, originHashInput, noteCanary, descriptionCanary, extraIdFor, type Cluster, type Fixture } from "./extra-fixtures.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 let c: Cluster, repo: ExtraRepository;
 beforeAll(async () => { c = await cluster(); repo = new ExtraRepository(c.runtime); }, 60_000);
 afterAll(async () => { await c?.close(); });
-const rawAttempt = async (f: Fixture, type = "LogSiteExtra", kind = "site_user", originFields: Record<string, unknown> = {}, receiptFields: { status?: string; semanticKey?: string } = {}, complete = false) => withTenant(c.runtime, f.ctx, async db => {
+const rawAttempt = async (f: Fixture, type = "LogSiteExtra", kind = "site_user", originFields: Record<string, unknown> = {}, receiptFields: { status?: string; semanticKey?: string } = {}, complete = false) => withTenant(c.admin, f.ctx, async db => {
  const id = randomUUID(), command = await receipt(db, f.p.tenantId, f.jobId, id, f.p.membershipId, type, randomUUID(), receiptFields);
  await rawVariation(db, f.p.tenantId, f.jobId, id, kind);
  const row = await rawOrigin(db, f, id, command, { kind, ...originFields });
- if (complete) await finishRaw(db, f, id, command, row.origin_hash); return row;
+ if (complete) await finishRaw(db, f, id, command, row.origin_hash); await terminalizeFixtureReceipt(db,f.p.tenantId,command,{variationId:id}); return row;
 });
 async function checkChain(f: Fixture) {
  const rows = (await c.admin.query("SELECT * FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence", [f.p.tenantId])).rows;
@@ -42,16 +43,16 @@ describe("ENT-4b origin persistence", () => {
  it("[DW2c] origin and client capture uniqueness reject second rows with 23505", async () => {
   const f = await fixture(c), capture = randomUUID(), a = await repo.raiseExtra(f.ctx, raise(f, { clientCaptureId: capture }));
   const old = (await c.admin.query("SELECT * FROM app.extra_origin WHERE tenant_id=$1 AND variation_id=$2", [f.p.tenantId, a.variationId])).rows[0];
-  await expect(withTenant(c.runtime, f.ctx, async db => { await db.$client.query("UPDATE app.command_receipt SET status='processing',result=NULL,completed_at=NULL WHERE tenant_id=$1 AND command_id=$2", [f.p.tenantId, old.command_id]); return rawOrigin(db, f, a.variationId, old.command_id); })).rejects.toMatchObject({ code: "23505" });
+  await expect(withTenant(c.admin, f.ctx, async db => { await db.$client.query("UPDATE app.command_receipt SET status='processing',result=NULL,completed_at=NULL WHERE tenant_id=$1 AND command_id=$2", [f.p.tenantId, old.command_id]); return rawOrigin(db, f, a.variationId, old.command_id); })).rejects.toMatchObject({ code: "23505" });
   await expect(rawAttempt(f, "LogSiteExtra", "site_user", { client_capture_id: capture }, {}, true)).rejects.toMatchObject({ code: "23505" });
  });
  it("[DW2d] neither origin column accepts the other track's kinds", async () => {
   const f = await fixture(c);
   await expect(rawAttempt(f, "LogSiteExtra", "builder_logged")).rejects.toMatchObject({ code: "23514" });
-  await expect(withTenant(c.runtime, f.ctx, async db => { const id = randomUUID(); const command = await receipt(db, f.p.tenantId, f.jobId, id, f.p.membershipId, "LogBuilderExtra"); await rawVariation(db, f.p.tenantId, f.jobId, id); await rawOrigin(db, f, id, command, { kind: "builder_logged" }); })).rejects.toMatchObject({ code: "23514" });
+  await expect(withTenant(c.admin, f.ctx, async db => { const id = randomUUID(); const command = await receipt(db, f.p.tenantId, f.jobId, id, f.p.membershipId, "LogBuilderExtra"); await rawVariation(db, f.p.tenantId, f.jobId, id); await rawOrigin(db, f, id, command, { kind: "builder_logged" }); })).rejects.toMatchObject({ code: "23514" });
   const small = await smallFixture(f);
   await expect(withTenant(c.runtime, f.ctx, db => rawVariation(db, f.p.tenantId, small, randomUUID(), "site_user", "small_builder"))).rejects.toMatchObject({ code: "23514" });
-  await expect(withTenant(c.runtime, f.ctx, async db => { const id = randomUUID(); await receipt(db, f.p.tenantId, small, id, f.p.membershipId, "LogBuilderExtra"); await rawVariation(db, f.p.tenantId, small, id, "builder_logged", "small_builder"); const command = await receipt(db, f.p.tenantId, small, id, f.p.membershipId, "LogSiteExtra"); await rawOrigin(db, { ...f, jobId: small }, id, command, { job_track: "small_builder", kind: "site_user", raising_grant_id: null }); })).rejects.toMatchObject({ code: "23514" });
+  await expect(withTenant(c.admin, f.ctx, async db => { const id = randomUUID(); await receipt(db, f.p.tenantId, small, id, f.p.membershipId, "LogBuilderExtra"); await rawVariation(db, f.p.tenantId, small, id, "builder_logged", "small_builder"); const command = await receipt(db, f.p.tenantId, small, id, f.p.membershipId, "LogSiteExtra"); await rawOrigin(db, { ...f, jobId: small }, id, command, { job_track: "small_builder", kind: "site_user", raising_grant_id: null }); })).rejects.toMatchObject({ code: "23514" });
  });
  it("[DW3] missing origin fails at commit; SH-1 deferred constraint remains singular", async () => {
   const f = await fixture(c), id = randomUUID();
@@ -62,7 +63,7 @@ describe("ENT-4b origin persistence", () => {
  });
  it("[DW5a] failures at each write, seam, audit and commit leave no facts or receipt", async () => {
   const f = await fixture(c);
-  for (const fragment of ["INSERT INTO app.command_receipt", "INSERT INTO app.variation", "INSERT INTO app.extra_origin", "INSERT INTO app.extra_event", "FROM app.append_audit(", "COMMIT"]) {
+  for (const fragment of ["SELECT app.begin_command(", "SELECT app.complete_command(", "INSERT INTO app.variation", "INSERT INTO app.extra_origin", "INSERT INTO app.extra_event", "FROM app.append_audit(", "COMMIT"]) {
    const raw = raise(f, { clientCaptureId: randomUUID() }), capture = raw.clientCaptureId as string;
    const connect = c.runtime.connect.bind(c.runtime), spy = vi.spyOn(c.runtime, "connect");
    spy.mockImplementation((async () => { const client = await connect(); const original = client.query.bind(client); const querySpy = vi.spyOn(client, "query"); querySpy.mockImplementation((async (sql: any, params?: any) => { const value = await original(sql, params); if (String(sql).includes(fragment)) { if (fragment === "COMMIT") throw new Error("COMMIT injection must be before execution"); throw new Error(noteCanary); } return value; }) as any); if (fragment === "COMMIT") querySpy.mockImplementation((async (sql: any, params?: any) => { if (sql === "COMMIT") { await original("SET CONSTRAINTS ALL IMMEDIATE"); throw new Error(noteCanary); } return original(sql, params); }) as any); return client; }) as any);
@@ -92,7 +93,11 @@ describe("ENT-4b origin persistence", () => {
   expect(await repo.raiseExtra(f.ctx, retry)).toEqual(a);
   const bound = (await c.admin.query("SELECT * FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [f.p.tenantId, retry.commandId])).rows;
   expect(bound).toHaveLength(1); expect(bound[0]).toMatchObject({ status: "succeeded", result: a, command_type: original.commandType });
-  expect(bound[0].request_hash).toBe((await c.admin.query("SELECT request_hash FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [f.p.tenantId, original.commandId])).rows[0].request_hash);
+  const firstReceipt=(await c.admin.query("SELECT request_hash FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2",[f.p.tenantId,original.commandId])).rows[0];
+  expect(bound[0].request_hash).toMatch(/^[a-f0-9]{64}$/);expect(firstReceipt.request_hash).toMatch(/^[a-f0-9]{64}$/);
+  expect(bound[0].request_hash).not.toBe(firstReceipt.request_hash); // distinct semantic identities stay bound
+  const claims=(await c.admin.query("SELECT significant_input,resource FROM app.command_lifecycle_claim WHERE tenant_id=$1 AND command_id=ANY($2::uuid[])",[f.p.tenantId,[original.commandId,retry.commandId]])).rows;
+  expect(claims).toHaveLength(2);expect(claims[0]).toEqual(claims[1]);
   const counts = async () => Object.fromEntries(await Promise.all(["command_receipt", "scope_identity", "variation", "extra_origin", "extra_event", "audit_event"].map(async table => [table, (await c.admin.query(`SELECT count(*)::int n FROM app.${table} WHERE tenant_id=$1`, [f.p.tenantId])).rows[0].n])));
   const before = await counts(), changed = { ...retry, clientCaptureId: randomUUID(), note: "Fictional different capture" };
   await expect(repo.raiseExtra(f.ctx, changed)).rejects.toMatchObject({ code: "COMMAND_CONFLICT" });
@@ -116,8 +121,9 @@ describe("ENT-4b origin persistence", () => {
   const f = await fixture(c);
   await assignTrack(f, "small_builder");
   const jobId = await smallFixture(f);
-  const id = await withTenant(c.runtime, f.ctx, async db => { const id = randomUUID(), command = await receipt(db, f.p.tenantId, jobId, id, f.p.membershipId, "LogBuilderExtra"); await rawVariation(db, f.p.tenantId, jobId, id, "builder_logged", "small_builder"); await rawOrigin(db, { ...f, jobId }, id, command, { job_track: "small_builder", kind: "builder_logged", raising_grant_id: null }); return id; });
+  const id = await withTenant(c.admin, f.ctx, async db => { const id = randomUUID(), command = await receipt(db, f.p.tenantId, jobId, id, f.p.membershipId, "LogBuilderExtra"); await rawVariation(db, f.p.tenantId, jobId, id, "builder_logged", "small_builder"); await rawOrigin(db, { ...f, jobId }, id, command, { job_track: "small_builder", kind: "builder_logged", raising_grant_id: null }); await terminalizeFixtureReceipt(db,f.p.tenantId,command,{variationId:id}); return id; });
   const old = (await c.admin.query("SELECT * FROM app.extra_origin WHERE tenant_id=$1 AND variation_id=$2", [f.p.tenantId, id])).rows[0];
+  expect((await c.admin.query("SELECT r.status,r.result FROM app.command_receipt r JOIN app.extra_origin o ON (o.tenant_id,o.command_id)=(r.tenant_id,r.command_id) WHERE o.tenant_id=$1 AND o.variation_id=$2", [f.p.tenantId, id])).rows).toEqual([{ status: "succeeded", result: { variationId: id } }]);
   await assignTrack(f, "contractor");
   expect((await c.admin.query("SELECT * FROM app.extra_origin WHERE tenant_id=$1 AND variation_id=$2", [f.p.tenantId, id])).rows[0]).toEqual(old);
   await expect(withTenant(c.runtime, f.ctx, db => rawVariation(db, f.p.tenantId, jobId))).rejects.toMatchObject({ code: "23503" });
@@ -142,15 +148,15 @@ describe("ENT-4b origin persistence", () => {
   expect(before).toMatchObject({ provenance: "legacy_synthetic_capture", command_id: null, raising_membership_id: null });
   expect(await repo.readExtra(f.ctx, jobId, id)).toMatchObject({ version: "extra-record-legacy.v1", origin: { version: "extra-origin-legacy.v1", legacy: true, provenance: before.provenance, commandId: null, raisingMembershipId: null } });
   expect((await c.admin.query("SELECT * FROM app.extra_origin WHERE tenant_id=$1 AND variation_id=$2", [f.p.tenantId, id])).rows[0]).toEqual(before);
-  await assignTrack(f, "contractor"); const extra = await repo.raiseExtra(f.ctx, raise(f)), strict = await repo.readExtra(f.ctx, f.jobId, extra.variationId);
+  await assignTrack(f, "contractor"); await seedActiveContractorAgreement(c.admin,f.p.tenantId); const extra = await repo.raiseExtra(f.ctx, raise(f)), strict = await repo.readExtra(f.ctx, f.jobId, extra.variationId);
   expect(strict.version).toBe("extra-record.v1"); expect(extraOriginV1.safeParse(strict.origin).success).toBe(true);
  });
  // Round 1 commit regression written before the deferred guard repair; NOT RUN (sandbox cannot start PostgreSQL).
  it("[S4] clearing tenant context after valid origin/event/audit writes refuses commit", async () => {
   const f = await fixture(c), id = randomUUID(), commandId = randomUUID();
-  await expect(withTenant(c.runtime, f.ctx, async db => {
+  await expect(withTenant(c.admin, f.ctx, async db => {
    await receipt(db, f.p.tenantId, f.jobId, id, f.p.membershipId, "LogSiteExtra", commandId); await rawVariation(db, f.p.tenantId, f.jobId, id);
-   const row = await rawOrigin(db, f, id, commandId); await finishRaw(db, f, id, commandId, row.origin_hash);
+   const row = await rawOrigin(db, f, id, commandId); await finishRaw(db, f, id, commandId, row.origin_hash); await terminalizeFixtureReceipt(db,f.p.tenantId,commandId,{variationId:id});
    await db.$client.query("SELECT set_config('app.tenant_id','',true)");
   })).rejects.toMatchObject({ code: "23514", message: "INVALID_ORIGIN" });
   for (const [table, column, value] of [["command_receipt", "command_id", commandId], ["variation", "id", id], ["extra_origin", "variation_id", id], ["extra_event", "variation_id", id], ["audit_event", "subject_ref", id]]) expect((await c.admin.query(`SELECT count(*)::int n FROM app.${table} WHERE tenant_id=$1 AND ${column}=$2`, [f.p.tenantId, value])).rows[0].n).toBe(0);
@@ -166,8 +172,10 @@ describe("ENT-4b origin persistence", () => {
  });
  it("[S2] new tenant tables have FORCE RLS, tenant policy and migration ownership", async () => {
   for (const table of newTables) {
-   const row = (await c.admin.query("SELECT c.relrowsecurity,c.relforcerowsecurity,pg_get_userbyid(c.relowner) owner,p.polname,p.polcmd FROM pg_class c JOIN pg_policy p ON p.polrelid=c.oid WHERE c.oid=$1::regclass", [`app.${table}`])).rows;
-   expect(row).toEqual([{ relrowsecurity: true, relforcerowsecurity: true, owner: "jobguard_migration", polname: "tenant_isolation", polcmd: "*" }]);
+   const row = (await c.admin.query("SELECT c.relrowsecurity,c.relforcerowsecurity,pg_get_userbyid(c.relowner) owner,p.polname,p.polcmd FROM pg_class c JOIN pg_policy p ON p.polrelid=c.oid WHERE c.oid=$1::regclass ORDER BY p.polname", [`app.${table}`])).rows;
+   const expected = [{ relrowsecurity: true, relforcerowsecurity: true, owner: "jobguard_migration", polname: "tenant_isolation", polcmd: "*" }];
+   if (["extra_duplicate_link", "extra_order_line_link"].includes(table)) expected.unshift({ relrowsecurity: true, relforcerowsecurity: true, owner: "jobguard_migration", polname: "lp5b_command_read", polcmd: "r" });
+   expect(row).toEqual(expected);
   }
  });
  it("[S3] exactly SELECT/INSERT; invoker functions uncallable by runtime/PUBLIC; least privilege preserved", async () => {
@@ -196,10 +204,11 @@ describe("ENT-4b origin persistence", () => {
  });
  it("[S4] origin requires exact logged and exact hash/command audit in the same transaction", async () => {
   const f = await fixture(c);
-  for (const missing of ["logged", "audit", "origin_hash", "command"]) await expect(withTenant(c.runtime, f.ctx, async db => {
+  for (const missing of ["logged", "audit", "origin_hash", "command"]) await expect(withTenant(c.admin, f.ctx, async db => {
    const id = randomUUID(), command = await receipt(db, f.p.tenantId, f.jobId, id, f.p.membershipId); await rawVariation(db, f.p.tenantId, f.jobId, id); const row = await rawOrigin(db, f, id, command);
    if (missing !== "logged") await db.$client.query("INSERT INTO app.extra_event(tenant_id,id,job_id,variation_id,kind,command_id,actor_membership_id,sequence,server_recorded_at) VALUES($1,$2,$3,$4,'logged',$5,$6,999,'2000-01-01T00:00:00Z')", [f.p.tenantId, randomUUID(), f.jobId, id, command, f.p.membershipId]);
    if (missing !== "audit") await appendAuditBatch(db, [{ id: randomUUID(), version: "audit.v1", actorRef: `membership:${f.p.membershipId}`, eventType: "contractor.extra.raised", subjectType: "extra", subjectRef: id, payload: { references: { command: missing === "command" ? randomUUID() : command }, hashes: { origin: missing === "origin_hash" ? "f".repeat(64) : row.origin_hash } } }]);
+   await terminalizeFixtureReceipt(db,f.p.tenantId,command,{variationId:id});
   })).rejects.toMatchObject({ code: "23514" });
  });
  it("[S5] evidence and excess references preserve job identity and new scope lineage", async () => {
@@ -246,12 +255,12 @@ describe("ENT-4b origin persistence", () => {
    "packages/db/src/practice-session.ts": "9b765f410777c28334f9f7d8388e0a3c6e30f52bb6d4b4070c9b69e4ecbf1b14",
    "packages/db/src/contractor-repository.ts": "56b95b80360434f0cf58376ef2ec44d0354b194e5080bcfd9414ac283971006c",
    "packages/db/src/contractor-party-repository.ts": "e5852288e5355b53f7548c4d5741aef54ee55a2b8a66dd56a54b08963cd1fdb0",
-   "packages/db/src/work-order-repository.ts": "9e4d46c5290e25647d714810d67b2efee6f674a1d52f654142297d22c476e22e",
-   "packages/db/src/sor-repository.ts": "122322172cea27dc52754ff19629abbbe049b8d96997a1a2e42a8887ac5a62d2",
-   "packages/db/src/job-scheduling-repository.ts": "ce9b3fee004db9e7e303511f169d55b4a8a2339521927816c9b378b79517e52d",
+   "packages/db/src/work-order-repository.ts": "6f769b3b5261219e8e277b3c8460b19b917fe93e66245d15285af5a04c098418",
+   "packages/db/src/sor-repository.ts": "b66552d4d408c5e476ab9bff44324cf160b741561b5a03926c0697853e31514f",
+   "packages/db/src/job-scheduling-repository.ts": "7517df3c6597af44f651c8b704c9bd91c4f40894ce5aa58e3b4fcea16cc9eb57",
    "packages/db/src/work-order-fixtures.ts": "703b2f726e9d4256cbd0a1908676f2cd401d64bad28741853f8131183cd0a0ea",
    // Scanner bytes change only for the renewed caller review citation above.
-   "apps/api/src/auth/context-boundary.test.ts": "f28d7a24691179f265720ae4e213241cff8ddc926ad3e5993d1bdb35c720ae20"
+   "apps/api/src/auth/context-boundary.test.ts": "b77c7b63985dc66d359af04285e099463335085aa47e64100af9473dc9f58bc0"
 };
   for (const [file, hash] of Object.entries(hashes)) expect(sha256Hex(await readFile(new URL(`../../../${file}`, import.meta.url), "utf8")), file).toBe(hash);
  });
@@ -265,9 +274,9 @@ describe("ENT-4b origin persistence", () => {
  async function tenantSettingChangedBeforeCommit(pick: (f: Fixture) => Promise<string | null>) {
   const f = await fixture(c), id = randomUUID(), commandId = randomUUID(), value = await pick(f);
   let refusal: any;
-  await withTenant(c.runtime, f.ctx, async db => {
+  await withTenant(c.admin, f.ctx, async db => {
    await receipt(db, f.p.tenantId, f.jobId, id, f.p.membershipId, "LogSiteExtra", commandId); await rawVariation(db, f.p.tenantId, f.jobId, id);
-   const row = await rawOrigin(db, f, id, commandId); await finishRaw(db, f, id, commandId, row.origin_hash);
+   const row = await rawOrigin(db, f, id, commandId); await finishRaw(db, f, id, commandId, row.origin_hash); await terminalizeFixtureReceipt(db,f.p.tenantId,commandId,{variationId:id});
    await db.$client.query("SELECT set_config('app.tenant_id',$1,true)", [value]);
   }).catch(error => { refusal = error; });
   expect(refusal).toBeDefined();

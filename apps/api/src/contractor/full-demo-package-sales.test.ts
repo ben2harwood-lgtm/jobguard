@@ -43,10 +43,15 @@ function validate(raw: unknown) {
   return parsed;
 }
 const register = (): z.infer<typeof schema> => JSON.parse(readFileSync(registerPath, "utf8"));
-it("A09 every claim resolves to merged evidence", () => {
-  expect(existsSync(registerPath)).toBe(true); expect(existsSync(guidePath)).toBe(true);
-  const claims = validate(register()), guide = readFileSync(guidePath, "utf8");
+function validateGuide(raw: unknown, guide: string) {
+  // Check the public artifact too: an extra paragraph must not bypass the register.
+  expect(guide).not.toMatch(/\bverified\b/iu);
+  const claims = validate(raw);
   expect(guide).toBe(`# JobGuard Contractor Sales Bible\n\n${label}\n\n` + claims.claims.map(c => `${c.text} [${c.id}]\n\nLimit: ${c.limit}\n\nEvidence: ${c.evidence.map(e => `[${e.path}](../${e.path}) @ \`${e.commit}\` (${e.kind})`).join("; ")}\n`).join("\n"));
+}
+it("A09 every public claim resolves to merged evidence and proposed terms stay proposed", () => {
+  expect(existsSync(registerPath)).toBe(true); expect(existsSync(guidePath)).toBe(true);
+  validateGuide(register(), readFileSync(guidePath, "utf8"));
 });
 it("A10 rejects unmerged capability and unrun-test proof", () => {
   expect(existsSync(registerPath)).toBe(true);
@@ -64,5 +69,20 @@ it("A11 rejects approved-price certification savings and live-settlement claims"
     expect(() => validate(input)).toThrow();
     const hidden = register(); hidden.claims[6]!.limit = text;
     expect(() => validate(hidden)).toThrow();
+  }
+});
+
+it("A17 rejects duplicate/missing claims, forged paths and unsupported public additions", () => {
+  const duplicate = register(); duplicate.claims[1] = duplicate.claims[0]!;
+  expect(() => validate(duplicate)).toThrow();
+  const missing = register(); missing.claims.pop();
+  expect(() => validate(missing)).toThrow();
+  const path = register(); path.claims[0]!.evidence[0]!.path = "../outside.md";
+  expect(() => validate(path)).toThrow();
+  const terms = register(); terms.claims[6]!.classification = "source_inspected";
+  expect(() => validate(terms)).toThrow();
+  const guide = readFileSync(guidePath, "utf8");
+  for (const addition of ["Verified", "VERIFIED", "ISO 27001 certified", "10% with no platform charge", "Guaranteed savings"]) {
+    expect(() => validateGuide(register(), `${guide}\n${addition}\n`)).toThrow();
   }
 });

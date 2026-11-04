@@ -55,7 +55,7 @@ export class SubscriptionApplication {
      }
     } catch {
      // Approval committed above. Executor/read failures cannot undo it or justify a new approval.
-     return { ...result, paymentStatus: "pending" as const };
+     return { ...result, paymentStatus: "pending" as const, executionStatus: "unavailable" as const };
     }
    }
    return result;
