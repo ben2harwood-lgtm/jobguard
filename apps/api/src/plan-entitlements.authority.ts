@@ -7,7 +7,7 @@ import { PlanEntitlementsApplication } from "./plan-entitlements.application.js"
 
 /** Request-scoped composition for normal, made-up companies. Never accepts plan,
  * track, trial, payment, agreement or enablement flags from the browser.
- * MON-3's absent persisted trial authority remains a refusal in the SQL service.
+ * SQL binds job checks to immutable track and persisted MON-3 trial authority.
  */
 export function companyPlanEntitlements(pool: Pool, identity: IdentityApplication, credentials: TenantRequestCredentials): PlanEntitlementsApplication {
   return new PlanEntitlementsApplication({

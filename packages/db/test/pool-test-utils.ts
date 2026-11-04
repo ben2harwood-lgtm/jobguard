@@ -4,7 +4,7 @@ import { Pool } from "pg";
 
 /** Administrative prerequisites for LP-4/LP-5; application roles never create these. */
 export async function installAuditCommandWriterRoles(admin: Pick<Pool, "query">): Promise<void> {
-  for (const role of ["jobguard_audit_writer", "jobguard_command_writer"]) {
+  for (const role of ["jobguard_audit_writer", "jobguard_command_writer", "jobguard_binding_owner"]) {
     await admin.query(`DO $do$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='${role}') THEN CREATE ROLE ${role} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS; END IF; END $do$`);
   }
 }

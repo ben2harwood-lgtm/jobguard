@@ -58,7 +58,7 @@ async function fixture() {
   const mandate = JSON.stringify({ events: [{ version: "fake-dd-mandate-event.v1", environment: "synthetic_demo", account: "fake_jobguard_dd",
     tenantId: x.context.tenantId, mandateId, eventId: randomUUID(), state: "active" }] });
   expect(rail.ingestMandates(mandate, rail.sign(mandate))).toEqual([{ code: "processed" }]);
-  const compose = (ownerPool = f.admin) => createSuccessFeeDirectDebitExecutor({ ownerPool, context: x.context,
+  const compose = (ownerPool = f.admin) => createSuccessFeeDirectDebitExecutor(x.context, { ownerPool,
     digest: x.auth.digest, store, sessions, rails: [rail] });
   const executor = compose(), ctx = { tenantId: x.context.tenantId, environment: "synthetic_demo" as const, sessionToken: x.auth.digest };
   // MON-4A has no platform invoice; its statement ID is the reservation balance key,
@@ -122,7 +122,7 @@ it("refuses a foreign tenant's statement without a provider attempt", async () =
   const x = await fixture(), submit = vi.spyOn(x.rail, "submit");
   // Change only the querying tenant, retaining the actual approved statement ID.
   const foreignContext = (await import("./tenant-context-test-utils.js")).testTenantContext(randomUUID());
-  const executor = createSuccessFeeDirectDebitExecutor({ ownerPool: f.admin, context: foreignContext,
+  const executor = createSuccessFeeDirectDebitExecutor(foreignContext, { ownerPool: f.admin,
     digest: x.auth.digest, store: x.store, rails: [x.rail], sessions: {
       authenticate: async () => ({ identityUserId: x.auth.identityUserId, sessionId: randomUUID(), csrfToken: "synthetic" }),
       findMembership: async () => ({ id: x.actor.membershipId, tenantId: foreignContext.tenantId,

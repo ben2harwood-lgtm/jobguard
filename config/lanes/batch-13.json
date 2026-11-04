@@ -51,6 +51,7 @@
         "packages/db/src/subscription-webhook-verifier.ts",
         "packages/db/test/migration-proofs/0678_payment_fee_collect_recheck.proof.json",
         "packages/db/test/native-server-chaos.integration.test.ts",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
         "packages/db/test/shadow-pilot-financial.integration.test.ts",
         "packages/db/test/subscription-stripe-sandbox.integration.test.ts",
         "packages/db/test/success-fee-direct-debit.integration.test.ts",

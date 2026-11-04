@@ -9,18 +9,18 @@ import { pauseSuccessFee } from "./success-fee-direct-debit.js";
  * context/digest come unchanged from PracticeAccess; SQL reauthenticates on each read.
  * The reservation store remains the shared card/DD store, not a per-rail book.
  * No route, provider registration or standing-authority writer is enabled. */
-export function createSuccessFeeDirectDebitExecutor(input: {
-  ownerPool: Pool; context: VerifiedTenantContext; digest: string; store: ReservationStore;
+export function createSuccessFeeDirectDebitExecutor(context: VerifiedTenantContext, input: {
+  ownerPool: Pool; digest: string; store: ReservationStore;
   rails: readonly CollectionRail[]; sessions: Pick<AuthProvider, "authenticate" | "findMembership">;
   now?: () => Date;
 }) {
   const repository = new PaymentFeeCollectionRepository(input.ownerPool);
   const store: ReservationStore = {
     async transaction(tenantId, work) {
-      if (tenantId !== input.context.tenantId) throw new FeeCollectionError("COLLECTION_REFUSED");
+      if (tenantId !== context.tenantId) throw new FeeCollectionError("COLLECTION_REFUSED");
       try {
         return await input.store.transaction(tenantId, (book, sources) =>
-          repository.withReader(input.context, input.digest, successFee => work(book, { ...sources, successFee })));
+          repository.withReader(context, input.digest, successFee => work(book, { ...sources, successFee })));
       } catch (error) {
         if (error instanceof PaymentFeeCollectionSourceError) return pauseSuccessFee(error.reason);
         throw error;

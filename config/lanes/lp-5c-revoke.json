@@ -1,0 +1,45 @@
+{
+  "version": 2,
+  "lanes": {
+    "lp-5c-revoke": {
+      "branches": [
+        "codex/sandbox/lp-5c-revoke"
+      ],
+      "note": "LP-5c RED; exact union after LP-5b on main. Migration 0557. Full PostgreSQL CI and independent exact-head Claude review required.",
+      "allow": [
+        "docs/contracts/lp-0-effective-privileges-v1.md",
+        "packages/db/migrations/0557_lp5c_revoke_command_writes.sql",
+        "packages/db/test/lp-0-grant-freeze.integration.test.ts",
+        "packages/db/test/lp5-catalog-fixture.ts",
+        "packages/db/test/lp5c-revoke.integration.test.ts",
+        "packages/db/test/lp5c-revoke.test.ts",
+        "packages/db/test/migration-proofs/0557_lp5c_revoke_command_writes.proof.json",
+        "packages/db/test/commands.integration.test.ts",
+        "packages/db/test/commercial-integrity-v3-receipt-guard.integration.test.ts",
+        "packages/db/test/contractor-parties.integration.test.ts",
+        "packages/db/test/decisions-later.integration.test.ts",
+        "packages/db/test/enterprise-fee-command-fixtures.integration.test.ts",
+        "packages/db/test/extra-approval-chain.integration.test.ts",
+        "packages/db/test/extra-links.integration.test.ts",
+        "packages/db/test/extra-origin-upgrade.integration.test.ts",
+        "packages/db/test/extra-origin.integration.test.ts",
+        "packages/db/test/extra-unlink.integration.test.ts",
+        "packages/db/test/job-parties.integration.test.ts",
+        "packages/db/test/job-work-state-commands-boundaries.integration.test.ts",
+        "packages/db/test/job-work-state-sources.integration.test.ts",
+        "packages/db/test/lp-adoption-boundary.integration.test.ts",
+        "packages/db/test/lp5-commands.integration.test.ts",
+        "packages/db/test/recovery-case-terms.integration.test.ts",
+        "packages/db/test/recovery-follow-up.integration.test.ts",
+        "packages/db/test/shared-money-origin.integration.test.ts",
+        "packages/db/test/site-extra-pricing.integration.test.ts",
+        "packages/db/test/site-visit.integration.test.ts",
+        "packages/db/test/subscription-authority.integration.test.ts",
+        "packages/db/test/success-fee-catch-posting.integration.test.ts",
+        "packages/db/test/watchdog-lock-order.integration.test.ts",
+        "packages/db/test/job-import-v3-admission-upgrade.integration.test.ts",
+        "docs/verdicts/LP-5C/TEST_REPAIR.md"
+      ]
+    }
+  }
+}

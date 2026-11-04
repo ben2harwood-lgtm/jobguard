@@ -29,6 +29,7 @@ export function fixture(successFee?: LockedCollectionSources["successFee"]) {
           approvedAt: "2026-09-30T00:00:00Z", termsHash }, state: "active" },
       action: "statement", billingMode: "paid", amountPence: 600, reservedAndCollectedPeriodPence: 0,
       currentStatement: statement, statementApproval: { ...statement, resolution: "approved", tenantId: id(1),
+        agreementId: selection.agreementId, termsRevision: selection.revision, termsHash,
         recipientRef: id(3), expiresAt: "2027-01-01T00:00:00Z", decisionId: id(9) } } };
   const intent = { version: "fee-collection.v1", commandId: id(10), jobId: id(5), invoiceId: id(6),
     statementHash: hash, amountPence: 600, rail: "stripe_card" };

@@ -158,6 +158,7 @@ export * from "./plan-entitlement-service.js";
 export * from "./payment-fee-repository.js";
 export * from "./small-builder-demo-repository.js";
 export { PaymentFeeCollectionRepository, PaymentFeeCollectionSourceError } from "./payment-fee-collection-repository.js";
+export * from "./subscription-mandate-repository.js";
 export { reviewOfflineCommercialIntent } from "./offline-upload.js";
 export * from "./resumable-evidence.js";
 export * from "./mobile-auth-store.js";
@@ -172,6 +173,7 @@ export * from "./simulation-fee-statement-repository.js";
 export * from "./simulation-fee-collection-repository.js";
 export * from "./simulation-money-run-repository.js";
 export { ShadowDemoApprovalReader } from "./shadow-demo-approval-reader.js";
+export { AccountingExportRepository, StoredAccountingExportError, storedAccountingExportV1, type StoredAccountingExport } from "./accounting-export-repository.js";
 export { ShadowDemoGuideRepository } from "./shadow-demo-guide-repository.js";
 
 export * from "./shadow-pilot-financial-reader.js";

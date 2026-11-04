@@ -29,10 +29,9 @@ export type SuccessFeeCollectionSources = z.infer<typeof successFeeCollectionSou
 export type SuccessFeePauseReason = "SETTLEMENT_UNVERIFIED" | "RECEIPT_DISPUTED" | "CASE_DISPUTED"
   | "ATTRIBUTION_DISPUTED" | "AUTHORITY_REVOKED" | "AUTHORITY_DISPUTED" | "AUTHORITY_EXPIRED"
   | "MANDATE_REVOKED" | "MANDATE_NOT_ACTIVE" | "AUTHORITY_STALE" | "FEE_CAP_EXCEEDED" | "SUCCESS_FEE_DEPENDENCY_BOUND";
-export class SuccessFeeCollectionError extends FeeCollectionError {
-  constructor(readonly reason: SuccessFeePauseReason) { super("COLLECTION_REFUSED"); this.message = reason; }
-}
-export const pauseSuccessFee = (reason: SuccessFeePauseReason): never => { throw new SuccessFeeCollectionError(reason); };
+export const pauseSuccessFee = (reason: SuccessFeePauseReason): never => {
+  throw Object.assign(new FeeCollectionError("COLLECTION_REFUSED"), { reason, message: reason });
+};
 export function validateSuccessFee(raw: unknown, ctx: CollectionSessionContext, intent: CollectionIntent,
   actorMembershipId: string, now: string) {
   const s = parse(successFeeCollectionSourcesV1, raw), b = s.binding, a = s.authorization;

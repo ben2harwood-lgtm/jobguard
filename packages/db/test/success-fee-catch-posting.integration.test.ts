@@ -164,9 +164,9 @@ it.each(["approve_review","recovery.attribution_review"])("a directly inserted %
  expect(x.assessment.assessmentOutcome).toBe("eligible_for_review");
  const artifact=(await f.admin.query("SELECT app.final_lock_hash($1::jsonb) hash",[x.assessment])).rows[0].hash as string;
  const deadline=(await f.admin.query("SELECT expires_at FROM control_plane.practice_session WHERE token_digest=$1",[x.auth.digest])).rows[0].expires_at as Date;
- // Deliberately bypass SV-6's writer using the runtime's existing generic authority grants.
+ // Owner fixture bypasses SV-6's writer so its independent proof gate is exercised.
  // Both the literal command action and the canonical authorization action are covered.
- await finalCheckTenant(f.runtime,x.context.tenantId,async db=>{
+ await finalCheckTenant(f.admin,x.context.tenantId,async db=>{
   await db.query("INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES($1,$2,'recovery_attribution',$3,$4)",[decision,x.context.tenantId,x.assessment.assessmentId,action]);
   await db.query("INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'approved',$4)",[resolution,x.context.tenantId,decision,x.actor.membershipId]);
   await db.query("INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,recipient,content_hash,aggregate_revision,policy_version,expires_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)",

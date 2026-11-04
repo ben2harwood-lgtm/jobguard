@@ -10,7 +10,7 @@ it.each(["AUTHORITY_DISPUTED", "AUTHORITY_REVOKED", "AUTHORITY_EXPIRED"] as cons
   const registration = vi.spyOn(PaymentFeeCollectionRepository.prototype, "withReader")
     .mockImplementation(async (_context, _digest, work) => work(read));
   const context = verifiedTenantContextForQueuedJob(ctx.tenantId);
-  const executor = createSuccessFeeDirectDebitExecutor({ ownerPool: {} as Pool, context, digest: "a".repeat(64),
+  const executor = createSuccessFeeDirectDebitExecutor(context, { ownerPool: {} as Pool, digest: "a".repeat(64),
     store: f.store, sessions: f.sessions, rails: [f.rail] });
   await expect(executor.reserve(ctx, { ...f.intent, purpose: "receipt_success_fee" })).rejects.toMatchObject({ reason });
   expect(registration).toHaveBeenCalledWith(context, "a".repeat(64), expect.any(Function));
