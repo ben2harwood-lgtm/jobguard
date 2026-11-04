@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-20-draft-store": {
+      "branches": [
+        "codex/sandbox/m4-20-draft-store"
+      ],
+      "note": "M4-20 durable synthetic draft records only; NOPR, RED; M4-20 remains open.",
+      "allow": [
+        "packages/db/src/retention-record-repository.ts",
+        "packages/db/src/index.ts",
+        "packages/db/test/retention-record-repository.test.ts",
+        "packages/db/test/retention-records.integration.test.ts",
+        "packages/db/test/later-empty-tables.ts",
+        "packages/db/migrations/0753_retention_records.sql",
+        "packages/db/test/migration-proofs/0753_retention_records.proof.json",
+        "packages/db/migration-notes/0753_retention_records.md",
+        "docs/contracts/retention-records-dark-v1.md"
+      ]
+    }
+  }
+}
