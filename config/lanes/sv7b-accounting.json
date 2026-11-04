@@ -16,6 +16,7 @@
         "packages/db/src/index.ts",
         "packages/db/test/accounting-observation-receipt.integration.test.ts",
         "packages/db/test/accounting-observation-receipt.test.ts",
+        "packages/db/test/later-empty-tables.ts",
         "packages/db/test/migration-proofs/0609_accounting_observation_receipt.proof.json"
       ]
     }
