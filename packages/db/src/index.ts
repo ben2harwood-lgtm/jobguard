@@ -185,6 +185,7 @@ export { DunningRepository } from "./dunning-repository.js";
 export { AccountingExportRepository, StoredAccountingExportError, storedAccountingExportV1, type StoredAccountingExport } from "./accounting-export-repository.js";
 export { ShadowDemoGuideRepository } from "./shadow-demo-guide-repository.js";
 
+export * from "./shadow-pilot-financial-reader.js";
 export { importLateSource, readLateSourceObservations, readLateSources } from "./late-source-import.js";
 
 export * from "./financial-reconciliation-queue-repository.js";

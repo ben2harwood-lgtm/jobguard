@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "lanes": {
+    "m1-15s-read-records": {
+      "branches": ["codex/sandbox/m1-15s-read-records"],
+      "note": "RED M1-15S offline stored financial records; no migration, route or activation. Lane file implicitly permitted.",
+      "allow": [
+        "packages/core/src/index.ts",
+        "packages/core/src/shadow-pilot-financial-record.ts",
+        "packages/core/src/shadow-pilot-report.ts",
+        "packages/core/src/shadow-pilot-report.test.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/shadow-pilot-financial-reader.ts",
+        "packages/db/test/shadow-pilot-financial.integration.test.ts",
+        "docs/operations/m1-15s-read-records.md"
+      ]
+    }
+  }
+}
