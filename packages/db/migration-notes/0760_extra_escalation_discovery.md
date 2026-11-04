@@ -293,3 +293,56 @@ bootstrap privileges, local MinIO and affected browser/contractor acceptance.
 Independent RED review binds the eventual exact head. Production native/device,
 provider and legal approvals are separate. NOPR until #549 and batch 10 land.
 Made-up data only; no real money, provider execution, PR or release.
+
+
+Batch-c2 final SV-7B union handoff — 4 Nov 2026
+
+READY for the router to stage all working files and complete pending
+origin/codex/sandbox/sv7b-accounting (3bd0f641db). The other seven named
+slice tips are ancestors of HEAD. Both conflict files keep the exact union;
+SV-7B adds its receipt without dropping existing migration notes or empty-table
+entries. Its migration/proof stem is now 0765_accounting_observation_receipt;
+0760–0765 are consecutive and paired with proofs. No Git writes or fetch ran.
+The pieces' lane files are removed; the batch lane lists exactly 68 final
+changed non-lane paths against the available origin/main (155a3eb06). Local
+main is stale, so it is not used as the current integration baseline.
+
+All ten batch-9 rules and both #549 additions checked for this scope. No new
+fingerprinted-row columns, routes, client imports or web server modules are
+introduced by the union. No new command registry entry is needed for the
+synthetic receipt seam. Existing WORM method classifications remain intact.
+Connector intake starts from main's latest 0554 body, retaining validation,
+serialization and LP-4 audit sealing; only materials staging extends it. No
+migration-owned routine joins command_lifecycle_claim. LP-0 tracks the new
+receipt relation because shadow has non-owner SELECT/INSERT grants; its owner
+entry is therefore retained. Proof identities have no DEFAULT expressions.
+No product runtime writes to the three LP-5c protected tables are introduced.
+Existing exact routine-upgrade handling remains unchanged. The initial-review
+LATER / SIMPLICITY observation above is retained without adding another.
+
+Validation actually executed in this run: direct installed TypeScript 5.8.3
+tsc -p tsconfig.json --noEmit PASS in config/core/ai/storage/db/api/web.
+pnpm typecheck produced only its wrapper warning, stalled and was interrupted;
+its aggregate result is not a pass. Installed Vitest 4.1.12 with maxWorkers=2,
+at most three named files per run: DB migration-proof-loader, accounting receipt
+and WORM proofs 83; API context-boundary, identity and watchdog-registry 278;
+API accounting connector, escalation and inbound 58; core device cache, queue
+and capture 84; core enterprise fee mandate 11; DB WORM repository and connector
+proofs 26. Total 540 passed. One supplied additional contractor mandate test
+path matched no file; the actual core mandate file ran and passed. No tests
+were weakened. Core purity (with existing computed-import notices), money
+arithmetic, PL/pgSQL CASE lint and git diff origin/main --check PASS.
+Standard lane lint executed and fails solely on the obsolete incoming lane,
+0609 SQL and 0609 proof paths still present in the read-only merge index.
+Projected final file-based lane comparison passes with 68 exact paths.
+Router must stage all changes, finish the merge and rerun the standard gate.
+
+SV-7B accounting now includes durable synthetic receipt tests and remains
+server-disabled for live use; connector G1/D04/D12 approvals and real-data
+acceptance stay open. All seven other pieces retain their open work listed
+above. No database/browser suite ran. CI must prove fresh/upgrade migrations,
+LP-0/catalogues/privileges/RLS, fingerprint preservation, accounting durable
+replay/races/rollback/isolation, escalation and connector upgrade behavior,
+WORM/MinIO and affected browser journeys, alongside required full checks.
+Independent RED review must bind the eventual exact head. NOPR until #549 and
+batch 10 land. Device/provider/legal approvals remain separate release gates.
