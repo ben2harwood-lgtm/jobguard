@@ -201,7 +201,7 @@ test("DEMO-S launches a fresh shadow job, resumes it and resets without inventin
     customerApproval: { state: "not_ready_yet", approvals: [] } });
   const results = page.getByRole("region", { name: "Saved shadow journey report" });
   await expect(results).toContainText("Not built yet"); await expect(results).toContainText("Not locked");
-  await expect(results).toContainText("No invoice issued"); await expect(results).toContainText("Customer approval: Not ready yet (MON-5)");
+  await expect(results).toContainText("No invoice issued"); await expect(results).toContainText("Customer approval: Not ready for the customer yet");
   await expect(results.getByRole("link", { name: "Open the same saved job" })).toHaveAttribute("href", `/jobs/${jobId}`);
   await expect(results).not.toContainText("£80.00");
   await page.getByRole("button", { name: "Launch or resume shadow-30000", exact: true }).click();
