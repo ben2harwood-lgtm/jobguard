@@ -150,3 +150,35 @@ synthetic caller cannot bypass the existing SQL check for the actual
 `jobguard_synthetic_demo` database. The reference-only executor and general
 `refuseEnterpriseFeeExecution` remain closed. No policy record, production gate,
 provider configuration, migration, grant or small-builder fee path changes.
+
+### ENT-14 landing preparation — 4 November 2026
+
+READY, RED, NOPR. Inspected completed merge `2954ce1ca` against its merged
+`origin/main` base `63acfced2`; local `main` is stale (`694e9e175`). No conflicts
+remain. The lane allow list exactly covers the five changed non-lane files and
+only this piece's lane differs from the merged main. No behavior, test expectation,
+migration, command, route, service, grant or runtime authority writer changed.
+The ten compatibility checks in the brief require no source repair in this slice.
+
+Installed Node 24.17.0 / Vitest 4.1.12, each run with `--maxWorkers=2`:
+- core mandate, contractor-mandate and enterprise-fee-statement: 57 passed;
+- API context-boundary and identity: 152 passed;
+- API watchdog-registry: 126 passed;
+- database migration-proof-loader (unit only): 76 passed.
+
+Total: 411 passing tests across seven named files. Initial API discovery failed
+because package `dist` artifacts were absent; compiling config/core/storage/db/ai
+with the installed TypeScript binary resolved those failures, without source edits.
+Direct installed `tsc` compilation passed for config/core/storage/db/ai; direct
+`tsc --noEmit` passed for API, AI and web. This covers all seven workspace packages.
+`pnpm typecheck`, the pnpm version probe and direct Turbo typecheck stalled in the
+pnpm wrapper; stopped those wrappers after the direct TypeScript checks passed.
+The aggregate pnpm/Turbo typecheck is not claimed as passing.
+
+`node tools/agent-lane-boundary-lint.mjs`, core purity, money arithmetic and
+`git diff origin/main --check` passed. No database or browser execution was attempted.
+CI must prove the full required suites, PostgreSQL upgrades/privileges/RLS and
+M4-23 acceptance after its `m4-23-ent-collect` dependency lands in batch 10; this
+branch's acceptance coverage cannot independently establish that integration.
+No dependency code was copied. Exact-head independent RED review, solicitor
+review and Ben's dated approval remain open. All live gates remain closed.
