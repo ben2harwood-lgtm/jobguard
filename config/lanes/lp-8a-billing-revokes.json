@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "lanes": {
+    "lp-8a-billing-revokes": {
+      "branches": [
+        "codex/sandbox/lp-8a-billing-revokes"
+      ],
+      "note": "LP-8a RED held NOPR on LP-7 3c7961efa; absence-only predecessor hold closed. Legacy billing/restore conversion, protected predecessor pins, PostgreSQL CI and exact-head security reviews remain held.",
+      "allow": [
+        "packages/db/migration-notes/0795_lp8a_billing_revokes.md",
+        "packages/db/migrations/0795_lp8a_billing_revokes.sql",
+        "packages/db/src/customer-billing-repository.ts",
+        "packages/db/src/final-account-repository.ts",
+        "packages/db/test/audit-dbsrc-03.test.ts",
+        "packages/db/test/lp8a-billing-revokes.integration.test.ts",
+        "packages/db/test/lp8a-billing-revokes.test.ts",
+        "packages/db/test/migration-proofs/0795_lp8a_billing_revokes.proof.json",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts"
+      ]
+    }
+  }
+}

@@ -29,13 +29,13 @@ export default async function setup() {
   // SV-5 Q6 practice run: the real worker process with its own queue and shadow logins, synthetic only.
   // Graphile installs its private tables as the queue login; CREATE is granted only until they exist.
   const login = (user: string) => `postgresql://${user}:sbox-e2e-worker@127.0.0.1:${port}/${SYNTHETIC_DATABASE_NAME}`;
-  for (const [user, group] of [["e2e_worker_queue", "jobguard_infrastructure"], ["e2e_worker_shadow", "jobguard_shadow"]]) {
+  for (const [user, group] of [["e2e_worker_actions", "jobguard_worker"], ["e2e_worker_queue", "jobguard_infrastructure"], ["e2e_worker_shadow", "jobguard_shadow"]]) {
     await identityAdmin.query(`CREATE ROLE ${user} LOGIN PASSWORD 'sbox-e2e-worker' NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOBYPASSRLS`);
     await identityAdmin.query(`GRANT ${group} TO ${user}`);
   }
   await identityAdmin.query(`GRANT CREATE ON DATABASE ${SYNTHETIC_DATABASE_NAME} TO e2e_worker_queue`);
   const worker: ChildProcess = spawn("pnpm", ["--filter", "@jobguard/api", "start:worker"], { cwd: join(process.cwd(), "../.."), detached: true, stdio: "inherit",
-    env: { ...process.env, JOBGUARD_ENV: "synthetic_demo", JOBGUARD_WORKER_PRACTICE_FINAL_CHECK_ONLY: "1", GRAPHILE_DATABASE_URL: login("e2e_worker_queue"), RUNTIME_DATABASE_URL: E2E_RUNTIME_URL, SHADOW_DATABASE_URL: login("e2e_worker_shadow") } });
+    env: { ...process.env, JOBGUARD_ENV: "synthetic_demo", JOBGUARD_WORKER_PRACTICE_FINAL_CHECK_ONLY: "1", WORKER_DATABASE_URL: login("e2e_worker_actions"), GRAPHILE_DATABASE_URL: login("e2e_worker_queue"), RUNTIME_DATABASE_URL: E2E_RUNTIME_URL, SHADOW_DATABASE_URL: login("e2e_worker_shadow") } });
   for (let i = 0; i < 240 && !(await identityAdmin.query("SELECT to_regclass('graphile_worker._private_jobs') IS NOT NULL ready")).rows[0].ready; i++) await new Promise(resolve => setTimeout(resolve, 500));
   await identityAdmin.query(`REVOKE CREATE ON DATABASE ${SYNTHETIC_DATABASE_NAME} FROM e2e_worker_queue`);
   await identityAdmin.end();

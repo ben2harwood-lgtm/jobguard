@@ -5,14 +5,14 @@
       "branches": [
         "codex/sandbox/lp-6c-money-routines"
       ],
-      "note": "LP-6c RED built on LP-6b 38e33202. NOPR. Shared inventory/upgrade test serialize; full PostgreSQL CI and two exact-head security checks required before landing. Router stages the resolved merge. Own lane file is implicitly permitted.",
+      "note": "LP-6c RED built on LP-6b ca05fd9240627059cbbd19f4104fa5e8b690b96d. NOPR. Shared inventory/upgrade test serialize; full PostgreSQL CI and two exact-head security checks required before landing. Router stages the resolved merge. Own lane file is implicitly permitted.",
       "allow": [
         "docs/contracts/lp-0-effective-privileges-v1.md",
-        "packages/db/migration-notes/0570_lp6c_money_binding.md",
-        "packages/db/migrations/0570_lp6c_money_binding.sql",
+        "packages/db/migration-notes/0591_lp6c_money_binding.md",
+        "packages/db/migrations/0591_lp6c_money_binding.sql",
         "packages/db/test/lp6c-money-routines.integration.test.ts",
         "packages/db/test/lp6c-money-routines.test.ts",
-        "packages/db/test/migration-proofs/0570_lp6c_money_binding.proof.json",
+        "packages/db/test/migration-proofs/0591_lp6c_money_binding.proof.json",
         "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts"
       ]
     }

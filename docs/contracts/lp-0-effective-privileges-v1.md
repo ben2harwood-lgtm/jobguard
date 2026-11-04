@@ -552,6 +552,121 @@ and database OID directly; there is no control-file grant or environment helper.
 
 ### LP-6c build-ahead delta — protected money/commitment identity
 
-`0570_lp6c_money_binding.sql` guards 28 existing definitions without withdrawing compatibility parameters or changing existing runtime grants. The new `a-lp6c-money-binding` inventory group records exactly five owner-only binding EXECUTE grants. The meter bridge now selects identity through `bind_request`, retaining synthetic-environment and live owner/admin restrictions. Financial authorization membership, command resource/claim actors and all explicit actor/tenant arguments covered by this slice must match the protected binding before business access or replay returns.
+`0591_lp6c_money_binding.sql` guards 28 existing definitions without withdrawing compatibility parameters or changing existing runtime grants. The new `a-lp6c-money-binding` inventory group records exactly five owner-only binding EXECUTE grants. The meter bridge now selects identity through `bind_request`, retaining synthetic-environment and live owner/admin restrictions. Financial authorization membership, command resource/claim actors and all explicit actor/tenant arguments covered by this slice must match the protected binding before business access or replay returns.
 
-The body-preservation regression checks the latest predecessor definitions; permission, exact approval, money formulas and CH-7-TERMS clocks remain independent controls. See `packages/db/migration-notes/0570_lp6c_money_binding.md` and `packages/db/test/lp6c-money-routines.integration.test.ts`. LP-6b 38e33202 is the predecessor; its JSON baseline remains unchanged and the LP-6c inventory delta is in the 0570 proof fragment. This is source-inspected construction, not PostgreSQL-executed or independently verified closure. Full PostgreSQL CI, two exact-head security checks and remaining LP-6d/LP-8/LP-9 gates remain required.
+The body-preservation regression checks the latest predecessor definitions; permission, exact approval, money formulas and CH-7-TERMS clocks remain independent controls. See `packages/db/migration-notes/0591_lp6c_money_binding.md` and `packages/db/test/lp6c-money-routines.integration.test.ts`. LP-6b ca05fd9240627059cbbd19f4104fa5e8b690b96d is the predecessor; its JSON baseline remains unchanged and the LP-6c inventory delta is in the 0591 proof fragment. This is source-inspected construction, not PostgreSQL-executed or independently verified closure. Full PostgreSQL CI, two exact-head security checks and remaining LP-6d/LP-8/LP-9 gates remain required.
+
+## LP-12 bounded ownership candidate (0815, inherited chain, 4 November)
+
+RED, NOPR; READY for router branch saving, landing held. The actual inherited
+LP-11 tip is `858c129f616dfe042d5311dcbf3d26c1358c9355`. LP-6b/6c/6d/6e,
+LP-7, LP-8a/b and LP-10 source is present. Their source presence closes the
+old absent-predecessor hold; it does not establish acceptance or mainline landing.
+The four index conflicts were resolved textually using the predecessor's current
+content, then only LP-12 owner provisioning, cleanup and tests were reapplied.
+The router must stage those resolutions and complete the existing merge because
+this sandbox cannot write `.git`. No fetch or Git mutation was performed.
+
+Migration 0815 retains the bounded slice: move the latest installed
+`lp6_session_authority` to `jobguard_binding_lookup_owner`, and
+`assert_financial_authorization`, `post_plan_obligation`, `post_plan_settlement`
+and `reverse_journal` to `jobguard_money_owner`. No function is re-created, so
+LP-6d's effective-practice resolver and LP-6c's authorization checks survive.
+LP-6d added the private `lp6d_contractor_session_identity(uuid)` dependency;
+LP-12 now grants the lookup owner EXECUTE on that existing helper rather than
+copying its body. All five required helper grants are enumerated in the tests.
+The three credential-row reads/locking grants, membership/revocation reads and
+two lookup policies remain scoped to the non-assumable credential lookup owner.
+The binding-store owner loses its redundant credential reads and direct SSO grant.
+
+The money owner retains only membership/authorization/account/journal reads,
+journal/line inserts, row-lock column grants and the two protected accessors.
+It has no sequence access. Its policies copy LP-11's installed canonical tenant
+policies and now refuse missing bound predicates or residual `app.tenant_id`.
+The candidate proof chains current_actor ACLs from LP-6e and current_tenant ACLs
+from LP-11 before adding only the money owner's EXECUTE. Binding, command and
+audit entrypoints remain with their inherited owners; no duplicate routines.
+The command writer loses custody of registry, lifecycle claim and immutable
+operational-record tables while retaining only required reads/inserts and
+claim outcome/effect updates. Private request_binding is the narrow-owner
+control-plane table exception. All owners remain inert and cannot inherit
+migration authority; bootstrap removes temporary memberships even on failure.
+
+LP-10's installed worker capability is now required by the test login; the old
+missing-worker role fabrication has been removed. Added database regressions
+check every surviving signature of the moved money functions, unbound forged
+settings and a different live author in the same tenant, with unchanged journal
+and audit state after refusal. Existing real-credential, wrong-tenant, money,
+reversal, command replay, owner assumption, redefinition, exact grant and cleanup
+assertions remain. Listing these tests establishes collection only, not execution.
+
+Closed old guard hold: the inherited
+`plan-entitlement-lifecycle-upgrade.integration.test.ts` already uses
+`pg_get_function_identity_arguments(p.oid)` in its catalogue snapshot. LP-12
+makes no edit to that guard. No scanner, pin, protection record, baseline JSON
+inventory or predecessor migration/proof is changed from the LP-11 tip.
+
+### Named holds for landing
+
+1. LP-11 credential bootstrap compatibility remains substantive work: the real
+SSO/practice/effective-contractor resolver reaches FORCE-RLS tenant rows before
+request_binding exists. LP-12's narrow lookup grants do not solve the nested
+identity/helper policies. No GUC fallback, provisional binding, duplicate resolver
+or bootstrap bypass is introduced. Prove positive sign-in, invitations,
+provisioning, SSO-required, effective-worker, revocation and pool reuse after
+its checked bootstrap design is implemented. LP-10/11 worker bootstrap also
+reads action_outbox before worker binding; internal/claim/retry/completion and
+legacy caller compatibility stay held with those owners. Customer-message
+writer remains held for the separate customer sign-in proof after LP-6b lands,
+as directed; it is not implemented here.
+
+2. Catalogue/source-proof registration remains held for PostgreSQL and the
+applicable owner. Exact known old/new differences: LP-12 current_actor ACL
+before includes LP-6e audit-writer EXECUTE; current_tenant before also includes
+LP-11 identity/meter/meter-owner/shadow EXECUTE; each after adds only
+`jobguard_money_owner=X/jobguard_binding_owner`. The latest LP-6d resolver's
+private helper ACL changes from `{jobguard_migration=X/jobguard_migration}` to
+`{jobguard_migration=X/jobguard_migration,jobguard_binding_lookup_owner=X/jobguard_migration}`.
+LP-6d's inherited 0780 proof describes that helper's arguments as `uuid`, while
+its SQL declaration is `s uuid`; identity-argument catalogue output must prove
+and reconcile `uuid` -> `s uuid` in that predecessor-owned fragment. LP-12's
+own fragment uses `s uuid`. Its five money policy predicates replace the old
+candidate's GUC read with `(app.current_tenant())::text` inside the retained
+NULLIF/uuid wrapper; PostgreSQL must verify canonical formatting and all
+surrounding attributes. No unmeasured fingerprint/digest is invented, and no
+scanner, pin or guard edit is proposed by LP-12.
+
+3. The inherited API watchdog registry failures remain held, with current
+results: 251 passed / 20 failed across context-boundary and registry after
+refreshing stale local database dist (context-boundary: 145 passed; registry:
+106 passed / 20 failed). Failures include four unclassified new mutation routes,
+standalone command registration and stranger-session 404/401 expectations.
+Its source and tenant-context
+source are unchanged from LP-11. Fixes belong to the inherited API/route
+classification and binding-fixture owners; no assertion is weakened here.
+
+4. CI must execute PostgreSQL fresh/upgrade/catalogue/RLS and migration suites,
+actual runtime and LP-10 worker login assumption/redefinition refusals, exact
+owner grants/helpers/sequence absence/table custody, all old signatures,
+forged/unbound/wrong-tenant/wrong-author and revoked identity attacks, legitimate
+credential/command/money/replay/reversal/limit paths and bootstrap cleanup.
+LP-11's gated positive-policy fixtures remain required. The source-derived
+0815 proof fragment is a candidate, not measured catalogue evidence. Full
+pinned-install typecheck/lint/test/build, affected synthetic browser journeys,
+accepted predecessor/contiguous migration order and independent exact-head RED
+review remain required before landing. No database/browser process was started.
+
+Local validation: database TypeScript passes; the three named LP-12/LP-6a/
+proof-loader files pass 83 tests; bootstrap SQL-trace selection passes eight
+with three PostgreSQL tests unselected; all 14 LP-12 PostgreSQL cases collect.
+The lane lists exactly the non-lane paths changed from the actual LP-11 tip,
+excluding itself. Full candidate-head lane lint remains router/CI work after
+merge staging. Detailed commands/results and migration/proof hashes are in the
+router commit message. No live customer data, money, provider, release or PR.
+
+LATER / SIMPLICITY (carried from initial review, nonblocking):
+`packages/db/src/demo-bootstrap.ts` repeats restricted-owner lists in provisioning
+and holder checks. A focused later change could share the list to reduce the
+risk of provisioning a role without its matching custody check. No unrelated
+refactor was made here. Forward fix requires a new reviewed migration restoring
+owners/revoking grants, never edits to installed history.

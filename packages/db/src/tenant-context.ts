@@ -1,3 +1,4 @@
+import { RequestBindingRefusedError } from "./request-binding-error.js";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { Pool, PoolClient } from "pg";
 import * as schema from "./schema.js";
@@ -89,21 +90,29 @@ export async function withTenant<T>(
   pool: Pool,
   context: VerifiedTenantContext,
   work: (database: TenantTransaction) => Promise<T>,
+  deferredBinding?: "identity-sso" | "identity-oidc" | "identity-sso-required" | "shadow-persist" | "audit-export-refusal",
 ): Promise<T> {
   if (!genuineTenantContexts.has(context) || typeof context.tenantId !== "string" || !UUID.test(context.tenantId)) {
     throw new InvalidTenantContextError();
   }
 
+  if (deferredBinding !== undefined && !["identity-sso", "identity-oidc", "identity-sso-required", "shadow-persist", "audit-export-refusal"].includes(deferredBinding)) throw new InvalidTenantContextError();
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
     const session = sessionReferences.get(context);
-    if (session) {
-      await client.query("SELECT app.bind_request($1, $2, $3)", [session.kind, session.credential, context.tenantId]);
-      const bound = (await client.query<{ actor: string; tenant: string }>(
-        "SELECT app.current_actor() actor, app.current_tenant() tenant",
-      )).rows[0];
-      if (!bound || bound.actor !== session.membershipId || bound.tenant !== context.tenantId) throw new InvalidTenantContextError();
+    if (session && deferredBinding === undefined) {
+      try {
+        await client.query("SELECT app.bind_request($1, $2, $3)", [session.kind, session.credential, context.tenantId]);
+        const bound = (await client.query<{ actor: string; tenant: string }>(
+          "SELECT app.current_actor() actor, app.current_tenant() tenant",
+        )).rows[0];
+        if (!bound || bound.actor !== session.membershipId || bound.tenant !== context.tenantId) throw new RequestBindingRefusedError(session.kind);
+      } catch (error) {
+        // Expiry can also be discovered by the authority lookup immediately after bind.
+        if ((error as { code?: string }).code === "42501") throw new RequestBindingRefusedError(session.kind);
+        throw error;
+      }
     }
     // Compatibility for retained dark synthetic/queued callers and pre-LP-6c routines.
     // On session paths the database has already derived and checked the authority.

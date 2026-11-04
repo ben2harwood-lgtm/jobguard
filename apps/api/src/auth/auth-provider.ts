@@ -114,7 +114,7 @@ export class MemoryAuthProvider implements AuthProvider {
     const digest = this.digest(token);
     const session = this.sessions.find((candidate) => timingSafeEqual(candidate.tokenDigest, digest));
     return session && session.expiresAt > this.now()
-      ? { identityUserId: session.identityUserId, sessionId: session.id, csrfToken: session.csrfToken, sessionCredential: digest.toString("hex") }
+      ? Object.defineProperty({ identityUserId: session.identityUserId, sessionId: session.id, csrfToken: session.csrfToken }, "sessionCredential", { value: digest.toString("hex") })
       : undefined;
   }
 

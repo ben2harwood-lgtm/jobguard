@@ -101,6 +101,7 @@ class BillingSql {
           this.receipts.set(id, { request_hash: request, result: { paymentId }, status: "succeeded" });
           claimed.push(id); return rows([{ payment_id: paymentId }]);
         }
+        if (sql === "SELECT app.current_actor() actor, app.current_tenant() tenant") return rows([{ actor: this.fixture.actorMembershipId, tenant: this.fixture.tenantId }]);
         if (sql.includes("FROM app.audit_event")) return rows(this.auditedPayments.has(values[1]) ? [{}] : []);
         if (sql.includes("SELECT authorization_id FROM app.customer_payment")) return rows([...pendingPayments, ...this.payments].filter(p => p.id === values[1]));
         if (sql.includes("FROM app.append_audit(")) {

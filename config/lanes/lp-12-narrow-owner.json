@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "lanes": {
+    "lp-12-narrow-owner": {
+      "branches": [
+        "codex/sandbox/lp-12-narrow-owner"
+      ],
+      "note": "LP-12 RED NOPR on inherited LP-11 858c129f616dfe042d5311dcbf3d26c1358c9355; reserved 0815. READY for branch save; landing held for inherited credential/worker compatibility, catalogue registration, API failures, PostgreSQL CI and independent exact-head review.",
+      "allow": [
+        "docs/contracts/lp-0-effective-privileges-v1.md",
+        "packages/db/migrations/0815_lp12_narrow_owners.sql",
+        "packages/db/src/demo-bootstrap.ts",
+        "packages/db/test/administrative-role-setup.ts",
+        "packages/db/test/demo-bootstrap.integration.test.ts",
+        "packages/db/test/lp12-narrow-owners.integration.test.ts",
+        "packages/db/test/lp12-narrow-owners.test.ts",
+        "packages/db/test/lp12-narrow-owners.ts",
+        "packages/db/test/lp6a-binding.test.ts",
+        "packages/db/test/migration-proofs/0815_lp12_narrow_owners.proof.json"
+      ]
+    }
+  }
+}

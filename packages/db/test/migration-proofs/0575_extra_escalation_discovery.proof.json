@@ -1,0 +1,74 @@
+{
+  "migration": "0575_extra_escalation_discovery.sql",
+  "lp0": [
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "id": "ent5-escalation-discovery",
+        "title": "ENT-5 synthetic escalation tenant discovery",
+        "kind": "read_access",
+        "status": "approved_current",
+        "target": {
+          "state": "retain",
+          "note": "Identifier-only synthetic worker discovery; FORCE RLS is evaluated per tenant."
+        },
+        "cards": [
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-12": "Verify worker-only execution and no business writes or authority changes."
+        },
+        "downstream": "Queues tenant identifiers; existing xa_escalate owns deadlines and escalation authority.",
+        "sources": [
+          "packages/db/migrations/0575_extra_escalation_discovery.sql"
+        ],
+        "tests": [
+          "packages/db/test/extra-escalation-worker.integration.test.ts"
+        ],
+        "gaps": [
+          "PostgreSQL CI and independent RED review required."
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:infrastructure.discover_extra_escalations()|jobguard_migration",
+        "group": "ent5-escalation-discovery"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:infrastructure.discover_extra_escalations()|jobguard_infrastructure|EXECUTE|-",
+        "group": "ent5-escalation-discovery"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:infrastructure.discover_extra_escalations()",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_infrastructure"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": []
+      }
+    }
+  ],
+  "upgrade": [],
+  "tenancy": []
+}
