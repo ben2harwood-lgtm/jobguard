@@ -1,0 +1,6 @@
+{
+  "migration": "0567_lp3_settlement_binding.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}

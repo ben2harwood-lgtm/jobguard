@@ -658,6 +658,10 @@ function replayPool(select: (sql: string) => object[] | undefined) {
       let ownership = false;
       return { release: vi.fn(), query: async (sql: string) => {
         transaction.push(sql);
+        if (sql === "SELECT app.bind_request($1, $2, $3)") return { rows: [], rowCount: 0 };
+        if (sql === "SELECT app.current_actor() actor, app.current_tenant() tenant") return {
+          rows: [{ actor: "d1500000-0000-4000-8000-000000000003", tenant: "11111111-1111-4111-8111-111111111111" }], rowCount: 1,
+        };
         if (sql.includes("practice_session_digest=$3") || sql.startsWith("SELECT id FROM app.evidence")) {
           ownership = true;
           return { rows: [{ id: scopeId }], rowCount: 1 };

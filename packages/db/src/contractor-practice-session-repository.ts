@@ -1,3 +1,4 @@
+import { RequestBindingRefusedError } from "./request-binding-error.js";
 import type { Pool } from "pg";
 import { z } from "zod";
 import { ContractorPracticeSessionError, contractorPracticeSessionRevokedV1 } from "@jobguard/core";
@@ -23,6 +24,7 @@ export class ContractorPracticeSessionRepository {
     return contractorPracticeSessionRevokedV1.parse({ version: "contractor-practice-session-revoked.v1", environment: "synthetic_demo", realExternalActions: 0, revokedAt: result.revokedAt });
    });
   } catch (error) {
+   if (error instanceof RequestBindingRefusedError) throw new ContractorPracticeSessionError("UNAUTHENTICATED");
    const message = error instanceof Error ? error.message : undefined;
    throw new ContractorPracticeSessionError(message === "MODE_FORBIDDEN" || message === "UNAUTHENTICATED" ? message : "PRACTICE_SESSION_UNAVAILABLE");
   }

@@ -81,7 +81,7 @@ export class EnterpriseIdentityRepository {
       const actor=(await db.$client.query<{actor:string}>("SELECT identity.sso_admin_command($1,$2::jsonb) actor",[sessionDigest,JSON.stringify(input)])).rows[0]!.actor;
       const c=String(input.action==="connection.create"?input.id:input.connectionId);
       await this.audit(db.$client,c,`sso.${String(input.action)}`,`membership:${actor}`,undefined,hash(canonical(input)));
-    });}catch(error){throw ssoRepositoryError(error);}
+    }, "identity-sso");}catch(error){throw ssoRepositoryError(error);}
   }
   async view(context:VerifiedTenantContext,sessionDigest:string):Promise<SsoView> {
     return withTenant(this.pool,context,async db=>{
@@ -91,12 +91,12 @@ export class EnterpriseIdentityRepository {
       const mappings=(await db.$client.query<SsoView['mappings'][number]>("SELECT DISTINCT ON(connection_id,idp_group) connection_id,idp_group,revision,role,scope_kind,scope_id,enabled FROM identity.idp_group_role_mapping ORDER BY connection_id,idp_group,revision DESC")).rows;
       const events=(await db.$client.query<SsoView['events'][number]>("SELECT * FROM identity.sso_admin_events($1,$2)",[sessionDigest,context.tenantId])).rows;
       return {version:"sso-admin-view.v1",environment:"synthetic_demo",tenantId:context.tenantId,connections,domains,mappings,events};
-    });
+    }, "identity-sso");
   }
   async sessionScope(sessionId:string):Promise<{tenantId:string;membershipId:string;connectionId?:string;revoked?:boolean}|null> {
     return (await this.pool.query<{scope:{tenantId:string;membershipId:string;connectionId?:string;revoked?:boolean}|null}>("SELECT identity.sso_session_scope($1) scope",[sessionId])).rows[0]!.scope;
   }
   async allowed(context:VerifiedTenantContext,connectionId:string,sessionId:string,membershipId:string,permission:string,targetId:string):Promise<boolean> {
-    return withTenant(this.pool,context,async(db:TenantTransaction)=> (await db.$client.query<{allowed:boolean}>("SELECT identity.sso_action_allowed($1,$2,$3,$4,$5) allowed",[connectionId,sessionId,membershipId,permission,targetId])).rows[0]!.allowed);
+    return withTenant(this.pool,context,async(db:TenantTransaction)=> (await db.$client.query<{allowed:boolean}>("SELECT identity.sso_action_allowed($1,$2,$3,$4,$5) allowed",[connectionId,sessionId,membershipId,permission,targetId])).rows[0]!.allowed, "identity-sso");
   }
 }

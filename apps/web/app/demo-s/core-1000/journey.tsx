@@ -26,7 +26,7 @@ export function Core1000Guide({ chooserHref = "/demo-s" }: { chooserHref?: strin
       <li>Preview a £100 net credit note and approve that exact correction. The expected gross credit is £120 and remaining balance £700. The original £1,320 invoice and receipt history stay saved.</li>
       <li>Inspect job value and follow its source links. Manual practice receipts are not bank-confirmed settlement or fee-eligible recoveries.</li>
     </ol>
-    <p>MON-5 customer journey: not ready yet. Acceptance here is builder-recorded practice acceptance, not an authenticated customer response.</p>
+    <p>This practice exercise doesn't use the customer's secure link; the shadow-30000 journey shows customer approval through the customer portal. Acceptance here is builder-recorded practice acceptance, not an authenticated customer response.</p>
     <p>Independent RED verdict: missing. Non-technical builder observations: 0 of 2 recorded here. No release gate is passed by this exercise.</p>
   </section>;
 }

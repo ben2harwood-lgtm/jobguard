@@ -36,3 +36,13 @@ describe("ENT-3d thin Next adapter", () => {
   expect(response.status).toBe(422); expect(await response.json()).toEqual({ version: "site-extra-error.v1", code }); expect(response.headers.get("cache-control")).toBe("no-store");
  });
 });
+
+it("passes strict v4 status on the existing route, refusing missing status and forged authority", async () => {
+ const raw = v3({ version: "log-site-extra.v4", workStatus: "finished" });
+ expect((await post(JSON.stringify(raw))).status).toBe(201);
+ expect(log).toHaveBeenCalledExactlyOnceWith("00000000-0000-4000-8000-000000000001", raw);
+ log.mockClear();
+ for (const key of ["origin", "time", "actor", "role", "track"]) expect((await post(JSON.stringify({ ...raw, [key]: "forged" }))).status).toBe(400);
+ expect((await post(JSON.stringify({ ...raw, workStatus: undefined }))).status).toBe(400);
+ expect(log).not.toHaveBeenCalled();
+});
