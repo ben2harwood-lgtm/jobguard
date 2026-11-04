@@ -54,3 +54,46 @@ catalogue, RLS, concurrent revisions, privileges, upgrade and fixture persistenc
 need CI execution plus an independent exact-head RED review. No local database or
 browser execution is claimed. Migration number 0754 is reserved and is renumbered
 at landing; the db index and later-empty-tables exports overlap other work.
+
+## Session route and practice preview screen (M4-19 remains open)
+
+The NOPR continuation adds `NoticeFixtureApplication`, a server-only composition,
+GET/POST `/api/jobs/[id]/notice-fixtures`, and the practice page at the same job's
+`notice-fixtures` path. The page uses the job ID as its one fixture notice ID;
+GET also accepts an explicit noticeId for existing stored books. Existing records
+and strict commands are unchanged. Session authentication, CSRF, trusted origin
+on POST, current membership, tenant context and owner/admin read authority are
+checked before repository access; command authority is rechecked by SQL. Other
+environments return not-found and every response is no-store. Path/body job IDs
+must agree. Tenant selectors are checked against session membership, never trusted
+as authority. Tenant/actor/enablement fields in the command remain forbidden.
+
+The server returns the exact persisted preview and unconditional real-notice gate
+refusal. The client displays those bytes and retains an uncertain command's exact
+body/ID in sessionStorage across reloads; new commands stay blocked until the same
+command receives a definite response. Missing/unsupported facts are advice flags,
+not stored revisions or approvals. Approvals target the displayed immutable
+revision; later facts invalidate reuse. Each service assertion is separately
+recorded, with the existing separate legal-assessment requirement. None is a real
+notice or proof of service. No migration, grant, role, provider, outbox, timer or
+financial path is added. No existing record is removed or rewritten.
+
+Unit boundary checks run locally; the new real-PostgreSQL route integration suite
+must prove persisted replay/conflict, stale approval refusal, role/session/tenant
+refusals and unchanged outbox/queue state. The headless browser spec must run in
+CI's mobile-360 and desktop projects to prove reload, uncertain retry, exact
+preview/approval, distinct service facts and 44px targets without horizontal
+scroll. CI must also run required repository checks and the Cloudflare bundle
+boundary. These tests are written, not claimed as executed locally. An independent
+exact-head RED review remains required. Professional review, D06 v2 templates,
+generation, sending and gates G0–G5 stay closed; this does not finish M4-19.
+
+LATER / SIMPLICITY (initial source review):
+`packages/db/src/notice-fixture-repository.ts` repeats construction of the current
+preview target during projection and decision creation. If this path grows,
+returning that canonical target once with the repository view could reduce
+repeated serialization and keep future consumers aligned. No change is needed
+for this bounded screen; retaining the existing authority avoids a format change.
+Shared export/registry overlap: serialize the workspace export line in
+`apps/api/src/workspace/index.ts` and the route classification in
+`packages/core/src/watchdog.ts` when the router catches up this older branch.
