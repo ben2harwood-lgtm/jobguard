@@ -23,6 +23,7 @@ async function checkAccessibility(page: Page, screen: string) {
       return { text: button.textContent, ratio: (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05), opacity: ancestors.reduce((n, node) => n * Number(getComputedStyle(node).opacity), 1) };
     });
   });
+  await test.info().attach(`disabled-contrast-${screen}`, { body: JSON.stringify(disabled, null, 2), contentType: "application/json" });
   for (const button of disabled) {
     expect(button.opacity, `${screen}: ${button.text} must not fade its AA colours`).toBe(1);
     expect(button.ratio, `${screen}: ${button.text} disabled text contrast`).toBeGreaterThanOrEqual(4.5);
@@ -45,6 +46,7 @@ test("visit completion requires an answer and retries the exact command", async 
     return route.fulfill({ json: { version: "site-visit-completed.v1", ...head, jobId, visitId, completedAt: "2026-11-03T10:00:00Z", closeoutAnswer: "no" } });
   });
   await page.goto("/site/extra");
+  await expect(page.getByRole("note", { name: "Practice sandbox notice", exact: true })).toHaveText("Practice sandbox — synthetic data; nothing is sent or charged");
   const complete = page.getByRole("button", { name: "Complete visit", exact: true });
   await expect(complete).toBeDisabled();
   await checkAccessibility(page, "visit-and-unanswered-closeout");

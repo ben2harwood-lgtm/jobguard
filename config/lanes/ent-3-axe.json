@@ -11,6 +11,7 @@
         "apps/web/package.json",
         "pnpm-lock.yaml",
         "apps/web/e2e/ENT-3.spec.ts",
+        "apps/web/app/layout.tsx",
         "apps/web/app/northside/northside.module.css",
         "docs/verdicts/ENT-3-AXE/BUILDER_RECEIPT.md"
       ]
