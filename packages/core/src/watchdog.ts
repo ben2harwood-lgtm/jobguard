@@ -48,6 +48,8 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "/api/contractor/jobs/[id]/billing/[action]": "pre_live_allowed",
   "nest:/contractor/jobs/:id/billing/:action": "pre_live_allowed",
   // SV6-PERSIST-B: historical attribution intent is post-live; execution remains closed.
+  "/api/jobs/[id]/dunning/[operation]": "post_live_billing",
+  "command:managed_recovery.elect": "post_live_billing",
   "/api/jobs/[id]/payment-fees": "post_live_billing",
   "nest:/jobs/:id/payment-fees": "post_live_billing",
   "/api/jobs/[id]/success-fees": "post_live_billing",
@@ -232,6 +234,8 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "command:proof.complete": "watchdog_live_only",
   "command:purchase_order.simulate": "watchdog_live_only",
   "command:purchase_order.place": "watchdog_live_only",
+  "command:purchase_order.send.dark": "watchdog_live_only",
+  "command:purchase_order.attest_manual": "watchdog_live_only",
   "command:recovery.message.approve": "post_live_billing",
   "command:recovery.follow_up.approve_reminder": "post_live_billing",
   "command:quote.acceptance.attest": "pre_live_allowed",

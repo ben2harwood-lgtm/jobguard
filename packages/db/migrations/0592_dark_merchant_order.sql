@@ -81,7 +81,7 @@ CREATE TRIGGER b_watchdog_command_id_before_insert BEFORE INSERT ON app.purchase
 INSERT INTO app.command_type_registry VALUES
  ('purchase_order.send.dark','command.v1','owner','route_before_begin','purchase_order','commercial','fake_merchant_order');
 
--- Preserve 0541's latest result adapters; only the dark purchase-order branch differs.
+-- Preserve main's latest result adapters, including 0566 managed recovery; only the dark purchase-order branch differs.
 CREATE OR REPLACE FUNCTION app.lp5_command_result(p_command_id uuid,p_outcome jsonb) RETURNS jsonb
  LANGUAGE plpgsql SET search_path=pg_catalog,pg_temp AS $$
 DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; c app.command_lifecycle_claim;
@@ -105,6 +105,23 @@ BEGIN
  END IF;
 
  CASE adapter
+ WHEN 'managed_recovery' THEN
+  SELECT jsonb_build_object('version','managed-recovery-state.v1','environment','synthetic_demo',
+   'tenantId',e.tenant_id,'jobId',e.job_id,'caseId',e.case_id,'pursuitStartedAt',NULL,
+   'election',jsonb_build_object('tenantId',e.tenant_id,'jobId',e.job_id,'caseId',e.case_id,
+    'commandId',e.command_id,'actorMembershipId',e.actor_membership_id,
+    'electedAt',to_char(e.elected_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+    'termsVersion',e.terms_version,'selection',jsonb_build_object('service',e.service,'points',e.points),
+    'bindingHash',encode(sha256(convert_to(replace(jsonb_build_array('managed-recovery-election.v1',
+     e.tenant_id,e.job_id,e.case_id,e.command_id,e.actor_membership_id,
+     to_char(e.elected_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+     e.terms_version,e.service,e.points)::text,', ',','),'UTF8')),'hex'))) INTO value
+  FROM app.managed_recovery_election e
+  WHERE e.tenant_id=t AND e.case_id=subject::uuid AND e.command_id=p_command_id
+   AND e.actor_membership_id=c.actor_membership_id AND e.authorization_id=c.authorization_id
+   AND e.xmin::text=pg_current_xact_id()::text AND expected_revision=1
+   AND a->>'actionType'='managed_recovery.elect' AND a->>'policyVersion'=e.terms_version
+   AND a->>'contentHash'=encode(sha256(convert_to('managed-recovery-election-command.v1'||chr(10)||e.job_id::text||chr(10)||e.case_id::text||chr(10)||e.service||chr(10)||e.points::text||chr(10)||e.terms_version,'UTF8')),'hex');
  WHEN 'source_intake' THEN
   -- The DTO is handed off only by the private checked source routine. Prove its
   -- exact command, job, actor and freshly registered original before accepting it.

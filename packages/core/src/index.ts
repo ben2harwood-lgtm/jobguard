@@ -136,6 +136,8 @@ export * from "./small-builder-demo-lifecycle.js";
 
 export * from "./supplier-line-matching.js";
 export * from "./supplier-match-corrections.js";
+export * from "./managed-recovery.js";
+export * from "./merchant-connectors.js";
 export * from "./inbox-outcome-metrics.js";
 
 export * from "./dunning.js";

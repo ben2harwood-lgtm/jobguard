@@ -52,7 +52,10 @@ describe("M2-1 migration compatibility (source checks, not PostgreSQL evidence)"
 
 describe("M2-1 checked command compatibility", () => {
   it("preserves every latest-main result adapter outside the exact dark-order branch", () => {
-    const current = readFileSync(new URL("../migrations/0541_late_source_import.sql", import.meta.url), "utf8");
+    const predecessor = readFileSync(new URL("../migrations/0541_late_source_import.sql", import.meta.url), "utf8");
+    const extension = readFileSync(new URL("../migrations/0566_managed_recovery_election.sql", import.meta.url), "utf8");
+    const managedRecovery = extension.split("$branch$CASE adapter\n")[1]!.split("$branch$")[0]!;
+    const current = predecessor.replace(" CASE adapter\n", " CASE adapter\n" + managedRecovery);
     const body = (sql: string) => {
       const start = sql.indexOf("CREATE OR REPLACE FUNCTION app.lp5_command_result(");
       return sql.slice(start, sql.indexOf("END $$;", start) + 8);
