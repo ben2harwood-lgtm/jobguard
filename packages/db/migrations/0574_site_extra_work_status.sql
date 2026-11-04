@@ -1,4 +1,4 @@
--- ENT-3 RED: an operative statement, never work timing or authorization.
+-- ENT-3 RED: an operative statement, never exact work timing or authorization.
 BEGIN;
 CREATE TABLE app.site_extra_work_status (
  tenant_id uuid NOT NULL, job_id uuid NOT NULL, variation_id uuid NOT NULL,
@@ -39,10 +39,9 @@ BEGIN
   SELECT * INTO o FROM app.extra_origin WHERE tenant_id=t AND job_id=p_job AND variation_id=p_extra;
   IF o.raising_membership_id IS DISTINCT FROM p_actor OR o.raising_role IS DISTINCT FROM 'operative'
    OR o.kind IS DISTINCT FROM 'site_user' OR o.command_type IS DISTINCT FROM 'LogSiteExtra'
-   OR NOT EXISTS(SELECT 1 FROM app.command_receipt r JOIN app.command_lifecycle_claim c
-    ON(c.tenant_id,c.command_id)=(r.tenant_id,r.command_id)
+   OR NOT EXISTS(SELECT 1 FROM app.command_receipt r
     WHERE r.tenant_id=t AND r.command_id=o.command_id AND r.status='processing'
-     AND r.actor_membership_id=p_actor AND c.actor_membership_id=p_actor AND c.transaction_id=pg_current_xact_id()) THEN
+     AND r.actor_membership_id=p_actor) THEN
    RAISE EXCEPTION 'INVALID_COMMAND' USING ERRCODE='23514'; END IF;
   IF p_status IS NULL OR p_status NOT IN('not_started','under_way','finished') THEN RAISE EXCEPTION 'INVALID_COMMAND' USING ERRCODE='23514'; END IF;
  END IF;
@@ -95,4 +94,16 @@ END $$;
 ALTER FUNCTION app.ent3_proceed_comparison(uuid,uuid,text,text) OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.ent3_proceed_comparison(uuid,uuid,text,text) FROM PUBLIC,jobguard_identity,jobguard_infrastructure;
 GRANT EXECUTE ON FUNCTION app.ent3_proceed_comparison(uuid,uuid,text,text) TO jobguard_runtime;
+-- One-extra statement read for ENT-5, after the caller checks client link/job authority.
+-- The tenant comes only from the verified transaction; no table grant is added.
+CREATE FUNCTION app.ent5_extra_work_status(p_job uuid,p_extra uuid) RETURNS text
+ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+ SELECT x.work_status FROM app.site_extra_work_status x
+ WHERE current_database()='jobguard_synthetic_demo'
+  AND x.tenant_id=nullif(current_setting('app.tenant_id',true),'')::uuid
+  AND x.job_id=p_job AND x.variation_id=p_extra
+$$;
+ALTER FUNCTION app.ent5_extra_work_status(uuid,uuid) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.ent5_extra_work_status(uuid,uuid) FROM PUBLIC,jobguard_identity,jobguard_infrastructure;
+GRANT EXECUTE ON FUNCTION app.ent5_extra_work_status(uuid,uuid) TO jobguard_runtime;
 COMMIT;

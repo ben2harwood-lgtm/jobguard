@@ -6,7 +6,7 @@ requires not_started, under_way or finished; no client actor, time, price or
 permission is accepted.
 
 `ent3_work_status` writes only during the still-processing LogSiteExtra's own
-transaction, bound to its origin, operative and lifecycle claim. The log seam
+transaction, bound to its origin, operative and processing command receipt. The log seam
 records status after server pricing and before completion. A status audit event
 uses lp4_seal_audit after all business writes. The existing request hash includes
 status, so exact replay returns the original log and changed status conflicts.
@@ -19,8 +19,11 @@ The existing supervisor-queries GET returns additive workStatuses for the existi
 uses sor_line_net_pence and xa_requirement, matching submission. It returns only
 within/above; NULL (unpriced) is above. The displayed preview may become stale;
 submission still evaluates its own rules. Neither comparison nor statement grants
-permission or supplies work timing, preapproval breach, approval, origin, fees or
-meter data. Finished above the limit is accepted, and later approval preserves the
+permission or supplies exact work timing, approval, origin, fees or meter data.
+ENT-5 reads one statement through ent5_extra_work_status, scoped to the verified
+tenant, job and extra, after client link/job checks. No runtime table grant is
+added. A visit alone cannot prove work: not_started or missing stays uncertain;
+under_way or finished can qualify a breach, which later approval cannot erase. Finished above the limit is accepted, and later approval preserves the
 statement and requirement comparisons.
 
 The proof file explicitly declares LP-0, upgrade and tenancy changes from reviewed

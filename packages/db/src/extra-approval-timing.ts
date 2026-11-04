@@ -1,6 +1,7 @@
 import type { TenantTransaction } from "./tenant-context.js";
 
 type Timing = "before_work" | "after_work" | "uncertain" | "not_derived";
+export type OperativeWorkStatus = "not_started" | "under_way" | "finished";
 type Breach = boolean | "uncertain" | "not_derived";
 export type VisitTimingSource = {
   visit_id: string; started_at: string; completed_at: string | null;
@@ -10,7 +11,7 @@ export type ApprovalTimingFact = { request_id: string; step_index: number; step_
 export type TimingRequest = { id: string; preapproval_required: boolean | null; superseded_us: string | null };
 
 /** Visit bounds are an interval for the extra, never a claim of an exact per-extra work time. */
-export function deriveVisitApprovalTiming(visit: VisitTimingSource | undefined, requests: TimingRequest[], facts: ApprovalTimingFact[], requestId: string) {
+export function deriveVisitApprovalTiming(visit: VisitTimingSource | undefined, requests: TimingRequest[], facts: ApprovalTimingFact[], requestId: string, workStatus?: OperativeWorkStatus) {
   const timing = (at: string): Timing => {
     if (!visit) return "not_derived";
     if (BigInt(at) < BigInt(visit.start_us)) return "before_work";
@@ -24,9 +25,10 @@ export function deriveVisitApprovalTiming(visit: VisitTimingSource | undefined, 
     if (request.preapproval_required === null) return "uncertain";
     const endedDuringVisit = request.superseded_us !== null && (visit.finish_us === null || BigInt(request.superseded_us) <= BigInt(visit.finish_us));
     const approval = facts.find(f => f.request_id === request.id && f.step_role === "client_approver");
-    if (!approval) return visit.finish_us === null || endedDuringVisit ? "uncertain" : true;
+    const workReportedDone = workStatus === "under_way" || workStatus === "finished";
+    if (!approval) return visit.finish_us === null || endedDuringVisit || !workReportedDone ? "uncertain" : true;
     const when = timing(approval.at_us);
-    return when === "before_work" ? false : when === "after_work" ? (endedDuringVisit ? "uncertain" : true) : "uncertain";
+    return when === "before_work" ? false : when === "after_work" ? (endedDuringVisit || !workReportedDone ? "uncertain" : true) : "uncertain";
   });
   // Every earlier frozen requirement remains relevant. A later approval/revision cannot erase a breach.
   const doneWithoutRequiredPreapproval: Breach = !visit ? "not_derived" : breaches.includes(true) ? true : breaches.includes("uncertain") ? "uncertain" : false;
@@ -60,5 +62,7 @@ export async function readExtraApprovalTiming(db: TenantTransaction, tenant: str
   const facts = (await db.$client.query<ApprovalTimingFact>(
     `SELECT request_id,step_index,step_role,(extract(epoch FROM server_recorded_at)*1000000)::bigint::text at_us
      FROM app.extra_approval_step_fact WHERE tenant_id=$1 AND job_id=$2 AND variation_id=$3 ORDER BY step_index`, [tenant, job, extra])).rows;
-  return deriveVisitApprovalTiming(visit, requests, facts, requestId);
+  const workStatus = (await db.$client.query<{ work_status: OperativeWorkStatus | null }>(
+    "SELECT app.ent5_extra_work_status($1,$2) work_status", [job, extra])).rows[0]?.work_status;
+  return deriveVisitApprovalTiming(visit, requests, facts, requestId, workStatus ?? undefined);
 }

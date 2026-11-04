@@ -82,7 +82,13 @@ is an immutable operative statement with server time and session operative, writ
 in the log transaction (migration 0574). It is not visit timing or a preapproval
 breach determination. Same-ID/different-status conflicts; replay preserves the
 first statement. Finished above the limit is recorded; later approval cannot alter
-it or the original requirement comparisons. ENT-5 not_derived stays unchanged.
+it or the original requirement comparisons. ENT-5 reads the statement for one
+extra through tenant/job/extra-scoped ent5_extra_work_status after client link and
+job authority checks. Visit bounds still determine approval timing. A true breach
+also requires an operative statement of under_way or finished; not_started or no
+statement stays uncertain even after the visit finishes and approval arrives.
+Later approval or a revision cannot erase a true breach. Without a linked visit,
+timing remains not_derived. The statement supplies no exact per-extra work time.
 Free-text `log-site-extra.v4` extends the unchanged strict v3 fields with required
 workStatus (not_started, under_way, finished). V1/v2/v3 remain unchanged and reject
 status. The existing LogSiteExtra route/registry classification is retained; no
@@ -114,7 +120,8 @@ The screen labels this as a comparison giving no permission to work. Free text i
 unpriced and shown above. The old generic Northside demo-setting limit is no longer
 used as this job's comparison. The existing supervisor-queries GET adds optional
 workStatuses, scoped to that supervisor's job, for read-only display alongside the
-existing extras list. No commercial/timing consumer reads these statements.
+existing extras list. ENT-5 uses the narrow statement read only to qualify its client-facing breach
+flag; no money consumer reads these statements.
 
 The first priced capture now uses exactly four taps: choose SoR result, choose
 work status, confirm resident, log; photo and typed search excluded by the card.

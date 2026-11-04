@@ -5,14 +5,6 @@
       "section": "entries",
       "before": null,
       "after": {
-        "key": "owner|rel:table|app.site_extra_work_status|jobguard_migration",
-        "group": "a-owner-tables-views"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
         "key": "acl|routine|function:app.ent3_work_status(uuid,uuid,uuid,text)|jobguard_runtime|EXECUTE|-",
         "group": "a-exec-site-extra-routines"
       }
@@ -98,6 +90,41 @@
       "section": "triggers",
       "before": null,
       "after": "app.site_extra_work_status|immutable|app.reject_immutable_commercial_mutation|BEFORE DELETE/UPDATE|O"
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.ent5_extra_work_status(uuid,uuid)|jobguard_runtime|EXECUTE|-",
+        "group": "a-exec-site-extra-routines"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.ent5_extra_work_status(uuid,uuid)|jobguard_migration",
+        "group": "a-owner-routines"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.ent5_extra_work_status(uuid,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": []
+      }
     }
   ],
   "upgrade": [
@@ -187,6 +214,21 @@
         "relacl": null,
         "relrowsecurity": false,
         "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "ent5_extra_work_status",
+        "args": "p_job uuid, p_extra uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
       }
     }
   ],

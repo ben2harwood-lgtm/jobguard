@@ -40,6 +40,7 @@
         "apps/web/app/ui/work-order-revisions.tsx",
         "apps/web/e2e/DEMO-S-chooser.spec.ts",
         "apps/web/e2e/ENT-11a.spec.ts",
+        "apps/web/e2e/ENT-11b.spec.ts",
         "apps/web/e2e/ENT-3.spec.ts",
         "apps/web/e2e/ENT-8a-possible-extras.spec.ts",
         "docs/contracts/extra-approval-chain-v1.md",
@@ -67,6 +68,7 @@
         "packages/db/src/site-supervisor-query.ts",
         "packages/db/test/extra-approval-timing.integration.test.ts",
         "packages/db/test/extra-approval-timing.test.ts",
+        "packages/db/test/late-source-import-migration.test.ts",
         "packages/db/test/later-empty-tables.ts",
         "packages/db/test/lp5-command-catalog.ts",
         "packages/db/test/migration-proofs/0573_site_supervisor_query.proof.json",
@@ -78,7 +80,9 @@
         "packages/db/test/site-extra-priced-evidence.integration.test.ts",
         "packages/db/test/site-extra-priced-evidence.test.ts",
         "packages/db/test/site-supervisor-query.integration.test.ts",
-        "packages/db/test/site-supervisor-query.test.ts"
+        "packages/db/test/site-supervisor-query.test.ts",
+        "tools/commercial-integrity-boundary.unresolved.json",
+        "tools/commercial-integrity-current-source-guard.unresolved.json"
       ],
       "note": "RED counted group c1; ENT-5 escalation-worker branch is not merged; acceptance and CI remain open."
     }
