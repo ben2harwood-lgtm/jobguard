@@ -188,9 +188,9 @@ it("[PH13] two revokes produce one event; open revoke and home ending read the c
   const pid = (await secondPool.query("SELECT pg_backend_pid() pid")).rows[0].pid;
   await heldRevoke(f, async () => {
    second = new ContractorPracticeSessionRepository(secondPool).revoke(f.context, f.session);
-   // Observe an actual independent-connection wait, never infer a race from elapsed time.
+   // Binding is first and holds the same session row: observe its independent-connection lock wait before the revoke callback.
    let waiting = false;
-   for (let attempt = 0; attempt < 256 && !waiting; attempt++) waiting = (await c.admin.query("SELECT wait_event_type='Lock' AND query LIKE '%revoke_contractor_practice_session%' waiting FROM pg_stat_activity WHERE pid=$1", [pid])).rows[0]?.waiting === true;
+   for (let attempt = 0; attempt < 256 && !waiting; attempt++) waiting = (await c.admin.query("SELECT wait_event_type='Lock' AND query LIKE '%app.bind_request%' waiting FROM pg_stat_activity WHERE pid=$1", [pid])).rows[0]?.waiting === true;
    expect(waiting).toBe(true);
   });
   await expect(second).rejects.toMatchObject({ code: "UNAUTHENTICATED" });

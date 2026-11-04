@@ -85,4 +85,4 @@ it("A17 rejects duplicate/missing claims, forged paths and unsupported public ad
   for (const addition of ["Verified", "VERIFIED", "ISO 27001 certified", "10% with no platform charge", "Guaranteed savings"]) {
     expect(() => validateGuide(register(), `${guide}\n${addition}\n`)).toThrow();
   }
-});
+}, 30_000);

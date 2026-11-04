@@ -1,3 +1,4 @@
+export { RequestBindingRefusedError } from "./request-binding-error.js";
 export { migrate, INITIAL_MIGRATION_URL, MIGRATION_URLS } from "./migrate.js";
 export * from "./audit.js";
 export { findAccountById, listAccounts } from "./account-repository.js";
@@ -158,6 +159,9 @@ export * from "./import-pre-adoption-repository.js";
 export * from "./plan-entitlement-service.js";
 export * from "./payment-fee-repository.js";
 export * from "./small-builder-demo-repository.js";
+export * from "./recovery-billability-repository.js";
+export * from "./managed-recovery-repository.js";
+export * from "./platform-tax-invoice-fixture-repository.js";
 export * from "./subscription-mandate-repository.js";
 export { reviewOfflineCommercialIntent } from "./offline-upload.js";
 export * from "./resumable-evidence.js";
@@ -168,14 +172,20 @@ export * from "./evidence-bundle-sources.js";
 export * from "./practice-photo-observation.js";
 export * from "./practice-proof-image.js";
 export * from "./value-business-reader.js";
+
+export { AccountingObservationReceiptRepository } from "./accounting-observation-receipt-repository.js";
 export * from "./small-builder-trial-demo-repository.js";
 export * from "./simulation-fee-statement-repository.js";
 export * from "./simulation-fee-collection-repository.js";
 export * from "./simulation-money-run-repository.js";
 export { ShadowDemoApprovalReader } from "./shadow-demo-approval-reader.js";
+
+export { DunningRepository } from "./dunning-repository.js";
 export { AccountingExportRepository, StoredAccountingExportError, storedAccountingExportV1, type StoredAccountingExport } from "./accounting-export-repository.js";
 export { ShadowDemoGuideRepository } from "./shadow-demo-guide-repository.js";
 
 export { importLateSource, readLateSourceObservations, readLateSources } from "./late-source-import.js";
 
 export { WorkerActionExecutor } from "./worker-action-executor.js";
+export * from "./financial-reconciliation-queue-repository.js";
+export * from "./money-trail-repository.js";

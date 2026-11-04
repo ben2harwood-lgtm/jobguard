@@ -1,0 +1,229 @@
+{
+  "migration": "0785_lp6e_audit_attribution.sql",
+  "lp0": [
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "id": "a-lp6e-audit-attribution",
+        "title": "LP-6e bound audit attribution",
+        "kind": "authority",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Built on LP-6d and its LP-6b/c predecessors; full PostgreSQL CI and exact-head independent RED review required."
+        },
+        "cards": [
+          "LP-6e",
+          "LP-6d",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-6e": "Stamp protected session attribution in audit seals.",
+          "LP-6d": "Bind remaining checked callers before activation.",
+          "LP-12": "Review private audit owner custody."
+        },
+        "downstream": "Owner-only actor and tenant lookups. Runtime cannot select checked trust. Protected sealer pin refresh remains held for its authorized owner.",
+        "sources": [
+          "packages/db/migrations/0785_lp6e_audit_attribution.sql"
+        ],
+        "tests": [
+          "packages/db/src/lp6e-audit.test.ts",
+          "packages/db/test/lp6e-audit.integration.test.ts"
+        ],
+        "gaps": [
+          "Protected app.lp4_seal_audit definition pin and static-call inventory need Ben authorization; this proof deliberately does not replace them.",
+          "LP-6d chain present; PostgreSQL CI and independent RED security checks remain required."
+        ],
+        "path": "ap-lp6e-audit-attribution"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.current_actor()|jobguard_audit_writer|EXECUTE|-",
+        "group": "a-lp6e-audit-attribution"
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.current_actor()",
+        "owner": "jobguard_binding_owner",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_command_writer",
+          "jobguard_migration"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.lp6_bound_request"
+        ]
+      },
+      "after": {
+        "identity": "function:app.current_actor()",
+        "owner": "jobguard_binding_owner",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_audit_writer",
+          "jobguard_command_writer",
+          "jobguard_migration"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.lp6_bound_request"
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.current_tenant()|jobguard_audit_writer|EXECUTE|-",
+        "group": "a-lp6e-audit-attribution"
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.current_tenant()",
+        "owner": "jobguard_binding_owner",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_command_writer",
+          "jobguard_migration"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.lp6_bound_request"
+        ]
+      },
+      "after": {
+        "identity": "function:app.current_tenant()",
+        "owner": "jobguard_binding_owner",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_audit_writer",
+          "jobguard_command_writer",
+          "jobguard_migration"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.lp6_bound_request"
+        ]
+      }
+    },
+    {
+      "section": "authorityPaths",
+      "before": null,
+      "after": {
+        "id": "ap-lp6e-audit-attribution",
+        "title": "LP-6e bound audit attribution",
+        "description": "Owner-only actor and tenant lookups. Runtime cannot select checked trust. Protected sealer pin refresh remains held for its authorized owner.",
+        "cards": [
+          "LP-6e",
+          "LP-6d",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-6e": "Stamp protected session attribution in audit seals.",
+          "LP-6d": "Bind remaining checked callers before activation.",
+          "LP-12": "Review private audit owner custody."
+        },
+        "sources": [
+          "packages/db/migrations/0785_lp6e_audit_attribution.sql"
+        ],
+        "tests": [
+          "packages/db/src/lp6e-audit.test.ts",
+          "packages/db/test/lp6e-audit.integration.test.ts"
+        ],
+        "gaps": [
+          "Protected app.lp4_seal_audit definition pin and static-call inventory need Ben authorization; this proof deliberately does not replace them.",
+          "LP-6d chain present; PostgreSQL CI and independent RED security checks remain required."
+        ]
+      }
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "routines",
+      "before": {
+        "nspname": "app",
+        "proname": "current_actor",
+        "args": "",
+        "proowner": "jobguard_binding_owner",
+        "proacl": "{jobguard_binding_owner=X/jobguard_binding_owner,jobguard_runtime=X/jobguard_binding_owner,jobguard_migration=X/jobguard_binding_owner,jobguard_command_writer=X/jobguard_binding_owner}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      },
+      "after": {
+        "nspname": "app",
+        "proname": "current_actor",
+        "args": "",
+        "proowner": "jobguard_binding_owner",
+        "proacl": "{jobguard_binding_owner=X/jobguard_binding_owner,jobguard_runtime=X/jobguard_binding_owner,jobguard_migration=X/jobguard_binding_owner,jobguard_command_writer=X/jobguard_binding_owner,jobguard_audit_writer=X/jobguard_binding_owner}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "nspname": "app",
+        "proname": "current_tenant",
+        "args": "",
+        "proowner": "jobguard_binding_owner",
+        "proacl": "{jobguard_binding_owner=X/jobguard_binding_owner,jobguard_runtime=X/jobguard_binding_owner,jobguard_migration=X/jobguard_binding_owner,jobguard_command_writer=X/jobguard_binding_owner}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      },
+      "after": {
+        "nspname": "app",
+        "proname": "current_tenant",
+        "args": "",
+        "proowner": "jobguard_binding_owner",
+        "proacl": "{jobguard_binding_owner=X/jobguard_binding_owner,jobguard_runtime=X/jobguard_binding_owner,jobguard_migration=X/jobguard_binding_owner,jobguard_command_writer=X/jobguard_binding_owner,jobguard_audit_writer=X/jobguard_binding_owner}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    }
+  ],
+  "tenancy": []
+}

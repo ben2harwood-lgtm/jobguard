@@ -139,13 +139,13 @@ BEGIN
   PERFORM set_config('app.tenant_id',coalesce(saved_tenant,''),true);
  RETURN jsonb_build_object('refused',true,'code','AUTHORIZATION_REVOKED');
  END IF;
+ PERFORM app.bind_worker_action(p_action);
  IF item.action_type='extra.client_approval_request.send'
   AND coalesce((app.mon8_feature_decision(principal,'approval_chains','new_work')->>'executable')::boolean,false) IS NOT TRUE THEN
   UPDATE app.action_outbox SET status='cancelled',updated_at=clock_timestamp() WHERE (tenant_id,id)=(item.tenant_id,item.id);
   PERFORM app.lp10_worker_audit(item,'entitlement_lost');
   PERFORM set_config('app.tenant_id',coalesce(saved_tenant,''),true); RETURN NULL;
  END IF;
- PERFORM app.bind_worker_action(p_action);
  SELECT coalesce(max(a.attempt_number),0)+1 INTO attempt_no FROM app.action_attempt a
  WHERE a.tenant_id=item.tenant_id AND a.action_id=item.id;
  token:=gen_random_uuid();
@@ -198,4 +198,68 @@ DO $$ DECLARE sig text; BEGIN
  END LOOP;
 END $$;
 GRANT EXECUTE ON FUNCTION app.worker_action_context(),app.bind_worker_action(uuid),app.claim_worker_action(uuid,text[]),app.complete_worker_action(uuid,uuid,text,text,text) TO jobguard_worker;
+-- Latest inherited body: 0780_lp6d_remaining_routines.sql. Keep the
+-- entitlement formula authoritative here; only its authority preamble changes.
+CREATE OR REPLACE FUNCTION app.mon8_feature_decision(actor uuid, feature text, purpose text DEFAULT 'new_work') RETURNS jsonb
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog AS $$
+BEGIN
+ -- Requests retain LP-6d's exact guard. A worker has no user session and
+ -- may use only the existing decision for its persisted, authorized action.
+ IF pg_has_role(session_user,'jobguard_worker','USAGE') THEN
+  IF feature IS DISTINCT FROM 'approval_chains' OR purpose IS DISTINCT FROM 'new_work'
+   OR NOT EXISTS(SELECT 1 FROM app.worker_action_context() b
+    JOIN app.action_outbox o ON (o.tenant_id,o.id)=(b.tenant_id,b.action_id)
+    WHERE b.actor_id=actor AND b.tenant_id::text=nullif(current_setting('app.tenant_id',true),'')
+     AND o.action_type='extra.client_approval_request.send') THEN
+   RAISE EXCEPTION 'WORKER_ACTION_REFUSED' USING ERRCODE='42501';
+  END IF;
+ ELSE
+  PERFORM app.current_actor();
+  IF nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text THEN
+   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
+  END IF;
+ END IF;
+DECLARE t uuid; assignment app.commercial_track_assignment; status app.contractor_agreement_status_revision;
+ agreement app.subscription_agreement_revision; entitlement text:='held'; reason text:='agreement_authority_held';
+ contractor_feature boolean; today date;
+BEGIN
+ IF current_database()<>'jobguard_synthetic_demo' OR current_setting('transaction_isolation')<>'read committed' THEN RAISE EXCEPTION 'MODE_FORBIDDEN' USING ERRCODE='42501'; END IF;
+ BEGIN t:=nullif(current_setting('app.tenant_id',true),'')::uuid; EXCEPTION WHEN invalid_text_representation THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END;
+ IF t IS NULL OR actor IS NULL OR feature IS NULL OR purpose IS NULL
+ OR feature NOT IN('watchdog','final_check','invoices','recovery_cases','pay_now','accounting_export','operative_roles','site_origin_capture','approval_chains','work_orders','sso')
+ OR purpose NOT IN('new_work','retained_read') THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
+ -- Organisation/status before subscription/lifecycle before business locks before audit.
+ contractor_feature:=feature IN('operative_roles','site_origin_capture','approval_chains','work_orders','sso');
+ PERFORM pg_advisory_xact_lock_shared(hashtextextended(t::text,54));
+ IF NOT contractor_feature AND purpose='new_work' THEN PERFORM pg_advisory_xact_lock_shared(hashtextextended(t::text,184)); END IF;
+ -- Read after both waits. The actor belongs to this transaction's verified tenant.
+ IF NOT EXISTS(SELECT 1 FROM app.membership m WHERE m.tenant_id=t AND m.id=actor AND m.revoked_at IS NULL
+ AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp())
+ AND NOT EXISTS(SELECT 1 FROM app.contractor_membership_revocation r WHERE r.tenant_id=t AND r.membership_id=m.id)) THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
+ IF purpose='retained_read' THEN
+  -- Availability only: each reader must still enforce its exact role/resource/export permissions.
+  entitlement:='included'; reason:='available';
+ ELSE
+  SELECT * INTO assignment FROM app.commercial_track_assignment WHERE tenant_id=t ORDER BY revision DESC LIMIT 1;
+  today:=(clock_timestamp() AT TIME ZONE 'Europe/London')::date;
+  IF NOT contractor_feature THEN SELECT * INTO agreement FROM app.subscription_agreement_revision WHERE tenant_id=t AND effective_date<=today ORDER BY effective_date DESC,revision DESC LIMIT 1; END IF;
+  IF assignment.commercial_track='contractor' THEN
+   IF contractor_feature THEN
+    SELECT * INTO status FROM app.contractor_agreement_status_revision WHERE tenant_id=t AND assignment_id=assignment.id ORDER BY revision DESC LIMIT 1;
+    IF status.status='active' THEN entitlement:='included'; reason:='available'; END IF;
+   ELSE entitlement:='excluded'; reason:='track_forbidden'; END IF;
+  ELSIF assignment.commercial_track='small_builder' OR (assignment.id IS NULL AND (agreement.id IS NOT NULL OR contractor_feature)) THEN
+   IF contractor_feature THEN entitlement:='excluded'; reason:='track_forbidden';
+   ELSIF agreement.id IS NOT NULL AND agreement.plan IN('Solo','Builder') THEN
+    entitlement:='included';
+    -- Live payment/accounting readiness and persisted MON-3 trial authority are not on main.
+    reason:=CASE WHEN feature IN('pay_now','accounting_export') THEN 'feature_disabled' ELSE 'available' END;
+   END IF;
+  END IF;
+ END IF;
+ RETURN jsonb_build_object('version','plan-entitlement-decision.v1','environment','synthetic_demo','feature',feature,
+  'entitlement',entitlement,'executable',reason='available','reason',reason);
+END;
+END
+$$;
 COMMIT;

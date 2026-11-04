@@ -16,7 +16,7 @@ async function session() {
 it("revalidates a stamped credential revoked between bridge authentication and transaction start", async () => {
   const s = await session(); let ran = false;
   await db.owner.query("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE id=$1", [s.id]);
-  await expect(withTenant(db.runtime,s.context,async () => { ran = true; })).rejects.toMatchObject({code:"42501",message:"REQUEST_BINDING_REFUSED"});
+  await expect(withTenant(db.runtime,s.context,async () => { ran = true; })).rejects.toMatchObject({code:"FORBIDDEN",message:"FORBIDDEN"});
   expect(ran).toBe(false);
 });
 it("binds each request on a reused backend and clears authority after both commit and rollback", async () => {
@@ -31,7 +31,9 @@ it("binds each request on a reused backend and clears authority after both commi
         if (rollback) throw new Error("fictional rollback");
       });
       if (rollback) await expect(run).rejects.toThrow("fictional rollback"); else await run;
-      await expect(pool.query("SELECT app.current_actor()")).rejects.toMatchObject({code:"42501"});
+      const unbound = await pool.connect();
+      try { await expect(unbound.query("SELECT app.current_actor()")).rejects.toMatchObject({code:"42501"}); }
+      finally { unbound.release(); }
     }
   } finally { await pool.end(); }
 });
@@ -45,6 +47,6 @@ it("holds the established request through a racing session revocation, then refu
       expect((await tx.$client.query("SELECT app.current_actor() actor")).rows[0].actor).toBe(s.member);
     });
     await revoker.query("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE id=$1",[s.id]);
-    await expect(withTenant(db.runtime,s.context,async () => { throw new Error("must not run"); })).rejects.toMatchObject({code:"42501",message:"REQUEST_BINDING_REFUSED"});
+    await expect(withTenant(db.runtime,s.context,async () => { throw new Error("must not run"); })).rejects.toMatchObject({code:"FORBIDDEN",message:"FORBIDDEN"});
   } finally { await revoker.query("ROLLBACK"); revoker.release(); }
 });

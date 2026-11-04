@@ -5,6 +5,8 @@ import { randomUUID, createHash } from "node:crypto";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { transaction } from "./lp-job-doors-fixtures.js";
+import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
 import { migrate } from "../src/migrate.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
 
@@ -36,12 +38,14 @@ afterAll(async () => { await closeTestPools(web, worker, admin); await postgres?
 async function enqueue(actionType = "send_quote") {
   const decision = randomUUID(), resolution = randomUUID(), auth = randomUUID(), id = randomUUID();
   const content = "Fictional approved document", hash = createHash("sha256").update(content).digest("hex");
-  await admin.query("INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES($1,$2,'quote','fictional',$3)", [decision, t, actionType]);
-  await admin.query("INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'approved',$4)", [resolution, t, decision, actor]);
-  await admin.query(`INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,content_hash,aggregate_revision,policy_version,expires_at)
-    VALUES($1,$2,$3,$4,$5,$7,$6,1,'synthetic.v1','2099-01-01')`, [auth, t, decision, resolution, actor, hash, actionType]);
-  await admin.query(`INSERT INTO app.action_outbox(id,tenant_id,authorization_id,adapter,provider_effect_key,action_type,content_hash,immutable_content,aggregate_revision,policy_version,authorization_expires_at)
-    VALUES($1,$2,$3,'fake_capture',$1::text,$6,$4,$5,1,'synthetic.v1','2099-01-01')`, [id, t, auth, hash, content, actionType]);
+  await transaction(admin, t, async client => {
+    await client.query("INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES($1,$2,'quote','fictional',$3)", [decision, t, actionType]);
+    await client.query("INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'approved',$4)", [resolution, t, decision, actor]);
+    await client.query(`INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,content_hash,aggregate_revision,policy_version,expires_at)
+      VALUES($1,$2,$3,$4,$5,$7,$6,1,'synthetic.v1','2099-01-01')`, [auth, t, decision, resolution, actor, hash, actionType]);
+    await client.query(`INSERT INTO app.action_outbox(id,tenant_id,authorization_id,adapter,provider_effect_key,action_type,content_hash,immutable_content,aggregate_revision,policy_version,authorization_expires_at)
+      VALUES($1,$2,$3,'fake_capture',$1::text,$6,$4,$5,1,'synthetic.v1','2099-01-01')`, [id, t, auth, hash, content, actionType]);
+  });
   return { id, auth };
 }
 const claim = async (id: string) => (await worker.query("SELECT app.claim_worker_action($1,ARRAY['fake_capture']) AS value", [id])).rows[0]!.value;
@@ -76,6 +80,49 @@ describe("LP-10 real login authority", () => {
     expect((await admin.query("SELECT status FROM app.action_outbox WHERE id=$1", [id])).rows[0].status).toBe("cancelled");
     expect((await admin.query("SELECT * FROM app.action_attempt WHERE action_id=$1", [id])).rows).toEqual([]);
   });
+  it("uses the inherited entitlement formula with protected worker authority only", async () => {
+    await transaction(admin, t, async client => {
+      await client.query(`INSERT INTO app.commercial_track_assignment(
+        tenant_id,id,revision,commercial_track,agreement_reference,environment,actor_ref)
+        VALUES($1,$2,1,'contractor',$3,'synthetic_demo',$4)`,
+        [t, randomUUID(), `synthetic-agreement:${randomUUID()}`, `membership:${actor}`]);
+    });
+    await seedActiveContractorAgreement(admin, t);
+    const { id } = await enqueue("extra.client_approval_request.send");
+    const accepted = await claim(id);
+    expect(accepted.action.id).toBe(id);
+    expect(await complete(id, accepted.token)).toBe(true);
+    // Even a worker with a binding cannot call the request entitlement API.
+    const client = await worker.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("SELECT app.bind_worker_action($1)", [id]);
+      await client.query("SAVEPOINT attack");
+      await expect(client.query("SELECT app.mon8_feature_decision($1,'approval_chains','new_work')", [actor]))
+        .rejects.toMatchObject({ code: "42501" });
+      await client.query("ROLLBACK TO attack");
+    } finally { await client.query("ROLLBACK"); client.release(); }
+  });
+  it("keeps every worker signature private from web and exposes no actor/tenant overload", async () => {
+    const signatures = (await admin.query<{ signature: string; web: boolean; worker: boolean }>(`
+      SELECT p.oid::regprocedure::text signature,
+       has_function_privilege('lp10_web',p.oid,'EXECUTE') web,
+       has_function_privilege('lp10_worker',p.oid,'EXECUTE') worker
+      FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+      WHERE n.nspname='app' AND p.proname IN ('bind_worker_action','worker_action_context',
+       'claim_worker_action','complete_worker_action') ORDER BY p.proname`)).rows;
+    expect(signatures).toEqual([
+      { signature: "app.bind_worker_action(uuid)", web: false, worker: true },
+      { signature: "app.claim_worker_action(uuid,text[])", web: false, worker: true },
+      { signature: "app.complete_worker_action(uuid,uuid,text,text,text)", web: false, worker: true },
+      { signature: "app.worker_action_context()", web: false, worker: true },
+    ]);
+    for (const sql of ["SELECT app.bind_worker_action($1::uuid,$2::uuid)",
+      "SELECT app.claim_worker_action($1::uuid,$2::uuid,ARRAY['fake_capture'])",
+      "SELECT app.complete_worker_action($1::uuid,$2::uuid,$2::uuid,'succeeded','fictional',NULL)"]) {
+      await expect(worker.query(sql, [randomUUID(), randomUUID()])).rejects.toMatchObject({ code: "42883" });
+    }
+  });
   it("worker cannot insert authorization/outbox/approval or assume runtime/owner", async () => {
     for (const sql of ["INSERT INTO app.action_outbox DEFAULT VALUES", "INSERT INTO app.action_authorization DEFAULT VALUES",
       "INSERT INTO app.decision_resolution DEFAULT VALUES", "SET ROLE jobguard_runtime", "SET ROLE jobguard_migration"]) {
@@ -86,10 +133,26 @@ describe("LP-10 real login authority", () => {
     const { id } = await enqueue(), client = await worker.connect();
     try {
       await client.query("BEGIN");
-      await client.query("SELECT set_config('app.tenant_id',$1,true)", [randomUUID()]);
+      await client.query("SELECT set_config('app.tenant_id',$1,true),set_config('app.actor_id',$2,true)", [randomUUID(), randomUUID()]);
       await client.query("SELECT app.bind_worker_action($1)", [id]);
       expect((await client.query("SELECT * FROM app.worker_action_context()")).rows).toEqual([{ action_id: id, tenant_id: t, actor_id: actor }]);
       await client.query("COMMIT");
+      expect((await client.query("SELECT * FROM app.worker_action_context()")).rows).toEqual([]);
+    } finally { await client.query("ROLLBACK"); client.release(); }
+  });
+  it("rejects a different action in the same binding and clears rolled-back pool context", async () => {
+    const first = await enqueue(), second = await enqueue(), client = await worker.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("SELECT app.bind_worker_action($1)", [first.id]);
+      await client.query("SAVEPOINT attack");
+      await expect(client.query("SELECT app.bind_worker_action($1)", [second.id]))
+        .rejects.toMatchObject({ code: "42501" });
+      await client.query("ROLLBACK TO attack");
+      expect((await client.query("SELECT * FROM app.worker_action_context()")).rows)
+        .toEqual([{ action_id: first.id, tenant_id: t, actor_id: actor }]);
+      await client.query("ROLLBACK");
+      await client.query("BEGIN");
       expect((await client.query("SELECT * FROM app.worker_action_context()")).rows).toEqual([]);
     } finally { await client.query("ROLLBACK"); client.release(); }
   });
@@ -101,8 +164,8 @@ describe("LP-10 real login authority", () => {
     expect(await complete(id, accepted[0].token)).toBe(false);
     expect((await admin.query("SELECT * FROM app.action_attempt WHERE action_id=$1", [id])).rows).toHaveLength(1);
     const events = (await admin.query("SELECT actor_ref,payload FROM app.audit_event WHERE subject_ref=$1 AND event_type='outbox.succeeded'", [id])).rows;
-    expect(events).toHaveLength(1); expect(events[0].actor_ref).toBe("worker:lp10_worker");
-    expect(events[0].payload.references).toMatchObject({ authorizingMembership: actor, executingWorker: "lp10_worker" });
+    expect(events).toHaveLength(1); expect(events[0].actor_ref).toBe("system:database:lp10_worker");
+    expect(events[0].payload.references).toMatchObject({ authorizingMembership: actor, executingWorker: "lp10_worker", auditActorKind: "system", auditTrust: "checked_operation" });
   });
   it("lease expiry refuses blind reclaim and late completion", async () => {
     const { id } = await enqueue(), first = await claim(id);

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { logSiteExtraV3 } from "./site-extra-evidence.js";
 import { enterpriseExtraV1, enterpriseRevisionV1 } from "./enterprise-domain/contracts.js";
 import { sha256 } from "./evidence-pack.js";
 import { parseQuantity } from "./quantity.js";
@@ -19,7 +20,7 @@ const quantityScaleFactor = 10n ** BigInt(quantityScale);
 export const sorPriceSourceValues = enterpriseRevisionV1.shape.priceSource.options;
 export const sorStoredCoverageValues = enterpriseExtraV1.shape.orderAtOrigin.shape.coverage.options.filter(value => value !== "fully_instructed");
 
-export const sorSiteExtraErrorCodes = ["UNAUTHENTICATED", "MODE_FORBIDDEN", "ORIGIN_FORBIDDEN", "TRACK_FORBIDDEN", "EXTRA_FORBIDDEN", "INVALID_COMMAND", "INVALID_QUANTITY", "NOT_FOUND", "JOB_NOT_LIVE", "IDEMPOTENCY_CONFLICT", "SOR_ITEM_NOT_FOUND", "ORDER_LINE_NOT_FOUND", "ORDER_LINE_AMBIGUOUS", "ALREADY_ON_ORDER", "EXTRA_NOT_POSITIVE", "MONEY_OUT_OF_RANGE", "SITE_PRICING_UNAVAILABLE"] as const;
+export const sorSiteExtraErrorCodes = ["UNAUTHENTICATED", "MODE_FORBIDDEN", "ORIGIN_FORBIDDEN", "TRACK_FORBIDDEN", "EXTRA_FORBIDDEN", "INVALID_COMMAND", "INVALID_QUANTITY", "NOT_FOUND", "JOB_NOT_LIVE", "IDEMPOTENCY_CONFLICT", "SOR_ITEM_NOT_FOUND", "ORDER_LINE_NOT_FOUND", "ORDER_LINE_AMBIGUOUS", "ALREADY_ON_ORDER", "EXTRA_NOT_POSITIVE", "MONEY_OUT_OF_RANGE", "SITE_PRICING_UNAVAILABLE", "PHOTO_NOT_ACCEPTED", "CONFIRMATION_MISMATCH"] as const;
 export type SorSiteExtraErrorCode = typeof sorSiteExtraErrorCodes[number];
 export class SorSiteExtraError extends Error {
   constructor(readonly code: SorSiteExtraErrorCode) { super(code); this.name = "SorSiteExtraError"; }
@@ -28,7 +29,7 @@ export function sorSiteExtraHttpStatus(code: SorSiteExtraErrorCode): number {
   const status: Record<SorSiteExtraErrorCode, number> = {
     UNAUTHENTICATED: 401, MODE_FORBIDDEN: 403, ORIGIN_FORBIDDEN: 403, TRACK_FORBIDDEN: 403, EXTRA_FORBIDDEN: 403, INVALID_COMMAND: 400, INVALID_QUANTITY: 400, NOT_FOUND: 404,
     JOB_NOT_LIVE: 409, IDEMPOTENCY_CONFLICT: 409, SOR_ITEM_NOT_FOUND: 422, ORDER_LINE_NOT_FOUND: 422, ORDER_LINE_AMBIGUOUS: 422, ALREADY_ON_ORDER: 422, EXTRA_NOT_POSITIVE: 422,
-    MONEY_OUT_OF_RANGE: 422, SITE_PRICING_UNAVAILABLE: 503,
+    MONEY_OUT_OF_RANGE: 422, SITE_PRICING_UNAVAILABLE: 503, PHOTO_NOT_ACCEPTED: 422, CONFIRMATION_MISMATCH: 422,
   };
   return status[code];
 }
@@ -57,21 +58,29 @@ function requireQuantity(value: unknown): string {
 export const logSorSiteExtraV1 = z.object({
   version: z.literal("log-sor-site-extra.v1"), commandId: uuid, sorCode: codeText, quantity: positiveQuantityV1, orderLineScopeItemId: uuid.optional(), note: reviewedText(5000),
 }).strict();
-export type LogSorSiteExtra = z.infer<typeof logSorSiteExtraV1>;
-const logSorHeadV1 = logSorSiteExtraV1.extend({ quantity: z.unknown().optional() });
+/** v2 binds the reviewed text, verified photo and resident confirmation to priced capture. v1 remains strict and unchanged. */
+export const siteExtraWorkStatusV1 = z.enum(["not_started", "under_way", "finished"]);
+export const logSorSiteExtraV2 = logSorSiteExtraV1.extend({
+  version: z.literal("log-sor-site-extra.v2"), description: logSiteExtraV3.shape.description,
+  photoEvidenceId: logSiteExtraV3.shape.photoEvidenceId.unwrap(),
+  residentConfirmation: logSiteExtraV3.shape.residentConfirmation.unwrap(),
+  siteVisitId: uuid.optional(), workStatus: siteExtraWorkStatusV1,
+}).strict();
+export type LogSorSiteExtra = z.infer<typeof logSorSiteExtraV1> | z.infer<typeof logSorSiteExtraV2>;
+const logSorHead = z.union([logSorSiteExtraV1.extend({ quantity: z.unknown().optional() }), logSorSiteExtraV2.extend({ quantity: z.unknown().optional() })]);
 /** Valid apart from its quantity is INVALID_QUANTITY; every other invalid body is INVALID_COMMAND. */
 export function parseLogSorSiteExtra(raw: unknown): LogSorSiteExtra {
-  const head = logSorHeadV1.safeParse(raw);
+  const head = logSorHead.safeParse(raw);
   if (!head.success) throw new SorSiteExtraError("INVALID_COMMAND");
   return { ...head.data, quantity: requireQuantity(head.data.quantity) };
 }
-const sorSiteExtraInputHeadV1 = z.object({ commandId: uuid, jobId: uuid, sorCode: codeText, quantity: z.unknown().optional(), orderLineScopeItemId: uuid.optional(), note: reviewedText(5000) }).strict();
-export type SorSiteExtraInput = { commandId: string; jobId: string; sorCode: string; quantity: string; orderLineScopeItemId?: string; note: string };
+const sorSiteExtraInputHeadV1 = logSorSiteExtraV1.omit({ version: true }).extend({ jobId: uuid, quantity: z.unknown().optional() });
+const sorSiteExtraInputHeadV2 = logSorSiteExtraV2.extend({ jobId: uuid, quantity: z.unknown().optional() });
+export type SorSiteExtraInput = Omit<z.infer<typeof logSorSiteExtraV1>, "version"> & { jobId: string } | z.infer<typeof logSorSiteExtraV2> & { jobId: string };
 export function parseSorSiteExtraInput(raw: unknown): SorSiteExtraInput {
-  const head = sorSiteExtraInputHeadV1.safeParse(raw);
+  const head = z.union([sorSiteExtraInputHeadV1, sorSiteExtraInputHeadV2]).safeParse(raw);
   if (!head.success) throw new SorSiteExtraError("INVALID_COMMAND");
-  const { quantity, orderLineScopeItemId, ...rest } = head.data;
-  return { ...rest, quantity: requireQuantity(quantity), ...(orderLineScopeItemId ? { orderLineScopeItemId } : {}) };
+  return { ...head.data, quantity: requireQuantity(head.data.quantity) };
 }
 
 // ---- The two reads. Search text is required (Q10 struck the recent list); the order-check query names a code and a total quantity. ----
@@ -114,7 +123,7 @@ const resultHead = { environment: z.literal("synthetic_demo"), realExternalActio
 const quantityText = sorQuantityV1;
 const orderCheckBodyV1 = z.object({
   outcome: z.enum(["new", "more_than_ordered", "already_on_order"]), sorCode: codeText, unit: z.string().min(1).max(40), claimedQuantity: quantityText, instructedQuantity: quantityText.nullable(),
-  extraQuantity: quantityText.optional(), orderLineScopeItemId: uuid.nullable(),
+  extraQuantity: quantityText.optional(), orderLineScopeItemId: uuid.nullable(), orderRevisionId: uuid.optional(), proceedComparison: z.enum(["within", "above"]).optional(),
 }).strict().superRefine((value, context) => {
   if ((value.outcome === "already_on_order") === (value.extraQuantity !== undefined)) context.addIssue({ code: "custom", path: ["extraQuantity"], message: "extra quantity exists exactly when there is an extra" });
 });
@@ -140,3 +149,24 @@ export function extraSorRevisionHashV1(input: ExtraSorRevisionHashInput): string
   const encode = (value: string | null) => value === null ? "N;" : `S${new TextEncoder().encode(value).length}:${value};`;
   return sha256(`extra-sor-revision-hash.v1\n${extraSorRevisionHashFields.map(field => encode(input[field])).join("")}`);
 }
+
+/** ENT-3: within-order capture is an immutable question, never a commercial extra. */
+export const recordSiteSupervisorQueryV1 = z.object({
+ version: z.literal("record-site-supervisor-query.v1"), commandId: uuid,
+ orderLineScopeItemId: uuid, sorCode: codeText, quantity: positiveQuantityV1,
+ expectedOrderRevisionId: uuid,
+}).strict();
+export const siteSupervisorQueryV1 = z.object({
+ version: z.literal("site-supervisor-query.v1"), ...resultHead,
+ queryId: uuid, jobId: uuid, orderLineScopeItemId: uuid, sorCode: codeText,
+ quantity: positiveQuantityV1, orderRevisionId: uuid, operativeMembershipId: uuid,
+ recordedAt: z.iso.datetime(),
+}).strict();
+export const siteSupervisorQueriesV1 = z.object({
+ version: z.literal("site-supervisor-queries.v1"), ...resultHead, jobId: uuid,
+ queries: z.array(siteSupervisorQueryV1),
+ workStatuses: z.array(z.object({ extraId: uuid, workStatus: siteExtraWorkStatusV1, operativeMembershipId: uuid, recordedAt: z.iso.datetime(), source: z.literal("operative_statement") }).strict()).optional(),
+}).strict();
+export const sorSiteExtraSubmittedV2 = sorSiteExtraLoggedV1.extend({
+ version: z.literal("sor-site-extra-submitted.v2"), state: z.enum(["awaiting_approval", "approved"]), requestId: uuid,
+}).strict();

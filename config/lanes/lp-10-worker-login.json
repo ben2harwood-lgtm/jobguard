@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/lp-10-worker-login"
       ],
-      "note": "LP-10 RED NOPR save. Landing held for protected inventory/guards, predecessors and remaining legacy executor cutover. See READY commit-message handoff.",
+      "note": "LP-10 RED NOPR refresh on LP-8b. READY for branch save; landing held for legacy execution/operator/internal worker cutover, protected inventory and real-PostgreSQL/independent evidence. See READY commit-message handoff.",
       "allow": [
         ".env.example",
         "apps/api/src/worker.ts",

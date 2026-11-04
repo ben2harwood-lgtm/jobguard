@@ -1,3 +1,4 @@
+import { applyRequestBindingFoundation } from "./request-binding-fixture.js";
 import { readFile } from "node:fs/promises";
 import type { Pool } from "pg";
 import { MIGRATION_URLS } from "../src/migrate.js";
@@ -9,4 +10,5 @@ export async function applyOutboundPause(admin: Pick<Pool, "query">) {
   const url = MIGRATION_URLS.find(item => item.pathname.endsWith(`/${OUTBOUND_PAUSE_MIGRATION}`))!;
   await admin.query(await readFile(url, "utf8"));
   await admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)", [OUTBOUND_PAUSE_MIGRATION]);
+  await applyRequestBindingFoundation(admin);
 }

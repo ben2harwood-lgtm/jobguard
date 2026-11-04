@@ -43,6 +43,23 @@ describe("worker-only executor protocol", () => {
       f.query.mock.calls.findIndex(([sql]) => sql.includes("complete_worker_action")));
     expect(f.release).toHaveBeenCalledOnce();
   });
+  it("does not report an effect when the claim token cannot complete", async () => {
+    const f = fixture(claimed, false);
+    vi.mocked(f.adapter.deliver).mockResolvedValueOnce({ kind: "outcome_unknown", code: "synthetic-unknown" });
+    await f.executor.execute(id);
+    expect(f.adapter.deliver).toHaveBeenCalledOnce();
+    expect(f.telemetry.emit.mock.calls.map(([name]) => name)).toEqual(["outbox.queue_age"]);
+  });
+  it.each([[1, "outbox.retry"], [5, "outbox.failure"]] as const)("reports retry attempt %s after durable completion", async (attempt, event) => {
+    const f = fixture({ ...claimed, attempt });
+    vi.mocked(f.adapter.deliver).mockResolvedValueOnce({ kind: "retryable", code: "synthetic-unavailable" });
+    await f.executor.execute(id);
+    expect(f.query).toHaveBeenCalledWith(
+      "SELECT app.complete_worker_action($1::uuid,$2::uuid,$3::text,$4::text,$5::text) AS completed",
+      [id, token, "retryable", null, "synthetic-unavailable"],
+    );
+    expect(f.telemetry.emit).toHaveBeenCalledWith(event, { actionId: id, attempt });
+  });
   it("rolls back a refused settlement guard before delivery", async () => {
     const f = fixture(claimed);
     await expect(f.executor.execute(id, () => { throw new Error("settlement disabled"); })).rejects.toThrow("settlement disabled");

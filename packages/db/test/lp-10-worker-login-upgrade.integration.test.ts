@@ -8,14 +8,23 @@ it("0805 preserves populated predecessor rows and routine bodies while closing w
   cluster = await startBeforeMigration("0805_worker_login.sql");
   const db = cluster.admin;
   const before = await snapshot(db);
-  const definitions = async () => (await db.query(`SELECT p.oid,pg_get_functiondef(p.oid) definition
+  const definitions = async () => (await db.query(`SELECT p.oid,p.proname,pg_get_functiondef(p.oid) definition
     FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
     WHERE n.nspname IN('app','identity','control_plane','audit_control','outbound_control') AND p.prokind='f' ORDER BY p.oid`)).rows;
   const routines = await definitions();
   await applyMigration(cluster, "0805_worker_login.sql");
   expect(await snapshot(db)).toEqual({ ...before, "control_plane.worker_action_binding": [] });
   const after = await definitions();
-  for (const prior of routines) expect(after.find(row => row.oid === prior.oid)).toEqual(prior);
+  for (const prior of routines) {
+    const current = after.find(row => row.oid === prior.oid);
+    if (prior.proname === "mon8_feature_decision") {
+      expect(current?.definition).toContain("FROM app.worker_action_context() b");
+      expect(current?.definition).toContain("PERFORM app.current_actor()");
+      // The entitlement formula remains byte-for-byte the inherited body.
+      expect(current?.definition.slice(current.definition.indexOf("DECLARE t uuid; assignment")))
+        .toBe(prior.definition.slice(prior.definition.indexOf("DECLARE t uuid; assignment")));
+    } else expect(current).toEqual(prior);
+  }
   expect((await db.query(`SELECT
     has_column_privilege('jobguard_runtime','app.action_outbox','status','UPDATE') web_update,
     has_table_privilege('jobguard_runtime','app.action_attempt','INSERT') web_attempt,

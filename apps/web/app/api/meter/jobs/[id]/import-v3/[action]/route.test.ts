@@ -18,7 +18,7 @@ const params = (action: string) => ({ params: Promise.resolve({ id: tenant, acti
 const request = (value: string | undefined = origin, body = "{}") => new Request(`${origin}/api/meter/jobs/${tenant}/import-v3/adopt`, { method: "POST", headers: value === undefined ? {} : { origin: value }, body });
 beforeEach(() => {
  vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
- state.authenticate.mockResolvedValue({ identityUserId: tenant, sessionId: tenant, csrfToken: "c".repeat(24) });
+ state.authenticate.mockResolvedValue({ identityUserId: tenant, sessionId: tenant, sessionCredential: "a".repeat(64), csrfToken: "c".repeat(24) });
  state.findMembership.mockResolvedValue({ id: tenant, identityUserId: tenant, tenantId: tenant, role: "owner" });
 });
 afterEach(() => { vi.restoreAllMocks(); vi.resetAllMocks(); vi.unstubAllEnvs(); });
