@@ -1,0 +1,61 @@
+{
+  "migration": "0763_ais_movement_read.sql",
+  "lp0": [
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.ais_movement_read(uuid,text,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "91051ac586a90500ecdc9197b6b0ff551dc20d55e5238b2d7e5d008b8e599451",
+        "staticWrites": [],
+        "staticCalls": [
+          "app.dark_ais",
+          "app.mon1_company_actor"
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.ais_movement_read(uuid,text,uuid)|jobguard_runtime|EXECUTE|-",
+        "group": "a-dark-ais"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.ais_movement_read(uuid,text,uuid)|jobguard_migration",
+        "group": "a-owner-routines"
+      }
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "ais_movement_read",
+        "args": "t uuid, digest text, c uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    }
+  ],
+  "tenancy": []
+}
