@@ -121,3 +121,50 @@ RLS/tenancy, escalation restart/concurrency/rollback, connector populated upgrad
 and adversarial intake, mandatory full checks and affected browser journeys.
 Physical-device/native and live-provider gates remain separate. Independent RED
 review must bind the exact eventual head. No PR before #549 and batch 10 land.
+
+## Batch-c2 continuation — pending M3-5 merge, 4 November 2026
+
+READY for router staging and completion of the pending merge. The core barrel now
+keeps sync-device-cache, offline-client-queue and offline-capture exports as an
+exact union, with no new behavior. M3-5 capture specimens and their existing
+contract/tests are included. Its incoming lane file is removed; the batch lane
+lists all 29 resulting changed non-lane paths against the available origin/main.
+M4-4 hold alert, ENT-14 fee mandate and SV-7B accounting remain NOT merged; the
+router takes those next. The native capture/storage/device obligations described
+in resumable-evidence-v1.md remain open. This does not finish M3-5 or any aggregate
+piece. Temporary migration stems/proofs remain 0760 and 0761 without SQL changes.
+
+Reapplied all ten batch-9 hardening rules to the present slices. No new app table,
+command, route, service, client DB import, web server module, browser spec,
+fingerprinted row column or runtime authority write is introduced. Connector
+intake's latest main body is preserved except its existing materials validation
+extension, covered by the source test. The replaced connector routine is outside
+the app/identity/control-plane/audit-control catalog captured by the plan-upgrade
+test, so no exception is needed there. Neither migration reads
+app.command_lifecycle_claim. LP-0 owner entries cover the infrastructure-reachable
+discovery routine only. No test or guard was weakened.
+
+Validation on this continuation (installed TypeScript 5.8.3, Vitest 4.1.12):
+- All seven workspace typechecks passed using installed
+  `node_modules/.bin/tsc -p <workspace>/tsconfig.json --noEmit` (core, config,
+  storage, DB, AI, API, web). `pnpm typecheck` stalled without progress and was
+  interrupted; no dependencies were downloaded.
+- Core cache, queue and capture: 84 passed in one three-file invocation.
+- API context boundary, identity and watchdog registry: 278 passed.
+- DB migration proof loader and connector intake proof: 80 passed.
+- API escalation worker, inbound and synthetic SFTP: 60 passed.
+- API client queue compatibility: 1 passed. Total: 503 tests passed. Every
+  Vitest invocation used explicit --maxWorkers=2 and at most three named files.
+- Lane tool syntax and git diff --check passed. Standard lane lint was run and
+  failed solely on config/lanes/m3-5-capture-states.json still in the read-only
+  incoming merge index. A deterministic projected-working-tree check using the
+  tool's exported policy, lane/path and migration-order functions passed. Router
+  must stage the removal/export union and rerun standard lane lint after commit;
+  the projected result is not that gate.
+
+No Git writes, fetch, database or browser runs were performed. CI still owes the
+full required checks, PostgreSQL fresh/upgrade/migration/catalog/privilege/RLS
+proofs, escalation concurrency/restart/rollback, connector adversarial upgrade
+coverage and affected browser journeys. Native device and real-provider evidence
+remain separately held. Independent RED review must bind the eventual exact head.
+NOPR until #549 and batch 10 land; no real data, providers, money or release.

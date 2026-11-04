@@ -35,3 +35,19 @@ The ordinary upload service still refuses audio by default. Audio is never sent 
 an AI/transcription service by this slice. Native capture, encrypted local media,
 UI states, queued AI, device tests and production transport/retention remain outside
 this server slice. No financial or locked-bill records are written.
+
+## Pure device capture rules (M3-5 remains open)
+
+`packages/core/src/offline-capture.ts` supplies strict `synthetic_demo` capture
+specimens and pure screen, resume and cleanup decisions. Client time is explicitly
+metadata. Only an authenticated finalize result, normalized by the caller, gives
+verified screen eligibility; this never replaces server proof validation. Resume
+uses the server offset with chunks up to 1 MB and files up to 25 MB. Begin retries
+keep the upload ID and original metadata/expiry; expired or rejected uploads need
+review, not a new identity or renewed expiry. Verified status needs finalize replay
+to recover the original immutable result. Text remains local pending a separate
+transport; voice processing stays queued until online, with no gateway call here.
+Low storage never releases an unverified copy without the person's explicit discard.
+Real recording/capture, encrypted local media, native wiring, airplane-mode,
+app/device restart and device storage runs remain native work. M3-5 is not closed;
+D08 remains proposed, G3 closed, and G0–G5 are unchanged.

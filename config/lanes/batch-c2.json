@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/batch-c2"
       ],
-      "note": "RED, NOPR partial group; remaining four slices are not merged. Router completes the pending merge and stages the renumbered paths.",
+      "note": "RED, NOPR partial group: five slices present; M4-4 hold alert, ENT-14 fee mandate and SV-7B accounting remain unmerged. Router stages and completes the M3-5 export union merge.",
       "allow": [
         "apps/api/src/connectors/inbound.test.ts",
         "apps/api/src/connectors/inbound.ts",
@@ -18,8 +18,11 @@
         "docs/contracts/connector-capabilities-v1.md",
         "docs/contracts/extra-approval-chain-v1.md",
         "docs/contracts/offline-contract-v1.md",
+        "docs/contracts/resumable-evidence-v1.md",
         "docs/contracts/sync-download-v1.md",
         "packages/core/src/index.ts",
+        "packages/core/src/offline-capture.test.ts",
+        "packages/core/src/offline-capture.ts",
         "packages/core/src/offline-client-queue.test.ts",
         "packages/core/src/offline-client-queue.ts",
         "packages/core/src/sync-device-cache.test.ts",
