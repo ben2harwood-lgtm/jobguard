@@ -1,5 +1,5 @@
 {
-  "migration": "0769_merchant_delivery_record_read.sql",
+  "migration": "0977_merchant_delivery_record_read.sql",
   "lp0": [
     {
       "section": "groups",
@@ -23,7 +23,7 @@
         },
         "downstream": "Read-only, synthetic-database and owner/admin-session checked tenant-wide delivery projection. No table grants or writes.",
         "sources": [
-          "packages/db/migrations/0769_merchant_delivery_record_read.sql",
+          "packages/db/migrations/0977_merchant_delivery_record_read.sql",
           "packages/db/src/merchant-reliability-repository.ts"
         ],
         "tests": [
@@ -88,7 +88,7 @@
           "LP-12": "Review fixed search_path, migration-owned private tables and helpers, and absence of runtime direct writes."
         },
         "sources": [
-          "packages/db/migrations/0769_merchant_delivery_record_read.sql",
+          "packages/db/migrations/0977_merchant_delivery_record_read.sql",
           "packages/db/src/merchant-reliability-repository.ts"
         ],
         "tests": [

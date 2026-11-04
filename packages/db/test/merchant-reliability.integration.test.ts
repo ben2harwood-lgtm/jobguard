@@ -42,7 +42,7 @@ it("catalogue proves no table grant, private helper and fixed migration-owned re
  const tableAcl=()=>c.admin.query("SELECT n.nspname,c.relname,c.relacl::text FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN ('app','identity') ORDER BY 1,2");
  const before=(await tableAcl()).rows;
  await c.admin.query("DROP FUNCTION app.merchant_delivery_record_read(uuid,text,uuid)");
- await c.admin.query(await readFile(new URL("../migrations/0769_merchant_delivery_record_read.sql",import.meta.url),"utf8"));
+ await c.admin.query(await readFile(new URL("../migrations/0977_merchant_delivery_record_read.sql",import.meta.url),"utf8"));
  expect((await tableAcl()).rows).toEqual(before);
  const row=(await c.admin.query("SELECT pg_get_userbyid(proowner) owner,prosecdef,proconfig,has_function_privilege('jobguard_runtime',oid,'EXECUTE') runtime,has_function_privilege('jobguard_infrastructure',oid,'EXECUTE') infrastructure FROM pg_proc WHERE oid='app.merchant_delivery_record_read(uuid,text,uuid)'::regprocedure")).rows[0];
  expect(row).toEqual({owner:"jobguard_migration",prosecdef:true,proconfig:["search_path=pg_catalog"],runtime:true,infrastructure:false});

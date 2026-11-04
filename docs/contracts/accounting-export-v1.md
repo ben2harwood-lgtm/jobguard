@@ -219,3 +219,81 @@ the batch's database integration suites, the export-preview browser journey
 and all required typecheck/lint/test/build checks against current main.
 Independent RED review must PASS at the exact resulting head before merge;
 this local source inspection and deterministic testing are not that review.
+
+## M5-2 stored route changes (dark slice, 4 November 2026)
+
+`AccountingExportRepository.routeChangePreview` and `routeChangeConfirm` use the
+migration-owned `app.accounting_export_route` session boundary. Inputs are strict
+version-1 schemas. The destination connection/mapping proposal is an existing
+administrator-owned synthetic export fixture, identified by source ID; runtime
+callers cannot seed, edit or assert its connection state. Its full scope must
+match tenant, target company, job, source revision and mapping. No tenant-wide
+switch exists. A switch with no previous route/history is refused.
+
+The canonical database preview hash binds version, exact scope/mapping, old and
+new route, target connection revision, consent revision and the ordered historic
+ledger artifacts, references, external IDs and execution states. Every historic
+entry must be pushed with an external ID. Pending, unknown, absent, edited,
+duplicate or conflicting entries hold the switch until reconciliation. These
+are persisted synthetic observations, not fresh provider lookups or real
+provider conformance. Live connection and target-visibility verification remain
+with the held adapters/G5 work.
+
+Confirmation is an explicit human-approved `accounting_export.route` Decision,
+with an exact preview hash, tenant, expiry, command ID and single-use Decision ID.
+The current session supplies the actor; caller-supplied actors are refused.
+Confirmation appends one FORCE-RLS record and a checked-operation audit event in
+one transaction under the existing tenant export lock. Identical command replay
+returns the original record after current session, fixture consent/revisions and
+reconciliation holds are checked; altered replay and Decision reuse across route
+changes and ordinary export approvals fail. Expired confirmation cannot replay.
+
+Existing ledger artifacts, mappings, references and external IDs are never
+rewritten. Their existing export claim rules prevent reposting. A new source's
+administrator-owned fixture must match the confirmed destination route,
+connection/consent revisions and exact mapping before preview/approval; the
+server does not silently rewrite a stale proposal. Other jobs/companies retain
+their routes. No HTTP, screen, worker, scheduler, OAuth, SDK, endpoint, tax,
+settlement or recovery-proof capability is added. M5-2 remains open; G0–G5,
+provider approval, CI database execution and exact-head independent RED review
+remain held.
+
+## M5-2 stored route read and human confirmation screen — 4 November 2026 (RED, NOPR)
+
+Migration `0976_accounting_export_route_change_read` adds one checked synthetic-only
+read with the existing owner/admin session permission and tenant export lock. It
+returns the hash-bound current proposal and immutable confirmed route history,
+without changing tables, grants, predecessors, ledger mappings or external IDs.
+Its only dispatcher call fixes the operation to the existing read-only preview.
+The session-only `/api/accounting-exports/[sourceId]/route-change` GET/POST uses
+the package application export, strict approval input, trusted POST origin and
+no-store responses. The server derives scope/tenant from the checked read and
+binds the session actor; actor mismatch rolls back before commit. SQL rechecks
+the exact hash, revisions, expiry, Decision reuse and reconciliation holds.
+
+The practice section shows old/new routes, target company, mapping and historic
+entries. Confirmation retains identical command/Decision/expiry bytes after an
+uncertain response; the server can replay the stored artifact after a committed
+but lost response. Reload reads the confirmed route/history. Already-sent items
+are never reissued. This supersedes the earlier slice's statement that no screen
+or HTTP boundary exists. Real adapters, connections on screen, workers, production
+use and G0–G5 remain closed; this does not finish M5-2.
+
+Local validation used installed TypeScript/Vitest directly, with no downloads:
+`tsc -p` for core, db and API, and web with `--noEmit`, passed. Vitest with
+`--maxWorkers=1`, at most three named files per run and two test workers total:
+API accounting-export.application (18); watchdog-registry/context-boundary/identity
+(278); db accounting-export-repository/migration-proof-loader (82); web existing
+export route/new route-change route/route-change component (11): 389 tests passed.
+Lane boundary, core purity, exact-money, commercial boundary, AI provider boundary,
+PL/pgSQL CASE-in-IF and diff whitespace checks passed. Initial JSX import and a
+duplicate test fixture property were fixed without weakening assertions.
+
+CI must run the extended real-PostgreSQL route-change suite, including read
+isolation/permission, no-write reload and predecessor-preserving 0767 upgrade;
+actual catalog/proof/RLS checks; and `m5-2-route-change.spec.ts` headless on
+mobile-360 and desktop (lost response/replay, stale proposal, held unknown export,
+permission and preserved historic IDs). No database or browser ran here. Full CI
+against current main and independent exact-head RED review remain required.
+Router commits/pushes this NOPR branch and reconciles/renumbers it into its group;
+this session performed no Git writes, fetch, main merge, PR or release.
