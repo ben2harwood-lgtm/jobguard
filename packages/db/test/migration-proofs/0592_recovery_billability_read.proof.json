@@ -1,5 +1,5 @@
 {
-  "migration": "0835_recovery_billability_read.sql",
+  "migration": "0592_recovery_billability_read.sql",
   "lp0": [
     {
       "section": "groups",
@@ -16,7 +16,7 @@
           "LP-8b": "Read immutable synthetic billability reviews only, without fee or write authority"
         },
         "sources": [
-          "packages/db/migrations/0835_recovery_billability_read.sql"
+          "packages/db/migrations/0592_recovery_billability_read.sql"
         ],
         "tests": [
           "apps/web/app/api/jobs/[id]/recovery-cases/[caseId]/billability/database.test.ts"
@@ -85,7 +85,7 @@
           "LP-8b": "Read immutable synthetic billability reviews only, without fee or write authority"
         },
         "sources": [
-          "packages/db/migrations/0835_recovery_billability_read.sql"
+          "packages/db/migrations/0592_recovery_billability_read.sql"
         ],
         "tests": [
           "apps/web/app/api/jobs/[id]/recovery-cases/[caseId]/billability/database.test.ts"

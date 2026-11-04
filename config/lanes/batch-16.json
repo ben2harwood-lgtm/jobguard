@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/batch-16"
       ],
-      "note": "Built-ahead RED group: M4-13 mandate, M4-2 billability review, M4-17 adjustments and MON-9 election screens. NOPR.",
+      "note": "RED group: M4-13 mandate, M4-2 billability review, M4-17 adjustments and MON-9 election screens. Reserved migrations 0592–0593; ready for PR testing and independent review.",
       "allow": [
         "apps/web/app/api/jobs/[id]/reconciliation/[runId]/adjustments/route.test.ts",
         "apps/web/app/api/jobs/[id]/reconciliation/[runId]/adjustments/route.ts",
@@ -45,16 +45,16 @@
         "docs/contracts/recovery-billability-policy-v1.md",
         "docs/contracts/subscription-success-agreement-v1.md",
         "packages/core/src/watchdog.ts",
-        "packages/db/migration-notes/0835_recovery_billability_read.md",
-        "packages/db/migration-notes/0836_financial_reconciliation_adjustments_read.md",
-        "packages/db/migrations/0835_recovery_billability_read.sql",
-        "packages/db/migrations/0836_financial_reconciliation_adjustments_read.sql",
+        "packages/db/migration-notes/0592_recovery_billability_read.md",
+        "packages/db/migration-notes/0593_financial_reconciliation_adjustments_read.md",
+        "packages/db/migrations/0592_recovery_billability_read.sql",
+        "packages/db/migrations/0593_financial_reconciliation_adjustments_read.sql",
         "packages/db/src/financial-reconciliation-queue-repository.ts",
         "packages/db/src/recovery-billability-repository.test.ts",
         "packages/db/src/recovery-billability-repository.ts",
         "packages/db/test/financial-reconciliation-adjustments.integration.test.ts",
-        "packages/db/test/migration-proofs/0835_recovery_billability_read.proof.json",
-        "packages/db/test/migration-proofs/0836_financial_reconciliation_adjustments_read.proof.json"
+        "packages/db/test/migration-proofs/0592_recovery_billability_read.proof.json",
+        "packages/db/test/migration-proofs/0593_financial_reconciliation_adjustments_read.proof.json"
       ]
     }
   }

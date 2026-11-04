@@ -1,4 +1,4 @@
-# 0750 — synthetic billability review read
+# 0592 — synthetic billability review read
 
 Adds only `app.read_recovery_billability(uuid,uuid,text)`, owned by the migration role,
 with EXECUTE for runtime. No table grants, writes, backfill or existing routine changes.

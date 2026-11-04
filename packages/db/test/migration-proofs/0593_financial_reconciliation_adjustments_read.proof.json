@@ -1,5 +1,5 @@
 {
-  "migration": "0836_financial_reconciliation_adjustments_read.sql",
+  "migration": "0593_financial_reconciliation_adjustments_read.sql",
   "lp0": [
     {
       "section": "entries",
