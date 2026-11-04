@@ -1,0 +1,34 @@
+{
+  "version": 2,
+  "lanes": {
+    "batch-19": {
+      "branches": [
+        "codex/sandbox/batch-19"
+      ],
+      "note": "Built-ahead M4-18 draft store group; RED, NOPR.",
+      "allow": [
+        "apps/api/src/interim-draft.application.test.ts",
+        "apps/api/src/interim-draft.application.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/web/app/api/jobs/[id]/interim-drafts/route.test.ts",
+        "apps/web/app/api/jobs/[id]/interim-drafts/route.ts",
+        "apps/web/app/jobs/[id]/interim-drafts/page.tsx",
+        "apps/web/app/jobs/[id]/interim-drafts/screen.test.ts",
+        "apps/web/app/jobs/[id]/interim-drafts/screen.tsx",
+        "apps/web/app/lib/interim-draft-server.ts",
+        "apps/web/e2e/interim-drafts.spec.ts",
+        "docs/contracts/interim-draft-records-dark-v1.md",
+        "packages/core/src/watchdog.ts",
+        "packages/db/migration-notes/0850_interim_draft_records.md",
+        "packages/db/migrations/0850_interim_draft_records.sql",
+        "packages/db/src/index.ts",
+        "packages/db/src/interim-draft-repository.ts",
+        "packages/db/test/interim-draft-repository.test.ts",
+        "packages/db/test/interim-draft-screen.integration.test.ts",
+        "packages/db/test/interim-draft.integration.test.ts",
+        "packages/db/test/later-empty-tables.ts",
+        "packages/db/test/migration-proofs/0850_interim_draft_records.proof.json"
+      ]
+    }
+  }
+}
