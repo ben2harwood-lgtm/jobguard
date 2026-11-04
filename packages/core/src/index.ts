@@ -134,8 +134,9 @@ export * from "./evidence-pack-v3.js";
 export * from "./evidence-pack-v3-assembly.js";
 export * from "./meter-today.js";
 
-export * from "./financial-reconciliation.js";
 export * from "./small-builder-demo-lifecycle.js";
+export * from "./managed-recovery.js";
+export * from "./platform-tax-invoice.js";
 export * from "./merchant-connectors.js";
 export * from "./inbox-outcome-metrics.js";
 
@@ -155,6 +156,8 @@ export * from "./customer-approval-method.js";
 export * from "./customer-quote-acceptance.js";
 export * from "./simulation-money-run.js";
 export * from "./customer-variation-approval.js";
+export * from "./financial-reconciliation.js";
+
 export * from "./interim-applications.js";
 export * from "./construction-notices.js";
 export * from "./retention-balances.js";
@@ -167,3 +170,8 @@ export * from "./contractor-mandate.js";
 
 export * from "./cancellation-kit.js";
 export * from "./value-source-receipt-v2.js";
+export * from "./sync-device-cache.js";
+export * from "./offline-client-queue.js";
+export * from "./offline-capture.js";
+
+export * from "./contractor-fee-mandate.js";

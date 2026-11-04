@@ -130,8 +130,8 @@ only, never balances, counts, hashes or an empty completed report.
 PUBLIC/infrastructure/shadow get none. No tables, table grants, policies,
 existing routines or roles change. There is no new table requiring FORCE RLS,
 tenancy or contractor table inventory rows. LP-0 has exactly two new ACL/owner
-keys, one routine protection record and appended authority-path evidence;
-serious-B5 has exactly one new routine identity. No freeze is loosened.
+keys and one routine protection record in its migration proof; serious-B5
+has exactly one new routine identity. No freeze is loosened.
 RLS still assumes correctly authenticated tenant context and cannot protect
 against stolen privileged credentials. Source-inspected SQL and scripted pool
 tests are not PostgreSQL execution proof.
@@ -304,7 +304,7 @@ were not executed here. The pnpm launcher stalled before invoking checks and
 was interrupted; verification used the already-installed Vitest and TypeScript
 binaries from the repository's package scripts. No package was downloaded.
 
-## M4-17 queue persistence (`0619_financial_reconciliation_queue.sql`; synthetic reference analysis only)
+## M4-17 queue persistence (`0572_financial_reconciliation_queue.sql`; synthetic reference analysis only)
 
 The `FinancialReconciliationQueueRepository` stores the existing supplied fake
 snapshots and deterministic reports, plus each report's unexplained differences.
@@ -313,7 +313,7 @@ No authoritative source adapter, route, scheduler, provider or live execution is
 added. Every report retains all four reference/disabled flags. This extends only
 the dark M4-17 seam; the accepted-source/production run holds above remain.
 
-`0619_financial_reconciliation_queue.sql` adds five append-only, FORCE-RLS tables: `financial_reconciliation_run`,
+`0572_financial_reconciliation_queue.sql` adds five append-only, FORCE-RLS tables: `financial_reconciliation_run`,
 `financial_reconciliation_difference`, `financial_reconciliation_adjustment`,
 `financial_reconciliation_approval`, and `financial_reconciliation_command`.
 The last retains exact command payloads, identity and result references, including
@@ -405,3 +405,92 @@ which cannot start PostgreSQL or bind localhost. Its assertions are CI obligatio
 not a completed restore rehearsal or a release claim. Local verification is in
 the existing router commit-message handoff. No migration or production behavior
 changes; the independent exact-head RED review and all G0–G5 gates remain owed.
+### M4-17 queue follow-up: SQL source and report verification
+
+Branch-owned 0479 now rebuilds the entire synthetic customer-invoice set for
+this tenant/job from `app.customer_invoice`, including each immutable
+`final_account_revision_id` and net/tax/gross pence. A different amount,
+revision, invented identity or missing stored invoice refuses, even if the
+caller supplies a fresh consistent source hash. SQL independently recomputes
+all balances and differences for the supported snapshot and compares the whole
+report, including canonical difference IDs. Fabricated, altered or omitted
+queue entries and changed balances refuse before persistence or audit. Daily
+aliases also validate their supplied snapshot/report before retaining the first
+run of the day; exact command replay still returns its immutable original.
+
+Provider observations remain supplied fictional inputs and never establish
+verified settlement. The stored platform journal has different kinds and book
+semantics from these invoice-scoped reference journal observations; there is no
+accepted adapter for that shape or for reference duplicate corrections. SQL
+therefore refuses nonempty `journals` and `corrections` rather than accepting
+unbacked facts. A proposed/approved reference adjustment is still a review fact,
+not a posted journal or executable authorization. Supporting persisted journal
+or correction inputs requires their actual source mapping and SQL comparison;
+this follow-up does not invent it. Honest invoice/provider-only reports retain
+the same report format, disabled flags, balances, hashes and queues.
+
+The PostgreSQL regression fixture now uses the existing historical invoice
+fixture with a real stored final-account revision and authorization. It attacks
+the SQL entry point directly, bypassing repository validation. Tests also
+compare supported provider chains, duplicate effects, limits, missing parents,
+orphans, overpayments and late observations against the pure reference engine.
+No new table, routine, ACL or policy is introduced: the exact LP-0 / SERIOUS-B5
+unions remain unchanged. Only the unmerged branch-owned migration is edited.
+PostgreSQL integration and upgrade execution remain CI-only here.
+
+
+### 2 November catch-up: explicit migration proofs
+
+Neither 0310 nor 0479 matches a migration body on the saved `main` or
+`origin/main` refs (including the M4-17-S simulation run migration 0512).
+Both branch migrations are retained at their current numbers. Their exact
+`lp0`, `upgrade` and `tenancy` expectations now live in the corresponding
+`packages/db/test/migration-proofs/*.proof.json` files. The legacy inventory,
+B5 helper and tenancy lists no longer duplicate these branch-only allowances;
+the existing full comparisons consume the fragments instead. Expectations
+come from SQL and committed reviewed records, never a running database.
+0310 adds one routine only. 0479 lists five empty tables, eleven indexes,
+one routine, five policies and five forced-RLS tenancy postures. Neither
+migration on main is edited. PostgreSQL execution and exact-head RED review
+remain required before merge.
+
+
+## M4-17 catch-up, 3 November 2026
+
+The incoming main is `111865cf65f5e68a28ce1891bd52aad0ac7a0f10` (the
+launcher's merge target; the local `main` reference is older). Current migration
+identities are `0571_money_trail_reconciliation` and
+`0572_financial_reconciliation_queue`; earlier numbered references above are
+historical. Neither migration replaces a main routine. The queue still calls
+main's current `app.ef_actor` and `app.ef_audit`; the latter seals through
+`app.lp4_seal_audit` following LP-4. Main's privilege baseline and upgrade proof
+are preserved, with all five new tables included in the empty-successor list
+and migration proof fragments covering the exact table catalogues.
+
+The earlier pure fee-collection reference is retained as a dependency of the
+money-trail reference; it does not replace main's implemented simulation
+collection or money-trail command paths. Other inherited lane files are removed
+from the active lane directory. No production action or new behaviour is added.
+
+LATER / SIMPLICITY: `FinancialReconciliationQueueRepository.stored` has its own
+canonical JSON encoder alongside the core reconciliation encoder. A future
+focused change could reuse one reviewed encoder, reducing maintenance of
+equivalent comparison rules. This does not block the catch-up.
+
+Validation for this catch-up (installed local binaries, no package downloads):
+
+- Core: `tsc -p tsconfig.json` passed (compile and typecheck).
+- DB and API: `tsc -p tsconfig.json --noEmit` passed in each package.
+- Core Vitest 4.1.12, `--maxWorkers=2`: financial-reconciliation,
+  money-trail-reconciliation and fee-collection: 78 tests passed.
+- DB Vitest 4.1.12, `--maxWorkers=2`: financial-reconciliation-queue-repository,
+  money-trail-repository and migration-proof-loader: 89 tests passed.
+- API Vitest 4.1.12, `--maxWorkers=2`: fee-collection-fake-adapter: 10 tests passed.
+- `git diff --check MERGE_HEAD` passed. Conflict markers are resolved in the
+  three conflicted files; the launcher must stage them to clear the read-only
+  unmerged index. PostgreSQL migration/privilege/upgrade tests, browser suites,
+  full CI and independent exact-head RED review remain outstanding.
+
+The global pnpm launcher stalled before starting its commands and was stopped;
+checks above used existing package-local `.bin` executables. No tests failed,
+no expectations were weakened, and no git write or network action was run.

@@ -12,7 +12,7 @@ describe("DEMO-J1 core-1000 guided entry", () => {
     expect(core1000Source.match(/^ITEM:/gm)).toHaveLength(5);
     expect(core1000Source).not.toContain("Replace shelves");
     const html = renderToStaticMarkup(<Core1000Guide />);
-    for (const text of ["£1,320", "£820", "£700", "£120", "no v1 cap or activation obligation", "MON-5 customer journey: not ready yet", "Independent RED verdict: missing", "0 of 2"]) expect(html).toContain(text);
+    for (const text of ["£1,320", "£820", "£700", "£120", "no v1 cap or activation obligation", "This practice exercise doesn&#x27;t use the customer&#x27;s secure link; the shadow-30000 journey shows customer approval through the customer portal.", "Independent RED verdict: missing", "0 of 2"]) expect(html).toContain(text);
     expect(html).toContain("does not mark steps complete");
     expect(html).not.toContain("You finished");
   });

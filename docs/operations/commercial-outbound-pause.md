@@ -21,14 +21,14 @@ SELECT outbound_control.command('<pause-command-id>', 'pause', 0);
 -- Operator A: request resume against the revision returned by pause.
 SELECT outbound_control.command('<request-command-id>', 'request_resume', 1);
 -- Operator A: complete reconciliation and retain its receipt independently.
--- Record that receipt UUID against this exact request (migration `0620_restore_reconciliation.sql`).
+-- Record that receipt UUID against this exact request (migration `0581_restore_reconciliation.sql`).
 SELECT outbound_control.record_reconciliation('<request-command-id>', '<reconciliation-receipt-id>');
 -- Operator B: inspect the receipt, then approve the exact request/revision.
 SELECT outbound_control.command('<approval-command-id>', 'approve_resume', 2, '<request-command-id>');
 ```
 
 The operator who paused or requested resume cannot approve it. A subsequent pause
-invalidates pending resume requests and their reconciliation facts. Migration `0620_restore_reconciliation.sql`
+invalidates pending resume requests and their reconciliation facts. Migration `0581_restore_reconciliation.sql`
 requires a recorded reconciliation fact for the exact current resume request;
 missing facts refuse approval with `OUTBOUND_RECONCILIATION_REQUIRED`. The fact
 records request UUID, independently retained receipt UUID, `session_user` and time.

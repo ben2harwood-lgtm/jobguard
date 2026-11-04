@@ -11,6 +11,17 @@ const logged = () => ({ version: "sor-site-extra-logged.v1", environment: "synth
 beforeEach(() => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); vi.stubEnv("VERCEL", "1"); vi.stubEnv("VERCEL_URL", "app.fictional.invalid"); vi.stubEnv("JOBGUARD_ALLOWED_ORIGINS", ""); logSor.mockReset(); workspace.mockClear(); logSor.mockResolvedValue(logged()); });
 afterEach(() => vi.unstubAllEnvs());
 describe("ENT-3c thin Next adapter for the priced log", () => {
+  it("ENT-3 v2 forwards only the reviewed capture and evidence fields", async () => {
+    const body = raw({ version: "log-sor-site-extra.v2", workStatus: "finished", description: "Fictional description", photoEvidenceId: crypto.randomUUID(), residentConfirmation: { shownContentSha256: "a".repeat(64) }, siteVisitId: crypto.randomUUID() });
+    expect((await post(JSON.stringify(body))).status).toBe(201);
+    expect(logSor).toHaveBeenCalledExactlyOnceWith(jobId, body);
+  });
+  it.each(["photoEvidenceId", "residentConfirmation"])("ENT-3 v2 refuses missing %s before composition", async field => {
+    const body: Record<string, unknown> = raw({ version: "log-sor-site-extra.v2", workStatus: "finished", description: "Fictional description", photoEvidenceId: crypto.randomUUID(), residentConfirmation: { shownContentSha256: "a".repeat(64) } });
+    delete body[field];
+    expect((await post(JSON.stringify(body))).status).toBe(400);
+    expect(workspace).not.toHaveBeenCalled();
+  });
   it("[C2] passes only the parsed body and the path ID, ignoring tenant, member and role in headers and query", async () => {
     const body = raw({ orderLineScopeItemId: crypto.randomUUID() }); const response = await post(JSON.stringify(body), "https://app.fictional.invalid", { "x-tenant-id": crypto.randomUUID(), "x-membership-id": crypto.randomUUID(), role: "owner" }, `?tenantId=${crypto.randomUUID()}&membershipId=${crypto.randomUUID()}&role=owner`);
     expect(logSor).toHaveBeenCalledExactlyOnceWith(jobId, parseLogSorSiteExtra(body)); expect(response.status).toBe(201); expect(response.headers.get("cache-control")).toBe("no-store");

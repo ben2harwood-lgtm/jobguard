@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Header, Headers, HttpCode, HttpException, Param, Post, Query } from "@nestjs/common";
 import { ApiBody, ApiConflictResponse, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiParam, ApiQuery, ApiTags } from "@nestjs/swagger";
 import { Pool } from "pg";
-import { SorSiteExtraError } from "@jobguard/core";
+import { recordSiteSupervisorQueryV1, SorSiteExtraError } from "@jobguard/core";
 import { SiteExtraApplication, sorSiteExtraHttpFailure } from "./site-extra.application.js";
 
 const principal = (cookie?: string) => ({ version: "contractor-principal.v1", sessionId: cookie?.split(";").map(x => x.trim()).find(x => x.startsWith("jg_session="))?.slice(11) });
@@ -18,11 +18,31 @@ export class SiteExtraPricingController {
  @ApiConflictResponse({ description: "JOB_NOT_LIVE: only live jobs accept site extras. IDEMPOTENCY_CONFLICT: command id reused with a different request.", schema: { type: "object", required: ["code"], properties: { code: { type: "string", enum: ["JOB_NOT_LIVE", "IDEMPOTENCY_CONFLICT"] } } } })
  @ApiOperation({ summary: "Log a schedule-of-rates site extra in synthetic_demo; the server compares it with the order and prices the extra quantity alone" })
  @ApiParam({ name: "id", type: String, format: "uuid" })
- @ApiBody({ schema: { type: "object", additionalProperties: false, required: ["version", "commandId", "sorCode", "quantity", "note"], properties: { version: { type: "string", enum: ["log-sor-site-extra.v1"] }, commandId: { type: "string", format: "uuid" }, sorCode: { type: "string", minLength: 1, maxLength: 80 }, quantity: { type: "string", pattern: "^(0|[1-9][0-9]{0,11})(\\.[0-9]{1,6})?$" }, orderLineScopeItemId: { type: "string", format: "uuid" }, note: { type: "string", minLength: 1, maxLength: 5000, pattern: "\\S" } } } })
+ @ApiBody({ schema: { oneOf: [{ type: "object", additionalProperties: false, required: ["version", "commandId", "sorCode", "quantity", "note"], properties: { version: { type: "string", enum: ["log-sor-site-extra.v1"] }, commandId: { type: "string", format: "uuid" }, sorCode: { type: "string", minLength: 1, maxLength: 80 }, quantity: { type: "string", pattern: "^(0|[1-9][0-9]{0,11})(\\.[0-9]{1,6})?$" }, orderLineScopeItemId: { type: "string", format: "uuid" }, note: { type: "string", minLength: 1, maxLength: 5000, pattern: "\\S" } } }, { type: "object", additionalProperties: false, required: ["version", "commandId", "sorCode", "quantity", "note", "description", "photoEvidenceId", "residentConfirmation", "workStatus"], properties: { version: { type: "string", enum: ["log-sor-site-extra.v2"] }, workStatus: { type: "string", enum: ["not_started", "under_way", "finished"] }, commandId: { type: "string", format: "uuid" }, sorCode: { type: "string", minLength: 1, maxLength: 80 }, quantity: { type: "string", pattern: "^(0|[1-9][0-9]{0,11})(\\.[0-9]{1,6})?$" }, orderLineScopeItemId: { type: "string", format: "uuid" }, note: { type: "string", minLength: 1, maxLength: 5000, pattern: "\\S" }, description: { type: "string", minLength: 1, maxLength: 500 }, photoEvidenceId: { type: "string", format: "uuid" }, siteVisitId: { type: "string", format: "uuid" }, residentConfirmation: { type: "object", additionalProperties: false, required: ["shownContentSha256"], properties: { shownContentSha256: { type: "string", pattern: "^[0-9a-f]{64}$" } } } } }] } })
  logSor(@Param("id") jobId: string, @Headers("cookie") cookie: string | undefined, @Headers("origin") origin: string | undefined, @Body() body: unknown) {
   const allowed = (process.env.JOBGUARD_ALLOWED_ORIGINS ?? "http://localhost:3000").split(",").map(value => value.trim());
   if (!origin || origin === "null" || !allowed.includes(origin)) return fail(new SorSiteExtraError("ORIGIN_FORBIDDEN"));
   return this.application.logSor(principal(cookie), jobId, body).catch(fail);
+ }
+ @Post("jobs/:id/supervisor-queries") @HttpCode(201) @Header("Cache-Control", "no-store")
+ @ApiCreatedResponse({ description: "Immutable within-order supervisor question recorded or replayed; no extra or price" })
+ @ApiOperation({ summary: "Record a within-order question for the supervisor" })
+ @ApiParam({ name: "id", type: String, format: "uuid" })
+ @ApiBody({ schema: { type: "object", additionalProperties: false, required: ["version", "commandId", "orderLineScopeItemId", "sorCode", "quantity", "expectedOrderRevisionId"], properties: {
+  version: { type: "string", enum: ["record-site-supervisor-query.v1"] }, commandId: { type: "string", format: "uuid" }, orderLineScopeItemId: { type: "string", format: "uuid" }, sorCode: { type: "string", minLength: 1, maxLength: 80 }, quantity: { type: "string", pattern: "^(0|[1-9][0-9]{0,11})(\\.[0-9]{1,6})?$" }, expectedOrderRevisionId: { type: "string", format: "uuid" }
+ } } })
+ recordQuery(@Param("id") jobId: string, @Headers("cookie") cookie: string | undefined, @Headers("origin") origin: string | undefined, @Body() body: unknown) {
+  const allowed = (process.env.JOBGUARD_ALLOWED_ORIGINS ?? "http://localhost:3000").split(",").map(value => value.trim());
+  if (!origin || origin === "null" || !allowed.includes(origin)) return fail(new SorSiteExtraError("ORIGIN_FORBIDDEN"));
+  if (!recordSiteSupervisorQueryV1.safeParse(body).success) return fail(new SorSiteExtraError("INVALID_COMMAND"));
+  return this.application.supervisorQueries(principal(cookie), jobId, body).catch(fail);
+ }
+ @Get("jobs/:id/supervisor-queries") @Header("Cache-Control", "no-store")
+ @ApiOkResponse({ description: "Immutable questions for a job in this supervisor's scope" })
+ @ApiOperation({ summary: "Read a job's within-order supervisor questions" })
+ @ApiParam({ name: "id", type: String, format: "uuid" })
+ queries(@Param("id") jobId: string, @Headers("cookie") cookie: string | undefined) {
+  return this.application.supervisorQueries(principal(cookie), jobId).catch(fail);
  }
  @Get("jobs/:id/sor-items") @Header("Cache-Control", "no-store")
  @ApiOkResponse({ description: "Items of this job's price list whose code or description contains the text (at most 50)" })

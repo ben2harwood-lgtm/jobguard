@@ -923,6 +923,8 @@ index's unmerged entries, commit, push and open the PR. PostgreSQL, migration
 execution, browser and full CI checks remain for GitHub CI after push. One
 independent RED review against the resulting exact head remains required.
 
+# M4-17-S — RED builder receipt
+
 ## M4-17 report NOPR catch-up — 2 November 2026
 
 READY for router staging/commit on `codex/sandbox/m4-17-report`; RED (money).
@@ -934,7 +936,7 @@ No fetch, commit, push, PR, PostgreSQL, browser, provider or release action ran.
 
 Main has no `read_money_trail_availability` or `financial_reconciliation_queue`
 definition. Retained their unique additive migrations under the claimed stems
-`0618_money_trail_reconciliation` and `0619_financial_reconciliation_queue`.
+`0571_money_trail_reconciliation` and `0572_financial_reconciliation_queue`.
 A byte comparison against HEAD's original migrations passes for both SQL files;
 all main migration files remain byte-identical to origin/main. Added explicit
 proof fragments for LP-0, upgrade and tenancy; restored main's protected LP-0,
@@ -972,7 +974,7 @@ added to settle the merge, and no test assertion was weakened.
 Baseline is cached origin/main bc8993090; local main is stale. No fetch or Git
 write was run. All 220 migrations on that baseline are byte-identical. The
 existing 0552 pause migration/proof is retained once. Five branch migrations
-and matching proofs are now 0618–0622, with filename-stem-only substitutions
+and matching proofs are now 0618–0583, with filename-stem-only substitutions
 through code, tests, notes and lookups. Source comparisons confirm those SQL
 bodies are otherwise unchanged. The latest 0537 fee writer's reversal-netted
 caps and negative-only invalid-proof compensation remain present; retained
@@ -1032,7 +1034,7 @@ import as CH-9-mapped. Its shared fixture accepts the reconciler as an argument,
 so Vitest can supply its ordinary core import without invoking native import in
 Vitest's VM. Browser tests retain their main-scoped locators. Added an exact
 app.write_success_fee_v3(uuid,text,jsonb,jsonb) successor-body exception to the
-plan-entitlement upgrade assertion for migration 0622. The 0556-only assertion
+plan-entitlement upgrade assertion for migration 0583. The 0556-only assertion
 still checks every predecessor body; after successors the named replacement
 must differ, every other body stays equal, and all routine privileges remain
 checked by migration proofs. No product behavior or migration numbering changed.
@@ -1076,3 +1078,379 @@ RLS/audit/replay/concurrency, restore and fee safety, and the affected browser
 journeys. No database or browser suite ran here. Required full CI and independent
 RED review against the resulting exact head remain pending. No substantial new
 complexity or production enablement was introduced.
+The sandbox cannot start PostgreSQL. The router/CI must run the unmodified
+success-fee-recovery-compensation.integration.test.ts,
+simulation-money-run.integration.test.ts, serious-b5-upgrade.integration.test.ts
+and lp-0-grant-freeze.integration.test.ts on real PostgreSQL (at most two workers),
+including confirmation of the schema diff. These suites were not run locally.
+The £320 -> £2,820 -> -£250 -> £32 path remains unverified after this repair until
+those results arrive. No browser, complete journey, live provider, real money,
+CI or release pass is claimed.
+
+
+## 2 November M4-17 reconciliation NOPR catch-up — migration proof
+
+READY for router commit/push and CI; RED, with no independent review or
+PostgreSQL pass claimed. Earlier work in this worktree is preserved.
+
+Compared against available origin/main f94b2d577ed4be9e7020f3578a56c415710b524b
+without fetching. Local main 694e9e17 is stale. Neither retained migration
+0571_money_trail_reconciliation.sql (SHA-256
+ a67fead829fe896aa8a0ba0dd665c1d4ac5155602d9ab724f5f38f63b5f4027e)
+nor the queue branch's 0572_financial_reconciliation_queue.sql (SHA-256
+ f5a196593d2825a68f306499ad548c4314437bea240dac1c03b155ffc803c162)
+has a byte-identical SQL body anywhere on origin/main. Neither availability
+routine nor financial_reconciliation_run appears in its SQL. Main's #500
+0512_simulation_money_trail_run.sql is a different migration with different
+routines and tables. 0479 belongs only to codex/sandbox/m4-17-queue; it is not
+part of this worktree and no proof for that absent migration is introduced.
+This branch still adds reconciliation code beyond main and is not redundant.
+
+Added 0571_money_trail_reconciliation.proof.json from the retained SQL and
+source expectations only, never a database. Its explicit lp0 section contains
+the two exact capabilities, protected routine attributes and a separate narrow
+authority path. Its upgrade section fixes the exact identity, owner, ACL,
+definer flag and search_path. Its tenancy section is explicitly empty: no
+relation is created or changed. Kept 0310 unchanged for later PR renumbering.
+
+Restored the LP-0 baseline to origin/main and removed this branch's old
+live-catalogue-derived availability allowance from serious-B5. The strict
+proof-composition path now owns these expectations; no assertion is weakened.
+The separate availability authority path avoids conflicting with the existing
+0511 proof's ap-recovery-money identity. Regenerated the existing downstream
+source index: only the migration count and availability routine row changed.
+Updated the existing branch lane to enumerate all retained catch-up paths.
+All origin/main SQL migrations remain byte-identical. No git writes, fetch,
+package downloads, database startup, browser suite or CI run was attempted.
+The unresolved index entries remain router-owned; working files contain no
+merge markers and the launcher can stage the completed files.
+
+Checks actually run with installed Vitest 4.1.12, at most two workers and at
+most three named files per invocation:
+
+- packages/db: vitest run --maxWorkers=2 test/migration-proof-loader.test.ts test/lp-0-catalog.test.ts src/money-trail-repository.test.ts — 63 passed, including loading the actual proof directory and composing LP-0.
+- packages/core: vitest run --maxWorkers=2 src/financial-reconciliation.test.ts src/money-trail-reconciliation.test.ts src/fee-collection.test.ts — 78 passed.
+- apps/api: vitest run --maxWorkers=2 src/fee-collection-fake-adapter.test.ts — 10 passed.
+- Root installed tsc -p packages/db/tsconfig.json --noEmit — passed.
+- node tools/plpgsql-case-in-if-lint.mjs — 184 migrations passed.
+- python3 tools/lp-downstream-inventory.py --check — passed after regeneration.
+- node --test tools/lp-downstream-inventory.test.mjs — 5 passed.
+- Read-only comparison of every origin/main migration's SQL bytes — passed.
+- git diff --check — passed.
+
+These are deterministic local checks. PostgreSQL migration/upgrade/tenancy,
+LP-0 grant-freeze and money-trail security suites, browser journeys, green CI
+and independent RED review remain required after router push. No live money,
+provider, production readiness or release approval is claimed.
+
+
+## 3 November M4-17 NOPR catch-up to main 111865cf
+
+Plan piece M4-17, RED. Preserved the existing synthetic reference comparison,
+its fee-collection reference dependency, and read-only M4-17-S availability.
+Resolved the core barrel conflict by keeping both reconciliation and main's
+new exports. Main's simulation money run is a separate implemented path; the
+retained reference comparison and availability routine are not duplicate SQL.
+No new product behavior or test expectation changes.
+
+Moved only full migration stems from 0571_money_trail_reconciliation to
+0571_money_trail_reconciliation in SQL/proof filenames and references, retaining
+the exact SQL body. No existing routine is re-created, no audit writer or table
+is added, and the current read_success_fee_v3 access check remains delegated.
+All 215 incoming-main migration files compare byte-identically. The historical
+downstream inventory now takes main's exact copy because 0574 is outside its
+frozen source boundary. Removed the two branch-only inherited lane files; the
+M4-17 lane lists all 22 changed non-lane paths and excludes itself.
+
+The first DB unit run failed one unchanged path-completeness assertion: the
+retained proof declared an authority path with no referencing group. Added a
+narrow read_access group to that proof and assigned only this routine's EXECUTE
+to it. No frozen inventory or existing group is edited. The rerun passed.
+
+Checks actually run using installed Vitest 4.1.12, maxWorkers=2, at most three
+named Vitest files per invocation:
+
+- packages/core: vitest run --maxWorkers=2 src/financial-reconciliation.test.ts src/money-trail-reconciliation.test.ts src/fee-collection.test.ts — 78 passed.
+- packages/db: vitest run --maxWorkers=2 test/migration-proof-loader.test.ts test/lp-0-catalog.test.ts src/money-trail-repository.test.ts — 115 passed after the proof correction.
+- apps/api: vitest run --maxWorkers=2 src/fee-collection-fake-adapter.test.ts — 10 passed.
+- Root installed tsc -p packages/core/tsconfig.json --noEmit and tsc -p packages/db/tsconfig.json --noEmit — passed.
+- python3 tools/lp-downstream-inventory.py --check — passed.
+- node --test tools/lp-downstream-inventory.test.mjs — 6 passed.
+- node tools/plpgsql-case-in-if-lint.mjs — 216 migrations passed.
+- Read-only comparison of all incoming-main SQL and reserved SQL body — passed.
+- git diff --check — passed.
+
+PostgreSQL migration, upgrade, privilege/RLS and money-trail security suites,
+browser journeys, CI and independent RED review remain unproved locally. The
+sandbox provides no database or browser. No fetch, git write, package download,
+provider action, PR or production release was performed. The router must stage
+the resolved files and migration rename to finish its existing merge.
+
+- Final API typecheck: root installed tsc -p apps/api/tsconfig.json --noEmit — passed.
+
+
+### Batch-9 built-ahead union — 3 November 2026 (RED, NOPR)
+
+Resolved the M4-10 invoice merge by keeping both export sets. Preserved the
+already merged MON-9 guard, M4-12 collection, M4-5 pursuit and M4-17 reconciliation
+behaviour. M4-17-queue remains unmerged because of its conflicts; the router takes
+it next. No new product behaviour, live action, database or browser run.
+
+Migration filename stems and all matching references were moved, with names
+preserved, to 0598_managed_recovery_election, 0568_managed_recovery_actor_bind,
+0569_managed_recovery_pursuit_guard, 0570_platform_tax_invoice and
+0571_money_trail_reconciliation. Each retains its corresponding migration proof.
+Added all five new empty app tables to later-empty-tables.ts. Replaced the five
+component lanes with batch-9, listing the final changed paths against the local
+origin/main base bc8993090. The older local main ref is stale; no fetch was run.
+
+Executed using the installed binaries, with --maxWorkers=2 and at most three
+named Vitest files per invocation:
+- core: fee-collection, financial-reconciliation, money-trail-reconciliation
+  (78 passed); platform-tax-invoice, managed-recovery (22 passed).
+- db: src/money-trail-repository.test.ts and
+  test/managed-recovery-repository.test.ts (18 passed).
+- ai: pursuit-draft (24 passed).
+- api: fee-collection-fake-adapter and recovery-message.application (35 passed).
+Total: 177 tests passed in ten files. The first db invocation could not load the
+unbuilt core package; after building local workspace dependencies, the same
+files passed without source or test changes.
+
+Installed tsc -p tsconfig.json --noEmit passed for core, db, ai, API and web.
+Local dependency builds passed for core, config, storage, db and ai. The pnpm
+wrapper stalled before starting its checks and was interrupted; direct installed
+binaries were used without downloads. Core purity, money arithmetic, commercial
+boundary, AI provider boundary and PL/pgSQL CASE-in-IF checks passed. Final
+working-tree lane coverage, conflict-marker, old-stem and git diff --check checks
+passed. node tools/lint.mjs stops at the local lane check: its union of committed,
+staged and unstaged paths still includes removed component lanes and old migration
+names. The final batch lane intentionally lists only final changes from the base,
+as required. This is not a claimed full lint pass.
+
+CI must prove the committed lane and migration ordering, the full required unit,
+lint, typecheck and build gates, real PostgreSQL fresh/upgrade/repeat migrations,
+proof/catalogue/RLS/privilege checks (including command grant withdrawal and sealed
+audit), and applicable browser journeys. One independent RED review remains due
+at the final committed head. The read-only Git index still has unmerged entries;
+working files are resolved and ready for the launcher's staging and merge commit.
+## 2 November 2026 — M4-17 queue NOPR migration-proof catch-up
+
+RED. Preserved the earlier worktree catch-up. Read-only comparisons checked
+both local main (694e9e17) and saved origin/main (f94b2d57), without fetching.
+Neither 0310 nor 0479 has an exact or comment/whitespace-normalized body match
+under another number. The merged M4-17-S 0512 simulation run is different;
+this queue branch still adds functionality and is not already on main.
+All 183 SQL migrations shared with origin/main remain byte-identical.
+
+Added exact proof fragments for 0310 and 0479, with explicit lp0, upgrade
+and tenancy sections. Sources are the branch SQL and committed reviewed
+inventory, not a database. Moved these branch-only expectations out of the
+legacy LP-0 inventory and tenancy lists, and replaced B5's branch-specific
+live-catalogue additions with the existing strict proof application. No
+comparison, historical baseline assertion or test was weakened. Retained
+0310's one routine and 0479's five empty tables, eleven indexes, one routine,
+five policies and five tenancy postures. PostgreSQL name[] values use the
+installed pg parser's literal string representation, checked without a DB.
+Refreshed the existing downstream design index for the added 0310 SQL source
+and updated this branch's lane; no new reporting mechanism was introduced.
+
+Checks actually run from this worktree with installed dependencies:
+
+- packages/db: ./node_modules/.bin/vitest run --maxWorkers=1 test/migration-proof-loader.test.ts test/lp-0-catalog.test.ts src/financial-reconciliation-queue-repository.test.ts — 60 passed.
+- packages/core: ./node_modules/.bin/vitest run --maxWorkers=1 src/financial-reconciliation.test.ts src/money-trail-reconciliation.test.ts — 50 passed.
+- Root ./node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit — passed.
+- node --test tools/lp-downstream-inventory.test.mjs — 5 passed.
+- python3 tools/lp-downstream-inventory.py --check — passed after refreshing the existing index.
+- node tools/plpgsql-case-in-if-lint.mjs — 185 migrations checked, passed.
+- git diff --check — passed.
+
+The pnpm wrapper stalled before launching checks and was interrupted; the
+installed Vitest 4.1.12 and TypeScript binaries above completed successfully.
+No packages were downloaded. No Git write, fetch, PostgreSQL startup,
+localhost binding, browser suite, provider action, PR or CI run was attempted.
+The existing unmerged index entries remain for launcher staging, as instructed.
+
+Router/CI still must run the real PostgreSQL migration/tenancy/B5 and money
+security suites, including money-trail-upgrade.integration.test.ts,
+financial-reconciliation-queue-upgrade.integration.test.ts,
+financial-reconciliation-queue.integration.test.ts,
+serious-b5-upgrade.integration.test.ts and lp-0-grant-freeze.integration.test.ts
+in batches of at most three named Vitest files, with at most two workers.
+Exact-head independent RED review and green CI remain merge gates. This is
+source inspection and local deterministic testing, not independent verification.
+
+### Batch-9 queue union — 3 November 2026 (RED, NOPR)
+
+READY for router staging and merge completion. Resolved the m4-17-queue working
+files as a union, retaining both export sets, both empty-successor lists and both
+receipt histories. Kept the identical availability migration once at 0602 with
+this batch's fuller authority-path proof; the queue and its proof follow at 0603.
+Batch migrations are consecutive 0598–0603. Replacements affected filename stems
+only. Added all five empty queue tables to later-empty-tables.ts and removed the
+incoming piece lane. batch-9.json now lists all 65 final non-lane changes against
+saved origin/main bc8993090; local main is stale and no fetch was performed.
+All 220 SQL files on that saved main ref compare byte-identically.
+
+No new product behaviour was introduced. The queue uses the current ef_actor
+(MON-8 entitlement enforcement) and ef_audit (lp4_seal_audit). It does not replace
+those routines or restore runtime INSERT on command_receipt,
+decision_resolution or action_authorization. No substantial new complexity.
+
+Checks executed with installed Node 24.17.0, Vitest 4.1.12 and TypeScript, one
+worker per invocation and at most three named Vitest files:
+
+- packages/db: vitest run --maxWorkers=1 test/migration-proof-loader.test.ts
+  test/lp-0-catalog.test.ts src/financial-reconciliation-queue-repository.test.ts
+  — proof/catalogue files passed (107 tests); one queue test initially failed
+  because the existing core dist lacked the newly exported adjustment schema.
+- Rebuilt the workspace dependency with root tsc -p packages/core/tsconfig.json.
+  No source/test change was needed for that build-artifact issue.
+- packages/db: vitest run --maxWorkers=1
+  src/financial-reconciliation-queue-repository.test.ts
+  src/money-trail-repository.test.ts test/managed-recovery-repository.test.ts
+  — all 23 passed, including all five queue tests.
+- packages/core: vitest run --maxWorkers=1 src/financial-reconciliation.test.ts
+  src/money-trail-reconciliation.test.ts src/platform-tax-invoice.test.ts
+  — all 59 passed. Total final passing coverage: 189 tests in eight files.
+- Root tsc -p packages/db/tsconfig.json --noEmit and
+  tsc -p packages/core/tsconfig.json --noEmit — passed.
+- python3 tools/lp-downstream-inventory.py --check — passed.
+- node tools/plpgsql-case-in-if-lint.mjs — 226 migrations passed.
+- git diff --check and final working-file conflict-marker/lane/proof checks — passed.
+
+CI must prove real PostgreSQL fresh/upgrade/repeat migration behavior, proof and
+privilege/RLS catalogues, money-trail and queue isolation/replay/approval/audit
+atomicity, command-authority withdrawal and sealed audit, plus required lint,
+unit, typecheck, build and affected browser journeys. Queue suites include
+financial-reconciliation-queue-upgrade.integration.test.ts and
+financial-reconciliation-queue.integration.test.ts. Exact-head independent RED
+review and green CI remain gates. Local checks are deterministic evidence only.
+No database/browser startup, package download, provider/live action, Git write,
+PR or CI run was attempted. The index remains unmerged for router staging,
+as instructed; all working-file conflicts are resolved.
+
+### Batch-9 landing preparation — 4 November 2026 (RED, NOPR)
+
+READY for router staging and completion of the existing merge from saved
+origin/main c829a9394. Resolved four working-file conflicts as exact unions:
+core/database exports, the contractor upgrade's successor expectations and
+later-empty-tables. The index remains unmerged because this sandbox cannot
+write Git metadata. No product behavior or migration numbering changed.
+
+Added one exact named predecessor exception in
+plan-entitlement-lifecycle-upgrade.integration.test.ts for 0598's rename of
+app.lp5_command_result(p_command_id uuid, p_outcome jsonb) to
+lp5_command_result_before_mon9. The test still requires the same OID and exact
+predecessor definition after normalizing only that function's declared name;
+every other predecessor definition still compares unchanged. Existing routine
+privilege proofs remain in force. The lane contains exactly the 66 non-lane
+working-tree changes against saved origin/main and does not list itself.
+
+Source inspection found the batch already uses side tables, registers
+managed_recovery.elect in watchdog and currentCommandRegistryRows, and has no
+new web server module, browser spec or client database import. Its repositories
+use caller-supplied verified contexts and the merged command dispatcher rather
+than direct runtime writes to command receipts, resolutions or authorizations.
+Proof arguments contain no DEFAULT clauses. Private routine ownership entries
+remain only where LP-0's existing collector tracks ownership distinct from the
+schema owner. No guard was widened.
+
+Initial review — LATER / SIMPLICITY:
+packages/db/test/contractor-entitlement-upgrade.integration.test.ts,
+emptySuccessors repeats names already supplied by laterEmptyTables. A later
+focused cleanup can use the shared list once, reducing duplicate maintenance.
+Kept the exact union in this merge preparation; this observation does not block.
+
+Local deterministic checks using installed Node 24.17.0, TypeScript 5.8.3 and
+Vitest 4.1.12 (at most two workers and three named files per invocation):
+
+- API watchdog-registry, auth/context-boundary and auth/identity: 278 passed.
+- DB migration-proof-loader: 76 passed.
+- DB lp-0-catalog, managed-recovery-repository and
+  financial-reconciliation-queue-repository: 46 passed.
+- API recovery-message.application and fee-collection-fake-adapter: 35 passed.
+- AI pursuit-draft: 24 passed.
+- Direct installed tsc --noEmit for core, db, api, web, ai, config and storage:
+  all seven passed. Total: 459 passing tests across ten files.
+- git diff --check: passed; all four working-file conflicts have no markers.
+- agent-lane-boundary-lint.mjs syntax check passed. Its standard invocation
+  cannot pass before router merge completion: it includes incoming main paths
+  from the unmerged index/HEAD. Do not widen the lane for those paths. Checked
+  the final working-tree diff using the tool's exported lanePathAllowed,
+  selectLane and migrationOrderViolations: 66 exact non-lane paths and six
+  added migrations (0598–0603), passed.
+
+The requested pnpm invocations failed before launching runners: the installed
+wrapper attempted to switch to pinned pnpm 10.28.1 and registry access failed.
+The direct Turbo attempt was stopped while blocked on that wrapper. No package
+was installed; direct existing binaries supplied the completed checks above.
+
+Router must stage and finish the existing merge, then rerun standard lane lint
+and pinned CI. CI must prove real PostgreSQL fresh/upgrade/repeat migrations,
+row fingerprints, exact routine/privilege/RLS proofs, plan-entitlement lifecycle
+upgrade (including the exact renamed delegate), current command registry,
+LP-5c runtime write refusals and unchanged-state checks, managed-recovery and
+money-trail/queue isolation, replay, approval and audit atomicity, plus affected
+browser journeys and mandatory build/lint/test gates. No database or browser
+was started here. Exact-head independent RED review and green CI remain gates.
+No Git writes, fetch, push, PR, live provider or release action was performed.
+
+## Batch-10 landing preparation — 4 November 2026 (RED)
+
+Resolved the existing merge with incoming main `f78c81684` as a union, retaining
+main's platform-invoice source/tests and both sides' reconciliation regression
+coverage. All 245 incoming main migration SQL files remain byte-identical.
+Main already contains the batch's availability and queue SQL at 0571/0572;
+retain those once, with main's corrected proof fragments. The remaining batch
+migrations and proofs are 0581 restore reconciliation, 0582 dark AIS and 0583
+success-fee production safety, in their original order. All three SQL bodies
+are byte-identical to the hardened branch. No new behavior was introduced.
+
+Local checks used installed binaries, no downloads, at most two workers and
+at most three named Vitest files per run:
+
+- Direct `tsc -p <package>/tsconfig.json --noEmit`: all seven packages passed;
+  installed core build passed to refresh stale runtime exports before guards.
+- API watchdog registry, context boundary and identity: 278 passed.
+- DB migration-proof loader, AIS proof and success-fee safety catalog: 82 passed.
+- Core CIS, interim applications and VAT treatments: 109 passed.
+- Core success-fee catch posting, fee collection and money trail: 57 passed.
+- DB AIS adapter/repository and outbox units: 20 passed.
+- API accounting-export sandbox, fee executor and fake adapter: 203 passed.
+- Web reconciliation route and report component units: 7 passed.
+- Total: 756 passing tests across 20 files. The initial watchdog failures came
+  from stale core dist; rebuilding core resolved them without test changes.
+- Syntax parsed all 49 changed TypeScript files, including merged DB tests.
+- Core purity, money arithmetic, commercial boundary, PL/pgSQL CASE-in-IF and
+  `git diff --check MERGE_HEAD --` passed.
+- Final working-file comparison against incoming main: 70 exact non-lane paths;
+  lane self-exclusion, migration order and tool-exported lane rules passed.
+
+The standard lane CLI was run and refuses the unfinished merge's stale index
+and HEAD paths. The router must stage the resolved files and complete the merge,
+then CI must rerun the standard CLI. Do not widen the lane with incoming main
+or obsolete filenames. pnpm/Turbo stalled in package-manager startup and was
+stopped; completed TypeScript and Vitest checks used the installed runners.
+
+Source inspection confirms no new function has a `SET app.*` clause, no new
+routine reads `app.command_lifecycle_claim` or introduces an audit classification,
+and the report route does not import API source. The shared report schema is a
+client-safe contract, not a server module. All newly added AIS app tables are
+registered in later-empty-tables; existing main tables and grants are retained.
+No CI image is added. Cloudflare compatibility was source-inspected only; the
+bundle build was not run because its pnpm prerequisite stalled.
+
+CI must prove pinned install and full required checks, real PostgreSQL fresh,
+upgrade and repeated migrations, non-superuser migration-owner installs, exact
+catalog/LP-0/RLS/privilege/row-fingerprint proofs, runtime authority-write refusals,
+restored proof/balance hashes and paused execution/replay handling, money/fee
+failure and concurrency cases, the affected browser journeys and the Cloudflare
+bundle without deployment. Independent RED review must cover the exact final
+head. This is local preparation, not a database/browser pass, completed merge,
+opened PR, release or live-provider approval. No Git writes or fetch were run.
+
+LATER / SIMPLICITY (initial review, non-blocking):
+`packages/db/MIGRATIONS.md` repeats availability/queue landing explanations in
+several sections. A single current migration mapping with links to the historical
+receipts would make the installed order easier to maintain without changing SQL
+or removing evidence. Deferred outside this merge-only task.

@@ -13,13 +13,13 @@ export const newTables = ["extra_event", "extra_duplicate_link", "extra_order_li
 export const newOriginColumns = ["command_type", "raising_grant_id", "raiser_assigned", "work_order_id", "work_order_revision_id", "site_visit_id", "evidence_id", "resident_confirmation_evidence_id", "client_capture_id", "origin_hash"];
 export const noteCanary = "Fictional note ENT4B-canary";
 export const descriptionCanary = "Fictional description ENT4B-canary";
-export async function cluster(beforeOwn = false) {
+export async function cluster(beforeOwn = false, database = "jobguard_synthetic_demo") {
  const dir = await mkdtemp(join(tmpdir(), "jg-ent4b-")), port = await freePort(58800, 400);
  const postgres = new EmbeddedPostgres({ databaseDir: dir, port, user: "postgres", password: "synthetic", persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
  await postgres.initialise(); await postgres.start();
  const config = { host: "127.0.0.1", port, user: "postgres", password: "synthetic" };
- const control = new Pool(config); await control.query("CREATE DATABASE jobguard_synthetic_demo"); await control.end();
- const admin = new Pool({ ...config, database: "jobguard_synthetic_demo" });
+ const control = new Pool(config); await control.query(`CREATE DATABASE "${database.replaceAll('"', '""')}"`); await control.end();
+ const admin = new Pool({ ...config, database });
  await installAuditCommandWriterRoles(admin);
  if (beforeOwn) {
   await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
@@ -39,7 +39,7 @@ export async function cluster(beforeOwn = false) {
  } else await migrate(admin);
  await installLegacySyntheticPartyFixtures(admin);
  await admin.query("CREATE ROLE ent4b_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOBYPASSRLS; GRANT jobguard_runtime TO ent4b_login");
- const runtime = new Pool({ ...config, database: "jobguard_synthetic_demo", user: "ent4b_login", max: 8 });
+ const runtime = new Pool({ ...config, database, user: "ent4b_login", max: 8 });
  return { admin, runtime, config, async close() { await closeTestPools(runtime, admin); await postgres.stop(); await rm(dir, { recursive: true, force: true }); } };
 }
 export type Cluster = Awaited<ReturnType<typeof cluster>>;

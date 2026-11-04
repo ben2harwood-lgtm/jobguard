@@ -140,7 +140,6 @@ export * from "./free-first-job-eligibility-repository.js";
 export * from "./free-first-job-lifecycle-repository.js";
 export * from "./recovery-attribution-repository.js";
 export * from "./success-fee-repository.js";
-export * from "./money-trail-repository.js";
 export * from "./final-check-repository.js";
 export * from "./final-check-source-reader.js";
 
@@ -153,15 +152,15 @@ export { MeterLifecyclePersistenceError } from "./meter-lifecycle-source.js";
 
 export * from "./value-v3-reader.js";
 export * from "./enterprise-baseline-repository.js";
-export * from "./financial-reconciliation-queue-repository.js";
 export { IMPORT_CATCH_HOLD_REASON, JobImportV3Repository, JobImportV3Error } from "./job-import-v3-repository.js";
 export * from "./import-pre-adoption-repository.js";
 
 export * from "./plan-entitlement-service.js";
 export * from "./payment-fee-repository.js";
 export * from "./small-builder-demo-repository.js";
-export * from "./ais-adapter.js";
-export * from "./ais-repository.js";
+export * from "./recovery-billability-repository.js";
+export * from "./managed-recovery-repository.js";
+export * from "./platform-tax-invoice-fixture-repository.js";
 export * from "./subscription-mandate-repository.js";
 export { reviewOfflineCommercialIntent } from "./offline-upload.js";
 export * from "./resumable-evidence.js";
@@ -172,12 +171,22 @@ export * from "./evidence-bundle-sources.js";
 export * from "./practice-photo-observation.js";
 export * from "./practice-proof-image.js";
 export * from "./value-business-reader.js";
+
+export { AccountingObservationReceiptRepository } from "./accounting-observation-receipt-repository.js";
 export * from "./small-builder-trial-demo-repository.js";
 export * from "./simulation-fee-statement-repository.js";
 export * from "./simulation-fee-collection-repository.js";
 export * from "./simulation-money-run-repository.js";
 export { ShadowDemoApprovalReader } from "./shadow-demo-approval-reader.js";
+
+export { DunningRepository } from "./dunning-repository.js";
 export { AccountingExportRepository, StoredAccountingExportError, storedAccountingExportV1, type StoredAccountingExport } from "./accounting-export-repository.js";
 export { ShadowDemoGuideRepository } from "./shadow-demo-guide-repository.js";
 
 export { importLateSource, readLateSourceObservations, readLateSources } from "./late-source-import.js";
+
+export * from "./financial-reconciliation-queue-repository.js";
+export * from "./money-trail-repository.js";
+
+export * from "./ais-adapter.js";
+export * from "./ais-repository.js";
