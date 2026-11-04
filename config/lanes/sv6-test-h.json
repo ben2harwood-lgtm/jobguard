@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "lanes": {
+    "sv6-test-h": {
+      "branches": ["codex/sandbox/sv6-test-h"],
+      "note": "SV-6 Test H / F3 persisted-chain proof only. RED: money and fees. No migrations; NOPR.",
+      "allow": ["packages/db/test/recovery-attribution-hookup.integration.test.ts"]
+    }
+  }
+}
