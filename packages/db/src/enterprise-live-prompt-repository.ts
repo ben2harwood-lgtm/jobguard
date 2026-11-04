@@ -58,6 +58,15 @@ export class EnterpriseLivePromptRepository {
  private async promptId(db:import("./tenant-context.js").TenantTransaction,session:string,job:string,observation:string):Promise<string>{
   return (await db.$client.query<{id:string}>("SELECT app.lp_observation_prompt($1,$2,$3) id",[session,job,observation])).rows[0]!.id;
  }
+ /** Narrow, session-authorised completion-source projection; never returns stored bytes. */
+ async observationEvidence(sessionId:string,jobId:string) {
+  if(!z.guid().safeParse(jobId).success)throw new EnterpriseLivePromptPersistenceError("INVALID_PROMPT_COMMAND");
+  try {
+   const context:VerifiedTenantContext=await contractorSessionContext(this.pool,sessionId);
+   return await withTenant(this.pool,context,async db=>
+    (await db.$client.query<{result:unknown}>("SELECT app.contractor_job_evidence_read($1,$2) result",[sessionId,jobId])).rows[0]!.result);
+  }catch(error){failure(error);}
+ }
  async list(sessionId:string,raw:unknown):Promise<EnterprisePromptPage>{return pageSchema.parse(await this.read(sessionId,this.parse(promptListV1,raw)));}
  detail(sessionId:string,raw:unknown){return this.read(sessionId,this.parse(promptDetailV1,raw));}
  importMaterials(sessionId:string,raw:unknown){return this.write(sessionId,this.parse(materialsIssueV1,raw));}
