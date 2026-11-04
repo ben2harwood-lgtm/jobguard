@@ -82,7 +82,7 @@ describe("MON-2B timestamped raw-byte verifier candidate (no provider evidence)"
         return /\.[cm]?[jt]sx?$/u.test(entry.name) ? [readFileSync(path, "utf8")] : [];
       });
     }
-    for (const source of [...sources(new URL("../../../apps/", import.meta.url)), readFileSync(new URL("./index.ts", import.meta.url), "utf8")]) {
+    for (const source of [...sources(new URL("../../../apps/", import.meta.url)), readFileSync(new URL("../src/index.ts", import.meta.url), "utf8")]) {
       expect(source).not.toMatch(/SubscriptionStripeSandboxAdapter|signSubscriptionSandboxEvent|subscription-stripe-sandbox-adapter/u);
     }
   });

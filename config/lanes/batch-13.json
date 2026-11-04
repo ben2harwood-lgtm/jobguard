@@ -28,6 +28,7 @@
         "docs/operations/m1-15s-read-records.md",
         "docs/operations/native-device-matrix.md",
         "docs/operations/native-rollout-rollback.md",
+        "docs/operations/provider-register.md",
         "docs/operations/subscription-synthetic.md",
         "packages/ai/package.json",
         "packages/ai/src/capture.ts",
@@ -56,7 +57,9 @@
         "packages/db/test/subscription-stripe-sandbox.integration.test.ts",
         "packages/db/test/success-fee-direct-debit.integration.test.ts",
         "tools/ai-provider-boundary-lint.mjs",
-        "tools/ai-provider-boundary.test.mjs"
+        "tools/ai-provider-boundary.test.mjs",
+        "tools/commercial-integrity-boundary.unresolved.json",
+        "tools/commercial-integrity-current-source-guard.unresolved.json"
       ]
     }
   }
