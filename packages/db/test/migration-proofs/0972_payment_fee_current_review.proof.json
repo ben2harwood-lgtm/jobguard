@@ -1,5 +1,5 @@
 {
-  "migration": "0962_payment_fee_current_review.sql",
+  "migration": "0972_payment_fee_current_review.sql",
   "lp0": [
     {
       "section": "routines",

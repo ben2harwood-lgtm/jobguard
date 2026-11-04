@@ -1,5 +1,5 @@
 {
-  "migration": "0961_success_fee_changed_proof.sql",
+  "migration": "0971_success_fee_changed_proof.sql",
   "lp0": [
     {
       "section": "routines",

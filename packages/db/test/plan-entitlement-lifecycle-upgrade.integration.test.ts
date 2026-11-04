@@ -42,13 +42,15 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     const current = live.find(row => row.oid === prior.oid);
     // 0566 and 0573 extend exactly this dispatcher for managed recovery and supervisor queries.
     if (prior.nspname === "app" && prior.proname === "lp5_command_result" && prior.args === "p_command_id uuid, p_outcome jsonb") continue;
-    // 0583 replaces only this exact predecessor body; its dedicated upgrade proof checks the replacement.
+    // 0971 extends the exact success-fee writer from 0583; retain its full latest body.
     if (prior.nspname === "app" && prior.proname === "write_success_fee_v3" &&
       prior.args === "p_job uuid, p_session text, p_command jsonb, p_artifact jsonb") {
-      expect(current?.definition).not.toEqual(prior.definition);
+      const sql = await readFile(new URL("../migrations/0971_success_fee_changed_proof.sql", import.meta.url), "utf8");
+      const body = sql.split("CREATE OR REPLACE FUNCTION app.write_success_fee_v3")[1]!.split("AS $$")[1]!.split("$$;")[0];
+      expect(current?.definition?.split("$function$")[1]).toEqual(body);
     } else if (prior.nspname === "app" && prior.proname === "payment_fee_current" &&
       prior.args === "t uuid, j uuid, s uuid, actor uuid") {
-      const sql = await readFile(new URL("../migrations/0962_payment_fee_current_review.sql", import.meta.url), "utf8");
+      const sql = await readFile(new URL("../migrations/0972_payment_fee_current_review.sql", import.meta.url), "utf8");
       expect(current?.definition?.split("$function$")[1]).toEqual(sql.split("AS $$")[1]!.split("$$;")[0]);
     } else if (prior.oid === paymentFeeWriterOid) {
       expect(current?.definition?.split("$function$")[1]).toEqual(paymentFeeWriterBody);
