@@ -71,10 +71,12 @@ describe("CH-4 verified proof and stage command sources",()=>{
  });
  it("r8 stage source binding rejects a forged original time, evidence link or hash without widening source reads",async()=>{
   const {createHash}=await import("node:crypto"),a=await seedWorkJob(f),photo=await insertPhoto(f,a),command=randomUUID(),link=randomUUID(),stage=randomUUID();
-  await workTenant(f.runtime,a.tenantId,async db=>{
+  await workTenant(f.admin,a.tenantId,async db=>{
    await db.query("INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,'proof.complete',$2::uuid::text,$3,'processing',$4)",[a.tenantId,command,CH4_HASH,a.actorId]);
+   await db.query("SET LOCAL ROLE jobguard_runtime");
    await db.query("INSERT INTO app.evidence_link(id,tenant_id,evidence_id,job_id,scope_item_id,required_evidence_type) VALUES($1,$2,$3,$4,$5,'pre_cover_photo')",[link,a.tenantId,photo,a.jobId,a.scopeId]);
    await db.query("INSERT INTO app.stage_completion(id,tenant_id,job_id,scope_item_id,stage,evidence_link_id,command_id,completed_at) VALUES($1,$2,$3,$4,'r8-binding',$5,$6,'2026-10-14T10:00:00.123456Z')",[stage,a.tenantId,a.jobId,a.scopeId,link,command]);
+   await db.query("RESET ROLE");
    await db.query("UPDATE app.command_receipt SET status='succeeded',result='{}',completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2", [a.tenantId, command]);
   });
   const before=await workEvents(f,a);
@@ -146,15 +148,19 @@ describe("CH-4 real database held-signal isolation",()=>{
       return rows;
      }
      const before=await snapshot();
-     await workTenant(runtime,a.tenantId,async db=>{
+     await workTenant(admin,a.tenantId,async db=>{
+      await db.query("SET LOCAL ROLE jobguard_runtime");
       await db.query("INSERT INTO app.evidence_upload(id,tenant_id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at,state,object_version_id,server_received_at,server_verified_at) VALUES($1,$2,$3,$4,$1::uuid::text,$5,'image/png',100,'standard_evidence','2099-10-01','verified','ch4-r7:v1',clock_timestamp(),clock_timestamp())",[photoId,a.tenantId,a.jobId,a.scopeId,CH4_HASH]);
       await db.query("INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) SELECT id,tenant_id,id,job_id,scope_item_id,'original','completion_photo',object_key,object_version_id,expected_sha256,80,expected_content_type,retention_class,server_received_at,server_verified_at FROM app.evidence_upload WHERE id=$1",[photoId]);
-      // Explicit source-command fixture through the non-owner runtime role. No
-      // trigger/RLS bypass: stage receipt validation must see the completed row.
+      // Owner stages authority only; photo and stage writes still run as runtime.
+      // No trigger/RLS bypass: stage receipt validation sees the completed row.
+      await db.query("RESET ROLE");
       await db.query("INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,'proof.complete',$2::uuid::text,$3,'processing',$4)",[a.tenantId,commandId,CH4_HASH,a.actorId]);
+      await db.query("SET LOCAL ROLE jobguard_runtime");
       await db.query("INSERT INTO app.evidence_link(id,tenant_id,evidence_id,job_id,scope_item_id,required_evidence_type) VALUES($1,$2,$3,$4,$5,'completion_photo')",[linkId,a.tenantId,photoId,a.jobId,a.scopeId]);
       await db.query("INSERT INTO app.stage_completion(id,tenant_id,job_id,scope_item_id,stage,evidence_link_id,command_id) VALUES($1,$2,$3,$4,'completion',$5,$6)",[completionId,a.tenantId,a.jobId,a.scopeId,linkId,commandId]);
       // This raw stage fixture proves source guards, not receipt construction.
+      await db.query("RESET ROLE");
       await db.query("UPDATE app.command_receipt SET status='succeeded',result=$3::jsonb,completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2",[a.tenantId,commandId,JSON.stringify({completionId,evidenceId:photoId,state:'complete'})]);
      });
      expect((await admin.query("SELECT kind FROM app.job_work_state_event ORDER BY sequence")).rows).toEqual([{kind:"first_site_evidence"},{kind:"first_site_evidence"},{kind:"site_activity"}]);
