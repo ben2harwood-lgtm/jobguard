@@ -22,6 +22,7 @@
         "apps/api/src/small-builder-demo.application.test.ts",
         "apps/api/src/subscription.application.test.ts",
         "apps/api/src/value/company-value.application.test.ts",
+        "apps/api/src/watchdog-registry.test.ts",
         "apps/web/app/api/jobs/[id]/dunning/route.test.ts",
         "apps/web/app/api/meter/current/route.test.ts",
         "apps/web/app/api/meter/jobs/[id]/import-v3/[action]/route.test.ts",
