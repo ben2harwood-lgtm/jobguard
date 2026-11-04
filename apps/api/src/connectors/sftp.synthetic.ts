@@ -9,6 +9,7 @@ const label = z.string().regex(/^fixture:[a-z0-9_-]+$(?![\s\S])/u);
 const operation = z.enum(["work_orders", "billing_status", "materials_issues", "export_delivery"]);
 const scopeV1 = z.object({ version: z.literal("sftp-fixture-scope.v1"), tenantId: z.guid(),
   clientContractId: z.guid(), operations: z.array(operation).min(1).max(4),
+  jobLive: z.boolean().default(true),
   maxBytes: z.number().int().positive().max(5_000_000),
 }).strict();
 const fileV1 = z.object({ version: z.literal("sftp-fixture-file.v1"), tenantId: z.guid(),
@@ -71,6 +72,7 @@ export function createInMemorySftpServer(contractTenants: ReadonlyMap<string, st
         name: "fake_sftp", supportsProviderDeduplication: true,
         async deliver(rawAction: Readonly<OutboundAction>) {
           requireOperation(scope, "export_delivery");
+          if (!scope.jobLive) throw new SyntheticSftpError("SFTP_FORBIDDEN");
           if (typeof rawAction.immutableContent !== "string" || Buffer.byteLength(rawAction.immutableContent) > scope.maxBytes) {
             throw new SyntheticSftpError("SFTP_INVALID");
           }
@@ -98,6 +100,7 @@ export function createInMemorySftpServer(contractTenants: ReadonlyMap<string, st
         },
         async reconcile(effectKey: string) {
           requireOperation(scope, "export_delivery");
+          if (!scope.jobLive) throw new SyntheticSftpError("SFTP_FORBIDDEN");
           const previous = deliveries.get(JSON.stringify([partition, effectKey]));
           // Lost server state is not proof of absence; never enable blind resend after restart.
           if (!previous) return "unknown";
@@ -110,6 +113,8 @@ export function createInMemorySftpServer(contractTenants: ReadonlyMap<string, st
       };
       return {
         adapter,
+        capabilities: { work_orders: "synthetic_only", billing_status: "synthetic_only",
+          materials_issues: "synthetic_only", export_delivery: "synthetic_only" } as const,
         async pull(rawName: unknown, rawOperation: unknown) {
           const name = parse(label, rawName), op = parse(operation.exclude(["export_delivery"]), rawOperation);
           requireOperation(scope, op);

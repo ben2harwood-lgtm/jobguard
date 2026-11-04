@@ -1,4 +1,4 @@
-import { fixtureAiSession } from "./fixture-provider.js";
+import { fixtureAiSession } from "./testing.js";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { AiGatewayError, AiGateway, FixtureAiProvider, createLiveAiProvider } from "./index.js";
