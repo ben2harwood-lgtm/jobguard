@@ -37,7 +37,9 @@ bucket, and uses exact VersionId for Object Lock COMPLIANCE retention and legal 
 calls. It never requests governance bypass. The opt-in
 `worm-minio.integration.test.ts` creates a disposable lock-enabled synthetic bucket,
 checks deletion/shortening rejection, overwrites the key, and verifies the original
-version and separate hold/release. The `WORM local MinIO` CI workflow runs this test.
+version and separate hold/release when explicitly enabled. The unproven
+`WORM local MinIO` CI workflow has been removed. `LocalMinioWormStorage` has never
+run against any object store, local or real.
 Locally it skips unless `JOBGUARD_TEST_LOCAL_MINIO=1`; a skip is not a pass of object
 store behavior. The fixture remains locked until expiry in its disposable container.
 Local MinIO evidence does **not** prove production S3 behavior.

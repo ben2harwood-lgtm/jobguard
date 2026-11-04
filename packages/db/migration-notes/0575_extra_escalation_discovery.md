@@ -225,8 +225,9 @@ connector-specific contract/G1/D04/D12 evidence remain open.
 CI must prove full required checks, fresh/upgrade PostgreSQL migrations and
 fingerprint preservation, effective privileges/LP-0, RLS and tenant isolation,
 escalation concurrency/restarts/rollback, connector adversarial upgrade tests,
-WORM command/recovery/alert atomicity, bootstrap privilege checks and local MinIO
-behavior, and affected browser journeys. No DB or browser suite ran here.
+WORM command/recovery/alert atomicity, bootstrap privilege checks and affected
+browser journeys. Local MinIO behavior remains unproven; its test is opt-in only,
+with no CI workflow. No DB or browser suite ran here.
 Independent RED review must bind the eventual exact head. NOPR until #549 and
 batch 10 land. No real data, live providers, money, PR or release.
 
@@ -289,7 +290,8 @@ No database or browser execution here. CI owes full required checks,
 fresh/upgrade PostgreSQL migrations, fingerprint preservation, effective
 privileges/LP-0, RLS/tenant isolation, escalation concurrency/restart/rollback,
 connector adversarial intake/upgrade, WORM authorization/recovery/alert atomicity,
-bootstrap privileges, local MinIO and affected browser/contractor acceptance.
+bootstrap privileges and affected browser/contractor acceptance. Local MinIO
+behavior remains unproven; its test is opt-in only, with no CI workflow.
 Independent RED review binds the eventual exact head. Production native/device,
 provider and legal approvals are separate. NOPR until #549 and batch 10 land.
 Made-up data only; no real money, provider execution, PR or release.
@@ -343,7 +345,8 @@ acceptance stay open. All seven other pieces retain their open work listed
 above. No database/browser suite ran. CI must prove fresh/upgrade migrations,
 LP-0/catalogues/privileges/RLS, fingerprint preservation, accounting durable
 replay/races/rollback/isolation, escalation and connector upgrade behavior,
-WORM/MinIO and affected browser journeys, alongside required full checks.
+WORM and affected browser journeys, alongside required full checks. Local MinIO
+behavior remains unproven; its test is opt-in only, with no CI workflow.
 Independent RED review must bind the eventual exact head. NOPR until #549 and
 batch 10 land. Device/provider/legal approvals remain separate release gates.
 
@@ -413,8 +416,10 @@ Still open for every counted piece (none is declared finished):
 - M3-5: encrypted native capture/media transport, device restart/airplane-mode/
   low-storage evidence, gateway wiring and G3. This slice supplies capture states.
 - M4-4: actual configured-store retention/hold evidence, production TSA route,
-  approved D07 policy/operations and production release evidence. Local MinIO CI
-  is separate from production S3 proof; this slice supplies hold alerts/recovery.
+  approved D07 policy/operations and production release evidence. The unproven
+  local MinIO CI workflow has been removed; its integration test remains opt-in.
+  `LocalMinioWormStorage` has never run against any object store, local or real.
+  This slice supplies hold alerts/recovery; local MinIO is not production S3 proof.
 - ENT-14: persisted agreement/mandate authority and collection integration,
   full lifecycle acceptance, solicitor-reviewed contract set, notice process,
   D12/D16 and Ben's dated approval. The pure synthetic mandate enables no rail.
@@ -426,7 +431,9 @@ No database or browser ran in this sandbox. CI must prove all required checks,
 fresh/upgrade migrations and rollback/forward-fix behavior, unchanged populated
 fingerprints, LP-0/catalogues/privileges/RLS, accounting replay/races/rollback and
 tenant/job isolation, escalation authorization/restarts, connector upgrade and
-adversarial intake, WORM authorization/recovery/alert atomicity, local MinIO,
-affected browser journeys and contractor acceptance. RED review must bind the
+adversarial intake, WORM authorization/recovery/alert atomicity, affected browser
+journeys and contractor acceptance. Local MinIO behavior remains unproven; the
+retained integration test skips unless explicitly opted in, and a skip is not a
+pass. There is no local MinIO CI workflow. RED review must bind the
 exact resulting head before merge. Real services, data, money, native-device and
 legal approvals remain separate; made-up data only throughout this run.
