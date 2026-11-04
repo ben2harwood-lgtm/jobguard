@@ -26,3 +26,41 @@ snapshot covers app/identity/control_plane/audit_control, not infrastructure.
 inspect the routine's grant/owner, discovery and context restoration in PostgreSQL.
 CI must run fresh/upgrade, LP-0, tenancy and escalation integration suites; this
 sandbox cannot run PostgreSQL. Renumber 0746 at landing if required.
+
+## Landing preparation — 4 November 2026
+
+RED, NOPR. Inspected against the launcher's merged `origin/main` at
+`155a3eb0680e1e270bdf2ecfe1e381374b62c889`; local `main` is stale. No unfinished
+merge or additional lane files are carried relative to that base. The ENT-5 lane
+already lists exactly the eight changed non-lane paths and excludes itself.
+
+No behaviour correction was needed from the landing checklist. This slice adds
+no columns, tables, commands, HTTP routes, application services, web modules or
+browser specs, and changes no older routine. It introduces no runtime writes to
+command receipts, decision resolutions or action authorizations. No empty-table,
+command-registry or upgrade-routine exceptions are therefore needed. The new
+routine has no arguments or defaults. Its LP-0 owner entry remains required by
+the current catalog's non-owner EXECUTE reachability rule: the infrastructure
+worker has EXECUTE, while the business runtime does not. SQL and proof stay at
+placeholder 0746, unchanged.
+
+Local checks use installed Node 24.17.0, TypeScript 5.8.3 and Vitest 4.1.12, with
+`--maxWorkers=2` and at most three named test files per invocation. The scheduling
+and context-boundary tests passed together (149 tests); identity passed (7),
+watchdog-registry passed (126), and migration-proof-loader passed (76). The first
+watchdog run could not resolve the absent `@jobguard/ai/dist` entry; compiling
+that dependency with the installed TypeScript runner allowed its unchanged test
+to pass. No test weakening was needed. Lane boundary lint and `git diff --check`
+passed. The global pnpm launcher stalled before executing checks and ultimately
+refused its pinned-version switch after registry fetch/signature verification
+failed; no packages were installed. Installed runners were invoked directly.
+All seven workspace typechecks passed via `tsc -p <workspace>/tsconfig.json
+--noEmit` (config, core, storage, AI, database, API and web).
+
+CI must still prove real PostgreSQL fresh/upgrade catalogs, LP-0 effective
+privileges, tenancy/context restoration, crash rollback, concurrent restart,
+listed-alternate authority and advisory independence through the escalation
+integration suite, plus the required full checks and browser journeys. Local
+unit checks are not database or independent-review evidence. An independent RED
+review of the exact landing head remains required. Production gates, timing,
+proceed and other held policy items remain open; this does not finish ENT-5.
