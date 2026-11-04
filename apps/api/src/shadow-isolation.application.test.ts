@@ -219,7 +219,7 @@ describe("SV-3 Test Q: signed-in builder HTTP surfaces",()=>{
  },180000);
  it("successful Log an extra, retries, mutation errors and current builder counts/inbox responses ignore held signals",async()=>{
   const {createWorkspaceApplication}=await import("./workspace/application.js");
-  const responses=[];
+  const responses:string[]=[];
   for(const database of ["jobguard_synthetic_demo","sv3_isolation_many"])await replayPracticeDatabase(database,async activeDatabase=>{const p=pool("sv3_isolation_runtime",activeDatabase);try{
    const app=createWorkspaceApplication({pool:p,sessionId:session}),out:unknown[]=[];
    const extra={version:"variation-command.v1",action:"propose",proposalId,scopeItemId,existingScopeItemId:null,lineageParentScopeItemId:null,description:"Fictional builder addition",captureText:"Fictional builder addition",price:null};
