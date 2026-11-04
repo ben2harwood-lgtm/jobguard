@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-22-draft-store": {
+      "branches": [
+        "codex/sandbox/m4-22-draft-store"
+      ],
+      "note": "M4-22 synthetic CIS fixture statement persistence only; NOPR; RED; M4-22 remains open.",
+      "allow": [
+        "docs/contracts/cis-fixture-records-dark-v1.md",
+        "packages/db/migration-notes/0756_cis_fixture_records.md",
+        "packages/db/migrations/0756_cis_fixture_records.sql",
+        "packages/db/src/cis-fixture-repository.ts",
+        "packages/db/src/index.ts",
+        "packages/db/test/cis-fixture-records.integration.test.ts",
+        "packages/db/test/cis-fixture-repository.test.ts",
+        "packages/db/test/later-empty-tables.ts",
+        "packages/db/test/migration-proofs/0756_cis_fixture_records.proof.json"
+      ]
+    }
+  }
+}
