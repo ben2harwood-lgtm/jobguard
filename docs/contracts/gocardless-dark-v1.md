@@ -68,3 +68,87 @@ The pnpm wrapper stalled before executing checks and was stopped; installed
 binaries were used without downloading packages. Database/browser/full CI and the
 independent RED review remain for the router/CI. Conflict markers are resolved in
 files; the read-only git index still needs the router to stage the resolution.
+
+
+M4-12 reservation persistence (0478): `PostgresReservationStore` implements the
+shared seam with one tenant row lock, including concurrent first use. It is an
+explicit server composition dependency, with no default registration. Its caller
+supplies the whole verified tenant context; the executor separately checks
+the current session/membership. Its source factory captures that caller context
+and must read and lock current invoice/statement/terms/credit revisions through
+the supplied transaction. A fake
+source factory in the PostgreSQL tests is not a production source implementation.
+Both rails must receive the same database-backed store. Provider calls remain
+outside its transaction. Book state, event fingerprints and appended chain audit
+commit together. Existing command bindings/events/audit cannot be rewritten by
+this adapter; unknown outcomes remain reserved across restarts. The book is
+internal reservation state, not a journal, invoice, receipt or settlement posting.
+Only the reservation book is durable here: the fake provider and mandate still
+use memory. Forward fix: stop new executor initiation and preserve the table and
+audit while repairing; never roll back by dropping or clearing unknown attempts.
+Database CI and the independent RED review must verify migration, row locking,
+RLS and durability before merge. No live capability is enabled by this addition.
+
+
+M4-12 reserve cleanup (RED, built ahead on reserve-pg): additive migration
+`0882_fee_reservation_archive.sql` follows the shared reservation book migration
+`0881_fee_reservation_book.sql`; both numbers are claimed for this catch-up. No earlier migration is
+edited. Compaction is lazy on the next successful store transaction, under the
+same tenant book lock. Released attempts, all event fingerprints and all book
+audit entries move to INSERT-only tenant-qualified archive records before the
+active book is rewritten. Released lifecycle snapshots are versioned append-only, including later failure
+status changes. The history remains readable to the adapter; it is not deleted. Unknown, pending, settled and reconciliation attempts stay active.
+Replays cannot create another release, reservation or chained audit entry.
+A late settlement of an archived release restores an active reconciliation hold,
+blocking an already reserved replacement. Refund replacements retain the original
+settled-principal cap. No new replacement command or provider behavior is needed:
+the executor already releases definite failures exactly once.
+
+This keeps released-retry/event/audit history out of the repeatedly rewritten JSON
+row. The existing whole-book callback interface still hydrates archived history
+inside the transaction for replay, balance and late-event checks; memory and read
+cost remain proportional to tenant history. Selective history reads would require
+a separate interface change. The archive is internal state, with runtime SELECT
+and INSERT only, FORCE RLS and no runtime UPDATE, DELETE or TRUNCATE. Existing
+LP-0, tenancy, entitlement and SERIOUS-B5 expectations include exactly the added
+table, primary key, grants and policy. No routine is recreated.
+
+Forward fix: stop executor initiation, preserve both tables and chain audit, and
+repair forward. Do not run the predecessor adapter on compacted books: it cannot
+read archived command/event identities. Rolling back requires a reviewed forward
+rehydration retaining active overrides, not dropping or clearing archive rows.
+PostgreSQL concurrency, populated upgrade, rollback, RLS and catalogue tests are
+added for CI; this sandbox cannot execute them. Independent RED review and green
+CI against current main remain required. Fake sources/adapters only; no live rail,
+real money, production source reader or release is enabled.
+
+
+M4-12 reserve cleanup landing preparation, 4 November 2026 (NOPR, RED):
+resolved the contractor-entitlement upgrade merge as the union of both lists;
+registered the two reservation tables in later-empty-tables. The dark store now
+captures the caller-supplied verified context and transaction source factory,
+rather than retaining context-bearing callbacks as class properties. All local
+callers are synthetic fixtures; no application route composes this store. Tenant
+matching, withTenant verification, source locking, reservation and replay behavior
+remain covered without weakening the context guard. No migration was changed or
+added in this preparation; 0607/0608 and their proof fragments remain intact.
+
+Local deterministic evidence: installed Vitest 4.1.12 with --maxWorkers=2 passed
+context-boundary, postgres-reservation-store and executor (221 tests),
+watchdog-registry and identity (133 tests), and migration-proof-loader (76 tests).
+Initial runs used stale dependency output and failed; rebuilding the five library
+packages with installed tsc resolved the import/schema failures. The context
+boundary failure was repaired in the store, without guard exemptions. PL/pgSQL
+CASE lint passed all 233 migrations, and git diff --check passed.
+
+The pnpm typecheck and pnpm test wrappers stalled after their package-settings
+warning; installed binaries were used instead. Direct tsc compilation/typechecking
+passed for core, config, storage, db, ai, api and web. The normal lane tool was run and
+refused incoming main files still staged against the pre-merge HEAD. A separate
+read-only comparison against origin/main verifies the lane allow equals exactly
+all eleven changed non-lane files and only this piece's lane differs. The router
+must stage the resolved file, finish the merge and rerun the normal lane check.
+No Git writes, fetch, database, browser, live provider or paid call were made.
+CI must prove PostgreSQL concurrency, RLS/grants, atomic rollback, populated
+upgrades and preservation proofs, plus the full required suites. Independent RED
+review at the final head remains required before landing.

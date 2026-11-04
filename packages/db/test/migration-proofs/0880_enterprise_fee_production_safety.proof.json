@@ -1,5 +1,5 @@
 {
-  "migration": "0606_enterprise_fee_production_safety.sql",
+  "migration": "0880_enterprise_fee_production_safety.sql",
   "lp0": [
     {
       "section": "entries",

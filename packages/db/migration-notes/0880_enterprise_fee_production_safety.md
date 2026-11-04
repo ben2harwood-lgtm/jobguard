@@ -1,6 +1,6 @@
 # M4-9 contractor production safety preparation (RED, dark)
 
-Migration `0606_enterprise_fee_production_safety.sql` adds a separate production command that always refuses, before any
+Migration `0880_enterprise_fee_production_safety.sql` adds a separate production command that always refuses, before any
 business read or write. No request approval, environment variable or GUC activates
 it. Synthetic routines keep their existing environment, finance-session, exact
 statement authority and stale-fact checks. No D16 or G4-C approval is created.
@@ -33,12 +33,12 @@ fresh Claude RED review against the exact head.
 Catch-up to main (3 November 2026): preserve both the dark production schema
 and main's simulated-invoice schema. Renumber only this branch's migration stem
 from `0589_enterprise_fee_production_safety` to
-`0606_enterprise_fee_production_safety`, including its proof and test lookup.
+`0880_enterprise_fee_production_safety`, including its proof and test lookup.
 No existing SQL routine is replaced; main's LP-4 audit sealing, LP-3/LP-5 command
 authority and MON-8 entitlements are retained. The new production routine always
 raises before any business operation and needs no command registration.
 
-Landing preparation (4 November 2026): the merge is complete against local
+Historical piece-only landing preparation (4 November 2026): that piece was merged against local
 `origin/main` fb61ec367. The six non-lane paths exactly match this piece's lane;
 no other piece's lane file differs from that base. The migration adds no columns
 or tables and replaces no existing routine. Its proof uses identity arguments
@@ -49,7 +49,7 @@ mutation or command receipt; its caller takes an existing verified context.
 Neither the repository addition nor its tests write command/decision authority
 as the runtime login. No compatibility correction or behaviour change was needed.
 
-Local checks: installed Vitest 4.1.12, one worker per run and at most two test
+Historical piece-only local checks (not batch-25 verification): installed Vitest 4.1.12, one worker per run and at most two test
 workers total; watchdog-registry (126), context-boundary and identity (152),
 migration-proof-loader and enterprise-fee-repository (83): 361 tests passed.
 Missing/stale ignored workspace builds initially prevented suite imports;
