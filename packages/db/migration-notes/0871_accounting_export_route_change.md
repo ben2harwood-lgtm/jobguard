@@ -1,4 +1,4 @@
-# 0764 — dark stored accounting route confirmation
+# 0871_accounting_export_route_change — dark stored accounting route confirmation
 
 M5-2 partial slice; RED (money records and tenant isolation), NOPR.
 Adds one private append-only FORCE-RLS table, a session-checked route operation,
