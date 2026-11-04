@@ -19,7 +19,7 @@ const eventV1 = z.object({
 
 export class SubscriptionSandboxError extends Error {
   constructor(readonly code: "INVALID_SANDBOX_INPUT" | "SANDBOX_BINDING_MISMATCH" |
-    "SANDBOX_SIGNATURE_INVALID" | "SANDBOX_EVENT_CONFLICT" | "SANDBOX_REVERSAL_REQUIRES_REVIEW") {
+    "SYNTHETIC_MODE_REQUIRED" | "SANDBOX_SIGNATURE_INVALID" | "SANDBOX_EVENT_CONFLICT" | "SANDBOX_REVERSAL_REQUIRES_REVIEW") {
     super(code); this.name = "SubscriptionSandboxError";
   }
 }
@@ -28,12 +28,16 @@ function parse<T>(schema: z.ZodType<T>, raw: unknown): T {
   if (!result.success) throw new SubscriptionSandboxError("INVALID_SANDBOX_INPUT");
   return result.data;
 }
+function requireSyntheticDemo() {
+  if (process.env.JOBGUARD_ENV !== "synthetic_demo") throw new SubscriptionSandboxError("SYNTHETIC_MODE_REQUIRED");
+}
 // Public fixture signing material, never a provider credential. This protocol is deliberately
 // sandbox-specific and must not be presented as verification of Stripe's real webhook protocol.
 function signature(payload: string) {
   return createHmac("sha256", "MON-2B-public-synthetic-fixture-only").update(payload).digest("hex");
 }
 export function signSubscriptionSandboxEvent(raw: unknown) {
+  requireSyntheticDemo();
   const payload = JSON.stringify(parse(eventV1, raw));
   return { payload, signature: signature(payload) };
 }
@@ -51,12 +55,14 @@ export class SubscriptionStripeSandboxAdapter implements SubscriptionPaymentAdap
   private readonly observed = new Set<string>();
 
   constructor(raw: unknown) {
+    requireSyntheticDemo();
     this.binding = parse(bindingV1, raw);
     if (this.binding.work.amountPence > this.binding.collectionBoundPence) {
       throw new SubscriptionSandboxError("SANDBOX_BINDING_MISMATCH");
     }
   }
   private checkWork(raw: unknown) {
+    requireSyntheticDemo();
     const work = parse(subscriptionSimulatedWorkV1, raw);
     if (JSON.stringify(work) !== JSON.stringify(this.binding.work)) {
       throw new SubscriptionSandboxError("SANDBOX_BINDING_MISMATCH");
@@ -74,6 +80,7 @@ export class SubscriptionStripeSandboxAdapter implements SubscriptionPaymentAdap
     return this.result(); // Observation only, never another collection.
   }
   ingest(raw: unknown): void {
+    requireSyntheticDemo();
     const envelope = parse(z.object({ payload: z.string().max(8192), signature: z.string().regex(/^[a-f0-9]{64}$/u) }).strict(), raw);
     if (!timingSafeEqual(Buffer.from(envelope.signature, "hex"), Buffer.from(signature(envelope.payload), "hex"))) {
       throw new SubscriptionSandboxError("SANDBOX_SIGNATURE_INVALID");
