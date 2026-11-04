@@ -14,7 +14,7 @@ vi.mock("../src/watchdog.js", () => ({
 
 const hash = (bytes: Uint8Array | string) => createHash("sha256").update(bytes).digest("hex");
 describe("LP-8b external original integrity (service orchestration, not SQL isolation)", () => {
-  it.each(["key", "version", "bytes", "length", "valid"])("checks the returned %s before database verification", async kind => {
+  it.each(["key", "version", "bytes", "length", "verifier_denied", "valid"])("checks the returned %s before database verification", async kind => {
     const tenant = randomUUID(), id = randomUUID(), job = randomUUID(), bytes = pngBytes(8);
     const key = `tenants/${tenant}/uploads/${id}/original`, storage = new MemoryStorage();
     storage.put(key,"v1",bytes);
@@ -27,7 +27,10 @@ describe("LP-8b external original integrity (service orchestration, not SQL isol
     const query=vi.fn(async(sql:string) => {
       if(sql.startsWith("SELECT job_id FROM app.evidence_upload"))return {rows:[{job_id:job}]};
       if(sql.startsWith("SELECT * FROM app.evidence_upload"))return {rows:[{id,job_id:job,object_key:key,object_version_id:"v1",state:"quarantined",expires_at:new Date("2099-01-01"),expected_sha256:hash(bytes),expected_content_type:"image/png",maximum_bytes:"1000"}]};
-      if(sql.startsWith("SELECT app.verify_evidence_upload"))return {rows:[{verified:new Date()}]};
+      if(sql.startsWith("SELECT app.verify_evidence_upload")){
+        if(kind==="verifier_denied")throw Object.assign(new Error("permission denied"),{code:"42501"});
+        return {rows:[{verified:new Date()}]};
+      }
       if(sql.startsWith("INSERT INTO app.evidence_object"))return {rows:[{id}]};
       return {rows:[]};
     });
@@ -36,6 +39,10 @@ describe("LP-8b external original integrity (service orchestration, not SQL isol
     if(kind==="valid") {
       await expect(result).resolves.toMatchObject({id});
       expect(query.mock.calls.some(([sql])=>sql.startsWith("SELECT app.verify_evidence_upload"))).toBe(true);
+    } else if(kind==="verifier_denied") {
+      await expect(result).rejects.toMatchObject({code:"42501"});
+      expect(query.mock.calls.some(([sql])=>sql==="ROLLBACK")).toBe(true);
+      expect(query.mock.calls.some(([sql])=>sql.startsWith("INSERT INTO app.evidence_object"))).toBe(false);
     } else {
       await expect(result).rejects.toMatchObject({code:"OBJECT_INVALID"});
       expect(query.mock.calls.some(([sql])=>sql.startsWith("SELECT app.verify_evidence_upload"))).toBe(false);

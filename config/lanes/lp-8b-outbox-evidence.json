@@ -5,15 +5,18 @@
       "branches": [
         "codex/sandbox/lp-8b-outbox-evidence"
       ],
-      "note": "LP-8b RED draft, not ready to commit: trusted external storage verification path remains incomplete; predecessor catch-up, full PostgreSQL CI and independent review remain required. Scanner definitions and pins unchanged.",
+      "note": "LP-8b RED built-ahead draft: READY for branch save; held for landing. External storage-verifier path incomplete; predecessor integration, PostgreSQL proof and exact-head independent review required. Scanner definitions, pins and guards unchanged.",
       "allow": [
-        "packages/db/migrations/0530_lp8b_outbox_evidence.sql",
+        "docs/verdicts/LP-8b/BUILDER_RECEIPT.md",
+        "packages/db/migrations/0800_lp8b_outbox_evidence.sql",
         "packages/db/src/evidence.ts",
         "packages/db/src/outbox.ts",
         "packages/db/src/prevention-check-repository.ts",
         "packages/db/test/lp8b-outbox-evidence.integration.test.ts",
-        "packages/db/test/lp8b-storage.test.ts"
-      ]
+        "packages/db/test/lp8b-storage.test.ts",
+        "packages/db/test/migration-proofs/0800_lp8b_outbox_evidence.proof.json"
+      ],
+      "receipt": "docs/verdicts/LP-8b/BUILDER_RECEIPT.md"
     }
   }
 }

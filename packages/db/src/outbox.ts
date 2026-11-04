@@ -1,6 +1,8 @@
+import { serverEntitlement } from "./plan-entitlement-service.js";
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
+import { commercialOutboundClaimsEnabled } from "./commercial-outbound-pause.js";
 import { appendAuditBatch } from "./audit.js";
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 
@@ -8,7 +10,16 @@ export const outboundActionV1Schema=z.object({version:z.literal("outbound-action
 export type OutboundAction=z.infer<typeof outboundActionV1Schema>;
 export async function appendOutboundAction(db:TenantTransaction,tenantId:string,raw:unknown){const a=outboundActionV1Schema.parse(raw);if(createHash("sha256").update(a.immutableContent).digest("hex")!==a.contentHash)throw new Error("CONTENT_HASH_MISMATCH");await db.$client.query(`SELECT app.insert_authorized_action(app.current_actor(),$2,$1,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,[a.id,tenantId,a.authorizationId,a.adapter,a.providerEffectKey,a.actionType,a.recipient,a.contentHash,a.immutableContent,a.aggregateRevision,a.amountPence,a.currency,a.policyVersion,a.authorizationExpiresAt]);}
 export type FakeDeliveryResult={kind:"succeeded";providerReference:string}|{kind:"retryable";code:string}|{kind:"outcome_unknown";code:string};
-export interface OutboundAdapter {readonly name:`fake_${string}`;readonly supportsProviderDeduplication:boolean;deliver(action:Readonly<OutboundAction>):Promise<FakeDeliveryResult>;reconcile(providerEffectKey:string):Promise<"succeeded"|"not_found"|"unknown">;}
+/** signinLink is transient delivery input; adapters must never persist it in outbox, audit or telemetry. */
+export interface OutboundAdapter {readonly name:`fake_${string}`;readonly supportsProviderDeduplication:boolean;deliver(action:Readonly<OutboundAction>, signinLink?:string):Promise<FakeDeliveryResult>;reconcile(providerEffectKey:string):Promise<"succeeded"|"not_found"|"unknown">;}
+/** The stored nonce is not a credential. Only the identity HMAC key can materialize it. */
+export function customerSigninLink(reference: string, digest: (value: string) => string): string {
+  const match = /^customer-signin-reference\.v1:([a-f0-9-]{36}\/[a-f0-9-]{36}\/[a-f0-9-]{36})\/([A-Za-z0-9_-]{43})$/u.exec(reference);
+  if (!match) throw new Error("INVALID_CUSTOMER_SIGNIN_REFERENCE");
+  for (const id of match[1]!.split("/")) z.guid().parse(id);
+  const secret = z.string().regex(/^[a-f0-9]{64}$/u).parse(digest(`customer-delivery:${reference}`));
+  return `/customer/sign-in#${match[1]}/${Buffer.from(secret, "hex").toString("base64url")}`;
+}
 export interface SafeTelemetry{emit(name:"outbox.queue_age"|"outbox.failure"|"outbox.retry"|"outbox.unknown_outcome",fields:Readonly<Record<string,string|number>>):void;}
 const rowToAction=(r:any):OutboundAction=>outboundActionV1Schema.parse({version:"outbound-action.v1",id:r.id,authorizationId:r.authorization_id,adapter:r.adapter,providerEffectKey:r.provider_effect_key,actionType:r.action_type,recipient:r.recipient,contentHash:r.content_hash,immutableContent:r.immutable_content,aggregateRevision:r.aggregate_revision,amountPence:r.amount_pence===null?null:Number(r.amount_pence),currency:r.currency,policyVersion:r.policy_version,authorizationExpiresAt:r.authorization_expires_at});
 /** Terminal refusal: no adapter call or delivery attempt is made. */
@@ -44,17 +55,21 @@ async function auditOutcome(db: TenantTransaction, id: string, status: string, r
 }
 
 export class ActionExecutor {
-  constructor(private pool: Pool, private adapters: Map<string, OutboundAdapter>, private telemetry: SafeTelemetry) {}
+  constructor(private pool: Pool, private adapters: Map<string, OutboundAdapter>, private telemetry: SafeTelemetry, private customerSigninDigest?: (value: string) => string) {}
 
-  async execute(context: VerifiedTenantContext, id: string) {
+  async execute(context: VerifiedTenantContext, id: string, beforeClaim?: (actionType: string) => void) {
     let action: OutboundAction | undefined;
     let attempt = 0;
+    let signinLink: string | undefined;
     let refusal: OutboxRevocationRefusal | undefined;
     await withTenant(this.pool, context, async db => {
       await db.$client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1::text,54))`, [context.tenantId]);
-      const r = (await db.$client.query<any>(`SELECT o.* FROM app.action_outbox o JOIN app.action_authorization a ON a.tenant_id=o.tenant_id AND a.id=o.authorization_id JOIN app.decision_resolution r ON r.tenant_id=a.tenant_id AND r.id=a.resolution_id AND r.resolution='approved' JOIN app.membership m ON m.tenant_id=a.tenant_id AND m.id=a.actor_membership_id AND (m.role='owner' OR (m.role='finance' AND o.action_type='customer_portal.signin.send' AND o.adapter='fake_email' AND o.policy_version='customer-signin.synthetic.v1' AND o.recipient ~ '^[^@[:space:]]+@[^@[:space:]]+\\.invalid$' AND o.amount_pence IS NULL AND o.currency IS NULL)) AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp()) WHERE o.id=$1 AND NOT EXISTS(SELECT 1 FROM app.contractor_membership_revocation revoked WHERE revoked.tenant_id=m.tenant_id AND revoked.membership_id=m.id) AND a.revoked_at IS NULL AND o.action_type=a.action_type AND o.recipient IS NOT DISTINCT FROM a.recipient AND o.content_hash=a.content_hash AND o.aggregate_revision=a.aggregate_revision AND o.amount_pence IS NOT DISTINCT FROM a.amount_pence AND o.currency IS NOT DISTINCT FROM a.currency AND o.policy_version=a.policy_version AND o.authorization_expires_at<=a.expires_at AND (o.status='executing' OR o.next_attempt_at<=clock_timestamp()) FOR UPDATE OF o`, [id])).rows[0];
+      const r = (await db.$client.query<any>(`SELECT o.*,a.actor_membership_id AS authorization_actor FROM app.action_outbox o JOIN app.action_authorization a ON a.tenant_id=o.tenant_id AND a.id=o.authorization_id JOIN app.decision_resolution r ON r.tenant_id=a.tenant_id AND r.id=a.resolution_id AND r.resolution='approved' JOIN app.membership m ON m.tenant_id=a.tenant_id AND m.id=a.actor_membership_id AND (m.role='owner' OR (m.role='finance' AND o.action_type='customer_portal.signin.send' AND o.adapter='fake_email' AND o.policy_version='customer-signin.synthetic.v1' AND o.recipient ~ '^[^@[:space:]]+@[^@[:space:]]+\\.invalid$' AND o.amount_pence IS NULL AND o.currency IS NULL)) AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp()) WHERE o.id=$1 AND NOT EXISTS(SELECT 1 FROM app.contractor_membership_revocation revoked WHERE revoked.tenant_id=m.tenant_id AND revoked.membership_id=m.id) AND a.revoked_at IS NULL AND o.action_type=a.action_type AND o.recipient IS NOT DISTINCT FROM a.recipient AND o.content_hash=a.content_hash AND o.aggregate_revision=a.aggregate_revision AND o.amount_pence IS NOT DISTINCT FROM a.amount_pence AND o.currency IS NOT DISTINCT FROM a.currency AND o.policy_version=a.policy_version AND o.authorization_expires_at<=a.expires_at AND (o.status='executing' OR o.next_attempt_at<=clock_timestamp()) FOR UPDATE OF o`, [id])).rows[0];
       if (!r) { refusal = await cancelRevokedAction(db, id, [...this.adapters.keys()]); return; }
       if (!this.adapters.has(r.adapter)) return;
+      if (!(await commercialOutboundClaimsEnabled(db))) return;
+      // Classify the locked, authorized row, never queue-supplied action metadata.
+      beforeClaim?.(r.action_type);
       if (r.status === "executing" && new Date(r.claimed_at).getTime() < Date.now() - 300_000) {
         await db.$client.query(`UPDATE app.action_outbox SET status='outcome_unknown',updated_at=clock_timestamp() WHERE id=$1`, [id]);
         await auditOutcome(db, id, "outcome_unknown", { reason: "stale_claim" });
@@ -68,7 +83,19 @@ export class ActionExecutor {
         await auditOutcome(db, id, "cancelled", { reason: "authorization_expired" });
         return;
       }
+      // MON-8: eligibility is current at the claim, not inherited from an earlier approval.
+      // Contractor checks use the tenant lock already held here; no subscription/business lock is added.
+      if (r.action_type === "extra.client_approval_request.send" && !(await serverEntitlement(db, r.authorization_actor, "approval_chains")).executable) {
+        await db.$client.query("UPDATE app.action_outbox SET status='cancelled',updated_at=clock_timestamp() WHERE id=$1", [id]);
+        await auditOutcome(db, id, "cancelled", { reason: "entitlement_lost" });
+        return;
+      }
       action = rowToAction(r);
+      if (action.actionType === "customer_portal.signin.send") {
+        if (action.adapter !== "fake_email" || action.policyVersion !== "customer-signin.synthetic.v1" || !this.customerSigninDigest) throw new Error("CUSTOMER_SIGNIN_DELIVERY_UNAVAILABLE");
+        if (createHash("sha256").update(action.immutableContent).digest("hex") !== action.contentHash) throw new Error("CONTENT_HASH_MISMATCH");
+        signinLink = customerSigninLink(action.immutableContent, this.customerSigninDigest);
+      }
       attempt = Number((await db.$client.query(`SELECT count(*)::int n FROM app.action_attempt WHERE action_id=$1`, [id])).rows[0].n) + 1;
       await db.$client.query(`UPDATE app.action_outbox SET status='executing',claimed_at=clock_timestamp(),updated_at=clock_timestamp() WHERE id=$1`, [id]);
       await db.$client.query(`INSERT INTO app.action_attempt(id,tenant_id,action_id,attempt_number,outcome) VALUES($1,$2,$3,$4,'started')`, [randomUUID(), context.tenantId, id, attempt]);
@@ -76,7 +103,9 @@ export class ActionExecutor {
     if (!action) return refusal;
     const adapter = this.adapters.get(action.adapter);
     if (!adapter) throw new Error("FAKE_ADAPTER_NOT_REGISTERED");
-    const result = await adapter.deliver(Object.freeze(action));
+    const result = signinLink === undefined
+      ? await adapter.deliver(Object.freeze(action))
+      : await adapter.deliver(Object.freeze(action), signinLink);
     await withTenant(this.pool, context, async db => {
       const status = result.kind === "retryable" && attempt >= 5 ? "dead_letter" : result.kind;
       if (status === "dead_letter") this.telemetry.emit("outbox.failure", { actionId: id, attempt });

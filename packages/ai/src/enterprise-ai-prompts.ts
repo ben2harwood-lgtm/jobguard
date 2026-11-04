@@ -45,8 +45,8 @@ export const ENTERPRISE_AI_EVALUATION_VERSION = "enterprise-ai-evaluation.v1" as
 export function enterpriseFixtureRequest(row: EnterpriseFixtureCase): AiGatewayRequest {
   return { contractVersion: "ai_gateway_request_v1", fixtureId: row.id,
     operation: "enterprise_possible_extras", promptVersion: "enterprise-extra-detection.fixture.v1", schemaVersion: "enterprise-ai-output.v1",
-    sources: [{ id: row.baseline.revisionId, content: JSON.stringify(row.baseline), sha256: digest(JSON.stringify(row.baseline)) },
-      ...row.sources.map(source => ({ id: source.evidenceId, content: source.text, sha256: source.sha256 }))],
+    sources: [{ tenantId: row.tenantId, visibility: "public", id: row.baseline.revisionId, content: JSON.stringify(row.baseline), sha256: digest(JSON.stringify(row.baseline)) },
+      ...row.sources.map(source => ({ tenantId: source.tenantId, visibility: "public" as const, id: source.evidenceId, content: source.text, sha256: source.sha256 }))],
     timeoutMs: 1000, maxOutputTokens: 2048 };
 }
 
@@ -94,7 +94,7 @@ export async function detectEnterpriseFixture(raw: unknown, options: {
   const development = await loadEnterpriseFixtureCorpus("development"), held = await loadEnterpriseFixtureCorpus("held-out-inputs");
   const row = [...development.cases, ...held.cases].find(value => value.id === parsed.data.fixtureId);
   if (!row) throw new AiGatewayError("fixture_not_found", "Unknown enterprise fixture");
-  const gateway = new AiGateway(new FixtureAiProvider(options.responses ?? { [row.id]: row.response }));
+  const gateway = new AiGateway(new FixtureAiProvider(options.responses ?? { [row.id]: row.response }), () => ({ tenantId: row.tenantId }));
   let result: AiGatewayResponse<EnterpriseAiOutput>;
   try {
     result = await gateway.generate(enterpriseFixtureRequest(row), enterpriseAiOutputV1, options.repair ? { repair: options.repair } : {});

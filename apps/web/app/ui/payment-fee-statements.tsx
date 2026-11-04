@@ -1,6 +1,6 @@
 "use client";
 import { useEffect,useState } from "react";
-import { paymentFeeViewV1,parseExactPence,divideRounded,type PaymentFeeCommand } from "@jobguard/core";
+import { paymentFeeViewV1,parseExactPence,divideRounded,type PaymentFeeAuthorityCommand,type PaymentFeeCommand } from "@jobguard/core";
 import type { z } from "zod";
 type View=z.infer<typeof paymentFeeViewV1>;
 const pounds=(p:number)=>new Intl.NumberFormat("en-GB",{style:"currency",currency:"GBP"}).format(p/100);
@@ -23,10 +23,10 @@ export function PaymentFeeStatements({jobId}:{jobId:string}){
   void readPaymentFeeView(jobId).then(data=>{if(active)setView(data);}).catch(()=>{if(active)setError("Receipt statements could not be loaded.");});
   return ()=>{active=false;};
  },[jobId,reload]);
- async function command(intent:Omit<Extract<PaymentFeeCommand,{action:"prepare"}>,"version"|"commandId">|Omit<Extract<PaymentFeeCommand,{action:"approve"}>,"version"|"commandId">|Omit<Extract<PaymentFeeCommand,{action:"dispute"}>,"version"|"commandId">){
+ async function command(intent:Omit<Extract<PaymentFeeCommand,{action:"prepare"}>,"version"|"commandId">|Omit<Extract<PaymentFeeCommand,{action:"approve"}>,"version"|"commandId">|Omit<Extract<PaymentFeeCommand,{action:"dispute"}>,"version"|"commandId">|Omit<PaymentFeeAuthorityCommand,"version"|"commandId">){
   if(busy)return;setBusy(true);setError("");
   try{
-   const response=await fetch(`/api/jobs/${jobId}/payment-fees`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({version:"payment-fee-command.v1",commandId:crypto.randomUUID(),...intent})});
+   const response=await fetch(`/api/jobs/${jobId}/payment-fees`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({version:intent.action==="opt_in"||intent.action==="revoke"?"payment-fee-authority-command.v1":"payment-fee-command.v1",commandId:crypto.randomUUID(),...intent})});
    if(!response.ok){setError("The statement could not be changed. Check the receipt, evidence and any dispute before trying again.");return;}
    const data=await readPaymentFeeView(jobId);setView(data);
   }catch{setError("The result could not be confirmed. Reload the statements before trying again.");}finally{setBusy(false);}
@@ -36,6 +36,9 @@ export function PaymentFeeStatements({jobId}:{jobId:string}){
   <h2>Success fee on your payment</h2>
   <p>Simulation — proposed policy; principal only. Nothing is collected. Your customer’s payment is never reduced.</p>
   <p>VAT not calculated in this simulation</p>
+  <p>Standing authority is off by default. If you opt in, each separate simulated collection is capped at the fee on that verified receipt, never a fixed sum. It pauses during a receipt, case or attribution dispute. You can revoke it at any time.</p>
+  <p data-testid="standing-authority-state">{view.standingAuthority?`Standing authority: ${view.standingAuthority.state}`:"Standing authority: off"}</p>
+  <button disabled={busy} onClick={()=>void command({action:view.standingAuthority?.state==="active"?"revoke":"opt_in",expectedAuthorityId:view.standingAuthority?.authorityId??null,cap:"per_verified_receipt_fee",policyVersion:"reference_fee_policy_v3"})}>{view.standingAuthority?.state==="active"?"Revoke standing authority":"Opt in to standing authority for simulation"}</button>
   {view.receipts.filter(id=>!view.statements.some(s=>s.statement.paymentId===id)).map(id=><p key={id}>Allocated qualifying receipt <code>{id}</code> <button disabled={busy} onClick={()=>void command({action:"prepare",paymentId:id})}>Prepare fee statement</button></p>)}
   {view.statements.map(({statement:s,state})=><article key={s.statementId}>
    <h3>Receipt {s.paymentId}</h3>

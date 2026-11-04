@@ -153,10 +153,11 @@ describe("principal to tenant bridge", () => {
       sessionToken: session.sessionToken, csrfToken: session.csrfToken,
       requestedTenantId: membership.tenantId, origin: ORIGIN,
     }, ORIGIN);
-    const query = vi.fn(async (_sql: string, _values?: unknown[]) => ({ rows: [] }));
+    const query = vi.fn(async (sql: string, _values?: unknown[]) => ({ rows: sql.includes("app.current_actor()") ? [{ actor: membership.id, tenant: membership.tenantId }] : [] }));
     const connect = vi.fn(async () => ({ query, release: vi.fn() }));
     await withTenant({ connect } as unknown as Pool, ctx, async () => undefined);
     expect(connect).toHaveBeenCalledOnce();
+    expect(query).toHaveBeenCalledWith("SELECT app.bind_request($1, $2, $3)", ["real", (await provider.authenticate(session.sessionToken))!.sessionCredential, membership.tenantId]);
     expect(query).toHaveBeenCalledWith("SELECT set_config('app.tenant_id', $1, true)", [membership.tenantId]);
   });
 

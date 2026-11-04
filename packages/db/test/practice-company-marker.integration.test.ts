@@ -33,7 +33,7 @@ it.each(paths)("[PW31] %s stops an already-running switch without changing its h
 });
 it.each(insertions.slice(0, 3))("[PW15] [PW16] %s prevents marking and is refused after marking", async (_kind, _table, sql) => {
  const f = await company(c), params = _kind === "address" ? [f.p.tenantId, f.p.membershipId, `${randomUUID()}@fictional.invalid`] : [f.p.tenantId, f.p.membershipId];
- await c.admin.query(sql, params); await expect(start(c, f)).rejects.toMatchObject({ code: "SWITCH_FORBIDDEN" }); expect(await text(c, "control_plane.practice_company_marker", f.p.tenantId)).toEqual([]);
+ await ownerTx(c, f.p.tenantId, db => db.$client.query(sql, params)); await expect(start(c, f)).rejects.toMatchObject({ code: "SWITCH_FORBIDDEN" }); expect(await text(c, "control_plane.practice_company_marker", f.p.tenantId)).toEqual([]);
  const marked = await company(c); await start(c, marked);
  for (const ended of [false, true]) { if (ended) await end(c, marked); const args = _kind === "address" ? [marked.p.tenantId, marked.p.membershipId, `${randomUUID()}@fictional.invalid`] : [marked.p.tenantId, marked.p.membershipId];
   await expect(c.admin.query(sql, args)).rejects.toMatchObject({ message: "PRACTICE_COMPANY_SIGN_IN_FORBIDDEN" });
@@ -107,7 +107,7 @@ it.each(variants)("[PW15] %s refuses routine and table-owner marker without writ
  const f = await company(c);
  if (variant.startsWith("V1") || variant.startsWith("RC3")) await c.admin.query(insertions[0][2], [f.p.tenantId, variant.startsWith("V1") ? f.members.admin : f.p.membershipId]);
  if (variant.startsWith("V2") || variant.startsWith("V3")) {
-  await c.admin.query(insertions[1][2], [f.p.tenantId, f.p.membershipId]);
+  await ownerTx(c, f.p.tenantId, db => db.$client.query(insertions[1][2], [f.p.tenantId, f.p.membershipId]));
   if (variant.startsWith("V3")) await c.admin.query("UPDATE identity.invitation SET accepted_at=clock_timestamp() WHERE tenant_id=$1", [f.p.tenantId]);
  }
  if (variant.startsWith("V4") || variant.startsWith("V5")) {

@@ -35,11 +35,12 @@ test("CI has concurrent core/web jobs behind an always-running checks gate", () 
 test("core and web retain their commands, setup pins and candidate SHA guards", () => {
   for (const command of ["typecheck", "lint"]) assert.ok(jobs["core-checks"].includes(`      - run: pnpm ${command}\n`));
   assert.ok(jobs["web-shards"].includes("      - run: pnpm build\n"));
-  assert.match(jobs["web-shards"], /^        run: pnpm test:e2e --shard=\$\{\{ matrix.shard \}\}\/4$/m);
+  assert.match(jobs["web-shards"], /^        run: pnpm test:e2e --shard=\$\{\{ matrix.shard \}\}\/6$/m);
   assert.ok(jobs["web-shards"].includes("run: pnpm --filter @jobguard/web exec playwright install --with-deps chromium"));
   for (const name of ["core-checks", "core-db", "web-shards"]) {
     const body = jobs[name];
-    assert.match(body, /^    runs-on: ubuntu-latest$/m);
+    // Playwright 1.55.1 cannot install chromium on 26.04, so the browser job stays on 24.04.
+    assert.match(body, name === "web-shards" ? /^    runs-on: ubuntu-24\.04$/m : /^    runs-on: ubuntu-latest$/m);
     assert.match(body, /^    timeout-minutes: 90$/m);
     assert.doesNotMatch(body, /^    needs:/m);
     assert.ok(body.includes("actions/checkout@v4.2.2\n        with: { fetch-depth: 0, persist-credentials: false }\n      - name: Verify the candidate SHA\n"));
@@ -104,15 +105,19 @@ for (const [gate, dependencies] of Object.entries({
 });
 
 test("only superseded PR runs cancel; main never cancels in progress", () => {
-  assert.ok(workflow.includes("group: ci-${{ github.workflow }}-${{ github.ref }}"));
-  assert.ok(workflow.includes("cancel-in-progress: ${{ github.event_name == 'pull_request' && github.ref != 'refs/heads/main' }}"));
+  assert.ok(workflow.includes("group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}"));
+  assert.ok(workflow.includes("cancel-in-progress: ${{ github.event_name == 'pull_request' }}"));
 });
 
-test("DB and browser matrices cover all four shards without fail-fast or test selection", () => {
-  for (const name of ["core-db", "web-shards"]) {
+test("DB and browser matrices cover every shard without fail-fast or test selection", () => {
+  for (const [name, count] of [["core-db", 4], ["web-shards", 6]]) {
     assert.match(jobs[name], /^      fail-fast: false$/m);
-    assert.match(jobs[name], /^        shard: \[1, 2, 3, 4\]$/m);
-    assert.ok(jobs[name].includes("--shard=${{ matrix.shard }}/4"));
+    const shards = jobs[name].match(/^        shard: \[([^\]]+)\]$/m)?.[1].split(",").map(Number);
+    assert.deepEqual(shards, Array.from({ length: count }, (_, i) => i + 1));
+    const commands = [...jobs[name].matchAll(/^      (?:- run:|  run:) (.*--shard=.*)$/gm)].map(([, command]) => command);
+    assert.deepEqual(commands, [name === "core-db"
+      ? `pnpm --filter @jobguard/db test --shard=\${{ matrix.shard }}/${count}`
+      : `pnpm test:e2e --shard=\${{ matrix.shard }}/${count}`]);
   }
   const root = JSON.parse(readFileSync(new URL("../package.json", import.meta.url)));
   assert.equal(root.scripts.test, "node --test tools/*.test.mjs && turbo run test");
@@ -123,6 +128,7 @@ test("DB and browser matrices cover all four shards without fail-fast or test se
   const db = JSON.parse(readFileSync(new URL("../packages/db/package.json", import.meta.url)));
   assert.equal(db.scripts.test, "vitest run --passWithNoTests --maxWorkers=1");
   const playwright = readFileSync(new URL("../apps/web/playwright.config.ts", import.meta.url), "utf8");
+  assert.match(playwright, /fullyParallel: true/);
   assert.match(playwright, /retries: 0/);
   assert.match(playwright, /workers: 1/);
   for (const project of ["mobile-360", "desktop"]) assert.ok(playwright.includes(`name: "${project}"`));
@@ -132,7 +138,7 @@ test("DB and browser matrices cover all four shards without fail-fast or test se
 test("each DB and browser shard builds its workspace prerequisites before testing", () => {
   const commands = {
     "core-db": ["pnpm exec turbo run build --filter=@jobguard/api...", "pnpm --filter @jobguard/db test --shard=${{ matrix.shard }}/4"],
-    "web-shards": ["pnpm build", "pnpm test:e2e --shard=${{ matrix.shard }}/4"],
+    "web-shards": ["pnpm build", "pnpm test:e2e --shard=${{ matrix.shard }}/6"],
   };
   for (const [job, [build, runTests]] of Object.entries(commands)) {
     const steps = jobs[job].split(/^      - /m).slice(1);

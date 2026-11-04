@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "lanes": {
+    "demo-j1-core": {
+      "branches": ["codex/sandbox/demo-j1-core"],
+      "note": "RED DEMO-S / DEMO-J1 core-1000 guided practice entry and real-command browser coverage. Reuses existing capture, v3 activation, worker Final Check, invoice, receipts, correction and value screens. No migration; MON-5 and independent verdict remain outstanding.",
+      "allow": [
+        "apps/web/app/demo-s/chooser.tsx",
+        "apps/web/app/demo-s/core-1000/page.tsx",
+        "apps/web/app/demo-s/core-1000/journey.tsx",
+        "apps/web/app/demo-s/core-1000/journey.test.tsx",
+        "apps/web/app/ui/jobguard-app.tsx",
+        "apps/web/app/ui/workspace-lifecycle.ts",
+        "apps/web/app/ui/workspace-lifecycle.test.ts",
+        "apps/web/app/ui/workspace-shell.tsx",
+        "apps/web/e2e/DEMO-J1-core-1000.spec.ts",
+        "docs/contracts/small-builder-demo-run-v1.md"
+      ]
+    }
+  }
+}
