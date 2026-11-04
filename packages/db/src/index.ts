@@ -185,3 +185,5 @@ export { importLateSource, readLateSourceObservations, readLateSources } from ".
 
 export * from "./financial-reconciliation-queue-repository.js";
 export * from "./money-trail-repository.js";
+
+export { VatFixtureRepository, VatFixtureRepositoryError } from "./vat-fixture-repository.js";

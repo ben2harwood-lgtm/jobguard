@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-21-draft-store": {
+      "branches": [
+        "codex/sandbox/m4-21-draft-store"
+      ],
+      "note": "M4-21 durable synthetic VAT fixtures only; RED, NOPR. Tax rules, adviser review and issue remain held.",
+      "allow": [
+        "packages/db/src/vat-fixture-repository.ts",
+        "packages/db/src/index.ts",
+        "packages/db/test/vat-fixture-repository.test.ts",
+        "packages/db/test/vat-fixture.integration.test.ts",
+        "packages/db/test/later-empty-tables.ts",
+        "packages/db/migrations/0755_vat_fixture_records.sql",
+        "packages/db/test/migration-proofs/0755_vat_fixture_records.proof.json",
+        "packages/db/migration-notes/0755_vat_fixture_records.md",
+        "docs/contracts/vat-fixture-records-dark-v1.md"
+      ]
+    }
+  }
+}
