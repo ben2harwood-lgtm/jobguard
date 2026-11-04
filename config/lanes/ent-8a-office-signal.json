@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-8a-office-signal": {
+      "branches": [
+        "codex/sandbox/ent-8a-office-signal"
+      ],
+      "allow": [
+        "apps/web/app/api/contractor/jobs/[id]/office-signals/route.test.ts",
+        "apps/web/app/api/contractor/jobs/[id]/office-signals/route.ts",
+        "apps/web/app/contractor/jobs/[id]/office-signals/office-signals.tsx",
+        "apps/web/app/contractor/jobs/[id]/office-signals/page.tsx",
+        "apps/web/e2e/ENT-8a-office-signals.spec.ts",
+        "docs/contracts/enterprise-live-prompts-v1.md",
+        "packages/db/migration-notes/0748_office_prompt_signal_read.md",
+        "packages/db/migrations/0748_office_prompt_signal_read.sql",
+        "packages/db/src/enterprise-live-prompt-repository.ts",
+        "packages/db/src/enterprise-office-signals.test.ts",
+        "packages/db/test/enterprise-live-prompt-office.integration.test.ts",
+        "packages/db/test/migration-proofs/0748_office_prompt_signal_read.proof.json"
+      ]
+    }
+  }
+}
