@@ -644,4 +644,7 @@ identity. No contractor lookup change was necessary.
 
 Local validation and CI handoff are recorded in the LP-6b commit message.
 PostgreSQL/browser execution and independent RED review remain CI/router work;
-no live services or customer data are used. NOPR until LP-3 #546 lands.
+no live services or customer data are used. LP-3 #546 has now landed; the
+4 November catch-up is ready for a PR with CI and independent review pending.
+The pending merge retains main’s prerequisite changes, the LP-6b authenticated
+fixture credential, and this LP-6b design section without new runtime behavior.

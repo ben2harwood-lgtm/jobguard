@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/lp-6b-withtenant"
       ],
-      "note": "LP-6b RED session-bearing withTenant and reviewed bridges; NOPR until LP-3 #546 lands. Requires exact-head independent review and full PostgreSQL CI. No migration or privilege changes.",
+      "note": "LP-6b RED session-bearing withTenant and reviewed bridges; PR follows landed LP-3. Requires exact-head independent security review and full PostgreSQL CI. No migration or privilege changes.",
       "allow": [
         "apps/api/src/accounting-export.application.test.ts",
         "apps/api/src/auth/auth-provider.ts",
