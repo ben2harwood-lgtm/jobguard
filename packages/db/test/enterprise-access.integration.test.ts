@@ -111,3 +111,89 @@ describe('ENT-10-rest SCIM machine provisioning',()=>{
   await expect(m.call({method:'POST',kind:'Users',eventId:randomUUID(),body:{schemas:['urn:ietf:params:scim:schemas:core:2.0:User'],externalId:randomUUID(),userName:m.f.email,active:true}})).rejects.toHaveProperty('code','ACCESS_REFUSED');
  });
 });
+
+// Route-level proof uses the exact POST transport called by the Next action handler.
+import { emergencyOwnerPost } from '../../../apps/api/src/auth/sso/enterprise-access.http.js';
+import { SsoRequiredController } from '../../../apps/api/src/auth/sso/sso-required.controller.js';
+import { canonicalRows, origin, type Credentials } from './scim-fixtures.js';
+async function postEmergency(f:ScimFixture,credentials:Credentials,command:Record<string,unknown>,tenant=f.principal.tenantId) {
+ const operation=String(command.operation);
+ const response=await emergencyOwnerPost(new Request(origin+'/api/auth/sso-required/emergency-actions/'+operation,{
+  method:'POST',body:JSON.stringify({version:'emergency-route.v1',requested_tenant_id:tenant,command}),
+ }),operation,{...credentials,tenantHeader:tenant},h.provider,origin,'synthetic_demo');
+ expect(response.headers.get('cache-control')).toBe('no-store');return response;
+}
+async function emergencyState(f:ScimFixture) {
+ const result:unknown[]=[];
+ for(const table of ['identity.emergency_request','identity.emergency_approval','identity.emergency_session','identity.emergency_action','app.audit_event','app.membership','app.role_grant_revocation'])
+  result.push(await canonicalRows(h,table,'tenant_id=$1',[f.principal.tenantId]));
+ return result;
+}
+async function refusedPost(f:ScimFixture,credentials:Credentials,command:Record<string,unknown>,tenant?:string) {
+ const before=await emergencyState(f),response=await postEmergency(f,credentials,command,tenant);
+ expect(response.status).toBe(403);expect(await response.json()).toEqual({code:'SSO_EMERGENCY_REFUSED'});
+ expect(await emergencyState(f)).toEqual(before);
+}
+describe('ENT-10 emergency action routes, real database',()=>{
+ it('requests, approves twice, opens, inspects and revokes through POST; refusals leave no effects',async()=>{
+  const f=await fixture(h),a=await owner(f),b=await owner(f),other=await fixture(h),target=await person(f,'read_only');
+  // Use already-live SSO sessions. Ordinary sessions cannot bypass a required SSO company.
+  await f.enable();
+  const proof=f.bound!,id=randomUUID(),tokenHash=hash('fictional route capability');
+  const input=(op:string,extra={})=>request(id,op,extra);
+  expect((await postEmergency(f,proof,input('request',{reasonHash:hash('synthetic recovery')}))).status).toBe(200);
+  await refusedPost(f,proof,input('approve'));
+  await refusedPost(f,proof,input('open',{tokenHash})); // one owner alone
+  await refusedPost(f,a.bound,input('approve'),other.principal.tenantId);
+  await refusedPost(f,{...a.bound,csrfToken:''},input('approve'));
+  await refusedPost(f,{...a.bound,csrfToken:'wrong'},input('approve'));
+  expect((await postEmergency(f,a.bound,input('approve'))).status).toBe(200);
+  await refusedPost(f,a.bound,input('approve')); // repeated identity
+  await refusedPost(f,proof,input('open',{tokenHash})); // still only one other owner
+  expect((await postEmergency(f,b.bound,input('approve'))).status).toBe(200);
+  expect((await postEmergency(f,proof,input('open',{tokenHash}))).status).toBe(200);
+  await refusedPost(f,proof,input('open',{tokenHash})); // immutable session replay
+  const inspected=await postEmergency(f,proof,input('inspect',{tokenHash}));expect(inspected.status).toBe(200);
+  expect(await inspected.json()).toHaveProperty('required',true);
+  await refusedPost(f,a.bound,input('inspect',{tokenHash}));
+  await refusedPost(f,proof,input('revoke_member',{tokenHash,targetMembershipId:a.membershipId}));
+  expect((await postEmergency(f,proof,input('revoke_member',{tokenHash,targetMembershipId:target.membershipId}))).status).toBe(200);
+  expect((await h.admin.query('SELECT revoked_at FROM app.membership WHERE tenant_id=$1 AND id=$2',[f.principal.tenantId,target.membershipId])).rows[0].revoked_at).not.toBeNull();
+  for(const credentials of [proof,a.bound,b.bound]) {
+   const notices=await h.required.emergencyNotices({requested_tenant_id:f.principal.tenantId},credentials) as {notices:{operation:string}[]};
+   expect(notices.notices.map(n=>n.operation)).toEqual(['request','approve','approve','open','inspect','revoke_member']);
+  }
+  const audit=await auditRows(h,f.principal.tenantId);
+  for(const op of ['request','approve','open','inspect','revoke_member','notices'])expect(audit.some(r=>r.event_type===`sso.emergency.${op}`)).toBe(true);
+  // Removed owner and expired/revoked login sessions cannot even request another capability.
+  await h.admin.query('UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2',[f.principal.tenantId,a.membershipId]);
+  await refusedPost(f,a.bound,request(randomUUID(),'request',{reasonHash:hash('removed')}));
+  await h.admin.query("UPDATE identity.session SET expires_at=clock_timestamp()-interval '1 minute' WHERE token_digest=$1",[h.provider.digest(`session:${b.bound.sessionToken}`)]);
+  await refusedPost(f,b.bound,request(randomUUID(),'request',{reasonHash:hash('expired login')}));
+  await h.admin.query('UPDATE identity.session SET revoked_at=clock_timestamp() WHERE token_digest=$1',[h.provider.digest(`session:${proof.sessionToken}`)]);
+  await refusedPost(f,proof,input('inspect',{tokenHash}));
+ });
+ it('expired approval window and capability session refuse without writes',async()=>{
+  const f=await fixture(h),a=await owner(f),id=randomUUID(),tokenHash=hash('expired route token');
+  await h.admin.query("INSERT INTO identity.emergency_request VALUES($1,$2,$3,$4,clock_timestamp()-interval '16 minutes',clock_timestamp()-interval '1 minute')",[f.principal.tenantId,id,f.principal.membershipId,hash('expired window')]);
+  await refusedPost(f,a.bound,request(id,'approve'));await refusedPost(f,f.bound!,request(id,'open',{tokenHash}));
+  await h.admin.query("INSERT INTO identity.emergency_session VALUES($1,$2,$3,transaction_timestamp()-interval '61 minutes',transaction_timestamp()-interval '1 minute')",[f.principal.tenantId,id,tokenHash]);
+  await refusedPost(f,f.bound!,request(id,'inspect',{tokenHash}));
+ });
+ it('retired HTTP handlers refuse an otherwise valid mailbox code; SSO remains required and code remains usable',async()=>{
+  const f=await fixture(h);await f.enable();
+  const challenge=await h.provider.requestCode({email:f.email,purpose:'signin',ip:randomUUID()});
+  const payload={version:'sso-emergency.v2',requested_tenant_id:f.principal.tenantId,commandId:randomUUID(),email:f.email,code:challenge.fixtureCode!,reason:'Synthetic identity provider outage'};
+  const before=await canonicalRows(h,'identity.challenge','email=$1',[f.email]);
+  const controller=new SsoRequiredController(()=>h.required);
+  await expect(controller.emergency(payload,{headers:{origin}})).rejects.toHaveProperty('status',403);
+  const path='../../../apps/web/app/api/auth/sso-required/emergency/route.ts';const {POST}=await import(new URL(path,import.meta.url).href);
+  const response=await POST(new Request(origin,{method:'POST',body:JSON.stringify(payload)}));expect(response.status).toBe(403);
+  expect(await response.json()).toEqual({code:'SSO_EMERGENCY_REFUSED'});expect(response.headers.get('cache-control')).toBe('no-store');
+  expect(await canonicalRows(h,'identity.challenge','email=$1',[f.email])).toEqual(before);
+  expect(await h.required.view({version:'sso-required-view.v1',requested_tenant_id:f.principal.tenantId},f.bound!)).toHaveProperty('required',true);
+  expect((await h.admin.query('SELECT count(*)::int n FROM identity.sso_emergency_window WHERE tenant_id=$1',[f.principal.tenantId])).rows[0].n).toBe(0);
+  // Proves the unchanged application would have accepted this exact unconsumed mailbox proof.
+  expect(await h.provider.proveEmergencyMailbox(f.email,challenge.fixtureCode!)).toBe(f.principal.identityUserId);
+ });
+});
