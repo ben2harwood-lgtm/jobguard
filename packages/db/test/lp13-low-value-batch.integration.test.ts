@@ -60,6 +60,32 @@ it("refuses standalone number-burning and allocates only once inside a checked i
   expect((await db.owner.query("SELECT id,invoice_number,pdf_sha256 FROM app.customer_invoice ORDER BY tenant_id,id")).rows).toEqual(issued);
 });
 
+it("refuses ambiguous invoice claims and a stale compatibility tenant without consuming a number", async () => {
+  const p = await principal(), other = await principal();
+  await request(p, async c => {
+    await begin(c, p);
+    await c.query("SELECT set_config('app.tenant_id',$1,true)", [other.tenant]);
+    await refused(c, "SELECT app.reserve_customer_invoice_number($1)", [p.tenant]);
+    await c.query("SELECT set_config('app.tenant_id',$1,true)", [p.tenant]);
+    await begin(c, p);
+    await refused(c, "SELECT app.reserve_customer_invoice_number($1)", [p.tenant]);
+    expect((await c.query("SELECT next_number FROM app.customer_invoice_sequence WHERE tenant_id=$1", [p.tenant])).rows).toEqual([]);
+  });
+  expect((await db.owner.query("SELECT next_number FROM app.customer_invoice_sequence WHERE tenant_id=$1", [p.tenant])).rows).toEqual([]);
+});
+
+it("refuses an unbound forged progress context before revealing whether the scope exists", async () => {
+  const p = await principal(), c = await db.runtime.connect();
+  try {
+    await c.query("BEGIN");
+    await c.query("SELECT set_config('app.tenant_id',$1,true),set_config('app.actor_id',$2,true)", [p.tenant, p.member]);
+    await c.query("SAVEPOINT attack");
+    await expect(c.query("SELECT app.transition_scope_progress($1,$2,$3,0,'in_progress','start')",
+      [p.tenant, randomUUID(), randomUUID()])).rejects.toMatchObject({code:"42501", message:"REQUEST_BINDING_REFUSED"});
+    await c.query("ROLLBACK TO attack; RELEASE attack");
+  } finally { await c.query("ROLLBACK"); c.release(); }
+});
+
 it("refuses reservation after approval revocation, including on the same transaction", async () => {
   const p=await principal(), c=await db.owner.connect();
   try {
@@ -89,6 +115,9 @@ it("keeps progress operational despite forged actor settings, and refuses cross-
     const row=(await c.query("SELECT * FROM app.transition_scope_progress($1,$2,$3,0,'in_progress','start')",[p.tenant,job,scope])).rows[0];
     expect(row).toMatchObject({stage:"in_progress",revision:1});
     await refused(c,"SELECT app.transition_scope_progress($1,$2,$3,1,'complete','actor:forged')",[p.tenant,job,scope],"22023");
+    await refused(c,"SELECT app.transition_scope_progress($1,$2,$3,0,'complete','complete')",[p.tenant,job,scope],"40001");
+    expect((await c.query("SELECT * FROM app.transition_scope_progress($1,$2,$3,1,'complete','complete')",[p.tenant,job,scope])).rows[0]).toMatchObject({stage:"complete",revision:2});
+    expect((await c.query("SELECT * FROM app.transition_scope_progress($1,$2,$3,2,'in_progress','rework')",[p.tenant,job,scope])).rows[0]).toMatchObject({stage:"in_progress",revision:3});
     expect((await c.query("SELECT * FROM app.job WHERE tenant_id=$1 AND id=$2",[p.tenant,job])).rows).toEqual(before);
     expect((await c.query("SELECT total_pence FROM app.scope_revision WHERE tenant_id=$1 AND job_id=$2",[p.tenant,job])).rows).toEqual([{total_pence:"1000"}]);
     for (const table of ["customer_invoice","recovery_fee_journal","action_authorization","cap_snapshot"]) {

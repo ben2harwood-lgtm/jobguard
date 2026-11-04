@@ -2,9 +2,9 @@ import { readFileSync } from "node:fs";
 import { expect, it } from "vitest";
 import { MIGRATION_URLS } from "../src/migrate.js";
 
-const sql=readFileSync(new URL("../migrations/0534_lp13_low_value_batch.sql",import.meta.url),"utf8");
+const sql=readFileSync(new URL("../migrations/0820_lp13_low_value_batch.sql",import.meta.url),"utf8");
 it("discovers the forward migration without changing the closed migration list",()=>{
-  expect(MIGRATION_URLS.some(url=>url.pathname.endsWith("/0534_lp13_low_value_batch.sql"))).toBe(true);
+  expect(MIGRATION_URLS.some(url=>url.pathname.endsWith("/0820_lp13_low_value_batch.sql"))).toBe(true);
 });
 it("keeps reservations on the private checked claim with no runtime table grants",()=>{
   expect(sql).toContain("ALTER TABLE app.command_lifecycle_claim ADD COLUMN reserved_invoice_number bigint");
@@ -21,7 +21,23 @@ it("preserves the existing progress transition rules and changes only its tenant
 });
 it("preserves the already-closed legacy, SSO and adoption bodies instead of copying obsolete definitions",()=>{
   expect(sql).not.toMatch(/CREATE OR REPLACE FUNCTION (?:app\.(?:record_legacy_builder_origin|adopt_in_flight_job)|identity\.sso_audit_append)/);
-  const audit=readFileSync(new URL("../migrations/0456_lp4_database_audit.sql",import.meta.url),"utf8")
+  const audit=readFileSync(new URL("../migrations/0520_lp4_database_audit.sql",import.meta.url),"utf8")
     .split("CREATE OR REPLACE FUNCTION identity.sso_audit_append",2)[1]!.split("END $$;",1)[0]!;
   expect(audit.indexOf("PERFORM identity.sso_load_connection(c)")).toBeLessThan(audit.indexOf("PERFORM app.lp4_seal_audit"));
+});
+
+it("retains LP-6c protected identity and compatibility context before allocating", () => {
+  const reservation = sql.split("CREATE OR REPLACE FUNCTION app.reserve_customer_invoice_number", 2)[1]!
+    .split("END $$;", 1)[0]!;
+  const predecessor = readFileSync(new URL("../migrations/0570_lp6c_money_binding.sql", import.meta.url), "utf8")
+    .split("CREATE OR REPLACE FUNCTION app.reserve_customer_invoice_number", 2)[1]!.split("END$$;", 1)[0]!;
+  for (const guard of ["p_tenant IS DISTINCT FROM app.current_tenant()",
+    "p_tenant IS DISTINCT FROM nullif(current_setting('app.tenant_id',true),'')::uuid"]) {
+    expect(predecessor).toContain(guard);
+    expect(reservation.indexOf(guard)).toBeGreaterThan(-1);
+    expect(reservation.indexOf(guard)).toBeLessThan(reservation.indexOf("SELECT c.* INTO STRICT claim"));
+  }
+  expect(sql).not.toMatch(/SET app\./);
+  expect(reservation).toContain("EXCEPTION WHEN no_data_found OR too_many_rows");
+  expect(reservation).toContain("IF claim.reserved_invoice_number IS NOT NULL THEN RETURN claim.reserved_invoice_number");
 });

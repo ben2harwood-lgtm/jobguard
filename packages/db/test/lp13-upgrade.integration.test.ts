@@ -4,7 +4,7 @@ import { afterAll, beforeAll, expect, it } from "vitest";
 import { jobDoorsActor, jobDoorsDatabase, type JobDoorsDatabase } from "./lp-job-doors-fixtures.js";
 
 let db: JobDoorsDatabase;
-beforeAll(async()=>{db=await jobDoorsDatabase(true,"0534_lp13_low_value_batch.sql");},300_000);
+beforeAll(async()=>{db=await jobDoorsDatabase(true,"0820_lp13_low_value_batch.sql");},300_000);
 afterAll(async()=>{await db?.close();});
 it("upgrades the supported predecessor without resetting an existing invoice sequence or broadening runtime writes",async()=>{
   const p=await jobDoorsActor(db.owner), id=randomUUID();
@@ -13,7 +13,7 @@ it("upgrades the supported predecessor without resetting an existing invoice seq
   const legacy=(await db.owner.query(`SELECT pg_get_functiondef('app.record_legacy_builder_origin()'::regprocedure) origin,
     pg_get_functiondef('identity.sso_audit_append(uuid,jsonb)'::regprocedure) sso,
     pg_get_functiondef('app.adopt_in_flight_job(uuid,uuid,uuid,varchar,varchar,character,varchar,bigint,bigint,varchar,varchar,uuid,timestamptz)'::regprocedure) adoption`)).rows;
-  await db.owner.query(await readFile(new URL("../migrations/0534_lp13_low_value_batch.sql",import.meta.url),"utf8"));
+  await db.owner.query(await readFile(new URL("../migrations/0820_lp13_low_value_batch.sql",import.meta.url),"utf8"));
   expect((await db.owner.query("SELECT * FROM app.customer_invoice_sequence WHERE tenant_id=$1",[p.tenant])).rows).toEqual(before);
   expect((await db.owner.query(`SELECT pg_get_functiondef('app.record_legacy_builder_origin()'::regprocedure) origin,
     pg_get_functiondef('identity.sso_audit_append(uuid,jsonb)'::regprocedure) sso,

@@ -4,21 +4,24 @@ BEGIN;
 -- A claim cannot commit without the invoice, audit and outbox proof (LP-5).
 ALTER TABLE app.command_lifecycle_claim ADD COLUMN reserved_invoice_number bigint
  CHECK (reserved_invoice_number IS NULL OR reserved_invoice_number > 0);
-GRANT EXECUTE ON FUNCTION app.current_actor(),app.current_tenant() TO jobguard_command_writer;
-GRANT EXECUTE ON FUNCTION app.current_tenant() TO jobguard_migration;
+-- Protected identity helper grants are supplied by LP-6c (0570).
 GRANT SELECT,INSERT ON app.customer_invoice_sequence TO jobguard_command_writer;
 GRANT UPDATE(next_number) ON app.customer_invoice_sequence TO jobguard_command_writer;
 CREATE POLICY lp13_invoice_number ON app.customer_invoice_sequence FOR ALL TO jobguard_command_writer
  USING(tenant_id=app.current_tenant()) WITH CHECK(tenant_id=app.current_tenant());
 
--- Latest definition: 0017. Keep the public signature; allocate once per checked,
+-- Latest definition: LP-6c 0570 (0017 predecessor). Keep the public signature; allocate once per checked,
 -- same-actor invoice command in this transaction. Standalone burning is refused.
 CREATE OR REPLACE FUNCTION app.reserve_customer_invoice_number(p_tenant uuid) RETURNS bigint
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 DECLARE n bigint; claim app.command_lifecycle_claim; actor uuid;
 BEGIN
  IF p_tenant IS DISTINCT FROM app.current_tenant() THEN
-  RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501';
+  RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
+ END IF;
+ -- Preserve LP-6c's compatibility-context check before touching the claim.
+ IF p_tenant IS DISTINCT FROM nullif(current_setting('app.tenant_id',true),'')::uuid THEN
+  RAISE EXCEPTION 'tenant context mismatch' USING ERRCODE='42501';
  END IF;
  actor:=app.current_actor();
  BEGIN
@@ -70,7 +73,7 @@ RETURNS app.scope_progress LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_
 END $$;
 
 -- 0053 already writes NULL raiser / legacy_unrecorded, never a named actor.
--- 0456 already calls sso_load_connection before sso_audit_append seals anything.
+-- 0520 already calls sso_load_connection before sso_audit_append seals anything.
 -- 0095's 13-argument adoption always refuses; 0356 withdrew runtime EXECUTE.
 -- Preserve these closures instead of reintroducing or copying obsolete bodies.
 COMMIT;
