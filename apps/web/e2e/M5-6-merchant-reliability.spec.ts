@@ -1,0 +1,40 @@
+import { createHmac, randomUUID } from "node:crypto";
+import { expect, test } from "@playwright/test";
+import { Pool } from "pg";
+import { meterCompany } from "../../../packages/db/test/meter-persistence-fixtures.js";
+import { workTenant, type WorkFixture } from "../../../packages/db/test/job-work-state-fixtures.js";
+import { closeTestPools } from "../../../packages/db/test/pool-test-utils.js";
+test.setTimeout(120000);
+let f:WorkFixture;
+test.beforeAll(()=>{f={admin:new Pool({connectionString:"postgresql://postgres:sbox-e2e-owner@127.0.0.1:55432/jobguard_synthetic_demo",max:1}),runtime:new Pool({connectionString:"postgresql://jobguard_runtime:sbox-e2e-runtime@127.0.0.1:55432/jobguard_synthetic_demo",max:1})} as WorkFixture;});
+test.afterAll(()=>closeTestPools(f.runtime,f.admin));
+test("own fictional delivery counts, sparse uncertainty, reload and no writes",async({page,context,baseURL})=>{
+ const a=await meterCompany(f),b=await meterCompany(f),token=randomUUID();
+ const digest=createHmac("sha256",process.env.AUTH_CODE_SECRET??"sbox-only-identity-hmac-secret-32-bytes").update(`session:${token}`).digest("hex");
+ await f.admin.query("UPDATE identity.session SET token_digest=$1 WHERE id=$2",[digest,a.sessionId]);
+ await context.addCookies([{name:"jobguard_session",value:token,url:baseURL!}]);
+ const seed=async()=>workTenant(f.admin,a.tenantId,async db=>{
+  // Administrative historical fixture only; no merchant feed or commercial action.
+  await db.query("SET LOCAL session_replication_role='replica'");
+  const doc=randomUUID();
+  await db.query("INSERT INTO app.supplier_document(id,tenant_id,job_id,supplier_context,document_type,content_hash,status) VALUES($1,$2,$3,'Fictional merchant','delivery',$4,'ready')",[doc,a.tenantId,a.jobId,randomUUID().replaceAll('-','').repeat(2)]);
+  await db.query("INSERT INTO app.goods_receipt(id,tenant_id,job_id,order_draft_id,document_id,revision,ordered_quantity,delivered_quantity,accepted_quantity,rejected_quantity,missing_quantity,unit) VALUES($1,$2,$3,$4,$5,1,10,8,8,0,2,'each')",[randomUUID(),a.tenantId,a.jobId,randomUUID(),doc]);
+ });
+ await seed();await seed();
+ await page.goto(`/jobs/${a.jobId}/merchant-reliability`);
+ await expect(page.getByText("not enough to say — fewer than 3 orders",{exact:true})).toBeVisible();
+ await seed();
+ const counts=()=>f.admin.query("SELECT (SELECT count(*) FROM app.goods_receipt) receipts,(SELECT count(*) FROM app.purchase_order_draft) orders,(SELECT count(*) FROM app.material_rate_revision) rates,(SELECT count(*) FROM app.journal) journals,(SELECT count(*) FROM app.supplier_document) documents,(SELECT count(*) FROM app.account) accounts");
+ const before=(await counts()).rows;
+ await page.reload();
+ await expect(page.getByText("Orders received: 3",{exact:true})).toBeVisible();
+ await expect(page.getByText("Orders with anything missing: 3",{exact:true})).toBeVisible();
+ await expect(page.getByText(/own record on fictional data/)).toBeVisible();
+ await expect(page.getByRole("button")).toHaveCount(0);
+ expect((await counts()).rows).toEqual(before);
+ expect((await page.request.get(`/api/jobs/${b.jobId}/merchant-reliability`)).ok()).toBe(false);
+ expect((await page.request.get(`/api/jobs/${a.jobId}/merchant-reliability?tenantId=${b.tenantId}`)).status()).toBe(400);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ await context.clearCookies();await page.reload();
+ await expect(page.getByRole("alert")).toBeVisible();
+});

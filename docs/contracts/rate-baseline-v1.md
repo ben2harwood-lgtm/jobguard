@@ -53,3 +53,20 @@ Still open for people: real held-out evaluation; any model beyond this baseline;
 the real M5-5 merchant adapter; any cross-tenant privacy/commercial decision and design review;
 and wiring to a live route with authorization and persistence. Synthetic passing tests do
 not close any of these requirements or mark full M5-6 complete.
+
+## Synthetic merchant delivery record (partial M5-6)
+
+A separate read-only practice projection now uses migration 0769's checked routine,
+with the dunning owner/admin session check and synthetic database refusal. Each
+order's latest receipt counts once across the session's single tenant; the URL job
+must belong to it. Exact supplier_context values remain separate. Held or quarantined
+latest documents do not count and never fall back to a previous ready revision.
+The first ready receipt's short quantity and a larger latest delivered quantity
+identify orders with more added later. Counts are descriptive, never a rank or score;
+fewer than three orders says "not enough to say". Sessions with multiple memberships
+are refused rather than guessing a tenant; requests cannot supply tenant or actor.
+No price, order, delivery, debt or account is changed. No provider, cross-tenant
+learning, alert, evaluation claim or live release is added. M5-5 and real evaluation
+remain held; this does not finish M5-6. Before this implementation the new pure import,
+route and SQL routine did not exist, so these new assertions fail by source reasoning;
+database and browser failing-first execution was unavailable in the sandbox.
