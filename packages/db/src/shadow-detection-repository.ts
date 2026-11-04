@@ -3,7 +3,8 @@ import type { Pool } from "pg";
 import { randomUUID } from "node:crypto";
 import { detectShadowObservations, groupShadowProposals, observationMustSurface, observationV1, reconcileFinalCheck, shadowProposalV1, shadowCaptureV1, shadowDetectionId, type DetectionGroup } from "@jobguard/core";
 import { FinalCheckRepository, type FinalCheckManifest, type FinalCheckSourceResult } from "./final-check-repository.js";
-import { decodeJobSourceFixture } from "./job-source-fixtures.js";
+import { decodePracticePhoto } from "./practice-photo-observation.js";
+import { decodeFinalCheckSourceFixture, decodeJobSourceFixture } from "./job-source-fixtures.js";
 import { readPracticeStructuredSource } from "./final-check-practice-readers.js";
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 import { finalCheckPersistenceErrorCodes, FinalCheckPersistenceError, type FinalCheckPersistenceErrorCode, type FinalCheckManifestView } from "./final-check-completion-repository.js";
@@ -154,9 +155,8 @@ export class FinalCheckCompletionRepository {
  * honestly: diary/message originals through the reviewed fixture decoder (read with the runtime login), the
  * generated practice proof photo through a practice-only reader, and anything else is "unsupported", never a
  * claimed zero result. Reconciliation is the same pure rule as the test harness. */
-export function practiceFinalCheckPorts(shadowPool: Pool, runtimePool: Pool, practicePhotoSha256: string) {
+export function practiceFinalCheckPorts(shadowPool: Pool, runtimePool: Pool, practicePhotoSha256: string, drainagePhotoSha256?: string) {
   const repo = new FinalCheckRepository(shadowPool), sink = new ShadowDetectionRepository(shadowPool);
-  const practicePhoto = "Practice photo: painted walls";
   async function observe(context: VerifiedTenantContext, m: FinalCheckManifest, s: FinalCheckManifest["sources"][number]) {
     const base = { version: "observation.v1", tenantId: context.tenantId, jobId: m.comparisons.jobId,
       evidence: { id: s.evidenceId, objectVersionId: s.objectVersionId, sha256: s.sha256, serverReceivedAt: s.receivedAt } };
@@ -167,10 +167,10 @@ export function practiceFinalCheckPorts(shadowPool: Pool, runtimePool: Pool, pra
       const decoded = row ? decodeJobSourceFixture(row.ref, row.text, kind) : null;
       return decoded ? observationV1.parse({ ...base, kind, ...decoded }) : null;
     }
-    if (s.sha256 === practicePhotoSha256) return observationV1.parse({ ...base, kind: "completion_photo", text: practicePhoto,
-      facts: { workReference: "practice:painted-walls", scopeArea: "job", description: "painted walls", status: "completed", estimatedValuePence: null, safetyImplication: false,
-        customerClearlyRequested: false, needsPriorWrittenAgreement: false, significantWork: null, activeDispute: false, silenceMateriallyWorsensDispute: false, disclosureDuty: false },
-      citations: [{ start: 0, end: practicePhoto.length, quote: practicePhoto }] });
+    const fixture = s.sha256 ? decodeFinalCheckSourceFixture(s.sourceKind,s.sha256) : null;
+    if(fixture)return observationV1.parse({...base,kind:s.sourceKind==="completion_photo"?"completion_photo":"note_or_voice",...fixture});
+    const photo = s.sha256 ? decodePracticePhoto(s.sha256, practicePhotoSha256, drainagePhotoSha256) : null;
+    if (photo) return observationV1.parse({ ...base, kind: "completion_photo", ...photo });
     return null;
   }
   return {

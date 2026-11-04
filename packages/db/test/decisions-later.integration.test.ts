@@ -97,7 +97,7 @@ it("L071 changed mandatory classification cannot retain obsolete suppression or 
   const snapshot = { version: "job-fact-snapshot.v1" as const, tenantId: DEMO_TENANT_ID, jobId: f.job, revision: 1, scopes: [],
     unresolvedQuestions: [{ id: randomUUID(), text: "Fictional scope question", commercialBlocker: false }] };
   const advisory = runJobChecks(snapshot)[0]!;
-  await withTenant(runtime, f.auth.context, async db => {
+  await withTenant(admin, f.auth.context, async db => {
     await persistFindings(db, DEMO_TENANT_ID, 1, [advisory]);
     const row = (await listDecisionInbox(db, f.job))[0]!;
     await suppressAdvisoryFinding(db, DEMO_TENANT_ID, row.id, "daily_advisory_budget", "decision-suppression.v1");
@@ -132,7 +132,7 @@ it("L065 checked write routine rechecks persisted authority and completed respon
   const stranger = await authenticatePracticeSession(runtime, await issuePracticeSession(runtime));
   await expect(withTenant(runtime, f.auth.context, db => db.$client.query(
     "SELECT app.decision_check_command($1,$2::jsonb,'begin','{}'::jsonb)", [stranger.digest, JSON.stringify(f.command)]))).rejects.toMatchObject({ message: "NOT_FOUND" });
-  await expect(withTenant(runtime, f.auth.context, db => db.$client.query(
+  await expect(withTenant(admin, f.auth.context, db => db.$client.query(
     "UPDATE app.command_receipt SET result='{}'::jsonb WHERE tenant_id=$1 AND command_id=$2", [DEMO_TENANT_ID, f.command.commandId]))).rejects.toMatchObject({ message: "DECISION_CHECK_IMMUTABLE" });
   const incomplete = { ...f.command, commandId: randomUUID() };
   await expect(withTenant(runtime, f.auth.context, db => db.$client.query(

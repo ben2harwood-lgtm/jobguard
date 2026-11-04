@@ -12,7 +12,7 @@ export function fixture() {
 }
 export const evaluate = (value: unknown) => evaluateCommercialIntegrityV3(value);
 export function postFixture() {
- return { ...fixture(), phase: "post_lock", ordinaryFacts: { ...fixture().ordinaryFacts, lockState: "present" }, published: { lockId: "30000000-0000-4000-8000-000000000001", contractVersion: "synthetic-published-fixture.1", cutoff: end, lockSource: source("lock"), lockedAccount: amount(100), catches: [], completions: [], receipts: [], corrections: [], allocations: [] } };
+ return { ...fixture(), phase: "post_lock", ordinaryFacts: { ...fixture().ordinaryFacts, lockState: "present" }, published: { lockId: "30000000-0000-4000-8000-000000000001", contractVersion: "synthetic-published-fixture.1", cutoff: end, lockSource: { ...source("30000000-0000-4000-8000-000000000001"), recordedAt: end, provenance: "server_recorded" }, lockedAccount: amount(100), catches: [], completions: [], receipts: [], corrections: [], allocations: [] } };
 }
 const quote = (id: string, job = jobId, pence = 199999, at = start) => ({ source: source(id, job), status: "accepted", customerId: "customer", siteId: "flat-1", bindingConfirmed: true, value: amount(pence), acceptedAt: at });
 
@@ -59,7 +59,7 @@ describe("CH6-C nine advisory families", () => {
  it("CI-F04 distinguishes explicit repeated avoidance from proportional, reversed or partial payment", () => {
   const base = postFixture(), c = { source: source("c"), catchId: "c", status: "confirmed", includedInLockedAccount: true, value: amount(10), invoiceLineId: "line" };
   const a = (id: string) => ({ source: source(id), receiptId: id, method: "explicit_user", reversed: false, catchOutstanding: amount(10), catchAllocated: amount(0), ordinaryAllocated: amount(5), catchLineIds: ["line"] });
-  const run = (allocations: unknown[]) => evaluate({ ...base, published: { ...base.published, catches: [c], allocations } });
+  const run = (allocations: unknown[]) => evaluate({ ...base, published: { ...base.published, catches: [c], receipts: ["a", "b"].map(id => ({ source: { ...source(id), sourceType: "receipt" }, value: amount(5), reversed: false })), allocations } });
   expect(run([a("a"), a("b")]).findings).toHaveLength(1);
   for (const allocations of [[a("a")], [a("a"), a("a")], [{ ...a("a"), method: "normal_allocator" }, a("b")], [{ ...a("a"), reversed: true }, a("b")], [{ ...a("a"), catchAllocated: amount(5) }, a("b")]]) expect(run(allocations).findings).toHaveLength(0);
  });

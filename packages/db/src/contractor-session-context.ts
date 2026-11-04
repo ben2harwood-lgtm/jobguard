@@ -21,7 +21,7 @@ import { verifiedTenantContextFromMembership, type VerifiedTenantContext } from 
  * value that is not a string uuid with ContractorError UNAUTHENTICATED before
  * database access; resolve it through an instance of the merged
  * ContractorRepository using the caller's pool; pass that exact, unaltered member
- * to verifiedTenantContextFromMembership and return its very object whole.
+ * to verifiedTenantContextFromMembership with that validated session reference and return its very object whole.
  * The persisted session lookup is the only source of tenant and member. Unknown
  * session errors and database failures propagate unchanged. This file has exactly
  * one maker call and never rebuilds, spreads or alters the member.
@@ -43,5 +43,5 @@ export async function contractorSessionContext(pool: Pool, sessionId: string): P
   if (process.env.JOBGUARD_ENV !== "synthetic_demo") throw new ContractorError("MODE_FORBIDDEN");
   if (!z.string().uuid().safeParse(sessionId).success) throw new ContractorError("UNAUTHENTICATED");
   const member = await new ContractorRepository(pool).resolveSession(sessionId);
-  return verifiedTenantContextFromMembership(member);
+  return verifiedTenantContextFromMembership(member, { kind: "contractor_practice", credential: sessionId });
 }

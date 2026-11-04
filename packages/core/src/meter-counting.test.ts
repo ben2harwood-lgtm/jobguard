@@ -119,3 +119,32 @@ describe("MON-1 replay fixtures: the pricing sentence and the code agree", () =>
     expect(() => countMeterDays({ version: "meter-lifecycle-days-input.v1", plan: "Solo", jobs: [{ ...a, policy: { version: "meter-lifecycle-policy.v1", revision: "specified-foundation.v1", clockStatus: "held" } }] })).toThrow("INVALID_METER_LIFECYCLE_INPUT");
   });
 });
+
+it('SB-18: Cap bypass by resume, reopen or import; pause rotation; early lock; import grace', async () => {
+ const { evaluateMeterPlaceAddition } = await import('./meter-place-admission.js');
+ const input = (n: number, plan: "Solo" | "Builder" = "Solo") => {
+  const place = (i: number) => ({tenantId:id(1),jobId:id(100+i),customerId:id(500+i),siteId:id(700+i),small:false});
+  return {version:"meter-place-addition.v1",environment:"synthetic_demo",plan,planRevision:1,date:"2026-01-01",
+   source:{kind:"switch_live",id:id(9999),expectedRevision:0},committedJobs:Array.from({length:n},(_,i)=>place(i)),prospective:place(n)};
+ };
+ const first = {kind:"first_site_evidence",at:T("01-05")};
+ const finished = job(1,[first,{kind:"finished_on_site",at:T("01-10")}]);
+ expect(datesCounted(finished)).toEqual(span("2026-01-05","2026-01-16"));
+ // Continuing site activity cancels the finish marker, so weekly pause rotation cannot remove places.
+ expect(intervals(job(1,[first,{kind:"finished_on_site",at:T("01-10")},{kind:"site_activity",at:T("01-12")}]))[0])
+  .toMatchObject({end:"2026-02-11T00:00:00.000000Z",endCause:"quiet_30"});
+ expect(datesCounted(job(1,[],{lock:T("01-02")}))).toEqual([]);
+ expect(() => projectMeterJobTimeline({...job(1),events:[{...job(1,[first]).events[0],kind:"paused"}]})).toThrow();
+ for (const kind of ["switch_live", "resume", "reopen", "live_import"] as const) {
+  const grace = input(5), full = input(6);
+  expect(evaluateMeterPlaceAddition({ ...grace, source: { ...grace.source, kind } }).decision).toBe("admit_upgrade_due");
+  expect(evaluateMeterPlaceAddition({ ...full, source: { ...full.source, kind } }).decision).toBe("refuse_upgrade_required");
+  const builder = input(13, "Builder");
+  expect(evaluateMeterPlaceAddition({ ...builder, source: { ...builder.source, kind } }))
+   .toMatchObject({ decision: "admit_track_review_due", maximumPence: 16900 });
+ }
+ const full = input(6), linked = full.committedJobs[0]!;
+ expect(evaluateMeterPlaceAddition({ ...full, prospective: { ...full.prospective, customerId: linked.customerId, siteId: linked.siteId } }))
+  .toMatchObject({ decision: "admit", before: 6, after: 6 });
+ expect(() => evaluateMeterPlaceAddition({ ...full, countedToday: 0, earlyLock: true })).toThrow();
+});
