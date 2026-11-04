@@ -27,7 +27,7 @@ export function WorkOrderRevisions({ workOrderId }: { workOrderId: string }) {
     <p role="status">{status}</p>
     {code && <p role="alert" tabIndex={-1} ref={errorRef}>{code === "NOT_FOUND" ? "This order is not available to you." : code === "UNAUTHENTICATED" ? "Start the generated contractor practice first." : `The request was refused (${code}).`}</p>}
     {view && <>
-      <Link href={`/contractor/jobs/${view.jobId}/billing`}>Billing and reconciliation</Link>
+      <Link href={`/contractor/jobs/${view.jobId}/billing`}>Billing and reconciliation</Link>{" · "}<Link href={`/contractor/jobs/${view.jobId}/possible-extras`}>Possible extras</Link>
       <dl className={styles.facts}>
         <div><dt>Job</dt><dd data-testid="job-state">{view.jobStatus === "live" ? "Live" : view.jobStatus}</dd></div>
         <div><dt>Current revision</dt><dd data-testid="current-revision">{view.currentRevision}</dd></div>

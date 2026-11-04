@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "lanes": {
+    "lp-6e-audit-attribution": {
+      "branches": [
+        "codex/sandbox/lp-6e-audit-attribution"
+      ],
+      "note": "LP-6e RED NOPR; LP-6d chain present; protected sealer pin refresh held for its authorized owner. Database/security checks pending.",
+      "allow": [
+        "apps/web/app/admin/contractor/audit-exports/page.tsx",
+        "docs/contracts/audit-v1.md",
+        "packages/db/migrations/0785_lp6e_audit_attribution.sql",
+        "packages/db/src/audit-export-repository.ts",
+        "packages/db/src/audit.ts",
+        "packages/db/src/lp6e-audit.test.ts",
+        "packages/db/test/lp6e-audit.integration.test.ts",
+        "packages/db/test/migration-proofs/0785_lp6e_audit_attribution.proof.json"
+      ]
+    }
+  }
+}

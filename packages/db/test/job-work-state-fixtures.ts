@@ -1,3 +1,4 @@
+import { applyRequestBindingFoundation } from "./request-binding-fixture.js";
 import { installAuditCommandWriterRoles } from "./pool-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { proofEvidenceTypeSchema } from "../../core/src/proof.js";
@@ -101,6 +102,7 @@ export async function prepareWorkAccount(f:WorkFixture,a:WorkJob) {
 
 /** Authenticate through the product's issued synthetic session, never a fabricated stamp. */
 export async function seedWorkPractice(f:WorkFixture) {
+ await applyRequestBindingFoundation(f.admin);
  const {DEMO_TENANT_ID,DEMO_ACCOUNT_ID,DEMO_MEMBERSHIP_ID,DEMO_IDENTITY_USER_ID}=await import("../src/demo-seed.js");
  const {issuePracticeSession,authenticatePracticeSession}=await import("../src/practice-session.js");
  process.env.JOBGUARD_ENV="synthetic_demo";

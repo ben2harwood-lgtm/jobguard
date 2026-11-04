@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "lanes": {
+    "lp-8b-outbox-evidence": {
+      "branches": [
+        "codex/sandbox/lp-8b-outbox-evidence"
+      ],
+      "note": "LP-8b RED stacked on LP-8a 2fd5439b. READY for NOPR branch save; held for landing on external storage-verifier completion, PostgreSQL catalogue/upgrade proof and exact-head independent review. No scanner, pin or guard changes.",
+      "allow": [
+        "docs/verdicts/LP-8b/BUILDER_RECEIPT.md",
+        "packages/db/migrations/0800_lp8b_outbox_evidence.sql",
+        "packages/db/src/evidence.ts",
+        "packages/db/src/outbox.ts",
+        "packages/db/src/prevention-check-repository.ts",
+        "packages/db/test/lp8b-outbox-evidence.integration.test.ts",
+        "packages/db/test/lp8b-storage.test.ts",
+        "packages/db/test/migration-proofs/0800_lp8b_outbox_evidence.proof.json"
+      ],
+      "receipt": "docs/verdicts/LP-8b/BUILDER_RECEIPT.md"
+    }
+  }
+}

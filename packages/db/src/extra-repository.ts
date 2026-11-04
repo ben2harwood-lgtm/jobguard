@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { Pool } from "pg";
 import {
- ExtraPersistenceError, extraPersistenceErrorCodes, raiseExtraV1, extraRecordV1, extraRecordLegacyV1, extraDuplicateLinkV1, extraOrderLineLinkV1,
+ ExtraPersistenceError, extraPersistenceErrorCodes, raiseExtraV1, raiseExtraV2, extraRecordV1, extraRecordLegacyV1, extraDuplicateLinkV1, extraOrderLineLinkV1,
  originForCommand, effectiveOrigin, type ExtraRecord, type ExtraReadRecord, type RaiseExtra, type EnterpriseGroup, type ExtraPersistenceErrorCode,
  extraDuplicateUnlinkV1, extraDuplicateLinksV1, extraUnlinkCommandType, type ExtraDuplicateLinks,
 } from "@jobguard/core";
@@ -59,7 +59,7 @@ function audit(tenant: string, actor: string, type: string, subject: string, ref
 export class ExtraRepository {
  constructor(private readonly pool: Pool) {}
  async raiseExtra(context: VerifiedTenantContext, raw: unknown, seam?: ExtraTransactionSeam): Promise<RaisedExtra> {
-  const input = parse(raiseExtraV1, raw), { commandId: _commandId, ...content } = input;
+  const input = parse(z.union([raiseExtraV1, raiseExtraV2]), raw), { commandId: _commandId, ...content } = input;
   try { return await withTenant(this.pool, context, async db => {
    const tenant = context.tenantId.toLowerCase();
    // Match revision/revocation order: tenant administration before job locks and origin foreign keys.

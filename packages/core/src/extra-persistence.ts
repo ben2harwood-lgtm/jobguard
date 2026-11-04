@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { logSiteExtraV4 } from "./site-extra-evidence.js";
 import { extraOriginV1 } from "./extra-origin.js";
 import { enterpriseStates } from "./enterprise-domain/contracts.js";
 import { instantV1 } from "./receipt-allocation.js";
@@ -12,6 +13,11 @@ export const raiseExtraV1 = z.object({
  clientCaptureId: uuid.optional(), deviceId: z.string().min(1).max(200).optional(), deviceCapturedAt: instantV1.optional(), siteVisitId: uuid.optional(), evidenceId: uuid.optional(), residentConfirmationEvidenceId: uuid.optional(),
 }).strict();
 export type RaiseExtra = z.infer<typeof raiseExtraV1>;
+/** Only the new free-text log opts into this request hash; historical v1 bytes stay unchanged. */
+export const raiseExtraV2 = raiseExtraV1.extend({
+ version: z.literal("raise-extra.v2"), commandType: z.literal("LogSiteExtra"), workStatus: logSiteExtraV4.shape.workStatus,
+}).strict();
+
 export const contractorProvenanceV1 = z.object({ commandType: raiseExtraV1.shape.commandType.nullable(), raisingGrantId: uuid.nullable(), raiserAssigned: z.boolean().nullable(), workOrderId: uuid.nullable(), workOrderRevisionId: uuid.nullable(), siteVisitId: uuid.nullable(), evidenceId: uuid.nullable(), residentConfirmationEvidenceId: uuid.nullable(), clientCaptureId: uuid.nullable(), originHash: hash.nullable() }).strict();
 export const extraRecordV1 = z.object({ version: z.literal("extra-record.v1"), origin: extraOriginV1, contractorProvenance: contractorProvenanceV1, latestEventKind: z.enum(enterpriseStates).nullable() }).strict();
 export type ExtraRecord = z.infer<typeof extraRecordV1>;

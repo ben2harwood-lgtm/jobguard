@@ -1,6 +1,7 @@
+import { recordSupervisorQuery as recordSiteSupervisorQuery, readSupervisorQueries } from "./site-supervisor-query.js";
 import type { Pool } from "pg";
 import { z } from "zod";
-import { offlineClientMetadataV1, parseOfflineIntentV1, ExtraPersistenceError, WorkOrderError, SiteExtraError, siteExtraContentSha256V1, type SiteExtraErrorCode } from "@jobguard/core";
+import { offlineClientMetadataV1, parseOfflineIntentV1, siteExtraWorkStatusV1, ExtraPersistenceError, WorkOrderError, SiteExtraError, siteExtraContentSha256V1, type SiteExtraErrorCode } from "@jobguard/core";
 import { ExtraRepository, type ExtraTransactionSeam, type RaisedExtra } from "./extra-repository.js";
 import { appendAuditBatch } from "./audit.js";
 import { assertContractorGate, derivedUuid } from "./work-order-repository.js";
@@ -16,6 +17,7 @@ const inputV1 = z.object({ commandId: z.guid({ error: "Invalid uuid" }), jobId: 
 type Input = z.infer<typeof inputV1>;
 const inputV3 = inputV1.extend({ photoEvidenceId: z.guid({ error: "Invalid uuid" }).optional(), shownContentSha256: z.string().regex(/^[0-9a-f]{64}$/u).optional(), clientMetadata: offlineClientMetadataV1.optional() }).strict();
 type InputV3 = z.infer<typeof inputV3>;
+const inputV4 = inputV3.omit({ clientMetadata: true }).extend({ version: z.literal("log-site-extra.v4"), workStatus: siteExtraWorkStatusV1 }).strict();
 type EvidenceRefusal = { code: "PHOTO_NOT_ACCEPTED" | "CONFIRMATION_MISMATCH"; reason: "photo_not_accepted" | "confirmation_mismatch" };
 export type EvidenceFacts = { photoEvidenceId: string | null; residentConfirmationEvidenceId: string | null; contentSha256: string };
 export type LoggedSiteExtra = RaisedExtra & { evidence?: EvidenceFacts };
@@ -152,7 +154,7 @@ export class SiteExtraRepository {
   return this.logSiteExtra(context, actor, { jobId: intent.jobId, commandId: intent.body.commandId, note: intent.body.note, description: intent.body.description, clientMetadata: intent.clientMetadata });
  }
  async logSiteExtra(context: VerifiedTenantContext, actor: AuthenticatedMembership, raw: unknown): Promise<LoggedSiteExtra> {
-  const parsed = inputV3.safeParse(raw); if (!parsed.success) throw new SiteExtraError("INVALID_COMMAND");
+  const parsed = z.union([inputV3, inputV4]).safeParse(raw); if (!parsed.success) throw new SiteExtraError("INVALID_COMMAND");
   const input = parsed.data;
   let refusal: SiteExtraRefusal | undefined;
   let liveRefusal: WatchdogError | undefined;
@@ -166,10 +168,11 @@ export class SiteExtraRepository {
      const gate = await this.evidenceGate(context, actor, input);
      if ("code" in gate) refusal = gate; else
      try {
-      return await new ExtraRepository(this.pool).raiseExtra(context, { version: "raise-extra.v1", commandId: input.commandId, commandType, jobId: input.jobId, actorMembershipId: actor.membershipId, grantId: authority.grant, note: input.note, description: input.description, ...(input.siteVisitId ? { siteVisitId: input.siteVisitId } : {}), ...gate.raise, ...(input.clientMetadata ? { deviceCapturedAt: input.clientMetadata.capturedAt, deviceId: input.clientMetadata.hlc.nodeId } : {}) }, async (db, fact) => {
+      return await new ExtraRepository(this.pool).raiseExtra(context, { ...("workStatus" in input ? { version: "raise-extra.v2", workStatus: input.workStatus } : { version: "raise-extra.v1" }), commandId: input.commandId, commandType, jobId: input.jobId, actorMembershipId: actor.membershipId, grantId: authority.grant, note: input.note, description: input.description, ...(input.siteVisitId ? { siteVisitId: input.siteVisitId } : {}), ...gate.raise, ...("clientMetadata" in input && input.clientMetadata ? { deviceCapturedAt: input.clientMetadata.capturedAt, deviceId: input.clientMetadata.hlc.nodeId } : {}) }, async (db, fact) => {
        try {
         if (gate.evidence) await siteExtraAuthoritySeam(db, fact);
         else await siteExtraBaseAuthoritySeam(db, fact);
+        if ("workStatus" in input) await db.$client.query("SELECT app.ent3_work_status($1,$2,$3,$4)", [input.jobId, actor.membershipId, fact.variationId, input.workStatus]);
        } catch (error) {
         if (error instanceof WatchdogError) {
          liveRefusal = error;
@@ -206,6 +209,14 @@ export class SiteExtraRepository {
   throw new SiteExtraError(refusal.code);
  }
 
+ async recordSupervisorQuery(context: VerifiedTenantContext, actor: AuthenticatedMembership, jobId: string, raw: unknown) {
+  return recordSiteSupervisorQuery(this.pool, context, actor, jobId, raw);
+ }
+ async supervisorQueries(context: VerifiedTenantContext, actor: AuthenticatedMembership, jobId: string) {
+  const result = await readSupervisorQueries(this.pool, context, actor, jobId);
+  const workStatuses = await withTenant(this.pool, context, async db => (await db.$client.query("SELECT app.ent3_work_status($1,$2,NULL,NULL) result", [jobId, actor.membershipId])).rows[0]?.result);
+  return { ...result, workStatuses };
+ }
  // ---- ENT-3c additions (append-only): the order check, the server-priced log and the two site reads. Authority first, through the private pre-check; nothing below restates the access rule. ----
  private async sorAuthority(context: VerifiedTenantContext, actor: AuthenticatedMembership, jobId: string, retained = false): Promise<{ grant: string; live: boolean } | Refusal> {
   try {
@@ -229,7 +240,8 @@ export class SiteExtraRepository {
  /** Logs a schedule-item extra: the server compares the amount with the order, prices the extra quantity alone, and keeps the price in the raising transaction. */
  async logSorSiteExtra(context: VerifiedTenantContext, actor: AuthenticatedMembership, raw: unknown): Promise<StoredSorExtra> {
   const input = parseSorSiteExtraInput(raw);
-  const requestHash = sha256Hex(canonicalJson({ version: "log-sor-site-extra.v1", jobId: input.jobId.toLowerCase(), sorCode: input.sorCode, quantity: input.quantity, orderLineScopeItemId: input.orderLineScopeItemId?.toLowerCase() ?? null, note: input.note }));
+  const capture = "version" in input ? input : undefined;
+  const requestHash = sha256Hex(canonicalJson({ version: capture?.version ?? "log-sor-site-extra.v1", jobId: input.jobId.toLowerCase(), sorCode: input.sorCode, quantity: input.quantity, orderLineScopeItemId: input.orderLineScopeItemId?.toLowerCase() ?? null, note: input.note, ...(capture ? { description: capture.description, workStatus: capture.workStatus, photoEvidenceId: capture.photoEvidenceId.toLowerCase(), residentConfirmation: capture.residentConfirmation, siteVisitId: capture.siteVisitId?.toLowerCase() ?? null } : {}) }));
   // recordRefusal reads only the command id and the job; the other fields are the typed shape it was written against.
   const refusalInput: Input = { commandId: input.commandId, jobId: input.jobId, note: input.note, description: input.sorCode };
   const refuse = async (refusal: Refusal): Promise<never> => { await this.recordRefusal(context, actor, refusalInput, refusal.reason); throw new SorSiteExtraError(refusal.code); };
@@ -245,6 +257,10 @@ export class SiteExtraRepository {
   }
   if (replay.receiptExists) throw new SorSiteExtraError("IDEMPOTENCY_CONFLICT");
   if (!authority.live) throw new SorSiteExtraError("JOB_NOT_LIVE");
+  if (capture?.siteVisitId) {
+   const visitAuthority = await this.precheck(context, actor, input.jobId, capture.siteVisitId);
+   if ("code" in visitAuthority) return refuse(visitAuthority);
+  }
   let planned;
   try {
    planned = await withTenant(this.pool, context, async db => {
@@ -261,16 +277,28 @@ export class SiteExtraRepository {
    if (error instanceof WatchdogError && error.code === "JOB_NOT_LIVE") throw new SorSiteExtraError("JOB_NOT_LIVE");
    throw error;
   }
+  const evidenceInput = capture ? { commandId: input.commandId, jobId: input.jobId, note: input.note, description: capture.description, photoEvidenceId: capture.photoEvidenceId, shownContentSha256: capture.residentConfirmation.shownContentSha256 } : undefined;
+  let gate: Gate | SiteExtraRefusal = { raise: {} };
+  try { if (evidenceInput) gate = await this.evidenceGate(context, actor, evidenceInput); }
+  catch (error) {
+   if (error instanceof SiteExtraError && error.code === "COMMAND_CONFLICT") throw new SorSiteExtraError("IDEMPOTENCY_CONFLICT");
+   throw error;
+  }
+  if ("code" in gate) {
+   await this.recordRefusal(context, actor, refusalInput, gate.reason);
+   throw new SorSiteExtraError(gate.code);
+  }
   // merged raiseExtra rewrites every error it does not know, so each seam step remembers its own exact refusal in this one call's local variable.
   let seamFailure: string | undefined;
   const remember = (error: unknown): never => { seamFailure = error instanceof Error ? error.message : undefined; throw error; };
   let raised: { variationId: string };
   try {
-   raised = await new ExtraRepository(this.pool).raiseExtra(context, { version: "raise-extra.v1", commandId: input.commandId, commandType, jobId: input.jobId, actorMembershipId: actor.membershipId, grantId: authority.grant, note: input.note, description: planned.description,
+   raised = await new ExtraRepository(this.pool).raiseExtra(context, { version: "raise-extra.v1", commandId: input.commandId, commandType, jobId: input.jobId, actorMembershipId: actor.membershipId, grantId: authority.grant, note: input.note, description: capture?.description ?? planned.description, ...gate.raise, ...(capture?.siteVisitId ? { siteVisitId: capture.siteVisitId } : {}),
     sorItem: { versionId: planned.versionId, code: input.sorCode }, ...(planned.check.outcome === "more_than_ordered" ? { excessOfScopeItemId: planned.check.orderLineScopeItemId } : {}) }, async (db, fact) => {
     try { await requireLiveJob(db, fact.jobId); } catch (error) { remember(error); }
-    try { await siteExtraBaseAuthoritySeam(db, fact); } catch (error) { remember(error); }
+    try { if (capture) await siteExtraAuthoritySeam(db, fact); else await siteExtraBaseAuthoritySeam(db, fact); } catch (error) { remember(error); }
     try { await db.$client.query("SELECT app.ent3c_record_sor_revision($1,$2,$3,$4)", [fact.jobId, fact.variationId, input.quantity, requestHash]); } catch (error) { remember(error); }
+    try { if (capture) await db.$client.query("SELECT app.ent3_work_status($1,$2,$3,$4)", [fact.jobId, actor.membershipId, fact.variationId, capture.workStatus]); } catch (error) { remember(error); }
    });
   } catch (error) {
    const recorded: Record<string, SorSiteExtraErrorCode> = { JOB_NOT_LIVE: "JOB_NOT_LIVE", ALREADY_ON_ORDER: "ALREADY_ON_ORDER", EXTRA_NOT_POSITIVE: "EXTRA_NOT_POSITIVE", MONEY_OUT_OF_RANGE: "MONEY_OUT_OF_RANGE", INVALID_QUANTITY: "INVALID_QUANTITY", ORDER_CHECK_STALE: "SITE_PRICING_UNAVAILABLE" };
@@ -316,9 +344,12 @@ export class SiteExtraRepository {
    if (!facts.item) throw new SorSiteExtraError("SOR_ITEM_NOT_FOUND");
    const check = orderCheckV1({ sorCode: query.sorCode, quantity: query.quantity, ...(query.orderLine ? { orderLineScopeItemId: query.orderLine } : {}), lines: facts.lines });
    const claimedQuantity = canonicalSorQuantity(query.quantity);
-   if (check.outcome === "new") return { outcome: "new" as const, sorCode: query.sorCode, unit: facts.item.unit, claimedQuantity, instructedQuantity: null, extraQuantity: check.extraQuantity, orderLineScopeItemId: null };
-   if (check.outcome === "more_than_ordered") return { outcome: "more_than_ordered" as const, sorCode: query.sorCode, unit: facts.item.unit, claimedQuantity, instructedQuantity: check.instructedQuantity, extraQuantity: check.extraQuantity, orderLineScopeItemId: check.orderLineScopeItemId };
-   return { outcome: "already_on_order" as const, sorCode: query.sorCode, unit: facts.item.unit, claimedQuantity, instructedQuantity: check.instructedQuantity, orderLineScopeItemId: check.orderLineScopeItemId };
+   const comparison = (await db.$client.query("SELECT app.ent3_proceed_comparison($1,$2,$3,$4) comparison", [jobId, actor.membershipId, query.sorCode, check.outcome === "already_on_order" ? null : check.extraQuantity])).rows[0]?.comparison;
+   if (comparison !== "within" && comparison !== "above") throw new SorSiteExtraError("SITE_PRICING_UNAVAILABLE");
+   const proceedComparison = comparison as "within" | "above";
+   if (check.outcome === "new") return { proceedComparison, outcome: "new" as const, sorCode: query.sorCode, unit: facts.item.unit, claimedQuantity, instructedQuantity: null, extraQuantity: check.extraQuantity, orderLineScopeItemId: null };
+   if (check.outcome === "more_than_ordered") return { proceedComparison, outcome: "more_than_ordered" as const, sorCode: query.sorCode, unit: facts.item.unit, claimedQuantity, instructedQuantity: check.instructedQuantity, extraQuantity: check.extraQuantity, orderLineScopeItemId: check.orderLineScopeItemId };
+   return { proceedComparison, orderRevisionId: facts.revisionId, outcome: "already_on_order" as const, sorCode: query.sorCode, unit: facts.item.unit, claimedQuantity, instructedQuantity: check.instructedQuantity, orderLineScopeItemId: check.orderLineScopeItemId };
   });
  }
 }
