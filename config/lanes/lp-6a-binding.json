@@ -1,0 +1,34 @@
+{
+  "version": 2,
+  "lanes": {
+    "lp-6a-binding": {
+      "branches": [
+        "codex/sandbox/lp-6a-binding"
+      ],
+      "note": "LP-6a RED dark session binding, migration 0562_lp6a_request_binding with proof, based on landed LP-5c (0557), reconciled after batch 7. Serialize LP shared paths. PostgreSQL CI and independent exact-head RED review required.",
+      "allow": [
+        "apps/api/src/shadow-isolation.application.test.ts",
+        "apps/api/src/sv5pre-worker-execution.integration.test.ts",
+        "docs/contracts/lp-0-effective-privileges-v1.md",
+        "docs/contracts/lp-command-binding-design-v1.md",
+        "docs/review/LP-6A-DESIGN-REVIEW-2026-10-30.md",
+        "packages/db/migrations/0562_lp6a_request_binding.sql",
+        "packages/db/src/demo-bootstrap.ts",
+        "packages/db/test/administrative-role-setup.ts",
+        "packages/db/test/audit-export.integration.test.ts",
+        "packages/db/test/commercial-integrity-v3-fixtures.ts",
+        "packages/db/test/demo-bootstrap.integration.test.ts",
+        "packages/db/test/final-account-lock.integration.test.ts",
+        "packages/db/test/later-empty-tables.ts",
+        "packages/db/test/lp-job-doors-fixtures.ts",
+        "packages/db/test/lp6a-binding.integration.test.ts",
+        "packages/db/test/lp6a-binding.test.ts",
+        "packages/db/test/lp6a-practice-restore.integration.test.ts",
+        "packages/db/test/lp6a-sso.integration.test.ts",
+        "packages/db/test/migration-proofs/0562_lp6a_request_binding.proof.json",
+        "packages/db/test/pool-test-utils.ts",
+        "packages/db/test/recovery-attribution-fixture.ts"
+      ]
+    }
+  }
+}

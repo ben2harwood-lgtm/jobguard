@@ -8,6 +8,7 @@
       "allow": [
         ".github/workflows/worm-local-minio.yml",
         "docs/operations/evidence-storage.md",
+        "packages/core/src/watchdog.ts",
         "packages/db/migrations/0740_worm_durable_commands.sql",
         "packages/db/migrations/0741_worm_operator_recovery.sql",
         "packages/db/migrations/0742_worm_operator_alerts.sql",
@@ -16,6 +17,7 @@
         "packages/db/src/worm-command-repository.ts",
         "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
         "packages/db/test/demo-bootstrap.integration.test.ts",
+        "packages/db/test/later-empty-tables.ts",
         "packages/db/test/migration-proofs/0740_worm_durable_commands.proof.json",
         "packages/db/test/migration-proofs/0741_worm_operator_recovery.proof.json",
         "packages/db/test/migration-proofs/0742_worm_operator_alerts.proof.json",

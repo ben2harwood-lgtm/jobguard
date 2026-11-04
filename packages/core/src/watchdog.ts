@@ -48,6 +48,8 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "/api/contractor/jobs/[id]/billing/[action]": "pre_live_allowed",
   "nest:/contractor/jobs/:id/billing/:action": "pre_live_allowed",
   // SV6-PERSIST-B: historical attribution intent is post-live; execution remains closed.
+  "/api/jobs/[id]/dunning/[operation]": "post_live_billing",
+  "command:managed_recovery.elect": "post_live_billing",
   "/api/jobs/[id]/payment-fees": "post_live_billing",
   "nest:/jobs/:id/payment-fees": "post_live_billing",
   "/api/jobs/[id]/success-fees": "post_live_billing",
@@ -182,6 +184,10 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "/api/jobs/[id]/relevance-inbox/[action]#seed": "watchdog_live_only",
   "/api/jobs/[id]/relevance-inbox/[action]#budget": "pre_live_allowed",
 
+  // Dark evidence controls preserve integrity at any job phase; they do not add site facts.
+  "method:worm-command-repository.ts#submit": "pre_live_allowed",
+  "method:worm-command-repository.ts#execute": "pre_live_allowed",
+  "method:worm-command-repository.ts#recover": "pre_live_allowed",
   "method:inbox-relevance-repository.ts#setBudget": "pre_live_allowed",
   "method:proof-repository.ts#invalidate": "post_live_billing",
   "command:confirm_proposal_review": "pre_live_allowed",
