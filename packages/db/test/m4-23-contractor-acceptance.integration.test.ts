@@ -1,8 +1,9 @@
 // M4-23 contractor sandbox acceptance. Real PostgreSQL; fake export adapter only.
-// Platform invoice execution is still held on this base. This suite must not claim invoice/collection acceptance.
+// M4-10 has no contractor source reader; M4-12 has no persisted ENT-14 collection adapter.
+// ENT-14 below proves reference authorization only. NOT COVERED todos preserve the missing acceptance steps.
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
-import { exactPence, parseExactPence, sumExactPence, refuseEnterpriseFeeExecution } from "@jobguard/core";
+import { applyContractorMandateReference, exactPence, parseExactPence, sumExactPence, refuseEnterpriseFeeExecution } from "@jobguard/core";
 import { ContractorBillingRepository, EnterpriseFeeRepository, ExtraRepository, ExtraApprovalRepository } from "../src/index.js";
 import { ContractorBillingDelivery } from "../src/contractor-billing-delivery.js";
 import type { OutboundAdapter } from "../src/outbox.js";
@@ -34,6 +35,40 @@ async function setup() {
   return { w, ctx, session, agreementVersionId, period, billing: new ContractorBillingRepository(c.runtime), fees: new EnterpriseFeeRepository(c.runtime) };
 }
 type Sandbox = Awaited<ReturnType<typeof setup>>;
+function authorizeReference(t: Sandbox, statement: { id: string; contentHash: string; totalDeltaPence: number }) {
+  // Fictional ENT-14 terms/approvals, not persisted authority and never supplied to an executor.
+  const now = new Date().toISOString(), actorId = t.w.members.finance.member.membershipId;
+  const binding = { tenantId: t.w.p.tenantId, agreementVersionId: t.agreementVersionId,
+    termsHash: "c".repeat(64), scopeHash: "d".repeat(64), rateHash: "e".repeat(64),
+    limitPence: statement.totalDeltaPence, track: "paid", currency: "GBP" };
+  const artifact = { binding, statementId: statement.id, statementHash: statement.contentHash,
+    amountPence: statement.totalDeltaPence, pilotExempt: false, action: "collect", originalActionId: null,
+    expiresAt: new Date(Date.now() + 600000).toISOString() };
+  const state = { version: "contractor-mandate-reference.v1", mode: "synthetic_demo", actions: [], events: [],
+    agreement: { version: "contractor-agreement.v1", id: randomUUID(), binding, status: "active",
+      approval: { actorId, decisionId: randomUUID(), resolutionId: randomUUID(), status: "approved", binding, approvedAt: now, revoked: false } } };
+  const request = { version: "contractor-mandate-event.v1", id: randomUUID(), now,
+    context: { tenantId: t.w.p.tenantId, actorId, role: "human" },
+    event: { kind: "request", actionId: randomUUID(), artifact,
+      approval: { actorId: t.w.members.owner.member.membershipId, decisionId: randomUUID(), resolutionId: randomUUID(),
+        status: "approved", revoked: false, artifact } } };
+  const queued = applyContractorMandateReference(state, request);
+  expect(queued.actions).toEqual([expect.objectContaining({ outcome: "queued", attempts: 0, artifact })]);
+  expect(applyContractorMandateReference(queued, request)).toEqual(queued);
+  // Another command/action for the same statement cannot reserve its amount again.
+  const duplicate = structuredClone(request); duplicate.id = randomUUID(); duplicate.event.actionId = randomUUID();
+  duplicate.event.approval.decisionId = randomUUID();
+  expect(() => applyContractorMandateReference(queued, duplicate)).toThrow("Contractor mandate reference refused");
+  const stale = structuredClone(request); stale.event.artifact.expiresAt = now;
+  expect(() => applyContractorMandateReference(state, stale)).toThrow("Contractor mandate reference refused");
+  const excess = structuredClone(request); excess.event.artifact.amountPence++;
+  expect(() => applyContractorMandateReference(state, excess)).toThrow("Contractor mandate reference refused");
+  expect(() => applyContractorMandateReference(state, { ...request, context: { ...request.context, tenantId: randomUUID() } }))
+    .toThrow("Contractor mandate reference refused");
+  expect(() => applyContractorMandateReference({ ...state, agreement: { ...state.agreement, status: "revoked" } }, request))
+    .toThrow("Contractor mandate reference refused");
+  return queued;
+}
 async function approve(t: Sandbox, s: Awaited<ReturnType<typeof submitted>>, rejected = false) {
   const approvals = new ExtraApprovalRepository(c.runtime), actor = t.w.members.supervisor.member;
   if (rejected) await approvals.rejectExtra(t.ctx, actor, { ...approveInput(s, 0), version: "reject-extra.v1", reasonCode: "not_done" });
@@ -147,10 +182,11 @@ async function post(t: Sandbox, expectedFee: number, period = t.period) {
     expect(p.lines.reduce((n, l) => n + BigInt(l.debitPence) - BigInt(l.creditPence), 0n)).toBe(0n);
   }
   const approved = await t.fees.readStatement(t.ctx, t.session, statementId);
+  if (expectedFee > 0) authorizeReference(t, approved);
   const netPosted = (await c.admin.query(`SELECT coalesce(sum(CASE WHEN kind='accrual' THEN amount_pence ELSE -amount_pence END),0)::text n
     FROM app.platform_enterprise_fee WHERE tenant_id=$1`, [t.w.p.tenantId])).rows[0].n as string;
   expect(BigInt(netPosted)).toBe(approved.sections.reduce((n, section) => n + BigInt(section.cumulativeFeePence), 0n));
-  // These are refusals, not fake successful invoices or payments. Replace only when their real pieces land.
+  // Reference ENT-14 approval cannot open invoice/collection execution or the live rail.
   for (const action of ["invoice-simulation", "collect"] as const) {
     expect(() => refuseEnterpriseFeeExecution("synthetic_demo", action)).toThrow("STATEMENT_EXECUTION_HELD");
     expect(() => refuseEnterpriseFeeExecution("pilot_no_charge", action)).toThrow("FEE_GATE_CLOSED");
@@ -179,6 +215,13 @@ it("M4-23 original order: paid ordinary work stays in allocation and earns no fe
   expect(await derive(t)).toMatchObject({ qualifyingPrincipal: exact(0), cumulativeFeePence: 0, contributions: [] });
   await post(t, 0);
 });
+
+it.todo("NOT COVERED M4-10 contractor invoice: reconstruct posted monthly statement, origin, approvals, customer invoice and payment from locked storage; issue one immutable platform invoice on replay");
+it.todo("NOT COVERED M4-12 contractor collection: persist exact ENT-14 authority, reserve the current platform invoice balance, execute one fake collection and reconcile settled principal/tax on replay");
+it.todo("NOT COVERED contractor invoice/collection exclusions: office entry, order line, client instruction and rejected extra must create no positive invoice or collection");
+it.todo("NOT COVERED contractor part payment and duplicate log: invoice/collect only the qualifying delta once after source and command replay");
+it.todo("NOT COVERED contractor credit after collection: linked platform credit/refund obligation and reconciliation without editing the original invoice or journal");
+it.todo("NOT COVERED contractor collection attacks: cross-customer invoice/attempt access, stale approvals, changed derivations, competing reservations and unknown fake-provider outcomes through a persisted ENT-14 adapter");
 it("M4-23 rejected extra: the actual rejection prevents export and positive fees", async () => {
   const t = await setup(), s = await extra(t, "rejected");
   await exportAndDeliver(t, s.jobId, []);

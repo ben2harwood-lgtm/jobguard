@@ -48,6 +48,8 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "/api/contractor/jobs/[id]/billing/[action]": "pre_live_allowed",
   "nest:/contractor/jobs/:id/billing/:action": "pre_live_allowed",
   // SV6-PERSIST-B: historical attribution intent is post-live; execution remains closed.
+  "/api/jobs/[id]/dunning/[operation]": "post_live_billing",
+  "command:managed_recovery.elect": "post_live_billing",
   "/api/jobs/[id]/payment-fees": "post_live_billing",
   "nest:/jobs/:id/payment-fees": "post_live_billing",
   "/api/jobs/[id]/success-fees": "post_live_billing",
@@ -99,12 +101,16 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "nest:/contractor/jobs/:id/possible-extras/evaluate": "pre_live_allowed",
   "nest:/contractor/jobs/:id/possible-extras/:promptId/confirm": "pre_live_allowed",
   "nest:/contractor/jobs/:id/possible-extras/:promptId/dismiss": "pre_live_allowed",
+  "/api/contractor/jobs/[id]/possible-extras/[promptId]/confirm": "pre_live_allowed",
+  "/api/contractor/jobs/[id]/possible-extras/[promptId]/dismiss": "pre_live_allowed",
   // contractor work-order jobs have no pre-live phase (they become live in the same transaction as the import), and this route carries its own live-job guard (precheck and seam, `SiteExtraRepository`).
   "/api/contractor/jobs/[id]/site-extras": "pre_live_allowed",
   "nest:/contractor/jobs/:id/site-extras": "pre_live_allowed",
   // contractor work-order jobs have no pre-live phase (they become live in the same transaction as the import), and the route carries its own live-job guard
   "/api/contractor/jobs/[id]/site-extras/sor": "pre_live_allowed",
   "nest:/contractor/jobs/:id/site-extras/sor": "pre_live_allowed",
+  "/api/contractor/jobs/[id]/supervisor-queries": "pre_live_allowed",
+  "nest:/contractor/jobs/:id/supervisor-queries": "pre_live_allowed",
   "/api/contractor/jobs/[id]/site-visits/start": "pre_live_allowed",
   "/api/contractor/jobs/[id]/site-visits/[visitId]/complete": "pre_live_allowed",
   "nest:/contractor/jobs/:id/site-visits/start": "pre_live_allowed",
@@ -182,6 +188,10 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "/api/jobs/[id]/relevance-inbox/[action]#seed": "watchdog_live_only",
   "/api/jobs/[id]/relevance-inbox/[action]#budget": "pre_live_allowed",
 
+  // Dark evidence controls preserve integrity at any job phase; they do not add site facts.
+  "method:worm-command-repository.ts#submit": "pre_live_allowed",
+  "method:worm-command-repository.ts#execute": "pre_live_allowed",
+  "method:worm-command-repository.ts#recover": "pre_live_allowed",
   "method:inbox-relevance-repository.ts#setBudget": "pre_live_allowed",
   "method:proof-repository.ts#invalidate": "post_live_billing",
   "command:confirm_proposal_review": "pre_live_allowed",
@@ -212,6 +222,7 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "command:ClientDecideExtra": "pre_live_allowed",
   "command:MarkDuplicate": "pre_live_allowed",
   "command:LogSiteExtra": "pre_live_allowed",
+  "command:RecordSiteSupervisorQuery": "pre_live_allowed",
   "command:RecordOfficeExtra": "pre_live_allowed",
   "command:RecordClientInstruction": "pre_live_allowed",
   "command:UnlinkDuplicate": "pre_live_allowed",

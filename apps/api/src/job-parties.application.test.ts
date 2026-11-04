@@ -121,6 +121,8 @@ describe("LP-5a parties-import result contract", () => {
     // Database boundary double; CI exercises the actual SQL projection and proof.
     const query = vi.fn(async (sql: string, values: unknown[] = []) => {
       if (/^(BEGIN|COMMIT|ROLLBACK)$/.test(sql) || sql.includes("set_config")) return { rows: [] };
+      if (sql === "SELECT app.bind_request($1, $2, $3)") return { rows: [] };
+      if (sql === "SELECT app.current_actor() actor, app.current_tenant() tenant") return { rows: [{ actor: DEMO_MEMBERSHIP_ID, tenant: DEMO_TENANT_ID }] };
       if (sql.includes("authenticate_practice_session")) return { rows: [{ tenant_id: DEMO_TENANT_ID, membership_id: DEMO_MEMBERSHIP_ID, identity_user_id: DEMO_IDENTITY_USER_ID }] };
       if (sql.includes("practice_session_digest=$3")) return { rows: [{ id: job }] };
       if (sql.includes("SELECT status,result FROM app.command_receipt")) return { rows: stored ? [{ status: "succeeded", result: stored }] : [] };

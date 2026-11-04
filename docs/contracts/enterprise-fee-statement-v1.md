@@ -54,6 +54,76 @@ For N=0169, compare canonical `row_to_json(t)::text` over named pre-existing col
 
 Forward fix: keep accepted agreements, artifacts, lineages, receipts, statements and journals; disable entrypoints and repair additively or through linked compensation. No history deletion, pilot backfill, small-builder book change or production activation is authorized.
 
+## ENT-14 dark contractor mandate preflight
+
+`contractor-fee-mandate.ts` follows the separate small-builder agreement shape without extending it.
+It defines a strict synthetic record bound to tenant, agreement version, exact agreement terms hash,
+rate, scope hash, recipient and validity window. Its approval binds the resulting selection hash and
+references notice-process evidence; it specifies no real wording or notice duration. A changed rate
+or scope invalidates the old record. Only a new human-approved record for the changed terms may
+pass simulation. Supplied approval fields are data, never proof of a human action.
+
+The pure check also requires current membership, disabled provider defaults, an active provider
+mandate and exact unexpired statement approval including principal, tax and source hash. Revocation,
+cancellation, provider cancellation, in-flight work and unknown outcomes block initiation. Unknown
+outcomes fence retries pending reconciliation. Retries and refunds have no authority under this
+record; separate exact approval, durable reconciliation and original-settlement refund limits remain
+future integration work. `pilot_no_charge` never permits fee collection, including with a mandate.
+The check neither creates nor alters a record and exposes no worker writer. Live execution always
+refuses. Fake-rail tests use fictional records only; no provider integration or actual cancellation,
+notice delivery, reconciliation or refund is claimed.
+
+This base has no contractor fee collection start to wire: `refuseEnterpriseFeeInvoiceWork` is
+validation/refusal machinery only, with no registered worker or provider. The enterprise repository
+records reference fee facts, not collection. Therefore the new check stays tested and unwired.
+There is no database migration, persisted mandate, API or worker registration in this piece.
+`requireEnterpriseRealData` remains unchanged and dark; G0–G5 remain closed.
+
+Still open for people: solicitor review and the contract set (MSA, DPA, sub-processors, DPIA,
+pilot runbook), Ben's dated approval, real terms wording, the notice period and approved notice
+process, D12 and D16. This implementation does not complete ENT-14 or any human/legal approval.
+RED independent review against the exact head and required CI remain outstanding.
+
+Local validation for this piece: installed Vitest 4.1.12 with `--maxWorkers=2` ran
+`contractor-fee-mandate.test.ts`, `subscription-agreement.test.ts` and
+`enterprise-fee-statement.test.ts`: 41 tests passed (11 new named mandate tests).
+The installed core `tsc -p packages/core/tsconfig.json --noEmit` passed. Core purity,
+money arithmetic, commercial boundary, AI provider boundary, PL/pgSQL CASE lint and
+`git diff --check` passed. Full local lint stops at the pre-existing, unchanged
+`config/lanes/m4-10-invoices.json` self-grant refusal; no check was weakened.
+The pnpm wrapper commands stalled before invoking checks; equivalent installed local
+Vitest/TypeScript binaries provided the results above. PostgreSQL, migration and browser
+suites were not run: this sandbox cannot start PostgreSQL or bind localhost. Full workspace
+checks, GitHub CI and independent RED review remain for the router. No existing tests changed.
+
+The existing `contractor-mandate.ts` is a separate synthetic event reducer, also
+unwired to an application or provider. It models reference retry/refund lifecycles;
+it is not a collection start or a human agreement writer. This terms/notice and
+statement preflight does not grant its retry/refund authority or alter that reducer.
+Its existing `contractor-mandate.test.ts` also passed separately with
+`--maxWorkers=2` (24 tests); total 65 passing tests across the two bounded runs.
+
+### ENT-14 catch-up validation — 3 November 2026
+
+Preserved the original mandate source and tests from `b31189d43`, main's simulated
+invoice hook and exports, and the caught-up M4-23 acceptance test verbatim from
+`origin/codex/sandbox/m4-23-ent-collect`. That parent explicitly excludes the inherited
+M4-10 invoice slice; this catch-up follows that exclusion, including its unused
+`0588_platform_tax_invoice` migration, rather than introducing or renumbering a migration.
+Inherited lane files are excluded; the ENT-14 lane names every remaining changed path.
+No command registration, grant, database routine or production behavior was added.
+
+Installed Vitest 4.1.12 with `--maxWorkers=2`: mandate, subscription-agreement and
+enterprise-fee-statement tests passed (41); contractor-mandate and contractor-billing
+passed (33). Core and database `tsc --noEmit` passed. Core/storage compilation refreshed
+ignored package artifacts for database test discovery. Core purity, money, commercial,
+AI-provider and PL/pgSQL CASE lint passed. The full lint wrapper stops at the lane
+boundary because its comparison includes the unfinished merge index and inherited
+branch history; the exact working-tree allow list was checked directly against main.
+`git diff origin/main --check` passed. Database execution, migrations, browser journeys,
+full CI and independent exact-head RED review remain unproved and required before landing.
+The human/legal approvals listed above remain open; this is NOPR catch-up evidence only.
+
 ## Simulated invoice hook — 2 November 2026
 
 Ben's `jobguard-ent-7-invoice-hook-q02-2026-11-02` instruction ("Run simulated hook")
@@ -80,3 +150,35 @@ synthetic caller cannot bypass the existing SQL check for the actual
 `jobguard_synthetic_demo` database. The reference-only executor and general
 `refuseEnterpriseFeeExecution` remain closed. No policy record, production gate,
 provider configuration, migration, grant or small-builder fee path changes.
+
+### ENT-14 landing preparation — 4 November 2026
+
+READY, RED, NOPR. Inspected completed merge `2954ce1ca` against its merged
+`origin/main` base `63acfced2`; local `main` is stale (`694e9e175`). No conflicts
+remain. The lane allow list exactly covers the five changed non-lane files and
+only this piece's lane differs from the merged main. No behavior, test expectation,
+migration, command, route, service, grant or runtime authority writer changed.
+The ten compatibility checks in the brief require no source repair in this slice.
+
+Installed Node 24.17.0 / Vitest 4.1.12, each run with `--maxWorkers=2`:
+- core mandate, contractor-mandate and enterprise-fee-statement: 57 passed;
+- API context-boundary and identity: 152 passed;
+- API watchdog-registry: 126 passed;
+- database migration-proof-loader (unit only): 76 passed.
+
+Total: 411 passing tests across seven named files. Initial API discovery failed
+because package `dist` artifacts were absent; compiling config/core/storage/db/ai
+with the installed TypeScript binary resolved those failures, without source edits.
+Direct installed `tsc` compilation passed for config/core/storage/db/ai; direct
+`tsc --noEmit` passed for API, AI and web. This covers all seven workspace packages.
+`pnpm typecheck`, the pnpm version probe and direct Turbo typecheck stalled in the
+pnpm wrapper; stopped those wrappers after the direct TypeScript checks passed.
+The aggregate pnpm/Turbo typecheck is not claimed as passing.
+
+`node tools/agent-lane-boundary-lint.mjs`, core purity, money arithmetic and
+`git diff origin/main --check` passed. No database or browser execution was attempted.
+CI must prove the full required suites, PostgreSQL upgrades/privileges/RLS and
+M4-23 acceptance after its `m4-23-ent-collect` dependency lands in batch 10; this
+branch's acceptance coverage cannot independently establish that integration.
+No dependency code was copied. Exact-head independent RED review, solicitor
+review and Ben's dated approval remain open. All live gates remain closed.

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { ContractorRepository, ContractorPracticeSessionRepository, JobSchedulingRepository, contractorSessionContext, withTenant, type VerifiedTenantContext } from "../src/index.js";
 import { currentCommand, type Cluster } from "./contractor-practice-session-fixtures.js";
-import { cluster, company, start, end, state, lookup, repo, on, off, text, expireSwitch, makeSessionExpired, startSessionWithHomeRecord, endHomeRecord, resolvers, raw } from "./practice-worker-switch-fixtures.js";
+import { cluster, company, start, end, state, lookup, repo, on, off, text, expireSwitch, makeSessionExpired, startSessionWithHomeRecord, endHomeRecord, resolvers, raw, requestContext } from "./practice-worker-switch-fixtures.js";
 let c: Cluster;
 beforeAll(async () => { process.env.JOBGUARD_ENV = "synthetic_demo"; c = await cluster(); }, 120000);
 afterAll(async () => { await c?.close(); });
@@ -43,7 +43,7 @@ it("[PW4] [PW7] a refused command writes no switch and no marker", async () => {
  expect(await text(c, "control_plane.practice_company_marker", f.p.tenantId)).toEqual([]);
  expect(await text(c, "control_plane.practice_worker_switch", f.p.tenantId)).toEqual([]);
  await start(c, f);
- for (const target of [f.members.supervisor, f.members.operative, randomUUID()]) await expect(repo(c).switchOn(f.context, f.p, f.session, { ...on(), workerId: target })).rejects.toMatchObject({ code: "SWITCH_OPEN" });
+ for (const target of [f.members.supervisor, f.members.operative, randomUUID()]) await expect(repo(c).switchOn(await requestContext(c, f), f.p, f.session, { ...on(), workerId: target })).rejects.toMatchObject({ code: "SWITCH_OPEN" });
 });
 it.each(["owner", "admin", "commercial_manager", "finance", "read_only", "revoked", "wider"])("[PW5] target %s has the identical not-found refusal", async role => {
  const f = await company(c); await expect(start(c, f, role)).rejects.toMatchObject({ code: "NOT_FOUND" }); expect(await lookup(c, f)).toEqual(f.p);
@@ -77,7 +77,7 @@ it("[PW8] expiry leaves an unclosed switch until explicitly ended", async () => 
 });
 it.each(["revoked", "expired", "home-revoked", "home-expired"])("[PW9] ended %s session cannot act or revive", async kind => {
  const f = await company(c); await start(c, f);
- if (kind === "revoked") await new ContractorPracticeSessionRepository(c.runtime).revoke(f.context, f.session);
+ if (kind === "revoked") await new ContractorPracticeSessionRepository(c.runtime).revoke(await requestContext(c, f), f.session);
  else if (kind === "expired") await makeSessionExpired(c, f.session);
  else {
   const home = await startSessionWithHomeRecord(c); await endHomeRecord(c, home.session, kind === "home-revoked" ? "revoked" : "expired");
@@ -104,7 +104,7 @@ it("[PW22] refusal records deduplicate and omit foreign targets", async () => {
  const f = await company(c), command = on(); for (let i = 0; i < 3; i++) await expect(start(c, f, "admin", command)).rejects.toMatchObject({ code: "NOT_FOUND" });
  const rows = (await c.admin.query("SELECT payload FROM app.audit_event WHERE tenant_id=$1 AND event_type='practice.worker_switch.refused'", [f.p.tenantId])).rows;
  expect(rows).toHaveLength(1); expect(rows[0]!.payload.references.worker).toBe(f.members.admin);
- const b = await company(c); await expect(repo(c).switchOn(f.context, f.p, f.session, { ...on(), workerId: b.members.operative })).rejects.toMatchObject({ code: "NOT_FOUND" });
+ const b = await company(c); await expect(repo(c).switchOn(await requestContext(c, f), f.p, f.session, { ...on(), workerId: b.members.operative })).rejects.toMatchObject({ code: "NOT_FOUND" });
  const last = (await c.admin.query("SELECT payload FROM app.audit_event WHERE tenant_id=$1 AND event_type='practice.worker_switch.refused' ORDER BY sequence DESC LIMIT 1", [f.p.tenantId])).rows[0]!; expect(last.payload.references).not.toHaveProperty("worker");
 });
 it("[PW30] a lookup made after a committed end names the owner, also inside a transaction opened before the end", async () => {
@@ -145,17 +145,17 @@ it.each(["routine", "audit", "commit"])("[PW10] injected %s failure rolls back b
  } });
  expect(failing).toBeInstanceOf(Pool);
  const repository = new PracticeWorkerSwitchRepository(failing);
- await expect(repository.switchOn(f.context, f.p, f.session, { ...on(), workerId: f.members.operative })).rejects.toMatchObject({ code: "SWITCH_UNAVAILABLE" });
+ await expect(repository.switchOn(await requestContext(c, f), f.p, f.session, { ...on(), workerId: f.members.operative })).rejects.toMatchObject({ code: "SWITCH_UNAVAILABLE" });
  expect(await text(c, "control_plane.practice_company_marker", f.p.tenantId)).toEqual([]); expect(await lookup(c, f)).toEqual(f.p);
  await start(c, f); const before = await text(c, "control_plane.practice_worker_switch", f.p.tenantId);
- await expect(repository.switchOff(f.context, f.p, f.session, off())).rejects.toMatchObject({ code: "SWITCH_UNAVAILABLE" });
+ await expect(repository.switchOff(await requestContext(c, f), f.p, f.session, off())).rejects.toMatchObject({ code: "SWITCH_UNAVAILABLE" });
  expect(await text(c, "control_plane.practice_worker_switch", f.p.tenantId)).toEqual(before); expect((await lookup(c, f)).membershipId).toBe(f.members.operative);
 });
 it("[PW10] no business lock is acquired after the audit append", async () => {
  const { ObservedPool, mutableTables } = await import("./lock-observer.js");
  const { PracticeWorkerSwitchRepository } = await import("../src/index.js");
  const f = await company(c), observed = new ObservedPool(c.runtime, c.admin), repository = new PracticeWorkerSwitchRepository(observed.pool), mutable = await mutableTables(c.admin);
- for (const work of [() => repository.switchOn(f.context, f.p, f.session, { ...on(), workerId: f.members.operative }), () => repository.switchOff(f.context, f.p, f.session, off())]) {
+ for (const work of [async () => repository.switchOn(await requestContext(c, f), f.p, f.session, { ...on(), workerId: f.members.operative }), async () => repository.switchOff(await requestContext(c, f), f.p, f.session, off())]) {
   const { transactions } = await observed.record(work); expect(transactions).toHaveLength(1);
   const statements = transactions[0]!.statements, index = statements.findIndex(s => [...s.footprint.rows.keys()].some(key => key.startsWith("audit_control.audit_head#"))); expect(index).toBeGreaterThanOrEqual(0);
   const head = statements[index]!.footprint;
@@ -168,8 +168,8 @@ it("[PW10] no business lock is acquired after the audit append", async () => {
 it("[PW20] invalid session values and foreign target cannot select authority", async () => {
  const f = await company(c), b = await company(c), switched = await start(c, b);
  for (const value of [randomUUID(), f.sessionRef, f.p.membershipId, f.members.operative!, f.p.tenantId, switched.switchId!]) {
-  await expect(repo(c).switchOn(f.context, f.p, value, { ...on(), workerId: f.members.operative })).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
-  await expect(repo(c).state(f.context, value)).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+  await expect(repo(c).switchOn(await requestContext(c, f), f.p, value, { ...on(), workerId: f.members.operative })).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+  await expect(repo(c).state(await requestContext(c, f), value)).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
  }
  expect(await lookup(c, f)).toEqual(f.p);
 });
@@ -191,7 +191,7 @@ it("[PW9] home record ending during a current switch leaves both session and swi
  const { prepareWorkOrderDemo } = await import("../src/index.js");
  for (const kind of ["expired", "revoked"] as const) {
   const f = await startSessionWithHomeRecord(c), demo = await prepareWorkOrderDemo(c.runtime, f.p, { siteCount: 1 });
-  await repo(c).switchOn(f.context, f.p, f.session, { ...on(), workerId: demo.operativeMembershipId });
+  await repo(c).switchOn(await requestContext(c, f), f.p, f.session, { ...on(), workerId: demo.operativeMembershipId });
   const sessionBefore = await text(c, "control_plane.contractor_practice_session", f.p.tenantId), switchBefore = await text(c, "control_plane.practice_worker_switch", f.p.tenantId);
   await endHomeRecord(c, f.session, kind);
   for (const resolve of resolvers(c)) await expect(resolve(f.session)).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
@@ -249,7 +249,7 @@ it.each(["membership.revoke", "grant.create"])("[PW11] [PW32] merged %s committe
 });
 it("[PW11] session revoke and switch settle without deadlock and no later lookup succeeds", async () => {
  const f = await company(c);
- const results = await Promise.allSettled([start(c, f), new ContractorPracticeSessionRepository(c.runtime).revoke(f.context, f.session)]);
+ const results = await Promise.allSettled([start(c, f), new ContractorPracticeSessionRepository(c.runtime).revoke(await requestContext(c, f), f.session)]);
  for (const result of results) if (result.status === "rejected") expect(result.reason.code).not.toBe("40P01");
  expect(results[1]!.status).toBe("fulfilled");
  for (let n = 0; n < 3; n++) await expect(lookup(c, f)).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
@@ -275,7 +275,7 @@ it.each(["owner membership", "owner grant", "small-builder track"])("[PW4] %s ca
  }
  const shapes = [];
  for (const workerId of [f.members.supervisor, f.members.operative, randomUUID(), other.members.operative]) {
-  const failure = await repo(c).switchOn(f.context, f.p, f.session, { ...on(), workerId }).catch(error => ({ code: error.code, message: error.message })); shapes.push(failure);
+  const failure = await repo(c).switchOn(await requestContext(c, f), f.p, f.session, { ...on(), workerId }).catch(error => ({ code: error.code, message: error.message })); shapes.push(failure);
  }
  expect(shapes).toEqual(Array(4).fill({ code: "SWITCH_FORBIDDEN", message: "SWITCH_FORBIDDEN" }));
  expect(await text(c, "control_plane.practice_worker_switch", f.p.tenantId)).toEqual([]);
