@@ -1,7 +1,7 @@
 import "server-only";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { EnterpriseLivePromptApplication, enterpriseLivePromptHttpFailure, PromptBoundaryError } from "../../../api/src/contractor/enterprise-live-prompt.application";
+import { EnterpriseLivePromptApplication, enterpriseLivePromptHttpFailure, PromptBoundaryError } from "@jobguard/api/workspace";
 import { syntheticPool } from "./synthetic-server";
 import { isTrustedBrowserOrigin } from "../api/contractor/origin";
 

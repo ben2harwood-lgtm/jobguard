@@ -11,6 +11,7 @@
         "apps/api/src/contractor/site-extra-pricing.application.test.ts",
         "apps/api/src/contractor/site-extra-pricing.controller.ts",
         "apps/api/src/contractor/site-extra.application.ts",
+        "apps/api/src/workspace/index.ts",
         "apps/web/app/api/contractor/jobs/[id]/possible-extras/[promptId]/confirm/route.ts",
         "apps/web/app/api/contractor/jobs/[id]/possible-extras/[promptId]/dismiss/route.ts",
         "apps/web/app/api/contractor/jobs/[id]/possible-extras/[promptId]/route.ts",
