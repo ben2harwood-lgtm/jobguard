@@ -6,7 +6,7 @@
         "codex/sandbox/lp-6b-withtenant",
         "codex/sandbox/lp-6b-repair-wip"
       ],
-      "note": "LP-6b RED repair WIP, main merged, migration 0584 with proof; identity grants unchanged. S9 remains Ben-owned known red. Only context-boundary principal/practice/contractor pins are authorized; full real-PostgreSQL shards and independent security checks required. No self-grant.",
+      "note": "LP-6b RED repair WIP, main merged, migration 0584 with proof; identity grants unchanged. Ben authorized only S9's two recorded values on 4 Nov 2026, after the full run; all other guards remain frozen. Only context-boundary principal/practice/contractor pins are authorized; full real-PostgreSQL shards and independent security checks required. No self-grant.",
       "allow": [
         "apps/api/src/accounting-export.application.test.ts",
         "apps/api/src/app.module.ts",
@@ -55,6 +55,7 @@
         "apps/web/app/lib/synthetic-server.test.ts",
         "apps/web/app/lib/synthetic-server.ts",
         "docs/contracts/lp-command-binding-design-v1.md",
+        "docs/review/LP-6B-0584-SUCCESSOR-DEFINITIONS-2026-11-04.md",
         "docs/review/LP-6B-REPAIR-WIP-2026-11-04-validation.md",
         "docs/review/LP-6B-REPAIR-WIP-2026-11-04.md",
         "packages/db/migration-notes/0584_lp6b_effective_session_actor.md",
