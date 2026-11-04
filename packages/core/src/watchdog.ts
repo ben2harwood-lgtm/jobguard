@@ -49,6 +49,7 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "nest:/contractor/jobs/:id/billing/:action": "pre_live_allowed",
   // SV6-PERSIST-B: historical attribution intent is post-live; execution remains closed.
   "/api/jobs/[id]/dunning/[operation]": "post_live_billing",
+  "/api/jobs/[id]/retention-records": "post_live_billing",
   "command:managed_recovery.elect": "post_live_billing",
   "/api/jobs/[id]/payment-fees": "post_live_billing",
   "nest:/jobs/:id/payment-fees": "post_live_billing",

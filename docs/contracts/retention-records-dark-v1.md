@@ -67,3 +67,30 @@ release, notice, invoice or money capability. FORCE RLS stays active and routine
 restore the caller tenant value even on failure. D02/D06 and production gates stay
 closed; the retention flag remains false. Real PostgreSQL CI and independent RED
 review are required before landing; this does not finish M4-20.
+
+## Synthetic session screen slice (M4-20 remains open)
+
+`/jobs/[id]/retention-records` and its no-store GET/POST API are available only in
+`synthetic_demo`; other environments return not-found. The application binds the
+verified context directly. Its company is the session's first current membership
+(the dunning screen convention), never a request tenant selector. The session
+person and digest are passed separately from the repository's strict raw command.
+POST requires the configured browser origin and session CSRF. URL/body job identity
+must agree. Existing repository authorization and replay/error contracts remain.
+
+The screen displays the stored profile, condition/date sources, timer/human review
+origin, session-stamped resolutions and stored movements. All balances come from
+server reconciliation; the client formats pence only. A timer review is explicitly
+not satisfaction. A human records a resolution before a separate stored release
+approval. An uncertain response retains the exact envelope and command ID for retry
+while this screen remains mounted; new actions stay disabled until it is resolved.
+Reloads read stored truth; they never submit a replacement command automatically.
+Stale profiles, consumed approvals and conflicting replays return typed conflicts
+with plain messages and no append. The page labels simulation, no issue, and zero
+automatic fee eligibility. No invoice/notice, real contract approval, grants,
+migration, timer changes, M4-21 composition or feature enablement is included.
+
+CI must execute the new real-PostgreSQL session/financial non-interference test and
+the headless mobile-360/desktop repository-seeded browser journey, plus existing
+retention store/timer suites. Local unit/source checks do not prove those results.
+The piece remains RED and requires independent review at its exact landing head.

@@ -22,7 +22,19 @@
         "packages/db/test/retention-review-timer.integration.test.ts",
         "packages/db/migrations/0760_retention_review_timer.sql",
         "packages/db/test/migration-proofs/0760_retention_review_timer.proof.json",
-        "packages/db/migration-notes/0760_retention_review_timer.md"
+        "packages/db/migration-notes/0760_retention_review_timer.md",
+        "apps/api/src/retention-record.application.ts",
+        "apps/api/src/retention-record.application.test.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/web/app/lib/retention-record-server.ts",
+        "apps/web/app/api/jobs/[id]/retention-records/route.ts",
+        "apps/web/app/api/jobs/[id]/retention-records/route.test.ts",
+        "apps/web/app/jobs/[id]/retention-records/page.tsx",
+        "apps/web/app/jobs/[id]/retention-records/screen.tsx",
+        "apps/web/app/jobs/[id]/retention-records/screen.test.tsx",
+        "apps/web/e2e/M4-20-retention-records.spec.ts",
+        "packages/core/src/watchdog.ts",
+        "packages/db/test/retention-screen.integration.test.ts"
       ]
     }
   }
