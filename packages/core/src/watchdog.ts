@@ -134,6 +134,7 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   // Practice forecasts are operational inputs, available before the job goes live.
   "/api/jobs/[id]/exposure-schedule": "pre_live_allowed",
   "/api/jobs/[id]/proof": "watchdog_live_only",
+  "/api/jobs/[id]/purchase-orders/merchant-order": "watchdog_live_only",
   "/api/jobs/[id]/purchase-orders/placement": "watchdog_live_only",
   "/api/jobs/[id]/purchase-orders/revisions": "watchdog_live_only",
   "/api/jobs/[id]/quotes/acceptance/disposition": "pre_live_allowed",
@@ -230,6 +231,7 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "command:LogBuilderExtra": "post_live_billing",
   "command:job.parties": "pre_live_allowed",
   "command:proof.complete": "watchdog_live_only",
+  "command:purchase_order.send.dark": "watchdog_live_only",
   "command:purchase_order.simulate": "watchdog_live_only",
   "command:purchase_order.place": "watchdog_live_only",
   "command:recovery.message.approve": "post_live_billing",

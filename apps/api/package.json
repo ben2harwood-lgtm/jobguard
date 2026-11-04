@@ -67,6 +67,14 @@
     "./trial": {
       "types": "./src/free-first-job-lifecycle.application.ts",
       "import": "./dist/free-first-job-lifecycle.application.js"
+    },
+    "./merchant-order": {
+      "types": "./src/merchant-order.application.ts",
+      "import": "./dist/merchant-order.application.js"
+    },
+    "./merchant-order-contracts": {
+      "types": "./src/merchant-order.contracts.ts",
+      "import": "./dist/merchant-order.contracts.js"
     }
   },
   "scripts": {

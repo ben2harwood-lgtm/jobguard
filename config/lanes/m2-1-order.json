@@ -6,6 +6,18 @@
         "codex/sandbox/m2-1-order"
       ],
       "allow": [
+        "apps/api/package.json",
+        "apps/api/src/merchant-order.application.test.ts",
+        "apps/api/src/merchant-order.application.ts",
+        "apps/api/src/merchant-order.contracts.ts",
+        "apps/web/app/api/jobs/[id]/purchase-orders/merchant-order/route.ts",
+        "apps/web/app/jobs/[id]/page.tsx",
+        "apps/web/app/lib/merchant-order-server.test.mts",
+        "apps/web/app/lib/merchant-order-server.ts",
+        "apps/web/app/ui/merchant-order.test.ts",
+        "apps/web/app/ui/merchant-order.tsx",
+        "apps/web/e2e/M2-1-order-screen.spec.ts",
+        "packages/core/src/watchdog.ts",
         "packages/db/migrations/0591_dark_merchant_order.sql",
         "packages/db/src/index.ts",
         "packages/db/src/outbox.ts",
@@ -20,7 +32,7 @@
         "packages/db/test/purchase-order-action.test.ts",
         "packages/db/test/purchase-order-audit.integration.test.ts"
       ],
-      "note": "M2-1 approved order action: DARK synthetic seam, RED commercial sends; migration 0591_dark_merchant_order. No HTTP route, worker registration, providers or deployment."
+      "note": "M2-1 RED synthetic merchant order action and practice screen; no live provider, grants, deployment or G2 completion. Existing migration 0591 only."
     }
   }
 }
