@@ -1454,3 +1454,56 @@ LATER / SIMPLICITY (initial review, non-blocking):
 several sections. A single current migration mapping with links to the historical
 receipts would make the installed order easier to maintain without changing SQL
 or removing evidence. Deferred outside this merge-only task.
+
+
+## PR #551 PostgreSQL failure repair — 4 November 2026
+
+This receipt supersedes the earlier no-PostgreSQL local evidence for the checks named below. Starting head: `30ce23f87292f448c4167803070ba256ab8bee4b`.
+
+Causes and repairs (one line each)
+1. Restore upgrade: migrate() also applies 0582, adding four AIS tables; keep exact predecessor rows/catalogue checks immediately after 0581, then check the full latest row snapshot against existing laterEmptyTables plus unchanged predecessor rows.
+2. Subscription pause: 0581 correctly rejects direct paused=false cleanup without a request-bound reconciliation; replace direct toggles with genuine operator pause, resume request, synthetic reconciliation receipt and a different operator's approval.
+3. Payment replay: failure (2) leaves this file's shared database paused; the application correctly commits approval but refuses execution, so attempts stay empty; isolated original test passes, and guarded cleanup restores its unchanged one-attempt/one-settlement assertions.
+4. Trial concurrency: the batch's new regression exposed trialFailure masking SQL's METER_UPGRADE_REQUIRED as FREE_FIRST_JOB_UNAVAILABLE; preserve the capacity error in product code, keeping all concurrency/rollback assertions unchanged.
+5. Contractor pause: the same obsolete direct cleanup conflicts with 0581; use the same real operator/reconciliation/two-person resume fixture, preserving zero attempts while paused and one send after resume.
+6. Finance access: the added report-access test calls raw revoke_contractor_practice_session without the audit append required by migration 0138's deferred trigger; use the existing audited ContractorPracticeSessionRepository.revoke transaction.
+
+Behaviour decisions
+(3) The existing normal-flow expectation of one attempt and one durable synthetic settlement is correct. Approval replay must not duplicate payment. The newly exercised paused behaviour (approval remains queued, no attempt) is also correct; the failed preceding cleanup supplied the wrong state. No payment product code or expected result changed.
+(4) The existing METER_UPGRADE_REQUIRED expectation is correct. PostgreSQL already refuses the seventh distinct large Solo job under the company capacity lock. The repository must expose that actionable refusal, not mask it as generic unavailability. No admission limit or guard changed.
+
+Preservation
+No migration SQL or proof changed; 0581, 0582 and 0583 retain their numbers and exact bytes. No columns, function SET app.* clauses, guard changes or altered expected results. The four added lane paths are exact repair paths; no wildcard grants. All data and adapter effects are synthetic. No full monorepo test suite, browser suite, live-provider run or independent review is claimed.
+
+Exact check commands (working directory /workspace/jobguard; stdout/stderr redirections omitted)
+
+node /workspace/.jobguard-runtime/node_modules/pnpm/bin/pnpm.cjs --filter @jobguard/db exec vitest run --maxWorkers=1 test/restore-reconciliation-upgrade.integration.test.ts test/subscription-actions.integration.test.ts test/trial-lock-order.integration.test.ts test/contractor-billing-delivery.integration.test.ts test/financial-reconciliation-queue.integration.test.ts -t 'adds the resume guard|M0-13a pause|public terms hash|concurrent trial-path activations|M0-13a paused contractor delivery|report reads require current finance access'
+Before fixes: 6 failed, 22 skipped, 5 failed files. After fixes: 6 passed, 22 skipped, 5 passed files.
+
+node /workspace/.jobguard-runtime/node_modules/pnpm/bin/pnpm.cjs --filter @jobguard/db exec vitest run --maxWorkers=1 test/subscription-actions.integration.test.ts -t 'public terms hash'
+Before fixes, isolated: 1 passed, 5 skipped.
+
+node /workspace/.jobguard-runtime/node_modules/pnpm/bin/pnpm.cjs --filter @jobguard/db exec vitest run --maxWorkers=1 test/trial-lock-order.integration.test.ts -t 'concurrent trial-path activations'
+Diagnostic run before fixes: 1 failed, 4 skipped; temporary error-message logging confirmed SQL METER_UPGRADE_REQUIRED. Diagnostic logging was removed.
+
+node /workspace/.jobguard-runtime/node_modules/pnpm/bin/pnpm.cjs --filter @jobguard/db exec vitest run --maxWorkers=1 test/restore-reconciliation-upgrade.integration.test.ts test/subscription-actions.integration.test.ts test/trial-lock-order.integration.test.ts test/contractor-billing-delivery.integration.test.ts test/financial-reconciliation-queue.integration.test.ts
+Full files after targeted pass: 28 passed, 5 passed files (includes all 22 remaining tests).
+
+node /workspace/.jobguard-runtime/node_modules/pnpm/bin/pnpm.cjs --filter @jobguard/db exec vitest run --maxWorkers=1 src/free-first-job-repository.test.ts src/free-first-job-lifecycle-repository.test.ts test/outbox.integration.test.ts test/restore-rehearsal.integration.test.ts test/financial-restore-proof.integration.test.ts test/free-first-job-lifecycle.integration.test.ts
+43 passed, 2 existing TODOs, 6 passed files.
+
+node /workspace/.jobguard-runtime/node_modules/pnpm/bin/pnpm.cjs typecheck
+7 successful package tasks.
+
+PATH=/workspace/.jobguard-runtime/node_modules/.bin:$PATH LANE_BASE_REF=f78c8168449a08b3db6719a3388d9c23d325ac14 node /workspace/.jobguard-runtime/node_modules/pnpm/bin/pnpm.cjs lint
+7 successful package tasks; repository source checks passed.
+
+PATH=/workspace/.jobguard-runtime/node_modules/.bin:$PATH node /workspace/.jobguard-runtime/node_modules/pnpm/bin/pnpm.cjs build
+7 successful package tasks. Turbopack emitted a warning about resolving ../migrations/ from packages/db/dist/migrate.js; the build completed successfully. Migration discovery/build configuration was not changed.
+
+git diff --check
+Passed.
+
+Setup: built core, storage and config with node node_modules/typescript/bin/tsc -p packages/<package>/tsconfig.json. The first shell pnpm was 11.25.0 and refused the pinned engine; used installed 10.28.1 instead. Direct Vitest initially lacked dependency dist files; built them. PostgreSQL runs used sandbox network access to bind localhost. The first default lane check used stale origin/main ce5d5465; reran against the actual PR base above. No checks were disabled.
+
+Independent RED review and full required CI remain separate evidence before merge. This change is pushed for review, not merged or deployed.

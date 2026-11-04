@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, expect, it } from "vitest";
+import { laterEmptyTables } from "./later-empty-tables.js";
 import { migrate } from "../src/migrate.js";
 import { startBeforeMigration, applyMigration, type Cluster } from "./contractor-practice-session-fixtures.js";
 import { snapshot, predecessorCatalogue } from "./contractor-entitlement-fixtures.js";
@@ -12,9 +13,11 @@ it("adds the resume guard without rewriting predecessor data or replacing the la
   const state = (await cluster.admin.query("SELECT * FROM outbound_control.state")).rows;
   const command = (await cluster.admin.query("SELECT pg_get_functiondef('outbound_control.command(uuid,text,integer,uuid)'::regprocedure) definition")).rows;
   await applyMigration(cluster, own);
-  await migrate(cluster.admin);
   expect(await snapshot(cluster.admin)).toEqual(before);
   expect(await predecessorCatalogue(cluster.admin)).toEqual(catalog);
+  // Check 0581 against its exact predecessor before later migrations add their catalogues.
+  await migrate(cluster.admin);
+  expect(await snapshot(cluster.admin)).toEqual({ ...laterEmptyTables, ...before });
   expect((await cluster.admin.query("SELECT * FROM outbound_control.state")).rows).toEqual(state);
   expect((await cluster.admin.query("SELECT pg_get_functiondef('outbound_control.command(uuid,text,integer,uuid)'::regprocedure) definition")).rows).toEqual(command);
   expect((await cluster.admin.query("SELECT * FROM outbound_control.reconciliation")).rows).toEqual([]);

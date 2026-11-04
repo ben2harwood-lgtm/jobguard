@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/batch-10"
       ],
-      "note": "Ben, 4 Nov 2026: sixth small group, RED. Union of m4-17-restore-proof, m4-21-credit-method, m4-23-sb-cash, m4-23-ent-collect, m4-dark-calculator-fixes and money-test-gaps. Main retains identical 0571/0572; new migrations 0581-0583.",
+      "note": "Ben, 4 Nov 2026: sixth small group, RED. Union of m4-17-restore-proof, m4-21-credit-method, m4-23-sb-cash, m4-23-ent-collect, m4-dark-calculator-fixes and money-test-gaps. Main retains identical 0571/0572; new migrations 0581-0583. PR #551 repair: exact paths for capacity-error propagation and guarded pause/resume fixtures.",
       "allow": [
         "apps/api/src/accounting-export.sandbox.test.ts",
         "apps/api/src/accounting-export.sandbox.ts",
@@ -48,11 +48,14 @@
         "packages/db/src/ais-adapter.ts",
         "packages/db/src/ais-repository.test.ts",
         "packages/db/src/ais-repository.ts",
+        "packages/db/src/free-first-job-repository.ts",
         "packages/db/src/index.ts",
         "packages/db/src/outbox.test.ts",
         "packages/db/test/ais-migration-proof.test.ts",
         "packages/db/test/ais.integration.test.ts",
+        "packages/db/test/commercial-outbound-pause-fixture.ts",
         "packages/db/test/commercial-outbound-pause-upgrade.integration.test.ts",
+        "packages/db/test/contractor-billing-delivery.integration.test.ts",
         "packages/db/test/financial-reconciliation-queue-upgrade.integration.test.ts",
         "packages/db/test/financial-reconciliation-queue.integration.test.ts",
         "packages/db/test/financial-restore-proof.integration.test.ts",
@@ -69,6 +72,7 @@
         "packages/db/test/shadow-demo-guide.integration.test.ts",
         "packages/db/test/simulation-fee-statement.integration.test.ts",
         "packages/db/test/stored-receipt-case-fixture.ts",
+        "packages/db/test/subscription-actions.integration.test.ts",
         "packages/db/test/success-fee-catch-fixture.ts",
         "packages/db/test/success-fee-production-safety-catalog.test.ts",
         "packages/db/test/success-fee-production-safety.integration.test.ts",

@@ -1,3 +1,4 @@
+import { pauseCommercialOutbound } from "./commercial-outbound-pause-fixture.js";
 import { assertLp4SealedEvents } from "./lp4-writer-catchup-fixture.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { SubscriptionExecutor } from "../src/subscription-executor.js";
@@ -23,13 +24,12 @@ describe("MON-2A C2/C3 billing action races", () => {
    async execute(work){calls++;return {version:"subscription-simulated-result.v1" as const,synthetic:true as const,workId:work.workId,resultId:randomUUID(),outcome:"settled" as const};},
    async reconcile(){throw new Error("unexpected reconciliation");},
   });
-  const prior=(await f.admin.query("SELECT paused FROM outbound_control.state")).rows[0].paused;
   const commandId=randomUUID();
-  await f.admin.query("UPDATE outbound_control.state SET paused=true");
+  const resume = await pauseCommercialOutbound(f.admin);
   try{
    await expect(executor.execute(context,a.digest,commandId,approved.workId,1)).rejects.toThrow("SUBSCRIPTION_UNAVAILABLE");
    expect(calls).toBe(0);expect(await readSubscription(f,a)).toEqual(before);
-  }finally{await f.admin.query("UPDATE outbound_control.state SET paused=$1",[prior]);}
+  }finally{await resume();}
   await executor.execute(context,a.digest,commandId,approved.workId,1);
   await expect(executor.execute(context,a.digest,commandId,approved.workId,1)).rejects.toThrow("SUBSCRIPTION_UNAVAILABLE");
   const after=await readSubscription(f,a);

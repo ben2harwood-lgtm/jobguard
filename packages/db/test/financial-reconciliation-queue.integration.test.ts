@@ -105,7 +105,7 @@ it("report reads require current finance access even for a known stored run", as
  // Neither a known run ID nor a missing ID bypasses the same finance gate.
  await expect(a.repo.read(a.w.ctx,session,a.scope.jobId,randomUUID())).rejects.toMatchObject({ code: "42501" });
  expect((await a.repo.read(a.w.ctx,a.w.session,a.scope.jobId,run.runId))?.report).toEqual(run.report);
- await withTenant(c.runtime,a.w.ctx,db=>db.$client.query("SELECT app.revoke_contractor_practice_session($1)",[a.w.session]));
+ await new ContractorPracticeSessionRepository(c.runtime).revoke(a.w.ctx,a.w.session);
  await expect(a.repo.read(a.w.ctx,a.w.session,a.scope.jobId,run.runId)).rejects.toThrow();
  expect((await c.admin.query("SELECT report FROM app.financial_reconciliation_run WHERE id=$1",[run.runId])).rows[0]?.report).toEqual(run.report);
 });
