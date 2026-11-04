@@ -152,7 +152,7 @@ export async function observeGate(c: AuthorityCluster, tenant: string, pid: numb
 export async function storedRows(c: AuthorityCluster, tenant: string) {
   const names = (await c.admin.query<{ schemaname: string; tablename: string }>(`SELECT p.schemaname,p.tablename FROM pg_tables p
     JOIN information_schema.columns c ON(c.table_schema,c.table_name,c.column_name)=(p.schemaname,p.tablename,'tenant_id')
-    WHERE p.schemaname IN ('app','audit_control','control_plane') ORDER BY p.schemaname,p.tablename`)).rows;
+    WHERE p.schemaname IN ('app','audit_control','control_plane') AND NOT(p.schemaname='control_plane' AND p.tablename='request_binding') ORDER BY p.schemaname,p.tablename`)).rows;
   const result: Record<string, string[]> = {};
   const quote = (s: string) => '"' + s.replaceAll('"', '""') + '"';
   for (const n of names) result[`${n.schemaname}.${n.tablename}`] = (await c.admin.query<{ bytes: string }>(

@@ -1,7 +1,8 @@
+import { RequestBindingRefusedError } from "./request-binding-error.js";
 import type { Pool } from "pg";
 import { z } from "zod";
 import { ContractorPracticeSessionError, contractorPracticeSessionRevokedV1 } from "@jobguard/core";
-import { RequestBindingRefusedError, withTenant, type VerifiedTenantContext } from "./tenant-context.js";
+import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 import { appendAuditBatch } from "./audit.js";
 import { derivedUuid } from "./work-order-repository.js";
 const routineAnswer = z.object({ session: z.guid({ error: "Invalid uuid" }), member: z.guid({ error: "Invalid uuid" }), revokedAt: z.iso.datetime({ precision: 6, error: "Invalid datetime" }) }).strict();

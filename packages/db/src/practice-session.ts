@@ -70,10 +70,9 @@ export function practiceMaterialPool(pool: Pool, digest: string): Pool {
     return new Proxy(client,{
      get(connection,property) {
       if(property==="query")return async(sql:string,values?:unknown[])=>{
-       const result=await connection.query(sql,values);
        // Only withTenant's exact tenant setup installs the digest, after binding.
        if(sql==="SELECT set_config('app.tenant_id', $1, true)")await connection.query("SELECT set_config('app.practice_material_digest', $1, true)",[digest]);
-       return result;
+       return connection.query(sql,values);
       };
       const value=Reflect.get(connection,property);
       return typeof value==="function"?value.bind(connection):value;

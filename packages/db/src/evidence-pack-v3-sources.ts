@@ -1,3 +1,4 @@
+import { mapRequestBindingRefusal } from "./request-binding-error.js";
 import type { Pool } from "pg";
 import { z } from "zod";
 import { sha256 } from "@jobguard/core";
@@ -77,7 +78,7 @@ export function withEvidencePackV3Snapshot<T>(
     const value = Reflect.get(target, key);
     return typeof value === "function" ? value.bind(target) : value;
   } });
-  return withTenant(snapshotPool, context, work);
+  return mapRequestBindingRefusal(withTenant(snapshotPool, context, work), () => new PracticeAccessError("UNAUTHENTICATED"));
 }
 
 /**

@@ -1,3 +1,4 @@
+import { RequestBindingRefusedError } from "./request-binding-error.js";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { Pool, PoolClient } from "pg";
 import * as schema from "./schema.js";
@@ -76,12 +77,6 @@ export class InvalidTenantContextError extends Error {
     super("A verified tenant context with a valid UUID is required");
     this.name = "InvalidTenantContextError";
   }
-}
-
-/** Binding refusal carries a public code and no database detail or credential. */
-export class RequestBindingRefusedError extends Error {
-  readonly code = "FORBIDDEN";
-  constructor() { super("FORBIDDEN"); this.name = "RequestBindingRefusedError"; }
 }
 
 export type TenantTransaction = NodePgDatabase<typeof schema> & { $client: PoolClient };

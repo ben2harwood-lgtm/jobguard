@@ -1,7 +1,8 @@
+import { RequestBindingRefusedError } from "../src/request-binding-error.js";
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { afterEach, expect, it, vi } from "vitest";
-import { InvalidTenantContextError, RequestBindingRefusedError, verifiedTenantContextFromMembership, verifiedTenantContextForQueuedJob, withTenant, type AuthenticatedMembership } from "../src/tenant-context.js";
+import { InvalidTenantContextError, verifiedTenantContextFromMembership, verifiedTenantContextForQueuedJob, withTenant, type AuthenticatedMembership } from "../src/tenant-context.js";
 import { authenticatePracticeSession } from "../src/practice-session.js";
 import { resolveVerifiedTenantContext } from "../../../apps/api/src/auth/principal-bridge.js";
 import type { AuthProvider } from "../../../apps/api/src/auth/auth-provider.js";

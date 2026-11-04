@@ -84,3 +84,24 @@ removal of `control_plane.request_binding` rows before real data, coordinated
 with the LP binding owners and independently reviewed. This repair builds no
 cleanup job. Two independent security checks remain pending until the real DB
 runs have completed; no independent approval is claimed here.
+
+## First complete four-shard run (before the next repair checkpoint)
+
+| Shard | Passed | Failed | Skipped | Todo | Total tests | Result |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| 1/4 | 1608 | 8 | 42 | 13 | 1671 | exit 1; 9 failed / 173 passed files |
+| 2/4 | 1366 | 16 | 0 | 0 | 1382 | exit 1; 12 failed / 170 passed files |
+| 3/4 | 1528 | 30 | 12 | 4 | 1574 | exit 1; 14 failed / 167 passed files |
+| 4/4 | 1611 | 12 | 28 | 0 | 1651 | exit 1; 13 failed / 168 passed files |
+
+All four ran to completion on real PostgreSQL. Some skips are failed setup,
+not passing assertions. These totals include source and built duplicate unit
+tests. Further repairs are being checked; this is not a final-state pass claim.
+The WIP now preserves digest-before-tenant compatibility after binding, moves
+the binding error into an internal module to retain the original tenant-context
+exports, maps binding refusals at domain boundaries, aligns worker fixtures with
+queued contexts, and repairs old-schema seed setup. Authentication credentials
+are non-enumerable on both real provider principal types; added serialization
+assertions cover JSON and shallow copies. No forbidden guard baseline, S9 pin
+or privilege was changed. Final S9 replacement hashes must be recomputed after
+these authorized practice-bridge edits.

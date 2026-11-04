@@ -1,7 +1,8 @@
+import { RequestBindingRefusedError } from "./request-binding-error.js";
 import type { Pool } from "pg";
 import { z } from "zod";
 import { PracticeWorkerSwitchError, practiceWorkerSwitchOnV1, practiceWorkerSwitchOffV1, practiceWorkerSwitchStateV1, type PracticeWorkerSwitchErrorCode } from "@jobguard/core";
-import { RequestBindingRefusedError, withTenant, type VerifiedTenantContext, type AuthenticatedMembership } from "./tenant-context.js";
+import { withTenant, type VerifiedTenantContext, type AuthenticatedMembership } from "./tenant-context.js";
 import { appendAuditBatch } from "./audit.js";
 import { derivedUuid } from "./work-order-repository.js";
 const uuid = z.guid({ error: "Invalid uuid" });

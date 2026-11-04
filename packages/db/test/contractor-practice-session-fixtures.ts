@@ -1,3 +1,4 @@
+import { applyRequestBindingFoundation } from "./request-binding-fixture.js";
 import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
 import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
@@ -25,6 +26,7 @@ export async function startBeforeMigration(name = migrationName, database?: stri
   await c.admin.query(await readFile(url, "utf8"));
   await c.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)", [entry]);
  }
+ if (name !== "0562_lp6a_request_binding.sql") await applyRequestBindingFoundation(c.admin);
  await seedHomeOwner(c); return c;
 }
 export async function applyMigration(c: Cluster, name = migrationName) {
