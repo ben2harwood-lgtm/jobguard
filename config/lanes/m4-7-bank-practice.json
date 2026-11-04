@@ -1,0 +1,30 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-7-bank-practice": {
+      "branches": [
+        "codex/sandbox/m4-7-bank-practice"
+      ],
+      "allow": [
+        "apps/api/src/practice-bank.application.test.ts",
+        "apps/api/src/practice-bank.application.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/web/app/api/practice-bank/route.test.ts",
+        "apps/web/app/api/practice-bank/route.ts",
+        "apps/web/app/lib/practice-bank-server.ts",
+        "apps/web/app/practice-bank/page.tsx",
+        "apps/web/app/practice-bank/screen.test.tsx",
+        "apps/web/app/practice-bank/screen.tsx",
+        "apps/web/e2e/practice-bank.spec.ts",
+        "docs/contracts/ais-practice-screen-v1.md",
+        "packages/db/migration-notes/0763_ais_movement_read.md",
+        "packages/db/migrations/0763_ais_movement_read.sql",
+        "packages/db/src/ais-repository.test.ts",
+        "packages/db/src/ais-repository.ts",
+        "packages/db/test/ais-practice.integration.test.ts",
+        "packages/db/test/migration-proofs/0763_ais_movement_read.proof.json"
+      ],
+      "note": "M4-7 RED fictional bank practice screen only; NOPR; real provider, vault and approvals held."
+    }
+  }
+}

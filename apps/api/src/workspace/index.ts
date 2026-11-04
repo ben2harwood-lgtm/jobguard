@@ -119,3 +119,4 @@ export { CompanyValueApplication } from "../value/value-business.application.js"
 export * from "../receipt-case-allocation.application.js";
 
 export { DunningApplication, dunningFailure } from "../dunning.application.js";
+export { PracticeBankApplication, practiceBankFailure, type PracticeBankMemory } from "../practice-bank.application.js";
