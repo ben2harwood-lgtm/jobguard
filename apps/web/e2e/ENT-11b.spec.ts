@@ -69,6 +69,7 @@ for (const width of [360, 1280]) test(`ENT-11b full Northside through billing, s
   await expect(op.page.getByLabel("Job")).toContainText("NS-1-0001");
   await op.page.getByLabel("What is the extra work?").fill(description);
   await op.page.getByLabel("Note for the office").fill("Six more voids than the order listed; resident shown the photo.");
+  await op.page.getByRole("button", { name: "Finished", exact: true }).click();
   await op.page.getByRole("button", { name: "Attach practice photo" }).click();
   await expect(op.page.getByTestId("photo-attached")).toBeVisible();
   await op.page.getByLabel(/The resident has seen this/).check();

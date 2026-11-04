@@ -1,4 +1,5 @@
--- LP-12 RED, built ahead: rebase after LP-11 before landing. No routine body changes.
+-- LP-12 RED on the inherited LP-11 chain. No routine body changes.
+-- Landing held for LP-11 credential/worker bootstrap compatibility and CI proof.
 -- Forward fix only: revoke the new grants and restore the former owners in a
 -- separately reviewed migration if rollback is needed. Never rewrite history.
 BEGIN;
@@ -51,7 +52,8 @@ CREATE POLICY lp12_binding_lookup_read ON app.membership FOR SELECT TO jobguard_
 CREATE POLICY lp12_binding_lookup_read ON app.contractor_membership_revocation FOR SELECT TO jobguard_binding_lookup_owner USING(true);
 GRANT EXECUTE ON FUNCTION identity.sso_session_memberships(uuid,uuid),
  app.authenticate_practice_session(text,uuid),app.contractor_practice_session_digest(uuid),
- app.contractor_practice_home_deadline(character,timestamptz) TO jobguard_binding_lookup_owner;
+ app.contractor_practice_home_deadline(character,timestamptz),
+ app.lp6d_contractor_session_identity(uuid) TO jobguard_binding_lookup_owner;
 GRANT CREATE ON SCHEMA app TO jobguard_binding_lookup_owner;
 ALTER FUNCTION app.lp6_session_authority(text,text,uuid) OWNER TO jobguard_binding_lookup_owner;
 REVOKE CREATE ON SCHEMA app FROM jobguard_binding_lookup_owner;
@@ -70,14 +72,16 @@ GRANT SELECT ON app.membership,app.financial_authorization,app.ledger_account,
  app.journal,app.journal_line TO jobguard_money_owner;
 GRANT INSERT ON app.journal,app.journal_line TO jobguard_money_owner;
 GRANT UPDATE(id) ON app.membership,app.financial_authorization,app.journal TO jobguard_money_owner;
--- Reuse the installed canonical tenant policy, including LP-11's protected
--- bound-tenant expression after catch-up. Do not reintroduce a GUC policy.
+-- Reuse LP-11's installed protected bound-tenant policy. Refuse a stale
+-- predecessor rather than installing caller-selected tenant authority.
 DO $$ DECLARE table_name text; read_rule text; write_rule text; BEGIN
  FOREACH table_name IN ARRAY ARRAY['membership','financial_authorization','ledger_account','journal','journal_line'] LOOP
   SELECT pg_get_expr(p.polqual,p.polrelid),pg_get_expr(p.polwithcheck,p.polrelid)
    INTO read_rule,write_rule FROM pg_policy p
    WHERE p.polrelid=format('app.%I',table_name)::regclass AND p.polname='tenant_isolation' AND p.polcmd='*';
-  IF read_rule IS NULL OR write_rule IS NULL THEN
+  IF read_rule IS NULL OR write_rule IS NULL
+   OR read_rule NOT LIKE '%current_tenant()%' OR write_rule NOT LIKE '%current_tenant()%'
+   OR read_rule LIKE '%app.tenant_id%' OR write_rule LIKE '%app.tenant_id%' THEN
    RAISE EXCEPTION 'LP12_TENANT_POLICY_MISSING' USING ERRCODE='42501';
   END IF;
   EXECUTE format('CREATE POLICY lp12_money_tenant ON app.%I FOR ALL TO jobguard_money_owner USING(%s) WITH CHECK(%s)',table_name,read_rule,write_rule);

@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/lp-12-narrow-owner"
       ],
-      "note": "LP-12 RED NOPR on LP-6c; 0815 bounded owners. READY for branch save; landing held for default-argument upgrade guard correction, predecessors, PostgreSQL CI and independent exact-head review.",
+      "note": "LP-12 RED NOPR on inherited LP-11 858c129f616dfe042d5311dcbf3d26c1358c9355; reserved 0815. READY for branch save; landing held for inherited credential/worker compatibility, catalogue registration, API failures, PostgreSQL CI and independent exact-head review.",
       "allow": [
         "docs/contracts/lp-0-effective-privileges-v1.md",
         "packages/db/migrations/0815_lp12_narrow_owners.sql",

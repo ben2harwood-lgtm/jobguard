@@ -1,7 +1,7 @@
 import "server-only";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { authenticatePracticeSession, PracticeAccessError, withTenant } from "@jobguard/db";
+import { authenticatePracticeSession, PracticeAccessError, RequestBindingRefusedError, withTenant } from "@jobguard/db";
 import { readSyntheticDemo } from "@jobguard/db";
 import { SYNTHETIC_SESSION as WORKSPACE_SYNTHETIC_SESSION } from "@jobguard/api/workspace";
 import { Pool } from "pg";
@@ -53,6 +53,7 @@ export async function syntheticWorkspace() {
 }
 
 export function practiceFailure(error:unknown) {
- if(!(error instanceof PracticeAccessError))return null;
- return NextResponse.json({code:error.code},{status:error.code==="UNAUTHENTICATED"?401:error.code==="NOT_FOUND"?404:403,headers:{"Cache-Control":"no-store"}});
+ const code=error instanceof PracticeAccessError?error.code:error instanceof RequestBindingRefusedError?(error.sessionKind==="practice"?"UNAUTHENTICATED":"FORBIDDEN"):undefined;
+ if(code===undefined)return null;
+ return NextResponse.json({code},{status:code==="UNAUTHENTICATED"?401:code==="NOT_FOUND"?404:403,headers:{"Cache-Control":"no-store"}});
 }

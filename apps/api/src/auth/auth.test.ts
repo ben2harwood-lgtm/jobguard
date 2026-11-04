@@ -34,6 +34,11 @@ describe("entered-code authentication", () => {
     expect(provider.fixtureMemberships()[0]).toMatchObject({ email: EMAIL, role: "owner" });
     expect(session.sessionToken).not.toContain("12345678");
     await expect(provider.authenticate(session.sessionToken)).resolves.toMatchObject({ csrfToken: session.csrfToken });
+    const principal = (await provider.authenticate(session.sessionToken))!;
+    expect(principal.sessionCredential).toMatch(/^[a-f0-9]{64}$/u);
+    expect(JSON.stringify(principal)).not.toContain(principal.sessionCredential);
+    expect(JSON.stringify(principal)).not.toContain("sessionCredential");
+    expect(Object.getOwnPropertyDescriptor(principal, "sessionCredential")).toMatchObject({ enumerable: false, writable: false });
   });
 
   it("enforces expiry, five attempts, resend cooldown and per-IP throttling", async () => {

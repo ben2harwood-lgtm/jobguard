@@ -1,0 +1,442 @@
+{
+  "migration": "0795_lp8a_billing_revokes.sql",
+  "lp0": [
+    {
+      "section": "entries",
+      "before": {
+        "key": "acl|rel|table|app.customer_invoice|jobguard_runtime|INSERT|-",
+        "group": "x-customer-billing-writes"
+      },
+      "after": null
+    },
+    {
+      "section": "entries",
+      "before": {
+        "key": "acl|rel|table|app.customer_invoice_evidence|jobguard_runtime|INSERT|-",
+        "group": "x-customer-billing-writes"
+      },
+      "after": null
+    },
+    {
+      "section": "entries",
+      "before": {
+        "key": "acl|rel|table|app.customer_credit_note|jobguard_runtime|INSERT|-",
+        "group": "x-customer-billing-writes"
+      },
+      "after": null
+    },
+    {
+      "section": "entries",
+      "before": {
+        "key": "acl|rel|table|app.customer_payment|jobguard_runtime|INSERT|-",
+        "group": "x-customer-billing-writes"
+      },
+      "after": null
+    },
+    {
+      "section": "entries",
+      "before": {
+        "key": "acl|rel|table|app.customer_payment_reversal|jobguard_runtime|INSERT|-",
+        "group": "x-customer-billing-writes"
+      },
+      "after": null
+    },
+    {
+      "section": "entries",
+      "before": {
+        "key": "acl|rel|table|app.customer_invoice_sequence|jobguard_runtime|INSERT|-",
+        "group": "x-invoice-number-sequences"
+      },
+      "after": null
+    },
+    {
+      "section": "entries",
+      "before": {
+        "key": "acl|rel|table|app.customer_credit_note_sequence|jobguard_runtime|INSERT|-",
+        "group": "x-invoice-number-sequences"
+      },
+      "after": null
+    },
+    {
+      "section": "entries",
+      "before": {
+        "key": "acl|routine|function:app.reserve_customer_invoice_number(uuid)|jobguard_runtime|EXECUTE|-",
+        "group": "x-exec-invoice-number"
+      },
+      "after": null
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.reserve_customer_invoice_number(uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.customer_invoice_sequence"
+        ],
+        "staticCalls": [
+          "app.current_tenant"
+        ]
+      },
+      "after": {
+        "identity": "function:app.reserve_customer_invoice_number(uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.customer_invoice_sequence"
+        ],
+        "staticCalls": [
+          "app.current_tenant"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.advance_final_account_draft(uuid,uuid,uuid,integer)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "5090f2b4054d23bc616fb7e30a45cd03b3417b5c042471abb0195fc04a7a2d4b",
+        "staticWrites": [
+          "app.final_account_draft"
+        ],
+        "staticCalls": []
+      },
+      "after": {
+        "identity": "function:app.advance_final_account_draft(uuid,uuid,uuid,integer)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.final_account_draft"
+        ],
+        "staticCalls": [
+          "app.current_actor",
+          "app.current_tenant"
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": {
+        "key": "owner|routine|function:app.reserve_customer_invoice_number(uuid)|jobguard_migration",
+        "group": "a-owner-routines"
+      },
+      "after": null
+    },
+    {
+      "section": "groups",
+      "before": {
+        "id": "x-customer-billing-writes",
+        "title": "Runtime INSERT on customer invoice, evidence, credit note, payment and reversal tables",
+        "kind": "money",
+        "status": "existing_exception",
+        "target": {
+          "state": "revoke",
+          "note": "LP-8a revokes after converting callers and restore tooling"
+        },
+        "cards": [
+          "LP-8a"
+        ],
+        "responsibilities": {
+          "LP-8a": "revoke direct invoice, evidence, credit, payment, reversal and number-sequence writes; retire the legacy direct-insert service; convert restore rehearsal; cover both invoice signatures"
+        },
+        "downstream": "Issuing an invoice, credit, payment or reversal moves money records; the login can write them without the exact-approval and same-actor receipt checks the routines apply.",
+        "sources": [
+          "packages/db/migrations/0017_customer_billing.sql:8",
+          "packages/db/migrations/0017_customer_billing.sql:14",
+          "packages/db/migrations/0027_uiwire10_customer_invoice.sql:52",
+          "packages/db/migrations/0028_uiwire11_credit_notes.sql:14"
+        ],
+        "tests": [
+          "packages/db/test/UIWIRE-10.integration.test.ts",
+          "packages/db/test/UIWIRE-11.integration.test.ts",
+          "packages/db/test/final-account-lock-invoice.integration.test.ts",
+          "packages/db/test/practice-invoice-audit.integration.test.ts"
+        ],
+        "gaps": [],
+        "path": "ap-customer-billing"
+      },
+      "after": null
+    },
+    {
+      "section": "groups",
+      "before": {
+        "id": "x-exec-invoice-number",
+        "title": "Runtime EXECUTE on reserve_customer_invoice_number",
+        "kind": "money",
+        "status": "existing_exception",
+        "target": {
+          "state": "review_at_card",
+          "note": "LP-13 traces number-burning impact; LP-8a covers its callers"
+        },
+        "cards": [
+          "LP-8a",
+          "LP-13"
+        ],
+        "responsibilities": {
+          "LP-8a": "revoke direct invoice, evidence, credit, payment, reversal and number-sequence writes; retire the legacy direct-insert service; convert restore rehearsal; cover both invoice signatures",
+          "LP-13": "invoice-number burning: numbers cannot corrupt issued records or create unbounded service trouble"
+        },
+        "downstream": "Consumes the next invoice number for a tenant without issuing an invoice.",
+        "sources": [
+          "packages/db/migrations/0017_customer_billing.sql:14"
+        ],
+        "tests": [
+          "packages/db/test/UIWIRE-10.integration.test.ts",
+          "packages/db/test/lp-0-authority-paths.integration.test.ts"
+        ],
+        "gaps": [],
+        "path": "ap-lp13-invoice-number-burning"
+      },
+      "after": null
+    },
+    {
+      "section": "targetState",
+      "before": {
+        "id": "ts-money-routines-only",
+        "statement": "Customer invoice, credit, payment, reversal and number-sequence tables are SELECT-only for the application login; money moves only through checked routines that bind actor, resource, amount, state and exact approval.",
+        "groups": [
+          "x-customer-billing-writes",
+          "x-invoice-number-sequences",
+          "x-final-account-writes",
+          "x-exec-invoice-number",
+          "a-exec-checked-billing-money",
+          "a-exec-final-account"
+        ],
+        "cards": [
+          "LP-8a",
+          "LP-13"
+        ]
+      },
+      "after": {
+        "id": "ts-money-routines-only",
+        "statement": "Customer invoice, credit, payment, reversal and number-sequence tables are SELECT-only for the application login; money moves only through checked routines that bind actor, resource, amount, state and exact approval.",
+        "groups": [
+          "x-invoice-number-sequences",
+          "x-final-account-writes",
+          "a-exec-checked-billing-money",
+          "a-exec-final-account"
+        ],
+        "cards": [
+          "LP-8a",
+          "LP-13"
+        ]
+      }
+    },
+    {
+      "section": "authorityPaths",
+      "before": {
+        "id": "ap-lp13-invoice-number-burning",
+        "title": "LP-13: invoice-number burning",
+        "description": "reserve_customer_invoice_number(uuid) is executable by the runtime login and increments the per-tenant sequence without issuing an invoice (0017_customer_billing.sql:14).",
+        "cards": [
+          "LP-13"
+        ],
+        "responsibilities": {
+          "LP-13": "numbers cannot corrupt issued records or create unbounded service trouble; any authority or money consequence retests under LP-8a"
+        },
+        "sources": [
+          "packages/db/migrations/0017_customer_billing.sql:14"
+        ],
+        "tests": [
+          "packages/db/test/UIWIRE-10.integration.test.ts",
+          "packages/db/test/lp-0-authority-paths.integration.test.ts"
+        ],
+        "gaps": []
+      },
+      "after": null
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "routines",
+      "before": {
+        "nspname": "app",
+        "proname": "reserve_customer_invoice_number",
+        "args": "p_tenant uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, app"
+        ]
+      },
+      "after": {
+        "nspname": "app",
+        "proname": "reserve_customer_invoice_number",
+        "args": "p_tenant uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, app"
+        ]
+      }
+    },
+    {
+      "section": "relations",
+      "before": {
+        "nspname": "app",
+        "relname": "customer_invoice",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=ar/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      },
+      "after": {
+        "nspname": "app",
+        "relname": "customer_invoice",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=r/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": {
+        "nspname": "app",
+        "relname": "customer_invoice_evidence",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=ar/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      },
+      "after": {
+        "nspname": "app",
+        "relname": "customer_invoice_evidence",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=r/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": {
+        "nspname": "app",
+        "relname": "customer_credit_note",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=ar/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      },
+      "after": {
+        "nspname": "app",
+        "relname": "customer_credit_note",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=r/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": {
+        "nspname": "app",
+        "relname": "customer_payment",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=ar/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      },
+      "after": {
+        "nspname": "app",
+        "relname": "customer_payment",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=r/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": {
+        "nspname": "app",
+        "relname": "customer_payment_reversal",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=ar/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      },
+      "after": {
+        "nspname": "app",
+        "relname": "customer_payment_reversal",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=r/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": {
+        "nspname": "app",
+        "relname": "customer_invoice_sequence",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=ar/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      },
+      "after": {
+        "nspname": "app",
+        "relname": "customer_invoice_sequence",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=r/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": {
+        "nspname": "app",
+        "relname": "customer_credit_note_sequence",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=ar/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      },
+      "after": {
+        "nspname": "app",
+        "relname": "customer_credit_note_sequence",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=r/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    }
+  ],
+  "tenancy": []
+}

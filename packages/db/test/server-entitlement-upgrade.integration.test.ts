@@ -1,3 +1,4 @@
+import { currentCommandRegistryRows } from "./lp5-command-catalog.js";
 import { laterEmptyTables } from "./later-empty-tables.js";
 import { afterAll, expect, it } from "vitest";
 import { company } from "./practice-worker-switch-fixtures.js";
@@ -19,5 +20,5 @@ it("MON-8 0352 and 0353 preserve every pre-existing row and refuse legacy new wo
   expect(await withTenant(c.runtime, f.context, db => serverEntitlement(db, f.p.membershipId, "work_orders"))).toMatchObject({ executable: false, entitlement: "held" });
   expect(await read(c, f)).toEqual(retained);
   await migrate(c.admin); await migrate(c.admin);
-  expect(await snapshot(c.admin)).toEqual({ ...before, ...laterEmptyTables });
+  expect(await snapshot(c.admin)).toEqual({ ...before, ...laterEmptyTables, "app.command_type_registry": (await c.admin.query("SELECT jsonb_agg(value ORDER BY value::text) data FROM jsonb_array_elements($1::jsonb)", [JSON.stringify(currentCommandRegistryRows)])).rows[0].data });
 }, 120000);

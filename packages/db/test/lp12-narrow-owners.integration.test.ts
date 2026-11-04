@@ -15,17 +15,16 @@ beforeAll(async () => {
   for (const [signature] of lp12Moved) bodies.set(signature,
     (await db.owner.query("SELECT prosrc,proconfig FROM pg_proc WHERE oid=$1::regprocedure", [signature])).rows[0]);
   await db.owner.query(await readFile(new URL("../migrations/0815_lp12_narrow_owners.sql", import.meta.url), "utf8"));
-  // Worker does not exist on this built-ahead base. This disposable probe has
-  // only that role, never runtime membership; the LP-10 role is used after rebase.
-  await db.owner.query("DO $$ BEGIN CREATE ROLE jobguard_worker NOLOGIN NOINHERIT; EXCEPTION WHEN duplicate_object THEN NULL; END $$");
+  // Use LP-10's installed worker capability, never fabricate a missing role.
+  expect((await db.owner.query("SELECT rolname FROM pg_roles WHERE rolname='jobguard_worker'")).rows).toHaveLength(1);
   const password = randomBytes(24).toString("hex");
   await db.owner.query(`CREATE ROLE lp12_worker_probe LOGIN INHERIT PASSWORD '${password}'; GRANT jobguard_worker TO lp12_worker_probe`);
   worker = new Pool({ ...db.runtime.options, user: "lp12_worker_probe", password, max: 1 });
 }, 300_000);
 afterAll(async () => { await worker?.end(); await db?.close(); });
 
-async function session() {
-  const f = await jobDoorsActor(db.owner), credential = randomBytes(32).toString("hex");
+async function session(tenant?: string) {
+  const f = await jobDoorsActor(db.owner, tenant), credential = randomBytes(32).toString("hex");
   await db.owner.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", [`${f.person}@fictional.invalid`, f.person]);
   await db.owner.query("INSERT INTO identity.membership_locator VALUES($1,$2,$3)", [f.person, f.tenant, f.member]);
   await db.owner.query(`INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at)
@@ -191,6 +190,7 @@ it("lists every helper and schema capability of the new owners, without grant op
       { helper: "app.authenticate_practice_session", is_grantable: false },
       { helper: "app.contractor_practice_home_deadline", is_grantable: false },
       { helper: "app.contractor_practice_session_digest", is_grantable: false },
+      { helper: "app.lp6d_contractor_session_identity", is_grantable: false },
       { helper: "identity.sso_session_memberships", is_grantable: false },
     ] : [
       { helper: "app.current_actor", is_grantable: false },
@@ -257,4 +257,51 @@ it("leaves only the necessary command-table grants after removing table custody"
     { relname: "command_lifecycle_claim", attname: "effect_ref", privilege_type: "UPDATE", is_grantable: false },
     { relname: "command_lifecycle_claim", attname: "outcome", privilege_type: "UPDATE", is_grantable: false },
   ]);
+});
+
+
+it("enumerates every surviving money signature and refuses unbound calls after ownership transfer", async () => {
+  const rows = (await db.owner.query<{ signature: string; name: string; types: string[] }>(`SELECT p.oid::regprocedure::text signature,p.proname name,
+    ARRAY(SELECT format_type(t,NULL) FROM unnest(p.proargtypes::oid[]) t) types
+    FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+    WHERE n.nspname='app' AND p.proname=ANY($1::text[]) ORDER BY 1`,
+  [["assert_financial_authorization", "post_plan_obligation", "post_plan_settlement", "reverse_journal"]])).rows;
+  const expected = (await db.owner.query<{ signature: string }>(`SELECT x::regprocedure::text signature
+    FROM unnest($1::text[]) x ORDER BY 1`, [lp12Moved.slice(1).map(([signature]) => signature)])).rows;
+  expect(rows.map(r => r.signature)).toEqual(expected.map(r => r.signature));
+  const c = await db.runtime.connect();
+  try {
+    await c.query("BEGIN");
+    await c.query("SELECT set_config('app.tenant_id',$1,true),set_config('app.actor_id',$2,true)", [randomUUID(), randomUUID()]);
+    for (const r of rows) {
+      await c.query("SAVEPOINT attack");
+      await expect(c.query(`SELECT app.${r.name}(${r.types.map((t,i) => `$${i+1}::${t}`).join(",")})`, r.types.map(() => null)))
+        .rejects.toMatchObject({ code: "42501" });
+      await c.query("ROLLBACK TO attack");
+    }
+  } finally { await c.query("ROLLBACK"); c.release(); }
+});
+
+it("refuses a same-tenant forged author at each moved posting without a journal or audit effect", async () => {
+  const actor = await session(), peer = await session(actor.tenant), authorization = randomUUID();
+  await db.owner.query(`INSERT INTO app.financial_authorization(id,tenant_id,membership_id,purpose,amount_pence,currency,artifact_hash,status)
+    VALUES($1,$2,$3,'plan_obligation',1000,'GBP',$4,'approved')`, [authorization, actor.tenant, peer.member, "a".repeat(64)]);
+  const c = await db.runtime.connect();
+  try {
+    await c.query("BEGIN");
+    await c.query("SELECT app.bind_request('real',$1,$2)", [actor.credential, actor.tenant]);
+    await c.query("SELECT set_config('app.tenant_id',$1,true),set_config('app.actor_id',$2,true)", [actor.tenant, peer.member]);
+    for (const [signature] of lp12Moved.slice(2)) {
+      const open = signature.indexOf("("), types = signature.slice(open+1,-1).split(",");
+      const values: unknown[] = types.map(() => null); values[values.length-2] = authorization;
+      await c.query("SAVEPOINT attack");
+      await expect(c.query(`SELECT ${signature.slice(0,open)}(${types.map((t,i) => `$${i+1}::${t}`).join(",")})`, values))
+        .rejects.toMatchObject({ code: "42501", message: "REQUEST_BINDING_REFUSED" });
+      await c.query("ROLLBACK TO attack");
+    }
+    expect((await c.query("SELECT app.current_actor() actor")).rows[0].actor).toBe(actor.member);
+  } finally { await c.query("ROLLBACK"); c.release(); }
+  for (const table of ["journal", "journal_line", "audit_event"]) {
+    expect((await db.owner.query(`SELECT count(*)::int n FROM app.${table} WHERE tenant_id=$1`, [actor.tenant])).rows[0].n).toBe(0);
+  }
 });

@@ -11,7 +11,7 @@
         "status": "approved_current",
         "target": {
           "state": "review_at_card",
-          "note": "Built ahead on LP-6c; LP-11 catch-up, full PostgreSQL CI and exact-head RED review remain. Guard edit reserved for Ben."
+          "note": "LP-11 source is inherited; credential/worker bootstrap compatibility, PostgreSQL CI and independent exact-head RED review remain held."
         },
         "cards": [
           "LP-12",
@@ -30,8 +30,8 @@
           "packages/db/test/lp12-narrow-owners.test.ts"
         ],
         "gaps": [
-          "LP-11 dependency not on this built-ahead base.",
-          "plan-entitlement-lifecycle-upgrade uses default-bearing arguments; Ben-authorized guard correction required."
+          "LP-11 credential and worker bootstrap compatibility remains held; no bypass here.",
+          "Exact PostgreSQL catalogue and full chain positive/refusal evidence remain required."
         ],
         "downstream": "Existing runtime signatures and routine bodies remain; no new runtime grants, table ownership or inherited migration powers. Private credential helper still validates its credential and tenant.",
         "path": "ap-roles-owners-schema"
@@ -575,6 +575,14 @@
         "key": "acl|routine|function:app.current_tenant()|jobguard_money_owner|EXECUTE|-",
         "group": "a-lp12-narrow-owners"
       }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.lp6d_contractor_session_identity(uuid)|jobguard_binding_lookup_owner|EXECUTE|-",
+        "group": "a-lp12-narrow-owners"
+      }
     }
   ],
   "upgrade": [
@@ -585,7 +593,7 @@
         "proname": "current_actor",
         "args": "",
         "proowner": "jobguard_binding_owner",
-        "proacl": "{jobguard_binding_owner=X/jobguard_binding_owner,jobguard_runtime=X/jobguard_binding_owner,jobguard_migration=X/jobguard_binding_owner,jobguard_command_writer=X/jobguard_binding_owner}",
+        "proacl": "{jobguard_binding_owner=X/jobguard_binding_owner,jobguard_runtime=X/jobguard_binding_owner,jobguard_migration=X/jobguard_binding_owner,jobguard_command_writer=X/jobguard_binding_owner,jobguard_audit_writer=X/jobguard_binding_owner}",
         "prosecdef": true,
         "proconfig": [
           "search_path=pg_catalog, pg_temp"
@@ -596,7 +604,7 @@
         "proname": "current_actor",
         "args": "",
         "proowner": "jobguard_binding_owner",
-        "proacl": "{jobguard_binding_owner=X/jobguard_binding_owner,jobguard_runtime=X/jobguard_binding_owner,jobguard_migration=X/jobguard_binding_owner,jobguard_command_writer=X/jobguard_binding_owner,jobguard_money_owner=X/jobguard_binding_owner}",
+        "proacl": "{jobguard_binding_owner=X/jobguard_binding_owner,jobguard_runtime=X/jobguard_binding_owner,jobguard_migration=X/jobguard_binding_owner,jobguard_command_writer=X/jobguard_binding_owner,jobguard_audit_writer=X/jobguard_binding_owner,jobguard_money_owner=X/jobguard_binding_owner}",
         "prosecdef": true,
         "proconfig": [
           "search_path=pg_catalog, pg_temp"
@@ -610,7 +618,7 @@
         "proname": "current_tenant",
         "args": "",
         "proowner": "jobguard_binding_owner",
-        "proacl": "{jobguard_binding_owner=X/jobguard_binding_owner,jobguard_runtime=X/jobguard_binding_owner,jobguard_migration=X/jobguard_binding_owner,jobguard_command_writer=X/jobguard_binding_owner}",
+        "proacl": "{jobguard_binding_owner=X/jobguard_binding_owner,jobguard_runtime=X/jobguard_binding_owner,jobguard_migration=X/jobguard_binding_owner,jobguard_command_writer=X/jobguard_binding_owner,jobguard_audit_writer=X/jobguard_binding_owner,jobguard_identity=X/jobguard_binding_owner,jobguard_meter=X/jobguard_binding_owner,jobguard_meter_owner=X/jobguard_binding_owner,jobguard_shadow=X/jobguard_binding_owner}",
         "prosecdef": true,
         "proconfig": [
           "search_path=pg_catalog, pg_temp"
@@ -621,7 +629,7 @@
         "proname": "current_tenant",
         "args": "",
         "proowner": "jobguard_binding_owner",
-        "proacl": "{jobguard_binding_owner=X/jobguard_binding_owner,jobguard_runtime=X/jobguard_binding_owner,jobguard_migration=X/jobguard_binding_owner,jobguard_command_writer=X/jobguard_binding_owner,jobguard_money_owner=X/jobguard_binding_owner}",
+        "proacl": "{jobguard_binding_owner=X/jobguard_binding_owner,jobguard_runtime=X/jobguard_binding_owner,jobguard_migration=X/jobguard_binding_owner,jobguard_command_writer=X/jobguard_binding_owner,jobguard_audit_writer=X/jobguard_binding_owner,jobguard_identity=X/jobguard_binding_owner,jobguard_meter=X/jobguard_binding_owner,jobguard_meter_owner=X/jobguard_binding_owner,jobguard_shadow=X/jobguard_binding_owner,jobguard_money_owner=X/jobguard_binding_owner}",
         "prosecdef": true,
         "proconfig": [
           "search_path=pg_catalog, pg_temp"
@@ -1195,8 +1203,8 @@
         "permissive": "PERMISSIVE",
         "roles": "{jobguard_money_owner}",
         "cmd": "ALL",
-        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
-        "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
+        "qual": "(tenant_id = (NULLIF((app.current_tenant())::text, ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF((app.current_tenant())::text, ''::text))::uuid)"
       }
     },
     {
@@ -1209,8 +1217,8 @@
         "permissive": "PERMISSIVE",
         "roles": "{jobguard_money_owner}",
         "cmd": "ALL",
-        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
-        "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
+        "qual": "(tenant_id = (NULLIF((app.current_tenant())::text, ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF((app.current_tenant())::text, ''::text))::uuid)"
       }
     },
     {
@@ -1223,8 +1231,8 @@
         "permissive": "PERMISSIVE",
         "roles": "{jobguard_money_owner}",
         "cmd": "ALL",
-        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
-        "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
+        "qual": "(tenant_id = (NULLIF((app.current_tenant())::text, ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF((app.current_tenant())::text, ''::text))::uuid)"
       }
     },
     {
@@ -1237,8 +1245,8 @@
         "permissive": "PERMISSIVE",
         "roles": "{jobguard_money_owner}",
         "cmd": "ALL",
-        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
-        "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
+        "qual": "(tenant_id = (NULLIF((app.current_tenant())::text, ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF((app.current_tenant())::text, ''::text))::uuid)"
       }
     },
     {
@@ -1251,8 +1259,33 @@
         "permissive": "PERMISSIVE",
         "roles": "{jobguard_money_owner}",
         "cmd": "ALL",
-        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
-        "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
+        "qual": "(tenant_id = (NULLIF((app.current_tenant())::text, ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF((app.current_tenant())::text, ''::text))::uuid)"
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "nspname": "app",
+        "proname": "lp6d_contractor_session_identity",
+        "args": "s uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      },
+      "after": {
+        "nspname": "app",
+        "proname": "lp6d_contractor_session_identity",
+        "args": "s uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_binding_lookup_owner=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
       }
     }
   ],

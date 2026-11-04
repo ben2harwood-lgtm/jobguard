@@ -5,3 +5,8 @@ CREATE ROLE jobguard_runtime_login LOGIN PASSWORD 'dev-runtime-only' NOSUPERUSER
 CREATE ROLE jobguard_infrastructure_login LOGIN PASSWORD 'dev-infrastructure-only' NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOBYPASSRLS;
 GRANT jobguard_runtime TO jobguard_runtime_login;
 GRANT jobguard_infrastructure TO jobguard_infrastructure_login;
+
+-- LP-10: fictional development credentials only, no web-role inheritance.
+DO $$ BEGIN CREATE ROLE jobguard_worker NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+CREATE ROLE jobguard_worker_login LOGIN PASSWORD 'dev-worker-only' NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOREPLICATION NOBYPASSRLS;
+GRANT jobguard_worker TO jobguard_worker_login;

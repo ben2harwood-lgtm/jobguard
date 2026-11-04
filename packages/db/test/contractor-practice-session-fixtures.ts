@@ -1,10 +1,11 @@
+import { applyRequestBindingFoundation } from "./request-binding-fixture.js";
 import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
 import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import type { Pool, PoolClient } from "pg";
 import { expect } from "vitest";
 import { cluster, ownerTx, type Cluster } from "./extra-fixtures.js";
-import { MIGRATION_URLS, ContractorRepository, ContractorPartyRepository, WorkOrderRepository, contractorSessionContext, issuePracticeSession, DEMO_TENANT_ID, DEMO_ACCOUNT_ID, DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID, type VerifiedTenantContext } from "../src/index.js";
+import { MIGRATION_URLS, ContractorRepository, ContractorPartyRepository, WorkOrderRepository, contractorSessionContext, issuePracticeSession, DEMO_TENANT_ID, DEMO_ACCOUNT_ID, DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID, verifiedTenantContextFromMembership, type VerifiedTenantContext } from "../src/index.js";
 export { cluster, ownerTx };
 export type { Cluster };
 export const migrationName = "0138_practice_session_hardening.sql";
@@ -16,15 +17,17 @@ export async function seedHomeOwner(c: Cluster) {
  await c.admin.query("INSERT INTO app.membership(tenant_id,id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner') ON CONFLICT DO NOTHING", [DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID, DEMO_ACCOUNT_ID, DEMO_IDENTITY_USER_ID]);
 }
 /** Reuses the merged cluster's pre-0122 setup, then applies only predecessors of the named migration. */
-export async function startBeforeMigration(name = migrationName) {
+export async function startBeforeMigration(name = migrationName, database?: string) {
  if (name < "0122_extra_origin_persistence.sql") throw new Error("This starter requires a migration at or after 0122");
- const c = await cluster(true);
+ const c = await cluster(true, database);
  for (const url of MIGRATION_URLS.filter(url => url.pathname.split("/").at(-1)! < name)) {
   const entry = url.pathname.split("/").at(-1)!;
   if ((await c.admin.query("SELECT 1 FROM public.jobguard_schema_migration WHERE migration_name=$1", [entry])).rowCount) continue;
   await c.admin.query(await readFile(url, "utf8"));
   await c.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)", [entry]);
  }
+ // 0150 seeds without a session bridge and proves the exact predecessor list.
+ if (name !== "0562_lp6a_request_binding.sql" && name !== "0150_membership_authority_fix.sql") await applyRequestBindingFoundation(c.admin);
  await seedHomeOwner(c); return c;
 }
 export async function applyMigration(c: Cluster, name = migrationName) {
@@ -37,7 +40,8 @@ export async function startSession(c: Cluster, home = false, activeAgreement = t
  const session = home ? await issuePracticeSession(c.runtime) : randomUUID();
  const p = await new ContractorRepository(c.runtime).startPractice(session);
  if (activeAgreement) await seedActiveContractorAgreement(c.admin, p.tenantId);
- const context: VerifiedTenantContext = await contractorSessionContext(c.runtime, session);
+ const hasBinding = (await c.admin.query("SELECT to_regprocedure('app.bind_request(text,text,uuid)') IS NOT NULL AS installed")).rows[0].installed;
+ const context: VerifiedTenantContext = hasBinding ? await contractorSessionContext(c.runtime, session) : verifiedTenantContextFromMembership(p);
  return { session, p, context, home };
 }
 export const startSessionWithHomeRecord = (c: Cluster) => startSession(c, true);
