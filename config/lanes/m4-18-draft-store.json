@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-18-draft-store": {
+      "branches": [
+        "codex/sandbox/m4-18-draft-store"
+      ],
+      "allow": [
+        "packages/db/src/interim-draft-repository.ts",
+        "packages/db/src/index.ts",
+        "packages/db/test/interim-draft-repository.test.ts",
+        "packages/db/test/interim-draft.integration.test.ts",
+        "packages/db/test/later-empty-tables.ts",
+        "packages/db/migrations/0752_interim_draft_records.sql",
+        "packages/db/test/migration-proofs/0752_interim_draft_records.proof.json",
+        "packages/db/migration-notes/0752_interim_draft_records.md",
+        "docs/contracts/interim-draft-records-dark-v1.md"
+      ]
+    }
+  }
+}
