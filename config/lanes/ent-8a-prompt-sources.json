@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-8a-prompt-sources": {
+      "branches": [
+        "codex/sandbox/ent-8a-prompt-sources"
+      ],
+      "note": "ENT-8a web-only source facts, RED, NOPR. Observation screen and end-of-job check remain open. No migration.",
+      "allow": [
+        "apps/web/app/api/contractor/jobs/[id]/possible-extras/evaluate/route.ts",
+        "apps/web/app/api/contractor/jobs/[id]/possible-extras/materials/route.integration.test.ts",
+        "apps/web/app/api/contractor/jobs/[id]/possible-extras/materials/route.ts",
+        "apps/web/app/api/contractor/jobs/[id]/possible-extras/observations/route.ts",
+        "apps/web/app/contractor/jobs/[id]/materials-issues/materials-issues.test.tsx",
+        "apps/web/app/contractor/jobs/[id]/materials-issues/materials-issues.tsx",
+        "apps/web/app/contractor/jobs/[id]/materials-issues/page.tsx",
+        "apps/web/app/lib/prompt-sources-server.test.ts",
+        "apps/web/app/lib/prompt-sources-server.ts",
+        "apps/web/e2e/ENT-8a-prompt-sources.spec.ts",
+        "docs/contracts/enterprise-live-prompts-v1.md",
+        "packages/core/src/watchdog.ts"
+      ]
+    }
+  }
+}
