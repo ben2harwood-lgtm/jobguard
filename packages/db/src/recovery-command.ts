@@ -9,10 +9,10 @@ const pendingCommands = new WeakMap<TenantTransaction, Set<string>>();
 export async function beginRecoveryCommand(db: TenantTransaction, tenantId: string, commandId: string,
   commandType: string, legacyJson: string): Promise<boolean> {
   const input = JSON.parse(legacyJson) as { caseId: string; membershipId: string };
+  const found = (await db.$client.query<{ job_id: string }>("SELECT job_id FROM app.recovery_case WHERE tenant_id=$1 AND id=$2", [tenantId, input.caseId])).rows[0];
+  if (!found) throw new Error("RECOVERY_CASE_NOT_FOUND");
   if(!(await db.$client.query(`SELECT 1 FROM app.membership WHERE tenant_id=$1 AND id=$2 AND role='owner'
     AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp())`,[tenantId,input.membershipId])).rowCount)throw new Error("FORBIDDEN");
-  const found = (await db.$client.query<{ job_id: string }>("SELECT job_id FROM app.recovery_case WHERE tenant_id=$1 AND id=$2", [tenantId, input.caseId])).rows[0];
-  if (!found) throw new Error("AUTHORIZATION_INVALID");
   const claimed = await beginRepositoryCommand(db, { tenantId, actorMembershipId: input.membershipId, commandId,
     commandType, semanticKey: commandId, jobId: found.job_id, legacyJson });
   if(claimed.kind==="claim"){

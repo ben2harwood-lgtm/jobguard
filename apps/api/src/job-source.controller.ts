@@ -37,4 +37,16 @@ export class JobSourceController {
  async recordMessage(@Param("id")id:string,@Body()body:unknown,@Headers("cookie")cookie?:string){
   try{return await createWorkspaceApplication({pool:this.pool,sessionId:practiceCookie(cookie)}).jobSources.intake(id,"customer_message",body)}catch(error){const failure=jobSourceFailure(error);throw new HttpException(failure.body,failure.status)}
  }
+ @Get("historical-evidence") @Header("Cache-Control","no-store")
+ @ApiOperation({summary:"Read imported fictional historical messages and their original receive times"})
+ async historical(@Param("id")id:string,@Headers("cookie")cookie?:string){
+  try{return await createWorkspaceApplication({pool:this.pool,sessionId:practiceCookie(cookie)}).jobSources.historical(id)}catch(error){const failure=jobSourceFailure(error);throw new HttpException(failure.body,failure.status)}
+ }
+ @Post("historical-evidence") @HttpCode(201) @Header("Cache-Control","no-store")
+ @ApiOperation({summary:"Import an old fictional message as evidence on a locked job; no site activity or fee eligibility"})
+ @ApiBody({schema:{type:"object",additionalProperties:false,required:["version","commandId","fictionalCustomer","text","statedSentAt"],properties:{version:{type:"string",enum:["late-source-import.v1"]},commandId:{type:"string",format:"uuid"},fictionalCustomer:{type:"object",additionalProperties:false,required:["kind","name"],properties:{kind:{type:"string",enum:["named_fictional_customer"]},name:{type:"string",minLength:1,maxLength:160}}},text:{type:"string",minLength:1,maxLength:8000},statedSentAt:{type:"string",format:"date-time"}}}})
+ async importHistorical(@Param("id")id:string,@Body()body:unknown,@Headers("cookie")cookie?:string){
+  try{return await createWorkspaceApplication({pool:this.pool,sessionId:practiceCookie(cookie)}).jobSources.importHistorical(id,body)}catch(error){const failure=jobSourceFailure(error);throw new HttpException(failure.body,failure.status)}
+ }
+
 }

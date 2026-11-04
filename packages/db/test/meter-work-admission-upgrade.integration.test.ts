@@ -31,6 +31,10 @@ describe("MON-1 0380 upgrade (PostgreSQL CI)", () => {
   await f.admin.query("REVOKE CREATE ON SCHEMA app FROM jobguard_meter_owner");
   const grants=(await f.admin.query("SELECT oid,relname,relacl::text,relowner,relrowsecurity,relforcerowsecurity FROM pg_class WHERE relnamespace='app'::regnamespace AND relkind='r' ORDER BY oid")).rows;
   await migrate(f.admin); await migrate(f.admin);
+  // 0399 must retire the old signature on an already meter-owned installation,
+  // before the administrative finalizer has another chance to revoke it.
+  expect((await f.admin.query("SELECT has_function_privilege('jobguard_runtime','app.mon1_counted_meter_today(uuid,text)','EXECUTE') allowed")).rows).toEqual([{allowed:false}]);
+  expect((await f.admin.query("SELECT migration_name FROM public.jobguard_schema_migration WHERE migration_name='0399_meter_reader_revoke.sql'")).rows).toEqual([{migration_name:"0399_meter_reader_revoke.sql"}]);
   expect(await proofDifferences(f.admin,before)).toEqual({rows:[],types:[]});
   const auditOid=(await f.admin.query("SELECT 'app.audit_event'::regclass::oid oid")).rows[0].oid;
   const expectedGrants=await Promise.all(grants.map(async row=>{

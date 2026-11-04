@@ -466,7 +466,7 @@ The replay branch of the thirteen-argument adopt_in_flight_job (0095_job_parties
 
 Remove the LP-0 guard, inventory and design note through the ordinary reviewed code process. No migration, grant, role, routine, policy or trigger is installed, so there is no data rollback.
 
-## LP-5c cutover (0508; stacked after 0496)
+## LP-5c cutover (0557; after 0522)
 
 Direct command creation and completion ACLs are withdrawn, including the separate receipt column UPDATE grants. No new runtime grants or routine changes. Land after LP-5b and rerun the complete PostgreSQL suite and independent RED review at the exact head. Shared overlaps with LP-5a/b are this LP-0 inventory and its exception assertions; serialize their landing. Forward fixes repair checked writers rather than restoring the direct grants.
 
@@ -504,7 +504,7 @@ Remaining runtime column UPDATE inventory (catalogue comparison remains LP-0):
 | app.variation.current_revision_id | LP-5c, LP-6d |
 | app.variation.state | LP-5c, LP-6d |
 
-## LP-6a dark binding delta (0520)
+## LP-6a dark binding delta (0564)
 
 The machine inventory adds exactly the following capabilities, in group
 `a-lp6a-request-binding`. They are source-derived expectations, pending real
@@ -518,20 +518,22 @@ binding accessor are callable only by the binding owner.
 - `acl|rel|table|control_plane.contractor_practice_session|jobguard_binding_owner|SELECT|-`
 - `acl|rel|table|control_plane.practice_session|jobguard_binding_owner|SELECT|-`
 - `acl|rel|table|identity.session|jobguard_binding_owner|SELECT|-`
-- `acl|routine|function:app.bind_request(p_kind text, p_credential text, p_tenant uuid)|jobguard_runtime|EXECUTE|-`
+- `acl|routine|function:app.bind_request(text,text,uuid)|jobguard_runtime|EXECUTE|-`
 - `acl|routine|function:app.current_actor()|jobguard_runtime|EXECUTE|-`
 - `acl|routine|function:app.current_tenant()|jobguard_runtime|EXECUTE|-`
-- `acl|routine|function:app.lp6_session_authority(p_kind text, p_credential text, p_tenant uuid)|jobguard_binding_owner|EXECUTE|-`
-- `acl|routine|function:identity.sso_session_memberships(u uuid, s uuid)|jobguard_binding_owner|EXECUTE|-`
+- `acl|routine|function:app.lp6_session_authority(text,text,uuid)|jobguard_binding_owner|EXECUTE|-`
+- `acl|routine|function:identity.sso_session_memberships(uuid,uuid)|jobguard_binding_owner|EXECUTE|-`
 - `acl|schema|app|jobguard_binding_owner|USAGE|-`
 - `acl|schema|control_plane|jobguard_binding_owner|USAGE|-`
 - `acl|schema|identity|jobguard_binding_owner|USAGE|-`
+- `owner|rel:table|control_plane.contractor_practice_session|jobguard_migration`
+- `owner|rel:table|control_plane.practice_session|jobguard_migration`
 - `owner|rel:table|control_plane.request_binding|jobguard_binding_owner`
-- `owner|routine|function:app.bind_request(p_kind text, p_credential text, p_tenant uuid)|jobguard_binding_owner`
+- `owner|routine|function:app.bind_request(text,text,uuid)|jobguard_binding_owner`
 - `owner|routine|function:app.current_actor()|jobguard_binding_owner`
 - `owner|routine|function:app.current_tenant()|jobguard_binding_owner`
 - `owner|routine|function:app.lp6_bound_request()|jobguard_binding_owner`
-- `owner|routine|function:app.lp6_session_authority(p_kind text, p_credential text, p_tenant uuid)|jobguard_migration`
+- `owner|routine|function:app.lp6_session_authority(text,text,uuid)|jobguard_migration`
 - `role|jobguard_binding_owner|super=f,inherit=f,createrole=f,createdb=f,login=f,replication=f,bypassrls=f,connlimit=-1,settings=`
 
 Real session digests remain bearer credentials; identity-login compromise can
@@ -548,34 +550,8 @@ the catalogue again. This adds no runtime capability or LP-0 baseline membership
 in the superuser-created fixture. Environment identity uses postmaster start time
 and database OID directly; there is no control-file grant or environment helper.
 
-## LP-8a staged billing cutover (0529)
+### LP-6c build-ahead delta — protected money/commitment identity
 
-Migration 0529 withdraws the five direct billing INSERT grants, INSERT/UPDATE/DELETE
-on the two number-allocation tables, and runtime EXECUTE on
-`reserve_customer_invoice_number(uuid)`. SELECT on both allocation tables remains.
-The reviewed inventory removes exactly those eight installed runtime capabilities;
-the owner role additionally receives EXECUTE on the two binding projections
-needed by the checked pointer routine. No scanner definitions or source pins change.
+`0570_lp6c_money_binding.sql` guards 28 existing definitions without withdrawing compatibility parameters or changing existing runtime grants. The new `a-lp6c-money-binding` inventory group records exactly five owner-only binding EXECUTE grants. The meter bridge now selects identity through `bind_request`, retaining synthetic-environment and live owner/admin restrictions. Financial authorization membership, command resource/claim actors and all explicit actor/tenant arguments covered by this slice must match the protected binding before business access or replay returns.
 
-`advance_final_account_draft` keeps its four-argument signature but derives its
-owner from the protected request binding. It checks active owner membership, the
-revision's exact tenant/job/draft, its number and previous pointer; exact retries
-are allowed, while skipped numbers and rewinds fail. Assembly also compares its
-supplied actor to the binding before creating any records. Direct final-account
-INSERT closure remains LP-8b.
-
-Actual grants in this base still include job and job_activation_terms INSERT.
-LP-2's shape/permit guard and LP-3's controlled activation-terms trigger constrain
-those writes; these are not claimed as revoked by LP-8a. The six M4-8-S allocation
-tables retain their existing SELECT-only runtime grants.
-
-This is an incomplete staged cutover: LP-6c's branch currently has no changes
-beyond this base. Both surviving invoice signatures need the predecessor's actor
-binding verified, and the legacy CustomerBillingCommandService direct writers and
-restore rehearsal still require conversion together before this branch is ready.
-Do not apply this staged migration to a shared environment in isolation.
-
-The two closed capability groups keep their existing IDs for authority-path
-continuity and now classify only the existing owner facts. They contain no
-runtime write/EXECUTE exception. This preserves the inventory's rule that every
-group must have a concrete fact without permitting withdrawn runtime grants.
+The body-preservation regression checks the latest predecessor definitions; permission, exact approval, money formulas and CH-7-TERMS clocks remain independent controls. See `packages/db/migration-notes/0570_lp6c_money_binding.md` and `packages/db/test/lp6c-money-routines.integration.test.ts`. LP-6b 38e33202 is the predecessor; its JSON baseline remains unchanged and the LP-6c inventory delta is in the 0570 proof fragment. This is source-inspected construction, not PostgreSQL-executed or independently verified closure. Full PostgreSQL CI, two exact-head security checks and remaining LP-6d/LP-8/LP-9 gates remain required.

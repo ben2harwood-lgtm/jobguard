@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "lanes": {
+    "lp-8a-billing-revokes": {
+      "branches": [
+        "codex/sandbox/lp-8a-billing-revokes"
+      ],
+      "note": "LP-8a RED READY for held NOPR save only; legacy service/restore conversion incomplete. Catch up LP-6d/6e/7; security checks and database CI required before landing.",
+      "allow": [
+        "packages/db/migration-notes/0795_lp8a_billing_revokes.md",
+        "packages/db/migrations/0795_lp8a_billing_revokes.sql",
+        "packages/db/src/final-account-repository.ts",
+        "packages/db/test/lp8a-billing-revokes.integration.test.ts",
+        "packages/db/test/lp8a-billing-revokes.test.ts",
+        "packages/db/test/migration-proofs/0795_lp8a_billing_revokes.proof.json",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts"
+      ]
+    }
+  }
+}

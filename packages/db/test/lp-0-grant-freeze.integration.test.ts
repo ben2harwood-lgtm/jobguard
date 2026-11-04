@@ -1,3 +1,4 @@
+import { loadMigrationProofs, proofSourceDigests } from "./migration-proof-loader.js";
 /**
  * LP-0 grant freeze guard, real PostgreSQL 16, complete migration registry.
  *
@@ -19,6 +20,7 @@ import { rolledBack } from "./upgrade-proof-utils.js";
 let db: Lp0Database;
 let inventory: Inventory;
 let rawInventory: any;
+let reviewedSourcesBefore: Record<string, string>;
 let baselineMigrationOnly: Fact[]; // runtime NOLOGIN: exactly as the migrations leave it
 let baselineBootstrapLogin: Fact[]; // runtime LOGIN: the synthetic-bootstrap posture used to exercise the real role
 let registryBefore: { migration_name: string; applied_at: string }[];
@@ -41,6 +43,7 @@ const has = async (c: PoolClient, sql: string, values: unknown[] = []) => (await
 
 beforeAll(async () => {
   ({ raw: rawInventory, inventory } = await loadReviewedInventory());
+  reviewedSourcesBefore = proofSourceDigests([new URL("../../../docs/contracts/lp-0-effective-privileges-v1.json", import.meta.url).pathname, ...loadMigrationProofs().sources]);
   db = await startLp0Database(58600);
   // Catalogue of the migrated base BEFORE any test-only login posture is applied.
   baselineMigrationOnly = deriveFacts(await readCatalogue(db.admin));
@@ -94,6 +97,54 @@ describe("LP-0 grant freeze guard against the fully migrated database", () => {
     // The runtime role in this database really is the least-privilege posture the inventory records (inspected, not assumed).
     const role = (await readCatalogue(db.admin)).roles.find(r => r.name === APPLICATION_ROLE)!;
     expect(role).toMatchObject({ super: false, bypassrls: false, createrole: false, createdb: false, replication: false, inherit: false });
+  });
+
+  it("[CH-5] pre-adoption exclusion retains its inventoried FORCE RLS and tenant policy", async () => {
+    const relation = "app.import_pre_adoption_evidence";
+    // Bounded CH-5 regression; the general LP0-13 comparator hold is unchanged.
+    const assertProtection = async (client: PoolClient | Lp0Database["admin"]) => {
+      const catalogue = await readCatalogue(client);
+      const table = catalogue.relations.find(r => `${r.schema}.${r.name}` === relation);
+      expect(table, "CH-5 exclusion requires ENABLE and FORCE RLS").toMatchObject({ rlsEnabled: true, rlsForced: true });
+      expect(inventory.recorded.rls).toContain(`${relation}|rls=t|forced=t`);
+      const policies = catalogue.policies.filter(p => p.relation === relation);
+      expect(policies, "CH-5 exclusion requires its sole tenant policy").toHaveLength(1);
+      const policy = policies[0]!;
+      expect(policy).toMatchObject({ name: "tenant_isolation", permissive: true, command: "ALL", roles: ["jobguard_migration"] });
+      expect(inventory.recorded.policies).toContain(`${relation}|${policy.name}|PERMISSIVE|ALL|jobguard_migration|${policy.digest.slice(0, 16)}`);
+    };
+    await assertProtection(db.admin);
+    for (const defect of [
+      `DROP POLICY tenant_isolation ON ${relation}`,
+      `ALTER TABLE ${relation} NO FORCE ROW LEVEL SECURITY`,
+      `ALTER TABLE ${relation} DISABLE ROW LEVEL SECURITY`,
+      `ALTER POLICY tenant_isolation ON ${relation} USING (true) WITH CHECK (true)`,
+    ]) {
+      await rolledBack(db.admin, async client => {
+        await assertProtection(client);
+        await client.query(defect);
+        await expect(assertProtection(client), defect).rejects.toThrow();
+      });
+      await assertProtection(db.admin);
+    }
+  });
+
+  it("[LP0-meter-revoke] the retired reader is refused and re-granting it fails the freeze", async () => {
+    const signature = "app.mon1_counted_meter_today(uuid,text)";
+    expect((await db.admin.query(`SELECT has_function_privilege('${APPLICATION_ROLE}',$1,'EXECUTE') AS allowed`, [signature])).rows).toEqual([{ allowed: false }]);
+    const runtime = await db.runtimeClient();
+    try {
+      await expect(runtime.query("SELECT app.mon1_counted_meter_today(NULL::uuid,NULL::text)")).rejects.toMatchObject({ code: "42501" });
+    } finally { await runtime.end(); }
+    const result = await control(async c => {
+      await c.query(`GRANT EXECUTE ON FUNCTION ${signature} TO ${APPLICATION_ROLE}`);
+    }, async c => {
+      expect(await has(c, `SELECT has_function_privilege('${APPLICATION_ROLE}',$1,'EXECUTE') AS allowed`, [signature])).toBe(true);
+    });
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "ROUTINE_EXPOSED", object: `function:${signature}`, grantee: APPLICATION_ROLE, privilege: "EXECUTE" }),
+    ]));
   });
 
   it("[LP0-03] dangerous column grant fails the freeze", async () => {
@@ -347,8 +398,14 @@ describe("LP-0 grant freeze guard against the fully migrated database", () => {
     // LP-4 deliberately withdraws direct runtime audit INSERT; its dedicated
     // NOLOGIN writer is the remaining, separately reviewed capability above.
     expect(find("acl|rel|table|app.audit_event|jobguard_runtime|INSERT|-")).toBeUndefined();
-    // LP-1 closed these broad powers; neither live facts nor the reviewed exceptions may retain them.
+    // LP-1 and LP-5c closed these broad powers; neither live facts nor the reviewed exceptions may retain them.
     for (const key of [
+      "acl|rel|table|app.command_receipt|jobguard_runtime|INSERT|-",
+      "acl|rel|table|app.decision_resolution|jobguard_runtime|INSERT|-",
+      "acl|rel|table|app.action_authorization|jobguard_runtime|INSERT|-",
+      "acl|col|app.command_receipt.status|jobguard_runtime|UPDATE|-",
+      "acl|col|app.command_receipt.result|jobguard_runtime|UPDATE|-",
+      "acl|col|app.command_receipt.completed_at|jobguard_runtime|UPDATE|-",
       "acl|rel|table|app.membership|jobguard_runtime|DELETE|-",
       "acl|rel|table|app.account|jobguard_runtime|UPDATE|-",
     ]) {
@@ -373,8 +430,12 @@ describe("LP-0 grant freeze guard against the fully migrated database", () => {
     expect(exceptions.has(closedTransition)).toBe(false);
     expect(baselineBootstrapLogin.some(fact => fact.key === closedTransition)).toBe(false);
     expect((await db.admin.query("SELECT has_function_privilege('jobguard_runtime','app.transition_job(uuid,uuid,integer,varchar,varchar,uuid,bigint,varchar,bigint)','EXECUTE') allowed")).rows).toEqual([{ allowed: false }]);
-    // Reads are approved current capability, rebound at LP-11; they are not an exception.
+    // Reads and the MON-5 identity stage routine are approved current capabilities, not exceptions.
     expect(find("acl|rel|table|app.job|jobguard_runtime|SELECT|-")).toMatchObject({ disposition: "approved_current" });
+    expect(find("owner|routine|function:identity.customer_stages(uuid,uuid,uuid,text,uuid,uuid,text)|jobguard_migration"))
+      .toMatchObject({ disposition: "approved_current", group: "a-owner-routines" });
+    expect(find("acl|routine|function:identity.customer_stages(uuid,uuid,uuid,text,uuid,uuid,text)|jobguard_identity|EXECUTE|-"))
+      .toMatchObject({ disposition: "approved_current", group: "a-customer-stage" });
     // Target state is a separate section and names no live key.
     expect(inventory.targetState.length).toBeGreaterThan(5);
     for (const t of inventory.targetState) { expect(t.statement).not.toMatch(/^acl\|/); for (const gid of t.groups) expect(groups.has(gid)).toBe(true); }
@@ -430,7 +491,8 @@ describe("LP-0 grant freeze guard against the fully migrated database", () => {
       expect(leftovers.rows[0]).toEqual({ roles: 0, relations: 0, routines: 0, defaults: 0, memberships: 0, tenants: 0, accounts: 0, jobs: 0, login: true });
     } finally { second.release(); }
     // The reviewed file on disk is untouched by any of the above.
-    expect(parseInventory(JSON.parse(await readFile(new URL("../../../docs/contracts/lp-0-effective-privileges-v1.json", import.meta.url), "utf8"))).entries.length).toBe(inventory.entries.length);
+    expect(proofSourceDigests([new URL("../../../docs/contracts/lp-0-effective-privileges-v1.json", import.meta.url).pathname, ...loadMigrationProofs().sources])).toEqual(reviewedSourcesBefore);
+    expect((await loadReviewedInventory()).inventory).toEqual(inventory);
   });
 });
 

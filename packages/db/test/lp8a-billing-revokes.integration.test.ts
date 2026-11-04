@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { randomBytes, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -91,3 +92,32 @@ describe("LP-8a runtime privilege withdrawal", () => {
   });
 
 });
+
+it("upgrades the previous schema without rewriting billing facts and is repeatable", async () => {
+  const prior = await jobDoorsDatabase(true, "0795_lp8a_billing_revokes.sql");
+  try {
+    const actor = await jobDoorsActor(prior.owner);
+    await prior.owner.query("INSERT INTO app.customer_invoice_sequence(id,tenant_id,next_number) VALUES($1,$2,42)", [randomUUID(), actor.tenant]);
+    await prior.owner.query("INSERT INTO app.customer_credit_note_sequence(id,tenant_id,next_number) VALUES($1,$2,17)", [randomUUID(), actor.tenant]);
+    const snapshot = async () => (await prior.owner.query(`SELECT jsonb_build_object(
+      'invoice_numbers',(SELECT jsonb_agg(to_jsonb(n)) FROM app.customer_invoice_sequence n),
+      'credit_numbers',(SELECT jsonb_agg(to_jsonb(n)) FROM app.customer_credit_note_sequence n),
+      'invoices',(SELECT coalesce(jsonb_agg(to_jsonb(i)),'[]') FROM app.customer_invoice i),
+      'credits',(SELECT coalesce(jsonb_agg(to_jsonb(c)),'[]') FROM app.customer_credit_note c),
+      'payments',(SELECT coalesce(jsonb_agg(to_jsonb(p)),'[]') FROM app.customer_payment p),
+      'reversals',(SELECT coalesce(jsonb_agg(to_jsonb(r)),'[]') FROM app.customer_payment_reversal r)) facts`)).rows[0].facts;
+    const before = await snapshot();
+    const sql = readFileSync(new URL("../migrations/0795_lp8a_billing_revokes.sql", import.meta.url), "utf8");
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await prior.owner.query(sql);
+      expect(await snapshot()).toEqual(before);
+      const privileges = (await prior.owner.query(`SELECT
+        has_table_privilege('jobguard_runtime','app.customer_invoice','INSERT') invoice_insert,
+        has_table_privilege('jobguard_runtime','app.customer_invoice_sequence','INSERT') number_insert,
+        has_function_privilege('jobguard_runtime','app.reserve_customer_invoice_number(uuid)','EXECUTE') reserve,
+        has_function_privilege('jobguard_runtime','app.issue_practice_customer_invoice(uuid,uuid,uuid,uuid,uuid,text,date)','EXECUTE') older_invoice,
+        has_function_privilege('jobguard_runtime','app.issue_lock_bound_customer_invoice(uuid,uuid,uuid,uuid,uuid,text,text,date,text)','EXECUTE') lock_invoice`)).rows[0];
+      expect(privileges).toEqual({ invoice_insert: false, number_insert: false, reserve: false, older_invoice: true, lock_invoice: true });
+    }
+  } finally { await prior.close(); }
+}, 300_000);

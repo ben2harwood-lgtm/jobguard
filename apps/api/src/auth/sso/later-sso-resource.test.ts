@@ -107,7 +107,7 @@ describe("LATER-B28 SSO application resource boundary", () => {
     const f = fixture();
     vi.spyOn(f.app.provider, "authenticate").mockImplementation(async () => {
       f.changeBeforeWrite(kind);
-      return { sessionId: f.sessionId, identityUserId: f.userId, csrfToken: f.credentials.csrfToken };
+      return { sessionId: f.sessionId, identityUserId: f.userId, csrfToken: f.credentials.csrfToken, sessionCredential: "a".repeat(64) };
     });
     await expect(f.app.start(f.connectionId, { version: "sso-start.v1", action: "signin", linkExisting: true }, f.credentials)).rejects.toHaveProperty("code", "LINK_FORBIDDEN");
     expect(f.saved).toHaveLength(0); expect(f.audit).not.toHaveBeenCalled(); expect(f.active()).toBe(0);
