@@ -1,3 +1,4 @@
+import { directDebitMandateNext } from "@jobguard/core";
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { FeeCollectionError, parse, pence, type Attempt } from "./contracts.js";
@@ -74,11 +75,7 @@ export class FakeGoCardlessRail implements CollectionRail {
         if (previous && previous !== digest(event)) throw new FeeCollectionError("IDEMPOTENCY_CONFLICT");
         if (previous) return { code: "processed" };
         const old = this.mandateStatus(event.tenantId, event.mandateId);
-        const terminal = ["cancelled", "failed", "expired"];
-        const order = ["created", "pending_submission", "active"];
-        if (!terminal.includes(old) && (terminal.includes(event.state) || order.indexOf(event.state) > order.indexOf(old))) {
-          this.mandates.get(event.mandateId)!.state = event.state;
-        }
+        this.mandates.get(event.mandateId)!.state = directDebitMandateNext(old, event.state);
         this.mandateEvents.set(key, digest(event));
         return { code: "processed" };
       } catch (error) {
