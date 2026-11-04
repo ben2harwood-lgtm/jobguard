@@ -11,7 +11,7 @@ book fields except tenantId/jobId, exactly one statement, and only the verificat
 and payment records added by that statement. Nested tenant/job IDs are fixture
 lineage validated by core against the verified context. The actor is a separate
 server-supplied membershipId/identityUserId pair; SQL requires a current owner
-membership. This is a dark repository API, with no HTTP/application registration.
+membership. The synthetic-only session application and HTTP adapter described below reach this dark repository API.
 It creates no commercial authorization or command receipt.
 
 The first row contains the fixed book fields and the complete supplied VAT and
@@ -46,6 +46,39 @@ is an integrity check, not independent evidence against a privileged rewrite.
 
 Only the synthetic demo database is accepted. `CIS_ENABLED` remains false and
 `assertCisIssueAllowed()` still refuses. No statutory work, revised-status
-segmentation, provider, screen, worker, document issue or production capability
+segmentation, provider, worker, document issue or production capability
 is introduced. M4-22 stays open for adviser-approved fixtures, D02, D06 v2,
 demand after the pilot, independent exact-head RED review, CI and release gates.
+
+## Synthetic session route and practice screen
+
+`CisFixtureApplication` binds the verified tenant context directly and supplies the
+session membership/user actor separately to the repository. GET/POST
+`/api/jobs/[id]/cis-fixtures` are session-only and no-store; POST requires the
+trusted browser Origin and CSRF. Other environments and the page return not-found.
+POST accepts the strict `cis.persist-fixture.v1` shape, with no top-level tenant,
+actor or enable fields. It is a dark fixture append, not a new dispatched business
+command; no command registry row, migration, grant or role is introduced. The job
+mutation route is classified as post-live billing in `jobMutationRegistry`.
+
+The first statement can use only the labelled fictional starting VAT/retention
+book in `cis-fixture-server.ts`. Its source IDs, dates, amounts and fictional
+approval fields are fixed. Existing stored books are preserved and remain the
+source for later statements. The adapter compares the fixed source snapshot;
+the client cannot supply arbitrary VAT/retention books. A GET with no readable
+stored statement retains the repository's not-found response (including unknown
+and foreign jobs) and supplies an identically scoped fictional starting form,
+without claiming that a job exists or a statement was stored. POST still checks
+the actual job and current owner through the repository routine.
+
+The page enters one structured statement, fixture status/validity and payment
+record, or an append-only correction against the preceding statement. The exact
+command payload/ID is retained in browser session storage across uncertain retries
+and reloads. Explicit rejection releases it for correction; uncertain responses
+require the same command. Stored figures, rates and policy versions come only
+from server reconciliation. CIS deductions are separately labelled, never unpaid
+debt, and fee-eligible recovery is zero. Evidence, status, certification and
+approval-shaped fields are fictional values proving nothing. Issue is disabled
+with the reason from `assertCisIssueAllowed`. No adviser approval or HMRC submission
+is claimed. Real-database route isolation and mobile-360/desktop headless browser
+journeys are CI obligations; this sandbox cannot execute them. M4-22 remains open.
