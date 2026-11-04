@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-5-escalation-worker": {
+      "branches": [
+        "codex/sandbox/ent-5-escalation-worker"
+      ],
+      "note": "ENT-5 scheduled escalation slice only; RED, NOPR, synthetic practice. ENT-5 remains open.",
+      "allow": [
+        "apps/api/src/worker.ts",
+        "apps/api/src/extra-escalation-task.ts",
+        "apps/api/src/extra-escalation-task.test.ts",
+        "packages/db/test/extra-escalation-worker.integration.test.ts",
+        "packages/db/migrations/0746_extra_escalation_discovery.sql",
+        "packages/db/test/migration-proofs/0746_extra_escalation_discovery.proof.json",
+        "packages/db/migration-notes/0746_extra_escalation_discovery.md",
+        "docs/contracts/extra-approval-chain-v1.md"
+      ]
+    }
+  }
+}
