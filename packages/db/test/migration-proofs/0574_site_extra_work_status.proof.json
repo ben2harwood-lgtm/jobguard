@@ -1,0 +1,205 @@
+{
+  "migration": "0574_site_extra_work_status.sql",
+  "lp0": [
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|rel:table|app.site_extra_work_status|jobguard_migration",
+        "group": "a-owner-tables-views"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.ent3_work_status(uuid,uuid,uuid,text)|jobguard_runtime|EXECUTE|-",
+        "group": "a-exec-site-extra-routines"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.ent3_work_status(uuid,uuid,uuid,text)|jobguard_migration",
+        "group": "a-owner-routines"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.ent3_work_status(uuid,uuid,uuid,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.site_extra_work_status"
+        ],
+        "staticCalls": [
+          "app.ent3a_require_extra_authority",
+          "app.lp4_seal_audit",
+          "app.xa_covers"
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.ent3_proceed_comparison(uuid,uuid,text,text)|jobguard_runtime|EXECUTE|-",
+        "group": "a-exec-site-extra-routines"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.ent3_proceed_comparison(uuid,uuid,text,text)|jobguard_migration",
+        "group": "a-owner-routines"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.ent3_proceed_comparison(uuid,uuid,text,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.ent3a_extra_authority",
+          "app.sor_line_net_pence",
+          "app.xa_requirement"
+        ]
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.site_extra_work_status|tenant_isolation|PERMISSIVE|ALL|jobguard_migration|6fa387f2f629fba6"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.site_extra_work_status|immutable|app.reject_immutable_commercial_mutation|BEFORE DELETE/UPDATE|O"
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "ent3_work_status",
+        "args": "p_job uuid, p_actor uuid, p_extra uuid, p_status text",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "ent3_proceed_comparison",
+        "args": "p_job uuid, p_actor uuid, p_code text, p_quantity text",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "app.site_extra_work_status",
+        "data": []
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "site_extra_work_status",
+        "policyname": "tenant_isolation",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "site_extra_work_status",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "site_extra_work_status_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "site_extra_work_status_tenant_id_command_id_key",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    }
+  ],
+  "tenancy": [
+    {
+      "relname": "site_extra_work_status",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    }
+  ]
+}

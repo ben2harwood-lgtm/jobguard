@@ -52,7 +52,7 @@ test("Possible extras enforces authority, exact hash and replay, then records on
   await session(f.sessions.operative!);
   expect((await page.request.post(`${path}/confirm`, { headers: { origin }, data: command })).status()).toBe(403);
   await page.goto(`/contractor/jobs/${f.jobId}/possible-extras`);
-  await expect(page.getByRole("alert")).toContainText("not available");
+  await expect(page.getByRole("main").getByRole("alert")).toContainText("not available");
   await expect(page.getByRole("button", { name: "Confirm possible extra", exact: true })).toHaveCount(0);
   await session(f.sessions.supervisor!);
   const foreign = await fixture();
