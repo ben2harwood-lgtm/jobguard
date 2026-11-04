@@ -51,6 +51,22 @@ it("returns the existing 401 after a practice credential is refused between auth
  expect(calls).toEqual(["BEGIN", "SELECT app.bind_request($1, $2, $3)", "ROLLBACK"]);
  expect(release).toHaveBeenCalledOnce();
 });
+it("returns 401 when the subject transaction is refused after the ownership transaction succeeds", async () => {
+ vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
+ const tenant = "11111111-1111-4111-8111-111111111111", member = "18000000-0000-4000-8000-000000000002";
+ let binds = 0; const release = vi.fn();
+ const query = vi.fn(async (sql: string) => {
+  if(sql === "SELECT app.bind_request($1, $2, $3)" && ++binds === 2)throw Object.assign(new Error("private refusal"), {code:"42501"});
+  if(sql === "SELECT app.current_actor() actor, app.current_tenant() tenant")return {rows:[{actor:member,tenant}]};
+  return {rows:sql.includes("WITH RECURSIVE practice_owned_job")?[{id:member}]:[]};
+ });
+ const pool = {query:async()=>({rows:[{tenant_id:tenant,membership_id:member,identity_user_id:"18000000-0000-4000-8000-000000000003"}]}),connect:async()=>({query,release})} as unknown as Pool;
+ operation = () => new PracticeAccess(pool, "18000000-0000-4000-8000-000000000001").subject(member,"upload",member);
+ expect(await response()).toEqual({status:401,body:{code:"UNAUTHENTICATED"}});
+ expect(binds).toBe(2); expect(release).toHaveBeenCalledTimes(2);
+ expect(query.mock.calls.some(([sql])=>sql.startsWith("SELECT id FROM app.evidence_upload"))).toBe(false);
+ expect(query.mock.calls.at(-1)?.[0]).toBe("ROLLBACK");
+});
 it.each(["real", "contractor_practice"] as const)("preserves a generic %s binding refusal as FORBIDDEN", async kind => {
  operation = async () => { throw new RequestBindingRefusedError(kind); };
  expect(await response()).toEqual({ status: 403, body: { code: "FORBIDDEN" } });

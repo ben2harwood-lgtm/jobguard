@@ -9,8 +9,9 @@ Only `codex/sandbox/lp-6b-repair-wip` is being pushed. The PR branch
 behavior in the merge commit, as `4497621853cdccde351c8997d10af3b30667eeb4`
 (122 commits). The database runtime for the second four-shard run is frozen at
 `a7fa979aa55749529f676d77db410b988fabd9a7`. Checkpoint `3787b049` additionally
-repairs API test doubles without runtime changes. Further bounded fixture/public-
-code corrections and final validation remain pending. Earlier checkpoints were
+repairs API test doubles without runtime changes. The fixture/public-code corrections are at `87330ae1`; a subsequent scoped
+practice-access correction restores the original Nest filter family. Final
+validation remains pending. Earlier checkpoints were
 pushed as the work progressed.
 
 ## Repair scope
@@ -53,7 +54,7 @@ on PATH. `pg_dump`/`psql` `16.15` are extracted test clients in scratch, not
 project dependencies. Network/local-process permission is required by this
 cloud sandbox for PostgreSQL sockets and Node synchronous subprocesses.
 
-The final commands below started against frozen source `a7fa979a`, after
+The current four commands below started against DB/runtime source `87330ae1`, after
 `pnpm --filter @jobguard/db build` passed. All are allowed to complete.
 
 | Command | Result |
@@ -62,8 +63,8 @@ The final commands below started against frozen source `a7fa979a`, after
 | `pnpm --filter @jobguard/db test --shard=2/4` | Running |
 | `pnpm --filter @jobguard/db test --shard=3/4` | Running |
 | `pnpm --filter @jobguard/db test --shard=4/4` | Running |
-| `pnpm --filter @jobguard/web test` | Exit 0; 116 files / 1,638 tests passed; 133.46s Vitest / 136.810s wall |
-| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=1` | Exit 1; 7,265 passed / 558 failed, 382 passed / 55 failed files; 1,289.41s Vitest / 1,291.512s wall. This pre-mock-repair run includes stale compiled duplicates; a rebuilt final run is pending. |
+| `pnpm --filter @jobguard/web test` | Exit 0; 117 files / 1,646 tests passed at `87330ae1`; 125.11s Vitest / 127.295s wall |
+| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=1` | Exit 1; 7,597 passed / 241 failed, 414 passed / 26 failed files at `87330ae1`; 1,380.38s Vitest / 1,382.739s wall. Two adapter doubles and the scoped practice mapping were then corrected; a final rebuilt run is pending. |
 
 Additional focused validation of the final source changes:
 
@@ -168,6 +169,17 @@ API type-checking passed. No assertion or SQL allow-list was changed.
   refuses, but a retained owner context can match that policy. No new HTTP path
   using such a context was identified. Any change needs Ben's contract/guard
   decision; universal stale-owner refusal across isolation levels is not claimed.
+
+The two recovery adapter doubles now pass all 33 tests without assertion changes.
+A full API run exposed an additional existing guard at watchdog-registry line 841:
+the Nest practice filter may catch only `PracticeAccessError`. The builder restored
+that original scope, translated bind failures locally in `PracticeAccess`, and
+left the two generic real/contractor HTTP regressions red for Ben. No filter-family
+guard was changed. The scoped recheck passed 114 / failed 20: 18 existing SQL
+allow-list cases plus those two generic transport regressions.
+
+The command journal and final failure inventory are retained in
+[validation](LP-6B-REPAIR-WIP-2026-11-04-validation.md).
 
 ## Exact S9 replacements for Ben
 

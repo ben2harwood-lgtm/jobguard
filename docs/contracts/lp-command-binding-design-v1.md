@@ -657,7 +657,13 @@ only effective contractor actor selection; it does not widen any grants.
 `withTenant` binds a session before tenant setup and runs no callback after
 binding refusal or actor/tenant mismatch. Credentials stay in the private weak
 map, outside context JSON, audit payloads and responses. Refused binding becomes
-a public error before repository-specific error translation.
+a public error before repository-specific error translation. The typed refusal
+carries only session kind. The practice-access and Next boundaries retain
+`UNAUTHENTICATED` for practice requests; existing typed domain translations still
+win. Nest's existing global filter remains restricted to `PracticeAccessError`: its
+exact error-family guard prevents a wider generic real/contractor translation
+without Ben's review. Those two transport regressions remain red. Business-query
+`42501` errors and forged error names are not treated as binding failures.
 
 The following exact calls temporarily defer session binding. Their existing SQL
 authorization remains mandatory. `lp6b-deferred-binding.test.ts` checks direct
