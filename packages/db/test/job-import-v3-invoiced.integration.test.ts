@@ -6,7 +6,7 @@ import { FinalAccountCommandService } from "../src/final-account-repository.js";
 import { withTenant } from "../src/tenant-context.js";
 import { seedWorkPractice } from "./job-work-state-fixtures.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
-import { createImportFixture, closeWorkFixture, freshIntent, type ImportFixture } from "./job-import-v3-fixtures.js";
+import { createImportFixture, closeWorkFixture, freshIntent, importState, type ImportFixture } from "./job-import-v3-fixtures.js";
 
 describe("CH-5 positive invoiced import — PostgreSQL CI", () => {
   let f: ImportFixture;
@@ -28,6 +28,12 @@ describe("CH-5 positive invoiced import — PostgreSQL CI", () => {
     const read = await repo.read(auth.context, auth.digest, String(a.jobId));
     expect(read.result).toEqual(a); expect(read.snapshot).toEqual(p.snapshot);
     expect(read.meter).toEqual({ countedPlaces: 0, reason: "imported_at_invoiced_stage" });
+    // The exclusion lives in the immutable import aggregate, rather than a live-meter admission table.
+    const exclusion = await withTenant(f.runtime, auth.context, db => db.$client.query(
+      "SELECT job_id,command_id,meter_reason,counted_places FROM app.job_import_v3 WHERE tenant_id=$1 AND meter_exclusion_id=$2",
+      [auth.context.tenantId, a.meterResultRef]));
+    expect(exclusion.rows).toEqual([{ job_id: a.jobId, command_id: input.commandId,
+      meter_reason: "imported_at_invoiced_stage", counted_places: 0 }]);
     expect(read.snapshot.terms.policyVersion).toBe("reference_fee_policy_v3");
     const job = (await f.admin.query("SELECT status,fee_policy_version,recovery_cap_pence,baseline_quote_version_id,accepted_quote_version_id FROM app.job WHERE tenant_id=$1 AND id=$2", [auth.context.tenantId, a.jobId])).rows[0];
     expect(job).toEqual({ status: "invoiced", fee_policy_version: "reference_fee_policy_v3", recovery_cap_pence: null, baseline_quote_version_id: null, accepted_quote_version_id: null });
@@ -53,6 +59,32 @@ describe("CH-5 positive invoiced import — PostgreSQL CI", () => {
     await f.admin.query("UPDATE control_plane.practice_session SET revoked_at=clock_timestamp() WHERE token_digest=$1", [auth.digest]);
     await expect(repo.adopt(auth.context, auth.digest, f.practice.jobId, input)).rejects.toMatchObject({ code: "FORBIDDEN" });
     await expect(repo.read(auth.context, auth.digest, String(a.jobId))).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+  it("rejects chained imports at the application and SQL boundaries without changing any facts", async () => {
+    const source = await seedWorkPractice(f), { auth } = source, repo = new JobImportV3Repository(f.runtime);
+    const binding = (await f.admin.query("SELECT binding_id FROM app.job_party_current WHERE tenant_id=$1 AND job_id=$2",
+      [auth.context.tenantId, source.jobId])).rows[0].binding_id;
+    const previewRequest = { ...f.request, expectedBindingId: binding, lifecyclePoint: "invoiced" };
+    const p = await repo.preview(auth.context, auth.digest, source.jobId, previewRequest);
+    const input = freshIntent(binding, p.previewHash, "invoiced");
+    const result = await repo.adopt(auth.context, auth.digest, source.jobId, input);
+    const importedId = String(result.jobId);
+    const importedBinding = (await f.admin.query("SELECT binding_id FROM app.job_party_current WHERE tenant_id=$1 AND job_id=$2",
+      [auth.context.tenantId, importedId])).rows[0].binding_id;
+    const chainedPreview = { ...previewRequest, expectedBindingId: importedBinding };
+    const before = await importState(f);
+    await expect(repo.preview(auth.context, auth.digest, importedId, chainedPreview)).rejects.toMatchObject({ code: "IMPORT_ALREADY_ADOPTED" });
+    await expect(repo.adopt(auth.context, auth.digest, importedId,
+      { ...input, commandId: randomUUID(), expectedBindingId: importedBinding })).rejects.toMatchObject({ code: "IMPORT_ALREADY_ADOPTED" });
+    // Call the checked SQL boundary directly: it must refuse an imported source even if the application is bypassed.
+    await expect(withTenant(f.runtime, auth.context, db => db.$client.query(
+      "SELECT app.adopt_invoiced_job_v3($1,$2,$3,$4,$5,$6,$7)",
+      [auth.context.tenantId, importedId, auth.digest, randomUUID(), randomUUID(), p.snapshot, "a".repeat(64)])))
+      .rejects.toThrow("IMPORT_ALREADY_ADOPTED");
+    // Original receipt replay and reading the imported job remain valid.
+    expect(await repo.adopt(auth.context, auth.digest, source.jobId, input)).toEqual(result);
+    expect((await repo.read(auth.context, auth.digest, importedId)).result).toEqual(result);
+    expect(await importState(f)).toEqual(before);
   });
   it("SQL writer rejects missing authorization and a forged snapshot before any import", async () => {
     const other = await seedWorkPractice(f), repo = new JobImportV3Repository(f.runtime);

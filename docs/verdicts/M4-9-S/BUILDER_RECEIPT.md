@@ -1,6 +1,6 @@
 # M4-9-S builder receipt
 
-Status: INCOMPLETE — exact reference arithmetic and a closed server/database dependency boundary built. The unheld source-backed slice and full card are NOT complete. Do not count this as a completed money-chain posting piece. No independent verdict or acceptance is recorded.
+Status: catch-only positive/zero source-backed posting is implemented in 0405–0406; PostgreSQL CI and exact-head RED review are pending. The full card, Q2/Q3 and UI remain incomplete. The 29 October section records the current slice; earlier boundary-only entries are historical. No independent verdict or acceptance is recorded.
 
 ## Session
 
@@ -449,3 +449,517 @@ push PR #380. Database, migration and browser execution remain GitHub CI work.
 No packages downloaded, PostgreSQL started, localhost listeners bound, real data,
 provider activity, live money or release. Commit message:
 `/tmp/m4-9-s-20261028T194935Z-commit-msg.txt`.
+
+## 29 October 2026 — catch-only source-backed posting (RED)
+
+Piece `m4-9-s-posting`, M4-9-S SF-04, SF-08–12 and SF-18–21.
+This section supersedes historical dependency-bound descriptions **only for
+synthetic catch positive/zero derivation, exact approval and posting**. The full
+M4-9-S card, UI, Q2 and Q3 are not claimed complete. No independent review or
+merge is claimed. Branch `codex/sandbox/m4-9-s-posting`, stacked on the issued
+M4-8-S producer and SV-6 review branches; their merge is not inferred.
+
+Implemented in reserved **0405–0406**:
+
+- Six owner-only, FORCE RLS, append-only tables: command, review, derivation,
+  source, journal and journal line. Exact assessment-subject and allocation FKs;
+  one journal per derivation and one derivation per job revision/review.
+- Current SV-6 `approve_review` Decision, approved resolution and exact
+  authorization are required, with matching artifact, subject, policy, revision,
+  actor, expiry and revocation checks. Reconstruct the latest assessment from
+  stored sources; require matching hash, all ten true conjuncts and eligibility.
+  M4-8-S v1 neutral receipt facts reach this path through its existing immutable
+  case consumer. No new allocator or supplied qualification/money exists.
+- Exact cumulative Q -> existing SQL half-even kernel -> F minus actual posted J.
+  Repository validation independently recomputes through the existing core kernel.
+  F13 Q £800 -> £80; no cap, subscription offset or fee VAT policy is introduced.
+- Saved statement/hash approval creates an exact fee authorization bound to
+  action, synthetic ledger recipient, GBP delta, revision, policy and expiry.
+  A zero delta retains its derivation/sources/approval and creates no journal.
+  Positive journals contain paired receivable/income lines. Deferred guards reject
+  incomplete source/authorization/derivation and unbalanced or spurious journals.
+- Durable command replay reauthenticates current session/owner/job and returns
+  the original result with `replayed: true`. Changed payloads conflict. Shared
+  case/receipt/job locks serialize posting and reject stale competing approvals.
+  Statement/source/authorization/journal/command/audit writes are atomic.
+- Availability reads remain independent of hidden facts before lock. Post-lock
+  availability is constant `catch_review_available`; review results provide exact
+  assessment hashes, source allocation IDs and review authorization references.
+  Both transports keep no-store and existing access controls; bounded new
+  source/review/stale/identity errors return 409. OpenAPI regenerated and checked.
+- LP-0 recorded routines/policies/triggers, SERIOUS-B5, entitlement upgrade and
+  tenancy expectations were extended with the exact installed objects. The two
+  existing public routine grants remain; no runtime table or helper grant added.
+
+Source-race trade-off: this synthetic writer first serializes authorization
+writes, then takes SHARE table locks over mutable/appendable qualification
+sources before business locks. This excludes phantom refund/credit, feed,
+evidence-invalidation, disclosure and source-review changes as well as updates.
+It is deliberately coarse, uses no new trigger-dispatch framework, and is not a
+production throughput design. A contending source writer can deadlock; the fee
+transaction rolls back and reports `SUCCESS_FEE_SOURCE_CHANGED`, requiring a new
+review. Audit is last, with no subsequent business lock acquisition.
+
+**Q2/Q3 boundary:** non-catch-only source sets still refuse with
+`SUCCESS_FEE_DEPENDENCY_BOUND`. Unsupported negative/reassessment commands retain
+`INVALID_SUCCESS_FEE_COMMAND`; a negative derived delta remains dependency-bound.
+Refunds/credits or invalidation after review refuse new posting; historical replay
+remains historical. Journals link their derivation and a negative journal's schema
+requires an original journal reference, but **linked compensation execution and
+its positive reversal acceptance test are not implemented**, because the issued
+brief explicitly keeps Q3 negative execution refusing. No old journal is edited.
+That held acceptance cannot be counted as passed by the immutable-history tests.
+
+Adversarial PostgreSQL tests authored for CI cover: required SV-6 approval,
+unallocated sources, unsettled feed facts, allocation overrun, locked-bill
+substitution, tampered statement, competing approvals, durable concurrent replay,
+zero derivation, refund/credit/invalidation staleness, a lock-observed concurrent
+invalidation, another tenant/session, audit rollback/retry, direct runtime access,
+immutable journals and a deferred malformed-journal refusal. Populated upgrade
+coverage preserves the real v1 receipt chain, replays predecessor commands and
+posts/replays after repeat migrate. **None of these PostgreSQL tests ran locally.**
+
+Local validation (Node v24.17.0; installed dependencies only):
+
+- Core: `node node_modules/vitest/vitest.mjs run --maxWorkers=2 src/success-fee-catch-posting.test.ts src/success-fee-posting.test.ts src/success-fee-posting-fixtures.test.ts`
+  in `packages/core`: PASS, 3 files / 79 tests.
+- DB units: same runner, `src/success-fee-repository.test.ts test/lp-0-catalog.test.ts src/migrate-discovery.test.ts`
+  in `packages/db`: PASS, 3 files / 39 tests. Scripted repository/catalogue tests
+  and filesystem discovery only; not database execution.
+- API: same runner, `src/success-fee.application.test.ts src/success-fee.http.test.ts`
+  in `apps/api`: PASS, 2 files / 16 tests. Handler/OpenAPI tests; no listening HTTP.
+- Web: same runner, `'app/api/jobs/[id]/success-fees/route.test.ts'` in
+  `apps/web`: PASS, 1 file / 6 tests. Mocked transport, not a browser journey.
+- Existing TypeScript compiler: `./node_modules/.bin/tsc -p <package>/tsconfig.json`
+  compiled core, storage, config, AI and DB, and transpiled API. API/core/DB
+  `--noEmit` checks passed. This does not claim the Nest production build or a
+  clean pinned install. No AI source or prompt changed.
+- Explicit strict NodeNext `tsc --noEmit` compilation passed for both new database
+  suites and affected success-fee access, SERIOUS-B5, entitlement and tenancy
+  integration suites. Compilation is not a PostgreSQL run.
+- `node --import tsx src/generate-openapi.ts` and `--check` in `apps/api`: PASS.
+- Core purity, money-arithmetic and commercial-boundary lint scripts: PASS.
+  Existing computed-import notices are reports only.
+
+The system pnpm launcher stalled before task output and was stopped. The old
+`/private/tmp/jg-sv6-bin/pnpm` helper does not exist in this environment. All
+completed checks above use the installed repository compiler/test executables;
+no package was downloaded and no lockfile/runtime pin changed. An initial DB
+unit invocation lacked the unbuilt storage package; after compiling existing
+workspace dependencies the complete named group passed.
+
+LATER / SIMPLICITY (initial source review):
+`packages/db/migrations/0406_success_fee_catch_posting.sql` and SV-6's approved
+review guard repeat some exact-review predicates. In a separately scoped follow-up,
+a private shared validator could retain one authoritative set of these checks;
+maintenance benefit is fewer opportunities for the two consumers to drift.
+This is advisory and does not weaken or block any current guard or review.
+
+Router handoff: commit/push/PR and GitHub PostgreSQL/migration/browser/required CI,
+then one fresh exact-head Claude RED review. The reserved migration numbers are
+above observed origin/main's 0375. The stacked producer branch already contains
+unmerged 0401; if that lands first, re-reserve/renumber this pair before merging
+so the migration-order gate remains true. Do not edit 0401 or any merged SQL.
+No git-writing command, database startup, localhost listener, provider call,
+real customer data, live money, deployment or release was attempted.
+
+Final deterministic handoff checks: exact 22-path lane (21 explicit non-lane paths),
+0405/0406 above observed origin/main 0375, no tracked migration changed, and
+`git diff --check`: PASS. These compare the working tree, not a committed PR head.
+Commit message: `/tmp/m4-9-s-posting-20261029T154217Z-commit-msg.txt`.
+
+## 30 October 2026 — test-only RED review follow-up
+
+Order: `m4-9-s-posting`, test-only follow-up to the independent RED PASS at
+`d4fd4b09` reported in the issued brief. That prior verdict is not claimed for
+this merged working tree or these new tests. No production code, SQL or migration
+was changed by this repair; no test proved a new production defect.
+
+Added four PostgreSQL cases in the existing success-fee catch suite:
+
+- Direct runtime inserts create a genuine Decision, approved resolution and exact
+  authorization for an otherwise eligible stored assessment, but no matching
+  `recovery_attribution_command` with action `approve_review`. Both the literal
+  `approve_review` action spelling and canonical `recovery.attribution_review`
+  authorization action are exercised. Fee review and posting attempts must return
+  `SUCCESS_FEE_REVIEW_REQUIRED`; all six fee tables, fee Decisions/resolutions,
+  authorizations and audit counts remain unchanged.
+- Save a real fee review, then re-assess that exact case/work/line/lock through
+  the SV-6 writer. Assert a successor revision with the same source hash and no
+  approval of the successor. Approving the old fee review or requesting a new one
+  must refuse with `SUCCESS_FEE_REVIEW_REQUIRED`, without another fee effect.
+  The unchanged source hash isolates supersession from changed-source staleness.
+- A rollback-only administrative corruption removes the case allocations beneath
+  a genuinely approved assessment while preserving its binding. Assert that the
+  allocation aggregate is null, then call `app.write_success_fee_v3` directly as
+  the runtime role. It must return SQLSTATE 40001 / `SUCCESS_FEE_SOURCE_CHANGED`,
+  rather than save a review with null `allocationIds` and rely on repository Zod
+  validation to roll back. Fee/authority/audit counts remain unchanged. Rollback
+  restores the immutable source, after which a real review has a non-null,
+  non-empty allocation ID array. No synthetic source deletion is committed.
+
+Resolved the sole textual merge conflict in
+`packages/db/test/stored-receipt-case-fixture.ts`. Its third argument accepts
+both this lane's protocol string and main's numeric baseline; main's fourth
+mixed-final-check argument and all merged fixture behavior remain. Existing
+producer, shadow-30000 and mixed-check call sites stay unchanged. The lane now
+includes this test helper. All other staged main changes were preserved.
+There were no shared expectation-list conflicts to resolve or rows to remove.
+
+Actual local checks, using installed Node v24.17.0 and existing executables:
+
+- `./node_modules/.bin/tsc --noEmit --strict --target ES2023 --module NodeNext --moduleResolution NodeNext --skipLibCheck --esModuleInterop packages/db/test/success-fee-catch-posting.integration.test.ts packages/db/test/receipt-line-command-producer.integration.test.ts packages/db/test/evidence-pack-v3-post-lock.integration.test.ts`:
+  PASS. Compiles the new PostgreSQL cases and both preserved fixture call forms;
+  does not execute them.
+- `./node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit`: PASS.
+- In `packages/db`, `node node_modules/vitest/vitest.mjs list --maxWorkers=2 test/success-fee-catch-posting.integration.test.ts`:
+  PASS; all 19 cases, including the four additions, collected through the actual
+  repository runner. Collection does not run the PostgreSQL hooks or assertions.
+- In `packages/db`, `node node_modules/vitest/vitest.mjs run --maxWorkers=2 src/success-fee-repository.test.ts`:
+  PASS, 1 file / 9 tests. Scripted repository coverage, not PostgreSQL proof.
+
+CI must execute the PostgreSQL suite. No PostgreSQL startup, localhost binding,
+package download, provider call, real data/money or git-writing command ran.
+The helper's conflict markers are resolved on disk; its Git index remains
+unmerged because this sandbox cannot stage it. Router must stage the resolved
+content with the other pending main-merge files, commit and push. Intended commit
+message: `/tmp/m4-9-s-posting-20261030T155255Z-commit-msg.txt`.
+
+Final repair-only path check: all four changed repair paths are admitted by the
+existing lane; no conflict markers remain in either changed test file; 0405 and
+0406 match HEAD bytes exactly; `git diff --check` passes. The index-only unmerged
+entry is retained for the router to stage. No new simplicity finding was added
+on this repair; the initial-review advisory above remains unchanged.
+
+## 30 October 2026 — m4-9-s-compensate (RED, migration 0489)
+
+Plan piece M4-9-S, BUILD_PLAN.md 2421–2433. Built ahead on
+`codex/sandbox/m4-9-s-posting` at `51ce7389973d00f1fd0291b361e33c7f1a5aa434`;
+router opens the PR after that base merges. Shared schema, core, contract and
+receipt paths serialize behind the posting slice. No Git-writing command ran.
+
+Adds approved builder-opened withheld-payment receipt allocations to the existing
+cumulative writer, alongside unchanged catch qualification. Reuses the existing
+allocator, eligibility approval, finalized proof, terms, settled feed match,
+command receipts and Decision authorizations. A source hash binds current case,
+eligibility, evidence, movement and reversal facts. Sources are stored with
+job-qualified links. Current proof/terms/allocator revocation and unallocated
+refunds fail closed; a changed composition requires a fresh exact statement.
+
+Negative deltas append balanced journals linked to earlier positive journals.
+The statement identifies every original and amount; each original has an
+aggregate compensation limit. Several earlier postings may require several
+negative journals. This is necessary to support a full reversal without linking
+more compensation to one journal than it posted. The existing authorization
+amount remains nonnegative: its absolute magnitude and the signed statement
+hash jointly bind the approved correction. Zero retains its derivation and
+creates no journal. Command replay returns the original effect once. Old catch
+statements remain valid; no existing migration is edited.
+
+The same six tables, RLS policies, roles, function signatures and ACLs remain.
+LP-0's two inventory files add the existing payer helper to call metadata and
+record the new behavior; there are no new table/routine/grant identities to add
+to entitlement, SERIOUS-B5, tenancy or privilege expectation lists. Existing
+expectations are preserved. Forward fix only; disable the route or append a
+reviewed migration if correction is needed. Never remove posted history.
+
+Regression coverage authored: F10/F11 £320 → £2,820 → £320, linked −£250;
+zero derivation/no journal; compensation replay; two competing case-source
+approvals on one job yielding one serial derivation; complete reversal of one
+combined posting and of two separate postings; invalidated proof, revoked
+terms/allocation approval, superseded eligibility, unallocated refund, wrong
+mode, cross-tenant/job calls, stale statements and direct INSERT refusal.
+Upgrade coverage retains populated predecessor catch/receipt history, exact
+command replay, owner/FORCE RLS and closed runtime INSERT grants. The existing
+catch tests only change two property-access assertions to accommodate the
+strict source union; their assertions are retained.
+
+Actual local checks (Node v24.17.0, installed package executables; at most two
+Vitest workers, at most two named files per invocation):
+
+- `packages/core/node_modules/.bin/tsc -p packages/core/tsconfig.json`: PASS
+  (also builds the core dependency for the repository runner).
+- `packages/db/node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit`: PASS.
+- Targeted strict TypeScript compilation of the changed/new PostgreSQL tests
+  through `/tmp/m4-9-s-compensate-test-tsconfig.json`: PASS; not DB execution.
+- In `packages/core`, `node_modules/.bin/vitest run --maxWorkers=2 src/success-fee-catch-posting.test.ts src/cumulative-fee.test.ts`:
+  PASS, 2 files / 64 tests.
+- In `packages/db`, `node_modules/.bin/vitest run --maxWorkers=2 src/success-fee-repository.test.ts`:
+  PASS, 1 file / 9 tests (scripted adapter boundary, not PostgreSQL proof).
+- Installed TypeScript builds of storage/config dependencies: PASS. Initial
+  PostgreSQL test collection lacked their local dist output; after these builds,
+  the normal runner collects the two new integration suites, 13 cases, with
+  `vitest list --maxWorkers=2`. No PostgreSQL hooks/assertions were executed.
+- Core-purity, money-arithmetic, commercial-boundary and CASE-in-IF lints: PASS.
+- Full `node tools/lint.mjs` stops at the default lane check because comparing
+  this built-ahead branch to current main includes the unchanged posting,
+  SV-6 and receipt-producer base commits. No lane scope was widened for those
+  inherited paths. The existing exported lane validator passes every own
+  working-tree path. Router must merge the base before the PR CI lane check.
+
+PostgreSQL/migration execution, full required CI and an independent Claude RED
+review against the eventual exact head remain required. No database/browser
+startup, live provider or money action, release, commit, push or PR was performed.
+Supplier qualification, catch reassessment, fee VAT and collection are outside
+this slice. This record is builder evidence, not an independent review.
+
+
+## 30 October 2026: catch-up onto merged parents and migration renumber
+
+RED M4-9-S catch-up only; no additional posting behaviour or test expectations.
+The former catch-facts/posting migrations are now 0405/0406, each byte-identical
+to its previous HEAD SQL. No migration present on origin/main was edited.
+All active references, including the upgrade test and lane, use the new numbers.
+Earlier migration-number references above have been updated to those names.
+
+Resolved live LP-0 conflicts by retaining both sides' routine, policy and trigger
+entries. SERIOUS-B5 retains main's complete upgrade union plus only the exact six
+private catch-ledger tables, indexes, policies and two trigger routines. Restored
+the frozen downstream LP-0 recorded input to origin/main: modifying that historical
+snapshot without regenerating its companion made three inventory checks fail;
+all five now pass. Its path is removed from this piece's lane.
+
+The shared receipt fixture preserves third-argument protocol strings, numeric
+baseline/mixed-check callers, and main's fifth-argument protocol override. No
+caller or expectation needed changing. The piece's lane exactly matches its
+paths against origin/main (its own lane file is implicitly owned).
+
+Source inspection against merged 0383 confirms the approved-review receipt still
+uses recovery_attribution_command.assessment_id/payload/first_result. The posting
+routine joins that command to the exact approved action_authorization, selects
+the latest assessment and reconstructs current sources before review/approval.
+The existing forged-authorization-without-command, superseded-assessment and
+refund-after-review PostgreSQL regressions are unchanged. They were NOT executed
+locally: this sandbox cannot start PostgreSQL. CI must confirm them, the migration
+upgrade suites, LP-0 catalogue and SERIOUS-B5. Latest main routine bodies remain
+0302 for the two re-created success-fee functions; 0406 adds only this piece's
+existing catch posting change.
+
+Local checks actually run (installed repository runners, at most two workers):
+
+- packages/db: ./node_modules/.bin/vitest run --maxWorkers=2
+  src/success-fee-repository.test.ts src/receipt-line-command-producer.test.ts
+  — 2 files, 14 tests passed.
+- packages/core: ./node_modules/.bin/vitest run --maxWorkers=1
+  src/success-fee-catch-posting.test.ts — 6 tests passed.
+- apps/api: ./node_modules/.bin/vitest run --maxWorkers=1
+  src/success-fee.application.test.ts — 15 tests passed.
+- packages/db: ./node_modules/.bin/tsc -p tsconfig.json --noEmit — passed,
+  including the merged integration-test fixture callers.
+- node --test tools/lp-downstream-inventory.test.mjs — 5 tests passed after
+  restoring the frozen snapshot.
+- node tools/plpgsql-case-in-if-lint.mjs — passed.
+- git diff --check — passed. Read-only assertions verified SQL bytes, no changed
+  main migration, exact lane paths and no conflict markers in piece files.
+
+The pnpm launcher stalled before running tests and was interrupted; the commands
+above used the already-installed package binaries without downloading packages.
+The index still records two unmerged paths because .git is read-only; the router
+must stage the resolved working files and renames before committing. No git write
+command was run. GitHub CI, browser/database suites and the independent exact-head
+Claude RED review remain pending. Q2/Q3 and the wider M4-9-S card remain held as
+previously recorded; this receipt is not a claim that the full card is finished.
+
+
+## 30 October 2026: reserved identifier repair after DB verification
+
+DB verification at bc431e37 found the reserved identifier `authorization` in
+0406's writer declaration. Renamed only that variable to `auth_id` at its
+three sites (declaration and two INSERT values). A read-only comparison verifies
+reversing that rename reproduces HEAD exactly; 0405 is unchanged. Scanned both
+migrations' variable, argument, alias and column identifiers; no further reserved
+identifier issue was found. No test expectations or numeric strings changed.
+
+LP-0 tooling is packages/db/test/lp-0-catalog.ts (the supplied src path does not
+exist). It hashes UTF-8 pg_get_functiondef output. The sole changed routine,
+function:app.write_success_fee_v3(uuid,text,jsonb,jsonb), already has a null
+recorded definitionSha256. No hash was guessed or overwritten; PostgreSQL CI
+must capture that identity's hash and verify migration execution.
+
+Local checks: installed packages/db Vitest runner with --maxWorkers=2,
+src/success-fee-repository.test.ts and test/lp-0-catalog.test.ts: 36 tests passed
+in two files. PL/pgSQL CASE-in-IF lint passed (164 migrations); git diff --check
+passed; exact-three-site rename and unchanged-0405 assertions passed. These
+checks do not prove PostgreSQL parsing: database verification remains CI's job.
+No git write command was run. RED review and existing release gates remain.
+
+
+## 30 October 2026: DB repair 2 after PostgreSQL run of 471782e6
+
+The supplied real-PostgreSQL run migrated successfully with 121 passing and
+three failing tests. This repair changes test fixtures/ordering only:
+
+- In both tenancy catalogue lists, move the six success_fee rows immediately
+  before supplier_bill_supersession. A read-only comparison confirms every
+  pre-existing row is retained unchanged and the block is in byte order.
+- The unsettled-source attack now inserts a constraint-valid pending movement
+  copied from the settled movement, then changes the receipt fact source's
+  movement_id to that pending row. Its event kind, event ID, identity and
+  representation satisfy the existing feed checks; all CHECKs and foreign keys
+  remain enabled. Only user triggers on the two deliberately corrupted fixture
+  tables are disabled temporarily and restored before calling the writer.
+  Everything is rollback-only. The exact SUCCESS_FEE_SOURCE_CHANGED expectation
+  and unchanged-effect assertions remain intact.
+
+No migration, production behaviour, LP-0 hash or other expectation changed.
+Local checks: installed packages/db tsc --noEmit passed; installed Vitest with
+--maxWorkers=2 on src/success-fee-repository.test.ts and
+src/receipt-line-command-producer.test.ts passed 14 tests in two files;
+git diff --check passed. Database execution is unavailable in this sandbox:
+the three repaired PostgreSQL cases still require CI verification. This is not
+an independent RED review. No git write commands were run.
+
+
+## 31 October 2026: CI repair 1 at 87996900 — private source fence
+
+SV-2's runtime routine scan matched write_success_fee_v3.prosrc because its
+LOCK TABLE batch directly named app.shadow_signal_evidence,
+app.shadow_commercial_signal, app.shadow_disclosure_event and
+app.shadow_signal_ineligibility. No composite type or inlined SQL was needed
+for that match. Moved the complete source-lock batch, byte-for-byte, into
+app.lock_success_fee_sources(): migration-owned SECURITY DEFINER with pinned
+search_path=pg_catalog,app and all PUBLIC/runtime/infrastructure/shadow/emergency
+EXECUTE revoked. The writer calls it at precisely the prior position, after
+command validation and the authorization-table lock and before case/advisory/
+audit locks. The protected tables remain behind the private migration-owned
+path; no dynamic SQL, matching-name disguise or allow-list addition was used.
+The existing source reconstruction still uses recovery_attribution_sources.
+
+Added an actual-role regression to success-fee-access.integration.test.ts for
+the helper's owner, pinned path, exact owner-only grants and refused runtime
+call. Extended SERIOUS-B5's exact additive routine union by this helper only;
+its existing signature, SECURITY DEFINER, pinned-path and exact ACL assertions
+also apply to the new helper. The original shadow-catalog test is unchanged.
+No migration on main was edited; only branch-owned 0406 changed.
+
+LP-0 gains the private helper's owner/definition row and the writer's helper
+call edge. The writer's stored hash was already null; both affected/new bodies
+remain null pending PostgreSQL pg_get_functiondef capture, never source-hashed.
+Exact capture identities:
+function:app.write_success_fee_v3(uuid,text,jsonb,jsonb)
+function:app.lock_success_fee_sources()
+
+Local verification: packages/db installed tsc --noEmit passed; installed Vitest
+--maxWorkers=2 src/success-fee-repository.test.ts test/lp-0-catalog.test.ts passed
+36 tests in two files; node --test tools/lp-downstream-inventory.test.mjs passed
+all five tests; PL/pgSQL CASE-in-IF lint passed (166 migrations); git diff --check
+passed. Read-only assertions verified an identical source-lock batch, preserved
+lock-order position, no protected SV-2 pattern in the writer body, unchanged SV-2
+test, unique null LP-0 rows and changed files within this piece's lane.
+
+PostgreSQL is unavailable in this sandbox. No database/catalogue pass or journey
+pass is claimed. The router commit message includes the complete source-found
+success-fee/shadow-catalog test inventory (including related upgrade/catalogue
+coverage) for coordinator rerun, plus the exact hash-capture identities.
+Independent exact-head RED review and existing release gates remain required.
+No git write command was run.
+
+
+## 1 November 2026 — M4-9-S-COMPENSATE catch-up (READY for router commit; RED)
+
+Reconciled the router-started merge against the existing local origin/main
+`d41b81946c966bffc81f74330d95822da0fff735`. No fetch, Git metadata write,
+commit, push or database startup was performed. Conflict markers are resolved
+in the working files; the read-only index still records the router's unfinished
+merge. The router must stage these resolutions and finish that merge.
+
+The sole new migration is `0511_success_fee_recovery_compensation.sql`. Its
+bytes exactly match the reviewed `d8953a2c` file named
+`0516_success_fee_recovery_compensation.sql`, including `terms_auth` rather
+than the conflicting record alias. The obsolete branch migration collapses;
+main's catch migrations are unchanged. The seven requested core/database
+files come from that same reviewed revision, changing only the compensation
+filename stem in test migration references. None requires simulation-money
+run tables or routines, and none was imported.
+
+Main has no per-migration proof directory (#499 is absent). LP-0 grant-freeze
+and tenancy tests remain byte-identical to main: this migration adds no
+table/routine/grant identity. Both inventories retain main's facts and add
+only success-fee routine metadata and the downstream success-fee catalogue
+facts. SERIOUS-B5 takes only the reviewed successFeeCatchAdditions index
+change; main's mobileAuthStoreAdditions, keyRegistryAdditions and every other
+helper remain intact. This corrects the historical compensation note above:
+the replaced journal uniqueness index and new source indexes must be reflected
+in B5. Only this piece's lane file changes, listing exact changed paths.
+
+Actual local checks, installed binaries, at most two workers:
+
+- Core Vitest: success-fee-posting.test.ts, success-fee-posting-fixtures.test.ts,
+  success-fee-catch-posting.test.ts — 3 files, 80 tests passed.
+- Database static Vitest: success-fee-recovery-compensation-catalog.test.ts and
+  lp-0-catalog.test.ts — 2 files, 30 tests passed.
+- Core and database TypeScript checks (`tsc -p <package>/tsconfig.json --noEmit`)
+  passed. Database tsconfig covers src, not PostgreSQL integration tests.
+- `git diff --check origin/main` passed. Deterministic scope check using the
+  existing lane exports against main plus untracked files passed: 14 paths,
+  one new migration above main, reviewed SQL byte equality.
+- `node tools/agent-lane-boundary-lint.mjs` was run and failed because the
+  unfinished merge index exposes main's staged changes and the old branch
+  history as lane edits. Full output: /tmp/m4-9-s-compensate-lane-check.txt.
+  This is not recorded as a lane pass. Router must rerun after staging and
+  committing the merge resolutions; no lane widening or checker edit is made.
+
+PostgreSQL cannot start/bind localhost in this sandbox. CI must run recovery
+compensation integration/catalogue/upgrade, catch-posting, serious-b5-upgrade,
+lp-0-grant-freeze and tenancy, at most two workers, plus the complete required
+PostgreSQL suite for this RED migration. Green CI and one independent RED
+review at the resulting exact head remain required. Migration 0510 (#460)
+must precede 0511 at merge; this piece lands ahead of #500. No production
+authority, live provider, fee collection, release or external refund is enabled.
+
+## M4-9-S-COMPENSATE-CATCHUP — migration proof isolation, 1 November 2026
+
+RED money; PR #501. This entry supersedes the preceding statement that #499
+is absent. HEAD already contains local origin/main (merge 8a875375), including
+#499 and the legacy registration of main's top migration 0510. No fetch or
+git mutation was performed. Migration 0511_success_fee_recovery_compensation
+retains its filename and byte-identical SQL.
+
+The new per-migration proof carries the exact ap-recovery-money before/after
+and write_success_fee_v3 static-call before/after formerly in the shared LP-0
+inventory. Its upgrade allowances remove exactly the old journal uniqueness
+index and add exactly the two journal and two source indexes, with explicit
+owner, null ACL and disabled index RLS attributes. The replaced source primary
+key retains the same catalogue attributes. Replaced routines retain their
+owner/ACL/definer/config attributes; no upgrade routine, policy, or row allowance
+is needed. The B5 fixture has no success-fee source rows to backfill. No tenancy
+attribute changes occur, so tenancy is empty. Historical populated source rows
+remain covered by success-fee-recovery-upgrade.integration.test.ts.
+
+Both shared LP-0 JSON files, serious-b5-upgrade, tenancy, the proof loader and
+the legacy list now match origin/main byte for byte. The downstream LP-0 input
+is a frozen historical inventory; the compensation catalogue test now reads
+the authoritative proof-combined inventory through loadReviewedInventory.
+It retains exact routine identity, static-call/write, runtime/PUBLIC/other-role
+execution and no-GRANT assertions. Own lane drops the reverted shared paths
+and permits the proof path; no other lane or loader changes.
+
+Actual local checks (installed Node 24.17.0 / Vitest 4.1.12, maxWorkers=2):
+
+- From packages/db: `./node_modules/.bin/vitest run --maxWorkers=2
+  test/migration-proof-loader.test.ts test/lp-0-catalog.test.ts
+  test/success-fee-recovery-compensation-catalog.test.ts`: 3 files, 56 tests pass.
+- From packages/core: `./node_modules/.bin/vitest run --maxWorkers=2
+  src/success-fee-posting.test.ts src/success-fee-posting-fixtures.test.ts
+  src/success-fee-catch-posting.test.ts`: 3 files, 80 tests pass.
+- From packages/db: `./node_modules/.bin/tsc -p tsconfig.json --noEmit`: pass.
+- Initial pnpm invocations stalled before starting the tools and were stopped;
+  the existing installed binaries above completed. No dependencies downloaded.
+- `git diff --check`: pass.
+- `node tools/agent-lane-boundary-lint.mjs`: fails on the three shared paths
+  reverted to main. Its local mode unions committed and unstaged paths, so
+  these disappear only once the router commits the catch-up. Do not widen
+  the lane to accommodate these reversions. Rerun the standard lint afterward.
+- Deterministic check using existing lanePathAllowed/migrationOrderViolations
+  against the final working-tree diff to origin/main plus untracked files:
+  pass, 12 paths. Checked SQL equality against HEAD and six baseline files
+  against origin/main. This is a deterministic scope check, not RED review.
+
+PostgreSQL/browser execution is unavailable in this read-only-git sandbox.
+Required CI: success-fee-recovery-compensation integration/catalogue,
+success-fee-recovery-upgrade, serious-b5-upgrade, lp-0-grant-freeze,
+lp-0-catalog, tenancy and migration-proof-loader; retain the full required
+PostgreSQL suite for this RED migration. Use at most two workers and at most
+three named Vitest files per invocation. No tests were disabled or loosened.
+Router commits/pushes; green CI and independent RED review at the exact head
+remain required before merge.

@@ -29,11 +29,11 @@ async function request(pool: Pool, actor: Actor, bound: boolean, work: (c: PoolC
 async function failure(c: PoolClient, sql: string, values: unknown[], expected: object = refused) {
   await c.query("SAVEPOINT attack");
   try { await expect(c.query(sql, values)).rejects.toMatchObject(expected); }
-  finally { await c.query("ROLLBACK TO attack"); }
+  finally { await c.query("ROLLBACK TO attack"); await c.query("RELEASE attack"); }
 }
 interface Routine { name: string; names: string[]; types: string[]; executable: boolean }
 async function routines() {
-  const migration = readFileSync(new URL("../migrations/0525_lp6c_money_binding.sql", import.meta.url), "utf8");
+  const migration = readFileSync(new URL("../migrations/0570_lp6c_money_binding.sql", import.meta.url), "utf8");
   const names = [...migration.matchAll(/CREATE OR REPLACE FUNCTION app\.(\w+)\(/gu)].map(m => m[1]);
   const rows = (await db.owner.query<Routine>(`SELECT p.proname name,p.proargnames names,
     ARRAY(SELECT format_type(x,NULL) FROM unnest(p.proargtypes::oid[]) x) types,
@@ -165,4 +165,43 @@ it("permits a bound owner through the invoice owner/resource boundary and number
   });
   await db.owner.query("UPDATE app.membership SET role='worker' WHERE tenant_id=$1 AND id=$2", [s.tenant, s.member]);
   await request(db.owner, s, true, c => failure(c, "SELECT app.final_lock_require_owner($1,$2)", [s.tenant, s.member], { code: "42501", message: "FORBIDDEN" }));
+});
+
+it("financial ports reject another live approver while a matching exact approval passes", async () => {
+  const s = await session(), peer = await session(s.tenant);
+  await request(db.owner, s, true, async c => {
+    const own = randomUUID(), foreign = randomUUID(), hash = "a".repeat(64);
+    for (const [id, member] of [[own, s.member], [foreign, peer.member]]) {
+      await c.query(`INSERT INTO app.financial_authorization(id,tenant_id,membership_id,purpose,amount_pence,currency,artifact_hash,status)
+        VALUES($1,$2,$3,'plan_obligation',100,'GBP',$4,'approved')`, [id, s.tenant, member, hash]);
+    }
+    await c.query("SELECT app.assert_financial_authorization($1,$2,'plan_obligation',100,'GBP',$3)", [s.tenant, own, hash]);
+    for (const r of (await routines()).filter(r => ["assert_financial_authorization", "post_plan_obligation", "post_plan_settlement", "reverse_journal"].includes(r.name))) {
+      const attack = call(r, s);
+      attack.values[r.names.indexOf("a")] = foreign;
+      await failure(c, attack.sql, attack.values);
+    }
+    await failure(c, "SELECT app.assert_financial_authorization($1,$2,'plan_obligation',101,'GBP',$3)",
+      [s.tenant, own, hash], { code: "42501", message: "exact approved financial authorization required" });
+    expect((await c.query("SELECT count(*)::int n FROM app.journal WHERE tenant_id=$1", [s.tenant])).rows[0].n).toBe(0);
+  });
+});
+
+it("command effect/completion helpers reject a persisted claim for another live member before returning or changing it", async () => {
+  const s = await session(), peer = await session(s.tenant);
+  await request(db.owner, s, true, async c => {
+    const command = randomUUID(), resource = { tenantId: s.tenant, actorMembershipId: peer.member, subjectType: "job", subjectRef: randomUUID() };
+    // LP-5c fixture writes use the owner, never runtime receipt writes.
+    await c.query(`INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id)
+      VALUES($1,$2,'synthetic.lock',$3,$4,'processing',$5)`, [s.tenant, command, `lp6c:${command}`, "a".repeat(64), peer.member]);
+    await c.query(`INSERT INTO app.command_lifecycle_claim(tenant_id,command_id,actor_membership_id,version,resource,expected_revisions,significant_input)
+      VALUES($1,$2,$3,'command.v1',$4,'{}','{}')`, [s.tenant, command, peer.member, resource]);
+    const before = (await c.query("SELECT row_to_json(c) value FROM app.command_lifecycle_claim c WHERE tenant_id=$1 AND command_id=$2", [s.tenant, command])).rows;
+    await failure(c, "SELECT app.lp5_bind_effect($1,NULL,'activation','{}')", [command]);
+    await failure(c, "SELECT app.complete_command($1,'{}')", [command]);
+    const after = (await c.query("SELECT row_to_json(c) value FROM app.command_lifecycle_claim c WHERE tenant_id=$1 AND command_id=$2", [s.tenant, command])).rows;
+    expect(after).toEqual(before);
+    await failure(c, "SELECT app.begin_command('command.v1',$1,'synthetic.lock',$2,$3,'{}','{}')", [command, `lp6c:${command}`, resource]);
+    expect((await c.query("SELECT status FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [s.tenant, command])).rows[0].status).toBe("processing");
+  });
 });

@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-11b-trace": {
+      "branches": [
+        "codex/sandbox/ent-11b-trace"
+      ],
+      "note": "ENT-11b traceability and sales-claim checks only; no product, schema or provider changes. Recorded human rehearsals remain missing.",
+      "allow": [
+        "apps/api/src/contractor/full-demo-package-sales.test.ts",
+        "apps/web/app/api/contractor/statements/[action]/route.test.ts",
+        "apps/web/e2e/ENT-11b.spec.ts",
+        "docs/operations/contractor-full-demo-package.md"
+      ]
+    }
+  }
+}

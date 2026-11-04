@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Pool } from "pg";
+import * as core from "@jobguard/core";
 import { readFile } from "node:fs/promises";
 import { migrate } from "./migrate.js";
 import { SmallBuilderDemoRepository } from "./small-builder-demo-repository.js";
@@ -47,6 +48,38 @@ describe("DEMO-I repository boundary (no PostgreSQL proof)",()=>{
  it("fails closed on invented completion fields and redacts database details",async()=>{
   const f=fixture({...run,status:"completed",pence:100});await expect(f.repo.execute(f.context,digest,"create",null,command)).rejects.toThrow("DEMO_UNAVAILABLE");
   const g=fixture(undefined,new Error("foreign company secret"));await expect(g.repo.execute(g.context,digest,"read",id,{})).rejects.toThrow("DEMO_UNAVAILABLE");
+ });
+ it("derives meter references only after the owned SQL result and reproduces exact replay",async()=>{
+  const stored={...run,scenario:"meter"};const f=fixture(stored);
+  const result=await f.repo.execute(f.context,digest,"create",null,{...command,scenario:"meter"});
+  expect(result).toMatchObject({status:"blocked",meterPreview:{tenantId:id,runId:id,hypothetical:true}});
+  if(!("meterPreview" in result)||!result.meterPreview)throw new Error("Expected preview");
+  expect(result.meterPreview.profiles.map(p=>p.principalPence)).toEqual([34800,82800,8900,7900,16900,4900,4900,6233,6965,16900]);
+  expect(await f.repo.execute(f.context,digest,"read",id,{})).toEqual(result);
+  expect(f.query.mock.calls.filter(call=>call[0].startsWith("SELECT app.small_builder_demo"))).toHaveLength(2);
+  const denied=fixture(stored,new Error("DEMO_NOT_FOUND"));
+  await expect(denied.repo.execute(denied.context,digest,"read",id,{})).rejects.toThrow("DEMO_NOT_FOUND");
+ });
+ it("never enriches immutable lifecycle reports with unsaved money projections",async()=>{
+  const stored={version:"small-builder-demo-report.v1",snapshotId:id,facts:{...run,scenario:"meter"}};
+  const f=fixture(stored);
+  expect(await f.repo.execute(f.context,digest,"report",id,{})).toEqual(stored);
+ });
+ it.each(["create","reset","read"] as const)("returns saved %s with a redacted note when the preview producer fails",async operation=>{
+  const stored={...run,scenario:"meter"};const f=fixture(stored);
+  const preview=vi.spyOn(core,"previewDemoMeter").mockImplementationOnce(()=>{throw new Error("private producer details");});
+  try {
+   const input=operation==="create" ? {...command,scenario:"meter"} : operation==="reset" ? {contractVersion:"small-builder-demo.reset.v1",commandId:id,expectedRunRevision:1} : {};
+   const result=await f.repo.execute(f.context,digest,operation,operation==="create"?null:id,input);
+   expect(result).toEqual({...stored,meterPreviewNote:"Preview unavailable."});
+   expect(core.smallBuilderDemoRunV1.parse(result)).toEqual(result);
+   expect(JSON.stringify(result)).not.toContain("private producer details");
+   expect(preview).toHaveBeenCalledOnce();
+   expect(f.query).toHaveBeenLastCalledWith("COMMIT");
+   expect(f.query.mock.calls.some(call=>call[0]==="ROLLBACK")).toBe(false);
+   expect(f.release).toHaveBeenCalledOnce();
+   expect(await f.repo.execute(f.context,digest,"read",stored.runId,{})).toMatchObject({...stored,meterPreview:{runId:stored.runId,hypothetical:true}});
+  } finally { preview.mockRestore(); }
  });
  it("reads only an exact requested stored snapshot without accepting report facts",async()=>{
   const report={version:"small-builder-demo-report.v1",snapshotId:id,facts:run};const f=fixture(report);

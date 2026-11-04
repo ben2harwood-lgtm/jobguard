@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { expect, it } from "vitest";
 
 const directory = new URL("../migrations/", import.meta.url);
-const migration = "0525_lp6c_money_binding.sql";
+const migration = "0570_lp6c_money_binding.sql";
 // This is a regression contract for copied bodies, not a permission scanner or source pin.
 const functions = (sql: string) => [...sql.matchAll(/CREATE (?:OR REPLACE )?FUNCTION\s+app\.(\w+)\s*\((.*?)\)\s*RETURNS\b(.*?)\bAS\s+(\$\w*\$)(.*?)\4\s*;/gis)];
 const key = (m: RegExpMatchArray) => m[1]! + m[2]!.replace(/\s+|\(\d+(?:,\d+)?\)/gu, "").toLowerCase();
@@ -42,4 +42,37 @@ it("moves the meter bridge to the common credential binding and keeps its enviro
   expect(meter).toContain("environment='synthetic_demo'");
   expect(meter).toContain("m.role IN('owner','admin')");
   expect(sql()).not.toMatch(/DROP |GRANT .* TO jobguard_runtime/u);
+});
+
+it("guards command claim actors before effect updates and completion/replay use", () => {
+  for (const name of ["lp5_bind_effect", "complete_command"]) {
+    const body = functions(sql()).find(m => m[1] === name)![5]!;
+    const check = body.indexOf("c.actor_membership_id IS DISTINCT FROM app.current_actor()");
+    expect(check).toBeGreaterThan(body.indexOf("SELECT * INTO c FROM app.command_lifecycle_claim"));
+    expect(check).toBeLessThan(body.indexOf("SELECT * INTO r FROM app.command_receipt"));
+  }
+  const begin = functions(sql()).find(m => m[1] === "begin_command")![5]!;
+  expect(begin.indexOf("(p_resource->>'actorMembershipId')::uuid IS DISTINCT FROM app.current_actor()"))
+    .toBeLessThan(begin.indexOf("SELECT * INTO reg"));
+});
+
+it("declares exactly the five owner-only binding grants and exact identity-form proof arguments", () => {
+  const proof = JSON.parse(readFileSync(new URL("./migration-proofs/0570_lp6c_money_binding.proof.json", import.meta.url), "utf8"));
+  expect(proof.migration).toBe(migration);
+  const grants = proof.lp0.filter((c: { section: string }) => c.section === "entries")
+    .map((c: { after: { key: string } }) => c.after.key);
+  expect(grants.sort()).toEqual([
+    "acl|routine|function:app.bind_request(text,text,uuid)|jobguard_migration|EXECUTE|-",
+    ...["current_actor", "current_tenant"].flatMap(name => ["jobguard_command_writer", "jobguard_migration"]
+      .map(role => `acl|routine|function:app.${name}()|${role}|EXECUTE|-`)),
+  ].sort());
+  expect(proof.upgrade).toHaveLength(3);
+  for (const change of proof.upgrade) {
+    expect(change.section).toBe("routines");
+    expect(change.after.args).toBe(change.before.args);
+    expect(change.after.args).not.toMatch(/DEFAULT/u);
+    const { proacl: _beforeAcl, ...before } = change.before;
+    const { proacl: _afterAcl, ...after } = change.after;
+    expect(after).toEqual(before);
+  }
 });

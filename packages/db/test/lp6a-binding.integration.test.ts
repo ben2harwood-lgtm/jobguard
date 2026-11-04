@@ -106,8 +106,8 @@ it("keeps concurrent requests isolated and takes only a session SHARE row lock",
   await Promise.all([a,b].map(s => request(async c => {
     await bind(c,s);
     expect((await c.query("SELECT app.current_actor() actor")).rows[0].actor).toBe(s.member);
-    const locks = (await c.query(`SELECT mode,relation::regclass::text rel FROM pg_locks
-      WHERE pid=pg_backend_pid() AND locktype='relation' AND mode IN ('RowShareLock','RowExclusiveLock')`)).rows;
+    const locks = (await c.query(`SELECT mode,relation::regclass::text rel FROM pg_locks l JOIN pg_class c ON c.oid=l.relation
+      WHERE pid=pg_backend_pid() AND locktype='relation' AND c.relkind='r' AND mode IN ('RowShareLock','RowExclusiveLock')`)).rows;
     expect(locks.filter(r => r.mode === "RowShareLock").map(r => r.rel)).toEqual(["identity.session"]);
     expect(locks.filter(r => r.mode === "RowExclusiveLock").map(r => r.rel)).toEqual(["control_plane.request_binding"]);
   })));
@@ -161,7 +161,7 @@ it("expires an already-bound request and refuses a bind waiting behind revocatio
 });
 
 it("rejects unsafe administrative provisioning before installing any binding object",async()=>{
-  const sql=await readFile(new URL("../migrations/0520_lp6a_request_binding.sql",import.meta.url),"utf8");
+  const sql=await readFile(new URL("../migrations/0562_lp6a_request_binding.sql",import.meta.url),"utf8");
   const admin=await db.owner.connect();
   try{
     for(const defect of ["ALTER ROLE jobguard_binding_owner LOGIN","GRANT jobguard_binding_owner TO jobguard_runtime",
@@ -176,7 +176,7 @@ it("rejects unsafe administrative provisioning before installing any binding obj
 });
 
 it("accepts only the exact temporary migration membership while executing as that role",async()=>{
-  const sql=await readFile(new URL("../migrations/0520_lp6a_request_binding.sql",import.meta.url),"utf8");
+  const sql=await readFile(new URL("../migrations/0562_lp6a_request_binding.sql",import.meta.url),"utf8");
   const preflight=sql.slice(0,sql.indexOf("-- Temporary schema CREATE"));
   const admin=await db.owner.connect();
   try{

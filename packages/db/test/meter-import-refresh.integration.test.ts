@@ -10,7 +10,7 @@ import { activateMeterJob } from "./meter-journey-fixtures.js";
 let f: WorkFixture;
 beforeAll(async()=>{ f=await createWorkFixture(); },60000);
 afterAll(async()=>closeWorkFixture(f));
-it("a real term-less adoption cannot roll back subscribe, upgrade, finish, close, site activity or a final lock; new admission still refuses",async()=>{
+it("a real term-less adoption cannot roll back subscribe, upgrade, finish, close, site activity or a final lock; classified imports no longer block new admission",async()=>{
  const a=await meterCompany(f); await activateMeterJob(f,a);
  const parties=(await f.admin.query(`SELECT b.customer_revision_id customer,b.site_revision_id site FROM app.job_party_binding b
  JOIN app.job_party_current c ON(c.tenant_id,c.binding_id)=(b.tenant_id,b.id) WHERE b.tenant_id=$1 AND b.job_id=$2`,[a.tenantId,a.jobId])).rows[0];
@@ -45,7 +45,7 @@ it("a real term-less adoption cannot roll back subscribe, upgrade, finish, close
  // A legacy import has no activation terms even after closing; keep it live in
  // the other regression checks and prove explicit admission never uses zero.
  const fresh=await seedWorkJob(f,a.tenantId); await activateMeterJob(f,fresh);
- await expect(work.command(fresh.context,fresh.jobId,fresh.actorId,{version:"job-work-state-command.v1",commandId:randomUUID(),expectedRevision:0,action:"resume"})).rejects.toThrow("CAPACITY_ADMISSION_UNAVAILABLE");
+ await expect(work.command(fresh.context,fresh.jobId,fresh.actorId,{version:"job-work-state-command.v1",commandId:randomUUID(),expectedRevision:0,action:"resume"})).resolves.toBeDefined();
  const account=await prepareWorkAccount(f,a), lock=new FinalAccountLockRepository(f.runtime);
  await lock.acceptTerms(a.context,{actorMembershipId:a.actorId,commandId:randomUUID(),termsVersion:"synthetic_final_check_terms.v1"});
  await lock.disposition(a.context,{jobId:a.jobId,actorMembershipId:a.actorId,commandId:randomUUID(),scopeItemId:a.scopeId,disposition:"done"});
@@ -60,5 +60,5 @@ it("a real term-less adoption cannot roll back subscribe, upgrade, finish, close
  await expect(work.command(foreign.context,imported,foreign.actorId,finish)).rejects.toThrow("WORK_STATE_FORBIDDEN");
  expect(await workTenant(f.admin,a.tenantId,async db=>{
   await db.query("SET LOCAL ROLE jobguard_migration"); return (await db.query("SELECT (app.mon1_refresh_work_ledger($1)).source_hash hash",[a.tenantId])).rows[0].hash;
- })).toBeNull();
+ })).toMatch(/^[a-f0-9]{64}$/u);
 });
