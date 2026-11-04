@@ -1,12 +1,16 @@
 BEGIN;
--- LP-11 staged cutover, after LP-10 and credential-bootstrap compatibility.
--- HELD: do not apply before those predecessors and the exact security proof
--- allowances land. Credential bootstrap must not depend on a not-yet-bound
--- tenant. No compatibility fallback to a caller-set GUC is permitted.
+-- LP-11 staged cutover on the inherited LP-6b through LP-10 implementation.
+-- HELD for bootstrap/worker compatibility and exact security proof allowances.
+-- Credential bootstrap must not depend on a not-yet-bound tenant. LP-10's
+-- lp10_lock_action reads the outbox before worker_action_binding exists, and
+-- worker_action_context revalidates through that same lookup. Routing policies
+-- recursively through either helper is not a solution. No caller-set GUC
+-- fallback, duplicate credential resolver or replacement worker binder here.
 -- Forward fix only: repair a policy while keeping the bound-tenant predicate;
 -- never restore caller-selected tenant authority on rollback.
 -- Existing policy principals only. No PUBLIC grant or binding-store access.
-GRANT EXECUTE ON FUNCTION app.current_tenant() TO jobguard_audit_writer,
+-- LP-6e already grants the audit writer this accessor.
+GRANT EXECUTE ON FUNCTION app.current_tenant() TO
  jobguard_identity,jobguard_meter,jobguard_meter_owner,jobguard_shadow;
 DO $cutover$
 DECLARE

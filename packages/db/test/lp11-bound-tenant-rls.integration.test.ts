@@ -9,8 +9,8 @@ beforeAll(async () => { db = await jobDoorsDatabase(true); }, 300_000);
 afterAll(async () => { await db?.close(); });
 const ident = (value: string) => `"${value.replaceAll('"', '""')}"`;
 
-async function session() {
-  const actor = await jobDoorsActor(db.owner), credential = randomBytes(32).toString("hex");
+async function session(tenant?: string) {
+  const actor = await jobDoorsActor(db.owner, tenant), credential = randomBytes(32).toString("hex");
   await db.owner.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)",
     [`${actor.person}@fictional.invalid`, actor.person]);
   await db.owner.query("INSERT INTO identity.membership_locator VALUES($1,$2,$3)",
@@ -25,6 +25,48 @@ async function refused(client: PoolClient, sql: string, params: unknown[] = []) 
   try { await expect(client.query(sql, params)).rejects.toMatchObject({ code: "42501" }); }
   finally { await client.query("ROLLBACK TO attack; RELEASE attack"); }
 }
+
+it("keeps the exact inherited binding signatures and private helpers closed to runtime", async () => {
+  const signatures = (await db.owner.query(`SELECT p.oid::regprocedure::text signature
+    FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+    WHERE n.nspname='app' AND p.proname=ANY($1::text[]) ORDER BY 1`,
+  [["bind_request", "current_actor", "current_tenant", "lp6_bound_request", "lp6_session_authority"]])).rows;
+  expect(signatures.map(row => row.signature)).toEqual([
+    "app.bind_request(text,text,uuid)", "app.current_actor()", "app.current_tenant()",
+    "app.lp6_bound_request()", "app.lp6_session_authority(text,text,uuid)",
+  ]);
+  const a = await session(), c = await db.runtime.connect();
+  try {
+    await c.query("BEGIN");
+    await c.query("SELECT set_config('app.tenant_id',$1,true),set_config('app.actor_id',$2,true)", [a.tenant, a.member]);
+    await refused(c, "SELECT app.lp6_bound_request()");
+    await refused(c, "SELECT * FROM app.lp6_session_authority('real',$1,$2)", [a.credential, a.tenant]);
+    for (const table of ["request_binding", "worker_action_binding"]) {
+      await refused(c, `SELECT * FROM control_plane.${table}`);
+    }
+  } finally { await c.query("ROLLBACK"); c.release(); }
+});
+
+it("refuses unbound forgery and wrong-tenant or same-tenant actor rebinding without changing rows", async () => {
+  const a = await session(), b = await session(), coworker = await session(a.tenant);
+  const before = (await db.owner.query("SELECT * FROM app.account WHERE tenant_id=ANY($1::uuid[]) ORDER BY id", [[a.tenant, b.tenant]])).rows;
+  const c = await db.runtime.connect();
+  try {
+    await c.query("BEGIN");
+    await c.query(`SELECT set_config('app.tenant_id',$1,true),set_config('app.actor_id',$2,true),
+      set_config('app.signed_context','forged',true)`, [b.tenant, b.member]);
+    for (const fn of ["current_actor", "current_tenant"]) await refused(c, `SELECT app.${fn}()`);
+    await refused(c, "SELECT * FROM app.account");
+    await refused(c, "SELECT app.bind_request('real',$1,$2)", [a.credential, b.tenant]);
+    await c.query("SELECT app.bind_request('real',$1,$2)", [a.credential, a.tenant]);
+    await refused(c, "SELECT app.bind_request('real',$1,$2)", [coworker.credential, a.tenant]);
+    await refused(c, "SELECT app.bind_request('real',$1,$2)", [b.credential, b.tenant]);
+    expect((await c.query("SELECT app.current_actor() actor,app.current_tenant() tenant")).rows)
+      .toEqual([{ actor: a.member, tenant: a.tenant }]);
+    expect((await c.query("SELECT * FROM app.account WHERE tenant_id=$1", [b.tenant])).rows).toEqual([]);
+  } finally { await c.query("ROLLBACK"); c.release(); }
+  expect((await db.owner.query("SELECT * FROM app.account WHERE tenant_id=ANY($1::uuid[]) ORDER BY id", [[a.tenant, b.tenant]])).rows).toEqual(before);
+});
 
 it("has no caller-selected tenant policy, including owner and identity alternatives", async () => {
   const policies = await db.owner.query(`SELECT schemaname,tablename,policyname,qual,with_check
@@ -159,6 +201,12 @@ it("upgrades the latest predecessor without changing rows, columns, policy roles
   try {
     const actor = await jobDoorsActor(predecessor.owner);
     const beforePolicies = await policies(), beforeColumns = await columns();
+    const routineBodies = async () => (await predecessor.owner.query(`SELECT n.nspname,p.proname,
+      pg_get_function_identity_arguments(p.oid) args,p.prosrc,p.proowner,p.prosecdef,p.proconfig
+      FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+      WHERE n.nspname IN ('app','identity','control_plane','connector') AND p.prokind='f'
+      ORDER BY n.nspname,p.proname,args`)).rows;
+    const beforeRoutines = await routineBodies();
     const beforeAccount = (await predecessor.owner.query("SELECT * FROM app.account WHERE tenant_id=$1", [actor.tenant])).rows;
     const beforeMembership = (await predecessor.owner.query("SELECT * FROM app.membership WHERE tenant_id=$1", [actor.tenant])).rows;
     await predecessor.owner.query(await readFile(new URL("../migrations/0810_lp11_bound_tenant_rls.sql", import.meta.url), "utf8"));
@@ -190,6 +238,9 @@ it("upgrades the latest predecessor without changing rows, columns, policy roles
         }
       }
     }
+    // In particular, retain LP-6d's private practice projection, LP-6e's audit
+    // attribution and LP-10's exact worker checks; LP-11 recreates none of them.
+    expect(await routineBodies()).toEqual(beforeRoutines);
     expect(await columns()).toEqual(beforeColumns);
     expect((await predecessor.owner.query("SELECT * FROM app.account WHERE tenant_id=$1", [actor.tenant])).rows).toEqual(beforeAccount);
     expect((await predecessor.owner.query("SELECT * FROM app.membership WHERE tenant_id=$1", [actor.tenant])).rows).toEqual(beforeMembership);
