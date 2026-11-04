@@ -243,6 +243,8 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "command:proof.complete": "watchdog_live_only",
   "command:purchase_order.simulate": "watchdog_live_only",
   "command:purchase_order.place": "watchdog_live_only",
+  "command:purchase_order.send.dark": "watchdog_live_only",
+  "command:purchase_order.attest_manual": "watchdog_live_only",
   "command:recovery.message.approve": "post_live_billing",
   "command:recovery.follow_up.approve_reminder": "post_live_billing",
   "command:quote.acceptance.attest": "pre_live_allowed",
