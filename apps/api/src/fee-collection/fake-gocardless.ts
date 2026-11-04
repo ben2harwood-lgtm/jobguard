@@ -16,6 +16,12 @@ const paymentEvent = z.object({ version: z.literal("fake-dd-event.v1"), environm
 }).strict();
 const mandateEvent = z.object({ version: z.literal("fake-dd-mandate-event.v1"), environment: z.literal("synthetic_demo"),
   account: z.literal("fake_jobguard_dd"), tenantId: id, mandateId: id, eventId: id, state: mandateState }).strict();
+export type FakeDirectDebitEvent = z.infer<typeof mandateEvent> | z.infer<typeof paymentEvent>;
+/** Prebound trusted routing; receives only signature-verified, schema-checked events.
+ * It must check tenant/object/amount bindings and answer replays from its store. */
+export interface FakeDirectDebitRecorder {
+  record(event: FakeDirectDebitEvent): Promise<{ code: "processed"; eventIds: readonly string[] }>;
+}
 const digest = (v: unknown) => createHash("sha256").update(JSON.stringify(v)).digest("hex");
 const invalid = (): never => { throw new FeeCollectionError("INVALID_WEBHOOK"); };
 /** In-memory deterministic specimen, NOT the GoCardless API/signing protocol.
@@ -29,7 +35,8 @@ export class FakeGoCardlessRail implements CollectionRail {
   private readonly accepted = new Map<string, { hash: string; objectId: string }>();
   private readonly mandateEvents = new Map<string, string>();
   crashAfterAcceptance = false;
-  constructor(private readonly testSigningSecret: string, private readonly now: () => Date = () => new Date()) {}
+  constructor(private readonly testSigningSecret: string, private readonly now: () => Date = () => new Date(),
+    private readonly recorder?: FakeDirectDebitRecorder) {}
   setup(raw: unknown) {
     const input = parse(setupV1, raw);
     const key = `${input.tenantId}:${input.commandId}`;
@@ -107,6 +114,21 @@ export class FakeGoCardlessRail implements CollectionRail {
     const value = this.accepted.get(`${tenantId}:${commandId}`);
     if (!value) throw new FeeCollectionError("COLLECTION_REFUSED");
     return value.objectId;
+  }
+  /** Dark store-only ingestion. No executor or financial effects. Existing sync
+   * verification/mandate APIs keep their original in-memory behaviour. */
+  async recordWebhookBatch(body: string, signature: string) {
+    const events = this.verifiedBatch(body, signature);
+    const results: ({ code: string; eventIds?: readonly string[] })[] = [];
+    for (const raw of events) {
+      const parsed = z.union([mandateEvent, paymentEvent]).safeParse(raw);
+      if (!parsed.success) { results.push({ code: "INVALID_WEBHOOK" }); continue; }
+      const event = parsed.data;
+      if (!this.recorder) { results.push({ code: "COLLECTION_REFUSED" }); continue; }
+      try { results.push(await this.recorder.record(event)); }
+      catch (error) { results.push({ code: error instanceof FeeCollectionError ? error.code : "INVALID_WEBHOOK" }); }
+    }
+    return results;
   }
   verifyWebhookBatch(body: string, signature: string): readonly (RailEvent | FeeCollectionError)[] {
     return this.verifiedBatch(body, signature).map(raw => {

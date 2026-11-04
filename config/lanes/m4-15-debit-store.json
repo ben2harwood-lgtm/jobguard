@@ -7,6 +7,9 @@
       ],
       "note": "M4-15 RED synthetic durable facts only; NOPR. Real rail, wiring and policy remain held.",
       "allow": [
+        "apps/api/src/fee-collection/direct-debit-fixture-recorder.test.ts",
+        "apps/api/src/fee-collection/direct-debit-fixture-recorder.ts",
+        "apps/api/src/fee-collection/fake-gocardless-recorder.test.ts",
         "apps/api/src/fee-collection/fake-gocardless.ts",
         "docs/contracts/gocardless-dark-v1.md",
         "packages/core/src/direct-debit-lifecycle.test.ts",
@@ -18,6 +21,7 @@
         "packages/db/src/index.ts",
         "packages/db/test/direct-debit-fixture-repository.test.ts",
         "packages/db/test/direct-debit-fixture.integration.test.ts",
+        "packages/db/test/fake-direct-debit-recorder.integration.test.ts",
         "packages/db/test/later-empty-tables.ts",
         "packages/db/test/migration-proofs/0758_direct_debit_fixture_facts.proof.json"
       ]

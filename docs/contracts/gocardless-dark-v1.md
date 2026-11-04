@@ -102,3 +102,33 @@ wiring, notices, mandate replacement and retries await their own approvals and
 D04/D05. PostgreSQL migration/upgrade/tenancy, restart/concurrency and immutable
 fact tests require CI; green local unit checks are not database evidence or an
 independent RED review.
+
+## Optional signed-event recorder (M4-15 remains open)
+
+The fake rail now accepts an optional `FakeDirectDebitRecorder` constructor port.
+Its explicit async `recordWebhookBatch` method authenticates the bounded exact
+body/timestamp before parsing, validates each member separately, then records
+schema-valid mandate/collection events independently. Invalid members leave no
+fact and do not prevent later valid members from being processed. A missing port
+refuses recording. Existing synchronous verification, mandate setup/ingestion and
+executor consumers retain their original behaviour; none are wired to this seam.
+
+`DirectDebitFixtureRecorder` closes over caller-verified context and copies trusted
+mandate/request bindings at construction. It never resolves a tenant or request
+binding from payload fields. Tenant, account, mandate, command, object and amount
+must match those bindings; refunds are refused. Each call reads the durable head
+and uses the repository's existing compare-and-append transaction. Exact replays
+return event IDs from stored history, including after a fresh rail/pool. Changed
+content or competing new events preserve the store conflict; no automatic retry
+is introduced. Stored lifecycle projections remain the repository's authority:
+submission/confirmation is not payout, delayed progress cannot revive terminal
+states, and only a stored `paid_out` event can project payout.
+
+This adds no migration, role, grant, route, application registration or financial
+write. The new real-PostgreSQL test sends signed bodies through fresh rails and
+pools, checks concurrent duplicate delivery, forgery/routing/batch rejection and
+lifecycle ordering, and snapshots all tenant-owned app rows outside the fixture
+facts to check that financial rows do not change. It is written for CI, not run
+in this database-free sandbox. Local unit checks cannot establish those database
+guarantees. Real rail, wiring, cross-rail reservations, refunds, notice/settings,
+mandate replacement/retries and production gates remain held. M4-15 is not finished.
