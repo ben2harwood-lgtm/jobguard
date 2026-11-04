@@ -56,7 +56,7 @@ Forward fix: keep accepted agreements, artifacts, lineages, receipts, statements
 
 ## ENT-14 dark contractor mandate preflight
 
-`enterprise-fee-mandate.ts` follows the separate small-builder agreement shape without extending it.
+`contractor-fee-mandate.ts` follows the separate small-builder agreement shape without extending it.
 It defines a strict synthetic record bound to tenant, agreement version, exact agreement terms hash,
 rate, scope hash, recipient and validity window. Its approval binds the resulting selection hash and
 references notice-process evidence; it specifies no real wording or notice duration. A changed rate
@@ -85,7 +85,7 @@ process, D12 and D16. This implementation does not complete ENT-14 or any human/
 RED independent review against the exact head and required CI remain outstanding.
 
 Local validation for this piece: installed Vitest 4.1.12 with `--maxWorkers=2` ran
-`enterprise-fee-mandate.test.ts`, `subscription-agreement.test.ts` and
+`contractor-fee-mandate.test.ts`, `subscription-agreement.test.ts` and
 `enterprise-fee-statement.test.ts`: 41 tests passed (11 new named mandate tests).
 The installed core `tsc -p packages/core/tsconfig.json --noEmit` passed. Core purity,
 money arithmetic, commercial boundary, AI provider boundary, PL/pgSQL CASE lint and

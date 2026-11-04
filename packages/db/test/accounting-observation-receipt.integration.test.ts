@@ -26,13 +26,13 @@ beforeAll(async () => {
   await c.admin.query("INSERT INTO app.job(tenant_id,id,title,status) VALUES($1,$2,'Fictional accounting job','live')", [t, jobId]);
  }
  await c.admin.query("CREATE ROLE accounting_test_shadow LOGIN PASSWORD 'synthetic' NOSUPERUSER NOBYPASSRLS; GRANT jobguard_shadow TO accounting_test_shadow");
- shadow = new Pool({ ...c.admin.options, user: "accounting_test_shadow", max: 2 });
+ shadow = new Pool({ ...c.admin.options, user: "accounting_test_shadow", password: "synthetic", max: 2 });
 }, 120000);
 afterAll(async () => { await shadow?.end(); await c?.close(); });
 it("separate runs and fresh pool connections emit one observation; new version emits again", async () => {
  const o = observation(), scope = { tenantId, jobId };
  expect(await emitter().emit(context, scope, batch([o]))).toHaveLength(1);
- const fresh = new Pool({ ...c.admin.options, user: "accounting_test_shadow", max: 1 });
+ const fresh = new Pool({ ...c.admin.options, user: "accounting_test_shadow", password: "synthetic", max: 1 });
  try {
   const restarted = new FakeAccountingObservationEmitter(new AccountingObservationReceiptRepository(fresh));
   expect(await restarted.emit(context, scope, batch([o]))).toEqual([]);

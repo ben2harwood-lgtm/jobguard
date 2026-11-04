@@ -1,9 +1,9 @@
 BEGIN;
 -- Identifier-only worker discovery. FORCE RLS remains active: inspect one tenant at a time,
--- just as identity bootstrap does. Function-local GUC restores the caller's context on exit.
+-- just as identity bootstrap does. Restore the caller's tenant context after discovery.
 CREATE FUNCTION infrastructure.discover_extra_escalations() RETURNS TABLE(tenant_id uuid)
-LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog SET app.tenant_id='' AS $$
-DECLARE t uuid;
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE t uuid; caller text:=current_setting('app.tenant_id',true);
 BEGIN
  IF current_database()<>'jobguard_synthetic_demo' THEN
   RAISE EXCEPTION 'MODE_FORBIDDEN' USING ERRCODE='42501';
@@ -28,6 +28,7 @@ BEGIN
      WHERE (e.tenant_id,e.request_id,e.step_index)=(r.tenant_id,r.id,progress.n))
   ) THEN tenant_id:=t; RETURN NEXT; END IF;
  END LOOP;
+ PERFORM set_config('app.tenant_id',coalesce(caller,''),true);
 END $$;
 ALTER FUNCTION infrastructure.discover_extra_escalations() OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION infrastructure.discover_extra_escalations() FROM PUBLIC,jobguard_runtime,jobguard_infrastructure;

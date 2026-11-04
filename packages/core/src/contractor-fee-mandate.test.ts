@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { checkSyntheticEnterpriseFeeMandate, enterpriseFeeMandateHash, enterpriseFeeMandateRecordV1,
-  refuseLiveEnterpriseFeeMandate } from "./enterprise-fee-mandate.js";
+  refuseLiveEnterpriseFeeMandate } from "./contractor-fee-mandate.js";
 
 const a = "00000000-0000-4000-8000-000000000001";
 const b = "00000000-0000-4000-8000-000000000002";
