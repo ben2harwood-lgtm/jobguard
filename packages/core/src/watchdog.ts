@@ -15,6 +15,7 @@ export type JobCommandPhase = "pre_live_allowed" | "watchdog_live_only" | "post_
  * New site facts, documents, orders, proof and messages must be live-only. */
 export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "/api/jobs/[id]/recovery-cases/[caseId]/billability": "post_live_billing",
+  "/api/jobs/[id]/reconciliation/[runId]/adjustments": "post_live_billing",
   "/api/customer-portal/quote": "pre_live_allowed",
   "/api/customer-portal/quote-accept": "pre_live_allowed",
   "nest:/customer-portal/quote": "pre_live_allowed",

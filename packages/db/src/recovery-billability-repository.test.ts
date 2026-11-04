@@ -42,7 +42,7 @@ it("production, pilot and unconfigured paths refuse before opening a connection"
   }
 });
 it("read uses only the guarded routine and binds the case, job and session in a tenant transaction", async () => {
-  const calls: { sql: string; values?: unknown[] }[] = [];
+  const calls: { sql: string; values: unknown[] | undefined }[] = [];
   const value = { version: "recovery-billability-view.v1", caseId: id(2), caseRevision: 1, lines: [], reviews: [] };
   const pool = { connect: async () => ({ query: async (sql: string, values?: unknown[]) => {
     calls.push({ sql, values }); return { rows: sql.startsWith("SELECT app.read_recovery_billability") ? [{ result: value }] : [] };

@@ -2,6 +2,7 @@ import "server-only";
 import { cookies } from "next/headers";
 import { authenticatePracticeSession, persistedBillabilityCommandV1, RecoveryBillabilityRepository } from "@jobguard/db";
 import { z } from "zod";
+import { resolveVerifiedTenantContext } from "@jobguard/api/identity";
 import { identityApplication } from "./identity-server";
 import { syntheticPool } from "./synthetic-server";
 
@@ -34,7 +35,7 @@ export async function recoveryBillabilityRequest(request: Request, jobId: string
     const identity = identityApplication();
     const session = await identity.session(identityToken);
     if (session.memberships.length !== 1 || session.memberships[0]?.role !== "owner") throw missing();
-    const context = await identity.context({ sessionToken: identityToken, requestedTenantId: session.memberships[0].tenantId, csrfToken: session.csrfToken, origin: identity.allowedOrigin });
+    const context = await resolveVerifiedTenantContext(identity.provider, { sessionToken: identityToken, requestedTenantId: session.memberships[0].tenantId, csrfToken: session.csrfToken, origin: identity.allowedOrigin }, identity.allowedOrigin);
     const digest = identity.provider.digest(`session:${identityToken}`);
     const view = await repository.read(context, jobId, caseId, digest);
     return input ? repository.command(context, jobId, digest, input) : view;

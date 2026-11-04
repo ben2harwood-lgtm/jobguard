@@ -8,12 +8,13 @@ import { StoredReceiptCaseAllocationRepository } from "../../../../../../../../.
 import { RecoveryBillabilityRepository } from "../../../../../../../../../packages/db/src/recovery-billability-repository.js";
 const state=vi.hoisted(()=>({pool:undefined as unknown,practice:"",identity:"",tenant:"",member:"",digest:""}));
 vi.mock("server-only",()=>({}));
+vi.mock("@jobguard/api/identity",()=>({resolveVerifiedTenantContext:async()=>testTenantContext(state.tenant)}));
 vi.mock("next/headers",()=>({cookies:async()=>({get:(key:string)=>({value:key==="jg_session"?state.practice:state.identity})})}));
 vi.mock("../../../../../../lib/synthetic-server",()=>({syntheticPool:()=>state.pool}));
 vi.mock("@jobguard/db",()=>import("../../../../../../../../../packages/db/src/index.js"));
 vi.mock("../../../../../../lib/identity-server",()=>({identityApplication:()=>({
  session:async()=>({csrfToken:"synthetic-csrf",memberships:[{tenantId:state.tenant,role:"owner"}]}),
- context:async()=>testTenantContext(state.tenant),allowedOrigin:"http://example.invalid",provider:{digest:()=>state.digest},
+ allowedOrigin:"http://example.invalid",provider:{digest:()=>state.digest},
 })}));
 import { POST, GET } from "./route";
 let f:FinalCheckFixture;

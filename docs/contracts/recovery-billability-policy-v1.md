@@ -116,7 +116,7 @@ does not create alternate adapters or fixtures to make them qualify. Non-billabl
 reviews are displayed as non-billable, never described as approved entitlement.
 
 Existing reads expose neither billability reviews nor a second owner's review
-projection. Migration `0750_recovery_billability_read.sql` therefore adds one
+projection. Migration `0835_recovery_billability_read.sql` therefore adds one
 read-only routine with runtime EXECUTE only. It checks current session/owner,
 tenant/job/case, owning practice session where applicable, and final-account lock
 before reading bound work/line identities and immutable review results. Unknown,
