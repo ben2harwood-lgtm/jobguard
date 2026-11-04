@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { DuplicateCandidates } from "./duplicate-candidates";
 import { NorthsidePractice } from "../../northside/northside-practice";
 import { pounds } from "../../lib/pounds";
 import styles from "../../northside/northside.module.css";
@@ -40,6 +41,10 @@ export function ExtraApprovals() {
     <h1>Extras to move along</h1>
     <p className={styles.note}>Practice data. You are signed in as <strong data-testid="approvals-role">{role || "…"}</strong>. Nothing is sent: the client link below is local. A pending fake outbox record is not delivery.</p>
     {error && <p role="alert" className={styles.error}>{error}</p>}
+    {["supervisor", "surveyor", "commercial_manager"].includes(role) && extras && <section aria-label="Possible duplicates">
+      <h2>Possible duplicates</h2>
+      {[...new Set(extras.map(x => x.jobId))].map(jobId => <DuplicateCandidates key={jobId} jobId={jobId} onChange={load} />)}
+    </section>}
     {extras === null ? <p role="status">Loading…</p> : extras.length === 0 ? <p data-testid="no-extras">No extras to show.</p> : extras.map(x => {
       const link = links[x.extraId];
       const card = pick[x.extraId] ?? { code: rates[x.jobId]?.[0]?.code ?? "", quantity: "1" };
