@@ -57,3 +57,21 @@ describe("M5-6 stored baseline application behavior (SQL transport only)", () =>
     expect(sql.mock.calls.map(([text]) => text)).toContain("ROLLBACK");
   });
 });
+
+it("reads checked job history with the session digest and rejects malformed/foreign result rows", async () => {
+  const stored = { id: randomUUID(), jobId, scopeItemId, previousRevisionId: currentRevisionId,
+    acceptedRatePence: 100, unit: "each", taxBasis: query.taxBasis, category: "paint", region: "london",
+    actorId: randomUUID(), acceptedAt: "2026-11-01T00:00:00.000Z", recordHash: "b".repeat(64), baselineHash: "a".repeat(64),
+    policyVersion: "rate-baseline.v1", provenance: "suggestion_accepted", environment: "synthetic_demo",
+    sources: Array.from({ length: 3 }, () => ({ observationId: randomUUID(), jobId, scopeItemId,
+      sourceScopeRevisionId: randomUUID(), provenance: "entered" })) };
+  let result: unknown = [stored];
+  const sql = vi.fn(async () => ({ rows: [{ result }] }));
+  const repo = new RateSuggestionRepository({ connect: async () => ({ query: sql, release: vi.fn() }) } as unknown as Pool);
+  expect(await repo.readAcceptances(context, actor, jobId)).toEqual([stored]);
+  expect(sql).toHaveBeenCalledWith("SELECT app.read_rate_suggestion_acceptances($1,$2) result", [actor.sessionDigest, jobId]);
+  result = [{ ...stored, jobId: randomUUID() }];
+  await expect(repo.readAcceptances(context, actor, jobId)).rejects.toThrow("INVALID_ACCEPTANCE_HISTORY");
+  result = [{ ...stored, sources: [], extra: "forged" }];
+  await expect(repo.readAcceptances(context, actor, jobId)).rejects.toThrow();
+});

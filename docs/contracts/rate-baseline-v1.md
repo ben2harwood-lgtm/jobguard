@@ -2,8 +2,8 @@
 
 This implements only the deterministic, synthetic portion permitted by BUILD_PLAN §12.4.
 The pure core module is exported from the core barrel. The dark stored reader and acceptance
-repository described below add migration 0762; neither is connected to a route, screen, provider
-or scheduler. No merchant adapter is required for this synthetic foundation.
+repository described below add migration 0762; the synthetic session route and screen below expose only stored suggestions and acceptances.
+No provider or scheduler is connected. No merchant adapter is required for this synthetic foundation.
 M5-5 remains unbuilt; this work does not satisfy or bypass its real integration dependency.
 G0–G5 are unchanged and no release approval is implied.
 
@@ -50,9 +50,9 @@ The dark authenticated command below checks membership, exact intent and current
 and records a separate immutable acceptance observation. It does not promote commercial scope. No accepted quote,
 agreed rate, invoice or cap is updated here.
 
-Still open for people: real held-out evaluation; any model beyond this baseline; any screen;
+Still open for people: real held-out evaluation; any model beyond this baseline;
 the real M5-5 merchant adapter; any cross-tenant privacy/commercial decision and design review;
-and wiring to a live route with authorization and persistence. Synthetic passing tests do
+and activation of any live route. Synthetic passing tests do
 not close any of these requirements or mark full M5-6 complete.
 
 ## Dark stored observations and human acceptance (0762)
@@ -86,4 +86,31 @@ PostgreSQL CI must verify these boundaries; local SQL transport tests do not pro
 
 M5-6 remains open: real held-out evaluation, later drift models, recurring-extra suggestions,
 merchant scoring, M5-5's real adapter and all applicable release gates remain held. There is
-no HTTP route, screen, worker, application composition, merchant data or cross-tenant learning.
+no live HTTP surface, worker, merchant data or cross-tenant learning.
+
+## Synthetic session screen and retained read (0765)
+
+The practice page `/jobs/[id]/rate-suggestions` and session-only GET/POST
+`/api/jobs/[id]/rate-suggestions` are refused outside `synthetic_demo`. The
+sole current session membership selects the company; ambiguous sessions fail
+closed. No request tenant, actor or session selector is accepted. POST requires
+a trusted browser origin. All responses use no-store. The checked history read
+requires the existing persisted small-builder owner authority covering this job,
+before baseline data is read or an acceptance is attempted.
+
+`readAcceptances(context, actor, jobId)` calls the sole read-only checked routine
+added by 0765. No table grants, roles, write routines or stored formats change.
+It returns actor membership ID (the stable who), server time, record/baseline
+hashes, target revision and immutable source observation/revision provenance.
+The client displays server counts, observed spread and policy; sparse data says
+not enough to say. Comparison fields and target item/revision IDs are explicit
+practice inputs; the server verifies the exact target and suggestion. The client
+retains the exact serialized command in session storage across uncertain retries
+and reloads, and clears it only on success or a definite refusal. Acceptance
+remains a separate observation; quote, quote-line, rate-book, agreed-rate, invoice
+and cap rows remain unchanged. No accepted observation feeds the baseline.
+
+PostgreSQL integration and catalog/upgrade suites plus the headless browser
+reload journey must run in CI; local transport/unit tests do not establish those
+guarantees. Exact-head independent RED review is still required. This does not
+finish M5-6; drift, recurring extras, merchant scoring, M5-5 and G0–G5 stay held.

@@ -13,6 +13,15 @@ export const storedRateAcceptanceV1 = z.object({ version: z.literal("rate-sugges
   acceptedRatePence: z.number().int().min(0).max(MAX_MONEY_PENCE), baselineHash: digest }).strict();
 const acceptanceResult = z.object({ id: uuid, actorId: uuid, recordHash: digest, provenance: z.literal("suggestion_accepted") }).strict();
 const humanActor = z.object({ kind: z.literal("human"), sessionDigest: digest }).strict();
+const storedAcceptancesV1 = z.array(z.object({
+  id: uuid, jobId: uuid, scopeItemId: uuid, previousRevisionId: uuid,
+  acceptedRatePence: z.number().int().min(0).max(MAX_MONEY_PENCE),
+  unit: label, taxBasis: label, category: label, region: label, actorId: uuid,
+  acceptedAt: z.iso.datetime(), recordHash: digest, baselineHash: digest,
+  policyVersion: z.literal("rate-baseline.v1"), provenance: z.literal("suggestion_accepted"), environment: z.literal("synthetic_demo"),
+  sources: z.array(z.object({ observationId: uuid, jobId: uuid, scopeItemId: uuid,
+    sourceScopeRevisionId: uuid, provenance: z.enum(["entered", "suggestion_accepted"]) }).strict()).min(3),
+}).strict());
 const observationSql = `SELECT coalesce(jsonb_agg(jsonb_build_object(
  'version','rate-observation.v1','id',o.id,'tenantId',o.tenant_id,'jobId',o.job_id,
  'scopeItemId',o.scope_item_id,'sourceScopeRevisionId',o.source_scope_revision_id,
@@ -55,6 +64,15 @@ export class RateSuggestionRepository {
   async read(context: VerifiedTenantContext, query: unknown) {
     storedRateQueryV1.parse(query);
     return withTenant(this.pool, context, db => storedBaseline(db.$client, context.tenantId, query));
+  }
+  async readAcceptances(context: VerifiedTenantContext, actor: unknown, rawJobId: unknown) {
+    const person = humanActor.parse(actor), jobId = uuid.parse(rawJobId);
+    return withTenant(this.pool, context, async db => {
+      const rows = storedAcceptancesV1.parse((await db.$client.query<{ result: unknown }>(
+        "SELECT app.read_rate_suggestion_acceptances($1,$2) result", [person.sessionDigest, jobId])).rows[0]!.result);
+      if (rows.some(row => row.jobId !== jobId)) throw new Error("INVALID_ACCEPTANCE_HISTORY");
+      return rows;
+    });
   }
   async accept(context: VerifiedTenantContext, actor: unknown, raw: unknown) {
     const person = humanActor.parse(actor), input = storedRateAcceptanceV1.parse(raw);
