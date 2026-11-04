@@ -1,3 +1,4 @@
+import { reconcileFinancialSnapshot } from "@jobguard/core";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { reportFixture, reportId, reportScope } from "../../../../../../e2e/helpers/reconciliation-report";
 const mocks = vi.hoisted(() => ({ read: vi.fn(), context: vi.fn(), pool: vi.fn(), session: "10000000-0000-4000-8000-000000000030" as string | undefined }));
@@ -10,12 +11,12 @@ const get = (id = reportScope.jobId, runId = reportId(20)) => route.GET(new Requ
 beforeEach(() => {
  vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
  mocks.session = reportId(30); mocks.pool.mockReturnValue({}); mocks.context.mockResolvedValue({ tenantId: reportScope.tenantId });
- mocks.read.mockResolvedValue({ ...reportFixture(), snapshot: { private: "do not send source rows" } });
+ mocks.read.mockResolvedValue({ ...reportFixture(reconcileFinancialSnapshot), snapshot: { private: "do not send source rows" } });
 });
 afterEach(() => { vi.clearAllMocks(); vi.unstubAllEnvs(); });
 it("reads only the requested run with the session-derived context and never returns the snapshot", async () => {
  const result = await get(); expect(result.status).toBe(200); expect(result.headers.get("cache-control")).toBe("no-store");
- expect(await result.json()).toEqual(reportFixture());
+ expect(await result.json()).toEqual(reportFixture(reconcileFinancialSnapshot));
  expect(mocks.context).toHaveBeenCalledWith({}, reportId(30));
  expect(mocks.read).toHaveBeenCalledWith({ tenantId: reportScope.tenantId }, reportId(30), reportScope.jobId, reportId(20));
  expect(Object.keys(route)).toEqual(["GET"]);

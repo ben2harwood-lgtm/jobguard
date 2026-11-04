@@ -1018,3 +1018,61 @@ checks against current main. These were not run in this sandbox. Independent
 exact-head RED review is still required when this group's PR opens. NOPR:
 working files are ready for the router to stage and complete the existing
 merge; index conflicts intentionally remain until that authorized Git write.
+
+## Batch-10 landing preparation — 4 November 2026
+
+RED, NOPR. Incoming main is MERGE_HEAD c829a9394 (LP-6a); local main is
+stale. Resolved the three working-file conflicts as an exact union: database
+exports, later-empty table expectations and the contractor upgrade expectation.
+The index remains unmerged because this sandbox cannot write Git metadata.
+The router must stage the working files and complete the existing merge.
+
+The reconciliation browser spec now loads core through the same native dynamic
+import as CH-9-mapped. Its shared fixture accepts the reconciler as an argument,
+so Vitest can supply its ordinary core import without invoking native import in
+Vitest's VM. Browser tests retain their main-scoped locators. Added an exact
+app.write_success_fee_v3(uuid,text,jsonb,jsonb) successor-body exception to the
+plan-entitlement upgrade assertion for migration 0622. The 0556-only assertion
+still checks every predecessor body; after successors the named replacement
+must differ, every other body stays equal, and all routine privileges remain
+checked by migration proofs. No product behavior or migration numbering changed.
+
+Source inspection found no new columns on fingerprinted tables, no new job
+mutation HTTP routes or command-registry command types, no client database
+imports, and no application service constructing its own verified context.
+The new lib/financial-reconciliation-report module is a client-consumed response
+schema, not a server module; adding server-only would break that contract.
+New app tables are included in the unioned laterEmptyTables. The five batch
+proofs have identity arguments without DEFAULT and owner entries for reachable
+routines only. Authority writes in the batch SQL run through existing controlled
+routines; direct fixture writes use owner connections. No runtime product write
+to the three LP-5c-protected authority tables was found.
+
+Validation in this run, using installed Vitest 4.1.12 with --maxWorkers=2,
+no more than three named files per invocation, and sequential Vitest runs:
+
+- apps/api: src/watchdog-registry.test.ts src/auth/context-boundary.test.ts src/auth/identity.test.ts — 278 passed.
+- packages/db: test/migration-proof-loader.test.ts test/ais-migration-proof.test.ts test/success-fee-production-safety-catalog.test.ts — 82 passed.
+- apps/web: app/ui/financial-reconciliation-report.test.tsx app/api/jobs/[id]/reconciliation/[runId]/route.test.ts — 7 passed.
+- Installed tsc -p tsconfig.json --noEmit passed in config, core, storage, ai, db, api and web, with at most two compiler processes.
+- git diff --check passed. The lane lists exactly 91 changed non-lane paths against incoming main, excluding itself; the existing lane policy functions accept that working-tree comparison.
+
+The first report unit run failed because native import inside the shared helper
+is unsupported in Vitest's VM; supplying the reconciler fixed it, and the same
+seven tests passed. pnpm typecheck and pnpm exec Vitest stalled before tasks
+launched; they were stopped. Turbo also stalled invoking pnpm, so each package's
+installed compiler was run directly. These wrapper attempts are not passes.
+
+Ran LANE_BASE_REF=MERGE_HEAD node tools/agent-lane-boundary-lint.mjs. It refuses
+the unfinished merge because it compares committed HEAD plus staged incoming
+main files, including main's other lane files. Do not broaden this lane to
+claim those main changes. The router must rerun the unchanged lint after staging
+and completing the authorized merge. No lane-check pass is claimed here.
+
+CI must prove PostgreSQL fresh/upgrade preservation (including fingerprinted
+row shape, final-account lock and recovery-pursuit terms), LP-0 actual catalogs,
+LP-5c authority guards, the named lifecycle successor exception, reconciliation
+RLS/audit/replay/concurrency, restore and fee safety, and the affected browser
+journeys. No database or browser suite ran here. Required full CI and independent
+RED review against the resulting exact head remain pending. No substantial new
+complexity or production enablement was introduced.

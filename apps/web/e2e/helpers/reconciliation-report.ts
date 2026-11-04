@@ -1,7 +1,7 @@
-import { reconcileFinancialSnapshot } from "@jobguard/core";
+import type { reconcileFinancialSnapshot as ReconcileFinancialSnapshot } from "@jobguard/core";
 export const reportId = (n: number) => `10000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 export const reportScope = { tenantId: reportId(1), jobId: reportId(2) };
-export const reportFixture = () => {
+export const reportFixture = (reconcileFinancialSnapshot: typeof ReconcileFinancialSnapshot) => {
  const invoiceId = reportId(3), paymentId = reportId(4);
  return { version: "financial-reconciliation-screen.v1" as const, jobId: reportScope.jobId, runId: reportId(20), report: reconcileFinancialSnapshot({
   version: "financial-reconciliation-snapshot.v1", environment: "synthetic_demo", ...reportScope,

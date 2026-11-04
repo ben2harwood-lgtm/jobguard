@@ -20,7 +20,7 @@ export async function createIntegrityFixture(throughCurrent=true, encoding: "UTF
  // LP-2 practice issuance requires this trusted database and mints its private job permits.
  await pg.initialise();await pg.start();await pg.createDatabase("jobguard_synthetic_demo");
  const admin=new Pool({host:"127.0.0.1",port,user:"postgres",password,database:"jobguard_synthetic_demo"});
- for (const role of ["jobguard_audit_writer", "jobguard_command_writer"]) await admin.query(`DO $do$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='${role}') THEN CREATE ROLE ${role} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS; END IF; END $do$`);
+ for (const role of ["jobguard_audit_writer", "jobguard_command_writer", "jobguard_binding_owner"]) await admin.query(`DO $do$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='${role}') THEN CREATE ROLE ${role} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS; END IF; END $do$`);
  if(throughCurrent)await migrate(admin);
  else {
   for(const url of MIGRATION_URLS.filter(url=>url.pathname<migrationUrl.pathname))await admin.query(await readFile(url,"utf8"));

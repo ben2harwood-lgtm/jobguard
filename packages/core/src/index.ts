@@ -136,6 +136,7 @@ export * from "./meter-today.js";
 
 export * from "./financial-reconciliation.js";
 export * from "./small-builder-demo-lifecycle.js";
+export * from "./merchant-connectors.js";
 export * from "./inbox-outcome-metrics.js";
 
 export * from "./dunning.js";
