@@ -1,0 +1,168 @@
+{
+  "migration": "0771_contractor_job_finish.sql",
+  "lp0": [
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|rel:table|app.contractor_job_finish|jobguard_migration",
+        "group": "a-owner-tables-views"
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.contractor_job_finish|tenant_isolation|PERMISSIVE|ALL|jobguard_migration|6fa387f2f629fba6"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.contractor_job_finish|immutable|app.reject_immutable_commercial_mutation|BEFORE DELETE/UPDATE/TRUNCATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.contractor_job_finish|lp_fact_audit|app.lp_require_audit|AFTER INSERT|O"
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.lp_command(uuid,jsonb,bytea)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.command_receipt",
+          "app.extra_completion_observation",
+          "app.extra_event",
+          "app.extra_origin",
+          "app.materials_issue_fact",
+          "app.prompt_resolution",
+          "app.scope_identity",
+          "app.scope_lineage",
+          "app.variation"
+        ],
+        "staticCalls": [
+          "app.contractor_job_team",
+          "app.lp_authority",
+          "app.lp_citations_valid",
+          "app.lp_evaluate",
+          "app.lp_png_completion_tags",
+          "app.lp_span_valid"
+        ]
+      },
+      "after": {
+        "identity": "function:app.lp_command(uuid,jsonb,bytea)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.command_receipt",
+          "app.contractor_job_finish",
+          "app.extra_completion_observation",
+          "app.extra_event",
+          "app.extra_origin",
+          "app.materials_issue_fact",
+          "app.prompt_resolution",
+          "app.scope_identity",
+          "app.scope_lineage",
+          "app.variation"
+        ],
+        "staticCalls": [
+          "app.contractor_job_team",
+          "app.lp_authority",
+          "app.lp_citations_valid",
+          "app.lp_evaluate",
+          "app.lp_png_completion_tags",
+          "app.lp_span_valid"
+        ]
+      }
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "app.contractor_job_finish",
+        "data": []
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "contractor_job_finish",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "contractor_job_finish",
+        "policyname": "tenant_isolation",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "contractor_job_finish_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "contractor_job_finish_tenant_id_command_id_key",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    }
+  ],
+  "tenancy": [
+    {
+      "relname": "contractor_job_finish",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    }
+  ]
+}

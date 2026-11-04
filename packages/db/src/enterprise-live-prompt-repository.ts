@@ -1,11 +1,10 @@
 import type { Pool } from "pg";
 import { z } from "zod";
-import { EnterpriseLivePromptPersistenceError, materialsIssueV1, completionObservationV1, evaluateLivePromptsV1, confirmPromptV1, dismissPromptV1, promptListV1, promptDetailV1 } from "@jobguard/core";
+import { EnterpriseLivePromptPersistenceError, contractorJobFinishV1, materialsIssueV1, completionObservationV1, evaluateLivePromptsV1, confirmPromptV1, dismissPromptV1, promptListV1, promptDetailV1 } from "@jobguard/core";
 import { contractorSessionContext } from "./contractor-session-context.js";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 import { appendAuditBatch, type AuditEventInput } from "./audit.js";
 import { readEnterpriseCompletionFindings, readStoredCompletionPhoto } from "./enterprise-live-prompt-source-reader.js";
-const endInput = z.object({version:z.literal("end-check.v1"),commandId:z.guid({ error: "Invalid uuid" }),jobId:z.guid({ error: "Invalid uuid" }),agreementVersionId:z.guid({ error: "Invalid uuid" }).optional(),completionEventId:z.guid({ error: "Invalid uuid" }).optional(),visitId:z.guid({ error: "Invalid uuid" }).optional()}).strict();
 type Result = Record<string,unknown>;
 export type EnterprisePromptItem = {id:string;jobId:string;promptHash:string;rule:"a"|"b"|"c"|"d";ruleVersion:string;surfacedAt:string;resolution:string|null};
 export type EnterprisePromptPage = {items:EnterprisePromptItem[];nextCursor:string|null};
@@ -58,6 +57,7 @@ export class EnterpriseLivePromptRepository {
  private async promptId(db:import("./tenant-context.js").TenantTransaction,session:string,job:string,observation:string):Promise<string>{
   return (await db.$client.query<{id:string}>("SELECT app.lp_observation_prompt($1,$2,$3) id",[session,job,observation])).rows[0]!.id;
  }
+ async finishStatus(sessionId:string,jobId:string){return this.read(sessionId,{version:"contractor-job-finish-status.v1",jobId:z.guid().parse(jobId)});}
  async list(sessionId:string,raw:unknown):Promise<EnterprisePromptPage>{return pageSchema.parse(await this.read(sessionId,this.parse(promptListV1,raw)));}
  detail(sessionId:string,raw:unknown){return this.read(sessionId,this.parse(promptDetailV1,raw));}
  importMaterials(sessionId:string,raw:unknown){return this.write(sessionId,this.parse(materialsIssueV1,raw));}
@@ -65,5 +65,5 @@ export class EnterpriseLivePromptRepository {
  evaluate(sessionId:string,raw:unknown){return this.write(sessionId,this.parse(evaluateLivePromptsV1,raw));}
  confirm(sessionId:string,raw:unknown){return this.write(sessionId,this.parse(confirmPromptV1,raw));}
  dismiss(sessionId:string,raw:unknown){return this.write(sessionId,this.parse(dismissPromptV1,raw));}
- endCheck(sessionId:string,raw:unknown){return this.write(sessionId,this.parse(endInput,raw));}
+ endCheck(sessionId:string,raw:unknown){return this.write(sessionId,this.parse(contractorJobFinishV1,raw));}
 }
