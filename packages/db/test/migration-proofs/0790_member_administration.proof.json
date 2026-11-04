@@ -34,7 +34,7 @@
           "apps/api/src/auth/member-administration.test.ts"
         ],
         "gaps": [
-          "Built ahead without LP-6d/LP-6e; PostgreSQL CI and independent exact-head RED review required."
+          "LP chain through LP-6e is present; PostgreSQL CI and independent exact-head RED review required."
         ]
       }
     },
@@ -64,7 +64,7 @@
           "apps/api/src/auth/member-administration.test.ts"
         ],
         "gaps": [
-          "Built ahead without LP-6d/LP-6e; PostgreSQL CI and independent exact-head RED review required."
+          "LP chain through LP-6e is present; PostgreSQL CI and independent exact-head RED review required."
         ]
       }
     },
@@ -108,6 +108,7 @@
         "staticCalls": [
           "app.bind_request",
           "app.current_actor",
+          "app.current_tenant",
           "app.lp4_seal_audit"
         ]
       }
@@ -152,6 +153,7 @@
         "staticCalls": [
           "app.bind_request",
           "app.current_actor",
+          "app.current_tenant",
           "app.lp4_seal_audit"
         ]
       }

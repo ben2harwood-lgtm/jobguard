@@ -49,6 +49,11 @@ BEGIN
   'eventType','membership.removed','subjectType','membership','subjectRef',p_target::text,
   'payload',jsonb_build_object('references',jsonb_build_object('previousRole',target_member.role,'disposition','removed'),
    'classifications',jsonb_build_object('action','security')))),'checked_operation');
+ -- Identity callers must not commit a system-attributed seal if the binding
+ -- expired while waiting for a business/audit lock. Lookups take no new locks.
+ IF app.current_actor() IS DISTINCT FROM actor OR app.current_tenant() IS DISTINCT FROM p_tenant THEN
+  RAISE EXCEPTION 'MEMBER_ADMIN_REFUSED' USING ERRCODE='42501';
+ END IF;
  RETURN jsonb_build_object('version','member-administration-result.v1','membershipId',p_target,'auditId',audit_id);
 END $$;
 ALTER FUNCTION identity.member_remove(char(64),uuid,uuid) OWNER TO jobguard_migration;
@@ -106,6 +111,11 @@ BEGIN
   'eventType','membership.role_changed','subjectType','membership','subjectRef',p_target::text,
   'payload',jsonb_build_object('references',jsonb_build_object('previousRole',target_member.role,'disposition',p_role),
    'classifications',jsonb_build_object('action','security')))),'checked_operation');
+ -- Identity callers must not commit a system-attributed seal if the binding
+ -- expired while waiting for a business/audit lock. Lookups take no new locks.
+ IF app.current_actor() IS DISTINCT FROM actor OR app.current_tenant() IS DISTINCT FROM p_tenant THEN
+  RAISE EXCEPTION 'MEMBER_ADMIN_REFUSED' USING ERRCODE='42501';
+ END IF;
  RETURN jsonb_build_object('version','member-administration-result.v1','membershipId',p_target,'auditId',audit_id);
 END $$;
 ALTER FUNCTION identity.member_change_role(char(64),uuid,uuid,text) OWNER TO jobguard_migration;

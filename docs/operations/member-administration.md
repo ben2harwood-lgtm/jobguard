@@ -2,8 +2,8 @@
 
 This is an authenticated server procedure with no new screen. Use fictional identities
 in the synthetic environment. LP-7 is RED and still requires the complete PostgreSQL
-CI run and an independent review at the exact proposed head. The LP chain must catch up
-through LP-6e before merge; this built-ahead branch does not prove the whole cutover.
+CI run and an independent review at the exact proposed head. The inherited LP chain
+through LP-6e is present; its landing and protected-control holds remain separate gates.
 
 1. Sign in using the existing entered-code flow, obtaining the Secure HttpOnly
    `jobguard_session` cookie and the session's CSRF token. Select the intended company
@@ -42,6 +42,9 @@ snapshot cannot retain authority across a lock wait. Concurrent mutual
 removal/demotion therefore cannot leave no active owner.
 The bound actor must have the current owner role; a conflicting existing transaction binding is refused.
 The application context's earlier role is never an authorization input to SQL.
+After sealing, LP-7 rechecks the protected actor and tenant without taking another
+lock. Expiry during a target-row or audit-head wait therefore rolls back both the
+membership change and any system-fallback audit stamp; it cannot return success.
 Delegated role grants are revoked using the existing SCIM mechanism. Memberships,
 authorizations and audit history are retained; no global signout or provider action
 is performed.
@@ -82,23 +85,28 @@ Forward-fix a failed procedure; emergency disablement revokes its identity EXECU
 grant. Never restore business-runtime membership writes. Do not reverse committed
 membership history to undo a deployment.
 
-## Built-ahead assumptions and handoff (4 November 2026)
+## LP-chain handoff (4 November 2026, 22:00 UTC run)
 
-Base: LP-6c `cebbbe2a8`, merged into this branch at `94424f283`. There is no
-unfinished merge. LP-6b/LP-6c are present; LP-6d and LP-6e are absent and being built
-as siblings. LP-7 leaves their remaining-routine conversion and trusted audit seal
-implementation to them. No pre-existing routine body is copied or replaced here.
-LP-7 binds the identity session in its own transaction for LP-6e's future audit
-attribution and retains the existing checked-operation seal. Landing still requires
-LP-6b/LP-6c and the dependency chain through LP-6e, plus exact-head RED review.
+The router merge `317b16202` contains LP-6e `e24a0355e` and its current LP-6d,
+LP-6c and LP-6b predecessors. No unfinished merge/index entries exist. Close the
+previous absence-only LP-6d/e hold and the old uncommitted-0528 rename/lane hold.
+LP-7 reuses the inherited binding and audit routines; no predecessor body is copied
+or recreated. ENT-10a2's SCIM migration is present; landing order/current-main
+reconciliation remains the router's responsibility.
 
-The 0790 migration proof records only its two identity entry points, their existing
-migration-owner custody and their exact identity-only grants. No scanner, source pin,
-protected table shape, existing merged migration or shared fixture was changed. CI must
-compare this proof with actual PostgreSQL catalogs and run fresh/upgrade migrations,
-LP-0/tenancy/privilege checks, the LP-7 race/rollback/binding/outbox/invitation tests,
-and the affected identity journeys. Any additional protected scanner/source-pin
-change discovered there is **do not commit** without Ben's piece-specific authority.
+Reserved migration **0790** and its additive proof are retained. The proof's call
+inventory includes the post-seal current-tenant lookup; actual catalogue comparison
+is still required. The lane's nine non-lane paths match the delta from
+`origin/codex/sandbox/lp-6e-audit-attribution`; the lane does not list itself.
+No scanner, pin, guard, protected baseline or earlier test is modified.
+
+The PostgreSQL suite now uses a real identity login for administration and mutual
+races. Additional authored cases check v3 bound-member attribution, legitimate
+self-removal/demotion with another owner, forged actor/tenant settings, the complete
+administration overload inventory and explicit retired actor-based call shapes,
+and expiry behind a proven target-row lock with atomic rollback. These cases have
+not executed here. Existing last-owner, next-request, rollback, delegated-grant,
+invitation and queued-send assertions remain in place.
 
 LATER / SIMPLICITY (initial review): the two routines in
 `0790_member_administration.sql` repeat the owner/target/last-owner checks. A later
@@ -106,62 +114,58 @@ reviewed private helper could centralize those checks to prevent security fixes 
 drifting between removal and role changes. This is non-blocking: introducing that
 helper and its private grants requires a separate privilege review.
 
-## Local check receipt (4 November 2026)
+## Local check receipt
 
-Node v24.17.0; installed tools only. Invoked the installed package binaries directly
-because the pnpm wrapper stalled before starting Vitest (cancelled). No downloads,
-Git writes, database startup, socket-bound HTTP test or provider call was performed.
+Installed Node v24.17.0 and package binaries only; no downloads. At most two Vitest
+workers per invocation, at most three named files. Current-run results:
 
-- API: `./node_modules/.bin/vitest run --maxWorkers=2 src/auth/member-administration.test.ts`:
-  9 passed, after adding the required LP-6b session credential to the test principal.
-- API: `./node_modules/.bin/vitest run --maxWorkers=2 src/auth/context-boundary.test.ts src/auth/identity.test.ts src/watchdog-registry.test.ts`:
-  identity/context 152 passed; watchdog initially failed during import on stale core
-  build output. After rebuilding core, its named rerun passed all 126 tests.
-- DB: `./node_modules/.bin/vitest run --maxWorkers=2 test/migration-proof-loader.test.ts`:
-  initially failed during import on stale core build output; rerun after the core
-  rebuild passed 76 tests, including discovery of the 0790 proof.
-- API and DB: `./node_modules/.bin/tsc -p tsconfig.json --noEmit`: both passed.
-  Core and DB `tsc -p tsconfig.json` builds also passed to refresh ignored build output.
-- API: `node --import tsx src/generate-openapi.ts --check`: passed after rebuilding
-  DB output. The tsx CLI itself was unavailable because its IPC listener is sandboxed;
-  Node's tsx loader runs the same source without that listener.
-- `git diff --check`: passed.
-- `node tools/agent-lane-boundary-lint.mjs`: default-main comparison includes inherited
-  LP-6b/LP-6c changes outside this lane. With
-  `LANE_BASE_REF=origin/codex/sandbox/lp-6c-money-routines`, its only refusal is the
-  uncommitted deletion of `0528_member_administration.sql`: the checker unions HEAD's
-  tracked deletion with the final diff. That old file is absent on the LP-6c base
-  and absent from the final tree, so the requested final lane deliberately lists
-  only 0790. Router must rerun the check against LP-6c after committing the rename.
-  An independent set comparison confirms the lane equals the final changed paths
-  from LP-6c, excluding config/lanes/.
+- API `vitest run --maxWorkers=2 src/auth/member-administration.test.ts src/auth/context-boundary.test.ts src/auth/identity.test.ts`: PASS, 161 tests / three files.
+- DB `vitest run --maxWorkers=2 test/migration-proof-loader.test.ts`: PASS, 76 tests / one file.
+- API and DB `tsc -p tsconfig.json --noEmit`: PASS.
+- DB, core and AI `tsc -p tsconfig.json`: PASS, refreshing ignored build output.
+- API OpenAPI `node --import tsx src/generate-openapi.ts --check`: PASS after refreshing stale DB/core/AI outputs. One invocation from the repository root failed to resolve its package-local tsx loader; the final command ran in apps/api.
+- TypeScript transpilation of the LP-7 integration test: PASS, zero syntax diagnostics; this is not semantic checking or PostgreSQL execution.
+- `node tools/plpgsql-case-in-if-lint.mjs`: PASS, 250 migrations.
+- `git diff --check` and exact final lane equality: PASS; no unmerged entries.
+- `LANE_BASE_REF=origin/codex/sandbox/lp-6e-audit-attribution node tools/agent-lane-boundary-lint.mjs`: PASS.
+- `node tools/commercial-integrity-current-source-guard.mjs`: FAIL, the same 11 inherited diagnostics (ten covered-edge paths and one stale baseline); see `/tmp/lp7-current-source-guard.log`. No waiver or new PASS is claimed.
 
-The LP-7 PostgreSQL tests have not run here. The new tests additionally cover
-conflicting prebound session substitution, retained next-request access after
-demotion, and MON-8 operative-invitation refusal after issuer removal/demotion.
-No independent security review, CI PASS, acceptance, push or merge is claimed.
+## Named holds for landing
 
+1. **Protected predecessor controls — held.** In
+   `docs/contracts/lp-0-effective-privileges-v1.json`, the old definition digest for
+   `function:app.lp4_seal_audit(jsonb,text)` is
+   `ddad34ee09aeb9ad16503ad6a3f8f077cca9f80e31fbdb6ce8fb8c3fd80e6eb1`.
+   The new digest is unknown until PostgreSQL `pg_get_functiondef` of 0785 is
+   available; compute and authorize it without substituting NULL. Old staticCalls:
+   `[app.final_lock_canonical]`; new:
+   `[app.current_actor, app.current_tenant, app.final_lock_canonical]`, catalogue
+   ordering to verify. Authorized owner must close the protected replacement.
+2. **Inherited source guard — held.** In
+   `tools/commercial-integrity-current-source-guard.unresolved.json`, old
+   practice-session.ts line 73 fingerprint:
+   `ad3ac47cb73083599ccbd5fd355eb9f2f313b9af4ceca2115da91270658d50ca`;
+   new line 75 fingerprint:
+   `a52add41726877212b3d0441a7351647222c7aa760b4e2be0f07d3ea2fd00c04`.
+   The generic runtime SQL helper remains unresolved; authorized owner must review
+   that precise expectation change or resolve the edge without weakening the guard.
+3. **Inherited authority compatibility — held.** Preserve historical LP-4 v2
+   assertions at their schema boundary and prove current v3 consumers separately.
+   Checked-domain conversion/compatibility of generic acceptance/activation events
+   and practice ownership adoption references is not established by actor binding.
+4. **Customer-message writer — held under the router's LP-6d ruling.**
+   `identity.customer_portal_message` (0547) reaches `sv7a_intake_job_source`
+   through the grant sponsor. Design separate customer sign-in proof after LP-6b
+   lands; no invented binding kind or sponsor impersonation here.
+5. **PostgreSQL/CI/review — held.** CI must run fresh, upgrade and repeat migrations,
+   full catalog/proof/grant/RLS/owner checks, LP-0/tenancy checks and LP-7 real-login
+   races, revocation, expiry, rollback, all signature/forgery attacks, invitations
+   and queued-work tests. Also prove inherited v1/v2 history and current v3
+   verifier/export/authority behavior. Reconcile reserved 0790 and predecessor
+   landing order against current main; run all required CI and applicable identity
+   browser journeys and obtain independent RED review at the exact proposed head.
+   No PostgreSQL/browser suite ran in this sandbox, which cannot start PostgreSQL
+   or bind localhost. No CI, independent review, acceptance or landing is claimed.
 
-## No-PR save verification (4 November 2026, 21:24 UTC run)
-
-Recovered the 17:52 handoff and retained its partial work. Read-only Git inspection
-found no unmerged entries; HEAD remains `94424f283` on
-`codex/sandbox/lp-7-member-removal`. No further code change was needed.
-Using installed package binaries, with at most two Vitest workers:
-
-- API `./node_modules/.bin/vitest run --maxWorkers=2 src/auth/member-administration.test.ts src/auth/context-boundary.test.ts src/auth/identity.test.ts`: 161 passed.
-- DB `./node_modules/.bin/vitest run --maxWorkers=2 test/migration-proof-loader.test.ts`: 76 passed.
-- API and DB `./node_modules/.bin/tsc -p tsconfig.json --noEmit`: passed.
-- API `node --import tsx src/generate-openapi.ts --check`: passed.
-- `git diff --check`: passed.
-- Lane lint against LP-6c still fails only on the tracked deletion of old 0528.
-  Final changed-path equality, including untracked 0790 SQL/proof, passes.
-
-READY is for the router's NOPR save only. All landing holds in the earlier handoff
-remain: catch up through LP-6e and land predecessors in order; validate actual
-PostgreSQL catalogs, fresh/upgrade migrations, authorization races, revocation,
-audit rollback, invitation and queued-work semantics in CI; obtain independent
-exact-head RED review; rerun lane lint after the rename is committed. No protected
-scanner, pin or guard was edited; no concrete old/new protected pin values are known.
-No additional design ruling is introduced. Existing invitation behavior and
-migration-owner custody remain subject to the named security and CI checks.
+READY for the router's held NOPR save. Made-up data only. No live providers, real
+customer data, money, release, fetch, Git writes, commit, push or PR performed here.

@@ -6,13 +6,16 @@ import { startLp0Database, RUNTIME_TEST_PASSWORD } from "./lp-0-catalog.js";
 import { ActionExecutor } from "../src/outbox.js";
 import { verifiedTenantContextForQueuedJob } from "../src/tenant-context.js";
 
-let db: { owner: Pool; runtime: Pool; close(): Promise<void> };
+let db: { owner: Pool; runtime: Pool; identity: Pool; close(): Promise<void> };
 beforeAll(async () => {
   const fixture = await startLp0Database(62700);
   await fixture.bootstrapRuntimeLogin();
   const runtime = new Pool({host:"127.0.0.1",port:fixture.port,database:fixture.databaseName,
     user:"jobguard_runtime",password:RUNTIME_TEST_PASSWORD,max:2});
-  db = {owner:fixture.admin,runtime,async close() { await runtime.end(); await fixture.stop(); }};
+  await fixture.admin.query("ALTER ROLE jobguard_identity LOGIN PASSWORD 'identity-fixture'");
+  const identity = new Pool({host:"127.0.0.1",port:fixture.port,database:fixture.databaseName,
+    user:"jobguard_identity",password:"identity-fixture",max:2});
+  db = {owner:fixture.admin,runtime,identity,async close() { await identity.end(); await runtime.end(); await fixture.stop(); }};
 }, 300_000);
 afterAll(async () => { await db?.close(); });
 const refusal = { code: "42501", message: "MEMBER_ADMIN_REFUSED" };
@@ -29,8 +32,8 @@ const invoke = (c: Pick<PoolClient,"query">, a: Member, target: Member, role?: s
   ? c.query("SELECT identity.member_remove($1,$2,$3) result", [a.digest,a.tenant,target.member])
   : c.query("SELECT identity.member_change_role($1,$2,$3,$4) result", [a.digest,a.tenant,target.member,role]);
 async function administration(a: Member, target: Member, role?: string) {
-  const c = await db.owner.connect();
-  try { await c.query("BEGIN; SET LOCAL ROLE jobguard_identity"); const r=await invoke(c,a,target,role); await c.query("COMMIT"); return r; }
+  const c = await db.identity.connect();
+  try { await c.query("BEGIN"); const r=await invoke(c,a,target,role); await c.query("COMMIT"); return r; }
   catch(e) { await c.query("ROLLBACK"); throw e; } finally { c.release(); }
 }
 const events = async (a: Member) => (await db.owner.query("SELECT * FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence", [a.tenant])).rows;
@@ -63,13 +66,13 @@ it.each([undefined,"finance"])("protects the last active owner from %s, ignoring
 
 it.each([undefined,"finance"])("serializes mutual %s behind a two-backend barrier and retains an owner", async role => {
   const a=await member(), b=await member(a.tenant), barrier=await db.runtime.connect();
-  const clients=await Promise.all([db.owner.connect(),db.owner.connect()]);
+  const clients=await Promise.all([db.identity.connect(),db.identity.connect()]);
   let results: PromiseSettledResult<unknown>[]=[];
   try {
     await barrier.query("BEGIN");
     await barrier.query("SELECT pg_advisory_xact_lock(hashtextextended($1,54))",[a.tenant]);
     const tasks=clients.map(async (c,i)=>{
-      try { await c.query("BEGIN; SET LOCAL ROLE jobguard_identity"); const r=await invoke(c,i===0?a:b,i===0?b:a,role); await c.query("COMMIT"); return r; }
+      try { await c.query("BEGIN"); const r=await invoke(c,i===0?a:b,i===0?b:a,role); await c.query("COMMIT"); return r; }
       catch(e) { await c.query("ROLLBACK"); throw e; }
     });
     const settled=Promise.allSettled(tasks);
@@ -101,7 +104,7 @@ it("removal rejects the very next bind; demotion rejects stale privileged admini
   await expect(administration(c,a)).rejects.toMatchObject(refusal);
   const audit=await events(a);
   expect(audit).toHaveLength(2);
-  expect(audit.every(e=>e.actor_ref===`membership:${a.member}` && e.payload.references.auditTrust==="checked_operation")).toBe(true);
+  expect(audit.every(e=>e.version==="audit.v3" && e.actor_ref===`membership:${a.member}` && e.payload.references.auditTrust==="checked_operation" && e.payload.references.auditActorKind==="bound_member")).toBe(true);
 });
 
 it("rolls back membership and audit together, including a failure at the final audit write", async () => {
@@ -191,4 +194,74 @@ it("refuses substituting an owner session into an already bound transaction", as
     expect((await db.owner.query("SELECT revoked_at FROM app.membership WHERE tenant_id=$1 AND id=$2",[target.tenant,target.member])).rows[0].revoked_at).toBeNull();
     expect(await events(a)).toHaveLength(0);
   } finally { await c.query("ROLLBACK"); c.release(); }
+});
+
+
+it.each([undefined,"finance"])("allows self %s with another owner and seals the original bound actor", async role => {
+  const a=await member(); await member(a.tenant);
+  await administration(a,a,role);
+  expect(await events(a)).toMatchObject([{version:"audit.v3",actor_ref:`membership:${a.member}`,
+    subject_ref:a.member,payload:{references:{auditTrust:"checked_operation",auditActorKind:"bound_member"}}}]);
+  await expect(administration(a,a)).rejects.toMatchObject({code:"42501"});
+});
+
+it.each([undefined,"finance"])("ignores forged actor/tenant GUCs for %s", async role => {
+  const owner=await member(), peer=await member(owner.tenant,"admin"), other=await member();
+  const c=await db.identity.connect();
+  try {
+    await c.query("BEGIN");
+    await c.query("SELECT set_config('app.tenant_id',$1,true),set_config('app.actor_id',$2,true),set_config('app.actor_membership_id',$2,true)",[other.tenant,owner.member]);
+    await expect(invoke(c,peer,owner,role)).rejects.toMatchObject(refusal);
+    await c.query("ROLLBACK");
+    expect(await events(owner)).toEqual([]);
+  } finally { await c.query("ROLLBACK"); c.release(); }
+});
+
+it("exposes no actor-accepting or retired administration signature to any caller", async () => {
+  const rows=(await db.owner.query("SELECT p.proname,oidvectortypes(p.proargtypes) args FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='identity' AND p.proname IN ('member_remove','member_change_role') ORDER BY p.proname")).rows;
+  expect(rows).toEqual([
+    {proname:"member_change_role",args:"character, uuid, uuid, text"},
+    {proname:"member_remove",args:"character, uuid, uuid"},
+  ]);
+  const a=await member(), b=await member(a.tenant,"finance");
+  for(const sql of [
+    "SELECT identity.member_remove($1::uuid,$2::uuid,$3::uuid)",
+    "SELECT identity.member_remove($1::uuid,$2::uuid,$3::uuid,$4::uuid)",
+    "SELECT identity.member_change_role($1::uuid,$2::uuid,$3::uuid,'finance'::text)",
+    "SELECT identity.member_change_role($1::uuid,$2::uuid,$3::uuid,$4::uuid,'finance'::text)",
+  ]) {
+    const values=sql.includes('$4')?[a.member,a.tenant,b.member,a.person]:[a.member,a.tenant,b.member];
+    await expect(db.identity.query(sql,values)).rejects.toMatchObject({code:"42883"});
+  }
+  expect(await events(a)).toEqual([]);
+});
+
+it.each([undefined,"finance"])("rolls back %s if the binding expires while waiting for the target row", async role => {
+  const a=await member(), b=await member(a.tenant,"finance");
+  const deadline=(await db.owner.query("UPDATE identity.session SET expires_at=clock_timestamp()+interval '5 seconds' WHERE id=$1 RETURNING expires_at",[a.sessionId])).rows[0].expires_at;
+  const barrier=await db.owner.connect(), c=await db.identity.connect();
+  let pending: Promise<PromiseSettledResult<unknown>[]> | undefined;
+  try {
+    await barrier.query("BEGIN");
+    await barrier.query("SELECT 1 FROM app.membership WHERE tenant_id=$1 AND id=$2 FOR UPDATE",[b.tenant,b.member]);
+    await c.query("BEGIN");
+    const pid=(await c.query("SELECT pg_backend_pid() pid")).rows[0].pid;
+    pending=Promise.allSettled([invoke(c,a,b,role)]);
+    for(let i=0;i<100;i++) {
+      if((await barrier.query("SELECT pg_backend_pid()=ANY(pg_blocking_pids($1)) blocked",[pid])).rows[0].blocked) break;
+      if(i===99) throw new Error("Administration must reach the target row lock");
+      await new Promise(r=>setTimeout(r,10));
+    }
+    await barrier.query("SELECT pg_sleep(greatest(0,extract(epoch FROM ($1::timestamptz-clock_timestamp())))+0.02)",[deadline]);
+    await barrier.query("COMMIT");
+    const [result]=await pending;
+    expect(result).toMatchObject({status:"rejected",reason:{code:"42501"}});
+    await c.query("ROLLBACK");
+    expect((await db.owner.query("SELECT role,revoked_at FROM app.membership WHERE tenant_id=$1 AND id=$2",[b.tenant,b.member])).rows[0]).toEqual({role:"finance",revoked_at:null});
+    expect(await events(a)).toEqual([]);
+  } finally {
+    await barrier.query("ROLLBACK");
+    if(pending) await pending;
+    await c.query("ROLLBACK"); barrier.release(); c.release();
+  }
 });
