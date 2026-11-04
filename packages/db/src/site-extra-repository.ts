@@ -1,7 +1,7 @@
 import { recordSupervisorQuery, readSupervisorQueries } from "./site-supervisor-query.js";
 import type { Pool } from "pg";
 import { z } from "zod";
-import { offlineClientMetadataV1, parseOfflineIntentV1, ExtraPersistenceError, WorkOrderError, SiteExtraError, siteExtraContentSha256V1, type SiteExtraErrorCode } from "@jobguard/core";
+import { offlineClientMetadataV1, parseOfflineIntentV1, siteExtraWorkStatusV1, ExtraPersistenceError, WorkOrderError, SiteExtraError, siteExtraContentSha256V1, type SiteExtraErrorCode } from "@jobguard/core";
 import { ExtraRepository, type ExtraTransactionSeam, type RaisedExtra } from "./extra-repository.js";
 import { appendAuditBatch } from "./audit.js";
 import { assertContractorGate, derivedUuid } from "./work-order-repository.js";
@@ -17,6 +17,7 @@ const inputV1 = z.object({ commandId: z.guid({ error: "Invalid uuid" }), jobId: 
 type Input = z.infer<typeof inputV1>;
 const inputV3 = inputV1.extend({ photoEvidenceId: z.guid({ error: "Invalid uuid" }).optional(), shownContentSha256: z.string().regex(/^[0-9a-f]{64}$/u).optional(), clientMetadata: offlineClientMetadataV1.optional() }).strict();
 type InputV3 = z.infer<typeof inputV3>;
+const inputV4 = inputV3.omit({ clientMetadata: true }).extend({ version: z.literal("log-site-extra.v4"), workStatus: siteExtraWorkStatusV1 }).strict();
 type EvidenceRefusal = { code: "PHOTO_NOT_ACCEPTED" | "CONFIRMATION_MISMATCH"; reason: "photo_not_accepted" | "confirmation_mismatch" };
 export type EvidenceFacts = { photoEvidenceId: string | null; residentConfirmationEvidenceId: string | null; contentSha256: string };
 export type LoggedSiteExtra = RaisedExtra & { evidence?: EvidenceFacts };
@@ -153,7 +154,7 @@ export class SiteExtraRepository {
   return this.logSiteExtra(context, actor, { jobId: intent.jobId, commandId: intent.body.commandId, note: intent.body.note, description: intent.body.description, clientMetadata: intent.clientMetadata });
  }
  async logSiteExtra(context: VerifiedTenantContext, actor: AuthenticatedMembership, raw: unknown): Promise<LoggedSiteExtra> {
-  const parsed = inputV3.safeParse(raw); if (!parsed.success) throw new SiteExtraError("INVALID_COMMAND");
+  const parsed = z.union([inputV3, inputV4]).safeParse(raw); if (!parsed.success) throw new SiteExtraError("INVALID_COMMAND");
   const input = parsed.data;
   let refusal: SiteExtraRefusal | undefined;
   let liveRefusal: WatchdogError | undefined;
@@ -167,10 +168,11 @@ export class SiteExtraRepository {
      const gate = await this.evidenceGate(context, actor, input);
      if ("code" in gate) refusal = gate; else
      try {
-      return await new ExtraRepository(this.pool).raiseExtra(context, { version: "raise-extra.v1", commandId: input.commandId, commandType, jobId: input.jobId, actorMembershipId: actor.membershipId, grantId: authority.grant, note: input.note, description: input.description, ...(input.siteVisitId ? { siteVisitId: input.siteVisitId } : {}), ...gate.raise, ...(input.clientMetadata ? { deviceCapturedAt: input.clientMetadata.capturedAt, deviceId: input.clientMetadata.hlc.nodeId } : {}) }, async (db, fact) => {
+      return await new ExtraRepository(this.pool).raiseExtra(context, { ...("workStatus" in input ? { version: "raise-extra.v2", workStatus: input.workStatus } : { version: "raise-extra.v1" }), commandId: input.commandId, commandType, jobId: input.jobId, actorMembershipId: actor.membershipId, grantId: authority.grant, note: input.note, description: input.description, ...(input.siteVisitId ? { siteVisitId: input.siteVisitId } : {}), ...gate.raise, ...("clientMetadata" in input && input.clientMetadata ? { deviceCapturedAt: input.clientMetadata.capturedAt, deviceId: input.clientMetadata.hlc.nodeId } : {}) }, async (db, fact) => {
        try {
         if (gate.evidence) await siteExtraAuthoritySeam(db, fact);
         else await siteExtraBaseAuthoritySeam(db, fact);
+        if ("workStatus" in input) await db.$client.query("SELECT app.ent3_work_status($1,$2,$3,$4)", [input.jobId, actor.membershipId, fact.variationId, input.workStatus]);
        } catch (error) {
         if (error instanceof WatchdogError) {
          liveRefusal = error;

@@ -1,7 +1,8 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { siteOrderCheckV1, siteSupervisorQueryV1, siteSupervisorQueriesV1, sorSiteExtraSubmittedV2, siteExtraLoggedV3, type SiteOrderCheck } from "@jobguard/core";
+import { siteOrderCheckV1, siteSupervisorQueryV1, siteSupervisorQueriesV1, sorSiteExtraSubmittedV2, siteExtraLoggedV4, siteExtraContentSha256V1, type SiteOrderCheck } from "@jobguard/core";
+import { LocalDictation } from "../../ui/local-dictation";
 import { SiteVisit } from "./site-visit";
 import { NorthsidePractice } from "../../northside/northside-practice";
 import { pounds } from "../../lib/pounds";
@@ -71,18 +72,20 @@ export function SiteExtra() {
   async function attach() {
     setBusy(true); setError("");
     try {
-      const r = await fetch("/api/northside/photo", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ version: "northside-command.v1", jobId, description, note }) });
+      const r = await fetch("/api/northside/photo", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ version: "northside-command.v1", jobId, description: sorCode ? description : "Generated practice photo", note: sorCode ? note : "Attach a generated practice photo" }) });
       const body = await r.json(); if (!r.ok) throw new Error(`The practice photo could not be attached (${body.code}).`);
-      setPhoto(body);
+      // Free-text words stay on this device until Log extra. Bind the reviewed
+      // field values to the returned photo hash; the log verifies it server-side.
+      setPhoto(sorCode ? body : { ...body, shownContentSha256: siteExtraContentSha256V1({ jobId, description, note, photoSha256: body.photoSha256 }) });
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
   async function log() {
-    if (!photo || !confirmed || pending.current || (sorCode && (!workStatus || !check || check.outcome === "already_on_order"))) return; pending.current = true; setBusy(true); setError(""); setDone("");
+    if (!photo || !confirmed || !workStatus || pending.current || (sorCode && (!workStatus || !check || check.outcome === "already_on_order"))) return; pending.current = true; setBusy(true); setError(""); setDone("");
     try {
-      attempt.current ??= JSON.stringify(sorCode ? { version: "log-sor-site-extra.v2", workStatus, commandId: commandId.current, sorCode, quantity, description, note, photoEvidenceId: photo.photoEvidenceId, residentConfirmation: { shownContentSha256: photo.shownContentSha256 }, ...(visitId ? { siteVisitId: visitId } : {}) } : { version: "log-site-extra.v3", commandId: commandId.current, description, note, photoEvidenceId: photo.photoEvidenceId, residentConfirmation: { shownContentSha256: photo.shownContentSha256 } });
+      attempt.current ??= JSON.stringify(sorCode ? { version: "log-sor-site-extra.v2", workStatus, commandId: commandId.current, sorCode, quantity, description, note, photoEvidenceId: photo.photoEvidenceId, residentConfirmation: { shownContentSha256: photo.shownContentSha256 }, ...(visitId ? { siteVisitId: visitId } : {}) } : { version: "log-site-extra.v4", workStatus, commandId: commandId.current, description, note, photoEvidenceId: photo.photoEvidenceId, residentConfirmation: { shownContentSha256: photo.shownContentSha256 } });
       const r = await fetch(`/api/contractor/jobs/${jobId}/site-extras${sorCode ? "/sor" : ""}`, { method: "POST", headers: { "content-type": "application/json" }, body: attempt.current });
       const body = await r.json(); if (!r.ok) throw new Error(`The extra was not logged (${body.code}).`);
-      const result = sorCode ? sorSiteExtraSubmittedV2.parse(body) : siteExtraLoggedV3.parse(body);
+      const result = sorCode ? sorSiteExtraSubmittedV2.parse(body) : siteExtraLoggedV4.parse(body);
       if (result.jobId !== jobId) throw new Error("Job response mismatch.");
       attempt.current = null; setWorkStatus(""); setSorCode(""); setCheck(null); setQuantity("1");
       setDone(sorCode ? "Extra logged and priced by the server, and submitted for approval." : "Extra logged. It is waiting for a price and approval."); setPhoto(null); setConfirmed(false); setDescription(""); setNote(""); commandId.current = crypto.randomUUID(); await load();
@@ -114,13 +117,14 @@ export function SiteExtra() {
       {sorCode && <><p>Schedule item: {sorCode}</p><label htmlFor="quantity">Total quantity</label><input className={styles.quantity} id="quantity" inputMode="decimal" value={quantity} disabled={locked} onChange={e => { setQuantity(e.target.value); setCheck(null); }} />
         <p role="status">{!check ? "Checking order…" : check.outcome === "already_on_order" ? "Already on the order. Record a question for your supervisor; this is not an extra." : check.outcome === "new" ? "New extra" : `${check.extraQuantity} ${check.unit} more than ordered`}</p>{check?.outcome === "already_on_order" && <div className={styles.actions}><button disabled={busy || !check.orderRevisionId} onClick={() => void askSupervisor()}>Ask supervisor</button></div>}</>}
       <p data-testid="proceed-comparison">Proceed limit comparison: {sorCode ? check?.proceedComparison === "within" ? "within the limit" : check?.proceedComparison === "above" ? "above the limit" : "unavailable" : "above the limit (unpriced)"}. This is a comparison and does not grant permission to proceed.</p>
-      {sorCode ? <fieldset disabled={locked}><legend>Work status — your own statement</legend><div className={styles.actions}>{(Object.keys(workLabels) as Array<keyof typeof workLabels>).map(value => <button key={value} type="button" aria-pressed={workStatus === value} onClick={() => setWorkStatus(value)}>{workLabels[value]}</button>)}</div>{workStatus && <p role="status">Your statement: {workLabels[workStatus]}</p>}<p>Work timing and any preapproval breach are not determined by this statement. Later approval does not erase a breach.</p></fieldset> : <p>Free-text work status is not recorded. Work timing comes from site visits.</p>}
+      <fieldset disabled={locked}><legend>Work status — your own statement</legend><div className={styles.actions}>{(Object.keys(workLabels) as Array<keyof typeof workLabels>).map(value => <button key={value} type="button" aria-pressed={workStatus === value} onClick={() => setWorkStatus(value)}>{workLabels[value]}</button>)}</div>{workStatus && <p role="status">Your statement: {workLabels[workStatus]}</p>}<p>Work timing and any preapproval breach are not determined by this statement. Later approval does not erase a breach.</p></fieldset>
       <div className={styles.row}><label htmlFor="description">What is the extra work?</label><input id="description" value={description} disabled={locked} maxLength={500} onChange={e => setDescription(e.target.value)} /></div>
+      {!sorCode && !locked && <div className={styles.row}><LocalDictation onUse={text => setDescription(text.slice(0, 500))} /></div>}
       <div className={styles.row}><label htmlFor="note">Note for the office</label><textarea id="note" rows={3} value={note} disabled={locked} maxLength={5000} onChange={e => setNote(e.target.value)} /></div>
-      {!photo ? <div className={styles.actions}><button disabled={busy || !jobId || !description.trim() || !note.trim() || Boolean(sorCode && (!workStatus || !check || check.outcome === "already_on_order"))} onClick={() => void attach()}>Attach practice photo</button></div>
+      {!photo ? <div className={styles.actions}><button disabled={busy || !workStatus || !jobId || !description.trim() || !note.trim() || Boolean(sorCode && (!workStatus || !check || check.outcome === "already_on_order"))} onClick={() => void attach()}>Attach practice photo</button></div>
         : <><p className={styles.ok} data-testid="photo-attached">Practice photo attached. Show the resident this description and photo.</p><p>Content hash: <code>{photo.shownContentSha256}</code></p>
           <label className={styles.confirmation}><input type="checkbox" checked={confirmed} disabled={busy || attempt.current !== null} onChange={e => setConfirmed(e.target.checked)} /> The resident has seen this and confirms it (identity not verified)</label>
-          <div className={styles.actions}><button disabled={busy || !confirmed || Boolean(sorCode && !workStatus)} onClick={() => void log()}>Log extra</button></div></>}
+          <div className={styles.actions}><button disabled={busy || !confirmed || !workStatus} onClick={() => void log()}>Log extra</button></div></>}
     </section>}
     <section className={styles.card} aria-label="My extras"><h2>My extras</h2>
       {loadState !== "ready" ? <p>{loadState === "loading" ? "Loading extras…" : "Extras are unavailable."}</p> : extras.length === 0 ? <p>None yet.</p> : <ul>{extras.map(x => <li key={x.extraId} data-testid="my-extra"><strong>{x.orderReference}</strong>: {x.description} <span className={styles.pill} data-testid="my-extra-state">{x.outcome ? labels[x.outcome] ?? x.outcome : labels[x.state] ?? x.state}</span>{x.quotedPence !== null && <> · price {pounds(x.quotedPence)}</>}{x.hasPhoto && " · photo"}{x.residentConfirmed && " · resident confirmed"}{supervisor && workStatements.filter(statement => statement.extraId === x.extraId).map(statement => <p key={statement.extraId}>Operative statement: {workLabels[statement.workStatus]} · operative {statement.operativeMembershipId} · recorded {statement.recordedAt}. Work timing and any preapproval breach remain separate; later approval does not erase a breach.</p>)}</li>)}</ul>}

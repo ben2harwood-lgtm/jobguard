@@ -147,3 +147,71 @@ for (const comparison of ["within", "above", "unpriced"] as const) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
  });
 }
+
+for (const speech of ["installed", "unavailable"] as const) {
+ test(`free-text status and ${speech} local speech keep words private until reviewed log`, async ({ page }) => {
+  const spoken = "Fictional dictated repair", reviewed = "Reviewed fictional repair";
+  await page.addInitScript(({ speech, spoken }) => {
+   window.__JOBGUARD_SPEECH_ADAPTER__ = {
+    configuration: { language: "en-GB", processLocally: true, remoteFallback: false },
+    available: async () => speech,
+    install: async () => false,
+    start(callbacks) {
+     queueMicrotask(() => { callbacks.final(spoken, "one"); callbacks.final(spoken, "one"); callbacks.end(); });
+     return { stop() { callbacks.end(); }, cancel() { callbacks.end(); } };
+    },
+   };
+  }, { speech, spoken });
+  const posts: Array<{ url: string; body: string }> = [];
+  page.on("request", request => { if (request.method() === "POST") posts.push({ url: request.url(), body: request.postData() ?? "" }); });
+  await page.route("**/api/northside", route => route.fulfill({ status: 401, json: {} }));
+  await page.route("**/api/contractor/practice/acting-as", route => route.fulfill({ json: { state: "acting" } }));
+  await page.route("**/api/contractor/site/jobs", route => route.fulfill({ json: { jobs: [{ jobId, reference: "Fictional order", openVisitId: null }] } }));
+  await page.route("**/api/northside/extras", route => route.fulfill({ json: { extras: [] } }));
+  await page.route(`**/api/contractor/jobs/${jobId}/order-lines`, route => route.fulfill({ json: { version: "site-order-lines.v1", ...head, jobId, workOrderId: jobId, revision: 1, lines: [] } }));
+  await page.route("**/api/northside/photo", route => route.fulfill({ json: { photoEvidenceId: visitId, photoSha256: "b".repeat(64), shownContentSha256: "a".repeat(64) } }));
+  const attempts: Record<string, unknown>[] = [];
+  await page.route(`**/api/contractor/jobs/${jobId}/site-extras`, async route => {
+   attempts.push(route.request().postDataJSON());
+   if (attempts.length === 1) return route.fulfill({ status: 503, json: { code: "SITE_EXTRA_UNAVAILABLE" } });
+   return route.fulfill({ status: 201, json: { version: "site-extra-logged.v4", ...head, jobId, extraId: jobId, state: "logged", evidence: { photoEvidenceId: visitId, residentConfirmationEvidenceId: visitId, contentFormat: "site-extra-content.v1", contentSha256: (attempts[0]!.residentConfirmation as { shownContentSha256: string }).shownContentSha256 } } });
+  });
+  await page.goto("/site/extra");
+  const description = page.getByLabel("What is the extra work?");
+  if (speech === "installed") {
+   await page.getByRole("button", { name: "Talk through the example", exact: true }).click();
+   await expect(page.getByLabel("Words to review")).toHaveValue(spoken);
+   await expect(description).toHaveValue("");
+   await page.getByLabel("Words to review").fill(reviewed);
+   await page.getByRole("button", { name: "Use these words", exact: true }).click();
+   await expect(description).toHaveValue(reviewed);
+  } else {
+   await expect(page.getByText("On-device voice is unavailable in this browser. Type or use the example.", { exact: true })).toBeVisible();
+   await description.fill(reviewed);
+  }
+  await description.fill(`${reviewed} checked`);
+  await page.getByLabel("Note for the office").fill("Fictional reviewed note");
+  const attach = page.getByRole("button", { name: "Attach practice photo" });
+  await expect(attach).toBeDisabled();
+  await expect(page.getByTestId("proceed-comparison")).toContainText("above the limit (unpriced)");
+  for (const name of ["Not started", "Under way", "Finished"]) {
+   const button = page.getByRole("button", { name, exact: true }), box = await button.boundingBox();
+   expect(box!.height).toBeGreaterThanOrEqual(44); expect(box!.width).toBeGreaterThanOrEqual(44);
+  }
+  await page.getByRole("button", { name: "Under way", exact: true }).click();
+  await attach.click();
+  await expect(page.getByTestId("photo-attached")).toBeVisible();
+  expect(posts.filter(post => post.body.includes("repair") || post.body.includes(spoken))).toEqual([]);
+  await expect(description).toBeDisabled();
+  await page.getByRole("checkbox", { name: /The resident has seen this/ }).check();
+  await page.getByRole("button", { name: "Log extra", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("SITE_EXTRA_UNAVAILABLE");
+  await page.getByRole("button", { name: "Log extra", exact: true }).click();
+  await expect(page.getByTestId("extra-logged")).toContainText("waiting for a price and approval");
+  expect(attempts).toHaveLength(2); expect(attempts[1]).toEqual(attempts[0]);
+  expect(attempts[0]).toMatchObject({ version: "log-site-extra.v4", workStatus: "under_way", description: `${reviewed} checked` });
+  expect(posts.filter(post => post.body.includes("repair")).every(post => post.url.endsWith("/site-extras"))).toBe(true);
+  expect(posts.some(post => /audio|transcri|speech/iu.test(post.url))).toBe(false);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+ });
+}

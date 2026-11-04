@@ -83,7 +83,30 @@ in the log transaction (migration 0745). It is not visit timing or a preapproval
 breach determination. Same-ID/different-status conflicts; replay preserves the
 first statement. Finished above the limit is recorded; later approval cannot alter
 it or the original requirement comparisons. ENT-5 not_derived stays unchanged.
-Free-text work status remains open: its strict v1/v2/v3 contracts are unchanged.
+Free-text `log-site-extra.v4` extends the unchanged strict v3 fields with required
+workStatus (not_started, under_way, finished). V1/v2/v3 remain unchanged and reject
+status. The existing LogSiteExtra route/registry classification is retained; no
+new command or route. V4 returns `site-extra-logged.v4`, with v3's evidence fields,
+state logged, and no price. The application supplies only the session actor and
+validated fields; origin, time, actor, role and track in a request are refused.
+
+Only v4 uses `raise-extra.v2`: its explicit version and status enter the existing
+shared command claim's canonical request hash before any early replay return.
+Historical raise-extra.v1 callers keep their original canonical bytes/hash.
+The log's existing transaction seam writes app.ent3_work_status after authority
+and evidence guards, before final audit/completion. An exact replay preserves the
+first immutable statement; changing status conflicts before another write.
+Migration 0745 already accepts free-text site_user origins, so no migration changes.
+Status is never carried in note, origin, device, visit, price or commercial fields.
+The existing no-note/no-verified-photo, tenant and assignment refusals remain.
+
+The screen requires status before attaching a photo for free text too. It reuses
+LocalDictation unchanged, with only local speech and no remote fallback. Reviewed
+words enter the editable description; unavailable voice leaves typing usable.
+Free-text photo attachment sends generic generated-photo text, not the operative's
+words. The screen computes the existing site-extra-content.v1 hash from the reviewed
+fields and returned photo hash; the log validates that binding server-side.
+Only Log extra sends the reviewed free-text words. No audio leaves the device.
 
 The order-check response adds optional proceedComparison (within/above), computed
 on the server using the job's bound rules and exact price, with unpriced above.
@@ -96,7 +119,7 @@ existing extras list. No commercial/timing consumer reads these statements.
 The first priced capture now uses exactly four taps: choose SoR result, choose
 work status, confirm resident, log; photo and typed search excluded by the card.
 This count is authored in the mobile-360/desktop browser spec, awaiting CI.
-Resolve/close, dictation, candidate duplicates, offline capture and real sending
+Resolve/close, candidate duplicates, offline capture and real sending
 remain open/out of scope. This partial work does not finish ENT-3.
 
 Local unit tests exercise strict boundaries, adapter binding and retry routing.
