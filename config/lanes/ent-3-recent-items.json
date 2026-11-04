@@ -1,0 +1,30 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-3-recent-items": {
+      "branches": [
+        "codex/sandbox/ent-3-recent-items"
+      ],
+      "note": "ENT-3 recent schedule items only; RED tenant and membership isolation. No migrations. Workspace facade read entry approved by router, 4 Nov 2026.",
+      "allow": [
+        "apps/api/openapi.json",
+        "apps/api/src/contractor/site-extra-pricing.application.test.ts",
+        "apps/api/src/contractor/site-extra-pricing.controller.ts",
+        "apps/api/src/contractor/site-extra-pricing.http.test.ts",
+        "apps/api/src/contractor/site-extra.application.ts",
+        "apps/api/src/workspace/application.ts",
+        "apps/web/app/api/contractor/jobs/[id]/sor-items/recent/route.test.ts",
+        "apps/web/app/api/contractor/jobs/[id]/sor-items/recent/route.ts",
+        "apps/web/app/site/extra/site-visit.test.tsx",
+        "apps/web/app/site/extra/site-visit.tsx",
+        "apps/web/e2e/ENT-3.spec.ts",
+        "docs/contracts/site-extra-pricing-v1.md",
+        "packages/core/src/site-extra-pricing.test.ts",
+        "packages/core/src/site-extra-pricing.ts",
+        "packages/db/src/site-extra-pricing-queries.ts",
+        "packages/db/src/site-extra-repository.ts",
+        "packages/db/test/site-extra-recent-items.integration.test.ts"
+      ]
+    }
+  }
+}
