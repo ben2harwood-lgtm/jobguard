@@ -301,7 +301,7 @@ READY for the router to stage all working files and complete pending
 origin/codex/sandbox/sv7b-accounting (3bd0f641db). The other seven named
 slice tips are ancestors of HEAD. Both conflict files keep the exact union;
 SV-7B adds its receipt without dropping existing migration notes or empty-table
-entries. Its migration/proof stem is now 0765_accounting_observation_receipt;
+entries. Its migration/proof stem is now 0580_accounting_observation_receipt;
 0760–0765 are consecutive and paired with proofs. No Git writes or fetch ran.
 The pieces' lane files are removed; the batch lane lists exactly 68 final
 changed non-lane paths against the available origin/main (155a3eb06). Local
@@ -346,3 +346,87 @@ replay/races/rollback/isolation, escalation and connector upgrade behavior,
 WORM/MinIO and affected browser journeys, alongside required full checks.
 Independent RED review must bind the eventual exact head. NOPR until #549 and
 batch 10 land. Device/provider/legal approvals remain separate release gates.
+
+
+Batch-c2 PR-opening handoff — 4 November 2026, current run
+
+READY for the router to stage everything and complete the pending main merge
+(MERGE_HEAD 620958206d30f85b467393cb40c9b92e6d4b47a4). This instruction supersedes
+older NOPR/#549/batch-10 waiting notes above: the group's turn is now authorized.
+The two remaining conflicts preserve both contract sections and the union of all
+empty-table entries. No behavior was added. The previously removed SV-7B lane
+file is restored byte-for-byte from origin/main, ready for staging, rather than
+deleting another piece's registration. No git-writing command or fetch ran.
+
+Landing stems, in existing dependency order: 0575_extra_escalation_discovery,
+0576_connector_materials_stage, 0577_worm_durable_commands,
+0578_worm_operator_recovery, 0579_worm_operator_alerts,
+0580_accounting_observation_receipt. SQL bytes are unchanged; companion proofs,
+notes and full-stem references follow the renames. Historical number-only notes
+above describe earlier runs. The batch lane lists all 68 final changed non-lane
+files against current origin/main and excludes itself.
+
+Validation actually run here:
+- pnpm typecheck and two pnpm test wrappers produced only a wrapper warning and
+  stalled before the tools started; interrupted them. No aggregate pnpm PASS.
+- Installed TypeScript 5.8.3: tsc -p <package>/tsconfig.json --noEmit PASS for
+  config, core, storage, ai, db, api and web. Rebuilt core with the same compiler
+  to refresh stale generated imports before rerunning watchdog coverage.
+- Installed Vitest 4.1.12, --maxWorkers=2, <=3 named files per run: DB migration
+  proof loader/WORM proofs/connector proof 83; API watchdog/context/identity 278;
+  API accounting/escalation/inbound 58; API SFTP/queue compatibility 18; core
+  device cache/queue/capture 84; core enterprise fee mandate 11; DB WORM
+  repository/accounting receipts 26; storage WORM/timestamp 35. Total 593 PASS.
+  The initial watchdog run failed on stale core dist; source already contained
+  every classification, and rebuilding core made the unchanged guards pass.
+- Commercial-integrity boundary and current-source guards PASS (90 roots, zero
+  diagnostics, nine existing baselines); no new fingerprint allowances needed.
+  PL/pgSQL CASE, core purity and money arithmetic guards PASS; core purity
+  reports ten existing computed-import notices. git diff origin/main --check PASS.
+- Standard lane lint executed and reports obsolete old-stem paths, the prior
+  SV-7B lane deletion and incoming main paths from the unfinished merge index.
+  This is not a gate PASS. Final worktree path comparison independently confirms
+  all 68 paths match the lane exactly; the six consecutive migration stems all
+  have proofs. Router must stage all changes, finish the merge and rerun standard
+  lane lint against main. The read-only index still records the resolved conflicts.
+
+All batch-9 hardening rules inspected for branch-owned scope. No fingerprinted
+row was widened; no new route, dispatcher command, browser journey or web module
+is introduced by this group. Existing WORM method classifications remain. No
+migration-owned routine reads command_lifecycle_claim, no runtime entrypoint is
+named ent5_%, and audit payloads follow existing references/hashes sealing.
+The accounting trigger reuses an already recorded routine; there is no new
+trigger routine needing a record. No runtime writes to LP-5c protected tables,
+new client DB imports, DEFAULT-bearing proof identities or older app-routine
+replacement requiring an upgrade exception are introduced. The existing initial
+LATER / SIMPLICITY entry above remains the sole initial-review observation.
+
+Still open for every counted piece (none is declared finished):
+- ENT-5: aggregate timing/proceed-policy and held policy items, pack verification,
+  PostgreSQL escalation restart/race/rollback evidence and production scheduling.
+- ENT-13a: domain promotion, credential rotation, real endpoint/conformance and
+  unknown-outcome evidence, held policy decisions and G5. This slice stages facts.
+- M3-3: encrypted device persistence, deployed PowerSync policy/region, independent
+  provider download authorization, physical-device evidence, D08 and G3.
+- M3-4: durable encrypted native queue, upload wiring, reconciliation UI and
+  reconnect/reinstall/device evidence. This slice supplies pure queue rules.
+- M3-5: encrypted native capture/media transport, device restart/airplane-mode/
+  low-storage evidence, gateway wiring and G3. This slice supplies capture states.
+- M4-4: actual configured-store retention/hold evidence, production TSA route,
+  approved D07 policy/operations and production release evidence. Local MinIO CI
+  is separate from production S3 proof; this slice supplies hold alerts/recovery.
+- ENT-14: persisted agreement/mandate authority and collection integration,
+  full lifecycle acceptance, solicitor-reviewed contract set, notice process,
+  D12/D16 and Ben's dated approval. The pure synthetic mandate enables no rail.
+- SV-7B accounting: connector-specific G1/D04/D12 approvals, approved real route,
+  immutable-source verification, durable downstream crash recovery and live
+  acceptance. Receipts claim at most once; live connector stays disabled.
+
+No database or browser ran in this sandbox. CI must prove all required checks,
+fresh/upgrade migrations and rollback/forward-fix behavior, unchanged populated
+fingerprints, LP-0/catalogues/privileges/RLS, accounting replay/races/rollback and
+tenant/job isolation, escalation authorization/restarts, connector upgrade and
+adversarial intake, WORM authorization/recovery/alert atomicity, local MinIO,
+affected browser journeys and contractor acceptance. RED review must bind the
+exact resulting head before merge. Real services, data, money, native-device and
+legal approvals remain separate; made-up data only throughout this run.

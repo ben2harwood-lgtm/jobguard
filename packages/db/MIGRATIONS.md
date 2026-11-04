@@ -1251,7 +1251,7 @@ One statement binds the available snapshot; the returned envelope is always
 incomplete and names absent adapters. This adds no definer source access,
 source grant or run permission, and cannot produce a completed report.
 
-### 0609 — SV-7B synthetic accounting observation receipts (branch-owned)
+### 0580 — SV-7B synthetic accounting observation receipts (branch-owned)
 
 Adds an append-only receipt keyed by tenant/evidence/object version, with a job
 foreign key and observation hash for conflicting replay detection. Forced tenant

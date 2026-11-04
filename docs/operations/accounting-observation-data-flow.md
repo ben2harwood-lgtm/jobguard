@@ -24,7 +24,7 @@ variations, invoice lines, allocations or fee entitlement. No money moves.
 Tests exercise the adapter and the existing worker with scripted ports; they do
 not prove live provider integration or PostgreSQL privileges. Existing SV-7A
 database isolation and worker tests remain required in CI. Branch-owned migration
-0765_accounting_observation_receipt.sql adds forced tenant RLS, a tenant/job foreign key and shadow SELECT/INSERT only.
+0580_accounting_observation_receipt.sql adds forced tenant RLS, a tenant/job foreign key and shadow SELECT/INSERT only.
 The receipt commits before returning observations: a process failure after commit
 may lose that emission. This synthetic seam guarantees at-most-once claiming,
 not durable downstream delivery; live activation still needs reviewed recovery.

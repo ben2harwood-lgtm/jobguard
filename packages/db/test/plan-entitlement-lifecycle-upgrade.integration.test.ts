@@ -35,7 +35,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   const selfComparison = "(SELECT content_hash FROM app.action_authorization WHERE tenant_id=p_tenant AND id=p_authorization)";
   for (const prior of security) {
     const current = live.find(row => row.oid === prior.oid);
-    // 0566 extends exactly this result dispatcher for managed_recovery.elect.
+    // 0566 and 0573 extend exactly this dispatcher for managed recovery and supervisor queries.
     if (prior.nspname === "app" && prior.proname === "lp5_command_result" && prior.args === "p_command_id uuid, p_outcome jsonb") continue;
     if (prior.oid === settlementOid) {
       expect(prior.definition).toContain(selfComparison);

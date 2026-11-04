@@ -1,9 +1,9 @@
 import type { Pool } from "pg";
 import { z } from "zod";
-import { parseOfflineIntentV1, SiteExtraError, logSiteExtraV1, logSiteExtraV3, siteExtraLoggedV1, siteExtraLoggedV3, siteExtraFailureV1, siteExtraHttpStatus, siteExtraContentSha256V1 } from "@jobguard/core";
-import { ContractorEntitlementAuthorityRepository, ContractorRepository, SiteExtraRepository, WatchdogError, contractorSessionContext, type AuthenticatedMembership, type VerifiedTenantContext } from "@jobguard/db";
+import { parseOfflineIntentV1, SiteExtraError, logSiteExtraV1, logSiteExtraV3, logSiteExtraV4, siteExtraLoggedV4, siteExtraLoggedV1, siteExtraLoggedV3, siteExtraFailureV1, siteExtraHttpStatus, siteExtraContentSha256V1 } from "@jobguard/core";
+import { derivedUuid, ExtraApprovalRepository, ContractorEntitlementAuthorityRepository, ContractorRepository, SiteExtraRepository, WatchdogError, contractorSessionContext, type AuthenticatedMembership, type VerifiedTenantContext } from "@jobguard/db";
 import { workOrderPrincipalV1 } from "./work-order.contracts.js";
-import { SorSiteExtraError, parseLogSorSiteExtra, parseOrderCheckQuery, parseSorItemsQuery, siteOrderCheckV1, siteSorItemsV1, sorSiteExtraFailureV1, sorSiteExtraHttpStatus, sorSiteExtraLoggedV1 } from "@jobguard/core";
+import { recordSiteSupervisorQueryV1, siteSupervisorQueryV1, siteSupervisorQueriesV1, sorSiteExtraSubmittedV2, SorSiteExtraError, parseLogSorSiteExtra, parseOrderCheckQuery, parseSorItemsQuery, siteOrderCheckV1, siteSorItemsV1, sorSiteExtraFailureV1, sorSiteExtraHttpStatus, sorSiteExtraLoggedV1 } from "@jobguard/core";
 import { SiteVisitRepository } from "@jobguard/db";
 import { SiteVisitError, logSiteExtraV2, startSiteVisitV1, parseCompleteSiteVisit, siteVisitStartedV1, siteVisitCompletedV1, siteAssignedJobsV1, siteOrderLinesV1, siteVisitFailureV1, siteVisitHttpStatus, type SiteVisitErrorCode } from "@jobguard/core";
 export function assertSiteExtraMode(): void {
@@ -53,18 +53,18 @@ export class SiteExtraApplication {
   const session = workOrderPrincipalV1.safeParse(principal); if (!session.success) throw new SiteExtraError("UNAUTHENTICATED");
   try {
    const member = await new ContractorRepository(this.pool).resolveSession(session.data.sessionId);
-   // v2 and v3 are separate extensions of v1, not a sequence: a body is exactly one of them.
-   const body = logBodyOf(raw), bodyV3 = body ? undefined : logSiteExtraV3.safeParse(raw);
+   // v2 (visit) and v3 (evidence) stay unchanged; v4 requires a free-text status.
+   const body = logBodyOf(raw), bodyV3 = body ? undefined : z.union([logSiteExtraV3, logSiteExtraV4]).safeParse(raw);
    if (!body && !bodyV3?.success) throw new SiteExtraError("INVALID_COMMAND");
    const job = z.guid({ error: "Invalid uuid" }).safeParse(jobId); if (!job.success) throw new SiteExtraError("NOT_FOUND");
    await this.requireSiteOrigin(session.data.sessionId);
    const context = await this.resolveContext(session.data.sessionId, member);
    if (bodyV3?.success) {
     const v3 = bodyV3.data, shown = v3.residentConfirmation?.shownContentSha256;
-    const result = await this.repository.logSiteExtra(context, member, { commandId: v3.commandId, jobId: job.data, note: v3.note, description: v3.description, ...(v3.photoEvidenceId === undefined ? {} : { photoEvidenceId: v3.photoEvidenceId }), ...(shown === undefined ? {} : { shownContentSha256: shown }) });
+    const result = await this.repository.logSiteExtra(context, member, { ...(v3.version === "log-site-extra.v4" ? { version: v3.version, workStatus: v3.workStatus } : {}), commandId: v3.commandId, jobId: job.data, note: v3.note, description: v3.description, ...(v3.photoEvidenceId === undefined ? {} : { photoEvidenceId: v3.photoEvidenceId }), ...(shown === undefined ? {} : { shownContentSha256: shown }) });
     // With no photo and no hash shown the content hash is the pure function of the request; otherwise the database's answer.
     const evidence = result.evidence ?? { photoEvidenceId: null, residentConfirmationEvidenceId: null, contentSha256: siteExtraContentSha256V1({ jobId: job.data, description: v3.description, note: v3.note, photoSha256: null }) };
-    return siteExtraLoggedV3.parse({ version: "site-extra-logged.v3", environment: "synthetic_demo", realExternalActions: 0, jobId: job.data, extraId: result.variationId, state: "logged", evidence: { ...evidence, contentFormat: "site-extra-content.v1" } });
+    return (v3.version === "log-site-extra.v4" ? siteExtraLoggedV4 : siteExtraLoggedV3).parse({ version: v3.version === "log-site-extra.v4" ? "site-extra-logged.v4" : "site-extra-logged.v3", environment: "synthetic_demo", realExternalActions: 0, jobId: job.data, extraId: result.variationId, state: "logged", evidence: { ...evidence, contentFormat: "site-extra-content.v1" } });
    }
    if (!body) throw new SiteExtraError("INVALID_COMMAND");
    const result = await this.repository.logSiteExtra(context, member, { commandId: body.commandId, jobId: job.data, note: body.note, description: body.description, ...("siteVisitId" in body ? { siteVisitId: body.siteVisitId } : {}) });
@@ -84,7 +84,7 @@ export class SiteExtraApplication {
  }
  private sorError(error: unknown): SorSiteExtraError {
   if (error instanceof SorSiteExtraError) return error;
-  if (error instanceof SiteExtraError && (error.code === "UNAUTHENTICATED" || error.code === "EXTRA_FORBIDDEN")) return new SorSiteExtraError(error.code);
+  if (error instanceof SiteExtraError && (error.code === "UNAUTHENTICATED" || error.code === "EXTRA_FORBIDDEN" || error.code === "PHOTO_NOT_ACCEPTED" || error.code === "CONFIRMATION_MISMATCH")) return new SorSiteExtraError(error.code);
   if ((error as { code?: string } | null)?.code === "UNAUTHENTICATED") return new SorSiteExtraError("UNAUTHENTICATED");
   return new SorSiteExtraError("SITE_PRICING_UNAVAILABLE");
  }
@@ -96,9 +96,32 @@ export class SiteExtraApplication {
    const job = z.guid({ error: "Invalid uuid" }).safeParse(jobId); if (!job.success) throw new SorSiteExtraError("NOT_FOUND");
    await this.requireSiteOrigin(sessionId);
    const context = await this.resolveContext(sessionId, member);
-   const result = await this.repository.logSorSiteExtra(context, member, { commandId: body.commandId, jobId: job.data, sorCode: body.sorCode, quantity: body.quantity, ...(body.orderLineScopeItemId ? { orderLineScopeItemId: body.orderLineScopeItemId } : {}), note: body.note });
-   return sorSiteExtraLoggedV1.parse({ version: "sor-site-extra-logged.v1", environment: "synthetic_demo", realExternalActions: 0, jobId: job.data, extraId: result.variationId, state: "logged", priceSource: result.priceSource,
-    orderCheck: { outcome: result.coverage === "new" ? "new" : "more_than_ordered", sorCode: result.sorCode, unit: result.unit, claimedQuantity: result.claimedQuantity, instructedQuantity: result.instructedQuantity, extraQuantity: result.extraQuantity, orderLineScopeItemId: result.orderLineScopeItemId } });
+   const result = await this.repository.logSorSiteExtra(context, member, { commandId: body.commandId, jobId: job.data, sorCode: body.sorCode, quantity: body.quantity, ...(body.orderLineScopeItemId ? { orderLineScopeItemId: body.orderLineScopeItemId } : {}), note: body.note, ...(body.version === "log-sor-site-extra.v2" ? { version: body.version, description: body.description, workStatus: body.workStatus, photoEvidenceId: body.photoEvidenceId, residentConfirmation: body.residentConfirmation, ...(body.siteVisitId ? { siteVisitId: body.siteVisitId } : {}) } : {}) });
+   // The log has committed. Submission has its own durable receipt, so failures leave
+   // that log intact and retries use the identical submit command (also on log replay).
+   let submission: Record<string, unknown> | undefined;
+   if (body.version === "log-sor-site-extra.v2") {
+    const submitId = derivedUuid(`ent3-priced-submit:${context.tenantId.toLowerCase()}:${body.commandId.toLowerCase()}`);
+    submission = await new ExtraApprovalRepository(this.pool).submitExtra(context, member, { version: "submit-extra.v1", commandId: submitId, jobId: job.data, extraId: result.variationId });
+   }
+   const answer = { version: "sor-site-extra-logged.v1", environment: "synthetic_demo", realExternalActions: 0, jobId: job.data, extraId: result.variationId, state: "logged", priceSource: result.priceSource,
+    orderCheck: { outcome: result.coverage === "new" ? "new" : "more_than_ordered", sorCode: result.sorCode, unit: result.unit, claimedQuantity: result.claimedQuantity, instructedQuantity: result.instructedQuantity, extraQuantity: result.extraQuantity, orderLineScopeItemId: result.orderLineScopeItemId } };
+   return submission ? sorSiteExtraSubmittedV2.parse({ ...answer, version: "sor-site-extra-submitted.v2", state: submission.state, requestId: submission.requestId }) : sorSiteExtraLoggedV1.parse(answer);
+  } catch (error) { throw this.sorError(error); }
+ }
+ async supervisorQueries(principal: unknown, jobId: string, raw?: unknown) {
+  const sessionId = this.sorEntry(principal);
+  try {
+   const member = await new ContractorRepository(this.pool).resolveSession(sessionId);
+   const job = z.guid().safeParse(jobId); if (!job.success) throw new SorSiteExtraError("NOT_FOUND");
+   const body = raw === undefined ? undefined : recordSiteSupervisorQueryV1.safeParse(raw);
+   if (body && !body.success) throw new SorSiteExtraError("INVALID_COMMAND");
+   const context = await this.resolveContext(sessionId, member);
+   if (body?.success) {
+    await this.requireSiteOrigin(sessionId);
+    return siteSupervisorQueryV1.parse(await this.repository.recordSupervisorQuery(context, member, job.data, body.data));
+   }
+   return siteSupervisorQueriesV1.parse(await this.repository.supervisorQueries(context, member, job.data));
   } catch (error) { throw this.sorError(error); }
  }
  async sorItems(principal: unknown, jobId: string, query: unknown) {

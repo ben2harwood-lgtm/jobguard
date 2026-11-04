@@ -41,11 +41,11 @@ describe("ENT-13a isolated connector proof", () => {
     const tenancy = [{ relname: "history", relrowsecurity: true, relforcerowsecurity: true, guarded: true }];
     expect(applyTenancyProofs(tenancy, [proof], "rls")).toEqual(tenancy);
   });
-  it("0761 widens only kind validation, retaining the latest intake body and all existing allowances", () => {
-    const addition = proofSchema.parse(JSON.parse(readFileSync(new URL("./migration-proofs/0761_connector_materials_stage.proof.json", import.meta.url), "utf8")));
-    expect(addition).toEqual({ migration: "0761_connector_materials_stage.sql", lp0: [], upgrade: [], tenancy: [] });
+  it("0576 widens only kind validation, retaining the latest intake body and all existing allowances", () => {
+    const addition = proofSchema.parse(JSON.parse(readFileSync(new URL("./migration-proofs/0576_connector_materials_stage.proof.json", import.meta.url), "utf8")));
+    expect(addition).toEqual({ migration: "0576_connector_materials_stage.sql", lp0: [], upgrade: [], tenancy: [] });
     const previous = readFileSync(new URL("../migrations/0554_connector_intake.sql", import.meta.url), "utf8");
-    const sql = readFileSync(new URL("../migrations/0761_connector_materials_stage.sql", import.meta.url), "utf8");
+    const sql = readFileSync(new URL("../migrations/0576_connector_materials_stage.sql", import.meta.url), "utf8");
     const body = previous.slice(previous.indexOf("CREATE FUNCTION connector.intake"), previous.indexOf("ALTER FUNCTION connector.intake"))
       .replace("CREATE FUNCTION", "CREATE OR REPLACE FUNCTION")
       .replace("v_kind NOT IN('work_order','billing_status')", "v_kind NOT IN('work_order','billing_status','materials_issue')")

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { parseInventory } from "./lp-0-catalog.js";
 import { applyTenancyProofs, applyUpgradeProofs, combineLp0, proofSchema } from "./migration-proof-loader.js";
 
-const proofs = ["0762_worm_durable_commands", "0763_worm_operator_recovery", "0764_worm_operator_alerts"].map(stem =>
+const proofs = ["0577_worm_durable_commands", "0578_worm_operator_recovery", "0579_worm_operator_alerts"].map(stem =>
   proofSchema.parse(JSON.parse(readFileSync(new URL(`./migration-proofs/${stem}.proof.json`, import.meta.url), "utf8"))));
 
 describe("M4-4 source-reviewed migration proofs", () => {

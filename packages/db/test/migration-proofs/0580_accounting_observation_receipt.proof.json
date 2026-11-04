@@ -1,5 +1,5 @@
 {
-  "migration": "0765_accounting_observation_receipt.sql",
+  "migration": "0580_accounting_observation_receipt.sql",
   "lp0": [
     {
       "section": "entries",

@@ -1,5 +1,5 @@
 {
-  "migration": "0764_worm_operator_alerts.sql",
+  "migration": "0579_worm_operator_alerts.sql",
   "lp0": [
     {
       "section": "entries",
