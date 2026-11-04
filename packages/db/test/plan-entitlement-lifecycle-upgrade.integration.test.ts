@@ -18,7 +18,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   const before = await snapshot(c.admin);
   const catalogue = async () => (await c!.admin.query(`SELECT n.nspname,p.proname,p.oid,p.proowner,p.proacl,p.prosecdef,p.proconfig,pg_get_function_identity_arguments(p.oid) args,
     CASE WHEN p.oid<>'app.mon8_company_feature(text,text,uuid)'::regprocedure THEN pg_get_functiondef(p.oid) END definition
-    FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname IN('app','identity','control_plane','audit_control') AND p.prokind='f' ORDER BY p.oid`)).rows;
+    FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname IN('app','identity','control_plane','audit_control','worm_control') AND p.prokind='f' ORDER BY p.oid`)).rows;
   const security = await catalogue();
   expect(await service(f, trial).check(request("final_check", trial.jobId))).toMatchObject({ executable: false });
   await applyMigration(c, "0556_mon8_job_track_and_trial.sql");
