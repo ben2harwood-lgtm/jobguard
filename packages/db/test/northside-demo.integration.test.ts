@@ -198,7 +198,8 @@ it("CLIENT-ISOLATION permits a second client's own extra and denies cross-client
   const sup = (await invite({ kind: "member.invite", role: "supervisor", email: "second.supervisor@fictional.invalid", scope: { kind: "team", id: team }, clientId: null, contractId: null })).id;
   const clientId = (await invite({ kind: "member.invite", role: "client_approver", email: "second.approver@fictional.invalid", scope: { kind: "client", id: secondOrder.client_id }, clientId: secondOrder.client_id, contractId: secondOrder.contract_id })).id;
   const op = await act(secondOrder.membership_id), extra = await log(secondOrder.job_id, op);
-  await repo.priceExtra(await ctx(), await act(sv), { version: "price-extra.v1", commandId: randomUUID(), jobId: extra.jobId, extraId: extra.extraId, netPence: 108000 });
+  const secondSurveyor = await act(sv);
+  await repo.priceExtra(await ctx(), secondSurveyor, { version: "price-extra.v1", commandId: randomUUID(), jobId: extra.jobId, extraId: extra.extraId, netPence: 108000 });
   const supervisor = await act(sup);
   const submitted = await repo.submitExtra(await ctx(), supervisor, { version: "submit-extra.v1", commandId: randomUUID(), jobId: extra.jobId, extraId: extra.extraId });
   await repo.approveExtraStep(await ctx(), supervisor, { version: "approve-extra-step.v1", commandId: randomUUID(), jobId: extra.jobId, requestId: submitted.requestId, stepIndex: 0, revisionHash: submitted.revisionHash, netPence: 108000 });

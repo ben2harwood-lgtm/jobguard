@@ -79,3 +79,18 @@ it("passes the practice credential that actually authenticated, with no request-
   await withTenant(c.pool, auth.context, async () => undefined);
   expect(c.query.mock.calls[1]?.[1]).toEqual(["practice", lookup.mock.calls[0]?.[1]?.[0], m.tenantId]);
 });
+
+it("sanitizes expiry/refusal discovered at the derived-authority lookup before any callback", async () => {
+  const m = member(), c = connection(m), work = vi.fn();
+  c.query.mockImplementation(async sql => {
+    if (sql.includes("current_actor()")) throw Object.assign(new Error("REQUEST_BINDING_REFUSED"), { code: "42501" });
+    return { rows: [] };
+  });
+  await expect(withTenant(c.pool, verifiedTenantContextFromMembership(m, { kind: "real", credential }), work))
+    .rejects.toBeInstanceOf(RequestBindingRefusedError);
+  expect(work).not.toHaveBeenCalled();
+  expect(c.query.mock.calls.map(call => call[0])).toEqual([
+    "BEGIN", "SELECT app.bind_request($1, $2, $3)", "SELECT app.current_actor() actor, app.current_tenant() tenant", "ROLLBACK",
+  ]);
+  expect(c.release).toHaveBeenCalledOnce();
+});

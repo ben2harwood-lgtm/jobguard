@@ -660,9 +660,11 @@ map, outside context JSON, audit payloads and responses. Refused binding becomes
 a public error before repository-specific error translation.
 
 The following exact calls temporarily defer session binding. Their existing SQL
-authorization remains mandatory. `lp6b-deferred-binding.test.ts` restricts the
-fourth `withTenant` argument to these named call sites; no role-based or
-catch-and-retry opt-out exists.
+authorization remains mandatory. `lp6b-deferred-binding.test.ts` checks direct
+named calls within `packages/db/src`. Independent review found that it does not
+cover other workspace packages or local aliases/re-exports. Ben owns any scanner
+expansion under the repair limits; complete workspace enforcement is not claimed.
+No role-based or catch-and-retry opt-out exists.
 
 | Call site | Reason | Closure owner |
 | --- | --- | --- |
