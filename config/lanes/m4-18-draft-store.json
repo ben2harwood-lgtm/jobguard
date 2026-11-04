@@ -14,7 +14,19 @@
         "packages/db/migrations/0752_interim_draft_records.sql",
         "packages/db/test/migration-proofs/0752_interim_draft_records.proof.json",
         "packages/db/migration-notes/0752_interim_draft_records.md",
-        "docs/contracts/interim-draft-records-dark-v1.md"
+        "docs/contracts/interim-draft-records-dark-v1.md",
+        "apps/api/src/interim-draft.application.ts",
+        "apps/api/src/interim-draft.application.test.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/web/app/lib/interim-draft-server.ts",
+        "apps/web/app/api/jobs/[id]/interim-drafts/route.ts",
+        "apps/web/app/api/jobs/[id]/interim-drafts/route.test.ts",
+        "apps/web/app/jobs/[id]/interim-drafts/page.tsx",
+        "apps/web/app/jobs/[id]/interim-drafts/screen.tsx",
+        "apps/web/app/jobs/[id]/interim-drafts/screen.test.ts",
+        "apps/web/e2e/interim-drafts.spec.ts",
+        "packages/core/src/watchdog.ts",
+        "packages/db/test/interim-draft-screen.integration.test.ts"
       ]
     }
   }

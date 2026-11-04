@@ -45,3 +45,27 @@ Every row and read also carries `SYNTHETIC DRAFT - NOT FOR ISSUE`.
 PostgreSQL CI must prove real concurrent serialization, source rejection, replay,
 FORCE RLS, grants, immutability, fresh/upgrade migration catalogues and the proof
 inventory. An independent exact-head RED review is required before landing.
+
+## Session screen adapter (partial M4-18)
+
+This extends the original no-route/no-composition boundary only for synthetic
+session access. All commercial gates remain closed.
+
+The synthetic-only `/jobs/[id]/interim-drafts` screen and session-only GET/POST
+adapter expose the stored book without enabling issue. The first current membership
+returned by the authenticated identity session selects the company; request tenant
+headers and body authority fields cannot select it. The application binds the
+verified context directly, and passes only the server session digest as actor.
+POST checks the trusted origin and session CSRF token through the principal bridge.
+The strict repository command remains the input boundary; its job must match the URL.
+All replies are no-store, other environments return not-found, and typed repository
+and domain refusals retain their codes with plain messages.
+
+The screen separates every record kind and renders server reconciliation without
+calculating value. Its synthetic JSON record editor preserves the exact pending
+command in session storage across uncertain retries and reloads; definitive HTTP
+refusals allow correction with a new command. The issue refusal comes from
+`assertInterimDocumentIssueAllowed`. No Decision, grant, migration or commercial
+posting is added. CI must run the new real-PostgreSQL isolation/side-effect test
+and the headless mobile-360/desktop stored-book journey; neither can run in the
+restricted builder sandbox. M4-18 remains open for issue, templates and tax.
