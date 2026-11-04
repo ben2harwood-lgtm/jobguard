@@ -31,7 +31,7 @@ ENT-5 timing source amendment, 3 November 2026: Ben answered “Use visit times 
 
 `doneWithoutRequiredPreapproval` is true when the frozen `aboveClientBeforeWorkThreshold` comparison requires client preapproval and the operative has stated `under_way` or `finished`, with a finished visit and no such approval or client approval strictly after the visit finish. `not_started` or a missing statement stays `uncertain` even after the visit finishes and approval arrives. A narrow `ent3_extra_work_status(job, extra)` read supplies only that statement within the verified tenant, after client link/job checks; runtime has no table read grant. It is false when no such requirement applies or approval is strictly before visit start, and `uncertain` when the interval cannot settle the order. No linked visit remains `not_derived`. A before-work comparison without a required client step stays uncertain under the held T/Y composition contract. Company step timings are also shown; this flag interprets the explicit client-before-work threshold only, and grants no proceed permission. Earlier revision requirements remain evaluated, so later approval or a new revision cannot erase a breach. Requirements superseded strictly before visit start are excluded; supersession during the visit is uncertain. The visit and approval facts are retained unchanged; no breach-clearing write exists.
 
-Still open: the proceed contract, reporting authority beyond the merged visit commands, other previously held policy items and any unproved ENT-5 Done-when (including pack verification). This amendment resolves the issued timing source only; it does not declare ENT-5 finished or enable real data.
+Still open: reporting authority beyond the merged visit commands, other previously held policy items and any unproved ENT-5 Done-when (including pack verification). This amendment resolves the issued timing source only; it does not declare ENT-5 finished or enable real data.
 
 ## ENT-5 screen actions — reject, withdraw and revise (4 November 2026)
 
@@ -94,3 +94,32 @@ Authority: Ben's 4 November instruction, “Make all the decisions, say yes, and
 Q01 (pricing), Q03 (applicable contract), Q14 (exports/authority-loss behavior) and Q15 (live scheduling/execution) remain held. Other unresolved invitation, identity and proceed questions are unchanged. No ENT-5-wide completion or production approval is claimed.
 
 Migrations reserved here: 0930 (cross-revision separation), 0931 (withdrawal and replay authority), 0932 (new snapshot wait terms and existing timer consumers); 0933 (expand-compatible rule validation); 0934 unused. No columns or stored row formats change. Roll forward to correct a routine; do not rewrite immutable snapshots or outcomes. Deployment order is migrations before application code. Existing pin/scanner holds and actual validation are recorded in `docs/verdicts/ENT-5b/BUILDER_RECEIPT.md`.
+
+
+## ENT-5 proceed statement ruling — 4 November 2026
+
+Ben instructed the router to decide and proceed ("Make all the decisions, say yes,
+and just get it coding"). The router's ruling in AGENT_CHOICES.md is that site
+staff may record "proceeding before approval", with a reason, as a fact only.
+This closes only the Q05 proceed hold; all other holds remain unchanged.
+
+`RecordExtraProceed` records one append-only operational statement, with the
+session-derived operative, server time, reason and exact priced request/revision.
+It uses the sibling reporting authority: a current operative with assigned job
+coverage and site-origin capture entitlement. The strict input accepts no actor,
+tenant, clock, amount, requirement or approval. Current authority is checked on
+replay too. Supervisors may read history through their existing covered-job grant.
+Only a current priced, undecided request accepts a new statement; stale/unpriced
+requests are refused. A retry is bound to its complete original input.
+
+The statement never approves, fills or skips a step, changes a requirement, or
+feeds pricing, billing or exports. The extra screen shows its immutable history.
+Where the bound snapshot explicitly requires client approval before work, the
+existing client breach projection includes this statement as a reported breach,
+including without a visit-derived time. It does not invent an exact work time.
+Later approval, a revision or a visit change cannot erase the earlier statement
+or breach. Held T/Y composition stays uncertain; no new requirement is inferred.
+
+Synthetic data only. Migration 0905 adds a side table without changing predecessor
+row shapes. Forward-fix only: preserve statements; disable the route if needed.
+No provider call, new alert or production release is introduced.

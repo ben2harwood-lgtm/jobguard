@@ -4,7 +4,7 @@ import { clusterBefore } from "./site-extra-pricing-fixtures.js";
 import { chainWorld, submitted } from "./extra-approval-chain-fixtures.js";
 import { proofBefore, proofColumns, proofDifferences } from "./upgrade-proof-utils.js";
 let c: Awaited<ReturnType<typeof clusterBefore>>;
-beforeAll(async () => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); c = await clusterBefore("0930_extra_same_step.sql"); }, 240_000);
+beforeAll(async () => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); c = await clusterBefore("0988_extra_same_step.sql"); }, 240_000);
 afterAll(async () => { await c?.close(); vi.unstubAllEnvs(); });
 it("0930–0933 preserve populated predecessor rows, column shapes and frozen wait terms, and replay harmlessly", async () => {
   const w = await chainWorld(c), s = await submitted(c, w, 40000);

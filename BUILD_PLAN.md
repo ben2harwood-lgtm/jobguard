@@ -890,6 +890,7 @@ Every card inherits §2.4 C1–C8 and AGENTS §2. Cards reuse the merged command
 - **Audit content:** audit payloads hold IDs and hashes only.
 
 ### ENT-5 Approval chain and client approval
+Proceed slice (4 Nov 2026): router ruling closes only the Q05 proceed hold. Site staff may record proceeding before approval with a reason as an immutable fact bound to the priced request. It grants no authority and changes no approval, pricing, billing or export; see the two extra-approval contracts. Other holds and ENT-5 acceptance remain open.
 **Track:** contractor
 **Depends on:** ENT-3, M4-3-S-R
 **Build:**

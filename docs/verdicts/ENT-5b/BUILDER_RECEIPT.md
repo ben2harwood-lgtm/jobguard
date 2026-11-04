@@ -86,3 +86,123 @@ Final local checks: core 741/741 (including the new Q08 regression), route 28/28
 Additional named landing hold: the full official lane command, `LANE_BASE_REF=codex/sandbox/batch-15 node tools/agent-lane-boundary-lint.mjs --lane=ent-5-rules`, refuses the already-incoming `config/lanes/batch-14.json` delta. That file was not edited here and cannot be granted by this lane; preserve the incoming union and resolve its base/landing ownership through the router. A self-comparison attempt with HEAD is also correctly refused by the tool. No scanner was changed or bypassed. A scoped check using the existing `lanePathAllowed` function passed for all 25 current-delta paths, and the lane's 52 non-lane paths exactly equal the entire difference from batch-15, including inherited deltas. That scoped result is not a full lane-gate PASS.
 
 READY for router handoff only. **do not commit** while the named protected-expectation and inherited-lane holds remain unresolved. The requested conventional commit-message file is `/tmp/ent-5-rules-20261104T222900Z-commit-msg.txt`; it carries the same status. This is source-inspected and locally tested work, not independently verified, integrated, released, or ENT-5 completion.
+
+
+## ENT-5 proceed record — 4 November 2026 — READY (NOPR on batch-15)
+
+RED: approval authority and tenant isolation. Implements the router's issued fact-only
+proceed ruling. Adds migration 0905, `RecordExtraProceed`, its existing lifecycle
+completion adapter, the session-bound reporting route, and a reason/history control
+on `/site/extra`. No predecessor table gains a column. The statement binds the
+immutable priced request; a current operative and assigned-job grant are required,
+including on replay. Supervisors can read through the existing covered-job grant.
+Only the Q05 proceed hold is closed; all other contractual holds remain.
+
+Affected invariants: tenant-qualified references and FORCE RLS; append-only history;
+no approval or commercial effect; immutable requirement snapshots; strict command
+input; durable replay/conflict behavior; reason excluded from audit payloads;
+server-stamped actor/time; current membership and permission checks. The statement
+reaches only history and the existing preapproval breach projection. It preserves
+historic breaches after approval/revision without inventing work timing. No new
+external action, provider, alert or production capability is introduced.
+
+Migration 0905 is reserved provisionally. Its proof covers the side table, exact
+registry addition, routine privileges, policies and immutable triggers. Forward-fix
+only; preserve statements if the route is disabled. The existing command-result
+adapter is extended as an exact union with 0573; a source test proves every prior
+branch remains byte-identical. No SET app.* function clause is added.
+
+Local validation uses installed repository binaries because the pnpm launcher tried
+to verify/switch to its pinned version and registry access failed. No package was
+downloaded. Initial Vitest imports failed before dependency dist outputs existed;
+local compiler builds of core/config/storage/db/ai/api resolved that setup issue.
+Executed successfully:
+- `node_modules/.bin/tsc -p packages/core/tsconfig.json --noEmit`, same for db,
+  API and web (and local dependency builds via their existing tsconfigs).
+- DB Vitest, maxWorkers=2: `test/extra-proceed-migration.test.ts`,
+  `test/extra-approval-timing.test.ts`, `test/migration-proof-loader.test.ts`: 95 passed.
+- API Vitest, maxWorkers=2: `src/contractor/extra-proceed.application.test.ts`,
+  `src/watchdog-registry.test.ts`, `src/auth/context-boundary.test.ts`: 272 passed.
+- Web Vitest, maxWorkers=2: the new proceed route's `route.test.ts`: 10 passed.
+- Core Vitest, maxWorkers=2: `src/extra-proceed.test.ts`: 1 passed.
+- DB Vitest, maxWorkers=2: `test/extra-proceed-migration.test.ts` and
+  `test/late-source-import-migration.test.ts`: 5 passed (includes the 2 source tests
+  already counted above). Final proof/timing/loader run: 95 passed again after
+  proof ordering was checked.
+- API Vitest, maxWorkers=2: `src/auth/identity.test.ts` and
+  `src/contractor/site-extra.application.test.ts`: 48 passed.
+- `vitest list --maxWorkers=2` collected all four tests in the new PostgreSQL
+  integration/upgrade files without executing their database setup or tests.
+- Core purity, money arithmetic, AI provider boundary, commercial boundary,
+  PL/pgSQL CASE-in-IF source lints and `git diff --check` passed.
+
+PostgreSQL and browser tests have NOT run here: this sandbox cannot start the DB or
+bind localhost. Added CI tests compare every unrelated business row before/after
+recording, exercise unchanged approval order, exact replay/conflict, forged fields,
+wrong tenant/job/extra, unassigned and revoked actors, unpriced/stale requests,
+immutable update/delete/truncate, runtime table denial, audit atomicity, and client
+breach/history preservation after approval/revision. Upgrade CI proves populated
+requests, predecessor columns and routine ACLs remain unchanged. The new browser
+journey exercises the actual synthetic route, replay, conflict and history after
+approval at both configured viewports (headless, at most two workers).
+
+Initial source review — LATER / SIMPLICITY: migration
+`0987_extra_proceed_statement.sql`, `app.lp5_command_result`: consider a separately
+reviewed split into existing per-adapter result helpers, so future additions do not
+repeat the full dispatcher body and risk losing predecessor branches. This is not
+part of the proceed slice and does not block it.
+
+Lane note: the stock lane tool was run and correctly refuses inherited batch-15
+paths against local main. The lane contains only this slice's exact changed paths
+from batch-15, excluding config/lanes and itself. A direct comparison using the
+same lane policy's exported matching logic verifies this slice; it does not claim
+the standard committed-range CI lane gate passed. Re-run that gate after batch-15
+lands and the router commits this branch.
+
+### Named holds for landing
+
+- Batch-15 must land first; this NOPR branch deliberately starts at its exact tip.
+  Shared API, extra-screen and contract files serialize with batch-15; reconcile
+  those paths after it lands rather than opening competing changes.
+- Router commits/pushes; green required CI against current main and one independent
+  RED review at the exact committed head remain required. This receipt is builder
+  source inspection and local deterministic test evidence, not independent review.
+- CI must run real PostgreSQL `extra-proceed.integration.test.ts` and
+  `extra-proceed-upgrade.integration.test.ts`, existing approval-chain/timing,
+  tenancy, privilege/catalog, fingerprint and migration-upgrade suites, plus the
+  normal typecheck/lint/test/build checks. No fixture/mock substitutes for DB proof.
+- CI must run `ENT-5-proceed.spec.ts` on mobile-360 and desktop headlessly with
+  at most two workers and preserve existing mandatory browser suites.
+- Reconcile reserved migration 0905 and its proof with the landing sequence; no
+  renumbering or mainline write was attempted in this read-only Git sandbox.
+- Full ENT-5 completion, remaining product-policy holds and all real-data/release
+  gates remain open; this is only the issued proceed slice.
+
+## batch-34 union handoff — 4 November 2026 — READY, RED, NOPR
+
+This entry supersedes the earlier source-handoff numbering and inherited-lane holds for this batch only. Both proceed and remaining-rule behavior are retained, including inherited batch-15 work. Four working-file conflicts are resolved; the read-only Git index still records the merge until the router stages it. No Git write, fetch, database, browser, provider or release action was performed.
+
+The final migration/proof/notes references use filename stems only:
+- `0590_extra_duplicate_candidates` → `0985_extra_duplicate_candidates`.
+- `0591_contractor_job_evidence_read` → `0986_contractor_job_evidence_read`.
+- `0905_extra_proceed_statement` → `0987_extra_proceed_statement`.
+- `0930_extra_same_step` → `0988_extra_same_step`.
+- `0931_extra_withdraw_roles` → `0989_extra_withdraw_roles`.
+- `0932_extra_working_day_wait` → `0990_extra_working_day_wait`.
+- `0933_extra_rule_wait_schema` → `0991_extra_rule_wait_schema`.
+
+Historical bare-number notes above are retained. The batch-34 lane replaces the three branch-added piece/batch lane files and lists exactly the 98 final non-lane paths changed from the existing `origin/main` snapshot (56b74eaec); local `main` is stale. The side-table list preserves both sides. No fingerprinted row shape or protected inventory/scanner was changed. The plan-entitlement upgrade assertion now binds seven exact predecessor routine identities to their replacement SQL bodies, retaining unchanged assertions for every other predecessor and the existing ACL proof checks. The LP-0 routine protection definitions are recorded facts, not compared definition pins; no baseline was rewritten. Real catalogue acceptance still requires CI.
+
+Local validation, installed binaries, no more than two Vitest workers and three named files per run:
+- Core `extra-proceed`, `extra-approval`, `contractor`: 742 passed.
+- API `watchdog-registry`, `context-boundary`, `identity`: 278 passed.
+- DB unit guards `migration-proof-loader`, `extra-proceed-migration`, `late-source-import-migration`: 81 passed.
+- API `extra-proceed.application`, `site-extra-pricing.application`: 79 passed.
+- Web proceed route and chain-actions route: 38 passed.
+- Repository-configured TypeScript builds for core/storage/config/ai/db/API and no-emit checks for DB/API/web passed. Seven exact predecessor exception sources also matched their SQL identity once each. `git diff --check` passed; working conflict markers are absent.
+
+The global pnpm launcher stalled before invoking checks and was cancelled; installed binaries were used instead. Initial test collection needed generated package entrypoints; dependency builds supplied them, then the listed tests passed. An accidental root-base-config compile was discarded: it does not carry the API decorator settings; the applicable package-config checks passed.
+
+Official `node tools/agent-lane-boundary-lint.mjs --lane=batch-34` was run and refuses 17 removed branch-only paths still present in HEAD/index history. Every refused path is absent from both `origin/main` and final working files. A separate deterministic check using the unchanged exported lane helpers passes final-file coverage, exact allow-list equality and migration ordering. This is not an official lane PASS: the router must rerun the official command after staging/completing this permitted merge. The brief explicitly allows unresolved index entries once working files are resolved.
+
+CI must prove PostgreSQL fresh/populated upgrades, migration replay, row-shape preservation, privileges/RLS/LP-0, command authority and audit, approval/replay/race/revocation/escalation behavior, and both viewport journeys including ENT-5 proceed and chain actions, plus required lint/test/build checks. Independent RED review at the exact final head remains required before merge. READY means router commit/push handoff for the NOPR branch, not approval, merge, ENT-5 completion or release.

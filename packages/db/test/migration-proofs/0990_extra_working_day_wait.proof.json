@@ -1,29 +1,29 @@
 {
-  "migration": "0590_extra_duplicate_candidates.sql",
+  "migration": "0990_extra_working_day_wait.sql",
   "lp0": [
     {
       "section": "entries",
       "before": null,
       "after": {
-        "key": "acl|routine|function:app.extra_duplicate_candidates(uuid,uuid)|jobguard_runtime|EXECUTE|-",
-        "group": "a-exec-helper-predicates"
+        "key": "owner|routine|function:app.xa_wait_deadline(timestamp with time zone,jsonb)|jobguard_migration",
+        "group": "a-owner-routines"
       }
     },
     {
       "section": "entries",
       "before": null,
       "after": {
-        "key": "owner|routine|function:app.extra_duplicate_candidates(uuid,uuid)|jobguard_migration",
-        "group": "a-owner-routines"
+        "key": "acl|routine|function:app.xa_wait_deadline(timestamp with time zone,jsonb)|jobguard_runtime|EXECUTE|-",
+        "group": "a-exec-extra-approval-routines"
       }
     },
     {
       "section": "routines",
       "before": null,
       "after": {
-        "identity": "function:app.extra_duplicate_candidates(uuid,uuid)",
+        "identity": "function:app.xa_wait_deadline(timestamp with time zone,jsonb)",
         "owner": "jobguard_migration",
-        "securityDefiner": true,
+        "securityDefiner": false,
         "searchPath": "search_path=pg_catalog",
         "returnsTrigger": false,
         "extension": null,
@@ -33,11 +33,7 @@
         "otherExecute": [],
         "definitionSha256": null,
         "staticWrites": [],
-        "staticCalls": [
-          "app.contractor_member_active",
-          "app.xa_covers",
-          "app.xa_latest_kind"
-        ]
+        "staticCalls": []
       }
     }
   ],
@@ -47,11 +43,11 @@
       "before": null,
       "after": {
         "nspname": "app",
-        "proname": "extra_duplicate_candidates",
-        "args": "p_actor uuid, p_job uuid",
+        "proname": "xa_wait_deadline",
+        "args": "p_started timestamp with time zone, p_step jsonb",
         "proowner": "jobguard_migration",
         "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
-        "prosecdef": true,
+        "prosecdef": false,
         "proconfig": [
           "search_path=pg_catalog"
         ]
