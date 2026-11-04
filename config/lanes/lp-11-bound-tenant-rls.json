@@ -2,11 +2,15 @@
   "version": 2,
   "lanes": {
     "lp-11-bound-tenant-rls": {
-      "branches": ["codex/sandbox/lp-11-bound-tenant-rls"],
-      "note": "LP-11 RED staged cutover. Requires the LP-10 predecessor chain, authentication bootstrap compatibility, protected inventory/pin authorization and full PostgreSQL validation before commit or merge.",
+      "branches": [
+        "codex/sandbox/lp-11-bound-tenant-rls"
+      ],
+      "note": "LP-11 RED NOPR staged cutover; DO NOT COMMIT until bootstrap dependencies, exact policy proof allowances and protected-source authorization are resolved. PostgreSQL CI and independent RED review remain required.",
       "allow": [
-        "packages/db/migrations/0532_lp11_bound_tenant_rls.sql",
-        "packages/db/test/lp11-bound-tenant-rls.integration.test.ts"
+        "packages/db/migrations/0810_lp11_bound_tenant_rls.sql",
+        "packages/db/test/lp11-bound-tenant-rls.integration.test.ts",
+        "packages/db/test/lp11-bound-tenant-rls.test.ts",
+        "packages/db/test/migration-proofs/0810_lp11_bound_tenant_rls.proof.json"
       ]
     }
   }

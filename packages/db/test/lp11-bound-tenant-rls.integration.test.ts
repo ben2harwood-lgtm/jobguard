@@ -1,4 +1,5 @@
 import { randomBytes, randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import type { PoolClient } from "pg";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { jobDoorsActor, jobDoorsDatabase, type JobDoorsDatabase } from "./lp-job-doors-fixtures.js";
@@ -27,7 +28,8 @@ async function refused(client: PoolClient, sql: string, params: unknown[] = []) 
 
 it("has no caller-selected tenant policy, including owner and identity alternatives", async () => {
   const policies = await db.owner.query(`SELECT schemaname,tablename,policyname,qual,with_check
-    FROM pg_policies WHERE schemaname IN ('app','identity','control_plane')`);
+    FROM pg_policies WHERE schemaname NOT IN ('pg_catalog','information_schema')
+    AND schemaname !~ '^pg_'`);
   expect(policies.rows.length).toBeGreaterThan(100);
   for (const policy of policies.rows) {
     expect(`${policy.qual} ${policy.with_check}`, JSON.stringify(policy)).not.toContain("app.tenant_id");
@@ -71,7 +73,8 @@ it("binds with real credential validation and ignores forged tenant settings for
 it("tests each converted USING and WITH CHECK independently, without another OR policy masking it", async () => {
   const a = await session(), b = await session();
   const policies = await db.owner.query(`SELECT schemaname,tablename,policyname,qual,with_check
-    FROM pg_policies WHERE schemaname IN ('app','identity','control_plane')
+    FROM pg_policies WHERE schemaname NOT IN ('pg_catalog','information_schema')
+    AND schemaname !~ '^pg_'
     AND (qual LIKE '%current_tenant()%' OR with_check LIKE '%current_tenant()%')`);
   expect(policies.rows.length).toBeGreaterThan(100);
   // Owner connection permits evaluating identity-schema row types too; the
@@ -100,24 +103,26 @@ it("tests each converted USING and WITH CHECK independently, without another OR 
 
 it("uses invoker RLS for every runtime-readable view and refuses unbound pool reuse", async () => {
   const views = await db.owner.query(`SELECT n.nspname,c.relname,c.reloptions FROM pg_class c
-    JOIN pg_namespace n ON n.oid=c.relnamespace WHERE c.relkind='v' AND n.nspname='app'
+    JOIN pg_namespace n ON n.oid=c.relnamespace WHERE c.relkind='v' AND n.nspname NOT IN ('pg_catalog','information_schema')
+    AND n.nspname !~ '^pg_'
     AND has_table_privilege('jobguard_runtime',c.oid,'SELECT')`);
   expect(views.rows.length).toBeGreaterThan(0);
   for (const v of views.rows) expect(v.reloptions, v.relname).toContain("security_invoker=true");
-  const a = await session(), pool = db.freshRuntime();
+  const a = await session(), b = await session(), pool = db.freshRuntime();
   try {
     let pid: number | undefined;
-    for (const finish of ["COMMIT", "ROLLBACK"]) {
+    for (const [actor, finish] of [[a, "COMMIT"], [b, "ROLLBACK"], [a, "COMMIT"]] as const) {
       const c = await pool.connect();
       try {
         const currentPid = (await c.query("SELECT pg_backend_pid() pid")).rows[0].pid;
         if (pid !== undefined) expect(currentPid).toBe(pid);
         pid = currentPid;
         await c.query("BEGIN");
-        await c.query("SELECT app.bind_request('real',$1,$2)", [a.credential, a.tenant]);
+        await c.query("SELECT app.bind_request('real',$1,$2)", [actor.credential, actor.tenant]);
+        expect((await c.query("SELECT tenant_id FROM app.account")).rows).toEqual([{ tenant_id: actor.tenant }]);
         for (const v of views.rows) {
           const rows = await c.query(`SELECT DISTINCT tenant_id FROM ${ident(v.nspname)}.${ident(v.relname)}`);
-          expect(rows.rows.every(row => row.tenant_id === a.tenant)).toBe(true);
+          expect(rows.rows.every(row => row.tenant_id === actor.tenant)).toBe(true);
         }
         await c.query(finish);
       } finally { await c.query("ROLLBACK"); c.release(); }
@@ -139,4 +144,88 @@ it("uses invoker RLS for every runtime-readable view and refuses unbound pool re
       } finally { await reused.query("ROLLBACK"); reused.release(); }
     }
   } finally { await pool.end(); }
+});
+
+
+it("upgrades the latest predecessor without changing rows, columns, policy roles or policy alternatives", async () => {
+  const predecessor = await jobDoorsDatabase(true, "0810_lp11_bound_tenant_rls.sql");
+  const policies = async () => (await predecessor.owner.query(`SELECT schemaname,tablename,policyname,permissive,roles,cmd,qual,with_check
+    FROM pg_policies WHERE schemaname NOT IN ('pg_catalog','information_schema') AND schemaname !~ '^pg_'
+    ORDER BY schemaname,tablename,policyname`)).rows;
+  const columns = async () => (await predecessor.owner.query(`SELECT n.nspname,c.relname,a.attname,a.atttypid,a.atttypmod,a.attnotnull
+    FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid JOIN pg_namespace n ON n.oid=c.relnamespace
+    WHERE n.nspname IN ('app','identity','control_plane','connector') AND a.attnum>0 AND NOT a.attisdropped
+    ORDER BY n.nspname,c.relname,a.attnum`)).rows;
+  try {
+    const actor = await jobDoorsActor(predecessor.owner);
+    const beforePolicies = await policies(), beforeColumns = await columns();
+    const beforeAccount = (await predecessor.owner.query("SELECT * FROM app.account WHERE tenant_id=$1", [actor.tenant])).rows;
+    const beforeMembership = (await predecessor.owner.query("SELECT * FROM app.membership WHERE tenant_id=$1", [actor.tenant])).rows;
+    await predecessor.owner.query(await readFile(new URL("../migrations/0810_lp11_bound_tenant_rls.sql", import.meta.url), "utf8"));
+    const afterPolicies = await policies();
+    expect(afterPolicies).toHaveLength(beforePolicies.length);
+    const pattern = /(?:pg_catalog\.)?current_setting\('app\.tenant_id'(?:::text)?(?:,\s*true)?\)/g;
+    const converted = (value: string | null) => value?.replace(pattern, "(app.current_tenant())::text") ?? null;
+    // Compare parsed expressions, allowing PostgreSQL to normalize parentheses.
+    // The independent catalogue proof must still provide exact before/after rows.
+    for (let i = 0; i < beforePolicies.length; i++) {
+      const before = beforePolicies[i]!, after = afterPolicies[i]!;
+      const { qual, with_check, ...metadata } = before;
+      expect({ ...after, qual, with_check }).toEqual({ ...metadata, qual, with_check });
+      for (const field of ["qual", "with_check"] as const) {
+        if (!before[field]?.includes("app.tenant_id")) expect(after[field]).toBe(before[field]);
+        else {
+          expect(after[field]).toContain("app.current_tenant()");
+          expect(after[field]).not.toContain("app.tenant_id");
+          const expected = converted(before[field]);
+          const c = await predecessor.owner.connect();
+          try {
+            await c.query("BEGIN");
+            await c.query(`CREATE TEMP TABLE ${ident(before.tablename)} (LIKE ${ident(before.schemaname)}.${ident(before.tablename)})`);
+            await c.query(`ALTER TABLE ${ident(before.tablename)} ENABLE ROW LEVEL SECURITY`);
+            await c.query(`CREATE POLICY expected ON ${ident(before.tablename)} USING (${expected})`);
+            const normalized = (await c.query("SELECT qual FROM pg_policies WHERE schemaname LIKE 'pg_temp_%' AND tablename=$1 AND policyname='expected'", [before.tablename])).rows[0].qual;
+            expect(after[field], `${before.schemaname}.${before.tablename}/${before.policyname}/${field}`).toBe(normalized);
+          } finally { await c.query("ROLLBACK"); c.release(); }
+        }
+      }
+    }
+    expect(await columns()).toEqual(beforeColumns);
+    expect((await predecessor.owner.query("SELECT * FROM app.account WHERE tenant_id=$1", [actor.tenant])).rows).toEqual(beforeAccount);
+    expect((await predecessor.owner.query("SELECT * FROM app.membership WHERE tenant_id=$1", [actor.tenant])).rows).toEqual(beforeMembership);
+    expect((await predecessor.owner.query("SELECT reloptions FROM pg_class WHERE oid='app.ledger_balance'::regclass")).rows[0].reloptions)
+      .toEqual(expect.arrayContaining(["security_barrier=true", "security_invoker=true"]));
+  } finally { await predecessor.close(); }
+}, 300_000);
+
+
+it("checks every runtime permissive alternative even when it has no converted tenant expression", async () => {
+  const a = await session(), b = await session();
+  const alternatives = (await db.owner.query(`SELECT n.nspname,c.relname,p.polname,p.polcmd,
+    pg_get_expr(p.polqual,p.polrelid) qual,pg_get_expr(p.polwithcheck,p.polrelid) with_check
+    FROM pg_policy p JOIN pg_class c ON c.oid=p.polrelid JOIN pg_namespace n ON n.oid=c.relnamespace
+    WHERE p.polpermissive AND EXISTS(SELECT 1 FROM pg_attribute a WHERE a.attrelid=c.oid AND a.attname='tenant_id' AND NOT a.attisdropped)
+    AND EXISTS(SELECT 1 FROM unnest(p.polroles) r(roleid) WHERE CASE WHEN r.roleid=0 THEN true ELSE pg_has_role('jobguard_runtime',r.roleid,'USAGE') END)
+    AND (has_table_privilege('jobguard_runtime',c.oid,'SELECT') OR has_table_privilege('jobguard_runtime',c.oid,'INSERT')
+      OR has_table_privilege('jobguard_runtime',c.oid,'UPDATE') OR has_table_privilege('jobguard_runtime',c.oid,'DELETE'))`)).rows;
+  expect(alternatives.length).toBeGreaterThan(100);
+  const c = await db.owner.connect();
+  try {
+    await c.query("BEGIN");
+    await c.query("SELECT app.bind_request('real',$1,$2)", [a.credential, a.tenant]);
+    await c.query("SELECT set_config('app.tenant_id',$1,true)", [b.tenant]);
+    for (const p of alternatives) {
+      // ALL/UPDATE inherit USING when WITH CHECK is absent; an omitted USING
+      // for a read alternative is TRUE and must not silently escape this test.
+      const expressions = p.polcmd === 'a' ? [p.with_check ?? 'true']
+        : p.polcmd === '*' || p.polcmd === 'w' ? [p.qual ?? 'true', p.with_check ?? p.qual ?? 'true']
+          : [p.qual ?? 'true'];
+      for (const expression of expressions) {
+        const result = await c.query(`SELECT (${expression}) IS TRUE allowed
+          FROM json_populate_record(NULL::${ident(p.nspname)}.${ident(p.relname)},$1::json) AS ${ident(p.relname)}`,
+        [JSON.stringify({ tenant_id: b.tenant })]);
+        expect(result.rows[0].allowed, `${p.nspname}.${p.relname}/${p.polname}: ${expression}`).toBe(false);
+      }
+    }
+  } finally { await c.query("ROLLBACK"); c.release(); }
 });

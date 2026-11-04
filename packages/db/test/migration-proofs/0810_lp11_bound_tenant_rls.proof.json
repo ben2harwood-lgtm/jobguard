@@ -1,0 +1,134 @@
+{
+  "migration": "0810_lp11_bound_tenant_rls.sql",
+  "lp0": [
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "id": "a-lp11-bound-tenant",
+        "title": "LP-11 staged bound tenant policy cutover",
+        "kind": "authority",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Staged only. Five accessor ACL changes are declared here; policy catalogue allowances remain outstanding and must not be inferred from a live catalogue."
+        },
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Convert tenant policy predicates and invoker view behavior after bootstrap and worker predecessors.",
+          "LP-12": "Narrow privileged routine owner custody."
+        },
+        "downstream": "Accessor-only grants for existing policy principals; no binding table access or PUBLIC grant.",
+        "sources": [
+          "packages/db/migrations/0810_lp11_bound_tenant_rls.sql"
+        ],
+        "tests": [
+          "packages/db/test/lp11-bound-tenant-rls.integration.test.ts",
+          "packages/db/test/lp11-bound-tenant-rls.test.ts"
+        ],
+        "gaps": [
+          "DO NOT COMMIT: LP-10 absent and credential-bootstrap compatibility unresolved; exact policy before/after allowances and protected source-pin approval outstanding; PostgreSQL and independent RED review outstanding."
+        ],
+        "path": "ap-lp11-bound-tenant"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.current_tenant()|jobguard_audit_writer|EXECUTE|-",
+        "group": "a-lp11-bound-tenant"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.current_tenant()|jobguard_identity|EXECUTE|-",
+        "group": "a-lp11-bound-tenant"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.current_tenant()|jobguard_meter|EXECUTE|-",
+        "group": "a-lp11-bound-tenant"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.current_tenant()|jobguard_meter_owner|EXECUTE|-",
+        "group": "a-lp11-bound-tenant"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.current_tenant()|jobguard_shadow|EXECUTE|-",
+        "group": "a-lp11-bound-tenant"
+      }
+    },
+    {
+      "section": "authorityPaths",
+      "before": null,
+      "after": {
+        "id": "ap-lp11-bound-tenant",
+        "title": "LP-11 staged bound tenant policy cutover",
+        "description": "Accessor-only grants for existing policy principals; no binding table access or PUBLIC grant.",
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Convert tenant policy predicates and invoker view behavior after bootstrap and worker predecessors.",
+          "LP-12": "Narrow privileged routine owner custody."
+        },
+        "sources": [
+          "packages/db/migrations/0810_lp11_bound_tenant_rls.sql"
+        ],
+        "tests": [
+          "packages/db/test/lp11-bound-tenant-rls.integration.test.ts",
+          "packages/db/test/lp11-bound-tenant-rls.test.ts"
+        ],
+        "gaps": [
+          "DO NOT COMMIT: LP-10 absent and credential-bootstrap compatibility unresolved; exact policy before/after allowances and protected source-pin approval outstanding; PostgreSQL and independent RED review outstanding."
+        ]
+      }
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "routines",
+      "before": {
+        "nspname": "app",
+        "proname": "current_tenant",
+        "args": "",
+        "proowner": "jobguard_binding_owner",
+        "proacl": "{jobguard_binding_owner=X/jobguard_binding_owner,jobguard_runtime=X/jobguard_binding_owner,jobguard_migration=X/jobguard_binding_owner,jobguard_command_writer=X/jobguard_binding_owner}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      },
+      "after": {
+        "nspname": "app",
+        "proname": "current_tenant",
+        "args": "",
+        "proowner": "jobguard_binding_owner",
+        "proacl": "{jobguard_binding_owner=X/jobguard_binding_owner,jobguard_runtime=X/jobguard_binding_owner,jobguard_migration=X/jobguard_binding_owner,jobguard_command_writer=X/jobguard_binding_owner,jobguard_audit_writer=X/jobguard_binding_owner,jobguard_identity=X/jobguard_binding_owner,jobguard_meter=X/jobguard_binding_owner,jobguard_meter_owner=X/jobguard_binding_owner,jobguard_shadow=X/jobguard_binding_owner}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    }
+  ],
+  "tenancy": []
+}
