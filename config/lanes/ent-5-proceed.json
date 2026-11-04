@@ -1,0 +1,41 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-5-proceed": {
+      "branches": [
+        "codex/sandbox/ent-5-proceed"
+      ],
+      "allow": [
+        "BUILD_PLAN.md",
+        "apps/api/src/contractor/extra-proceed.application.test.ts",
+        "apps/api/src/contractor/site-extra.application.ts",
+        "apps/web/app/api/contractor/jobs/[id]/site-extras/[extraId]/proceed/route.test.ts",
+        "apps/web/app/api/contractor/jobs/[id]/site-extras/[extraId]/proceed/route.ts",
+        "apps/web/app/site/extra/extra-proceed.tsx",
+        "apps/web/app/site/extra/site-extra.tsx",
+        "apps/web/e2e/ENT-5-proceed.spec.ts",
+        "docs/contracts/extra-approval-chain-v1.md",
+        "docs/contracts/extra-approval-v1.md",
+        "docs/verdicts/ENT-5b/BUILDER_RECEIPT.md",
+        "packages/core/src/extra-proceed.test.ts",
+        "packages/core/src/extra-proceed.ts",
+        "packages/core/src/index.ts",
+        "packages/core/src/watchdog.ts",
+        "packages/db/migrations/0905_extra_proceed_statement.sql",
+        "packages/db/src/extra-approval-timing.ts",
+        "packages/db/src/extra-proceed.ts",
+        "packages/db/src/index.ts",
+        "packages/db/test/extra-approval-timing.test.ts",
+        "packages/db/test/extra-proceed-migration.test.ts",
+        "packages/db/test/extra-proceed-upgrade.integration.test.ts",
+        "packages/db/test/extra-proceed.integration.test.ts",
+        "packages/db/test/late-source-import-migration.test.ts",
+        "packages/db/test/later-empty-tables.ts",
+        "packages/db/test/lp5-command-catalog.ts",
+        "packages/db/test/migration-proofs/0905_extra_proceed_statement.proof.json"
+      ],
+      "receipt": "docs/verdicts/ENT-5b/BUILDER_RECEIPT.md",
+      "note": "RED. ENT-5 fact-only proceed record, built ahead on batch-15; NOPR. PostgreSQL/browser CI and independent exact-head review required."
+    }
+  }
+}
