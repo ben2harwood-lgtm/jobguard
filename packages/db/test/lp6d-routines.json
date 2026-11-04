@@ -630,5 +630,195 @@
     "source": "packages/db/migrations/0551_sync_snapshot_checkpoint.sql",
     "actor": null,
     "tenant": null
+  },
+  {
+    "name": "app.mon9_session",
+    "arguments": "digest text,actor uuid",
+    "source": "packages/db/migrations/0566_managed_recovery_election.sql",
+    "actor": "actor",
+    "tenant": null
+  },
+  {
+    "name": "app.mon9_elect",
+    "arguments": "j uuid,c uuid,actor uuid,command uuid,auth_id uuid,service text,points integer,terms text",
+    "source": "packages/db/migrations/0566_managed_recovery_election.sql",
+    "actor": "actor",
+    "tenant": null
+  },
+  {
+    "name": "app.mon9_elect",
+    "arguments": "digest text,j uuid,c uuid,actor uuid,command uuid,auth_id uuid,service text,points integer,terms text",
+    "source": "packages/db/migrations/0568_managed_recovery_actor_bind.sql",
+    "actor": "actor",
+    "tenant": null
+  },
+  {
+    "name": "app.ent3_supervisor_query",
+    "arguments": "p_job uuid,p_actor uuid,p_body jsonb",
+    "source": "packages/db/migrations/0573_site_supervisor_query.sql",
+    "actor": "p_actor",
+    "tenant": null
+  },
+  {
+    "name": "app.ent3_work_status",
+    "arguments": "p_job uuid,p_actor uuid,p_extra uuid,p_status text",
+    "source": "packages/db/migrations/0574_site_extra_work_status.sql",
+    "actor": "p_actor",
+    "tenant": null
+  },
+  {
+    "name": "app.ent3_proceed_comparison",
+    "arguments": "p_job uuid,p_actor uuid,p_code text,p_quantity text",
+    "source": "packages/db/migrations/0574_site_extra_work_status.sql",
+    "actor": "p_actor",
+    "tenant": null
+  },
+  {
+    "name": "app.worm_submit",
+    "arguments": "c jsonb",
+    "source": "packages/db/migrations/0577_worm_durable_commands.sql",
+    "actor": null,
+    "tenant": null
+  },
+  {
+    "name": "app.billability_snapshot",
+    "arguments": "t uuid,j uuid,c uuid,w uuid,l uuid,actor uuid",
+    "source": "packages/db/migrations/0565_recovery_billability_integration.sql",
+    "actor": "actor",
+    "tenant": "t"
+  },
+  {
+    "name": "app.recovery_billability",
+    "arguments": "j uuid,digest text,p jsonb,document jsonb DEFAULT NULL",
+    "source": "packages/db/migrations/0565_recovery_billability_integration.sql",
+    "actor": null,
+    "tenant": null
+  },
+  {
+    "name": "app.read_money_trail_availability",
+    "arguments": "p_job uuid,p_session text",
+    "source": "packages/db/migrations/0571_money_trail_reconciliation.sql",
+    "actor": null,
+    "tenant": null
+  },
+  {
+    "name": "app.financial_reconciliation_queue",
+    "arguments": "p_session uuid,p_job uuid,p_command jsonb",
+    "source": "packages/db/migrations/0572_financial_reconciliation_queue.sql",
+    "actor": null,
+    "tenant": null
+  },
+  {
+    "name": "app.advance_final_account_draft",
+    "arguments": "p_tenant uuid,p_draft uuid,p_revision uuid,p_number integer",
+    "source": "packages/db/migrations/0016_final_accounts.sql",
+    "actor": null,
+    "tenant": "p_tenant"
+  },
+  {
+    "name": "app.invalidate_stale_final_account_authorizations",
+    "arguments": "p_tenant uuid,p_job uuid,p_current_hash char(64)",
+    "source": "packages/db/migrations/0016_final_accounts.sql",
+    "actor": null,
+    "tenant": "p_tenant"
+  },
+  {
+    "name": "app.approve_synthetic_landing",
+    "arguments": "p jsonb",
+    "source": "packages/db/migrations/0356_unchecked_job_doors.sql",
+    "actor": null,
+    "tenant": null
+  },
+  {
+    "name": "app.reverse_synthetic_landing",
+    "arguments": "p_tenant uuid,p_reversal uuid,p_derivation uuid,p_journal uuid,p_allocation uuid,p_amount bigint,p_reason varchar",
+    "source": "packages/db/migrations/0356_unchecked_job_doors.sql",
+    "actor": null,
+    "tenant": "p_tenant"
+  },
+  {
+    "name": "app.configure_recovery_demo",
+    "arguments": "p_job uuid,p_command uuid,p_scenario varchar",
+    "source": "packages/db/migrations/0356_unchecked_job_doors.sql",
+    "actor": null,
+    "tenant": null
+  },
+  {
+    "name": "app.create_fee_illustration_source",
+    "arguments": "p_job uuid,p_command uuid",
+    "source": "packages/db/migrations/0357_job_doors_illustration_compatibility.sql",
+    "actor": null,
+    "tenant": null
+  },
+  {
+    "name": "app.issue_practice_customer_credit_note",
+    "arguments": "\n p_tenant uuid,p_job uuid,p_invoice uuid,p_actor uuid,p_command uuid,p_net_pence bigint,p_reason text,p_preview_hash text\n",
+    "source": "packages/db/migrations/0190_credit_command_replay.sql",
+    "actor": "p_actor",
+    "tenant": "p_tenant"
+  },
+  {
+    "name": "app.record_practice_customer_receipt",
+    "arguments": "\n p_tenant uuid,p_job uuid,p_invoice uuid,p_actor uuid,p_command uuid,\n p_paid_on date,p_amount bigint,p_method text,p_reference text\n",
+    "source": "packages/db/migrations/0030_receipt_replay_and_invoice_binding.sql",
+    "actor": "p_actor",
+    "tenant": "p_tenant"
+  },
+  {
+    "name": "app.reverse_practice_customer_receipt",
+    "arguments": "\n p_tenant uuid,p_job uuid,p_invoice uuid,p_payment uuid,p_actor uuid,p_command uuid,p_reason text\n",
+    "source": "packages/db/migrations/0030_receipt_replay_and_invoice_binding.sql",
+    "actor": "p_actor",
+    "tenant": "p_tenant"
+  },
+  {
+    "name": "app.pf1b_review_supplier_credit",
+    "arguments": "t uuid,j uuid,input jsonb",
+    "source": "packages/db/migrations/0188_practice_supplier_credit.sql",
+    "actor": null,
+    "tenant": "t"
+  },
+  {
+    "name": "app.final_check_builder",
+    "arguments": "t uuid,j uuid,d text,locking boolean DEFAULT false",
+    "source": "packages/db/migrations/0238_final_check.sql",
+    "actor": null,
+    "tenant": "t"
+  },
+  {
+    "name": "app.read_success_fee_v3",
+    "arguments": "p_job uuid,p_session text",
+    "source": "packages/db/migrations/0406_success_fee_catch_posting.sql",
+    "actor": null,
+    "tenant": null
+  },
+  {
+    "name": "app.read_value_job",
+    "arguments": "j uuid,digest text",
+    "source": "packages/db/migrations/0510_read_value_job_combined_final.sql",
+    "actor": null,
+    "tenant": null
+  },
+  {
+    "name": "app.read_value_business",
+    "arguments": "digest text",
+    "source": "packages/db/migrations/0358_value_source_read.sql",
+    "actor": null,
+    "tenant": null
+  },
+  {
+    "name": "app.lock_success_fee_sources",
+    "arguments": "",
+    "source": "packages/db/migrations/0406_success_fee_catch_posting.sql",
+    "actor": null,
+    "tenant": null
+  },
+  {
+    "name": "app.mon8_feature_decision",
+    "arguments": "actor uuid, feature text, purpose text DEFAULT 'new_work'",
+    "source": "packages/db/migrations/0548_server_plan_entitlements.sql",
+    "actor": null,
+    "tenant": null,
+    "subjectActor": "actor"
   }
 ]

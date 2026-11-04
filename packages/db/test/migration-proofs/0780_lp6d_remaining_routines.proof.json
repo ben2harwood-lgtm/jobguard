@@ -6,12 +6,12 @@
       "before": null,
       "after": {
         "id": "a-lp6d-routine-binding",
-        "title": "Protected actor access for existing checked routine owners",
+        "title": "Checked remaining routines and authorization revocation",
         "kind": "identity",
         "status": "approved_current",
         "target": {
           "state": "retain",
-          "note": "Read current transaction authority only; no binding-store access."
+          "note": "Retain checked entry points and private projection only; no binding-store access."
         },
         "cards": [
           "LP-6d"
@@ -19,7 +19,7 @@
         "responsibilities": {
           "LP-6d": "Bind remaining routines while retaining decided permissions."
         },
-        "downstream": "Existing migration and command writer owners may read the protected actor and tenant. The invitation bridge may bind a validated real session. No new business table write grant.",
+        "downstream": "Reuse LP-6c binding/accessor grants; retain a private switched-session projection and one checked recovery-message authorization revocation entry point. No binding-store or general business-table write grant.",
         "sources": [
           "packages/db/migrations/0780_lp6d_remaining_routines.sql"
         ],
@@ -38,8 +38,8 @@
       "before": null,
       "after": {
         "id": "ap-lp6d-routine-binding",
-        "title": "Protected actor access for existing checked routine owners",
-        "description": "Existing migration and command writer owners may read the protected actor and tenant. The invitation bridge may bind a validated real session. No new business table write grant.",
+        "title": "Checked remaining routines and authorization revocation",
+        "description": "Reuse LP-6c binding/accessor grants; retain a private switched-session projection and one checked recovery-message authorization revocation entry point. No binding-store or general business-table write grant.",
         "cards": [
           "LP-6d"
         ],
@@ -156,6 +156,55 @@
         ]
       },
       "after": null
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.lp6_session_authority(text,text,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_binding_owner"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.authenticate_practice_session",
+          "app.contractor_practice_home_deadline",
+          "app.contractor_practice_session_digest",
+          "app.contractor_session",
+          "identity.sso_session_memberships"
+        ]
+      },
+      "after": {
+        "identity": "function:app.lp6_session_authority(text,text,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_binding_owner"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.authenticate_practice_session",
+          "app.contractor_practice_home_deadline",
+          "app.contractor_practice_session_digest",
+          "app.lp6d_contractor_session_identity",
+          "identity.sso_session_memberships"
+        ]
+      }
     }
   ],
   "upgrade": [

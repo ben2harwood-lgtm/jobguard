@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/lp-6d-remaining-routines"
       ],
-      "note": "LP-6d RED, NOPR. READY for held branch save only; landing holds remain in migration note and router commit-message handoff. Router owns commit and push.",
+      "note": "LP-6d RED, held NOPR chain update on supplied LP-6c. Exact nine non-lane endpoint paths. Landing holds and verification are in the existing migration note and router handoff; router owns Git completion, commit and push.",
       "allow": [
         "packages/db/migration-notes/0780_lp6d_remaining_routines.md",
         "packages/db/migrations/0780_lp6d_remaining_routines.sql",

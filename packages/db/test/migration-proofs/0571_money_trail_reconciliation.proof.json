@@ -1,0 +1,121 @@
+{
+  "migration": "0571_money_trail_reconciliation.sql",
+  "lp0": [
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "id": "a-money-trail-availability",
+        "title": "Synthetic money trail availability",
+        "cards": [
+          "LP-6c",
+          "LP-8b"
+        ],
+        "responsibilities": {
+          "LP-6c": "Retain delegated current owner, tenant, job and session checks",
+          "LP-8b": "Expose availability only; no financial write or run authority"
+        },
+        "sources": [
+          "packages/db/migrations/0571_money_trail_reconciliation.sql"
+        ],
+        "tests": [
+          "packages/db/test/money-trail-security.integration.test.ts",
+          "packages/db/test/money-trail-upgrade.integration.test.ts"
+        ],
+        "gaps": [
+          "Authoritative fee source contracts and reconciliation run authority remain dependency-bound."
+        ],
+        "kind": "read_access",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Read-only synthetic availability; independent RED review remains required."
+        },
+        "downstream": "Constant dependency metadata after delegated current owner, tenant, job and session checks; no run or money write authority.",
+        "path": "ap-money-trail-availability"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.read_money_trail_availability(uuid,text)|jobguard_runtime|EXECUTE|-",
+        "group": "a-money-trail-availability"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.read_money_trail_availability(uuid,text)|jobguard_migration",
+        "group": "a-owner-routines"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.read_money_trail_availability(uuid,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.read_success_fee_v3"
+        ]
+      }
+    },
+    {
+      "section": "authorityPaths",
+      "before": null,
+      "after": {
+        "id": "ap-money-trail-availability",
+        "title": "Synthetic money trail availability",
+        "description": "read_money_trail_availability delegates current synthetic owner, job and persisted session authorization to read_success_fee_v3. It returns constant dependency metadata only and does not authorize a reconciliation run.",
+        "cards": [
+          "LP-6c",
+          "LP-8b"
+        ],
+        "responsibilities": {
+          "LP-6c": "Retain delegated current owner, tenant, job and session checks",
+          "LP-8b": "Expose availability only; no financial write or run authority"
+        },
+        "sources": [
+          "packages/db/migrations/0571_money_trail_reconciliation.sql"
+        ],
+        "tests": [
+          "packages/db/test/money-trail-security.integration.test.ts",
+          "packages/db/test/money-trail-upgrade.integration.test.ts"
+        ],
+        "gaps": [
+          "Authoritative fee source contracts and reconciliation run authority remain dependency-bound."
+        ]
+      }
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "read_money_trail_availability",
+        "args": "p_job uuid, p_session text",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    }
+  ],
+  "tenancy": []
+}

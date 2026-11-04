@@ -5,7 +5,7 @@ import type { PoolClient } from "pg";
 import { jobDoorsActor, jobDoorsDatabase, type JobDoorsDatabase } from "./lp-job-doors-fixtures.js";
 import routines from "./lp6d-routines.json";
 import classification from "./lp6d-runtime-classification.json";
-import { withTenant } from "../src/tenant-context.js";
+import { verifiedTenantContextFromMembership, withTenant } from "../src/tenant-context.js";
 import { beginRepositoryCommand, completeRepositoryCommand } from "../src/repository-command.js";
 import { appendAuditBatch } from "../src/audit.js";
 import { canonicalJson } from "../src/work-order-repository.js";
@@ -15,14 +15,14 @@ import { company, start } from "./practice-worker-switch-fixtures.js";
 
 let db: JobDoorsDatabase, visit: Awaited<ReturnType<typeof visitFixture>>, switched: Awaited<ReturnType<typeof company>>;
 beforeAll(async () => {
-  db = await jobDoorsDatabase(true, "0570_lp6c_money_binding.sql");
+  db = await jobDoorsDatabase(true, "0591_lp6c_money_binding.sql");
   // Product fixture routes run against the predecessor, before the cutover.
   // No broad runtime fixture write is introduced or restored.
   const predecessor = { admin: db.owner, runtime: db.runtime } as Cluster;
   visit = await visitFixture(predecessor);
   switched = await company(predecessor);
   await start(predecessor, switched, "operative");
-  await db.owner.query(await readFile(new URL("../migrations/0570_lp6c_money_binding.sql", import.meta.url), "utf8"));
+  await db.owner.query(await readFile(new URL("../migrations/0591_lp6c_money_binding.sql", import.meta.url), "utf8"));
   await db.owner.query(await readFile(new URL("../migrations/0780_lp6d_remaining_routines.sql", import.meta.url), "utf8"));
 }, 300_000);
 afterAll(async () => { await db?.close(); });
@@ -54,25 +54,46 @@ it("refuses every callable remaining entry point before business validation when
   const actor = await jobDoorsActor(db.owner);
   const digest = await credential(actor.tenant, actor.member, actor.person);
   const rows = (await db.owner.query(`SELECT n.nspname||'.'||p.proname name,p.proargnames names,
-    oidvectortypes(p.proargtypes) types FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
-    WHERE n.nspname='app' AND p.prokind='f' AND p.prorettype<>'trigger'::regtype
-    AND has_function_privilege('jobguard_runtime',p.oid,'EXECUTE')`)).rows;
-  const guarded = new Set([...routines.map(r => r.name), "app.revoke_recovery_message_authorization"]);
+    oidvectortypes(p.proargtypes) types,has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') executable
+    FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+    WHERE n.nspname='app' AND p.prokind='f' AND p.prorettype<>'trigger'::regtype`)).rows;
+  const guarded = new Set([...routines.map(r => r.name), "app.revoke_recovery_message_authorization", "app.ent3_extra_work_status"]);
   const callable = rows.filter(row => guarded.has(row.name));
-  expect(callable.length).toBeGreaterThan(40);
+  expect(callable.length).toBeGreaterThanOrEqual(routines.length + 2);
+  const subjectActors = new Set(routines.filter(r => r.subjectActor).map(r => r.name));
   for (const row of callable) {
     const types = row.types ? row.types.split(", ") as string[] : [];
     const names = row.names as string[] | null;
     const expression = `SELECT * FROM ${row.name}(${types.map((type, i) => `$${i + 1}::${type}`).join(",")})`;
     const values = types.map((_type, i) => ["p_actor", "actor", "p_owner"].includes(names?.[i] ?? "") ? actor.member
       : ["p_tenant", "t"].includes(names?.[i] ?? "") ? actor.tenant : null);
+    if (!row.executable) {
+      await expect(db.runtime.query(expression, values)).rejects.toMatchObject({ code: "42501" });
+      // Exercise historical/private overload guards as owner without exposing
+      // them to runtime, including the old managed-recovery signature.
+      const c = await db.owner.connect();
+      try {
+        await c.query("BEGIN");
+        await c.query("SELECT set_config('app.tenant_id',$1,true)", [actor.tenant]);
+        await failure(c, expression, values);
+        await c.query("SELECT app.bind_request('real',$1,$2)", [digest, actor.tenant]);
+        const index = names?.findIndex(name => ["p_actor", "actor", "p_owner"].includes(name)) ?? -1;
+        if (index >= 0 && !subjectActors.has(row.name)) {
+          const forged = [...values]; forged[index] = randomUUID();
+          await failure(c, expression, forged);
+        }
+        await c.query("SELECT set_config('app.tenant_id',$1,true)", [randomUUID()]);
+        await failure(c, expression, values);
+      } finally { await c.query("ROLLBACK"); c.release(); }
+      continue;
+    }
     await request(actor.tenant, null, c => failure(c, expression, values));
     await request(actor.tenant, digest, async c => {
       await c.query("SELECT set_config('app.tenant_id',$1,true)", [randomUUID()]);
       await failure(c, expression, values);
     });
     const index = names?.findIndex(name => ["p_actor", "actor", "p_owner"].includes(name)) ?? -1;
-    if (index >= 0 && row.name !== "app.ent3a_extra_authority") {
+    if (index >= 0 && !subjectActors.has(row.name)) {
       const forged = [...values]; forged[index] = randomUUID();
       await request(actor.tenant, digest, c => failure(c, expression, forged));
     }
@@ -109,8 +130,8 @@ it("commits and replays an operative visit through the checked command and audit
   const actor = visit.members.operative.member;
   const digest = await credential(actor.tenantId, actor.membershipId, actor.identityUserId);
   const commandId = randomUUID();
-  const run = () => withTenant(db.runtime, visit.ctx, async tx => {
-    await tx.$client.query("SELECT app.bind_request('real',$1,$2)", [digest, actor.tenantId]);
+  const context = verifiedTenantContextFromMembership(actor, { kind: "real", credential: digest });
+  const run = () => withTenant(db.runtime, context, async tx => {
     const claim = await beginRepositoryCommand<{ visitId: string; startedAt: string }>(tx, {
       tenantId: actor.tenantId, actorMembershipId: actor.membershipId, commandId,
       commandType: "StartSiteVisit", semanticKey: `site-visit-start:${visit.jobId}:${actor.membershipId}:${commandId}`,
@@ -200,4 +221,40 @@ it("binds sync checkpoint identities to the member and preserves an allowed chec
     await failure(c, "SELECT app.sync_snapshot_generation($1,0,1,$2,'synthetic_demo')", [other.person, "a".repeat(64)]);
     expect((await c.query("SELECT app.sync_snapshot_generation($1,0,1,$2,'synthetic_demo') generation", [a.person, "a".repeat(64)])).rows[0].generation).toBe("1");
   });
+});
+
+it("preserves the switched session's base-owner revocation check from LP-6b", async () => {
+  const c = await db.owner.connect();
+  try {
+    await c.query("BEGIN");
+    await c.query("SELECT set_config('app.tenant_id',$1,true)", [switched.p.tenantId]);
+    await c.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [switched.p.tenantId, switched.p.membershipId]);
+    await failure(c, "SELECT app.bind_request('contractor_practice',$1,$2)", [switched.session, switched.p.tenantId]);
+    await failure(c, "SELECT * FROM app.contractor_session($1)", [switched.session]);
+  } finally { await c.query("ROLLBACK"); c.release(); }
+});
+
+it("rejects a substituted live credential and a forged WORM payload actor before resource validation", async () => {
+  const a = await jobDoorsActor(db.owner), other = await jobDoorsActor(db.owner);
+  const digest = await credential(a.tenant, a.member, a.person);
+  const foreign = await credential(other.tenant, other.member, other.person);
+  await request(a.tenant, digest, async c => {
+    expect((await c.query("SELECT app.mon9_session($1,$2) person", [digest, a.member])).rows[0].person).toBe(a.person);
+    await failure(c, "SELECT app.mon9_session($1,$2)", [foreign, a.member]);
+    await failure(c, "SELECT app.mon9_session($1,$2)", [digest, other.member]);
+    await failure(c, "SELECT app.worm_submit($1)", [JSON.stringify({ actorMembershipId: other.member })]);
+  });
+});
+
+it("preserves the named supervisor's queries and work-status read while refusing an operative's supervisor read", async () => {
+  const supervisor = visit.named.member, operative = visit.members.operative.member;
+  const ds = await credential(supervisor.tenantId, supervisor.membershipId, supervisor.identityUserId);
+  const dop = await credential(operative.tenantId, operative.membershipId, operative.identityUserId);
+  await request(supervisor.tenantId, ds, async c => {
+    expect((await c.query("SELECT app.ent3_supervisor_query($1,$2,NULL) result", [visit.jobId, supervisor.membershipId])).rows[0].result)
+      .toMatchObject({ version: "site-supervisor-queries.v1", jobId: visit.jobId, queries: [] });
+    expect((await c.query("SELECT app.ent3_work_status($1,$2,NULL,NULL) result", [visit.jobId, supervisor.membershipId])).rows[0].result).toEqual([]);
+    await failure(c, "SELECT app.ent3_supervisor_query($1,$2,NULL)", [visit.jobId, operative.membershipId]);
+  });
+  await request(operative.tenantId, dop, c => failure(c, "SELECT app.ent3_supervisor_query($1,$2,NULL)", [visit.jobId, operative.membershipId], { code: "P0002", message: "NOT_FOUND" }));
 });

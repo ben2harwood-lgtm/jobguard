@@ -1,4 +1,4 @@
-import { ContractorEntitlementAuthorityRepository } from "@jobguard/db";
+import { ExtraApprovalRepository, ContractorEntitlementAuthorityRepository } from "@jobguard/db";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
@@ -189,4 +189,88 @@ describe("ENT-3c single path and seam", () => {
     const queries = readFileSync(resolve(process.cwd(), "../../packages/db/src/site-extra-pricing-queries.ts"), "utf8");
     expect(queries).not.toMatch(/\b(?:INSERT|UPDATE|DELETE)\b/iu); expect(queries).not.toMatch(/LogSiteExtra|commandType/u);
   });
+});
+
+
+it("ENT-3 v2 keeps verified-photo, shown-hash and visit bindings through the application", async () => {
+  vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
+  const pool = new Pool(), m = member(), sessionId = uuid(), jobId = uuid();
+  vi.spyOn(ContractorRepository.prototype, "resolveSession").mockResolvedValue(m);
+  vi.spyOn(ExtraApprovalRepository.prototype, "submitExtra").mockResolvedValue({ requestId: uuid(), state: "awaiting_approval" });
+  const raw = body({ version: "log-sor-site-extra.v2", workStatus: "finished", description: "Fictional reviewed description", photoEvidenceId: uuid(), residentConfirmation: { shownContentSha256: "a".repeat(64) }, siteVisitId: uuid() });
+  const repo = vi.spyOn(SiteExtraRepository.prototype, "logSorSiteExtra").mockResolvedValue(stored(jobId));
+  const app = createWorkspaceApplication({ pool, sessionId });
+  await app.siteExtras.logSor(jobId, raw);
+  expect(repo.mock.calls[0]![1]).toBe(m);
+  expect(repo.mock.calls[0]![2]).toEqual({ ...raw, jobId });
+  await pool.end();
+});
+
+it("ENT-3 documents both strict versions with the exact controller schema", () => {
+  const parameters = Reflect.getMetadata("swagger/apiParameters", SiteExtraPricingController.prototype.logSor) as Array<{ in: string; schema: unknown }>;
+  const spec = JSON.parse(readFileSync(resolve(process.cwd(), "openapi.json"), "utf8"));
+  expect(spec.paths["/contractor/jobs/{id}/site-extras/sor"].post.requestBody.content["application/json"].schema).toEqual(parameters.find(p => p.in === "body")!.schema);
+});
+
+it("ENT-3 priced v2 keeps its log after a failed submit and retries one exact submission on log replay", async () => {
+ vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
+ const pool = new Pool(), m = member(), sessionId = uuid(), jobId = uuid(), result = stored(jobId);
+ vi.spyOn(ContractorRepository.prototype, "resolveSession").mockResolvedValue(m);
+ const log = vi.spyOn(SiteExtraRepository.prototype, "logSorSiteExtra").mockResolvedValue(result);
+ const requestId = uuid();
+ const submit = vi.spyOn(ExtraApprovalRepository.prototype, "submitExtra")
+  .mockRejectedValueOnce(new Error("submit unavailable"))
+  .mockResolvedValue({ requestId, state: "awaiting_approval" });
+ const app = new SiteExtraApplication(pool), principal = { version: "contractor-principal.v1", sessionId };
+ const raw = body({ version: "log-sor-site-extra.v2", workStatus: "finished", description: "Fictional lock", photoEvidenceId: uuid(), residentConfirmation: { shownContentSha256: "a".repeat(64) } });
+ await expect(app.logSor(principal, jobId, raw)).rejects.toMatchObject({ code: "SITE_PRICING_UNAVAILABLE" });
+ expect(log).toHaveBeenCalledOnce();
+ const answer = await app.logSor(principal, jobId, raw);
+ expect(answer).toMatchObject({ version: "sor-site-extra-submitted.v2", state: "awaiting_approval", extraId: result.variationId, requestId });
+ expect(await app.logSor(principal, jobId, raw)).toEqual(answer);
+ const commands = submit.mock.calls.map(call => call[2]);
+ expect(commands[0]).toEqual(commands[1]); expect(commands[1]).toEqual(commands[2]);
+ expect(commands[0]).toMatchObject({ version: "submit-extra.v1", jobId, extraId: result.variationId });
+ expect((commands[0] as { commandId: string }).commandId).not.toBe(raw.commandId);
+ for (const call of submit.mock.calls) { expect(call[0].tenantId).toBe(m.tenantId); expect(call[1]).toBe(m); }
+ submit.mockClear();
+ await app.logSor(principal, jobId, body());
+ expect(submit).not.toHaveBeenCalled();
+ await pool.end();
+});
+
+it("ENT-3 a rejected log never attempts submission", async () => {
+ vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
+ const pool = new Pool(), sessionId = uuid();
+ vi.spyOn(ContractorRepository.prototype, "resolveSession").mockResolvedValue(member());
+ vi.spyOn(SiteExtraRepository.prototype, "logSorSiteExtra").mockRejectedValue(new SorSiteExtraError("IDEMPOTENCY_CONFLICT"));
+ const submit = vi.spyOn(ExtraApprovalRepository.prototype, "submitExtra");
+ await expect(new SiteExtraApplication(pool).logSor({ version: "contractor-principal.v1", sessionId }, uuid(), body({ version: "log-sor-site-extra.v2", workStatus: "finished", description: "Fictional", photoEvidenceId: uuid(), residentConfirmation: { shownContentSha256: "a".repeat(64) } }))).rejects.toMatchObject({ code: "IDEMPOTENCY_CONFLICT" });
+ expect(submit).not.toHaveBeenCalled(); await pool.end();
+});
+
+it("ENT-3 documents the strict supervisor query controller body exactly", () => {
+ const parameters = Reflect.getMetadata("swagger/apiParameters", SiteExtraPricingController.prototype.recordQuery) as Array<{ in: string; schema: unknown }>;
+ const spec = JSON.parse(readFileSync(resolve(process.cwd(), "openapi.json"), "utf8"));
+ expect(spec.paths["/contractor/jobs/{id}/supervisor-queries"].post.requestBody.content["application/json"].schema).toEqual(parameters.find(p => p.in === "body")!.schema);
+});
+it("ENT-3 supervisor questions bind the session and strict payload without raising an extra", async () => {
+ vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
+ const pool = new Pool(), m = member(), sessionId = uuid(), jobId = uuid();
+ vi.spyOn(ContractorRepository.prototype, "resolveSession").mockResolvedValue(m);
+ const raw = { version: "record-site-supervisor-query.v1", commandId: uuid(), orderLineScopeItemId: uuid(), sorCode: "FIT-LOCK", quantity: "1", expectedOrderRevisionId: uuid() };
+ const result = { version: "site-supervisor-query.v1", environment: "synthetic_demo", realExternalActions: 0, queryId: uuid(), jobId, orderLineScopeItemId: raw.orderLineScopeItemId, sorCode: raw.sorCode, quantity: raw.quantity, orderRevisionId: raw.expectedOrderRevisionId, operativeMembershipId: m.membershipId, recordedAt: "2026-11-03T10:00:00.000Z" };
+ const record = vi.spyOn(SiteExtraRepository.prototype, "recordSupervisorQuery").mockResolvedValue(result as Awaited<ReturnType<SiteExtraRepository["recordSupervisorQuery"]>>);
+ const read = vi.spyOn(SiteExtraRepository.prototype, "supervisorQueries").mockResolvedValue({ version: "site-supervisor-queries.v1", environment: "synthetic_demo", realExternalActions: 0, jobId, queries: [result] } as Awaited<ReturnType<SiteExtraRepository["supervisorQueries"]>>);
+ const raise = vi.spyOn(ExtraRepository.prototype, "raiseExtra");
+ const app = new SiteExtraApplication(pool), principal = { version: "contractor-principal.v1", sessionId };
+ expect(await app.supervisorQueries(principal, jobId, raw)).toEqual(result);
+ expect(record.mock.calls[0]![0].tenantId).toBe(m.tenantId); expect(record.mock.calls[0]![1]).toBe(m); expect(record.mock.calls[0]!.slice(2)).toEqual([jobId, raw]);
+ for (const field of ["tenantId", "actor", "role", "time", "origin", "amount"]) await expect(app.supervisorQueries(principal, jobId, { ...raw, [field]: "forged" })).rejects.toMatchObject({ code: "INVALID_COMMAND" });
+ expect(record).toHaveBeenCalledOnce();
+ expect(await app.supervisorQueries(principal, jobId)).toMatchObject({ queries: [result] });
+ expect(read.mock.calls[0]![1]).toBe(m);
+ record.mockRejectedValue(new SorSiteExtraError("NOT_FOUND"));
+ await expect(app.supervisorQueries(principal, jobId, raw)).rejects.toMatchObject({ code: "NOT_FOUND" });
+ expect(raise).not.toHaveBeenCalled(); await pool.end();
 });
