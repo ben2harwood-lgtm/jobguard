@@ -34,7 +34,7 @@ describe("SV5PRE final-check registration", () => {
     const registered = vi.fn(async (..._args: unknown[]) => ({ stop: vi.fn() }));
     const queries = vi.fn(async () => ({ rows: [{ safe: true }] }));
     vi.doMock("pg", () => ({ Pool: class { query = queries; end = async () => undefined; } }));
-    vi.doMock("graphile-worker", () => ({ run: registered }));
+    vi.doMock("graphile-worker", async () => ({ ...await vi.importActual<Record<string, unknown>>("graphile-worker"), run: registered }));
     vi.doMock("@jobguard/db", async () => ({
       ...await vi.importActual<Record<string, unknown>>("@jobguard/db"),
       ActionExecutor: class { execute = async () => undefined; },

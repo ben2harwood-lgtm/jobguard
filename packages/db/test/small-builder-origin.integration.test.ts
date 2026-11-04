@@ -240,7 +240,12 @@ describe("SV-2 small-builder origins and withdrawal (B2, B3, DW4, DW5, DW8)",()=
   await expect(insert("builder_logged",existing)).rejects.toMatchObject({code:"23514"});
   await expect(insert("final_review",existing)).rejects.toMatchObject({code:"23514"});
   for(const id of [wrongJob,wrongTenant,randomUUID()])await expect(insert("jobguard_catch",id)).rejects.toMatchObject({code:"23503"});
-  const id=await insert("jobguard_catch",existing);await expect(admin.query("INSERT INTO app.extra_origin SELECT * FROM app.extra_origin WHERE variation_id=$1",[id])).rejects.toMatchObject({code:"23505"});expect((await admin.query("SELECT source_signal_id FROM app.extra_origin WHERE variation_id=$1",[id])).rows[0].source_signal_id).toBe(existing);
+  const id=await insert("jobguard_catch",existing);await expect(asTenant(T,async client=>{
+   // Isolate the duplicate-key backstop with an open unmanaged receipt in this
+   // same (ultimately rolled-back) transaction; committed setup stays terminal.
+   await client.query("UPDATE app.command_receipt SET status='processing',result=NULL,completed_at=NULL WHERE tenant_id=$1 AND command_id=(SELECT command_id FROM app.extra_origin WHERE tenant_id=$1 AND variation_id=$2)",[T,id]);
+   await client.query("INSERT INTO app.extra_origin SELECT * FROM app.extra_origin WHERE variation_id=$1",[id]);
+  })).rejects.toMatchObject({code:"23505"});expect((await admin.query("SELECT source_signal_id FROM app.extra_origin WHERE variation_id=$1",[id])).rows[0].source_signal_id).toBe(existing);
   await insert("final_review",null);
   await expect(insert("site_user",null)).rejects.toMatchObject({code:"23514"});
  });

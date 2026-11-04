@@ -53,6 +53,9 @@ beforeAll(async () => {
     createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C"], onLog: () => undefined });
   await postgres.initialise(); await postgres.start();
   admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password: credential, database: "postgres", max: 2 });
+  for (const role of ["jobguard_audit_writer", "jobguard_command_writer", "jobguard_binding_owner"]) {
+    await admin.query(`CREATE ROLE ${role} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS`);
+  }
   await migrate(admin);
   for (const [login, group] of [["sv5pre_worker_runtime", "jobguard_runtime"], ["sv5pre_worker_shadow", "jobguard_shadow"], ["sv5pre_worker_graphile", "jobguard_infrastructure"]]) {
     await admin.query(`CREATE ROLE ${login} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOBYPASSRLS`);

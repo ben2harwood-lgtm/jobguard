@@ -17,28 +17,31 @@ beforeAll(async () => {
     persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C"], onLog: () => undefined });
   await postgres.initialise(); await postgres.start();
   admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password: "test-only", database: "postgres" });
+  await admin.query("CREATE DATABASE jobguard_synthetic_demo");
+  await admin.end();
+  admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password: "test-only", database: "jobguard_synthetic_demo" });
   await migrate(admin);
   await admin.query(`CREATE ROLE lp10_worker LOGIN PASSWORD 'fictional-worker' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS INHERIT;
     GRANT jobguard_worker TO lp10_worker;
     CREATE ROLE lp10_web LOGIN PASSWORD 'fictional-web' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS INHERIT;
     GRANT jobguard_runtime TO lp10_web;`);
-  worker = new Pool({ host: "127.0.0.1", port, user: "lp10_worker", password: "fictional-worker", database: "postgres", max: 2 });
-  web = new Pool({ host: "127.0.0.1", port, user: "lp10_web", password: "fictional-web", database: "postgres" });
+  worker = new Pool({ host: "127.0.0.1", port, user: "lp10_worker", password: "fictional-worker", database: "jobguard_synthetic_demo", max: 2 });
+  web = new Pool({ host: "127.0.0.1", port, user: "lp10_web", password: "fictional-web", database: "jobguard_synthetic_demo" });
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [t]);
   await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [person]);
   await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional LP10')", [account, t]);
   await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [actor, t, account, person]);
 }, 120_000);
 afterAll(async () => { await closeTestPools(web, worker, admin); await postgres?.stop(); if (directory) await rm(directory, { recursive: true, force: true }); });
-async function enqueue() {
+async function enqueue(actionType = "send_quote") {
   const decision = randomUUID(), resolution = randomUUID(), auth = randomUUID(), id = randomUUID();
   const content = "Fictional approved document", hash = createHash("sha256").update(content).digest("hex");
-  await admin.query("INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES($1,$2,'quote','fictional','send_quote')", [decision, t]);
+  await admin.query("INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES($1,$2,'quote','fictional',$3)", [decision, t, actionType]);
   await admin.query("INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'approved',$4)", [resolution, t, decision, actor]);
   await admin.query(`INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,content_hash,aggregate_revision,policy_version,expires_at)
-    VALUES($1,$2,$3,$4,$5,'send_quote',$6,1,'synthetic.v1','2099-01-01')`, [auth, t, decision, resolution, actor, hash]);
+    VALUES($1,$2,$3,$4,$5,$7,$6,1,'synthetic.v1','2099-01-01')`, [auth, t, decision, resolution, actor, hash, actionType]);
   await admin.query(`INSERT INTO app.action_outbox(id,tenant_id,authorization_id,adapter,provider_effect_key,action_type,content_hash,immutable_content,aggregate_revision,policy_version,authorization_expires_at)
-    VALUES($1,$2,$3,'fake_capture',$1::text,'send_quote',$4,$5,1,'synthetic.v1','2099-01-01')`, [id, t, auth, hash, content]);
+    VALUES($1,$2,$3,'fake_capture',$1::text,$6,$4,$5,1,'synthetic.v1','2099-01-01')`, [id, t, auth, hash, content, actionType]);
   return { id, auth };
 }
 const claim = async (id: string) => (await worker.query("SELECT app.claim_worker_action($1,ARRAY['fake_capture']) AS value", [id])).rows[0]!.value;
@@ -51,6 +54,27 @@ describe("LP-10 real login authority", () => {
       "SELECT app.complete_worker_action($1,$1,'succeeded','fictional',NULL)", "UPDATE app.action_outbox SET status='succeeded' WHERE id=$1"]) {
       await expect(web.query(sql, [id])).rejects.toMatchObject({ code: "42501" });
     }
+  });
+  it("refusals leave action state and attempts unchanged", async () => {
+    const { id } = await enqueue();
+    await expect(web.query("UPDATE app.action_outbox SET status='succeeded' WHERE id=$1", [id])).rejects.toMatchObject({ code: "42501" });
+    expect((await admin.query("SELECT status FROM app.action_outbox WHERE id=$1", [id])).rows[0].status).toBe("pending");
+    expect((await admin.query("SELECT * FROM app.action_attempt WHERE action_id=$1", [id])).rows).toEqual([]);
+  });
+  it("durable operator pause prevents claims, without giving the worker pause authority", async () => {
+    const { id } = await enqueue();
+    await admin.query("UPDATE outbound_control.state SET paused=true");
+    try {
+      expect(await claim(id)).toBeNull();
+      await expect(worker.query("UPDATE outbound_control.state SET paused=false")).rejects.toMatchObject({ code: "42501" });
+      expect((await admin.query("SELECT status FROM app.action_outbox WHERE id=$1", [id])).rows[0].status).toBe("pending");
+    } finally { await admin.query("UPDATE outbound_control.state SET paused=false"); }
+  });
+  it("keeps the current contractor entitlement guard at claim", async () => {
+    const { id } = await enqueue("extra.client_approval_request.send");
+    expect(await claim(id)).toBeNull();
+    expect((await admin.query("SELECT status FROM app.action_outbox WHERE id=$1", [id])).rows[0].status).toBe("cancelled");
+    expect((await admin.query("SELECT * FROM app.action_attempt WHERE action_id=$1", [id])).rows).toEqual([]);
   });
   it("worker cannot insert authorization/outbox/approval or assume runtime/owner", async () => {
     for (const sql of ["INSERT INTO app.action_outbox DEFAULT VALUES", "INSERT INTO app.action_authorization DEFAULT VALUES",
@@ -110,6 +134,17 @@ describe("LP-10 real login authority", () => {
     await admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE id=$1", [actor]);
     try { expect(await claim(id)).toMatchObject({ refused: true, code: "AUTHORIZATION_REVOKED" }); }
     finally { await admin.query("UPDATE app.membership SET revoked_at=NULL WHERE id=$1", [actor]); }
+  });
+  it("five retryable attempts end in dead letter, without a sixth claim", async () => {
+    const { id } = await enqueue();
+    for (let attempt = 1; attempt <= 5; attempt++) {
+      const value = await claim(id); expect(value.attempt).toBe(attempt);
+      await worker.query("SELECT app.complete_worker_action($1,$2,'retryable',NULL,'fictional-unavailable')", [id, value.token]);
+      await admin.query("UPDATE app.action_outbox SET next_attempt_at=clock_timestamp()-interval '1 second' WHERE id=$1", [id]);
+    }
+    expect(await claim(id)).toBeNull();
+    expect((await admin.query("SELECT status FROM app.action_outbox WHERE id=$1", [id])).rows[0].status).toBe("dead_letter");
+    expect((await admin.query("SELECT count(*)::int n FROM app.action_attempt WHERE action_id=$1", [id])).rows[0].n).toBe(5);
   });
   it("retry due time and attempt fencing prevent stale completion", async () => {
     const { id } = await enqueue(), first = await claim(id);

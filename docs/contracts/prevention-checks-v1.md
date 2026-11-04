@@ -1,8 +1,75 @@
 # MON-7a synthetic prevention checks v1
 
-Issued scope: B1, B2, B3, B5 and B6, with their DW1–DW4 assertions. B4 is MON-7b,
-parked until payment stages exist. No exposure figure, curve or schedule is defined
-or implemented here. MON-7 cannot be fully accepted while B4 is parked.
+MON-7a scope: B1, B2, B3, B5 and B6, with their DW1–DW4 assertions.
+MON-7 adds the practice-only saved stage forecast and exposure curve below. This does
+not enable live checks or staged invoice issuance.
+
+## MON-7 saved practice stage exposure
+
+`EXPOSURE_CURVE_ENABLED(environment)` is true only for `synthetic_demo`. The
+prevention panel mounts the schedule only after an authenticated practice view
+whose job ID matches the selected job. The schedule's own strict response must
+also match that ID. No fixture is rendered as the selected job's schedule.
+
+M4-18 remains an in-memory draft model and disabled. It has no saved dated stage
+schedule to read. Migration 0550 therefore adds a separate, minimal operational
+forecast history, `app.practice_exposure_schedule`, with tenant-qualified job
+keys, forced RLS and runtime SELECT/INSERT only. Existing immutable-record
+triggers also refuse updates/deletes. This is not an accepted commercial schedule,
+a valuation, a receipt fact or an issued document.
+
+`GET /api/jobs/:id/exposure-schedule` reads the latest saved revision, or a null
+schedule (displayed as unknown). `POST` accepts strict
+`exposure-schedule-command.v1`: command ID, expected revision and dated stages
+with cumulative work/receipt forecasts or null amounts. The builder explicitly
+enters fictional values; no prices, dates or receipts are inferred from other
+job records. There is no lookup of an individual or external provider call.
+The existing `PracticeAccess` job authorization, repository owner/ownership checks
+and synthetic-only environment guard apply to both reads and saves. Other
+sessions receive the same 404 as missing jobs; missing sessions receive 401.
+
+Saves append a new revision and audit event atomically. A tenant schedule lock
+serializes command-ID checks and expected-revision checks; the audit head is
+locked last. A replay with the same canonical input has no second effect and
+returns the current saved projection; changed payload/job is a command conflict.
+Unknown save outcomes require a reload before further editing. Reloading never
+renews the observation date: citations bind server retrieval time and the saved
+revision's original server record time. Source freshness is evaluated at read
+time. Missing/unavailable schedules never fall back to a generated fixture.
+The fixture helper remains isolated to domain and render tests.
+
+Each dated stage is an independent cumulative snapshot, not an incremental sum.
+Reference net exposure is `max(0, cumulative work value - cumulative receipts)`
+in bounded GBP integer pence, using bigint intermediates. This is an illustrative
+unpaid-work forecast, not a claim about profit, loss, settlement or savings.
+Receipt reversals can increase exposure at a later stage; no monotonic assumption
+is imposed on either cumulative input. Stage identities are unique and dates
+strictly increase. Excess receipts floor exposure at zero and create no credit.
+
+Every displayed figure shares its row's exact generated schedule citation,
+retrieval date and observation date. Missing citation, observation or either
+amount yields `unknown` with no money figure. Source ages above the reference
+1440-minute limit and future observation/retrieval yield `unknown`, never
+`clear`; exactly 1440 minutes remains current. Fresh zero exposure is still an
+advisory snapshot, never an assurance of safety. Future *stage* dates are forecast
+dates, distinct from source observation dates. Forged citations, invalid dates,
+amounts, versions and production inputs fail with `INVALID_EXPOSURE_SCHEDULE`.
+The chart connects adjacent known stages only; unknown stages leave gaps. The
+adjacent accessible table provides exact figures, stage dates and source dates.
+
+The curve has no Decision, posting, fee, value-receipt contribution, meter,
+entitlement, outbox, worker, external action or provider. It only evaluates saved
+forecasts. M4-18 stays disabled. No data backfill, new operational alert or
+provider release is needed. Forward fix: disable the practice presentation or
+correct the reader in a follow-up; preserve saved revisions and audit events.
+The additive table is unused by older application code.
+
+The existing MON-7 browser suite now covers saved schedules, reloads, unknown
+amounts, stale presentation, cross-session refusals and fee/value/work-meter
+severance. CI runs this file in both `mobile-360` and `desktop` projects.
+Stale browser presentation deliberately ages a response; the normal save/read
+and reload assertions use real PostgreSQL-backed routes. Full database/catalog,
+upgrade and browser CI plus independent RED review remain required.
 
 ## Authority and subjects
 

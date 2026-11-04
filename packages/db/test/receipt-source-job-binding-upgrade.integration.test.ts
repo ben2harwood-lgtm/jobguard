@@ -1,3 +1,4 @@
+import { applyOutboundPause } from "./outbound-pause-fixture.js";
 // CI ONLY: populated real-writer F5/F7 upgrade, with a constraint-removal control.
 import {readFile} from "node:fs/promises";
 import {afterAll,beforeAll,expect,it} from "vitest";
@@ -24,6 +25,7 @@ it("#346: populated F5/F7 survive upgrade; SQL refuses a same-tenant movement fr
   await f.admin.query(name.startsWith("0095_")?sql.replace("BEGIN;","BEGIN; SELECT set_config('app.deployment_mode','details_needed',true);"):sql);
   await f.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)",[name]);
  }
+ await applyOutboundPause(f.admin);
  // The generated test logins are created before roles exist in this upgrade fixture.
  for(const [pool,role] of [[f.runtime,"jobguard_runtime"],[f.shadow,"jobguard_shadow"]] as const){
   const login=(await pool.query("SELECT current_user AS name")).rows[0].name as string;
@@ -36,8 +38,9 @@ it("#346: populated F5/F7 survive upgrade; SQL refuses a same-tenant movement fr
  await migrate(f.admin);await migrate(f.admin);
  expect(await proofDifferences(f.admin,before)).toEqual({rows:[],types:[]});
  const constraints=(await f.admin.query(`SELECT conname,convalidated,pg_get_constraintdef(oid) definition FROM pg_constraint
-  WHERE conrelid='app.receipt_allocation_fact_source'::regclass AND confrelid='app.practice_feed_event'::regclass`)).rows;
- expect(constraints).toEqual([{conname:"receipt_fact_source_job_movement_fk",convalidated:true,
+  WHERE conrelid='app.receipt_allocation_fact_source'::regclass AND confrelid='app.practice_feed_event'::regclass ORDER BY conname`)).rows;
+ expect(constraints).toEqual([{conname:"receipt_allocation_fact_source_tenant_id_movement_id_fkey",convalidated:true,
+  definition:"FOREIGN KEY (tenant_id, movement_id) REFERENCES app.practice_feed_event(tenant_id, id)"}, {conname:"receipt_fact_source_job_movement_fk",convalidated:true,
   definition:"FOREIGN KEY (tenant_id, job_id, movement_id) REFERENCES app.practice_feed_event(tenant_id, job_id, id)"}]);
  await rolledBack(f.admin,async db=>{
   // Isolate the FK from the independent append-only guard, only in a rolled-back

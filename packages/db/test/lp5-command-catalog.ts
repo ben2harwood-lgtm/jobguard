@@ -1,4 +1,4 @@
-// Exact LP-5a additions, independently asserted against migration 0475 and PostgreSQL.
+// Exact LP-5a additions, independently asserted against migration 0521 and PostgreSQL.
 export const lp5aReadTables = [
   "proposal_review",
   "imported_job_baseline",
@@ -284,10 +284,15 @@ export const lp5bReadTables = [
   "inbox_preference_revision",
   "inbox_outcome_event",
   "watchdog_command_identity",
-  "variation_revision"
+  "variation_revision",
+  "job_diary_entry", "customer_message_source", "final_account_invoice_binding"
 ];
 export const lp5ReadTables = [...lp5aReadTables, ...lp5bReadTables];
 export const lp5bRegistryRows = [
+  {"command_type": "JobSource.diary", "version": "repository-command.v1", "permission_rule": "owner", "lock_adapter": "route_before_begin", "completion_adapter": "source_intake", "audit_class": "operational", "outbox_class": null},
+  {"command_type": "JobSource.customer_message", "version": "repository-command.v1", "permission_rule": "owner", "lock_adapter": "route_before_begin", "completion_adapter": "source_intake", "audit_class": "operational", "outbox_class": null},
+  {"command_type": "IssueLockBoundInvoice", "version": "repository-command.v1", "permission_rule": "owner", "lock_adapter": "route_before_begin", "completion_adapter": "lock_invoice", "audit_class": "commercial", "outbox_class": "fake_invoice_delivery"},
+
   {
     "command_type": "StartSiteVisit",
     "version": "repository-command.v1",
@@ -578,7 +583,19 @@ export const lp5bRegistryRows = [
   }
 ];
 export const lp5RegistryRows = [...lp5aRegistryRows, ...lp5bRegistryRows];
+// Exact successor introduced by SV-5; keep the historical LP-5 catalogues unchanged.
+export const lateSourceRegistryRow = {
+  command_type: "LateSource.import", version: "repository-command.v1", permission_rule: "owner",
+  lock_adapter: "route_before_begin", completion_adapter: "source_intake", audit_class: "operational", outbox_class: null,
+};
+export const currentCommandRegistryRows = [...lp5RegistryRows, lateSourceRegistryRow];
 export const lp5bRoutines = [
+  {
+    "signature": "app.lp5b_bind_follow_up_cancel()",
+    "owner": "jobguard_command_writer",
+    "securityDefiner": true,
+    "execute": []
+  },
   {
     "signature": "app.record_repository_command(uuid)",
     "owner": "jobguard_command_writer",

@@ -20,7 +20,7 @@ export async function resolveVerifiedTenantContext(
   if (!request.sessionToken) throw new AuthError("UNAUTHENTICATED");
   if (request.origin !== allowedOrigin) throw new AuthError("ORIGIN_FORBIDDEN");
   const principal = await provider.authenticate(request.sessionToken);
-  if (!principal) throw new AuthError("UNAUTHENTICATED");
+  if (!principal || !principal.sessionCredential) throw new AuthError("UNAUTHENTICATED");
   if (!request.csrfToken || request.csrfToken !== principal.csrfToken) throw new AuthError("ORIGIN_FORBIDDEN");
   const selected = request.requestedTenantId ?? request.tenantHeader;
   if (!selected || (request.requestedTenantId && request.tenantHeader && request.requestedTenantId !== request.tenantHeader)) {
@@ -28,5 +28,5 @@ export async function resolveVerifiedTenantContext(
   }
   const membership = await provider.findMembership(principal, selected);
   if (!membership) throw new AuthError("TENANT_FORBIDDEN");
-  return verifiedTenantContextFromMembership(asAuthenticatedMembership(membership));
+  return verifiedTenantContextFromMembership(asAuthenticatedMembership(membership), { kind: "real", credential: principal.sessionCredential });
 }

@@ -1,0 +1,34 @@
+{
+  "version": 2,
+  "lanes": {
+    "lp-6b-withtenant": {
+      "branches": [
+        "codex/sandbox/lp-6b-withtenant"
+      ],
+      "note": "LP-6b RED session-bearing withTenant and reviewed bridges; NOPR until LP-3 #546 lands. Requires exact-head independent review and full PostgreSQL CI. No migration or privilege changes.",
+      "allow": [
+        "apps/api/src/accounting-export.application.test.ts",
+        "apps/api/src/auth/auth-provider.ts",
+        "apps/api/src/auth/auth.test.ts",
+        "apps/api/src/auth/context-boundary.test.ts",
+        "apps/api/src/auth/persisted-auth-provider.ts",
+        "apps/api/src/auth/principal-bridge.ts",
+        "apps/api/src/auth/sso/action-paths.test.ts",
+        "apps/api/src/auth/sso/later-sso-resource.test.ts",
+        "apps/api/src/auth/sso/sso-required-unlinked.test.ts",
+        "apps/api/src/job-import-v3.application.test.ts",
+        "apps/api/src/meter-work-state.application.test.ts",
+        "apps/api/src/small-builder-demo.application.test.ts",
+        "apps/api/src/subscription.application.test.ts",
+        "apps/api/src/value/company-value.application.test.ts",
+        "docs/contracts/lp-command-binding-design-v1.md",
+        "packages/db/src/contractor-session-context.ts",
+        "packages/db/src/practice-session.ts",
+        "packages/db/src/tenant-context.ts",
+        "packages/db/test/contractor-session-context.test.ts",
+        "packages/db/test/lp6b-withtenant.integration.test.ts",
+        "packages/db/test/lp6b-withtenant.test.ts"
+      ]
+    }
+  }
+}
