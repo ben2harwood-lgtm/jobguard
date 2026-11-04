@@ -7,9 +7,11 @@ Only `codex/sandbox/lp-6b-repair-wip` is being pushed. The PR branch
 `6c7ded22c533c7d7660beb640144934d8c7f6e53`. Main
 `f78c8168449a08b3db6719a3388d9c23d325ac14` was merged cleanly, without repair
 behavior in the merge commit, as `4497621853cdccde351c8997d10af3b30667eeb4`
-(122 commits). The final repair source is frozen at
-`a7fa979aa55749529f676d77db410b988fabd9a7`; subsequent report commits do not
-change the tested source. Earlier checkpoints were pushed as the work progressed.
+(122 commits). The database runtime for the second four-shard run is frozen at
+`a7fa979aa55749529f676d77db410b988fabd9a7`. Checkpoint `3787b049` additionally
+repairs API test doubles without runtime changes. Further bounded fixture/public-
+code corrections and final validation remain pending. Earlier checkpoints were
+pushed as the work progressed.
 
 ## Repair scope
 
@@ -61,7 +63,7 @@ The final commands below started against frozen source `a7fa979a`, after
 | `pnpm --filter @jobguard/db test --shard=3/4` | Running |
 | `pnpm --filter @jobguard/db test --shard=4/4` | Running |
 | `pnpm --filter @jobguard/web test` | Exit 0; 116 files / 1,638 tests passed; 133.46s Vitest / 136.810s wall |
-| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=1` | Running |
+| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=1` | Exit 1; 7,265 passed / 558 failed, 382 passed / 55 failed files; 1,289.41s Vitest / 1,291.512s wall. This pre-mock-repair run includes stale compiled duplicates; a rebuilt final run is pending. |
 
 Additional focused validation of the final source changes:
 
@@ -112,6 +114,12 @@ build originated at `2fbb0f52`; it is not rebuilt underneath the running suite.
 The first temporary-config startup attempt had the wrong cwd and was corrected
 before the full run.
 
+API-double checkpoint `3787b049`: the nine-file focused batch passed 270 tests.
+The next seven-file batch passed 60 and failed 11, all in job-parties: ten cases
+still require its unchanged SQL allow-list; the import replay needed one more
+exact bind answer. Its subsequent focused replay passed (1 test / 35 unselected).
+API type-checking passed. No assertion or SQL allow-list was changed.
+
 ## Unchanged guards and decisions for Ben
 
 - `[S9]`, `packages/db/test/extra-origin.integration.test.ts:252`: replacement
@@ -141,6 +149,15 @@ before the full run.
   session/stranger cases require binding answers plus an allow-list addition.
   Leave the guard for Ben. Separate replay mocks gained exact binding answers;
   the focused watchdog recheck passed 108 / failed 18 of 126 tests.
+- SERIOUS-B7 S21 revocation/case-lock races now encounter the required earlier
+  binding locks: seven cases time out at the existing 120 seconds; the three S22
+  supplier cases cascade. Their lock/ordering guards remain unchanged for Ben.
+- The 0556 plan-entitlement upgrade routine-definition guard at line 44 sees the
+  0584 authority-helper replacement. Its successor-definition allowance requires
+  Ben; the builder has not changed that guard.
+- The enterprise-dashboard module import guard rejects the new pure refusal-
+  translation dependency `./request-binding-error.js`; its allow-list belongs to
+  Ben. No alternate import is used to bypass it.
 - Independent review found the new `lp6b-deferred-binding.test.ts` only scans
   direct names in `packages/db/src`, not all workspace packages or aliases/
   re-exports. No unauthorized production opt-out was found in source inspection,
