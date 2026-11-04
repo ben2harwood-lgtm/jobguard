@@ -1,6 +1,6 @@
 # LP-6b router continuation validation journal
 
-This journal retains completed and pending attempts, including failures later repaired.
+This journal retains recorded completed and pending attempts, including failures later repaired. An early mock run hit stale core outputs after the main merge; its wrapper name was reused, so router-api-mocks records the final successful rerun rather than reconstructing missing timing.
 The main repair report identifies which run covers the final source and which reds remain. Recorded HEAD is the start commit, not a claim that every focused run had a clean working tree. Full matrix commands started after committed repair checkpoints.
 Each row records its actual working directory; Node 24.15.0 and pnpm 10.28.1 are pinned. Isolated privacy runs include the recorded uncommitted patch hash in their source column.
 The scratch wrapper adds the pinned runtime to PATH; final PostgreSQL client PATH is
@@ -30,10 +30,10 @@ The scratch wrapper adds the pinned runtime to PATH; final PostgreSQL client PAT
 | router-lint | /workspace/jobguard | 57e6997ddb26 | `pnpm lint` | 1 | 2.006 |  |
 | router-full-api | /workspace/jobguard | 57e6997ddb26 | `pnpm --filter @jobguard/api exec vitest run --maxWorkers=1` | 1 | 1280.87 | 7 failed \| 447 passed (454); 9 failed \| 7983 passed (7992) |
 | router-typecheck | /workspace/jobguard | 57e6997ddb26 | `pnpm typecheck` | 0 | 204.87 |  |
-| router-full-db-2 | /workspace/jobguard | 5ada4bc6823f | `pnpm --filter @jobguard/db test --shard=2/4` | no completion recorded |  |  |
-| router-full-db-1 | /workspace/jobguard | 5ada4bc6823f | `pnpm --filter @jobguard/db test --shard=1/4` | no completion recorded |  |  |
-| router-full-db-4 | /workspace/jobguard | 5ada4bc6823f | `pnpm --filter @jobguard/db test --shard=4/4` | no completion recorded |  |  |
-| router-full-db-3 | /workspace/jobguard | 5ada4bc6823f | `pnpm --filter @jobguard/db test --shard=3/4` | no completion recorded |  |  |
+| router-full-db-2 | /workspace/jobguard | 5ada4bc6823f | `pnpm --filter @jobguard/db test --shard=2/4` | 1 | 1828.01 | 1 failed \| 188 passed (189); 1 failed \| 1409 passed (1410) |
+| router-full-db-1 | /workspace/jobguard | 5ada4bc6823f | `pnpm --filter @jobguard/db test --shard=1/4` | 0 | 1828.77 | 190 passed (190); 1710 passed \| 15 todo (1725) |
+| router-full-db-4 | /workspace/jobguard | 5ada4bc6823f | `pnpm --filter @jobguard/db test --shard=4/4` | 1 | 1803.609 | 3 failed \| 186 passed (189); 3 failed \| 1690 passed (1693) |
+| router-full-db-3 | /workspace/jobguard | 5ada4bc6823f | `pnpm --filter @jobguard/db test --shard=3/4` | 1 | 2516.43 | 2 failed \| 187 passed (189); 11 failed \| 1656 passed \| 4 todo (1671) |
 | router-lint-recheck | /workspace/jobguard | 50fdba791efa | `pnpm lint` | 0 | 144.13 |  |
 | router-privacy-before | /workspace/work/lp6b/privacy-worktree | 50fdba791efa + patch 69b48f9f9851 | `pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/privacy-operations.integration.test.ts -t 'keeps the forbidden public code when genuine request binding refuses a revoked session or member'` | 1 | 11.139 | 1 failed (1); 1 failed \| 5 skipped (6) |
 | router-tools | /workspace/jobguard | 50fdba791efa | `node --test tools/*.test.mjs` | 1 | 123.459 | tests 423; pass 419; fail 4; skipped 0; todo 0 |
@@ -45,6 +45,17 @@ The scratch wrapper adds the pinned runtime to PATH; final PostgreSQL client PAT
 | router-resumable-before | /workspace/work/lp6b/resumable-worktree | 66607034ef0d | `pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/native-server-chaos.integration.test.ts` | 1 | 16.494 | 1 failed (1); 1 failed \| 3 passed (4) |
 | router-resumable-after | /workspace/work/lp6b/resumable-worktree | 66607034ef0d | `pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/native-server-chaos.integration.test.ts` | 0 | 9.893 | 1 passed (1); 4 passed (4) |
 | router-resumable-complete | /workspace/work/lp6b/resumable-worktree | 66607034ef0d | `pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 src/resumable-evidence.test.ts test/native-server-chaos.integration.test.ts` | 0 | 17.567 | 2 passed (2); 23 passed (23) |
+| router-resumable-typecheck | /workspace/work/lp6b/resumable-worktree | 66607034ef0d | `pnpm --filter @jobguard/db typecheck` | 0 | 25.089 |  |
+| router-proof-normalization | /workspace/work/lp6b/privacy-worktree | 50fdba791efa + patch 64810a1dee24 | `pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/plan-entitlement-lifecycle-upgrade.integration.test.ts` | 0 | 11.465 | 1 passed (1); 1 passed (1) |
+| router-proof-normalization-guarded | /workspace/work/lp6b/privacy-worktree | 50fdba791efa + patch e3485ad4b9ab | `pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/plan-entitlement-lifecycle-upgrade.integration.test.ts` | 0 | 10.803 | 1 passed (1); 1 passed (1) |
+| router-postfix-build | /workspace/jobguard | 209a3831a02f | `pnpm build` | 0 | 69.384 |  |
+| router-postfix-db | /workspace/jobguard | 209a3831a02f | `pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 src/resumable-evidence.test.ts dist/resumable-evidence.test.js test/native-server-chaos.integration.test.ts test/privacy-operations.integration.test.ts test/plan-entitlement-lifecycle-upgrade.integration.test.ts test/lp6b-effective-actor-upgrade.integration.test.ts` | 0 | 29.971 | 6 passed (6); 50 passed (50) |
+| router-postfix-api | /workspace/jobguard | 209a3831a02f | `pnpm --filter @jobguard/api exec vitest run --maxWorkers=1 src/ai-capture-authority.test.ts src/privacy-operations.application.test.ts src/connectors/conformance-kit.test.ts dist/ai-capture-authority.test.js dist/privacy-operations.application.test.js dist/connectors/conformance-kit.test.js src/practice-binding-refusal.test.ts dist/practice-binding-refusal.test.js` | 0 | 19.13 | 8 passed (8); 54 passed (54) |
+| router-postfix-typecheck | /workspace/jobguard | 209a3831a02f | `pnpm typecheck` | 0 | 133.143 |  |
+| router-postfix-tools | /workspace/jobguard | 209a3831a02f | `node --test tools/*.test.mjs` | 1 | 150.131 | tests 423; pass 419; fail 4; skipped 0; todo 0 |
+| router-postfix-lint | /workspace/jobguard | 209a3831a02f | `pnpm lint` | 0 | 148.931 |  |
+| router-postfix-web | /workspace/jobguard | 209a3831a02f | `pnpm --filter @jobguard/web test` | 0 | 147.38 | 121 passed (121); 1662 passed (1662) |
+| router-final-lane | /workspace/jobguard | 209a3831a02f | `env LANE_BASE_REF=56b74eae node tools/agent-lane-boundary-lint.mjs --lane=lp-6b-withtenant` | 0 | 0.23 |  |
 
 ## Final-run failure inventory
 
@@ -53,27 +64,40 @@ A suite/hook failure is shown separately from failed test counts. This is not a 
 
 ### router-full-db-1
 
-Recorded HEAD `5ada4bc6823fcc6f01979e3cd337e813b5db0ac7`; exit `no completion recorded`.
+Recorded HEAD `5ada4bc6823fcc6f01979e3cd337e813b5db0ac7`; exit `0`.
 
-No completion result was recorded; this attempt is not completed test evidence.
+No failed test titles reported.
 
 ### router-full-db-2
 
-Recorded HEAD `5ada4bc6823fcc6f01979e3cd337e813b5db0ac7`; exit `no completion recorded`.
+Recorded HEAD `5ada4bc6823fcc6f01979e3cd337e813b5db0ac7`; exit `1`.
 
-No completion result was recorded; this attempt is not completed test evidence.
+- test/commercial-integrity-v3-query-isolation.integration.test.ts > PostgreSQL zero/many hidden signal query log > concurrent family/source reads hold no writer locks while jobs and sessions change
 
 ### router-full-db-3
 
-Recorded HEAD `5ada4bc6823fcc6f01979e3cd337e813b5db0ac7`; exit `no completion recorded`.
+Recorded HEAD `5ada4bc6823fcc6f01979e3cd337e813b5db0ac7`; exit `1`.
 
-No completion result was recorded; this attempt is not completed test evidence.
+- test/serious-b7.integration.test.ts [ test/serious-b7.integration.test.ts ]
+- test/practice-worker-switch.integration.test.ts > [PW32] decision 39 grants stay with the member and revocation removes job access
+- test/serious-b7.integration.test.ts > SERIOUS-B7 PostgreSQL authority and sources > S21 refuses session revocation/change committed while attachment approval waits for its case lock
+- test/serious-b7.integration.test.ts > SERIOUS-B7 PostgreSQL authority and sources > S21 refuses membership revocation/change committed while attachment approval waits for its case lock
+- test/serious-b7.integration.test.ts > SERIOUS-B7 PostgreSQL authority and sources > S21 refuses permission revocation/change committed while attachment approval waits for its case lock
+- test/serious-b7.integration.test.ts > SERIOUS-B7 PostgreSQL authority and sources > S21 refuses membership_expiry revocation/change committed while attachment approval waits for its case lock
+- test/serious-b7.integration.test.ts > SERIOUS-B7 PostgreSQL authority and sources > S21 refuses session_expiry revocation/change committed while attachment approval waits for its case lock
+- test/serious-b7.integration.test.ts > SERIOUS-B7 PostgreSQL authority and sources > S21 holds control_plane.practice_session against revocation until the approving transaction ends
+- test/serious-b7.integration.test.ts > SERIOUS-B7 PostgreSQL authority and sources > S21 holds app.membership against revocation until the approving transaction ends
+- test/serious-b7.integration.test.ts > SERIOUS-B7 PostgreSQL authority and sources > S22 opens and packs supported supplier case merchant_overcharge through the real applications
+- test/serious-b7.integration.test.ts > SERIOUS-B7 PostgreSQL authority and sources > S22 opens and packs supported supplier case duplicate_supplier_payment through the real applications
+- test/serious-b7.integration.test.ts > SERIOUS-B7 PostgreSQL authority and sources > S22 opens and packs supported supplier case prevention through the real applications
 
 ### router-full-db-4
 
-Recorded HEAD `5ada4bc6823fcc6f01979e3cd337e813b5db0ac7`; exit `no completion recorded`.
+Recorded HEAD `5ada4bc6823fcc6f01979e3cd337e813b5db0ac7`; exit `1`.
 
-No completion result was recorded; this attempt is not completed test evidence.
+- test/contractor-practice-session.integration.test.ts > [PH11] a holder can end their own session after membership revoke without additional permission
+- test/native-server-chaos.integration.test.ts > offline membership revocation refuses state, remaining bytes, finalization and command replay without effects
+- test/plan-entitlement-lifecycle-upgrade.integration.test.ts > 0556 preserves all populated tables and routine ACLs, installs only the adapter body, and replays harmlessly
 
 ### router-full-api
 
@@ -115,9 +139,33 @@ Recorded HEAD `e1c03c91ac305d190843b1530ea602481b052962`; exit `1`.
 - test/contractor-practice-session.integration.test.ts > [PH11] a holder can end their own session after membership revoke without additional permission
 - test/practice-worker-switch.integration.test.ts > [PW32] decision 39 grants stay with the member and revocation removes job access
 
-### router-tools
+### router-postfix-db
 
-Recorded HEAD `50fdba791efa5e236d1cb68d92d3c3db6d424285`; exit `1`.
+Recorded HEAD `209a3831a02f27dce24f0f44c43868f8705fa2d9`; exit `0`.
+
+No failed test titles reported.
+
+### router-postfix-api
+
+Recorded HEAD `209a3831a02f27dce24f0f44c43868f8705fa2d9`; exit `0`.
+
+No failed test titles reported.
+
+### router-postfix-web
+
+Recorded HEAD `209a3831a02f27dce24f0f44c43868f8705fa2d9`; exit `0`.
+
+No failed test titles reported.
+
+### router-proof-normalization-guarded
+
+Recorded HEAD `50fdba791efa5e236d1cb68d92d3c3db6d424285`; exit `0`.
+
+No failed test titles reported.
+
+### router-postfix-tools
+
+Recorded HEAD `209a3831a02f27dce24f0f44c43868f8705fa2d9`; exit `1`.
 
 - CI-B01 exact integrated source has zero violations, unbaselined edges and stale entries
 - CLI exits zero for repository and exit status agrees with API

@@ -1,6 +1,6 @@
 # LP-6b router continuation — 4 November 2026
 
-Status: WIP; no independent Claude verdict or merge approval is claimed. The Codex agents used here performed engineering work, not the independent checks requested by the router.
+**Not merge-ready: the remaining boundary/scanner/pin decisions below need the router.** No independent Claude verdict or merge approval is claimed. The Codex agents used here performed engineering work, not the independent checks requested by the router.
 
 ## Cause grouping before repair
 
@@ -37,12 +37,61 @@ Renamed `0584_lp6b_effective_session_actor.sql` and its proof stem to `0596_lp6b
 
 The authorized named successor exception matches exactly `app.lp6_session_authority(text,text,uuid)`, names original 0584 / renamed 0596, and compares its entire definition using the reviewed successor body with the predecessor header/suffix unchanged. Every other definition and the final owner/ACL comparison remain strict.
 
-The named definition check passes. The test subsequently reaches a pre-existing fixture/proof-chain problem: 0562 was installed early by the historical fixture and is already in its baseline catalogue, but successor proof application tries to add its routines again. Automatic approval review rejected a proposed broad dynamic exclusion of already-installed migrations: it would weaken the strict proof comparison beyond the named successor exception. That edit was not executed. No workaround or proof-loader relaxation was applied; this remaining scope question needs Ben.
+The named definition check passes. The test then exposed a fixture composition issue: its historical setup had already staged 0562, so the strict forward proof tried to add the same routines twice.
 
-## Validation
+Automatic approval review rejected an initial broad exclusion of already-installed migrations; that edit was not executed. The safer correction now uses the existing strict proof checker to invert ONLY the exact six reviewed 0562 routine records, validating every after-value before restoring the logical pre-foundation metadata. It then applies EVERY original successor proof unchanged, including 0562. Nothing is skipped. Six added negative controls flip each staged routine's security-definer flag and require rejection before normalization. All existing definition, table and final owner/ACL comparisons remain exact. The complete real-PG upgrade test passes in the isolated checkout and in the main-checkout recheck. This issue is resolved without broadening a guard or changing a database privilege.
 
-Current completed checks: web 121 files / 1,662 tests passed (138.015s); typecheck passed (204.870s); lint recheck passed (144.130s); migration boundaries 110 tests passed (48.004s); recovery/dashboard races 28 passed (22.699s); job-source/money-trail 15 passed (18.403s). The fresh build passed all seven tasks (109.547s); the final API-only rebuild passed (31.069s). Four full DB shards are still running. The complete API suite finished with 7,983 passed / 9 failed, 447 passed / 7 failed files, 1,280.870s wall. Two failures are the unchanged pure-import scanner; seven belong to newly merged AI/privacy/conformance test setup. In an isolated checkout their three repaired source files and three compiled counterparts pass all 36 tests after an isolated API build; root runtime/source remains unchanged until the DB matrix closes. No green full-suite claim is made.
+## Final validation
 
-The new main privacy repository has a real typed-binding-refusal mapping gap, hidden by its old unbound fixture contexts. In an isolated checkout, a genuine-session regression fails with PRIVACY_UNAVAILABLE before the two-line typed-error fix, then the whole six-test privacy file passes. The tested patch remains isolated until the main matrix closes; it has not changed the active run's source. The fresh DB run also exposes the new native-server-chaos case: resumable evidence binding refusal must retain NOT_FOUND for status/append/finalize. That bounded domain mapping is being tested in a separate isolated checkout with all original assertions intact.
+All four complete real-PostgreSQL shards finished at source `5ada4bc6`. The complete API run started at `57e6997d` with the same production code. Root source and runtime outputs stayed fixed while these ran; later commits in that interval changed documentation only. Raw red counts below are retained, including failures subsequently repaired. Source and compiled copies count as actually executed; todo is not pass.
 
-Tools: 419 passed / 4 failed (423 total; 123.459s), the same practice-session source-fingerprint guards. Those pins remain unchanged. Exact commands, working directories, patch identities, results and remaining failed titles are in the [current validation journal](LP-6B-ROUTER-REPAIR-2026-11-04-validation.md). Earlier reports remain historical evidence; their 0584 references describe the then-current migration stem.
+| Exact command | Complete run result |
+| --- | --- |
+| `pnpm --filter @jobguard/db test --shard=1/4` | exit 0; Test Files: 190 passed (190); Tests: 1710 passed \| 15 todo (1725); 1828.77s wall |
+| `pnpm --filter @jobguard/db test --shard=2/4` | exit 1; Test Files: 1 failed \| 188 passed (189); Tests: 1 failed \| 1409 passed (1410); 1828.01s wall |
+| `pnpm --filter @jobguard/db test --shard=3/4` | exit 1; Test Files: 2 failed \| 187 passed (189); Tests: 11 failed \| 1656 passed \| 4 todo (1671); 2516.43s wall |
+| `pnpm --filter @jobguard/db test --shard=4/4` | exit 1; Test Files: 3 failed \| 186 passed (189); Tests: 3 failed \| 1690 passed (1693); 1803.609s wall |
+| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=1` | exit 1; Test Files: 7 failed \| 447 passed (454); Tests: 9 failed \| 7983 passed (7992); 1280.87s wall |
+
+Four-shard raw aggregate: **6,465 passed, 15 failed, 0 skipped, 19 todo / 6,499 tests**; 751 passed / 6 failed files. SERIOUS-B7 also reports its teardown-hook failure. No uncaught connection error recurred. Shard 1, including S9 and J10, passed; no deterministic J10 product fix is claimed. A possible PostgreSQL query/wait sampling race was identified, but the old failure did not capture enough lock data to establish that cause.
+
+After those full runs, the verified isolated patches were applied and pushed at `209a3831`:
+
+- Privacy: map only the typed refused bind to existing PRIVACY_FORBIDDEN after rollback. Its prior contextless fixture missed this path; a new genuine real-session/member revocation case fails before the fix and passes after it, including read/command and no-effects checks.
+- Resumable evidence: map only the typed refused bind to existing NOT_FOUND across begin, status, append, finalize and proof-storage reads, after rollback. The existing offline rehearsal now retains PERMISSION_REVOKED for command replay and proves no effects. The new unit observes all five refused entry traces and client releases.
+- New-main API fixtures: add the missing non-enumerable privacy principal credential, preserve bound-actor answers while AI negative cases explicitly reach capture reads, and resolve actual source bytes for the compiled conformance test. No scanner logic or existing negative control was removed.
+- Upgrade fixture: strict inverse/forward composition described above. All successors and every final comparison remain active.
+
+| Recheck after applying the fixes | Result |
+| --- | --- |
+| Affected database suites, source and compiled unit copies, real-PG privacy/native/upgrade | exit 0; Test Files: 6 passed (6); Tests: 50 passed (50); 29.971s wall |
+| Affected API source and compiled fixtures plus actual HTTP binding regressions | exit 0; Test Files: 8 passed (8); Tests: 54 passed (54); 19.13s wall |
+| Complete web suite | exit 0; Test Files: 121 passed (121); Tests: 1662 passed (1662); 147.38s wall |
+| Root pnpm build | exit 0; 69.384s wall |
+| Root pnpm typecheck | exit 0; 133.143s wall |
+| Root pnpm lint | exit 0; 148.931s wall |
+| node --test tools/*.test.mjs | exit 1; 150.131s wall; 423 tests, 419 pass, 4 fail, 0 skipped, 0 todo |
+
+The focused passes do not rewrite the raw full-run failures. Seven new-main API setup failures, the native offline mapping failure and the 0556 fixture failure were cleared by their complete affected source/compiled/PostgreSQL rechecks. The two API scanner failures remain. The SERIOUS hook and S22 cascades remain tied to the unresolved S21 protocol conflict.
+
+All exact commands, cwd, starting HEAD, isolated patch identities, exits, timings and failed titles are in the [validation journal](LP-6B-ROUTER-REPAIR-2026-11-04-validation.md). Real embedded PostgreSQL is 16.10; test pg_dump/psql clients are 16.15. All data and provider effects are fictional. No real provider, data, release or merge readiness is claimed.
+
+## Remaining decisions under the unchanged limits
+
+1. **Binding protocol versus existing session/read contracts — real product conflicts.** PW32 switch-off, PH11 self-revoke, seven S21 approval races, and the integrity read-lock test cannot all pass under the current generic session SHARE binding and unchanged older contracts. LP-6a explicitly requires revocation to wait for a bound request; S21 requires that revocation to commit while the request awaits a case lock. Integrity forbids the RowExclusive relation lock intrinsically required by the binding INSERT. No timeout was relabelled as authentication failure, and no fake queued context or generic revoked-member binding was introduced.
+
+A bounded compatibility option for Ben to approve is exactly five named calls: PracticeWorkerSwitchRepository.switchOff; ContractorPracticeSessionRepository.revoke; EvidencePackRepository.approveAttachment; CommercialIntegrityV3Repository.readFamily; CommercialIntegrityV3Repository.read. Their existing checked SQL authority/fencing would remain, every other call would still bind first, and no privilege would change. This requires explicit new named binding deferrals and changing the restriction scanner at `packages/db/test/lp6b-deferred-binding.test.ts` (strict call list 9 to 14, with workspace/alias coverage addressed). That scanner change is currently forbidden. A purpose-bound replacement binding protocol is an alternative requiring its own reviewed design and forward migration; it must not broaden ordinary business binding to revoked members. Neither alternative has been implemented.
+
+2. **Pure-reader import scanner — two API failures.** `apps/api/src/contractor/enterprise-dashboard.boundaries.test.ts:11` omits `./request-binding-error.js` from the exact DB import list; line 19 rejects it. That helper only translates a typed refusal. Adding this exact pure dependency needs the router to permit this scanner edit. It was left unchanged; the import was not relocated or obscured to evade the scanner.
+
+3. **Four source-fingerprint tool failures.** The unchanged baselines are `tools/commercial-integrity-boundary.unresolved.json` and `tools/commercial-integrity-current-source-guard.unresolved.json`. The reviewed source site is `packages/db/src/practice-session.ts`, old line 73 / current line 75; recorded fingerprint `ad3ac47cb73083599ccbd5fd355eb9f2f313b9af4ceca2115da91270658d50ca` versus current `a52add41726877212b3d0441a7351647222c7aa760b4e2be0f07d3ea2fd00c04`. These are semantic source fingerprints, distinct from the two S9 hashes Ben approved. No baseline or source pin was refreshed in this continuation.
+
+The earlier browser evidence remains qualified: pinned-browser download was blocked, eight managed-browser data-navigation cases were policy-blocked and the shadow-disclosure scenario needs its own boundary decision. No new full browser pass is claimed here. The earlier Codex agent checks are engineering evidence and do not satisfy Claude’s independent check gate.
+
+## Preserved limits and ownership
+
+S9 is unchanged in this continuation; all eight recorded values still match. No other source scanner definition or source pin was changed. Source-inspection fixture locators inspect the same TypeScript bytes from src and dist. Strict SQL mock traces observe every pool/client call; the necessary bind/actor statements are explicit and their arguments/order are checked. No guard was satisfied by hiding SQL. Only the named routine definition successor expectation and strictly checked fixture composition changed in the approved upgrade test.
+
+0596 SQL bytes remain `fc85804a10686e5d3799e0519ab67c28b43cad98e9d89efebe9eaedff352aa06`. The repair adds no database grant, app-schema usage for identity, function SET app.* clause, fingerprinted-table column, or binding-row cleanup. Snapshot comparison still excludes only control_plane.request_binding. The lane never lists itself; the final lane check passed against main 56b74eae, including the working-tree report paths.
+
+**Database/platform operations should own binding-row retention/removal, with security review. Ben must name the accountable owner before real data.** No cleanup was built. Claude performs the independent checks separately. Only `codex/sandbox/lp-6b-repair-wip` is pushed; the PR branch remains at `6c7ded22c533c7d7660beb640144934d8c7f6e53`.
