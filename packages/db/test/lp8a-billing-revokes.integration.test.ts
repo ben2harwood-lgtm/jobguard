@@ -54,6 +54,29 @@ describe("LP-8a runtime privilege withdrawal", () => {
       await attack(c, "SELECT app.advance_final_account_draft($1,$2,$3,1)", [actor.tenant, randomUUID(), randomUUID()]);
     } finally { await c.query("ROLLBACK"); c.release(); }
   });
+  it("rejects forged actors on every surviving invoice, credit, receipt and reversal signature", async () => {
+    const actor = await jobDoorsActor(db.owner), other = await jobDoorsActor(db.owner, actor.tenant);
+    const credential = randomBytes(32).toString("hex");
+    await db.owner.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", [`${actor.person}@fictional.invalid`,actor.person]);
+    await db.owner.query("INSERT INTO identity.membership_locator VALUES($1,$2,$3)", [actor.person,actor.tenant,actor.member]);
+    await db.owner.query("INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at) VALUES($1,$2,'synthetic_demo',$3,'fictional',clock_timestamp()+interval '1 hour')", [randomUUID(),actor.person,credential]);
+    const c = await db.runtime.connect();
+    // These are all surviving billing command signatures, including the older invoice overload.
+    const calls = [
+      "SELECT * FROM app.issue_practice_customer_invoice($1,$2,$3,$4,$5,'fixture@example.invalid',date '2026-11-04')",
+      "SELECT app.issue_lock_bound_customer_invoice($1,$2,$3,$4,$5,'final','fixture@example.invalid',date '2026-11-04',repeat('a',64))",
+      "SELECT * FROM app.issue_practice_customer_credit_note($1,$2,$3,$4,$5,1000,'Fictional correction',repeat('a',64))",
+      "SELECT * FROM app.record_practice_customer_receipt($1,$2,$3,$4,$5,date '2026-11-04',1000,'bank_transfer','fictional')",
+      "SELECT * FROM app.reverse_practice_customer_receipt($1,$2,$3,$5,$4,$6,'Fictional reversal')",
+    ];
+    try {
+      await c.query("BEGIN");
+      await c.query("SELECT set_config('app.tenant_id',$1,true),set_config('app.actor_id',$2,true)",[actor.tenant,other.member]);
+      for (const sql of calls) await attack(c,sql, [actor.tenant,randomUUID(),randomUUID(),other.member,randomUUID(),...(sql.includes('$6')?[randomUUID()]:[])]);
+      await c.query("SELECT app.bind_request('real',$1,$2)",[credential,actor.tenant]);
+      for (const sql of calls) await attack(c,sql, [actor.tenant,randomUUID(),randomUUID(),other.member,randomUUID(),...(sql.includes('$6')?[randomUUID()]:[])]);
+    } finally { await c.query("ROLLBACK");c.release(); }
+  });
   it("advances only the exact next revision of the same job and draft, with an exact retry", async () => {
     const actor = await jobDoorsActor(db.owner), credential = randomBytes(32).toString("hex");
     await db.owner.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", [`${actor.person}@fictional.invalid`, actor.person]);

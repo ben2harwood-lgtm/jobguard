@@ -16,10 +16,18 @@ REVOKE EXECUTE ON FUNCTION app.reserve_customer_invoice_number(uuid)
 
 -- Retain the installed four-argument interface. Actor identity comes from the
 -- unforgeable transaction binding, never from a tenant/actor GUC or the draft.
--- This replaces the latest definition (0016); no historical migration changes.
+-- Extend the latest LP-6d definition (0780), preserving its binding preamble.
+-- No historical migration changes.
 CREATE OR REPLACE FUNCTION app.advance_final_account_draft(
  p_tenant uuid,p_draft uuid,p_revision uuid,p_number integer
 ) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
+BEGIN
+ -- LP6D_BOUND: run before original DECLARE initializers and business locks.
+ PERFORM app.current_actor();
+ IF nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+  OR p_tenant IS DISTINCT FROM app.current_tenant() THEN
+  RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
+ END IF;
 DECLARE head app.final_account_draft; candidate app.final_account_revision; actor_id uuid;
 BEGIN
  actor_id:=app.current_actor();
@@ -52,7 +60,9 @@ BEGIN
  END IF;
  UPDATE app.final_account_draft SET current_revision_id=p_revision,revision=p_number,
   updated_at=transaction_timestamp() WHERE tenant_id=p_tenant AND id=p_draft;
-END $$;
+END;
+END
+$$;
 REVOKE ALL ON FUNCTION app.advance_final_account_draft(uuid,uuid,uuid,integer) FROM PUBLIC;
 -- Forward fix only: restoring direct billing INSERT or the unguarded pointer
 -- routine would reopen authorization bypasses. Repair callers, never regrant.

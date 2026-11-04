@@ -6,6 +6,7 @@ import type { TenantTransaction } from "./tenant-context.js";
  * (the access rule is the database routine called through SiteExtraRepository's pre-check), none writes, and no money column is ever selected.
  */
 export type SorOrderFacts = {
+  revisionId: string;
   sorVersionId: string | null;
   item: { code: string; description: string; unit: string } | null;
   lines: OrderLineFact[];
@@ -25,7 +26,7 @@ export async function readOrderFacts(db: TenantTransaction, tenant: string, jobI
   const lines = (await db.$client.query<{ scope_item_id: string; sor_code: string; quantity: string; position: number }>(
     "SELECT scope_item_id,sor_code,quantity,position FROM app.work_order_line WHERE tenant_id=$1 AND revision_id=$2 ORDER BY position", [tenant, revision.revision_id])).rows
     .map(row => ({ scopeItemId: row.scope_item_id, sorCode: row.sor_code, quantity: row.quantity, position: row.position }));
-  return { sorVersionId: revision.sor_version_id, item: item ?? null, lines };
+  return { revisionId: revision.revision_id, sorVersionId: revision.sor_version_id, item: item ?? null, lines };
 }
 
 /** Items of the job's price list whose code or description contains the text. Compared with position(), so no pattern character has a meaning. At most 50, with a flag. */

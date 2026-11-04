@@ -153,6 +153,129 @@
         "group": "a-owner-routines"
       },
       "after": null
+    },
+    {
+      "section": "groups",
+      "before": {
+        "id": "x-customer-billing-writes",
+        "title": "Runtime INSERT on customer invoice, evidence, credit note, payment and reversal tables",
+        "kind": "money",
+        "status": "existing_exception",
+        "target": {
+          "state": "revoke",
+          "note": "LP-8a revokes after converting callers and restore tooling"
+        },
+        "cards": [
+          "LP-8a"
+        ],
+        "responsibilities": {
+          "LP-8a": "revoke direct invoice, evidence, credit, payment, reversal and number-sequence writes; retire the legacy direct-insert service; convert restore rehearsal; cover both invoice signatures"
+        },
+        "downstream": "Issuing an invoice, credit, payment or reversal moves money records; the login can write them without the exact-approval and same-actor receipt checks the routines apply.",
+        "sources": [
+          "packages/db/migrations/0017_customer_billing.sql:8",
+          "packages/db/migrations/0017_customer_billing.sql:14",
+          "packages/db/migrations/0027_uiwire10_customer_invoice.sql:52",
+          "packages/db/migrations/0028_uiwire11_credit_notes.sql:14"
+        ],
+        "tests": [
+          "packages/db/test/UIWIRE-10.integration.test.ts",
+          "packages/db/test/UIWIRE-11.integration.test.ts",
+          "packages/db/test/final-account-lock-invoice.integration.test.ts",
+          "packages/db/test/practice-invoice-audit.integration.test.ts"
+        ],
+        "gaps": [],
+        "path": "ap-customer-billing"
+      },
+      "after": null
+    },
+    {
+      "section": "groups",
+      "before": {
+        "id": "x-exec-invoice-number",
+        "title": "Runtime EXECUTE on reserve_customer_invoice_number",
+        "kind": "money",
+        "status": "existing_exception",
+        "target": {
+          "state": "review_at_card",
+          "note": "LP-13 traces number-burning impact; LP-8a covers its callers"
+        },
+        "cards": [
+          "LP-8a",
+          "LP-13"
+        ],
+        "responsibilities": {
+          "LP-8a": "revoke direct invoice, evidence, credit, payment, reversal and number-sequence writes; retire the legacy direct-insert service; convert restore rehearsal; cover both invoice signatures",
+          "LP-13": "invoice-number burning: numbers cannot corrupt issued records or create unbounded service trouble"
+        },
+        "downstream": "Consumes the next invoice number for a tenant without issuing an invoice.",
+        "sources": [
+          "packages/db/migrations/0017_customer_billing.sql:14"
+        ],
+        "tests": [
+          "packages/db/test/UIWIRE-10.integration.test.ts",
+          "packages/db/test/lp-0-authority-paths.integration.test.ts"
+        ],
+        "gaps": [],
+        "path": "ap-lp13-invoice-number-burning"
+      },
+      "after": null
+    },
+    {
+      "section": "targetState",
+      "before": {
+        "id": "ts-money-routines-only",
+        "statement": "Customer invoice, credit, payment, reversal and number-sequence tables are SELECT-only for the application login; money moves only through checked routines that bind actor, resource, amount, state and exact approval.",
+        "groups": [
+          "x-customer-billing-writes",
+          "x-invoice-number-sequences",
+          "x-final-account-writes",
+          "x-exec-invoice-number",
+          "a-exec-checked-billing-money",
+          "a-exec-final-account"
+        ],
+        "cards": [
+          "LP-8a",
+          "LP-13"
+        ]
+      },
+      "after": {
+        "id": "ts-money-routines-only",
+        "statement": "Customer invoice, credit, payment, reversal and number-sequence tables are SELECT-only for the application login; money moves only through checked routines that bind actor, resource, amount, state and exact approval.",
+        "groups": [
+          "x-invoice-number-sequences",
+          "x-final-account-writes",
+          "a-exec-checked-billing-money",
+          "a-exec-final-account"
+        ],
+        "cards": [
+          "LP-8a",
+          "LP-13"
+        ]
+      }
+    },
+    {
+      "section": "authorityPaths",
+      "before": {
+        "id": "ap-lp13-invoice-number-burning",
+        "title": "LP-13: invoice-number burning",
+        "description": "reserve_customer_invoice_number(uuid) is executable by the runtime login and increments the per-tenant sequence without issuing an invoice (0017_customer_billing.sql:14).",
+        "cards": [
+          "LP-13"
+        ],
+        "responsibilities": {
+          "LP-13": "numbers cannot corrupt issued records or create unbounded service trouble; any authority or money consequence retests under LP-8a"
+        },
+        "sources": [
+          "packages/db/migrations/0017_customer_billing.sql:14"
+        ],
+        "tests": [
+          "packages/db/test/UIWIRE-10.integration.test.ts",
+          "packages/db/test/lp-0-authority-paths.integration.test.ts"
+        ],
+        "gaps": []
+      },
+      "after": null
     }
   ],
   "upgrade": [

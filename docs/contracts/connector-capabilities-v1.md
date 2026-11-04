@@ -109,3 +109,35 @@ Those require the owning accepted interfaces and remaining slices. Staged `paid`
 money received; staged `reversed` compensates no ledger. This work does not close the
 aggregate ENT-13a acceptance or G5. Database guarantees require the CI PostgreSQL suite
 and exact-head independent RED review; local transport fakes are contract evidence only.
+
+## ENT-13a staging coverage — materials and SFTP (3 November 2026)
+
+`connector-input.v1` also accepts `materials_issue`, with exactly the same fields and
+fixture-only document label as `work_order`. Strict TypeScript and SQL validation
+refuse raw content and additional money, allocation, tenant/job/bill/statement,
+origin or approval fields. Migration 0761 widens staging only; no materials fact or
+prompt is created and the connector gains no privileges.
+
+`stageSftpFixturePull` is an internal synthetic projection of one scope-checked
+`sftp-fixture-pull.v1` result into the existing ConnectorIntake. It is not a request
+boundary or machine authentication scheme. The harness must supply the result of
+its existing scoped fake client and the separately selected binding credentials.
+The unchanged file parser refuses foreign tenant/contract files before parsing.
+Only the database binding selects the tenant and source namespace. A file cannot
+provision or override either. No HTTP registration or composition is introduced.
+
+The caller supplies a separate strict `sftp-stage-descriptor.v1` containing fixture
+`subject`, positive integer `revision` and fixture `document` label. The label is
+used for work orders/materials; billing carries no document. Raw work-order,
+materials, resident and invoice content never enters intake. Billing requires
+exactly one parsed observation: invoiced maps to billed, paid to paid, and
+payment_reversed to reversed. Credited/rejected, multiple observations and invalid
+inputs refuse without staging; there is no default or arrival-order inference.
+
+SFTP and signed webhook/API push use the same event identity and semantic envelope:
+identical retries return the first receipt and changed staged payloads conflict.
+The SFTP parser separately detects changed raw domain proposals. Every kind remains
+`staged` with `domainEffects: 0`; status observations are not settlement or authority.
+Existing fake_sftp authorised export delivery and reconciliation are unchanged and
+covered by their existing contract tests. No domain promotion or real endpoint is
+released; Q2/H1, Q3, Q4, Q7 and G5 remain held. This does not close ENT-13a.
