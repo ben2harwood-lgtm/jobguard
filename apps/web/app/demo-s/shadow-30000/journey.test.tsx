@@ -48,7 +48,7 @@ it.each(["not_ready_yet", "awaiting_customer", "approved"])("accepts the v2 cust
  const parsed = parseShadowReport({ ...report(), customerApproval }, jobId);
  expect(parsed.customerApproval).toEqual(customerApproval);
  const html = renderToStaticMarkup(<ShadowSavedReport report={parsed} />);
- expect(html).toContain(state === "not_ready_yet" ? "Not ready yet (MON-5)" : state === "awaiting_customer" ? "Awaiting customer" : "Approved through the customer portal");
+ expect(html).toContain(state === "not_ready_yet" ? "Not ready for the customer yet" : state === "awaiting_customer" ? "Awaiting customer" : "Approved through the customer portal");
  if (state !== "not_ready_yet") expect(html).not.toContain("MON-5");
  for (const approval of customerApproval.approvals) {
   expect(html).toContain(approval.variationId); expect(html).toContain(approval.approvedAt);

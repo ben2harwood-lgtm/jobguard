@@ -1,4 +1,5 @@
 import { beginRepositoryCommand, completeRepositoryCommand } from "./repository-command.js";
+import { readExtraApprovalTiming } from "./extra-approval-timing.js";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { Pool } from "pg";
@@ -204,8 +205,7 @@ export class ExtraApprovalRepository {
         const approvals = (await db.$client.query<{ step_index: number; step_role: string; actor_kind: string; server_recorded_at: Date }>("SELECT step_index,step_role,actor_kind,server_recorded_at FROM app.extra_approval_step_fact WHERE tenant_id=$1 AND request_id=$2 ORDER BY step_index", [tenant, i.requestId])).rows;
         return { version: "client-approval-view.v1", environment: "synthetic_demo", requestId: i.requestId, requestRevision: req.request_revision, description: req.description, netPence: Number(req.net_pence), revisionHash: req.revision_hash, expiresAt: link.expires_at.toISOString(),
           decided: req.outcome, companyApprovals: approvals.map(a => ({ stepIndex: a.step_index, role: a.step_role, kind: a.actor_kind, serverRecordedAt: a.server_recorded_at.toISOString() })),
-          // The work-report source for this flag is held (Q05); it is shown honestly as not derived rather than guessed.
-          doneWithoutRequiredPreapproval: "not_derived" };
+          ...await readExtraApprovalTiming(db, tenant, i.jobId, req.variation_id, i.requestId) };
       });
     } catch (error) { failure(error); }
   }
