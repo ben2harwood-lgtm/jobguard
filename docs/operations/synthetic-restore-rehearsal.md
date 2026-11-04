@@ -100,7 +100,7 @@ job/evidence-reference slice; it is not a general legal data-export implementati
 The fixture database pause must not be represented as a deployed recovery rehearsal.
 Do not close #20 as fully independently accepted on these tests alone.
 
-M0-13b adds migration 0608 and its restricted reconciliation grants; no business
+M0-13b adds migration `0581_restore_reconciliation` and its restricted reconciliation grants; no business
 formula, production feature flag or provider is changed. Existing tests/security gates remain mandatory. The new integration test
 is automatically collected by the existing database suite; the CLI is also runnable
 separately. No new package dependency is introduced.

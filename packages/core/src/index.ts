@@ -170,6 +170,7 @@ export * from "./contractor-mandate.js";
 
 export * from "./cancellation-kit.js";
 export * from "./value-source-receipt-v2.js";
+export * from "./privacy-operations.js";
 export * from "./sync-device-cache.js";
 export * from "./offline-client-queue.js";
 export * from "./offline-capture.js";
