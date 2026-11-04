@@ -1,0 +1,269 @@
+{
+  "version": "foundation-gates.v1",
+  "contractorPilotEvidence": null,
+  "rows": [
+    {
+      "id": "g0-m0",
+      "gate": "G0",
+      "planLine": 163,
+      "requirement": "M0 tasks pass",
+      "status": "blocked",
+      "evidencePaths": [
+        "BUILD_PLAN.md"
+      ],
+      "blockingReason": "No complete current-head M0 acceptance evidence; M0-13a/b/c deployed evidence and owner decisions remain outstanding.",
+      "ownerApproval": null
+    },
+    {
+      "id": "g0-contracts",
+      "gate": "G0",
+      "planLine": 163,
+      "requirement": "contracts are versioned",
+      "status": "evidence_present",
+      "evidencePaths": [
+        "docs/contracts/authentication-v1.md",
+        "docs/contracts/environment-modes-v1.md",
+        "docs/contracts/provider-data-flow-v1.md",
+        "docs/contracts/pilot-terms-v1.md"
+      ],
+      "blockingReason": null,
+      "ownerApproval": null
+    },
+    {
+      "id": "g0-policies",
+      "gate": "G0",
+      "planLine": 163,
+      "requirement": "pending policies fail closed",
+      "status": "blocked",
+      "evidencePaths": [
+        "packages/config/src/policy-gates.ts",
+        "packages/config/src/enterprise-real-data.ts"
+      ],
+      "blockingReason": "Source contains fail-closed controls, but no complete current-head verification of all pending-policy production paths is recorded.",
+      "ownerApproval": null
+    },
+    {
+      "id": "g0-postgres",
+      "gate": "G0",
+      "planLine": 163,
+      "requirement": "critical tests run on real PostgreSQL",
+      "status": "blocked",
+      "evidencePaths": [
+        "packages/db/test/tenancy.integration.test.ts",
+        "packages/db/test/audit.integration.test.ts",
+        "packages/db/test/ledger.integration.test.ts",
+        "docs/operations/synthetic-restore-receipt-2026-09-20.json"
+      ],
+      "blockingReason": "Tests and a historical synthetic PostgreSQL rehearsal exist; neither proves the critical suite passed at this commit.",
+      "ownerApproval": null
+    },
+    {
+      "id": "g0-acceptance",
+      "gate": "G0",
+      "planLine": 163,
+      "requirement": "separate technical acceptance",
+      "status": "needs_owner_approval",
+      "evidencePaths": [],
+      "blockingReason": "Separate technical acceptance has not been supplied; agent source inspection is not acceptance.",
+      "ownerApproval": null
+    },
+    {
+      "id": "g1-d04",
+      "gate": "G1",
+      "planLine": 164,
+      "requirement": "Approved processor/data-flow register (D04)",
+      "status": "needs_owner_approval",
+      "evidencePaths": [
+        "docs/decisions/d04-providers-residency.md",
+        "docs/contracts/provider-data-flow-v1.md"
+      ],
+      "blockingReason": "D04 remains proposed; route descriptions and the register schema are not approved deployed provider evidence.",
+      "ownerApproval": null
+    },
+    {
+      "id": "g1-invoice",
+      "gate": "G1",
+      "planLine": 164,
+      "requirement": "supported invoice/tax scope",
+      "status": "needs_owner_approval",
+      "evidencePaths": [
+        "docs/decisions/d02-vat-rounding-invoicing.md",
+        "docs/decisions/d06-builder-invoices-customer-approval-jurisdiction.md"
+      ],
+      "blockingReason": "Supported pilot invoice/tax/jurisdiction scope has no supplied owner approval; proposed policies do not grant it.",
+      "ownerApproval": null
+    },
+    {
+      "id": "g1-permissions",
+      "gate": "G1",
+      "planLine": 164,
+      "requirement": "permissions",
+      "status": "blocked",
+      "evidencePaths": [
+        "docs/contracts/authentication-v1.md",
+        "docs/operations/m0-6l-identity.md"
+      ],
+      "blockingReason": "Identity implementation notes are not deployed permission/revocation acceptance evidence.",
+      "ownerApproval": null
+    },
+    {
+      "id": "g1-d07",
+      "gate": "G1",
+      "planLine": 164,
+      "requirement": "privacy/retention procedure (D07, D12)",
+      "status": "needs_owner_approval",
+      "evidencePaths": [
+        "docs/decisions/d07-retention-recovery-operations.md"
+      ],
+      "blockingReason": "D07 remains proposed; deployed retention/export/deletion rehearsal and approved recovery objectives remain outstanding.",
+      "ownerApproval": null
+    },
+    {
+      "id": "g1-d12",
+      "gate": "G1",
+      "planLine": 164,
+      "requirement": "privacy/retention procedure (D07, D12)",
+      "status": "needs_owner_approval",
+      "evidencePaths": [
+        "docs/decisions/d12-data-protection-role-third-party-transparency.md"
+      ],
+      "blockingReason": "D12 remains proposed; approved privacy procedure and controller instructions are outstanding.",
+      "ownerApproval": null
+    },
+    {
+      "id": "g1-secrets",
+      "gate": "G1",
+      "planLine": 164,
+      "requirement": "secret management",
+      "status": "blocked",
+      "evidencePaths": [
+        "BUILD_PLAN.md"
+      ],
+      "blockingReason": "No deployed secrets/least-privilege evidence supplied for M0-13a.",
+      "ownerApproval": null
+    },
+    {
+      "id": "g1-alerts",
+      "gate": "G1",
+      "planLine": 164,
+      "requirement": "alerts",
+      "status": "blocked",
+      "evidencePaths": [
+        "BUILD_PLAN.md"
+      ],
+      "blockingReason": "No deployed alert delivery, incident ownership or alert rehearsal evidence supplied for M0-13a.",
+      "ownerApproval": null
+    },
+    {
+      "id": "g1-backup",
+      "gate": "G1",
+      "planLine": 164,
+      "requirement": "backup and successful restore evidence",
+      "status": "blocked",
+      "evidencePaths": [
+        "docs/operations/synthetic-restore-rehearsal.md"
+      ],
+      "blockingReason": "Synthetic fixture backup instructions do not establish deployed database/object-version/checkpoint backups.",
+      "ownerApproval": null
+    },
+    {
+      "id": "g1-restore",
+      "gate": "G1",
+      "planLine": 164,
+      "requirement": "backup and successful restore evidence",
+      "status": "blocked",
+      "evidencePaths": [
+        "docs/operations/synthetic-restore-receipt-2026-09-20.json"
+      ],
+      "blockingReason": "The historical synthetic receipt is not M0-13b: actual deployed backup restore, recovery/data-loss measurements and disabled-dispatch reconciliation remain outstanding.",
+      "ownerApproval": null
+    },
+    {
+      "id": "g1-outbound",
+      "gate": "G1",
+      "planLine": 164,
+      "requirement": "outbound kill switch",
+      "status": "blocked",
+      "evidencePaths": [
+        "BUILD_PLAN.md"
+      ],
+      "blockingReason": "No deployed commercial-outbound disable/recovery evidence supplied; audit/evidence preservation must be demonstrated.",
+      "ownerApproval": null
+    },
+    {
+      "id": "g1-terms",
+      "gate": "G1",
+      "planLine": 164,
+      "requirement": "approved no-charge pilot terms",
+      "status": "needs_owner_approval",
+      "evidencePaths": [
+        "docs/contracts/pilot-terms-v1.md"
+      ],
+      "blockingReason": "Contract text states no platform charge but no owner-approved pilot terms were supplied.",
+      "ownerApproval": null
+    },
+    {
+      "id": "g1-d13",
+      "gate": "G1",
+      "planLine": 164,
+      "requirement": "D13 approval of the Final Check disclosure",
+      "status": "needs_owner_approval",
+      "evidencePaths": [
+        "docs/decisions/d13-shadow-attribution-delayed-disclosure.md"
+      ],
+      "blockingReason": "D13 remains proposed; Final Check disclosure approval must come from the owner.",
+      "ownerApproval": null
+    },
+    {
+      "id": "g1-contractor-pilot",
+      "gate": "G1",
+      "planLine": 164,
+      "requirement": "a signed pilot agreement",
+      "status": "blocked",
+      "evidencePaths": [
+        "docs/contracts/pilot-terms-v1.md",
+        "packages/config/src/enterprise-real-data.ts"
+      ],
+      "blockingReason": "No ENT-14 signed contractor pilot agreement or solicitor/founder approval evidence supplied; the gate schema is not a signature.",
+      "ownerApproval": null
+    },
+    {
+      "id": "g1-contractor-dpa",
+      "gate": "G1",
+      "planLine": 164,
+      "requirement": "data processing agreement (ENT-14)",
+      "status": "blocked",
+      "evidencePaths": [
+        "docs/decisions/d12-data-protection-role-third-party-transparency.md",
+        "packages/config/src/enterprise-real-data.ts"
+      ],
+      "blockingReason": "No ENT-14 signed DPA/contract-set evidence supplied. Real contractor data stays blocked.",
+      "ownerApproval": null
+    },
+    {
+      "id": "g1-contractor-d12",
+      "gate": "G1",
+      "planLine": 164,
+      "requirement": "D12 v4",
+      "status": "needs_owner_approval",
+      "evidencePaths": [
+        "docs/decisions/d12-data-protection-role-third-party-transparency.md"
+      ],
+      "blockingReason": "D12 v4 remains proposed; existing version text does not supply founder approval.",
+      "ownerApproval": null
+    },
+    {
+      "id": "g1-checkpoint",
+      "gate": "G1",
+      "planLine": 306,
+      "requirement": "Keep an independently restricted checkpoint",
+      "status": "blocked",
+      "evidencePaths": [
+        "BUILD_PLAN.md",
+        "packages/db/test/audit.integration.test.ts"
+      ],
+      "blockingReason": "Audit test source is not evidence of a restricted checkpoint deployed before G1.",
+      "ownerApproval": null
+    }
+  ]
+}

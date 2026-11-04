@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/batch-17"
       ],
-      "note": "ENT-5 must-decide and ENT-8a office signals; RED, built ahead with no PR.",
+      "note": "ENT-5 must-decide and ENT-8a office signals; RED, ready for PR and CI.",
       "allow": [
         "apps/web/app/api/contractor/jobs/[id]/office-signals/route.test.ts",
         "apps/web/app/api/contractor/jobs/[id]/office-signals/route.ts",
@@ -21,12 +21,12 @@
         "packages/core/src/extra-approval-inbox.test.ts",
         "packages/core/src/extra-approval-inbox.ts",
         "packages/core/src/index.ts",
-        "packages/db/migration-notes/0840_office_prompt_signal_read.md",
-        "packages/db/migrations/0840_office_prompt_signal_read.sql",
+        "packages/db/migration-notes/0594_office_prompt_signal_read.md",
+        "packages/db/migrations/0594_office_prompt_signal_read.sql",
         "packages/db/src/enterprise-live-prompt-repository.ts",
         "packages/db/src/enterprise-office-signals.test.ts",
         "packages/db/test/enterprise-live-prompt-office.integration.test.ts",
-        "packages/db/test/migration-proofs/0840_office_prompt_signal_read.proof.json"
+        "packages/db/test/migration-proofs/0594_office_prompt_signal_read.proof.json"
       ]
     }
   }
