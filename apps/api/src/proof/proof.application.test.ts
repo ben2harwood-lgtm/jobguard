@@ -123,3 +123,14 @@ describe.each(["existing", "concurrent"] as const)("round 13: %s-object finaliza
     expect(f.statements.slice(beforeReplay).some(sql => /^(INSERT|UPDATE|DELETE)/u.test(sql))).toBe(false);
   });
 });
+
+// DEMO-J3: the new source is an exact generated original, never caller bytes.
+it("generates a distinct complete fictional drainage PNG and accepts only the named recipe", () => {
+ const ordinary = generatePracticePng(), drainage = generatePracticePng("j3-drainage-photo");
+ expect(hasCompleteImage(drainage, "image/png")).toBe(true);
+ expect(drainage.equals(ordinary)).toBe(false);
+ expect(generatePracticePng("j3-drainage-photo")).toEqual(drainage);
+ const command = { version: "practice-proof-command.v1", action: "select_generated", commandId: crypto.randomUUID(), scopeItemId: crypto.randomUUID(), fixture: "j3-drainage-photo" };
+ expect(proofCommandV1.safeParse(command).success).toBe(true);
+ for (const patch of [{fixture:"live-upload"},{bytes:"customer photo"},{deploymentMode:"production"}]) expect(proofCommandV1.safeParse({...command,...patch}).success).toBe(false);
+});

@@ -94,3 +94,10 @@ objects['routine','app.neutral_private']={'groups':{'a-shadow-role-grants'}}
 assert classify('routine','app.neutral_private')=={'hidden'}
 `], { stdio: "pipe" });
 });
+
+ test("frozen LP-5 source map resolves to the current ordered implementation migrations", () => {
+  for (const [recorded, current] of [["0535_lp5a_commands.sql", "0521_lp5a_commands.sql"], ["0536_lp5b_writers.sql", "0522_lp5b_writers.sql"]]) {
+    assert.ok(generated.includes(`packages/db/migrations/${recorded}`));
+    assert.ok(readFileSync(`packages/db/migrations/${current}`, "utf8").startsWith("-- LP-5"));
+  }
+ });

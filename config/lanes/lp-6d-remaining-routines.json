@@ -5,17 +5,17 @@
       "branches": [
         "codex/sandbox/lp-6d-remaining-routines"
       ],
-      "note": "LP-6d RED; built ahead. LP-6c catch-up, PostgreSQL CI and independent review required. Router owns commit/push/PR.",
+      "note": "LP-6d RED, NOPR. READY for held branch save only; landing holds remain in migration note and router commit-message handoff. Router owns commit and push.",
       "allow": [
-        "docs/contracts/lp-0-effective-privileges-v1.json",
-        "docs/contracts/lp-0-effective-privileges-v1.md",
-        "packages/db/migration-notes/0526_lp6d_remaining_routines.md",
-        "packages/db/migrations/0526_lp6d_remaining_routines.sql",
+        "packages/db/migration-notes/0780_lp6d_remaining_routines.md",
+        "packages/db/migrations/0780_lp6d_remaining_routines.sql",
         "packages/db/src/recovery-message-repository.ts",
         "packages/db/test/lp6d-routines.integration.test.ts",
         "packages/db/test/lp6d-routines.json",
         "packages/db/test/lp6d-routines.test.ts",
-        "packages/db/test/lp6d-runtime-classification.json"
+        "packages/db/test/lp6d-runtime-classification.json",
+        "packages/db/test/migration-proofs/0780_lp6d_remaining_routines.proof.json",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts"
       ]
     }
   }

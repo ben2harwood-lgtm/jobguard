@@ -15,14 +15,15 @@ import { company, start } from "./practice-worker-switch-fixtures.js";
 
 let db: JobDoorsDatabase, visit: Awaited<ReturnType<typeof visitFixture>>, switched: Awaited<ReturnType<typeof company>>;
 beforeAll(async () => {
-  db = await jobDoorsDatabase(true, "0526_lp6d_remaining_routines.sql");
+  db = await jobDoorsDatabase(true, "0570_lp6c_money_binding.sql");
   // Product fixture routes run against the predecessor, before the cutover.
   // No broad runtime fixture write is introduced or restored.
   const predecessor = { admin: db.owner, runtime: db.runtime } as Cluster;
   visit = await visitFixture(predecessor);
   switched = await company(predecessor);
   await start(predecessor, switched, "operative");
-  await db.owner.query(await readFile(new URL("../migrations/0526_lp6d_remaining_routines.sql", import.meta.url), "utf8"));
+  await db.owner.query(await readFile(new URL("../migrations/0570_lp6c_money_binding.sql", import.meta.url), "utf8"));
+  await db.owner.query(await readFile(new URL("../migrations/0780_lp6d_remaining_routines.sql", import.meta.url), "utf8"));
 }, 300_000);
 afterAll(async () => { await db?.close(); });
 const refused = { code: "42501", message: "REQUEST_BINDING_REFUSED" };
@@ -159,7 +160,7 @@ it("binds invitations to their credential and refuses a different session in the
 it("classifies live pg_proc, including post-inventory additions, and detects an unassigned definer", async () => {
   const assigned: Record<string, string> = classification;
   const unknown = async (c: { query: PoolClient["query"] }) => (await c.query(`SELECT n.nspname||'.'||p.proname||'('||oidvectortypes(p.proargtypes)||')' signature
-    FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname IN('app','identity','control_plane')
+    FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname IN('app','identity','control_plane','outbound_control','connector')
     AND p.prokind IN('f','p') AND p.prosecdef AND has_function_privilege('jobguard_runtime',p.oid,'EXECUTE')`)).rows
     .map(row => row.signature as string).filter(signature => !(signature.replaceAll(", ", ",") in assigned));
   expect(await unknown(db.owner)).toEqual([]);
@@ -189,5 +190,14 @@ it("withdraws the direct revocation column and rejects a fabricated revoke comma
   await request(a.tenant, digest, async c => {
     await failure(c, "UPDATE app.action_authorization SET revoked_at=clock_timestamp()", [], { code: "42501" });
     await failure(c, "SELECT app.revoke_recovery_message_authorization($1,$2,$3,$4)", [a.tenant, a.member, randomUUID(), randomUUID()], { code: "23514", message: "AUTHORIZATION_INVALID" });
+  });
+});
+
+it("binds sync checkpoint identities to the member and preserves an allowed checkpoint", async () => {
+  const a = await jobDoorsActor(db.owner), other = await jobDoorsActor(db.owner);
+  const digest = await credential(a.tenant, a.member, a.person);
+  await request(a.tenant, digest, async c => {
+    await failure(c, "SELECT app.sync_snapshot_generation($1,0,1,$2,'synthetic_demo')", [other.person, "a".repeat(64)]);
+    expect((await c.query("SELECT app.sync_snapshot_generation($1,0,1,$2,'synthetic_demo') generation", [a.person, "a".repeat(64)])).rows[0].generation).toBe("1");
   });
 });

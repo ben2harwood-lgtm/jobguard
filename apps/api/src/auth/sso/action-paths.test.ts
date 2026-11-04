@@ -19,7 +19,7 @@ import request from "supertest";
 import type { CacheItem, CacheProvider } from "@node-saml/node-saml";
 import { SamlAdapter, type SamlConnection } from "./saml.js";
 import { generateTestIdentityProvider } from "./test-identity-provider.js";
-const principal={identityUserId:"30000000-0000-4000-8000-000000000003",sessionId:"40000000-0000-4000-8000-000000000004",csrfToken:"a".repeat(32)};
+const principal={identityUserId:"30000000-0000-4000-8000-000000000003",sessionId:"40000000-0000-4000-8000-000000000004",csrfToken:"a".repeat(32),sessionCredential:"b".repeat(64)};
 const member={id:"50000000-0000-4000-8000-000000000005",identityUserId:principal.identityUserId,tenantId:"10000000-0000-4000-8000-000000000001",role:"read_only" as const,email:"site@fixture.invalid"};
 function fixture() {
  const base={authenticate:vi.fn(async()=>principal),findMembership:vi.fn(async()=>member),memberships:vi.fn(async()=>[{...member,name:'Fictional'}]),requestCode:vi.fn(),verifyCode:vi.fn()} as unknown as PersistedAuthProvider;

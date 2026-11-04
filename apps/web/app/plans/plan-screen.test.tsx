@@ -4,8 +4,26 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, expect, it, vi } from "vitest";
 import { subscriptionPlanView } from "@jobguard/core";
 import { loadSubscriptionPlan, loadSubscriptionWorkspace, PlanDetails, PlanScreen, submitSubscriptionAction, subscriptionActionMessage } from "./plan-screen";
+import { OnboardingSuggestion } from "./subscription-onboarding";
 vi.stubGlobal("React", React);
 afterEach(() => vi.useRealTimers());
+it.each([
+  ["7", "no", "Solo or Builder should fit."],
+  ["8", "no", "The contractor deal may fit better."],
+  ["1", "yes", "The contractor deal may fit better."],
+])("suggests a deal for %s jobs and staff capture %s without granting capabilities", (usualJobs, siteStaffCapture, message) => {
+  const html = renderToStaticMarkup(createElement(OnboardingSuggestion, { usualJobs, siteStaffCapture }));
+  expect(html).toContain(`Suggestion: ${message}`);
+  expect(html).toContain("Contractor capabilities require a contractor agreement.");
+  expect(html.includes('href="/admin/contractor"')).toBe(message.includes("contractor"));
+});
+it.each([["", "no"], ["-1", "no"], ["1.5", "no"], ["abc", "yes"], ["9007199254740992", "no"], ["7", ""]])(
+  "explains invalid onboarding answers %s/%s without a suggestion", (usualJobs, siteStaffCapture) => {
+    const html = renderToStaticMarkup(createElement(OnboardingSuggestion, { usualJobs, siteStaffCapture }));
+    expect(html).toContain('role="alert"');
+    expect(html).toContain("Enter a whole number of jobs");
+    expect(html).not.toContain("Suggestion:");
+  });
 const session = { csrfToken: "company-csrf", memberships: [{ tenantId: "00000000-0000-4000-8000-000000000001" }] };
 const empty = { version: "subscription-persisted-read.v1", environment: "synthetic_demo", hypothetical: true,
   agreements: [], periods: [], statements: [], work: [], attempts: [], results: [] };
@@ -121,4 +139,13 @@ it("shows the server billing day before acceptance without an anchor input", asy
   expect(html).toContain("Your billing day: the 15");
   expect(html).not.toContain('<input');
   expect(subscriptionPlanView(empty, "2026-06-01").billingDay).toBeNull();
+});
+
+it("preserves a separate executor warning without rejecting a saved approval", async () => {
+  const answer = { workId: "saved", paymentStatus: "pending", executionStatus: "unavailable" };
+  const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(session))
+    .mockResolvedValueOnce(Response.json(answer, {status: 201}));
+  const result = await submitSubscriptionAction(session.memberships[0]!.tenantId, "same-id", {kind: "approve_simulation"}, fetcher);
+  expect(result).toEqual(answer);
+  expect(subscriptionActionMessage(result)).toContain("Approval saved. Simulated payment is pending.");
 });

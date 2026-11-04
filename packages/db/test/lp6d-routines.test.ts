@@ -4,7 +4,7 @@ import routines from "./lp6d-routines.json";
 import classification from "./lp6d-runtime-classification.json";
 import { loadReviewedInventory, pathCompleteness, repoFileExists } from "./lp-0-catalog.js";
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
-const sql = read("../migrations/0526_lp6d_remaining_routines.sql");
+const sql = read("../migrations/0780_lp6d_remaining_routines.sql");
 
 it("keeps every predecessor body and permission rule behind an early binding check", () => {
   for (const routine of routines) {
@@ -18,6 +18,11 @@ it("keeps every predecessor body and permission rule behind an early binding che
         .replace("IF action='resume' THEN RAISE EXCEPTION 'CAPACITY_ADMISSION_UNAVAILABLE'; END IF;", "")
         .replace("'finish','cancel_finish','close','reopen','link'", "'finish','cancel_finish','close','reopen','link','resume'")
         .replace("IF action='finish' THEN\n  IF marker.kind", "IF action='resume' THEN\n  PERFORM app.ch4_require_open(t,j);\n  PERFORM app.ch4_admit_place(t,j,action);\n  event_kind:='resumed';\n ELSIF action='finish' THEN\n  IF marker.kind");
+    }
+    if (routine.name === "app.sv7a_intake_job_source") {
+      previous = previous.replace("PERFORM app.ch4_admit_place(t,j,'restart');", "IF EXISTS(SELECT 1 FROM app.job x WHERE x.tenant_id=t AND x.id=j AND x.practice_session_digest IS NULL) THEN PERFORM app.ch4_admit_place(t,j,'restart'); END IF;")
+        .replaceAll("app.ch4_require_command_owner(t,j,digest)", "app.sv7a_require_source_owner(t,j,digest,source)")
+        .replace("WHEN source='customer_message' AND txt='Please fit an outside tap.' THEN 'job-source:request-tap.v1' END;", "WHEN source='customer_message' AND txt='Please fit an outside tap.' THEN 'job-source:request-tap.v1' WHEN source='customer_message' AND txt='There are exposed live wires beside the new socket.' THEN 'customer-message:exposed-wires.synthetic.v1' END;");
     }
     const changed = [...sql.matchAll(pattern)].at(-1)![1]!;
     expect(changed, routine.name).toContain(previous);
@@ -63,5 +68,10 @@ it("converts the invitation bridge and withdraws direct authorization revocation
   const { inventory } = await loadReviewedInventory();
   expect(pathCompleteness(inventory, repoFileExists)).toEqual([]);
   expect(inventory.entries.some(e => e.key === "acl|col|app.action_authorization.revoked_at|jobguard_runtime|UPDATE|-")).toBe(false);
-  expect(inventory.entries.filter(e => e.group === "a-lp6d-routine-binding")).toHaveLength(6);
+  expect(inventory.entries.filter(e => e.group === "a-lp6d-routine-binding")).toHaveLength(3);
+});
+
+it("leaves the final-lock owner helper exclusively to LP-6c", () => {
+  expect(routines.some(r => r.name === "app.final_lock_require_owner")).toBe(false);
+  expect(sql).not.toContain("CREATE OR REPLACE FUNCTION app.final_lock_require_owner(");
 });

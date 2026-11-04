@@ -1,0 +1,219 @@
+{
+  "migration": "0780_lp6d_remaining_routines.sql",
+  "lp0": [
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "id": "a-lp6d-routine-binding",
+        "title": "Protected actor access for existing checked routine owners",
+        "kind": "identity",
+        "status": "approved_current",
+        "target": {
+          "state": "retain",
+          "note": "Read current transaction authority only; no binding-store access."
+        },
+        "cards": [
+          "LP-6d"
+        ],
+        "responsibilities": {
+          "LP-6d": "Bind remaining routines while retaining decided permissions."
+        },
+        "downstream": "Existing migration and command writer owners may read the protected actor and tenant. The invitation bridge may bind a validated real session. No new business table write grant.",
+        "sources": [
+          "packages/db/migrations/0780_lp6d_remaining_routines.sql"
+        ],
+        "tests": [
+          "packages/db/test/lp6d-routines.test.ts",
+          "packages/db/test/lp6d-routines.integration.test.ts"
+        ],
+        "gaps": [
+          "Partial catch-up: customer credential/command compatibility unresolved; PostgreSQL CI and both exact-head RED security checks remain required."
+        ],
+        "path": "ap-lp6d-routine-binding"
+      }
+    },
+    {
+      "section": "authorityPaths",
+      "before": null,
+      "after": {
+        "id": "ap-lp6d-routine-binding",
+        "title": "Protected actor access for existing checked routine owners",
+        "description": "Existing migration and command writer owners may read the protected actor and tenant. The invitation bridge may bind a validated real session. No new business table write grant.",
+        "cards": [
+          "LP-6d"
+        ],
+        "responsibilities": {
+          "LP-6d": "Bind remaining routines while retaining decided permissions."
+        },
+        "sources": [
+          "packages/db/migrations/0780_lp6d_remaining_routines.sql"
+        ],
+        "tests": [
+          "packages/db/test/lp6d-routines.test.ts",
+          "packages/db/test/lp6d-routines.integration.test.ts"
+        ],
+        "gaps": [
+          "Partial catch-up: customer credential/command compatibility unresolved; PostgreSQL CI and both exact-head RED security checks remain required."
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.lp6d_contractor_session_identity(uuid)|jobguard_migration",
+        "group": "a-lp6d-routine-binding"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.revoke_recovery_message_authorization(uuid,uuid,uuid,uuid)|jobguard_migration",
+        "group": "a-lp6d-routine-binding"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.revoke_recovery_message_authorization(uuid,uuid,uuid,uuid)|jobguard_runtime|EXECUTE|-",
+        "group": "a-lp6d-routine-binding"
+      }
+    },
+    {
+      "section": "entries",
+      "before": {
+        "key": "acl|col|app.action_authorization.revoked_at|jobguard_runtime|UPDATE|-",
+        "group": "x-command-authority-writes"
+      },
+      "after": null
+    },
+    {
+      "section": "entries",
+      "before": {
+        "key": "acl|routine|function:app.apply_recovery_timeline_signal(uuid,jsonb)|jobguard_runtime|EXECUTE|-",
+        "group": "a-m4-6-history"
+      },
+      "after": null
+    },
+    {
+      "section": "groups",
+      "before": {
+        "id": "a-m4-6-history",
+        "title": "M4-6 synthetic timeline history state",
+        "kind": "authority",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Source allowance only; PostgreSQL CI and independent RED review required."
+        },
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Guard the atomic history writer; runtime cannot write runs or chosen fingerprints, and stopped is terminal.",
+          "LP-12": "Keep history tenant-scoped and references immutable."
+        },
+        "downstream": "SELECT on both tenant-scoped history tables and guarded apply_recovery_timeline_signal EXECUTE only. The owner-only helper accepts no runtime calls; the aggregate checks the current persisted practice session and job ownership, derives references/state and computes the fingerprint itself. No clock, approval, message or financial authority.",
+        "sources": [
+          "packages/db/migrations/0506_recovery_timeline_store.sql"
+        ],
+        "tests": [
+          "packages/db/test/recovery-follow-up.integration.test.ts"
+        ],
+        "gaps": [
+          "PostgreSQL CI and independent RED review pending."
+        ],
+        "path": "ap-m4-6-history"
+      },
+      "after": null
+    },
+    {
+      "section": "authorityPaths",
+      "before": {
+        "id": "ap-m4-6-history",
+        "title": "M4-6 synthetic timeline history state",
+        "description": "SELECT on both tenant-scoped history tables and guarded apply_recovery_timeline_signal EXECUTE only. The owner-only helper accepts no runtime calls; the aggregate checks the current persisted practice session and job ownership, derives references/state and computes the fingerprint itself. No clock, approval, message or financial authority.",
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Guard the atomic history writer; runtime cannot write runs or chosen fingerprints, and stopped is terminal.",
+          "LP-12": "Keep history tenant-scoped and references immutable."
+        },
+        "sources": [
+          "packages/db/migrations/0506_recovery_timeline_store.sql"
+        ],
+        "tests": [
+          "packages/db/test/recovery-follow-up.integration.test.ts"
+        ],
+        "gaps": [
+          "PostgreSQL CI and independent RED review pending."
+        ]
+      },
+      "after": null
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp6d_contractor_session_identity",
+        "args": "uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "revoke_recovery_message_authorization",
+        "args": "uuid, uuid, uuid, uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "nspname": "app",
+        "proname": "apply_recovery_timeline_signal",
+        "args": "uuid, jsonb",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      },
+      "after": {
+        "nspname": "app",
+        "proname": "apply_recovery_timeline_signal",
+        "args": "uuid, jsonb",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    }
+  ],
+  "tenancy": []
+}

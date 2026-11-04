@@ -53,3 +53,30 @@ When storage is authorized, retain the full upgrade contract:
 For N=0169, compare canonical `row_to_json(t)::text` over named pre-existing columns, names/full `format_type` types, and pre-existing primary-key identities. Require nonempty specimens; rolled-back microsecond/value/type/remove-row controls must fail, while later nullable columns, function replacements and inserts must pass. Later migrations must succeed twice. The upgrade suite remains owed; no proof or fresh installation was run here.
 
 Forward fix: keep accepted agreements, artifacts, lineages, receipts, statements and journals; disable entrypoints and repair additively or through linked compensation. No history deletion, pilot backfill, small-builder book change or production activation is authorized.
+
+## Simulated invoice hook — 2 November 2026
+
+Ben's `jobguard-ent-7-invoice-hook-q02-2026-11-02` instruction ("Run simulated hook")
+opens the fictional invoice projection only. The earlier Q-02 refusal description
+above remains applicable to the supplied-reference executor, which cannot establish
+persisted authority. The working hook is `EnterpriseFeeRepository.simulateInvoice`,
+called by the cookie-scoped `statements/simulate-invoice` route and the practice
+statement screen. This is not a real invoice issuance or provider integration.
+
+The strict `enterprise-fee-simulate-invoice.v1` command accepts command, statement
+and authorization IDs only. In one tenant transaction it calls the existing
+`ef_post_statement` command and reads the immutable statement. Posting owns the
+finance/session, exact Decision/authorization, expiry/revocation, content hash,
+revision, stale-facts, dispute, replay, locking and audit checks. A previously
+unposted statement therefore posts its authorized synthetic journals; existing
+postings replay without another financial effect. The returned invoice uses the
+statement ID as its stable simulation identity, and binds its revision, hash,
+authorization, exact signed delta and GBP. Zero stays zero. No VAT treatment,
+provider reference, payment marker, real invoice number or collection is inferred.
+The artifact is a projection of durable statement/posting facts, not another store.
+
+Both the route and repository refuse pilot/live/unknown environments; even a
+synthetic caller cannot bypass the existing SQL check for the actual
+`jobguard_synthetic_demo` database. The reference-only executor and general
+`refuseEnterpriseFeeExecution` remain closed. No policy record, production gate,
+provider configuration, migration, grant or small-builder fee path changes.
