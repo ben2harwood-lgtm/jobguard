@@ -168,3 +168,64 @@ proofs, escalation concurrency/restart/rollback, connector adversarial upgrade
 coverage and affected browser journeys. Native device and real-provider evidence
 remain separately held. Independent RED review must bind the eventual exact head.
 NOPR until #549 and batch 10 land; no real data, providers, money or release.
+
+## Batch-c2 M4-4 union handoff — 4 November 2026
+
+RED, NOPR. Available origin/main remains 155a3eb06; local main is stale, no fetch.
+Resolved the pending M4-4 merge's later-empty-tables conflict as the exact union.
+Preserved both sides' behavior. WORM migration/proof stems now follow 0760/0761:
+0762 durable commands, 0763 operator recovery, 0764 operator alerts. SQL bytes are
+unchanged. The incoming piece lane is replaced by the batch lane. Expanded the
+plan-entitlement-lifecycle-upgrade routine catalogue to include worm_control so
+its strict successor-proof comparison also checks the newly added operator
+routines; no exception or weaker assertion was introduced.
+
+Applied all ten batch-9 hardening rules to the present slices: no fingerprinted
+row additions; WORM mutations classified in watchdog; no new dispatcher command
+types; no application-context minting, client DB import, new web server module or
+browser spec; all three new empty app tables registered; proof arguments use
+identity form, and LP-0 owners correspond to tracked objects (no owner entry for
+owner-only worm_audit). No runtime command_receipt, decision_resolution or
+action_authorization writes, no command_lifecycle_claim joins, and no re-created
+older routine beyond connector.intake's latest available main body with the
+approved kind-validation extension. No old app routine needs an entitlement
+upgrade definition exception. No product behavior or tests weakened.
+
+Validation performed here with installed TypeScript 5.8.3 / Vitest 4.1.12:
+- All seven workspace typechecks passed via installed tsc --noEmit (core, config,
+  storage, DB, AI, API, web). pnpm typecheck stalled with no progress after its
+  startup warning and was interrupted. No packages downloaded.
+- 563 focused tests passed: API watchdog/context/identity 278; DB proof loader,
+  connector proof and WORM proofs 83; core cache/queue/capture 84; WORM repository
+  22; storage WORM/timestamp 35; API escalation/inbound/SFTP 60; API queue
+  compatibility 1. Each invocation names <=3 files and uses --maxWorkers=2.
+- WORM repository initially failed four tests because local storage dist lacked
+  the new exports. Rebuilt storage/core with installed tsc, then all 22 passed.
+- Lane tool syntax and git diff --check pass. Standard lane lint was run and
+  sees the removed incoming lane and old migration stems in the read-only merge
+  index. Router must stage the full union/renames and rerun standard lane lint;
+  the projected working-tree policy/path/order check is separate evidence.
+
+LATER / SIMPLICITY (initial review):
+packages/db/test/contractor-entitlement-upgrade.integration.test.ts emptySuccessors
+repeats table names in the incoming change. A later dedicated cleanup can dedupe
+that fixed list or reuse the shared empty-table registry where its historical
+boundary matches, reducing maintenance drift. This does not block this union.
+
+Still open per piece: ENT-5 aggregate timing/proceed-policy and production gates;
+ENT-13a domain promotion, real endpoints, Q2/H1, Q3, Q4, Q7 and G5; M3-3 encrypted
+native persistence, real PowerSync policy/deployment, D08/G3 and device evidence;
+M3-4 durable encrypted queue, reconciliation UI and reconnect/reinstall evidence;
+M3-5 encrypted native media/capture wiring and airplane-mode/restart/storage
+acceptance; M4-4 D07, actual production object-store/RFC-3161 evidence and release
+gates. ENT-14 fee mandate and SV-7B accounting branches are NOT merged; router
+takes them next. ENT-14 legal/founder approval and mandate acceptance, and SV-7B
+connector-specific contract/G1/D04/D12 evidence remain open.
+
+CI must prove full required checks, fresh/upgrade PostgreSQL migrations and
+fingerprint preservation, effective privileges/LP-0, RLS and tenant isolation,
+escalation concurrency/restarts/rollback, connector adversarial upgrade tests,
+WORM command/recovery/alert atomicity, bootstrap privilege checks and local MinIO
+behavior, and affected browser journeys. No DB or browser suite ran here.
+Independent RED review must bind the eventual exact head. NOPR until #549 and
+batch 10 land. No real data, live providers, money, PR or release.
