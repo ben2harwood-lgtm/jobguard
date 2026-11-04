@@ -72,6 +72,10 @@
       "types": "./src/accounting-export.application.ts",
       "import": "./dist/accounting-export.application.js"
     },
+    "./dunning-contracts": {
+      "types": "./src/dunning.contracts.ts",
+      "import": "./dist/dunning.contracts.js"
+    },
     "./accounting-export-contracts": {
       "types": "./src/accounting-export.preview-contracts.ts",
       "import": "./dist/accounting-export.preview-contracts.js"

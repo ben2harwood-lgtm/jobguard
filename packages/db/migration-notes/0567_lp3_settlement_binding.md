@@ -65,3 +65,27 @@ lp3-upgrade.integration.test.ts and
 plan-entitlement-lifecycle-upgrade.integration.test.ts. Source inspection and
 unit execution are not independent verification. No git writes, fetches,
 pushes, PR creation, real providers or real customer data were used.
+
+## 4 November catch-up after PR #545
+
+Resolved the launcher-started merge of origin/main at
+`fb61ec3676ea3021313485e0daaa525f6efa545f` (latest migration 0566).
+The upgrade test keeps both named exceptions: main's exact
+`app.lp5_command_result(p_command_id uuid, p_outcome jsonb)` dispatcher and
+LP-3's full-signature settlement OID with its exact expression-substitution
+assertion. Main's `pg_get_function_identity_arguments` catalogue query remains.
+Migration 0567 is unchanged. The lane equals all eight non-lane paths changed
+from origin/main and does not list itself. No new behavior was introduced.
+
+Checks actually run for this catch-up:
+
+- In packages/db: `./node_modules/.bin/tsc -p tsconfig.json --noEmit`: PASS.
+- In packages/db: `./node_modules/.bin/vitest run --maxWorkers=2 test/migration-proof-loader.test.ts`: PASS, 76 tests (Vitest 4.1.12).
+- `git diff --check`: PASS; exact lane coverage and unchanged 0567 comparison: PASS.
+- Initial pnpm wrappers produced no check output and were interrupted; the
+  installed binaries above completed successfully without downloads.
+
+READY for the launcher to stage and complete its merge. The git index remains
+unmerged because this sandbox permits no git writes. PostgreSQL/browser
+execution remains with CI; independent RED review and green CI at the exact
+resulting head remain required.
