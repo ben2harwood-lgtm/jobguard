@@ -15,7 +15,14 @@
         "packages/db/migrations/0753_retention_records.sql",
         "packages/db/test/migration-proofs/0753_retention_records.proof.json",
         "packages/db/migration-notes/0753_retention_records.md",
-        "docs/contracts/retention-records-dark-v1.md"
+        "docs/contracts/retention-records-dark-v1.md",
+        "apps/api/src/retention-review-task.ts",
+        "apps/api/src/retention-review-task.test.ts",
+        "apps/api/src/worker.ts",
+        "packages/db/test/retention-review-timer.integration.test.ts",
+        "packages/db/migrations/0760_retention_review_timer.sql",
+        "packages/db/test/migration-proofs/0760_retention_review_timer.proof.json",
+        "packages/db/migration-notes/0760_retention_review_timer.md"
       ]
     }
   }

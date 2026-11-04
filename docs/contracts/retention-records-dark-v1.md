@@ -42,3 +42,28 @@ registered application command, worker, reminder owner, scheduler or composition
 refuses. Existing issue blockers remain unchanged. G0–G5, demand after pilot,
 RETENTION_REVIEW_OWNER wiring, D06 v2 templates, D02 tax and independent RED review
 remain held. No retention release is automatically fee eligible. M4-21 is untouched.
+
+## Synthetic timer review slice (0760; M4-20 remains open)
+
+The earlier no-worker statement describes 0753. `retention-release-review-v1` now
+has one Graphile discovery owner, registered only in `synthetic_demo`; elsewhere
+registration returns an empty crontab and installs no tasks. Discovery emits only
+tenant IDs; queue payloads contain version/tenant only, keyed by tenant and database
+minute. Execution uses the existing worker context constructor and an
+infrastructure-only repository port, with no human impersonation.
+
+`infrastructure.discover_retention_reviews()` observes current profile conditions
+that are due and have no review for that profile/condition. The bounded
+`infrastructure.retention_timer` prepares and appends under the existing job lock.
+Core validates the stored book and each proposed append using the database date.
+Retries, duplicate workers and crashes cannot append a second review for that
+condition/revision. A changed date requires a new profile and a new review; old
+approvals cannot release against it. Timer rows have no membership actor and audit
+uses the named system owner. Human records retain their original actor contract.
+
+Only EXECUTE on these routines is granted to the existing infrastructure role.
+There is no direct table access, no new role and no resolution, satisfaction,
+release, notice, invoice or money capability. FORCE RLS stays active and routines
+restore the caller tenant value even on failure. D02/D06 and production gates stay
+closed; the retention flag remains false. Real PostgreSQL CI and independent RED
+review are required before landing; this does not finish M4-20.

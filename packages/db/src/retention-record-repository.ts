@@ -1,9 +1,10 @@
+import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
 import {
   appendRetentionRecord, reconcileRetentionBook, retentionBookV1, retentionRecordV1,
   retentionProfileV1, retentionReviewV1, retentionResolutionV1, retentionReleaseV1,
-  retentionReceiptV1, retentionReversalV1, RetentionError,
+  retentionReceiptV1, retentionReversalV1, RetentionError, RETENTION_REVIEW_OWNER,
 } from "@jobguard/core";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 
@@ -41,6 +42,40 @@ export class RetentionRecordRepository {
       }
       throw new RetentionRecordRepositoryError("RETENTION_UNAVAILABLE");
     }
+  }
+  /** Infrastructure-only timer port: no actor, arbitrary record or date input. */
+  async raiseTimerReviews(context: VerifiedTenantContext) {
+    const jobs = await this.guarded(() => withTenant(this.pool, context, async db =>
+      z.array(id).parse((await db.$client.query(
+        "SELECT infrastructure.retention_timer($1,NULL,NULL,NULL) result", [context.tenantId],
+      )).rows[0]?.result)));
+    let appended = 0;
+    for (const jobId of jobs) appended += await this.guarded(() => withTenant(this.pool, context, async db => {
+      const invoke = async (record: unknown, expected: string | null) => (await db.$client.query(
+        "SELECT infrastructure.retention_timer($1,$2,$3::jsonb,$4) result",
+        [context.tenantId, jobId, record === null ? null : JSON.stringify(record), expected],
+      )).rows[0]?.result;
+      let stored = preparedV1.extend({ today: z.iso.date() }).parse(await invoke(null, null));
+      let book = retentionBookV1.parse({ version: "retention.book.v1", environment: "synthetic", tenantId: context.tenantId, jobId, records: stored.records });
+      reconcileRetentionBook(book); // Reject altered histories even when there is nothing due.
+      const profile = book.records.findLast(row => row.version === "retention.profile.v1");
+      if (!profile || profile.version !== "retention.profile.v1") return 0;
+      let count = 0;
+      for (const condition of profile.conditions) {
+        if (book.records.some(row => row.version === "retention.review.v1" && row.profileId === profile.id && row.conditionId === condition.id)) continue;
+        const record = retentionReviewV1.parse({ version: "retention.review.v1", id: randomUUID(), tenantId: context.tenantId, jobId,
+          profileId: profile.id, conditionId: condition.id, owner: RETENTION_REVIEW_OWNER, trigger: "timer", raisedOn: stored.today });
+        try { book = appendRetentionRecord(book, record); }
+        catch (error) {
+          if (error instanceof RetentionError && error.code === "CONDITION_UNMET") continue;
+          throw error;
+        }
+        stored = preparedV1.extend({ today: z.iso.date() }).parse(await invoke(record, stored.bookHash));
+        count++;
+      }
+      return count;
+    }));
+    return appended;
   }
   async read(context: VerifiedTenantContext, jobId: string) {
     const job = id.safeParse(jobId);
