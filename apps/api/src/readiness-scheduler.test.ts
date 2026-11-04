@@ -5,7 +5,7 @@ import { FixtureReadinessAdapters, readHolidays, readWeather, refusedLiveReadine
 
 const scope = { tenantId: "10000000-0000-4000-8000-000000000001", jobId: "10000000-0000-4000-8000-000000000002", taskId: "10000000-0000-4000-8000-000000000003" };
 const other = "10000000-0000-4000-8000-000000000004";
-const now = "2026-08-28T12:00:00.000Z", due = "2026-09-01T08:00:00.000Z";
+const now = "2026-08-28T07:00:00.000Z", due = "2026-08-28T08:00:00.000Z";
 const provenance = { synthetic: true as const, revision: "fixture.v1", observedAt: "2026-08-28T00:00:00.000Z", expiresAt: "2026-09-02T00:00:00.000Z" };
 const holidays: HolidayReading[] = ["england-and-wales", "scotland", "northern-ireland"].map(region => ({
   version: "readiness-holidays.v1", ...provenance, jurisdiction: region as HolidayReading["jurisdiction"],
@@ -116,14 +116,14 @@ describe("M2-6 Graphile scheduled prevention", () => {
   });
   it("covers calendar differences, weekends, local midnight and both DST changes", async () => {
     const cases = [
-      { at: now, region: "scotland", day: "2026-08-31", runAt: "2026-08-31T08:00:00.000Z" },
+      { at: now, region: "scotland", day: "2026-08-31", runAt: "2026-08-28T08:00:00.000Z" },
       { at: now, region: "northern-ireland", day: "2026-09-01", runAt: due },
-      { at: "2026-07-10T12:00:00.000Z", region: "northern-ireland", day: "2026-07-14", runAt: "2026-07-14T08:00:00.000Z" },
-      { at: "2026-07-10T12:00:00.000Z", region: "england-and-wales", day: "2026-07-13", runAt: "2026-07-13T08:00:00.000Z" },
-      { at: "2026-01-01T12:00:00.000Z", region: "scotland", day: "2026-01-05", runAt: "2026-01-05T09:00:00.000Z" },
-      { at: "2026-01-01T12:00:00.000Z", region: "england-and-wales", day: "2026-01-02", runAt: "2026-01-02T09:00:00.000Z" },
-      { at: "2026-03-27T12:00:00.000Z", region: "england-and-wales", day: "2026-03-30", runAt: "2026-03-30T08:00:00.000Z" },
-      { at: "2026-10-23T12:00:00.000Z", region: "scotland", day: "2026-10-26", runAt: "2026-10-26T09:00:00.000Z" },
+      { at: "2026-07-10T12:00:00.000Z", region: "northern-ireland", day: "2026-07-14", runAt: "2026-07-10T08:00:00.000Z" },
+      { at: "2026-07-10T12:00:00.000Z", region: "england-and-wales", day: "2026-07-13", runAt: "2026-07-10T08:00:00.000Z" },
+      { at: "2026-01-01T12:00:00.000Z", region: "scotland", day: "2026-01-05", runAt: "2026-01-01T09:00:00.000Z" },
+      { at: "2026-01-01T12:00:00.000Z", region: "england-and-wales", day: "2026-01-02", runAt: "2026-01-01T09:00:00.000Z" },
+      { at: "2026-03-27T12:00:00.000Z", region: "england-and-wales", day: "2026-03-30", runAt: "2026-03-27T09:00:00.000Z" },
+      { at: "2026-10-23T12:00:00.000Z", region: "scotland", day: "2026-10-26", runAt: "2026-10-23T08:00:00.000Z" },
       { at: "2026-08-30T23:30:00.000Z", region: "england-and-wales", day: "2026-09-01", runAt: due },
     ];
     for (const c of cases) {
@@ -140,6 +140,14 @@ describe("M2-6 Graphile scheduled prevention", () => {
     }
     const h = harness({ plannedDate: "2026-08-31" });
     expect(await h.scheduler.schedule(scope, now, h.queue)).toBe("not_next_workday");
+  });
+  it("rejects forged due dates on the planned day, a holiday, a weekend or an earlier workday", async () => {
+    const h = harness();
+    await h.scheduler.schedule(scope, now, h.queue);
+    for (const dueAt of ["2026-09-01T08:00:00.000Z", "2026-08-31T08:00:00.000Z", "2026-08-29T08:00:00.000Z", "2026-08-27T08:00:00.000Z"]) {
+      await expect(h.scheduler.execute({ ...(h.task() as object), dueAt }, "2026-09-01T08:00:00.000Z")).rejects.toThrow("INVALID_READINESS_TASK");
+    }
+    expect(h.recordProposal).not.toHaveBeenCalled();
   });
   it("evaluates provider outage and stale weather as unknown risk without leaking provider errors", async () => {
     let failed = false;

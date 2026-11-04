@@ -1,3 +1,4 @@
+import { readinessTasks } from "./readiness-task.js";
 import { executeEvidencePackV3 } from "./evidence-pack-v3.worker.js";
 import { EvidencePackV3WorkerRepository } from "@jobguard/db";
 import { readLateSourceObservations } from "@jobguard/db";
@@ -138,11 +139,16 @@ tasks.build_evidence_pack_v3 = async payload => {
 };
 // Browser-test isolation: the e2e worker runs only the practice final-check tasks, so queued outbox actions
 // that existing journeys advance by hand are never delivered behind their backs.
+const readiness = readinessTasks(runtimePool, finalCheckEnvironment, (store, scope) => {
+ const context = queueContext({tenantId:scope.tenantId});
+ return {load: raw => store.load(context, raw), recordProposal: raw => store.recordProposal(context, raw)};
+});
+Object.assign(tasks, readiness.tasks);
 const practiceOnly=process.env.JOBGUARD_WORKER_PRACTICE_FINAL_CHECK_ONLY==="1";
 const runner=await run({connectionString:environment.GRAPHILE_DATABASE_URL,
  logger:redactingWorkerLogger(logger),
- taskList:redactingTasks(practiceOnly?{discover_final_check_requests:tasks.discover_final_check_requests!,final_check_practice_run:tasks.final_check_practice_run!,discover_evidence_pack_requests:tasks.discover_evidence_pack_requests!,build_evidence_pack_v3:tasks.build_evidence_pack_v3!,discover_demo_source_holds:tasks.discover_demo_source_holds!,hold_demo_sources:tasks.hold_demo_sources!}:tasks),
- crontab:practiceOnly?"*/1 * * * * discover_final_check_requests\n*/1 * * * * discover_evidence_pack_requests\n*/1 * * * * discover_demo_source_holds":"*/1 * * * * discover_outbox\n*/1 * * * * discover_final_check_requests\n*/1 * * * * discover_evidence_pack_requests\n*/1 * * * * discover_demo_source_holds"});
+ taskList:redactingTasks(practiceOnly?{...readiness.tasks,discover_final_check_requests:tasks.discover_final_check_requests!,final_check_practice_run:tasks.final_check_practice_run!,discover_evidence_pack_requests:tasks.discover_evidence_pack_requests!,build_evidence_pack_v3:tasks.build_evidence_pack_v3!,discover_demo_source_holds:tasks.discover_demo_source_holds!,hold_demo_sources:tasks.hold_demo_sources!}:tasks),
+ crontab:practiceOnly?"*/1 * * * * discover_final_check_requests\n*/1 * * * * discover_evidence_pack_requests\n*/1 * * * * discover_demo_source_holds"+readiness.crontab:"*/1 * * * * discover_outbox\n*/1 * * * * discover_final_check_requests\n*/1 * * * * discover_evidence_pack_requests\n*/1 * * * * discover_demo_source_holds"});
 for(const signal of ["SIGINT","SIGTERM"] as const)process.once(signal,()=>{
  void (async()=>{await runner.stop();await runtimePool.end();await shadowPool.end();})()
   .catch(()=>{logger.error("WORKER_TASK_FAILED");process.exitCode=1;});

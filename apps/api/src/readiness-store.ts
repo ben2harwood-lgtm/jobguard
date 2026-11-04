@@ -16,7 +16,7 @@ const proposalV1 = z.object({
   status: z.literal("proposal"), programmeChanged: z.literal(false),
 }).strict().refine(p => p.ready === (p.reasons.length === 0) && !(p.ready && p.weather !== true));
 
-/** Opt-in synthetic composition only; never registered in the live application or worker. */
+/** Synthetic composition only; the practice worker binds ports to each queued tenant. Live use remains disabled. */
 export class DurableReadinessStore {
   constructor(private readonly pool: Pool, private readonly mode = "disabled") {}
   private assertDark(): void {
