@@ -47,9 +47,9 @@ export const approveExtraStepV1 = z.object({ version: z.literal("approve-extra-s
 export const rejectExtraV1 = z.object({ version: z.literal("reject-extra.v1"), ...common, ...bound, reasonCode: reason }).strict();
 export const withdrawExtraV1 = z.object({ version: z.literal("withdraw-extra.v1"), ...common, extraId: uuid, reasonCode: z.enum(["not_done", "raised_in_error", "resident_cancelled", "already_on_order"]) }).strict();
 export const markDuplicateV1 = z.object({ version: z.literal("mark-duplicate.v1"), ...common, duplicateId: uuid, canonicalId: uuid }).strict();
-/** Owner-only send: the owner approves THIS request, recipient, amount and expiry. Practice recipients end in .invalid and nothing is delivered. */
+/** A granted surveyor/commercial manager approves THIS request, recipient, amount and expiry. Practice recipients end in .invalid and nothing is delivered. */
 export const issueClientApprovalV1 = z.object({ version: z.literal("issue-client-approval.v1"), ...common, requestId: uuid, approverMembershipId: uuid, recipient: z.email({ error: "Invalid email" }).refine(s => s.toLowerCase().endsWith(".invalid")),
-  linkToken: z.string().regex(/^[A-Za-z0-9_-]{32,128}$/u), expiresAt: z.coerce.date() }).strict();
+  linkToken: z.string().regex(/^[A-Za-z0-9_-]{32,128}$/u), signinDigest: hash.optional(), expiresAt: z.coerce.date() }).strict();
 export const revokeClientApprovalV1 = z.object({ version: z.literal("revoke-client-approval.v1"), ...common, linkId: uuid }).strict();
 export const clientApprovalViewV1 = z.object({ version: z.literal("client-approval-view.v1"), jobId: uuid, requestId: uuid, linkToken: z.string().min(16).max(200), email: z.email({ error: "Invalid email" }) }).strict();
 export const decideClientApprovalV1 = z.object({ version: z.literal("decide-client-approval.v1"), ...common, requestId: uuid, linkToken: z.string().min(16).max(200), email: z.email({ error: "Invalid email" }), revisionHash: hash, netPence: pence,
@@ -142,17 +142,17 @@ export class ExtraApprovalRepository {
     });
   }
 
-  /** Owner-only (Ben decision 18). Goes through the merged dispatcher: owner check, exact authorization, receipt, audit. Returns the link id; the token is the caller's. */
+  /** Q10 ruling, 4 Nov: grant-covered surveyor/commercial-manager send with exact authorization, receipt and audit. Returns the link id; the token is the caller's. */
   async issueClientApproval(context: VerifiedTenantContext, owner: AuthenticatedMembership, raw: unknown): Promise<Result> {
     const i = this.parse(issueClientApprovalV1, raw), member = this.checkActor(context, owner), tenant = lc(context.tenantId);
     const linkId = derivedUuid(`extra-client-link:${tenant}:${i.commandId}`), outboxId = derivedUuid(`extra-client-outbox:${tenant}:${i.commandId}`);
     try {
-      const request = await withTenant(this.pool, context, async db => (await db.$client.query<{ request_revision: number; net_pence: string | null; variation_id: string }>(
-        "SELECT request_revision,net_pence::text,variation_id FROM app.extra_approval_request WHERE tenant_id=$1 AND job_id=$2 AND id=$3", [tenant, i.jobId, i.requestId])).rows[0]);
+      const request = await withTenant(this.pool, context, async db => (await db.$client.query<{ request_revision: number; revision_hash: string; net_pence: string | null; variation_id: string }>(
+        "SELECT request_revision,revision_hash,net_pence::text,variation_id FROM app.extra_approval_request WHERE tenant_id=$1 AND job_id=$2 AND id=$3", [tenant, i.jobId, i.requestId])).rows[0]);
       if (!request || request.net_pence === null) throw new ExtraApprovalError("NOT_FOUND");
       const tokenHash = sha256Hex(i.linkToken), net = Number(request.net_pence);
       // The exact message the owner approves (practice only: the fake_email adapter delivers nothing; the .invalid recipient cannot receive anything).
-      const content = canonicalJson({ version: "extra-client-approval-message.v1", linkId, requestId: i.requestId, revision: request.request_revision, recipient: i.recipient, netPence: net, expiresAt: i.expiresAt.toISOString(), path: `/extra-approval/${linkId}`, token: i.linkToken });
+      const content = canonicalJson({ version: "extra-client-approval-message.v1", linkId, requestId: i.requestId, revision: request.request_revision, revisionHash: request.revision_hash, ...(i.signinDigest ? { signinDigest: i.signinDigest } : {}), recipient: i.recipient, netPence: net, expiresAt: i.expiresAt.toISOString(), path: i.signinDigest ? `/customer/sign-in#${tenant}/${i.jobId}/${i.approverMembershipId}/${i.linkToken}` : `/extra-approval/${i.jobId}/${i.requestId}#t=${i.linkToken}`, token: i.linkToken });
       const contentHash = sha256Hex(content);
       const command: ConsequentialCommand = { version: "command.v1", commandId: i.commandId, commandType: "IssueClientApproval", semanticKey: `extra-client-approval:${i.requestId}:${i.commandId}`, actorMembershipId: member, subjectType: "extra", subjectRef: request.variation_id,
         action: { actionType: "extra.client_approval_request.send", recipient: i.recipient, contentHash, aggregateRevision: request.request_revision, amountPence: net, currency: "GBP", policyVersion: "extra-client-approval-send.v1", expiresAt: i.expiresAt } };
@@ -162,6 +162,7 @@ export class ExtraApprovalRepository {
           await appendOutboundAction(db, tenant, { version: "outbound-action.v1", id: outboxId, authorizationId: c.authorizationId!, adapter: "fake_email", providerEffectKey: `extra-client-link:${linkId}`, actionType: c.action.actionType, recipient: i.recipient,
             contentHash, immutableContent: content, aggregateRevision: request.request_revision, amountPence: net, currency: "GBP", policyVersion: "extra-client-approval-send.v1", authorizationExpiresAt: i.expiresAt });
           const r = await this.call(db, "SELECT app.xa_issue_link($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) r", [i.jobId, i.requestId, i.commandId, member, linkId, i.approverMembershipId, i.recipient, tokenHash, i.expiresAt, c.authorizationId, outboxId]);
+          if (i.signinDigest) await db.$client.query("SELECT app.xc_bind_link($1,$2,$3)", [linkId, i.signinDigest, member]);
           const replaced = (r.replacedOutboxIds as string[]) ?? [];
           // "Cancel replaced requests": an earlier message that has not gone out never will.
           if (replaced.length) await db.$client.query("UPDATE app.action_outbox SET status='cancelled',updated_at=clock_timestamp() WHERE tenant_id=$1 AND id=ANY($2::uuid[]) AND status IN('pending','retryable')", [tenant, replaced]);

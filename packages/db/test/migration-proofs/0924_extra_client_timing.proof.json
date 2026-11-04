@@ -1,0 +1,60 @@
+{
+  "migration": "0924_extra_client_timing.sql",
+  "lp0": [
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.xc_timing(uuid,uuid,uuid,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.ent3_extra_work_status"
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.xc_timing(uuid,uuid,uuid,uuid)|jobguard_migration",
+        "group": "a-owner-routines"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.xc_timing(uuid,uuid,uuid,uuid)|jobguard_runtime|EXECUTE|-",
+        "group": "a-exec-site-extra-routines"
+      }
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "xc_timing",
+        "args": "t uuid, j uuid, v uuid, r uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": false,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    }
+  ],
+  "tenancy": []
+}

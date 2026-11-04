@@ -42,27 +42,8 @@ export function deriveVisitApprovalTiming(visit: VisitTimingSource | undefined, 
 
 /** Called only after client link and current job authority checks, within their tenant transaction. */
 export async function readExtraApprovalTiming(db: TenantTransaction, tenant: string, job: string, extra: string, requestId: string) {
-  const visit = (await db.$client.query<VisitTimingSource>(
-    `SELECT v.id visit_id,to_char(v.started_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') started_at,
-      to_char(v.completed_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') completed_at,
-      (extract(epoch FROM v.started_at)*1000000)::bigint::text start_us,
-      (extract(epoch FROM v.completed_at)*1000000)::bigint::text finish_us
-     FROM app.extra_origin o JOIN app.site_visit v ON (v.tenant_id,v.job_id,v.id)=(o.tenant_id,o.job_id,o.site_visit_id)
-     WHERE o.tenant_id=$1 AND o.job_id=$2 AND o.variation_id=$3`, [tenant, job, extra])).rows[0];
-  const requests = (await db.$client.query<TimingRequest>(
-    `SELECT q.id,CASE WHEN (q.comparisons->>'aboveClientBeforeWorkThreshold')::boolean
-        AND NOT (q.requirement->>'clientRequired')::boolean THEN NULL
-        ELSE (q.comparisons->>'aboveClientBeforeWorkThreshold')::boolean END preapproval_required,
-      (SELECT (extract(epoch FROM min(n.server_recorded_at))*1000000)::bigint::text FROM app.extra_approval_request n
-       WHERE (n.tenant_id,n.job_id,n.variation_id)=(q.tenant_id,q.job_id,q.variation_id) AND n.request_revision>q.request_revision) superseded_us
-     FROM app.extra_approval_request q JOIN app.extra_approval_request selected
-       ON (selected.tenant_id,selected.job_id,selected.variation_id)=(q.tenant_id,q.job_id,q.variation_id)
-     WHERE q.tenant_id=$1 AND q.job_id=$2 AND q.variation_id=$3 AND selected.id=$4 AND q.request_revision<=selected.request_revision`,
-    [tenant, job, extra, requestId])).rows;
-  const facts = (await db.$client.query<ApprovalTimingFact>(
-    `SELECT request_id,step_index,step_role,(extract(epoch FROM server_recorded_at)*1000000)::bigint::text at_us
-     FROM app.extra_approval_step_fact WHERE tenant_id=$1 AND job_id=$2 AND variation_id=$3 ORDER BY step_index`, [tenant, job, extra])).rows;
-  const workStatus = (await db.$client.query<{ work_status: OperativeWorkStatus | null }>(
-    "SELECT app.ent3_extra_work_status($1,$2) work_status", [job, extra])).rows[0]?.work_status;
-  return deriveVisitApprovalTiming(visit, requests, facts, requestId, workStatus ?? undefined);
+  const result = (await db.$client.query<{ timing: {
+    visit: VisitTimingSource | null; requests: TimingRequest[]; facts: ApprovalTimingFact[]; workStatus: OperativeWorkStatus | null;
+  } }>("SELECT app.xc_timing($1,$2,$3,$4) timing", [tenant, job, extra, requestId])).rows[0]!.timing;
+  return deriveVisitApprovalTiming(result.visit ?? undefined, result.requests, result.facts, requestId, result.workStatus ?? undefined);
 }

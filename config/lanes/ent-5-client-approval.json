@@ -1,0 +1,56 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-5-client-approval": {
+      "branches": [
+        "codex/sandbox/ent-5-client-approval"
+      ],
+      "allow": [
+        "BUILD_PLAN.md",
+        "apps/api/src/auth/customer-signin.ts",
+        "apps/api/src/auth/extra-customer.test.ts",
+        "apps/api/src/auth/extra-customer.ts",
+        "apps/api/src/auth/index.ts",
+        "apps/web/app/api/customer-portal/extra-approvals/route.ts",
+        "apps/web/app/api/northside/client/route.ts",
+        "apps/web/app/api/northside/extras/[extraId]/[action]/route.ts",
+        "apps/web/app/api/northside/extras/route.ts",
+        "apps/web/app/approvals/extras/extra-approvals.tsx",
+        "apps/web/app/customer/extra-approvals/approvals.tsx",
+        "apps/web/app/customer/extra-approvals/page.tsx",
+        "apps/web/app/customer/sign-in/signin.tsx",
+        "apps/web/e2e/ENT-11a.spec.ts",
+        "apps/web/e2e/ENT-11b.spec.ts",
+        "apps/web/e2e/ENT-5-client-session.spec.ts",
+        "docs/contracts/extra-client-approval-v1.md",
+        "docs/verdicts/ENT-5/BUILDER_RECEIPT.md",
+        "packages/core/src/watchdog.ts",
+        "packages/db/migrations/0920_extra_client_session.sql",
+        "packages/db/migrations/0921_extra_client_send_authority.sql",
+        "packages/db/migrations/0922_extra_customer_use.sql",
+        "packages/db/migrations/0923_extra_customer_approval.sql",
+        "packages/db/migrations/0924_extra_client_timing.sql",
+        "packages/db/src/commands.ts",
+        "packages/db/src/extra-approval-chain-repository.ts",
+        "packages/db/src/extra-approval-timing.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/northside-run.ts",
+        "packages/db/src/outbox.ts",
+        "packages/db/test/contractor-full-demo-package.integration.test.ts",
+        "packages/db/test/extra-approval-chain.integration.test.ts",
+        "packages/db/test/extra-approval-timing.integration.test.ts",
+        "packages/db/test/extra-client-session.integration.test.ts",
+        "packages/db/test/extra-evidence-packs.integration.test.ts",
+        "packages/db/test/later-empty-tables.ts",
+        "packages/db/test/migration-proofs/0920_extra_client_session.proof.json",
+        "packages/db/test/migration-proofs/0921_extra_client_send_authority.proof.json",
+        "packages/db/test/migration-proofs/0922_extra_customer_use.proof.json",
+        "packages/db/test/migration-proofs/0923_extra_customer_approval.proof.json",
+        "packages/db/test/migration-proofs/0924_extra_client_timing.proof.json",
+        "packages/db/test/northside-demo.integration.test.ts"
+      ],
+      "receipt": "docs/verdicts/ENT-5/BUILDER_RECEIPT.md",
+      "note": "ENT-5 client approval journey. RED. Synthetic NOPR; Q14/Q15 held; protected landing holds recorded in receipt."
+    }
+  }
+}
