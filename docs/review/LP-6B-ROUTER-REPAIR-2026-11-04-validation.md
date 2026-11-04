@@ -28,7 +28,7 @@ The scratch wrapper adds the pinned runtime to PATH; final PostgreSQL client PAT
 | router-source-money-boundaries | /workspace/jobguard | 57e6997ddb26 | `pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/job-sources-authority.integration.test.ts test/money-trail-security.integration.test.ts` | 0 | 18.403 | 2 passed (2); 15 passed (15) |
 | router-full-web | /workspace/jobguard | 57e6997ddb26 | `pnpm --filter @jobguard/web test` | 0 | 138.015 | 121 passed (121); 1662 passed (1662) |
 | router-lint | /workspace/jobguard | 57e6997ddb26 | `pnpm lint` | 1 | 2.006 |  |
-| router-full-api | /workspace/jobguard | 57e6997ddb26 | `pnpm --filter @jobguard/api exec vitest run --maxWorkers=1` | no completion recorded |  |  |
+| router-full-api | /workspace/jobguard | 57e6997ddb26 | `pnpm --filter @jobguard/api exec vitest run --maxWorkers=1` | 1 | 1280.87 | 7 failed \| 447 passed (454); 9 failed \| 7983 passed (7992) |
 | router-typecheck | /workspace/jobguard | 57e6997ddb26 | `pnpm typecheck` | 0 | 204.87 |  |
 | router-full-db-2 | /workspace/jobguard | 5ada4bc6823f | `pnpm --filter @jobguard/db test --shard=2/4` | no completion recorded |  |  |
 | router-full-db-1 | /workspace/jobguard | 5ada4bc6823f | `pnpm --filter @jobguard/db test --shard=1/4` | no completion recorded |  |  |
@@ -38,6 +38,13 @@ The scratch wrapper adds the pinned runtime to PATH; final PostgreSQL client PAT
 | router-privacy-before | /workspace/work/lp6b/privacy-worktree | 50fdba791efa + patch 69b48f9f9851 | `pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/privacy-operations.integration.test.ts -t 'keeps the forbidden public code when genuine request binding refuses a revoked session or member'` | 1 | 11.139 | 1 failed (1); 1 failed \| 5 skipped (6) |
 | router-tools | /workspace/jobguard | 50fdba791efa | `node --test tools/*.test.mjs` | 1 | 123.459 | tests 423; pass 419; fail 4; skipped 0; todo 0 |
 | router-privacy-after | /workspace/work/lp6b/privacy-worktree | 50fdba791efa + patch 0844b1344200 | `pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/privacy-operations.integration.test.ts` | 0 | 33.289 | 1 passed (1); 6 passed (6) |
+| router-newmain-api-before | /workspace/work/lp6b/newmain-api-worktree | 66607034ef0d | `pnpm --filter @jobguard/api exec vitest run --maxWorkers=1 src/ai-capture-authority.test.ts src/privacy-operations.application.test.ts src/connectors/conformance-kit.test.ts` | 1 | 14.709 | 2 failed \| 1 passed (3); 3 failed \| 15 passed (18) |
+| router-newmain-api-after | /workspace/work/lp6b/newmain-api-worktree | 66607034ef0d | `pnpm --filter @jobguard/api exec vitest run --maxWorkers=1 src/ai-capture-authority.test.ts src/privacy-operations.application.test.ts src/connectors/conformance-kit.test.ts` | 0 | 21.083 | 3 passed (3); 18 passed (18) |
+| router-newmain-api-isolated-build | /workspace/work/lp6b/newmain-api-worktree | 66607034ef0d | `pnpm --filter @jobguard/api build` | 0 | 51.71 |  |
+| router-newmain-api-compiled-proof | /workspace/work/lp6b/newmain-api-worktree | 66607034ef0d | `pnpm --filter @jobguard/api exec vitest run --maxWorkers=1 src/ai-capture-authority.test.ts src/privacy-operations.application.test.ts src/connectors/conformance-kit.test.ts dist/ai-capture-authority.test.js dist/privacy-operations.application.test.js dist/connectors/conformance-kit.test.js` | 0 | 16.208 | 6 passed (6); 36 passed (36) |
+| router-resumable-before | /workspace/work/lp6b/resumable-worktree | 66607034ef0d | `pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/native-server-chaos.integration.test.ts` | 1 | 16.494 | 1 failed (1); 1 failed \| 3 passed (4) |
+| router-resumable-after | /workspace/work/lp6b/resumable-worktree | 66607034ef0d | `pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/native-server-chaos.integration.test.ts` | 0 | 9.893 | 1 passed (1); 4 passed (4) |
+| router-resumable-complete | /workspace/work/lp6b/resumable-worktree | 66607034ef0d | `pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 src/resumable-evidence.test.ts test/native-server-chaos.integration.test.ts` | 0 | 17.567 | 2 passed (2); 23 passed (23) |
 
 ## Final-run failure inventory
 
@@ -70,9 +77,17 @@ No completion result was recorded; this attempt is not completed test evidence.
 
 ### router-full-api
 
-Recorded HEAD `57e6997ddb267902462143d2de372fb44641970b`; exit `no completion recorded`.
+Recorded HEAD `57e6997ddb267902462143d2de372fb44641970b`; exit `1`.
 
-No completion result was recorded; this attempt is not completed test evidence.
+- dist/ai-capture-authority.test.js > stored capture AI authority (fake provider; no live route) > uses persisted bytes, hash, tenant and visibility rather than request labels
+- src/ai-capture-authority.test.ts > stored capture AI authority (fake provider; no live route) > uses persisted bytes, hash, tenant and visibility rather than request labels
+- dist/privacy-operations.application.test.js > dark privacy route > uses the verified context and persisted session digest
+- src/privacy-operations.application.test.ts > dark privacy route > uses the verified context and persisted session digest
+- dist/privacy-operations.application.test.js > dark privacy route > returns only a typed error, never database details
+- src/privacy-operations.application.test.ts > dark privacy route > returns only a typed error, never database details
+- dist/connectors/conformance-kit.test.js > ENT-13b shared synthetic conformance (no provider or release evidence) > passes every named check for the synthetic SFTP connector
+- dist/contractor/enterprise-dashboard.boundaries.test.js > [E9-27 E9-34] advisory/read modules import only pure readers and the tenant/session boundary; no writer, provider, outbox or privileged client
+- src/contractor/enterprise-dashboard.boundaries.test.ts > [E9-27 E9-34] advisory/read modules import only pure readers and the tenant/session boundary; no writer, provider, outbox or privileged client
 
 ### router-full-web
 
