@@ -47,3 +47,40 @@ Live use still requires the written payment-regulation opinion, VAT ruling,
 D10 v2, G4-S and M4-15. All G0-G5 gates remain closed. Exact-head independent
 RED review and PostgreSQL CI (including upgrade/catalogue/RLS/concurrency tests)
 remain required before landing this bounded synthetic change.
+
+## Builder practice preview (4 November 2026; MON-6 remains open)
+
+This addition supersedes the earlier no-route/no-screen description only for the
+builder practice preview. A session-only, no-store GET/POST now serves the stored
+invoice and attempts at `/jobs/:job/invoices/:invoice/pay-now-preview`.
+The application binds the verified company context directly; POST passes the
+session digest as actor locator and accepts only `{commandId, rail}`. GET checks
+current owner/admin membership via the existing identity provider and obtains
+positive-balance options from read-only SQL prepare; zero balance has no
+collectable options. No private SQL actor-helper grant was added. POST requires
+the trusted browser origin. Page and route are not found outside synthetic_demo.
+The client renders server facts, shares the original wording, and retains the
+command ID/rail across uncertain responses and reloads. Bank transfer gets equal
+list treatment and a 44 px practice action. The customer component stays dark.
+
+Local evidence: all seven package TypeScript checks and 415 focused Vitest tests
+passed with installed binaries, at most two workers per run; lane/diff checks
+and browser fixture subprocess syntax pass. The pnpm wrapper could not
+verify/fetch its pinned executable here; its top-level checks did not execute.
+Vitest lists five new DB cases; Playwright lists mobile-360 and desktop cases.
+Neither database nor browser execution was possible in this sandbox.
+CI must run `pay-now-preview.integration.test.ts`, existing
+`pay-now-attempt.integration.test.ts`, and
+`MON-6-stored-pay-now-preview.spec.ts` headless at both widths. They cover stored
+extreme balances, row immutability, replays/concurrency, roles/sessions, isolation,
+credits/receipts/reversals, equal screens for an ordinary stored invoice and a
+synthetic approved catch line, lost-response retries after reload, 44 px targets
+and no horizontal scroll. The catch line is a source fixture, not live detection.
+Normal CI gates and independent RED review at the router's committed head remain
+outstanding. No migration, role or grant was introduced. Customer page, live
+rails, stages, real tariff/VAT, provider sandbox evidence and G0-G5 stay held.
+
+LATER / SIMPLICITY (initial review): `PayNowAttemptApplication.read` could later
+use a repository current-options projection instead of inline prepare SQL plus
+a separate balance read, keeping stored projection in one place. That requires
+a separately scoped repository-interface change outside this brief.
