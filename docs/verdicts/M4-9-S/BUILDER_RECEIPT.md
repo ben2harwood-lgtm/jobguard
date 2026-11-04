@@ -963,3 +963,94 @@ PostgreSQL suite for this RED migration. Use at most two workers and at most
 three named Vitest files per invocation. No tests were disabled or loosened.
 Router commits/pushes; green CI and independent RED review at the exact head
 remain required before merge.
+
+## money-test-gaps — RED, NOPR=1
+
+Tests and fixtures only, covering the named M4-9-S/M4-10-S, #511 and #509
+stage-end gaps. One mixed derivation includes an 80,000p catch and a 32,000p
+withheld-payment recovery: 11,200p fee, then a linked -3,200p compensation
+leaving 8,000p. The existing recovery fixture can reuse the catch job while
+keeping the baseline recovery receipts separate from its supplementary invoice.
+The pending-movement test invokes the real statement writer as the runtime role,
+checks no statement/command/Decision effects and then issues successfully after
+rollback. Only movement state changes: its source hash and all other row fields
+remain identical. The owner-only, rolled-back fault injection temporarily removes
+the tuple CHECK and disables mutation triggers; otherwise PostgreSQL prevents
+constructing this corrupt source state before the writer is reached. No installed
+constraint or trigger is changed outside that rollback.
+
+Main already had the real-second-session 0518 ownership test. Its positive
+control now explicitly reads the second session's own review inputs before using
+that same session against the first job. The capacity race uses real trial
+activations, a simulated card and Solo terms with five distinct large jobs live;
+one contender gets place six and the other reaches METER_UPGRADE_REQUIRED.
+It checks activation/admission counts, absent loser receipt/activation and a
+serial capacity refusal. Existing fixture defaults and all earlier tests remain.
+
+Local evidence (installed Node 24.17.0, Vitest 4.1.12; one Vitest worker):
+
+- `pnpm --filter @jobguard/db typecheck` and the named pnpm Vitest run stalled
+  before starting tools and were interrupted. No downloads or installs.
+- Built existing core/storage/config dependencies using each package's installed
+  `./node_modules/.bin/tsc -p tsconfig.json`. Passed. Initial unit collection
+  failed because their dist entries were absent; the rerun below passed.
+- From packages/db: `./node_modules/.bin/tsc -p tsconfig.json --noEmit`: passed.
+- From packages/db: `./node_modules/.bin/vitest run --maxWorkers=1
+  test/trial-lock-order-source.test.ts src/simulation-fee-statement-repository.test.ts
+  src/success-fee-repository.test.ts`: 3 files, 15 tests passed.
+- Vitest `list --maxWorkers=1` collected success-fee-recovery-compensation,
+  simulation-fee-statement and trial-lock-order integration files together;
+  a separate call collected shadow-demo-guide.integration.test.ts. This proves
+  runner discovery/import only, not PostgreSQL execution.
+- `node tools/lint.mjs`: core purity passed; lane stage refused missing branch
+  or self-comparison range in this sandbox. No lint rule was changed.
+
+PostgreSQL and browser suites were not run: this sandbox cannot start PostgreSQL
+or bind localhost. Required next: run the four integration files on real PostgreSQL
+in batches of at most three files, with at most two workers; green required CI
+and an independent RED review at the exact committed head remain outstanding.
+No product bug has been demonstrated locally; no expected failures or skips were
+added. Nothing is left for people unless PostgreSQL execution finds a bug; no
+human/legal/provider acceptance is claimed or closed. Synthetic fixtures only;
+no product code, migrations, real data, providers, paid calls or release changes.
+The router owns commit/push of codex/sandbox/money-test-gaps; no PR for this build.
+
+Final deterministic checks: `git diff --check` passed. Existing loadLanePolicy /
+lanePathAllowed helpers accepted all eight exact changed paths, including the
+implicitly permitted own lane file, with no unchanged allow-list entries.
+
+## MONEY-TEST-GAPS catch-up to main — 3 November 2026
+
+READY for router commit as NOPR; RED money tests. Inspected merge cef455d3f
+against local origin/main 111865cf6. The launcher already completed the merge;
+there are no unmerged index entries. Local main is stale, so scope comparisons
+use origin/main without fetching. Main's production code, migrations and other
+lanes are unchanged. This piece retains its six test/fixture changes above,
+its existing receipt and its own exact lane. No test expectation, skip or
+production behavior was changed during this catch-up. No migration is needed.
+
+Actual checks on Node 24.17.0 and installed Vitest 4.1.12:
+
+- packages/db: `./node_modules/.bin/tsc -p tsconfig.json --noEmit` passed.
+  This checks src; integration tests are outside that tsconfig.
+- packages/db: `./node_modules/.bin/vitest run --maxWorkers=1
+  test/trial-lock-order-source.test.ts
+  src/simulation-fee-statement-repository.test.ts
+  src/success-fee-repository.test.ts` — 15 tests passed across three files.
+- packages/core: `./node_modules/.bin/vitest run --maxWorkers=1
+  src/success-fee-posting.test.ts src/success-fee-posting-fixtures.test.ts
+  src/success-fee-catch-posting.test.ts` — 80 tests passed across three files.
+- packages/db: `vitest list --maxWorkers=1` with the three named compensation,
+  statement and trial integration files, then separately the shadow guide file,
+  collected all four successfully. Discovery/import only; no database assertions
+  executed and no PostgreSQL startup attempted.
+- `git diff --check origin/main` passed. Existing loadLanePolicy/lanePathAllowed
+  helpers verified eight changed paths, exact allow-list equality excluding
+  config/lanes, only this piece's lane changed, and no migration changes.
+
+PostgreSQL and browser execution remain unproved in this sandbox. CI must run
+all four changed integration files against real PostgreSQL, plus required
+checks, before landing. Independent RED review must cover the resulting exact
+committed head. No full-suite, clean-install, browser or independent-review pass
+is claimed. No Git writes, installs, downloads, providers or real data were used.
+Router owns commit/push and later PR opening when this group's turn arrives.

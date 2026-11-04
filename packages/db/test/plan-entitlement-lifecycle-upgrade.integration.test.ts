@@ -37,7 +37,11 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     const current = live.find(row => row.oid === prior.oid);
     // 0566 and 0573 extend exactly this dispatcher for managed recovery and supervisor queries.
     if (prior.nspname === "app" && prior.proname === "lp5_command_result" && prior.args === "p_command_id uuid, p_outcome jsonb") continue;
-    if (prior.oid === settlementOid) {
+    // 0583 replaces only this exact predecessor body; its dedicated upgrade proof checks the replacement.
+    if (prior.nspname === "app" && prior.proname === "write_success_fee_v3" &&
+      prior.args === "p_job uuid, p_session text, p_command jsonb, p_artifact jsonb") {
+      expect(current?.definition).not.toEqual(prior.definition);
+    } else if (prior.oid === settlementOid) {
       expect(prior.definition).toContain(selfComparison);
       expect(current?.definition).toEqual(prior.definition.replace(selfComparison, "payload"));
     } else {

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { RETENTION_REVIEW_OWNER } from "./retention-balances.js";
 import { MAX_MONEY_PENCE } from "./money.js";
 import { VAT_FIXTURE_LABEL, VAT_SUPPORT_MATRIX_VERSION, type DarkVatTreatment } from "./vat-treatments.js";
 import { CIS_ENABLED, CIS_FIXTURE_LABEL, CIS_POLICY_VERSION, CisDeductionError,
@@ -63,6 +64,46 @@ function next(book: CisFixtureBook, correction = false) {
 }
 
 describe("M4-22 dark CIS fixtures", () => {
+  it("refuses a VAT source already credited from £100 to £50 before the statement", () => {
+    const book = fixture(), doc = book.vatBook.documents[0]!;
+    doc.groups[0]!.retainedNetPence = 0;
+    const profile = book.retentionBook.records[0]!;
+    if (profile.version !== "retention.profile.v1") throw new Error("Expected profile");
+    profile.retained.netPence = 0; profile.conditions[0]!.cumulativeLimit.netPence = 0;
+    book.vatBook.documents.push({ ...structuredClone(doc), id: id(12), previousDocumentId: doc.id,
+      kind: "credit_note", creditOfDocumentId: doc.id, documentReference: "VAT-credit", documentDate: "2026-10-20",
+      groups: doc.groups.map(g => ({ ...g, cumulativeNetPence: 5000 })) });
+    Object.assign(book.statements[0]!, { cumulativePaidNetPence: 10000, cumulativeDirectMaterialsPence: 0, cumulativePaidVatPence: 2000 });
+    rejects(book, "MISSING_SOURCE");
+    book.statements[0]!.vatDocumentId = id(12);
+    rejects(book, "VALUE_LIMIT");
+    Object.assign(book.statements[0]!, { cumulativePaidNetPence: 5000, cumulativePaidVatPence: 1000 });
+    expect(last(book)).toMatchObject({ cisDeduction: { pence: 1000 }, expectedCash: { pence: 5000 } });
+  });
+  it.each(["gross_payment", "unregistered"] as const)("refuses overlapping conflicting status even when %s is cited", status => {
+    const book = fixture("standard_20", status);
+    book.verifications.push({ ...book.verifications[0]!, id: id(33), status: status === "gross_payment" ? "unregistered" : "gross_payment" });
+    rejects(book, "INVALID_LINEAGE");
+    book.verifications[1]!.validFrom = "2026-11-06"; book.verifications[1]!.validThrough = "2026-12-05";
+    expect(() => reconcileCisFixtures(book)).not.toThrow();
+  });
+  it("refuses a VAT retention release with a reversed linked receipt", () => {
+    const book = fixture(), doc = book.vatBook.documents[0]!;
+    const source = { kind: "human_input" as const, actorId: id(3), inputId: id(4) };
+    book.retentionBook.records.push(
+      { ...context(60), version: "retention.review.v1", profileId: id(20), conditionId: id(21), owner: RETENTION_REVIEW_OWNER, trigger: "human", raisedOn: "2026-10-01" },
+      { ...context(61), version: "retention.resolution.v1", reviewId: id(60), outcome: "approved", conditionSatisfied: true, humanSource: { actorId: source.actorId, inputId: source.inputId }, amount: { netPence: 1000, taxPence: 0 } },
+      { ...context(62), version: "retention.release.v1", resolutionId: id(61) },
+      { ...context(63), version: "retention.receipt.v1", releaseId: id(62), grossPence: 1000 },
+      { ...context(64), version: "retention.reversal.v1", receiptId: id(63), grossPence: 1000 },
+    );
+    book.vatBook.documents.push({ ...structuredClone(doc), id: id(12), previousDocumentId: doc.id, kind: "retention_release",
+      retentionReleaseId: id(62), documentReference: "VAT-release", groups: doc.groups.map(g => ({ ...g, retainedNetPence: 0 })) });
+    book.statements[0]!.vatDocumentId = id(12);
+    expect(() => reconcileCisFixtures(book)).toThrow(expect.objectContaining({ code: "INVALID_LINEAGE" }));
+    book.retentionBook.records.pop();
+    expect(() => reconcileCisFixtures(book)).not.toThrow();
+  });
   it.each([["gross_payment", 0], ["registered", 600], ["unregistered", 900]] as const)("requires evidenced %s status", (status, deduction) => {
     const result = last(fixture("standard_20", status));
     expect(result.deductionBase.pence).toBe(3000); expect(result.cisDeduction.pence).toBe(deduction);

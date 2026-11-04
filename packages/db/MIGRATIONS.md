@@ -1267,6 +1267,44 @@ Adds `recovery_timeline_run` and `recovery_timeline_signal`, owned by `jobguard_
 
 Expand-only forward fix: disable the unregistered synthetic runtime if necessary; retain both history tables and apply a new migration to repair defects. Do not drop history or edit this migration after merge. Populated predecessor/privilege preservation is covered by the SERIOUS-B5 upgrade suite; real PostgreSQL behavior is covered in recovery-follow-up.integration.test.ts and tenancy/catalogue checks. These are CI gates, not locally executed PostgreSQL evidence.
 
+## M4-17 report catch-up — availability and reference queue (RED, dark)
+
+The availability migration is already on main as `0571_money_trail_reconciliation.sql`;
+the reference queue migration is already on main as
+`0572_financial_reconciliation_queue.sql`. Both retain their original SQL bytes.
+Main's `0512_simulation_money_trail_run.sql` remains unchanged: its simulation-run
+routine does not define either of these two entry points. No existing routine is
+re-created, and no main migration is edited. The two matching migration proof
+files carry exact additive LP-0, upgrade and tenancy expectations; the protected
+baseline lists stay unchanged.
+
+`0572_financial_reconciliation_queue.sql` adds the five private, forced-RLS, immutable reference queue tables, their
+indexes/policies and the finance-session checked queue routine. It adds no money
+posting or external execution. No historical data is backfilled. Forward fix:
+disable the reference path and append a reviewed migration while retaining all
+run/proposal/approval history. PostgreSQL fresh/upgrade, RLS and privilege checks
+remain CI evidence requirements; local unit tests do not establish them.
+
+## Batch-10 migration order (RED, sixth small group)
+
+Incoming main at `f78c81684` already contains `0552_commercial_outbound_pause.sql`
+and byte-identical SQL for `0571_money_trail_reconciliation.sql` and
+`0572_financial_reconciliation_queue.sql`. Keep main's migrations and corrected
+proof fragments once; archived duplicate branch copies are not installed again.
+The remaining batch migrations follow main's 0580 consecutively. Only filename
+stems and exact references change; SQL behavior is preserved:
+
+- `0571_money_trail_reconciliation.sql`: dependency availability read.
+- `0572_financial_reconciliation_queue.sql`: private reference queue.
+- `0581_restore_reconciliation.sql`: extends the existing outbound pause control with independently recorded reconciliation before resume.
+- `0582_dark_ais.sql`: isolated synthetic AIS observations; no live rail.
+- `0583_success_fee_production_safety.sql`: extends main's latest `0537_fee_invalid_proof_reduction.sql` writer with independent derivation and posting guards, preserving reversal-netted caps, strictly negative invalid-proof compensation and existing command/audit authority.
+
+Each has its matching proof fragment in `test/migration-proofs/`. New empty app
+tables are registered in `test/later-empty-tables.ts`. No main migration is
+changed. No backfill or production enablement. Retain history and forward-fix
+with an additive migration; keep external execution disabled during restore.
+PostgreSQL fresh/upgrade, privilege/RLS and restore proofs remain CI gates.
 ### 0572_financial_reconciliation_queue — M4-17 reference queue (RED)
 
 Adds five initially empty, append-only, FORCE-RLS financial reconciliation tables

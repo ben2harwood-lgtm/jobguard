@@ -1,4 +1,4 @@
-// CI only: apply 0479 alone, preserve populated predecessor rows and routine bodies,
+// CI only: apply 0572_financial_reconciliation_queue.sql alone, preserve populated predecessor rows and routine bodies,
 // then apply all successors twice. No PostgreSQL startup in the builder sandbox.
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { startBeforeMigration, applyMigration, startSession, type Cluster } from "./contractor-practice-session-fixtures.js";

@@ -187,3 +187,6 @@ export { importLateSource, readLateSourceObservations, readLateSources } from ".
 
 export * from "./financial-reconciliation-queue-repository.js";
 export * from "./money-trail-repository.js";
+
+export * from "./ais-adapter.js";
+export * from "./ais-repository.js";
