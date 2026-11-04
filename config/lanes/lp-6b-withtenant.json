@@ -90,6 +90,7 @@
         "packages/db/test/enterprise-dashboard.authority-fixtures.ts",
         "packages/db/test/evidence-pack-v3-commands.integration.test.ts",
         "packages/db/test/evidence-pack-v3-isolation.integration.test.ts",
+        "packages/db/test/extra-origin.integration.test.ts",
         "packages/db/test/historical-practice-fixture.ts",
         "packages/db/test/job-work-state-fixtures.ts",
         "packages/db/test/later-empty-tables.ts",
