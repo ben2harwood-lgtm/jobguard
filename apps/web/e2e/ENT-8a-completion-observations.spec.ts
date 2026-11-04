@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 test.use({ headless: true });
-// Transport-mocked screen journey: deliberately independent of the not-yet-landed POST.
+// Transport fault injection for uncertain retries and text refusals. The real POST,
+// stored-byte read, session checks and persistence run in ENT-8a-possible-extras.spec.ts.
 // Both mobile-360 and desktop run from the existing Playwright projects, headless.
 const job = "00000000-0000-4000-8000-000000000001", evidenceId = "00000000-0000-4000-8000-000000000002";
 const source = { evidenceId, sha256: "c".repeat(64), objectVersion: "stored-photo-version", mediaKind: "completion_photo", photoTags: ["Fictional new vent"], capturedAt: "2026-11-04T05:00:00Z" };

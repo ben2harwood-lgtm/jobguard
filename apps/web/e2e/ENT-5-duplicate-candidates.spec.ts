@@ -34,6 +34,10 @@ test("possible duplicates can be linked and un-linked, with server refusals and 
  const issues: unknown[] = [];
  cdp.on("Audits.issueAdded", event => { if (event.issue.code === "LowTextContrastIssue") issues.push(event.issue); });
  await cdp.send("Audits.enable"); await cdp.send("Audits.checkContrast", { reportAAA: false });
+ for (const issue of issues as Array<{ details: { lowTextContrastIssueDetails: { violatingNodeId: number } } }>) {
+  const { node } = await cdp.send("DOM.describeNode", { backendNodeId: issue.details.lowTextContrastIssueDetails.violatingNodeId });
+  await test.info().attach(`contrast-node-${node.backendNodeId}`, { body: JSON.stringify({ issue, node }), contentType: "application/json" });
+ }
  expect(issues).toEqual([]);
  await section.getByRole("button", { name: "Link duplicate" }).click();
  await expect(main.getByRole("alert")).toContainText("EXTRA_EXPORTED");

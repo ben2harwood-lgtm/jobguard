@@ -103,6 +103,7 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "nest:/contractor/jobs/:id/possible-extras/:promptId/dismiss": "pre_live_allowed",
   "/api/contractor/jobs/[id]/possible-extras/[promptId]/confirm": "pre_live_allowed",
   "/api/contractor/jobs/[id]/possible-extras/[promptId]/dismiss": "pre_live_allowed",
+  "/api/contractor/jobs/[id]/possible-extras/observations": "pre_live_allowed",
   // contractor work-order jobs have no pre-live phase (they become live in the same transaction as the import), and this route carries its own live-job guard (precheck and seam, `SiteExtraRepository`).
   // Contractor commands retain their own job/authority/export guards, like site capture.
   "/api/contractor/jobs/[id]/duplicate-candidates": "pre_live_allowed",

@@ -63,8 +63,21 @@ export class EnterpriseLivePromptRepository {
   if(!z.guid().safeParse(jobId).success)throw new EnterpriseLivePromptPersistenceError("INVALID_PROMPT_COMMAND");
   try {
    const context:VerifiedTenantContext=await contractorSessionContext(this.pool,sessionId);
-   return await withTenant(this.pool,context,async db=>
-    (await db.$client.query<{result:unknown}>("SELECT app.contractor_job_evidence_read($1,$2) result",[sessionId,jobId])).rows[0]!.result);
+   return await withTenant(this.pool,context,async db=>{
+    const snapshot=z.object({version:z.literal("observation-evidence.v1"),items:z.array(z.object({
+     evidenceId:z.guid(),sha256:z.string(),objectVersion:z.string(),mediaKind:z.enum(["completion_photo","completion_note"]),contentType:z.string(),capturedAt:z.string().nullable(),
+    }).strict())}).strict().parse((await db.$client.query<{result:unknown}>("SELECT app.contractor_job_evidence_read($1,$2) result",[sessionId,jobId])).rows[0]!.result);
+    const items=[];
+    for(const {contentType,...item} of snapshot.items){
+     let photoTags:string[]=[];
+     if(item.mediaKind==="completion_photo" && contentType==="image/png"){
+      const bytes=await readStoredCompletionPhoto(db,sessionId,{jobId,...item});
+      photoTags=z.array(z.string()).parse((await db.$client.query<{tags:unknown}>("SELECT app.contractor_completion_photo_tags($1,$2,$3,$4,$5,$6::bytea) tags",[sessionId,jobId,item.evidenceId,item.sha256,item.objectVersion,bytes])).rows[0]!.tags);
+     }
+     items.push({...item,photoTags});
+    }
+    return {version:snapshot.version,items};
+   });
   }catch(error){failure(error);}
  }
  async list(sessionId:string,raw:unknown):Promise<EnterprisePromptPage>{return pageSchema.parse(await this.read(sessionId,this.parse(promptListV1,raw)));}
