@@ -46,3 +46,10 @@ export const siteExtraLoggedV3 = z.object({
  evidence: z.object({ photoEvidenceId: uuid.nullable(), residentConfirmationEvidenceId: uuid.nullable(), contentFormat: z.literal(siteExtraContentFormatV1), contentSha256: lowerHash }).strict(),
 }).strict();
 export type SiteExtraLoggedV3 = z.infer<typeof siteExtraLoggedV3>;
+
+/** Free-text status is an operative statement, separate from pricing and visit timing. */
+export const logSiteExtraV4 = logSiteExtraV3.extend({
+ version: z.literal("log-site-extra.v4"), workStatus: z.enum(["not_started", "under_way", "finished"]),
+}).strict();
+export type LogSiteExtraV4 = z.infer<typeof logSiteExtraV4>;
+export const siteExtraLoggedV4 = siteExtraLoggedV3.extend({ version: z.literal("site-extra-logged.v4") }).strict();

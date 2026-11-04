@@ -160,6 +160,7 @@ export * from "./payment-fee-repository.js";
 export * from "./small-builder-demo-repository.js";
 export * from "./recovery-billability-repository.js";
 export * from "./managed-recovery-repository.js";
+export * from "./platform-tax-invoice-fixture-repository.js";
 export * from "./subscription-mandate-repository.js";
 export { reviewOfflineCommercialIntent } from "./offline-upload.js";
 export * from "./resumable-evidence.js";
@@ -170,6 +171,8 @@ export * from "./evidence-bundle-sources.js";
 export * from "./practice-photo-observation.js";
 export * from "./practice-proof-image.js";
 export * from "./value-business-reader.js";
+
+export { AccountingObservationReceiptRepository } from "./accounting-observation-receipt-repository.js";
 export * from "./small-builder-trial-demo-repository.js";
 export * from "./simulation-fee-statement-repository.js";
 export * from "./simulation-fee-collection-repository.js";
@@ -181,3 +184,6 @@ export { AccountingExportRepository, StoredAccountingExportError, storedAccounti
 export { ShadowDemoGuideRepository } from "./shadow-demo-guide-repository.js";
 
 export { importLateSource, readLateSourceObservations, readLateSources } from "./late-source-import.js";
+
+export * from "./financial-reconciliation-queue-repository.js";
+export * from "./money-trail-repository.js";

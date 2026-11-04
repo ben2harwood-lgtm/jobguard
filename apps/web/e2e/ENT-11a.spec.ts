@@ -64,6 +64,7 @@ test("the first contractor demo: operative logs an extra with photo and resident
   await expect(op.page.getByLabel("Job")).toContainText("NS-1-0001");
   await op.page.getByLabel("What is the extra work?").fill(description);
   await op.page.getByLabel("Note for the office").fill("Six more voids than the order listed; resident shown the photo.");
+  await op.page.getByRole("button", { name: "Finished", exact: true }).click();
   await op.page.getByRole("button", { name: "Attach practice photo" }).click();
   await expect(op.page.getByTestId("photo-attached")).toBeVisible();
   await op.page.getByLabel(/The resident has seen this/).check();
@@ -128,6 +129,8 @@ test("the first contractor demo: operative logs an extra with photo and resident
   await expect(cl.page.getByTestId("client-amount")).toHaveText(pounds(rate * 6));
   await expect(cl.page.getByTestId("client-description")).toHaveText(description);
   await expect(cl.page.getByTestId("client-company-approvals")).toContainText("supervisor");
+  await expect(cl.page.getByTestId("client-work-timing")).toContainText("no linked visit");
+  await expect(cl.page.getByTestId("client-work-timing")).toContainText("has not been derived");
   await expect(cl.page.getByTestId("actual-actor")).toContainText(ownerMember);
   await cl.page.getByRole("button", { name: "Approve this extra" }).click();
   await expect(cl.page.getByTestId("client-decided")).toContainText("approved");
@@ -198,7 +201,7 @@ test("hub GET fault injections: aborted transport, 503 and malformed JSON recove
         else await route.fulfill({ status: 200, contentType: "application/json", body: '{"broken":' });
       });
       await page.reload();
-      const alert = page.getByRole("alert").filter({ hasText: /^The practice could not be loaded\.$/ });
+      const alert = page.getByRole("main").getByRole("alert").filter({ hasText: /^The practice could not be loaded\.$/ });
       const retry = page.getByRole("button", { name: "Try again", exact: true });
       await expect(alert).toBeVisible();
       await expect(alert).toHaveText("The practice could not be loaded.");
