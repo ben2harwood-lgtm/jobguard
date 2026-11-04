@@ -1,7 +1,10 @@
 import { expect, test } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
-import { authorizePracticeJob, InboxMetricsRepository } from "@jobguard/db";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
+
+const loadDb = () => (new Function("specifier", "return import(specifier)") as (specifier: string) => Promise<typeof import("@jobguard/db")>)(pathToFileURL(join(process.cwd(), "../../packages/db/dist/index.js")).href);
 import { openLiveWatchdogJob } from "./helpers/capture-journey";
 import { E2E_RUNTIME_URL } from "./global-setup";
 
@@ -23,6 +26,7 @@ test("owner sees content-free outcomes, honest unknowns and uncapped mandatory b
   await expect(page.getByTestId("visible-advisory-count")).toHaveText("0");
 
   // Fixture setup goes through the existing durable metadata writer, never a new public write route.
+  const { authorizePracticeJob, InboxMetricsRepository } = await loadDb();
   const pool = new Pool({ connectionString: E2E_RUNTIME_URL, max: 1 });
   try {
     const token = (await page.context().cookies()).find(cookie => cookie.name === "jg_session")!.value;

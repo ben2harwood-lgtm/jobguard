@@ -28,12 +28,12 @@
         "packages/db/migrations/0700_inbox_metrics_store.sql",
         "packages/db/src/inbox-metrics-repository.ts",
         "packages/db/src/index.ts",
-        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
         "packages/db/test/inbox-metrics.integration.test.ts",
         "packages/db/test/inbox-metrics.test.ts",
         "packages/db/test/later-empty-tables.ts",
         "packages/db/test/migration-proofs/0699_scheduled_readiness_store.proof.json",
         "packages/db/test/migration-proofs/0700_inbox_metrics_store.proof.json",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
         "packages/db/test/readiness-store.integration.test.ts",
         "tools/supplier-benchmark.mjs"
       ]

@@ -10,7 +10,7 @@ import { closeTestPools, freePort } from "./pool-test-utils.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { importWatchdogFixtureJob } from "./watchdog-fixtures.js";
 import { DurableReadinessStore } from "../../../apps/api/src/readiness-store.js";
-import { DarkReadinessScheduler, type ScheduledPlan } from "../../../apps/api/src/readiness-scheduler.js";
+import { DarkReadinessScheduler, type ScheduledPlan, type ReadinessProposal } from "../../../apps/api/src/readiness-scheduler.js";
 import { refusedLiveReadinessAdapters } from "../../../apps/api/src/readiness-adapters.js";
 
 let pg: EmbeddedPostgres | undefined, admin: Pool, runtime: Pool;
@@ -20,7 +20,15 @@ const now = "2026-10-30T12:00:00.000Z", due = "2026-11-02T09:00:00.000Z";
 const plan: ScheduledPlan = { version: "readiness-scheduled-plan.v1", synthetic: true, scope, factRevision: 1,
   ruleRevision: "readiness-scheduled.v1", status: "confirmed", plannedDate: "2026-11-02", jurisdiction: "england-and-wales",
   localTime: "09:00", timeZone: "Europe/London", predecessors: [], edges: [], material: { requiredUnits: 1, landedUnits: 1 }, access: "unknown", crew: true };
-const store = () => new DurableReadinessStore(runtime, context, "synthetic_demo");
+const store = (verifiedContext = context) => {
+  const service = new DurableReadinessStore(runtime, "synthetic_demo");
+  return {
+    confirm: (raw: unknown, actor: string) => service.confirm(verifiedContext, actor, raw),
+    load: (raw: unknown) => service.load(verifiedContext, raw),
+    recordProposal: (raw: ReadinessProposal) => service.recordProposal(verifiedContext, raw),
+    proposals: (raw: unknown) => service.proposals(verifiedContext, raw),
+  };
+};
 const tableNames = ["scheduled_readiness_plan", "scheduled_readiness_proposal"];
 beforeAll(async () => {
   const databaseDir = await mkdtemp(join(tmpdir(), "jg-readiness-store-")), port = await freePort(59600, 100);
@@ -75,7 +83,7 @@ it("persists confirmed facts and unknown adapter outcomes across store/scheduler
   await expect(refusedLiveReadinessAdapters.weather({ scope, date: plan.plannedDate })).rejects.toThrow("READINESS_LIVE_DISABLED");
 });
 it("isolates tenant/job/task reads, denies cross-tenant writes and prevents runtime mutations", async () => {
-  const foreign = new DurableReadinessStore(runtime, testTenantContext(other), "synthetic_demo");
+  const foreign = store(testTenantContext(other));
   expect(await foreign.load(scope)).toBeNull(); expect(await foreign.proposals(scope)).toEqual([]);
   for (const changed of [{ ...scope, jobId: randomUUID() }, { ...scope, taskId: randomUUID() }]) {
     expect(await store().load(changed)).toBeNull(); expect(await store().proposals(changed)).toEqual([]);
