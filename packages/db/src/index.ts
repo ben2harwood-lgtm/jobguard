@@ -195,3 +195,4 @@ export * from "./ais-adapter.js";
 export * from "./ais-repository.js";
 
 export { withEvidencePackV3Snapshot } from "./evidence-pack-v3-sources.js";
+export * from "./rate-suggestion-repository.js";
