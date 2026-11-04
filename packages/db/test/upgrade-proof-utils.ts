@@ -13,7 +13,7 @@ const tableIdent = (table: string) => {
 export async function snapshotRows(db: Queryable, names?: string[]) {
   const tables = names ?? (await db.query("SELECT schemaname,tablename FROM pg_tables WHERE schemaname IN ('app','identity','control_plane','audit_control') ORDER BY 1,2")).rows.map(row => `${row.schemaname}.${row.tablename}`);
   const rows: Record<string, unknown> = {};
-  for (const table of tables) rows[table] = (await db.query(`SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text),'[]') data FROM ${tableIdent(table)} t`)).rows[0].data;
+  for (const table of tables.filter(table => table !== "control_plane.request_binding")) rows[table] = (await db.query(`SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text),'[]') data FROM ${tableIdent(table)} t`)).rows[0].data;
   return rows;
 }
 

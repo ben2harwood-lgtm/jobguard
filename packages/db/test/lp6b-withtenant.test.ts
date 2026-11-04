@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { afterEach, expect, it, vi } from "vitest";
-import { InvalidTenantContextError, verifiedTenantContextFromMembership, verifiedTenantContextForQueuedJob, withTenant, type AuthenticatedMembership } from "../src/tenant-context.js";
+import { InvalidTenantContextError, RequestBindingRefusedError, verifiedTenantContextFromMembership, verifiedTenantContextForQueuedJob, withTenant, type AuthenticatedMembership } from "../src/tenant-context.js";
 import { authenticatePracticeSession } from "../src/practice-session.js";
 import { resolveVerifiedTenantContext } from "../../../apps/api/src/auth/principal-bridge.js";
 import type { AuthProvider } from "../../../apps/api/src/auth/auth-provider.js";
@@ -48,7 +48,7 @@ it("rolls back and skips business work when revocation is discovered at bind", a
 it.each(["actor", "tenant"])("refuses a mismatched database-derived %s before callback", async key => {
   const m = member(), c = connection(m), work = vi.fn();
   c.query.mockImplementation(async sql => ({ rows: sql.includes("current_actor()") ? [{ actor: m.membershipId, tenant: m.tenantId, [key]: randomUUID() }] : [] }));
-  await expect(withTenant(c.pool, verifiedTenantContextFromMembership(m, { kind: "real", credential }), work)).rejects.toBeInstanceOf(InvalidTenantContextError);
+  await expect(withTenant(c.pool, verifiedTenantContextFromMembership(m, { kind: "real", credential }), work)).rejects.toBeInstanceOf(RequestBindingRefusedError);
   expect(work).not.toHaveBeenCalled(); expect(c.query.mock.calls.at(-1)?.[0]).toBe("ROLLBACK");
 });
 

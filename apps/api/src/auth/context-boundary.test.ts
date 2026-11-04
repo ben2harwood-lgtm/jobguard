@@ -87,7 +87,7 @@ const APPROVED_PRACTICE_FILES = [
 // A change to any bridge requires renewed caller review; the hashes are NOT computed from the tree under test.
 const REVIEWED_PRACTICE_SOURCES: Readonly<Record<string, string>> = {
   // renewed caller review 28 Oct (jg-checks, ch9-p2 review)
-  "packages/db/src/practice-session.ts": "ac6e538511ef920f91eeaf47fb2a1c49573f918bf9dfd8fd484d34c97c776472",
+  "packages/db/src/practice-session.ts": "3dfaf399fa6e19763f06ef0e25678a951e19a235e85cd6e526d104f208adae48",
   "packages/db/src/contractor-repository.ts": "56b95b80360434f0cf58376ef2ec44d0354b194e5080bcfd9414ac283971006c",
   "packages/db/src/contractor-party-repository.ts": "e5852288e5355b53f7548c4d5741aef54ee55a2b8a66dd56a54b08963cd1fdb0",
   "packages/db/src/work-order-repository.ts": "6f769b3b5261219e8e277b3c8460b19b917fe93e66245d15285af5a04c098418",

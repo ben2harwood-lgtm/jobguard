@@ -57,7 +57,7 @@ export type EvidencePackV3OrdinarySources = EvidencePackSources & {
   producerBindings: "held"; complete: false;
 };
 
-/** Set snapshot mode on BEGIN, before withTenant's transaction-local RLS query. */
+/** Establish the snapshot, bind while writable, then seal it before tenant setup or reads. */
 export function withEvidencePackV3Snapshot<T>(
   pool: Pool, context: VerifiedTenantContext, work: (tx: TenantTransaction) => Promise<T>,
 ): Promise<T> {
@@ -65,8 +65,11 @@ export function withEvidencePackV3Snapshot<T>(
     if (key === "connect") return async () => {
       const client = await target.connect();
       return new Proxy(client, { get(connection, property) {
-        if (property === "query") return (sql: string, values?: unknown[]) =>
-          connection.query(sql === "BEGIN" ? "BEGIN ISOLATION LEVEL REPEATABLE READ, READ ONLY" : sql, values);
+        if (property === "query") return async (sql: string, values?: unknown[]) => {
+          if (sql === "BEGIN") return connection.query("BEGIN ISOLATION LEVEL REPEATABLE READ");
+          if (sql === "SELECT set_config('app.tenant_id', $1, true)") await connection.query("SET TRANSACTION READ ONLY");
+          return connection.query(sql, values);
+        };
         const value = Reflect.get(connection, property);
         return typeof value === "function" ? value.bind(connection) : value;
       } });

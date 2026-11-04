@@ -13,8 +13,11 @@ it("establishes read-only repeatable-read before tenant setup in PostgreSQL", as
     expect((await tx.$client.query("SHOW transaction_read_only")).rows[0].transaction_read_only).toBe("on");
     expect((await tx.$client.query("SELECT current_setting('app.tenant_id') tenant_id")).rows[0].tenant_id).toBe(f.source.tenantId);
   });
-  expect(statements.slice(0, 2)).toEqual([
-    { sql: "BEGIN ISOLATION LEVEL REPEATABLE READ, READ ONLY", values: undefined },
+  expect(statements.slice(0, 5)).toEqual([
+    { sql: "BEGIN ISOLATION LEVEL REPEATABLE READ", values: undefined },
+    { sql: "SELECT app.bind_request($1, $2, $3)", values: ["practice", f.auth.digest, f.source.tenantId] },
+    { sql: "SELECT app.current_actor() actor, app.current_tenant() tenant", values: undefined },
+    { sql: "SET TRANSACTION READ ONLY", values: undefined },
     { sql: "SELECT set_config('app.tenant_id', $1, true)", values: [f.source.tenantId] },
   ]);
   expect(statements.at(-1)?.sql).toBe("COMMIT");

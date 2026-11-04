@@ -78,6 +78,12 @@ export class InvalidTenantContextError extends Error {
   }
 }
 
+/** Binding refusal carries a public code and no database detail or credential. */
+export class RequestBindingRefusedError extends Error {
+  readonly code = "FORBIDDEN";
+  constructor() { super("FORBIDDEN"); this.name = "RequestBindingRefusedError"; }
+}
+
 export type TenantTransaction = NodePgDatabase<typeof schema> & { $client: PoolClient };
 
 /**
@@ -89,21 +95,28 @@ export async function withTenant<T>(
   pool: Pool,
   context: VerifiedTenantContext,
   work: (database: TenantTransaction) => Promise<T>,
+  deferredBinding?: "identity-sso" | "identity-oidc" | "identity-sso-required" | "shadow-persist" | "audit-export-refusal",
 ): Promise<T> {
   if (!genuineTenantContexts.has(context) || typeof context.tenantId !== "string" || !UUID.test(context.tenantId)) {
     throw new InvalidTenantContextError();
   }
 
+  if (deferredBinding !== undefined && !["identity-sso", "identity-oidc", "identity-sso-required", "shadow-persist", "audit-export-refusal"].includes(deferredBinding)) throw new InvalidTenantContextError();
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
     const session = sessionReferences.get(context);
-    if (session) {
-      await client.query("SELECT app.bind_request($1, $2, $3)", [session.kind, session.credential, context.tenantId]);
+    if (session && deferredBinding === undefined) {
+      try {
+        await client.query("SELECT app.bind_request($1, $2, $3)", [session.kind, session.credential, context.tenantId]);
+      } catch (error) {
+        if ((error as { code?: string }).code === "42501") throw new RequestBindingRefusedError();
+        throw error;
+      }
       const bound = (await client.query<{ actor: string; tenant: string }>(
         "SELECT app.current_actor() actor, app.current_tenant() tenant",
       )).rows[0];
-      if (!bound || bound.actor !== session.membershipId || bound.tenant !== context.tenantId) throw new InvalidTenantContextError();
+      if (!bound || bound.actor !== session.membershipId || bound.tenant !== context.tenantId) throw new RequestBindingRefusedError();
     }
     // Compatibility for retained dark synthetic/queued callers and pre-LP-6c routines.
     // On session paths the database has already derived and checked the authority.
