@@ -132,3 +132,46 @@ facts to check that financial rows do not change. It is written for CI, not run
 in this database-free sandbox. Local unit checks cannot establish those database
 guarantees. Real rail, wiring, cross-rail reservations, refunds, notice/settings,
 mandate replacement/retries and production gates remain held. M4-15 is not finished.
+
+## Stored practice lifecycle screen (M4-15 still open)
+
+The session-only `/jobs/[id]/direct-debit-practice` page reads a server projection
+of durable fixture facts. GET never creates facts. Its POST accepts only a
+versioned server-issued step; it feeds one event through the signed fake rail's
+recorder port. Repeating a step replays that same event, including after refresh
+or a new application instance. No public webhook is added. The server derives
+one fictional mandate and four fictional requests per tenant/job; the client
+cannot choose tenant, account, mandate, object, amount, event or signature. The
+short sequence includes request, submission, failure, a retry example,
+confirmation, payout, chargeback, payment cancellation, late failure and mandate
+revocation. These are fictional event facts, never collection execution or retry
+authority. The ephemeral fake signing material stays on the server.
+
+The caller authenticates the persisted practice session and supplies its verified
+context and actor. Application authorization rechecks immutable job ownership
+before any fixture read or replay. Foreign-company and unreadable jobs have the
+same not-found response. POST uses the existing configured browser-origin gate;
+all responses are no-store. The client displays server labels and stored order,
+with the latest fact marked current and a separate current state per payment.
+Requested/submitted/confirmed never mean payout. The stored mandate projection
+reports that cancelled/revoked mandates block new collection; this slice adds no
+collection capability. Responses contain no raw events, bank details, bindings,
+account IDs or signing material.
+
+No migration, grants, SDK, real endpoint, financial writes, executor, reservations,
+refunds, mandate replacement, notices, worker or scheduler changed. The real rail,
+cross-rail balance guarantee, notices and G0–G5 release gates remain open/closed
+as before; this does not finish M4-15. CI must run the new real-PostgreSQL
+application test and the headless mobile-360/desktop browser spec (both saved API
+and transport rendering cases). Local unit/type checks are not database/browser
+proof or independent RED review. NOPR; the router owns commit/push and later review.
+
+Local verification for this screen: installed Vitest passed 5 application tests,
+11 existing recorder/rail tests, 4 route/render tests, 278 watchdog-registry /
+context-boundary / identity tests, and 76 migration-proof-loader tests, each run
+with at most two workers and three named files. Direct installed TypeScript
+checks passed API, web, core and DB; lane lint and `git diff --check` passed.
+Root `turbo typecheck --concurrency=2` stalled in its pnpm subprocesses with no
+completed task for about 100 seconds and was interrupted; that is not a full
+workspace typecheck pass. No database, browser, build, deployment or provider was
+run here. CI must prove the remaining suites, including Cloudflare bundling.
