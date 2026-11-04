@@ -1,0 +1,193 @@
+{
+  "migration": "0790_member_administration.sql",
+  "lp0": [
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "id": "a-lp7-member-administration",
+        "title": "LP-7 identity member administration",
+        "kind": "identity",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Ben authorized built-ahead LP-7 on 4 November; no landing or independent security review implied."
+        },
+        "path": "ap-lp7-member-administration",
+        "downstream": "Identity-only member removal and role changes. Session authority is bound after tenant revocation lock; no owner creation, business-runtime grants or provider effects.",
+        "cards": [
+          "LP-7",
+          "LP-6e",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-7": "Session-derived owner administration, last-owner protection and atomic audit.",
+          "LP-6e": "Trusted bound actor attribution at audit seal.",
+          "LP-12": "Review identity entry-point definer custody."
+        },
+        "sources": [
+          "packages/db/migrations/0790_member_administration.sql",
+          "apps/api/src/auth/identity.application.ts"
+        ],
+        "tests": [
+          "packages/db/test/lp7-member-administration.integration.test.ts",
+          "apps/api/src/auth/member-administration.test.ts"
+        ],
+        "gaps": [
+          "Built ahead without LP-6d/LP-6e; PostgreSQL CI and independent exact-head RED review required."
+        ]
+      }
+    },
+    {
+      "section": "authorityPaths",
+      "before": null,
+      "after": {
+        "id": "ap-lp7-member-administration",
+        "title": "LP-7 identity member administration",
+        "description": "Identity-only member removal and role changes. Session authority is bound after tenant revocation lock; no owner creation, business-runtime grants or provider effects.",
+        "cards": [
+          "LP-7",
+          "LP-6e",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-7": "Session-derived owner administration, last-owner protection and atomic audit.",
+          "LP-6e": "Trusted bound actor attribution at audit seal.",
+          "LP-12": "Review identity entry-point definer custody."
+        },
+        "sources": [
+          "packages/db/migrations/0790_member_administration.sql",
+          "apps/api/src/auth/identity.application.ts"
+        ],
+        "tests": [
+          "packages/db/test/lp7-member-administration.integration.test.ts",
+          "apps/api/src/auth/member-administration.test.ts"
+        ],
+        "gaps": [
+          "Built ahead without LP-6d/LP-6e; PostgreSQL CI and independent exact-head RED review required."
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:identity.member_remove(character,uuid,uuid)|jobguard_identity|EXECUTE|-",
+        "group": "a-lp7-member-administration"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:identity.member_remove(character,uuid,uuid)|jobguard_migration",
+        "group": "a-owner-routines"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:identity.member_remove(character,uuid,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_identity"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.membership",
+          "app.role_grant_revocation"
+        ],
+        "staticCalls": [
+          "app.bind_request",
+          "app.current_actor",
+          "app.lp4_seal_audit"
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:identity.member_change_role(character,uuid,uuid,text)|jobguard_identity|EXECUTE|-",
+        "group": "a-lp7-member-administration"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:identity.member_change_role(character,uuid,uuid,text)|jobguard_migration",
+        "group": "a-owner-routines"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:identity.member_change_role(character,uuid,uuid,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_identity"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.membership",
+          "app.role_grant_revocation"
+        ],
+        "staticCalls": [
+          "app.bind_request",
+          "app.current_actor",
+          "app.lp4_seal_audit"
+        ]
+      }
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "identity",
+        "proname": "member_remove",
+        "args": "p_session_digest character, p_tenant uuid, p_target uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_identity=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "identity",
+        "proname": "member_change_role",
+        "args": "p_session_digest character, p_tenant uuid, p_target uuid, p_role text",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_identity=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    }
+  ],
+  "tenancy": []
+}

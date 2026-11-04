@@ -1,12 +1,19 @@
 import { randomBytes, randomUUID, createHash } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
-import type { PoolClient } from "pg";
-import { jobDoorsActor, jobDoorsDatabase, type JobDoorsDatabase } from "./lp-job-doors-fixtures.js";
+import { Pool, type PoolClient } from "pg";
+import { jobDoorsActor } from "./lp-job-doors-fixtures.js";
+import { startLp0Database, RUNTIME_TEST_PASSWORD } from "./lp-0-catalog.js";
 import { ActionExecutor } from "../src/outbox.js";
 import { verifiedTenantContextForQueuedJob } from "../src/tenant-context.js";
 
-let db: JobDoorsDatabase;
-beforeAll(async () => { db = await jobDoorsDatabase(true); }, 300_000);
+let db: { owner: Pool; runtime: Pool; close(): Promise<void> };
+beforeAll(async () => {
+  const fixture = await startLp0Database(62700);
+  await fixture.bootstrapRuntimeLogin();
+  const runtime = new Pool({host:"127.0.0.1",port:fixture.port,database:fixture.databaseName,
+    user:"jobguard_runtime",password:RUNTIME_TEST_PASSWORD,max:2});
+  db = {owner:fixture.admin,runtime,async close() { await runtime.end(); await fixture.stop(); }};
+}, 300_000);
 afterAll(async () => { await db?.close(); });
 const refusal = { code: "42501", message: "MEMBER_ADMIN_REFUSED" };
 async function member(tenant?: string, role = "owner") {
@@ -90,6 +97,7 @@ it("removal rejects the very next bind; demotion rejects stale privileged admini
   await administration(a,b);
   await expect(db.runtime.query("SELECT app.bind_request('real',$1,$2)",[b.digest,b.tenant])).rejects.toMatchObject({code:"42501",message:"REQUEST_BINDING_REFUSED"});
   await administration(a,c,"finance");
+  await db.runtime.query("SELECT app.bind_request('real',$1,$2)",[c.digest,c.tenant]);
   await expect(administration(c,a)).rejects.toMatchObject(refusal);
   const audit=await events(a);
   expect(audit).toHaveLength(2);
@@ -129,12 +137,20 @@ it.each([undefined,"read_only"])("keeps preapproved invitations valid and preven
   expect(deliver).not.toHaveBeenCalled();
   expect((await db.owner.query("SELECT status FROM app.action_outbox WHERE tenant_id=$1 AND id=$2",[b.tenant,outbox])).rows[0].status).toBe("pending");
   expect((await db.owner.query("SELECT count(*)::int n FROM app.action_attempt WHERE tenant_id=$1 AND action_id=$2",[b.tenant,outbox])).rows[0].n).toBe(0);
-  // Existing invitation contract checks immutable grant/expiry, not the issuer's current role.
+  // Finance invitations keep their immutable grant; operative invitations recheck the issuer.
   const challenge=randomUUID();
   await db.owner.query("INSERT INTO identity.challenge(id,email,purpose,invitation_id,digest,requested_at,expires_at,consumed_at,verified) VALUES($1,$2,'invitation',$3,$4,clock_timestamp(),clock_timestamp()+interval '1 hour',clock_timestamp(),true)",[challenge,recipient,invitation,'a'.repeat(64)]);
   const person=(await db.owner.query("SELECT identity.provision_verified_challenge($1) id",[challenge])).rows[0].id;
   expect(person).toBeTruthy();
   expect((await db.owner.query("SELECT role FROM app.membership WHERE tenant_id=$1 AND identity_user_id=$2",[b.tenant,person])).rows[0].role).toBe("finance");
+  // Owner fixture represents an operative grant issued while b was still an owner.
+  // Current MON-8 acceptance must refuse it after revocation/demotion, before entitlement.
+  const operativeInvitation=randomUUID(), operativeChallenge=randomUUID();
+  const operativeRecipient=`${randomUUID()}@fictional.invalid`;
+  await db.owner.query("INSERT INTO identity.invitation(id,email,tenant_id,account_id,role,expires_at,issuer_user_id) VALUES($1,$2,$3,$4,'operative',clock_timestamp()+interval '1 hour',$5)",[operativeInvitation,operativeRecipient,b.tenant,b.account,b.person]);
+  await db.owner.query("INSERT INTO identity.challenge(id,email,purpose,invitation_id,digest,requested_at,expires_at,consumed_at,verified) VALUES($1,$2,'invitation',$3,$4,clock_timestamp(),clock_timestamp()+interval '1 hour',clock_timestamp(),true)",[operativeChallenge,operativeRecipient,operativeInvitation,'b'.repeat(64)]);
+  expect((await db.owner.query("SELECT identity.provision_verified_challenge($1) id",[operativeChallenge])).rows[0].id).toBeNull();
+  expect((await db.owner.query("SELECT accepted_at FROM identity.invitation WHERE id=$1",[operativeInvitation])).rows[0].accepted_at).toBeNull();
 });
 
 it("refuses snapshot isolation that could retain authority from before the tenant lock", async () => {
@@ -160,4 +176,19 @@ it("exposes only the two identity entry points with fixed paths and no runtime w
   const a=await member(), b=await member(a.tenant);
   await expect(invoke(db.runtime,a,b,"finance")).rejects.toMatchObject({code:"42501"});
   await expect(administration({...a,digest:'f'.repeat(64)},b)).rejects.toMatchObject(refusal);
+});
+
+
+it("refuses substituting an owner session into an already bound transaction", async () => {
+  const a=await member(), b=await member(a.tenant), target=await member(a.tenant,"finance");
+  const c=await db.owner.connect();
+  try {
+    await c.query("BEGIN");
+    await c.query("SELECT app.bind_request('real',$1,$2)",[b.digest,b.tenant]);
+    await c.query("SET LOCAL ROLE jobguard_identity");
+    await expect(invoke(c,a,target)).rejects.toMatchObject({code:"42501",message:"REQUEST_BINDING_REFUSED"});
+    await c.query("ROLLBACK");
+    expect((await db.owner.query("SELECT revoked_at FROM app.membership WHERE tenant_id=$1 AND id=$2",[target.tenant,target.member])).rows[0].revoked_at).toBeNull();
+    expect(await events(a)).toHaveLength(0);
+  } finally { await c.query("ROLLBACK"); c.release(); }
 });

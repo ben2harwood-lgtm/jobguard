@@ -18,10 +18,14 @@ BEGIN
  SELECT * INTO auth_session FROM identity.session s WHERE s.token_digest=p_session_digest
   AND s.environment='synthetic_demo' AND s.revoked_at IS NULL AND s.expires_at>clock_timestamp() FOR SHARE;
  IF NOT FOUND THEN RAISE EXCEPTION 'MEMBER_ADMIN_REFUSED' USING ERRCODE='42501'; END IF;
- SELECT m.id INTO actor FROM identity.sso_session_memberships(auth_session.user_id,auth_session.id) m
-  WHERE m.tenant_id=p_tenant AND m.role='owner';
+ -- Bind only after the revocation lock; LP-6e can trust the same transaction actor.
+ PERFORM app.bind_request('real',p_session_digest,p_tenant);
+ actor:=app.current_actor();
  PERFORM set_config('app.tenant_id',p_tenant::text,true);
- IF actor IS NULL THEN RAISE EXCEPTION 'MEMBER_ADMIN_REFUSED' USING ERRCODE='42501'; END IF;
+ IF actor IS NULL OR NOT EXISTS(SELECT 1 FROM app.membership m
+  WHERE m.tenant_id=p_tenant AND m.id=actor AND m.role='owner') THEN
+  RAISE EXCEPTION 'MEMBER_ADMIN_REFUSED' USING ERRCODE='42501';
+ END IF;
  SELECT * INTO target_member FROM app.membership m WHERE m.tenant_id=p_tenant AND m.id=p_target
   AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp())
   AND NOT EXISTS(SELECT 1 FROM app.contractor_membership_revocation r
@@ -71,10 +75,14 @@ BEGIN
  SELECT * INTO auth_session FROM identity.session s WHERE s.token_digest=p_session_digest
   AND s.environment='synthetic_demo' AND s.revoked_at IS NULL AND s.expires_at>clock_timestamp() FOR SHARE;
  IF NOT FOUND THEN RAISE EXCEPTION 'MEMBER_ADMIN_REFUSED' USING ERRCODE='42501'; END IF;
- SELECT m.id INTO actor FROM identity.sso_session_memberships(auth_session.user_id,auth_session.id) m
-  WHERE m.tenant_id=p_tenant AND m.role='owner';
+ -- Bind only after the revocation lock; LP-6e can trust the same transaction actor.
+ PERFORM app.bind_request('real',p_session_digest,p_tenant);
+ actor:=app.current_actor();
  PERFORM set_config('app.tenant_id',p_tenant::text,true);
- IF actor IS NULL THEN RAISE EXCEPTION 'MEMBER_ADMIN_REFUSED' USING ERRCODE='42501'; END IF;
+ IF actor IS NULL OR NOT EXISTS(SELECT 1 FROM app.membership m
+  WHERE m.tenant_id=p_tenant AND m.id=actor AND m.role='owner') THEN
+  RAISE EXCEPTION 'MEMBER_ADMIN_REFUSED' USING ERRCODE='42501';
+ END IF;
  SELECT * INTO target_member FROM app.membership m WHERE m.tenant_id=p_tenant AND m.id=p_target
   AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp())
   AND NOT EXISTS(SELECT 1 FROM app.contractor_membership_revocation r

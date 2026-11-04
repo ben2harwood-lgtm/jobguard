@@ -8,7 +8,7 @@ import type { IdentityHttpRequest } from "./identity-http.js";
 const tenant=randomUUID(), target=randomUUID(), user=randomUUID(), actor=randomUUID();
 function fixture() {
   const query=vi.fn().mockResolvedValue({rows:[{result:{version:"member-administration-result.v1",membershipId:target,auditId:randomUUID()}}]});
-  const authenticate=vi.fn().mockResolvedValue({identityUserId:user,sessionId:randomUUID(),csrfToken:"fictional-csrf-token-1234567890"});
+  const authenticate=vi.fn().mockResolvedValue({identityUserId:user,sessionId:randomUUID(),csrfToken:"fictional-csrf-token-1234567890",sessionCredential:"a".repeat(64)});
   const findMembership=vi.fn().mockResolvedValue({id:actor,identityUserId:user,tenantId:tenant,role:"owner"});
   const digest=vi.fn(()=>"a".repeat(64));
   const app=new IdentityApplication({authenticate,findMembership,digest,repository:{pool:{query}}} as unknown as PersistedAuthProvider,"https://jobguard.invalid");
