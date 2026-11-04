@@ -1,7 +1,7 @@
 import type { Pool } from "pg";
 import { z } from "zod";
 import { ContractorPracticeSessionError, contractorPracticeSessionRevokedV1 } from "@jobguard/core";
-import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
+import { RequestBindingRefusedError, withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 import { appendAuditBatch } from "./audit.js";
 import { derivedUuid } from "./work-order-repository.js";
 const routineAnswer = z.object({ session: z.guid({ error: "Invalid uuid" }), member: z.guid({ error: "Invalid uuid" }), revokedAt: z.iso.datetime({ precision: 6, error: "Invalid datetime" }) }).strict();
@@ -23,6 +23,7 @@ export class ContractorPracticeSessionRepository {
     return contractorPracticeSessionRevokedV1.parse({ version: "contractor-practice-session-revoked.v1", environment: "synthetic_demo", realExternalActions: 0, revokedAt: result.revokedAt });
    });
   } catch (error) {
+   if (error instanceof RequestBindingRefusedError) throw new ContractorPracticeSessionError("UNAUTHENTICATED");
    const message = error instanceof Error ? error.message : undefined;
    throw new ContractorPracticeSessionError(message === "MODE_FORBIDDEN" || message === "UNAUTHENTICATED" ? message : "PRACTICE_SESSION_UNAVAILABLE");
   }
