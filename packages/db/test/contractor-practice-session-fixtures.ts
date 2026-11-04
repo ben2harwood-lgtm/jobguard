@@ -26,7 +26,8 @@ export async function startBeforeMigration(name = migrationName, database?: stri
   await c.admin.query(await readFile(url, "utf8"));
   await c.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)", [entry]);
  }
- if (name !== "0562_lp6a_request_binding.sql") await applyRequestBindingFoundation(c.admin);
+ // 0150 seeds without a session bridge and proves the exact predecessor list.
+ if (name !== "0562_lp6a_request_binding.sql" && name !== "0150_membership_authority_fix.sql") await applyRequestBindingFoundation(c.admin);
  await seedHomeOwner(c); return c;
 }
 export async function applyMigration(c: Cluster, name = migrationName) {

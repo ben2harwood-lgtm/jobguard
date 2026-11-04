@@ -1,6 +1,9 @@
 import { ArgumentsHost, Catch, type ExceptionFilter } from "@nestjs/common";
-import { PracticeAccessError } from "@jobguard/db";
-@Catch(PracticeAccessError)
+import { PracticeAccessError, RequestBindingRefusedError } from "@jobguard/db";
+@Catch(PracticeAccessError, RequestBindingRefusedError)
 export class PracticeErrorsFilter implements ExceptionFilter {
- catch(error:PracticeAccessError,host:ArgumentsHost){host.switchToHttp().getResponse().status(error.code==="UNAUTHENTICATED"?401:error.code==="NOT_FOUND"?404:403).json({code:error.code});}
+ catch(error:PracticeAccessError|RequestBindingRefusedError,host:ArgumentsHost){
+  const code=error instanceof RequestBindingRefusedError?(error.sessionKind==="practice"?"UNAUTHENTICATED":"FORBIDDEN"):error.code;
+  host.switchToHttp().getResponse().status(code==="UNAUTHENTICATED"?401:code==="NOT_FOUND"?404:403).json({code});
+ }
 }
