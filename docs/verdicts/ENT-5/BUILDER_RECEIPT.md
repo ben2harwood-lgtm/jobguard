@@ -442,3 +442,75 @@ Builder receipt only; not independently reviewed or accepted.
 - First real database run (the sandbox could not start PostgreSQL before; embedded-postgres dylib symlinks hydrated locally): ENT-5's own tests needed three fixes, all in ENT-5's own new test files: fixtures read a retired `session_id` column (now use the fixture's tenant context like neighbouring tests); two specimen UPDATEs violated `evidence_upload_state_ck` (pending now clears `server_verified_at`, rejected sets a `rejection_code`); fresh pool copied runtime options without a password. No merged test or expectation changed.
 - Card vs main: ENT-5 remains the foundation only (two tables, pure evaluators, source loaders). It adds no command, queue, escalation job, client link/page or outbox send, so Ben decision 18 (outbox owner-only sends), the 0153/0155 quote re-acceptance and variation/final-account changes, and the 0144 work-state guards are not touched. The card's commands, queues, client approval and the outbox request remain unbuilt (held under Q01-Q16); the client approval request through the outbox must be built later against main's outbox rules.
 - Checks (all through heavy-slot, maxWorkers=2): core `extra-approval|extra-client-approval|extra-evidence-pack` tests 21 passed; db `extra-approval-authority|extra-evidence-packs|extra-approval-upgrade` 13 passed; db `lp-0-authority-paths|lp-0-grant-freeze` 19 passed; db `tenancy|site-extra-evidence|evidence-packs` 44 passed; `typecheck` and `lint` for core and db exit 0; core-purity, money-arithmetic lints pass; `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs` passed.
+
+## ENT-5 duplicate dismissal — 4 November 2026, NOPR on batch-15
+
+READY. RED: approval authority, tenant isolation, and billing-export eligibility.
+Base: codex/sandbox/batch-15 at 0fac585a92c88dd39d212726b913e557eb75d257;
+branch codex/sandbox/ent-5-dismiss. No unfinished merge was present. No Git writes,
+push, PR, real customer data, provider action or release was performed.
+
+Implemented the issued supervisor/surveyor/commercial_manager ruling, requiring a
+covering grant and refusing reporters/pricers of any member. The checked writer
+resolves the persisted session inside SQL. The strict route rejects actor, tenant,
+job and role injection and requires trusted origin. The candidates screen offers
+a reason-required Not duplicates button, using the exact returned fingerprint.
+
+Migration 0910 adds one private append-only forced-RLS disposition table, one
+checked writer, and shared raw/unresolved group readers. Existing list and export
+refusal use the same unresolved reader. Snapshots bind all members, canonical
+identities and immutable revision IDs/hashes/bindings. A new member or revision
+raises the group again; a new reopen fact reverses dismissal. No existing table
+gets columns and no function uses a SET app.* clause. Prices, approvals, origins,
+links and export facts are untouched by dismissal. Existing job lock 417 orders
+new captures/revisions, dismissals and exports; tenant fence 54 orders revocation.
+The receipt and audit are atomic with the fact; the audit head is the final
+contending lock. Replay writes nothing. The command and route are classified.
+
+The proof includes exact catalogue/ACL/RLS/registry changes and the named
+cb_unresolved predecessor-body exception. Its full registry row snapshot is
+required by the existing upgrade-proof format; it is not a new registry or
+reporting mechanism. Forward fix through a successor migration; preserve all
+immutable facts. An application rollback may leave this unused additive feature
+installed; do not restore broad runtime receipt writes or remove recorded facts.
+
+Local validation (installed tools only, at most two workers, at most three named
+Vitest files per run):
+
+- TypeScript: packages/core, packages/db, apps/api and apps/web --noEmit pass.
+- DB Vitest: src/extra-duplicate-candidates.test.ts and
+  test/migration-proof-loader.test.ts: 80 tests pass.
+- Web Vitest: duplicate-candidates/route.test.ts and transport.test.ts:
+  6 tests pass (including the new dismissal route).
+- API Vitest: watchdog-registry.test.ts, auth/context-boundary.test.ts and
+  auth/identity.test.ts: 278 tests pass.
+- git diff --check passes. The exported lane path and migration-order validators
+  pass: the manifest exactly equals all 19 non-lane paths changed from batch-15.
+  The official lane command with LANE_BASE_REF=codex/sandbox/batch-15 refuses a
+  self-comparison because this uncommitted HEAD is still the batch-15 base.
+
+The pnpm wrapper stalled before running checks; those invocations were stopped.
+The existing installed .bin/tsc and .bin/vitest runners were used directly after
+compiling workspace dependencies. No package install command was used. PostgreSQL and
+browser suites were not run: this sandbox cannot start PostgreSQL or bind localhost.
+
+### Named holds for landing
+
+- Router must commit/push this NOPR branch and integrate in batch order against
+  current main, preserving/reserving migration 0910 (renumber only if landing
+  allocation requires it, with the proof references updated together).
+- The router must rerun the official lane command after committing (before any
+  landing claim); the local manifest check is not an official lane PASS.
+- Exact-head CI must prove fresh/upgrade/catalogue/RLS/privilege and migration
+  suites, including plan-entitlement-lifecycle-upgrade and serious-b5-upgrade.
+- PostgreSQL must execute extra-duplicate-candidates.integration.test.ts:
+  self-dismissal, forged/missing/foreign sessions and bodies, wrong tenant and
+  grants/roles, inert replay/conflict, concurrent replay, revision invalidation,
+  new-extra race, exact-group exclusion, reversal, immutable facts and unchanged
+  commercial records, approved export lines, and all other groups still blocking.
+- Browser CI must execute ENT-5-duplicate-candidates.spec.ts at mobile-360 and
+  desktop, including reason-required dismissal, stale/self refusal and refresh.
+- Independent RED review must PASS on the exact landing head, and required CI
+  must be green. This builder receipt is not that review or an acceptance.
+
+No open product-policy decision remains for this issued synthetic leaf.
