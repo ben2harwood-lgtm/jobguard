@@ -18,3 +18,18 @@ describe("privacy boundaries", () => {
     expect(privacyCommandV1.safeParse({ ...value, expectedRevision: -1 }).success).toBe(false);
   });
 });
+
+describe("expanded DSAR boundaries", () => {
+  it("requires versioned exact review evidence and keeps legacy commands narrow", async () => {
+    const { privacyCommand, privacyCommandV2 } = await import("./privacy-operations.js");
+    const review = { version: "privacy-command.v2", action: "review", commandId: uuid, requestId: uuid, expectedRevision: 1,
+      identityRef: uuid, authorityRef: uuid, retentionReviewRef: uuid, reviewHash: "b".repeat(64) };
+    expect(privacyCommand.safeParse(review).success).toBe(true);
+    for (const key of ["identityRef", "authorityRef", "retentionReviewRef", "reviewHash"]) {
+      expect(privacyCommandV2.safeParse({ ...review, [key]: undefined }).success).toBe(false);
+    }
+    expect(privacyCommandV2.safeParse({ ...review, tenantId: uuid }).success).toBe(false);
+    expect(privacyCommandV1.safeParse({ ...open, operation: "offboard" }).success).toBe(false);
+    expect(privacyCommandV2.safeParse({ ...open, version: "privacy-command.v2", operation: "offboard" }).success).toBe(true);
+  });
+});

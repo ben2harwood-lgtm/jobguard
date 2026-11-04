@@ -4,6 +4,7 @@ import { afterAll,beforeAll,expect,it,vi } from "vitest";
 import { ActionExecutor, type OutboundAdapter } from "../src/outbox.js";
 import { RecoveryAttributionRepository } from "../src/recovery-attribution-repository.js";
 import { SimulationFeeStatementRepository } from "../src/simulation-fee-statement-repository.js";
+import { recoveryFeeFixture } from "./success-fee-recovery-fixture.js";
 import { catchFeeFixture } from "./success-fee-catch-fixture.js";
 import { realReceiptFixture } from "./stored-receipt-case-fixture.js";
 import { createFinalCheckFixture,closeFinalCheckFixture,finalCheckTenant,type FinalCheckFixture } from "./final-check-fixture.js";
@@ -191,4 +192,42 @@ it.each([10000,30000])("after 0522, a £500 reversal with live B=%ip cannot offs
   expect(snapshot).toMatchObject({feePence:1000,qualifyingPrincipal:{numerator:"10000",denominator:"1"}});
   expect(snapshot.feePence-6000).toBe(-5000); // £50 correction; reviewed B retains exactly £10.
  }
+});
+
+it("the statement writer refuses a settled movement reverted to pending with its original source hash intact",async()=>{
+ const x=await recoveryFeeFixture(f);await x.allocate(0);await x.approve(await x.review());
+ const movement=(await f.admin.query(`SELECT e.* FROM app.practice_feed_event e
+  JOIN app.recovery_case_allocation a ON(a.tenant_id,a.job_id,a.movement_id)=(e.tenant_id,e.job_id,e.id)
+  WHERE a.tenant_id=$1 AND a.job_id=$2 AND a.payment_id=$3`,[x.context.tenantId,x.jobId,x.payments[0]])).rows[0];
+ expect(movement.state).toBe("settled");
+ // Owner-only fault injection: change only state, retaining the genuine allocation/hash binding.
+ // Roll back the whole attack, including trigger DDL; execute the real writer on that connection.
+ await rolledBack(f.admin,async db=>{
+  await db.query("SELECT set_config('app.tenant_id',$1,true)",[x.context.tenantId]);
+  await db.query("SELECT set_config('app.practice_material_digest',$1,true)",[x.auth.digest]);
+  // The catalogue tuple CHECK normally forbids this state regression. Remove that one
+  // check only inside this rolled-back owner attack so the writer's independent guard is tested.
+  const tuple=(await db.query("SELECT pg_get_constraintdef(oid) definition FROM pg_constraint WHERE conrelid='app.practice_feed_event'::regclass AND conname='practice_feed_event_check2'")).rows[0];
+  for(const column of ["event_kind","state","identity","representation_id"])expect(tuple.definition).toContain(column);
+  await db.query("ALTER TABLE app.practice_feed_event DROP CONSTRAINT practice_feed_event_check2");
+  await db.query("ALTER TABLE app.practice_feed_event DISABLE TRIGGER USER");
+  await db.query("UPDATE app.practice_feed_event SET state='pending' WHERE tenant_id=$1 AND id=$2",[x.context.tenantId,movement.id]);
+  await db.query("ALTER TABLE app.practice_feed_event ENABLE TRIGGER USER");
+  expect((await db.query("SELECT * FROM app.practice_feed_event WHERE tenant_id=$1 AND id=$2",[x.context.tenantId,movement.id])).rows)
+   .toEqual([{...movement,state:"pending"}]);
+  const counts=async()=> (await db.query(`SELECT
+   (SELECT count(*)::int FROM app.platform_fee_statement WHERE tenant_id=$1) statements,
+   (SELECT count(*)::int FROM app.platform_fee_statement_command WHERE tenant_id=$1) commands,
+   (SELECT count(*)::int FROM app.decision WHERE tenant_id=$1) decisions`,[x.context.tenantId])).rows;
+  const before=await counts();
+  await db.query("SET LOCAL ROLE jobguard_runtime");
+  await db.query("SAVEPOINT pending_movement");
+  await expect(db.query("SELECT app.write_platform_fee_statement($1,$2,$3::jsonb)",[x.jobId,x.auth.digest,issue()]))
+   .rejects.toThrow("SUCCESS_FEE_SOURCE_CHANGED");
+  await db.query("ROLLBACK TO SAVEPOINT pending_movement");
+  await db.query("RESET ROLE");
+  expect(await counts()).toEqual(before);
+ });
+ // Positive control rules out refusal from an unrelated fixture failure.
+ expect((await repo.command(x.context,x.jobId,x.auth.digest,issue())).statementId).toEqual(expect.any(String));
 });

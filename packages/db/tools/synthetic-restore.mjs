@@ -69,7 +69,9 @@ function practicePng() {
 }
 
 /** The API parameter is the real db package: source in Vitest, compiled package in the CLI. */
-export async function runSyntheticRestoreRehearsal(options = {}, api) {
+// Optional in-process fixture hooks let integration tests populate another synthetic
+// database in this same cold-copied cluster. They are never CLI/options inputs.
+export async function runSyntheticRestoreRehearsal(options = {}, api, fixture) {
   if (!options || typeof options !== "object" || Array.isArray(options) || Object.keys(options).some(key => key !== "environment")) throw new Error("REHEARSAL_OPTIONS_REFUSED");
   const environment = Object.hasOwn(options, "environment") ? options.environment : "synthetic_demo";
   requiredMode(environment);
@@ -84,7 +86,7 @@ export async function runSyntheticRestoreRehearsal(options = {}, api) {
   const source = new EmbeddedPostgres({ ...clusterOptions, databaseDir: sourcePath, port: sourcePort });
   const restored = new EmbeddedPostgres({ ...clusterOptions, databaseDir: restoredPath, port: restoredPort });
   const pools = new Set();
-  const pool = (port, user = "postgres") => { const p = new Pool({ host: "127.0.0.1", port, user, password, database: "postgres", max: 4 }); pools.add(p); return p; };
+  const pool = (port, user = "postgres", database = "postgres") => { const p = new Pool({ host: "127.0.0.1", port, user, password, database, max: 4 }); pools.add(p); return p; };
   const closePools = async () => { await Promise.all([...pools].map(p => p.end())); pools.clear(); await new Promise(ok => setTimeout(ok, 25)); };
   const pass = (id, detail) => checks.push({ id, status: "PASS", detail });
   const ids = Object.fromEntries(["tenant", "otherTenant", "identity", "account", "member", "job", "otherJob", "scope", "quote", "draft", "revision", "variation"].map(name => [name, randomUUID()]));
@@ -97,7 +99,8 @@ export async function runSyntheticRestoreRehearsal(options = {}, api) {
     let admin = pool(sourcePort);
     const postgresVersion = (await admin.query("SHOW server_version")).rows[0].server_version;
     assert.match(postgresVersion, /^16\./);
-    // Match bootstrap's administrative prerequisites before current migrations.
+    // Match current migration prerequisites in this disposable cluster. These
+    // non-login writer roles never become runtime credentials or memberships.
     for (const role of ["jobguard_audit_writer", "jobguard_command_writer"]) {
       await admin.query(`DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='${role}') THEN
         CREATE ROLE ${role} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
@@ -195,6 +198,7 @@ export async function runSyntheticRestoreRehearsal(options = {}, api) {
       actionIds.push(actionId);
     }
     const sourceOrigin = await createBuilderOrigin(runtime, ids.variation);
+    await fixture?.beforeBackup({ admin, postgres: source, directory: sourcePath, pool: (user, database) => pool(sourcePort, user, database) });
     // The snapshot covers every row, including money/audit/control metadata, not only the examples above.
     const tables = (await admin.query("SELECT schemaname,tablename FROM pg_tables WHERE schemaname IN ('app','audit_control','identity','control_plane','infrastructure','public') AND tablename NOT LIKE 'pg_%' ORDER BY schemaname,tablename")).rows;
     const quote = identifier => '"' + identifier.replaceAll('"', '""') + '"';
@@ -227,6 +231,8 @@ export async function runSyntheticRestoreRehearsal(options = {}, api) {
     pass("corrupt-backup-refused", "A modified backup fails SHA-256 verification before any restore starts.");
     await rename(sourcePath, join(root, "original-offline"));
     const restoreStart = performance.now();
+    const dependencyMeasurements = {};
+    const measured = name => { dependencyMeasurements[name] = { status: "exercised", recoveryMilliseconds: performance.now() - restoreStart, dataLossMilliseconds: 0, boundary: "quiescent synthetic cold snapshot; no post-backup writes" }; };
     await copyStoppedCluster(backupPath, restoredPath); await verifyTree(restoredPath, manifest);
     await restored.start(); timings.restoreStartMilliseconds = Math.round(performance.now() - restoreStart);
     // No worker/runtime connection exists until the restored database is paused.
@@ -242,6 +248,8 @@ export async function runSyntheticRestoreRehearsal(options = {}, api) {
     runtime = pool(restoredPort, "rehearsal_runtime"); storage = new DatabaseSyntheticStorage(runtime);
     assert.equal((await admin.query("SHOW server_version")).rows[0].server_version, postgresVersion);
     assert.deepEqual(await rowSnapshot(admin), before);
+    measured("database");
+    await fixture?.afterRestore({ admin, postgres: restored, directory: restoredPath, pool: (user, database) => pool(restoredPort, user, database) });
     assert.deepEqual(await trackRows(runtime), sourceTrack);
     assert.deepEqual(await api.withTenant(runtime, context, async db => (await db.$client.query("SELECT job_track,kind,provenance,raising_role,source_capture_hash FROM app.extra_origin WHERE tenant_id=$1 AND job_id=$2 AND variation_id=$3", [ids.tenant, ids.job, ids.variation])).rows), sourceOrigin);
     await createBuilderOrigin(runtime, randomUUID());
@@ -265,7 +273,9 @@ export async function runSyntheticRestoreRehearsal(options = {}, api) {
     assert.equal(await new api.EvidenceService(runtime, storage).cleanupExpiredOrphans(context, new Date("2100-01-01T00:00:00Z")), 0);
     assert.equal(digest((await storage.readExactVersion(upload.objectKey, objectVersion)).bytes), digest(bytes));
     pass("retained-evidence-preserved", "Expired-orphan cleanup does not select or remove the finalized retained original, even with a future test clock.");
+    measured("evidenceVersions");
     const restoredAudit = await auditRows(runtime); api.verifyAuditChain(restoredAudit, checkpoint);
+    measured("auditCheckpoint");
     assert.throws(() => api.verifyAuditChain(restoredAudit.map((event, i) => i === 0 ? { ...event, payload: { references: { changed: "fixture" } } } : event), checkpoint), /Invalid audit chain/);
     pass("audit-checkpoint-restored", "The restored audit chain matches the checkpoint recorded outside the copied cluster; altered payloads fail verification. The checkpoint is a local fixture, not an external signed attestation.");
     const role = (await runtime.query("SELECT rolsuper,rolbypassrls,rolcreaterole,rolcreatedb FROM pg_roles WHERE rolname=current_user")).rows[0];
@@ -323,7 +333,7 @@ export async function runSyntheticRestoreRehearsal(options = {}, api) {
       financialFixture: { invoiceGrossPence: 12000, manualReceiptPence: 5000, outstandingPence: 7000, invoicePdfSha256: invoicePdfHash, qualifyingRecoveryProof: false, platformFeeSettlement: false },
       outboundControl: { sourceClaimsEnabled: true, restoredPausedBeforeRuntime: true, finalPaused: true, attemptsWhilePaused: 0,
         reconciliationReceipt, resumeRequest, pauseRevision, independentlyApprovedByFixtureOperator: true },
-      fakeDeliveryCallsAfterRestore: fakeDeliveries, liveProviderCalls: 0, timings, checks,
+      fakeDeliveryCallsAfterRestore: fakeDeliveries, liveProviderCalls: 0, timings, dependencyMeasurements, checks,
       notRun: [
         "Hosted deployment backup/restore, replication and point-in-time recovery",
         "MinIO/S3/object-version restore; this run restores the current DB-backed synthetic storage path",

@@ -17,17 +17,18 @@ export async function firstTrialFixture(f:WorkFixture,startedAt?:string){
 // Private synthetic source fixture ONLY. Like A's keyParent, predecessor
 // commercial parent rows are installed with owner trigger bypass. This is not
 // a command journey or a successful trial admission. The reader runs normally.
-export async function exactTarget(f: WorkFixture, a: TrialCompany) {
+export async function exactTarget(f: WorkFixture, a: TrialCompany, large = false) {
  const documentId = randomUUID(), revisionId = randomUUID(), acceptanceId = randomUUID();
+ const net = large ? 300000 : 100000, tax = large ? 60000 : 20000, total = net + tax;
  await workTenant(f.admin, a.tenantId, async db => {
   await db.query("SET LOCAL session_replication_role='replica'");
   await seedSyntheticPartyFixture(db, a.tenantId, a.jobId);
-  await db.query("INSERT INTO app.quote_revision(id,tenant_id,job_id,quote_draft_id,revision,currency,tax_policy_version,subtotal_pence,discount_pence,net_pence,tax_pence,total_pence,issuable,blockers) VALUES($1,$2,$3,$4,1,'GBP','candidate_m1_standard_v1',100000,0,100000,20000,120000,true,'[]')", [revisionId,a.tenantId,a.jobId,randomUUID()]);
+  await db.query("INSERT INTO app.quote_revision(id,tenant_id,job_id,quote_draft_id,revision,currency,tax_policy_version,subtotal_pence,discount_pence,net_pence,tax_pence,total_pence,issuable,blockers) VALUES($1,$2,$3,$4,1,'GBP','candidate_m1_standard_v1',$5,0,$5,$6,$7,true,'[]')", [revisionId,a.tenantId,a.jobId,randomUUID(),net,tax,total]);
   await db.query(`INSERT INTO app.quote_document_version(id,tenant_id,job_id,quote_revision_id,document_version,reference,content_hash,object_key,object_version_id,pdf_byte_length,issuer,customer,snapshot,parties_snapshot)
-   SELECT $1,$2,$3,$4,1,'ELIG-FIXTURE',$5,'synthetic/elig','fixture-v1',1,'{}','{}','{"netPence":100000,"totalPence":120000}',snapshot FROM app.job_party_snapshot WHERE tenant_id=$2 AND job_id=$3`, [documentId,a.tenantId,a.jobId,revisionId,'a'.repeat(64)]);
-  await db.query("INSERT INTO app.quote_version(id,tenant_id,job_id,version,content_hash,net_value_pence,status) VALUES($1,$2,$3,1,$4,100000,'accepted')", [documentId,a.tenantId,a.jobId,'a'.repeat(64)]);
+   SELECT $1,$2,$3,$4,1,'ELIG-FIXTURE',$5,'synthetic/elig','fixture-v1',1,'{}','{}',jsonb_build_object('netPence',$6::integer,'totalPence',$7::integer),snapshot FROM app.job_party_snapshot WHERE tenant_id=$2 AND job_id=$3`, [documentId,a.tenantId,a.jobId,revisionId,'a'.repeat(64),net,total]);
+  await db.query("INSERT INTO app.quote_version(id,tenant_id,job_id,version,content_hash,net_value_pence,status) VALUES($1,$2,$3,1,$4,$5,'accepted')", [documentId,a.tenantId,a.jobId,'a'.repeat(64),net]);
   await db.query(`INSERT INTO app.quote_acceptance(id,tenant_id,job_id,document_id,document_version,document_hash,accepted_total_pence,currency,acceptance_kind,actor_membership_id,stated_customer_name,stated_method,accepted_at)
-   VALUES($1,$2,$3,$4,1,$5,120000,'GBP','builder_attestation',$6,'Fictional customer','verbal',clock_timestamp())`, [acceptanceId,a.tenantId,a.jobId,documentId,'a'.repeat(64),a.actorId]);
+   VALUES($1,$2,$3,$4,1,$5,$7,'GBP','builder_attestation',$6,'Fictional customer','verbal',clock_timestamp())`, [acceptanceId,a.tenantId,a.jobId,documentId,'a'.repeat(64),a.actorId,total]);
   await db.query(`INSERT INTO app.quote_send(id,tenant_id,job_id,document_id,content_hash,authorization_id,outbox_action_id,recipients) VALUES($1,$2,$3,$4,$5,$6,$7,'["fixture@example.invalid"]')`, [randomUUID(),a.tenantId,a.jobId,documentId,'a'.repeat(64),randomUUID(),randomUUID()]);
   await db.query("UPDATE app.job SET status='accepted',accepted_quote_version_id=$3,revision=revision+1 WHERE tenant_id=$1 AND id=$2", [a.tenantId,a.jobId,documentId]);
   await db.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','synthetic_demo','backfilled_synthetic_fixture') ON CONFLICT(tenant_id,job_id) DO UPDATE SET provenance='backfilled_synthetic_fixture',source_id=NULL", [a.tenantId,a.jobId]);

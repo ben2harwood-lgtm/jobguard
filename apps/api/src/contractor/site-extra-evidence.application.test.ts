@@ -110,3 +110,20 @@ describe("ENT-3d source rules", () => {
   for (const file of lane) expect(readFileSync(resolve(root, file), "utf8"), file).not.toContain('commandType: "');
  });
 });
+
+it("ENT-3 free-text v4 binds status to the session request and stays logged and unpriced", async () => {
+ vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
+ const pool = new Pool(), m = member(), sessionId = crypto.randomUUID(), jobId = crypto.randomUUID();
+ vi.spyOn(ContractorRepository.prototype, "resolveSession").mockResolvedValue(m);
+ const repo = vi.spyOn(SiteExtraRepository.prototype, "logSiteExtra").mockResolvedValue({ variationId: crypto.randomUUID() });
+ const app = new SiteExtraApplication(pool), principal = { version: "contractor-principal.v1", sessionId };
+ const raw = v3({ version: "log-site-extra.v4", workStatus: "under_way" });
+ const result = await app.log(principal, jobId, raw);
+ expect(repo).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ tenantId: m.tenantId }), m, { version: "log-site-extra.v4", workStatus: "under_way", commandId: raw.commandId, jobId, note: raw.note, description: raw.description });
+ expect(result).toMatchObject({ version: "site-extra-logged.v4", state: "logged" });
+ expect(result).not.toHaveProperty("price");
+ for (const key of ["origin", "time", "actor", "role", "track", "tenantId", "actorMembershipId", "serverRecordedAt"]) await expect(app.log(principal, jobId, { ...raw, [key]: "forged" }), key).rejects.toMatchObject({ code: "INVALID_COMMAND" });
+ await expect(app.log(principal, jobId, { ...raw, workStatus: undefined })).rejects.toMatchObject({ code: "INVALID_COMMAND" });
+ expect(repo).toHaveBeenCalledOnce();
+ await pool.end();
+});

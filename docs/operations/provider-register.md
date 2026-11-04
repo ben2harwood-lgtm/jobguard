@@ -13,7 +13,7 @@ fallbacks and approval gaps. Missing detail is a gate, never implicit approval.
 
 | Route record (authoritative detail) | Current processing/storage/log/backup region status | Source SHA-256 |
 | --- | --- | --- |
-| [accounting-observation-data-flow.md](accounting-observation-data-flow.md) | Local synthetic fixtures only; live region **not chosen** | 7934de25e9a8be495ee5553a718a6efc9f2492ae6af84679e4142adbdbbd585e |
+| [accounting-observation-data-flow.md](accounting-observation-data-flow.md) | Local synthetic fixtures only; live region **not chosen** | e9fc108fbd72c4863f98cdff6d0e45866cec165881bd69e44617a2e2d8b7752b |
 | [audit-export-data-flow.md](audit-export-data-flow.md) | Local synthetic fixtures only; live region **not chosen** | 3e737f01740a6e14275ba0b84a35100c96f82eed3a6a79b4314711f7e8b43aa8 |
 | [claude-data-flow.md](claude-data-flow.md) | Local synthetic fixtures only; live region **not chosen** | 79bc81c285f5885d6498533d7c3cb88e66959a869e99ff29b9ed816f9a724c04 |
 | [connector-data-flow.md](connector-data-flow.md) | Local synthetic fixtures only; live region **not chosen** | 68e542fe80365c2732d0ef0123c04fa50f2b330270806a396608f2d9dc36b997 |

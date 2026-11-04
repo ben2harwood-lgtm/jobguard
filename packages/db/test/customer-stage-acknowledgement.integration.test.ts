@@ -1,3 +1,4 @@
+import { currentCommandRegistryRows } from "./lp5-command-catalog.js";
 import { laterEmptyTables } from "./later-empty-tables.js";
 import { workTenant } from "./job-work-state-fixtures.js";
 import { randomBytes, randomUUID, createHash } from "node:crypto";
@@ -10,7 +11,7 @@ let c:Cluster;
 beforeAll(async()=>{
  c=await startBeforeMigration(own);const before=await snapshot(c.admin);await applyMigration(c,own);
  expect(await snapshot(c.admin)).toEqual({...before,"app.customer_stage_acknowledgement":[]});
- await migrate(c.admin);await migrate(c.admin);expect(await snapshot(c.admin)).toEqual({...before,"app.customer_stage_acknowledgement":[],...laterEmptyTables});
+ await migrate(c.admin);await migrate(c.admin);expect(await snapshot(c.admin)).toEqual({...before,"app.customer_stage_acknowledgement":[],...laterEmptyTables,"app.command_type_registry":(await c.admin.query("SELECT jsonb_agg(value ORDER BY value::text) data FROM jsonb_array_elements($1::jsonb)", [JSON.stringify(currentCommandRegistryRows)])).rows[0].data});
 },120000);
 afterAll(async()=>{await c?.close();});
 async function identity(sql:string,args:unknown[]) {

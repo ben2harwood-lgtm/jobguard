@@ -112,6 +112,16 @@ export class AccountingExportSandbox {
       (source.kind === "customer_invoice" ? source.state !== "issued" : source.state !== "posted")) fail("source_unavailable");
     if (source.finalAccount && source.finalAccount.revision !== source.finalAccount.lockedRevision) fail("source_unavailable");
     if (source.kind === "customer_invoice" ? source.invoiceId !== null || source.invoiceRevision !== null : source.invoiceId === null || source.invoiceRevision === null) fail("reference_conflict");
+    // The first approved export binds the invoice family, including adjustments exported first.
+    const invoiceId = source.invoiceId ?? source.sourceId;
+    for (const artifact of this.artifacts.values()) {
+      if ((source.invoiceId !== null || artifact.source.invoiceId !== null)
+        && artifact.scope.tenantId === scope.tenantId
+        && (artifact.source.invoiceId ?? artifact.source.sourceId) === invoiceId
+        && (artifact.scope.companyId !== scope.companyId || artifact.scope.mapping.customerId !== scope.mapping.customerId)) {
+        fail("reference_conflict");
+      }
+    }
     if (source.invoiceId) {
       const invoice = this.sources.get(key(scope.tenantId, source.invoiceId));
       if (!invoice || invoice.revision !== source.invoiceRevision || (invoice.finalAccount && invoice.finalAccount.revision !== invoice.finalAccount.lockedRevision) || invoice.jobId !== scope.jobId || invoice.kind !== "customer_invoice" || invoice.state !== "issued" ||

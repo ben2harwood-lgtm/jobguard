@@ -1,4 +1,4 @@
-import { pauseOutboundFixture } from "./outbound-pause-fixture.js";
+import { pauseCommercialOutbound } from "./commercial-outbound-pause-fixture.js";
 import { assertLp4SealedEvents } from "./lp4-writer-catchup-fixture.js";
 import {afterAll,beforeAll,expect,it} from "vitest";
 import {randomUUID} from "node:crypto";
@@ -43,7 +43,7 @@ it("M0-13a paused contractor delivery keeps its queued artifact and records no a
  let calls=0;
  const adapter:OutboundAdapter={name:"fake_api",supportsProviderDeduplication:true,async deliver(){calls++;return {kind:"succeeded",providerReference:"fictional-pause"};},async reconcile(){return "unknown";}};
  const executor=new ContractorBillingDelivery(c.runtime,new Map([[adapter.name,adapter]]));
- const resume = await pauseOutboundFixture(c.admin);
+ const resume = await pauseCommercialOutbound(c.admin);
  try{
   await executor.execute(w.ctx,w.session,w.s.jobId,action.outboxActionId);
   await executor.execute(w.ctx,w.session,w.s.jobId,action.outboxActionId);

@@ -93,3 +93,91 @@ that the person is erased from all systems.
 The executable CI rehearsal uses two made-up tenants, validates instruction holds,
 cross-tenant reads/writes, source/derived redaction, prior-export clearing, retention,
 work cancellation, access fencing, conflicts, concurrent replay and revocation.
+
+## M5-11 expanded inventory and tenant exit (dark v2)
+
+`privacy-command.v2` uses the same disabled-by-default route, independent database
+name check, current persisted owner/admin session, tenant context, CSRF and Origin.
+It preserves v1 for the original nine-class rehearsal. A v1 command cannot execute
+a v2 request, or process an expanded/held inventory through the legacy path.
+`open` also accepts `offboard`, anchored to a builder subject in the exiting tenant.
+Offboarding requires the tenant controller's recorded instruction even for that
+builder subject; all resident/client requests still require contractor instruction.
+
+Before v2 `execute`, use action `review` with requestId, expectedRevision,
+identityRef, authorityRef, retentionReviewRef and reviewHash (SHA-256 of the exact
+external review record). References identify restricted owner-reviewed records of
+subject identity verification, representative/controller authority, the scope of
+release, third-party redactions and retention/legal-hold review. The authenticated
+operator records them; they are not self-service identity proof or legal approval.
+No contact details or review document content belongs in these fields.
+The server stores actor/time and hashes the exact tenant-qualified subject and
+artifact inventory. A changed subject, payload, hold, retention field or inventory
+membership invalidates execution; open a fresh request and repeat instruction/review.
+Review is recorded once and does not approve D07/D12 or invent a retention duration.
+`instruct`, `review` and `execute` increment revision and bind idempotency to the
+exact actor, version and payload. Current access is checked again before replay.
+
+The following inventory covers every required data class. These are locations to
+inventory before real activation, not claims that a live erasure adapter is present.
+The executable rehearsal registers fictional entries in `app.privacy_artifact`,
+with category, subject, optional hold_ref, retention_basis, retention_review_ref and
+expiry_at. Record each original/version/replica separately; never hide multiple
+unreviewed storage destinations behind one fictional entry.
+
+| Class | Where to locate the data and its copies | Rehearsal disposition / owner review |
+|---|---|---|
+| source | Job/capture/diary/customer/supplier records in `app`; private evidence originals and object versions; import staging | Tombstone payload; data owner inventories subject/job/version links |
+| derived | AI extraction/proposals, transcripts, previews, search indexes, generated quote/invoice/export documents | Tombstone and clear previous subject exports; derived immutable commercial snapshots follow accounting/legal class |
+| observation | Imported observations, capture provenance, watchdog findings and shadow signals | Tombstone fictional payload; shadow disclosure requires the existing permanent fee-ineligibility path before any real release |
+| model | `packages/ai` evaluation/input/output provenance; provider processing/log copies | Tombstone fictional payload; provider retention/training deletion evidence required; no model unlearning claim |
+| log | API/worker/infrastructure monitoring, traces and provider logs | Redact fixture payload; operations owner reviews identifiers, redaction and expiry |
+| cache | Web/API caches, search and sync projections, previously generated exports | Tombstone; all old exports cleared in the same tenant/subject scope |
+| native | Encrypted SQLite/PowerSync replicas and device attachments, if deployed; browser offline stores | Pending device acknowledgement; remote offline erasure is not promised; revoke sync and purge on next verified connection |
+| connector | Tenant provider connection credentials, consent and scheduled connector work | Disconnect fictional connector and cancel queued work; connector owner verifies revocation at the provider before a real claim |
+| connector_copy | Merchant/bank/provider-hosted copies and downstream subprocessors | Pending controller/provider acknowledgement and retention review |
+| backup | PostgreSQL snapshots/WAL, S3/MinIO versions/replicas, operational/provider backups | Pending verified expiry; restore must reapply tombstones/fences before access or execution |
+| locked_evidence | Immutable object versions, Object Lock/legal holds and evidence references | Retain/restrict; evidence owner reviews expiry and legal basis; never shorten a lock |
+| key | KMS/secrets/encrypted-store keys and restore dependencies | Pending dependency review; no key destruction while retained records/backups require decryption |
+| accounting | Posted journals, payments/allocations, accepted commercial snapshots, obligations/fee statements and corrections | Retain/restrict under reviewed policy; reconcile existing obligations only; no new or retroactive pilot charge |
+| legal | Audit/checkpoints, approvals, instructions, request receipts, holds, disputes and legal records | Retain/restrict with basis and owner review; no deletion of immutable audit history |
+| queued_work | Durable action/outbox/worker schedules, including future recurring work | Cancel and fence fictional work; retain held bytes if necessary while stopping execution |
+| inflight_work | Dispatch attempts, provider references, reconciliation records | Outcome unknown, pending reconciliation; no blind retries or claim of cancellation after provider acceptance |
+| access_grant | Memberships, sessions, device/object URL grants, sync authorization | Revoke fictional grant and subject access even when underlying bytes are held |
+| consent | Standing authorizations, connector consent and delegated authority | Revoke fictional consent; no new authorized work; retain held record only as restricted evidence |
+
+For a complete deployed inventory the operations owner must enumerate actual
+PostgreSQL catalogs (including identity/control-plane and worker exceptions), all
+object versions, service destinations from the provider register, logs, backups and
+device replicas, map every location to a class/subject and review missing mappings.
+The migration-only rehearsal is **not** that deployed inventory: real adapters and
+unmapped systems remain a release hold. Shared identity belongs to a person across
+tenants: a real tenant exit must revoke tenant membership/sync/consent without
+revoking another company's access or destroying shared keys. There is no native
+client in this checkout; native cleanup remains a pending procedure.
+
+`delete` affects only the request subject. `offboard` affects every fictional subject
+and artifact in the selected tenant. Both fence access, cancel queued work, revoke
+consent, disconnect connectors, mark in-flight work unknown, clear prior exports,
+redact mutable data, preserve held/locked/legal/accounting records, and leave native,
+provider copies, keys and backups pending. A database trigger fences new fictional
+subjects/artifacts and active work after tenant exit; a revoked subject cannot get
+new artifacts after deletion. Historical request receipts stay readable by current
+authorized privacy operators. Existing fictional in-flight and financial references
+remain available for reconciliation; this creates no fee or settlement fact.
+
+`privacy-receipt.v2`, returned on execution and read, lists artifact IDs/categories
+under completed actions, retention/hold exceptions and pending acknowledgement,
+unknown-outcome or expiry handling. It includes review references, zero external
+actions/new charges and explicit `backupsErased=false`, `offlineDevicesErased=false`.
+`rehearsed_with_exceptions` never means fully erased or legally approved. A pending
+expiry remains pending even if its date has passed: an owner must verify removal.
+The immutable command receipt and audit hashes bind the result without copying raw
+subject payloads into audit. Use the existing operations/request record to track
+owner review and closure; no automatic completion based only on elapsed time.
+
+M5-11 requires CI PostgreSQL fresh/upgrade, tenancy and LP-0 checks plus the
+`dsar-offboarding.integration.test.ts` rehearsals, green CI and an exact-head
+independent RED review. Live session/consent revocation, provider disconnection,
+actual erasure, restore/native rehearsals and policy approval remain unimplemented
+release gates. The feature flag cannot activate them.

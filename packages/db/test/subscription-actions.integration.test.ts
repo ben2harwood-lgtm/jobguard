@@ -1,7 +1,7 @@
-import { pauseOutboundFixture } from "./outbound-pause-fixture.js";
+import { pauseCommercialOutbound } from "./commercial-outbound-pause-fixture.js";
+import { assertLp4SealedEvents } from "./lp4-writer-catchup-fixture.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { SubscriptionExecutor } from "../src/subscription-executor.js";
-import { assertLp4SealedEvents } from "./lp4-writer-catchup-fixture.js";
 import { subscriptionConsentText } from "@jobguard/core";
 import { IdentityRepository, SubscriptionRepository } from "../src/index.js";
 import { PersistedAuthProvider } from "../../../apps/api/src/auth/persisted-auth-provider.js";
@@ -25,7 +25,7 @@ describe("MON-2A C2/C3 billing action races", () => {
    async reconcile(){throw new Error("unexpected reconciliation");},
   });
   const commandId=randomUUID();
-  const resume = await pauseOutboundFixture(f.admin);
+  const resume = await pauseCommercialOutbound(f.admin);
   try{
    await expect(executor.execute(context,a.digest,commandId,approved.workId,1)).rejects.toThrow("SUBSCRIPTION_UNAVAILABLE");
    expect(calls).toBe(0);expect(await readSubscription(f,a)).toEqual(before);

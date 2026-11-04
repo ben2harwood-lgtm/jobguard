@@ -41,7 +41,7 @@ async function api(page: Page, operation: string, command?: unknown, runId?: str
     return { status: response.status, body: await response.json() };
   }, { operation, command, runId });
 }
-for (const [scenario, screens] of [["core-1000", []], ["meter", [["Jobs on the go and account review", "/meter"], ["Plan and saved periods", "/plans"]]], ["trial", [["Accepted terms and saved periods", "/plans"]]]] as [string, [string, string][]][]) {
+for (const [scenario, screens] of [["core-1000", []], ["recovery-18800", [["Open the recovery practice guide", "/demo-s/recovery-18800"]]], ["shadow-30000", []], ["meter", [["Jobs on the go and account review", "/meter"], ["Plan and saved periods", "/plans"]]], ["trial", [["Accepted terms and saved periods", "/plans"]]]] as [string, [string, string][]][]) {
   test(`DEMO-S ${scenario}: resume by reference, saved report with its screens, and reset`, async ({ page }) => {
     test.setTimeout(90_000);
     await signIn(page); await page.goto("/demo-s");
@@ -61,12 +61,21 @@ for (const [scenario, screens] of [["core-1000", []], ["meter", [["Jobs on the g
     await expect(report).toContainText("Independent verdict: missing");
     for (const [name, href] of screens) await expect(report.getByRole("link", { name, exact: true })).toHaveAttribute("href", href);
     if (scenario === "trial") await expect(report.getByRole("link", { name: "trial source report", exact: true })).toHaveAttribute("href", new RegExp(`/demo-s/trial\\?.*runId=${runId}`));
+    if (scenario === "recovery-18800") await expect(report).toContainText("This selection is not tied to one job");
+    if (scenario === "shadow-30000") await expect(report).toContainText("Create or resume and read saved results");
+    const snapshotUrl = await report.getByRole("link", { name: /^Open exact saved report / }).getAttribute("href");
+    await page.goto(snapshotUrl!);
     await page.reload();
     await expect(report).toContainText("Saved screens");
+    for (const [name, href] of screens) await expect(report.getByRole("link", { name, exact: true })).toHaveAttribute("href", href);
     await page.getByRole("button", { name: "Reset selection", exact: true }).click();
     await expect(page.getByRole("link", { name: "Open archived selection", exact: true })).toBeVisible();
     await expect(saved).toBeVisible();
     expect(new URL(page.url()).searchParams.get("runId")).not.toBe(runId);
+    await page.goto(snapshotUrl!);
+    await expect(report).toContainText("Not archived at snapshot time");
+    await expect(page.getByRole("button", { name: "Reset selection", exact: true })).toBeDisabled();
+    for (const [name, href] of screens) await expect(report.getByRole("link", { name, exact: true })).toHaveAttribute("href", href);
   });
 }
 test("DEMO-S chooser saves honest blockers for all families on both browser projects", async ({ page }) => {
@@ -123,6 +132,13 @@ test("DEMO-S lost-response replay, reset, immutable report and cross-company den
   const other = await browser.newContext();
   try {
     const foreign = await other.newPage(); await signIn(foreign);
+    const foreignTenantId = await foreign.evaluate(async () =>
+      (await (await fetch("/api/auth/session", { cache: "no-store" })).json()).memberships[0].tenantId as string);
+    const foreignSnapshotUrl = new URL(snapshotUrl);
+    foreignSnapshotUrl.searchParams.set("tenantId", foreignTenantId);
+    await foreign.goto(foreignSnapshotUrl.toString());
+    await expect(foreign.getByRole("main").getByRole("alert")).toHaveText("That saved selection or report is unavailable to this membership.");
+    await expect(foreign.getByRole("region", { name: "Saved selection report" })).toHaveCount(0);
     expect((await api(foreign, "read", undefined, runId)).status).toBe(404);
     expect((await api(foreign, "reset", reset)).status).toBe(404);
   } finally { await other.close(); }
@@ -185,7 +201,7 @@ test("DEMO-S launches a fresh shadow job, resumes it and resets without inventin
     customerApproval: { state: "not_ready_yet", approvals: [] } });
   const results = page.getByRole("region", { name: "Saved shadow journey report" });
   await expect(results).toContainText("Not built yet"); await expect(results).toContainText("Not locked");
-  await expect(results).toContainText("No invoice issued"); await expect(results).toContainText("Customer approval: Not ready yet (MON-5)");
+  await expect(results).toContainText("No invoice issued"); await expect(results).toContainText("Customer approval: Not ready for the customer yet");
   await expect(results.getByRole("link", { name: "Open the same saved job" })).toHaveAttribute("href", `/jobs/${jobId}`);
   await expect(results).not.toContainText("£80.00");
   await page.getByRole("button", { name: "Launch or resume shadow-30000", exact: true }).click();
