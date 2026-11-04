@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "lanes": {
+    "mon-6-attempt-store": {
+      "branches": [
+        "codex/sandbox/mon-6-attempt-store"
+      ],
+      "note": "MON-6 RED dark synthetic stored attempts only; NOPR. Live rails, stages and screens stay held.",
+      "allow": [
+        "apps/web/app/lib/pay-now-fake-provider.ts",
+        "docs/contracts/pay-now-fake-attempts-dark-v1.md",
+        "packages/core/src/pay-now-synthetic.test.ts",
+        "packages/core/src/pay-now-synthetic.ts",
+        "packages/db/migration-notes/0757_pay_now_fake_attempts.md",
+        "packages/db/migrations/0757_pay_now_fake_attempts.sql",
+        "packages/db/src/index.ts",
+        "packages/db/src/pay-now-attempt-repository.ts",
+        "packages/db/test/later-empty-tables.ts",
+        "packages/db/test/migration-proofs/0757_pay_now_fake_attempts.proof.json",
+        "packages/db/test/pay-now-attempt-repository.test.ts",
+        "packages/db/test/pay-now-attempt.integration.test.ts"
+      ]
+    }
+  }
+}
