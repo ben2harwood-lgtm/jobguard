@@ -1,0 +1,30 @@
+{
+  "version": 2,
+  "lanes": {
+    "m5-6-merchant-reliability": {
+      "branches": [
+        "codex/sandbox/m5-6-merchant-reliability"
+      ],
+      "note": "RED. NOPR synthetic checked read and descriptive own delivery counts; M5-6 incomplete; M5-5 and real evaluation held.",
+      "allow": [
+        "packages/core/src/index.ts",
+        "packages/db/src/index.ts",
+        "docs/contracts/rate-baseline-v1.md",
+        "packages/core/src/merchant-reliability.ts",
+        "packages/core/src/merchant-reliability.test.ts",
+        "packages/db/src/merchant-reliability-repository.ts",
+        "packages/db/test/merchant-reliability.integration.test.ts",
+        "packages/db/migrations/0769_merchant_delivery_record_read.sql",
+        "packages/db/migration-notes/0769_merchant_delivery_record_read.md",
+        "packages/db/test/migration-proofs/0769_merchant_delivery_record_read.proof.json",
+        "apps/web/app/lib/merchant-reliability-server.ts",
+        "apps/web/app/api/jobs/[id]/merchant-reliability/route.ts",
+        "apps/web/app/api/jobs/[id]/merchant-reliability/route.test.ts",
+        "apps/web/app/jobs/[id]/merchant-reliability/page.tsx",
+        "apps/web/app/jobs/[id]/merchant-reliability/screen.tsx",
+        "apps/web/app/jobs/[id]/merchant-reliability/screen.test.tsx",
+        "apps/web/e2e/M5-6-merchant-reliability.spec.ts"
+      ]
+    }
+  }
+}
