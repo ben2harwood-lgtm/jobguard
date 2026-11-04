@@ -69,6 +69,38 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   const ownerOids = Object.fromEntries((await c.admin.query("SELECT rolname,oid FROM pg_roles")).rows.map(row => [row.rolname,row.oid]));
   const successors = loadMigrationProofs().proofs.filter(proof => proof.migration > "0556_mon8_job_track_and_trial.sql")
     .map(proof => ({ ...proof, upgrade: proof.upgrade.filter(change => change.section === "routines") }));
-  const expected = applyUpgradeProofs({ rows: {}, routines: privileges(security), relations: [], policies: [] }, successors, ownerOids);
+  // The historical fixture staged 0562 early. Strictly undo only that reviewed
+  // fixture metadata, then replay EVERY successor below; no proof is skipped.
+  // The inverse checks exact reviewed after-values before restoring before-values.
+  const foundation = successors.find(proof => proof.migration === "0562_lp6a_request_binding.sql");
+  expect(foundation).toBeDefined();
+  expect(foundation!.upgrade).toHaveLength(6);
+  expect(foundation!.upgrade.map(change => {
+    if (change.section !== "routines" || change.after === null) throw new Error("Unexpected 0562 routine normalization record");
+    return change.after.nspname + "." + change.after.proname + "(" + change.after.args + ")";
+  }).sort()).toEqual([
+    "app.bind_request(p_kind text, p_credential text, p_tenant uuid)",
+    "app.current_actor()",
+    "app.current_tenant()",
+    "app.lp6_bound_request()",
+    "app.lp6_session_authority(p_kind text, p_credential text, p_tenant uuid)",
+    "identity.sso_session_memberships(u uuid, s uuid)",
+  ].sort());
+  const inverseFoundation = { ...foundation!, lp0: [], tenancy: [],
+    upgrade: [...foundation!.upgrade].reverse().map(change => ({ ...change, before: change.after, after: change.before })) };
+  const stagedBaseline = { rows: {}, routines: privileges(security), relations: [], policies: [] };
+  // A changed security attribute in ANY staged routine must fail before normalization.
+  for (const change of foundation!.upgrade) {
+    if (change.section !== "routines" || change.after === null) throw new Error("Unexpected 0562 routine normalization record");
+    const identity = change.after;
+    const matches = (row: typeof stagedBaseline.routines[number]) => row.nspname === identity.nspname &&
+      row.proname === identity.proname && row.args === identity.args;
+    expect(stagedBaseline.routines.filter(matches)).toHaveLength(1);
+    const tampered = { ...stagedBaseline, routines: stagedBaseline.routines.map(row =>
+      matches(row) ? { ...row, prosecdef: !row.prosecdef } : row) };
+    expect(() => applyUpgradeProofs(tampered, [inverseFoundation], ownerOids)).toThrow("before allowance mismatch");
+  }
+  const logicalPreFoundation = applyUpgradeProofs(stagedBaseline, [inverseFoundation], ownerOids);
+  const expected = applyUpgradeProofs(logicalPreFoundation, successors, ownerOids);
   expect(privileges(live)).toEqual(privileges(expected.routines as typeof security));
 }, 120000);
