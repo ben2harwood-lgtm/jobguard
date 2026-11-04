@@ -173,3 +173,5 @@ export * from "./value-source-receipt-v2.js";
 export * from "./sync-device-cache.js";
 export * from "./offline-client-queue.js";
 export * from "./offline-capture.js";
+
+export * from "./enterprise-fee-mandate.js";

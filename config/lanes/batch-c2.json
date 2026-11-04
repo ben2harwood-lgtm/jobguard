@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/batch-c2"
       ],
-      "note": "RED, NOPR partial group: six slices present including pending M4-4 union merge. ENT-14 fee mandate and SV-7B accounting remain unmerged; router takes them next.",
+      "note": "RED, NOPR: seven slices included after pending ENT-14 union resolution. SV-7B accounting remains unmerged; router takes it next. Open only after #549 and batch 10 land.",
       "allow": [
         ".github/workflows/worm-local-minio.yml",
         "apps/api/src/connectors/inbound.test.ts",
@@ -17,11 +17,14 @@
         "apps/api/src/offline-client-queue.compat.test.ts",
         "apps/api/src/worker.ts",
         "docs/contracts/connector-capabilities-v1.md",
+        "docs/contracts/enterprise-fee-statement-v1.md",
         "docs/contracts/extra-approval-chain-v1.md",
         "docs/contracts/offline-contract-v1.md",
         "docs/contracts/resumable-evidence-v1.md",
         "docs/contracts/sync-download-v1.md",
         "docs/operations/evidence-storage.md",
+        "packages/core/src/enterprise-fee-mandate.test.ts",
+        "packages/core/src/enterprise-fee-mandate.ts",
         "packages/core/src/index.ts",
         "packages/core/src/offline-capture.test.ts",
         "packages/core/src/offline-capture.ts",
@@ -46,6 +49,7 @@
         "packages/db/test/demo-bootstrap.integration.test.ts",
         "packages/db/test/extra-escalation-worker.integration.test.ts",
         "packages/db/test/later-empty-tables.ts",
+        "packages/db/test/m4-23-contractor-acceptance.integration.test.ts",
         "packages/db/test/migration-proofs/0760_extra_escalation_discovery.proof.json",
         "packages/db/test/migration-proofs/0761_connector_materials_stage.proof.json",
         "packages/db/test/migration-proofs/0762_worm_durable_commands.proof.json",

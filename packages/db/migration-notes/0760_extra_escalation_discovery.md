@@ -229,3 +229,67 @@ WORM command/recovery/alert atomicity, bootstrap privilege checks and local MinI
 behavior, and affected browser journeys. No DB or browser suite ran here.
 Independent RED review must bind the eventual exact head. NOPR until #549 and
 batch 10 land. No real data, live providers, money, PR or release.
+
+
+## Batch-c2 ENT-14 union handoff — 4 November 2026
+
+READY, RED, NOPR. Resolved pending ENT-14 merge `653c52d7d` as an exact
+working-tree union. Retained cache/queue/capture exports and added the mandate
+export. Restored all nine platform-tax-invoice files byte-for-byte from HEAD;
+the incoming older branch's deletions must not remove main's invoice behavior.
+No new behavior or weakened tests. Router must stage ALL working-tree files,
+including the restored untracked core invoice source/test, and complete the merge.
+SV-7B accounting is NOT merged; router takes that branch next. ENT-14 is resolved
+in the working tree but not merged until that router action.
+
+Removed the ENT-14 piece lane; batch-c2 owns the exact 58 resulting non-lane
+paths against available origin/main (`155a3eb06`). Local main is stale. The
+projection compares file bytes with origin/main so the read-only index's deleted
+but restored invoice files do not create false final changes. No fetch or Git
+writes. Migration stems/proofs remain consecutive 0760 through 0764, in dependency
+order; no new mandate migration. Landing renumbers them again.
+
+Applied all ten batch-9 rules to the resulting union: no fingerprinted table
+columns added; WORM methods remain classified, no new command types; no new
+application context construction, client DB imports, web server modules or browser
+specs; WORM empty tables remain registered; routine proof identities omit DEFAULT;
+LP-0 owners cover tracked reachable objects; no runtime authority-table writes or
+new command_lifecycle_claim reads. Connector replacement retains the latest main
+body with only its intended validation widening. No additional routine exception
+is needed. Existing guards are unchanged. The earlier initial-review LATER /
+SIMPLICITY observation above remains the sole simplification observation.
+
+Validation with installed TypeScript 5.8.3 and Vitest 4.1.12:
+- All seven workspace tsc --noEmit checks passed (config, core, storage, db, ai,
+  API, web). pnpm typecheck stalled after its wrapper warning and was stopped;
+  the aggregate wrapper is not claimed as passing. No packages downloaded.
+- 607 tests passed, each invocation --maxWorkers=2 and at most three named files:
+  mandate/contractor-mandate/restored tax-invoice 44; context/identity/watchdog
+  278; migration-proof-loader/connector proof/WORM proofs 83; cache/queue/capture
+  84; escalation/inbound/SFTP 60; WORM repository 22; storage WORM/timestamp 35;
+  API queue compatibility 1. An initial attempt at the root Vitest bin failed
+  because no root bin exists; all actual runs used installed package-local bins.
+- Core purity, money arithmetic, PL/pgSQL CASE lint, lane tool syntax and
+  git diff origin/main --check passed. Working-tree lane paths and migration
+  order/proof pairing were checked separately. Standard lane lint was run and
+  fails on the removed incoming lane and restored invoice paths still in the
+  read-only merge index. Router must stage the union and rerun the standard gate.
+
+Still open: ENT-5 aggregate timing/proceed-policy, PostgreSQL and production gates;
+ENT-13a domain promotion, real endpoints, Q2/H1, Q3, Q4, Q7 and G5; M3-3 encrypted
+native persistence, actual PowerSync policy/deployment, device evidence and D08/G3;
+M3-4 durable encrypted queue, reconciliation UI and reconnect/reinstall recovery;
+M3-5 native encrypted capture/wiring and airplane-mode/restart/storage acceptance;
+M4-4 D07, actual production object-store and RFC-3161/provider evidence; ENT-14
+persisted mandate/collection integration, full acceptance, solicitor review,
+contract set, notice process, D12/D16 and Ben's dated approval. SV-7B accounting
+is absent; connector contract tests and G1/D04/D12 evidence remain open.
+
+No database or browser execution here. CI owes full required checks,
+fresh/upgrade PostgreSQL migrations, fingerprint preservation, effective
+privileges/LP-0, RLS/tenant isolation, escalation concurrency/restart/rollback,
+connector adversarial intake/upgrade, WORM authorization/recovery/alert atomicity,
+bootstrap privileges, local MinIO and affected browser/contractor acceptance.
+Independent RED review binds the eventual exact head. Production native/device,
+provider and legal approvals are separate. NOPR until #549 and batch 10 land.
+Made-up data only; no real money, provider execution, PR or release.
