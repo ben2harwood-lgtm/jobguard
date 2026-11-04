@@ -5,6 +5,7 @@ import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { cluster, fixture, newCase, command, start, counts, qualifyingAllocation, type Cluster, type Fixture } from "../../../../../../../../../packages/db/test/managed-recovery-fixtures";
 const boundary = vi.hoisted(() => ({ session: vi.fn(), resolve: vi.fn(), digest: vi.fn(), pool: vi.fn() }));
 vi.mock("server-only", () => ({}));
+vi.mock("@jobguard/db", () => import("../../../../../../../../../packages/db/src/index.js"));
 vi.mock("@jobguard/api/identity", () => ({ resolveVerifiedTenantContext: boundary.resolve }));
 vi.mock("../../../../../../lib/identity-server", () => ({
   identityCredentials: async () => ({ sessionToken: "fixture-token" }),

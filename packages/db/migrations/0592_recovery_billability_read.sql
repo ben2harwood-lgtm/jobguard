@@ -4,7 +4,7 @@ CREATE FUNCTION app.read_recovery_billability(j uuid,c uuid,digest text) RETURNS
  LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; a record; revision integer; practice boolean;
 BEGIN
- IF current_database()<>'jobguard_synthetic_demo' OR NOT pg_has_role(session_user,'jobguard_runtime','USAGE')
+ IF NOT pg_has_role(session_user,'jobguard_runtime','USAGE')
  THEN RAISE EXCEPTION 'BILLABILITY_NOT_FOUND' USING ERRCODE='42501'; END IF;
  SELECT * INTO a FROM app.authenticate_practice_session(digest,t);
  practice:=FOUND;
@@ -18,7 +18,7 @@ BEGIN
   END;
  END IF;
  -- Ownership and lock precede all source/review reads. No pre-lock shadow signal.
- IF NOT EXISTS(SELECT 1 FROM app.job x JOIN app.final_account_lock k ON(k.tenant_id,k.job_id)=(x.tenant_id,x.id)
+ IF current_database()<>'jobguard_synthetic_demo' OR NOT EXISTS(SELECT 1 FROM app.job x JOIN app.final_account_lock k ON(k.tenant_id,k.job_id)=(x.tenant_id,x.id)
   WHERE x.tenant_id=t AND x.id=j AND x.practice_session_digest IS NOT NULL
   AND (NOT practice OR x.practice_session_digest=digest))
  THEN RAISE EXCEPTION 'BILLABILITY_NOT_FOUND' USING ERRCODE='42501'; END IF;

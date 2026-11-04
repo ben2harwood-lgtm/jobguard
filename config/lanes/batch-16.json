@@ -7,6 +7,7 @@
       ],
       "note": "RED group: M4-13 mandate, M4-2 billability review, M4-17 adjustments and MON-9 election screens. Reserved migrations 0592–0593; ready for PR testing and independent review.",
       "allow": [
+        "apps/web/app/styles.css",
         "apps/web/app/api/jobs/[id]/reconciliation/[runId]/adjustments/route.test.ts",
         "apps/web/app/api/jobs/[id]/reconciliation/[runId]/adjustments/route.ts",
         "apps/web/app/api/jobs/[id]/recovery-cases/[caseId]/billability/database.test.ts",

@@ -29,7 +29,15 @@ async function fixture() {
   const owner = await admin.connect();
   try {
    await owner.query("BEGIN"); await owner.query("SELECT set_config('app.tenant_id',$1,true)", [tenantId]);
-   await owner.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,'Fictional reconciliation','live')", [jobId, tenantId]);
+   await owner.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,'Fictional reconciliation','draft')", [jobId, tenantId]);
+   const customer = randomUUID(), customerRevision = randomUUID(), site = randomUUID(), siteRevision = randomUUID(), binding = randomUUID();
+   await owner.query("INSERT INTO app.customer(tenant_id,id) VALUES($1,$2)", [tenantId, customer]);
+   await owner.query("INSERT INTO app.customer_revision(tenant_id,id,customer_id,revision,payload) VALUES($1,$2,$3,1,$4)", [tenantId, customerRevision, customer, { version: "customer.v1", name: "Fictional reconciliation customer", type: "person", email: "fictional@example.invalid" }]);
+   await owner.query("INSERT INTO app.site(tenant_id,id) VALUES($1,$2)", [tenantId, site]);
+   await owner.query("INSERT INTO app.site_revision(tenant_id,id,site_id,revision,payload,match_key) VALUES($1,$2,$3,1,$4,'[]')", [tenantId, siteRevision, site, { version: "site.v1", addressLines: ["1 Fictional Road"], town: "London", postcode: "SW1A 1AA" }]);
+   await owner.query("INSERT INTO app.job_party_binding(tenant_id,id,job_id,revision,customer_id,customer_revision_id,paying_party_id,paying_party_revision_id,site_id,site_revision_id,provenance) VALUES($1,$2,$3,0,$4,$5,$4,$5,$6,$7,'backfilled_synthetic_fixture')", [tenantId, binding, jobId, customer, customerRevision, site, siteRevision]);
+   await owner.query("INSERT INTO app.job_party_current(tenant_id,job_id,binding_id) VALUES($1,$2,$3)", [tenantId, jobId, binding]);
+   await owner.query("UPDATE app.job SET status='live' WHERE tenant_id=$1 AND id=$2", [tenantId, jobId]);
    await owner.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')", [scopeItemId, tenantId, jobId]);
    await owner.query("INSERT INTO app.quote_version(id,tenant_id,job_id,version,content_hash,net_value_pence,status) VALUES($1,$2,$3,1,$4,10000,'accepted')", [baselineId, tenantId, jobId, 'a'.repeat(64)]);
    await owner.query("INSERT INTO app.final_account_draft(id,tenant_id,job_id) VALUES($1,$2,$3)", [draftId, tenantId, jobId]);

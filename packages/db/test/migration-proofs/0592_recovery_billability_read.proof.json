@@ -30,7 +30,7 @@
           "state": "review_at_card",
           "note": "No fee authority; synthetic only"
         },
-        "downstream": "Post-lock immutable reviews only; no write or fee authority.",
+        "downstream": "Runtime role is checked first. The synthetic database, ownership and final-account lock share one refusal before source/review reads; Test Q compares the exact refusal logs. Post-lock immutable reviews only; no write or fee authority.",
         "path": "ap-billability-review-read"
       }
     },
@@ -94,7 +94,7 @@
           "Independent RED review and CI PostgreSQL evidence required."
         ],
         "title": "Post-lock synthetic billability reviews",
-        "description": "Current unambiguous synthetic owner session or owning practice session, same tenant/job/case and final-account lock. No fee authority."
+        "description": "Runtime role first, then current unambiguous synthetic owner session or owning practice session. Database name, same-tenant job ownership and final-account lock are checked together before source/review reads, preserving identical Test Q refusal logs. Same case and synthetic source only; no fee authority."
       }
     }
   ],
