@@ -194,3 +194,4 @@ export * from "./money-trail-repository.js";
 
 export * from "./ais-adapter.js";
 export * from "./ais-repository.js";
+export { CisFixtureRepository, CisFixturePersistenceError } from "./cis-fixture-repository.js";

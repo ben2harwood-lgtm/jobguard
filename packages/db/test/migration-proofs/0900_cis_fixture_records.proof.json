@@ -1,0 +1,220 @@
+{
+  "migration": "0900_cis_fixture_records.sql",
+  "lp0": [
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "id": "m4-22-fixture-records",
+        "title": "M4-22 dark CIS fixture storage",
+        "kind": "working_data",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Synthetic fixture storage only; PostgreSQL CI and independent RED review remain required."
+        },
+        "cards": [
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-12": "Verify private append-only storage, caller context and tenant isolation; no commercial authority."
+        },
+        "downstream": "Rebuilds synthetic source lineage using the existing pure calculator; no real issue or statutory processing.",
+        "sources": [
+          "packages/db/migrations/0900_cis_fixture_records.sql",
+          "packages/db/src/cis-fixture-repository.ts"
+        ],
+        "tests": [
+          "packages/db/test/cis-fixture-records.integration.test.ts"
+        ],
+        "gaps": [
+          "PostgreSQL CI and independent RED review outstanding."
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.cis_fixture_records(uuid,uuid,jsonb,jsonb)|jobguard_runtime|EXECUTE|-",
+        "group": "m4-22-fixture-records"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.cis_fixture_records(uuid,uuid,jsonb,jsonb)|jobguard_migration",
+        "group": "m4-22-fixture-records"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.cis_fixture_records(uuid,uuid,jsonb,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.cis_fixture_record"
+        ],
+        "staticCalls": [
+          "app.final_lock_hash"
+        ]
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.cis_fixture_record|tenant_isolation|PERMISSIVE|ALL|jobguard_migration|6fa387f2f629fba6"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.cis_fixture_record|cis_fixture_immutable|app.reject_immutable_commercial_mutation|BEFORE DELETE/UPDATE/TRUNCATE|O"
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "app.cis_fixture_record",
+        "data": []
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "cis_fixture_record",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "cis_fixture_record_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "cis_fixture_record_tenant_id_command_id_key",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "cis_fixture_record_tenant_id_job_id_statement_id_key",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "cis_fixture_one_root",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "cis_fixture_one_successor",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "cis_fixture_document_reference",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "cis_fixture_record",
+        "policyname": "tenant_isolation",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "cis_fixture_records",
+        "args": "t uuid, j uuid, a jsonb, v jsonb",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    }
+  ],
+  "tenancy": [
+    {
+      "relname": "cis_fixture_record",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    }
+  ]
+}
