@@ -153,6 +153,58 @@ it("SV-6 G: two distinct £400 net settlements create reviewed £40 then cumulat
  expect(await reviewAssessment(x,next)).toMatchObject({effect:"review_recorded",assessmentId:next.assessmentId});
  expect(await new RecoveryAttributionRepository(f.runtime).history(x.context,x.jobId,x.auth.digest)).toEqual([first,next]);
 });
+it("SV-6 H / F3: a saved £200 item credit leaves £600 qualifying, £60 fee and one linked -£20 compensation",async()=>{
+ const {SuccessFeeRepository}=await import("../src/success-fee-repository.js");
+ const x=await realReceiptFixture(f,"F7","receipt-line-allocation-command.v1");
+ // The supplementary invoice contains only this catch: its credit is item-specific.
+ expect(x.produced.input.lines).toEqual([expect.objectContaining({id:x.line,netPence:80000})]);
+ expect(x.fact.net).toEqual({numerator:"80000",denominator:"1"});
+ await allocate(x);const first=await assess(x,await command(x));await reviewAssessment(x,first);
+ const fees=new SuccessFeeRepository(f.runtime);
+ const feeReview=(revision:number)=>fees.command(x.context,x.jobId,x.auth.digest,{version:"success-fee-command.v1",action:"review",commandId:randomUUID(),expectedPostingRevision:revision});
+ const approval=(review:Awaited<ReturnType<typeof feeReview>>)=>({version:"success-fee-command.v1",action:"approve",commandId:randomUUID(),expectedPostingRevision:review.postingRevision,reviewId:review.reviewId,statementHash:review.statementHash});
+ const post=(p:unknown)=>fees.command(x.context,x.jobId,x.auth.digest,p);
+ const initial=await feeReview(0);
+ expect(initial.statement).toMatchObject({qualifyingPrincipal:{numerator:"80000",denominator:"1"},feePence:8000,deltaPence:8000});
+ const original=await post(approval(initial));expect(original.journalId).not.toBeNull();
+ const originalJournal=()=>f.admin.query("SELECT row_to_json(j) journal,(SELECT jsonb_agg(to_jsonb(l) ORDER BY l.account) FROM app.success_fee_journal_line l WHERE l.tenant_id=j.tenant_id AND l.journal_id=j.id) lines FROM app.success_fee_journal j WHERE tenant_id=$1 AND job_id=$2 AND id=$3",[x.context.tenantId,x.jobId,original.journalId]);
+ const before=(await originalJournal()).rows;expect(before).toHaveLength(1);
+ const creditInput={jobId:x.jobId,invoiceId:x.invoiceId,netPence:20000,reason:"Fictional Test H item credit"};
+ const preview=await x.invoices.previewCredit(x.context,creditInput);
+ const creditCommand={...creditInput,actorMembershipId:x.actor.membershipId,commandId:randomUUID(),previewHash:preview.previewHash};
+ const credit=await x.invoices.issueCredit(x.context,creditCommand);
+ const snapshot=await x.producer.readCurrent(x.context,x.actor,x.auth.digest,{jobId:x.jobId});
+ const review=await x.producer.command(x.context,x.actor,x.auth.digest,x.jobId,{version:"receipt-line-allocation-command.v1",action:"review_reverse",commandId:randomUUID(),allocationRevisionId:x.produced.allocationRevisionId,reversalSource:{kind:"credit_note",sourceId:credit.creditNoteId},grossPence:24000,expectedSourceRevision:snapshot.revision});
+ const reverseCommand={version:"receipt-line-allocation-command.v1",action:"reverse",commandId:randomUUID(),reviewId:review.reviewId,approvalHash:review.approvalHash,expectedSourceRevision:review.sourceRevision};
+ const reversed=await x.producer.command(x.context,x.actor,x.auth.digest,x.jobId,reverseCommand);
+ const after=await x.producer.readCurrent(x.context,x.actor,x.auth.digest,{jobId:x.jobId});
+ const reversal=after.rows.find(r=>r.direction==="reversal"&&r.lineId===x.line)!;
+ expect(reversal.net).toEqual({numerator:"-20000",denominator:"1"});
+ await allocate(x,reversal.lineAllocationId);
+ const reassess=await command(x,1),next=await assess(x,reassess);
+ expect(next).toMatchObject({revision:2,previousAssessmentId:first.assessmentId,assessmentOutcome:"eligible_for_review",remainingPrincipal:{numerator:"60000",denominator:"1"}});
+ expect(next.assessmentId).not.toBe(first.assessmentId);expect(next.sourceHash).not.toBe(first.sourceHash);
+ expect(attributionValueReceipt(next)).toMatchObject({recovered:{numerator:"60000",denominator:"1"},fee:{pence:6000}});
+ await reviewAssessment(x,next);
+ const reduction=await feeReview(1);
+ expect(reduction.statement).toMatchObject({qualifyingPrincipal:{numerator:"60000",denominator:"1"},feePence:6000,deltaPence:-2000,compensationLinks:[{journalId:original.journalId,amountPence:2000}]});
+ const compensationCommand=approval(reduction),compensation=await post(compensationCommand);
+ expect(compensation.statement.deltaPence).toBe(-2000);expect(compensation.journalId).not.toBeNull();
+ const journals=()=>f.admin.query("SELECT id,amount_pence,reverses_journal_id FROM app.success_fee_journal WHERE tenant_id=$1 AND job_id=$2 ORDER BY amount_pence",[x.context.tenantId,x.jobId]);
+ const expectedJournals=[{id:compensation.journalId,amount_pence:"-2000",reverses_journal_id:original.journalId},{id:original.journalId,amount_pence:"8000",reverses_journal_id:null}];
+ expect((await journals()).rows).toEqual(expectedJournals);
+ // Replay the same saved reduction through each command boundary, then recompute afresh.
+ expect(await x.invoices.issueCredit(x.context,creditCommand)).toEqual(credit);
+ expect(await x.producer.command(x.context,x.actor,x.auth.digest,x.jobId,reverseCommand)).toEqual({...reversed,replayed:true});
+ expect(await assess(x,reassess)).toEqual(next);
+ expect(await post(compensationCommand)).toEqual({...compensation,replayed:true});
+ const repeated=await feeReview(2);
+ expect(repeated.statement).toMatchObject({qualifyingPrincipal:{numerator:"60000",denominator:"1"},feePence:6000,deltaPence:0});
+ expect((await post(approval(repeated))).journalId).toBeNull();
+ expect((await journals()).rows).toEqual(expectedJournals);
+ expect((await originalJournal()).rows).toEqual(before);
+ expect(await new RecoveryAttributionRepository(f.runtime).history(x.context,x.jobId,x.auth.digest)).toEqual([first,next]);
+});
 it("SV-6 M: blended partial cash uses the stored exact pro-rata catch share; unallocated lines earn nothing",async()=>{
  const x=await realReceiptFixture(f,"F7",240000,false,false,undefined,{combined:true});
  // £3,200 net blended bill: £800 catch + £2,400 baseline. £960 gross receipt

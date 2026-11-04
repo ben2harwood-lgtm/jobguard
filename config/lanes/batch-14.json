@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/batch-14"
       ],
-      "note": "Built ahead: M2-5 benchmark, M2-6 readiness store and M2-7 metrics/dashboard. RED. NOPR. Preserves current-main MON-8 and LP-5c.",
+      "note": "M2-5 benchmark, M2-6 synthetic readiness store and M2-7 metrics/dashboard. RED. Preserves merged main; migrations 0588-0589.",
       "allow": [
         "apps/api/src/readiness-adapters.ts",
         "apps/api/src/readiness-scheduler.test.ts",
@@ -24,16 +24,15 @@
         "packages/core/src/supplier-benchmark.test.ts",
         "packages/core/src/supplier-benchmark.ts",
         "packages/core/src/test-fixtures/made-up-only-supplier-benchmark.ts",
-        "packages/db/migrations/0699_scheduled_readiness_store.sql",
-        "packages/db/migrations/0700_inbox_metrics_store.sql",
+        "packages/db/migrations/0588_scheduled_readiness_store.sql",
+        "packages/db/migrations/0589_inbox_metrics_store.sql",
         "packages/db/src/inbox-metrics-repository.ts",
         "packages/db/src/index.ts",
         "packages/db/test/inbox-metrics.integration.test.ts",
         "packages/db/test/inbox-metrics.test.ts",
         "packages/db/test/later-empty-tables.ts",
-        "packages/db/test/migration-proofs/0699_scheduled_readiness_store.proof.json",
-        "packages/db/test/migration-proofs/0700_inbox_metrics_store.proof.json",
-        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/0588_scheduled_readiness_store.proof.json",
+        "packages/db/test/migration-proofs/0589_inbox_metrics_store.proof.json",
         "packages/db/test/readiness-store.integration.test.ts",
         "tools/supplier-benchmark.mjs"
       ]

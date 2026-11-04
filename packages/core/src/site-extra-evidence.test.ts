@@ -115,3 +115,19 @@ describe("site-extra error codes", () => {
   expect(new SiteExtraError("PHOTO_NOT_ACCEPTED").message).toBe("PHOTO_NOT_ACCEPTED");
  });
 });
+
+describe("ENT-3 free-text v4", () => {
+ it("requires an operative status and refuses every forged authority field without widening v1/v2/v3", async () => {
+  const { logSiteExtraV4, logSiteExtraV2 } = await import("./index.js");
+  const body = { version: "log-site-extra.v4", commandId: confirmation, description, note, workStatus: "finished" };
+  for (const workStatus of ["not_started", "under_way", "finished"]) expect(logSiteExtraV4.parse({ ...body, workStatus }).workStatus).toBe(workStatus);
+  for (const key of ["origin", "time", "actor", "role", "track", "tenantId", "actorMembershipId", "serverRecordedAt", "price", "siteVisitId"]) expect(logSiteExtraV4.safeParse({ ...body, [key]: "forged" }).success, key).toBe(false);
+  for (const workStatus of [undefined, null, "approved"]) expect(logSiteExtraV4.safeParse({ ...body, workStatus }).success).toBe(false);
+  expect(logSiteExtraV4.safeParse({ ...body, note: "" }).success).toBe(false);
+  for (const [schema, version, fields] of [[logSiteExtraV1, "log-site-extra.v1", {}], [logSiteExtraV2, "log-site-extra.v2", { siteVisitId: job }], [logSiteExtraV3, "log-site-extra.v3", {}]] as const) {
+   const old = { version, commandId: confirmation, description, note, ...fields };
+   expect(schema.parse(old)).toEqual(old);
+   expect(schema.safeParse({ ...old, workStatus: "finished" }).success).toBe(false);
+  }
+ });
+});

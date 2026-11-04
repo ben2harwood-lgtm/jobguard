@@ -44,8 +44,8 @@
   {
     "code": "UNRESOLVED_COVERED_EDGE",
     "file": "packages/db/src/subscription-stripe-sandbox-adapter.ts",
-    "line": 103,
-    "fingerprint": "cca1e585bf32c7408b19ff8bbb7a528bc17aa2440a1daa23e3bfc71f8526682c",
+    "line": 110,
+    "fingerprint": "5fb98f0e7f16d382aef5d7ecabe4a34d02404237cf544dde1099a7bdebc91df2",
     "reason": "Synthetic sandbox adapter.execute(work) receives runtime authorized work; broad terminal execute detection cannot prove a SQL boundary."
   },
   {
@@ -54,5 +54,12 @@
     "fingerprint": "a03814ad97eb55bfe1dca02eca37c87717afeb72090091c8703d5a9d14d1222d",
     "reason": "Receipt result->>'outboxActionId' only joins the first authorization grant to return its expiry; no advisory result reaches money.",
     "code": "UNRESOLVED_COVERED_EDGE"
+  },
+  {
+    "code": "UNRESOLVED_COVERED_EDGE",
+    "file": "packages/db/src/extra-approval-chain-repository.ts",
+    "line": 94,
+    "fingerprint": "afbffeb30d1a014e8ccd5823926378c931403a72313c2e51287461f81173cc8b",
+    "reason": "Generic local call helper receives runtime sql/args; all nine callers pass literal SELECT app.xa_* calls and none reads advisory results."
   }
 ]

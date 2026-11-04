@@ -1,0 +1,6 @@
+{
+  "migration": "0576_connector_materials_stage.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}

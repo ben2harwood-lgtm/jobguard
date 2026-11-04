@@ -1,5 +1,5 @@
 {
-  "migration": "0699_scheduled_readiness_store.sql",
+  "migration": "0588_scheduled_readiness_store.sql",
   "lp0": [
     {
       "section": "entries",

@@ -6,6 +6,8 @@ export * from "./capture.js";
 export * from "./shadow-proposal.js"; export * from "./shadow-evaluation.js";
 export * from "./sor-suggestion.js";
 export * from "./sor-suggestion-evaluation.js";
+export * from "./pursuit-draft.js";
 
+export * from "./deepgram.js";
 export * from "./inbox-wording.js";
 export * from "./claude-provider.js";

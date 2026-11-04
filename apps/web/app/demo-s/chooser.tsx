@@ -31,6 +31,8 @@ async function readSaved(session: Session, tenantId: string, operation: "read" |
 function SavedScreens({ scenario, tenantId, runId }: { scenario: string; tenantId: string; runId: string }) {
   const trial = `/demo-s/trial?${new URLSearchParams({ tenantId, runId })}`;
   if (scenario === "core-1000") return <p>Saved screens: use Read saved core-1000 results on this selection. It links each job screen to its saved record.</p>;
+  if (scenario === "recovery-18800") return <p>Saved screens: <a href="/demo-s/recovery-18800">Open the recovery practice guide</a>. This selection is not tied to one job. The job’s own recovery practice guide holds its saved results.</p>;
+  if (scenario === "shadow-30000") return <p>Saved screens: use Create or resume and read saved results on this selection. It links each job screen to its saved record.</p>;
   if (scenario === "meter") return <p>Saved screens: <a href={demoLink(tenantId, runId)}>reference previews</a> · <a href="/meter">Jobs on the go and account review</a> · <a href="/plans">Plan and saved periods</a></p>;
   if (scenario === "trial") return <p>Saved screens: <a href={trial}>trial source report</a> · <a href="/plans">Accepted terms and saved periods</a> · <a href="/meter">Jobs on the go</a></p>;
   return null;
@@ -38,7 +40,11 @@ function SavedScreens({ scenario, tenantId, runId }: { scenario: string; tenantI
 export function LifecycleReport({ report, tenantId }: { report: SmallBuilderDemoReport; tenantId: string }) {
   const facts = report.facts;
   return <section aria-labelledby="report-title"><h2 id="report-title">Saved selection report</h2>
-    <p>This snapshot records selection metadata only. It does not record whether a product journey ran. Read current persisted journey results below.</p>
+    <p>This snapshot records selection metadata only. It does not record whether a product journey ran. {facts.scenario === "core-1000" || facts.scenario === "shadow-30000"
+      ? "Read current persisted journey results using the saved-results control below."
+      : facts.scenario === "recovery-18800"
+        ? "Read saved results in the job’s own recovery practice guide."
+        : "Read current persisted journey results on the linked saved screens."}</p>
     <dl><dt>Scenario</dt><dd>{facts.scenario}</dd><dt>Status</dt><dd>{facts.status}</dd>
       <dt>Saved reason</dt><dd>{facts.reason}</dd><dt>Revision</dt><dd>{facts.revision}</dd>
       <dt>Created</dt><dd>{facts.createdAt}</dd><dt>Archived</dt><dd>{facts.archivedAt ?? "Not archived at snapshot time"}</dd></dl>

@@ -1,0 +1,51 @@
+{
+  "version": 2,
+  "lanes": {
+    "batch-12": {
+      "branches": [
+        "codex/sandbox/batch-12"
+      ],
+      "note": "RED batch-12 landing: preserve hardened synthetic foundation, operations and fixture transcription. Main owns restore 0581 and privacy 0584; only Deepgram constraints remain as migration 0586.",
+      "allow": [
+        "apps/api/src/capture/contracts.ts",
+        "apps/api/src/capture/deepgram-fixture.service.test.ts",
+        "apps/api/src/capture/deepgram-fixture.service.ts",
+        "apps/web/app/ui/review-proposal.tsx",
+        "config/foundation-gates.v1.json",
+        "config/ops-alerts.v1.json",
+        "docs/operations/deepgram-fixture-data-flow.md",
+        "docs/operations/foundation-gates.md",
+        "docs/operations/incident-ownership.md",
+        "docs/operations/provider-register.md",
+        "packages/ai/src/deepgram.test.ts",
+        "packages/ai/src/deepgram.ts",
+        "packages/ai/src/index.ts",
+        "packages/config/src/foundation-gates.test.ts",
+        "packages/config/src/foundation-gates.ts",
+        "packages/config/src/ops-alerts.ts",
+        "packages/core/src/deepgram-transcript.test.ts",
+        "packages/core/src/deepgram-transcript.ts",
+        "packages/core/src/index.ts",
+        "packages/db/migration-notes/0586_deepgram_fixture_transcripts.md",
+        "packages/db/migrations/0586_deepgram_fixture_transcripts.sql",
+        "packages/db/src/capture-repository.ts",
+        "packages/db/src/evidence.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/resumable-evidence.test.ts",
+        "packages/db/src/speech-audio.test.ts",
+        "packages/db/src/speech-audio.ts",
+        "packages/db/test/deepgram.integration.test.ts",
+        "packages/db/test/deployment-preflight-checks.ts",
+        "packages/db/test/deployment-preflight.integration.test.ts",
+        "packages/db/test/migration-proofs/0586_deepgram_fixture_transcripts.proof.json",
+        "packages/db/test/ops-alerts.test.ts",
+        "packages/db/test/outbox.integration.test.ts",
+        "packages/db/test/privacy-operations.integration.test.ts",
+        "tools/deployment-preflight.mjs",
+        "tools/foundation-gates.test.mjs",
+        "tools/ops-pack.test.mjs",
+        "tools/provider-register.mjs"
+      ]
+    }
+  }
+}
