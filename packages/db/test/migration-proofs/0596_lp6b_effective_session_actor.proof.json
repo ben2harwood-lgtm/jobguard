@@ -1,5 +1,5 @@
 {
-  "migration": "0584_lp6b_effective_session_actor.sql",
+  "migration": "0596_lp6b_effective_session_actor.sql",
   "lp0": [
     {
       "section": "routines",
