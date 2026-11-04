@@ -16,7 +16,7 @@ const previousEnvironment=process.env.JOBGUARD_ENV;
 beforeAll(async()=>{
   process.env.JOBGUARD_ENV='synthetic_demo';
   const directory=await mkdtemp(join(tmpdir(),'jg-pf1b-')),port=await freePort(61700,100),value=randomUUID();
-  const options={databaseDir:directory,port,user:'postgres',persistent:true,createPostgresUser:process.getuid?.()===0,initdbFlags:['--lc-messages=C','--encoding=UTF8'],onLog:()=>undefined};
+  const options={databaseDir:directory,port,user:'postgres',persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:['--lc-messages=C','--encoding=UTF8'],onLog:()=>undefined};
   postgres=new EmbeddedPostgres({...options,password:value}); await postgres.initialise(); await postgres.start(); await postgres.createDatabase('jobguard_synthetic_demo');
   admin=new Pool({host:'127.0.0.1',port,database:'jobguard_synthetic_demo',user:'postgres',password:value});
   await migrate(admin); await seedIdentity(admin);

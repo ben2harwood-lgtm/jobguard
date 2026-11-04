@@ -42,8 +42,8 @@ export class ShadowObservationReader {
       if(locksAvailable && (await db.$client.query("SELECT 1 FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2",[context.tenantId,jobId])).rowCount)
         throw new ShadowObservationReadError("DETECTION_LOCKED_JOB");
       // Read all merged sources using qualified relationships. A source without an immutable finalized object stays unprocessed.
-      const evidence = (await db.$client.query<{ id: string; object_version_id: string; sha256: string; received: string; evidence_type: string; text: string | null }>(`
-        SELECT e.id,e.object_version_id,e.sha256,to_char(e.server_received_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') received,e.evidence_type,
+      const evidence = (await db.$client.query<{ id: string; object_version_id: string; sha256: string; received: string; evidence_type: string; content_type: string; text: string | null }>(`
+        SELECT e.id,e.object_version_id,e.sha256,to_char(e.server_received_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') received,e.evidence_type,e.content_type,
           c.content_text AS text
         FROM app.evidence_object e
         LEFT JOIN app.capture_source c ON c.tenant_id=e.tenant_id AND c.sha256=e.sha256
@@ -60,7 +60,7 @@ export class ShadowObservationReader {
       const observations: Observation[] = [];
       for (const e of evidence) {
         const kind = supplier.some(s => s.content_hash === e.sha256) ? "supplier_line"
-          : ["completion_photo", "site_photo"].includes(e.evidence_type) ? "completion_photo"
+          : (["completion_photo", "site_photo"].includes(e.evidence_type) || (e.evidence_type === "electrical_certificate" && e.content_type === "image/png")) ? "completion_photo"
           : e.text !== null ? "note_or_voice" : null;
         if (!kind) continue;
         const source = await this.sources.decode({ tenantId:context.tenantId,jobId,kind, evidenceId: e.id, objectVersionId: e.object_version_id, sha256: e.sha256, text: e.text });

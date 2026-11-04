@@ -36,7 +36,7 @@ describe("LP-5c runtime command authority cutover", () => {
   it("refuses forgeries and fabricated completion, then commits and replays a checked positive command", async () => {
     const actor = await jobDoorsActor(db.owner), context = testTenantContext(actor.tenant);
     const commandId = randomUUID(), job = randomUUID();
-    await db.owner.query("INSERT INTO app.job(tenant_id,id,title,status) VALUES($1,$2,'Fictional LP5c job','live')", [actor.tenant, job]);
+    await db.owner.query("INSERT INTO app.job(tenant_id,id,title,status) VALUES($1,$2,'Fictional LP5c job','accepted')", [actor.tenant, job]);
     const count = async () => (await db.owner.query(`SELECT
       (SELECT count(*) FROM app.command_receipt WHERE tenant_id=$1) receipts,
       (SELECT count(*) FROM app.decision_resolution WHERE tenant_id=$1) resolutions,

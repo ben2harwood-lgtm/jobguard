@@ -10,6 +10,8 @@ const knownErrors = new Set(["SSO_ROUTE_BLOCKED","SSO_NOT_FOUND","SSO_FORBIDDEN"
 export function ssoRepositoryError(error:unknown):SsoRepositoryError {
   if(error instanceof SsoRepositoryError)return error;
   const e=(error??{}) as {code?:string;message?:string;constraint?:string};
+  if(e.code === "42501" && e.message === "FORBIDDEN") return new SsoRepositoryError("SSO_FORBIDDEN");
+  if(e.code === "42501" && e.message === "MODE_FORBIDDEN") return new SsoRepositoryError("SSO_ROUTE_BLOCKED");
   if(e.message && knownErrors.has(e.message))return new SsoRepositoryError(e.message);
   if(e.code==="23505")return new SsoRepositoryError(e.constraint?.includes("verified_domain")?"DOMAIN_CLAIMED":e.constraint?.includes("sso_assertion_use")?"ASSERTION_REPLAY":"INVALID_SSO_INPUT");
   return new SsoRepositoryError("SSO_UNAVAILABLE",{cause:error});

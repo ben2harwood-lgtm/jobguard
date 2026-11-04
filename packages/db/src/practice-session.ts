@@ -20,7 +20,7 @@ export async function authenticatePracticeSession(pool: Pool, token: string | un
  const digest=digestToken(parsed.data);
  const row=(await pool.query(requestedTenantId?"SELECT * FROM app.authenticate_practice_session($1,$2)":"SELECT * FROM app.authenticate_practice_session($1)",requestedTenantId?[digest,requestedTenantId]:[digest])).rows[0];
  if(!row)throw new PracticeAccessError("UNAUTHENTICATED"); const principal=principalV1.parse(row);
- const context=verifiedTenantContextFromMembership({tenantId:principal.tenant_id,membershipId:principal.membership_id,identityUserId:principal.identity_user_id} as AuthenticatedMembership);
+ const context=verifiedTenantContextFromMembership({tenantId:principal.tenant_id,membershipId:principal.membership_id,identityUserId:principal.identity_user_id} as AuthenticatedMembership, {kind:"practice",credential:digest});
  return {context,digest,membershipId:principal.membership_id,identityUserId:principal.identity_user_id};
 }
 

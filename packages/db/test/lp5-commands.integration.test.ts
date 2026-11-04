@@ -41,12 +41,16 @@ async function begin(f: Awaited<ReturnType<typeof fixture>>, command = commercia
 describe("LP-5a actual PostgreSQL command lifecycle", () => {
   it("concurrent duplicate IDs and semantic keys commit one resolution, no grant and the first result", async () => {
     const f = await fixture();
-    const results = await Promise.all([f.command, f.command, { ...f.command, commandId: randomUUID() }].map(c => f.dispatcher.dismissDecision(f.context, c)));
+    const commands=[f.command, f.command, { ...f.command, commandId: randomUUID() }];
+    const results = await Promise.all(commands.map(c => f.dispatcher.dismissDecision(f.context, c)));
     expect(results).toEqual(Array(3).fill({ decisionId: f.command.decisionId, resolution: "dismissed", authorizedAction: false }));
     expect(await counts(f.actor.tenant)).toMatchObject({ receipts: 1, resolutions: 1, authorizations: 0, audits: 2 });
     const audits = (await db.owner.query("SELECT version,payload FROM app.audit_event WHERE tenant_id=$1 AND event_type='command.succeeded'", [f.actor.tenant])).rows;
     expect(audits).toHaveLength(1);
-    expect(audits[0]).toMatchObject({ version: "audit.v2", payload: { references: { commandId: f.command.commandId, auditTrust: "checked_operation" } } });
+    const receipts=(await db.owner.query("SELECT command_id FROM app.command_receipt WHERE tenant_id=$1",[f.actor.tenant])).rows;
+    expect(receipts).toHaveLength(1);
+    expect(commands.map(c=>c.commandId)).toContain(receipts[0].command_id);
+    expect(audits[0]).toMatchObject({ version: "audit.v2", payload: { references: { commandId: receipts[0].command_id, auditTrust: "checked_operation" } } });
     await expect(f.dispatcher.dismissDecision(f.context, { ...f.command, resolution: "rejected" })).rejects.toMatchObject({ code: "COMMAND_CONFLICT" });
     await expect(f.dispatcher.dismissDecision(f.context, { ...f.command, expectedSnapshotRevision: 2 })).rejects.toMatchObject({ code: "COMMAND_CONFLICT" });
   });
@@ -87,10 +91,12 @@ describe("LP-5a actual PostgreSQL command lifecycle", () => {
   });
   it.each(["recovery.message.approve", "other.family"])("requires an unconverted %s receipt to finish before commit", async commandType => {
     const f = await fixture(), commandId = randomUUID();
-    const insert = (tx: TenantTransaction) => tx.$client.query(`INSERT INTO app.command_receipt
+    let inserted = 0;
+    const insert = async (tx: TenantTransaction) => { const result = await tx.$client.query(`INSERT INTO app.command_receipt
       (command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id)
-      VALUES($1,$2,$3,$1::text,repeat('a',64),'processing',$4)`, [commandId, f.actor.tenant, commandType, f.actor.member]);
+      VALUES($1::uuid,$2::uuid,$3::text,$1::uuid::text,repeat('a',64),'processing',$4::uuid)`, [commandId, f.actor.tenant, commandType, f.actor.member]); inserted++; return result; };
     await expect(withTenant(db.owner, f.context, insert)).rejects.toMatchObject({ code: "23514", message: "COMMAND_CONFLICT" });
+    expect(inserted).toBe(1); // The deferred guard, rather than parameter parsing, refuses commit.
     await withTenant(db.owner, f.context, async tx => {
       await insert(tx);
       await tx.$client.query("UPDATE app.command_receipt SET status='succeeded',result='{}',completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2", [f.actor.tenant, commandId]);
@@ -112,7 +118,7 @@ describe("LP-5a actual PostgreSQL command lifecycle", () => {
   it("a handler cannot store arbitrary success JSON, nor rewrite the terminal receipt", async () => {
     const f = await fixture(), c = commercial(f, { commandType: "synthetic.lock" });
     await expect(f.dispatcher.dispatch(f.context, c, { mutate: async () => ({ locked: f.job, injected: "not stored" }) })).resolves.toEqual({ locked: f.job });
-    await expect(withTenant(db.runtime, f.context, tx => tx.$client.query(`UPDATE app.command_receipt SET result='{"forged":true}' WHERE command_id=$1`, [c.commandId]))).rejects.toThrow();
+    await expect(withTenant(db.owner, f.context, tx => tx.$client.query(`UPDATE app.command_receipt SET result='{"forged":true}' WHERE command_id=$1`, [c.commandId]))).rejects.toMatchObject({ code: "23514", message: "AUTHORIZATION_INVALID" });
   });
   it("validates operational no-op input without minting a commercial authorization", async () => {
     const f = await fixture(), c = commercial(f, { commandType: "synthetic.lock" });
@@ -155,7 +161,7 @@ describe("LP-5a actual PostgreSQL command lifecycle", () => {
   it("cannot bypass a completed receipt's proof by switching tenant before commit", async () => {
     const f = await fixture(), other = await jobDoorsActor(db.owner), c = commercial(f, { commandType: "synthetic.lock" });
     const first = await f.dispatcher.dispatch(f.context, c, { mutate: async () => ({ locked: f.job }) });
-    await expect(withTenant(db.runtime, f.context, async tx => {
+    await expect(withTenant(db.owner, f.context, async tx => {
       await tx.$client.query("UPDATE app.command_receipt SET result='{\"forged\":true}' WHERE command_id=$1", [c.commandId]);
       await tx.$client.query("SELECT set_config('app.tenant_id',$1,true)", [other.tenant]);
     })).rejects.toMatchObject({ code: "23514", message: "AUTHORIZATION_INVALID" });
