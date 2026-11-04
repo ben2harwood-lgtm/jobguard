@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "demo-sfinish": {
+      "branches": [
+        "codex/sandbox/demo-sfinish"
+      ],
+      "note": "AMBER DEMO-S: evidence-after-lock browser scenario over SV-5 commands; honest trial report gaps over MON-3. No migration or product authority change. Human observations and trial scope card remain open.",
+      "allow": [
+        "apps/web/e2e/DEMO-A1-rest.spec.ts",
+        "apps/web/e2e/DEMO-J5-trial.spec.mts",
+        "packages/db/src/small-builder-trial-demo-repository.test.ts"
+      ]
+    }
+  }
+}

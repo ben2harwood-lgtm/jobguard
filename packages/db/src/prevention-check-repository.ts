@@ -2,6 +2,7 @@ import { beginRepositoryCommand, completeRepositoryCommand } from "./repository-
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { jobPartiesSnapshotV1, preventionCommandV1, preventionCommandResultV1, preventionViewV1, preventionResultV1,
+  exposureScheduleCommandV1, exposureScheduleViewV1, EXPOSURE_SOURCE,
   preventionCompanyEligibleAtLatest, PreventionCheckError, PREVENTION_COMPANY_ELIGIBILITY_REFERENCE,
   type PreventionKind, type PreventionResultV1, type JobPartiesSnapshotV1 } from "@jobguard/core";
 import { appendAuditBatch } from "./audit.js";
@@ -70,6 +71,43 @@ export class PreventionCheckRepository {
   async view(context: VerifiedTenantContext, actor: string, job: string, practiceDigest?: string) {
     this.syntheticOnly();
     return withTenant(this.pool,context,async db=>{await this.authorize(db,context.tenantId,actor,job,practiceDigest);return this.viewIn(db,context.tenantId,job);});
+  }
+  /** Separate operational forecast history; never a financial source or an issued schedule. */
+  async exposureSchedule(context: VerifiedTenantContext, actor: string, job: string, practiceDigest: string | undefined, raw?: unknown) {
+    this.syntheticOnly();
+    const parsed = raw === undefined ? null : exposureScheduleCommandV1.safeParse(raw);
+    if (parsed && !parsed.success) throw new PreventionCheckError("INVALID_PREVENTION_COMMAND");
+    return withTenant(this.pool, context, async db => {
+      const tenant = context.tenantId;
+      await this.authorize(db, tenant, actor, job, practiceDigest, true);
+      const input = parsed?.success ? parsed.data : null;
+      if (input) await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`exposure:${tenant}`]);
+      const latest = (await db.$client.query<{ revision: number; stages: unknown[]; recorded_at: Date }>(
+        "SELECT revision,stages,recorded_at FROM app.practice_exposure_schedule WHERE tenant_id=$1 AND job_id=$2 ORDER BY revision DESC LIMIT 1", [tenant, job])).rows[0];
+      let saved = latest;
+      if (input) {
+        const requestHash = digest({ job, input });
+        const replay = (await db.$client.query<{ job_id: string; request_hash: string }>(
+          "SELECT job_id,request_hash FROM app.practice_exposure_schedule WHERE tenant_id=$1 AND command_id=$2", [tenant, input.commandId])).rows[0];
+        if (replay && (replay.job_id !== job || replay.request_hash !== requestHash)) throw new PreventionCheckError("COMMAND_CONFLICT");
+        if (!replay) {
+          if ((latest?.revision ?? 0) !== input.expectedRevision) throw new PreventionCheckError("REVISION_CONFLICT");
+          saved = (await db.$client.query<{ revision: number; stages: unknown[]; recorded_at: Date }>(
+            `INSERT INTO app.practice_exposure_schedule(tenant_id,job_id,revision,command_id,request_hash,stages)
+             VALUES($1,$2,$3,$4,$5,$6) RETURNING revision,stages,recorded_at`,
+            [tenant, job, input.expectedRevision + 1, input.commandId, requestHash, JSON.stringify(input.stages)])).rows[0];
+          // Last lock is the audit head, as for the existing prevention commands.
+          await appendAuditBatch(db, [{ id: randomUUID(), version: "audit.v1", actorRef: `membership:${actor}`,
+            eventType: "prevention.exposure_schedule_saved", subjectType: "job", subjectRef: job,
+            payload: { references: { commandId: input.commandId }, hashes: { request: requestHash }, classifications: { action: "operational" } } }]);
+        }
+      }
+      const now = (await db.$client.query<{ now: Date }>("SELECT clock_timestamp() now")).rows[0]!.now.toISOString();
+      const source = saved ? { ...EXPOSURE_SOURCE, retrievedAt: now, observedAt: saved.recorded_at.toISOString() } : null;
+      return exposureScheduleViewV1.parse({ version: "exposure-schedule-view.v1", environment: "synthetic_demo", jobId: job,
+        revision: saved?.revision ?? 0, schedule: saved ? { version: "exposure-schedule.v1", environment: "synthetic_demo", evaluatedAt: now,
+          stages: saved.stages.map(stage => ({ ...(stage as object), source })) } : null });
+    });
   }
   async command(context: VerifiedTenantContext, actor: string, job: string, raw: unknown, practiceDigest?: string) {
     this.syntheticOnly();

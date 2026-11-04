@@ -1,3 +1,4 @@
+import { applyOutboundPause } from "./outbound-pause-fixture.js";
 import { seedLegacySandbox } from "./lp-legacy-sandbox-fixture.js";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, readFile } from "node:fs/promises";
@@ -144,6 +145,7 @@ describe("MIGFIX-8 upgrade", () => {
         await db.query(name === "0095_job_parties.sql" ? text.replace("BEGIN;", "BEGIN; SELECT set_config('app.deployment_mode','synthetic_demo',true);") : text);
         await db.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)", [name]);
       }
+      await applyOutboundPause(db);
       await db.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [DEMO_TENANT_ID]);
       await db.query("SELECT set_config('app.tenant_id',$1,false)", [DEMO_TENANT_ID]);
       await db.query("INSERT INTO identity.identity_user(id) VALUES($1)", [DEMO_IDENTITY_USER_ID]);

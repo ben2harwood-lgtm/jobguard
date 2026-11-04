@@ -1,11 +1,24 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
-import { prepareEvidencePackV3Sources } from "../src/evidence-pack-v3-sources.js";
+import { prepareEvidencePackV3Sources, withEvidencePackV3Snapshot } from "../src/evidence-pack-v3-sources.js";
 import { asFixtureTenant } from "./recovery-attribution-fixture.js";
 import { createEvidencePackV3Fixture, closeEvidencePackV3Fixture, readOrdinary, recordingPool, type V3Fixture } from "./evidence-pack-v3-fixture.js";
 let f: V3Fixture;
 beforeAll(async () => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); f = await createEvidencePackV3Fixture(); }, 90_000);
 afterAll(async () => { if (f) await closeEvidencePackV3Fixture(f); vi.unstubAllEnvs(); });
+it("establishes read-only repeatable-read before tenant setup in PostgreSQL", async () => {
+  const statements: Array<{ sql: string; values: unknown[] | undefined }> = [];
+  await withEvidencePackV3Snapshot(recordingPool(f.runtime, statements), f.auth.context, async tx => {
+    expect((await tx.$client.query("SHOW transaction_isolation")).rows[0].transaction_isolation).toBe("repeatable read");
+    expect((await tx.$client.query("SHOW transaction_read_only")).rows[0].transaction_read_only).toBe("on");
+    expect((await tx.$client.query("SELECT current_setting('app.tenant_id') tenant_id")).rows[0].tenant_id).toBe(f.source.tenantId);
+  });
+  expect(statements.slice(0, 2)).toEqual([
+    { sql: "BEGIN ISOLATION LEVEL REPEATABLE READ, READ ONLY", values: undefined },
+    { sql: "SELECT set_config('app.tenant_id', $1, true)", values: [f.source.tenantId] },
+  ]);
+  expect(statements.at(-1)?.sql).toBe("COMMIT");
+});
 
 it("SB-02 activation: completed pre-lock artifacts, source revision and runtime statement shape stay identical with zero/many hidden signals", async () => {
   const { EvidencePackV3Repository, EvidencePackV3WorkerRepository } = await import("../src/evidence-pack-v3-repository.js");
@@ -57,12 +70,43 @@ it("SB-02 activation: completed pre-lock artifacts, source revision and runtime 
       VALUES($1,$2,$3,$3,'possible_extra','deterministic','synthetic:SB02',clock_timestamp(),'Hidden fixture','low','held_for_final_check')`, [f.source.tenantId, jobId, randomUUID()]);
   });
   expect(await run()).toEqual(zero);
+  // At activation, an ordinary read/material fetch must not wait on hidden-table
+  // locks. The negative control proves the lock is effective; this is not a
+  // claim of identical HTTP latency. Must-surface detection is intentionally separate.
+  const ordinaryMaterial = await asFixtureTenant(f.admin, f.source.tenantId, async db =>
+    (await db.query("SELECT app.evidence_pack_v3_material($1,$2,true) material", [f.source.tenantId, caseId])).rows[0].material);
+  const blocker = await f.admin.connect();
+  try {
+    await blocker.query("BEGIN");
+    await blocker.query("LOCK TABLE app.shadow_commercial_signal, app.final_check_run_binding, app.recovery_attribution_revision IN ACCESS EXCLUSIVE MODE");
+    await expect(asFixtureTenant(f.admin, f.source.tenantId, async db => {
+      await db.query("SET LOCAL lock_timeout='500ms'");
+      await db.query("SELECT count(*) FROM app.shadow_commercial_signal");
+    })).rejects.toMatchObject({ code: "55P03" });
+    await asFixtureTenant(f.admin, f.source.tenantId, async db => {
+      await db.query("SET LOCAL lock_timeout='500ms'");
+      const result = await db.query(`SELECT app.read_evidence_pack_v3($1,$2,$3) view,
+        app.evidence_pack_v3_material($1,$2,true) material`, [f.source.tenantId, caseId, f.auth.digest]);
+      expect(result.rows[0].view.visibleSourceRevision).toBe(zero.revision);
+      expect(result.rows[0].material).toEqual(ordinaryMaterial);
+    });
+  } finally {
+    await blocker.query("ROLLBACK");
+    blocker.release();
+  }
   // Structural timing check: the public read/request and ordinary material branch
   // never query a hidden relation. Wall-clock equality is not inferred from a stopwatch.
   const definitions = (await f.admin.query(`SELECT proname,pg_get_functiondef(oid) body FROM pg_proc WHERE pronamespace='app'::regnamespace
-    AND proname IN('read_evidence_pack_v3','request_evidence_pack_v3','evidence_pack_v3_ordinary','evidence_pack_v3_material')`)).rows;
+    AND proname IN('read_evidence_pack_v3','request_evidence_pack_v3','evidence_pack_v3_ordinary','evidence_pack_v3_material',
+      'prepare_evidence_pack_v3','complete_evidence_pack_v3_check','finish_evidence_pack_v3','evidence_pack_v3_owner')`)).rows;
+  expect(definitions).toHaveLength(8);
   for (const def of definitions) {
     const ordinaryBody = def.proname === "evidence_pack_v3_material" ? def.body.split("SELECT b0.*")[0] : def.body;
+    if (def.proname === "evidence_pack_v3_material") {
+      expect(def.body).toContain("SELECT b0.*");
+      expect(ordinaryBody).toContain("IF NOT FOUND OR ordinary_only THEN RETURN");
+      expect(ordinaryBody).not.toContain("b app.final_check_run_binding");
+    }
     expect(ordinaryBody).not.toMatch(/app\.(?:shadow_|final_check_run_binding|recovery_attribution_revision)/u);
   }
 });

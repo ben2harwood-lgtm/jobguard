@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent9-signal-spec": {
+      "branches": ["codex/sandbox/ent9-signal-spec"],
+      "note": "ENT-11b test-only ENT-9 advisory coverage: matched and unmatched Northside billed variations over real HTTP at phone and desktop widths; all dashboard money figures remain unchanged.",
+      "allow": ["apps/web/e2e/ENT-11b.spec.ts"]
+    }
+  }
+}

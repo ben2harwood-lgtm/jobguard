@@ -12,6 +12,10 @@ export class PreventionCheckApplication {
     const auth = await this.access.job(jobId);
     return this.repository.view(auth.context,auth.membershipId,jobId,auth.digest);
   }
+  async exposureSchedule(jobId: string, raw?: unknown) {
+    const auth = await this.access.job(jobId);
+    return this.repository.exposureSchedule(auth.context, auth.membershipId, jobId, auth.digest, raw);
+  }
   async command(jobId: string, raw: unknown, routeAction?: string) {
     const auth = await this.access.job(jobId);
     const parsed = preventionCommandV1.safeParse(raw);

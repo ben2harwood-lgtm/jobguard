@@ -87,8 +87,9 @@ describe.each(callers)("LP-5b $type complete caller", caller => {
     if(legacy.input?.commandId)legacy.input.commandId=commandId;
     if("actorMembershipId" in legacy)legacy.actorMembershipId=h.member;
     const begin = (type: string) => withTenant(h.runtime, h.ctx, async db => {
-      await beginRepositoryCommand(db, { tenantId: h.tenant, actorMembershipId: h.member, commandId,
-        commandType: type, semanticKey: commandId, jobId: c.jobId, legacyJson: JSON.stringify(legacy) });
+      const claim=await beginRepositoryCommand(db, { tenantId: h.tenant, actorMembershipId: h.member, commandId,
+        commandType: type, semanticKey: ["LogBuilderExtra","AddFinalReviewExtra"].includes(caller.type)?`extra-origin:${c.jobId}:${commandId}`:commandId, jobId: c.jobId, legacyJson: JSON.stringify(legacy) });
+      expect(claim.kind).toBe("claim");
       return completeRepositoryCommand(db, commandId, { id: randomUUID(), revisionId: randomUUID() });
     });
     await expect(begin(`unknown.${caller.type}`)).rejects.toMatchObject({ message: "AUTHORIZATION_INVALID" });

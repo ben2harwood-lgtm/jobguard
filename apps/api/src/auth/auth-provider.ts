@@ -23,6 +23,7 @@ export const rolePermits = (role: Role, permission: Permission): boolean => perm
 export interface AuthPrincipal {
   readonly identityUserId: string;
   readonly sessionId: string;
+  readonly sessionCredential?: string;
   readonly csrfToken: string;
 }
 
@@ -113,7 +114,7 @@ export class MemoryAuthProvider implements AuthProvider {
     const digest = this.digest(token);
     const session = this.sessions.find((candidate) => timingSafeEqual(candidate.tokenDigest, digest));
     return session && session.expiresAt > this.now()
-      ? { identityUserId: session.identityUserId, sessionId: session.id, csrfToken: session.csrfToken }
+      ? { identityUserId: session.identityUserId, sessionId: session.id, csrfToken: session.csrfToken, sessionCredential: digest.toString("hex") }
       : undefined;
   }
 

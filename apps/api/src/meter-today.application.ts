@@ -5,7 +5,12 @@ import type { IdentityApplication } from "./auth/identity.application.js";
 import type { TenantRequestCredentials } from "./auth/principal-bridge.js";
 
 export class MeterTodayApplication {
-  constructor(private readonly identity: IdentityApplication, private readonly repository: Pick<MeterTodayRepository, "read">) {}
+  constructor(private readonly identity: IdentityApplication, private readonly repository: Pick<MeterTodayRepository, "read"> & Partial<Pick<MeterTodayRepository, "readJobs">>) {}
+  async readJobs(credentials: TenantRequestCredentials) {
+    if (process.env.JOBGUARD_ENV !== "synthetic_demo" || !this.repository.readJobs) throw new MeterLifecyclePersistenceError("METER_FORBIDDEN");
+    const context = await resolveVerifiedTenantContext(this.identity.provider, credentials, this.identity.allowedOrigin);
+    return this.repository.readJobs(context, this.identity.provider.digest(`session:${credentials.sessionToken}`));
+  }
   async read(credentials: TenantRequestCredentials) {
     if (process.env.JOBGUARD_ENV !== "synthetic_demo") throw new MeterLifecyclePersistenceError("METER_FORBIDDEN");
     const context = await resolveVerifiedTenantContext(this.identity.provider, credentials, this.identity.allowedOrigin);
@@ -25,13 +30,21 @@ export function meterTodayFailure(error: unknown) {
  * as the meter read; actor and tenant are derived on the server. */
 export class MeterWorkStateApplication {
   constructor(private readonly identity: IdentityApplication,
-    private readonly repository: Pick<import("@jobguard/db").JobWorkStateRepository, "command">) {}
+    private readonly repository: Pick<import("@jobguard/db").JobWorkStateRepository, "command" | "read">) {}
+  async read(credentials: TenantRequestCredentials, jobId: string) {
+    if (process.env.JOBGUARD_ENV !== "synthetic_demo") throw new MeterLifecyclePersistenceError("METER_FORBIDDEN");
+    const context = await resolveVerifiedTenantContext(this.identity.provider, credentials, this.identity.allowedOrigin);
+    return this.repository.read(context, jobId, await this.membershipId(credentials, context.tenantId));
+  }
   async command(credentials: TenantRequestCredentials, jobId: string, raw: unknown) {
     if (process.env.JOBGUARD_ENV !== "synthetic_demo") throw new MeterLifecyclePersistenceError("METER_FORBIDDEN");
     const context = await resolveVerifiedTenantContext(this.identity.provider, credentials, this.identity.allowedOrigin);
+    return this.repository.command(context, jobId, await this.membershipId(credentials, context.tenantId), raw);
+  }
+  private async membershipId(credentials: TenantRequestCredentials, tenantId: string) {
     const principal = await this.identity.provider.authenticate(credentials.sessionToken!);
-    const membership = principal && await this.identity.provider.findMembership(principal, context.tenantId);
+    const membership = principal && await this.identity.provider.findMembership(principal, tenantId);
     if (!membership) throw new MeterLifecyclePersistenceError("METER_FORBIDDEN");
-    return this.repository.command(context, jobId, membership.id, raw);
+    return membership.id;
   }
 }

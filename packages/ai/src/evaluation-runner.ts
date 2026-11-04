@@ -1,3 +1,4 @@
+import { GOLDEN_TARGETS } from "./golden-run-record.js";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { z } from "zod";
@@ -65,8 +66,7 @@ export async function runCaptureEvaluation(mutation?: EvaluationMutation) {
     versions: { dataset: sources.version, labels: labels.version, parser: CAPTURE_FIXTURE_PARSER_VERSION,
       fixtureRoute: PINNED_CAPTURE_MODEL, prompt: CAPTURE_PROMPT_VERSION, schema: CAPTURE_SCHEMA_VERSION },
     hashes: { datasetSha256: hash(sourceRaw), labelsSha256: hash(labelRaw) },
-    targets: { scopeIntentRecallPercent: 95, unsupportedMonetaryFacts: 0, validCitationsPercent: 100,
-      designatedAmbiguities: "ALL", additionalGuard: "Every case must match its explicit labels; no pooling away failures" },
+    targets: { ...GOLDEN_TARGETS },
     cases: { passed: results.filter(r => r.passed).length, total: results.length }, totals,
     citationStage: "PROPOSAL_OUTPUT_BEFORE_DATABASE_PERSISTENCE", citationOffsetUnit: "UTF-16-code-units",
     negativeControl: mutation ?? null, costPence: 0, elapsedMs: Date.now() - started,
