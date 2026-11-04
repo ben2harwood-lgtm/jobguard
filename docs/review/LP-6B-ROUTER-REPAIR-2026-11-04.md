@@ -41,4 +41,8 @@ The named definition check passes. The test subsequently reaches a pre-existing 
 
 ## Validation
 
-Exact commands, results and remaining failed titles will be recorded after the current checks finish. Earlier reports remain historical evidence; their 0584 references describe the then-current migration stem.
+Current completed checks: web 121 files / 1,662 tests passed (138.015s); typecheck passed (204.870s); lint recheck passed (144.130s); migration boundaries 110 tests passed (48.004s); recovery/dashboard races 28 passed (22.699s); job-source/money-trail 15 passed (18.403s). The fresh build passed all seven tasks (109.547s); the final API-only rebuild passed (31.069s). Four full DB shards and the complete API suite are still running; no green full-suite claim is made.
+
+The new main privacy repository has a real typed-binding-refusal mapping gap, hidden by its old unbound fixture contexts. In an isolated checkout, a genuine-session regression fails with PRIVACY_UNAVAILABLE before the two-line typed-error fix, then the whole six-test privacy file passes. The tested patch remains isolated until the main matrix closes; it has not changed the active run's source.
+
+Tools: 419 passed / 4 failed (423 total; 123.459s), the same practice-session source-fingerprint guards. Those pins remain unchanged. Exact commands, working directories, patch identities, results and remaining failed titles are in the [current validation journal](LP-6B-ROUTER-REPAIR-2026-11-04-validation.md). Earlier reports remain historical evidence; their 0584 references describe the then-current migration stem.
