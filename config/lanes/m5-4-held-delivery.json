@@ -5,10 +5,14 @@
       "branches": [
         "codex/sandbox/m5-4-held-delivery"
       ],
-      "note": "AMBER: M5-4 held delivery intake must not record goods receipts. NOPR; real feeds and approvals remain held.",
+      "note": "AMBER: M5-4 mandatory inbox review for held merchant documents. NOPR; real feeds and approvals remain held.",
       "allow": [
         "packages/db/src/supplier-document-repository.ts",
-        "packages/db/test/supplier-documents.integration.test.ts"
+        "packages/db/src/inbox-relevance-repository.ts",
+        "apps/web/app/ui/supplier-documents.tsx",
+        "packages/db/test/merchant-ingestion.integration.test.ts",
+        "packages/db/src/merchant-ingestion.test.ts",
+        "config/lanes/m5-4-held-delivery.json"
       ]
     }
   }

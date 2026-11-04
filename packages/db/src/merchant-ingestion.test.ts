@@ -34,8 +34,10 @@ it("driver double: changed prices quarantine against the original identity and p
   const arrival = db.writes.find(w => w.sql.includes("INSERT INTO app.supplier_document_intake("))!;
   expect(arrival.sql).toContain("canonical_document_id");
   expect(arrival.values.at(-1)).toBe(canonicalId);
-  expect(db.writes.every(w => /INSERT INTO app.supplier_document(?:\(|_version\(|_intake\()/.test(w.sql))).toBe(true);
-  expect(db.writes.at(-1)?.values).toContain("fixture_portal");
+  const allowedTables = ["app.supplier_document", "app.supplier_document_version", "app.supplier_document_intake",
+    "app.inbox_finding_revision", "app.inbox_decision_revision", "app.inbox_outcome_event"];
+  expect(db.writes.every(w => allowedTables.includes(/INSERT INTO ([a-z_]+\.[a-z_]+)\(/.exec(w.sql)?.[1] ?? ""))).toBe(true);
+  expect(arrival.values).toContain("fixture_portal");
   expect(appendAuditBatch).toHaveBeenCalledWith(expect.anything(), [expect.objectContaining({ eventType: "merchant_document.review_required" })]);
   for (const [sql, values] of db.query.mock.calls) expect(values?.slice(sql.startsWith("INSERT") ? 1 : 0, sql.startsWith("INSERT") ? 3 : 2)).toEqual([tenant, job]);
 });
