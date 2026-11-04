@@ -11,7 +11,7 @@
         "status": "approved_current",
         "target": {
           "state": "review_at_card",
-          "note": "Built on LP-6b; full PostgreSQL CI and exact-head independent RED review required."
+          "note": "Built on LP-6d and its LP-6b/c predecessors; full PostgreSQL CI and exact-head independent RED review required."
         },
         "cards": [
           "LP-6e",
@@ -23,7 +23,7 @@
           "LP-6d": "Bind remaining checked callers before activation.",
           "LP-12": "Review private audit owner custody."
         },
-        "downstream": "Owner-only actor and tenant lookups. Runtime cannot select checked trust. Protected sealer pin refresh remains held for Ben.",
+        "downstream": "Owner-only actor and tenant lookups. Runtime cannot select checked trust. Protected sealer pin refresh remains held for its authorized owner.",
         "sources": [
           "packages/db/migrations/0785_lp6e_audit_attribution.sql"
         ],
@@ -33,7 +33,7 @@
         ],
         "gaps": [
           "Protected app.lp4_seal_audit definition pin and static-call inventory need Ben authorization; this proof deliberately does not replace them.",
-          "LP-6d absent; PostgreSQL CI and independent RED security checks remain required."
+          "LP-6d chain present; PostgreSQL CI and independent RED security checks remain required."
         ],
         "path": "ap-lp6e-audit-attribution"
       }
@@ -148,7 +148,7 @@
       "after": {
         "id": "ap-lp6e-audit-attribution",
         "title": "LP-6e bound audit attribution",
-        "description": "Owner-only actor and tenant lookups. Runtime cannot select checked trust. Protected sealer pin refresh remains held for Ben.",
+        "description": "Owner-only actor and tenant lookups. Runtime cannot select checked trust. Protected sealer pin refresh remains held for its authorized owner.",
         "cards": [
           "LP-6e",
           "LP-6d",
@@ -168,7 +168,7 @@
         ],
         "gaps": [
           "Protected app.lp4_seal_audit definition pin and static-call inventory need Ben authorization; this proof deliberately does not replace them.",
-          "LP-6d absent; PostgreSQL CI and independent RED security checks remain required."
+          "LP-6d chain present; PostgreSQL CI and independent RED security checks remain required."
         ]
       }
     }

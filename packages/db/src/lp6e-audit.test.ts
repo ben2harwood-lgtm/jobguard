@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { readFileSync, readdirSync } from "node:fs";
 import { expect, it } from "vitest";
 import { auditActorAttribution, canonicalAuditHash, verifyAuditChain, type AuditEvent, type AuditEventInput } from "./audit.js";
 import { AUDIT_EXPORT_NOTICE, AUDIT_EXPORT_SANDBOX, signAuditExport, verifySignedAuditExport } from "./audit-export-repository.js";
@@ -59,4 +60,19 @@ it.each(["auditTrust", "auditActorKind"])("refuses misplaced trusted metadata %s
   expect(() => verifyAuditChain([sealed({ payload: {
     references: { auditActorKind: "bound_member", auditTrust: "lower_trust" }, hashes: { [key]: "a".repeat(64) },
   } })])).toThrow("Reserved audit payload field");
+});
+
+it("extends the latest predecessor sealer and rechecks expiry after the final lock", () => {
+  const directory = new URL("../migrations/", import.meta.url);
+  const definition = /CREATE (?:OR REPLACE )?FUNCTION app\.lp4_seal_audit\([\s\S]*?END \$\$;/u;
+  const predecessors = readdirSync(directory).filter(name => name.endsWith(".sql") && name < "0785")
+    .sort().filter(name => definition.test(readFileSync(new URL(name,directory),"utf8")));
+  expect(predecessors.at(-1)).toBe("0520_lp4_database_audit.sql");
+  const sql = readFileSync(new URL("0785_lp6e_audit_attribution.sql",directory),"utf8");
+  expect(sql.match(/CREATE (?:OR REPLACE )?FUNCTION /gu)).toHaveLength(1);
+  expect(sql).toContain("GRANT EXECUTE ON FUNCTION app.current_actor(),app.current_tenant() TO jobguard_audit_writer");
+  const lock = sql.indexOf("SELECT h.sequence,h.event_hash INTO seq,prev");
+  const recheck = sql.indexOf("IF app.current_actor() IS DISTINCT FROM bound_actor",lock);
+  expect(lock).toBeGreaterThan(0); expect(recheck).toBeGreaterThan(lock);
+  expect(recheck).toBeLessThan(sql.indexOf("seq:=seq+1"));
 });

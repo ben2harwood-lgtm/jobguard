@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/lp-6e-audit-attribution"
       ],
-      "note": "LP-6e RED NOPR; LP-6d absent and protected sealer pin refresh held for Ben. Database/security checks pending.",
+      "note": "LP-6e RED NOPR; LP-6d chain present; protected sealer pin refresh held for its authorized owner. Database/security checks pending.",
       "allow": [
         "apps/web/app/admin/contractor/audit-exports/page.tsx",
         "docs/contracts/audit-v1.md",

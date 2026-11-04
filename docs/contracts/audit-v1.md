@@ -112,7 +112,7 @@ fields and are refused in every section. No caller text is merged into those fie
 Verifier/export attribution distinguishes v3 bound members, v3 system work and old
 unverified actor claims. v1/v2 history, hashes and checkpoint semantics stay intact.
 
-Landing remains held for predecessor integration, authorized source-pin/inventory
+Landing remains held for authorized source-pin/inventory
 refresh and whole-PostgreSQL regression checks. Existing generic authority writers
 must be converted to their checked domain operation, never merely relabelled as
 checked. Existing LP-4 version-specific tests must be run at their historical schema
@@ -120,15 +120,27 @@ boundary while retaining their original assertions. No production authority-cons
 closure or release is claimed by this built-ahead candidate. Forward fix only; do not
 rewrite old history or restore direct runtime audit writes on failure.
 
-4 November catch-up boundary: 0785 is based on the unchanged LP-4 sealer body
-in local `origin/main` at `f78c81684`, with LP-6c `0570` already present.
-LP-6d is absent. LP-6d retains the remaining checked authority/evidence/commitment
-routines; this piece does not recreate those sibling bodies. The audit-writer
-inventory includes later customer-portal issue/acceptance (`0533`, `0545`),
-connector intake (`0554`) and accounting export (`0558`): each still reaches the
-single private sealer and receives v3 attribution. Non-member execution principals
-are labelled system work; that label does not authenticate a customer identity.
+4 November chained catch-up: LP-6d `cdd4e3282` is present with LP-6c `0591`
+and LP-6b's latest session authority. The absence-only predecessor hold is closed;
+predecessor landing and exact-head CI are separate evidence. The latest preceding
+sealer definition remains `0520`; 0785 replaces only that audit primitive, reusing
+the inherited actor/tenant accessors and checked domain routines. It does not
+recreate sibling routines. After waiting for the audit head, it revalidates a
+bound request's lifetime without taking another business lock.
+
+The audit-writer inventory includes later customer-portal issue/acceptance (`0533`,
+`0545`), connector intake (`0554`) and accounting export (`0558`): each still reaches
+the single private sealer and receives v3 attribution. Non-member execution
+principals are labelled system work; that label does not authenticate a customer
+identity. LP-6d's customer-message writer remains held under the router's ruling:
+`identity.customer_portal_message` needs separate customer sign-in proof after
+LP-6b lands; no sponsor impersonation or invented member binding is supplied here.
 The 0785 proof records the two owner-only lookup grants and their exact ACL changes.
 It intentionally leaves the protected sealer definition hash and static-call pin
-unchanged for Ben; catalogue CI must fail until that authorized update is supplied.
-No existing scanner, fingerprint, pin or historical test assertion is relaxed.
+unchanged for the authorized owner; catalogue CI must fail until that authorized
+update is supplied. No scanner, fingerprint, pin or historical assertion is relaxed.
+
+LATER / SIMPLICITY (initial review): the authority-event classification in
+`0785_lp6e_audit_attribution.sql` and `packages/db/src/audit.ts` must agree.
+A future shared fixture table for event-name acceptance/refusal would make SQL and
+verifier drift easier to detect without changing their separate execution boundaries.

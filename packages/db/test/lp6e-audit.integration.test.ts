@@ -25,8 +25,8 @@ async function chain(tenant: string): Promise<AuditEvent[]> {
     FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence`, [tenant])).rows;
 }
 it("stamps A despite a claim naming B; verifier agrees", async () => {
-  const p = await principal();
-  await transaction(db.runtime,p.tenant,async c => { await bind(c,p); await append(c,[input()]); });
+  const p = await principal(), peer = await jobDoorsActor(db.owner,p.tenant);
+  await transaction(db.runtime,p.tenant,async c => { await bind(c,p); await append(c,[input({actorRef:`membership:${peer.member}`})]); });
   const events = await chain(p.tenant); verifyAuditChain(events); expect(events).toHaveLength(1);
   expect(events[0]!.actorRef).toBe(`membership:${p.member}`); expect(auditActorAttribution(events[0]!)).toBe("bound_member");
 });
@@ -102,4 +102,74 @@ it("binding expiry cannot fall back to a system identity during append", async (
     await append(c,[input()]);
   })).rejects.toMatchObject({code:"42501"});
   expect(await chain(p.tenant)).toEqual([]);
+});
+
+it("keeps every retired/private audit overload unavailable to a bound runtime", async () => {
+  const p = await principal();
+  const names = ["lock_audit_head", "advance_audit_head", "lp4_seal_audit", "append_final_lock_audit", "append_shadow_audit", "append_final_check_audit"];
+  const rows = (await db.owner.query<{ name: string; args: string; executable: boolean }>(`
+    SELECT p.proname name,oidvectortypes(p.proargtypes) args,
+      has_function_privilege('lp2_login',p.oid,'EXECUTE') executable
+    FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+    WHERE n.nspname='app' AND p.proname=ANY($1::text[]) AND p.prokind='f'`, [names])).rows;
+  expect(new Set(rows.map(row => row.name))).toEqual(new Set(names));
+  for (const row of rows) {
+    expect(row.executable, row.name + "(" + row.args + ")").toBe(false);
+    const args = row.args ? row.args.split(", ").map(type => `NULL::${type}`).join(",") : "";
+    await expect(transaction(db.runtime,p.tenant,async c => {
+      await bind(c,p); await c.query(`SELECT app.${row.name}(${args})`);
+    })).rejects.toMatchObject({ code: "42501" });
+  }
+  expect(await chain(p.tenant)).toEqual([]);
+});
+it("cannot reuse an authenticated append's binding in the next pooled transaction", async () => {
+  const p = await principal(), pool = db.freshRuntime();
+  try {
+    await transaction(pool,p.tenant,async c => { await bind(c,p); await append(c,[input()]); });
+    await expect(transaction(pool,p.tenant,c => append(c,[input()]))).rejects.toMatchObject({ code: "42501" });
+    const events = await chain(p.tenant); expect(events).toHaveLength(1); verifyAuditChain(events);
+  } finally { await pool.end(); }
+});
+it("uses a protected binding even for an owner-side checked writer", async () => {
+  const p = await principal(), peer = await jobDoorsActor(db.owner,p.tenant);
+  await transaction(db.owner,p.tenant,async c => {
+    await bind(c,p);
+    await c.query("SELECT app.append_final_lock_audit($1,$2,$3,'final_account.locked',$4)",
+      [randomUUID(),peer.member,randomUUID(),JSON.stringify({revisionId:randomUUID()})]);
+  });
+  const events = await chain(p.tenant); verifyAuditChain(events);
+  expect(events).toHaveLength(1);
+  expect(events[0]!.actorRef).toBe(`membership:${p.member}`);
+  expect(auditActorAttribution(events[0]!)).toBe("bound_member");
+});
+it("refuses a binding that expires while waiting for the audit head", async () => {
+  const p = await principal();
+  // Create a real head before taking the contended lock.
+  await transaction(db.runtime,p.tenant,async c => { await bind(c,p); await append(c,[input()]); });
+  const deadline = (await db.owner.query("UPDATE identity.session SET expires_at=clock_timestamp()+interval '5 seconds' WHERE token_digest=$1 RETURNING expires_at",[p.credential])).rows[0].expires_at;
+  const blocker = await db.owner.connect(), caller = await db.runtime.connect();
+  let outcome: Promise<unknown> | undefined;
+  try {
+    await caller.query("BEGIN"); await bind(caller,p);
+    await caller.query("SELECT set_config('app.tenant_id',$1,true)",[p.tenant]);
+    const pid = (await caller.query("SELECT pg_backend_pid() pid")).rows[0].pid;
+    await blocker.query("BEGIN");
+    await blocker.query("SELECT 1 FROM audit_control.audit_head WHERE tenant_id=$1 FOR UPDATE",[p.tenant]);
+    // Capture either outcome immediately, including an unexpected early failure.
+    outcome = append(caller,[input()]).then(() => null, (error: unknown) => error);
+    let waiting = false;
+    for (let attempt = 0; attempt < 200; attempt++) {
+      waiting = (await db.owner.query("SELECT cardinality(pg_blocking_pids($1))>0 waiting",[pid])).rows[0].waiting;
+      if (waiting) break;
+      await db.owner.query("SELECT pg_sleep(0.01)");
+    }
+    expect(waiting).toBe(true);
+    await blocker.query("SELECT pg_sleep(greatest(0,extract(epoch FROM ($1::timestamptz-clock_timestamp())))+0.02)",[deadline]);
+    await blocker.query("COMMIT");
+    expect(await outcome).toMatchObject({code:"42501"});
+  } finally {
+    await blocker.query("ROLLBACK"); blocker.release();
+    try { await outcome; } finally { await caller.query("ROLLBACK"); caller.release(); }
+  }
+  const events = await chain(p.tenant); expect(events).toHaveLength(1); verifyAuditChain(events);
 });

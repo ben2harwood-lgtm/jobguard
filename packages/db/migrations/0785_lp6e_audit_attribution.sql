@@ -73,6 +73,12 @@ BEGIN
  END LOOP;
  INSERT INTO audit_control.audit_head(tenant_id) VALUES(t) ON CONFLICT DO NOTHING;
  SELECT h.sequence,h.event_hash INTO seq,prev FROM audit_control.audit_head h WHERE h.tenant_id=t FOR UPDATE;
+ -- A head wait must not extend an authenticated request's lifetime. These
+ -- protected lookups read binding state only; the audit head stays the last lock.
+ IF bound_actor IS NOT NULL THEN
+  IF app.current_actor() IS DISTINCT FROM bound_actor OR app.current_tenant() IS DISTINCT FROM t THEN
+   RAISE EXCEPTION 'AUDIT_CONTEXT_REQUIRED' USING ERRCODE='42501'; END IF;
+ END IF;
  FOR e IN SELECT value FROM jsonb_array_elements(p_events) LOOP
   seq:=seq+1;
   ts:=date_trunc('milliseconds',clock_timestamp());
