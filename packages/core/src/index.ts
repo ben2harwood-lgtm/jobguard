@@ -134,6 +134,7 @@ export * from "./meter-today.js";
 
 export * from "./small-builder-demo-lifecycle.js";
 export * from "./deepgram-transcript.js";
+export * from "./merchant-connectors.js";
 export * from "./inbox-outcome-metrics.js";
 
 export * from "./dunning.js";
