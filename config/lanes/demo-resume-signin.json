@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "demo-resume-signin": {
+      "branches": ["codex/sandbox/demo-resume-signin"],
+      "note": "RED DEMO-S before-live resume check. Ownership repair already merged in ef584cd9; exercise actual fixture email-code sign-in and company authority without changing production code or migrations.",
+      "allow": [
+        "apps/api/src/small-builder-demo.application.test.ts",
+        "packages/db/test/demo-resume-signin.integration.test.ts"
+      ]
+    }
+  }
+}

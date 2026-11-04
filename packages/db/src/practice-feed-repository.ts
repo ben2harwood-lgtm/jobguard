@@ -8,7 +8,7 @@ import type { Pool } from "pg";
 import { z } from "zod";
 import {
   assessAttestedReceipt, generatedPracticeFeedEvents, practiceFeedAdapterEventV1, practiceFeedCommandV1, practiceFeedQueryV1,
-  practiceMovementCatalogueV1, practiceMovementDefinition, practiceMovementKeyV1, projectPracticeFeedMovements,
+  practiceMovementCatalogueV1, syntheticPracticeMovementCatalogueV1, practiceMovementDefinition, syntheticPracticeMovementKeyV1, projectPracticeFeedMovements,
   type HashedPracticeFeedEvent, type PracticeFeedAdapterEvent, type PracticeFeedCommand, type PracticeFeedQuery, type PracticeFeedView,
   type PracticeMovementKey,
 } from "@jobguard/core";
@@ -132,13 +132,18 @@ export class PracticeFeedRepository {
     // disguise only new-key reconciliation actions so the merged key parser never sees them.
     const factReceiptIds = new Set(snapshot.matches.filter(m => practiceFactKeyV1.safeParse(m.movement_key).success).map(m => m.payment_id));
     snapshot = { ...snapshot,
-      events: snapshot.events.filter(e => practiceMovementKeyV1.safeParse(e.movement_key).success),
-      matches: snapshot.matches.filter(m => practiceMovementKeyV1.safeParse(m.movement_key).success),
+      events: snapshot.events.filter(e => syntheticPracticeMovementKeyV1.safeParse(e.movement_key).success),
+      matches: snapshot.matches.filter(m => syntheticPracticeMovementKeyV1.safeParse(m.movement_key).success),
       payments: snapshot.payments.filter(p => !factReceiptIds.has(p.id)),
       commands: snapshot.commands.map(c => c.action === "reconcile_duplicate" && practiceFactKeyV1.safeParse(c.movement_key).success ? { ...c, action: "practice_facts_reconciled" } : c),
     };
     const account = snapshot.account;
-    const base = { version: "practice-feed-view.v1", environment: "synthetic_demo", realExternalActions: 0, jobId, catalogue: practiceMovementCatalogueV1, allocatedEligibleNetPence: 0 } as const;
+    // Preserve the issued seven-movement view until this job uses the additive
+    // Test G fixture. Its equal-value receipt then exposes both settlement choices.
+    const testG = snapshot.payments.some(p => Number(p.amount_pence) === 48000)
+      || snapshot.events.some(e => e.movement_key === "receipt-480-a" || e.movement_key === "receipt-480-b");
+    const base = { version: "practice-feed-view.v1", environment: "synthetic_demo", realExternalActions: 0, jobId,
+      catalogue: testG ? syntheticPracticeMovementCatalogueV1 : practiceMovementCatalogueV1, allocatedEligibleNetPence: 0 } as const;
     const attested = (payments: Snapshot["payments"], movements: PracticeFeedView["movements"]) => payments.map((payment) => ({
       paymentId: payment.id, invoiceId: payment.invoice_id, paidOn: payment.paid_on, reference: payment.reference, amountPence: Number(payment.amount_pence),
       currency: payment.currency, reversed: payment.reversed,
@@ -155,7 +160,7 @@ export class PracticeFeedRepository {
       }),
       sourceHash: String(event.source_hash).trim(),
     }));
-    const reconciled = snapshot.commands.filter((command) => command.action === "reconcile_duplicate").map((command) => practiceMovementKeyV1.parse(command.movement_key));
+    const reconciled = snapshot.commands.filter((command) => command.action === "reconcile_duplicate").map((command) => syntheticPracticeMovementKeyV1.parse(command.movement_key));
     const all = projectPracticeFeedMovements(account.id, events, reconciled);
     const offset = Number(query.cursor ?? 0), movements = all.slice(offset, offset + query.limit);
     const disconnect = snapshot.commands.find((command) => command.action === "disconnect");

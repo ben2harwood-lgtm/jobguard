@@ -1,3 +1,4 @@
+import { applyOutboundPause } from "./outbound-pause-fixture.js";
 import { seedLegacySandbox } from "./lp-legacy-sandbox-fixture.js";
 // Written before 0207. Real PostgreSQL only; CI execution required, NOT RUN locally.
 import { randomUUID } from "node:crypto";
@@ -43,6 +44,7 @@ beforeAll(async () => {
   await postgres.initialise(); await postgres.start(); admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password, database: "postgres" });
   await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
   for (const url of MIGRATION_URLS.slice(0, position)) { await admin.query(await readFile(url, "utf8")); await admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)", [basename(fileURLToPath(url))]); }
+  await applyOutboundPause(admin);
   await installLegacySyntheticPartyFixtures(admin);
   await admin.query(`CREATE ROLE pursuit_upgrade_login LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_runtime TO pursuit_upgrade_login`);
   runtime = new Pool({ host: "127.0.0.1", port, user: "pursuit_upgrade_login", password, database: "postgres", max: 4 });
