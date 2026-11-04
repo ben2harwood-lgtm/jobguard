@@ -89,7 +89,7 @@ unassigned allocation/revision IDs on stored-receipt and receipt-facts reviews.
 The existing stored-event reader remains compatible with the prior candidate's
 structured exclusion receipt; no writer can emit that shape through the sealer.
 
-LP-6e candidate (migration 0527, RED; depends on LP-6d)
+LP-6e candidate (migration 0785, RED; depends on LP-6d)
 ----------------------------------------------------
 
 New seals use `audit.v3`, the v2 canonical envelope with its version changed.
@@ -119,3 +119,16 @@ checked. Existing LP-4 version-specific tests must be run at their historical sc
 boundary while retaining their original assertions. No production authority-consumer
 closure or release is claimed by this built-ahead candidate. Forward fix only; do not
 rewrite old history or restore direct runtime audit writes on failure.
+
+4 November catch-up boundary: 0785 is based on the unchanged LP-4 sealer body
+in local `origin/main` at `f78c81684`, with LP-6c `0570` already present.
+LP-6d is absent. LP-6d retains the remaining checked authority/evidence/commitment
+routines; this piece does not recreate those sibling bodies. The audit-writer
+inventory includes later customer-portal issue/acceptance (`0533`, `0545`),
+connector intake (`0554`) and accounting export (`0558`): each still reaches the
+single private sealer and receives v3 attribution. Non-member execution principals
+are labelled system work; that label does not authenticate a customer identity.
+The 0785 proof records the two owner-only lookup grants and their exact ACL changes.
+It intentionally leaves the protected sealer definition hash and static-call pin
+unchanged for Ben; catalogue CI must fail until that authorized update is supplied.
+No existing scanner, fingerprint, pin or historical test assertion is relaxed.

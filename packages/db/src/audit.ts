@@ -17,7 +17,7 @@ export const auditEventInputV1Schema = z.object({
   eventType: identifier.max(100), subjectType: identifier.max(100), subjectRef: identifier,
   payload: auditPayloadV1Schema,
 });
-/** Requests remain v1; only the database emits v2. Legacy history has no trust assertion. */
+/** Requests remain v1; only the database emits v2/v3. Legacy history has no trust assertion. */
 const checkedExclusionsSchema = auditEventInputV1Schema.extend({
   version: z.literal("audit.v2"), actorRef: z.literal("system:final_check"),
   eventType: z.literal("final_check.sources_excluded"), subjectType: z.literal("job"),
@@ -93,7 +93,10 @@ export function verifyAuditChain(events: readonly AuditEvent[], checkpoint?: Aud
     auditActorAttribution(event);
     if (event.version === "audit.v3") {
       for (const section of [event.payload.references, event.payload.hashes, event.payload.classifications]) {
-        if (section && ["actor", "tenant", "type", "actorRef", "tenantId", "eventType"].some(key => key in section)) {
+        const reserved = ["actor", "tenant", "type", "payload", "payloadHash", "tenantId", "id", "version", "actorRef",
+          "eventType", "subjectType", "subjectRef", "sequence", "occurredAt", "previousHash", "eventHash"];
+        if (section && (reserved.some(key => key in section) ||
+            (section !== event.payload.references && ["auditTrust", "auditActorKind"].some(key => key in section)))) {
           throw new AuditVerificationError("Reserved audit payload field");
         }
       }

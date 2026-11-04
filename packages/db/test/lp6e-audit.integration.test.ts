@@ -81,3 +81,25 @@ it("duplicate IDs roll back the whole batch and head", async () => {
   expect(await chain(p.tenant)).toEqual([]);
   expect((await db.owner.query("SELECT 1 FROM audit_control.audit_head WHERE tenant_id=$1",[p.tenant])).rowCount).toBe(0);
 });
+
+it("serializes concurrent bound appends with contiguous authenticated attribution", async () => {
+  const p = await principal();
+  await Promise.all(Array.from({ length: 4 }, () => transaction(db.runtime,p.tenant,async c => {
+    await bind(c,p); await append(c,[input(),input()]);
+  })));
+  const events = await chain(p.tenant);
+  expect(events.map(event => event.sequence)).toEqual([1,2,3,4,5,6,7,8]);
+  expect(events.every(event => event.actorRef === `membership:${p.member}` && event.version === "audit.v3")).toBe(true);
+  verifyAuditChain(events);
+});
+it("binding expiry cannot fall back to a system identity during append", async () => {
+  const p = await principal();
+  const deadline = (await db.owner.query("UPDATE identity.session SET expires_at=clock_timestamp()+interval '5 seconds' WHERE token_digest=$1 RETURNING expires_at",[p.credential])).rows[0].expires_at;
+  await expect(transaction(db.runtime,p.tenant,async c => {
+    await bind(c,p);
+    expect((await c.query("SELECT app.current_actor() actor")).rows[0].actor).toBe(p.member);
+    await c.query("SELECT pg_sleep(greatest(0,extract(epoch FROM ($1::timestamptz-clock_timestamp())))+0.02)",[deadline]);
+    await append(c,[input()]);
+  })).rejects.toMatchObject({code:"42501"});
+  expect(await chain(p.tenant)).toEqual([]);
+});

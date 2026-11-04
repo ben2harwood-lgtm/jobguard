@@ -57,7 +57,7 @@ BEGIN
      RAISE EXCEPTION 'AUDIT_INPUT_INVALID' USING ERRCODE='22023'; END IF;
     FOR entry IN SELECT key,value FROM jsonb_each(payload->section) LOOP
      IF length(entry.key) NOT BETWEEN 1 AND 200 OR entry.key !~ '^[A-Za-z0-9_.:@/-]+$'
-      OR entry.key IN ('actor','tenant','type','auditActorKind','auditTrust','tenantId','id','version','actorRef','eventType','subjectType','subjectRef','sequence','occurredAt','previousHash','eventHash')
+      OR entry.key IN ('actor','tenant','type','payload','payloadHash','auditActorKind','auditTrust','tenantId','id','version','actorRef','eventType','subjectType','subjectRef','sequence','occurredAt','previousHash','eventHash')
       OR jsonb_typeof(entry.value) IS DISTINCT FROM 'string'
       OR length(entry.value #>> '{}') NOT BETWEEN 1 AND 200
       OR (entry.value #>> '{}') !~ '^[A-Za-z0-9_.:@/-]+$'

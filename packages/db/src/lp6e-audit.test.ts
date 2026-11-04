@@ -45,3 +45,18 @@ it("refuses actor substitution, contradictory attribution and absent attribution
   }
   expect(() => verifyAuditChain([sealed({ payload: { references: { auditTrust: "lower_trust" } } })])).toThrow("Invalid audit actor attribution");
 });
+
+it.each(["payload", "payloadHash", "id", "version", "subjectType", "subjectRef", "sequence", "occurredAt", "previousHash", "eventHash"])("refuses sealed metadata collision %s in every payload section", key => {
+  for (const [section, value] of [["references", "forged"], ["hashes", "a".repeat(64)], ["classifications", "security"]] as const) {
+    expect(() => verifyAuditChain([sealed({ payload: {
+      references: { auditActorKind: "bound_member", auditTrust: "lower_trust" }, [section]: {
+        ...(section === "references" ? { auditActorKind: "bound_member", auditTrust: "lower_trust" } : {}), [key]: value,
+      },
+    } })])).toThrow("Reserved audit payload field");
+  }
+});
+it.each(["auditTrust", "auditActorKind"])("refuses misplaced trusted metadata %s", key => {
+  expect(() => verifyAuditChain([sealed({ payload: {
+    references: { auditActorKind: "bound_member", auditTrust: "lower_trust" }, hashes: { [key]: "a".repeat(64) },
+  } })])).toThrow("Reserved audit payload field");
+});
