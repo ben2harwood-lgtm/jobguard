@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/batch-13"
       ],
-      "note": "RED built-ahead union; NOPR. MON-4B collect recheck; migration 0678 with matching proof.",
+      "note": "RED landing union. MON-4B collect recheck; migration 0587 with matching proof.",
       "allow": [
         "apps/api/src/ai-capture-authority.test.ts",
         "apps/api/src/ai-capture-authority.ts",
@@ -40,7 +40,7 @@
         "packages/core/src/shadow-pilot-financial-record.ts",
         "packages/core/src/shadow-pilot-report.test.ts",
         "packages/core/src/shadow-pilot-report.ts",
-        "packages/db/migrations/0678_payment_fee_collect_recheck.sql",
+        "packages/db/migrations/0587_payment_fee_collect_recheck.sql",
         "packages/db/src/index.ts",
         "packages/db/src/payment-fee-collection-repository.test.ts",
         "packages/db/src/payment-fee-collection-repository.ts",
@@ -49,7 +49,7 @@
         "packages/db/src/subscription-stripe-sandbox-adapter.ts",
         "packages/db/src/subscription-webhook-verifier.test.ts",
         "packages/db/src/subscription-webhook-verifier.ts",
-        "packages/db/test/migration-proofs/0678_payment_fee_collect_recheck.proof.json",
+        "packages/db/test/migration-proofs/0587_payment_fee_collect_recheck.proof.json",
         "packages/db/test/native-server-chaos.integration.test.ts",
         "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
         "packages/db/test/shadow-pilot-financial.integration.test.ts",

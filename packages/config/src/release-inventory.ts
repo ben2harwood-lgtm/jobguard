@@ -117,3 +117,58 @@ export function parseReleaseInventory(input: unknown) {
     }
   }).parse(input);
 }
+
+const securityReviewerV1Schema = z.discriminatedUnion("kind", [
+  z.strictObject({ kind: z.literal("agent"), independent: z.literal(false) }),
+  z.strictObject({ kind: z.literal("human"), independent: z.boolean() }),
+]);
+const declaredRailId = z.enum(Object.keys(paymentRailDeclarations) as [keyof typeof paymentRailDeclarations, ...(keyof typeof paymentRailDeclarations)[]]);
+
+export const securityFindingV1Schema = z.strictObject({
+  id: text,
+  severity: z.enum(["low", "medium", "high", "critical"]),
+  // Feature findings explicitly enumerate every release rail they affect.
+  affected: z.strictObject({
+    featureId: text.nullable(),
+    railIds: z.array(declaredRailId).min(1),
+  }),
+  ownerRole: text,
+  remediationEvidence: z.array(text),
+  retest: z.strictObject({
+    result: z.enum(["pending", "failed", "passed"]),
+    evidence: z.array(text),
+    reviewer: securityReviewerV1Schema,
+  }),
+  status: z.enum(["open", "in_remediation", "awaiting_retest", "closed"]),
+}).superRefine((finding, ctx) => {
+  const deny = (message: string) => ctx.addIssue({ code: "custom", message });
+  if (new Set(finding.affected.railIds).size !== finding.affected.railIds.length) deny("Duplicate affected rail");
+  if (finding.retest.result !== "pending" && finding.retest.evidence.length === 0) deny("Completed retest requires evidence");
+  if (finding.status === "closed" && (finding.remediationEvidence.length === 0 ||
+      finding.retest.result !== "passed" || finding.retest.evidence.length === 0)) {
+    deny("Closed finding requires remediation and passing retest evidence");
+  }
+});
+
+export const securityFindingsV1Schema = z.strictObject({
+  version: z.literal("security-findings.v1"),
+  findings: z.array(securityFindingV1Schema),
+}).superRefine((register, ctx) => {
+  if (new Set(register.findings.map(f => f.id)).size !== register.findings.length) {
+    ctx.addIssue({ code: "custom", message: "Duplicate security finding ID" });
+  }
+});
+
+/** Additional offline release check. Passing is neither execution authority nor certification. */
+export function parseReleaseWithSecurityFindings(releaseInput: unknown, registerInput: unknown) {
+  const register = securityFindingsV1Schema.parse(registerInput);
+  return releaseRecordV1Schema.superRefine((release, ctx) => {
+    for (const finding of register.findings) {
+      if (finding.status === "closed" || !["high", "critical"].includes(finding.severity)) continue;
+      const affected = finding.affected.railIds.filter(id => release.enabledRailIds.includes(id));
+      if (affected.length > 0) {
+        ctx.addIssue({ code: "custom", message: `Unresolved high-impact finding ${finding.id} blocks ${affected.join(", ")}` });
+      }
+    }
+  }).parse(releaseInput);
+}

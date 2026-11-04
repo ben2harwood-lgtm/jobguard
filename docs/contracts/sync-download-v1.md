@@ -121,3 +121,18 @@ the builder sandbox cannot start PostgreSQL. The existing tenancy suite covers f
 Production authentication/source queries, actual PowerSync stream enforcement, approved-region hosting, native
 schema/cache migration and physical-device evidence remain NOT built, behind D08/G3 and independent RED review.
 No dependencies, providers, keys, HTTP endpoints or deployments were added.
+
+## M3-3 device cache rules (synthetic only)
+
+`sync-device-cache.ts` adds a strict `sync-device-cache.v1` logical cache with the existing seven-field
+projection, scope, monotonic generation/schema, server-issued resume cursor and identity-only purge markers.
+Requests are serialized; interrupted requests retain their cursor/sequence, consumed answers cannot replay,
+and only a fresh bound answer under current authority can restore a purged identity. Refusals apply cleanup
+and require a fresh subscription; schema changes clear the logical projection before resubscription.
+The caller must bind each answer to its pending exchange and authenticated user/tenant/profile/generation,
+and supply the server schema version. These are transport facts, not new server result fields or client
+selectors. This pure rule neither authenticates those facts nor verifies persisted state against tampering;
+the server remains authoritative. Scope changes return an empty partition and delegate old-scope obligations
+to `planMobileCleanupV1`, including its unsynced-work hold. Nothing here deletes physical data or proves erasure.
+Provider stream rules, engine/region deployment, small-builder profile and physical-device cleanup/resync
+and migration evidence remain HELD. M3-3 stays open, D08 proposed, G3 closed; no native wiring is introduced.

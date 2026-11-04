@@ -1,5 +1,5 @@
 {
-  "migration": "0678_payment_fee_collect_recheck.sql",
+  "migration": "0587_payment_fee_collect_recheck.sql",
   "lp0": [
     {
       "section": "routines",

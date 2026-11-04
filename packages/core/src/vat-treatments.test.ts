@@ -11,6 +11,7 @@ import {
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const codes = Object.keys(VAT_SUPPORT_MATRIX) as DarkVatTreatment[];
+const roundingVersions = ["fixture_cumulative_group_half_up_v1", "fixture_document_group_sign_symmetric_half_up_v1"] as const;
 function fixture(code: DarkVatTreatment = "reduced_5"): VatTreatmentFixtureBook {
   return {
     version: "vat.fixture-book.v1", matrixVersion: VAT_SUPPORT_MATRIX_VERSION,
@@ -69,9 +70,9 @@ function retentionFixture(netPence = 1000, taxPence = 50): RetentionBook {
   return { version: "retention.book.v1", environment: "synthetic", ...context, records: [
     { ...context, id: id(30), version: "retention.profile.v1", revision: 1, previousProfileId: null,
       contractProfileVersion: "fictional-contract-v1", fixtureApprovalId: id(5), taxTreatmentVersion: "fictional-tax-v1",
-      retained: { netPence: 2000, taxPence: 400 }, alreadyBilled: { netPence: 0, taxPence: 0 },
+      retained: { netPence: 1000, taxPence }, alreadyBilled: { netPence: 0, taxPence: 0 },
       conditions: [{ id: id(6), milestone: "completion", description: "Fictional completion", source,
-        dueDate: "2026-10-31", dateSource: source, cumulativeLimit: { netPence: 2000, taxPence: 400 } }] },
+        dueDate: "2026-10-31", dateSource: source, cumulativeLimit: { netPence: 1000, taxPence } }] },
     { ...context, id: id(40), version: "retention.review.v1", profileId: id(30), conditionId: id(6),
       owner: RETENTION_REVIEW_OWNER, trigger: "human", raisedOn: "2026-10-31" },
     { ...context, id: id(50), version: "retention.resolution.v1", reviewId: id(40), outcome: "approved",
@@ -84,6 +85,18 @@ describe("M4-21 / M4-20 release linkage", () => {
   function vatRelease(code: DarkVatTreatment = "reduced_5") {
     const book = fixture(code); append(book, "retention_release", 10000, 0); return book;
   }
+  it.each([[999, 50], [1000, 49]])("reconciles held VAT principal/tax against retention remaining: %i/%i", (net, tax) => {
+    const vat = fixture(), retention = retentionFixture();
+    retention.records = retention.records.slice(0, 1);
+    const profile = retention.records[0]!;
+    if (profile.version !== "retention.profile.v1") throw new Error("Expected profile");
+    profile.retained = { netPence: net, taxPence: tax };
+    profile.conditions[0]!.cumulativeLimit = { ...profile.retained };
+    expect(() => reconcileVatRetentionFixtures(vat, retention)).toThrow(expect.objectContaining({ code: "VALUE_LIMIT" }));
+    profile.retained = { netPence: 1000, taxPence: 50 };
+    profile.conditions[0]!.cumulativeLimit = { ...profile.retained };
+    expect(() => reconcileVatRetentionFixtures(vat, retention)).not.toThrow();
+  });
   it("rejects unknown release IDs and IDs belonging to another kind of record", () => {
     for (const releaseId of [id(999), id(50), id(30)]) {
       const vat = vatRelease(); vat.documents[1]!.retentionReleaseId = releaseId;
@@ -168,18 +181,81 @@ describe("M4-21 fixture, awaiting adviser approval", () => {
     rejects({ ...fixture(code), adviserApproved: true }, "INVALID_INPUT");
   });
   it.each(codes)("%s reconciles partial bills, a credit and a retention release under both explicit bases", code => {
-    for (const basis of ["full_net", "net_after_retention"] as const) {
-      const book = fixture(code); book.taxBasis = basis;
-      append(book, "interim", 20000, 2000);
-      append(book, "credit_note", 15000, 1500);
-      append(book, "retention_release", 15000, 0);
-      reconciles(book);
-      const release = last(book);
-      expect(release.delta.net.pence).toBe(0);
-      expect(release.delta.fullValueGross.pence).toBe(0);
-      expect(release.delta.expectedCash.pence).toBeGreaterThanOrEqual(1500);
-      expect(release.cumulative.retained.pence).toBe(0);
+    for (const roundingVersion of roundingVersions) {
+      for (const basis of ["full_net", "net_after_retention"] as const) {
+        const book = fixture(code); book.taxBasis = basis; book.roundingVersion = roundingVersion;
+        append(book, "interim", 20000, 2000);
+        append(book, "credit_note", 15000, 1500);
+        append(book, "retention_release", 15000, 0);
+        reconciles(book);
+        const release = last(book);
+        expect(release.delta.net.pence).toBe(0);
+        expect(release.delta.fullValueGross.pence).toBe(0);
+        expect(release.delta.expectedCash.pence).toBeGreaterThanOrEqual(1500);
+        expect(release.cumulative.retained.pence).toBe(0);
+      }
     }
+  });
+  it.each(roundingVersions)("%s shows the exact penny comparison on fictional part bills and credits", roundingVersion => {
+    const book = fixture("reduced_5"); book.roundingVersion = roundingVersion;
+    book.documents[0]!.groups[0]!.cumulativeNetPence = 10;
+    book.documents[0]!.groups[0]!.retainedNetPence = 0;
+    append(book, "interim", 20, 0);
+    append(book, "credit_note", 10, 0);
+    append(book, "credit_note", 0, 0);
+    const result = reconcileVatTreatmentFixtures(book);
+    const cumulativeMethod = roundingVersion === roundingVersions[0];
+    expect(result.documents.map(d => d.delta.vatToSupplier.pence)).toEqual(cumulativeMethod ? [1, 0, 0, -1] : [1, 1, -1, -1]);
+    expect(result.documents.map(d => d.cumulative.vatToSupplier.pence)).toEqual(cumulativeMethod ? [1, 1, 1, 0] : [1, 2, 1, 0]);
+    expect(result.roundingVersion).toBe(roundingVersion);
+    expect(result.approval).toBe("not adviser-approved");
+    expect(result.issueBlockers).toContain("FEATURE_DISABLED");
+    expect(() => assertVatTreatmentIssueAllowed()).toThrow(expect.objectContaining({ code: "ISSUE_DISABLED" }));
+    reconciles(book);
+  });
+  it.each(roundingVersions)("%s refuses no-op credits and releases, including after nonzero fixture movements", roundingVersion => {
+    for (const kind of ["credit_note", "retention_release"] as const) {
+      const book = fixture(); book.roundingVersion = roundingVersion;
+      append(book, kind, 10000, 1000); rejects(book, "VALUE_LIMIT");
+      book.documents.pop();
+      append(book, kind, kind === "credit_note" ? 9000 : 10000, 0);
+      expect(() => reconcileVatTreatmentFixtures(book)).not.toThrow();
+      append(book, kind, kind === "credit_note" ? 9000 : 10000, 0);
+      rejects(book, "VALUE_LIMIT");
+    }
+  });
+  it("requires one explicit rounding version and refuses mixed-version histories", () => {
+    const { roundingVersion: _missing, ...book } = fixture();
+    rejects(book, "INVALID_INPUT");
+    for (const roundingVersion of roundingVersions) {
+      const mixed = fixture(); mixed.roundingVersion = roundingVersion;
+      append(mixed, "credit_note", 9000, 900);
+      // Strict document schemas cannot override the single book-level method.
+      Object.assign(mixed.documents[1]!, { roundingVersion: roundingVersions.find(v => v !== roundingVersion) });
+      rejects(mixed, "INVALID_INPUT");
+      rejects({ ...mixed, roundingVersion: [...roundingVersions] }, "INVALID_INPUT");
+    }
+  });
+  it.each(roundingVersions)("%s preserves unchanged groups alongside a genuine credit or release", roundingVersion => {
+    for (const kind of ["credit_note", "retention_release"] as const) {
+      const book = fixture(); book.roundingVersion = roundingVersion;
+      book.documents[0]!.groups.push(fixture("zero").documents[0]!.groups[0]!);
+      append(book, kind, kind === "credit_note" ? 9000 : 10000, 0);
+      book.documents[1]!.groups[1] = structuredClone(book.documents[0]!.groups[1]!);
+      expect(last(book).groups[1]!.delta.net.pence).toBe(0);
+      expect(last(book).groups[1]!.delta.retained.pence).toBe(0);
+      reconciles(book);
+    }
+  });
+  it.each(roundingVersions)("%s exposes rounding residues without inventing a balancing adjustment", roundingVersion => {
+    const book = fixture(); book.roundingVersion = roundingVersion;
+    book.documents[0]!.groups[0]!.cumulativeNetPence = 10;
+    book.documents[0]!.groups[0]!.retainedNetPence = 0;
+    append(book, "interim", 20, 0); append(book, "interim", 30, 0);
+    append(book, "credit_note", 0, 0);
+    expect(last(book).cumulative.net.pence).toBe(0);
+    expect(last(book).cumulative.vatToSupplier.pence).toBe(roundingVersion === roundingVersions[0] ? 0 : 1);
+    reconciles(book);
   });
   it("uses exact cumulative group rounding so small part bills and credits do not lose pennies", () => {
     const book = fixture("reduced_5");

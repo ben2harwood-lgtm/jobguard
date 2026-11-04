@@ -295,3 +295,62 @@ independent RED review must pass at the exact resulting head before merge.
 No database/browser suite was run locally, and no live service or real data was
 used. Forward fix or revert the new migration only before deployment; do not
 edit previously applied main migrations.
+
+
+Batch-13 PR landing union (4 November 2026), MON-4B collect recheck, RED:
+This receipt supersedes the historical NOPR/numbering handoffs above. Incoming
+main is 84c57224bb39f51f7ec6f93405d8b0798ad9426d (top migration 0586).
+Resolved the DB barrel and plan-entitlement-lifecycle upgrade conflicts by
+retaining both sides' exports and exact named routine exceptions. The existing
+hardened collection work is preserved. The sole branch migration and proof are
+renamed by stem from 0678 to 0587_payment_fee_collect_recheck. Main has no copy
+of this helper/recheck; no migration was dropped or split. Main's migration
+bytes are unchanged. Compared with the latest 0527 writer, 0587 only replaces
+the inline review loop with the existing hardened shared helper and removes
+its unused local variables. No new product behavior was added in this union.
+
+Static recheck: no new tables, table-column shape changes, command kinds or
+routes; no new CI images or web files relative to incoming main. No SET app.*
+function clause or command_lifecycle_claim access in 0587. The existing actor,
+command-authority and LP4-sealed audit paths are retained. Branch tests contain
+no raw practice-session revocation or direct outbound-pause clearing. Incoming
+restore-reconciliation-upgrade retains laterEmptyTables. Existing web routes
+were source-checked for direct apps/api source imports; none were found. No
+Cloudflare build was attempted in this constrained environment.
+
+Local checks used the installed package binaries, sequential Vitest invocations
+with --maxWorkers=2 and at most three named files per invocation:
+- API auth/context-boundary + auth/identity: 152 passed.
+- DB migration-proof-loader + payment-fee-collection-repository: 89 passed.
+- API watchdog-registry + success-fee-direct-debit + success-fee-composition:
+  156 passed.
+- API fee-collection/executor + fake-gocardless + ai-capture-authority: 111 passed.
+- DB subscription-stripe-sandbox-adapter + subscription-webhook-verifier:
+  40 passed.
+- AI gateway + later-gateway + claude-provider: 79 passed.
+- Core shadow-pilot-report: 16 passed.
+Total: 643 Vitest tests; node --test tools/ai-provider-boundary.test.mjs also
+passed all 5 tests. Money-arithmetic, commercial-boundary and AI-provider
+boundary linters passed. Installed tsc passed for core, config, DB, API and AI
+(core/config/DB emitted package build output for imports; API/AI used --noEmit).
+Root pnpm typecheck and pnpm test invocations stalled before useful output and
+were interrupted. The initial watchdog run failed on stale core dist output;
+it passed after rebuilding core/config/DB. No expectations were weakened.
+
+The standard lane command was run and refuses the unfinished read-only index,
+which still contains incoming-main changes and the old migration stem. A
+working-tree comparison against MERGE_HEAD, including untracked renamed files,
+passes the existing lane matcher: exactly 50 non-lane paths, no self-listed
+lane file, unchanged main migration bytes, valid consecutive 0587 ordering and
+no conflict markers. git diff --check passed. These are deterministic local
+checks, not independent review or PostgreSQL/browser evidence.
+
+READY for router staging, merge completion, commit, push and PR opening. CI
+must prove the full mandatory checks, fresh/upgrade/replay PostgreSQL migrations,
+proof/catalog/privilege/RLS guarantees, plan-entitlement-lifecycle and restore
+upgrade snapshots, and success-fee-direct-debit integration tests (including
+stale/revoked/expired review and real authorization row-lock waits), plus
+applicable browser journeys. No local DB/browser suite ran. Independent RED
+review must PASS at the exact resulting head and required CI must be green
+before merge. Synthetic data and fake payment rails only; production gates
+and required external approvals remain unchanged.

@@ -186,7 +186,8 @@ export class DarkFeeCollectionExecutor {
       if (attempt.state === "released" && event.state === "definite_failure" && attempt.providerObjectId === event.objectId) {
         book.events[eventKey] = hash; return;
       }
-      if ((attempt.state === "released" && event.state === "settled") || attempt.state === "reconciliation_required") {
+      if ((attempt.state === "released" && event.state === "settled")
+        || (attempt.state === "settled" && event.state === "definite_failure") || attempt.state === "reconciliation_required") {
         // Persist the contradictory fact and reserve its balance until explicit reconciliation.
         attempt.providerObjectId = event.objectId;
         if (attempt.state !== "reconciliation_required") transition(book, attempt, "reconciliation_required");
@@ -194,7 +195,6 @@ export class DarkFeeCollectionExecutor {
         return;
       }
       if (attempt.state === "reserved" || attempt.state === "released") throw new FeeCollectionError("RECONCILIATION_REQUIRED");
-      if (event.state === "definite_failure" && attempt.state === "settled") throw new FeeCollectionError("RECONCILIATION_REQUIRED");
       attempt.providerObjectId = event.objectId;
       if (attempt.state !== "settled") transition(book, attempt, event.state === "settled" ? "settled" : "released");
       book.events[eventKey] = hash;

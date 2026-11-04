@@ -48,6 +48,23 @@ describe("M4-18 synthetic interim drafts", () => {
       lines: [{ scheduled: { pence: 10000 }, applied: { pence: 6000 }, certified: { pence: 5000 }, invoiced: { pence: 5000 }, invoiceable: { pence: 0 } }],
     });
   });
+  it("rejects a baseline source relabelled as an approved variation", () => {
+    const first = schedule();
+    expectCode(() => append(empty(), { ...first, lines: [...first.lines,
+      { ...first.lines[0]!, id: id(90), kind: "approved_variation", approvalDecisionId: id(91) }] }), "DUPLICATE_LINE");
+  });
+  it("refuses a revision of an older application after a later application becomes current", () => {
+    const book = append(invoiced(), { ...application(21, 8000), applicationId: id(18) }, certification(31, 8000, 21));
+    expectCode(() => append(book, { ...application(22, 3000), revision: 2, previousRevisionId: id(20) }), "STALE_REVISION");
+    const revisedSchedule = append(book, { ...schedule(), ...base(11), revision: 2, previousScheduleId: id(10) });
+    expectCode(() => append(revisedSchedule, { ...application(22, 3000), scheduleId: id(11), revision: 2, previousRevisionId: id(20) }), "STALE_REVISION");
+  });
+  it("flags the credit when a subsequent certificate cuts the invoiced ceiling from £80 to £50", () => {
+    const book = append(empty(), schedule(), application(20, 10000), certification(30, 8000), invoice(40, 8000), certification(31, 5000));
+    expect(reconcileInterimDraftBook(book).lines[0]).toMatchObject({ creditRequired: { pence: 3000 }, invoiceable: { pence: 0 } });
+    const credited = append(book, { ...base(70), version: "interim.credit-draft.v1", invoiceId: id(40), lines: lines(3000), taxPence: 0 });
+    expect(reconcileInterimDraftBook(credited).lines[0]!.creditRequired?.pence).toBe(0);
+  });
   it("blocks duplicate completed value even with a fresh invoice identity", () => {
     expectCode(() => append(invoiced(), invoice(41, 1)), "VALUE_LIMIT");
     expect(appendInterimDraftRecord(invoiced(), invoice()).records).toHaveLength(4);
