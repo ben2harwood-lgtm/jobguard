@@ -1,11 +1,11 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import type { Pool, PoolClient } from "pg";
+import type { PoolClient } from "pg";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { EvidenceService } from "../src/evidence.js";
 import { PreventionCheckRepository } from "../src/prevention-check-repository.js";
 import { JobPartiesRepository } from "../src/job-parties-repository.js";
 import { ExtraRepository } from "../src/extra-repository.js";
-import { verifiedTenantContextForQueuedJob } from "../src/tenant-context.js";
+import { verifiedTenantContextFromMembership } from "../src/tenant-context.js";
 import { jobDoorsActor, jobDoorsDatabase, transaction, type JobDoorsDatabase } from "./lp-job-doors-fixtures.js";
 import { MemoryStorage, pngBytes } from "./site-extra-evidence-fixtures.js";
 import { fixture, raise, type Cluster } from "./extra-fixtures.js";
@@ -34,23 +34,9 @@ async function refused(c:PoolClient,sql:string,params:unknown[]=[],code="42501")
   try{await expect(c.query(sql,params)).rejects.toMatchObject({code});}
   finally{await c.query("ROLLBACK TO attack; RELEASE attack");}
 }
-// Test-only bridge for the explicitly dark LP-6a base. Production callers are
-// cut over by LP-6b before this stacked piece lands; this is never exported.
-function boundPool(s:Session):Pool{
-  return new Proxy(db.runtime,{get(target,key){
-    if(key!=="connect")return Reflect.get(target,key);
-    return async()=>{
-      const client=await target.connect();
-      return new Proxy(client,{get(c,k){
-        if(k!=="query"){const value=Reflect.get(c,k);return typeof value==="function"?value.bind(c):value;}
-        return async(sql:string,params?:unknown[])=>{
-          const result=await c.query(sql,params);
-          if(sql==="BEGIN")await c.query("SELECT app.bind_request('real',$1,$2)",[s.credential,s.tenant]);
-          return result;
-        };
-      }});
-    };
-  }}) as Pool;
+// Exercise LP-6b's actual session-bearing withTenant path, with no pool shim.
+function contextFor(s:Session){
+  return verifiedTenantContextFromMembership({identityUserId:s.person,tenantId:s.tenant,membershipId:s.member} as Parameters<typeof verifiedTenantContextFromMembership>[0],{kind:"real",credential:s.credential});
 }
 async function authority(s:Session,revoked=false){
   const id=randomUUID(), d=randomUUID(), r=randomUUID(), content="Fictional approved artifact", hash=digest(content);
@@ -67,6 +53,9 @@ it("refuses direct inserts, every mismatched approved field, actor forgery, revo
   await request(s,async c=>{
     await refused(c,"INSERT INTO app.action_outbox(id,tenant_id,authorization_id,adapter,provider_effect_key,action_type,content_hash,immutable_content,aggregate_revision,policy_version,authorization_expires_at) VALUES($1,$2,$3,'fake_capture','forged','quote.send',$4,'substituted',2,'synthetic.v1','2099-01-01')",[randomUUID(),s.tenant,args[3],args[8]]);
     for(const [index,value] of [[0,randomUUID()],[1,randomUUID()],[6,"invoice.send"],[7,"other@fictional.invalid"],[8,"0".repeat(64)],[9,"substituted"],[10,3],[11,101],[12,"USD"],[13,"other.v1"],[14,new Date("2100-01-01")]] as const){const attack=[...args];attack[index]=value;await refused(c,insert,attack);}
+    // Attack the other runtime-callable LP-8b signature under a valid binding too.
+    await refused(c,"SELECT app.lp8b_check_extra_command($1,$2,$3,$4)",[s.tenant,randomUUID(),randomUUID(),randomUUID()]);
+    await refused(c,"SELECT app.lp8b_check_extra_command($1,$2,$3,$4)",[randomUUID(),s.member,randomUUID(),randomUUID()]);
     await c.query(insert,args);
     expect((await c.query("SELECT immutable_content,status FROM app.action_outbox WHERE tenant_id=$1 AND id=$2",[s.tenant,args[2]])).rows).toEqual([{immutable_content:args[9],status:"pending"}]);
     await refused(c,insert,[...args.slice(0,2),randomUUID(),...args.slice(3)],"23505");
@@ -76,14 +65,24 @@ it("refuses direct inserts, every mismatched approved field, actor forgery, revo
   await request(s,c=>refused(c,insert,revoked));
 });
 
+it("refuses unbound outbox authority even with forged compatibility settings",async()=>{
+  const s=await session(), args=await authority(s), c=await db.runtime.connect();
+  try{
+    await c.query("BEGIN");
+    await c.query("SELECT set_config('app.tenant_id',$1,true),set_config('app.actor_id',$2,true)",[s.tenant,s.member]);
+    await refused(c,insert,args);
+    await refused(c,"SELECT app.lp8b_check_extra_command($1,$2,$3,$4)",[s.tenant,s.member,randomUUID(),randomUUID()]);
+  }finally{await c.query("ROLLBACK");c.release();}
+});
+
 it("keeps finalized evidence scoped and exact, refuses fabricated verification and wrong references, and permits owner invalidation only",async()=>{
-  const s=await session(), job=randomUUID(), bytes=pngBytes(41), context=verifiedTenantContextForQueuedJob(s.tenant);
+  const s=await session(), job=randomUUID(), bytes=pngBytes(41), context=contextFor(s);
   await importWatchdogFixtureJob(db.owner,s.tenant,job);
-  const storage=new MemoryStorage(), service=new EvidenceService(boundPool(s),storage);
+  const storage=new MemoryStorage(), service=new EvidenceService(db.runtime,storage);
   const upload=await service.beginUpload(context,{jobId:job,expectedSha256:digest(bytes),contentType:"image/png",maximumBytes:1000,expiresAt:new Date("2099-01-01")});
   await request(s,async c=>{
     await refused(c,"UPDATE app.evidence_upload SET state='verified',server_verified_at=clock_timestamp(),object_version_id='v1' WHERE tenant_id=$1 AND id=$2",[s.tenant,upload.id]);
-    await refused(c,"UPDATE app.evidence_upload SET expected_sha256=$3 WHERE tenant_id=$1 AND id=$2",[s.tenant,upload.id,"0".repeat(64)]);
+    await refused(c,"UPDATE app.evidence_upload SET expected_sha256=$3 WHERE tenant_id=$1 AND id=$2",[s.tenant,upload.id,"0".repeat(64)],"55000");
     await c.query("UPDATE app.evidence_upload SET state='quarantined',object_version_id='v1' WHERE tenant_id=$1 AND id=$2",[s.tenant,upload.id]);
     // Correct bytes still do not prove that a storage read took place.
     await refused(c,"SELECT app.verify_evidence_upload($1,$2,'v1','image/png',$3)",[s.tenant,upload.id,Buffer.from(bytes)]);
@@ -108,7 +107,7 @@ it("keeps finalized evidence scoped and exact, refuses fabricated verification a
 });
 
 it("requires explicit prevention attribution from the bound owner and processing command; legitimate repository facts keep their actor",async()=>{
-  const s=await session(), pool=boundPool(s), context=verifiedTenantContextForQueuedJob(s.tenant), job=randomUUID();
+  const s=await session(), pool=db.runtime, context=contextFor(s), job=randomUUID();
   await db.owner.query("INSERT INTO app.job(tenant_id,id,title,status) VALUES($1,$2,'Fictional prevention job','quoting')",[s.tenant,job]);
   const parties=new JobPartiesRepository(pool);
   const customer=await parties.command(context,s.member,job,{version:"job-parties-command.v1",commandId:randomUUID(),action:"create_customer",customer:{version:"customer.v1",name:"Fictional customer",type:"person"}});
@@ -128,12 +127,12 @@ it("requires explicit prevention attribution from the bound owner and processing
 it("retains 0122 checks and requires the scoped grant for extra events",async()=>{
   const c={admin:db.owner,runtime:db.runtime} as Cluster, f=await fixture(c);
   const s=await session({tenant:f.p.tenantId,member:f.p.membershipId,person:f.p.identityUserId,account:(await db.owner.query("SELECT account_id FROM app.membership WHERE tenant_id=$1 AND id=$2",[f.p.tenantId,f.p.membershipId])).rows[0].account_id});
-  const repository=new ExtraRepository(boundPool(s)), input=raise(f);
-  await expect(repository.raiseExtra(f.ctx,input)).resolves.toHaveProperty("variationId");
+  const repository=new ExtraRepository(db.runtime), input=raise(f);
+  await expect(repository.raiseExtra(contextFor(s),input)).resolves.toHaveProperty("variationId");
   const row=(await db.owner.query("SELECT * FROM app.extra_event WHERE tenant_id=$1 LIMIT 1",[s.tenant])).rows[0];
   await request(s,c=>refused(c,"INSERT INTO app.extra_event(tenant_id,id,job_id,variation_id,kind,command_id,actor_membership_id) VALUES($1,$2,$3,$4,'awaiting_approval',$5,$6)",[s.tenant,randomUUID(),f.jobId,row.variation_id,input.commandId,s.member],"23514"));
   await db.owner.query("INSERT INTO app.role_grant_revocation(tenant_id,id,grant_id) VALUES($1,$2,$3)",[s.tenant,randomUUID(),f.grantId]);
-  await expect(repository.raiseExtra(f.ctx,raise(f))).rejects.toBeTruthy();
+  await expect(repository.raiseExtra(contextFor(s),raise(f))).rejects.toBeTruthy();
 });
 
 it("keeps allocation tables SELECT-only and new security-definer entries private from PUBLIC/identity/infrastructure",async()=>{
@@ -141,8 +140,8 @@ it("keeps allocation tables SELECT-only and new security-definer entries private
     const row=(await db.owner.query("SELECT has_table_privilege('jobguard_runtime',$1,'SELECT') readable,has_table_privilege('jobguard_runtime',$1,'INSERT,UPDATE,DELETE') writable",[`app.${table}`])).rows[0];
     expect(row).toEqual({readable:true,writable:false});
   }
-  const rows=(await db.owner.query("SELECT p.oid::regprocedure::text signature,p.proconfig FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='app' AND p.proname IN ('insert_authorized_action','verify_evidence_upload')")).rows;
-  expect(rows).toHaveLength(2);
+  const rows=(await db.owner.query("SELECT p.oid::regprocedure::text signature,p.proconfig FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='app' AND p.proname IN ('insert_authorized_action','verify_evidence_upload','lp8b_check_extra_command')")).rows;
+  expect(rows).toHaveLength(3);
   for(const r of rows){
     expect(r.proconfig).toContain("search_path=pg_catalog, pg_temp");
     for(const role of ["jobguard_identity","jobguard_infrastructure"])expect((await db.owner.query("SELECT has_function_privilege($1,$2,'EXECUTE') allowed",[role,r.signature])).rows[0].allowed).toBe(false);

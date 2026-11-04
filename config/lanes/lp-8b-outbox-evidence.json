@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/lp-8b-outbox-evidence"
       ],
-      "note": "LP-8b RED built-ahead draft: READY for branch save; held for landing. External storage-verifier path incomplete; predecessor integration, PostgreSQL proof and exact-head independent review required. Scanner definitions, pins and guards unchanged.",
+      "note": "LP-8b RED stacked on LP-8a 2fd5439b. READY for NOPR branch save; held for landing on external storage-verifier completion, PostgreSQL catalogue/upgrade proof and exact-head independent review. No scanner, pin or guard changes.",
       "allow": [
         "docs/verdicts/LP-8b/BUILDER_RECEIPT.md",
         "packages/db/migrations/0800_lp8b_outbox_evidence.sql",
