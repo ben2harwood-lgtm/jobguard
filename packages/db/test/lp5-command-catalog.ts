@@ -596,7 +596,8 @@ export const siteSupervisorQueryRegistryRow = {
   command_type: "RecordSiteSupervisorQuery", version: "repository-command.v1", permission_rule: "active_member",
   lock_adapter: "route_before_begin", completion_adapter: "site_supervisor_query", audit_class: "operational", outbox_class: null,
 };
-export const currentCommandRegistryRows = [...lp5RegistryRows, lateSourceRegistryRow, managedRecoveryRegistryRow, siteSupervisorQueryRegistryRow];
+export const contractorJobFinishRegistryRow = {"command_type": "EndCheck", "version": "end-check.v1", "permission_rule": "owner", "lock_adapter": "route_before_begin", "completion_adapter": "contractor_job_finish", "audit_class": "operational", "outbox_class": null};
+export const currentCommandRegistryRows = [...lp5RegistryRows, lateSourceRegistryRow, managedRecoveryRegistryRow, siteSupervisorQueryRegistryRow, contractorJobFinishRegistryRow];
 export const lp5bRoutines = [
   {
     "signature": "app.lp5b_bind_follow_up_cancel()",

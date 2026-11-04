@@ -135,3 +135,54 @@ Final local verification:
 
 READY for router commit/push and CI/RED checking; not independently reviewed,
 merged, released or aggregate ENT-13a complete.
+
+## Batch-35 landing preparation (4 November 2026)
+
+RED. Built ahead, NOPR: ENT-13a-machine plus ENT-8a-job-finish. Comparison base is
+cached origin/main 56b74eaec205e86c9eaf7eee75d85ade2599a364 (the batch's mainline
+parent); local main is stale. No fetch or Git writes were run.
+
+Migrations are 0990_contractor_job_finish then 0991_connector_machine, with matching
+proofs and stem references. Main migrations were not edited. The finish fact stays
+in its own immutable table, now listed in laterEmptyTables. EndCheck is classified
+in jobMutationRegistry and registered in SQL and currentCommandRegistryRows; the
+proof includes its exact registry transition. The MON-8 upgrade guard compares the
+exact five replaced routine signatures against their migration bodies, preserving
+all prior exceptions. Private tables have no spurious LP-0 owner or RLS entries
+where that inventory tracks only non-owner grants. Actual FORCE RLS and private
+policies remain required. The connector policy digest uses the catalogue's
+true/newline/true form. No runtime INSERT grants, fingerprinted row changes or
+SET app.* clauses were added.
+
+Current verification, with installed tools and no dependency downloads:
+- Sequential package tsc -p tsconfig.json --noEmit: PASS for core, config, storage,
+  ai, db, API and web (the existing workspace typecheck commands).
+- API Vitest watchdog-registry, context-boundary, identity: PASS, 278 tests.
+- API Vitest connectors/machine.test.ts: PASS, 20 tests.
+- Web Vitest finish route and job-finish component: PASS, 20 tests. No browser run.
+- DB Vitest migration-proof-loader.test.ts: PASS, 76 tests.
+- Every Vitest invocation named at most three files and used --maxWorkers=2.
+- Changed DB integration files and imports: tsc PASS using the temporary
+  /tmp/batch-35-integration-types.json; this is not PostgreSQL execution.
+- PL/pgSQL CASE-in-IF lint: PASS, 256 migrations. Commercial-boundary lint,
+  money-arithmetic lint and git diff --check: PASS.
+- Standard agent-lane-boundary-lint.mjs: REFUSED old paths still recorded in HEAD,
+  including removed piece lane files and old migration stems. The sandbox cannot
+  commit these removals/renames. Existing exported lane helpers verify the actual
+  final-tree diff: PASS, exactly 31 paths, no lane files in allow, valid migration
+  order. Router MUST rerun the standard checker after committing this preparation;
+  this is not a claimed standard lane PASS.
+
+Initial pnpm invocations stalled before Vitest started and were interrupted. Direct
+installed Vitest initially lacked workspace dist exports; existing package builds
+supplied them, and all named suites then passed. No test was weakened.
+
+CI must prove fresh and predecessor PostgreSQL upgrades, LP-0 catalogue and grants,
+command registry and snapshot compatibility, immutable finish/replay/permission/audit
+boundaries, connector isolation/nonce/rotation/revocation/concurrency guarantees,
+mandatory database suites and the ENT-8a finish browser journey. One independent RED
+review must bind to the router-committed head before landing. No real data, live
+services, PR, release or Git mutation was used.
+
+READY for router commit and NOPR push; CI and independent RED checking remain for
+this group's turn. Not merged, independently reviewed or released.

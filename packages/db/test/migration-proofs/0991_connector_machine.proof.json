@@ -1,5 +1,5 @@
 {
-  "migration": "0940_connector_machine.sql",
+  "migration": "0991_connector_machine.sql",
   "lp0": [
     {
       "section": "groups",
@@ -23,7 +23,7 @@
         },
         "downstream": "Owner-only synthetic connection commands; separate NOLOGIN machine role with only authenticated authority lookup and capability-scoped staging. No member session, real credential, endpoint, origin, commercial effect or G5 activation.",
         "sources": [
-          "packages/db/migrations/0940_connector_machine.sql"
+          "packages/db/migrations/0991_connector_machine.sql"
         ],
         "tests": [
           "packages/db/test/connector-machine.integration.test.ts"
@@ -175,54 +175,29 @@
       }
     },
     {
-      "section": "rls",
+      "section": "policies",
       "before": null,
-      "after": "connector.machine_connection|rls=t|forced=t"
+      "after": "connector.machine_connection|machine_control|PERMISSIVE|ALL|jobguard_migration|8e78f46a14e10bd9"
     },
     {
       "section": "policies",
       "before": null,
-      "after": "connector.machine_connection|machine_control|PERMISSIVE|ALL|jobguard_migration|source-inspected-digest-pending"
-    },
-    {
-      "section": "rls",
-      "before": null,
-      "after": "connector.machine_capability|rls=t|forced=t"
+      "after": "connector.machine_capability|machine_control|PERMISSIVE|ALL|jobguard_migration|8e78f46a14e10bd9"
     },
     {
       "section": "policies",
       "before": null,
-      "after": "connector.machine_capability|machine_control|PERMISSIVE|ALL|jobguard_migration|source-inspected-digest-pending"
-    },
-    {
-      "section": "rls",
-      "before": null,
-      "after": "connector.machine_key|rls=t|forced=t"
+      "after": "connector.machine_key|machine_control|PERMISSIVE|ALL|jobguard_migration|8e78f46a14e10bd9"
     },
     {
       "section": "policies",
       "before": null,
-      "after": "connector.machine_key|machine_control|PERMISSIVE|ALL|jobguard_migration|source-inspected-digest-pending"
-    },
-    {
-      "section": "rls",
-      "before": null,
-      "after": "connector.machine_nonce|rls=t|forced=t"
+      "after": "connector.machine_nonce|machine_control|PERMISSIVE|ALL|jobguard_migration|8e78f46a14e10bd9"
     },
     {
       "section": "policies",
       "before": null,
-      "after": "connector.machine_nonce|machine_control|PERMISSIVE|ALL|jobguard_migration|source-inspected-digest-pending"
-    },
-    {
-      "section": "rls",
-      "before": null,
-      "after": "connector.machine_command|rls=t|forced=t"
-    },
-    {
-      "section": "policies",
-      "before": null,
-      "after": "connector.machine_command|machine_control|PERMISSIVE|ALL|jobguard_migration|source-inspected-digest-pending"
+      "after": "connector.machine_command|machine_control|PERMISSIVE|ALL|jobguard_migration|8e78f46a14e10bd9"
     },
     {
       "section": "triggers",

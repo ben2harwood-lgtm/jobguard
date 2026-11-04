@@ -38,12 +38,22 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   // 0567 changes only the checked settlement overload's expected approval hash.
   const settlementOid = (await c.admin.query("SELECT 'app.record_simulated_settlement(uuid,uuid,uuid,character varying,bigint,timestamp with time zone,uuid,uuid,uuid)'::regprocedure::oid oid")).rows[0].oid;
   const selfComparison = "(SELECT content_hash FROM app.action_authorization WHERE tenant_id=p_tenant AND id=p_authorization)";
+  const finishSql = await readFile(new URL("../migrations/0990_contractor_job_finish.sql", import.meta.url), "utf8");
+  const finishRoutineBodies = new Map([
+    ["lp_command|p_session uuid, p_input jsonb, p_source_bytes bytea", "lp_command"],
+    ["lp_read|p_session uuid, p_input jsonb", "lp_read"],
+    ["lp_finish|p_session uuid, p_command uuid, p_result jsonb", "lp_finish"],
+    ["lp_require_audit|", "lp_require_audit"],
+    ["lp_receipt_immutable|", "lp_receipt_immutable"],
+  ].map(([identity, name]) => [identity, finishSql.split(`CREATE OR REPLACE FUNCTION app.${name}(`)[1]!.split("AS $$")[1]!.split("$$;")[0]]));
   for (const prior of security) {
     const current = live.find(row => row.oid === prior.oid);
     // 0566 and 0573 extend exactly this dispatcher for managed recovery and supervisor queries.
     if (prior.nspname === "app" && prior.proname === "lp5_command_result" && prior.args === "p_command_id uuid, p_outcome jsonb") continue;
     // 0583 replaces only this exact predecessor body; its dedicated upgrade proof checks the replacement.
-    if (prior.nspname === "app" && prior.proname === "write_success_fee_v3" &&
+    if (prior.nspname === "app" && finishRoutineBodies.has(`${prior.proname}|${prior.args}`)) {
+      expect(current?.definition?.split("$function$")[1]).toEqual(finishRoutineBodies.get(`${prior.proname}|${prior.args}`));
+    } else if (prior.nspname === "app" && prior.proname === "write_success_fee_v3" &&
       prior.args === "p_job uuid, p_session text, p_command jsonb, p_artifact jsonb") {
       expect(current?.definition).not.toEqual(prior.definition);
     } else if (prior.oid === paymentFeeWriterOid) {

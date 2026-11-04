@@ -1,4 +1,6 @@
 BEGIN;
+INSERT INTO app.command_type_registry VALUES
+ ('EndCheck','end-check.v1','owner','route_before_begin','contractor_job_finish','operational',NULL);
 -- ENT-8a synthetic contractor completion only. No work-order/job status or financial changes.
 -- Forward fix only: preserve immutable finish facts and receipts when changing this command later.
 CREATE TABLE app.contractor_job_finish (
