@@ -141,7 +141,7 @@ tasks.build_evidence_pack_v3 = async payload => {
 // that existing journeys advance by hand are never delivered behind their backs.
 const readiness = readinessTasks(runtimePool, finalCheckEnvironment, (store, scope) => {
  const context = queueContext({tenantId:scope.tenantId});
- return {load: raw => store.load(context, raw), recordProposal: raw => store.recordProposal(context, raw)};
+ return {load: raw => store.load(context, raw), loadJobPlans: raw => store.loadJobPlans(context, raw), recordProposal: raw => store.recordProposal(context, raw)};
 });
 Object.assign(tasks, readiness.tasks);
 const practiceOnly=process.env.JOBGUARD_WORKER_PRACTICE_FINAL_CHECK_ONLY==="1";

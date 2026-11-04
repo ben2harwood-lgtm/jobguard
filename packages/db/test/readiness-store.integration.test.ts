@@ -23,6 +23,7 @@ const plan: ScheduledPlan = { version: "readiness-scheduled-plan.v1", synthetic:
 const store = () => new DurableReadinessStore(runtime, "synthetic_demo");
 const ports = (): ReadinessSchedulePorts => ({
   load: raw => store().load(context, raw),
+  loadJobPlans: raw => store().loadJobPlans(context, raw),
   recordProposal: raw => store().recordProposal(context, raw),
 });
 const tableNames = ["scheduled_readiness_plan", "scheduled_readiness_proposal"];
@@ -113,4 +114,43 @@ it("rolls plan writes back when audit fails and binds all plan/proposal identiti
   expect((await admin.query("SELECT count(*)::int n FROM app.scheduled_readiness_proposal")).rows).toEqual([{ n: 1 }]);
   await expect(withTenant(runtime, context, db => db.$client.query(`INSERT INTO app.scheduled_readiness_proposal(tenant_id,job_id,task_id,proposal_key,plan_hash,payload,audit_event_id) VALUES($1,$2,$3,$4,$5,$6,$7)`,
     [tenantId, scope.jobId, scope.taskId, "d".repeat(64), p.payload.planHash, { ...p.payload, key: "d".repeat(64), recoveryFeePence: 1 }, p.audit_event_id]))).rejects.toMatchObject({ code: "23514" });
+});
+
+
+it("reads latest confirmed plans in one tenant/job and proposes without writing programme facts", async () => {
+  const jobId = randomUUID(), otherJob = randomUUID(), foreignJob = randomUUID();
+  await importWatchdogFixtureJob(admin, tenantId, jobId);
+  await importWatchdogFixtureJob(admin, tenantId, otherJob);
+  await importWatchdogFixtureJob(admin, other, foreignJob);
+  const blocked = { ...plan, scope: { tenantId, jobId, taskId: randomUUID() },
+    labourRatePence: 999_999_999_999, uncertainDurationHours: 1 };
+  const next = { ...blocked, scope: { tenantId, jobId, taskId: randomUUID() }, access: true as const, plannedDate: "2026-11-03" };
+  const cancelled = { ...next, scope: { ...next.scope, taskId: randomUUID() } };
+  for (const p of [blocked, next, cancelled, { ...next, scope: { ...next.scope, jobId: otherJob } }])
+    await store().confirm(context, "member:synthetic-builder", p);
+  await store().confirm(context, "member:synthetic-builder", { ...cancelled, factRevision: 2, status: "cancelled" });
+  await store().confirm(testTenantContext(other), "member:synthetic-builder", { ...next, scope: { ...next.scope, tenantId: other, jobId: foreignJob } });
+  expect(await store().loadJobPlans(context, blocked.scope)).toEqual(expect.arrayContaining([blocked, next]));
+  expect(await store().loadJobPlans(context, blocked.scope)).toHaveLength(2);
+  expect(await store().loadJobPlans(testTenantContext(other), blocked.scope)).toEqual([]);
+  const snapshot = async () => (await admin.query("SELECT to_jsonb(p) AS row FROM app.scheduled_readiness_plan p ORDER BY tenant_id,job_id,task_id,fact_revision")).rows;
+  const before = await snapshot();
+  const adapters = { weather: async () => null, holidays: async () => ({ version: "readiness-holidays.v1", synthetic: true,
+    revision: "fixture.v1", observedAt: now, expiresAt: "2026-12-01T00:00:00.000Z", jurisdiction: "england-and-wales",
+    from: "2026-01-01", through: "2026-12-31", holidays: [] }) };
+  const addJob = vi.fn(async (..._args: unknown[]) => ({}));
+  const scheduler = new DarkReadinessScheduler(adapters, ports(), "synthetic_demo");
+  await scheduler.schedule(blocked.scope, now, { addJob } as unknown as Parameters<DarkReadinessScheduler["schedule"]>[2]);
+  const task = addJob.mock.calls[0]![1];
+  await scheduler.execute(task, due); await scheduler.execute(task, due);
+  expect(await snapshot()).toEqual(before);
+  const proposals = await store().proposals(context, blocked.scope);
+  expect(proposals).toHaveLength(1);
+  expect(proposals[0]).toMatchObject({ labourExposurePence: 999_999_999_999,
+    resequence: [{ taskId: next.scope.taskId, fromDate: next.plannedDate, toDate: blocked.plannedDate }],
+    programmeChanged: false, classification: "prevention", feeEligible: false, recoveryFeePence: 0 });
+  // Only a human confirmation creates the new fact revision and supersedes the queued evaluation.
+  await store().confirm(context, "member:synthetic-builder", { ...blocked, factRevision: 2, plannedDate: "2026-11-04" });
+  expect(await scheduler.execute(task, due)).toBe("superseded");
+  expect(await store().load(context, blocked.scope)).toMatchObject({ factRevision: 2, plannedDate: "2026-11-04" });
 });

@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it, vi } from "vitest";
 import type { TaskList } from "graphile-worker";
+import type { ScheduledPlan } from "./readiness-scheduler.js";
 import { registerFinalCheckTask } from "./worker-task-extensions.js";
 import { executeFinalCheckTask } from "./final-check-task-executor.js";
 
@@ -32,6 +33,16 @@ describe("SV5PRE final-check registration", () => {
 
   it("PRE-Q6-01 actual worker composition installs the strict task before the Graphile runner", async () => {
     const registered = vi.fn(async (..._args: unknown[]) => ({ stop: vi.fn() }));
+    const scope = { tenantId: task.tenantId, jobId: task.jobId, taskId: task.executionId };
+    const plan: ScheduledPlan = { version: "readiness-scheduled-plan.v1", synthetic: true, scope, factRevision: 1,
+      ruleRevision: "readiness-scheduled.v1", status: "confirmed", plannedDate: "2026-11-05", jurisdiction: "england-and-wales",
+      localTime: "09:00", timeZone: "Europe/London", predecessors: [], edges: [],
+      material: { requiredUnits: 1, landedUnits: 1 }, access: false, crew: true };
+    const candidate = { ...plan, scope: { ...scope, taskId: task.manifestId }, plannedDate: "2026-11-06", access: true };
+    const load = vi.fn(async (..._args: unknown[]) => plan);
+    const loadJobPlans = vi.fn(async (..._args: unknown[]) => [candidate]);
+    const recordProposal = vi.fn(async (..._args: unknown[]) => undefined);
+    vi.doMock("./readiness-store.js", () => ({ DurableReadinessStore: class { load = load; loadJobPlans = loadJobPlans; recordProposal = recordProposal; } }));
     const queries = vi.fn(async () => ({ rows: [{ safe: true }] }));
     vi.doMock("pg", () => ({ Pool: class { query = queries; end = async () => undefined; } }));
     vi.doMock("graphile-worker", async () => ({ ...await vi.importActual<Record<string, unknown>>("graphile-worker"), run: registered }));
@@ -46,6 +57,8 @@ describe("SV5PRE final-check registration", () => {
     for (const name of ["GRAPHILE_DATABASE_URL", "RUNTIME_DATABASE_URL", "SHADOW_DATABASE_URL"]) vi.stubEnv(name, "postgresql://localhost/sv5pre");
     vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
     try {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date("2026-11-04T10:00:00.000Z"));
       vi.resetModules(); await import("./worker.js");
       expect(registered).toHaveBeenCalledTimes(1);
       const options = registered.mock.calls[0]![0] as { taskList: TaskList };
@@ -53,6 +66,19 @@ describe("SV5PRE final-check registration", () => {
       const handler = options.taskList.final_check!, helpers = {} as Parameters<typeof handler>[1];
       await expect(handler({ ...task, completed: true }, helpers)).rejects.toMatchObject({ code: "INVALID_FINAL_CHECK_TASK" });
       await expect(handler(task, helpers)).rejects.toThrow("FINAL_CHECK_FORBIDDEN");
+      // Execute the real worker's schedule/evaluate composition, rather than a test binding.
+      const addJob = vi.fn(async (..._args: unknown[]) => ({}));
+      await options.taskList.readiness_schedule!({ version: "readiness-schedule-task.v1", scope },
+        { addJob } as unknown as Parameters<typeof handler>[1]);
+      expect(addJob).toHaveBeenCalledTimes(1);
+      await options.taskList.readiness_evaluate!(addJob.mock.calls[0]![1], helpers);
+      const queuedContext = load.mock.calls.at(-1)![0];
+      expect(queuedContext).toMatchObject({ tenantId: scope.tenantId });
+      expect(loadJobPlans).toHaveBeenCalledExactlyOnceWith(queuedContext, scope);
+      expect(recordProposal).toHaveBeenCalledExactlyOnceWith(queuedContext, expect.objectContaining({
+        ready: false, resequence: [{ taskId: candidate.scope.taskId, fromDate: candidate.plannedDate, toDate: plan.plannedDate }],
+        status: "proposal", programmeChanged: false, feeEligible: false, recoveryFeePence: 0,
+      }));
       const discovery=options.taskList.discover_final_check_requests!;
       const request={lock_id:task.lockId,tenant_id:task.tenantId,job_id:task.jobId};
       for(const fail of [false,true]){
@@ -68,6 +94,7 @@ describe("SV5PRE final-check registration", () => {
         else{await discovery({},discoveryHelpers);expect(statements[0]).toBe("BEGIN");expect(statements.at(-1)).toBe("COMMIT");expect(statements[2]).toContain("graphile_worker.add_job");expect(statements[3]).toContain("UPDATE infrastructure.final_check_request");}
       }
     } finally {
+      vi.useRealTimers(); vi.doUnmock("./readiness-store.js");
       listeners.mockRestore(); vi.unstubAllEnvs(); vi.doUnmock("pg"); vi.doUnmock("graphile-worker"); vi.doUnmock("@jobguard/db"); vi.resetModules();
     }
   });

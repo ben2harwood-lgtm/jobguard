@@ -17,13 +17,15 @@ const plan: ScheduledPlan = { version: "readiness-scheduled-plan.v1", synthetic:
 function harness(overrides: Partial<ScheduledPlan> = {}, adapters?: ReadinessAdapters, mode = "synthetic_demo") {
   let current: unknown = { ...plan, ...overrides };
   const records = new Map<string, ReadinessProposal>();
+  let jobPlans: unknown[] = [];
+  const loadJobPlans = vi.fn(async () => structuredClone(jobPlans));
   const load = vi.fn(async () => structuredClone(current));
   const recordProposal = vi.fn(async (proposal: ReadinessProposal) => { if (!records.has(proposal.key)) records.set(proposal.key, structuredClone(proposal)); });
-  const scheduler = new DarkReadinessScheduler(adapters ?? new FixtureReadinessAdapters({ weather: [weather], holidays }), { load, recordProposal }, mode);
+  const scheduler = new DarkReadinessScheduler(adapters ?? new FixtureReadinessAdapters({ weather: [weather], holidays }), { load, loadJobPlans, recordProposal }, mode);
   const addJob = vi.fn(async (..._args: unknown[]) => ({}));
   const queue = { addJob } as unknown as Pick<JobHelpers, "addJob">;
   const task = () => addJob.mock.calls.at(-1)![1];
-  return { scheduler, load, recordProposal, records, addJob, queue, task, change: (value: unknown) => { current = value; } };
+  return { scheduler, loadJobPlans, setPlans: (plans: unknown[]) => { jobPlans = plans; }, load, recordProposal, records, addJob, queue, task, change: (value: unknown) => { current = value; } };
 }
 
 describe("M2-6 dark factual adapter seams", () => {
@@ -222,5 +224,45 @@ describe("M2-6 Graphile scheduled prevention", () => {
       const h = harness({ access: false, labourRatePence, uncertainDurationHours: 1 }); await h.scheduler.schedule(scope, now, h.queue); await h.scheduler.execute(h.task(), due);
       expect([...h.records.values()][0]).toMatchObject({ recoveryFeePence: 0, feeEligible: false });
     }
+  });
+});
+
+
+describe("scheduled exposure and resequence", () => {
+  it("records labour exposure and proposals only for blocked work, deduping replays", async () => {
+    const h = harness({ access: false, labourRatePence: 999_999_999_999, uncertainDurationHours: 1 });
+    h.setPlans([{ ...plan, scope: { ...scope, taskId: other }, plannedDate: "2026-09-02" }]);
+    await h.scheduler.schedule(scope, now, h.queue);
+    await h.scheduler.execute(h.task(), due); await h.scheduler.execute(h.task(), due);
+    expect(h.records.size).toBe(1);
+    expect([...h.records.values()][0]).toMatchObject({ labourExposurePence: 999_999_999_999,
+      resequence: [{ taskId: other, fromDate: "2026-09-02", toDate: plan.plannedDate }],
+      status: "proposal", programmeChanged: false, classification: "prevention", feeEligible: false, recoveryFeePence: 0 });
+    expect(h.loadJobPlans).toHaveBeenCalledWith(scope);
+    h.setPlans([{ ...plan, scope: { ...scope, taskId: other }, factRevision: 2, plannedDate: "2026-09-03" }]);
+    await h.scheduler.execute(h.task(), due);
+    expect(h.records.size).toBe(2);
+  });
+  it("keeps missing labour inputs unknown and omits risk fields on ready work", async () => {
+    for (const patch of [{}, { labourRatePence: 100 }, { uncertainDurationHours: 8 }]) {
+      const h = harness({ access: false, ...patch });
+      await h.scheduler.schedule(scope, now, h.queue); await h.scheduler.execute(h.task(), due);
+      expect([...h.records.values()][0]).toMatchObject({ labourExposurePence: null, resequence: [] });
+    }
+    const h = harness({ labourRatePence: 100, uncertainDurationHours: 8 });
+    await h.scheduler.schedule(scope, now, h.queue); await h.scheduler.execute(h.task(), due);
+    expect([...h.records.values()][0]).not.toHaveProperty("labourExposurePence");
+    expect([...h.records.values()][0]).not.toHaveProperty("resequence");
+    expect(h.loadJobPlans).not.toHaveBeenCalled();
+  });
+  it("does not offer foreign or cancelled tasks from a port", async () => {
+    const h = harness({ access: false });
+    h.setPlans([
+      { ...plan, plannedDate: "2026-09-02", scope: { ...scope, taskId: other, tenantId: other } },
+      { ...plan, plannedDate: "2026-09-02", scope: { ...scope, taskId: other, jobId: other } },
+      { ...plan, plannedDate: "2026-09-02", scope: { ...scope, taskId: other }, status: "cancelled" },
+    ]);
+    await h.scheduler.schedule(scope, now, h.queue); await h.scheduler.execute(h.task(), due);
+    expect([...h.records.values()][0]).toMatchObject({ resequence: [] });
   });
 });

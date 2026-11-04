@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/m2-6-edge-facts"
       ],
-      "note": "M2-6 RED: synthetic readiness timer with preceding-workday scheduling and tenant-bound storage; scheduler source and existing test are authorized for the 4 November timing repair. Live routes remain disabled.",
+      "note": "M2-6 RED: synthetic tenant-bound readiness proposals only; labour exposure and resequencing for review. No automatic programme writes, live adapters or G2 release.",
       "allow": [
         "apps/api/src/readiness-adapters.ts",
         "apps/api/src/readiness-scheduler.test.ts",
@@ -20,10 +20,13 @@
         "apps/api/src/readiness-task.ts",
         "apps/api/src/readiness-task.test.ts",
         "apps/api/src/worker.ts",
+        "apps/api/src/sv5pre-worker-registration.test.ts",
         "packages/db/test/readiness-timer.integration.test.ts",
         "packages/db/migrations/0761_readiness_plan_discovery.sql",
         "packages/db/test/migration-proofs/0761_readiness_plan_discovery.proof.json",
-        "packages/db/migration-notes/0761_readiness_plan_discovery.md"
+        "packages/db/migration-notes/0761_readiness_plan_discovery.md",
+        "packages/core/src/readiness.ts",
+        "packages/core/src/readiness.test.ts"
       ]
     }
   }

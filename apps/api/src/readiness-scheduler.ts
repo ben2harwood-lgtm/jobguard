@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { JobHelpers, TaskList } from "graphile-worker";
 import { z } from "zod";
-import { assertAcyclicDependencies, dueAtLocalTime, evaluateReadiness, MAX_MONEY_PENCE, nextWorkday } from "@jobguard/core";
+import { assertAcyclicDependencies, dueAtLocalTime, evaluateReadiness, MAX_MONEY_PENCE, nextWorkday, proposeResequence, type ResequenceCandidate } from "@jobguard/core";
 import { calendarDate, jurisdiction, ReadinessSeamError, readHolidays, readWeather, sameScope, scopeV1, type HolidayReading, type ReadinessAdapters, type ReadinessScope } from "./readiness-adapters.js";
 
 const truth = z.union([z.boolean(), z.literal("unknown")]);
@@ -32,10 +32,13 @@ export type ReadinessProposal = Readonly<{
   ready: boolean; reasons: readonly string[]; weather: true | false | "unknown";
   classification: "prevention"; feeEligible: false; recoveryFeePence: 0;
   status: "proposal"; programmeChanged: false;
+  labourExposurePence?: number | null | undefined; resequence?: readonly ResequenceCandidate[] | undefined;
 }>;
 export interface ReadinessSchedulePorts {
   /** Authoritative confirmed plan, scoped by ALL three identifiers. */
   load(scope: ReadinessScope): Promise<unknown>;
+  /** Latest confirmed plan per task on the queued tenant/job. Legacy ports offer no candidates. */
+  loadJobPlans?(scope: ReadinessScope): Promise<readonly unknown[]>;
   /** Atomically insert-if-absent by key. No commercial or programme write capability. */
   recordProposal(proposal: ReadinessProposal): Promise<void>;
 }
@@ -126,9 +129,15 @@ export class DarkReadinessScheduler {
     const reasons = [...result.reasons];
     if (weather.state === "unknown" || result.weather === "unknown") reasons.push("Weather availability unknown");
     if (calendar.state === "unknown") reasons.push("Workday calendar unknown");
-    const key = digest({ task, weather, calendar, reasons });
+    const ready = reasons.length === 0;
+    const jobPlans = ready || !this.ports.loadJobPlans ? [] : (await this.ports.loadJobPlans(plan.scope))
+      .map(raw => scheduledPlanV1.parse(raw))
+      .filter(other => other.scope.tenantId === plan.scope.tenantId && other.scope.jobId === plan.scope.jobId)
+      .sort((a, b) => a.scope.taskId.localeCompare(b.scope.taskId));
+    const risk = ready ? {} : { labourExposurePence: result.exposure?.pence ?? null, resequence: proposeResequence(plan, jobPlans) };
+    const key = digest({ task, weather, calendar, reasons, jobPlans, risk });
     await this.ports.recordProposal({ version: "readiness-prevention-proposal.v1", scope: plan.scope, key, planHash: task.planHash, ruleRevision: plan.ruleRevision, evaluatedAt: now,
-      ready: reasons.length === 0, reasons, weather: result.weather, classification: "prevention", feeEligible: false, recoveryFeePence: 0, status: "proposal", programmeChanged: false });
+      ...risk, ready, reasons, weather: result.weather, classification: "prevention", feeEligible: false, recoveryFeePence: 0, status: "proposal", programmeChanged: false });
     return "evaluated";
   }
 }

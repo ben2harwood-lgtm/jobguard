@@ -2,8 +2,8 @@ import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
 import { appendAuditBatch, withTenant, type VerifiedTenantContext } from "@jobguard/db";
-import { assertAcyclicDependencies } from "@jobguard/core";
-import { ReadinessSeamError, scopeV1 } from "./readiness-adapters.js";
+import { assertAcyclicDependencies, MAX_MONEY_PENCE } from "@jobguard/core";
+import { calendarDate, ReadinessSeamError, scopeV1 } from "./readiness-adapters.js";
 import { scheduledPlanV1, type ReadinessProposal } from "./readiness-scheduler.js";
 
 const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
@@ -14,7 +14,10 @@ const proposalV1 = z.object({
   ready: z.boolean(), reasons: z.array(z.string().max(200)), weather: z.union([z.boolean(), z.literal("unknown")]),
   classification: z.literal("prevention"), feeEligible: z.literal(false), recoveryFeePence: z.literal(0),
   status: z.literal("proposal"), programmeChanged: z.literal(false),
-}).strict().refine(p => p.ready === (p.reasons.length === 0) && !(p.ready && p.weather !== true));
+  labourExposurePence: z.number().int().nonnegative().max(MAX_MONEY_PENCE).nullable().optional(),
+  resequence: z.array(z.object({ taskId: z.string().uuid(), fromDate: calendarDate, toDate: calendarDate }).strict()
+    .refine(candidate => candidate.fromDate > candidate.toDate)).max(3).optional(),
+}).strict().refine(p => p.ready === (p.reasons.length === 0) && !(p.ready && (p.weather !== true || p.labourExposurePence !== undefined || p.resequence !== undefined)));
 
 /** Synthetic composition only; the practice worker binds ports to each queued tenant. Live use remains disabled. */
 export class DurableReadinessStore {
@@ -59,6 +62,18 @@ export class DurableReadinessStore {
     return withTenant(this.pool, context, async db => (await db.$client.query(
       `SELECT payload FROM app.scheduled_readiness_plan WHERE tenant_id=$1 AND job_id=$2 AND task_id=$3 ORDER BY fact_revision DESC LIMIT 1`,
       [scope.tenantId, scope.jobId, scope.taskId])).rows[0]?.payload ?? null);
+  }
+  async loadJobPlans(context: VerifiedTenantContext, raw: unknown): Promise<readonly unknown[]> {
+    const scope = this.scope(raw);
+    if (scope.tenantId !== context.tenantId) return [];
+    return withTenant(this.pool, context, async db => {
+      // Choose the latest revision BEFORE filtering cancellation, so old confirmations never reappear.
+      const rows = await db.$client.query(`SELECT payload FROM (
+        SELECT DISTINCT ON (task_id) task_id,payload FROM app.scheduled_readiness_plan
+        WHERE tenant_id=$1 AND job_id=$2 ORDER BY task_id,fact_revision DESC
+      ) latest WHERE payload->>'status'='confirmed' ORDER BY task_id`, [scope.tenantId, scope.jobId]);
+      return rows.rows.map(row => scheduledPlanV1.parse(row.payload));
+    });
   }
   async recordProposal(context: VerifiedTenantContext, raw: unknown): Promise<void> {
     this.assertDark();
