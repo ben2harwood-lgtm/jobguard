@@ -1,3 +1,4 @@
+import { applyOutboundPause, OUTBOUND_PAUSE_MIGRATION } from "./outbound-pause-fixture.js";
 import { syntheticOwnerPool } from "./pool-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, rm, readFile } from "node:fs/promises";
@@ -115,6 +116,7 @@ describe("CH-1 v3 activation",()=>{
     await upgrade.query(name === "0095_job_parties.sql" ? sql.replace("BEGIN;", "BEGIN; SELECT set_config('app.deployment_mode','synthetic_demo',true);") : sql);
     await upgrade.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)",[name]);
    }
+   await applyOutboundPause(upgrade);
    await upgrade.query(`INSERT INTO control_plane.tenant(id)VALUES('${T}');INSERT INTO identity.identity_user(id)VALUES('d1500000-0000-4000-8000-000000000001');INSERT INTO app.account(id,tenant_id,name)VALUES('d1500000-0000-4000-8000-000000000002','${T}','Synthetic');INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)VALUES('${M}','${T}','d1500000-0000-4000-8000-000000000002','d1500000-0000-4000-8000-000000000001','owner');`);
    const job=await prepareActivationFixtureV3(upgrade,context,"historic-upgrade",100000),row=(await upgrade.query(`SELECT j.revision,d.id,d.document_version,d.content_hash FROM app.job j JOIN app.quote_document_version d ON(d.tenant_id,d.id)=(j.tenant_id,j.accepted_quote_version_id) WHERE j.id=$1`,[job])).rows[0];
    const input={version:"switch-live.v1",activationId:randomUUID(),capSnapshotId:randomUUID(),syntheticObligationId:null,jobId:job,acceptedDocumentId:row.id,acceptedDocumentVersion:row.document_version,acceptedDocumentHash:row.content_hash,expectedJobRevision:row.revision,acceptedNetValuePence:100000,recoveryCapPence:1500,mode:"pilot_no_charge",activationTermsVersion:"pilot_no_charge.v1",feePolicyVersion:"reference_fee_policy_v1",activatedAt:new Date()};
@@ -126,7 +128,7 @@ describe("CH-1 v3 activation",()=>{
    for (const [table, was] of Object.entries(proof)) expect(Object.keys(was.rows).length, `[MO4-4a] ${table} pre-existing row`).toBeGreaterThan(0);
    await upgrade.query(await readFile(MIGRATION_URLS[own]!, "utf8"));
    await upgrade.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)",[names[own]]);
-   expect((await upgrade.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map(row=>row.migration_name), "[MO4-4b] N alone registry").toEqual(names.slice(0,own+1));
+   expect((await upgrade.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map(row=>row.migration_name), "[MO4-4b] N alone registry").toEqual([...names.slice(0,own+1),OUTBOUND_PAUSE_MIGRATION]);
    expect(await snapshot(), "[MO4-4c] complete joined rows at N alone").toEqual(before);
    expect((await upgrade.query(`SELECT count(*)::int n FROM app.job_activation_terms`)).rows[0].n).toBe(0);
    const controls = [];

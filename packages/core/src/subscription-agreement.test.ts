@@ -22,6 +22,7 @@ const currentStatement = { statementId: b, revision: 1, contentHash: "a".repeat(
 function statementFixture() {
   return { ...fixture(), action: "statement", amountPence: 600, currentStatement,
     statementApproval: { ...currentStatement, resolution: "approved", tenantId: a, recipientRef: b,
+      agreementId: selection.agreementId, termsRevision: selection.revision, termsHash: subscriptionAgreementHash(selection),
       expiresAt: "2026-11-01T00:00:00Z", decisionId: b } };
 }
 
@@ -91,6 +92,30 @@ describe("M4-13 dark subscription and success-fee agreement", () => {
       expect(() => checkSyntheticSubscriptionAgreement({ ...f, statementApproval: { ...f.statementApproval, ...change } })).toThrow("AGREEMENT_INELIGIBLE");
     }
     expect(() => checkSyntheticSubscriptionAgreement({ ...f, amountPence: 601 })).toThrow("AGREEMENT_INELIGIBLE");
+  });
+  it("requires statement approval bound to the exact agreement and approved terms revision/hash", () => {
+    const f = statementFixture();
+    for (const change of [{ agreementId: a }, { termsRevision: 2 }, { termsHash: "c".repeat(64) }]) {
+      expect(() => checkSyntheticSubscriptionAgreement({ ...f, statementApproval: { ...f.statementApproval, ...change } }))
+        .toThrow("AGREEMENT_INELIGIBLE");
+    }
+    for (const field of ["agreementId", "termsRevision", "termsHash"] as const) {
+      const approval: Partial<typeof f.statementApproval> = { ...f.statementApproval };
+      delete approval[field];
+      expect(() => checkSyntheticSubscriptionAgreement({ ...f, statementApproval: approval })).toThrow("INVALID_AGREEMENT");
+    }
+    // Keep the exact statement and recipient while approving different agreement terms.
+    for (const change of [{ agreementId: a }, { revision: 2 }, { anchorDay: 1 }]) {
+      const updatedSelection = { ...selection, ...change };
+      const termsHash = subscriptionAgreementHash(updatedSelection);
+      const request = { ...f, currentRevision: updatedSelection.revision, currentTermsHash: termsHash,
+        record: { ...f.record, selection: updatedSelection, termsHash,
+          approval: { ...f.record.approval, termsHash } } };
+      expect(() => checkSyntheticSubscriptionAgreement(request)).toThrow("AGREEMENT_INELIGIBLE");
+      expect(checkSyntheticSubscriptionAgreement({ ...request, statementApproval: { ...f.statementApproval,
+        agreementId: updatedSelection.agreementId, termsRevision: updatedSelection.revision, termsHash } })
+        .eligibleForSimulation).toBe(true);
+    }
   });
   it("keeps pilot fee-free and trial subscription-free without exempting trial success fees", () => {
     for (const billingMode of ["first_job_trial", "pilot_no_charge"]) {

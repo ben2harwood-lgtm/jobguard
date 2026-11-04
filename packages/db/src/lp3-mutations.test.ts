@@ -11,6 +11,23 @@ const activation={version:"switch-live.v1",activationId:id,capSnapshotId:id,synt
 const settlement={version:"simulated-settlement.v1",settlementId:id,obligationId:id,providerEventId:"Fictional 🧱 event",amountPence:7900,currency:"GBP",simulatedAt:at};
 const disposition={version:"quote-disposition.v1",eventId:id,jobId:id,documentId:id,documentVersion:1,documentHash:"a".repeat(64),expectedJobRevision:2,kind:"superseded",occurredAt:at};
 describe("LP3 runtime mutation binding",()=>{
+  it("requires the canonical settlement approval before calling SQL",async()=>{
+    const exact={...command,subjectType:"synthetic_obligation",subjectRef:id,
+      action:{actionType:"synthetic_obligation.simulate_settlement",recipient:null,contentHash:lp3MutationHash(id,id,settlement),
+        aggregateRevision:1,amountPence:7900,currency:"GBP",policyVersion:"synthetic_demo_illustrative.v1"}} as ConsequentialCommand;
+    let calls=0;
+    const database={$client:{query:async()=>{calls++;return {rows:[]};}}} as unknown as TenantTransaction;
+    const mutation=new RecordSimulatedSettlementMutation(id,"synthetic_demo",settlement);
+    const changes=[{contentHash:"a".repeat(64)},
+      {contentHash:lp3MutationHash(id,id,{...settlement,obligationId:other})},
+      {amountPence:7901},{currency:null},{policyVersion:"other-policy"},{aggregateRevision:2},{recipient:"fictional@example.invalid"}];
+    for(const change of changes)await expect(mutation.mutate(database,{...exact,action:{...exact.action,...change}} as ConsequentialCommand))
+      .rejects.toThrow("EXACT_SIMULATION_AUTHORIZATION_MISMATCH");
+    await expect(mutation.mutate(database,{...exact,subjectType:"job"})).rejects.toThrow("EXACT_SIMULATION_AUTHORIZATION_MISMATCH");
+    expect(calls).toBe(0);
+    await mutation.mutate(database,exact);
+    expect(calls).toBe(1);
+  });
   it("reports only the LP-3 semantic-use uniqueness race as a command conflict", async () => {
     const exact = {...command, action:{actionType:"quote.acceptance.attest", contentHash:acceptance.documentHash,
       aggregateRevision:acceptance.documentVersion, amountPence:acceptance.acceptedTotalPence,

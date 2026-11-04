@@ -13,6 +13,7 @@ const source = { sourceId: id(9), sourceVersion: "object-version.1", sourceHash:
 const scope = { tenantId: b.tenantId, jobId: b.jobId, workId: id(4), lineId: id(5) };
 const authority = { environment: "synthetic_demo", tenantId: b.tenantId, jobId: b.jobId,
   membershipId: id(6), identityUserId: id(7), permission: "review_recovery_eligibility" };
+const approver = { ...authority, membershipId: id(60), identityUserId: id(70) };
 const facts = () => ({
   version: "shadow-eligibility.v1", policyVersion: RECOVERY_BILLABILITY_POLICY, environment: "synthetic_reference",
   ...scope, caseId: b.caseId, approvedCase: true, unresolvedDispute: false,
@@ -33,7 +34,7 @@ const reviewCommand = () => ({ version: "recovery-billability-review-command.v1"
 const approvalCommand = () => ({ version: "recovery-billability-approval-command.v1", commandId: id(11), reviewCommandId: id(10), expected: { ...b } });
 const approved = () => {
   const current = snapshot(), review = reviewBillability(reviewCommand(), current, authority);
-  return { current, review, approval: approveBillability(approvalCommand(), review, current, authority) };
+  return { current, review, approval: approveBillability(approvalCommand(), review, current, approver) };
 };
 function catchSnapshot() {
   const lockId = id(20), base = facts();
@@ -49,9 +50,18 @@ function catchSnapshot() {
 }
 function cannotApprove(current: unknown, command = reviewCommand()) {
   const r = reviewBillability(command, current, authority);
-  expect(() => approveBillability(approvalCommand(), r, current, authority)).toThrow("BILLABILITY_NOT_APPROVABLE");
+  expect(() => approveBillability(approvalCommand(), r, current, approver)).toThrow("BILLABILITY_NOT_APPROVABLE");
 }
 describe("M4-2 DARK D03 v3 billability review", () => {
+  it("the same person with two owner memberships cannot approve their own review", () => {
+    const s = snapshot(), r = reviewBillability(reviewCommand(), s, authority);
+    const secondMembership = { ...authority, membershipId: id(61) };
+    expect(() => approveBillability(approvalCommand(), r, s, secondMembership)).toThrow("BILLABILITY_FORBIDDEN");
+  });
+  it("approver = requester refused", () => {
+    const s = snapshot(), r = reviewBillability(reviewCommand(), s, authority);
+    expect(() => approveBillability(approvalCommand(), r, s, authority)).toThrow("BILLABILITY_FORBIDDEN");
+  });
   it("records exact category, attribution, principal, exclusions, reasons and authorized reviewer in an immutable review", () => {
     const { review, approval, current } = approved();
     expect(review.snapshot.caseType).toBe("merchant_overcharge");
@@ -59,7 +69,7 @@ describe("M4-2 DARK D03 v3 billability review", () => {
     expect(review.assessment).toMatchObject({ classification: "eligible_for_review", exclusions: [], productionEnabled: false });
     expect(Object.isFrozen(review.snapshot.facts)).toBe(true);
     expect(Object.isFrozen(review.command.expected)).toBe(true);
-    expect(requireCurrentBillabilityApproval(approval, current, authority)).toEqual({ approvedPrincipal: { pence: 30000, currency: "GBP" }, productionEnabled: false });
+    expect(requireCurrentBillabilityApproval(approval, current, approver)).toEqual({ approvedPrincipal: { pence: 30000, currency: "GBP" }, productionEnabled: false });
     expect(Object.isFrozen(current)).toBe(false);
   });
   it.each(["evidenceComplete", "causationCertain", "amountCertain", "taxBasisCertain"] as const)("holds uncertain %s non-billable until a new review", key => {
@@ -121,14 +131,14 @@ describe("M4-2 DARK D03 v3 billability review", () => {
   it("binds exact case, evidence, policy and reviewer versions and refuses stale/revoked authority", () => {
     const { approval, current, review } = approved();
     for (const key of ["caseRevision", "evidenceRevision"] as const)
-      expect(() => requireCurrentBillabilityApproval(approval, { ...current, binding: { ...b, [key]: b[key] + 1 } }, authority)).toThrow("BILLABILITY_STALE");
-    expect(() => requireCurrentBillabilityApproval(approval, { ...current, binding: { ...b, evidenceHash: "c".repeat(64) } }, authority)).toThrow("BILLABILITY_STALE");
+      expect(() => requireCurrentBillabilityApproval(approval, { ...current, binding: { ...b, [key]: b[key] + 1 } }, approver)).toThrow("BILLABILITY_STALE");
+    expect(() => requireCurrentBillabilityApproval(approval, { ...current, binding: { ...b, evidenceHash: "c".repeat(64) } }, approver)).toThrow("BILLABILITY_STALE");
     for (const change of [{ policyVersion: "future-more-generous-policy" }, { policyRevision: 2 }])
       expect(() => requireCurrentBillabilityApproval(approval, { ...current, binding: { ...b, ...change } }, authority)).toThrow("INVALID_BILLABILITY_INPUT");
     for (const change of [{ membershipId: id(98) }, { identityUserId: id(98) }])
-      expect(() => approveBillability(approvalCommand(), review, current, { ...authority, ...change })).toThrow("BILLABILITY_STALE");
+      expect(() => requireCurrentBillabilityApproval(approval, current, { ...approver, ...change })).toThrow("BILLABILITY_STALE");
     for (const change of [{ permission: "read" }, { environment: "production" }])
-      expect(() => requireCurrentBillabilityApproval(approval, current, { ...authority, ...change })).toThrow("BILLABILITY_FORBIDDEN");
+      expect(() => requireCurrentBillabilityApproval(approval, current, { ...approver, ...change })).toThrow("BILLABILITY_FORBIDDEN");
   });
   it("refuses cross-tenant, cross-job, cross-case and cross-line sources", () => {
     for (const key of ["tenantId", "jobId", "caseId"] as const) {
@@ -142,21 +152,21 @@ describe("M4-2 DARK D03 v3 billability review", () => {
   });
   it("replays only the same command for the same authenticated reviewer; replay grants no current entitlement", () => {
     const { approval, current } = approved();
-    expect(replayBillabilityApproval(approval, approvalCommand(), current, authority)).toEqual(approval);
-    expect(replayBillabilityApproval(approval, { ...approvalCommand(), expected: Object.fromEntries(Object.entries(b).reverse()) }, current, authority)).toEqual(approval);
+    expect(replayBillabilityApproval(approval, approvalCommand(), current, approver)).toEqual(approval);
+    expect(replayBillabilityApproval(approval, { ...approvalCommand(), expected: Object.fromEntries(Object.entries(b).reverse()) }, current, approver)).toEqual(approval);
     for (const change of [{ commandId: id(99) }, { reviewCommandId: id(99) }, { expected: { ...b, caseRevision: 3 } }])
-      expect(() => replayBillabilityApproval(approval, { ...approvalCommand(), ...change }, current, authority)).toThrow("BILLABILITY_REPLAY_CONFLICT");
+      expect(() => replayBillabilityApproval(approval, { ...approvalCommand(), ...change }, current, approver)).toThrow("BILLABILITY_REPLAY_CONFLICT");
     const reversed = { ...current, availableAllocatedNetPence: 0 };
-    expect(replayBillabilityApproval(approval, approvalCommand(), reversed, authority)).toEqual(approval);
-    expect(() => requireCurrentBillabilityApproval(approval, reversed, authority)).toThrow("BILLABILITY_STALE");
+    expect(replayBillabilityApproval(approval, approvalCommand(), reversed, approver)).toEqual(approval);
+    expect(() => requireCurrentBillabilityApproval(approval, reversed, approver)).toThrow("BILLABILITY_STALE");
   });
   it("invalidates historical approval on reversals, evidence invalidation, capture, disclosure or locked-bill change even without version bumps", () => {
     const { approval, current } = approved();
     for (const change of [{ availableAllocatedNetPence: 1 }, { evidenceComplete: false }, { builderCaptured: true },
       { disclosedBeforeLock: true }, { finalAccountLockId: id(99) }, { sources: [{ ...source, sourceVersion: "2" }] }])
-      expect(() => requireCurrentBillabilityApproval(approval, { ...current, ...change }, authority)).toThrow("BILLABILITY_STALE");
-    const s = catchSnapshot(), r = reviewBillability(reviewCommand(), s, authority), a = approveBillability(approvalCommand(), r, s, authority);
-    expect(() => requireCurrentBillabilityApproval(a, { ...s, finalAccountLockId: id(99) }, authority)).toThrow("BILLABILITY_STALE");
+      expect(() => requireCurrentBillabilityApproval(approval, { ...current, ...change }, approver)).toThrow("BILLABILITY_STALE");
+    const s = catchSnapshot(), r = reviewBillability(reviewCommand(), s, authority), a = approveBillability(approvalCommand(), r, s, approver);
+    expect(() => requireCurrentBillabilityApproval(a, { ...s, finalAccountLockId: id(99) }, approver)).toThrow("BILLABILITY_STALE");
   });
   it("enforces money and exact allocation limits without rounding up a fraction", () => {
     for (const change of [{ claimedNetPence: 29999 }, { availableAllocatedNetPence: 29999 }, { availableAllocatedNetPence: 0 }]) cannotApprove({ ...snapshot(), ...change });
@@ -166,7 +176,7 @@ describe("M4-2 DARK D03 v3 billability review", () => {
     const s = { ...snapshot(), facts: { ...facts(), principalNet: { numerator: "89999", denominator: "3" } } };
     cannotApprove(s);
     const r = reviewBillability({ ...reviewCommand(), claimedEligiblePrincipalPence: 29999 }, s, authority);
-    expect(approveBillability(approvalCommand(), r, s, authority).productionEnabled).toBe(false);
+    expect(approveBillability(approvalCommand(), r, s, approver).productionEnabled).toBe(false);
   });
   it("rejects duplicate source identities and client-supplied classifier/approval authority", () => {
     expect(() => evaluateBillabilityPolicy({ ...snapshot(), sources: [source, source] })).toThrow("INVALID_BILLABILITY_INPUT");
@@ -175,8 +185,8 @@ describe("M4-2 DARK D03 v3 billability review", () => {
   });
   it("recomputes the saved assessment and rejects tampered reviewer or exclusions", () => {
     const { approval, current, review } = approved();
-    expect(() => approveBillability(approvalCommand(), { ...review, assessment: { ...review.assessment, exclusions: ["forged"] } }, current, authority)).toThrow("BILLABILITY_STALE");
-    expect(() => requireCurrentBillabilityApproval({ ...approval, approvedBy: { ...authority, membershipId: id(99) } }, current, authority)).toThrow("BILLABILITY_STALE");
+    expect(() => approveBillability(approvalCommand(), { ...review, assessment: { ...review.assessment, exclusions: ["forged"] } }, current, approver)).toThrow("BILLABILITY_STALE");
+    expect(() => requireCurrentBillabilityApproval({ ...approval, approvedBy: { ...authority, membershipId: id(99) } }, current, approver)).toThrow("BILLABILITY_STALE");
   });
   it("all production and pilot inputs fail closed; outward policy result carries no shadow data", () => {
     for (const environment of ["production", "pilot_no_charge", "unconfigured"])
