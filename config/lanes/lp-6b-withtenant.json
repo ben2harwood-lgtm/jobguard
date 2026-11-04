@@ -9,6 +9,7 @@
       "note": "LP-6b RED repair WIP, main merged, migration 0584 with proof; identity grants unchanged. S9 remains Ben-owned known red. Only context-boundary principal/practice/contractor pins are authorized; full real-PostgreSQL shards and independent security checks required. No self-grant.",
       "allow": [
         "apps/api/src/accounting-export.application.test.ts",
+        "apps/api/src/app.module.ts",
         "apps/api/src/auth/auth-provider.ts",
         "apps/api/src/auth/auth.test.ts",
         "apps/api/src/auth/context-boundary.test.ts",
@@ -39,6 +40,7 @@
         "apps/api/src/recovery-follow-up.controller.test.ts",
         "apps/api/src/recovery-message.application.test.ts",
         "apps/api/src/recovery-message.controller.test.ts",
+        "apps/api/src/request-binding.filter.ts",
         "apps/api/src/small-builder-demo.application.test.ts",
         "apps/api/src/subscription.application.test.ts",
         "apps/api/src/value/company-value.application.test.ts",

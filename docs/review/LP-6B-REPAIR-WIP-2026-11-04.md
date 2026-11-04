@@ -9,8 +9,8 @@ Only `codex/sandbox/lp-6b-repair-wip` is being pushed. The PR branch
 behavior in the merge commit, as `4497621853cdccde351c8997d10af3b30667eeb4`
 (122 commits). The database runtime for the second four-shard run is frozen at
 `a7fa979aa55749529f676d77db410b988fabd9a7`. Checkpoint `3787b049` additionally
-repairs API test doubles without runtime changes. The fixture/public-code corrections are at `87330ae1`; a subsequent scoped
-practice-access correction restores the original Nest filter family. Final
+repairs API test doubles without runtime changes. The fixture/public-code corrections are at `87330ae1`; subsequent scoped
+practice-access and dedicated-filter corrections retain the original Nest filter family. Final
 validation remains pending. Earlier checkpoints were
 pushed as the work progressed.
 
@@ -171,12 +171,13 @@ API type-checking passed. No assertion or SQL allow-list was changed.
   decision; universal stale-owner refusal across isolation levels is not claimed.
 
 The two recovery adapter doubles now pass all 33 tests without assertion changes.
-A full API run exposed an additional existing guard at watchdog-registry line 841:
-the Nest practice filter may catch only `PracticeAccessError`. The builder restored
-that original scope, translated bind failures locally in `PracticeAccess`, and
-left the two generic real/contractor HTTP regressions red for Ben. No filter-family
-guard was changed. The scoped recheck passed 114 / failed 20: 18 existing SQL
-allow-list cases plus those two generic transport regressions.
+A full API run exposed an existing guard at watchdog-registry line 841: the
+practice filter catches only `PracticeAccessError`. That filter and guard remain
+unchanged. A separate filter scoped only to the typed binding refusal now handles
+that family. All nine HTTP regressions pass through the real AppModule; business
+SQL errors and forged names remain unhandled by the binding filter. The focused
+scope/context check passed 277 / failed the same 18 SQL allow-list cases. Final
+full checks at the resulting commit are pending.
 
 The command journal and final failure inventory are retained in
 [validation](LP-6B-REPAIR-WIP-2026-11-04-validation.md).

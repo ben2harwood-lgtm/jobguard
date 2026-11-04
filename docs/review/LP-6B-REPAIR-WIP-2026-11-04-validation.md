@@ -24,7 +24,7 @@ The scratch wrapper adds the pinned runtime to PATH; final PostgreSQL client PAT
 | build-retry | 2fbb0f52ab30 | `pnpm build` | 0 | 271.315 |  |
 | browser-list | 2fbb0f52ab30 | `pnpm --filter @jobguard/web exec playwright test --config=/workspace/work/lp6b/playwright-system.config.ts --list` | 0 | 46.991 |  |
 | browser-system | 2fbb0f52ab30 | `CI=1 pnpm --filter @jobguard/web exec playwright test --config=/workspace/work/lp6b/playwright-system.config.ts` | 1 | 2.718 |  |
-| browser-system-retry | 2fbb0f52ab30 | `CI=1 pnpm --filter @jobguard/web exec playwright test --config=/workspace/work/lp6b/playwright-system.config.ts` | running |  |  |
+| browser-system-retry | 2fbb0f52ab30 | `CI=1 pnpm --filter @jobguard/web exec playwright test --config=/workspace/work/lp6b/playwright-system.config.ts` | 1 | 8815.379 |   574 passed (2.4h) |
 | watchdog-mock | 2fbb0f52ab30 | `pnpm --filter @jobguard/api exec vitest run --maxWorkers=1 src/watchdog-registry.test.ts` | 1 | 21.131 | 1 failed (1); 18 failed \| 108 passed (126) |
 | repair-unit-2 | 70d6d6580a17 | `pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 src/tenant-context.test.ts src/money-trail-repository.test.ts src/success-fee-repository.test.ts src/simulation-fee-statement-repository.test.ts src/simulation-fee-collection-repository.test.ts src/stored-receipt-case-allocation-repository.test.ts test/recovery-terms-timing-fixture.test.ts test/lp6b-withtenant.test.ts test/lp6b-deferred-binding.test.ts` | 0 | 12.553 | 9 passed (9); 87 passed (87) |
 | old-schema-repair | 70d6d6580a17 | `pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/recovery-case-terms-upgrade.integration.test.ts test/recovery-pursuit-terms-upgrade.integration.test.ts test/job-import-v3-admission-upgrade.integration.test.ts test/job-import-v3-original-source-upgrade.integration.test.ts test/ch4-company-read.integration.test.ts test/migfix-8-upgrade.integration.test.ts test/commercial-integrity-v3-upgrade.integration.test.ts test/server-entitlement-upgrade.integration.test.ts test/contractor-retained-read.integration.test.ts` | 1 | 75.951 | 2 failed \| 7 passed (9); 14 passed \| 6 skipped (20) |
@@ -54,7 +54,7 @@ The scratch wrapper adds the pinned runtime to PATH; final PostgreSQL client PAT
 | public-refusal-api-retry | fbeb41a1b2da | `pnpm --filter @jobguard/api exec vitest run --maxWorkers=1 src/practice-binding-refusal.test.ts src/auth/auth.test.ts src/auth/context-boundary.test.ts` | 0 | 10.251 | 3 passed (3); 168 passed (168) |
 | public-refusal-web-retry | fbeb41a1b2da | `pnpm --filter @jobguard/web exec vitest run --maxWorkers=1 app/lib/synthetic-server.test.ts` | 0 | 5.522 | 1 passed (1); 8 passed (8) |
 | latest-core-db-2 | 87330ae1bb0a | `pnpm --filter @jobguard/db test --shard=2/4` | 1 | 2079.767 | 2 failed \| 180 passed (182); 2 failed \| 1380 passed (1382) |
-| latest-core-db-3 | 87330ae1bb0a | `pnpm --filter @jobguard/db test --shard=3/4` | running |  |  |
+| latest-core-db-3 | 87330ae1bb0a | `pnpm --filter @jobguard/db test --shard=3/4` | 1 | 2833.637 | 2 failed \| 179 passed (181); 12 failed \| 1558 passed \| 4 todo (1574) |
 | latest-core-db-4 | 87330ae1bb0a | `pnpm --filter @jobguard/db test --shard=4/4` | 1 | 1982.233 | 3 failed \| 178 passed (181); 3 failed \| 1649 passed (1652) |
 | latest-core-db-1 | 87330ae1bb0a | `pnpm --filter @jobguard/db test --shard=1/4` | 1 | 2093.479 | 1 failed \| 181 passed (182); 1 failed \| 1657 passed \| 13 todo (1671) |
 | last-api-build | 87330ae1bb0a | `pnpm --filter @jobguard/api build` | 0 | 48.381 |  |
@@ -62,6 +62,9 @@ The scratch wrapper adds the pinned runtime to PATH; final PostgreSQL client PAT
 | latest-web | 87330ae1bb0a | `pnpm --filter @jobguard/web test` | 0 | 127.295 | 117 passed (117); 1646 passed (1646) |
 | next-refusal-adapter-mocks | 87330ae1bb0a | `pnpm --filter @jobguard/api exec vitest run --maxWorkers=1 src/recovery-follow-up.controller.test.ts src/recovery-message.controller.test.ts` | 0 | 28.647 | 2 passed (2); 33 passed (33) |
 | scoped-practice-refusal | 87330ae1bb0a | `pnpm --filter @jobguard/api exec vitest run --maxWorkers=1 src/practice-binding-refusal.test.ts src/watchdog-registry.test.ts` | 1 | 15.892 | 2 failed (2); 20 failed \| 114 passed (134) |
+| scoped-api-build | 1d71d76414cf | `pnpm --filter @jobguard/api build` | 0 | 24.558 |  |
+| dedicated-binding-filter | 1d71d76414cf | `pnpm --filter @jobguard/api exec vitest run --maxWorkers=1 src/practice-binding-refusal.test.ts src/watchdog-registry.test.ts src/auth/context-boundary.test.ts src/auth/auth.test.ts` | 1 | 23.922 | 1 failed \| 3 passed (4); 18 failed \| 277 passed (295) |
+| binding-http-final | 1d71d76414cf | `pnpm --filter @jobguard/api exec vitest run --maxWorkers=1 src/practice-binding-refusal.test.ts` | 0 | 6.166 | 1 passed (1); 9 passed (9) |
 
 ## Final-run failure inventory
 
@@ -83,9 +86,21 @@ Recorded HEAD `87330ae1bb0a03ec4f10b30aa11289b2677bb974`; exit `1`.
 
 ### latest-core-db-3
 
-Recorded HEAD `87330ae1bb0a03ec4f10b30aa11289b2677bb974`; exit `running`.
+Recorded HEAD `87330ae1bb0a03ec4f10b30aa11289b2677bb974`; exit `1`.
 
-Run is still pending.
+- test/serious-b7.integration.test.ts [ test/serious-b7.integration.test.ts ]
+- test/practice-worker-switch.integration.test.ts > [PW11] concurrent duplicate and different commands serialize
+- test/practice-worker-switch.integration.test.ts > [PW32] decision 39 grants stay with the member and revocation removes job access
+- test/serious-b7.integration.test.ts > SERIOUS-B7 PostgreSQL authority and sources > S21 refuses session revocation/change committed while attachment approval waits for its case lock
+- test/serious-b7.integration.test.ts > SERIOUS-B7 PostgreSQL authority and sources > S21 refuses membership revocation/change committed while attachment approval waits for its case lock
+- test/serious-b7.integration.test.ts > SERIOUS-B7 PostgreSQL authority and sources > S21 refuses permission revocation/change committed while attachment approval waits for its case lock
+- test/serious-b7.integration.test.ts > SERIOUS-B7 PostgreSQL authority and sources > S21 refuses membership_expiry revocation/change committed while attachment approval waits for its case lock
+- test/serious-b7.integration.test.ts > SERIOUS-B7 PostgreSQL authority and sources > S21 refuses session_expiry revocation/change committed while attachment approval waits for its case lock
+- test/serious-b7.integration.test.ts > SERIOUS-B7 PostgreSQL authority and sources > S21 holds control_plane.practice_session against revocation until the approving transaction ends
+- test/serious-b7.integration.test.ts > SERIOUS-B7 PostgreSQL authority and sources > S21 holds app.membership against revocation until the approving transaction ends
+- test/serious-b7.integration.test.ts > SERIOUS-B7 PostgreSQL authority and sources > S22 opens and packs supported supplier case merchant_overcharge through the real applications
+- test/serious-b7.integration.test.ts > SERIOUS-B7 PostgreSQL authority and sources > S22 opens and packs supported supplier case duplicate_supplier_payment through the real applications
+- test/serious-b7.integration.test.ts > SERIOUS-B7 PostgreSQL authority and sources > S22 opens and packs supported supplier case prevention through the real applications
 
 ### latest-core-db-4
 
@@ -349,7 +364,6 @@ No failed test titles reported.
 
 ### browser-system-retry
 
-Recorded HEAD `2fbb0f52ab30388189806e7ab8a9aa2c6808a636`; exit `running`.
+Recorded HEAD `2fbb0f52ab30388189806e7ab8a9aa2c6808a636`; exit `1`.
 
-Run is still pending.
-
+See the command result above; no Vitest/TAP failure-title block was reported.

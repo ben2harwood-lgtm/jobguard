@@ -4,7 +4,9 @@ import { afterAll, afterEach, beforeAll, expect, it, vi } from "vitest";
 import type { Pool } from "pg";
 import { get } from "node:http";
 import { PracticeAccessError, RequestBindingRefusedError } from "@jobguard/db";
-import { PracticeErrorsFilter } from "./practice-errors.filter.js";
+import { AppModule } from "./app.module.js";
+import { ApplicationAuthGuard } from "./auth/application-auth.guard.js";
+import { Pool as PoolProvider } from "pg";
 import { PracticeAccess } from "./practice-access.js";
 
 let operation: () => Promise<unknown> = async () => undefined;
@@ -14,12 +16,14 @@ class Probe {
 }
 let app: INestApplication, url: string;
 beforeAll(async () => {
- const module = await Test.createTestingModule({ controllers: [Probe] }).compile();
+ // Stub the unrelated HTTP authentication guard; the probe executes the real
+ // practice access bridge and the real AppModule exception-filter registrations.
+ vi.spyOn(ApplicationAuthGuard.prototype, "canActivate").mockResolvedValue(true);
+ const module = await Test.createTestingModule({ imports: [AppModule], controllers: [Probe] }).overrideProvider(PoolProvider).useValue({}).compile();
  app = module.createNestApplication(); app.useLogger(false);
- app.useGlobalFilters(new PracticeErrorsFilter());
  await app.listen(0, "127.0.0.1"); url = `${await app.getUrl()}/binding-refusal`;
 });
-afterAll(async () => { await app?.close(); });
+afterAll(async () => { await app?.close(); vi.restoreAllMocks(); });
 afterEach(() => { vi.unstubAllEnvs(); operation = async () => undefined; });
 function response(): Promise<{ status: number | undefined; body: unknown }> {
  return new Promise((resolve, reject) => {
@@ -67,9 +71,9 @@ it("returns 401 when the subject transaction is refused after the ownership tran
  expect(query.mock.calls.some(([sql])=>sql.startsWith("SELECT id FROM app.evidence_upload"))).toBe(false);
  expect(query.mock.calls.at(-1)?.[0]).toBe("ROLLBACK");
 });
-it.each(["real", "contractor_practice"] as const)("preserves a generic %s binding refusal as FORBIDDEN", async kind => {
+it.each(["practice", "real", "contractor_practice"] as const)("maps a generic %s binding refusal to its established public code", async kind => {
  operation = async () => { throw new RequestBindingRefusedError(kind); };
- expect(await response()).toEqual({ status: 403, body: { code: "FORBIDDEN" } });
+ expect(await response()).toEqual({ status: kind === "practice" ? 401 : 403, body: { code: kind === "practice" ? "UNAUTHENTICATED" : "FORBIDDEN" } });
 });
 it.each(["UNAUTHENTICATED", "NOT_FOUND"] as const)("preserves the existing typed practice error %s", async code => {
  operation = async () => { throw new PracticeAccessError(code); };

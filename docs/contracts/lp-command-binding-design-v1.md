@@ -660,10 +660,10 @@ map, outside context JSON, audit payloads and responses. Refused binding becomes
 a public error before repository-specific error translation. The typed refusal
 carries only session kind. The practice-access and Next boundaries retain
 `UNAUTHENTICATED` for practice requests; existing typed domain translations still
-win. Nest's existing global filter remains restricted to `PracticeAccessError`: its
-exact error-family guard prevents a wider generic real/contractor translation
-without Ben's review. Those two transport regressions remain red. Business-query
-`42501` errors and forged error names are not treated as binding failures.
+win. Nest registers a separate binding-only filter, retaining the existing practice
+and watchdog filter families and their guards unchanged. Generic real/contractor
+refusals retain `FORBIDDEN`. Business-query `42501` errors and forged error names
+are not treated as binding failures.
 
 The following exact calls temporarily defer session binding. Their existing SQL
 authorization remains mandatory. `lp6b-deferred-binding.test.ts` checks direct
