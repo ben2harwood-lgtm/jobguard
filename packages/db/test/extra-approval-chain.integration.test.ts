@@ -73,8 +73,8 @@ it("E5B-02 stale revision, wrong hash/net, unpriced and replay semantics", async
   expect(await code(repo.reviseExtra(ctx, surveyor(), { ...revise, netPence: 60001 }))).toBe("COMMAND_CONFLICT"); // same command id, different content
   expect(await code(repo.approveExtraStep(ctx, sup2(), approveInput(s, 0)))).toBe("STALE_REVISION"); // revision 1 after 2 exists (even though it was decided)
   const s2 = { ...s, requestId: second.requestId as string, hash: second.revisionHash as string, net: 60000 };
-  expect(await code(repo.approveExtraStep(ctx, sup(), approveInput(s2, 0)))).toBe("REPEAT_HELD"); // same person, same slot, later version: held, refused
-  expect(await code(repo.approveExtraStep(ctx, sup2(), approveInput(s2, 0)))).toBe("ok");
+  expect(await code(repo.approveExtraStep(ctx, sup(), approveInput(s2, 0)))).toBe("ok"); // Q04: same person can occupy the same slot on a new request revision
+  expect(await code(repo.approveExtraStep(ctx, sup2(), approveInput(s2, 0)))).toBe("STEP_OUT_OF_ORDER");
   expect(await code(repo.approveExtraStep(ctx, sup(), approveInput(s2, 1)))).toBe("REUSED_APPROVER"); // approved step 0 of the first version, may not fill step 1 of the next
   const bindings = await sql("SELECT logical_revision,source_kind FROM app.extra_approval_revision_binding WHERE variation_id=$1 ORDER BY logical_revision", [s.extraId]);
   expect(bindings).toEqual([{ logical_revision: 1, source_kind: "ordinary" }, { logical_revision: 2, source_kind: "ordinary" }]);

@@ -1,10 +1,10 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import type { z } from "zod";
 import { isTrustedBrowserOrigin } from "../../../../contractor/origin";
-const h = vi.hoisted(() => ({ actor: vi.fn(), query: vi.fn(), queue: vi.fn(), extras: vi.fn(), rates: vi.fn(), reject: vi.fn(), withdraw: vi.fn(), revise: vi.fn() }));
+const h = vi.hoisted(() => ({ actor: vi.fn(), query: vi.fn(), queue: vi.fn(), extras: vi.fn(), rates: vi.fn(), reject: vi.fn(), withdraw: vi.fn(), revise: vi.fn(), approve: vi.fn() }));
 vi.mock("server-only", () => ({}));
 vi.mock("@jobguard/db", () => ({
-  ExtraApprovalRepository: class { queue = h.queue; rejectExtra = h.reject; withdrawExtra = h.withdraw; reviseExtra = h.revise; },
+  ExtraApprovalRepository: class { queue = h.queue; approveExtraStep = h.approve; rejectExtra = h.reject; withdrawExtra = h.withdraw; reviseExtra = h.revise; },
   withTenant: async (_pool: unknown, _context: unknown, fn: (db: unknown) => unknown) => fn({ $client: { query: h.query } }),
   northsideExtras: h.extras, northsideRateCard: h.rates,
 }));
@@ -52,11 +52,12 @@ it("delegates completed rejection replays and payload conflicts to the durable c
   h.reject.mockRejectedValueOnce({ code: "COMMAND_CONFLICT" });
   expect(await (await call("reject", { ...binding, reasonCode: "changed" })).json()).toEqual({ code: "COMMAND_CONFLICT" });
 });
-it.each(["owner", "surveyor", "operative", "client_approver"])("refuses withdrawal by %s", async role => {
+it.each(["owner", "operative", "client_approver"])("refuses withdrawal by %s", async role => {
   h.actor.mockResolvedValue({ pool: {}, member, role });
   expect((await call("withdraw", { reasonCode: "not_done" })).status).toBe(403); expect(h.withdraw).not.toHaveBeenCalled();
 });
-it("passes a supervisor withdrawal and only the existing reason list", async () => {
+it.each(["supervisor", "surveyor", "commercial_manager"])("passes covered %s withdrawal and only the existing reason list", async role => {
+  h.actor.mockResolvedValue({ pool: {}, member, role });
   expect((await call("withdraw", { reasonCode: "not_done" })).status).toBe(200);
   expect(h.withdraw).toHaveBeenCalledWith(tenant, member, { ...common, version: "withdraw-extra.v1", extraId: extra.extraId, reasonCode: "not_done" });
   expect((await call("withdraw", { reasonCode: "anything" })).status).toBe(422);
@@ -98,4 +99,22 @@ it("binds replay to the original URL extra and job rather than trusting a receip
   h.query.mockResolvedValue({ rows: [{ extra_id: id(90), job_id: extra.jobId }] });
   expect(await (await call("reject", { ...binding, reasonCode: "not_agreed" })).json()).toEqual({ code: "COMMAND_CONFLICT" });
   expect(h.reject).not.toHaveBeenCalled();
+});
+
+it("forwards a same-person approval repeat after it leaves the queue, with full binding", async () => {
+  h.queue.mockResolvedValue([]);
+  h.query.mockResolvedValue({ rows: [{ extra_id: extra.extraId, job_id: extra.jobId }] });
+  h.approve.mockResolvedValue({ state: "approved", stepIndex: 0 });
+  expect((await call("approve", binding)).status).toBe(200);
+  expect(h.approve).toHaveBeenCalledWith(tenant, member, { ...common, ...binding, version: "approve-extra-step.v1" });
+  h.approve.mockRejectedValueOnce({ code: "COMMAND_CONFLICT" });
+  expect(await (await call("approve", { ...binding, netPence: 1001 })).json()).toEqual({ code: "COMMAND_CONFLICT" });
+});
+it("refuses a replay receipt bound to another URL extra", async () => {
+  h.query.mockResolvedValue({ rows: [{ extra_id: id(99), job_id: extra.jobId }] });
+  expect((await call("approve", binding)).status).toBe(409);
+  expect(h.approve).not.toHaveBeenCalled();
+});
+it.each(["tenantId", "actorMembershipId", "serverTime"])("manual submit refuses forged %s", async field => {
+  expect((await call("submit", { [field]: id(99) })).status).toBe(422);
 });

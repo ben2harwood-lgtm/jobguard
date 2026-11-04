@@ -1,0 +1,22 @@
+import { afterAll, beforeAll, expect, it, vi } from "vitest";
+import { migrate } from "../src/index.js";
+import { clusterBefore } from "./site-extra-pricing-fixtures.js";
+import { chainWorld, submitted } from "./extra-approval-chain-fixtures.js";
+import { proofBefore, proofColumns, proofDifferences } from "./upgrade-proof-utils.js";
+let c: Awaited<ReturnType<typeof clusterBefore>>;
+beforeAll(async () => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); c = await clusterBefore("0930_extra_same_step.sql"); }, 240_000);
+afterAll(async () => { await c?.close(); vi.unstubAllEnvs(); });
+it("0930–0933 preserve populated predecessor rows, column shapes and frozen wait terms, and replay harmlessly", async () => {
+  const w = await chainWorld(c), s = await submitted(c, w, 40000);
+  const tables = ["app.variation", "app.variation_revision", "app.extra_origin", "app.extra_event", "app.extra_approval_request", "app.extra_approval_step_fact", "app.extra_approval_outcome", "app.approval_rule_version", "app.command_receipt", "app.audit_event"];
+  const before = await proofBefore(c.admin, tables);
+  const columns = await Promise.all(tables.map(table => proofColumns(c.admin, table)));
+  const old = (await c.admin.query("SELECT requirement FROM app.extra_approval_request WHERE id=$1", [s.requestId])).rows[0].requirement;
+  expect(old.steps[0]).not.toHaveProperty("waitWorkingDays");
+  await migrate(c.admin); await migrate(c.admin);
+  expect(await proofDifferences(c.admin, before)).toEqual({ rows: [], types: [] });
+  expect(await Promise.all(tables.map(table => proofColumns(c.admin, table)))).toEqual(columns);
+  expect((await c.admin.query("SELECT requirement FROM app.extra_approval_request WHERE id=$1", [s.requestId])).rows[0].requirement).toEqual(old);
+  const legacy = (await c.admin.query("SELECT app.xa_wait_deadline('2026-11-06T14:00Z',$1) deadline", [old.steps[0]])).rows[0];
+  expect(legacy.deadline.toISOString()).toBe("2026-11-06T14:01:00.000Z");
+});
