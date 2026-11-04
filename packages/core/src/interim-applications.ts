@@ -105,7 +105,7 @@ function scheduleValues(schedule: Schedule): Map<string, number> {
   for (const line of schedule.lines) {
     if (ids.has(line.id)) fail("DUPLICATE_LINE", "Duplicate schedule source identity");
     ids.add(line.id);
-    const source = JSON.stringify([line.kind, line.sourceDocumentId, line.commercialRevisionId, line.scopeItemId]);
+    const source = JSON.stringify([line.sourceDocumentId, line.commercialRevisionId, line.scopeItemId]);
     if (sources.has(source)) fail("DUPLICATE_LINE", "The same commercial source cannot enter a schedule twice");
     sources.add(source);
     if (line.kind === "baseline") {
@@ -144,6 +144,7 @@ function project(records: InterimDraftRecord[]): Projection {
   };
   const applications = new Map<string, Application>();
   const certificates = new Set<string>();
+  let latestApplication: Application | undefined;
   for (const record of records) {
     switch (record.version) {
       case "interim.schedule.v1": {
@@ -170,8 +171,12 @@ function project(records: InterimDraftRecord[]): Projection {
         const previous = applications.get(record.applicationId);
         if (record.revision !== (previous?.revision ?? 0) + 1 || record.previousRevisionId !== (previous?.id ?? null)
           || (previous && previous.kind !== record.kind)) fail("STALE_REVISION", "Application revisions must extend their own immutable history");
+        if (previous && previous.id !== latestApplication?.id) {
+          fail("STALE_REVISION", "An older application cannot supersede the current application");
+        }
         state.applied = boundedValues(record.cumulativeValues, state.scheduled);
         applications.set(record.applicationId, record);
+        latestApplication = record;
         state.application = record;
         state.certification = undefined; state.certified = new Map();
         break;
@@ -273,7 +278,7 @@ export function reconcileInterimDraftBook(input: unknown) {
       scopeItemId, scheduled: sum([scheduled]), applied: sum([applied]), certified: sum([certified]), invoiced: sum([invoiced]),
       invoiceable: sum([Math.max(0, certified - invoiced)]),
       finalAccountRemaining: state.application ? sum([applied, -invoiced]) : null,
-      creditRequired: state.application ? sum([Math.max(0, invoiced - applied)]) : null,
+      creditRequired: state.application ? sum([Math.max(0, invoiced - (state.certification ? certified : applied))]) : null,
     };
   });
   const balances = [...state.invoices.values()].map(invoice => ({

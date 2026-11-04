@@ -12,6 +12,9 @@ The projection sums each attempt's latest immutable event. Collection settlement
 
 Migration 0491 is additive. Forward fix only: preserve attempts, unknown outcomes, events and approvals. Do not roll back by removing financial history. No subscription routine (including latest `app.mon2_issue` from 0374) is replaced or modified. Real providers, real-data operation, policy approval and independent RED review remain separate gates.
 
+
+<!-- Preserved branch history from the NOPR catch-up. -->
+
 # Fee collection simulation: independent reference contracts v1
 
 Status: pure reference arithmetic and fake-event validation only. No collection/refund authority, financial persistence, executable adapter or transport is implemented. The complete M4-12-S card remains open. Decision 74 authorizes preparation on accepted M4-10-S `4710ea180696b91b4fbf161534b57c1dffffe87f`; acceptance of that partial piece does not establish missing upstream issuance or collection interfaces.

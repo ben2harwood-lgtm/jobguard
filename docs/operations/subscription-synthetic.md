@@ -26,10 +26,11 @@ A durable claimed attempt with no result (process interruption or lost result pe
 ## MON-2B dark provider adapter
 
 `SubscriptionStripeSandboxAdapter` implements the existing `SubscriptionPaymentAdapter` port;
-it is not installed in any HTTP route or live provider factory. Supply an exact MON-2A approved
+it is not installed in any HTTP route or live provider factory and is no longer exported from
+the database barrel. Import it directly only in synthetic fixture code. Supply an exact MON-2A approved
 work claim, tenant and synthetic D05 collection bound from trusted fixture setup, then use the
-existing `SubscriptionExecutor`. Construction and every call refuse live environments and extra
-fields. The adapter never recomputes prices. Provider proration, retries and emails are fixed off.
+existing `SubscriptionExecutor`. Construction, signing and every call require runtime `JOBGUARD_ENV=synthetic_demo`;
+the work schema independently refuses other environments and extra fields. The adapter never recomputes prices. Provider proration, retries and emails are fixed off.
 No migration, dependency, environment variable, provider key or network endpoint is added.
 
 Fake submission returns `outcome_unknown`; a checkout event does not settle it. The fixture helper
@@ -52,3 +53,33 @@ restart recovery and live reversal compensation remain required before productio
 `test/subscription-stripe-sandbox.integration.test.ts` and existing subscription PostgreSQL suites;
 the restricted builder sandbox cannot run PostgreSQL. One independent exact-head Claude RED
 review and green required CI remain merge gates under the current simple loop.
+
+
+### MON-2B webhook verifier candidate
+
+`src/subscription-webhook-verifier.ts` supplies the separate, unwired
+`verifySubscriptionWebhookV1(rawBody, signatureHeader, secret, clock)` helper. Pass the original
+raw bytes, a configured secret and a clock returning Unix milliseconds. Missing/blank secrets,
+missing/malformed signatures, ambiguous timestamps and invalid clocks fail closed with
+`SUBSCRIPTION_WEBHOOK_REFUSED`; error messages contain neither payload nor secret.
+The candidate format is `t=<Unix seconds>,v1=<hex HMAC-SHA256>` over the exact timestamp,
+a dot and the original bytes. One timestamp and at least one valid 32-byte v1 signature are
+required. Multiple v1 signatures support rotation; every candidate uses constant-time digest
+comparison, and any matching candidate suffices. Other signature versions are ignored. Timestamp
+tolerance is fixed at 300 seconds in either direction, inclusive. Replay within that window is
+possible: existing ingest/work/receipt idempotency, not signature verification, owns one effect.
+
+All vectors use made-up secrets generated locally by tests. **This format has not been checked
+against the provider in sandbox.** The verifier is not a provider adapter, an approval or a route.
+The public-string fake remains a separate synthetic fixture protocol. Tests feed verified bytes
+into that existing fake ingest only; the PostgreSQL replay test asserts one settled result and
+no duplicate audit. Unit tests prove stable fake result identity, not database uniqueness.
+A source boundary test forbids the public-string adapter/helper throughout application sources
+and the database barrel, including route dependencies. No route, configuration secret, migration,
+external action or network connection is installed by this piece.
+
+Still open for people: real provider sandbox and a real signing secret, running actual provider
+test events, D05, G4-S and any route. Existing D09/D02, live M4-10/M4-13 and other release gates
+remain unresolved; G0–G5 stay closed. Independent exact-head RED review and required CI remain
+necessary. Local unit/typecheck evidence is recorded in the handoff commit message; PostgreSQL
+and browser suites cannot run in the restricted builder sandbox and remain CI work.

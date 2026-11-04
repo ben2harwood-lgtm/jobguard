@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { currentCommandRegistryRows } from "./lp5-command-catalog.js";
 import { afterAll, expect, it } from "vitest";
 import { startBeforeMigration, applyMigration, snapshot, type Cluster } from "./contractor-entitlement-fixtures.js";
@@ -30,6 +31,10 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   // Successor migrations have their own exact reviewed routine ACL additions.
   // Keep the 0556-only assertion above, and retain every predecessor definition.
   const live = await catalogue();
+  // 0587 replaces only the payment-fee writer body; keep every mainline exception below.
+  const paymentFeeWriterOid = (await c.admin.query("SELECT 'app.write_payment_fee(uuid,text,jsonb)'::regprocedure::oid oid")).rows[0].oid;
+  const collectRecheck = await readFile(new URL("../migrations/0587_payment_fee_collect_recheck.sql", import.meta.url), "utf8");
+  const paymentFeeWriterBody = collectRecheck.split("CREATE OR REPLACE FUNCTION app.write_payment_fee")[1]!.split("AS $$")[1]!.split("$$;")[0];
   // 0567 changes only the checked settlement overload's expected approval hash.
   const settlementOid = (await c.admin.query("SELECT 'app.record_simulated_settlement(uuid,uuid,uuid,character varying,bigint,timestamp with time zone,uuid,uuid,uuid)'::regprocedure::oid oid")).rows[0].oid;
   const selfComparison = "(SELECT content_hash FROM app.action_authorization WHERE tenant_id=p_tenant AND id=p_authorization)";
@@ -37,7 +42,13 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     const current = live.find(row => row.oid === prior.oid);
     // 0566 and 0573 extend exactly this dispatcher for managed recovery and supervisor queries.
     if (prior.nspname === "app" && prior.proname === "lp5_command_result" && prior.args === "p_command_id uuid, p_outcome jsonb") continue;
-    if (prior.oid === settlementOid) {
+    // 0583 replaces only this exact predecessor body; its dedicated upgrade proof checks the replacement.
+    if (prior.nspname === "app" && prior.proname === "write_success_fee_v3" &&
+      prior.args === "p_job uuid, p_session text, p_command jsonb, p_artifact jsonb") {
+      expect(current?.definition).not.toEqual(prior.definition);
+    } else if (prior.oid === paymentFeeWriterOid) {
+      expect(current?.definition?.split("$function$")[1]).toEqual(paymentFeeWriterBody);
+    } else if (prior.oid === settlementOid) {
       expect(prior.definition).toContain(selfComparison);
       expect(current?.definition).toEqual(prior.definition.replace(selfComparison, "payload"));
     } else {
