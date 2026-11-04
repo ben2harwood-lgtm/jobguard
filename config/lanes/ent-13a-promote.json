@@ -1,0 +1,31 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-13a-promote": {
+      "branches": [
+        "codex/sandbox/ent-13a-promote"
+      ],
+      "allow": [
+        "apps/api/src/connectors/promotion.application.test.ts",
+        "apps/api/src/connectors/promotion.application.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/web/app/api/contractor/work-order-imports/connector-promotions/route.test.ts",
+        "apps/web/app/api/contractor/work-order-imports/connector-promotions/route.ts",
+        "apps/web/app/contractor/connector-promotions/page.test.ts",
+        "apps/web/app/contractor/connector-promotions/page.tsx",
+        "apps/web/e2e/ENT-13a-promote.spec.ts",
+        "docs/contracts/connector-capabilities-v1.md",
+        "docs/operations/connector-data-flow.md",
+        "packages/core/src/watchdog.ts",
+        "packages/db/migrations/0773_connector_promotion.sql",
+        "packages/db/src/connector-promotion-repository.ts",
+        "packages/db/src/enterprise-live-prompt-repository.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/work-order-repository.ts",
+        "packages/db/test/connector-promotion.integration.test.ts",
+        "packages/db/test/later-empty-tables.ts",
+        "packages/db/test/migration-proofs/0773_connector_promotion.proof.json"
+      ]
+    }
+  }
+}
