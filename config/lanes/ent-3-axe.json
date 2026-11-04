@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-3-axe": {
+      "branches": [
+        "codex/sandbox/ent-3-axe"
+      ],
+      "receipt": "docs/verdicts/ENT-3-AXE/BUILDER_RECEIPT.md",
+      "note": "Router ruling 4 Nov 2026: RED only for test supply chain. Exact test-only axe pin; no runtime scanner, no exclusions, no PR. Minimal disabled style overlap with #556.",
+      "allow": [
+        "apps/web/package.json",
+        "pnpm-lock.yaml",
+        "apps/web/e2e/ENT-3.spec.ts",
+        "apps/web/app/northside/northside.module.css",
+        "docs/verdicts/ENT-3-AXE/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}
