@@ -271,7 +271,10 @@ describe("ENT-10b PostgreSQL audit exports", () => {
       .filter(table => oldTables.has(`app.${table}`))
       .map(table => `policy app.${table}.customer_stage_source: permissive policy added`);
     expect(upgrade.afterAllDifferences, "[MO5-e] exact reviewed meter, LP-4, LP-5a and MON-5 source additions on predecessor objects")
-      .toEqual([...reviewedMeterSources, ...writerFacts, ...customerStageFacts].sort());
+      .toEqual([...reviewedMeterSources, ...writerFacts, ...customerStageFacts,
+        ...["identity.session", "control_plane.practice_session", "control_plane.contractor_practice_session"]
+          .filter(table => oldTables.has(table))
+          .map(table => `table ${table}: + grant jobguard_binding_owner SELECT`)].sort());
   });
   it("exports one tenant only, including shared-user tenants, with its own audit event and distinct public key", async () => {
     const a = await setup(), b = await setup();
