@@ -6,7 +6,7 @@
         "codex/sandbox/lp-6b-withtenant",
         "codex/sandbox/lp-6b-repair-wip"
       ],
-      "note": "LP-6b RED repair WIP, main merged, migration 0584 with proof; identity grants unchanged. Ben authorized only S9's two recorded values on 4 Nov 2026, after the full run; all other guards remain frozen. Only context-boundary principal/practice/contractor pins are authorized; full real-PostgreSQL shards and independent security checks required. No self-grant.",
+      "note": "LP-6b RED repair WIP, main merged through 0589, migration 0596 with proof; identity grants unchanged. Ben authorized only S9's two recorded values on 4 Nov 2026, after the full run; all other guards remain frozen. Only context-boundary principal/practice/contractor pins are authorized; full real-PostgreSQL shards and independent security checks required. No self-grant.",
       "allow": [
         "apps/api/src/accounting-export.application.test.ts",
         "apps/api/src/app.module.ts",
