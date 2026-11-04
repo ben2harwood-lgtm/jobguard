@@ -30,11 +30,19 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   // Successor migrations have their own exact reviewed routine ACL additions.
   // Keep the 0556-only assertion above, and retain every predecessor definition.
   const live = await catalogue();
+  // 0567 changes only the checked settlement overload's expected approval hash.
+  const settlementOid = (await c.admin.query("SELECT 'app.record_simulated_settlement(uuid,uuid,uuid,character varying,bigint,timestamp with time zone,uuid,uuid,uuid)'::regprocedure::oid oid")).rows[0].oid;
+  const selfComparison = "(SELECT content_hash FROM app.action_authorization WHERE tenant_id=p_tenant AND id=p_authorization)";
   for (const prior of security) {
     const current = live.find(row => row.oid === prior.oid);
     // 0566 extends exactly this result dispatcher for managed_recovery.elect.
     if (prior.nspname === "app" && prior.proname === "lp5_command_result" && prior.args === "p_command_id uuid, p_outcome jsonb") continue;
-    expect(current?.definition).toEqual(prior.definition);
+    if (prior.oid === settlementOid) {
+      expect(prior.definition).toContain(selfComparison);
+      expect(current?.definition).toEqual(prior.definition.replace(selfComparison, "payload"));
+    } else {
+      expect(current?.definition).toEqual(prior.definition);
+    }
   }
   const privileges = (rows: typeof security) => rows.map(({ oid: _oid, definition: _definition, ...row }) => row)
     .sort((a,b) => a.nspname.localeCompare(b.nspname) || a.proname.localeCompare(b.proname) || a.args.localeCompare(b.args));
