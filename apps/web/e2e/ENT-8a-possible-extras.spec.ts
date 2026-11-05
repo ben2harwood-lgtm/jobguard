@@ -5,6 +5,7 @@ import { pathToFileURL } from "node:url";
 import { join } from "node:path";
 import { seedActiveContractorAgreement } from "../../../packages/db/test/contractor-agreement-test-fixture";
 import { E2E_ADMIN_DATABASE_URL, E2E_RUNTIME_URL } from "./global-setup";
+import { taggedCompletionPhoto } from "./helpers/tagged-completion-photo";
 
 test.setTimeout(180_000);
 const origin = "http://127.0.0.1:3000";
@@ -105,4 +106,38 @@ test("an explicit authorised existing-extra choice coalesces without creating an
   expect((await c.admin.query("SELECT kind,variation_id FROM app.prompt_resolution WHERE tenant_id=$1 AND prompt_id=$2", [f.p.tenantId, prompt.id])).rows).toEqual([{ kind: "coalesced", variation_id: chosen.variationId }]);
   expect((await c.admin.query("SELECT kind FROM app.extra_origin WHERE tenant_id=$1 AND job_id=$2", [f.p.tenantId, f.jobId])).rows).toEqual([{ kind: "office_entry" }, { kind: "office_entry" }]);
  } finally { await c.close(); }
+});
+
+test("completion observations save real stored photo citations through the checked web route", async ({page,context})=>{
+ const {c,f}=await fixture();
+ try {
+  const db=await database();
+  const scope=(await c.admin.query("SELECT scope_item_id FROM app.work_order_line WHERE tenant_id=$1 AND job_id=$2 ORDER BY position LIMIT 1",[f.p.tenantId,f.jobId])).rows[0]!.scope_item_id as string;
+  const photo=await taggedCompletionPhoto(db,c.runtime,f.ctx,f.jobId,scope,["Fictional new vent"]);
+  const path=`/api/contractor/jobs/${f.jobId}/possible-extras/observations`;
+  const command={version:"completion-observation.v1",commandId:crypto.randomUUID(),...photo,workIdentity:"FIT-VENT",locator:{kind:"photo_tag",tag:"Fictional new vent"}};
+  const post=(data:unknown=command,sourceOrigin=origin)=>page.request.post(path,{headers:{origin:sourceOrigin},data});
+  expect((await post()).status()).toBe(401);
+  await context.addCookies([{name:"jg_session",value:f.sessions.operative!,url:origin}]);
+  expect((await post()).status()).toBe(403);
+  await context.addCookies([{name:"jg_session",value:f.sessions.supervisor!,url:origin}]);
+  expect((await post(command,"https://untrusted.invalid")).status()).toBe(403);
+  expect((await post({...command,tenantId:f.p.tenantId})).status()).toBe(400);
+  expect((await post({...command,sha256:"0".repeat(64)})).status()).toBe(409);
+  expect((await page.request.post(`/api/contractor/jobs/${crypto.randomUUID()}/possible-extras/observations`,{headers:{origin},data:command})).status()).toBe(403);
+  await page.goto(`/contractor/jobs/${f.jobId}/completion-observations`);
+  const main=page.getByRole("main");
+  await main.getByLabel("Completion evidence").selectOption(photo.evidenceId);
+  await main.getByLabel("Stored photo tag").selectOption("Fictional new vent");
+  await main.getByLabel("Work identity",{exact:true}).fill("FIT-VENT");
+  const sent=page.waitForRequest(r=>r.url().endsWith(path)&&r.method()==="POST");
+  await main.getByRole("button",{name:"Record observation",exact:true}).click();
+  const raw=(await sent).postDataJSON();
+  await expect(main.getByRole("status")).toContainText("Observation recorded. Reference:");
+  expect(raw).toMatchObject({...photo,workIdentity:"FIT-VENT",locator:{kind:"photo_tag",tag:"Fictional new vent"}});
+  const replay=await post(raw);expect(replay.status()).toBe(201);
+  const saved=await replay.json();
+  expect((await c.admin.query("SELECT id,sha256,photo_tags FROM app.extra_completion_observation WHERE tenant_id=$1 AND job_id=$2",[f.p.tenantId,f.jobId])).rows).toEqual([{id:saved.observationId,sha256:photo.sha256,photo_tags:["Fictional new vent"]}]);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
+ } finally {await c.close();}
 });

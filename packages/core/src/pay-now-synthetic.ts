@@ -41,3 +41,16 @@ export function payNowOptions(raw: unknown) {
   });
 }
 export function assertPayNowLiveAllowed(): never { throw new PayNowSyntheticError("PAY_NOW_DISABLED"); }
+
+/** Shared fake accounting projection; never records a real payment. */
+export function payNowFakeResult(raw: unknown, rail: PayNowRail | "direct_debit_stub") {
+  const invoice = parsePayNowInvoice(raw);
+  const stub = rail === "direct_debit_stub";
+  const option = payNowOptions(invoice).find(item => item.rail === rail);
+  const amount = stub ? money(0) : money(invoice.balancePence);
+  return Object.freeze({ synthetic: true as const, invoiceId: invoice.invoiceId,
+    invoiceRevision: invoice.revision, destinationAccount: invoice.builderAccount,
+    status: stub ? "stub_not_collected" as const : "fake_settled" as const,
+    customerDebit: amount, builderCredit: amount,
+    builderFeeDebit: option?.builderFee ?? money(0), platformCustomerFunds: money(0) });
+}

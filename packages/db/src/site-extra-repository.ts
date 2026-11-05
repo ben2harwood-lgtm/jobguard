@@ -9,7 +9,7 @@ import { withTenant, InvalidTenantContextError, type VerifiedTenantContext, type
 import { requireLiveJob, WatchdogError } from "./watchdog.js";
 import { SorSiteExtraError, canonicalSorQuantity, orderCheckV1, parseOrderCheckQuery, parseSorItemsQuery, parseSorSiteExtraInput, type SiteOrderCheck, type SorSiteExtraErrorCode } from "@jobguard/core";
 import { canonicalJson, sha256Hex } from "./work-order-repository.js";
-import { readOrderFacts, readReplay, readStoredPriced, searchItems, type StoredPriced } from "./site-extra-pricing-queries.js";
+import { readOrderFacts, readReplay, readStoredPriced, recentItems, searchItems, type StoredPriced } from "./site-extra-pricing-queries.js";
 /** ENT-3c: what a priced log answers. The price itself is never part of an answer (Q7). */
 export type StoredSorExtra = Pick<StoredPriced, "variationId" | "jobId" | "coverage" | "sorCode" | "unit" | "claimedQuantity" | "instructedQuantity" | "extraQuantity" | "orderLineScopeItemId" | "priceSource">;
 const commandType = "LogSiteExtra";
@@ -329,6 +329,18 @@ export class SiteExtraRepository {
    const facts = await readOrderFacts(db, tenant, jobId, null);
    if (!facts || !facts.sorVersionId) throw new SorSiteExtraError("SITE_PRICING_UNAVAILABLE");
    return { sorVersionId: facts.sorVersionId, ...(await searchItems(db, tenant, facts.sorVersionId, query.q)) };
+  });
+ }
+ /** Recent codes belong to the authenticated actor, never to a request-selected membership. */
+ async sorRecentItems(context: VerifiedTenantContext, actor: AuthenticatedMembership, jobId: string) {
+  if (!z.guid({ error: "Invalid uuid" }).safeParse(jobId).success) throw new SorSiteExtraError("NOT_FOUND");
+  const authority = await this.sorAuthority(context, actor, jobId, true);
+  if ("code" in authority) throw new SorSiteExtraError(authority.code);
+  const tenant = context.tenantId.toLowerCase();
+  return withTenant(this.pool, context, async db => {
+   const facts = await readOrderFacts(db, tenant, jobId, null);
+   if (!facts || !facts.sorVersionId) throw new SorSiteExtraError("SITE_PRICING_UNAVAILABLE");
+   return { sorVersionId: facts.sorVersionId, items: await recentItems(db, tenant, facts.sorVersionId, actor.membershipId) };
   });
  }
  /** The order check as a read: the same outcome the command then acts on, already-on-the-order included as a result. Writes nothing and records no refusal. */

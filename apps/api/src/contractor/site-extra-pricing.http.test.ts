@@ -130,3 +130,15 @@ describe("ENT-3c Nest HTTP pipeline in every other mode", () => {
     untouched();
   });
 });
+
+it("recent-items GET ignores forged query identities and uses the persisted actor", async () => {
+ await start("synthetic_demo");
+ const m = member(), jobId = randomUUID();
+ lookup.mockResolvedValue(m);
+ const repo = vi.spyOn(SiteExtraRepository.prototype, "sorRecentItems").mockResolvedValue({ sorVersionId: randomUUID(), items: [] });
+ const response = await request(app.getHttpServer()).get(`/contractor/jobs/${jobId}/sor-items/recent?q=ignored&tenantId=${randomUUID()}&membershipId=${randomUUID()}&jobId=${randomUUID()}`).set("cookie", session());
+ expect(response.status).toBe(200);
+ expect(response.headers["cache-control"]).toBe("no-store");
+ expect(response.body).toMatchObject({ version: "site-sor-recent-items.v1", jobId, items: [] });
+ expect(repo.mock.calls[0]).toEqual([expect.objectContaining({ tenantId: m.tenantId }), m, jobId]);
+});

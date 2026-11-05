@@ -168,6 +168,8 @@ export * from "./resumable-evidence.js";
 export * from "./mobile-auth-store.js";
 
 export { FixtureSpeechAudioReader, SpeechAudioError } from "./speech-audio.js";
+export * from "./purchase-order-action.js";
+export * from "./purchase-order-action-repository.js";
 export * from "./evidence-bundle.js";
 export * from "./evidence-bundle-sources.js";
 export * from "./practice-photo-observation.js";
@@ -195,8 +197,14 @@ export * from "./money-trail-repository.js";
 
 export * from "./ais-adapter.js";
 export * from "./ais-repository.js";
-export * from "./recurring-extras-repository.js";
-
-export * from "./subscription-stripe-sandbox-adapter.js";
-
+export { VatFixtureRepository, VatFixtureRepositoryError } from "./vat-fixture-repository.js";
+export * from "./retention-record-repository.js";
+export * from "./pay-now-attempt-repository.js";
+export * from "./notice-fixture-repository.js";
 export * from "./direct-debit-fixture-repository.js";
+
+export { InterimDraftRepository, InterimDraftRepositoryError } from "./interim-draft-repository.js";
+export * from "./extra-duplicate-candidates.js";
+
+export * from "./recurring-extras-repository.js";
+export * from "./subscription-stripe-sandbox-adapter.js";
