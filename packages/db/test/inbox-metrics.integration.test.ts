@@ -1,3 +1,4 @@
+import { appendAuditBatch } from "../src/index.js";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -14,8 +15,18 @@ const tenant = randomUUID(), other = randomUUID(), job = randomUUID(), otherJob 
 const context = testTenantContext(tenant), foreign = testTenantContext(other);
 const connect = () => new Pool({ host: "127.0.0.1", port: db.port, database: db.databaseName,
   user: "jobguard_runtime", password: RUNTIME_TEST_PASSWORD, max: 2 });
-const finding = () => ({ tenantId: tenant, jobId: job, ruleId: "proof", ruleVersion: "v1",
+let actor: { membershipId: string; identityUserId: string };
+const finding = async () => { const event = ({ tenantId: tenant, jobId: job, ruleId: "proof", ruleVersion: "v1",
   eventId: randomUUID(), commandId: randomUUID(), kind: "finding", findingId: randomUUID(), occurredAt: "2026-01-01T00:00:00Z" });
+  await withTenant(db.admin, context, async tx => {
+    const audit = await appendAuditBatch(tx, [{id:randomUUID(),version:"audit.v1",actorRef:`membership:${actor.membershipId}`,eventType:"inbox.finding_recorded",subjectType:"job",subjectRef:job,payload:{references:{jobId:job},classifications:{action:"operational"}}}]);
+    await tx.$client.query(`INSERT INTO app.inbox_finding_revision
+      (id,tenant_id,job_id,revision,lane,rule_id,rule_revision,action_type,source_revision,source_reference,title,explanation,permitted_action,actor_ref,subject_ref,payload_hash,audit_event_id,created_at)
+      VALUES($1,$2,$3,1,'mandatory','proof','v1','provide-proof','fixture.v1',$1::text,'Synthetic proof','Synthetic source','Add proof',$4,$3,$5,$6,clock_timestamp())`,
+    [event.findingId,tenant,job,`membership:${actor.membershipId}`,"a".repeat(64),audit[0]!.id]);
+  });
+  return event;
+};
 const envelope = (event: unknown, receiptId = randomUUID()) => ({ version: "inbox-metric-record.v1",
   environment: "synthetic_demo", jobId: job, receiptId, event });
 const readScope = { version: "inbox-metrics.v1", environment: "synthetic_demo", jobId: job, asOf: "2026-01-02T00:00:00Z" };
@@ -28,34 +39,36 @@ beforeAll(async () => {
   await db.admin.query("INSERT INTO control_plane.tenant(id) VALUES($1),($2)", [tenant, other]);
   await importWatchdogFixtureJob(db.admin, tenant, job);
   await importWatchdogFixtureJob(db.admin, tenant, otherJob);
+  const member = (await db.admin.query("SELECT id,identity_user_id FROM app.membership WHERE tenant_id=$1 AND role='owner' LIMIT 1",[tenant])).rows[0]!;
+  actor={membershipId:member.id,identityUserId:member.identity_user_id};
   await db.bootstrapRuntimeLogin(); runtime = connect();
 }, 120000);
 afterAll(async () => { await runtime?.end(); await db?.stop(); });
 
 describe("M2-7 durable synthetic metrics (real PostgreSQL)", () => {
   it("dedupes concurrent deliveries and command/event replays across fresh connections", async () => {
-    const event = finding(), input = envelope(event);
-    const results = await Promise.all([repo().record(context, input), repo().record(context, input)]);
+    const event = (await finding()), input = envelope(event);
+    const results = await Promise.all([repo().record(context, actor, input), repo().record(context, actor, input)]);
     expect(results.map(r => r.replay).sort()).toEqual([false, true]);
-    expect(await repo().record(context, envelope(event))).toMatchObject({ status: "accepted", replay: true });
+    expect(await repo().record(context, actor, envelope(event))).toMatchObject({ status: "accepted", replay: true });
     await runtime.end(); runtime = connect();
     expect(await read()).toMatchObject({ ingestion: { accepted: 1, rejected: 0 }, byRule: [{ findings: 1 }] });
     const before = await read(); await migrate(db.admin); expect(await read()).toEqual(before);
   });
   it("stores conversions, coalescing, dismissal latency and reversals by rule/version", async () => {
-    const first = finding(), second = finding();
-    await repo().record(context, envelope(first)); await repo().record(context, envelope(second));
+    const first = (await finding()), second = (await finding());
+    await repo().record(context, actor, envelope(first)); await repo().record(context, actor, envelope(second));
     const decisionId = randomUUID();
     const decision = { ...first, eventId: randomUUID(), commandId: randomUUID(), kind: "decision",
       findingIds: [first.findingId, second.findingId], decisionId };
     delete (decision as Partial<typeof first>).findingId;
-    expect(await repo().record(context, envelope(decision))).toMatchObject({ status: "accepted" });
+    expect(await repo().record(context, actor, envelope(decision))).toMatchObject({ status: "accepted" });
     const resolution = { ...decision, eventId: randomUUID(), commandId: randomUUID(), kind: "resolution",
       resolution: "dismissed", reason: "duplicate", occurredAt: "2026-01-01T00:01:00Z" };
     delete (resolution as Partial<typeof decision>).findingIds;
-    await repo().record(context, envelope(resolution));
+    await repo().record(context, actor, envelope(resolution));
     for (const [outcome, occurredAt] of [["useful", "2026-01-01T00:02:00Z"], ["reversed", "2026-01-01T00:03:00Z"]]) {
-      await repo().record(context, envelope({ tenantId: tenant, jobId: job, ruleId: "proof", ruleVersion: "v1",
+      await repo().record(context, actor, envelope({ tenantId: tenant, jobId: job, ruleId: "proof", ruleVersion: "v1",
         eventId: randomUUID(), commandId: randomUUID(), decisionId, kind: "later_outcome", outcome, occurredAt }));
     }
     expect((await read()).byRule[0]).toMatchObject({ decisions: 1, convertedFindings: 2, coalescedCount: 1,
@@ -64,20 +77,20 @@ describe("M2-7 durable synthetic metrics (real PostgreSQL)", () => {
   });
   it("counts malformed bodies, reference errors and identity conflicts as rejections without retaining content", async () => {
     const baseline = (await read()).ingestion;
-    const valid = finding(); await repo().record(context, envelope(valid));
-    const malformed = envelope({ ...finding(), message: "private@example.invalid", kind: "resolution" });
-    const cases = [malformed, envelope({ ...finding(), tenantId: other }), envelope({ ...finding(), jobId: otherJob }),
+    const valid = (await finding()); await repo().record(context, actor, envelope(valid));
+    const malformed = envelope({ ...(await finding()), message: "private@example.invalid", kind: "resolution" });
+    const cases = [malformed, envelope({ ...(await finding()), tenantId: other }), envelope({ ...(await finding()), jobId: otherJob }),
       envelope({ ...valid, ruleVersion: "v2" }), envelope({ ...valid, eventId: randomUUID() }),
       envelope({ ...valid, commandId: randomUUID() }), envelope({ tenantId: tenant, jobId: job, ruleId: "proof", ruleVersion: "v1",
         eventId: randomUUID(), commandId: randomUUID(), kind: "resolution", decisionId: randomUUID(),
         resolution: "confirmed", reason: "useful", occurredAt: "2026-01-01T00:00:00Z" })];
-    for (const input of cases) expect(await repo().record(context, input)).toMatchObject({ status: "rejected", replay: false });
-    expect(await repo().record(context, malformed)).toMatchObject({ status: "rejected", replay: true });
+    for (const input of cases) expect(await repo().record(context, actor, input)).toMatchObject({ status: "rejected", replay: false });
+    expect(await repo().record(context, actor, malformed)).toMatchObject({ status: "rejected", replay: true });
     expect((await read()).ingestion).toEqual({ accepted: baseline.accepted + 1, rejected: baseline.rejected + cases.length });
     const rows = (await db.admin.query("SELECT event,event_id,command_id FROM app.inbox_metric_receipt WHERE rejection IS NOT NULL")).rows;
     expect(rows).toHaveLength(cases.length);
     expect(rows.every(r => r.event === null && r.event_id === null && r.command_id === null)).toBe(true);
-    await expect(repo().record(context, { ...malformed, event: {} })).rejects.toThrow("IDEMPOTENCY_CONFLICT");
+    await expect(repo().record(context, actor, { ...malformed, event: {} })).rejects.toThrow("IDEMPOTENCY_CONFLICT");
   });
   it("isolates tenant/job reads, fails closed without context, and denies mutation and forged tenant inserts", async () => {
     expect(await repo().read(foreign, readScope)).toMatchObject({ byRule: [], ingestion: { accepted: 0, rejected: 0 } });
@@ -90,7 +103,7 @@ describe("M2-7 durable synthetic metrics (real PostgreSQL)", () => {
       (tenant_id,job_id,receipt_id,request_hash,rejection,audit_event_id)
       VALUES($1,$2,$3,repeat('a',64),'INVALID_METRICS_INPUT',$4)`,
       [other,job,randomUUID(),randomUUID()]))).rejects.toMatchObject({ code: "42501" });
-    await expect(repo().record(foreign, envelope(finding()))).rejects.toThrow("INVALID_METRICS_INPUT");
+    await expect(repo().record(foreign, actor, envelope((await finding())))).rejects.toThrow("INVALID_METRICS_INPUT");
     await expect(repo().read({ tenantId: tenant } as typeof context, readScope)).rejects.toThrow("verified tenant context");
   });
   it("keeps forced RLS, composite references, immutable receipts and exact runtime grants", async () => {
@@ -116,15 +129,27 @@ describe("M2-7 durable synthetic metrics (real PostgreSQL)", () => {
         (tenant_id uuid,job_id uuid,event jsonb,rejection text);
         GRANT USAGE ON SCHEMA app TO jobguard_runtime;
         GRANT SELECT ON app.inbox_metric_receipt TO jobguard_runtime`);
-      await admin.query("INSERT INTO app.inbox_metric_receipt VALUES($1,$2,$3::jsonb,NULL)", [tenant, job, JSON.stringify(finding())]);
+      await admin.query("INSERT INTO app.inbox_metric_receipt VALUES($1,$2,$3::jsonb,NULL)", [tenant, job, JSON.stringify((await finding()))]);
       expect((await reader.query("SELECT event FROM app.inbox_metric_receipt")).rows).toHaveLength(1);
       const repository = new InboxMetricsRepository(reader);
       expect(await repository.read(context, readScope)).toMatchObject({ byRule: [], ingestion: { accepted: 0, rejected: 0 } });
-      await expect(repository.record(context, envelope(finding()))).rejects.toThrow("INVALID_METRICS_INPUT");
+      await expect(repository.record(context, actor, envelope((await finding())))).rejects.toThrow("INVALID_METRICS_INPUT");
       expect((await reader.query("SELECT event FROM app.inbox_metric_receipt")).rows).toHaveLength(1);
     } finally {
       await reader.end(); await admin.end();
       await db.admin.query(`DROP DATABASE ${database}`);
     }
   });
+});
+
+it("refuses hidden or absent finding identifiers without receipts, plus invalid and revoked actors on replays", async () => {
+ const absent={...(await finding()),findingId:randomUUID()};
+ const before=(await db.admin.query("SELECT count(*) n FROM app.inbox_metric_receipt")).rows;
+ await expect(repo().record(context,actor,envelope(absent))).rejects.toThrow("INVALID_METRICS_REFERENCE");
+ expect((await db.admin.query("SELECT count(*) n FROM app.inbox_metric_receipt")).rows).toEqual(before);
+ const input=envelope(await finding());await repo().record(context,actor,input);
+ for(const patch of [{identityUserId:randomUUID()},{membershipId:randomUUID()}])
+  await expect(repo().record(context,{...actor,...patch},input)).rejects.toThrow("INVALID_METRICS_INPUT");
+ await db.admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2",[tenant,actor.membershipId]);
+ await expect(repo().record(context,actor,input)).rejects.toThrow("INVALID_METRICS_INPUT");
 });

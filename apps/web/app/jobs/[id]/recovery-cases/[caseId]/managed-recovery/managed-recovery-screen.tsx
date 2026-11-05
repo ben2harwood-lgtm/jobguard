@@ -6,14 +6,14 @@ type Selection = NonNullable<ManagedRecoveryState["election"]>["selection"];
 type Choice = { label: string; command: { version: "managed-recovery-election-command.v1"; caseId: string;
   termsVersion: string; selection: Selection } };
 type Command = Choice["command"] & { commandId: string };
-export type ManagedRecoveryView = { version: "managed-recovery-screen.v1";
+export type ManagedRecoveryView = { version: "managed-recovery-screen.v1"; csrfToken: string;
   preview: ReturnType<typeof previewManagedRecoveryInvoice>; choices: Choice[]; termsVersion: string;
   successFeeLabel: string; successFeeAmount: string; serviceChargeAmount: string | null; message: string };
 
 /** Retain the exact submitted body, including its ID, until a definitive server answer. */
-export async function sendManagedRecoveryChoice(url: string, command: Command) {
+export async function sendManagedRecoveryChoice(url: string, command: Command, csrfToken: string) {
   return fetch(url, { method: "POST", credentials: "same-origin", cache: "no-store",
-    headers: { "Content-Type": "application/json" }, body: JSON.stringify(command) });
+    headers: { "Content-Type": "application/json", "x-csrf-token": csrfToken }, body: JSON.stringify(command) });
 }
 
 export function ManagedRecoveryScreen({ jobId, caseId }: { jobId: string; caseId: string }) {
@@ -56,7 +56,7 @@ export function ManagedRecoveryScreen({ jobId, caseId }: { jobId: string; caseId
       // Persist before sending: a reload or lost response must not mint a new command.
       sessionStorage.setItem(storageKey, JSON.stringify(command));
       setPending(command);
-      const response = await sendManagedRecoveryChoice(url, command);
+      const response = await sendManagedRecoveryChoice(url, command, view.csrfToken);
       const result = await response.json();
       setMessage(result.message);
       if (response.ok) {
