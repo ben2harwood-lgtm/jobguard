@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/batch-33"
       ],
-      "note": "Built-ahead M2-1 order and M2-2 later-delivery union. RED; NOPR.",
+      "note": "M2-1 practice order screen and M2-2 later-delivery fix; database action already on main. RED; NOPR.",
       "allow": [
         "apps/api/package.json",
         "apps/api/src/merchant-order.application.test.ts",
@@ -21,23 +21,9 @@
         "apps/web/app/ui/supplier-documents.tsx",
         "apps/web/e2e/M2-1-order-screen.spec.ts",
         "apps/web/e2e/M2-2-S.spec.ts",
+        "docs/verdicts/batch-33/BUILDER_RECEIPT.md",
         "packages/core/src/watchdog.ts",
-        "packages/db/migrations/0980_dark_merchant_order.sql",
-        "packages/db/src/index.ts",
-        "packages/db/src/outbox.ts",
-        "packages/db/src/purchase-order-action-guard.ts",
-        "packages/db/src/purchase-order-action-repository.ts",
-        "packages/db/src/purchase-order-action.ts",
         "packages/db/src/supplier-document-repository.ts",
-        "packages/db/src/watchdog.ts",
-        "packages/db/test/late-source-import-migration.test.ts",
-        "packages/db/test/later-empty-tables.ts",
-        "packages/db/test/lp5-command-catalog.ts",
-        "packages/db/test/m2-1-migration-proof.test.ts",
-        "packages/db/test/migration-proofs/0980_dark_merchant_order.proof.json",
-        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
-        "packages/db/test/purchase-order-action.test.ts",
-        "packages/db/test/purchase-order-audit.integration.test.ts",
         "packages/db/test/supplier-documents.integration.test.ts"
       ]
     }

@@ -25,10 +25,10 @@ function fixture() {
   let current = true, locked = false, owner = true;
   const query = vi.fn(async (sql: string, values: any[] = []) => {
     const result = (rows: any[] = [], rowCount = rows.length) => ({ rows, rowCount });
+    if (sql === "SELECT outbound_control.claims_enabled() AS enabled") return result([{ enabled: true }]);
     if (sql === "BEGIN") { snapshot = structuredClone(state); active = true; return result(); }
     if (sql === "ROLLBACK") { state = snapshot; active = false; return result(); }
     if (sql === "COMMIT") { active = false; return result(); }
-    if (sql === "SELECT outbound_control.claims_enabled() AS enabled") return result([{ enabled: true }]);
     if (sql.includes("set_config") || sql.includes("pg_advisory_xact_lock") || sql.includes("require_watchdog_live")) return result();
     if (sql.startsWith("SELECT 1 FROM app.final_account_lock")) return result(locked ? [{}] : []);
     if (sql.startsWith("SELECT r.id,r.draft_id")) return result(current && values[0] === tenant && values[1] === job && values[2] === revision ? [{ ...orderRow }] : []);

@@ -44,7 +44,7 @@ test("reviews a cited above-rate order and confirms exactly one practice effect"
   expect(await wrongLink.json()).toEqual({ code: "NOT_FOUND" });
   // Every commercial change leaves the displayed authority stale until re-reviewed.
   for (const [label, value] of [["Order unit price (£)", "26.00"], ["Quantity", "11"], ["Fictional recipient", "changed@fictional.invalid"]]) {
-    await page.getByLabel(label!, { exact: true }).fill(value!);
+    await page.locator("#purchase-orders").getByLabel(label!, { exact: true }).fill(value!);
     await page.getByRole("button", { name: "Preview changed order", exact: true }).click();
     await expect(page.getByTestId(label === "Quantity" ? "order-preview-quantity" : label === "Fictional recipient" ? "order-preview-recipient" : "order-proposed-net"))
       .toHaveText(label === "Quantity" ? "11" : label === "Fictional recipient" ? value! : "£260.00");
