@@ -172,10 +172,10 @@ it("E5B-07 the send is owner-only and exact", async () => {
   expect(await sql("SELECT 1 FROM app.action_outbox WHERE action_type='extra.client_approval_request.send' AND recipient LIKE 'real.person%'")).toEqual([]);
 });
 
-it("E5B-08 withdraw (supervisors only), reject, and duplicate", async () => {
+it("E5B-08 withdraw (covered supervisory roles), reject, and duplicate", async () => {
   const s = await submitted(c, w, 40000), w2 = { version: "withdraw-extra.v1", commandId: randomUUID(), jobId: s.jobId, extraId: s.extraId, reasonCode: "not_done" };
   expect(await code(repo.withdrawExtra(ctx, w.members.operative.member, w2))).toBe("PERMISSION_DENIED");
-  expect(await code(repo.withdrawExtra(ctx, surveyor(), { ...w2, commandId: randomUUID() }))).toBe("PERMISSION_DENIED"); // wider roles held
+  expect(await code(repo.withdrawExtra(ctx, w.members.owner.member, { ...w2, commandId: randomUUID() }))).toBe("PERMISSION_DENIED"); // Q11: owner is not a covered withdrawer
   expect(await code(repo.withdrawExtra(ctx, sup(), w2))).toBe("ok");
   expect(await outcome(s.requestId)).toEqual([{ kind: "withdrawn", actor_kind: "member", by_rule: false }]);
   expect(await code(repo.withdrawExtra(ctx, sup(), { ...w2, commandId: randomUUID() }))).toBe("ALREADY_DECIDED");

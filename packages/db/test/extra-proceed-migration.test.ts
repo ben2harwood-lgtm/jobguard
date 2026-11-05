@@ -20,8 +20,14 @@ it("registers the operational command, side-table proof and no commercial writer
  const registry = proof.upgrade.find(c => c.section === "rows" && c.after?.table === "app.command_type_registry");
  const previousRegistry = predecessor.upgrade.find(c => c.section === "rows" && c.after?.table === "app.command_type_registry");
  if (registry?.section !== "rows" || previousRegistry?.section !== "rows") throw new Error("Missing exact registry proof");
- expect(registry.before?.data).toEqual(previousRegistry.after?.data);
- expect(registry.after?.data.filter(row => (row as { command_type: string }).command_type !== "RecordExtraProceed")).toEqual(previousRegistry.after?.data);
+ const historical = (rows: NonNullable<typeof registry.after>["data"]) => rows.filter(row => (row as { command_type: string }).command_type !== "rate.suggestion_accept");
+ expect(historical(registry.before!.data)).toEqual(expect.arrayContaining(previousRegistry.after!.data));
+ expect(historical(registry.before!.data)).toHaveLength(previousRegistry.after!.data.length);
+ const latestRegistry = loadMigrationProofs().proofs.find(p => p.migration === "0609_rate_suggestion_acceptance.sql")!.upgrade.find(c => c.section === "rows" && c.after?.table === "app.command_type_registry");
+ expect(registry.before).toEqual(latestRegistry?.after);
+ const withoutProceed = registry.after!.data.filter(row => (row as { command_type: string }).command_type !== "RecordExtraProceed");
+ expect(withoutProceed).toEqual(expect.arrayContaining(registry.before!.data));
+ expect(withoutProceed).toHaveLength(registry.before!.data.length);
  expect(registry.after?.data).toHaveLength(currentCommandRegistryRows.length);
  expect(registry.after?.data).toEqual(expect.arrayContaining(currentCommandRegistryRows));
  expect(proof.tenancy).toEqual([{ relname: "extra_proceed_statement", before: null, after: { relrowsecurity: true, relforcerowsecurity: true, guarded: true, owner: "jobguard_migration" } }]);

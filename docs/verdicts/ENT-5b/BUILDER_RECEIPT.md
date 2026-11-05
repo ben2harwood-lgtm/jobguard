@@ -331,3 +331,64 @@ used at most two workers and at most three named files. Final passing coverage:
 - Q01/Q03/Q14/Q15, wider ENT-5 acceptance, and all real-data/provider/production
   gates remain open. READY means ready for router handoff, not ENT-5 completion,
   independent acceptance, merge or release.
+
+## batch-34 repair and main catch-up — 5 November 2026 evening
+
+READY for router handoff (NOPR). RED: ENT-5 approval/authorization and tenant-safe
+append-only proceed history. This is builder evidence, not independent review.
+
+- Repaired E5B-08 to refuse owner withdrawal under Q11, retaining operative
+  refusal, supervisor success and final-outcome assertions. Surveyor and
+  commercial-manager success/replay coverage remains in the existing Q11
+  parameterized test in `extra-approval-rules.integration.test.ts`.
+- Resolved the five union conflicts in working files, preserving main's rate
+  export/registry, identity/CIS/rate empty-table entries and all branch entries.
+- 1200's registry proof now chains its exact `before` to 0609's `after`, including
+  `rate.suggestion_accept`; only `RecordExtraProceed` is added. The historical
+  0606 comparison excludes the later rate row, checks full membership and count,
+  and separately asserts the exact 0609 predecessor record. The initial check
+  caught a proof row-order mismatch; the exact predecessor replacement fixes it.
+- Compared against local `origin/main` d16ef1978eb44d7d9d33a77926fb179e794af196:
+  only migrations 1200–1204 are added, no main migration is changed/removed,
+  no semantic migration filename repeats main, and all migration numbers are
+  unique. The dispatcher test proves 1200 preserves 0606 byte for byte except
+  its new branch. Main's existing catalogue declarations and union entries survive.
+- Lane allow-list equals all 49 working files changed from main outside
+  `config/lanes/`; it does not grant itself. Updated lane base note.
+
+### Local verification
+
+Used installed binaries directly after the pnpm launcher stalled before running
+checks and was interrupted. No dependency installation was performed. Vitest
+runs were sequential, each with `--maxWorkers=2` and at most three named files:
+
+- From `packages/db`: `./node_modules/.bin/vitest run --maxWorkers=2
+  test/extra-proceed-migration.test.ts test/migration-proof-loader.test.ts
+  test/m2-1-migration-proof.test.ts` — 83 passed on the corrected tree.
+- From `packages/db`: `./node_modules/.bin/vitest run --maxWorkers=2
+  test/late-source-import-migration.test.ts test/extra-approval-timing.test.ts`
+  — 20 passed.
+- From `packages/core`: `./node_modules/.bin/vitest run --maxWorkers=2
+  src/extra-proceed.test.ts src/extra-approval.test.ts src/rate-baseline.test.ts`
+  — 38 passed.
+- From repository root: `packages/core/node_modules/.bin/tsc -p
+  packages/core/tsconfig.json --noEmit` and
+  `packages/db/node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit`
+  — both exit 0.
+- `node tools/core-purity-lint.mjs`, `node tools/money-arithmetic-lint.mjs`,
+  `node tools/commercial-boundary-lint.mjs`,
+  `node tools/ai-provider-boundary-lint.mjs`, and
+  `node tools/plpgsql-case-in-if-lint.mjs` — all exit 0. Core purity reports
+  existing computed-import notices. `git diff --check` — exit 0.
+
+### Router actions and remaining gates
+
+The working files have no conflict markers. The five conflict paths remain
+unmerged in the read-only Git index: router must stage them and the other repair
+changes, finish the pending merge, commit and push the NOPR branch. No Git writes,
+PostgreSQL startup or browser/localhost suites were attempted here. Official lane
+CI, required full CI, real PostgreSQL suites (especially E5B-08 and Q11 withdrawal),
+browser journeys and independent RED review at the final exact head remain
+required. Earlier receipt instructions about the previous merge's 0590/0591
+restoration are historical; the current working-tree comparison shows those main
+paths preserved. Wider ENT-5 acceptance and production/provider gates stay open.
