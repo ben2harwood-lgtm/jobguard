@@ -165,3 +165,62 @@ describe("FEE-STORE-AUTHORITY populated forward upgrade", () => {
     } finally { await db.close(); }
   }, 120_000);
 });
+
+// Demonstrate the predecessor defects before the forward migration, using separate
+// committed statements, then replay the same attacks against the upgraded database.
+describe("LATER-SAFETY-14 populated forward upgrade", () => {
+  it("closes signed-result replay and unsigned key insertion without changing history or ACLs", async () => {
+    const migration = "0790_fee_result_forward_only.sql";
+    const db = await startBeforeMigration(migration);
+    try {
+      const f = fixture();
+      await f.executor.reserve(ctx, f.intent);
+      await f.executor.execute(ctx, id(10));
+      const original = { version: "fee-reservation-book.v1", ...f.book() };
+      original.attempts[0]!.paymentState = "confirmed";
+      await db.admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [ctx.tenantId]);
+      await db.admin.query("INSERT INTO app.fee_provider_fixture_key VALUES($1,'stripe_card',$2)", [ctx.tenantId, "synthetic-test-signing-secret"]);
+      await db.admin.query("INSERT INTO app.fee_reservation_book VALUES($1,$2)", [ctx.tenantId, JSON.stringify(original)]);
+      const store = new PostgresReservationStore(db.runtime, testTenantContext(ctx.tenantId), () => ({
+        collection: async () => f.source, credit: async () => f.credit,
+      }));
+      const read = () => store.transaction(ctx.tenantId, async book => structuredClone(book));
+      const replace = (book: unknown, proof: unknown = null) => withTenant(db.runtime, testTenantContext(ctx.tenantId), tx => tx.$client.query(
+        "SELECT app.replace_fee_reservation_book($1,$2::jsonb,$3::jsonb)", [ctx.tenantId, JSON.stringify(book), JSON.stringify(proof)]));
+      const stale = structuredClone(original);
+      stale.attempts[0]!.paymentState = "submitted";
+      const captured = f.rail.signStoreResult(ctx.tenantId, stale.attempts[0]!);
+      await replace(stale, captured); // Vulnerable predecessor accepts captured older proof.
+      expect((await read()).attempts[0]!.paymentState).toBe("submitted");
+      await replace(original, f.rail.signStoreResult(ctx.tenantId, original.attempts[0]!));
+      const unsigned = { version: "fee-reservation-book.v1", ...await read() };
+      unsigned.events[`stripe_card:${id(95)}`] = "a".repeat(64);
+      await replace(unsigned); // Vulnerable predecessor accepts an unsigned new key.
+      expect((await read()).events[`stripe_card:${id(95)}`]).toBe("a".repeat(64));
+      const catalogue = async () => (await db.admin.query(`SELECT p.proowner,p.proacl,p.prosecdef,p.proconfig
+        FROM pg_proc p WHERE p.oid='app.replace_fee_reservation_book(uuid,jsonb,jsonb)'::regprocedure`)).rows;
+      const acl = await catalogue();
+      const before = await read();
+      const history = async () => ({
+        archive: (await db.admin.query("SELECT * FROM app.fee_reservation_archive WHERE tenant_id=$1 ORDER BY kind,key", [ctx.tenantId])).rows,
+        audit: (await db.admin.query("SELECT * FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence", [ctx.tenantId])).rows,
+      });
+      const saved = await history();
+      await applyMigration(db, migration);
+      expect(await read()).toEqual(before);
+      const backwards = { version: "fee-reservation-book.v1", ...before, attempts: stale.attempts };
+      await expect(replace(backwards, captured)).rejects.toMatchObject({ code: "23514" });
+      expect(await read()).toEqual(before);
+      const poisoned = { version: "fee-reservation-book.v1", ...structuredClone(before) };
+      poisoned.events[`stripe_card:${id(96)}`] = "b".repeat(64);
+      await expect(replace(poisoned)).rejects.toMatchObject({ code: "23514" });
+      expect(await read()).toEqual(before);
+      expect(await history()).toEqual(saved);
+      // Direct replay of this CREATE OR REPLACE migration is harmless too.
+      await db.admin.query(await readFile(new URL(`../migrations/${migration}`, import.meta.url), "utf8"));
+      expect(await catalogue()).toEqual(acl);
+      expect(await read()).toEqual(before);
+      expect(await history()).toEqual(saved);
+    } finally { await db.close(); }
+  }, 120_000);
+});
