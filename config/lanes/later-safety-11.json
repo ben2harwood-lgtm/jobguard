@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-11": {
+      "branches": [
+        "codex/sandbox/later-safety-11"
+      ],
+      "allow": [
+        "apps/api/src/vat-fixture.application.test.ts",
+        "apps/api/src/vat-fixture.application.ts",
+        "apps/web/app/api/jobs/[id]/vat-fixtures/route.test.ts",
+        "apps/web/e2e/M4-21-vat-fixtures.spec.ts",
+        "docs/contracts/vat-fixture-records-dark-v1.md",
+        "packages/db/src/vat-fixture-repository.ts",
+        "packages/db/test/vat-fixture-repository.test.ts",
+        "packages/db/test/vat-fixture-route.integration.test.ts",
+        "packages/db/test/vat-fixture.integration.test.ts"
+      ]
+    }
+  }
+}
