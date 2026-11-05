@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "demo-s-trial-fc-design": {
+      "branches": [
+        "codex/sandbox/demo-s-trial-fc-design"
+      ],
+      "note": "DEMO-S-TRIAL-FC-DESIGN: RED proposed authority design only; NOPR; no behaviour or grants changed.",
+      "allow": [
+        "docs/contracts/company-final-check-authority-v1.md"
+      ]
+    }
+  }
+}
