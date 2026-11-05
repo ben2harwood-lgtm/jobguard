@@ -40,7 +40,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   const selfComparison = "(SELECT content_hash FROM app.action_authorization WHERE tenant_id=p_tenant AND id=p_authorization)";
   for (const prior of security) {
     const current = live.find(row => row.oid === prior.oid);
-    // 0566 and 0573 extend exactly this dispatcher for managed recovery and supervisor queries.
+    // 0566, 0573 and 0980 extend exactly this dispatcher for managed recovery, supervisor queries and dark orders.
     if (prior.nspname === "app" && prior.proname === "lp5_command_result" && prior.args === "p_command_id uuid, p_outcome jsonb") continue;
     // 0583 replaces only this exact predecessor body; its dedicated upgrade proof checks the replacement.
     if (prior.nspname === "app" && prior.proname === "write_success_fee_v3" &&

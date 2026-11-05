@@ -79,6 +79,14 @@
     "./accounting-export-contracts": {
       "types": "./src/accounting-export.preview-contracts.ts",
       "import": "./dist/accounting-export.preview-contracts.js"
+    },
+    "./merchant-order": {
+      "types": "./src/merchant-order.application.ts",
+      "import": "./dist/merchant-order.application.js"
+    },
+    "./merchant-order-contracts": {
+      "types": "./src/merchant-order.contracts.ts",
+      "import": "./dist/merchant-order.contracts.js"
     }
   },
   "scripts": {
