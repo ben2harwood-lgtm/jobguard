@@ -40,9 +40,9 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   const selfComparison = "(SELECT content_hash FROM app.action_authorization WHERE tenant_id=p_tenant AND id=p_authorization)";
   // This batch replaces only these exact routine identities; compare their complete bodies.
   const batchBodies = await Promise.all([
-    ["retention_records", "t uuid, digest text, j uuid, cid uuid, v jsonb, expected text", "1110_retention_timer_runtime_rules.sql"],
-    ["notice_fixture_records", "j uuid, n uuid, digest text, operation text, v jsonb", "1111_notice_live_job_check.sql"],
-    ["pay_now_fake_attempt", "t uuid, digest text, j uuid, operation text, v jsonb", "1112_pay_now_catch_statement.sql"],
+    ["retention_records", "t uuid, digest text, j uuid, cid uuid, v jsonb, expected text", "1200_retention_timer_runtime_rules.sql"],
+    ["notice_fixture_records", "j uuid, n uuid, digest text, operation text, v jsonb", "1201_notice_live_job_check.sql"],
+    ["pay_now_fake_attempt", "t uuid, digest text, j uuid, operation text, v jsonb", "1202_pay_now_catch_statement.sql"],
   ].map(async ([name, args, migration]) => {
     const sql = await readFile(new URL(`../migrations/${migration}`, import.meta.url), "utf8");
     return { name, args, body: sql.split(`CREATE OR REPLACE FUNCTION app.${name}`)[1]!.split("AS $$")[1]!.split("$$;")[0] };

@@ -23,9 +23,8 @@ Local evidence and pending CI are recorded in the router commit message. CI must
 prove real session predicates, RLS/ACL/owner/search_path, upgrade/fresh install,
 concurrent replay, and cancellation without an aborted transaction.
 
-Named holds for landing: stacked on batch-26 / #568, not main. Router must catch
-up after #568 lands, reserve/renumber the filename stems, and run main-relative
-lane checks; this lane deliberately excludes inherited batch-26 paths. Runtime
+Named holds for landing: current reconciliation and CI gates are recorded in
+1200_retention_timer_runtime_rules.md. Runtime
 raw INSERT on the attestation table (hold 2) and production LP-5 lifecycle adapter
 remain held. No HTTP route, real merchant/provider, fee store, D-decision or
 G0–G5 change. Exact-head independent RED review and green CI are still required.

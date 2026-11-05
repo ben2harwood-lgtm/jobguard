@@ -10,7 +10,7 @@ role or direct table grant is added. The fixed search path is `pg_catalog`. No
 No backfill: the new table starts empty. Upgrade and LP-0/tenancy allowances are
 explicit reviewed expectations in the matching proof JSON, never database-derived.
 The table also appears in `later-empty-tables.ts`. Migration
-`1114_vat_fixture_records` uses the reserved landing number 0607.
+`0607_vat_fixture_records` uses the reserved landing number 0607.
 
 Forward fix by a subsequent migration; never edit applied SQL or erase fixture
 history. Its synthetic-only session route remains closed outside the demo

@@ -1,5 +1,5 @@
 {
-  "migration": "1114_vat_fixture_records.sql",
+  "migration": "0607_vat_fixture_records.sql",
   "lp0": [
     {
       "section": "groups",
@@ -23,7 +23,7 @@
         },
         "downstream": "Synthetic owner-checked append-only fixture history. No issuance, money posting, authority, outbox or provider.",
         "sources": [
-          "packages/db/migrations/1114_vat_fixture_records.sql",
+          "packages/db/migrations/0607_vat_fixture_records.sql",
           "packages/db/src/vat-fixture-repository.ts"
         ],
         "tests": [
@@ -68,7 +68,7 @@
           "LP-12": "Verify FORCE RLS, immutable private records, exact runtime routine grant and no live capability."
         },
         "sources": [
-          "packages/db/migrations/1114_vat_fixture_records.sql",
+          "packages/db/migrations/0607_vat_fixture_records.sql",
           "packages/db/src/vat-fixture-repository.ts"
         ],
         "tests": [

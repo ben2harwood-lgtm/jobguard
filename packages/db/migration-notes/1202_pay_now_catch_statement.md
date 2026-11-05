@@ -2,7 +2,7 @@
 
 Forward replacement of the latest main routine in 0598 only. No table shape,
 owner, privilege, RLS policy, trigger, function signature or stored row changes.
-0787 is the reserved stem; the router renumbers it at landing.
+1202 is the reserved stem; the router renumbers it at landing.
 
 Invalid, expired or revoked company sessions now raise PAY_NOW_UNAUTHENTICATED
 (28000), before the existing mon1_company_actor owner/admin gate. Both checks

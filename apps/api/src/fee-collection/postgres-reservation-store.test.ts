@@ -15,10 +15,10 @@ describe("PostgresReservationStore transaction adapter", () => {
       book: { version: "fee-reservation-book.v1", attempts: [], events: {}, audit: [] }, archive: [],
     };
     const query = vi.fn(async (sql: string, values?: unknown[]) => {
-      if (sql.startsWith("SELECT book")) return { rows: [{ book: structuredClone(persisted.book) }] };
+      if (sql.startsWith("SELECT app.lock_fee_reservation_book") || sql.startsWith("SELECT book")) return { rows: [{ book: structuredClone(persisted.book) }] };
       if (sql.startsWith("SELECT kind")) return { rows: structuredClone(persisted.archive) };
       if (sql.startsWith("INSERT INTO app.fee_reservation_archive")) persisted.archive.push(...JSON.parse(values![1] as string));
-      if (sql.startsWith("UPDATE")) persisted.book = JSON.parse(values![1] as string);
+      if (sql.startsWith("SELECT app.replace_fee_reservation_book") || sql.startsWith("UPDATE app.fee_reservation_book")) persisted.book = JSON.parse(values![1] as string);
       return { rows: [] };
     });
     const db = { $client: { query } } as unknown as TenantTransaction;
@@ -31,9 +31,18 @@ describe("PostgresReservationStore transaction adapter", () => {
     const f = setup();
     expect(await f.store.transaction(ctx.tenantId, async (_book, sources) => sources.collection(id(5), id(6)))).toMatchObject({ tenantId: ctx.tenantId });
     expect(f.sources).toHaveBeenCalledWith(f.db);
-    expect(f.query.mock.calls.map(([sql]) => sql.split(" ")[0])).toEqual(["INSERT", "SELECT", "SELECT", "UPDATE"]);
-    expect(f.query.mock.calls[1]![0]).toContain("FOR UPDATE");
+    expect(f.query.mock.calls.map(([sql]) => sql.split(" ")[0])).toEqual(["INSERT", "SELECT", "SELECT", "SELECT", "SELECT"]);
+    expect(f.query.mock.calls[1]![0]).toContain("app.lock_fee_reservation_book");
     expect(f.query.mock.invocationCallOrder.at(-1)!).toBeLessThan(mocks.appendAuditBatch.mock.invocationCallOrder[0]!);
+  });
+  it("uses guarded routines instead of runtime row locks or raw updates", async () => {
+    const f = setup();
+    await f.store.transaction(ctx.tenantId, async () => undefined);
+    const sql = f.query.mock.calls.map(([value]) => value).join("\n");
+    expect(sql).toContain("app.lock_fee_reservation_book");
+    expect(sql).toContain("app.replace_fee_reservation_book");
+    expect(sql).not.toContain("FOR UPDATE");
+    expect(sql).not.toContain("UPDATE app.fee_reservation_book");
   });
   it("refuses a mismatched verified tenant before starting a transaction", async () => {
     const f = setup();
@@ -90,6 +99,21 @@ describe("PostgresReservationStore transaction adapter", () => {
     const executor = new DarkFeeCollectionExecutor(f.store, [sample.rail], () => new Date("2026-10-29T00:00:00Z"), sample.sessions);
     return { ...sample, ...f, executor };
   }
+  it("allows a callback reporting a definite result for unknown and retains its audit", async () => {
+    const f = executorFixture();
+    await f.executor.reserve(ctx, f.intent);
+    f.rail.crashAfterAcceptance = true;
+    await expect(f.executor.execute(ctx, id(10))).rejects.toThrow("FAKE_CRASH_AFTER_ACCEPTANCE");
+    // UNKNOWN-RESULT-AUTHORITY: the runtime login cannot prove a provider result.
+    await f.store.transaction(ctx.tenantId, async book => {
+      book.attempts[0]!.state = "released";
+      book.audit.push({ commandId: id(10), state: "released" });
+    });
+    const restored = await f.store.transaction(ctx.tenantId, async book => book);
+    expect(restored.attempts[0]?.state).toBe("released");
+    expect(restored.audit.at(-1)).toEqual({ commandId: id(10), state: "released" });
+  });
+
   it("archives repeated replacements without growing the active book or losing command replays", async () => {
     const f = executorFixture();
     f.rail.definiteFailure = true;

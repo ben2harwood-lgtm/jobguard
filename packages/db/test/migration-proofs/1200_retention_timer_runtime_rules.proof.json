@@ -1,5 +1,5 @@
 {
-  "migration": "1110_retention_timer_runtime_rules.sql",
+  "migration": "1200_retention_timer_runtime_rules.sql",
   "lp0": [
     {
       "section": "entries",

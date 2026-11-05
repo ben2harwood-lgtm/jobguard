@@ -79,7 +79,7 @@ describe("MON-6 durable fake attempts on real PostgreSQL",()=>{
   const old=await repo.command(caught.context,caught.actor,input);
   const snapshot=async()=>(await c.admin.query("SELECT record::text,record_hash,snapshot_hash FROM app.pay_now_fake_attempt WHERE tenant_id=$1 AND command_id=$2",[caught.tenantId,input.commandId])).rows[0];
   const before=await snapshot();expect(old.invoice.includesCatch).toBe(false);
-  await c.admin.query(await readFile(new URL("../migrations/1112_pay_now_catch_statement.sql",import.meta.url),"utf8"));
+  await c.admin.query(await readFile(new URL("../migrations/1202_pay_now_catch_statement.sql",import.meta.url),"utf8"));
   expect(await snapshot()).toEqual(before);
   expect(await repo.command(caught.context,caught.actor,input)).toEqual(old);
   expect(await repo.command(caught.context,caught.actor,caught.input)).toEqual(current);
