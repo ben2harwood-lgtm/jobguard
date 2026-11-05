@@ -37,6 +37,7 @@ describe("M4-12 PostgreSQL shared reservation store", () => {
     f.source.agreement.record!.termsHash = hash;
     f.source.agreement.record!.approval.termsHash = hash;
     f.source.agreement.statementApproval!.tenantId = tenantId;
+    f.source.agreement.statementApproval!.termsHash = hash;
     const sessions = { ...f.sessions, findMembership: async () => ({ ...f.membership, tenantId }) };
     const context = { ...ctx, tenantId };
     await db.admin.query("INSERT INTO public.fee_source_fixture VALUES($1,$2)", [tenantId, JSON.stringify(f.source)]);

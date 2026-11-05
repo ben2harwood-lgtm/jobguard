@@ -14,6 +14,7 @@
         "apps/api/src/workspace/index.ts",
         "apps/web/app/api/practice-bank/route.test.ts",
         "apps/web/app/api/practice-bank/route.ts",
+        "apps/web/app/api/subscription-mandate/route.integration.test.ts",
         "apps/web/app/lib/practice-bank-server.ts",
         "apps/web/app/practice-bank/page.tsx",
         "apps/web/app/practice-bank/screen.test.tsx",
