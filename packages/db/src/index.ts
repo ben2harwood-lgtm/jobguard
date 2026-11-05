@@ -210,3 +210,5 @@ export * from "./direct-debit-fixture-repository.js";
 
 export { InterimDraftRepository, InterimDraftRepositoryError } from "./interim-draft-repository.js";
 export * from "./extra-duplicate-candidates.js";
+
+export * from "./extra-proceed.js";

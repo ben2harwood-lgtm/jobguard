@@ -38,6 +38,25 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   // 0567 changes only the checked settlement overload's expected approval hash.
   const settlementOid = (await c.admin.query("SELECT 'app.record_simulated_settlement(uuid,uuid,uuid,character varying,bigint,timestamp with time zone,uuid,uuid,uuid)'::regprocedure::oid oid")).rows[0].oid;
   const selfComparison = "(SELECT content_hash FROM app.action_authorization WHERE tenant_id=p_tenant AND id=p_authorization)";
+  // ENT-5 changes only these exact predecessor routines; all other definitions stay pinned.
+  const routineKey = (identity: string) => identity.replace(/,\s*/gu, ",");
+  const ent5Bodies = new Map<string, string>();
+  const ent5Replacements = [
+    ["app.xa_approve(p_job uuid,p_request uuid,p_command uuid,p_actor uuid,p_step integer,p_hash text,p_net bigint,p_reject boolean,p_reason text)", "1201_extra_same_step.sql"],
+    ["app.xa_withdraw(p_job uuid,p_variation uuid,p_command uuid,p_actor uuid,p_reason text)", "1202_extra_withdraw_roles.sql"],
+    ["app.lp5b_contractor_permission(p_type text,p_actor uuid,p_job uuid,p_input jsonb)", "1202_extra_withdraw_roles.sql"],
+    ["app.xa_requirement(p_rules jsonb,p_net bigint)", "1203_extra_working_day_wait.sql"],
+    ["app.xa_escalate()", "1203_extra_working_day_wait.sql"],
+    ["app.xa_queue(p_member uuid)", "1203_extra_working_day_wait.sql"],
+    ["app.valid_approval_rules(d jsonb)", "1204_extra_rule_wait_schema.sql"],
+  ] as const;
+  for (const [identity, file] of ent5Replacements) {
+    const sql = await readFile(new URL(`../migrations/${file}`, import.meta.url), "utf8");
+    const replacement = [...sql.matchAll(/CREATE OR REPLACE FUNCTION ([\w.]+)\(([^)]*)\)[\s\S]*?AS \$\$([\s\S]*?)\$\$;/gu)]
+      .find(match => routineKey(`${match[1]}(${match[2]})`) === identity);
+    expect(replacement, identity).toBeDefined();
+    ent5Bodies.set(identity, replacement![3]!);
+  }
   for (const prior of security) {
     const current = live.find(row => row.oid === prior.oid);
     // 0566, 0573 and 0606 extend exactly this dispatcher for managed recovery, supervisor queries and dark orders.
@@ -56,6 +75,8 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     } else if (prior.oid === settlementOid) {
       expect(prior.definition).toContain(selfComparison);
       expect(current?.definition).toEqual(prior.definition.replace(selfComparison, "payload"));
+    } else if (ent5Bodies.has(routineKey(`${prior.nspname}.${prior.proname}(${prior.args})`))) {
+      expect(current?.definition?.split("$function$")[1]).toEqual(ent5Bodies.get(routineKey(`${prior.nspname}.${prior.proname}(${prior.args})`)));
     } else {
       expect(current?.definition).toEqual(prior.definition);
     }

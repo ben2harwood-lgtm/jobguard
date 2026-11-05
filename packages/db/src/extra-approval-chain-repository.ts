@@ -117,7 +117,20 @@ export class ExtraApprovalRepository {
   }
   private async decide(context: VerifiedTenantContext, actor: AuthenticatedMembership, i: z.infer<typeof approveExtraStepV1> | z.infer<typeof rejectExtraV1>, rejecting: boolean): Promise<Result> {
     const type = rejecting ? "RejectExtra" : "ApproveExtraStep", reasonCode = rejecting ? (i as z.infer<typeof rejectExtraV1>).reasonCode : null;
-    return this.run(context, actor, type, i.commandId, `extra-step:${i.requestId}:${i.stepIndex}:${i.commandId}`, { jobId: i.jobId, requestId: i.requestId, stepIndex: i.stepIndex, hash: i.revisionHash, net: i.netPence, reasonCode }, async (db, _t, m) => {
+    // Reuse the first receipt for this person/step, including receipts made before this ruling.
+    // begin_command still verifies the complete payload and current grants before returning it.
+    const member = this.checkActor(context, actor);
+    let semantic = `extra-step:${i.requestId}:${i.stepIndex}:${member}`;
+    try {
+      const prior = await withTenant(this.pool, context, async db => (await db.$client.query<{ semantic_key: string }>(
+        `SELECT r.semantic_key FROM app.command_receipt r
+         WHERE r.tenant_id=$1 AND r.actor_membership_id=$2 AND r.command_type=$3 AND
+          (r.command_id=$4 OR (r.status='succeeded' AND r.result->>'requestId'=$5 AND r.result->>'stepIndex'=$6))
+         ORDER BY (r.command_id=$4) DESC,r.created_at,r.command_id LIMIT 1`,
+        [context.tenantId, member, type, i.commandId, i.requestId, String(i.stepIndex)])).rows[0]);
+      if (prior) semantic = prior.semantic_key;
+    } catch (error) { failure(error); }
+    return this.run(context, actor, type, i.commandId, semantic, { jobId: i.jobId, requestId: i.requestId, stepIndex: i.stepIndex, hash: i.revisionHash, net: i.netPence, reasonCode }, async (db, _t, m) => {
       const r = await this.call(db, "SELECT app.xa_approve($1,$2,$3,$4,$5,$6,$7,$8,$9) r", [i.jobId, i.requestId, i.commandId, m, i.stepIndex, i.revisionHash, i.netPence, rejecting, reasonCode]);
       const extra = (await db.$client.query<{ variation_id: string }>("SELECT variation_id FROM app.extra_approval_request WHERE id=$1", [i.requestId])).rows[0]!.variation_id;
       return { result: r, audits: [audit(m, rejecting ? "contractor.extra.rejected" : "contractor.extra.step_approved", extra, { command: i.commandId, job: i.jobId, extra, request: i.requestId, step: String(i.stepIndex) }, { revision: i.revisionHash })] };
