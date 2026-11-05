@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-8": {
+      "branches": [
+        "codex/sandbox/later-safety-8"
+      ],
+      "note": "LATER-SAFETY-8 RED: typed pay-now refusals and truthful catch projection; no plan piece finished.",
+      "allow": [
+        "apps/api/src/pay-now-attempt.application.test.ts",
+        "apps/api/src/pay-now-attempt.application.ts",
+        "apps/web/app/api/jobs/[id]/invoices/[invoiceId]/pay-now-preview/route.test.ts",
+        "apps/web/app/jobs/[id]/invoices/[invoiceId]/pay-now-preview/screen.test.tsx",
+        "apps/web/app/jobs/[id]/invoices/[invoiceId]/pay-now-preview/screen.tsx",
+        "packages/db/migration-notes/0787_pay_now_catch_statement.md",
+        "packages/db/migrations/0787_pay_now_catch_statement.sql",
+        "packages/db/src/pay-now-attempt-repository.ts",
+        "packages/db/test/migration-proofs/0787_pay_now_catch_statement.proof.json",
+        "packages/db/test/pay-now-attempt-repository.test.ts",
+        "packages/db/test/pay-now-attempt.integration.test.ts",
+        "packages/db/test/pay-now-preview.integration.test.ts"
+      ]
+    }
+  }
+}
