@@ -1,0 +1,6 @@
+{
+  "migration": "0782_dunning_owner_approval.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}
