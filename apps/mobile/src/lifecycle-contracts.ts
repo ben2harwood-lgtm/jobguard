@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { mobileAccessV1, mobileRefreshV1, mobilePartitionV1, mobileReadLeaseV1, mobileLocalMetadataV1 } from "@jobguard/core";
+import { mobileAccessV1, mobileRefreshV1, mobilePartitionV1, mobileReadLeaseV1, mobileLocalMetadataV1, syncDeviceCacheV1 } from "@jobguard/core";
 import type { EncryptedStore } from "./store";
 const time = z.number().int().nonnegative().safe();
 export const mobileSession = z.object({ version: z.literal("mobile-session.v1"), environment: z.literal("synthetic_demo"),
@@ -10,6 +10,7 @@ export type Partition = z.infer<typeof mobilePartitionV1>;
 export const activeRecord = z.object({ version: z.literal("mobile-active.v1"), partition: mobilePartitionV1,
  state: z.enum(["active", "cleanup_required"]) }).strict();
 export const localData = z.object({ version: z.literal("mobile-cache.v1"), metadata: mobileLocalMetadataV1,
+ sync: syncDeviceCacheV1.nullable().prefault(null),
  notes: z.array(z.object({ id: z.guid(), text: z.string().startsWith("Fictional ").max(500) }).strict()).max(100),
  // Small synthetic attachments are stored INSIDE SQLCipher, never in a plaintext media directory.
  files: z.array(z.object({ id: z.guid(), base64: z.string().regex(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u).max(131072) }).strict()).max(8),
