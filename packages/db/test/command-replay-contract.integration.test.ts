@@ -3,6 +3,9 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { jobMutationRegistry, watchdogCommandGuards, watchdogRoutineGuards } from "@jobguard/core";
 import { readFileSync } from "node:fs";
 import { lp5RegistryRows } from "./lp5-command-catalog.js";
+import { RateSuggestionRepository } from "../src/rate-suggestion-repository.js";
+import { createWorkFixture, closeWorkFixture, workTenant } from "./job-work-state-fixtures.js";
+import { meterCompany } from "./meter-persistence-fixtures.js";
 import { PurchaseOrderActionRepository } from "../src/purchase-order-action-repository.js";
 import { createWatchdogHarness } from "./watchdog-command-harness.js";
 
@@ -121,3 +124,37 @@ describe("CH-2 replay contract for each watchdog_live_only command", () => {
     for (const result of results) expect(norm(result)).toEqual(norm(results[0]));
   }, 240000);
 });
+
+// Dedicated synthetic seam: LP-5 cross-family identity remains held in the rate contract.
+it("rate acceptance replays the stored result after new evidence and rejects changed intent", async () => {
+  const f = await createWorkFixture();
+  try {
+    const a = await meterCompany(f), repo = new RateSuggestionRepository(f.runtime);
+    const actor = { kind: "human", sessionDigest: a.digest };
+    const query = { version: "rate-query.v1", asOf: "2026-11-01T00:00:00.000Z", unit: "each",
+      taxBasis: "standard_rate_20", category: "paint", region: "london" };
+    async function sample() {
+      const scope = randomUUID(), revision = randomUUID();
+      await workTenant(f.admin, a.tenantId, async db => {
+        await db.query("INSERT INTO app.scope_identity(tenant_id,job_id,id,state) VALUES($1,$2,$3,'confirmed')", [a.tenantId,a.jobId,scope]);
+        await db.query(`INSERT INTO app.scope_revision(tenant_id,job_id,scope_item_id,id,revision,description,quantity_decimal,unit,unit_price_pence,total_pence)
+          VALUES($1,$2,$3,$4,1,'Fictional paint','1','each',100,100)`, [a.tenantId,a.jobId,scope,revision]);
+        await db.query(`INSERT INTO app.rate_book_observation(tenant_id,job_id,scope_item_id,id,source_scope_revision_id,unit,rate_principal_pence,currency,tax_basis,category,region,effective_at,provenance)
+          VALUES($1,$2,$3,$4,$5,'each',100,'GBP','standard_rate_20','paint','london','2026-10-30','entered')`,
+        [a.tenantId,a.jobId,scope,randomUUID(),revision]);
+      });
+      return { scope, revision };
+    }
+    const target = await sample(); await sample(); await sample();
+    const baseline = await repo.read(a.context, query);
+    const input = { version: "rate-suggestion-accept.v1", commandId: randomUUID(), query, jobId: a.jobId,
+      scopeItemId: target.scope, currentRevisionId: target.revision, acceptedRatePence: 100, baselineHash: baseline.baselineHash };
+    const results = await Promise.all([repo.accept(a.context, actor, input), repo.accept(a.context, actor, input)]);
+    expect(results[1]).toEqual(results[0]);
+    await sample();
+    expect(await repo.accept(a.context, actor, input)).toEqual(results[0]);
+    await expect(repo.accept(a.context, actor, { ...input, acceptedRatePence: 101 })).rejects.toThrow("COMMAND_CONFLICT");
+    await expect(repo.accept(a.context, actor, { ...input, jobId: randomUUID() })).rejects.toThrow("NOT_FOUND");
+    expect((await f.admin.query("SELECT count(*)::int n FROM app.rate_suggestion_acceptance WHERE tenant_id=$1", [a.tenantId])).rows[0].n).toBe(1);
+  } finally { await closeWorkFixture(f); }
+}, 120_000);
