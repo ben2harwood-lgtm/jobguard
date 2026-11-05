@@ -354,3 +354,181 @@ applicable browser journeys. No local DB/browser suite ran. Independent RED
 review must PASS at the exact resulting head and required CI must be green
 before merge. Synthetic data and fake payment rails only; production gates
 and required external approvals remain unchanged.
+
+## M4-15 durable synthetic facts seam (0758)
+
+`DirectDebitFixtureRepository` is separate from the in-memory fake rail, which
+remains unwired and behaves as before. It records only already verified fake
+mandate and collection-payment events. Callers must supply a genuine withTenant
+context and independent server bindings (synthetic environment, fake account,
+mandate, and accepted payment command/object/amount). Payload tenant or account
+claims never select context. No signature or raw webhook is accepted as proof by
+this repository; signature verification remains the rail's responsibility.
+
+Initial mandate state must be `created`. Each later write compares the supplied
+previous history head under a database lock. Exact event replays are idempotent
+across process/pool restarts, changed content conflicts, and swapped known
+references return the same not-found as foreign tenants. Calls use separate
+transactions so one invalid batch member leaves no fact and does not stop others.
+Reads return the full stored history and derive mandate/payment states with the
+shared core lifecycle rules. Terminal mandates block new submission permanently;
+this is a read answer, not execution authority. Payment payout appears only after
+a stored `paid_out` event; failures, chargebacks and late failures stay distinct.
+Facts and hashes are append-only under FORCE RLS; runtime has no direct table
+access. No collection, reservation, settlement, release or financial posting occurs.
+
+The initial review simplification (LATER / SIMPLICITY):
+`apps/api/src/fee-collection/executor.ts:195` duplicates the payment progress
+ordering now exported by `packages/core/src/direct-debit-lifecycle.ts`. A future
+executor change can import that ordering to reduce maintenance drift; executor
+and reservation behaviour are outside this slice.
+
+This adds persistence only and does not complete M4-15. Real rail, application
+wiring, notices, mandate replacement and retries await their own approvals and
+D04/D05. PostgreSQL migration/upgrade/tenancy, restart/concurrency and immutable
+fact tests require CI; green local unit checks are not database evidence or an
+independent RED review.
+
+## Optional signed-event recorder (M4-15 remains open)
+
+The fake rail now accepts an optional `FakeDirectDebitRecorder` constructor port.
+Its explicit async `recordWebhookBatch` method authenticates the bounded exact
+body/timestamp before parsing, validates each member separately, then records
+schema-valid mandate/collection events independently. Invalid members leave no
+fact and do not prevent later valid members from being processed. A missing port
+refuses recording. Existing synchronous verification, mandate setup/ingestion and
+executor consumers retain their original behaviour; none are wired to this seam.
+
+`DirectDebitFixtureRecorder` closes over caller-verified context and copies trusted
+mandate/request bindings at construction. It never resolves a tenant or request
+binding from payload fields. Tenant, account, mandate, command, object and amount
+must match those bindings; refunds are refused. Each call reads the durable head
+and uses the repository's existing compare-and-append transaction. Exact replays
+return event IDs from stored history, including after a fresh rail/pool. Changed
+content or competing new events preserve the store conflict; no automatic retry
+is introduced. Stored lifecycle projections remain the repository's authority:
+submission/confirmation is not payout, delayed progress cannot revive terminal
+states, and only a stored `paid_out` event can project payout.
+
+This adds no migration, role, grant, route, application registration or financial
+write. The new real-PostgreSQL test sends signed bodies through fresh rails and
+pools, checks concurrent duplicate delivery, forgery/routing/batch rejection and
+lifecycle ordering, and snapshots all tenant-owned app rows outside the fixture
+facts to check that financial rows do not change. It is written for CI, not run
+in this database-free sandbox. Local unit checks cannot establish those database
+guarantees. Real rail, wiring, cross-rail reservations, refunds, notice/settings,
+mandate replacement/retries and production gates remain held. M4-15 is not finished.
+
+## Stored practice lifecycle screen (M4-15 still open)
+
+The session-only `/jobs/[id]/direct-debit-practice` page reads a server projection
+of durable fixture facts. GET never creates facts. Its POST accepts only a
+versioned server-issued step; it feeds one event through the signed fake rail's
+recorder port. Repeating a step replays that same event, including after refresh
+or a new application instance. No public webhook is added. The server derives
+one fictional mandate and four fictional requests per tenant/job; the client
+cannot choose tenant, account, mandate, object, amount, event or signature. The
+short sequence includes request, submission, failure, a retry example,
+confirmation, payout, chargeback, payment cancellation, late failure and mandate
+revocation. These are fictional event facts, never collection execution or retry
+authority. The ephemeral fake signing material stays on the server.
+
+The caller authenticates the persisted practice session and supplies its verified
+context and actor. Application authorization rechecks immutable job ownership
+before any fixture read or replay. Foreign-company and unreadable jobs have the
+same not-found response. POST uses the existing configured browser-origin gate;
+all responses are no-store. The client displays server labels and stored order,
+with the latest fact marked current and a separate current state per payment.
+Requested/submitted/confirmed never mean payout. The stored mandate projection
+reports that cancelled/revoked mandates block new collection; this slice adds no
+collection capability. Responses contain no raw events, bank details, bindings,
+account IDs or signing material.
+
+No migration, grants, SDK, real endpoint, financial writes, executor, reservations,
+refunds, mandate replacement, notices, worker or scheduler changed. The real rail,
+cross-rail balance guarantee, notices and G0–G5 release gates remain open/closed
+as before; this does not finish M4-15. CI must run the new real-PostgreSQL
+application test and the headless mobile-360/desktop browser spec (both saved API
+and transport rendering cases). Local unit/type checks are not database/browser
+proof or independent RED review. NOPR; the router owns commit/push and later review.
+
+Local verification for this screen: installed Vitest passed 5 application tests,
+11 existing recorder/rail tests, 4 route/render tests, 278 watchdog-registry /
+context-boundary / identity tests, and 76 migration-proof-loader tests, each run
+with at most two workers and three named files. Direct installed TypeScript
+checks passed API, web, core and DB; lane lint and `git diff --check` passed.
+Root `turbo typecheck --concurrency=2` stalled in its pnpm subprocesses with no
+completed task for about 100 seconds and was interrupted; that is not a full
+workspace typecheck pass. No database, browser, build, deployment or provider was
+run here. CI must prove the remaining suites, including Cloudflare bundling.
+
+
+## Batch-36 catch-up (4 November 2026, RED, NOPR)
+
+Resolved the contract notes, core/DB exports and later-empty-table list as a union
+of both pieces and current origin/main (56b74eaec; the local main ref is stale).
+Preserved both sides' barrel exports and snapshot entries. Renamed the one added
+migration, note and proof by filename stem to 0995_direct_debit_fixture_facts.
+No older migration, routine body, product behavior or guard was changed. Removed
+the two piece lane files and added the batch-36 lane with the final changed paths.
+
+Installed TypeScript package checks passed for core, DB, API and web. Dependency
+outputs were built with the installed TypeScript compiler for core/config/storage,
+DB and AI; no packages were downloaded. Early runs could not import absent built
+workspace packages; after producing those outputs the guards passed. An early
+export-union omission was corrected, and both sides' exports were verified.
+
+Installed Vitest 4.1.12 checks passed, each invocation limited to two workers and
+at most three named files (434 tests total):
+- API watchdog-registry, context-boundary and identity: 278.
+- Core direct-debit-lifecycle and recurring-extras: 8.
+- DB migration-proof-loader and direct-debit-fixture-repository: 84.
+- API direct-debit practice application, fixture recorder and fake recorder: 16.
+- Web direct-debit route/screen and recurring-extras route/screen: 11.
+- Existing fake-gocardless: 37.
+Working-tree and staged whitespace checks passed.
+
+Named holds for landing: tools/agent-lane-boundary-lint.mjs refuses the required deletions
+of config/lanes/m4-15-debit-store.json and config/lanes/m5-6-recurring-extras.json.
+Its lanePathAllowed rule permits a non-integration lane to edit only its own lane
+file. This is a tooling-policy conflict with the issued batch cleanup; no guard
+was weakened to bypass it. The read-only index also retains the old staged 0758
+migration/note/proof paths, which the final working-tree batch lane correctly
+does not list; router staging resolves those three transient path violations.
+The two lane-deletion violations still need the router's integration handling.
+
+No database, browser, provider, PR, push or release was run here. CI must prove
+PostgreSQL fresh/upgrade migrations and catalogs, immutable facts, tenant isolation,
+replay/restart/concurrency, unchanged financial data, and the mobile/desktop
+practice journeys, plus the required full checks and Cloudflare build. Independent
+RED review must bind to the final committed head before landing. This catch-up
+closes neither full M4-15 nor full M5-6.
+
+### Batch-36 resume (5 November 2026, RED, NOPR)
+
+READY for launcher save under the 4 November router ruling; the named landing
+holds above remain. No guard, scanner, pin, test assertion or product policy was
+changed. Corrected the migration note heading to its reserved number, 0995.
+The working files contain the resolved union; the read-only Git index still needs
+the launcher to stage those resolutions and the migration rename.
+
+Current local verification: installed Vitest 4.1.12, invoked directly with
+`node node_modules/vitest/vitest.mjs run --maxWorkers=2` from each package, passed
+119 tests, with at most three named files per invocation:
+- Core: `src/direct-debit-lifecycle.test.ts`, `src/recurring-extras.test.ts` (8).
+- DB: `test/migration-proof-loader.test.ts`, `test/direct-debit-fixture-repository.test.ts` (84).
+- API: `src/fee-collection/direct-debit-practice.application.test.ts`,
+  `src/fee-collection/direct-debit-fixture-recorder.test.ts`,
+  `src/fee-collection/fake-gocardless-recorder.test.ts` (16).
+- Web: `app/api/jobs/[id]/direct-debit-practice/route.test.ts`,
+  `app/jobs/[id]/direct-debit-practice/screen.test.ts`,
+  `app/api/jobs/[id]/recurring-extras/route.test.ts` (9); separately
+  `app/jobs/[id]/recurring-extras/recurring-extras-screen.test.tsx` (2).
+`node node_modules/typescript/bin/tsc -p <package>/tsconfig.json --noEmit`
+passed for packages/core, packages/db, apps/api and apps/web. The initial
+`pnpm exec vitest` invocation stalled before starting tests and was interrupted;
+the direct installed runner supplied the results above. Whitespace checks passed.
+Lane lint was rerun and still rejects the two lane deletions and three obsolete
+0758 staged paths listed above. This is a named landing hold, not a check pass.
+No PostgreSQL or browser suite ran; required CI and exact-head independent RED
+review remain outstanding. READY means saved for router handling, not landed.

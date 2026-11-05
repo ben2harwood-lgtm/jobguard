@@ -1,0 +1,55 @@
+{
+  "version": 2,
+  "lanes": {
+    "batch-36": {
+      "branches": [
+        "codex/sandbox/batch-36"
+      ],
+      "note": "Built-ahead union of M4-15 debit store and M5-6 recurring extras; RED; NOPR.",
+      "allow": [
+        "apps/api/package.json",
+        "apps/api/src/fee-collection/direct-debit-fixture-recorder.test.ts",
+        "apps/api/src/fee-collection/direct-debit-fixture-recorder.ts",
+        "apps/api/src/fee-collection/direct-debit-practice.application.test.ts",
+        "apps/api/src/fee-collection/direct-debit-practice.application.ts",
+        "apps/api/src/fee-collection/direct-debit-practice.contracts.ts",
+        "apps/api/src/fee-collection/fake-gocardless-recorder.test.ts",
+        "apps/api/src/fee-collection/fake-gocardless.ts",
+        "apps/web/app/api/jobs/[id]/direct-debit-practice/route.test.ts",
+        "apps/web/app/api/jobs/[id]/direct-debit-practice/route.ts",
+        "apps/web/app/api/jobs/[id]/recurring-extras/route.test.ts",
+        "apps/web/app/api/jobs/[id]/recurring-extras/route.ts",
+        "apps/web/app/jobs/[id]/direct-debit-practice/page.tsx",
+        "apps/web/app/jobs/[id]/direct-debit-practice/screen.test.ts",
+        "apps/web/app/jobs/[id]/direct-debit-practice/screen.tsx",
+        "apps/web/app/jobs/[id]/recurring-extras/page.tsx",
+        "apps/web/app/jobs/[id]/recurring-extras/recurring-extras-screen.test.tsx",
+        "apps/web/app/jobs/[id]/recurring-extras/recurring-extras-screen.tsx",
+        "apps/web/app/lib/direct-debit-practice-server.ts",
+        "apps/web/app/lib/recurring-extras-server.ts",
+        "apps/web/e2e/M4-15-direct-debit-practice.spec.ts",
+        "apps/web/e2e/M5-6-recurring-extras.spec.ts",
+        "docs/contracts/gocardless-dark-v1.md",
+        "docs/contracts/rate-baseline-v1.md",
+        "packages/core/src/direct-debit-lifecycle.test.ts",
+        "packages/core/src/direct-debit-lifecycle.ts",
+        "packages/core/src/index.ts",
+        "packages/core/src/recurring-extras.test.ts",
+        "packages/core/src/recurring-extras.ts",
+        "packages/core/src/watchdog.ts",
+        "packages/db/migration-notes/0995_direct_debit_fixture_facts.md",
+        "packages/db/migrations/0995_direct_debit_fixture_facts.sql",
+        "packages/db/src/direct-debit-fixture-repository.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/recurring-extras-repository.ts",
+        "packages/db/test/direct-debit-fixture-repository.test.ts",
+        "packages/db/test/direct-debit-fixture.integration.test.ts",
+        "packages/db/test/direct-debit-practice.integration.test.ts",
+        "packages/db/test/fake-direct-debit-recorder.integration.test.ts",
+        "packages/db/test/later-empty-tables.ts",
+        "packages/db/test/migration-proofs/0995_direct_debit_fixture_facts.proof.json",
+        "packages/db/test/recurring-extras.integration.test.ts"
+      ]
+    }
+  }
+}

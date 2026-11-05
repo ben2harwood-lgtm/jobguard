@@ -180,3 +180,5 @@ export * from "./contractor-fee-mandate.js";
 
 export * from "./deepgram-transcript.js";
 export * from "./recurring-extras.js";
+
+export * from "./direct-debit-lifecycle.js";
