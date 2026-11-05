@@ -38,3 +38,34 @@ No human, legal or provider result or approval is supplied by this change.
 
 Validation evidence belongs in the commit receipt. PostgreSQL integration tests
 are written for CI; this sandbox cannot start PostgreSQL or bind localhost.
+
+Landing preparation, 4 November 2026 (RED, NOPR): inspected the clean merge at
+`a2876841b` against its merged `origin/main` base `155a3eb06`. No compatibility
+code changes or migrations were needed. The lane contains exactly this slice's
+eight non-lane paths; no other piece's lane is added relative to that base.
+
+Local validation used Node 24.17.0 and installed Vitest 4.1.12, with explicit
+`--maxWorkers=2` and at most three named files per invocation:
+
+- Each of the seven workspace packages/apps passed its existing
+  `node_modules/.bin/tsc -p <workspace>/tsconfig.json --noEmit` equivalent.
+- Core `shadow-pilot-report.test.ts` and `shadow-pilot-measurement.test.ts`:
+  47 tests passed.
+- API `auth/context-boundary.test.ts` and `auth/identity.test.ts`: 152 tests
+  passed; `watchdog-registry.test.ts`: 126 tests passed.
+- DB `migration-proof-loader.test.ts`: 76 tests passed.
+- `node tools/agent-lane-boundary-lint.mjs` and
+  `git diff --check origin/main HEAD` passed.
+
+The initial `pnpm typecheck` and filtered unit command stalled before starting
+checks and were interrupted. Direct installed binaries completed the checks.
+Initial guard imports lacked workspace `dist` outputs; compiling the existing
+config, core, storage, DB and AI packages with their existing TypeScript configs
+resolved those imports, and the affected guards then passed. No dependencies
+were downloaded or test expectations changed.
+
+CI must still prove PostgreSQL stored-row reads, gross accrual/invoice/collection
+refusal and tenant isolation through `shadow-pilot-financial.integration.test.ts`,
+plus the required full lint, test, build, migration and browser suites. No database
+or browser was started locally. Independent RED review at the final head and
+green CI remain required before landing; the real pilot and G4-S remain open.
