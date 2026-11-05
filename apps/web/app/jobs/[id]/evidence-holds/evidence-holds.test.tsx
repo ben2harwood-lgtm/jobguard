@@ -34,19 +34,17 @@ it.each([403, 503, "network"] as const)("handles hold request outcome %s without
   retry.props.onClick();
   await vi.waitFor(() => expect(hooks.cells[3]).toBe(false));
   expect(JSON.parse(fetch.mock.calls[0]![1]!.body as string)).toEqual(request);
-  expect(hooks.cells[4]).toEqual(status === 403 ? null : request);
-  expect(stored.has(key)).toBe(status !== 403);
+  expect(hooks.cells[4]).toEqual(request);
+  expect(stored.get(key)).toBe(JSON.stringify(request));
   hooks.cursor = 0;
   const html = renderToStaticMarkup(EvidenceHolds({ jobId: "fictional-job" }));
-  expect(html.includes("Retry same request")).toBe(status !== 403);
+  expect(html).toContain("Retry same request");
   if (status === 403) expect(html).toContain("Request refused. An active owner is required.");
-  if (status !== 403) {
-    hooks.cursor = 0;
-    const next = EvidenceHolds({ jobId: "fictional-job" });
-    const group = React.Children.toArray(next.props.children).find(child => React.isValidElement(child) && child.type === "div") as React.ReactElement<{ children: React.ReactNode }>;
-    const again = React.Children.toArray(group.props.children)[0] as React.ReactElement<{ onClick: () => void }>;
-    again.props.onClick();
-    await vi.waitFor(() => expect(hooks.cells[3]).toBe(false));
-    expect(fetch.mock.calls.filter(([, init]) => init?.method === "POST").map(([, init]) => init!.body)).toEqual([JSON.stringify(request), JSON.stringify(request)]);
-  }
+  hooks.cursor = 0;
+  const next = EvidenceHolds({ jobId: "fictional-job" });
+  const group = React.Children.toArray(next.props.children).find(child => React.isValidElement(child) && child.type === "div") as React.ReactElement<{ children: React.ReactNode }>;
+  const again = React.Children.toArray(group.props.children)[0] as React.ReactElement<{ onClick: () => void }>;
+  again.props.onClick();
+  await vi.waitFor(() => expect(hooks.cells[3]).toBe(false));
+  expect(fetch.mock.calls.filter(([, init]) => init?.method === "POST").map(([, init]) => init!.body)).toEqual([JSON.stringify(request), JSON.stringify(request)]);
 });

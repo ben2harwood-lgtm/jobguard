@@ -44,8 +44,9 @@ export function EvidenceHolds({ jobId }: { jobId: string }) {
       const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(request), cache: "no-store" });
       const body = await response.json();
       setMessage(body.message);
-      // Definite refusals end this request; uncertain outcomes keep the exact IDs.
-      if (response.ok || [400, 401, 403, 404, 409].includes(response.status)) { sessionStorage.removeItem(key); setPending(null); }
+      // The repository sanitizes database failures to WORM_REFUSED as well.
+      // A 403 therefore cannot prove that COMMIT did not happen; keep the IDs.
+      if (response.ok || [400, 401, 404, 409].includes(response.status)) { sessionStorage.removeItem(key); setPending(null); }
       await refresh();
     } catch { setMessage("The server has not confirmed the result. Retry the same request."); }
     finally { locked.current = false; setBusy(false); }

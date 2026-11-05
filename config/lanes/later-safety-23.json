@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/later-safety-23"
       ],
-      "note": "LATER-SAFETY-23: per-row connector promotion validation and final 403 hold refusal. Stacked NOPR; includes inherited differences from batch-41. No migration.",
+      "note": "LATER-SAFETY-23: per-row connector promotion validation; retain exact hold retry IDs for uncertain 403 outcomes. Stacked NOPR; includes inherited differences from batch-41. No migration.",
       "allow": [
         "apps/api/package.json",
         "apps/api/src/merchant-order.application.test.ts",
@@ -13,7 +13,6 @@
         "apps/api/src/merchant-order.contracts.ts",
         "apps/web/app/api/jobs/[id]/purchase-orders/merchant-order/route.ts",
         "apps/web/app/jobs/[id]/evidence-holds/evidence-holds.test.tsx",
-        "apps/web/app/jobs/[id]/evidence-holds/evidence-holds.tsx",
         "apps/web/app/jobs/[id]/page.tsx",
         "apps/web/app/lib/merchant-order-server.test.mts",
         "apps/web/app/lib/merchant-order-server.ts",
