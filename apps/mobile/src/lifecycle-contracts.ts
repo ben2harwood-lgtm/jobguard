@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { mobileAccessV1, mobileRefreshV1, mobilePartitionV1, mobileReadLeaseV1, mobileLocalMetadataV1, syncDeviceCacheV1 } from "@jobguard/core";
+import { mobileAccessV1, mobileRefreshV1, mobilePartitionV1, mobileReadLeaseV1, mobileLocalMetadataV1, syncDeviceCacheV1, offlineReconciliationV1, offlineUploadV1 } from "@jobguard/core";
 import type { EncryptedStore } from "./store";
 const time = z.number().int().nonnegative().safe();
 export const mobileSession = z.object({ version: z.literal("mobile-session.v1"), environment: z.literal("synthetic_demo"),
@@ -9,13 +9,20 @@ export type MobileSession = z.infer<typeof mobileSession>;
 export type Partition = z.infer<typeof mobilePartitionV1>;
 export const activeRecord = z.object({ version: z.literal("mobile-active.v1"), partition: mobilePartitionV1,
  state: z.enum(["active", "cleanup_required"]) }).strict();
+const queueEntry = z.object({ upload: offlineUploadV1, reconciliation: offlineReconciliationV1 }).strict();
 export const localData = z.object({ version: z.literal("mobile-cache.v1"), metadata: mobileLocalMetadataV1,
  sync: syncDeviceCacheV1.nullable().prefault(null),
+ queue: z.array(z.unknown()).max(1000).prefault([]),
  notes: z.array(z.object({ id: z.guid(), text: z.string().startsWith("Fictional ").max(500) }).strict()).max(100),
  // Small synthetic attachments are stored INSIDE SQLCipher, never in a plaintext media directory.
  files: z.array(z.object({ id: z.guid(), base64: z.string().regex(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u).max(131072) }).strict()).max(8),
  unsyncedWork: z.enum(["none", "present", "unknown"]),
-}).strict();
+}).strict().refine(data => data.unsyncedWork !== "none" || data.queue.every(raw => {
+ const parsed = queueEntry.safeParse(raw); return parsed.success && parsed.data.reconciliation.item.status === "recorded"
+  && parsed.data.reconciliation.item.commandId === parsed.data.upload.commandId
+  && parsed.data.reconciliation.item.payloadHash === parsed.data.upload.payloadHash;
+}), "Unresolved queue requires cleanup hold");
+// Unresolved or malformed commands cannot be labelled empty to authorize erasure.
 export type LocalData = z.infer<typeof localData>;
 export function samePartition(a: Partition, b: Partition) {
  return a.userId === b.userId && a.tenantId === b.tenantId && a.membershipId === b.membershipId

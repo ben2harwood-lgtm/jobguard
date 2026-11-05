@@ -18,6 +18,7 @@ export class MobileClient {
  readonly #options;
  constructor(provider: MobileAuthProvider, vault: SecureVault, resources: PartitionResources,
   options: { enabled: boolean; environment: string; policy: unknown; uuid(): string; deviceInstanceId: string;
+   beforePartitionCleanup?(p: Partition): Promise<void>;
    clock(): { status: "trusted_fixture" | "unverified" | "anomaly"; nowMs: number }; partitionKey(p: Partition): Promise<string> }) {
   const policy = mobileAuthPolicySpecimenV1.safeParse(options.policy);
   if (!policy.success) throw new MobileClientError("MOBILE_DENIED");
@@ -122,6 +123,7 @@ export class MobileClient {
  private async markCleanup(p: Partition) {
   this.#ready = false;
   await this.#vault.set(activeKey, JSON.stringify({ version: "mobile-active.v1", partition: p, state: "cleanup_required" }));
+  await this.#options.beforePartitionCleanup?.(p);
   await this.#vault.remove(await this.credentialKey(p));
  }
  private async erase(p: Partition) {
