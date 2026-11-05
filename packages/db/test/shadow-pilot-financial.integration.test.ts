@@ -14,7 +14,7 @@ let f: FinalCheckFixture, research: Pool, reader: ShadowPilotFinancialReader;
 beforeAll(async () => {
   f = await createFinalCheckFixture();
   // SET ROLE drops the superuser's bypass: FORCE RLS and tenant policies really apply.
-  research = new Pool({ ...f.admin.options, options: "-c role=jobguard_migration" });
+  research = new Pool({ ...f.admin.options, password: f.admin.options.password, options: "-c role=jobguard_migration" });
   reader = new ShadowPilotFinancialReader(research);
 }, 120_000);
 afterAll(async () => { if (research) await research.end(); if (f) await closeFinalCheckFixture(f); });

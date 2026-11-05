@@ -29,3 +29,49 @@ it("E5-19 optional absence and confirmation limits are explicit in source artifa
   expect(pack.completeApprovalPack).toBe(false);
   expect(() => verifyExtraSourcePack(JSON.stringify({ ...pack, completeApprovalPack: true }))).toThrow();
 });
+
+it("preserves legacy omissions and labels only timing held on new artifacts", () => {
+  const pack = buildExtraSourcePack("job-1", "extra-1", sources, []);
+  expect(pack.integrity.manifest.omissions).toEqual(["Extra work timing HELD"]);
+  const legacy = structuredClone(pack);
+  legacy.integrity.manifest.omissions = ["Approval requirement, steps and extra work timing HELD"];
+  expect(verifyExtraSourcePack(JSON.stringify(legacy)).completeApprovalPack).toBe(false);
+  expect(legacy.integrity.manifest.omissions).toContain("Approval requirement, steps and extra work timing HELD");
+});
+
+const approvalSources: EvidenceSource[] = [
+  ...sources,
+  { sourceId: "extra_approval_request:request-1", version: 1, jobId: "job-1", kind: "approval", label: "Frozen requirement", content: JSON.stringify({ tenant_id: "tenant-1", job_id: "job-1", variation_id: "extra-1", id: "request-1", requirement: { steps: [{ index: 0, role: "supervisor" }, { index: 1, role: "client_approver" }] } }) },
+  ...["member", "client_approver"].map((actor, index): EvidenceSource => ({ sourceId: `extra_approval_step_fact:step-${index}`, version: 1, jobId: "job-1", kind: "approval", label: `Step ${index}`, content: JSON.stringify({ tenant_id: "tenant-1", job_id: "job-1", variation_id: "extra-1", request_id: "request-1", step_index: index, actor_kind: actor }) })),
+];
+it("detects edited requirements and steps, missing steps and cross-subject substitutions through shared verifiers", () => {
+  const pack = buildExtraSourcePack("job-1", "extra-1", approvalSources, []);
+  for (const index of [1, 2, 3]) {
+    const altered = structuredClone(pack);
+    altered.integrity.sources[index]!.content += "edited";
+    expect(verifyExtraSourcePack(JSON.stringify(altered)).findings).toContain("Content hash mismatch");
+    expect(inspectExtraSourcePack(pack, approvalSources.filter((_, i) => i !== index)).findings).toContain("Missing original source");
+  }
+  for (const changed of [{ tenant_id: "other-tenant" }, { job_id: "other-job" }, { variation_id: "other-extra" }, { request_id: "request-2" }]) {
+    const substituted = approvalSources.map((s, i) => i === 3 ? { ...s, content: JSON.stringify({ ...JSON.parse(s.content), ...changed }) } : s);
+    expect(inspectExtraSourcePack(pack, substituted).findings).toContain("Content hash mismatch");
+    const exported = structuredClone(pack);
+    exported.integrity.sources = substituted;
+    expect(verifyExtraSourcePack(JSON.stringify(exported)).findings).toContain("Content hash mismatch");
+  }
+  const later = approvalSources.map(s => s.sourceId.startsWith("extra_approval_request:") ? { ...s, sourceId: "extra_approval_request:request-2", version: 2 } : s);
+  expect(inspectExtraSourcePack(pack, later).findings).toContain("Missing original source");
+});
+it("source array order carries no authority; changing recorded step order does", () => {
+  const pack = buildExtraSourcePack("job-1", "extra-1", approvalSources, []);
+  expect(inspectExtraSourcePack(pack, [...approvalSources].reverse()).findings).not.toContain("Content hash mismatch");
+  const reordered = approvalSources.map(s => s.sourceId.startsWith("extra_approval_step_fact:") ? { ...s, content: JSON.stringify({ ...JSON.parse(s.content), step_index: 99 }) } : s);
+  expect(inspectExtraSourcePack(pack, reordered).findings).toContain("Content hash mismatch");
+});
+it("a self-consistently rewritten export fails comparison to persisted sources and an independent digest", async () => {
+  const { manifestDigest } = await import("./evidence-pack.js");
+  const original = buildExtraSourcePack("job-1", "extra-1", approvalSources, []);
+  const edited = buildExtraSourcePack("job-1", "extra-1", approvalSources.map((s, i) => i === 3 ? { ...s, content: "forged approval" } : s), []);
+  expect(inspectExtraSourcePack(edited, approvalSources).findings).toContain("Content hash mismatch");
+  expect(verifyExtraSourcePack(JSON.stringify(edited), { trustedManifestDigest: manifestDigest(original.integrity.manifest) }).checkpointTrusted).toBe(false);
+});

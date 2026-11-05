@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
+import { syntheticSpeechAudio } from "@jobguard/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ResumableEvidenceService } from "./resumable-evidence.js";
 import { beginEvidenceUploadSchema, hasCompletePcmWav } from "./evidence.js";
@@ -170,6 +171,16 @@ describe("dark resumable transfer orchestration (SQL isolation is tested in CI)"
     await expect(f.service.finalize(context, actor, {...input,commandId:randomUUID(),evidenceType:"site_photo"})).rejects.toMatchObject({code:"OBJECT_INVALID",message:"wrong_hash"});
     expect(f.row.state).toBe("rejected");
     await expect(f.service.append(context, actor, {...input,offset:0,bytes:new Uint8Array([1])})).rejects.toMatchObject({code:"CONFLICT"});
+  });
+  it("keeps non-silent resumable WAV uploads independent of the Deepgram fixture restriction", async () => {
+    const f=fixture(), bytes=Buffer.from(syntheticSpeechAudio());
+    bytes[45]=1;
+    const hash=createHash("sha256").update(bytes).digest("hex");
+    await f.service.begin(context, actor, {...beginRequest(), contentType:"audio/wav", maximumBytes:bytes.length, expectedSha256:hash});
+    await f.service.append(context, actor, {...input,offset:0,bytes});
+    await expect(f.service.finalize(context, actor, {...input,commandId:randomUUID(),evidenceType:"synthetic_voice"}))
+      .resolves.toMatchObject({id:input.uploadId,sha256:hash});
+    expect(f.row.state).toBe("verified");
   });
   it("validates narrow synthetic voice bytes without widening the ordinary upload boundary", () => {
     const bytes=Buffer.alloc(46); bytes.write("RIFF");bytes.writeUInt32LE(38,4);bytes.write("WAVEfmt ",8);
