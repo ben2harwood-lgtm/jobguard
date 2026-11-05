@@ -12,7 +12,7 @@ const loadIdentity = () => nativeImport(pathToFileURL(join(process.cwd(), "../ap
 test.use({ headless: true });
 test("stored VAT documents: explicit facts, refusal, uncertain replay and reload without issuing", async ({ page, context, baseURL }) => {
   await signInForChooser(page);
-  const session = await (await page.request.get("/api/auth/session")).json();
+  const session = await page.evaluate(async () => (await fetch("/api/auth/session", { cache: "no-store" })).json());
   const token = (await context.cookies()).find(cookie => cookie.name === "jobguard_session")!.value;
   const { JobRepository, VatFixtureRepository } = await loadDb();
   const { createIdentityApplication, resolveVerifiedTenantContext } = await loadIdentity();
@@ -34,12 +34,12 @@ test("stored VAT documents: explicit facts, refusal, uncertain replay and reload
     await page.getByLabel("Document date", { exact: true }).fill("2026-11-04");
     await page.getByLabel("Interim certification UUID (fixture lineage)", { exact: true }).fill(randomUUID());
     await page.getByLabel("Retention profile UUID (fixture lineage)", { exact: true }).fill(randomUUID());
-    const treatment = page.getByLabel("Treatment", { exact: true });
+    const treatment = page.getByLabel("Treatment");
     await expect(treatment).toHaveValue(""); // No default or fallback rate.
     await treatment.selectOption("drc_20");
     await page.getByLabel("Cumulative net (integer pence)").fill("10000");
     await page.getByLabel("Retained principal (integer pence)").fill("1000");
-    for (const [label, value] of [["Supplier VAT registered", "true"], ["Customer VAT registered", "true"], ["Customer end user", "true"], ["Intermediary supplier", "false"], ["Construction reverse charge in scope", "true"]]) await page.getByLabel(label!, { exact: true }).selectOption(value!);
+    for (const [label, value] of [["Supplier VAT registered", "true"], ["Customer VAT registered", "true"], ["Customer end user", "true"], ["Intermediary supplier", "false"], ["Construction reverse charge in scope", "true"]]) await page.getByLabel(label!).selectOption(value!);
     await page.getByLabel("Supplier VAT number (blank only if unregistered)").fill("fictional-vat");
     await page.getByLabel("Customer VAT number (blank only if unregistered)").fill("fictional-client-vat");
     await page.getByLabel("Fictional eligibility actor UUID (not authorization)").fill(randomUUID());
@@ -48,7 +48,7 @@ test("stored VAT documents: explicit facts, refusal, uncertain replay and reload
     await page.getByRole("button", { name: "Store practice document", exact: true }).click();
     await expect(page.locator("main").getByRole("alert")).toContainText("reverse charge eligibility inputs conflict");
     expect((await admin.query("SELECT count(*)::int n FROM app.vat_fixture_record WHERE tenant_id=$1", [verified.tenantId])).rows[0].n).toBe(0);
-    await page.getByLabel("Customer end user", { exact: true }).selectOption("false");
+    await page.getByLabel("Customer end user").selectOption("false");
     // Execute the actual route, then lose its reply. Reload and retry must reuse the exact command.
     let loseReply = true;
     const transientRefusals = [408, 429];
@@ -87,7 +87,7 @@ test("stored VAT documents: explicit facts, refusal, uncertain replay and reload
     await expect(page.locator("main")).toContainText("fixture lineage, not proof");
     await expect(page.getByLabel("Fictional supplier reference")).toHaveCount(0);
     await expect(page.locator("form")).toContainText("Fictional builder");
-    const headers = { origin: baseURL!, "x-csrf-token": session.csrfToken, "x-tenant-id": verified.tenantId };
+    const headers = { cookie: `jobguard_session=${token}`, origin: baseURL!, "x-csrf-token": session.csrfToken, "x-tenant-id": verified.tenantId };
     const conflict = await page.request.post(path, { headers, data: { ...original, book: { ...original.book, customerReference: "changed" } } });
     expect(conflict.status()).toBe(409); expect((await conflict.json()).message).toContain("fixed fields");
     const saved = await new VatFixtureRepository(runtime).read(verified, job.id);

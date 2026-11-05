@@ -62,7 +62,7 @@ BEGIN
    OR v->'book'->>'roundingVersion' IS DISTINCT FROM 'fixture_cumulative_group_half_up_v1'
    OR coalesce(v->'book'->>'taxBasis','') NOT IN('full_net','net_after_retention')
    OR coalesce(v->'book'->>'supplierReference','')='' OR coalesce(v->'book'->>'customerReference','')=''
-   OR v->'book'-ARRAY['version','matrixVersion','environment','label','roundingVersion','taxBasis','supplierReference','customerReference']<>'{}'::jsonb
+   OR (v->'book')-ARRAY['version','matrixVersion','environment','label','roundingVersion','taxBasis','supplierReference','customerReference']<>'{}'::jsonb
    OR jsonb_typeof(v->'document') IS DISTINCT FROM 'object'
   THEN RAISE EXCEPTION 'VAT_FIXTURE_INVALID_INPUT'; END IF;
   cid:=(v->>'commandId')::uuid; did:=(v->'document'->>'id')::uuid;

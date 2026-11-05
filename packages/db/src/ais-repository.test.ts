@@ -79,3 +79,18 @@ describe("M4-7 application orchestration (scripted SQL)", () => {
     expect((await s.repository.read(s.ctx, s.digest, s.id)).status).toBe("unlinked");
   });
 });
+
+it("movement read validates its projection and redacts SQL errors without returning credential columns", async () => {
+  const s = await fixture();
+  const projection = { version: "ais-practice-view.v1", connection: { connectionId: s.id, status: "linked" },
+    movements: [{ movementRef: "fake_cash", status: "pending", pence: 32000, currency: "GBP", bookedOn: "2026-10-02" }] };
+  const original = s.client.query.getMockImplementation()!;
+  s.client.query.mockImplementation(async (sql, values) => sql.includes("ais_movement_read") ? { rows: [{ result: projection }] } as never : original(sql, values));
+  expect(await s.repository.movements(s.ctx, s.digest, s.id)).toEqual(projection);
+  expect(s.client.query).toHaveBeenCalledWith("SELECT app.ais_movement_read($1,$2,$3) AS result", [s.ctx.tenantId, s.digest, s.id]);
+  s.client.query.mockImplementation(async (sql, values) => {
+    if (sql.includes("ais_movement_read")) throw new Error("private SQL token fake_secret");
+    return original(sql, values);
+  });
+  await expect(s.repository.movements(s.ctx, s.digest)).rejects.toThrow(/^AIS_FORBIDDEN$/u);
+});
