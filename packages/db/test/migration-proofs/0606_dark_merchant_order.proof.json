@@ -1,5 +1,5 @@
 {
-  "migration": "1010_dark_merchant_order.sql",
+  "migration": "0606_dark_merchant_order.sql",
   "lp0": [
     {
       "section": "entries",
@@ -848,6 +848,15 @@
             "outbox_class": "fake_purchase_order"
           },
           {
+            "command_type": "purchase_order.send.dark",
+            "version": "command.v1",
+            "permission_rule": "owner",
+            "lock_adapter": "route_before_begin",
+            "completion_adapter": "purchase_order",
+            "audit_class": "commercial",
+            "outbox_class": "fake_merchant_order"
+          },
+          {
             "command_type": "purchase_order.simulate",
             "version": "command.v1",
             "permission_rule": "owner",
@@ -1296,15 +1305,6 @@
             "completion_adapter": "operational_record",
             "audit_class": "operational",
             "outbox_class": null
-          },
-          {
-            "command_type": "purchase_order.send.dark",
-            "version": "command.v1",
-            "permission_rule": "owner",
-            "lock_adapter": "route_before_begin",
-            "completion_adapter": "purchase_order",
-            "audit_class": "commercial",
-            "outbox_class": "fake_merchant_order"
           }
         ]
       }

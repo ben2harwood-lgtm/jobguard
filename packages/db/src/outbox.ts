@@ -2,8 +2,8 @@ import { serverEntitlement } from "./plan-entitlement-service.js";
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
-import { darkOrderStillAuthorized } from "./purchase-order-action-guard.js";
 import { commercialOutboundClaimsEnabled } from "./commercial-outbound-pause.js";
+import { darkOrderStillAuthorized } from "./purchase-order-action-guard.js";
 import { appendAuditBatch } from "./audit.js";
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 

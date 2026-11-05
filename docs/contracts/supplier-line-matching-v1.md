@@ -71,7 +71,7 @@ The original pure matcher remains unchanged. The dark synthetic correction seam
 is specified below. Inline fixtures are development regression tests, not frozen
 human ground truth, a held-out benchmark or G2 release evidence.
 
-## M2-4 stored reviewer corrections (`1011_supplier_line_corrections.sql`)
+## M2-4 stored reviewer corrections (`1200_supplier_line_corrections.sql`)
 
 `SupplierLineCorrectionRepository` stores an immutable, server-owned confirmed
 synthetic snapshot using `supplier-line-snapshot.v1`. The caller supplies a verified
@@ -104,7 +104,7 @@ same match and discrepancy IDs. New confirmed source versions require a new
 snapshot, never edits to a stored one. No finding, debt, invoice, payment or fee
 is created by these proposal corrections.
 
-Migration `1011_supplier_line_corrections.sql` adds only `supplier_line_match_snapshot`,
+Migration `1200_supplier_line_corrections.sql` adds only `supplier_line_match_snapshot`,
 `supplier_line_match_correction` and their trigger guard. Tenant-qualified job,
 snapshot, actor and deferred audit foreign keys, FORCE RLS, append-only grants,
 immutable triggers, revision uniqueness and audit actor/type/subject/command/hash
@@ -116,7 +116,7 @@ not evidence of agreed debt or verified original bytes.
 
 Upgrade is additive and backfills no source or financial data. Roll forward with
 a new migration to repair defects; keep the existing tables/history and disable
-the dark caller if necessary. Never edit `1011_supplier_line_corrections.sql` after merge. PostgreSQL integration,
+the dark caller if necessary. Never edit `1200_supplier_line_corrections.sql` after merge. PostgreSQL integration,
 full migration/catalogue CI and one independent RED review remain required before
 merge. There is no browser change or new provider route in this piece.
 
@@ -128,10 +128,10 @@ correction repository includes its result as `discrepancies` on create, correcti
 read and replay. It reconstructs historical facts first, so historical command
 replays retain the original result. Current reads use the current correction
 revision. No findings are persisted and M2-5 itself needs no migration. The stacked prerequisites use
-`1010_dark_merchant_order.sql` and `1011_supplier_line_corrections.sql`.
+`0606_dark_merchant_order.sql` and `1200_supplier_line_corrections.sql`.
 The stacked M2-1 dark order uses the checked `app.begin_command`,
 `app.complete_command` and `app.append_audit` protocol from `c70d7d20`.
-Migration 0592 registers only `purchase_order.send.dark` with owner permission
+Migration 0606 registers only `purchase_order.send.dark` with owner permission
 and the `fake_merchant_order` outbox. Checked completion binds the whole approved
 artifact (including `revisionAuthorityHash`) to the immutable order revision.
 Manual attestation takes the actor from its trusted authenticated caller,
@@ -186,3 +186,67 @@ DATA ONLY, not the frozen 100-set held-out benchmark, an accuracy claim or G2 ev
 Reports explicitly state the uncertainty and `releaseEvidence: false`. People must
 freeze the held-out corpus/labels and record the product decision separately. G0–G5
 remain closed. No providers, paid calls or real customer data are introduced.
+
+
+## Batch-38 landing reconciliation — 5 November 2026
+
+READY for the router to stage the resolved merge and submit for CI and RED review.
+Compared with merged `origin/main` / `MERGE_HEAD`
+`62081c68933d0b953e7dd75a8cbd7b3a2fb4f304` (the local `main` ref is older).
+M2-1 dark merchant order behaviour is wholly on main; M2-2–M2-5's dark
+synthetic line-facts seams remain in this batch. Live-task acceptance is not claimed.
+
+Migration inventory against that main:
+- Removed branch-only `1010_dark_merchant_order.sql` and its proof. Its executable
+  SQL equals main's `0606_dark_merchant_order.sql` after excluding comments and
+  blank lines (normalized SHA-256
+  `5df3fcadefbd396123c570fc7b64fefe3763857db6797082012051a332dbd88a`).
+  There was no branch-only note. Main's 0606 SQL and proof are retained byte for byte.
+  This also removes the duplicate re-creation of `app.lp5_command_result`, preserving
+  main's latest dark-order branch and every other adapter without a later overwrite.
+- Retained `1011_supplier_line_corrections` as provisional stem
+  `1200_supplier_line_corrections`, with its proof and all callers updated.
+  SQL body is byte-identical (SHA-256
+  `4d8b129f60489377865da77073fdd15303c17c2c4080cdda4bac674a682002a3`).
+  It creates two tables and a new audit trigger function; it re-creates no existing
+  routine. No branch migration note existed. Forward-fix/rollback constraints above
+  continue to apply. Final contiguous numbering belongs to the landing router.
+
+Resolved exports with both new repositories, retained main's outbox import order,
+command catalogue and M2-1 proof tests, and extended main's empty-table list with
+both supplier-line tables. Removed the duplicate always-true fixture handler so
+commercial-outbound pause coverage actually reaches `claimsEnabled`; no test was
+weakened. Main's source guards and order implementations remain unchanged.
+
+Local checks use installed `node_modules/.bin` tools, Node 24.17.0, at most two
+Vitest workers and at most three named files per invocation. The pnpm wrapper
+stalled before starting Vitest and was cancelled; no packages were downloaded.
+Executed from the respective package directories:
+- core: `vitest run --maxWorkers=2 src/line-discrepancy.test.ts src/discrepancy-evaluation.test.ts src/supplier-line-matching.test.ts` — 49 passed.
+- core: `vitest run --maxWorkers=1 src/supplier-match-corrections.test.ts` — 5 passed.
+- ai: `vitest run --maxWorkers=1 src/merchant-extraction.test.ts` — 33 passed.
+- db: `vitest run --maxWorkers=2 test/m2-1-migration-proof.test.ts test/supplier-line-migration-proofs.test.ts test/late-source-import-migration.test.ts` — 8 passed (source/proof checks).
+- db: `vitest run --maxWorkers=2 test/merchant-intake-port.test.ts test/purchase-order-action.test.ts` — 61 passed (protocol doubles, not PostgreSQL).
+
+- core, ai and db: `node_modules/.bin/tsc -p tsconfig.json --noEmit` — all passed.
+- Repository checks: `node tools/core-purity-lint.mjs`,
+  `node tools/money-arithmetic-lint.mjs`, `node tools/ai-provider-boundary-lint.mjs`,
+  `node tools/plpgsql-case-in-if-lint.mjs` — passed. Core purity reports 11
+  pre-existing computed test imports as unverifiable, not refused.
+- Read-only lane inventory: exactly 28 changed paths against merged origin/main,
+  including the new 1200 migration and proof, excluding all `config/lanes/` paths.
+  Existing lane policy parser and path authorization passed. Final commit-bound
+  lane lint remains for CI because the index still contains the pending merge.
+
+### Named holds for landing
+
+- Router must stage all five resolved paths to clear the read-only Git index's
+  unmerged entries, commit and push; this session performs no Git writes.
+- Final migration numbering and exact changed-path lane check after staging.
+- Green CI against current main: real PostgreSQL fresh install and upgrade,
+  catalogue/privilege/RLS/proof checks, replay/conflict/concurrent correction,
+  audit and purchase-order session-isolation suites; required full checks and
+  browser journeys. No PostgreSQL or browser suite ran in this sandbox.
+- Independent RED review at the exact final head. This builder check is not that review.
+- Live routes/providers, frozen held-out benchmark and G2 remain closed as above;
+  this synthetic work supplies no release or production authorization.

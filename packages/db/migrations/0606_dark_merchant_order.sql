@@ -81,7 +81,7 @@ CREATE TRIGGER b_watchdog_command_id_before_insert BEFORE INSERT ON app.purchase
 INSERT INTO app.command_type_registry VALUES
  ('purchase_order.send.dark','command.v1','owner','route_before_begin','purchase_order','commercial','fake_merchant_order');
 
--- Preserve main's latest result adapters, including 0573 supervisor queries; only the dark purchase-order branch differs.
+-- Preserve 0573's latest result adapters; only the dark purchase-order branch differs.
 CREATE OR REPLACE FUNCTION app.lp5_command_result(p_command_id uuid,p_outcome jsonb) RETURNS jsonb
  LANGUAGE plpgsql SET search_path=pg_catalog,pg_temp AS $$
 DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; c app.command_lifecycle_claim;
@@ -480,4 +480,5 @@ BEGIN
  IF value IS NULL THEN RAISE EXCEPTION 'AUTHORIZATION_INVALID' USING ERRCODE='23514'; END IF;
  RETURN value;
 END $$;
+
 COMMIT;

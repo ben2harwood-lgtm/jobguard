@@ -81,6 +81,17 @@ export class EnterpriseLivePromptRepository {
   }catch(error){failure(error);}
  }
  async list(sessionId:string,raw:unknown):Promise<EnterprisePromptPage>{return pageSchema.parse(await this.read(sessionId,this.parse(promptListV1,raw)));}
+ /** Office signals are read-only; strict projections prevent accidental commercial-field disclosure. */
+ async officeSignals(sessionId:string,raw:unknown) {
+  const input=this.parse(z.object({version:z.literal("office-signals.v1"),jobId:z.guid(),limit:z.number().int().min(1).max(100).default(50),after:z.guid().optional()}).strict(),raw) as {jobId:string;limit:number;after?:string};
+  try {
+   const context:VerifiedTenantContext=await contractorSessionContext(this.pool,sessionId);
+   return await withTenant(this.pool,context,async db=>{
+    const result=(await db.$client.query<{result:unknown}>("SELECT app.lp_office_signals($1,$2,$3,$4) result",[sessionId,input.jobId,input.limit,input.after??null])).rows[0]!.result;
+    return z.object({items:z.array(z.object({promptId:z.guid(),variationId:z.guid(),recordedAt:z.iso.datetime({offset:true})}).strict()),nextCursor:z.guid().nullable()}).strict().parse(result);
+   });
+  }catch(error){failure(error);}
+ }
  detail(sessionId:string,raw:unknown){return this.read(sessionId,this.parse(promptDetailV1,raw));}
  importMaterials(sessionId:string,raw:unknown){return this.write(sessionId,this.parse(materialsIssueV1,raw));}
  registerObservation(sessionId:string,raw:unknown){return this.write(sessionId,this.parse(completionObservationV1,raw));}
