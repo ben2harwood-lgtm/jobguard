@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "recover-ch6-gaps": {
+      "branches": [
+        "codex/sandbox/recover-ch6-gaps"
+      ],
+      "allow": [
+        "packages/db/test/commercial-integrity-v3-published.integration.test.ts",
+        "packages/db/test/commercial-integrity-v3-review.integration.test.ts",
+        "docs/verdicts/CH6-J/BUILDER_RECEIPT.md"
+      ],
+      "receipt": "docs/verdicts/CH6-J/BUILDER_RECEIPT.md",
+      "note": "CH-6 recovery, RED, NOPR: supplementary lineage/replay and foreign-tenant held-write regressions only."
+    }
+  }
+}
