@@ -185,3 +185,4 @@ export * from "./deepgram-transcript.js";
 export * from "./offline-reconciliation.js";
 
 export * from "./core-loop-views.js";
+export * from "./operative-view-models.js";
