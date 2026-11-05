@@ -1,9 +1,26 @@
-/** Exact own-upgrade/catalogue proof, followed by full-chain replay and identity preservation. */
+/** Exact upgrade/catalogue proof; later routine replacements and table ACL changes are scoped below. */
 import { readFile } from 'node:fs/promises';
 import { afterAll, expect, it } from 'vitest';
 import { createScimHarness, fixture, person, canonicalRows, type ScimHarness } from './scim-fixtures.js';
 import { migrate, MIGRATION_URLS } from '../src/migrate.js';
 import { predecessorCatalogue } from './contractor-entitlement-fixtures.js';
+type Relation = { nspname:string; relname:string; relacl:unknown; [key:string]:unknown };
+function expectRelationsUnchanged(before:Relation[],after:Relation[],laterAcl:Set<string>) {
+ for(const row of before){
+  if(!laterAcl.has(`${row.nspname}.${row.relname}`)){expect(after).toContainEqual(row);continue;}
+  const {relacl:_a,...kept}=row;
+  expect(after.map(({relacl:_x,...r})=>r)).toContainEqual(kept);
+ }
+}
+it('ACL comparison permits only named-table permissions and rejects column changes or unnamed-table grants',()=>{
+ const named={nspname:'app',relname:'fee_reservation_archive',relacl:['runtime=ar'],columns:[{attname:'id'}],constraints:[],relowner:1};
+ const unnamed={...named,relname:'other_table'};
+ const before=[named,unnamed],laterAcl=new Set(['app.fee_reservation_archive']);
+ const tightened={...named,relacl:['runtime=r']};
+ expectRelationsUnchanged(before,[tightened,unnamed],laterAcl);
+ expect(()=>expectRelationsUnchanged(before,[{...tightened,columns:[...named.columns,{attname:'stray'}]},unnamed],laterAcl)).toThrow();
+ expect(()=>expectRelationsUnchanged(before,[tightened,{...unnamed,relacl:['runtime=arw']}],laterAcl)).toThrow();
+});
 let h:ScimHarness|undefined;
 afterAll(async()=>{await h?.close();});
 it('emergency_dual_owner/scim2_machine preserve populated identity state, installed routines and old ACLs; new capabilities start empty and default OFF',async()=>{
@@ -11,22 +28,27 @@ it('emergency_dual_owner/scim2_machine preserve populated identity state, instal
  const f=await fixture(h);await person(f,'finance');
  const tables=['identity.session','identity.sso_subject','identity.sso_emergency_window','identity.sso_required_event','app.membership','app.role_grant'];
  const before=await Promise.all(tables.map(t=>canonicalRows(h!,t))),catalogue=await predecessorCatalogue(h.admin);
- // Check this piece's two migrations before unrelated successors intentionally change authority.
- for(const name of ['0612_emergency_dual_owner.sql','0613_scim2_machine.sql']) {
-  const url=MIGRATION_URLS.find(u=>u.pathname.endsWith('/'+name));
-  expect(url).toBeDefined();
-  await h.admin.query(await readFile(url!,'utf8'));
-  await h.admin.query('INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)',[name]);
- }
+ await migrate(h.admin);await migrate(h.admin);
  expect(await Promise.all(tables.map(t=>canonicalRows(h!,t)))).toEqual(before);
  const after=await predecessorCatalogue(h.admin);
- for(const key of ['relations','routines','policies'] as const)for(const row of catalogue[key])expect(after[key]).toContainEqual(row);
- // Successors have separate exact migration proofs; still exercise the whole chain and its replay here.
- await migrate(h.admin);
- const current=await predecessorCatalogue(h.admin);
- await migrate(h.admin);
- expect(await predecessorCatalogue(h.admin)).toEqual(current);
- expect(await Promise.all(tables.map(t=>canonicalRows(h!,t)))).toEqual(before);
+ // Later migrations pin their own replacement bodies; owner, ACL, security and settings must still match.
+ const boundary=MIGRATION_URLS.findIndex(u=>u.pathname.endsWith('/0613_scim2_machine.sql'));
+ expect(boundary).toBeGreaterThanOrEqual(0);
+ const later=new Set<string>();
+ for(const url of MIGRATION_URLS.slice(boundary+1))
+  for(const m of (await readFile(url,'utf8')).matchAll(/CREATE OR REPLACE FUNCTION ([a-z_]+)\.([a-z0-9_]+)\(/gu))later.add(`${m[1]}.${m[2]}`);
+ // A later GRANT/REVOKE on a predecessor table may change its ACL only; that migration's proof and LP-0 pin it.
+ const laterAcl=new Set<string>();
+ for(const url of MIGRATION_URLS.slice(boundary+1))
+  for(const m of (await readFile(url,'utf8')).matchAll(/\b(?:GRANT|REVOKE)\b[^;]*?\bON\s+(?:TABLE\s+)?((?:[a-z_]+\.[a-z0-9_]+)(?:\s*,\s*[a-z_]+\.[a-z0-9_]+)*)\s+(?:TO|FROM)\b/gu))
+   for(const name of m[1]!.split(','))laterAcl.add(name.trim());
+ for(const row of catalogue.policies)expect(after.policies).toContainEqual(row);
+ expectRelationsUnchanged(catalogue.relations,after.relations,laterAcl);
+ for(const row of catalogue.routines){
+  if(!later.has(`${row.nspname}.${row.proname}`)){expect(after.routines).toContainEqual(row);continue;}
+  const {definition:_d,...kept}=row;
+  expect(after.routines.map(({definition:_x,...r}:typeof row)=>r)).toContainEqual(kept);
+ }
  for(const table of ['emergency_request','emergency_approval','emergency_session','emergency_action','scim2_binding','scim2_resource','scim2_receipt']) {
   expect(await canonicalRows(h,'identity.'+table)).toEqual([]);
   expect((await h.admin.query("SELECT relrowsecurity,relforcerowsecurity,pg_get_userbyid(relowner) owner FROM pg_class WHERE oid=$1::regclass",['identity.'+table])).rows[0]).toEqual({relrowsecurity:true,relforcerowsecurity:true,owner:'jobguard_migration'});

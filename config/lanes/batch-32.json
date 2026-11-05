@@ -1,0 +1,48 @@
+{
+  "version": 2,
+  "lanes": {
+    "batch-32": {
+      "branches": [
+        "codex/sandbox/batch-32"
+      ],
+      "note": "M5-2 route store and M5-6 merchant reliability; RED, synthetic only, built ahead NOPR.",
+      "allow": [
+        "apps/api/src/accounting-export.application.test.ts",
+        "apps/api/src/accounting-export.application.ts",
+        "apps/api/src/accounting-export.preview-contracts.ts",
+        "apps/api/src/watchdog-registry.test.ts",
+        "apps/web/app/accounting-exports/export-screen.tsx",
+        "apps/web/app/accounting-exports/route-change.test.tsx",
+        "apps/web/app/accounting-exports/route-change.tsx",
+        "apps/web/app/api/accounting-exports/[sourceId]/route-change/route.test.ts",
+        "apps/web/app/api/accounting-exports/[sourceId]/route-change/route.ts",
+        "apps/web/app/api/jobs/[id]/merchant-reliability/route.test.ts",
+        "apps/web/app/api/jobs/[id]/merchant-reliability/route.ts",
+        "apps/web/app/jobs/[id]/merchant-reliability/page.tsx",
+        "apps/web/app/jobs/[id]/merchant-reliability/screen.test.tsx",
+        "apps/web/app/jobs/[id]/merchant-reliability/screen.tsx",
+        "apps/web/app/lib/merchant-reliability-server.ts",
+        "apps/web/e2e/M5-6-merchant-reliability.spec.ts",
+        "apps/web/e2e/m5-2-route-change.spec.ts",
+        "docs/contracts/accounting-export-v1.md",
+        "docs/contracts/rate-baseline-v1.md",
+        "packages/core/src/index.ts",
+        "packages/core/src/merchant-reliability.test.ts",
+        "packages/core/src/merchant-reliability.ts",
+        "packages/core/src/watchdog.ts",
+        "packages/db/migration-notes/0617_accounting_export_route_change_read.md",
+        "packages/db/migration-notes/0618_merchant_delivery_record_read.md",
+        "packages/db/migrations/0617_accounting_export_route_change_read.sql",
+        "packages/db/migrations/0618_merchant_delivery_record_read.sql",
+        "packages/db/src/accounting-export-repository.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/merchant-reliability-repository.ts",
+        "packages/db/test/accounting-export-repository.test.ts",
+        "packages/db/test/accounting-export-route-change.integration.test.ts",
+        "packages/db/test/merchant-reliability.integration.test.ts",
+        "packages/db/test/migration-proofs/0617_accounting_export_route_change_read.proof.json",
+        "packages/db/test/migration-proofs/0618_merchant_delivery_record_read.proof.json"
+      ]
+    }
+  }
+}
