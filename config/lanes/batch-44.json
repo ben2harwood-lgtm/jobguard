@@ -1,0 +1,30 @@
+{
+  "version": 2,
+  "lanes": {
+    "batch-44": {
+      "branches": [
+        "codex/sandbox/batch-44"
+      ],
+      "note": "M2-6 edge facts, synthetic readiness scheduling; RED; NOPR.",
+      "allow": [
+        "apps/api/src/readiness-scheduler.test.ts",
+        "apps/api/src/readiness-scheduler.ts",
+        "apps/api/src/readiness-store.test.ts",
+        "apps/api/src/readiness-store.ts",
+        "apps/api/src/readiness-task.test.ts",
+        "apps/api/src/readiness-task.ts",
+        "apps/api/src/shadow-detection.worker.test.ts",
+        "apps/api/src/sv5pre-worker-registration.test.ts",
+        "apps/api/src/worker.ts",
+        "packages/core/src/readiness.test.ts",
+        "packages/core/src/readiness.ts",
+        "packages/db/migration-notes/1050_readiness_plan_discovery.md",
+        "packages/db/migrations/1050_readiness_plan_discovery.sql",
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/1050_readiness_plan_discovery.proof.json",
+        "packages/db/test/readiness-store.integration.test.ts",
+        "packages/db/test/readiness-timer.integration.test.ts"
+      ]
+    }
+  }
+}
