@@ -76,8 +76,9 @@ describe("structural recovery fee guard",()=>{
    const repo = new RecoveryCaseRepository(runtime), port = new PostgresRecoveryOutcomePostingPort(runtime), w = await createWorld(true);
    let c = await open(repo, 400000, w);
    c = await step(repo, c, {eventType:"assemble_evidence"}, w);
-   const make = await readyToLand(c, 400000, w), first = make(200000), second = make(200000);
-   await land(first, w); await land(second, w);
+   // Each allocation needs its own settled receipt (unique tenant/receipt/case/evidence).
+   const first = (await readyToLand(c, 400000, w))(200000); await land(first, w);
+   const second = (await readyToLand(c, 400000, w))(200000); await land(second, w);
    const reversal = {version:"recovery.landing.reverse.v1", reversalId:randomUUID(), derivationId:randomUUID(), journalId:randomUUID(), allocationId:first.allocationId, amountPence:200000, reason:"Fictional reversal"};
    const counts = async () => (await admin.query(`SELECT
     (SELECT count(*)::int FROM app.landing_reversal WHERE tenant_id=$1 AND job_id=$2) reversals,
@@ -136,8 +137,9 @@ describe("structural recovery fee guard",()=>{
    const repo = new RecoveryCaseRepository(runtime), w = await createWorld(true);
    let c = await open(repo,400000,w);
    c = await step(repo,c,{eventType:"assemble_evidence"},w);
-   const make = await readyToLand(c,400000,w), first = make(200000), second = make(200000);
-   await land(first,w); await land(second,w);
+   // Each allocation needs its own settled receipt (unique tenant/receipt/case/evidence).
+   const first = (await readyToLand(c,400000,w))(200000); await land(first,w);
+   const second = (await readyToLand(c,400000,w))(200000); await land(second,w);
    const signature = "app.reverse_synthetic_landing(uuid,uuid,uuid,uuid,uuid,bigint,character varying)";
    const historical = await readFile(new URL("../migrations/0356_unchecked_job_doors.sql",import.meta.url),"utf8");
    const predecessor = "CREATE OR REPLACE FUNCTION app.reverse_synthetic_landing" + historical.split("CREATE OR REPLACE FUNCTION app.reverse_synthetic_landing")[1]!.split("END$$;")[0]! + "END$$;";
