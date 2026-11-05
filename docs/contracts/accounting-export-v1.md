@@ -260,7 +260,7 @@ remain held.
 
 ## M5-2 stored route read and human confirmation screen — 4 November 2026 (RED, NOPR)
 
-Migration `1200_accounting_export_route_change_read` adds one checked synthetic-only
+Migration `0617_accounting_export_route_change_read` adds one checked synthetic-only
 read with the existing owner/admin session permission and tenant export lock. It
 returns the hash-bound current proposal and immutable confirmed route history,
 without changing tables, grants, predecessors, ledger mappings or external IDs.
@@ -290,7 +290,7 @@ PL/pgSQL CASE-in-IF and diff whitespace checks passed. Initial JSX import and a
 duplicate test fixture property were fixed without weakening assertions.
 
 CI must run the extended real-PostgreSQL route-change suite, including read
-isolation/permission, no-write reload and predecessor-preserving 1200 upgrade;
+isolation/permission, no-write reload and predecessor-preserving 0617 upgrade;
 actual catalog/proof/RLS checks; and `m5-2-route-change.spec.ts` headless on
 mobile-360 and desktop (lost response/replay, stale proposal, held unknown export,
 permission and preserved historic IDs). No database or browser ran here. Full CI
@@ -377,3 +377,81 @@ at most three named files per invocation):
 - Independent RED review must PASS at the exact landing head. No PostgreSQL,
   browser, provider conformance, production approval or live release was established
   in this sandbox; G0–G5 and the existing provider/legal/commercial holds remain.
+
+## Batch-32 PR handoff — 5 November 2026 (RED)
+
+Current comparison is incoming `origin/main` / `MERGE_HEAD`
+`d16ef1978eb44d7d9d33a77926fb179e794af196`, against batch head
+`0e620fb4358cba952fc64f3fba89c59dbce8e73f`. This supersedes the earlier
+NOPR/numbering handoff above. The three merge conflicts retain both sides:
+core exports, database exports, and the rate-baseline contract. The router must
+stage the resolved working files and complete the merge; this sandbox made no
+Git writes. The named `batch-32-harden.md` and `PRECHECK-FINDINGS.md` were absent;
+the available `batch-32.md`, `batch-9-harden.md`, batch-32 prechecks/recheck and
+current PR brief were read. The proven numeric receipt fixture cast is retained.
+
+Migration reconciliation against that incoming main:
+
+| Migration | Landing disposition |
+| --- | --- |
+| Main's `0599_accounting_export_route_change` | Retained unchanged; the previously removed duplicate is still absent |
+| Branch `1200_accounting_export_route_change_read` | Reserved `0617_accounting_export_route_change_read`; SQL byte-identical, proof/note/test references renamed |
+| Branch `1201_merchant_delivery_record_read` | Reserved `0618_merchant_delivery_record_read`; SQL byte-identical, proof/note/test references renamed |
+
+All 278 incoming-main SQL migration blobs match the resolved working tree.
+Neither remaining stem repeats main. Each adds a new routine; neither recreates
+any routine, and no latest main routine body is replaced or loses a guard.
+0614–0616 remain reserved for #576 and must land first. No new table, command
+registry row, worker task, provider route, grant to a table, `SET app.*` clause,
+identity/control-plane schema change, or financial posting is introduced here.
+The merchant proof now describes read-only session projection, rather than
+claiming lifecycle dispatch. The existing route-change LP-5 hold remains above.
+Raw session revocation fixtures here target `identity.session`, not the audited
+`control_plane.contractor_practice_session` repository boundary.
+
+The route confirmation screen now treats 4xx other than 408/429 as definite
+refusals: discard approval/proposal and require a fresh read. Network failures,
+408 and 429 retain the same exact approval for retry. The existing browser
+journey now checks identical bytes after lost response/408/429 and removal of
+the confirmation button after a stale-proposal refusal. The merchant server
+boundary test has a 120-second budget. No test assertion was weakened.
+
+Local execution, installed tools only, at most two workers and three named
+Vitest files per invocation:
+
+- `node node_modules/typescript/bin/tsc -p` for core, db and API passed;
+  web `--noEmit` passed, including a repeat after the refusal handling change.
+- Core `src/merchant-reliability.test.ts`: 4 passed.
+- DB `test/accounting-export-repository.test.ts`,
+  `test/migration-proof-loader.test.ts`, `test/m2-1-migration-proof.test.ts`:
+  87 passed.
+- API `src/accounting-export.application.test.ts`,
+  `src/watchdog-registry.test.ts`, `src/auth/context-boundary.test.ts`:
+  290 passed with `--testTimeout=60000`; `src/auth/identity.test.ts`: 7 passed.
+- Web route-change component/route and merchant-reliability route: 10 passed;
+  merchant screen and existing accounting-export route: 6 passed. The six
+  route-change component/route tests passed again after the final screen change.
+  Total unique tests: 404 passed across 13 files, all `--maxWorkers=1`.
+- Core-purity, money-arithmetic, commercial-boundary, AI-provider-boundary and
+  PL/pgSQL CASE-in-IF linters passed. Core purity reports 11 existing computed
+  import names as unverifiable. Provider register matches its authoritative
+  data-flow sources; those sources did not change. Diff whitespace passed.
+- The standard `node tools/agent-lane-boundary-lint.mjs` was run and fails on the
+  unfinished Git merge's old HEAD/index union, including incoming main paths
+  and old migration filenames. This is not a final-head lane PASS. Separately,
+  blob comparison to incoming main plus the repository's `loadLanePolicy`,
+  `lanePathAllowed` and `migrationOrderViolations` helpers confirms exact
+  resolved-tree coverage (35 paths plus the lane file), no self-listing, and
+  valid reserved numbering. Rerun the standard CLI after the router commits.
+- Cloudflare compatibility was source-inspected: this batch's web routes use
+  package exports, with no direct apps/api source imports. Cloudflare build was
+  not executed in this restricted environment.
+
+Required next evidence: router stages/commits/pushes and opens this group's PR;
+standard lane lint and mandatory CI checks at that head; real PostgreSQL fresh,
+upgrade, migration-proof/catalog/RLS, tenant/session refusal, no-write merchant
+read and route replay tests; both changed browser journeys at phone and desktop
+widths, max two workers; independent RED PASS at the exact resulting head.
+The prior precheck is evidence for its old head only. No PostgreSQL, browser,
+live adapter, real customer data, deployment or launch ran here. M5-2/M5-6 remain
+partial synthetic slices with existing commercial/provider/release holds.

@@ -1,4 +1,4 @@
-# 1201_merchant_delivery_record_read merchant delivery record read
+# 0618_merchant_delivery_record_read merchant delivery record read
 
 RED: one migration-owned checked read; runtime execute only, fixed pg_catalog search path.
 Uses the dunning synthetic database refusal and private owner/admin session helper.

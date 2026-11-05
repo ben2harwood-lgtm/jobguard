@@ -62,14 +62,23 @@ test("exact stored change survives a lost confirmation response, retry and reloa
   if (route.request().method() !== "POST") return route.continue();
   bodies.push(route.request().postData()!);
   if (bodies.length === 1) { await route.fetch(); return route.abort("failed"); }
+  if (bodies.length === 2 || bodies.length === 3) return route.fulfill({
+   status: bodies.length === 2 ? 408 : 429, contentType: "application/json",
+   body: JSON.stringify({ version: 1, code: "EXPORT_UNAVAILABLE" }),
+  });
   return route.continue();
  });
  const confirm = section.getByRole("button", { name: "Confirm this exact route change" });
  await confirm.click();
  await expect(page.getByRole("main").getByRole("alert")).toContainText("result is uncertain");
+ for (let retry = 0; retry < 2; retry++) {
+  await confirm.click();
+  await expect(page.getByRole("main").getByRole("alert")).toContainText("result is uncertain");
+  await expect(confirm).toBeEnabled();
+ }
  await confirm.click();
  await expect(section.getByRole("status")).toContainText("Stored route: xero. Revision 1.");
- expect(bodies).toHaveLength(2); expect(bodies[1]).toBe(bodies[0]);
+ expect(bodies).toHaveLength(4); expect(bodies.every(body => body === bodies[0])).toBe(true);
  await page.reload();
  await expect(section.getByRole("status")).toContainText("Stored route: xero. Revision 1.");
  const saved = await f.repo.routeChangeRead(f.context, f.digest, "demo-next");
@@ -89,8 +98,10 @@ test("changed proposal and stale connection refuse confirmation, then unknown ex
  await admin.query("UPDATE app.accounting_export_fixture SET artifact=$2 WHERE tenant_id=$1 AND source_id='demo-next'", [f.member.tenantId, f.next]);
  await confirm.click();
  await expect(page.getByRole("main").getByRole("alert")).toContainText("proposal changed");
+ await expect(confirm).toHaveCount(0);
  expect((await admin.query("SELECT count(*)::int n FROM app.accounting_export_route_change WHERE tenant_id=$1", [f.member.tenantId])).rows[0].n).toBe(0);
  await section.getByRole("button", { name: "Load current route change" }).click();
+ await expect(confirm).toBeVisible();
  const pending = structuredClone(f.old);
  pending.scope.sourceId = pending.source.sourceId = pending.target.sourceId = "demo-held";
  await admin.query("INSERT INTO app.accounting_export_fixture(tenant_id,source_id,artifact,consent_expires_at) VALUES($1,$2,$3,clock_timestamp()+interval '1 hour')", [f.member.tenantId, pending.source.sourceId, pending]);

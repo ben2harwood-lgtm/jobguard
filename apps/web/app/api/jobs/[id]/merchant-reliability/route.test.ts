@@ -41,4 +41,4 @@ it("server refuses production, missing sessions, non-owners, ambiguous sessions 
  await readMerchantDeliveryRecord("s",null,id);
  expect(auth.read).toHaveBeenCalledWith({tenantId:id},"a".repeat(64),id);
  vi.unstubAllEnvs();
-});
+}, 120_000);

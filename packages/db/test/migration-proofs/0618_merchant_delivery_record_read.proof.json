@@ -1,5 +1,5 @@
 {
-  "migration": "1201_merchant_delivery_record_read.sql",
+  "migration": "0618_merchant_delivery_record_read.sql",
   "lp0": [
     {
       "section": "groups",
@@ -11,7 +11,7 @@
         "status": "approved_current",
         "target": {
           "state": "review_at_card",
-          "note": "Bounded synthetic lifecycle dispatch; exact-head RED review and PostgreSQL CI remain required."
+          "note": "Read-only synthetic session projection; exact-head RED review and PostgreSQL CI remain required."
         },
         "cards": [
           "LP-11",
@@ -23,7 +23,7 @@
         },
         "downstream": "Read-only, synthetic-database and owner/admin-session checked tenant-wide delivery projection. No table grants or writes.",
         "sources": [
-          "packages/db/migrations/1201_merchant_delivery_record_read.sql",
+          "packages/db/migrations/0618_merchant_delivery_record_read.sql",
           "packages/db/src/merchant-reliability-repository.ts"
         ],
         "tests": [
@@ -88,7 +88,7 @@
           "LP-12": "Review fixed search_path, migration-owned private tables and helpers, and absence of runtime direct writes."
         },
         "sources": [
-          "packages/db/migrations/1201_merchant_delivery_record_read.sql",
+          "packages/db/migrations/0618_merchant_delivery_record_read.sql",
           "packages/db/src/merchant-reliability-repository.ts"
         ],
         "tests": [

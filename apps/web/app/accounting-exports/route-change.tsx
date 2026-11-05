@@ -24,6 +24,11 @@ export function RouteChange({ sourceId, tenantId, csrfToken }: { sourceId: strin
       headers: { "x-csrf-token": csrfToken, "x-tenant-id": tenantId, "Content-Type": "application/json" },
       ...(body ? { body: JSON.stringify(body) } : {}),
     });
+    // A definite refusal needs a fresh proposal and approval; only uncertain outcomes retain the exact retry.
+    if (response.status >= 400 && response.status < 500 && response.status !== 408 && response.status !== 429) {
+      approval.current = null;
+      setValue(null);
+    }
     const result: unknown = await response.json();
     if (!response.ok) throw new Error((result as { code?: string }).code ?? "EXPORT_UNAVAILABLE");
     return result;
