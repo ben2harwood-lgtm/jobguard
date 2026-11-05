@@ -6,6 +6,9 @@
     "exactOptionalPropertyTypes": true,
     "types": [
       "react"
+    ],
+    "typeRoots": [
+      "./node_modules/@types"
     ]
   },
   "include": [

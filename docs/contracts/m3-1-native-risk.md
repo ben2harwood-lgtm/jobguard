@@ -107,3 +107,9 @@ The commands below used `/workspace/.npm-cache/_npx/116f317e7afab6e7/node_module
 | `node tools/agent-lane-boundary-lint.mjs` | Passed after a real branch commit existed; before first commit it correctly refused self-comparison. Lane lists every changed non-lane file and does not list itself |
 
 Full `pnpm test`, browser journeys, `pnpm test:migrations`, `pnpm eval`, physical-device suite and release checks were not completed. There is no new server migration/model/browser flow; existing PostgreSQL risk tests still exercise current migrations and authority. This is not a claim that all mandatory acceptance suites passed. No independent RED review was performed.
+
+## 5 November follow-up: React type isolation
+
+Mobile now scopes its ambient types with `types: ["react"]` and `typeRoots: ["./node_modules/@types"]`. React runtime resolution is unchanged: no TypeScript path alias points Metro at a declaration file. No web/root compiler strictness, declarations or test assertions were relaxed. `@types/react` remains exactly main's 19.1.8. The earlier exploratory install left both mobile's direct link and pnpm's implicit type lookup pointing at 19.1.10; those local links were repaired to the already-installed, manifest-pinned 19.1.8 for verification. This is an installed-tree repair, not a dependency-age exception or proof of a successful frozen install.
+
+**Age-clear date:** `glob@14.0.2`, published 27 October 2026 at 22:07:00.325 UTC, reaches fourteen days on **10 November 2026 at 22:07:00.325 GMT (Europe/London)**. No clock override, release-age exclusion or security downgrade is permitted. Full graph resolution and supply-chain lint must run again then; other immature packages may still block it.
