@@ -51,5 +51,5 @@ export function readinessTasks(pool: Pool, mode: string, bindStore: (store: Dura
     scheduler.register(registered, clock);
     await registered.readiness_evaluate!(raw, helpers);
   };
-  return { tasks, crontab: "\n*/1 * * * * discover_readiness_plans" };
+  return { tasks, crontab: "*/1 * * * * discover_readiness_plans" };
 }

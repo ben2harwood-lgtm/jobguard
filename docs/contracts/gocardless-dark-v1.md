@@ -69,6 +69,89 @@ binaries were used without downloading packages. Database/browser/full CI and th
 independent RED review remain for the router/CI. Conflict markers are resolved in
 files; the read-only git index still needs the router to stage the resolution.
 
+
+M4-12 reservation persistence (0478): `PostgresReservationStore` implements the
+shared seam with one tenant row lock, including concurrent first use. It is an
+explicit server composition dependency, with no default registration. Its caller
+supplies the whole verified tenant context; the executor separately checks
+the current session/membership. Its source factory captures that caller context
+and must read and lock current invoice/statement/terms/credit revisions through
+the supplied transaction. A fake
+source factory in the PostgreSQL tests is not a production source implementation.
+Both rails must receive the same database-backed store. Provider calls remain
+outside its transaction. Book state, event fingerprints and appended chain audit
+commit together. Existing command bindings/events/audit cannot be rewritten by
+this adapter; unknown outcomes remain reserved across restarts. The book is
+internal reservation state, not a journal, invoice, receipt or settlement posting.
+Only the reservation book is durable here: the fake provider and mandate still
+use memory. Forward fix: stop new executor initiation and preserve the table and
+audit while repairing; never roll back by dropping or clearing unknown attempts.
+Database CI and the independent RED review must verify migration, row locking,
+RLS and durability before merge. No live capability is enabled by this addition.
+
+
+M4-12 reserve cleanup (RED, built ahead on reserve-pg): additive migration
+`0604_fee_reservation_archive.sql` follows the shared reservation book migration
+`0603_fee_reservation_book.sql`; both numbers are claimed for this catch-up. No earlier migration is
+edited. Compaction is lazy on the next successful store transaction, under the
+same tenant book lock. Released attempts, all event fingerprints and all book
+audit entries move to INSERT-only tenant-qualified archive records before the
+active book is rewritten. Released lifecycle snapshots are versioned append-only, including later failure
+status changes. The history remains readable to the adapter; it is not deleted. Unknown, pending, settled and reconciliation attempts stay active.
+Replays cannot create another release, reservation or chained audit entry.
+A late settlement of an archived release restores an active reconciliation hold,
+blocking an already reserved replacement. Refund replacements retain the original
+settled-principal cap. No new replacement command or provider behavior is needed:
+the executor already releases definite failures exactly once.
+
+This keeps released-retry/event/audit history out of the repeatedly rewritten JSON
+row. The existing whole-book callback interface still hydrates archived history
+inside the transaction for replay, balance and late-event checks; memory and read
+cost remain proportional to tenant history. Selective history reads would require
+a separate interface change. The archive is internal state, with runtime SELECT
+and INSERT only, FORCE RLS and no runtime UPDATE, DELETE or TRUNCATE. Existing
+LP-0, tenancy, entitlement and SERIOUS-B5 expectations include exactly the added
+table, primary key, grants and policy. No routine is recreated.
+
+Forward fix: stop executor initiation, preserve both tables and chain audit, and
+repair forward. Do not run the predecessor adapter on compacted books: it cannot
+read archived command/event identities. Rolling back requires a reviewed forward
+rehydration retaining active overrides, not dropping or clearing archive rows.
+PostgreSQL concurrency, populated upgrade, rollback, RLS and catalogue tests are
+added for CI; this sandbox cannot execute them. Independent RED review and green
+CI against current main remain required. Fake sources/adapters only; no live rail,
+real money, production source reader or release is enabled.
+
+
+M4-12 reserve cleanup landing preparation, 4 November 2026 (NOPR, RED):
+resolved the contractor-entitlement upgrade merge as the union of both lists;
+registered the two reservation tables in later-empty-tables. The dark store now
+captures the caller-supplied verified context and transaction source factory,
+rather than retaining context-bearing callbacks as class properties. All local
+callers are synthetic fixtures; no application route composes this store. Tenant
+matching, withTenant verification, source locking, reservation and replay behavior
+remain covered without weakening the context guard. No migration was changed or
+added in this preparation; 0607/0608 and their proof fragments remain intact.
+
+Local deterministic evidence: installed Vitest 4.1.12 with --maxWorkers=2 passed
+context-boundary, postgres-reservation-store and executor (221 tests),
+watchdog-registry and identity (133 tests), and migration-proof-loader (76 tests).
+Initial runs used stale dependency output and failed; rebuilding the five library
+packages with installed tsc resolved the import/schema failures. The context
+boundary failure was repaired in the store, without guard exemptions. PL/pgSQL
+CASE lint passed all 233 migrations, and git diff --check passed.
+
+The pnpm typecheck and pnpm test wrappers stalled after their package-settings
+warning; installed binaries were used instead. Direct tsc compilation/typechecking
+passed for core, config, storage, db, ai, api and web. The normal lane tool was run and
+refused incoming main files still staged against the pre-merge HEAD. A separate
+read-only comparison against origin/main verifies the lane allow equals exactly
+all eleven changed non-lane files and only this piece's lane differs. The router
+must stage the resolved file, finish the merge and rerun the normal lane check.
+No Git writes, fetch, database, browser, live provider or paid call were made.
+CI must prove PostgreSQL concurrency, RLS/grants, atomic rollback, populated
+upgrades and preservation proofs, plus the full required suites. Independent RED
+review at the final head remains required before landing.
 ## M4-15 durable synthetic facts seam (0758)
 
 `DirectDebitFixtureRepository` is separate from the in-memory fake rail, which
@@ -554,3 +637,55 @@ repository and recorder integrations, recovery eligibility, restore checks and
 phone/desktop ENT-8a journeys, plus all mandatory typecheck/lint/test/build gates.
 The independent RED check must pass against the resulting exact head before
 merge. No live provider, real customer data, git write or release was used.
+
+## Batch-25 landing preparation, 5 November 2026 (RED)
+
+Resolved the workspace exports, this contract and later-empty-table registry as
+an exact union with incoming main. The four batch migrations have reserved
+landing numbers 0602–0605; SQL bodies are unchanged. Main has no duplicate of
+these migrations. Earlier migration numbers in historical receipts above are
+historical, including reservation 0607/0608. The batch-25 lane covers exactly the
+35 changed files versus origin/main, excluding its own lane entry.
+
+Main's executor now carries optional receipt-success-fee purpose and authorization
+bindings. The reservation parser retains both existing contract fields; its strict
+shape and immutable-identity check remain enforced. Regression coverage verifies
+round-trip persistence and refusal of changed or removed authority bindings.
+This compatibility union adds no rail, provider wiring or production capability.
+AIS practice and the always-refusing production stub remain outside LP-5 lifecycle
+dispatch; their lifecycle/production activation is held for separate work.
+
+Local deterministic evidence: installed Vitest 4.1.12 with at most two workers
+and at most three named files per run passed 454 tests: reservation store,
+executor and practice-bank application (82); watchdog registry, context boundary
+and identity (278); migration proof loader, AIS and enterprise-fee repositories
+(89); practice-bank route and screen (5). The first reservation run exposed the
+new optional authority fields and failed; the regression run passed after retaining
+them. Installed tsc built core, config, storage, db and ai and passed API/web
+no-emit typechecks. Commercial integrity boundary and current-source guards passed
+with zero diagnostics and the existing nine baselined sites. PL/pgSQL CASE lint
+passed 266 migrations. Provider register check and git diff --check passed.
+
+The normal lane lint was run and refused the still-unfinished merge index's
+incoming main files and former migration paths. A read-only comparison of the
+actual working files against origin/main passed exact lane coverage and migration
+order using the lane tool's own functions. The router must stage the resolutions,
+complete the merge and rerun the normal lane lint. No Git writes were made here.
+The pnpm wrapper could not verify/obtain its pinned package version in this
+restricted environment; installed tools supplied the local checks. Web route and
+server-module imports were source-inspected: they use the API workspace export,
+not apps/api source. Database and browser suites were not run.
+
+CI must prove fresh and populated migrations, preservation fingerprints, LP/RLS
+catalogues and grants, reservation concurrency/rollback/restart/replay and late
+settlement handling, AIS ownership/session/consent isolation and financial
+non-effects, fee derivation/attribution/reversal integrity, phone/desktop browser
+journeys and the Cloudflare build. Green required CI against current main and an
+independent RED review of the final exact head remain required before merge.
+Made-up data only; live providers, real money and release remain disabled.
+
+The aggregate lint entrypoint also ran: core purity passed, then it stopped at
+that same pending-index lane refusal. The Cloudflare pnpm wrapper stalled without
+starting a build and was stopped; no Cloudflare build pass is claimed. The named
+batch-25-harden brief was absent; the available batch-25 original brief contains
+its hardening rules and was read alongside batch-9-harden and this landing brief.
