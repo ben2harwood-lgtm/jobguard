@@ -85,8 +85,8 @@ export type TenantTransaction = NodePgDatabase<typeof schema> & { $client: PoolC
 type DeferredBinding = "identity-sso" | "identity-oidc" | "identity-sso-required" | "shadow-persist" | "audit-export-refusal"
   | "practice-switch-off" | "contractor-session-revoke" | "commercial-integrity-read" | "commercial-integrity-read-family"
   | "evidence-pack-approval";
-type LateBinding = { readonly context: VerifiedTenantContext; complete: boolean };
-const lateBindings = new WeakMap<TenantTransaction, LateBinding>();
+type LateBinding = { complete: boolean };
+const lateBindings = new WeakMap<TenantTransaction, WeakMap<VerifiedTenantContext, LateBinding>>();
 
 async function bindRequest(client: PoolClient, context: VerifiedTenantContext): Promise<void> {
   const session = sessionReferences.get(context);
@@ -105,8 +105,8 @@ async function bindRequest(client: PoolClient, context: VerifiedTenantContext): 
 
 /** Only an active approval transaction may bind after its established locks. */
 export async function bindAfterLocks(database: TenantTransaction, context: VerifiedTenantContext): Promise<void> {
-  const binding = lateBindings.get(database);
-  if (!binding || binding.context !== context || binding.complete) throw new InvalidTenantContextError();
+  const binding = lateBindings.get(database)?.get(context);
+  if (!binding || binding.complete) throw new InvalidTenantContextError();
   await bindRequest(database.$client, context);
   binding.complete = true;
 }
@@ -135,8 +135,12 @@ export async function withTenant<T>(
     if (deferredBinding === undefined) await bindRequest(client, context);
     await client.query("SELECT set_config('app.tenant_id', $1, true)", [context.tenantId]);
     database = drizzle(client, { schema }) as TenantTransaction;
-    const late = deferredBinding === "evidence-pack-approval" ? { context, complete: false } : undefined;
-    if (late) lateBindings.set(database, late);
+    const late = deferredBinding === "evidence-pack-approval" ? { complete: false } : undefined;
+    if (late) {
+      const contexts = new WeakMap<VerifiedTenantContext, LateBinding>();
+      contexts.set(context, late);
+      lateBindings.set(database, contexts);
+    }
     const result = await work(database);
     if (late && !late.complete) throw new RequestBindingRefusedError(sessionReferences.get(context)?.kind ?? "real");
     await client.query("COMMIT");
