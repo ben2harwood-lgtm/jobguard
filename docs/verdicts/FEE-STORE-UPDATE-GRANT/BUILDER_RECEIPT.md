@@ -1,3 +1,37 @@
+# READY — fee-store-safety catch-up to main (RED)
+
+Plan piece: fee-store-safety; PR #570. Verified the launcher-completed merge
+`bb428c441b65942dcd46c68d129446b863223e6c` with main parent
+`46ba084a71976d8154df287bb715b6dfca348a6f`. The index has no unmerged
+entries and the initial working tree was clean. No source repair was needed.
+All incoming main paths are byte-identical to that main parent. Fee-store source,
+tests, migration SQL, note and proof are byte-identical to the pre-merge branch
+parent. Both sides' behaviour and every test expectation are preserved.
+Migration 0608 remains reserved above main's expected 0607 after #569 lands.
+The lane lists exactly all eight paths differing from origin/main outside
+config/lanes, and does not list itself. Only this existing receipt was updated.
+
+Local checks executed for this catch-up (installed binaries, no downloads):
+- From apps/api: `./node_modules/.bin/vitest run src/fee-collection/postgres-reservation-store.test.ts src/watchdog-registry.test.ts --maxWorkers=2`:
+  2 files, 141 tests passed.
+- From packages/db: `./node_modules/.bin/vitest run test/migration-proof-loader.test.ts test/late-source-import-migration.test.ts --maxWorkers=2`:
+  2 files, 79 tests passed. These are deterministic source/proof checks, not
+  real-PostgreSQL integration evidence.
+- From root: `./node_modules/.bin/tsc -p apps/api/tsconfig.json --noEmit`
+  and `./node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit`: passed.
+- `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs`: passed
+  against the committed merge. Read-only byte comparisons, exact lane equality,
+  absence of unmerged index entries and `git diff --check`: passed.
+
+No git writes, PostgreSQL, browser suite, provider calls or live activation ran.
+The router commits this receipt and pushes PR #570; green required CI against
+current main and independent RED review of the final exact head remain required.
+UNKNOWN-RESULT-AUTHORITY remains a hold on route/rail activation. The dark store
+is not claimed production-ready. The earlier receipts below remain historical;
+this section supersedes their catch-up status and outstanding merge instructions.
+
+## Previous catch-up receipt
+
 # FEE-STORE-UPDATE-GRANT — READY for router commit and PR (RED)
 
 Plan piece: fee-store-safety. Exact-union catch-up with batch-25 at
