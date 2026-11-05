@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { Pool } from "pg";
 import { isDeepStrictEqual } from "node:util";
 import { z } from "zod";
@@ -80,7 +81,7 @@ export class CisFixtureRepository {
       const fixed = { ...suppliedFixed, tenantId: context.tenantId, jobId: input.data.jobId };
       if (records.length && !isDeepStrictEqual(records[0]!.payload.fixed, fixed)) fail("CONFLICT");
       const request = { ...input.data, actor: principal.data };
-      const requestHash = (await db.$client.query("SELECT app.final_lock_hash($1::jsonb) hash", [JSON.stringify(request)])).rows[0]?.hash as string;
+      const requestHash = createHash("sha256").update(JSON.stringify(request)).digest("hex");
       const prior = records.find(row => row.commandId === input.data.commandId);
       if (prior) {
         if (prior.requestHash !== requestHash) fail("CONFLICT");

@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import type { Pool } from "pg";
 import { testTenantContext } from "./tenant-context-test-utils.js";
@@ -61,7 +60,7 @@ function following(book: CisFixtureBook, n = 41, correction = false): ReturnType
 function harness() {
  const records: unknown[] = [];
  const query = vi.fn(async (sql: string, args?: unknown[]) => {
-  if (sql.includes("final_lock_hash")) return { rows: [{ hash: createHash("sha256").update(String(args?.[0])).digest("hex") }] };
+  if (sql.includes("final_lock_hash")) throw Object.assign(new Error("permission denied for function final_lock_hash"), { code: "42501" });
   if (sql.includes("cis_fixture_records")) {
    if (args?.[3]) {
     const v = JSON.parse(String(args[3])), { commandId, requestHash, rateNumerator, ...payload } = v;
@@ -77,6 +76,12 @@ function harness() {
  return { repo: new CisFixtureRepository({ connect } as unknown as Pool), query, connect, records, context: testTenantContext(tenantId) };
 }
 describe("M4-22 CIS fixture storage boundary", () => {
+ it("stores a SHA-256 request hash without calling the restricted database hash function", async () => {
+  const f = harness(), input = command();
+  const stored = await f.repo.command(f.context, actor, input);
+  expect(stored.records[0]!.requestHash).toMatch(/^[a-f0-9]{64}$/u);
+  expect(f.query.mock.calls.some(([sql]) => sql.includes("final_lock_hash"))).toBe(false);
+ });
  it("rebuilds stored figures, replays once, and appends a correction without editing history", async () => {
   const f = harness(), input = command();
   const initial = await f.repo.command(f.context, actor, input);
