@@ -140,3 +140,44 @@ and layout. Required database/upgrade checks run only in CI. The historical
 browser and audit results above are not reruns on this batch. An independent RED
 review at the exact eventual head remains required before merge. READY for the
 launcher to stage/complete this NOPR branch; not a merge or release acceptance.
+
+## batch-45 landing refresh — 5 November 2026, 21:14 order
+
+The launcher completed the main merge before this session: HEAD
+`d4b5a77b4`, cached `origin/main` `d16ef1978`; the initial working tree was
+clean and no index conflicts remained. This supersedes the earlier integration
+section's unmerged-index status. No git-writing command was run in this session.
+No application or test behaviour needed further changes.
+
+Inspected every non-lane diff against main. Main's latest disabled-button CSS is
+byte-identical, including its border, cursor and opacity; main's recent-item
+browser journeys remain intact. The sandbox notice keeps its text, role and name.
+The dunning test still asserts exactly four invoice regions, now within main so
+the added sandbox landmark is excluded. The dependency diff adds only the pinned
+axe wrapper/engine and their lockfile records. There are no database, migration,
+routine, exact-table-list or command-catalog changes to reconcile.
+
+The lane has exactly all six non-lane changed paths, without listing itself.
+`node tools/agent-lane-boundary-lint.mjs` passed against the current merged HEAD.
+A separate deterministic check passed exact path equality, branch registration,
+conflict-marker absence and main CSS equality. `git diff origin/main --check`
+passed. These are builder checks, not an independent RED review.
+
+Local checks used installed binaries, without downloading packages:
+
+- In apps/web, `./node_modules/.bin/tsc -p tsconfig.json --noEmit`: passed.
+- In apps/web, `./node_modules/.bin/playwright test --list ENT-3.spec.ts m4-16-workbench.spec.mts --workers=2`:
+  passed; 24 tests collected across the two widths. This lists tests only; it
+  does not execute browser journeys, start a server or prove accessibility.
+- In apps/web, `./node_modules/.bin/vitest run --maxWorkers=2 app/site/extra/site-visit.test.tsx 'app/api/contractor/jobs/[id]/site-visits/[visitId]/complete/route.test.ts' 'app/api/contractor/jobs/[id]/site-extras/sor/route.test.ts'`:
+  UI file passed all 3 tests; the two route files initially failed collection
+  because the compiled `@jobguard/api/workspace` entrypoint was absent.
+- In apps/api, `./node_modules/.bin/tsc -p tsconfig.json`: passed, building
+  the existing API prerequisite without changing configuration or tests.
+- Re-ran only the two route files from apps/web with
+  `./node_modules/.bin/vitest run --maxWorkers=2 'app/api/contractor/jobs/[id]/site-visits/[visitId]/complete/route.test.ts' 'app/api/contractor/jobs/[id]/site-extras/sor/route.test.ts'`:
+  both files passed, 92 tests. Combined with the UI file, 95 relevant tests passed.
+
+READY for router commit/push and the group's PR turn. Full required CI,
+PostgreSQL/browser execution and independent RED review at the eventual head
+remain outstanding. No new browser pass, merge acceptance or release is claimed.
