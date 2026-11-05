@@ -57,3 +57,25 @@ LATER / SIMPLICITY: packages/db/test/dsar-offboarding.integration.test.ts:
 replace the implicit checkRevisions offset map with explicit returned revisions
 when next extending these journeys; this makes stale-revision assertions easier
 to maintain. Deferred; no behavior or acceptance assertion changed for this batch.
+
+Merge refresh validation (5 Nov 2026, main d16ef1978): resolved the sole
+later-empty-tables conflict as main's exact list plus app.privacy_review_fact.
+All main identity, SCIM, fixture, reservation, retention and other empty-table
+entries are retained. Compared the complete replacement privacy_command body
+against main's latest definition in 0585_dsar_offboarding.sql: only this group's
+existing verify/review fact changes differ; main's database fence, actor checks,
+locking, instruction, inventory, execution and sealed audit paths are preserved.
+Main has no copy of migration 1045, so no duplicate migration was removed.
+
+Current refresh checks: direct installed Vitest runners, --maxWorkers=1 per run,
+privacy-operations.test.ts (5 passed), dsar-migration-proofs.test.ts and
+migration-proof-loader.test.ts (84 passed). At most two workers ran at once.
+pnpm launchers stalled before the runners and were interrupted; no packages
+were downloaded. Exported lane policy checks confirm exactly nine non-lane
+paths, no self-entry, and valid migration order against MERGE_HEAD (= origin/main).
+PostgreSQL/browser suites and the committed-range lane CLI remain for CI;
+independent RED review remains required. Git index is read-only here, so the
+router must stage the resolved file and conclude the merge.
+The additional core/db noEmit TypeScript command sequence produced no output
+and was interrupted after more than two minutes; no current-refresh typecheck
+PASS is claimed. CI must supply that result. git diff MERGE_HEAD --check passed.
