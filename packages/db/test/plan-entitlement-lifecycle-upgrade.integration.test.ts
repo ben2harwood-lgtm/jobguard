@@ -39,7 +39,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   const settlementOid = (await c.admin.query("SELECT 'app.record_simulated_settlement(uuid,uuid,uuid,character varying,bigint,timestamp with time zone,uuid,uuid,uuid)'::regprocedure::oid oid")).rows[0].oid;
   const selfComparison = "(SELECT content_hash FROM app.action_authorization WHERE tenant_id=p_tenant AND id=p_authorization)";
   // 0966 changes exactly the effective-state read and retains the latest mark writer.
-  const relink = await readFile(new URL("../migrations/0966_extra_duplicate_relink.sql", import.meta.url), "utf8");
+  const relink = await readFile(new URL("../migrations/1005_extra_duplicate_relink.sql", import.meta.url), "utf8");
   const relinkBodies = Object.fromEntries(["xa_latest_kind", "xa_mark_duplicate"].map(name => [name,
     relink.split(`CREATE OR REPLACE FUNCTION app.${name}`)[1]!.split("AS $$")[1]!.split("$$;")[0]]));
   for (const prior of security) {
@@ -54,6 +54,10 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
       prior.proname === "xa_latest_kind" && prior.args === "p_tenant uuid, p_job uuid, p_variation uuid" ||
       prior.proname === "xa_mark_duplicate" && prior.args === "p_job uuid, p_duplicate uuid, p_canonical uuid, p_command uuid, p_actor uuid, p_link uuid")) {
       expect(current?.definition?.split("$function$")[1]).toEqual(relinkBodies[prior.proname]);
+    } else if (prior.nspname === "app" && prior.proname === "cb_unresolved" && prior.args === "p_tenant uuid, p_job uuid") {
+      const source = await readFile(new URL("../migrations/1006_extra_duplicate_disposition.sql", import.meta.url), "utf8");
+      const body = source.split("CREATE OR REPLACE FUNCTION app.cb_unresolved")[1]!.split("AS $$")[1]!.split("$$;")[0];
+      expect(current?.definition?.split("$function$")[1]).toEqual(body);
     } else if (prior.oid === paymentFeeWriterOid) {
       expect(current?.definition?.split("$function$")[1]).toEqual(paymentFeeWriterBody);
     } else if (prior.oid === settlementOid) {

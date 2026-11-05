@@ -186,8 +186,8 @@ installed-routine PostgreSQL fixture comparisons guard against drift. Same visit
 OR same UTC server day; same non-null SoR code OR same non-null excess line.
 Different visits alone do not exempt same-day captures; different lines alone
 do not exempt captures with the same code. Connected candidates are displayed
-together, collapsed through active links as in cb_unresolved. There is no
-invented dismissal, keep-separate or not-a-duplicate action. The selected
+together, collapsed through active links as in cb_unresolved. The original candidate-only extension introduced no dismissal. The issued
+4 November dismissal extension below supersedes that limit. The selected
 canonical controls billing identity, never the group's effective origin.
 
 Validation: local TypeScript and bounded unit guards; database integration and
@@ -196,7 +196,7 @@ browser case checks 44px targets, accessible control names, Chromium AA contrast
 server refusals, linking and reason-required un-linking. These are automated
 checks, not a full human accessibility assessment. Exact-head RED independent
 review and green CI remain required before merge. NOPR; production gates stay
-closed. Dismissal still needs Ben's recorded finance decision.
+closed. The dismissal ruling below supersedes the former decision hold.
 
 ### ENT-3-RELINK-FIX: effective state after reversal (0966)
 
@@ -214,5 +214,52 @@ reverse a later link. Unlinking two independently approved extras restores their
 separate eligibility; it does not manufacture approval. Any still-unresolved
 deterministic candidate continues to block export. Mistaken manual links between
 distinct work can be reversed and both approved extras exported separately.
-There is no keep-separate/dismissal command in this branch; no new one is added.
 Existing completed duplicate approval outcomes are not reopened.
+
+## ENT-5 exact-group dismissal — issued 4 November 2026
+
+Authority: Ben's instruction to proceed and the router ruling recorded in
+AGENT_CHOICES.md. Supervisor, surveyor or commercial_manager must have an active
+covering job.read grant, and must not have reported or priced any group member.
+The session is resolved again inside the database writer; the HTTP body cannot
+select a tenant, actor, role or job. Owner/admin dismissal is not opened.
+
+POST `/api/contractor/jobs/[id]/duplicate-dispositions` accepts exactly
+`{version:'duplicate-disposition.v1', commandId, groupId, fingerprint,
+disposition:'not_duplicates'|'reopen', reasonCode}`. Reasons are `different_work`,
+`different_location`, or `review_changed`. The route supplies the job; the
+persisted session supplies the actor. Trusted browser origin, no-store responses,
+and synthetic_demo / jobguard_synthetic_demo fences apply.
+
+The candidate response adds a 64-character SHA-256 `fingerprint` per group.
+Migration 0910 defines one grouping function and one unresolved projection used
+by both the list and app.cb_unresolved (and hence export refusal). The snapshot
+contains sorted member identities, canonical identities, all immutable ordinary
+and SoR revision IDs/hashes, and approval binding IDs. Descriptions are existing
+labels and never authority. No group-wide waiver or client-supplied member list
+is accepted. A new member, canonical change or revision invalidates the old
+snapshot. Other groups still block export.
+
+`app.extra_duplicate_disposition` is tenant-scoped, forced-RLS and append-only;
+runtime has no table writes. Its checked SECURITY DEFINER writer serializes on
+the existing tenant fence (54) then job lock (417), shared with extra creation,
+revision/link commands and export. Authority and feature entitlement are checked
+before replay; a new command requires the exact current group. Reporter and
+pricing checks cover every member, including linked members and past bindings.
+It writes one receipt, one disposition fact and one final audit append atomically.
+No price, approval, origin, link, extra event or export line is changed. The latest
+fact for the exact snapshot decides whether it is unresolved. `reopen` records a
+new fact under the same authority, reason and snapshot rules; history is retained.
+A successful same-command replay is inert; changed payload/job/actor conflicts.
+
+Closed failures: INVALID_COMMAND, MODE_FORBIDDEN, PERMISSION_DENIED, NOT_FOUND,
+SELF_DISMISSAL, STALE_REVISION, COMMAND_CONFLICT, DATABASE_UNAVAILABLE. Existing
+entitlement failures stay fail-closed. Error responses contain no SQL details.
+A write racing a new extra either commits before it (the enlarged group raises
+again) or observes a stale fingerprint and rolls back. Audit is the last
+contending lock. RLS retains its authenticated-context limitation.
+
+This extension changes candidate disposition only, never commercial approval or
+fee entitlement. PostgreSQL/catalogue/upgrade/race tests and mobile/desktop
+transport rendering are CI proofs; independent RED review must bind the exact
+landing head. No real data, provider, money or release is enabled.

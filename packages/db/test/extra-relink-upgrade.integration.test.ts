@@ -7,7 +7,7 @@ import { world, code, type World } from "./contractor-billing-fixtures.js";
 import { raiseOn, approveInput, type Cluster } from "./extra-approval-chain-fixtures.js";
 let c: Cluster | undefined;
 afterAll(async () => { await c?.close(); });
-const migration = "0966_extra_duplicate_relink.sql";
+const migration = "1005_extra_duplicate_relink.sql";
 const mark = (w: World, duplicateId: string, canonicalId: string) => ({version:"mark-duplicate.v1",commandId:randomUUID(),jobId:w.s.jobId,duplicateId,canonicalId});
 it("0966 reproduces the populated predecessor failure, changes only two routine bodies and repairs both relink directions", async () => {
  c = await startBeforeMigration(migration);
