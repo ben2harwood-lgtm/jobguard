@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-9": {
+      "branches": [
+        "codex/sandbox/later-safety-9"
+      ],
+      "note": "LATER-SAFETY-9: synthetic-only practice bank page and read-only credential availability. RED authority; NOPR; no migrations.",
+      "allow": [
+        "apps/api/src/practice-bank.application.test.ts",
+        "apps/api/src/practice-bank.application.ts",
+        "apps/web/app/api/practice-bank/route.test.ts",
+        "apps/web/app/practice-bank/page.test.tsx",
+        "apps/web/app/practice-bank/page.tsx",
+        "apps/web/app/practice-bank/screen.test.tsx",
+        "apps/web/app/practice-bank/screen.tsx"
+      ]
+    }
+  }
+}
