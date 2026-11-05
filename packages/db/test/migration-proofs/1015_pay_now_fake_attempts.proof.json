@@ -1,0 +1,210 @@
+{
+  "migration": "1015_pay_now_fake_attempts.sql",
+  "lp0": [
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "id": "a-mon6-attempt",
+        "title": "MON-6 dark synthetic pay-now observations",
+        "kind": "authority",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Bounded synthetic lifecycle dispatch; exact-head RED review and PostgreSQL CI remain required."
+        },
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Retain verified-context reads and persisted session/company membership verification before writes and replay.",
+          "LP-12": "Verify exact migration ownership and runtime-only closed entry point; helpers and tables remain private."
+        },
+        "downstream": "Dark synthetic observations of stored final invoices only. No financial state, command receipt, authorization, audit, outbox or provider writes.",
+        "sources": [
+          "packages/db/migrations/1015_pay_now_fake_attempts.sql",
+          "packages/db/src/pay-now-attempt-repository.ts"
+        ],
+        "tests": [
+          "packages/db/test/pay-now-attempt.integration.test.ts",
+          "packages/db/test/pay-now-attempt-repository.test.ts"
+        ],
+        "gaps": [
+          "Actual PostgreSQL catalogue execution and follow-up RED review remain required."
+        ],
+        "path": "ap-mon6-attempt"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.pay_now_fake_attempt(uuid,text,uuid,text,jsonb)|jobguard_runtime|EXECUTE|-",
+        "group": "a-mon6-attempt"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.pay_now_fake_attempt(uuid,text,uuid,text,jsonb)|jobguard_migration",
+        "group": "a-mon6-attempt"
+      }
+    },
+    {
+      "section": "authorityPaths",
+      "before": null,
+      "after": {
+        "id": "ap-mon6-attempt",
+        "title": "MON-6 dark synthetic pay-now observations",
+        "description": "Dark synthetic observations of stored final invoices only. No financial state, command receipt, authorization, audit, outbox or provider writes.",
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Preserve authenticated company/member ownership, current session checks and synthetic database refusal.",
+          "LP-12": "Review fixed search_path, migration-owned private tables and helpers, and absence of runtime direct writes."
+        },
+        "sources": [
+          "packages/db/migrations/1015_pay_now_fake_attempts.sql",
+          "packages/db/src/pay-now-attempt-repository.ts"
+        ],
+        "tests": [
+          "packages/db/test/pay-now-attempt.integration.test.ts",
+          "packages/db/test/pay-now-attempt-repository.test.ts"
+        ],
+        "gaps": [
+          "No product journey execution or production capability is enabled."
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.pay_now_fake_attempt(uuid,text,uuid,text,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.pay_now_fake_attempt"
+        ],
+        "staticCalls": [
+          "app.final_lock_hash",
+          "app.mon1_company_actor"
+        ]
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.pay_now_fake_attempt|tenant_scope|PERMISSIVE|ALL|jobguard_migration|6fa387f2f629fba6"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.pay_now_fake_attempt|immutable_rows|app.reject_immutable_authorization_record|BEFORE DELETE/UPDATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.pay_now_fake_attempt|immutable_table|app.reject_immutable_authorization_record|BEFORE TRUNCATE|O"
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "app.pay_now_fake_attempt",
+        "data": []
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "pay_now_fake_attempt",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "pay_now_fake_attempt_pk",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "pay_now_fake_attempt_snapshot",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "pay_now_fake_attempt",
+        "args": "t uuid, digest text, j uuid, operation text, v jsonb",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "pay_now_fake_attempt",
+        "policyname": "tenant_scope",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
+      }
+    }
+  ],
+  "tenancy": [
+    {
+      "relname": "pay_now_fake_attempt",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    }
+  ]
+}

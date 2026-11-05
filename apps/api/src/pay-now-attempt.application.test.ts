@@ -1,0 +1,97 @@
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import type { Pool } from "pg";
+import type { IdentityApplication } from "./auth/identity.application.js";
+const mocks = vi.hoisted(() => ({ resolve: vi.fn(), read: vi.fn(), command: vi.fn(), list: vi.fn(), query: vi.fn() }));
+vi.mock("./auth/principal-bridge.js", () => ({ resolveVerifiedTenantContext: mocks.resolve }));
+vi.mock("@jobguard/db", async original => ({ ...await original<typeof import("@jobguard/db")>(),
+  PayNowAttemptRepository: class { read = mocks.read; command = mocks.command; },
+  PracticeInvoiceRepository: class { list = mocks.list; },
+  withTenant: (_pool: unknown, _context: unknown, work: (db: unknown) => unknown) => work({ $client: { query: mocks.query } }),
+}));
+import { PayNowAttemptApplication, payNowAttemptFailure } from "./pay-now-attempt.application.js";
+import { PayNowAttemptError } from "@jobguard/db";
+const id = "11111111-1111-4111-8111-111111111111", commandId = "22222222-2222-4222-8222-222222222222";
+const context = Object.freeze({ tenantId: id }), credentials = { sessionToken: "session" };
+const authenticate = vi.fn(), findMembership = vi.fn();
+const digest = vi.fn(() => "a".repeat(64));
+const app = new PayNowAttemptApplication({ provider: { digest, authenticate, findMembership }, allowedOrigin: "https://practice.invalid" } as unknown as IdentityApplication, {} as Pool);
+const invoice = { version: "pay-now.synthetic-invoice.v1", environment: "synthetic_demo", tenantId: id, jobId: id, invoiceId: id, revision: 1,
+  balancePence: 100, currency: "GBP", kind: "final", builderAccount: `fake-builder-${id}`, includesCatch: false };
+beforeEach(() => {
+  vi.clearAllMocks(); vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
+  authenticate.mockResolvedValue({ sessionId: id }); findMembership.mockResolvedValue({ role: "owner" });
+  mocks.resolve.mockResolvedValue(context); mocks.list.mockResolvedValue([{ id, balancePence: 100 }]);
+  mocks.read.mockResolvedValue({ synthetic: true, attempts: [] }); mocks.query.mockResolvedValue({ rows: [{ result: { invoice } }] });
+});
+afterEach(() => vi.unstubAllEnvs());
+it("uses the verified context unchanged, session actor and strict server-bound command", async () => {
+  await app.command(credentials, id, id, { commandId, rail: "card" });
+  expect(mocks.command).toHaveBeenCalledWith(context, { jobId: id, sessionDigest: "a".repeat(64) }, { version: "pay-now-attempt.v1", invoiceId: id, commandId, rail: "card" });
+  expect(digest).toHaveBeenCalledWith("session:session");
+});
+it.each(["balance", "balancePence", "account", "tenant", "actor", "invoiceId", "version"])("rejects forged %s", async field => {
+  await expect(app.command(credentials, id, id, { commandId, rail: "card", [field]: id })).rejects.toThrow("INVALID_INPUT");
+  expect(mocks.command).not.toHaveBeenCalled();
+});
+it("loads current stored options, checks GET's actor and clears options at zero balance", async () => {
+  const view = await app.read(credentials, id, id);
+  expect(view.balancePence).toBe(100); expect(view.options.map(row => row.rail)).toEqual(["bank_transfer", "card", "pay_by_bank"]);
+  expect(findMembership).toHaveBeenCalledWith({ sessionId: id }, id);
+  mocks.list.mockResolvedValue([{ id, balancePence: 0 }]);
+  expect(await app.read(credentials, id, id)).toMatchObject({ balancePence: 0, options: [], attempts: [] });
+});
+it("does not read history after a refused owner/admin gate or authentication", async () => {
+  findMembership.mockResolvedValueOnce({ role: "read_only" });
+  await expect(app.read(credentials, id, id)).rejects.toThrow("UNAVAILABLE"); expect(mocks.read).not.toHaveBeenCalled();
+  mocks.resolve.mockRejectedValueOnce(new Error("UNAUTHENTICATED"));
+  await expect(app.command(credentials, id, id, { commandId, rail: "card" })).rejects.toThrow("UNAUTHENTICATED"); expect(mocks.command).not.toHaveBeenCalled();
+});
+it.each(["production", "pilot_no_charge", ""])("is not found in %s before authentication or storage", async mode => {
+  vi.stubEnv("JOBGUARD_ENV", mode);
+  await expect(app.read(credentials, id, id)).rejects.toThrow("NOT_FOUND");
+  await expect(app.command(credentials, id, id, {})).rejects.toThrow("NOT_FOUND");
+  expect(mocks.resolve).not.toHaveBeenCalled(); expect(mocks.command).not.toHaveBeenCalled();
+});
+it("preserves repository not-found and conflict refusals", () => {
+  expect(payNowAttemptFailure(new PayNowAttemptError("NOT_FOUND")).status).toBe(404);
+  expect(payNowAttemptFailure(new PayNowAttemptError("ALREADY_ATTEMPTED")).status).toBe(409);
+});
+it.each(["estimator", "foreman", "operative", "finance", "read_only"])("refuses %s on GET before invoice access", async role => {
+  findMembership.mockResolvedValue({ role });
+  await expect(app.read(credentials, id, id)).rejects.toThrow("UNAVAILABLE");
+  expect(mocks.list).not.toHaveBeenCalled(); expect(mocks.read).not.toHaveBeenCalled();
+});
+it("refuses an altered stored locator instead of rendering its options", async () => {
+  mocks.query.mockResolvedValue({ rows: [{ result: { invoice: { ...invoice, tenantId: commandId } } }] });
+  await expect(app.read(credentials, id, id)).rejects.toThrow("UNAVAILABLE");
+  expect(mocks.read).not.toHaveBeenCalled();
+});
+
+const customerQuery = vi.fn();
+const customerApp = new PayNowAttemptApplication({ provider: { digest, repository: { pool: { query: customerQuery } } } } as unknown as IdentityApplication, {} as Pool);
+const customerRequest = { headers: { cookie: `jobguard_customer=${id}.${id}.${id}.${"a".repeat(43)}` } };
+it.each([1, 12000, 1000000000000])("customer sees exactly %i pence and only public options", async balancePence => {
+  customerQuery.mockResolvedValue({ rows: [{ result: { invoiceNumber: "TEST-1", balancePence } }] });
+  const view = await customerApp.customerPractice(customerRequest);
+  expect(view).toEqual({ invoiceNumber: "TEST-1", amountDue: { pence: balancePence, currency: "GBP" }, options: ["bank_transfer", "card", "pay_by_bank"].map(rail => ({ rail, customerTotal: { pence: balancePence, currency: "GBP" } })) });
+  expect(JSON.stringify(view)).not.toMatch(/fee|catch|surcharge|policy|attempt|tenant|account/iu);
+  expect(customerQuery).toHaveBeenCalledWith("SELECT identity.customer_practice_pay_now($1,$2,$3,$4) result", [id, id, id, "a".repeat(64)]);
+  expect(mocks.command).not.toHaveBeenCalled(); expect(mocks.read).not.toHaveBeenCalled();
+});
+it("customer full payment offers no collectable options", async () => {
+  customerQuery.mockResolvedValue({ rows: [{ result: { invoiceNumber: "TEST-1", balancePence: 0 } }] });
+  expect((await customerApp.customerPractice(customerRequest)).options).toEqual([]);
+});
+it.each([{}, { cookie: "jobguard_customer=forged" }, { ...customerRequest.headers, "x-tenant-id": id }])("refuses missing, malformed or request-scoped credentials before invoice reads", async headers => {
+  await expect(customerApp.customerPractice({ headers })).rejects.toMatchObject({ code: "CUSTOMER_REFUSED" });
+  expect(customerQuery).not.toHaveBeenCalled();
+});
+it("normalizes revoked and foreign customer session refusals", async () => {
+  customerQuery.mockRejectedValue(Object.assign(new Error("private"), { code: "42501" }));
+  await expect(customerApp.customerPractice(customerRequest)).rejects.toMatchObject({ code: "CUSTOMER_REFUSED" });
+});
+it("customer practice refuses production before session or invoice access", async () => {
+  vi.stubEnv("JOBGUARD_ENV", "production");
+  await expect(customerApp.customerPractice(customerRequest)).rejects.toThrow("NOT_FOUND");
+  expect(customerQuery).not.toHaveBeenCalled();
+});

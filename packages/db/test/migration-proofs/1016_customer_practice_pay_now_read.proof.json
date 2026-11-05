@@ -1,0 +1,123 @@
+{
+  "migration": "1016_customer_practice_pay_now_read.sql",
+  "lp0": [
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "id": "a-mon6-customer-practice",
+        "title": "MON-6 customer practice invoice read",
+        "kind": "identity",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Synthetic build only; RED review and PostgreSQL CI outstanding."
+        },
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Verify current signed customer scope before invoice access.",
+          "LP-12": "Only the identity login executes this bounded read routine."
+        },
+        "downstream": "Read-only invoice number and current balance. No hidden data, attempts or financial writes.",
+        "sources": [
+          "packages/db/migrations/1016_customer_practice_pay_now_read.sql",
+          "apps/api/src/pay-now-attempt.application.ts"
+        ],
+        "tests": [
+          "packages/db/test/customer-practice-pay-now.integration.test.ts"
+        ],
+        "gaps": [
+          "PostgreSQL CI and exact-head RED review required."
+        ],
+        "path": "ap-mon6-customer-practice"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:identity.customer_practice_pay_now(uuid,uuid,uuid,text)|jobguard_identity|EXECUTE|-",
+        "group": "a-mon6-customer-practice"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:identity.customer_practice_pay_now(uuid,uuid,uuid,text)|jobguard_migration",
+        "group": "a-mon6-customer-practice"
+      }
+    },
+    {
+      "section": "authorityPaths",
+      "before": null,
+      "after": {
+        "title": "MON-6 customer practice invoice read",
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Verify current signed customer scope before invoice access.",
+          "LP-12": "Only the identity login executes this bounded read routine."
+        },
+        "sources": [
+          "packages/db/migrations/1016_customer_practice_pay_now_read.sql",
+          "apps/api/src/pay-now-attempt.application.ts"
+        ],
+        "tests": [
+          "packages/db/test/customer-practice-pay-now.integration.test.ts"
+        ],
+        "gaps": [
+          "PostgreSQL CI and exact-head RED review required."
+        ],
+        "id": "ap-mon6-customer-practice",
+        "description": "Read-only invoice number and current balance. No hidden data, attempts or financial writes."
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:identity.customer_practice_pay_now(uuid,uuid,uuid,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_identity"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "identity.customer_portal_use"
+        ]
+      }
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "identity",
+        "proname": "customer_practice_pay_now",
+        "args": "t uuid, j uuid, c uuid, digest text",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_identity=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    }
+  ],
+  "tenancy": []
+}

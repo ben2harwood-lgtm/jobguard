@@ -1,0 +1,49 @@
+{
+  "version": 2,
+  "lanes": {
+    "batch-39": {
+      "branches": [
+        "codex/sandbox/batch-39"
+      ],
+      "note": "RED. ENT-3 priced journey and MON-6 stored synthetic pay-now attempts; built ahead NOPR.",
+      "allow": [
+        "apps/api/src/pay-now-attempt.application.test.ts",
+        "apps/api/src/pay-now-attempt.application.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/web/app/api/customer-portal/practice-pay-now/route.test.ts",
+        "apps/web/app/api/customer-portal/practice-pay-now/route.ts",
+        "apps/web/app/api/jobs/[id]/invoices/[invoiceId]/pay-now-preview/route.test.ts",
+        "apps/web/app/api/jobs/[id]/invoices/[invoiceId]/pay-now-preview/route.ts",
+        "apps/web/app/customer/practice-pay-now/page.tsx",
+        "apps/web/app/customer/practice-pay-now/screen.test.tsx",
+        "apps/web/app/customer/practice-pay-now/screen.tsx",
+        "apps/web/app/jobs/[id]/invoices/[invoiceId]/pay-now-preview/page.tsx",
+        "apps/web/app/jobs/[id]/invoices/[invoiceId]/pay-now-preview/screen.test.tsx",
+        "apps/web/app/jobs/[id]/invoices/[invoiceId]/pay-now-preview/screen.tsx",
+        "apps/web/app/lib/pay-now-attempt-server.ts",
+        "apps/web/app/lib/pay-now-fake-provider.ts",
+        "apps/web/app/ui/pay-now-synthetic.tsx",
+        "apps/web/e2e/ENT-3-priced-journey.spec.ts",
+        "apps/web/e2e/MON-6-customer-practice-pay-now.spec.ts",
+        "apps/web/e2e/MON-6-stored-pay-now-preview.spec.ts",
+        "docs/contracts/pay-now-fake-attempts-dark-v1.md",
+        "packages/core/src/pay-now-synthetic.test.ts",
+        "packages/core/src/pay-now-synthetic.ts",
+        "packages/core/src/watchdog.ts",
+        "packages/db/migration-notes/1015_pay_now_fake_attempts.md",
+        "packages/db/migration-notes/1016_customer_practice_pay_now_read.md",
+        "packages/db/migrations/1015_pay_now_fake_attempts.sql",
+        "packages/db/migrations/1016_customer_practice_pay_now_read.sql",
+        "packages/db/src/index.ts",
+        "packages/db/src/pay-now-attempt-repository.ts",
+        "packages/db/test/customer-practice-pay-now.integration.test.ts",
+        "packages/db/test/later-empty-tables.ts",
+        "packages/db/test/migration-proofs/1015_pay_now_fake_attempts.proof.json",
+        "packages/db/test/migration-proofs/1016_customer_practice_pay_now_read.proof.json",
+        "packages/db/test/pay-now-attempt-repository.test.ts",
+        "packages/db/test/pay-now-attempt.integration.test.ts",
+        "packages/db/test/pay-now-preview.integration.test.ts"
+      ]
+    }
+  }
+}
