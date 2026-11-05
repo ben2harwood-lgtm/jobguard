@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { combineLp0, proofSchema } from "./migration-proof-loader.js";
 import { parseInventory } from "./lp-0-catalog.js";
 
-const migration = readFileSync(new URL("../migrations/0885_dark_merchant_order.sql", import.meta.url), "utf8");
+const migration = readFileSync(new URL("../migrations/0606_dark_merchant_order.sql", import.meta.url), "utf8");
 const priorSource = readFileSync(new URL("../migrations/0303_job_source_intake.sql", import.meta.url), "utf8");
 const commandKinds = (sql: string) => [...sql.matchAll(/'((?:WorkState|JobSource)\.[^']+|[a-z_]+\.[a-z_]+)'/gu)].map(match => match[1]!);
 
@@ -17,8 +17,8 @@ describe("M2-1 migration compatibility (source checks, not PostgreSQL evidence)"
   });
 
   it("composes the owned proof with the shared LP-0 baseline exactly once", () => {
-    const proof = proofSchema.parse(JSON.parse(readFileSync(new URL("./migration-proofs/0885_dark_merchant_order.proof.json", import.meta.url), "utf8")));
-    expect(proof.migration).toBe("0885_dark_merchant_order.sql");
+    const proof = proofSchema.parse(JSON.parse(readFileSync(new URL("./migration-proofs/0606_dark_merchant_order.proof.json", import.meta.url), "utf8")));
+    expect(proof.migration).toBe("0606_dark_merchant_order.sql");
     const baseline = parseInventory(JSON.parse(readFileSync(new URL("../../../docs/contracts/lp-0-effective-privileges-v1.json", import.meta.url), "utf8")));
     const inventory = parseInventory(combineLp0(baseline, [proof]));
     for (const change of proof.lp0.filter(c => c.section === "entries")) {
@@ -70,7 +70,7 @@ describe("M2-1 checked command compatibility", () => {
     const seeds = migration.split("INSERT INTO app.command_type_registry VALUES")[1]!.split(";")[0]!;
     const values = seeds.match(/\(([^()]+)\)/u)![1]!.split(",").map(value => value.trim().slice(1, -1));
     expect(Object.fromEntries(Object.keys(darkOrderRegistryRow).map((key, index) => [key, values[index]]))).toEqual(darkOrderRegistryRow);
-    const proof = proofSchema.parse(JSON.parse(readFileSync(new URL("./migration-proofs/0885_dark_merchant_order.proof.json", import.meta.url), "utf8")));
+    const proof = proofSchema.parse(JSON.parse(readFileSync(new URL("./migration-proofs/0606_dark_merchant_order.proof.json", import.meta.url), "utf8")));
     const delta = proof.upgrade.find(change => change.section === "rows" && change.after?.table === "app.command_type_registry")!;
     if (delta.section !== "rows") throw new Error("Missing registry proof");
     expect(delta.after!.data).toEqual(expect.arrayContaining(currentCommandRegistryRows));

@@ -5,14 +5,11 @@
       "branches": [
         "codex/sandbox/batch-26"
       ],
-      "note": "M2-1 dark merchant orders and M2-5 made-up-only benchmark, built ahead; RED, NOPR.",
+      "note": "M2-1 dark merchant orders and M2-5 made-up-only benchmark, RED, ready for PR checks.",
       "allow": [
-        "docs/operations/supplier-benchmark.md",
-        "packages/core/src/supplier-benchmark.test.ts",
-        "packages/core/src/supplier-benchmark.ts",
-        "packages/core/src/test-fixtures/made-up-only-supplier-benchmark.ts",
+        "docs/contracts/dark-merchant-order-v1.md",
         "packages/core/src/watchdog.ts",
-        "packages/db/migrations/0885_dark_merchant_order.sql",
+        "packages/db/migrations/0606_dark_merchant_order.sql",
         "packages/db/src/index.ts",
         "packages/db/src/outbox.ts",
         "packages/db/src/purchase-order-action-guard.ts",
@@ -23,11 +20,10 @@
         "packages/db/test/later-empty-tables.ts",
         "packages/db/test/lp5-command-catalog.ts",
         "packages/db/test/m2-1-migration-proof.test.ts",
-        "packages/db/test/migration-proofs/0885_dark_merchant_order.proof.json",
+        "packages/db/test/migration-proofs/0606_dark_merchant_order.proof.json",
         "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
         "packages/db/test/purchase-order-action.test.ts",
-        "packages/db/test/purchase-order-audit.integration.test.ts",
-        "tools/supplier-benchmark.mjs"
+        "packages/db/test/purchase-order-audit.integration.test.ts"
       ]
     }
   }
