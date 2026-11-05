@@ -1,0 +1,231 @@
+{
+  "migration": "0607_vat_fixture_records.sql",
+  "lp0": [
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "id": "a-m4-21-fixture",
+        "title": "M4-21 durable synthetic VAT fixtures",
+        "kind": "authority",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Bounded synthetic fixture storage; exact-head RED review and PostgreSQL CI remain required."
+        },
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Preserve verified tenant context and current owner membership for fixture appends.",
+          "LP-12": "Verify FORCE RLS, immutable private records, exact runtime routine grant and no live capability."
+        },
+        "downstream": "Synthetic owner-checked append-only fixture history. No issuance, money posting, authority, outbox or provider.",
+        "sources": [
+          "packages/db/migrations/0607_vat_fixture_records.sql",
+          "packages/db/src/vat-fixture-repository.ts"
+        ],
+        "tests": [
+          "packages/db/test/vat-fixture.integration.test.ts",
+          "packages/db/test/vat-fixture-repository.test.ts"
+        ],
+        "gaps": [
+          "Actual PostgreSQL catalogue execution and follow-up RED review remain required."
+        ],
+        "path": "ap-m4-21-fixture"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.vat_fixture_records(uuid,uuid,uuid,text,jsonb)|jobguard_runtime|EXECUTE|-",
+        "group": "a-m4-21-fixture"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.vat_fixture_records(uuid,uuid,uuid,text,jsonb)|jobguard_migration",
+        "group": "a-m4-21-fixture"
+      }
+    },
+    {
+      "section": "authorityPaths",
+      "before": null,
+      "after": {
+        "id": "ap-m4-21-fixture",
+        "title": "M4-21 durable synthetic VAT fixtures",
+        "description": "Verified-context read and owner-checked append-only synthetic VAT fixtures; no issue or financial authority.",
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Preserve verified tenant context and current owner membership for fixture appends.",
+          "LP-12": "Verify FORCE RLS, immutable private records, exact runtime routine grant and no live capability."
+        },
+        "sources": [
+          "packages/db/migrations/0607_vat_fixture_records.sql",
+          "packages/db/src/vat-fixture-repository.ts"
+        ],
+        "tests": [
+          "packages/db/test/vat-fixture.integration.test.ts",
+          "packages/db/test/vat-fixture-repository.test.ts"
+        ],
+        "gaps": [
+          "No product journey execution or production capability is enabled."
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.vat_fixture_records(uuid,uuid,uuid,text,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.vat_fixture_record"
+        ],
+        "staticCalls": [
+          "app.final_lock_hash",
+          "app.final_lock_require_owner"
+        ]
+      }
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "app.vat_fixture_record",
+        "data": []
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "vat_fixture_record",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "vat_fixture_records",
+        "args": "t uuid, actor uuid, j uuid, operation text, v jsonb",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "vat_fixture_record",
+        "policyname": "tenant_scope",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "vat_fixture_record_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "vat_fixture_command",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "vat_fixture_reference",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "vat_fixture_ordinal",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "vat_fixture_previous",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    }
+  ],
+  "tenancy": [
+    {
+      "relname": "vat_fixture_record",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    }
+  ]
+}

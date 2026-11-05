@@ -600,7 +600,11 @@ export const duplicateDispositionRegistryRow = {
  command_type: "ResolveDuplicateCandidates", version: "duplicate-disposition.v1", permission_rule: "active_member",
  lock_adapter: "route_before_begin", completion_adapter: "duplicate_disposition", audit_class: "commercial", outbox_class: null,
 };
-export const currentCommandRegistryRows = [...lp5RegistryRows, lateSourceRegistryRow, managedRecoveryRegistryRow, siteSupervisorQueryRegistryRow, duplicateDispositionRegistryRow];
+export const darkOrderRegistryRow = {
+  command_type: "purchase_order.send.dark", version: "command.v1", permission_rule: "owner",
+  lock_adapter: "route_before_begin", completion_adapter: "purchase_order", audit_class: "commercial", outbox_class: "fake_merchant_order",
+};
+export const currentCommandRegistryRows = [...lp5RegistryRows, lateSourceRegistryRow, managedRecoveryRegistryRow, siteSupervisorQueryRegistryRow, darkOrderRegistryRow, duplicateDispositionRegistryRow];
 export const lp5bRoutines = [
   {
     "signature": "app.lp5b_bind_follow_up_cancel()",

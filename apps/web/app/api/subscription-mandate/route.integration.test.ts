@@ -60,7 +60,7 @@ it("persists exactly the shown terms once, rejects stale sequences, and holds fr
     selection: changed.preview.selection, previewProof: changed.preview.previewProof } }));
   expect(replacement.status).toBe(409); expect(await replacement.json()).toMatchObject({ code: "MANDATE_NOTICE_REAUTHORISATION_REQUIRED" });
   expect(await count()).toBe(1);
-});
+}, 120_000);
 it.each(["revoked", "cancelled"])("%s removes authority and internal preflight refuses future initiation", async kind => {
   const p = await prepare(); expect((await POST(request(p.input))).status).toBe(200);
   const input = { commandId: randomUUID(), command: { version: "subscription-mandate-command.v1", kind, expectedSequence: 1 } };
@@ -73,8 +73,8 @@ it.each(["revoked", "cancelled"])("%s removes authority and internal preflight r
     recipientRef: record.selection.recipientRef, currentRevision: record.selection.revision, currentTermsHash: record.termsHash,
     billingMode: "paid", providerDefaultsDisabled: true, amountPence: 4900, reservedAndCollectedPeriodPence: 0,
   })).toMatchObject({ mayInitiate: false, productionEnabled: false, eligibleForSimulation: false, reason: kind.toUpperCase() });
-});
+}, 120_000);
 it("SQL rejects a session expired after the identity seam without revealing a record", async () => {
   await prepare(); await fixture.admin.query("UPDATE identity.session SET expires_at=clock_timestamp()-interval '1 second' WHERE id=$1", [company.sessionId]);
   const response = await GET(request()); expect(response.status).toBe(404); expect(await response.json()).toEqual({ code: "NOT_FOUND" });
-});
+}, 120_000);

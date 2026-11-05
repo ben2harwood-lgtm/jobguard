@@ -1,4 +1,4 @@
-# 0966 — ENT-3-RELINK-FIX (RED)
+# 1200 — ENT-3-RELINK-FIX (RED)
 
 Forward repair of the post-unlink billing dead end. Replaces the private
 `xa_latest_kind(uuid,uuid,uuid)` projection to skip only duplicate events whose
@@ -8,7 +8,7 @@ completion behavior. No table, column, grant, function configuration or stored
 row changes. The shared projection also restores previously approved standalone
 extras to revision/export eligibility; unresolved candidates still block export.
 
-0966 is the issued provisional reservation and is above batch-15's migrations.
+1200 is the issued provisional reservation and is above batch-15's migrations.
 The proof pins the exact private helper definition; the populated upgrade test
 checks unchanged rows and routine security metadata, only the two named body
 changes, replay of the migration and recovery of the affected journey.

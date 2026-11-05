@@ -38,14 +38,19 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   // 0567 changes only the checked settlement overload's expected approval hash.
   const settlementOid = (await c.admin.query("SELECT 'app.record_simulated_settlement(uuid,uuid,uuid,character varying,bigint,timestamp with time zone,uuid,uuid,uuid)'::regprocedure::oid oid")).rows[0].oid;
   const selfComparison = "(SELECT content_hash FROM app.action_authorization WHERE tenant_id=p_tenant AND id=p_authorization)";
-  // 0966 changes exactly the effective-state read and retains the latest mark writer.
-  const relink = await readFile(new URL("../migrations/1005_extra_duplicate_relink.sql", import.meta.url), "utf8");
+  // 1200 changes exactly the effective-state read and retains the latest mark writer.
+  const relink = await readFile(new URL("../migrations/1200_extra_duplicate_relink.sql", import.meta.url), "utf8");
   const relinkBodies = Object.fromEntries(["xa_latest_kind", "xa_mark_duplicate"].map(name => [name,
     relink.split(`CREATE OR REPLACE FUNCTION app.${name}`)[1]!.split("AS $$")[1]!.split("$$;")[0]]));
   for (const prior of security) {
     const current = live.find(row => row.oid === prior.oid);
-    // 0566 and 0573 extend exactly this dispatcher for managed recovery and supervisor queries.
+    // 0566, 0573 and 0606 extend exactly this dispatcher for managed recovery, supervisor queries and dark orders.
     if (prior.nspname === "app" && prior.proname === "lp5_command_result" && prior.args === "p_command_id uuid, p_outcome jsonb") continue;
+    // 0599_accounting_export_route_change changes only this checked synthetic dispatcher; dedicated route upgrade tests bind the body.
+    if (prior.nspname === "app" && prior.proname === "accounting_export" &&
+      prior.args === "t uuid, digest text, operation text, source text, v jsonb") {
+      expect(current?.definition).not.toEqual(prior.definition);
+    } else
     // 0583 replaces only this exact predecessor body; its dedicated upgrade proof checks the replacement.
     if (prior.nspname === "app" && prior.proname === "write_success_fee_v3" &&
       prior.args === "p_job uuid, p_session text, p_command jsonb, p_artifact jsonb") {
@@ -55,7 +60,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
       prior.proname === "xa_mark_duplicate" && prior.args === "p_job uuid, p_duplicate uuid, p_canonical uuid, p_command uuid, p_actor uuid, p_link uuid")) {
       expect(current?.definition?.split("$function$")[1]).toEqual(relinkBodies[prior.proname]);
     } else if (prior.nspname === "app" && prior.proname === "cb_unresolved" && prior.args === "p_tenant uuid, p_job uuid") {
-      const source = await readFile(new URL("../migrations/1006_extra_duplicate_disposition.sql", import.meta.url), "utf8");
+      const source = await readFile(new URL("../migrations/1201_extra_duplicate_disposition.sql", import.meta.url), "utf8");
       const body = source.split("CREATE OR REPLACE FUNCTION app.cb_unresolved")[1]!.split("AS $$")[1]!.split("$$;")[0];
       expect(current?.definition?.split("$function$")[1]).toEqual(body);
     } else if (prior.oid === paymentFeeWriterOid) {
