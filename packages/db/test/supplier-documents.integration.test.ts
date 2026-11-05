@@ -47,3 +47,18 @@ it("retains the whole later-delivery position, replay identity, isolation and ma
   await repo.appendReceipt(ctx, deliveryJob, { accepted: "7", rejected: "0", expectedRevision: 3 });
   expect((await repo.view(ctx, deliveryJob)).receipt).toMatchObject({ revision: 4, accepted: "7", missing: "3", laterDelivered: "0" });
 });
+
+it("refuses receipt totals above ordered including rejected stock without a persisted effect", async () => {
+  const repo = new SupplierDocumentRepository(runtime);
+  const before = await repo.view(ctx, job);
+  const counts = async () => (await admin.query(`SELECT
+    (SELECT count(*) FROM app.goods_receipt WHERE tenant_id=$1 AND job_id=$2) receipts,
+    (SELECT count(*) FROM app.audit_event WHERE tenant_id=$1) audits`, [tenant, job])).rows[0];
+  const priorCounts = await counts();
+  for (const [accepted, rejected] of [["9", "2"], ["10", "0.000001"], ["10.000001", "0"]]) {
+    await expect(repo.appendReceipt(ctx, job, { commandId: randomUUID(), accepted: accepted!, rejected: rejected!, expectedRevision: before.receipt!.revision }))
+      .rejects.toMatchObject({ code: "ORDER_DELIVERY_EXCEEDS_ORDERED" });
+    expect(await counts()).toEqual(priorCounts);
+    expect((await repo.view(ctx, job)).receipt).toEqual(before.receipt);
+  }
+});
