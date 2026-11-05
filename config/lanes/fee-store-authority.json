@@ -15,6 +15,7 @@
         "apps/api/src/fee-collection/postgres-reservation-store.ts",
         "docs/verdicts/FEE-STORE-AUTHORITY/BUILDER_RECEIPT.md",
         "packages/db/migrations/0619_fee_store_authority.sql",
+        "packages/db/test/enterprise-access-upgrade.integration.test.ts",
         "packages/db/test/fee-reservation-archive-upgrade.integration.test.ts",
         "packages/db/test/fee-reservation.integration.test.ts",
         "packages/db/test/later-empty-tables.ts",

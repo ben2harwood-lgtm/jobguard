@@ -1,3 +1,45 @@
+# CI repair try 1 — READY for router commit (RED)
+
+Plan piece: fee-store-authority, PR #579. Repair based on `cd5519caa`, which
+already merges current main (including #578). No application behavior or SQL
+migration was changed, and no migration renumber or policy decision is needed.
+
+Failed CI run: 42113294900 at e975ff02. The CLI could not reach api.github.com;
+read the actual job logs through the connected GitHub API instead.
+- core-db (2), job 127546217429: one failure, 199 files / 1447 tests passed.
+  `enterprise-access-upgrade.integration.test.ts` compared pre-0612 catalogue
+  authority against the entire later chain. Migration 0619 intentionally removes
+  runtime archive INSERT and adds the private seal writer. The expected old
+  `fee_reservation_archive` ACL therefore cannot equal the final ACL.
+- core, job 127560007494: aggregate failed only because core-db failed;
+  core-checks succeeded.
+- checks, job 127564365278: aggregate failed only because core failed;
+  web, secrets and dependency-review succeeded. No CI gate was edited.
+
+Repair: apply and register the two named enterprise migrations (0612 and 0613)
+using the existing harness's SQL/bookkeeping pattern, then compare every prior
+relation, routine (including exact body), and policy without successor exclusions.
+Next run the whole migration chain, snapshot its catalogue, replay it and assert
+exact catalogue equality. Populated identity data equality is checked both after
+the own upgrade and after full replay. Existing empty/default-OFF, RLS, ownership,
+runtime privilege and SCIM role assertions remain. This preserves main's intent
+that later replacements have their own proofs, while removing its routine-name
+regex carve-out and preventing unrelated later authority changes from invalidating
+the own-upgrade assertion. The lane adds only the failing test path.
+
+Validation, using installed binaries, no downloads:
+- packages/db: `./node_modules/.bin/vitest run test/migration-proof-loader.test.ts test/lp-0-catalog.test.ts --maxWorkers=2` — 108 passed.
+- Root: `./node_modules/.bin/tsc -p /tmp/fee-store-authority-repair-tsconfig.json` — passed. Temporary config extends the repository strict tsconfig, uses noEmit, and compiles the changed integration test and its imports.
+- packages/db: `./node_modules/.bin/vitest list test/enterprise-access-upgrade.integration.test.ts test/fee-reservation.integration.test.ts test/fee-reservation-archive-upgrade.integration.test.ts --maxWorkers=2` — 31 cases collected; collection only.
+- Root: `node tools/agent-lane-boundary-lint.mjs --lane=fee-store-authority` and `git diff --check` — passed.
+
+PostgreSQL/browser execution is prohibited in this sandbox. CI must execute the
+repaired integration test and mandatory database/migration suites after router
+commit/push; an independent RED review remains required at the resulting exact
+head. No git-writing commands ran. No new complexity or behavior was introduced.
+The initial LATER / SIMPLICITY observation remains in the earlier receipt below;
+this repair adds no second review finding.
+
 # READY — fee-store authority fix (RED)
 
 Plan piece: fee-store-authority; branch `codex/sandbox/fee-store-authority`.
