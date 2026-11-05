@@ -6,7 +6,7 @@ Ben, 5 November 2026: “Start native app”; no-PR branches in plan order, made
 
 Based on `origin/main` at `36acf72daddbaa68f09a84c67a8a22842a72928d`. `origin/codex/sandbox/m3-1` is already an ancestor of that main; no duplicate merge was needed. Push destination: `codex/sandbox/m3-1-native`; no PR.
 
-Read alongside `BUILD_PLAN.md` §11.4 / M3-1, `docs/contracts/offline-contract-v1.md`, its existing core/property/PostgreSQL tests, and proposed `docs/decisions/d08-offline-security-conflicts.md`. No contract/test/server permission was weakened. No PostgreSQL migration or grant was added.
+Read alongside `BUILD_PLAN.md` §11.4 / M3-1, `docs/contracts/offline-contract-v1.md`, its existing core/property/PostgreSQL tests, and proposed `docs/decisions/d08-offline-security-conflicts.md`. No contract/test/server permission was weakened. No PostgreSQL migration or grant was added. The API declares mobile as a workspace development dependency because its new compatibility test consumes that interface; this also preserves the existing CI prerequisite-graph assertion without editing the test.
 
 ## Dependency and clean-install hold
 
@@ -32,13 +32,15 @@ Runtime observed: Node 24.19.0; use repository-pinned pnpm 10.28.1 (the environm
 
 The exploratory lock was discarded before the age-enforced resolution. `pnpm-lock.yaml` consequently remains main's unchanged lock, without a mobile importer. This is deliberate unresolved dependency work, not a frozen-install success. The mandatory mobile lint refuses the missing registry integrity bindings. Resolve and commit a full age-compliant lock before use; do not install with an age bypass. Do not interpret the installed exploratory dependency tree or exported bundle as a clean pinned build. Waiting until the inherited security pin is mature may unblock that pin, but the whole graph must be resolved and checked again; no future pass is promised.
 
+The mobile React type pin is aligned with main at 19.1.8; the exploratory install originally selected 19.1.10 and its duplicate-type effect is not a clean-tree regression result.
+
 The direct-pin lint checks exact versions, dated publication evidence, integrity bindings to the committed lock, SQLCipher configuration and disabled OTA updates. It does not claim a vulnerability scan, dependency provenance review, complete transitive age audit or native encryption proof. Automatic approval review rejected an attempted removal of the age control because it would weaken the requested requirement; the removal was not applied. The control stays enabled.
 
 ## Native flags and encryption boundary
 
 `app.json` defines iOS and Android development-build targets, synthetic `invalid.jobguard.synthetic` identifiers, new architecture enabled, Hermes (generated default), `expo-dev-client` launcher mode, no generated account scheme and OTA updates disabled. There is no EAS configuration, Expo account, PowerSync service or hosted route.
 
-`expo-sqlite` config plugin: `useSQLCipher: true`. Generated Android `gradle.properties`: `expo.sqlite.useSQLCipher=true`, `newArchEnabled=true`, `hermesEnabled=true`. Generated iOS `Podfile.properties.json`: `expo.sqlite.useSQLCipher="true"`, `newArchEnabled="true"`, `expo.jsEngine="hermes"`. Generated Gradle wrapper: 8.14.3; generated iOS deployment default: 15.1. Native directories are ignored prebuild outputs; their existence is configuration evidence only, not compiled artifacts.
+`expo-sqlite` config plugin: `useSQLCipher: true`. Generated Android `gradle.properties`: `expo.sqlite.useSQLCipher=true`, `newArchEnabled=true`, `hermesEnabled=true`. Generated iOS `Podfile.properties.json`: `expo.sqlite.useSQLCipher="true"`, `newArchEnabled="true"`, `expo.jsEngine="hermes"`. Generated Gradle wrapper: 8.14.3; generated iOS deployment default: 15.1. React Native 0.81.5 source defaults additionally pin Android min SDK 24, target/compile SDK 36, build tools 36.0.0, NDK 27.1.12297006, AGP 8.11.0 and Kotlin 2.1.20; none of those toolchains was installed/compiled here. expo-sqlite names Android OpenSSL artifact `io.github.ronickg:openssl:3.3.2` and fbjni 0.3.0. Its CMake arguments include `-DANDROID_STL=c++_shared`, `-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON`, `-DUSE_SQLCIPHER=true`, `-DUSE_LIBSQL=false`; actual compiler linkage remains unproved. Native directories are ignored prebuild outputs; their existence is configuration evidence only, not compiled artifacts.
 
 Source-inspected expo-sqlite 16.0.8 vendors SQLCipher 4.7.0 / SQLite 3.49.1. Its Android encryption branch adds `-DSQLITE_HAS_CODEC=1 -DSQLITE_EXTRA_INIT=sqlcipher_extra_init -DSQLITE_EXTRA_SHUTDOWN=sqlcipher_extra_shutdown -DSQLCIPHER_CRYPTO_OPENSSL`. The iOS branch adds `-DSQLITE_HAS_CODEC=1 -DSQLCIPHER_CRYPTO_CC -DSQLITE_EXTRA_INIT=sqlcipher_extra_init -DSQLITE_EXTRA_SHUTDOWN=sqlcipher_extra_shutdown -DNDEBUG`. These are selected source flags, not observed compiler output. Release flags and complete native transitive versions remain owed.
 
@@ -75,3 +77,33 @@ All data is fictional notes/identifiers. No real PII, amounts, evidence, credent
 ## Executed evidence
 
 Commands and final results are recorded below. All automated encryption/driver tests use explicit doubles. The real HTTP test uses actual Nest controllers, runtime-role PostgreSQL, persisted digest-bound synthetic session and fictional fixture jobs; only its local store is a double. It proves transport/server behavior, not device encryption/durability/authentication UI. No secrets are printed or committed.
+
+The commands below used `/workspace/.npm-cache/_npx/116f317e7afab6e7/node_modules/.bin/pnpm` (10.28.1) either directly or by prefixing `PATH` with its directory. Registry commands used `npm_config_cache=/workspace/.npm-cache` (or `npm --cache /workspace/.npm-cache`). Install additionally set `XDG_DATA_HOME=/workspace/work/xdg PNPM_HOME=/workspace/work/pnpm`; no home-directory files or credentials were written. Native commands set `CI=1 EXPO_OFFLINE=1 EXPO_NO_TELEMETRY=1`. Commands requiring loopback/subprocess/network access used the execution tool's network permission; early sandbox-denied runs are not reported as product failures.
+
+| Exact command after that environment setup | Observed result |
+| --- | --- |
+| `git fetch origin main` and `git fetch origin codex/sandbox/m3-1:refs/remotes/origin/codex/sandbox/m3-1` | Passed after enabling execution-network access; first attempts could not reach proxy |
+| `git switch -c codex/sandbox/m3-1-native origin/main` | Passed |
+| `git merge-base --is-ancestor origin/codex/sandbox/m3-1 origin/main` | Exit 0, work already included |
+| `pnpm install --ignore-scripts --store-dir /workspace/.pnpm-store` | Initial exploratory install passed before age policy; subsequent age-enforced installs failed with `ERR_PNPM_NO_MATURE_MATCHING_VERSION` (browserslist, then glob) |
+| `npm view glob@14.0.2 time --json` | Confirmed publication `2026-10-27T22:07:00.325Z` |
+| `node apps/mobile/tools/supply-chain.mjs --refresh` | Recorded direct release dates/integrities. First exploratory-graph check passed 11 direct pins; final check fails `expo: registry integrity missing from lock`. Final supply-chain status is FAIL/HELD |
+| `pnpm --filter @jobguard/mobile prebuild` | Passed; generated iOS and Android SQLCipher flags above; no native compile |
+| `pnpm --filter @jobguard/mobile exec expo run:android --no-install` | Exit 1: missing Android SDK and `adb ENOENT`; native encryption execution stopped |
+| `pnpm --filter @jobguard/mobile exec expo run:ios --no-install` | Exit 1: iOS builds require macOS; no EAS/hosted build attempted |
+| `pnpm turbo run build --filter=@jobguard/core --filter=@jobguard/db --filter=@jobguard/config` | Passed (4 tasks including storage). Early invocation inherited environment-default pnpm 11 for child scripts; later root runs used the pinned pnpm PATH |
+| `pnpm --filter @jobguard/mobile test` | Passed, 2 files / 8 tests: driver fail-closed/wrong-key/schema rules, retry/restore identity, payload tampering, unsupported money, revocation/conflict review, loopback restriction and exclusive operation |
+| `pnpm --filter @jobguard/mobile typecheck` | Passed in exploratory install; does not establish frozen-install compatibility |
+| `pnpm --filter @jobguard/api typecheck` | Passed |
+| `pnpm --filter @jobguard/core exec vitest run src/offline-contract.test.ts src/offline-contract.properties.test.ts src/offline-client-queue.test.ts` | Passed, 3 files / 75 tests (including generated histories) |
+| `pnpm --filter @jobguard/api exec vitest run src/m31-native-roundtrip.integration.test.ts src/offline-client-queue.compat.test.ts src/offline-upload.application.test.ts src/contractor/offline-risk.application.test.ts` | Passed, 4 files / 17 tests; includes real HTTP + PostgreSQL note round trip, committed retry and revocation |
+| `pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/offline-risk.properties.integration.test.ts test/offline-risk.integration.test.ts test/offline-upload.integration.test.ts` | Passed, 3 files / 18 tests, including multi-crew schedules, authority/conflicts and durable server replay |
+| `pnpm typecheck` | Exit 2: 7 of 8 tasks passed; web TS2742 inferred types reference exploratory `@types/react@19.1.10`. Final manifest aligns mobile with main's 19.1.8; clean reinstall verification remains blocked. No web annotations/tests were weakened to hide this |
+| `pnpm build` | Exit 1: 7 of 8 tasks passed, including both mobile Hermes exports and API; web TS2742 duplicate exploratory React-type inference errors. A migration-directory bundler warning was also printed. Initial root attempts failed trying to write Expo state under the unavailable home directory; mobile scripts now force offline/no-telemetry export/prebuild |
+| `node --test tools/*.test.mjs` | Final run passed, 423 tests, zero failed/skipped. Initial run caught the missing mobile build prerequisite; the workspace development dependency fixed it without changing tests |
+| `node --test tools/ci-workflow.test.mjs` | Final run passed, 9 tests, unchanged assertions; API development dependency now includes its mobile test prerequisite |
+| `pnpm lint` | Exit 1: repository boundary checks passed, mobile supply-chain lint correctly failed the missing lock binding; downstream type lint was interrupted, not passed |
+| `git diff --check` | Passed |
+| `node tools/agent-lane-boundary-lint.mjs` | Passed after a real branch commit existed; before first commit it correctly refused self-comparison. Lane lists every changed non-lane file and does not list itself |
+
+Full `pnpm test`, browser journeys, `pnpm test:migrations`, `pnpm eval`, physical-device suite and release checks were not completed. There is no new server migration/model/browser flow; existing PostgreSQL risk tests still exercise current migrations and authority. This is not a claim that all mandatory acceptance suites passed. No independent RED review was performed.

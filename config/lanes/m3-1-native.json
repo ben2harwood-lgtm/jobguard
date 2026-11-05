@@ -7,6 +7,7 @@
       ],
       "note": "RED sign-in and offline commands. Synthetic native risk slice only; no PR. Device proof and D08 remain closed.",
       "allow": [
+        "apps/api/package.json",
         "apps/api/src/m31-native-roundtrip.integration.test.ts",
         "apps/mobile/.gitignore",
         "apps/mobile/App.tsx",
