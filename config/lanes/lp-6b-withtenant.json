@@ -81,6 +81,8 @@
         "apps/web/app/lib/synthetic-server.ts",
         "docs/contracts/lp-command-binding-design-v1.md",
         "docs/review/LP-6B-0584-SUCCESSOR-DEFINITIONS-2026-11-04.md",
+        "docs/review/LP-6B-REPAIR-2026-11-05-validation.md",
+        "docs/review/LP-6B-REPAIR-2026-11-05.md",
         "docs/review/LP-6B-REPAIR-WIP-2026-11-04-validation.md",
         "docs/review/LP-6B-REPAIR-WIP-2026-11-04.md",
         "docs/review/LP-6B-ROUTER-REPAIR-2026-11-04-validation.md",
