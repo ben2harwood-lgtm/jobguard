@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "lanes": {
+    "batch-47": {
+      "branches": [
+        "codex/sandbox/batch-47"
+      ],
+      "note": "M3-4 reconciliation and M3-6 shared core-loop synthetic groundwork. RED; NOPR. Native device proof and D08 remain outstanding. No migrations.",
+      "allow": [
+        "apps/api/src/core-loop-shared.contract.test.ts",
+        "apps/web/app/lib/contracts.ts",
+        "docs/contracts/offline-contract-v1.md",
+        "packages/core/src/core-loop-views.test.ts",
+        "packages/core/src/core-loop-views.ts",
+        "packages/core/src/index.ts",
+        "packages/core/src/offline-client-queue.ts",
+        "packages/core/src/offline-reconciliation.properties.test.ts",
+        "packages/core/src/offline-reconciliation.test.ts",
+        "packages/core/src/offline-reconciliation.ts"
+      ]
+    }
+  }
+}
