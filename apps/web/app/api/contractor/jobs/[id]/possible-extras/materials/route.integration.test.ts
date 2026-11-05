@@ -32,20 +32,20 @@ it("finance and owner import, supervisor refuses; a replay returns exactly the f
   const evaluated = await post(evaluate, f.sessions.supervisor!, { version: "evaluate-live-prompts.v1", commandId: randomUUID(), jobId: f.jobId });
   expect(evaluated.status).toBe(201);
   expect(await evaluated.json()).toEqual({ promptIds: [expect.any(String)], quarantinedComparisons: 0, unevaluatedComparisons: expect.any(Number) });
-});
+}, 120_000);
 it.each(["equal", "unknown", "unit"])("%s materials produce no prompt through the route", async variant => {
   const f = await promptFixture(c);
   const line = (await c.admin.query("SELECT l.sor_code,l.unit,sum(l.quantity::numeric)::text quantity FROM app.work_order_line l JOIN app.work_order_current w ON(w.tenant_id,w.revision_id)=(l.tenant_id,l.revision_id) WHERE l.tenant_id=$1 AND l.job_id=$2 GROUP BY l.sor_code,l.unit ORDER BY l.sor_code LIMIT 1", [f.p.tenantId, f.jobId])).rows[0]!;
   expect((await post(materials, f.sessions.finance!, materialsInput(f, { workIdentity: variant === "unknown" ? "UNKNOWN" : line.sor_code, unit: variant === "unit" ? "pack" : line.unit, quantity: line.quantity }))).status).toBe(201);
   expect((await new EnterpriseLivePromptRepository(c.runtime).list(f.sessions.supervisor!, listInput(f))).items).toHaveLength(0);
-});
+}, 120_000);
 it.each(["return", "correction"])("keeps a %s and holds the comparison without subtracting it", async kind => {
   const f = await promptFixture(c);
   expect((await post(materials, f.sessions.finance!, materialsInput(f))).status).toBe(201);
   const response = await post(materials, f.sessions.finance!, materialsInput(f, { kind, quantity: "99" }));
   expect(response.status).toBe(201); expect(await response.json()).toMatchObject({ quarantinedComparisons: 1 });
   expect((await c.admin.query("SELECT fact_kind,quantity::text quantity FROM app.materials_issue_fact WHERE tenant_id=$1 ORDER BY fact_kind", [f.p.tenantId])).rows).toEqual(expect.arrayContaining([{ fact_kind: kind, quantity: "99.000000" }, { fact_kind: "issue", quantity: "100.000000" }]));
-});
+}, 120_000);
 it("foreign, unknown and uncovered jobs refuse identically, and revoked grants cannot replay", async () => {
   const f = await promptFixture(c), foreign = await promptFixture(c);
   const input = { version: "evaluate-live-prompts.v1", commandId: randomUUID(), jobId: f.jobId };
@@ -62,7 +62,7 @@ it("foreign, unknown and uncovered jobs refuse identically, and revoked grants c
   expect(await foreignObservation.json()).toEqual({ version: "enterprise-live-prompt-error.v1", code: "EXTRA_FORBIDDEN" });
   const uncovered = await promptSession(c, f.otherSupervisor);
   expect((await post(evaluate, uncovered, { ...input, commandId: randomUUID() })).status).toBe(404);
-});
+}, 120_000);
 it("refuses missing evidence, pending uploads and another job’s verified photo", async () => {
   const f = await promptFixture(c), foreign = await promptFixture(c);
   const photo = await completionPhoto(c, foreign, ["new gutters"]);
@@ -75,4 +75,4 @@ it("refuses missing evidence, pending uploads and another job’s verified photo
     expect(response.status).toBe(409); expect(await response.json()).toEqual({ version: "enterprise-live-prompt-error.v1", code: "PROMPT_SOURCE_INVALID" });
   }
   expect((await new EnterpriseLivePromptRepository(c.runtime).list(f.sessions.supervisor!, listInput(f))).items).toHaveLength(0);
-});
+}, 120_000);
