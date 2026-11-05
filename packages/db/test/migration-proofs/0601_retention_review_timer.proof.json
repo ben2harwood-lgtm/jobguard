@@ -82,37 +82,6 @@
       }
     }
   ],
-  "upgrade": [
-    {
-      "section": "routines",
-      "before": null,
-      "after": {
-        "nspname": "infrastructure",
-        "proname": "discover_retention_reviews",
-        "args": "",
-        "proowner": "jobguard_migration",
-        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_infrastructure=X/jobguard_migration}",
-        "prosecdef": true,
-        "proconfig": [
-          "search_path=pg_catalog"
-        ]
-      }
-    },
-    {
-      "section": "routines",
-      "before": null,
-      "after": {
-        "nspname": "infrastructure",
-        "proname": "retention_timer",
-        "args": "t uuid, j uuid, v jsonb, expected text",
-        "proowner": "jobguard_migration",
-        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_infrastructure=X/jobguard_migration}",
-        "prosecdef": true,
-        "proconfig": [
-          "search_path=pg_catalog"
-        ]
-      }
-    }
-  ],
+  "upgrade": [],
   "tenancy": []
 }
