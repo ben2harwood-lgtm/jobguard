@@ -19,11 +19,17 @@ export function RouteChange({ sourceId, tenantId, csrfToken }: { sourceId: strin
   const inFlight = useRef(false);
   const approval = useRef<ReturnType<typeof routeApprovalV1.parse> | null>(null);
   async function request(body?: object) {
-    const response = await fetch(`/api/accounting-exports/${encodeURIComponent(sourceId)}/route-change`, {
-      method: body ? "POST" : "GET", cache: "no-store", credentials: "same-origin",
-      headers: { "x-csrf-token": csrfToken, "x-tenant-id": tenantId, "Content-Type": "application/json" },
-      ...(body ? { body: JSON.stringify(body) } : {}),
-    });
+    let response: Response;
+    try {
+      response = await fetch(`/api/accounting-exports/${encodeURIComponent(sourceId)}/route-change`, {
+        method: body ? "POST" : "GET", cache: "no-store", credentials: "same-origin",
+        headers: { "x-csrf-token": csrfToken, "x-tenant-id": tenantId, "Content-Type": "application/json" },
+        ...(body ? { body: JSON.stringify(body) } : {}),
+      });
+    } catch {
+      // A lost response is uncertain, never a refusal: keep the exact approval for retry.
+      throw new Error("EXPORT_UNAVAILABLE");
+    }
     // A definite refusal needs a fresh proposal and approval; only uncertain outcomes retain the exact retry.
     if (response.status >= 400 && response.status < 500 && response.status !== 408 && response.status !== 429) {
       approval.current = null;
