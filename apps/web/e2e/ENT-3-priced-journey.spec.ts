@@ -130,13 +130,11 @@ test("ENT-3 priced capture, order coverage and close-out persist in PostgreSQL a
     await page.reload(); await ready();
     await expect(reloadedExtra).toContainText("photo");
     await expect(reloadedExtra).toContainText("resident confirmed");
-    // SoR pricing is persisted above; quotedPence is a separate approval-bound
-    // quote, absent until that revision is bound. Do not invent a displayed quote.
     const extrasResponse = await page.request.get("/api/northside/extras");
     expect(extrasResponse.status()).toBe(200);
     const listed = (await extrasResponse.json()).extras.find((extra: { extraId: string }) => extra.extraId === first[0]!.variation_id);
-    expect(listed).toMatchObject({ quotedPence: null, state: "awaiting_approval" });
-    await expect(reloadedExtra).not.toContainText(" · price ");
+    expect(listed).toMatchObject({ quotedPence: Number(first[0]!.expected_net), state: "awaiting_approval" });
+    await expect(reloadedExtra).toContainText(` · price £${(Number(first[0]!.expected_net) / 100).toFixed(2)}`);
     await expect(reloadedExtra.getByTestId("my-extra-state")).toHaveText("Waiting for approval");
     expect(await pricedRows()).toEqual(first);
     await noSideScroll(page);

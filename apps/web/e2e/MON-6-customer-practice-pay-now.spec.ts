@@ -14,7 +14,7 @@ async function seed() {
   const root = join(process.cwd(), "../..");
   const script = `
     import { Pool } from 'pg';
-    import { randomUUID, createHmac } from 'node:crypto';
+    import { randomBytes, randomUUID, createHmac } from 'node:crypto';
     const { meterCompany } = await import(${JSON.stringify(pathToFileURL(join(root, "packages/db/test/meter-persistence-fixtures.ts")).href)});
     const { prepareWorkAccount } = await import(${JSON.stringify(pathToFileURL(join(root, "packages/db/test/job-work-state-fixtures.ts")).href)});
     const { prepareInvoicePrerequisites } = await import(${JSON.stringify(pathToFileURL(join(root, "packages/db/test/sv5pre-fixtures.ts")).href)});
@@ -39,7 +39,7 @@ async function seed() {
         const customerToken=b.tenantId+'.'+b.jobId+'.'+customer+'.'+'x'.repeat(43);
         const customerDigest=createHmac('sha256',process.env.AUTH_CODE_SECRET).update('customer-session:'+customerToken).digest('hex');
         const builderDigest=includesCatch ? b.digest : digest;
-        const link='a'.repeat(64);
+        const link=randomBytes(32).toString('hex');
         await f.admin.query('SELECT identity.customer_portal_issue($1,$2,$3,$4,$5,$6)',[b.tenantId,builderDigest,b.jobId,customer,link,'customer-signin-reference.v1:'+b.tenantId+'/'+b.jobId+'/'+customer+'/'+'a'.repeat(43)]);
         await f.admin.query("SELECT identity.customer_portal_use($1,$2,$3,$4,$5,'redeem')",[b.tenantId,b.jobId,customer,link,customerDigest]);
         output.push({tenantId:b.tenantId,jobId:b.jobId,invoiceId:invoice.id,includesCatch,customerToken});

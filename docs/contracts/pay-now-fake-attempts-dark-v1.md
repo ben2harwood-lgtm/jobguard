@@ -348,3 +348,52 @@ Local checks (installed binaries, no downloads):
 - Existing synthetic-only, real-provider, money, deployment and launch gates stand.
 
 READY
+
+### batch-39 additional repair — 5 November 2026
+
+Ben authorized this additional NOPR repair round (router: "Yes, all three").
+This entry supersedes the preceding ENT-3 null-price conclusion and round-limit
+wording; it does not claim an independent PASS or an executed browser/DB pass.
+
+- MON-6 now generates a fresh 32-byte portal-link digest on each issue. Both
+  projects may share FINAL_CHECK_TENANT without reusing its unique link digest.
+- ENT-3's real cause was the extras reader: it joined only variation_revision,
+  although server-priced captures bind extra_sor_revision instead. Read the
+  latest binding first and select the price from its declared source kind,
+  joining both sources by tenant, job, variation and revision. No seed price,
+  approval, entitlement or pricing calculation changes. Restore the positive
+  My extras price assertion after reload and assert the API price equals the
+  stored, independently recomputed SoR amount.
+- Add PostgreSQL regression assertions for the submitted SoR amount, refusal of
+  an unassigned operative, and the existing surveyor-priced ordinary path.
+- Preserve the proxy, expiry, practice-principal and restricted-shadow-pool fixes.
+  Retain final-check-fixture.ts's explicit draft/party/track/live setup: MON-6
+  still calls that helper in the browser cluster without the legacy test hooks.
+- Lane inventory covers every non-lane path changed from origin/main, and does
+  not list itself. No new migration; 1200 remains subject to landing reservation.
+
+Local validation with installed binaries (no downloads):
+
+- apps/web: vitest run --maxWorkers=2 proxy.test.ts
+  app/api/customer-portal/practice-pay-now/route.test.ts
+  app/customer/practice-pay-now/screen.test.tsx — 51 passed.
+- packages/db: vitest run --maxWorkers=2
+  test/customer-practice-pay-now-fixtures.test.ts
+  test/site-extra-priced-evidence.test.ts — 15 passed; no database started.
+- apps/web: tsc -p tsconfig.json --noEmit --incremental false — passed.
+- Root tsc -p /tmp/batch-39-final-typecheck.json — checks the two modified
+  PostgreSQL regression files and their source dependencies — passed.
+- apps/web: playwright test --list --workers=2 ENT-3-priced-journey.spec.ts
+  MON-6-customer-practice-pay-now.spec.ts — four project entries discovered,
+  not executed (ENT-3 keeps its desktop skip).
+- node tools/lint.mjs — passed, including lane and money boundaries.
+- git diff --check — passed.
+
+CI must execute both MON-6 widths together against one database, ENT-3 mobile,
+site-extra-priced-evidence.integration, northside-demo.integration and the
+existing SB-25/customer/shared-fixture/migration/RLS checks. No PostgreSQL,
+localhost server or browser suite was started in this sandbox. Required green
+CI and independent RED review must bind the resulting pushed head. Synthetic
+only; provider, real-money, deployment and launch gates remain unchanged.
+
+READY for router commit/push, NOPR, CI and independent RED review.
