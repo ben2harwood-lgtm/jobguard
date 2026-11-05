@@ -30,9 +30,9 @@ describe("MON-6 durable fake attempts on real PostgreSQL",()=>{
     await db.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state) VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic.v1',clock_timestamp(),'Fictional catch','low','confirmed_extra')",[t,j,signal,randomUUID()]);
     await db.query("INSERT INTO app.scope_identity(tenant_id,job_id,id,state) VALUES($1,$2,$3,'reserved')",[t,j,scope]);
     await db.query("INSERT INTO app.variation(tenant_id,job_id,id,scope_item_id,capture_kind,capture_text,description,job_track,origin) VALUES($1,$2,$3,$4,'text','Fictional catch','Fictional catch','small_builder','jobguard_catch')",[t,j,variation,scope]);
-    await db.query("INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id,result) VALUES($1,$2,'ConfirmJobGuardCatch',$3,$4,'processing',$5,'{}')",[t,command,`extra-origin:${j}:${variation}`,h,a.actorId]);
+    await db.query("INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id,result) VALUES($1,$2,'ConfirmJobGuardCatch',$3,$4,'processing',$5,NULL)",[t,command,`extra-origin:${j}:${variation}`,h,a.actorId]);
     await db.query("INSERT INTO app.extra_origin(tenant_id,job_id,variation_id,job_track,kind,command_id,raising_membership_id,raising_role,provenance,source_signal_id) VALUES($1,$2,$3,'small_builder','jobguard_catch',$4,$5,'owner','command',$6)",[t,j,variation,command,a.actorId,signal]);
-    await db.query("UPDATE app.command_receipt SET status='succeeded',completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2",[t,command]);
+    await db.query("UPDATE app.command_receipt SET status='succeeded',result='{}',completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2",[t,command]);
     await db.query("INSERT INTO app.variation_revision(tenant_id,job_id,id,variation_id,scope_item_id,revision,description,quantity_decimal,unit,unit_rate_pence,signed_delta_pence,content_hash,confirmed_by_membership_id,rate_provenance_kind,rate_source_ref,rate_source_hash,rate_version) VALUES($1,$2,$3,$4,$5,1,'Fictional catch','1','item',500,500,$6,$7,'human_entered','synthetic://fixture',$6,'fixture-v1')",[t,j,priced,variation,scope,h,a.actorId]);
     await db.query("UPDATE app.variation SET current_revision_id=$3,state='priced' WHERE tenant_id=$1 AND id=$2",[t,variation,priced]);
    });
@@ -43,7 +43,7 @@ describe("MON-6 durable fake attempts on real PostgreSQL",()=>{
    }));
    // Add the approved source before locking; the baseline plus catch totals 10000.
    await c.admin.query(`INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,approval_id,description,net_pence,ordinal)
-    VALUES($1,$2,$3,$4,'variation',$5,$6,$5,$7,'Fictional approved catch',500,2)`,[randomUUID(),t,j,r,priced,scope,approval]);
+    VALUES($1,$2,$3,$4,'variation',$5,$6,$5,$7,'Fictional catch',500,2)`,[randomUUID(),t,j,r,priced,scope,approval]);
   }
   await prepareInvoicePrerequisites(c.admin,c.runtime,t,j,a.actorId,r);
   const invoices=new PracticeInvoiceRepository(c.runtime);

@@ -105,8 +105,7 @@
         "staticCalls": [
           "app.final_lock_hash",
           "app.lp4_seal_audit",
-          "app.mon1_company_actor",
-          "app.require_watchdog_live"
+          "app.mon1_company_actor"
         ]
       }
     },
@@ -168,8 +167,7 @@
         "definitionSha256": null,
         "staticWrites": [],
         "staticCalls": [
-          "app.final_lock_hash",
-          "app.require_watchdog_live"
+          "app.final_lock_hash"
         ]
       }
     }

@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/batch-46"
       ],
-      "note": "LATER-SAFETY-6 through LATER-SAFETY-11; RED; main 62081c689 retained, duplicate VAT migration removed, provisional stems 1200\u20131203. NOPR.",
+      "note": "LATER-SAFETY-6 through LATER-SAFETY-11; RED money; main 199124c08 exact union; B1/B2/B3 pre-check repair; provisional unique migrations 1200\u20131203. NOPR; READY for CI and exact-head review.",
       "allow": [
         "apps/api/src/notice-fixture.application.test.ts",
         "apps/api/src/notice-fixture.application.ts",
@@ -66,6 +66,7 @@
         "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
         "packages/db/test/purchase-order-action.test.ts",
         "packages/db/test/purchase-order-audit.integration.test.ts",
+        "packages/db/test/retention-post-live.integration.test.ts",
         "packages/db/test/retention-record-repository.test.ts",
         "packages/db/test/retention-records.integration.test.ts",
         "packages/db/test/retention-review-timer.integration.test.ts",

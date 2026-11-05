@@ -19,7 +19,6 @@ BEGIN
  actor:=app.mon1_company_actor(t,digest);
  PERFORM set_config('app.tenant_id',t::text,true);
  IF NOT EXISTS(SELECT 1 FROM app.job WHERE tenant_id=t AND id=j) THEN RAISE EXCEPTION 'RETENTION_NOT_FOUND'; END IF;
- PERFORM app.require_watchdog_live(j);
  SELECT coalesce(jsonb_agg(record ORDER BY ordinal),'[]'::jsonb) INTO records
   FROM app.retention_record WHERE tenant_id=t AND job_id=j;
  IF EXISTS(SELECT 1 FROM app.retention_record WHERE tenant_id=t AND job_id=j AND record_hash<>app.final_lock_hash(record))
@@ -42,6 +41,8 @@ BEGIN
   IF FOUND THEN
    IF prior.job_id<>j OR prior.record IS DISTINCT FROM v OR prior.actor_membership_id<>actor THEN RAISE EXCEPTION 'RETENTION_CONFLICT'; END IF;
   ELSE
+   IF NOT EXISTS(SELECT 1 FROM app.job WHERE tenant_id=t AND id=j AND status IN('live','invoiced','paid') FOR SHARE)
+   THEN RAISE EXCEPTION 'JOB_NOT_LIVE'; END IF;
    INSERT INTO app.retention_record(tenant_id,job_id,command_id,ordinal,record_kind,record,record_hash,actor_membership_id)
     VALUES(t,j,cid,jsonb_array_length(records)+1,v->>'version',v,app.final_lock_hash(v),actor);
    PERFORM app.lp4_seal_audit(jsonb_build_array(jsonb_build_object('id',gen_random_uuid(),'version','audit.v1',
@@ -70,7 +71,6 @@ BEGIN
  THEN RAISE EXCEPTION 'RETENTION_NOT_FOUND'; END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended(t::text||':'||j::text,753));
  IF NOT EXISTS(SELECT 1 FROM app.job WHERE tenant_id=t AND id=j) THEN RAISE EXCEPTION 'RETENTION_NOT_FOUND'; END IF;
- PERFORM app.require_watchdog_live(j);
  SELECT coalesce(jsonb_agg(record ORDER BY ordinal),'[]'::jsonb) INTO records
   FROM app.retention_record WHERE tenant_id=t AND job_id=j;
  IF EXISTS(SELECT 1 FROM app.retention_record WHERE tenant_id=t AND job_id=j AND record_hash<>app.final_lock_hash(record))
@@ -115,6 +115,8 @@ BEGIN
     IF EXISTS(SELECT 1 FROM app.retention_record WHERE tenant_id=t AND job_id=j AND record_kind='retention.review.v1'
       AND record->>'profileId'=v->>'profileId' AND record->>'conditionId'=v->>'conditionId')
     THEN RAISE EXCEPTION 'RETENTION_CONFLICT'; END IF;
+    IF NOT EXISTS(SELECT 1 FROM app.job WHERE tenant_id=t AND id=j AND status IN('live','invoiced','paid') FOR SHARE)
+    THEN RAISE EXCEPTION 'JOB_NOT_LIVE'; END IF;
     INSERT INTO app.retention_record(tenant_id,job_id,command_id,ordinal,record_kind,record,record_hash,actor_membership_id)
      VALUES(t,j,(v->>'id')::uuid,jsonb_array_length(stored->'records')+1,'retention.review.v1',v,app.final_lock_hash(v),NULL);
     PERFORM app.lp4_seal_audit(jsonb_build_array(jsonb_build_object('id',gen_random_uuid(),'version','audit.v1',

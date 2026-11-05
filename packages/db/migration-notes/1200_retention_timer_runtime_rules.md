@@ -1,3 +1,67 @@
+# READY — batch-46 pre-check repair (RED: money)
+
+This section supersedes earlier live-only retention, base, lane-count and merge
+status claims below. Ready for router commit and CI/review; not database-proven,
+independently reviewed, merged, deployed or released. NOPR remains in force.
+Base: origin/main 199124c0885ca27558fbaf62a9a74dee7ad2818f, already merged by the
+launcher at 9c19c7564. No git-writing commands were run here.
+
+## Repair findings
+
+- B1: removed the live-only guard from both retention readers. Each new human
+  record and new timer review now checks live/invoiced/paid with FOR SHARE before
+  INSERT, raising JOB_NOT_LIVE otherwise. Reads and stored-command replay retain
+  authentication, tenant scope, hashes and audit semantics at every job status.
+  The 1200 proof removes the two obsolete require_watchdog_live static calls.
+  The saved invoiced-job probe is now retention-post-live.integration.test.ts,
+  also covering paid jobs, quoting-job new-human/new-timer refusal, unchanged book
+  and exact replay, and a pending timer that succeeds once invoiced without a
+  duplicate on retry. Synthetic owner status setup is not invoice-journey proof.
+- B2: processing command receipts now have result NULL; success sets result '{}'.
+  Source inspection traced STALE_REVISION to the exact approved-source comparison
+  in 0237: the final-account line said 'Fictional approved catch' while its
+  approved revision said 'Fictional catch'. The fixture now uses the latter.
+  Product lock validation is unchanged. Existing includesCatch true/false,
+  identical options/customer debit/builder fees and predecessor replay assertions
+  remain; their PostgreSQL execution is a CI requirement, not a local pass.
+- B3: both VAT route regexes now use the valid records": pattern under /u. The
+  read-role loops omit operative, which the membership update guard rejects.
+  All owner/admin, other-role, expiry/revocation and foreign-tenant assertions stay.
+- Restored main's config/lanes/batch-27.json exactly. All 275 migrations on this
+  main remain byte-identical; no duplicate migration suffixes exist. Only the four
+  unique 1200–1203 migrations remain additional; the duplicate VAT foundation
+  stays removed. The batch-46 lane lists the exact diff from main outside
+  config/lanes, including the new regression, and does not list itself.
+
+## Local verification in this repair
+
+Installed binaries only, at most two Vitest workers, at most three named files
+per invocation. From packages/db:
+
+- ./node_modules/.bin/vitest run --maxWorkers=2
+  test/migration-proof-loader.test.ts test/retention-record-repository.test.ts
+  test/pay-now-attempt-repository.test.ts: 122 passed (3 files).
+- ./node_modules/.bin/vitest run --maxWorkers=2
+  test/vat-fixture-repository.test.ts: 18 passed (1 file).
+- ./node_modules/.bin/vitest list --maxWorkers=2 loaded/collected the new
+  retention regression, pay-now-attempt and VAT route files (3 files), then the
+  final retention regression and VAT persistence file (2 files). No database
+  hooks or test bodies ran; this establishes collection, not behavior.
+- Root ./node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit: passed
+  (source typecheck; package tsconfig excludes integration tests).
+- Root node --test tools/plpgsql-case-in-if-lint.test.mjs: 15 passed, including
+  the real migration inventory. git diff --check passed. Main-relative lane
+  equality verified for all 67 changed paths outside config/lanes.
+
+CI must execute retention-post-live, retention-records, retention-review-timer,
+retention-screen, pay-now-attempt and pay-now-preview, both VAT integration files,
+and the existing migration/tenancy/LP-0 upgrade proofs on real PostgreSQL. It must
+prove the catch fixture locks cleanly and both catch flags with unchanged fees,
+as well as all status/refusal/replay assertions. Required full CI and affected
+phone/desktop browser journeys still apply (at most two workers), followed by an
+independent RED check against the exact final head. No database or browser was
+started here; no production activation, customer data, live money or service used.
+
 # READY — batch-46 landing reconciliation (RED)
 
 Plan pieces: LATER-SAFETY-6 through LATER-SAFETY-11, synthetic safety follow-ups

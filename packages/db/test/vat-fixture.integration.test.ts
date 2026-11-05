@@ -121,7 +121,7 @@ describe("M4-21 real PostgreSQL synthetic VAT documents", () => {
   it("permits only current owners and admins and rechecks revoked, expired and foreign actors", async () => {
     const a = await company(), b = await company(), repo = new VatFixtureRepository(c.runtime);
     const expected = await repo.command(a.context, a.actorId, input(a));
-    for (const role of ["owner", "admin", "estimator", "foreman", "operative", "finance", "read_only"]) {
+    for (const role of ["owner", "admin", "estimator", "foreman", "finance", "read_only"]) {
       await c.admin.query("UPDATE app.membership SET role=$1 WHERE tenant_id=$2 AND id=$3", [role, a.tenantId, a.actorId]);
       if (role === "owner" || role === "admin") expect(await repo.read(a.context, a.actorId, a.jobId)).toEqual(expected);
       else for (const jobId of [a.jobId, randomUUID()])
