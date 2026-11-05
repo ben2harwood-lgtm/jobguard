@@ -127,3 +127,50 @@ Final watchdog result: `pnpm --filter @jobguard/api exec vitest run
 --maxWorkers=2 src/watchdog-registry.test.ts` — PASS, 126 tests after building
 its existing workspace prerequisites. All selected local checks now pass except
 the explicitly recorded inherited lane-file conflict.
+
+
+## batch-37 pre-check repair — 5 November 2026
+
+READY for router commit/push as NOPR; not a CI or independent-review verdict.
+Applied only the four fixes specified in coordinator/prechecks/batch-37-r.md:
+leave sorItem absent for free-text unlink fixtures; rebase 1201 registry proof
+on 0609's exact 63 rows and insert ResolveDuplicateCandidates in jsonb text
+order (64 after); include the new row in restore-reconciliation's sorted
+expectation and the two unit-test registry expectations. Resolved both incoming
+main conflicts as unions: retain both empty tables and both registry constants.
+Product implementation and migration SQL were not changed in this repair.
+
+Executed with the installed cached pnpm 10.28.1 entrypoint
+(`/Users/benharwood/.cache/node/corepack/v1/pnpm/10.28.1/bin/pnpm.cjs`), one
+invocation at a time, maxWorkers=2, at most three named Vitest files per run:
+
+- DB `vitest run --maxWorkers=2 test/late-source-import-migration.test.ts test/m2-1-migration-proof.test.ts test/migration-proof-loader.test.ts`: PASS, 83 tests, three files.
+- DB `vitest run --maxWorkers=2 test/extra-relink-migration.test.ts test/lp5-command-catalog.test.ts test/lp5b-command-catalog.test.ts`: PASS, 15 tests, three files.
+- DB `vitest run --maxWorkers=2 src/extra-duplicate-candidates.test.ts`: PASS, four tests.
+- DB `vitest list --maxWorkers=2 test/extra-duplicate-candidates.integration.test.ts test/restore-reconciliation-upgrade.integration.test.ts test/serious-b5-upgrade.integration.test.ts`: PASS, 17 cases collected only; no PostgreSQL execution claimed.
+- `git diff --check`: PASS.
+
+Read-only checks against local origin/main 199124c0885ca27558fbaf62a9a74dee7ad2818f:
+only migrations 1200/1201 are added; neither repeats a main migration stem and
+no main migration is edited. Latest definitions found on main: xa_mark_duplicate
+0522, xa_latest_kind 0158, cb_unresolved 0243, extra_duplicate_candidates 0590.
+Confirmed the mark writer is exact except its explanatory comment, the state
+projection/order is retained, candidate authority and link projection are
+unchanged, and the old matching predicates are retained in shared grouping.
+Proof before equals 0609 after exactly; before/after both sort in PostgreSQL
+jsonb text order. Both conflict files have no remaining markers.
+
+The lane lists exactly all 28 non-lane paths differing from origin/main and
+never lists itself. The existing lanePathAllowed validator accepts all 29
+working-tree paths (including its own lane file). The standard
+`LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs` currently
+fails on incoming batch-28/main paths because its local mode includes the
+uncommitted merge's staged changes from HEAD. The read-only index still marks
+the two conflict files unmerged; the router must stage the resolved unions,
+complete the merge/commit and rerun the standard lane gate. No widening to main's
+paths, alternate-base pass, or gate change was used.
+
+No Git writes, installation, PostgreSQL, localhost or browser process was run.
+GitHub CI must run required database, browser and full suites after router push;
+independent RED review must bind the resulting exact head. No release/merge or
+independent PASS is claimed.

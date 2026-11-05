@@ -73,8 +73,9 @@ describe("M2-1 checked command compatibility", () => {
     const proof = proofSchema.parse(JSON.parse(readFileSync(new URL("./migration-proofs/0606_dark_merchant_order.proof.json", import.meta.url), "utf8")));
     const delta = proof.upgrade.find(change => change.section === "rows" && change.after?.table === "app.command_type_registry")!;
     if (delta.section !== "rows") throw new Error("Missing registry proof");
-    expect(delta.after!.data).toEqual(expect.arrayContaining(currentCommandRegistryRows));
-    expect(delta.after!.data).toHaveLength(currentCommandRegistryRows.length);
+    const historicalCommandRegistryRows = currentCommandRegistryRows.filter(row => !["rate.suggestion_accept", "ResolveDuplicateCandidates"].includes(row.command_type));
+    expect(delta.after!.data).toEqual(expect.arrayContaining(historicalCommandRegistryRows));
+    expect(delta.after!.data).toHaveLength(historicalCommandRegistryRows.length);
     expect(delta.after!.data.filter(row => (row as { command_type: string }).command_type !== "purchase_order.send.dark")).toEqual(delta.before!.data);
   });
 });

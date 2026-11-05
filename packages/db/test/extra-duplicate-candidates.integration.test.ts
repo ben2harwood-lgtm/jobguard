@@ -22,7 +22,7 @@ async function pair(w: World, sameCode = true) {
  // Direct merged raise preserves two distinct site actors; price through the existing surveyor command.
  const result: string[] = [];
  for (const actor of [w.w.members.operative, second]) {
-  const raised = await new ExtraRepository(c.runtime).raiseExtra(w.ctx, direct(w.w, actor, { jobId: w.s.jobId, sorItem: sameCode ? { versionId: w.w.demo.sorVersionId, code: "CLEAR-GUTTER" } : null }));
+  const raised = await new ExtraRepository(c.runtime).raiseExtra(w.ctx, direct(w.w, actor, { jobId: w.s.jobId, ...(sameCode ? { sorItem: { versionId: w.w.demo.sorVersionId, code: "CLEAR-GUTTER" } } : {}) }));
   await new ExtraApprovalRepository(c.runtime).priceExtra(w.ctx, w.w.members.surveyor.member, { version: "price-extra.v1", commandId: randomUUID(), jobId: w.s.jobId, extraId: raised.variationId, netPence: 338 });
   const submitted = await new ExtraApprovalRepository(c.runtime).submitExtra(w.ctx, w.w.members.supervisor.member, { version: "submit-extra.v1", commandId: randomUUID(), jobId: w.s.jobId, extraId: raised.variationId });
   await new ExtraApprovalRepository(c.runtime).approveExtraStep(w.ctx, w.w.members.supervisor.member, approveInput({ jobId: w.s.jobId, requestId: String(submitted.requestId), hash: String(submitted.revisionHash), net: 338 }, 0));

@@ -27,11 +27,14 @@
         "packages/db/test/extra-duplicate-candidates.integration.test.ts",
         "packages/db/test/extra-relink-migration.test.ts",
         "packages/db/test/extra-relink-upgrade.integration.test.ts",
+        "packages/db/test/late-source-import-migration.test.ts",
         "packages/db/test/later-empty-tables.ts",
         "packages/db/test/lp5-command-catalog.ts",
+        "packages/db/test/m2-1-migration-proof.test.ts",
         "packages/db/test/migration-proofs/1200_extra_duplicate_relink.proof.json",
         "packages/db/test/migration-proofs/1201_extra_duplicate_disposition.proof.json",
-        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts"
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
+        "packages/db/test/restore-reconciliation-upgrade.integration.test.ts"
       ]
     }
   }
