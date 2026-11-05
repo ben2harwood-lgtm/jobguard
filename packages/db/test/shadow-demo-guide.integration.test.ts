@@ -23,6 +23,38 @@ beforeAll(async () => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); f = await 
 afterAll(async () => { await closeFinalCheckFixture(f); vi.unstubAllEnvs(); });
 
 describe("0518 demo-only guide helpers", () => {
+ it("LATER-SAFETY-19 delivers the same demo link the page returned and redeems only its tenant-bound grant", async () => {
+  const a = await guide.locked();
+  const { ShadowDemoGuideApplication } = await import("../../../apps/api/src/shadow-demo-guide.application.js");
+  const { ActionExecutor } = await import("../src/outbox.js");
+  const issued = await new ShadowDemoGuideApplication(f.runtime, a.sessionId, "synthetic_demo").issueCustomerLink(a.jobId, { version: "shadow-guide-customer-link.v1", customerId: a.customer }, hash);
+  const stored = (await f.admin.query("SELECT row_to_json(g) grant, row_to_json(o) outbox, row_to_json(auth) authorization FROM app.customer_portal_grant g JOIN app.action_outbox o ON(o.tenant_id,o.id)=(g.tenant_id,g.outbox_id) JOIN app.action_authorization auth ON(auth.tenant_id,auth.id)=(o.tenant_id,o.authorization_id) WHERE g.tenant_id=$1 AND g.job_id=$2", [a.tenantId, a.jobId])).rows[0];
+  expect(stored.outbox.immutable_content).toMatch(new RegExp(`^customer-signin-reference\\.v1:${a.tenantId}/${a.jobId}/${a.customer}/[A-Za-z0-9_-]{43}$`));
+  expect(stored.outbox).toMatchObject({ content_hash: hash(stored.outbox.immutable_content), adapter: "fake_email", policy_version: "customer-signin.synthetic.v1" });
+  expect(stored.authorization.content_hash).toBe(stored.outbox.content_hash);
+  const deliver = vi.fn(async (_action: unknown, path?: string) => {
+   expect(path).toBe(issued.path);
+   return { kind: "succeeded" as const, providerReference: "fictional-demo-email" };
+  });
+  const adapter = { name: "fake_email" as const, supportsProviderDeduplication: false, deliver, reconcile: async () => "unknown" as const };
+  await new ActionExecutor(f.runtime, new Map([[adapter.name, adapter]]), { emit: () => undefined }, hash).execute(a.context, stored.outbox.id);
+  expect(deliver).toHaveBeenCalledTimes(1);
+  const secret = deliver.mock.calls[0]![1]!.split("/").at(-1)!;
+  expect(stored.grant.token_digest).toBe(hash(`customer-link:${secret}`));
+  expect(JSON.stringify(stored)).not.toContain("/customer/sign-in#");
+  expect(JSON.stringify(stored)).not.toContain(secret);
+  const redeem = async (tenantId: string) => {
+   const db = await f.admin.connect();
+   try {
+    await db.query("BEGIN"); await db.query("SET LOCAL ROLE jobguard_identity");
+    const result = await db.query("SELECT identity.customer_portal_use($1,$2,$3,$4,$5,'redeem') result", [tenantId, a.jobId, a.customer, hash(`customer-link:${secret}`), hash(`customer-session:${randomUUID()}`)]);
+    await db.query("COMMIT"); return result;
+   } catch (error) { await db.query("ROLLBACK"); throw error; } finally { db.release(); }
+  };
+  await expect(redeem(randomUUID())).rejects.toMatchObject({ code: "42501" });
+  await expect(redeem(a.tenantId)).resolves.toHaveProperty("rows");
+  await expect(redeem(a.tenantId)).rejects.toMatchObject({ code: "42501" });
+ }, 600000);
  it("0789 never stores the demo sign-in path or secret, including legacy path callers", async () => {
   const a = await guide.locked(), secret = Buffer.from(randomUUID() + randomUUID()).toString("base64url").slice(0, 43);
   const l = link(a, a.customer, secret);
