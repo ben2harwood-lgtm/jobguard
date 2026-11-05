@@ -17,9 +17,11 @@ export const jobSourceEvidenceV1 = z.object({id:z.guid({ error: "Invalid uuid" }
 const base={id:z.guid({ error: "Invalid uuid" }),commandId:z.guid({ error: "Invalid uuid" }),text:jobSourceTextV1,evidence:jobSourceEvidenceV1,actualTesterMembershipId:z.guid({ error: "Invalid uuid" })};
 export const diaryEntryV1=z.object({...base,entryMode:z.enum(["typed","dictated_text"]),onSite:z.boolean()}).strict().readonly();
 export const customerMessageV1=z.object({...base,fictionalCustomer:fictionalCustomerV1}).strict().readonly();
+export const customerBoundMessageV1=z.object({id:base.id,commandId:base.commandId,text:base.text,evidence:base.evidence,fictionalCustomer:fictionalCustomerV1,
+ customerActor:z.object({kind:z.literal("customer"),customerId:z.guid(),sessionId:z.guid()}).strict().readonly()}).strict().readonly();
 const read={jobId:z.guid({ error: "Invalid uuid" }),environment:z.literal("synthetic_demo"),realExternalActions:z.literal(0)};
 export const diaryReadV1=z.object({...read,version:z.literal("job-diary-read.v1"),entries:z.array(diaryEntryV1).readonly(),notice:z.literal(JOB_DIARY_NOTICE),noticeVersion:z.literal(JOB_DIARY_NOTICE_VERSION)}).strict().readonly();
-export const customerMessageReadV1=z.object({...read,version:z.literal("customer-message-read.v1"),messages:z.array(customerMessageV1).readonly()}).strict().readonly();
+export const customerMessageReadV1=z.object({...read,version:z.literal("customer-message-read.v1"),messages:z.array(z.union([customerMessageV1,customerBoundMessageV1])).readonly()}).strict().readonly();
 export type DiaryRead=z.infer<typeof diaryReadV1>;
 export type CustomerMessageRead=z.infer<typeof customerMessageReadV1>;
 export class JobSourceError extends Error {

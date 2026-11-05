@@ -1,0 +1,27 @@
+{
+  "version": 2,
+  "lanes": {
+    "lp-6d-customer-proof": {
+      "branches": [
+        "codex/sandbox/lp-6d-customer-proof"
+      ],
+      "allow": [
+        "apps/api/src/auth/customer-message.test.ts",
+        "apps/api/src/auth/customer-message.ts",
+        "docs/contracts/lp-customer-binding-v1.md",
+        "packages/core/src/job-sources.test.ts",
+        "packages/core/src/job-sources.ts",
+        "packages/db/migration-notes/1000_lp6d_customer_binding.md",
+        "packages/db/migrations/1000_lp6d_customer_binding.sql",
+        "packages/db/src/job-source-observation-reader.ts",
+        "packages/db/src/shadow-detection-repository.ts",
+        "packages/db/test/customer-portal-message.integration.test.ts",
+        "packages/db/test/later-empty-tables.ts",
+        "packages/db/test/lp6d-customer-binding.test.ts",
+        "packages/db/test/migration-proofs/1000_lp6d_customer_binding.proof.json",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts"
+      ],
+      "note": "LP-6D-CUSTOMER-PROOF RED NOPR; verification and landing holds in migration note 1000."
+    }
+  }
+}

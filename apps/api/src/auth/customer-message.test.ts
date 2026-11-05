@@ -81,3 +81,11 @@ it("fails closed if SQL returns an internal membership ID or an unknown receipt 
   expect(next.status).toBe(503);expect(await next.json()).toEqual({code:"CUSTOMER_UNAVAILABLE"});
  }
 });
+
+it("accepts genuine customer attribution and rejects a different customer's receipt",async()=>{
+ const f=fixture(),customerActor={kind:"customer",customerId:customer,sessionId:commandId};
+ f.query.mockImplementation(async sql=>({rows:[{result:sql.includes("customer_portal_message")?{...receipt,record:{...receipt.record,customerActor}}:{version:"customer-session.v1",jobId:job}}]}));
+ expect((await f.app.post(body,{headers})).record).toMatchObject({customerActor});
+ customerActor.customerId=tenant;
+ await expect(f.app.post(body,{headers})).rejects.toThrow("Invalid message receipt");
+});

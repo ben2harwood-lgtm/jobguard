@@ -19,7 +19,7 @@ describe("SV-7A source contracts (intake remains held)",()=>{
   expect(customerMessageInputV1.parse(input).fictionalCustomer.kind).toBe("named_fictional_customer");
   for(const change of [{actorMembershipId:id},{sessionId:id},{fictionalCustomer:{kind:"authenticated_customer",name:"Alex"}},{fictionalCustomer:{kind:"named_fictional_customer",name:"Alex",role:"owner"}}]) expect(customerMessageInputV1.safeParse({...input,...change}).success).toBe(false);
   const read={version:"customer-message-read.v1",jobId:id,messages:[{id,commandId:id,text:input.text,evidence:{id,objectVersionId:"concrete-v1",sha256:"a".repeat(64),serverReceivedAt:"2026-10-13T10:00:00.000001Z"},fictionalCustomer:input.fictionalCustomer,actualTesterMembershipId:id}],environment:"synthetic_demo",realExternalActions:0};
-  expect(customerMessageReadV1.parse(read).messages[0]?.actualTesterMembershipId).toBe(id);
+  expect(customerMessageReadV1.parse(read).messages[0]).toMatchObject({actualTesterMembershipId:id});
   expect(customerMessageReadV1.safeParse({...read,messages:[{...read.messages[0],actualTesterMembershipId:"Fictional Alex"}]}).success).toBe(false);
  });
  it("SV7A-01 typed failures carry stable codes",()=>{expect(new JobSourceError("INVALID_JOB_SOURCE_INPUT").code).toBe("INVALID_JOB_SOURCE_INPUT")});
@@ -27,4 +27,13 @@ describe("SV-7A source contracts (intake remains held)",()=>{
   for(const text of ["fictional \ud800", "\udc00 fictional"])expect(diaryInputV1.safeParse({...diary,text}).success).toBe(false);
   expect(diaryInputV1.parse({...diary,text:"\ufeffFictional café 🛠\r\n"}).text).toBe("\ufeffFictional café 🛠\r\n");
  });
+});
+
+it("reads customer-bound messages without accepting a sponsor as their actor",()=>{
+ const id="11111111-1111-4111-8111-111111111111";
+ const record={id,commandId:id,text:"A fictional request",evidence:{id,objectVersionId:"v1",sha256:"a".repeat(64),serverReceivedAt:"2026-11-05T00:00:00.000Z"},fictionalCustomer:{kind:"named_fictional_customer",name:"Fictional customer"},customerActor:{kind:"customer",customerId:id,sessionId:id}};
+ const read={version:"customer-message-read.v1",jobId:id,messages:[record],environment:"synthetic_demo",realExternalActions:0};
+ expect(customerMessageReadV1.parse(read).messages).toEqual([record]);
+ for(const message of [{...record,actualTesterMembershipId:id},{...record,customerActor:{...record.customerActor,kind:"member"}},{...record,customerActor:{...record.customerActor,sessionId:"forged"}}])
+  expect(customerMessageReadV1.safeParse({...read,messages:[message]}).success).toBe(false);
 });

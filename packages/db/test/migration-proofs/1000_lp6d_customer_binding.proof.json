@@ -1,0 +1,405 @@
+{
+  "migration": "1000_lp6d_customer_binding.sql",
+  "lp0": [
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "id": "a-lp6d-customer-binding",
+        "title": "Distinct synthetic customer request binding",
+        "kind": "identity",
+        "status": "approved_current",
+        "target": {
+          "state": "retain",
+          "note": "Customer authority cannot enter member command paths."
+        },
+        "cards": [
+          "LP-6d"
+        ],
+        "responsibilities": {
+          "LP-6d": "Bind verified customer/session/job; keep sponsor separate from actor."
+        },
+        "downstream": "Private credential resolver and binder; runtime can only read tenant-isolated immutable customer message records.",
+        "sources": [
+          "docs/contracts/lp-customer-binding-v1.md",
+          "packages/db/migrations/1000_lp6d_customer_binding.sql"
+        ],
+        "tests": [
+          "packages/db/test/lp6d-customer-binding.test.ts",
+          "packages/db/test/customer-portal-message.integration.test.ts"
+        ],
+        "gaps": [
+          "Real PostgreSQL CI, predecessor catch-up and independent RED review remain required."
+        ],
+        "path": "ap-lp6d-customer-binding"
+      }
+    },
+    {
+      "section": "authorityPaths",
+      "before": null,
+      "after": {
+        "id": "ap-lp6d-customer-binding",
+        "title": "Distinct synthetic customer request binding",
+        "description": "Private credential resolver and binder; runtime can only read tenant-isolated immutable customer message records.",
+        "cards": [
+          "LP-6d"
+        ],
+        "responsibilities": {
+          "LP-6d": "Bind verified customer/session/job; keep sponsor separate from actor."
+        },
+        "sources": [
+          "docs/contracts/lp-customer-binding-v1.md",
+          "packages/db/migrations/1000_lp6d_customer_binding.sql"
+        ],
+        "tests": [
+          "packages/db/test/lp6d-customer-binding.test.ts",
+          "packages/db/test/customer-portal-message.integration.test.ts"
+        ],
+        "gaps": [
+          "Real PostgreSQL CI, predecessor catch-up and independent RED review remain required."
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.lp6_customer_authority(uuid,uuid,uuid,text)|jobguard_migration",
+        "group": "a-lp6d-customer-binding"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.lp6_customer_authority(uuid,uuid,uuid,text)|jobguard_binding_owner|EXECUTE|-",
+        "group": "a-lp6d-customer-binding"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.bind_customer_request(uuid,uuid,uuid,text)|jobguard_binding_owner",
+        "group": "a-lp6d-customer-binding"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.bind_customer_request(uuid,uuid,uuid,text)|jobguard_migration|EXECUTE|-",
+        "group": "a-lp6d-customer-binding"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|rel:table|app.customer_portal_message_record|jobguard_migration",
+        "group": "a-lp6d-customer-binding"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|rel|table|app.customer_portal_message_record|jobguard_runtime|SELECT|-",
+        "group": "a-lp6d-customer-binding"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp6_customer_authority(uuid,uuid,uuid,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_binding_owner"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "identity.customer_portal_use"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.bind_customer_request(uuid,uuid,uuid,text)",
+        "owner": "jobguard_binding_owner",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_migration"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [
+          "control_plane.request_binding"
+        ],
+        "staticCalls": [
+          "app.lp6_customer_authority"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:identity.customer_portal_message(uuid,uuid,uuid,text,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_identity"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.append_final_check_audit",
+          "app.sv7a_intake_job_source",
+          "identity.customer_portal_use"
+        ]
+      },
+      "after": {
+        "identity": "function:identity.customer_portal_message(uuid,uuid,uuid,text,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_identity"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.customer_portal_message_record",
+          "app.evidence_object",
+          "app.evidence_upload",
+          "app.watchdog_command_identity"
+        ],
+        "staticCalls": [
+          "app.append_final_check_audit",
+          "app.bind_customer_request",
+          "app.ch4_legacy_command_owned"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.sv7a_require_source_owner(uuid,uuid,text,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.ch4_require_command_owner",
+          "identity.customer_portal_use"
+        ]
+      },
+      "after": {
+        "identity": "function:app.sv7a_require_source_owner(uuid,uuid,text,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.ch4_require_command_owner"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.read_job_sources(uuid,uuid,text,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "db5d1d4963d5033e0a0027559619a60001bbeaef5b0c39dac4c8f3f4d1d2e3e7",
+        "staticWrites": [],
+        "staticCalls": [
+          "app.authenticate_practice_session"
+        ]
+      },
+      "after": {
+        "identity": "function:app.read_job_sources(uuid,uuid,text,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "db5d1d4963d5033e0a0027559619a60001bbeaef5b0c39dac4c8f3f4d1d2e3e7",
+        "staticWrites": [],
+        "staticCalls": [
+          "app.authenticate_practice_session",
+          "app.contractor_session",
+          "app.current_actor",
+          "app.current_tenant"
+        ]
+      }
+    },
+    {
+      "section": "rls",
+      "before": null,
+      "after": "app.customer_portal_message_record|rls=t|forced=t"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.customer_portal_message_record|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_runtime|6fa387f2f629fba6"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.customer_portal_message_record|customer_message_immutable|app.reject_immutable_commercial_mutation|BEFORE UPDATE/DELETE/TRUNCATE|O"
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp6_customer_authority",
+        "args": "t uuid, j uuid, c uuid, digest text",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_binding_owner=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "bind_customer_request",
+        "args": "t uuid, j uuid, c uuid, digest text",
+        "proowner": "jobguard_binding_owner",
+        "proacl": "{jobguard_binding_owner=X/jobguard_binding_owner,jobguard_migration=X/jobguard_binding_owner}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "app.customer_portal_message_record",
+        "data": []
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "customer_portal_message_record",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=r/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "customer_portal_message_record_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "customer_portal_message_record_tenant_id_command_id_key",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "customer_portal_message_record",
+        "policyname": "tenant_isolation",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration,jobguard_runtime}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
+      }
+    }
+  ],
+  "tenancy": [
+    {
+      "relname": "customer_portal_message_record",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    }
+  ]
+}

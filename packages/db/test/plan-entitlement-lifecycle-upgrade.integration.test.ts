@@ -208,6 +208,21 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     expect(signature.split("(")[0]).toBe(body[1]);
     replacements.set(oid, body[4]!);
   }
+  // Exact successor signatures only: customer authority never relaxes member guards.
+  const customerBodies = [...readFileSync(new URL("../migrations/1000_lp6d_customer_binding.sql", import.meta.url), "utf8")
+    .matchAll(/CREATE OR REPLACE FUNCTION ((?:app|identity)\.\w+)\((.*?)\)\s*RETURNS\b.*?\bAS\s+(\$\w*\$)(.*?)\3\s*;/gis)];
+  const customerSignatures = [
+    "app.lp6_bound_request()",
+    "identity.customer_portal_message(uuid,uuid,uuid,text,jsonb)",
+    "app.sv7a_require_source_owner(uuid,uuid,text,text)",
+    "app.read_job_sources(uuid,uuid,text,text)",
+    "app.evidence_pack_v3_ordinary(uuid,uuid)",
+  ];
+  expect(customerBodies.map(body => body[1])).toEqual(customerSignatures.map(signature => signature.split("(")[0]));
+  for (const [index, signature] of customerSignatures.entries()) {
+    const oid = (await c.admin.query("SELECT $1::regprocedure::oid oid", [signature])).rows[0].oid;
+    replacements.set(oid, customerBodies[index]![4]!);
+  }
   for (const prior of security) {
     const current = live.find(row => row.oid === prior.oid);
     // Preserve the repair branch's named successor dispatcher allowance.

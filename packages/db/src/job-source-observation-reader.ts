@@ -6,9 +6,11 @@ import {decodeJobSourceFixture} from "./job-source-fixtures.js";
 export async function readJobSourceObservations(db:TenantTransaction,tenantId:string,jobId:string):Promise<Observation[]> {
  const rows=(await db.$client.query<{evidence_id:string;object_version_id:string;sha256:string;received:string;source_kind:"diary"|"customer_message";bytes:Buffer;byte_length:number;synthetic_fixture_ref:string|null}>(`
   SELECT o.evidence_id,o.object_version_id,o.sha256,to_char(o.source_received_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') received,o.source_kind,o.bytes,o.byte_length,o.synthetic_fixture_ref
-  FROM app.job_source_original o
+  FROM (SELECT tenant_id,job_id,evidence_id,source_kind,source_id,object_key,object_version_id,content_type,bytes,sha256,byte_length,source_received_at,environment,synthetic_fixture_ref FROM app.job_source_original
+   UNION ALL SELECT tenant_id,job_id,evidence_id,'customer_message',id,'synthetic/job-sources/'||id::text,object_version_id,'text/plain; charset=utf-8',bytes,sha256,octet_length(bytes),source_received_at,'synthetic_demo',synthetic_fixture_ref FROM app.customer_portal_message_record) o
   JOIN (SELECT tenant_id,job_id,id,source_kind,evidence_id,object_version_id,sha256,source_received_at FROM app.job_diary_entry
-   UNION ALL SELECT tenant_id,job_id,id,source_kind,evidence_id,object_version_id,sha256,source_received_at FROM app.customer_message_source) s
+   UNION ALL SELECT tenant_id,job_id,id,source_kind,evidence_id,object_version_id,sha256,source_received_at FROM app.customer_message_source
+   UNION ALL SELECT tenant_id,job_id,id,'customer_message',evidence_id,object_version_id,sha256,source_received_at FROM app.customer_portal_message_record) s
    ON(s.tenant_id,s.job_id,s.source_kind,s.id,s.evidence_id,s.object_version_id,s.sha256,s.source_received_at)=(o.tenant_id,o.job_id,o.source_kind,o.source_id,o.evidence_id,o.object_version_id,o.sha256,o.source_received_at)
   JOIN app.evidence_object e ON(e.tenant_id,e.job_id,e.id,e.object_version_id,e.sha256,e.server_received_at)=(o.tenant_id,o.job_id,o.evidence_id,o.object_version_id,o.sha256,o.source_received_at)
   JOIN app.evidence_upload u ON(u.tenant_id,u.job_id,u.id)=(e.tenant_id,e.job_id,e.upload_id)

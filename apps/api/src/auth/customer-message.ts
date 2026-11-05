@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { jobSourceTextV1, customerMessageV1 } from "@jobguard/core";
+import { jobSourceTextV1, customerMessageV1, customerBoundMessageV1 } from "@jobguard/core";
 import type { IdentityApplication } from "./identity.application.js";
 import type { IdentityHttpRequest } from "./identity-http.js";
 import { CustomerSigninApplication, CustomerRefused, customerRefusal, customerToken } from "./customer-signin.js";
@@ -11,7 +11,7 @@ export const customerPortalMessageV1 = z.object({
 const customerPortalMessageReceiptV1 = z.object({
   version: z.literal("job-source-intake-receipt.v1"), jobId: z.guid(),
   sourceKind: z.literal("customer_message"), environment: z.literal("synthetic_demo"),
-  realExternalActions: z.literal(0), record: customerMessageV1.unwrap().omit({actualTesterMembershipId: true}).readonly(),
+  realExternalActions: z.literal(0), record: z.union([customerMessageV1.unwrap().omit({actualTesterMembershipId: true}).readonly(), customerBoundMessageV1]),
 }).strict();
 /** Uses sign-in's persisted session; never constructs a membership or a tenant context. */
 export class CustomerMessageApplication {
@@ -31,7 +31,8 @@ export class CustomerMessageApplication {
         [tenantId, jobId, customerId, digest, JSON.stringify(input)],
       )).rows[0]?.result;
       const receipt = customerPortalMessageReceiptV1.parse(result);
-      if (receipt.sourceKind !== "customer_message" || receipt.jobId !== jobId) throw new Error("Invalid message receipt");
+      if (receipt.sourceKind !== "customer_message" || receipt.jobId !== jobId
+        || ("customerActor" in receipt.record && receipt.record.customerActor.customerId !== customerId)) throw new Error("Invalid message receipt");
       return receipt;
     } catch (error) {
       if ((error as {code?: string})?.code === "42501") throw new CustomerRefused();

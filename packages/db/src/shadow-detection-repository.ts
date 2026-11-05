@@ -163,7 +163,7 @@ export function practiceFinalCheckPorts(shadowPool: Pool, runtimePool: Pool, pra
     if (s.sourceKind === "job_diary_text" || s.sourceKind === "customer_message_text") {
       const kind = s.sourceKind === "job_diary_text" ? "note_or_voice" : "customer_request";
       const row = await withTenant(runtimePool, context, async db => (await db.$client.query<{ text: string; ref: string | null }>(
-        "SELECT convert_from(bytes,'UTF8') text,synthetic_fixture_ref ref FROM app.job_source_original WHERE tenant_id=$1 AND evidence_id=$2", [context.tenantId, s.evidenceId])).rows[0]);
+        "SELECT convert_from(bytes,'UTF8') text,synthetic_fixture_ref ref FROM app.job_source_original WHERE tenant_id=$1 AND evidence_id=$2 UNION ALL SELECT convert_from(bytes,'UTF8') text,synthetic_fixture_ref ref FROM app.customer_portal_message_record WHERE tenant_id=$1 AND evidence_id=$2", [context.tenantId, s.evidenceId])).rows[0]);
       const decoded = row ? decodeJobSourceFixture(row.ref, row.text, kind) : null;
       return decoded ? observationV1.parse({ ...base, kind, ...decoded }) : null;
     }
