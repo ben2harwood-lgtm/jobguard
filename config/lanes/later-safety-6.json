@@ -1,0 +1,28 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-6": {
+      "branches": [
+        "codex/sandbox/later-safety-6"
+      ],
+      "note": "LATER-SAFETY-6: RED retention runtime timer and owner/admin reads; NOPR; no plan piece finishes.",
+      "allow": [
+        "apps/api/src/retention-record.application.test.ts",
+        "apps/api/src/retention-record.application.ts",
+        "apps/api/src/retention-review-task.test.ts",
+        "apps/api/src/retention-review-task.ts",
+        "apps/api/src/worker.ts",
+        "apps/web/app/api/jobs/[id]/retention-records/route.test.ts",
+        "apps/web/app/jobs/[id]/retention-records/screen.tsx",
+        "packages/db/migration-notes/0785_retention_timer_runtime_rules.md",
+        "packages/db/migrations/0785_retention_timer_runtime_rules.sql",
+        "packages/db/src/retention-record-repository.ts",
+        "packages/db/test/migration-proofs/0785_retention_timer_runtime_rules.proof.json",
+        "packages/db/test/retention-record-repository.test.ts",
+        "packages/db/test/retention-records.integration.test.ts",
+        "packages/db/test/retention-review-timer.integration.test.ts",
+        "packages/db/test/retention-screen.integration.test.ts"
+      ]
+    }
+  }
+}
