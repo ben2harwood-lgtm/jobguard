@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it } from "vitest";
-import { lp5RegistryRows, lateSourceRegistryRow, managedRecoveryRegistryRow, siteSupervisorQueryRegistryRow, currentCommandRegistryRows } from "./lp5-command-catalog.js";
+import { lp5RegistryRows, lateSourceRegistryRow, managedRecoveryRegistryRow, siteSupervisorQueryRegistryRow, darkOrderRegistryRow } from "./lp5-command-catalog.js";
 import { parseInventory } from "./lp-0-catalog.js";
 import { applyTenancyProofs, applyUpgradeProofs, combineLp0, loadMigrationProofs } from "./migration-proof-loader.js";
 
@@ -33,8 +33,10 @@ it("M2-4 and its sibling proofs preserve main and keep tables guarded and routin
     expect(Object.keys(expected.rows).sort()).toEqual([
       "app.command_type_registry", "app.purchase_order_manual_attestation", "app.supplier_line_match_correction", "app.supplier_line_match_snapshot",
     ]);
-    expect(expected.rows["app.command_type_registry"]).toEqual(expect.arrayContaining(currentCommandRegistryRows));
-    expect(expected.rows["app.command_type_registry"]).toHaveLength(currentCommandRegistryRows.length);
+    // This fixture stops at 0606; main adds rate.suggestion_accept in 0609.
+    const registryAt0606 = [...lp5RegistryRows, lateSourceRegistryRow, managedRecoveryRegistryRow, siteSupervisorQueryRegistryRow, darkOrderRegistryRow];
+    expect(expected.rows["app.command_type_registry"]).toEqual(expect.arrayContaining(registryAt0606));
+    expect(expected.rows["app.command_type_registry"]).toHaveLength(registryAt0606.length);
     expect(expected.routines).toHaveLength(3);
     for (const routine of expected.routines) expect(routine).toMatchObject({
       proowner: 42, proacl: "{jobguard_migration=X/jobguard_migration}", prosecdef: false,
