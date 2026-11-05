@@ -182,3 +182,4 @@ export * from "./direct-debit-lifecycle.js";
 
 export * from "./extra-approval-inbox.js";
 export * from "./deepgram-transcript.js";
+export * from "./operative-view-models.js";
