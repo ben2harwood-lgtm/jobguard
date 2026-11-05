@@ -69,6 +69,70 @@ binaries were used without downloading packages. Database/browser/full CI and th
 independent RED review remain for the router/CI. Conflict markers are resolved in
 files; the read-only git index still needs the router to stage the resolution.
 
+## M4-15 durable synthetic facts seam (0758)
+
+`DirectDebitFixtureRepository` is separate from the in-memory fake rail, which
+remains unwired and behaves as before. It records only already verified fake
+mandate and collection-payment events. Callers must supply a genuine withTenant
+context and independent server bindings (synthetic environment, fake account,
+mandate, and accepted payment command/object/amount). Payload tenant or account
+claims never select context. No signature or raw webhook is accepted as proof by
+this repository; signature verification remains the rail's responsibility.
+
+Initial mandate state must be `created`. Each later write compares the supplied
+previous history head under a database lock. Exact event replays are idempotent
+across process/pool restarts, changed content conflicts, and swapped known
+references return the same not-found as foreign tenants. Calls use separate
+transactions so one invalid batch member leaves no fact and does not stop others.
+Reads return the full stored history and derive mandate/payment states with the
+shared core lifecycle rules. Terminal mandates block new submission permanently;
+this is a read answer, not execution authority. Payment payout appears only after
+a stored `paid_out` event; failures, chargebacks and late failures stay distinct.
+Facts and hashes are append-only under FORCE RLS; runtime has no direct table
+access. No collection, reservation, settlement, release or financial posting occurs.
+
+The initial review simplification (LATER / SIMPLICITY):
+`apps/api/src/fee-collection/executor.ts:195` duplicates the payment progress
+ordering now exported by `packages/core/src/direct-debit-lifecycle.ts`. A future
+executor change can import that ordering to reduce maintenance drift; executor
+and reservation behaviour are outside this slice.
+
+This adds persistence only and does not complete M4-15. Real rail, application
+wiring, notices, mandate replacement and retries await their own approvals and
+D04/D05. PostgreSQL migration/upgrade/tenancy, restart/concurrency and immutable
+fact tests require CI; green local unit checks are not database evidence or an
+independent RED review.
+
+## Optional signed-event recorder (M4-15 remains open)
+
+The fake rail now accepts an optional `FakeDirectDebitRecorder` constructor port.
+Its explicit async `recordWebhookBatch` method authenticates the bounded exact
+body/timestamp before parsing, validates each member separately, then records
+schema-valid mandate/collection events independently. Invalid members leave no
+fact and do not prevent later valid members from being processed. A missing port
+refuses recording. Existing synchronous verification, mandate setup/ingestion and
+executor consumers retain their original behaviour; none are wired to this seam.
+
+`DirectDebitFixtureRecorder` closes over caller-verified context and copies trusted
+mandate/request bindings at construction. It never resolves a tenant or request
+binding from payload fields. Tenant, account, mandate, command, object and amount
+must match those bindings; refunds are refused. Each call reads the durable head
+and uses the repository's existing compare-and-append transaction. Exact replays
+return event IDs from stored history, including after a fresh rail/pool. Changed
+content or competing new events preserve the store conflict; no automatic retry
+is introduced. Stored lifecycle projections remain the repository's authority:
+submission/confirmation is not payout, delayed progress cannot revive terminal
+states, and only a stored `paid_out` event can project payout.
+
+This adds no migration, role, grant, route, application registration or financial
+write. The new real-PostgreSQL test sends signed bodies through fresh rails and
+pools, checks concurrent duplicate delivery, forgery/routing/batch rejection and
+lifecycle ordering, and snapshots all tenant-owned app rows outside the fixture
+facts to check that financial rows do not change. It is written for CI, not run
+in this database-free sandbox. Local unit checks cannot establish those database
+guarantees. Real rail, wiring, cross-rail reservations, refunds, notice/settings,
+mandate replacement/retries and production gates remain held. M4-15 is not finished.
+
 ## MON-4B: receipt success fees (synthetic, real MON-4A reader)
 
 Plan: MON-4 / §10.3.4, M4-15 and §12.4. RED money. Repair 1 addresses
@@ -354,3 +418,139 @@ applicable browser journeys. No local DB/browser suite ran. Independent RED
 review must PASS at the exact resulting head and required CI must be green
 before merge. Synthetic data and fake payment rails only; production gates
 and required external approvals remain unchanged.
+
+
+Batch-20 landing attempt (5 November 2026), M4-15 debit store / ENT-8a prompt sources, RED:
+Incoming main: 108373dc9e9ff496931419193cf983cb27f2d873 (top migration 0594;
+0595 reserved for #560). Resolved working-file conflicts in both barrels, both
+contracts and laterEmptyTables by retaining both sides. Kept the batch-20
+hardened observation route pending the incompatibility below. Removed its
+duplicate watchdog registry key. Renamed only the full migration filename stem
+from 0855_direct_debit_fixture_facts to 0596_direct_debit_fixture_facts across
+SQL/proof/note paths and references. No main migration has the same store, and
+all main SQL bytes are unchanged. Added only the requested 240-second beforeAll
+timeout in recovery-eligibility-v3.integration.test.ts. Materials form buttons
+now use explicit AA-contrast foreground/background colours, including busy state.
+
+NOT READY / do not commit: exact-union route conflict. Main routes observations
+through possibleExtrasResponse / EnterpriseLivePromptApplication, returning 403
+EXTRA_FORBIDDEN and passing the repository answer through. This batch routes
+through promptSourcesResponse, projecting only observationId plus validated
+evaluation and hiding EXTRA_FORBIDDEN as 404 NOT_FOUND. The incoming route test
+expects 403 and mocks only {observationId}; the retained hardened route requires
+evaluation, so that successful-response assertion receives 503. These contracts
+cannot both hold for the same route without choosing behaviour or changing a
+test expectation. Keep the hardened route and obtain a scoped reconciliation
+order; do not weaken either test or silently remove the hardening.
+
+Local checks (installed binaries, Vitest --maxWorkers=2, <=3 named files/run):
+- Core direct-debit-lifecycle: 2 passed.
+- DB direct-debit-fixture-repository + migration-proof-loader: 84 passed.
+- API direct-debit-fixture-recorder + fake-gocardless-recorder + fake-gocardless:
+  48 passed.
+- API auth/context-boundary + auth/identity + watchdog-registry: 278 passed.
+- Web prompt-sources-server + materials-issues + possible-extras/route: final
+  run 29 passed, 1 failed (route conflict above). Initial run lacked API dist;
+  built the installed API package and reran. No package downloads.
+- Installed tsc passed core, config, DB and API emitting build output; API and
+  web --noEmit checks passed. Core initially found the duplicate registry key;
+  it passed after deduplication.
+- Money arithmetic, commercial boundary, commercial integrity boundary and
+  current-source guards passed; both integrity guards had 0 diagnostics with
+  their existing 9 unresolved baselines. No fingerprint was changed.
+- Standard lane lint ran and failed because the read-only unfinished index still
+  contains incoming-main paths and the old 0855 stem. A working-file comparison
+  with MERGE_HEAD using the existing lane matcher/order functions passed: 30
+  non-lane paths, no self-listing, sole new SQL 0596, main SQL unchanged.
+- git diff --check passed. No provider-register data-flow source changed, no
+  new CI image, and no new runtime writes to protected command tables. New
+  private tables are in laterEmptyTables; restore-reconciliation-upgrade uses it.
+  No command_lifecycle_claim access, SET app.* function clause, direct session
+  revocation or outbound-pause clearing was added. New server transport is
+  server-only; changed web routes do not directly import API source. Cloudflare
+  build was not run in this restricted environment; source inspection was used.
+
+LATER / SIMPLICITY: apps/web/app/lib/prompt-sources-server.ts duplicates the
+existing live-prompt application transport. After explicitly reconciling denial
+status and response projection contracts, one shared transport would reduce
+authorization/error handling drift. This observation does not block by itself.
+
+No PostgreSQL or browser suites were run here. CI still must prove migration
+fresh/upgrade/catalogue/privilege/RLS and immutable replay guarantees; the two
+Direct Debit integrations, source route integration, recovery eligibility hook,
+restore snapshots and phone/desktop ENT-8a browser journey; full mandatory
+checks and exact-head independent RED review remain required before merge.
+No git write, push, PR, real data, live provider or release action was performed.
+
+### Batch-20 reconciliation follow-up — 5 November 2026
+
+READY for router commit/push/PR; supersedes the NOT READY observation-route
+conflict above. Applied the router's ruling: observations retain main's public
+403 EXTRA_FORBIDDEN while keeping the strict validated evaluation projection.
+Materials/evaluate refusal behavior is unchanged. The shared transport test now
+checks the observation-specific 403; no existing expectation in
+possible-extras/route.test.ts changed. Its success mock has the full projection,
+and a new regression proves an incomplete projection yields 503
+PROMPT_UNAVAILABLE with Cache-Control: no-store (no response cache storage).
+This output validation does not establish database rollback after a repository
+call. The recovery eligibility hook already has the requested 240_000 timeout;
+its diff from incoming main contains only that timeout.
+
+Current local verification, using installed binaries (no downloads):
+- From apps/web: ./node_modules/.bin/vitest run --maxWorkers=2
+  'app/api/contractor/jobs/[id]/possible-extras/route.test.ts'
+  app/lib/prompt-sources-server.test.ts
+  'app/contractor/jobs/[id]/materials-issues/materials-issues.test.tsx'
+  passed: 3 files, 31 tests.
+- From apps/web: ./node_modules/.bin/tsc -p tsconfig.json --noEmit passed.
+- git diff --check passed.
+- node tools/agent-lane-boundary-lint.mjs --lane=batch-20 failed on the
+  unfinished read-only index (incoming-main paths and old 0855 entries).
+  Working-file verification against MERGE_HEAD using lanePathAllowed and
+  migrationOrderViolations passed: exact 31 non-lane paths, no lane self-entry,
+  unchanged incoming-main SQL, sole new SQL 0596. Router must stage the resolved
+  working files/renames and rerun standard lane lint after completing the merge.
+- pnpm wrappers made no progress and were interrupted; checks above ran through
+  the installed Vitest/TypeScript executables instead.
+
+No DB/browser suites were attempted: this sandbox cannot start PostgreSQL or
+bind localhost. CI must prove the full mandatory checks, fresh/upgrade migration
+and catalog/grant/RLS guarantees, Direct Debit repository/recorder integrations,
+source-route integration, recovery eligibility, restore reconciliation, and
+phone/desktop ENT-8a journeys. Exact-head independent RED review remains a
+merge gate. This handoff is readiness for a PR, not evidence of those gates.
+No git write, commit, push, PR creation, live provider or release was performed.
+
+
+### Batch-20 PR #562 independent-check repair — 5 November 2026 (RED)
+
+Applied on clean head `40dca9548` (the merge from main following `b0b50fe6`).
+This repair changes test expectations and documentation only: the foreign
+observation expects 403 / EXTRA_FORBIDDEN per the router ruling; return/correction
+facts expect PostgreSQL's six-decimal quantity text; the route integration test
+loads @jobguard/db from source using the managed-recovery test's mock pattern.
+The 0596 note heading and proof description now identify the actual synthetic
+append-only facts routine. Product code and migration 0596 SQL are unchanged.
+
+Local checks using installed binaries, with at most two Vitest workers:
+- From apps/web: `./node_modules/.bin/vitest run --maxWorkers=2
+  'app/api/contractor/jobs/[id]/possible-extras/route.test.ts'
+  app/lib/prompt-sources-server.test.ts
+  'app/contractor/jobs/[id]/materials-issues/materials-issues.test.tsx'`
+  passed: 3 files, 31 tests.
+- From apps/web: `./node_modules/.bin/vitest list --maxWorkers=2
+  'app/api/contractor/jobs/[id]/possible-extras/materials/route.integration.test.ts'`
+  collected all 8 cases successfully. Collection is not database execution.
+- From apps/web: `./node_modules/.bin/tsc -p tsconfig.json --noEmit` passed.
+- `node tools/agent-lane-boundary-lint.mjs --lane=batch-20` and
+  `git diff --check` passed. Working-file comparison with origin/main also
+  confirms exactly 31 non-lane paths in the lane allow list, with no self-entry.
+
+READY for router commit/push and CI; not a merge or release approval.
+No database or browser suite ran here: the sandbox cannot start PostgreSQL or
+bind localhost. CI must execute the repaired source-route integration assertions,
+fresh/upgrade migration and catalogue/grant/FORCE RLS checks, Direct Debit
+repository and recorder integrations, recovery eligibility, restore checks and
+phone/desktop ENT-8a journeys, plus all mandatory typecheck/lint/test/build gates.
+The independent RED check must pass against the resulting exact head before
+merge. No live provider, real customer data, git write or release was used.
