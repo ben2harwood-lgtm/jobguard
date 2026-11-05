@@ -165,3 +165,67 @@ The first `pnpm test` attempt passed core (4,672 tests), web (1,902), config (34
 System-Chromium journey result: **2 passed (4.4m)**. The complete 360px journey took **1.7m** and 1280px took **2.6m** under concurrent verification load, including billing, statement and dashboard assertions. Both satisfy the unchanged ten-minute journey assertion. This is an automated test, not the separate human rehearsal. The worker's SIGTERM output is the existing teardown stopping its process after both tests passed.
 
 `pnpm lint:lanes` passed against real base `36acf72da`. An additional exact-set check confirmed that the lane's `allow` equals every changed non-`config/lanes/` path, with no self-entry: **4 files plus the own lane file**. `git diff --check` passed.
+
+The rerun passed every non-DB workspace, including **4,072 API tests**. Its serial DB run was then deliberately stopped and replaced with the repository's existing CI arrangement (`.github/workflows/ci.yml`): four shards, each still `--maxWorkers=1`. This changes no test selection across the complete set, no test implementation and no timeout. No PR was opened to trigger CI.
+
+```sh
+pnpm exec turbo run test --filter='!@jobguard/db'
+pnpm --filter @jobguard/ai eval:contract
+pnpm --filter @jobguard/db test --shard=1/4
+pnpm --filter @jobguard/db test --shard=2/4
+pnpm --filter @jobguard/db test --shard=3/4
+pnpm --filter @jobguard/db test --shard=4/4
+```
+
+The non-DB CI command passed **12/12 tasks**, using the successful rerun's cache. AI contract evaluation passed with deterministic synthetic fixtures and no constructed network clients; live-model evaluation was not run (unchanged release item).
+
+Scope limit: this proves the reported sparse Northside journey and its unnecessary authorization/scan work. It is not a universal latency guarantee for arbitrary numbers of contributing jobs, extras or historical revisions; those facts still require their original authority checks and projections. The unchanged 360px/1280px journeys cover the complete billed/paid scenario that the focused plan fixture does not synthesize.
+
+A broad-run restore case initially failed with **`spawn pg_dump ENOENT`**. The unchanged file reproduced that failure in isolation (1 failed, 2 passed). This environment had neither `pg_dump` nor `psql`. Its configured Debian snapshot host was also blocked, so an isolated package index used the already-allowed official `deb.debian.org` mirror. PostgreSQL client **17.11-0+deb13u1** was downloaded and extracted under `work/pg-client`; only local runtime-bin symlinks were added. No OS package, project dependency, test or security rule changed. The unchanged restore file then passed **3/3 tests**, 13.82 s.
+
+```sh
+mkdir -p work/pg-client/lists/partial work/pg-client/cache/archives/partial
+cat > work/pg-client/sources.list <<'SOURCES'
+deb [signed-by=/usr/share/keyrings/debian-archive-keyring.gpg] https://deb.debian.org/debian trixie main
+SOURCES
+apt-get -o Dir::Etc::main=/dev/null -o Dir::Etc::parts=- \
+  -o Dir::Etc::sourcelist=/workspace/jobguard/work/pg-client/sources.list -o Dir::Etc::sourceparts=- \
+  -o Dir::State::Lists=/workspace/jobguard/work/pg-client/lists \
+  -o Dir::Cache=/workspace/jobguard/work/pg-client/cache -o APT::Sandbox::User=agent update
+cd /workspace/jobguard/work/pg-client
+apt-get -o Dir::Etc::main=/dev/null -o Dir::Etc::parts=- \
+  -o Dir::Etc::sourcelist=/workspace/jobguard/work/pg-client/sources.list -o Dir::Etc::sourceparts=- \
+  -o Dir::State::Lists=/workspace/jobguard/work/pg-client/lists \
+  -o Dir::Cache=/workspace/jobguard/work/pg-client/cache -o APT::Sandbox::User=agent download postgresql-client-17
+cd /workspace/jobguard
+dpkg-deb -x work/pg-client/postgresql-client-17_*.deb work/pg-client/extracted
+ln -s /workspace/jobguard/work/pg-client/extracted/usr/lib/postgresql/17/bin/pg_dump /workspace/.jobguard-runtime/node_modules/.bin/pg_dump
+ln -s /workspace/jobguard/work/pg-client/extracted/usr/lib/postgresql/17/bin/psql /workspace/.jobguard-runtime/node_modules/.bin/psql
+pg_dump --version # PostgreSQL 17.11
+psql --version    # PostgreSQL 17.11
+pnpm --filter @jobguard/db exec vitest run test/lp6a-practice-restore.integration.test.ts --maxWorkers=1
+```
+
+Final complete DB-shard results (all four commands ran to completion):
+
+| Run | Files | Tests | Duration | Exit |
+|---|---|---|---:|---:|
+| Shard 1/4 | 197 passed | 1,777 passed; 15 existing todo | 1,144.48 s | 0 |
+| Shard 2/4 | 197 passed | 1,425 passed | 1,129.39 s | 0 |
+| Shard 3/4 | 197 passed | 1,661 passed; 4 existing todo | 1,312.74 s | 0 |
+| Shard 4/4, before client prerequisite was available | 195 passed; 1 failed | 1,798 passed; 1 failed (`pg_dump ENOENT`) | 1,183.65 s | 1 |
+| Unchanged restore-file rerun with client 17.11 | 1 passed | 3 passed | 13.82 s | 0 |
+
+Thus all 787 DB files were exercised, and the sole environmental failure was resolved and re-executed successfully without changing a test. The original shard-4 exit remains recorded as a failure; this is not a claim that the initial four-command run was entirely green. The 19 existing todo cases were not implemented or weakened by this piece.
+
+## Handoff
+
+The branch is pushed with no PR and no merge. Product code is limited to the shared read query; the other changes are the PostgreSQL regression, this receipt, its plan archive and the exact lane manifest. RED review remains **tenant isolation only**, against the final branch head. No independent review or human rehearsal is claimed. Pinned Chromium/CI verification remains distinct from the successful local Chromium 154 journey.
+
+```sh
+git diff --check
+pnpm lint:lanes
+git push origin codex/sandbox/ent-dashboard-slow
+git ls-remote --heads origin refs/heads/codex/sandbox/ent-dashboard-slow
+git status --short
+```
