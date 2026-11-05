@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/batch-27"
       ],
-      "note": "M4-21 draft-store, built ahead NOPR; RED. Migration starts at 0890.",
+      "note": "M4-21 draft-store, ready for PR; RED. Reserved migration: 0607.",
       "allow": [
         "apps/api/src/vat-fixture.application.test.ts",
         "apps/api/src/vat-fixture.application.ts",
@@ -19,12 +19,12 @@
         "apps/web/e2e/M4-21-vat-fixtures.spec.ts",
         "docs/contracts/vat-fixture-records-dark-v1.md",
         "packages/core/src/watchdog.ts",
-        "packages/db/migration-notes/0890_vat_fixture_records.md",
-        "packages/db/migrations/0890_vat_fixture_records.sql",
+        "packages/db/migration-notes/0607_vat_fixture_records.md",
+        "packages/db/migrations/0607_vat_fixture_records.sql",
         "packages/db/src/index.ts",
         "packages/db/src/vat-fixture-repository.ts",
         "packages/db/test/later-empty-tables.ts",
-        "packages/db/test/migration-proofs/0890_vat_fixture_records.proof.json",
+        "packages/db/test/migration-proofs/0607_vat_fixture_records.proof.json",
         "packages/db/test/vat-fixture-repository.test.ts",
         "packages/db/test/vat-fixture-route.integration.test.ts",
         "packages/db/test/vat-fixture.integration.test.ts"

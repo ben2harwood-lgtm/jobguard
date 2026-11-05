@@ -13,7 +13,8 @@ job or documents), and one core `document`. There is no tenant, authorization ac
 or activation flag in the command body. Eligibility's human-fixture actor/evidence
 references describe fictional assertions, not authorization or verified tax facts.
 This is a fixture-local idempotency command, not a dispatcher/commercial command;
-it creates no command receipt, Decision or financial authorization. Its fixture-storage
+it creates no command receipt, Decision or financial authorization. LP-5 lifecycle
+dispatch remains held for this fixture-only command; it cannot dispatch commercial work. Its fixture-storage
 HTTP mutation is classified as post-live billing in the web mutation registry; this
 classification grants no commercial issue authority.
 
@@ -79,7 +80,8 @@ supplies the disabled issue reason. Credit method, interim/retention lineage and
 eligibility remain fictional, unapproved fixtures. No invoice or credit note is issued.
 The complete command is saved before POST in per-job/company-membership session storage.
 Network/5xx uncertainty, including reload, retries that identical command and payload;
-a definite 4xx refusal permits correction with a new command ID.
+a definite 4xx refusal, except 408/429, permits correction with a new command ID.
+Timeout and rate-limit responses preserve the saved request for unchanged retry.
 
 Local evidence is in the router commit message. CI must run the new PostgreSQL route
 test (persisted sessions, tenant/role refusals, no new financial or outbox rows) and

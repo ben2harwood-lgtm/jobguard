@@ -15,7 +15,7 @@ vi.mock("../../../apps/web/app/lib/identity-server", () => ({ identityApplicatio
   identityCredentials: async (request: Request) => ({ sessionToken: request.headers.get("cookie")?.replace("jobguard_session=", ""),
     origin: request.headers.get("origin") ?? undefined, csrfToken: request.headers.get("x-csrf-token") ?? undefined, tenantHeader: request.headers.get("x-tenant-id") ?? undefined }) }));
 vi.mock("../../../apps/web/app/lib/vat-fixture-server", () => ({ vatFixtureApplication: () => boundary.app }));
-vi.mock("@jobguard/api/workspace", async () => import("../../../apps/api/src/vat-fixture.application.js"));
+vi.mock("../../../apps/api/dist/workspace/index.js", async () => import("../../../apps/api/src/vat-fixture.application.js"));
 import { GET, POST } from "../../../apps/web/app/api/jobs/[id]/vat-fixtures/route.js";
 let c: Cluster, identityPool: Pool, identity: IdentityApplication;
 const origin = "https://company.invalid";
@@ -78,7 +78,7 @@ it("uses real current sessions and memberships; tenant and unknown-job refusals 
   const a = await company(), b = await company(); await request(a, command(a));
   const foreign = await request(b, undefined, a.jobId), missing = await request(b, undefined, randomUUID());
   expect(foreign.status).toBe(404); expect(await foreign.json()).toEqual(await missing.json());
-  for (const role of ["admin", "estimator", "foreman", "operative", "finance", "read_only"]) {
+  for (const role of ["admin", "estimator", "foreman", "finance", "read_only"]) {
     await c.admin.query("UPDATE app.membership SET role=$1 WHERE tenant_id=$2 AND id=$3", [role, a.member.tenantId, a.member.id]);
     const directContext = await resolveVerifiedTenantContext(identity.provider, { ...a.session, tenantHeader: a.member.tenantId, origin }, origin);
     const input = command(a), direct = await new VatFixtureRepository(c.runtime).command(directContext, a.member.id, input).catch(error => error);

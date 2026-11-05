@@ -90,7 +90,7 @@ export function VatFixtureScreen({ jobId, issueRefusal }: { jobId: string; issue
         headers: { ...session.headers, "Content-Type": "application/json" }, body: JSON.stringify(retry.current) });
       const value = await response.json() as VatFixtureView & { message?: string };
       if (!response.ok) {
-        if (response.status >= 400 && response.status < 500) clearPending();
+        if (response.status >= 400 && response.status < 500 && response.status !== 408 && response.status !== 429) clearPending();
         throw new Error(value.message ?? "Uncertain result. Retry the same document.");
       }
       setView(value); clearPending();

@@ -51,13 +51,23 @@ test("stored VAT documents: explicit facts, refusal, uncertain replay and reload
     await page.getByLabel("Customer end user", { exact: true }).selectOption("false");
     // Execute the actual route, then lose its reply. Reload and retry must reuse the exact command.
     let loseReply = true;
+    const transientRefusals = [408, 429];
     await page.route(`**${path}`, async route => {
-      if (route.request().method() === "POST" && loseReply) { loseReply = false; await route.fetch(); await route.abort("failed"); }
+      if (route.request().method() === "POST" && transientRefusals.length) {
+        await route.fulfill({ status: transientRefusals.shift()!, contentType: "application/json", body: JSON.stringify({ message: "Retry the saved request." }) });
+      } else if (route.request().method() === "POST" && loseReply) { loseReply = false; await route.fetch(); await route.abort("failed"); }
       else await route.continue();
     });
     const sent = page.waitForRequest(request => request.method() === "POST" && request.url().endsWith(path));
     await page.getByRole("button", { name: "Store practice document", exact: true }).click();
     const original = (await sent).postDataJSON();
+    // 408 and 429 preserve the same request, then a lost committed reply does too.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await expect(page.getByRole("button", { name: "Retry saved document unchanged" })).toBeEnabled();
+      const retryRequest = page.waitForRequest(request => request.method() === "POST" && request.url().endsWith(path));
+      await page.getByRole("button", { name: "Retry saved document unchanged" }).click();
+      expect((await retryRequest).postDataJSON()).toEqual(original);
+    }
     await expect(page.getByRole("button", { name: "Retry saved document unchanged" })).toBeEnabled();
     await page.reload();
     await expect(page.getByRole("button", { name: "Retry saved document unchanged" })).toBeEnabled();

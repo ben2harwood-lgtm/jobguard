@@ -3,10 +3,12 @@ import { checkSyntheticSubscriptionAgreement } from "@jobguard/core";
 import { rolePermits, type AuthProvider } from "../auth/auth-provider.js";
 import { collectionIntentV1, collectionSourcesV1, creditSourcesV1, FeeCollectionError, parse, refundIntentV1,
   type Attempt, type CollectionBook, type CollectionIntent, type CollectionSources, type ReservationStore,
-  type CollectionSessionContext, type DirectDebitWebhookContext, type DirectDebitPaymentState } from "./contracts.js";
+  type LockedCollectionSources, type CollectionSessionContext, type DirectDebitWebhookContext, type DirectDebitPaymentState } from "./contracts.js";
+import { pauseSuccessFee, validateSuccessFee } from "./success-fee-direct-debit.js";
 export interface CollectionRail {
   readonly name: "stripe_card" | "direct_debit";
   readonly environment: "synthetic_demo";
+  collectionPauseReason?(tenantId: string): "MANDATE_REVOKED" | "MANDATE_NOT_ACTIVE" | undefined;
   verifyWebhook(body: string, signature: string): RailEvent;
   verifyWebhookBatch?(body: string, signature: string): readonly (RailEvent | FeeCollectionError)[];
   submit(tenantId: string, attempt: Readonly<Attempt>): Promise<{ state: "provider_accepted"; objectId: string } | { state: "definite_failure" }>;
@@ -43,12 +45,23 @@ function validate(raw: unknown, ctx: CollectionSessionContext, intent: Collectio
   checkSyntheticSubscriptionAgreement({ ...agreement, now });
   return source;
 }
+async function readCollection(sources: LockedCollectionSources, ctx: CollectionSessionContext,
+  intent: CollectionIntent, actorMembershipId: string, now: string) {
+  if (intent.purpose === "receipt_success_fee") {
+    if (!sources.successFee) return pauseSuccessFee("SUCCESS_FEE_DEPENDENCY_BOUND");
+    return validateSuccessFee(await sources.successFee(intent.jobId, intent.invoiceId, intent.statementHash), ctx, intent, actorMembershipId, now);
+  }
+  const s = validate(await sources.collection(intent.jobId, intent.invoiceId), ctx, intent, now);
+  return { ...s, statementId: s.agreement.currentStatement!.statementId,
+    amountPence: s.agreement.amountPence, decisionId: s.collectionDecision.decisionId, authorizationId: undefined };
+}
+type ValidatedCollection = Awaited<ReturnType<typeof readCollection>>;
 function requireReconciled(book: CollectionBook, invoiceId: string, statementId?: string) {
   if (book.attempts.some(a => a.state === "reconciliation_required"
     && (a.invoiceId === invoiceId || a.statementId === statementId))) throw new FeeCollectionError("RECONCILIATION_REQUIRED");
 }
-function outstanding(book: CollectionBook, source: CollectionSources, excluding?: string) {
-  const used = book.attempts.filter(a => a.kind === "collection" && (a.invoiceId === source.invoiceId || a.statementId === source.agreement.currentStatement!.statementId)
+function outstanding(book: CollectionBook, source: ValidatedCollection, excluding?: string) {
+  const used = book.attempts.filter(a => a.kind === "collection" && (a.invoiceId === source.invoiceId || a.statementId === source.statementId)
     && a.state !== "released" && a.commandId !== excluding).reduce((sum, a) => sum + BigInt(a.amountPence), 0n);
   // priorReceipts excludes settlements in this reservation book. Refunds never silently reopen debt.
   return BigInt(source.principalPence) + BigInt(source.taxPence) - BigInt(source.creditsPence)
@@ -78,15 +91,15 @@ export class DarkFeeCollectionExecutor {
         if (prior.actorMembershipId !== actorMembershipId) return refuse();
         return structuredClone(prior);
       }
-      const source = validate(await sources.collection(intent.jobId, intent.invoiceId), ctx, intent, this.now().toISOString());
-      requireReconciled(book, intent.invoiceId, source.agreement.currentStatement!.statementId);
+      const source = await readCollection(sources, ctx, intent, actorMembershipId, this.now().toISOString());
+      requireReconciled(book, intent.invoiceId, source.statementId);
       if (BigInt(intent.amountPence) > outstanding(book, source)) return refuse();
       // Each decision approves the exact full statement, not a caller-selected partial debit.
-      if (intent.amountPence !== source.agreement.amountPence) return refuse();
+      if (intent.amountPence !== source.amountPence) return refuse();
       const attempt: Attempt = { ...intent, kind: "collection", fingerprint: fingerprint(intent),
         actorMembershipId, principalPence: source.principalPence,
-        statementId: source.agreement.currentStatement!.statementId,
-        invoiceHash: source.invoiceHash, sourceHash: source.sourceHash, decisionId: source.collectionDecision.decisionId,
+        statementId: source.statementId,
+        invoiceHash: source.invoiceHash, sourceHash: source.sourceHash, decisionId: source.decisionId, authorizationId: source.authorizationId,
         settlementCommandId: null, settlementObjectId: null,
         creditNoteId: null, state: "reserved", providerObjectId: null };
       book.attempts.push(attempt); transition(book, attempt, "reserved");
@@ -118,7 +131,7 @@ export class DarkFeeCollectionExecutor {
         actorMembershipId, principalPence: intent.amountPence,
         jobId: intent.jobId, invoiceId: intent.invoiceId, invoiceHash: original.invoiceHash,
         sourceHash: intent.creditHash, statementHash: original.statementHash, statementId: original.statementId, amountPence: intent.amountPence,
-        rail: original.rail, decisionId: credit.decisionId, settlementCommandId: original.commandId,
+        rail: original.rail, purpose: original.purpose, decisionId: credit.decisionId, settlementCommandId: original.commandId,
         settlementObjectId: original.providerObjectId, creditNoteId: intent.creditNoteId,
         state: "reserved", providerObjectId: null };
       book.attempts.push(attempt); transition(book, attempt, "reserved");
@@ -218,11 +231,15 @@ export class DarkFeeCollectionExecutor {
       if (current.state !== "reserved") throw new FeeCollectionError("RECONCILIATION_REQUIRED");
       if (!this.rails.some(r => r.name === current.rail && r.environment === "synthetic_demo")) throw new FeeCollectionError("COLLECTION_DARK");
       if (current.kind === "collection") {
-        const source = validate(await sources.collection(current.jobId, current.invoiceId), ctx,
-          { version: "fee-collection.v1", ...current }, this.now().toISOString());
-        if (source.principalPence !== current.principalPence || source.collectionDecision.decisionId !== current.decisionId
-          || source.agreement.currentStatement!.statementId !== current.statementId || source.invoiceHash !== current.invoiceHash || source.sourceHash !== current.sourceHash
-          || current.amountPence !== source.agreement.amountPence || BigInt(current.amountPence) > outstanding(book, source, current.commandId)) return refuse();
+        const source = await readCollection(sources, ctx,
+          { version: "fee-collection.v1", ...current }, actorMembershipId, this.now().toISOString());
+        if (source.principalPence !== current.principalPence || source.decisionId !== current.decisionId
+          || source.authorizationId !== current.authorizationId
+          || source.statementId !== current.statementId || source.invoiceHash !== current.invoiceHash || source.sourceHash !== current.sourceHash
+          || current.amountPence !== source.amountPence || BigInt(current.amountPence) > outstanding(book, source, current.commandId)) {
+          if (current.purpose === "receipt_success_fee") return pauseSuccessFee("AUTHORITY_STALE");
+          return refuse();
+        }
       } else {
         const credit = parse(creditSourcesV1, await sources.credit({ version: "fee-refund.v1", ...current,
           settlementCommandId: current.settlementCommandId!, creditNoteId: current.creditNoteId!, creditHash: current.sourceHash }));
@@ -232,6 +249,10 @@ export class DarkFeeCollectionExecutor {
           || credit.invoiceHash !== current.invoiceHash || credit.creditNoteId !== current.creditNoteId || credit.creditHash !== current.sourceHash
           || credit.settlementCommandId !== current.settlementCommandId || credit.approvedAmountPence !== current.amountPence
           || credit.amountPence !== current.amountPence || Date.parse(credit.expiresAt) <= this.now().getTime()) return refuse();
+      }
+      if (current.kind === "collection" && current.purpose === "receipt_success_fee") {
+        const reason = this.rails.find(r => r.name === current.rail)!.collectionPauseReason?.(ctx.tenantId);
+        if (reason) return pauseSuccessFee(reason);
       }
       // Commit before network I/O. A crash from here keeps the balance reserved and requires reconciliation.
       transition(book, current, "outcome_unknown");

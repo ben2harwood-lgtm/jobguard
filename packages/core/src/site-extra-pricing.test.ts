@@ -211,3 +211,16 @@ describe("[C6] the worked money table through merged priceSorLine (pure)", () =>
     expect(["2026", "1351"].join(" minus ")).toBe("2026 minus 1351");
   });
 });
+
+it("recent-items contract caps five and rejects authority, history and money fields", async () => {
+ const { siteSorRecentItemsV1 } = await import("./site-extra-pricing.js");
+ const item = { code: "A", description: "Fictional item", unit: "each" };
+ const result = { version: "site-sor-recent-items.v1", environment: "synthetic_demo", realExternalActions: 0, jobId: crypto.randomUUID(), sorVersionId: crypto.randomUUID(), items: [item] };
+ expect(siteSorRecentItemsV1.safeParse(result).success).toBe(true);
+ expect(siteSorRecentItemsV1.safeParse({ ...result, items: [] }).success).toBe(true);
+ expect(siteSorRecentItemsV1.safeParse({ ...result, items: Array(6).fill(item) }).success).toBe(false);
+ for (const field of ["price", "quantity", "jobId", "membershipId", "serverRecordedAt"]) {
+  expect(siteSorRecentItemsV1.safeParse({ ...result, items: [{ ...item, [field]: "forged" }] }).success).toBe(false);
+ }
+ expect(siteSorRecentItemsV1.safeParse({ ...result, membershipId: crypto.randomUUID() }).success).toBe(false);
+});
