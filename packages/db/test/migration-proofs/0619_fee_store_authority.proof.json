@@ -1,0 +1,394 @@
+{
+  "migration": "0619_fee_store_authority.sql",
+  "lp0": [
+    {
+      "section": "entries",
+      "before": {
+        "key": "acl|rel|table|app.fee_reservation_archive|jobguard_runtime|INSERT|-",
+        "group": "a-m4-12-reservations"
+      },
+      "after": null
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|rel|table|app.fee_reservation_archive|jobguard_audit_writer|INSERT|-",
+        "group": "a-m4-12-reservations"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.replace_fee_reservation_book(uuid,jsonb,jsonb)|jobguard_migration",
+        "group": "a-m4-12-reservations"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.replace_fee_reservation_book(uuid,jsonb,jsonb)|jobguard_runtime|EXECUTE|-",
+        "group": "a-m4-12-reservations"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.seal_fee_reservation_change(uuid,jsonb,jsonb)|jobguard_audit_writer",
+        "group": "a-m4-12-reservations"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.seal_fee_reservation_change(uuid,jsonb,jsonb)|jobguard_migration|EXECUTE|-",
+        "group": "a-m4-12-reservations"
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.replace_fee_reservation_book(uuid,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.fee_reservation_book"
+        ],
+        "staticCalls": []
+      },
+      "after": {
+        "identity": "function:app.replace_fee_reservation_book(uuid,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.replace_fee_reservation_book(uuid,jsonb,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.fee_reservation_book"
+        ],
+        "staticCalls": [
+          "app.seal_fee_reservation_change",
+          "public.hmac"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.seal_fee_reservation_change(uuid,jsonb,jsonb)",
+        "owner": "jobguard_audit_writer",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_migration"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.fee_reservation_archive"
+        ],
+        "staticCalls": [
+          "app.lp4_seal_audit"
+        ]
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.fee_provider_fixture_key|migration_tenant_select|PERMISSIVE|SELECT|jobguard_migration|ade3739356a579ac"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.fee_reservation_archive|fee_seal_insert|PERMISSIVE|INSERT|jobguard_audit_writer|c76e2e8de7d01dda"
+    },
+    {
+      "section": "groups",
+      "before": {
+        "id": "a-m4-12-reservations",
+        "title": "M4-12 dark shared collection reservations",
+        "kind": "authority",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Source-defined additive capability; exact-head RED review and PostgreSQL CI required."
+        },
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Retain authenticated tenant binding and same-transaction source locks.",
+          "LP-12": "Check exact reservation table grants, RLS and append-only audit."
+        },
+        "downstream": "One tenant book serializes fake card and Direct Debit reservations. No live adapter or production source reader is registered. No DELETE, TRUNCATE or tenant-key UPDATE is granted.",
+        "sources": [
+          "packages/db/migrations/0603_fee_reservation_book.sql",
+          "packages/db/migrations/0604_fee_reservation_archive.sql",
+          "apps/api/src/fee-collection/postgres-reservation-store.ts"
+        ],
+        "tests": [
+          "packages/db/test/fee-reservation.integration.test.ts"
+        ],
+        "gaps": [
+          "PostgreSQL CI and independent RED review remain required."
+        ],
+        "path": "ap-m4-12-reservations"
+      },
+      "after": {
+        "id": "a-m4-12-reservations",
+        "title": "M4-12 dark shared collection reservations",
+        "kind": "authority",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Source-defined additive capability; exact-head RED review and PostgreSQL CI required."
+        },
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Retain authenticated tenant binding and same-transaction source locks.",
+          "LP-12": "Check revoked raw archive INSERT, private fixture signing keys, exact signed result bindings, private archive seal and chained database audit. No route or live rail may use this synthetic capability."
+        },
+        "downstream": "One tenant book serializes fake card and Direct Debit reservations. No live adapter or production source reader is registered. No DELETE, TRUNCATE or tenant-key UPDATE is granted. 0619 withdraws runtime archive INSERT; one guarded replacement authenticates fake provider results, compacts history through a private seal and chains actual state and lifecycle differences. Fixture keys are owner-provisioned and runtime-inaccessible.",
+        "sources": [
+          "packages/db/migrations/0603_fee_reservation_book.sql",
+          "packages/db/migrations/0604_fee_reservation_archive.sql",
+          "apps/api/src/fee-collection/postgres-reservation-store.ts",
+          "packages/db/migrations/0619_fee_store_authority.sql",
+          "apps/api/src/fee-collection/executor.ts"
+        ],
+        "tests": [
+          "packages/db/test/fee-reservation.integration.test.ts",
+          "packages/db/test/fee-reservation-archive-upgrade.integration.test.ts",
+          "apps/api/src/fee-collection/postgres-reservation-store.test.ts"
+        ],
+        "gaps": [
+          "Real PostgreSQL catalogue/upgrade execution and independent exact-head RED review are pending. No live provider, route or production fee authority is registered."
+        ],
+        "path": "ap-m4-12-reservations"
+      }
+    },
+    {
+      "section": "authorityPaths",
+      "before": {
+        "id": "ap-m4-12-reservations",
+        "title": "M4-12 dark shared collection reservations",
+        "description": "One tenant book serializes fake card and Direct Debit reservations. No live adapter or production source reader is registered. No DELETE, TRUNCATE or tenant-key UPDATE is granted.",
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Retain authenticated tenant binding and same-transaction source locks.",
+          "LP-12": "Check exact reservation table grants, RLS and append-only audit."
+        },
+        "sources": [
+          "packages/db/migrations/0603_fee_reservation_book.sql",
+          "packages/db/migrations/0604_fee_reservation_archive.sql",
+          "apps/api/src/fee-collection/postgres-reservation-store.ts"
+        ],
+        "tests": [
+          "packages/db/test/fee-reservation.integration.test.ts"
+        ],
+        "gaps": [
+          "PostgreSQL CI and independent RED review remain required."
+        ]
+      },
+      "after": {
+        "id": "ap-m4-12-reservations",
+        "title": "M4-12 dark shared collection reservations",
+        "description": "One tenant book serializes fake card and Direct Debit reservations. No live adapter or production source reader is registered. No DELETE, TRUNCATE or tenant-key UPDATE is granted. 0619 withdraws runtime archive INSERT; one guarded replacement authenticates fake provider results, compacts history through a private seal and chains actual state and lifecycle differences. Fixture keys are owner-provisioned and runtime-inaccessible.",
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Retain authenticated tenant binding and same-transaction source locks.",
+          "LP-12": "Check revoked raw archive INSERT, private fixture signing keys, exact signed result bindings, private archive seal and chained database audit. No route or live rail may use this synthetic capability."
+        },
+        "sources": [
+          "packages/db/migrations/0603_fee_reservation_book.sql",
+          "packages/db/migrations/0604_fee_reservation_archive.sql",
+          "apps/api/src/fee-collection/postgres-reservation-store.ts",
+          "packages/db/migrations/0619_fee_store_authority.sql",
+          "apps/api/src/fee-collection/executor.ts"
+        ],
+        "tests": [
+          "packages/db/test/fee-reservation.integration.test.ts",
+          "packages/db/test/fee-reservation-archive-upgrade.integration.test.ts",
+          "apps/api/src/fee-collection/postgres-reservation-store.test.ts"
+        ],
+        "gaps": [
+          "Real PostgreSQL catalogue/upgrade execution and independent exact-head RED review are pending. No live provider, route or production fee authority is registered."
+        ]
+      }
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "fee_provider_fixture_key",
+        "policyname": "migration_tenant_select",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "fee_reservation_archive",
+        "policyname": "fee_seal_insert",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_audit_writer}",
+        "cmd": "INSERT",
+        "qual": null,
+        "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
+      }
+    },
+    {
+      "section": "relations",
+      "before": {
+        "nspname": "app",
+        "relname": "fee_reservation_archive",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=ar/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      },
+      "after": {
+        "nspname": "app",
+        "relname": "fee_reservation_archive",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=r/jobguard_migration,jobguard_audit_writer=a/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "app.fee_provider_fixture_key",
+        "data": []
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "fee_provider_fixture_key",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "fee_provider_fixture_key_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "replace_fee_reservation_book",
+        "args": "p_tenant uuid, p_book jsonb, p_result jsonb",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, app"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "seal_fee_reservation_change",
+        "args": "p_tenant uuid, p_records jsonb, p_events jsonb",
+        "proowner": "jobguard_audit_writer",
+        "proacl": "{jobguard_audit_writer=X/jobguard_audit_writer,jobguard_migration=X/jobguard_audit_writer}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, app"
+        ]
+      }
+    }
+  ],
+  "tenancy": [
+    {
+      "relname": "fee_provider_fixture_key",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": false,
+        "owner": "jobguard_migration"
+      }
+    }
+  ]
+}
