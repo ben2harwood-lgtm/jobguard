@@ -19,11 +19,12 @@
         "docs/verdicts/ENT-5/BUILDER_RECEIPT.md",
         "docs/verdicts/batch-15/REPAIR_RECEIPT.md",
         "packages/core/src/watchdog.ts",
-        "packages/db/migration-notes/1200_extra_duplicate_relink.md",
-        "packages/db/migrations/1200_extra_duplicate_relink.sql",
-        "packages/db/migrations/1201_extra_duplicate_disposition.sql",
+        "packages/db/migration-notes/0622_extra_duplicate_relink.md",
+        "packages/db/migrations/0622_extra_duplicate_relink.sql",
+        "packages/db/migrations/0623_extra_duplicate_disposition.sql",
         "packages/db/src/extra-duplicate-candidates.test.ts",
         "packages/db/src/extra-duplicate-candidates.ts",
+        "packages/db/test/command-replay-contract.integration.test.ts",
         "packages/db/test/extra-duplicate-candidates.integration.test.ts",
         "packages/db/test/extra-relink-migration.test.ts",
         "packages/db/test/extra-relink-upgrade.integration.test.ts",
@@ -31,10 +32,11 @@
         "packages/db/test/later-empty-tables.ts",
         "packages/db/test/lp5-command-catalog.ts",
         "packages/db/test/m2-1-migration-proof.test.ts",
-        "packages/db/test/migration-proofs/1200_extra_duplicate_relink.proof.json",
-        "packages/db/test/migration-proofs/1201_extra_duplicate_disposition.proof.json",
+        "packages/db/test/migration-proofs/0622_extra_duplicate_relink.proof.json",
+        "packages/db/test/migration-proofs/0623_extra_duplicate_disposition.proof.json",
         "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
-        "packages/db/test/restore-reconciliation-upgrade.integration.test.ts"
+        "packages/db/test/restore-reconciliation-upgrade.integration.test.ts",
+        "packages/db/test/watchdog.integration.test.ts"
       ]
     }
   }

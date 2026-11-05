@@ -1,5 +1,5 @@
 {
-  "migration": "1201_extra_duplicate_disposition.sql",
+  "migration": "0623_extra_duplicate_disposition.sql",
   "lp0": [
     {
       "section": "routines",

@@ -39,7 +39,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   const settlementOid = (await c.admin.query("SELECT 'app.record_simulated_settlement(uuid,uuid,uuid,character varying,bigint,timestamp with time zone,uuid,uuid,uuid)'::regprocedure::oid oid")).rows[0].oid;
   const selfComparison = "(SELECT content_hash FROM app.action_authorization WHERE tenant_id=p_tenant AND id=p_authorization)";
   // 1200 changes exactly the effective-state read and retains the latest mark writer.
-  const relink = await readFile(new URL("../migrations/1200_extra_duplicate_relink.sql", import.meta.url), "utf8");
+  const relink = await readFile(new URL("../migrations/0622_extra_duplicate_relink.sql", import.meta.url), "utf8");
   const relinkBodies = Object.fromEntries(["xa_latest_kind", "xa_mark_duplicate"].map(name => [name,
     relink.split(`CREATE OR REPLACE FUNCTION app.${name}`)[1]!.split("AS $$")[1]!.split("$$;")[0]]));
   for (const prior of security) {
@@ -51,16 +51,22 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
       prior.args === "t uuid, digest text, operation text, source text, v jsonb") {
       expect(current?.definition).not.toEqual(prior.definition);
     } else
-    // 0583 replaces only this exact predecessor body; its dedicated upgrade proof checks the replacement.
+    // 0615 extends the exact success-fee writer from 0583; retain its full latest body.
     if (prior.nspname === "app" && prior.proname === "write_success_fee_v3" &&
       prior.args === "p_job uuid, p_session text, p_command jsonb, p_artifact jsonb") {
-      expect(current?.definition).not.toEqual(prior.definition);
+      const sql = await readFile(new URL("../migrations/0615_success_fee_changed_proof.sql", import.meta.url), "utf8");
+      const body = sql.split("CREATE OR REPLACE FUNCTION app.write_success_fee_v3")[1]!.split("AS $$")[1]!.split("$$;")[0];
+      expect(current?.definition?.split("$function$")[1]).toEqual(body);
+    } else if (prior.nspname === "app" && prior.proname === "payment_fee_current" &&
+      prior.args === "t uuid, j uuid, s uuid, actor uuid") {
+      const sql = await readFile(new URL("../migrations/0616_payment_fee_current_review.sql", import.meta.url), "utf8");
+      expect(current?.definition?.split("$function$")[1]).toEqual(sql.split("AS $$")[1]!.split("$$;")[0]);
     } else if (prior.nspname === "app" && (
       prior.proname === "xa_latest_kind" && prior.args === "p_tenant uuid, p_job uuid, p_variation uuid" ||
       prior.proname === "xa_mark_duplicate" && prior.args === "p_job uuid, p_duplicate uuid, p_canonical uuid, p_command uuid, p_actor uuid, p_link uuid")) {
       expect(current?.definition?.split("$function$")[1]).toEqual(relinkBodies[prior.proname]);
     } else if (prior.nspname === "app" && prior.proname === "cb_unresolved" && prior.args === "p_tenant uuid, p_job uuid") {
-      const source = await readFile(new URL("../migrations/1201_extra_duplicate_disposition.sql", import.meta.url), "utf8");
+      const source = await readFile(new URL("../migrations/0623_extra_duplicate_disposition.sql", import.meta.url), "utf8");
       const body = source.split("CREATE OR REPLACE FUNCTION app.cb_unresolved")[1]!.split("AS $$")[1]!.split("$$;")[0];
       expect(current?.definition?.split("$function$")[1]).toEqual(body);
     } else if (prior.oid === paymentFeeWriterOid) {
