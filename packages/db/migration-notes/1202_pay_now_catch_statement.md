@@ -52,3 +52,13 @@ Forward-fix strategy: replace only this exact routine in a later migration
 while preserving prior records and hashes. Emergency rollback may restore
 0598's routine body (and preserve ACLs) at the cost of reverting the corrected
 refusal/statement behavior; never rewrite or delete stored attempts.
+
+Final repair round (B2): the catch fixture now uses the existing insertPhoto
+helper to create verified fictional evidence before lock and links the signal
+to its exact stored object version, hash and receive time. This lets the shared
+completion helper classify the signal instead of publishing an incomplete
+zero result. sv5pre-fixtures.ts, B1/B3 fixes and every assertion are unchanged.
+Local pay-now repository unit checks: 34 passed with at most two workers.
+PostgreSQL/browser execution is unavailable in this sandbox; the catch,
+equal-debit and predecessor/1202 replay assertions still require CI and
+exact-head independent RED review before landing.

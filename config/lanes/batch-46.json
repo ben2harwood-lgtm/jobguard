@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/batch-46"
       ],
-      "note": "LATER-SAFETY-6 through LATER-SAFETY-11; RED money; main 199124c08 exact union; B1/B2/B3 pre-check repair; provisional unique migrations 1200\u20131203. NOPR; READY for CI and exact-head review.",
+      "note": "LATER-SAFETY-6 through LATER-SAFETY-11; RED money; main 199124c08 exact union; B1/B3 preserved, final B2 fixture-evidence repair; provisional unique migrations 1200\u20131203. NOPR; READY for CI and exact-head review. Allow list verified against origin/main d16ef1978; excludes config/lanes/.",
       "allow": [
         "apps/api/src/notice-fixture.application.test.ts",
         "apps/api/src/notice-fixture.application.ts",

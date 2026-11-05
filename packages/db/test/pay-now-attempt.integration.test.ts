@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { beforeAll, afterAll, describe, it, expect } from "vitest";
 import { cluster, type Cluster } from "./extra-fixtures.js";
 import { meterCompany } from "./meter-persistence-fixtures.js";
-import { workTenant, type WorkFixture } from "./job-work-state-fixtures.js";
+import { insertPhoto, workTenant, type WorkFixture } from "./job-work-state-fixtures.js";
 import { prepareInvoicePrerequisites } from "./sv5pre-fixtures.js";
 import { PayNowAttemptRepository } from "../src/pay-now-attempt-repository.js";
 import { PracticeInvoiceRepository } from "../src/practice-invoice-repository.js";
@@ -26,8 +26,11 @@ describe("MON-6 durable fake attempts on real PostgreSQL",()=>{
    // Explicit synthetic catch source, with all origin, FK and approval guards on.
    // This isolates pay-now projection; it does not claim a detector/confirmation journey.
    const variation=randomUUID(),scope=randomUUID(),signal=randomUUID(),priced=randomUUID(),approval=randomUUID(),command=randomUUID();
+   const evidence=await insertPhoto(c as unknown as WorkFixture,a,new Date().toISOString());
    await workTenant(c.admin,t,async db=>{
     await db.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state) VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic.v1',clock_timestamp(),'Fictional catch','low','confirmed_extra')",[t,j,signal,randomUUID()]);
+    // Copy the exact stored evidence identity and timestamp for final-check completion.
+    await db.query("INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at) SELECT tenant_id,job_id,$3,id,object_version_id,sha256,server_received_at FROM app.evidence_object WHERE tenant_id=$1 AND job_id=$2 AND id=$4",[t,j,signal,evidence]);
     await db.query("INSERT INTO app.scope_identity(tenant_id,job_id,id,state) VALUES($1,$2,$3,'reserved')",[t,j,scope]);
     await db.query("INSERT INTO app.variation(tenant_id,job_id,id,scope_item_id,capture_kind,capture_text,description,job_track,origin) VALUES($1,$2,$3,$4,'text','Fictional catch','Fictional catch','small_builder','jobguard_catch')",[t,j,variation,scope]);
     await db.query("INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id,result) VALUES($1,$2,'ConfirmJobGuardCatch',$3,$4,'processing',$5,NULL)",[t,command,`extra-origin:${j}:${variation}`,h,a.actorId]);
