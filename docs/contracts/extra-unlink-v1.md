@@ -197,3 +197,22 @@ server refusals, linking and reason-required un-linking. These are automated
 checks, not a full human accessibility assessment. Exact-head RED independent
 review and green CI remain required before merge. NOPR; production gates stay
 closed. Dismissal still needs Ben's recorded finance decision.
+
+### ENT-3-RELINK-FIX: effective state after reversal (0966)
+
+The event history remains immutable. `xa_latest_kind` skips a `duplicate` event
+only when the link written by that exact event's command has an explicit un-link
+fact for the same tenant, job and duplicate. An active duplicate event remains
+current. Other events and approval outcomes are unchanged. This shared read is
+used by the mark command, revision commands and billing eligibility, so an old
+reversed link cannot permanently hide the preceding state.
+
+Relinking in either direction creates a fresh link and duplicate event through
+the existing MarkDuplicate command, with the same roles, grants, receipt checks,
+job lock and exported-endpoint guard as before. An old un-link replay cannot
+reverse a later link. Unlinking two independently approved extras restores their
+separate eligibility; it does not manufacture approval. Any still-unresolved
+deterministic candidate continues to block export. Mistaken manual links between
+distinct work can be reversed and both approved extras exported separately.
+There is no keep-separate/dismissal command in this branch; no new one is added.
+Existing completed duplicate approval outcomes are not reopened.
