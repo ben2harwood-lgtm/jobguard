@@ -4,11 +4,12 @@ import { NextResponse } from "next/server";
 import { MerchantOrderApplication } from "@jobguard/api/merchant-order";
 import { practiceFailure, syntheticPool } from "./synthetic-server";
 import { routeErrorCode } from "./route-error-code";
+import { isTrustedBrowserOrigin } from "../api/contractor/origin";
 
 export async function merchantOrderReply(request: Request, jobId: string) {
   const headers = { "Cache-Control": "no-store" };
   // Commercial practice actions are same-origin; a cookie alone cannot authorize CSRF.
-  if (request.headers.get("origin") !== new URL(request.url).origin)
+  if (!isTrustedBrowserOrigin(request))
     return NextResponse.json({ code: "ORIGIN_FORBIDDEN" }, { status: 403, headers });
   try {
     const app = new MerchantOrderApplication(syntheticPool(), (await cookies()).get("jg_session")?.value);

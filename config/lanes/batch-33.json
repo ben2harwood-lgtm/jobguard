@@ -24,6 +24,7 @@
         "docs/verdicts/batch-33/BUILDER_RECEIPT.md",
         "packages/core/src/watchdog.ts",
         "packages/db/src/supplier-document-repository.ts",
+        "packages/db/test/command-replay-contract.integration.test.ts",
         "packages/db/test/supplier-documents.integration.test.ts"
       ]
     }

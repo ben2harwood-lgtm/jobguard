@@ -1,5 +1,15 @@
 # Batch 33: M2-1 practice order screen and M2-2 later delivery
 
+## PR #575 repair — 5 November 2026
+
+READY: batch-33 origin and replay-coverage repair; RED. This section supersedes the historical merge status below. The router already merged main as `9d6aef1169f569d9f5bc8774c7ba55864cf7b98f` (parents `889b44af0` and `28871adf3`); no unresolved index entries remain. This repair preserves that union and leaves the proven later-delivery implementation unchanged. No git-writing commands were run.
+
+- Replaced the merchant-order bridge's request-URL origin comparison with the unchanged shared `isTrustedBrowserOrigin(request)` used by sibling routes. The fixture calls the real helper with explicit server configuration. Added localhost/127.0.0.1 regression coverage and rejection of unconfigured origins, wrong ports and forwarded-host spoofing before application work.
+- Confirmed POST → merchantOrderReply → MerchantOrderApplication.execute → PurchaseOrderActionRepository.approve for approval requests, including the existing exact reviewed-facts/retry unit test. Added the route to that command's existing real replay-contract case and added the test path to the lane; the lane does not list itself. Preview and manual attestation retain their separate existing paths.
+- Final local checks: apps/web `./node_modules/.bin/vitest run --maxWorkers=2 app/lib/merchant-order-server.test.mts app/api/contractor/origin.test.ts app/ui/supplier-documents.test.tsx`: PASS, 37 tests. apps/api `./node_modules/.bin/vitest run --maxWorkers=2 src/merchant-order.application.test.ts src/watchdog-registry.test.ts`: PASS, 131 tests. Core `./node_modules/.bin/tsc -p tsconfig.json`: PASS. Web `./node_modules/.bin/tsc -p tsconfig.json --noEmit`: PASS. Source-only TypeScript AST check confirms the route is listed under the approve replay case; this is not a PostgreSQL replay execution. Lane boundary lint and diff whitespace check pass.
+- Initial web typecheck caught a missing .js extension in the new .mts fixture import; corrected and rerun successfully. Initial API registry run used stale compiled core and failed on main's cis-fixtures entry; rebuilt core from unchanged source and reran successfully.
+- Required downstream: router commit/push, exact-head green CI including PostgreSQL command replay and production-build browser tests at both widths, plus independent RED recheck. This sandbox cannot start PostgreSQL or bind localhost, so neither suite was run locally. No migration, provider, real-data, deployment or launch change.
+
 READY for router staging, merge completion and PR; RED. No git/index mutation, commit, push or PR performed here.
 
 ## Scope and merge
