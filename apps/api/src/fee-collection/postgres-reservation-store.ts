@@ -15,6 +15,8 @@ const attempt = z.object({
   rail: z.enum(["stripe_card", "direct_debit"]), decisionId: id, settlementCommandId: id.nullable(),
   settlementObjectId: z.string().nullable(), creditNoteId: id.nullable(), state,
   paymentState: z.enum(["pending_submission", "submitted", "confirmed", "paid_out", "failed", "cancelled", "charged_back", "late_failure"]).optional(),
+  purpose: z.literal("receipt_success_fee").optional(),
+  authorizationId: id.optional(),
   providerObjectId: z.string().nullable(),
 }).strict().transform(({ version, paymentState, ...rest }) => {
   const lifecycle = paymentState === undefined ? rest : { ...rest, paymentState };

@@ -1,0 +1,41 @@
+{
+  "version": 2,
+  "lanes": {
+    "batch-14": {
+      "branches": [
+        "codex/sandbox/batch-14"
+      ],
+      "note": "M2-5 benchmark, M2-6 synthetic readiness store and M2-7 metrics/dashboard. RED. Preserves merged main; migrations 0588-0589.",
+      "allow": [
+        "apps/api/src/readiness-adapters.ts",
+        "apps/api/src/readiness-scheduler.test.ts",
+        "apps/api/src/readiness-scheduler.ts",
+        "apps/api/src/readiness-store.test.ts",
+        "apps/api/src/readiness-store.ts",
+        "apps/web/app/api/jobs/[id]/inbox-metrics/route.test.ts",
+        "apps/web/app/api/jobs/[id]/inbox-metrics/route.ts",
+        "apps/web/app/jobs/[id]/signal-to-noise/page.tsx",
+        "apps/web/app/lib/inbox-metrics-server.ts",
+        "apps/web/app/ui/inbox-metrics-dashboard.test.tsx",
+        "apps/web/app/ui/inbox-metrics-dashboard.tsx",
+        "apps/web/app/ui/relevance-inbox.tsx",
+        "apps/web/e2e/m2-7-dashboard.spec.ts",
+        "docs/operations/supplier-benchmark.md",
+        "packages/core/src/supplier-benchmark.test.ts",
+        "packages/core/src/supplier-benchmark.ts",
+        "packages/core/src/test-fixtures/made-up-only-supplier-benchmark.ts",
+        "packages/db/migrations/0588_scheduled_readiness_store.sql",
+        "packages/db/migrations/0589_inbox_metrics_store.sql",
+        "packages/db/src/inbox-metrics-repository.ts",
+        "packages/db/src/index.ts",
+        "packages/db/test/inbox-metrics.integration.test.ts",
+        "packages/db/test/inbox-metrics.test.ts",
+        "packages/db/test/later-empty-tables.ts",
+        "packages/db/test/migration-proofs/0588_scheduled_readiness_store.proof.json",
+        "packages/db/test/migration-proofs/0589_inbox_metrics_store.proof.json",
+        "packages/db/test/readiness-store.integration.test.ts",
+        "tools/supplier-benchmark.mjs"
+      ]
+    }
+  }
+}

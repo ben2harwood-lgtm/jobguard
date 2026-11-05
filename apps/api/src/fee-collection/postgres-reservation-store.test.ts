@@ -67,6 +67,18 @@ describe("PostgresReservationStore transaction adapter", () => {
     await expect(f.store.transaction(ctx.tenantId, async book => { book.attempts[0]!.amountPence = 1; })).rejects.toMatchObject({ code: "IDEMPOTENCY_CONFLICT" });
     await expect(f.store.transaction(ctx.tenantId, async book => { book.audit = []; })).rejects.toMatchObject({ code: "IDEMPOTENCY_CONFLICT" });
   });
+  it("preserves receipt success-fee authority through persistence and refuses rebinding", async () => {
+    const f = setup(), sample = fixture();
+    const reserved = { ...await sample.executor.reserve(ctx, sample.intent),
+      purpose: "receipt_success_fee" as const, authorizationId: id(80) };
+    await f.store.transaction(ctx.tenantId, async book => { book.attempts.push(reserved); });
+    expect(await f.store.transaction(ctx.tenantId, async book => book.attempts[0])).toEqual(reserved);
+    for (const change of [{ purpose: undefined }, { authorizationId: id(81) }, { authorizationId: undefined }]) {
+      await expect(f.store.transaction(ctx.tenantId, async book => {
+        Object.assign(book.attempts[0]!, change);
+      })).rejects.toMatchObject({ code: "IDEMPOTENCY_CONFLICT" });
+    }
+  });
   it("does not allow an existing event fingerprint to be removed", async () => {
     const f = setup();
     f.persisted.book = { version: "fee-reservation-book.v1", attempts: [], audit: [], events: { prior: "a".repeat(64) } };

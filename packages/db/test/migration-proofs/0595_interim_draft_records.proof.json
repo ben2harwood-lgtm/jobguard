@@ -1,0 +1,221 @@
+{
+  "migration": "0595_interim_draft_records.sql",
+  "lp0": [
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "id": "a-m4-18-drafts",
+        "title": "M4-18 synthetic interim draft storage",
+        "kind": "authority",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Synthetic draft persistence outside the LP-5 command lifecycle; named hold: move onto the command boundary with a registry row and audit before records feed any real workflow. Exact-head RED review and PostgreSQL CI remain required."
+        },
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Verify persisted synthetic session for writes and verified tenant context for reads.",
+          "LP-12": "Verify exact migration ownership and runtime-only closed entry point; helpers and tables remain private."
+        },
+        "downstream": "One synthetic-only routine stores fixture draft records; core validates the locked book. No commercial authority or issue.",
+        "sources": [
+          "packages/db/migrations/0595_interim_draft_records.sql",
+          "packages/db/src/interim-draft-repository.ts"
+        ],
+        "tests": [
+          "packages/db/test/interim-draft.integration.test.ts",
+          "packages/db/test/interim-draft-repository.test.ts"
+        ],
+        "gaps": [
+          "Actual PostgreSQL catalogue execution and follow-up RED review remain required."
+        ],
+        "path": "ap-m4-18-drafts"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.interim_draft_records(uuid,text,uuid,text,jsonb)|jobguard_runtime|EXECUTE|-",
+        "group": "a-m4-18-drafts"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.interim_draft_records(uuid,text,uuid,text,jsonb)|jobguard_migration",
+        "group": "a-m4-18-drafts"
+      }
+    },
+    {
+      "section": "authorityPaths",
+      "before": null,
+      "after": {
+        "id": "ap-m4-18-drafts",
+        "title": "M4-18 synthetic interim draft storage",
+        "description": "Synthetic draft persistence only; verified-context reads and persisted-session writes. Core rules validate the locked history.",
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Preserve authenticated company/member ownership, current session checks and synthetic database refusal.",
+          "LP-12": "Review fixed search_path, migration-owned private tables and helpers, and absence of runtime direct writes."
+        },
+        "sources": [
+          "packages/db/migrations/0595_interim_draft_records.sql",
+          "packages/db/src/interim-draft-repository.ts"
+        ],
+        "tests": [
+          "packages/db/test/interim-draft.integration.test.ts",
+          "packages/db/test/interim-draft-repository.test.ts"
+        ],
+        "gaps": [
+          "No product journey execution or production capability is enabled."
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.interim_draft_records(uuid,text,uuid,text,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.interim_draft_record"
+        ],
+        "staticCalls": [
+          "app.mon1_company_actor"
+        ]
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.interim_draft_record|tenant_scope|PERMISSIVE|ALL|jobguard_migration|6fa387f2f629fba6"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.interim_draft_record|immutable_rows|app.reject_immutable_authorization_record|BEFORE DELETE/UPDATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.interim_draft_record|immutable_table|app.reject_immutable_authorization_record|BEFORE TRUNCATE|O"
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "app.interim_draft_record",
+        "data": []
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "interim_draft_record",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "interim_draft_record_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "interim_draft_record_tenant_id_command_id_key",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "interim_draft_record_tenant_id_job_id_revision_key",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "interim_draft_records",
+        "args": "t uuid, digest text, j uuid, operation text, v jsonb",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "interim_draft_record",
+        "policyname": "tenant_scope",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
+      }
+    }
+  ],
+  "tenancy": [
+    {
+      "relname": "interim_draft_record",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    }
+  ]
+}

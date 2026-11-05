@@ -20,7 +20,11 @@ is durable and deduplicated; the read projection returns latest stable movements
 including the same owned account's history across reconnects. No bank observation
 lands a case, allocates cash, starts a fee or writes a receipt.
 
-Migration 0763 is required because dark_ais inspect exposes no movements. It adds
+Migration `0605_ais_movement_read.sql` is required because dark_ais inspect exposes no movements. It adds
 one read-only routine and runtime EXECUTE only. CI must prove PostgreSQL session,
 ownership, expiry, replay, migration/catalogue and financial non-effect boundaries,
 and the headless phone/desktop journey. Local mocks prove orchestration only.
+
+LP-5 lifecycle dispatch remains held for these AIS practice operations: they use
+the existing dark AIS session boundary, not the LP-5 command lifecycle. This slice
+does not claim lifecycle dispatch or enable production bank access.

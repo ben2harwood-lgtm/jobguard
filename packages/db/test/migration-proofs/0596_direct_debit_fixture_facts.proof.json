@@ -1,0 +1,295 @@
+{
+  "migration": "0596_direct_debit_fixture_facts.sql",
+  "lp0": [
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "id": "a-m4-15-facts",
+        "title": "Synthetic Direct Debit facts only",
+        "kind": "authority",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Synthetic append-only mandate and payment facts behind a tenant-context-checked routine; exact-head RED review and PostgreSQL CI remain required."
+        },
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Verify context-bound synthetic facts and immutable replay history.",
+          "LP-12": "Verify narrow routine access and FORCE RLS with no direct runtime grants."
+        },
+        "downstream": "Verified fake events only; no authorization, collection, reservation, settlement or application wiring.",
+        "sources": [
+          "packages/db/migrations/0596_direct_debit_fixture_facts.sql",
+          "packages/db/src/direct-debit-fixture-repository.ts"
+        ],
+        "tests": [
+          "packages/db/test/direct-debit-fixture.integration.test.ts",
+          "packages/db/test/direct-debit-fixture-repository.test.ts"
+        ],
+        "gaps": [
+          "Actual PostgreSQL catalogue execution and follow-up RED review remain required."
+        ],
+        "path": "ap-m4-15-facts"
+      }
+    },
+    {
+      "section": "authorityPaths",
+      "before": null,
+      "after": {
+        "id": "ap-m4-15-facts",
+        "title": "Synthetic Direct Debit facts only",
+        "description": "Verified fake events only; no authorization, collection, reservation, settlement or application wiring.",
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Verify context-bound synthetic facts and immutable replay history.",
+          "LP-12": "Verify narrow routine access and FORCE RLS with no direct runtime grants."
+        },
+        "sources": [
+          "packages/db/migrations/0596_direct_debit_fixture_facts.sql",
+          "packages/db/src/direct-debit-fixture-repository.ts"
+        ],
+        "tests": [
+          "packages/db/test/direct-debit-fixture.integration.test.ts",
+          "packages/db/test/direct-debit-fixture-repository.test.ts"
+        ],
+        "gaps": [
+          "No product journey execution or production capability is enabled."
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.direct_debit_fixture(uuid,text,jsonb,jsonb,uuid)|jobguard_runtime|EXECUTE|-",
+        "group": "a-m4-15-facts"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.direct_debit_fixture(uuid,text,jsonb,jsonb,uuid)|jobguard_migration",
+        "group": "a-m4-15-facts"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.direct_debit_fixture(uuid,text,jsonb,jsonb,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.direct_debit_mandate_fact",
+          "app.direct_debit_payment_fact"
+        ],
+        "staticCalls": [
+          "app.final_lock_hash"
+        ]
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.direct_debit_mandate_fact|tenant_scope|PERMISSIVE|ALL|jobguard_migration|6fa387f2f629fba6"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.direct_debit_mandate_fact|immutable_facts|app.reject_immutable_commercial_mutation|BEFORE DELETE/UPDATE/TRUNCATE|O"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.direct_debit_payment_fact|tenant_scope|PERMISSIVE|ALL|jobguard_migration|6fa387f2f629fba6"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.direct_debit_payment_fact|immutable_facts|app.reject_immutable_commercial_mutation|BEFORE DELETE/UPDATE/TRUNCATE|O"
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "app.direct_debit_mandate_fact",
+        "data": []
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "direct_debit_mandate_fact",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "direct_debit_mandate_fact_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "direct_debit_mandate_fact_tenant_id_mandate_id_event_id_key",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "direct_debit_mandate_fact_tenant_id_mandate_id_sequence_key",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "direct_debit_mandate_fact",
+        "policyname": "tenant_scope",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
+      }
+    },
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "app.direct_debit_payment_fact",
+        "data": []
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "direct_debit_payment_fact",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "direct_debit_payment_fact_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "direct_debit_payment_fact_tenant_id_mandate_id_sequence_key",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "direct_debit_payment_fact",
+        "policyname": "tenant_scope",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "direct_debit_fixture",
+        "args": "t uuid, operation text, b jsonb, e jsonb, expected_head uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    }
+  ],
+  "tenancy": [
+    {
+      "relname": "direct_debit_mandate_fact",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    },
+    {
+      "relname": "direct_debit_payment_fact",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    }
+  ]
+}
