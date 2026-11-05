@@ -265,3 +265,43 @@ rootDir, six explicitly selected test files). This proves types, not DB executio
 READY for router staging/commit and NOPR push. Database/browser CI, the standard
 committed-head lane check and independent RED review remain required. Not merged,
 independently reviewed, released or launched.
+
+## Batch-35 merge refresh — 5 November 2026, incoming main d16ef1978
+
+Resolved all seven conflicted working files while preserving both branches:
+main's SCIM role, emergency/SCIM/CIS empty-table expectations and DB exports,
+plus this group's machine role, contractor finish fact and EndCheck registry row.
+No new product behaviour. Incoming main's 278 migration blobs remain identical;
+0990 and 0991 are the only added migrations and neither exists on incoming main.
+Compared all five 0990 replacement routines against the latest definitions across
+incoming main's migration tree (0196): only this group's existing finish/status/
+EndCheck changes remain. No mainline routine logic was removed. Exact lane
+comparison and the existing lane helpers pass for all 35 non-lane changed paths;
+the lane does not list itself. No assertions were removed or weakened in this
+refresh. This is a merge recheck, not a new independent review.
+
+Local checks (installed Node 24.17.0 / pnpm 10.28.1, no downloads):
+- DB Vitest, maxWorkers=2, late-source-import-migration.test.ts,
+  migration-proof-loader.test.ts, demo-bootstrap.integration.test.ts, filtered to
+  `bootstrap SQL trace|0613|migration proof|exact|discovery`: 87 passed, 3 skipped.
+  Only the SQL trace section of demo-bootstrap ran; no PostgreSQL was started.
+- DB Vitest, maxWorkers=2, lp5-command-catalog.test.ts and
+  connector-intake-proof.test.ts: 11 passed.
+- API Vitest, maxWorkers=2, connectors/machine.test.ts,
+  connectors/inbound.test.ts and auth/context-boundary.test.ts: 204 passed.
+- Web Vitest, maxWorkers=2, contractor job finish route.test.ts and
+  possible-extras/job-finish.test.tsx: 20 passed.
+- PL/pgSQL CASE-in-IF lint (280 migrations), commercial-boundary lint,
+  money-arithmetic lint, git diff --check: PASS.
+
+The index remains unmerged because this sandbox prohibits Git writes. The router
+must stage these resolved files and complete the merge. Database/browser suites,
+full required CI and independent RED review remain required on the committed head.
+
+Type verification: `pnpm exec turbo run typecheck --filter=@jobguard/db
+--filter=@jobguard/api --filter=@jobguard/web --concurrency=2` passed all 7 tasks
+(including dependencies). Turbo emitted sandbox cache I/O warnings only.
+`node node_modules/typescript/bin/tsc -p /tmp/batch-35-repair-types.json --noEmit`
+also passed for the six changed DB test files and imported fixtures.
+
+READY for router staging and merge commit; no Git writes performed.
