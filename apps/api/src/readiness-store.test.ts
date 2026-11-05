@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { describe, expect, it, vi } from "vitest";
-import type { VerifiedTenantContext } from "@jobguard/db";
+import { verifiedTenantContextForQueuedJob, type VerifiedTenantContext } from "@jobguard/db";
 import { DurableReadinessStore } from "./readiness-store.js";
 import type { ReadinessProposal, ScheduledPlan } from "./readiness-scheduler.js";
 
@@ -23,6 +23,7 @@ describe("durable readiness store boundaries", () => {
     for (const mode of ["disabled", "production_billing", "pilot_no_charge", "provider_sandbox"]) {
       const { store, connect } = fixture(mode);
       await expect(store.confirm(context, "member:synthetic", plan)).rejects.toThrow("READINESS_LIVE_DISABLED");
+      await expect(store.loadJobPlans(context, scope)).rejects.toThrow("READINESS_LIVE_DISABLED");
       await expect(store.load(context, scope)).rejects.toThrow("READINESS_LIVE_DISABLED");
       await expect(store.recordProposal(context, proposal)).rejects.toThrow("READINESS_LIVE_DISABLED");
       await expect(store.proposals(context, scope)).rejects.toThrow("READINESS_LIVE_DISABLED");
@@ -31,6 +32,7 @@ describe("durable readiness store boundaries", () => {
   });
   it("returns no rows for a different tenant and refuses its writes", async () => {
     const { store, connect } = fixture(), other = { ...scope, tenantId: randomUUID() };
+    expect(await store.loadJobPlans(context, other)).toEqual([]);
     expect(await store.load(context, other)).toBeNull(); expect(await store.proposals(context, other)).toEqual([]);
     await expect(store.confirm(context, "member:synthetic", { ...plan, scope: other })).rejects.toThrow("READINESS_SCOPE_MISMATCH");
     await expect(store.recordProposal(context, { ...proposal, scope: other })).rejects.toThrow("READINESS_SCOPE_MISMATCH");
@@ -46,10 +48,24 @@ describe("durable readiness store boundaries", () => {
   });
   it("refuses fee, locked bill, programme changes and false readiness at the persistence boundary", async () => {
     const { store, connect } = fixture();
-    for (const patch of [{ feeEligible: true }, { recoveryFeePence: 1 }, { programmeChanged: true }, { classification: "recovery" }, { lockedBillId: randomUUID() }, { ready: true }, { ready: true, reasons: [] }, { weather: null }]) {
+    for (const patch of [{ feeEligible: true }, { recoveryFeePence: 1 }, { programmeChanged: true }, { classification: "recovery" }, { lockedBillId: randomUUID() }, { ready: true }, { ready: true, reasons: [] }, { weather: null },
+      { labourExposurePence: -1 }, { labourExposurePence: 1.5 }, { labourExposurePence: 1_000_000_000_001 },
+      { ready: true, reasons: [], weather: true, labourExposurePence: null },
+      { ready: true, reasons: [], weather: true, resequence: [] },
+      { resequence: [{ taskId: scope.taskId, fromDate: "2026-11-02", toDate: "2026-11-03" }] },
+      { resequence: Array.from({ length: 4 }, () => ({ taskId: scope.taskId, fromDate: "2026-11-03", toDate: "2026-11-02" })) }]) {
       await expect(store.recordProposal(context, { ...proposal, ...patch } as ReadinessProposal)).rejects.toThrow("INVALID_READINESS_PROPOSAL");
     }
     await expect(store.recordProposal(context, null)).rejects.toThrow("INVALID_READINESS_PROPOSAL");
     expect(connect).not.toHaveBeenCalled();
   });
+});
+
+
+it("reads legacy stored proposals without risk fields", async () => {
+  const query = vi.fn(async (sql: string) => ({ rows: sql.includes("SELECT payload") ? [{ payload: proposal }] : [] }));
+  const release = vi.fn();
+  const store = new DurableReadinessStore({ connect: async () => ({ query, release }) } as unknown as Pool, "synthetic_demo");
+  expect(await store.proposals(verifiedTenantContextForQueuedJob(scope.tenantId), scope)).toEqual([proposal]);
+  expect(release).toHaveBeenCalled();
 });
