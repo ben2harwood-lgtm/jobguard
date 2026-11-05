@@ -494,3 +494,13 @@ Validation for this catch-up (installed local binaries, no package downloads):
 The global pnpm launcher stalled before starting its commands and was stopped;
 checks above used existing package-local `.bin` executables. No tests failed,
 no expectations were weakened, and no git write or network action was run.
+
+## M4-17 adjustment web surface (partial, synthetic only)
+
+`/jobs/[id]/reconciliation/[runId]/adjustments` reads one already stored run and its adjustment proposals. The session-only GET/POST endpoint at the matching `/api/jobs/.../adjustments` path never starts a run. Outside `synthetic_demo`, page and endpoint return not-found. POST requires a trusted configured browser origin. All responses are no-store.
+
+Commands retain the repository's versioned propose/approve envelopes. On proposal transport, tenantId and jobId are omitted from the adjustment and its fact/correction: the server binds these exclusively from the resolved session and path, then passes the strict bound command to the repository. Caller tenant, actor, status and approved fields are refused. Run/hash/revision and approval content hash remain exact client-reviewed bindings. The UI displays server report figures and stored proposal content; its server-provided missing-payment-journal proposal is reviewed explicitly and never automatically submitted. Pending complete payloads stay in browser session storage across uncertain responses and reloads; retries use the same command ID.
+
+0572 requires another finance identity to approve; even a second session of the proposer cannot self-approve. A changed content/report hash or superseded run is refused. An approval records simulated review, never a posted correction: invoices, journals, provider rows and stored runs stay unchanged. The new read routine uses the same ef_actor finance/session/entitlement authority and existing FORCE RLS tenant policies; no caller context setting changes or table grants are added. Missing and foreign run reads both return null.
+
+M4-17 remains open: restore proof, independent money-surface security review, real rails, collection and G4-C/G4-S stay held. No new alert or provider flow is introduced. CI must execute real PostgreSQL replay/concurrency/isolation/immutability tests, fresh/upgrade migration and catalogue proofs, and the headless journey at mobile-360 and desktop; these cannot execute in the builder sandbox.

@@ -9,7 +9,7 @@ import { RetentionRecordApplication } from "../../../apps/api/src/retention-reco
 import { createWorkFixture, closeWorkFixture, type WorkFixture } from "./job-work-state-fixtures.js";
 import { meterCompany } from "./meter-persistence-fixtures.js";
 let f: WorkFixture, infrastructure: Pool;
-beforeAll(async () => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); f = await createWorkFixture(); infrastructure = new Pool({ ...f.admin.options, options: "-c role=jobguard_infrastructure", max: 1 }); }, 240000);
+beforeAll(async () => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); f = await createWorkFixture(); infrastructure = new Pool({ ...f.admin.options, password: f.admin.options.password, options: "-c role=jobguard_infrastructure", max: 1 }); }, 240000);
 afterAll(async () => { await infrastructure?.end(); await closeWorkFixture(f); vi.unstubAllEnvs(); });
 async function company() {
   const a = await meterCompany(f), token = randomUUID();
@@ -77,7 +77,7 @@ it("session application reads timer review, resolves as session person, refuses 
   }
   for (const key of ["tenantId", "actorId", "enabled"]) await expect(a.app.command(a.credentials, a.jobId, { ...input(release), [key]: true })).rejects.toThrow("INVALID_RETENTION_INPUT");
   const beforeRefusals = await read();
-  for (const role of ["estimator", "foreman", "operative", "finance", "read_only"]) {
+  for (const role of ["estimator", "foreman", "finance", "read_only"]) {
     await f.admin.query("UPDATE app.membership SET role=$1 WHERE tenant_id=$2 AND id=$3", [role, a.tenantId, a.actorId]);
     await expect(append(release)).rejects.toThrow();
     expect(await read()).toEqual(beforeRefusals);

@@ -1,4 +1,4 @@
-# 0875_retention_records — synthetic draft archive
+# 0600_retention_records — synthetic draft archive
 
 Adds one empty append-only business table with tenant/job and membership foreign
 keys, ordered book rows, record hashes, FORCE RLS, and update/delete/truncate

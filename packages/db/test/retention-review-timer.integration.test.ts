@@ -10,7 +10,7 @@ describe("M4-20 infrastructure timer (real PostgreSQL)", () => {
  let f: WorkFixture, infrastructure: Pool;
  beforeAll(async () => {
   f = await createWorkFixture();
-  infrastructure = new Pool({ ...f.admin.options, options: "-c role=jobguard_infrastructure", max: 2 });
+  infrastructure = new Pool({ ...f.admin.options, password: f.admin.options.password, options: "-c role=jobguard_infrastructure", max: 2 });
  }, 240000);
  afterAll(async () => { await infrastructure?.end(); await closeWorkFixture(f); });
  const timer = () => new RetentionRecordRepository(infrastructure);

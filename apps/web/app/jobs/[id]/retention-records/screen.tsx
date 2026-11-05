@@ -7,7 +7,7 @@ type Source = Extract<RetentionRecord, { version: "retention.profile.v1" }>["con
 const sourceText = (source: Source) => source.kind === "contract_profile"
   ? `Contract ${source.profileVersion}, clause ${source.clause}` : `Person ${source.actorId}, input ${source.inputId}`;
 const pounds = (pence: number) => new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(pence / 100);
-const target = { minHeight: 44, minWidth: 44, maxWidth: "100%" };
+const target = { minHeight: 44, minWidth: 44, maxWidth: "100%", color: "#17201c", backgroundColor: "#ffffff", opacity: 1 };
 async function sessionHeaders() {
   const response = await fetch("/api/auth/session", { cache: "no-store", credentials: "same-origin" });
   if (!response.ok) throw new Error("Sign in with an authorised company session.");
@@ -42,7 +42,7 @@ export function RetentionRecordScreen({ jobId }: { jobId: string }) {
       if (!pending.current) pending.current = JSON.stringify({ version: "retention-record-command.v1", commandId: crypto.randomUUID(), jobId, record });
       const response = await fetch(path, { method: "POST", credentials: "same-origin", headers: await sessionHeaders(), body: pending.current });
       if (!response.ok) {
-        if (response.status < 500) { pending.current = null; setUncertain(false); }
+        if (response.status >= 400 && response.status < 500 && response.status !== 408 && response.status !== 429) { pending.current = null; setUncertain(false); }
         const failure = await response.json() as { message?: string };
         throw new Error(failure.message ?? "Retention command unavailable.");
       }

@@ -46,18 +46,23 @@ test("M4-20 timer review, session resolution, uncertain retry and reconciled fin
     await review.getByLabel("I confirm the condition is satisfied").check();
     await review.getByLabel("Net pence").fill("4000"); await review.getByLabel("Tax pence").fill("800");
     // Let the real route commit, lose the response, then retry the exact envelope.
-    const bodies: string[] = []; let lose = true;
+    const bodies: string[] = []; const transient = [408, 429]; let lose = true;
     await page.route(`**${path}`, async route => {
       if (route.request().method() !== "POST") return route.continue();
       bodies.push(route.request().postData()!);
+      const status = transient.shift();
+      if (status) return route.fulfill({ status, contentType: "application/json", body: JSON.stringify({ message: "Retry this command." }) });
       if (lose) { lose = false; await route.fetch(); return route.abort("failed"); }
       return route.continue();
     });
     await review.getByRole("button", { name: "Record human resolution" }).click();
     await expect(main.getByRole("button", { name: "Retry same command" })).toBeVisible();
-    await main.getByRole("button", { name: "Retry same command" }).click();
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await main.getByRole("button", { name: "Retry same command" }).click();
+      if (attempt < 2) await expect(main.getByRole("button", { name: "Retry same command" })).toBeEnabled();
+    }
     await expect(main.getByText(`Resolution approved by person ${membership.id}; condition satisfied: yes.`)).toBeVisible();
-    expect(bodies).toHaveLength(2); expect(bodies[0]).toBe(bodies[1]);
+    expect(bodies).toHaveLength(4); expect(new Set(bodies).size).toBe(1);
     expect((await read()).book.records.filter(r => r.version === "retention.resolution.v1")).toHaveLength(1);
     await main.getByRole("button", { name: "Record release approval for this resolution" }).click();
     await expect(main.getByText("Released: net £40.00; tax £8.00", { exact: true })).toBeVisible();

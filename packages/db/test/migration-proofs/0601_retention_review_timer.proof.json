@@ -1,5 +1,5 @@
 {
-  "migration": "0876_retention_review_timer.sql",
+  "migration": "0601_retention_review_timer.sql",
   "lp0": [
     {
       "section": "entries",

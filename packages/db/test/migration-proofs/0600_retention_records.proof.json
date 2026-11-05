@@ -1,5 +1,5 @@
 {
-  "migration": "0875_retention_records.sql",
+  "migration": "0600_retention_records.sql",
   "lp0": [
     {
       "section": "groups",
@@ -11,7 +11,7 @@
         "status": "approved_current",
         "target": {
           "state": "review_at_card",
-          "note": "Bounded synthetic lifecycle dispatch; exact-head RED review and PostgreSQL CI remain required."
+          "note": "Synthetic draft storage outside LP-5 lifecycle dispatch; production lifecycle integration held; exact-head RED review and PostgreSQL CI remain required."
         },
         "cards": [
           "LP-11",
@@ -23,7 +23,7 @@
         },
         "downstream": "Synthetic retention draft records only. Core validates under the job lock; stored rows never authorize issue or qualify recovery.",
         "sources": [
-          "packages/db/migrations/0875_retention_records.sql",
+          "packages/db/migrations/0600_retention_records.sql",
           "packages/db/src/retention-record-repository.ts"
         ],
         "tests": [
@@ -68,7 +68,7 @@
           "LP-12": "Review fixed search_path, migration-owned private tables and helpers, and absence of runtime direct writes."
         },
         "sources": [
-          "packages/db/migrations/0875_retention_records.sql",
+          "packages/db/migrations/0600_retention_records.sql",
           "packages/db/src/retention-record-repository.ts"
         ],
         "tests": [

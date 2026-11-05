@@ -31,7 +31,7 @@ is outside the core-validation guarantee. RLS protects storage within the verifi
 tenant context; it cannot authenticate a tenant context chosen by compromised
 application code. This adapter is not approved for live composition.
 
-Migration 0875_retention_records grants runtime EXECUTE on the one bounded routine only. Tables
+Migration 0600_retention_records grants runtime EXECUTE on the one bounded routine only. Tables
 remain private, migration-owned and FORCE RLS protected. The routine restores the
 caller's tenant setting, including on failure. Audit contains references/hashes,
 never descriptions. This is a synthetic draft archive, not a commercial command,
@@ -43,9 +43,9 @@ refuses. Existing issue blockers remain unchanged. G0–G5, demand after pilot,
 RETENTION_REVIEW_OWNER wiring, D06 v2 templates, D02 tax and independent RED review
 remain held. No retention release is automatically fee eligible. M4-21 is untouched.
 
-## Synthetic timer review slice (0876_retention_review_timer; M4-20 remains open)
+## Synthetic timer review slice (0601_retention_review_timer; M4-20 remains open)
 
-The earlier no-worker statement describes 0875_retention_records. `retention-release-review-v1` now
+The earlier no-worker statement describes 0600_retention_records. `retention-release-review-v1` now
 has one Graphile discovery owner, registered only in `synthetic_demo`; elsewhere
 registration returns an empty crontab and installs no tasks. Discovery emits only
 tenant IDs; queue payloads contain version/tenant only, keyed by tenant and database
@@ -94,3 +94,7 @@ CI must execute the new real-PostgreSQL session/financial non-interference test 
 the headless mobile-360/desktop repository-seeded browser journey, plus existing
 retention store/timer suites. Local unit/source checks do not prove those results.
 The piece remains RED and requires independent review at its exact landing head.
+
+These synthetic draft commands remain outside LP-5 lifecycle dispatch. Production
+composition is held until a separately reviewed lifecycle integration; stored draft
+records do not authorize commercial execution.
