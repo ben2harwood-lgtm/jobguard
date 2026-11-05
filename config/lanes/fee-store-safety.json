@@ -1,0 +1,54 @@
+{
+  "version": 2,
+  "lanes": {
+    "fee-store-safety": {
+      "branches": [
+        "codex/sandbox/fee-store-safety"
+      ],
+      "note": "FEE-STORE-UPDATE-GRANT RED; exact-union merge retained. Tenant-scoped archive owner SELECT resolved in 1060; NOPR, no git writes.",
+      "allow": [
+        "apps/api/src/fee-collection/postgres-reservation-store.test.ts",
+        "apps/api/src/fee-collection/postgres-reservation-store.ts",
+        "apps/api/src/pay-now-attempt.application.test.ts",
+        "apps/api/src/pay-now-attempt.application.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/web/app/api/jobs/[id]/invoices/[invoiceId]/pay-now-preview/route.test.ts",
+        "apps/web/app/api/jobs/[id]/invoices/[invoiceId]/pay-now-preview/route.ts",
+        "apps/web/app/jobs/[id]/invoices/[invoiceId]/pay-now-preview/page.tsx",
+        "apps/web/app/jobs/[id]/invoices/[invoiceId]/pay-now-preview/screen.test.tsx",
+        "apps/web/app/jobs/[id]/invoices/[invoiceId]/pay-now-preview/screen.tsx",
+        "apps/web/app/lib/pay-now-attempt-server.ts",
+        "apps/web/app/lib/pay-now-fake-provider.ts",
+        "apps/web/app/ui/pay-now-synthetic.tsx",
+        "apps/web/e2e/MON-6-stored-pay-now-preview.spec.ts",
+        "docs/contracts/accounting-export-v1.md",
+        "docs/contracts/pay-now-fake-attempts-dark-v1.md",
+        "docs/verdicts/FEE-STORE-UPDATE-GRANT/BUILDER_RECEIPT.md",
+        "packages/core/src/pay-now-synthetic.test.ts",
+        "packages/core/src/pay-now-synthetic.ts",
+        "packages/core/src/watchdog.ts",
+        "packages/db/migration-notes/0598_pay_now_fake_attempts.md",
+        "packages/db/migration-notes/0599_accounting_export_route_change.md",
+        "packages/db/migration-notes/1060_fee_reservation_book_guard.md",
+        "packages/db/migrations/0598_pay_now_fake_attempts.sql",
+        "packages/db/migrations/0599_accounting_export_route_change.sql",
+        "packages/db/migrations/1060_fee_reservation_book_guard.sql",
+        "packages/db/src/accounting-export-repository.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/pay-now-attempt-repository.ts",
+        "packages/db/test/accounting-export-repository.test.ts",
+        "packages/db/test/accounting-export-route-change.integration.test.ts",
+        "packages/db/test/fee-reservation-archive-upgrade.integration.test.ts",
+        "packages/db/test/fee-reservation.integration.test.ts",
+        "packages/db/test/later-empty-tables.ts",
+        "packages/db/test/migration-proofs/0598_pay_now_fake_attempts.proof.json",
+        "packages/db/test/migration-proofs/0599_accounting_export_route_change.proof.json",
+        "packages/db/test/migration-proofs/1060_fee_reservation_book_guard.proof.json",
+        "packages/db/test/pay-now-attempt-repository.test.ts",
+        "packages/db/test/pay-now-attempt.integration.test.ts",
+        "packages/db/test/pay-now-preview.integration.test.ts",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts"
+      ]
+    }
+  }
+}
