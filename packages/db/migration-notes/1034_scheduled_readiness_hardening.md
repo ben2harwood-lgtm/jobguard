@@ -139,3 +139,45 @@ Installed TypeScript checks passed: packages/db, apps/api and apps/web each ran
 ./node_modules/.bin/tsc -p tsconfig.json --noEmit from its package directory.
 git diff --check passed. No further simplification was added on this follow-up;
 the initial review suggestion above remains LATER only.
+
+
+## Latest merge preparation (5 November 2026, 23:42 UTC)
+
+READY for router staging/merge commit and push. This entry supersedes the earlier
+current-main merge verification above: origin/main is now
+68b104767b18fad6fc5b9676f95bcd7d68bcc19d, HEAD is
+f763dc659d83a2e1a63d67f85c288dd25a648e59, and this merge is still uncommitted.
+The sole conflicted file, plan-entitlement-lifecycle-upgrade.integration.test.ts,
+now retains main's exact 0615 success-fee and 0616 payment-fee body assertions
+and this group's exact 1030 import and 1033 dunning body assertions. No test was
+weakened. The index remains unmerged until the router stages the resolution;
+no Git-writing command was run in this sandbox.
+
+Compared replacement routines to the latest bodies on this origin/main again:
+1030 differs from 0534 only in its intended tenant/source duplicate predicate;
+1033 differs from 0564 only in its intended current-owner approval predicate.
+All five reserved 1030–1034 migrations are absent from main, with no duplicate
+migration suffix, so none needed dropping. No additional exact-list edits were
+needed. The lane allow-list exactly matches all 68 changed paths outside
+config/lanes/ and excludes itself.
+
+Local installed Vitest binaries passed 232 tests in 13 named files, with at most
+three named files per run and at most two workers total. Commands, from the
+respective package directories, used ./node_modules/.bin/vitest run --maxWorkers=1:
+- db: test/later-safety-3.test.ts test/inbox-metrics.test.ts test/dunning-repository.test.ts (41)
+- api: src/readiness-store.test.ts src/capture/deepgram-fixture.service.test.ts (17)
+- db: test/migration-proof-loader.test.ts src/payment-fee-collection-repository.test.ts src/enterprise-live-prompt-repository.test.ts (110)
+- web: app/lib/recovery-billability-server.test.ts app/lib/managed-recovery-server.test.ts app/api/contractor/jobs/[id]/duplicate-candidates/transport.test.ts (46)
+- core: src/shadow-pilot-report.test.ts (17)
+- db: test/scheduled-readiness-hardening.integration.test.ts -t 'declares missing-context-safe' (1 static check; 3 PostgreSQL tests excluded).
+Installed ./node_modules/.bin/tsc -p tsconfig.json --noEmit passed in db, api
+and web. git diff --check passed. The two initial pnpm invocations stalled before
+test execution and were interrupted; no dependency install was requested.
+
+The full lane lint currently fails because local mode counts main's staged merge
+files against this group's lane, in addition to the branch delta. Do not add
+main's files to this lane to silence that result. Direct origin/main-to-working-
+tree path comparison confirms exact coverage; the router must rerun full lane
+lint after staging and committing the merge. PostgreSQL, browser suites, committed-
+head CI and independent RED review remain required. No further simplification
+was added on this follow-up; the initial LATER suggestion above remains advisory.
