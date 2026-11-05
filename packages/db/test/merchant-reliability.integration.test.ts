@@ -16,7 +16,7 @@ async function receipt(a:Company, orderId=randomUUID(), revision=1, supplier="Fi
   await db.query("SET LOCAL session_replication_role='replica'");
   const document=randomUUID();
   await db.query("INSERT INTO app.supplier_document(id,tenant_id,job_id,supplier_context,document_type,content_hash,status) VALUES($1,$2,$3,$4,'delivery',$5,$6)",[document,a.tenantId,a.jobId,supplier,randomUUID().replaceAll('-','').repeat(2),status]);
-  await db.query("INSERT INTO app.goods_receipt(id,tenant_id,job_id,order_draft_id,document_id,revision,ordered_quantity,delivered_quantity,accepted_quantity,rejected_quantity,missing_quantity,unit) VALUES($1,$2,$3,$4,$5,$6,10,$7,$7,0,10-$7,'each')",[randomUUID(),a.tenantId,a.jobId,orderId,document,revision,revision===1?8:10]);
+  await db.query("INSERT INTO app.goods_receipt(id,tenant_id,job_id,order_draft_id,document_id,revision,ordered_quantity,delivered_quantity,accepted_quantity,rejected_quantity,missing_quantity,unit) VALUES($1,$2,$3,$4,$5,$6,10,$7::numeric,$7::numeric,0,10-$7::numeric,'each')",[randomUUID(),a.tenantId,a.jobId,orderId,document,revision,revision===1?8:10]);
  }); return orderId;
 }
 it("counts latest once, keeps tenants/suppliers apart, excludes held latest and writes nothing",async()=>{
