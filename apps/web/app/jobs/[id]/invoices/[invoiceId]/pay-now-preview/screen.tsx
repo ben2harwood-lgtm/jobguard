@@ -72,6 +72,11 @@ export function PayNowAttemptScreen({ jobId, invoiceId }: { jobId: string; invoi
     try { sessionStorage.setItem(key, JSON.stringify(command)); } catch { /* In-memory retry remains available. */ }
     try {
       const response = await fetch(url, { method: "POST", credentials: "same-origin", headers: { ...await companyHeaders(), "Content-Type": "application/json" }, body: JSON.stringify(command) });
+      if (response.status >= 400 && response.status < 500 && response.status !== 408 && response.status !== 429) {
+        setPending(null);
+        try { sessionStorage.removeItem(key); } catch { /* Definite server refusal. */ }
+        throw new Error(`Practice attempt refused (${response.status}). Reload the stored invoice.`);
+      }
       if (!response.ok) throw new Error("Practice attempt unconfirmed. Retry the same option or refresh; no real money moves.");
       await response.json();
       setView(await load());
