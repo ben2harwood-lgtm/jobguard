@@ -22,7 +22,7 @@ const finding = async () => { const event = ({ tenantId: tenant, jobId: job, rul
     const audit = await appendAuditBatch(tx, [{id:randomUUID(),version:"audit.v1",actorRef:`membership:${actor.membershipId}`,eventType:"inbox.finding_recorded",subjectType:"job",subjectRef:job,payload:{references:{jobId:job},classifications:{action:"operational"}}}]);
     await tx.$client.query(`INSERT INTO app.inbox_finding_revision
       (id,tenant_id,job_id,revision,lane,rule_id,rule_revision,action_type,source_revision,source_reference,title,explanation,permitted_action,actor_ref,subject_ref,payload_hash,audit_event_id,created_at)
-      VALUES($1,$2,$3,1,'mandatory','proof','v1','provide-proof','fixture.v1',$1::text,'Synthetic proof','Synthetic source','Add proof',$4,$3,$5,$6,clock_timestamp())`,
+      VALUES($1,$2,$3,1,'mandatory','proof','v1','provide-proof','fixture.v1',$1::uuid::text,'Synthetic proof','Synthetic source','Add proof',$4,$3,$5,$6,clock_timestamp())`,
     [event.findingId,tenant,job,`membership:${actor.membershipId}`,"a".repeat(64),audit[0]!.id]);
   });
   return event;

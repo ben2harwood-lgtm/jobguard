@@ -32,7 +32,7 @@ beforeAll(async()=>{
     createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});
   await pg.initialise();await pg.start();admin=new Pool({host:"127.0.0.1",port,database:"postgres",user:"postgres",password:"synthetic-test-only"});
   await admin.query("CREATE DATABASE jobguard_synthetic_demo");
-  const options={...admin.options,database:"jobguard_synthetic_demo"};
+  const options={...admin.options,password:"synthetic-test-only",database:"jobguard_synthetic_demo"};
   await admin.end();admin=new Pool(options);
   // Upgrade from every predecessor, retaining a real legacy source row.
   await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
@@ -125,7 +125,7 @@ describe("dark speech registration and persistence (real PostgreSQL)",()=>{
 });
 
 it("fixture persistence rejects a non-demo database even with the demo environment",async()=>{
- const nonDemo=new Pool({...runtime.options,database:"postgres"});
+ const nonDemo=new Pool({...runtime.options,password:"synthetic",database:"postgres"});
  try {
   const request=input(randomUUID(),randomUUID(),randomUUID());
   await expect(new CaptureRepository(nonDemo).persistSpeechFixtureSource(context,request.captureId,{kind:request.sourceKind,text:request.text,acquisition:request.acquisition}))

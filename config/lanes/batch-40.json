@@ -64,6 +64,7 @@
         "packages/db/test/inbox-metrics.test.ts",
         "packages/db/test/job-import-v3-admission.integration.test.ts",
         "packages/db/test/later-safety-3.test.ts",
+        "packages/db/test/managed-recovery-fixtures.ts",
         "packages/db/test/managed-recovery-preview-credit-note.integration.test.ts",
         "packages/db/test/migration-proofs/1030_company_import_once.proof.json",
         "packages/db/test/migration-proofs/1031_ais_private_reads.proof.json",
