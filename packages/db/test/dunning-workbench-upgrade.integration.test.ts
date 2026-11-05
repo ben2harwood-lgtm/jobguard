@@ -39,7 +39,7 @@ it("0564_dunning_workbench_preview preserves populated history, redrafts expired
   expect((await c.admin.query("SELECT count(*)::int n FROM app.dunning_reminder WHERE tenant_id=$1",[a.tenantId])).rows[0].n).toBe(2);
 }, 240000);
 
-it("0782 preserves populated receipts and approvals while removing admin approval authority", async () => {
+it("1033 preserves populated receipts and approvals while removing admin approval authority", async () => {
  const upgraded=await startBeforeMigration("1033_dunning_owner_approval.sql");
  try {
   const a=await meterCompany(upgraded as unknown as WorkFixture), invoiceId=randomUUID();

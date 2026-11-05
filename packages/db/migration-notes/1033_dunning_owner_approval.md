@@ -1,7 +1,7 @@
 # LATER-SAFETY-4 — owner-only reminder approval (RED)
 
-Verified against main b628980835bdefa152aa8d9ff889b5cf80f0b5e1. The latest routine is
-0564_dunning_workbench_preview.sql. 0782 copies that body and adds only the current
+Verified against origin/main d16ef1978eb44d7d9d33a77926fb179e794af196. The latest routine is
+0564_dunning_workbench_preview.sql. 1033 copies that body and adds only the current
 owner predicate from mon1_lifecycle_actor after the source lock, before receipt
 lookup. Read and request remain owner/admin. Wrong-role approval raises the
 existing DUNNING_UNAVAILABLE with SQLSTATE 42501; the repository preserves a
@@ -13,13 +13,13 @@ The explicit lp0/upgrade/tenancy proof sections are empty because no tracked
 catalogue attributes change. The body change has populated upgrade coverage in
 dunning-workbench-upgrade.integration.test.ts, preserving snapshots, Decisions,
 resolutions, receipts and audit. Existing fixture actors are owners; none changed.
-The plan-entitlement-lifecycle upgrade baseline predates creation of this routine
-in 0563, so no older tracked routine exception is needed there.
+The plan-entitlement-lifecycle upgrade guard binds this replacement to its exact
+migration body while preserving all other tracked routines.
 
 Forward fix only: retain historical approved previews and receipts. If correction
 is needed, add a successor migration preserving owner-only approval; do not
-restore admin authority or edit this migration after landing. 0782 is reserved
-for this branch and must be renumbered above merged migrations at landing.
+restore admin authority or edit this migration after landing. 1033 is reserved
+for this branch, above the current main migration maximum of 0613.
 
 PostgreSQL and browser checks cannot run in this sandbox. CI must prove fresh
 migration/install, populated upgrade, admin request/refused approval, current

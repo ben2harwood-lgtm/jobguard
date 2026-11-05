@@ -99,3 +99,43 @@ LATER / SIMPLICITY: apps/api/src/readiness-store.ts and
 packages/db/src/inbox-metrics-repository.ts repeat the strict membership/identity
 actor schema. A later shared contract export could keep that boundary shape in
 one place while preserving each operation's independent permission checks.
+
+
+## Current-main merge verification (5 November 2026)
+
+READY for router commit/push and subsequent CI/review. The launcher already
+committed the merge at 2fd1fb88b with origin/main d16ef1978. No unresolved index
+entries or conflict markers remain. Local main is stale and was not used as the
+comparison base. No Git-writing command was run in this sandbox.
+
+Compared both replacement routines against the latest definitions on origin/main:
+1030 retains the complete 0534 import body with only its tenant/source duplicate
+predicate; 1033 retains the complete 0564 dunning body with only its current-owner
+approval predicate. No main behavior was removed. All five migrations are absent
+from main, above its 0613 maximum, and have matching proofs. No migration needed
+dropping. Main's new rows in the shared registers were retained by the merge.
+The lane allow-list equals all 68 changed paths outside config/lanes and does not
+list itself. LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs
+--lane=batch-40 passed. SQL CASE-in-IF lint passed for all 283 migrations.
+
+Local installed Vitest binaries passed 232 tests in 13 named files, never more
+than three named files per invocation or two Vitest workers total. Selected files:
+DB later-safety-3, inbox-metrics, dunning-repository, payment-fee-collection-repository,
+enterprise-live-prompt-repository and migration-proof-loader; API readiness-store
+and deepgram-fixture.service; web recovery-billability-server,
+managed-recovery-server and duplicate-candidates/transport; core shadow-pilot-report;
+and only the static policies/immutability test in scheduled-readiness-hardening.
+The latter explicitly did not run its three PostgreSQL tests. The initial pnpm
+launches failed before running checks because the launcher could not fetch/verify
+the pinned package-manager release; installed binaries supplied all test evidence.
+No packages were downloaded. Stale migration references in the dunning note and
+upgrade test title were corrected; no behavior or assertions were changed.
+
+PostgreSQL, browser suites, green CI against the committed head and independent
+RED review remain required. This is merge preparation, not completion of a plan
+piece or approval to release.
+
+Installed TypeScript checks passed: packages/db, apps/api and apps/web each ran
+./node_modules/.bin/tsc -p tsconfig.json --noEmit from its package directory.
+git diff --check passed. No further simplification was added on this follow-up;
+the initial review suggestion above remains LATER only.
