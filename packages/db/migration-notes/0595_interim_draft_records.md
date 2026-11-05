@@ -1,4 +1,4 @@
-# 0850_interim_draft_records — M4-18 synthetic interim draft records
+# 0595_interim_draft_records — M4-18 synthetic interim draft records
 
 Adds one empty append-only tenant/job table and one runtime-callable synthetic-only
 routine. No existing row shape, routine, registry, commercial table or policy changes.
@@ -11,6 +11,6 @@ reviewed migration/repository change. If storage must be withdrawn, revoke the
 routine's runtime EXECUTE in a new migration and retain the table for investigation.
 Do not delete records or roll back earlier commercial history.
 
-Migration `0850_interim_draft_records` is numbered for this batch and must be checked at landing.
+Migration `0595_interim_draft_records` is numbered for this batch and must be checked at landing.
 Real database and migration catalogue evidence comes from CI; this sandbox cannot
 start PostgreSQL. No issue/templates/tax/release gate is satisfied by this change.

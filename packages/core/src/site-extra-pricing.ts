@@ -83,7 +83,7 @@ export function parseSorSiteExtraInput(raw: unknown): SorSiteExtraInput {
   return { ...head.data, quantity: requireQuantity(head.data.quantity) };
 }
 
-// ---- The two reads. Search text is required (Q10 struck the recent list); the order-check query names a code and a total quantity. ----
+// ---- The two reads. Search text is required; the order-check query names a code and a total quantity. ----
 const sorItemsQueryHeadV1 = z.object({ q: z.string().trim().min(1).max(80) }).strict();
 export function parseSorItemsQuery(raw: unknown): { q: string } {
   const parsed = sorItemsQueryHeadV1.safeParse(raw);
@@ -140,6 +140,11 @@ export const siteSorItemsV1 = z.object({
   items: z.array(z.object({ code: codeText, description: z.string().min(1).max(500), unit: z.string().min(1).max(40) }).strict()).max(50), truncated: z.boolean(),
 }).strict();
 export type SiteSorItems = z.infer<typeof siteSorItemsV1>;
+
+/** Separate read: no search query and no history, person, quantity or money fields. */
+export const siteSorRecentItemsV1 = siteSorItemsV1.omit({ truncated: true }).extend({
+  version: z.literal("site-sor-recent-items.v1"), items: siteSorItemsV1.shape.items.max(5),
+}).strict();
 
 // ---- The TypeScript mirror of the hash in migration item 4 (framing as merged extraOriginHashV1). ----
 export const extraSorRevisionHashFields = ["tenantId", "jobId", "variationId", "revision", "originHash", "workOrderId", "workOrderRevisionId", "sorVersionId", "sorCode", "unit", "ratePence", "adjustmentNumerator", "adjustmentDenominator", "coverage", "excessOfScopeItemId", "instructedQuantity", "claimedQuantity", "quantity", "netPence"] as const;

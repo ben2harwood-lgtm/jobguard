@@ -79,8 +79,9 @@ describe("M0-13c synthetic PostgreSQL privacy rehearsal", () => {
     const execute = { action: "execute", requestId: req.requestId, expectedRevision: 0, commandId: randomUUID() };
     const both = await Promise.all([command(a,execute), command(a,execute)]); expect(both[0]).toEqual(both[1]);
     await expect(command(a,{ ...execute, commandId: randomUUID() })).rejects.toMatchObject({ code: "PRIVACY_CONFLICT" });
-    const events = (await f.admin.query("SELECT payload FROM app.audit_event WHERE tenant_id=$1 AND event_type='privacy.execute'", [a.tenantId])).rows;
-    expect(events).toHaveLength(1); expect(JSON.stringify(events)).not.toContain("fictional");
+    const events = (await f.admin.query("SELECT version,payload FROM app.audit_event WHERE tenant_id=$1 AND event_type='privacy.execute'", [a.tenantId])).rows;
+    expect(events).toHaveLength(1); expect(events[0]).toMatchObject({ version: "audit.v2", payload: { references: { auditTrust: "checked_operation" } } });
+    expect(JSON.stringify(events)).not.toContain("fictional");
   });
   it("refuses direct table access, forged tenant context/digest, revoked membership/session and malformed SQL input", async () => {
     const a = await meterCompany(f), b = await meterCompany(f), id = await subject(a);

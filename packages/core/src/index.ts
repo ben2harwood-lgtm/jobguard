@@ -168,6 +168,7 @@ export * from "./exposure-curve.js";
 export * from "./pay-now-synthetic.js";
 export * from "./contractor-mandate.js";
 
+export * from "./shadow-pilot-financial-record.js";
 export * from "./cancellation-kit.js";
 export * from "./value-source-receipt-v2.js";
 export * from "./privacy-operations.js";
@@ -176,3 +177,5 @@ export * from "./offline-client-queue.js";
 export * from "./offline-capture.js";
 
 export * from "./contractor-fee-mandate.js";
+
+export * from "./deepgram-transcript.js";

@@ -1,5 +1,5 @@
 {
-  "migration": "0850_interim_draft_records.sql",
+  "migration": "0595_interim_draft_records.sql",
   "lp0": [
     {
       "section": "groups",
@@ -23,7 +23,7 @@
         },
         "downstream": "One synthetic-only routine stores fixture draft records; core validates the locked book. No commercial authority or issue.",
         "sources": [
-          "packages/db/migrations/0850_interim_draft_records.sql",
+          "packages/db/migrations/0595_interim_draft_records.sql",
           "packages/db/src/interim-draft-repository.ts"
         ],
         "tests": [
@@ -68,7 +68,7 @@
           "LP-12": "Review fixed search_path, migration-owned private tables and helpers, and absence of runtime direct writes."
         },
         "sources": [
-          "packages/db/migrations/0850_interim_draft_records.sql",
+          "packages/db/migrations/0595_interim_draft_records.sql",
           "packages/db/src/interim-draft-repository.ts"
         ],
         "tests": [
