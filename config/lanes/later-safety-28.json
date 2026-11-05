@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-28": {
+      "branches": [
+        "codex/sandbox/later-safety-28"
+      ],
+      "allow": [
+        "apps/api/src/fee-collection/postgres-reservation-store.test.ts",
+        "packages/db/migration-notes/0799_fee_result_malformed_proof.md",
+        "packages/db/migrations/0799_fee_result_malformed_proof.sql",
+        "packages/db/test/fee-reservation.integration.test.ts",
+        "packages/db/test/migration-proofs/0799_fee_result_malformed_proof.proof.json"
+      ]
+    }
+  }
+}
