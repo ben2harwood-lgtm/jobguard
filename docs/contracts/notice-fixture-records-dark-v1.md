@@ -52,7 +52,7 @@ bindings, expiration, hashes and append-only scope. This is fixture infrastructu
 not a production legal authorization or independent audit checkpoint. PostgreSQL
 catalogue, RLS, concurrent revisions, privileges, upgrade and fixture persistence
 need CI execution plus an independent exact-head RED review. No local database or
-browser execution is claimed. Migration number 0865 is reserved for batch-22; the db index and later-empty-tables exports overlap other work.
+browser execution is claimed. Migration number 0597 is reserved for batch-22; the db index and later-empty-tables exports overlap other work.
 
 ## Session route and practice preview screen (M4-19 remains open)
 

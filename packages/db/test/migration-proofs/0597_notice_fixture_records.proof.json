@@ -1,5 +1,5 @@
 {
-  "migration": "0865_notice_fixture_records.sql",
+  "migration": "0597_notice_fixture_records.sql",
   "lp0": [
     {
       "section": "groups",
@@ -23,7 +23,7 @@
         },
         "downstream": "One private append-only fixture book. Read uses verified tenant context; writes authenticate a synthetic human session. No notice generation, authorization, outbox or provider.",
         "sources": [
-          "packages/db/migrations/0865_notice_fixture_records.sql",
+          "packages/db/migrations/0597_notice_fixture_records.sql",
           "packages/db/src/notice-fixture-repository.ts"
         ],
         "tests": [
@@ -68,7 +68,7 @@
           "LP-12": "Review the one runtime routine, fixed search path, FORCE RLS and private table."
         },
         "sources": [
-          "packages/db/migrations/0865_notice_fixture_records.sql",
+          "packages/db/migrations/0597_notice_fixture_records.sql",
           "packages/db/src/notice-fixture-repository.ts"
         ],
         "tests": [

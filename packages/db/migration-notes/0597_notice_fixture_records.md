@@ -1,4 +1,4 @@
-# 0865 — synthetic notice fixture records (M4-19 remains open)
+# 0597 — synthetic notice fixture records (M4-19 remains open)
 
 Adds app.notice_fixture_record and the single app.notice_fixture_records routine.
 Existing rows/routines are unchanged; new table starts empty. No data backfill,
@@ -13,7 +13,7 @@ success and error; it has no SET app.* clause. No new role is added.
 
 Forward fix only: do not delete fixture history. If a defect is found, keep the
 unregistered repository dark and add a corrective migration after review.
-No rollback mutates an earlier record or re-enables real notices. 0865 is reserved for batch-22; the migration, proof and note use the same number.
+No rollback mutates an earlier record or re-enables real notices. 0597 is reserved for batch-22; the migration, proof and note use the same number.
 
 CI must run real PostgreSQL fresh/upgrade/catalogue/tenancy suites and
 notice-fixture-records.integration.test.ts. Local checks and their outcomes are

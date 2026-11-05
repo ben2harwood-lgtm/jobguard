@@ -274,3 +274,17 @@ it("ENT-3 supervisor questions bind the session and strict payload without raisi
  await expect(app.supervisorQueries(principal, jobId, raw)).rejects.toMatchObject({ code: "NOT_FOUND" });
  expect(raise).not.toHaveBeenCalled(); await pool.end();
 });
+
+it("recent items resolve the actor from the session and accept no request-selected identity", async () => {
+ vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
+ const pool = new Pool(), m = member(), sessionId = uuid(), jobId = uuid();
+ vi.spyOn(ContractorRepository.prototype, "resolveSession").mockResolvedValue(m);
+ const repo = vi.spyOn(SiteExtraRepository.prototype, "sorRecentItems").mockResolvedValue({ sorVersionId: uuid(), items: [] });
+ const app = new SiteExtraApplication(pool), principal = { version: "contractor-principal.v1", sessionId };
+ expect(await app.sorRecentItems(principal, jobId)).toMatchObject({ version: "site-sor-recent-items.v1", jobId, items: [] });
+ expect(repo.mock.calls[0]).toEqual([expect.objectContaining({ tenantId: m.tenantId }), m, jobId]);
+ await expect(app.sorRecentItems({ ...principal, membershipId: uuid() }, jobId)).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+ await expect(app.sorRecentItems(principal, "unknown")).rejects.toMatchObject({ code: "NOT_FOUND" });
+ expect(repo).toHaveBeenCalledOnce();
+ await pool.end();
+});

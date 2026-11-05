@@ -86,6 +86,11 @@ export class FakeGoCardlessRail implements CollectionRail {
       }
     });
   }
+  collectionPauseReason(tenantId: string): "MANDATE_REVOKED" | "MANDATE_NOT_ACTIVE" | undefined {
+    const mandate = [...this.mandates.values()].find(m => m.tenantId === tenantId);
+    if (mandate?.state === "active") return undefined;
+    return mandate?.state === "cancelled" ? "MANDATE_REVOKED" : "MANDATE_NOT_ACTIVE";
+  }
   async submit(tenantId: string, attempt: Readonly<Attempt>) {
     if (attempt.rail !== this.name) throw new FeeCollectionError("COLLECTION_REFUSED");
     const { state: _state, providerObjectId: _object, paymentState: _payment, ...approved } = attempt;

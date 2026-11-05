@@ -9,6 +9,7 @@ import { GET } from "./route";
 import { GET as detail } from "./[promptId]/route";
 import { POST as confirm } from "./[promptId]/confirm/route";
 import { POST as dismiss } from "./[promptId]/dismiss/route";
+import { POST as registerObservation } from "./observations/route";
 const job = "00000000-0000-4000-8000-000000000002", promptId = "00000000-0000-4000-8000-000000000003";
 const context = { params: Promise.resolve({ id: job, promptId }) };
 const body = () => ({ version: "confirm-prompt.v1", commandId: crypto.randomUUID(), promptHash: "a".repeat(64) });
@@ -85,4 +86,20 @@ it("dismiss rejects body authority and untrusted origins before repository execu
  for (const key of ["tenantId", "actorId", "role"]) expect((await dismiss(request({ ...raw, [key]: job }), context)).status).toBe(400);
  expect((await dismiss(request(raw, "https://untrusted.invalid"), context)).status).toBe(403);
  expect(write).not.toHaveBeenCalled();
+});
+
+it("registers observations through the same session, origin, mode and strict body boundary", async () => {
+ const POST = registerObservation;
+ const write=vi.spyOn(EnterpriseLivePromptRepository.prototype,"registerObservation").mockResolvedValue({observationId:promptId});
+ const raw={version:"completion-observation.v1",commandId:crypto.randomUUID(),evidenceId:promptId,sha256:"a".repeat(64),objectVersion:"fictional-v1",workIdentity:"FIT-VENT",locator:{kind:"photo_tag",tag:"Fictional vent"}};
+ const response=await POST(request(raw),context);
+ expect(response.status).toBe(201);expect(response.headers.get("cache-control")).toBe("no-store");
+ expect(write).toHaveBeenCalledWith(auth.session,{...raw,jobId:job});write.mockClear();
+ for(const key of ["actorId","tenantId","role","jobId"]) expect((await POST(request({...raw,[key]:job}),context)).status).toBe(400);
+ expect((await POST(request(raw,"https://untrusted.invalid"),context)).status).toBe(403);
+ vi.stubEnv("JOBGUARD_ENV","production_billing");expect((await POST(request(raw),context)).status).toBe(403);
+ vi.stubEnv("JOBGUARD_ENV","synthetic_demo");auth.session=undefined;
+ expect((await POST(request(raw),context)).status).toBe(401);expect(write).not.toHaveBeenCalled();
+ auth.session=job;write.mockRejectedValue(new EnterpriseLivePromptPersistenceError("EXTRA_FORBIDDEN"));
+ expect((await POST(request(raw),context)).status).toBe(403);
 });

@@ -2890,6 +2890,30 @@
         ]
       }
     },
+    "/contractor/jobs/{id}/sor-items/recent": {
+      "get": {
+        "operationId": "SiteExtraPricingController_sorRecentItems",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Up to five of the operative's recent items on this job's price list; no prices"
+          }
+        },
+        "tags": [
+          "contractor-site-extras"
+        ]
+      }
+    },
     "/contractor/jobs/{id}/order-check": {
       "get": {
         "operationId": "SiteExtraPricingController_orderCheck",

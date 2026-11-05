@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/batch-22"
       ],
-      "note": "M4-19 draft-store synthetic notice records; RED; NOPR built ahead.",
+      "note": "M4-19 draft-store synthetic notice records; RED; ready for PR and CI.",
       "allow": [
         "apps/api/src/notice-fixture.application.test.ts",
         "apps/api/src/notice-fixture.application.ts",
@@ -19,12 +19,12 @@
         "apps/web/e2e/M4-19-notice-fixtures.spec.ts",
         "docs/contracts/notice-fixture-records-dark-v1.md",
         "packages/core/src/watchdog.ts",
-        "packages/db/migration-notes/0865_notice_fixture_records.md",
-        "packages/db/migrations/0865_notice_fixture_records.sql",
+        "packages/db/migration-notes/0597_notice_fixture_records.md",
+        "packages/db/migrations/0597_notice_fixture_records.sql",
         "packages/db/src/index.ts",
         "packages/db/src/notice-fixture-repository.ts",
         "packages/db/test/later-empty-tables.ts",
-        "packages/db/test/migration-proofs/0865_notice_fixture_records.proof.json",
+        "packages/db/test/migration-proofs/0597_notice_fixture_records.proof.json",
         "packages/db/test/notice-fixture-records.integration.test.ts",
         "packages/db/test/notice-fixture-repository.test.ts",
         "packages/db/test/notice-fixture-route.integration.test.ts"

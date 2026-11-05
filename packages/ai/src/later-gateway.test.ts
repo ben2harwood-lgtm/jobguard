@@ -1,4 +1,4 @@
-import { fixtureAiSession } from "./fixture-provider.js";
+import { fixtureAiSession } from "./testing.js";
 import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { jobRecordProposalV1, parseObservation, sha256, type JobRecordProposal } from "@jobguard/core";

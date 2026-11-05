@@ -120,3 +120,5 @@ export * from "../receipt-case-allocation.application.js";
 
 export { DunningApplication, dunningFailure } from "../dunning.application.js";
 export { NoticeFixtureApplication, assertNoticeFixtureMode, noticeFixtureFailure, noticeFixtureRealNoticeRefusal, type NoticeFixtureView } from "../notice-fixture.application.js";
+
+export { InterimDraftApplication, interimDraftFailure } from "../interim-draft.application.js";
