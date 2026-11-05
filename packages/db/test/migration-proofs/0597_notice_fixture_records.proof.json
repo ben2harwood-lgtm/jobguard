@@ -11,7 +11,7 @@
         "status": "approved_current",
         "target": {
           "state": "review_at_card",
-          "note": "Bounded synthetic lifecycle dispatch; exact-head RED review and PostgreSQL CI remain required."
+          "note": "Bounded synthetic store outside the LP-5 command lifecycle; before records feed anything real, move onto the command boundary with a command registry row and audit. Exact-head RED review and PostgreSQL CI remain required."
         },
         "cards": [
           "LP-11",

@@ -49,9 +49,15 @@ written. The unconditional real-notice gate and literal false flag are unchanged
 The core remains the rule authority for fictional profiles, dates, preview and
 service-state validation. SQL independently enforces durable identity, exact stored
 bindings, expiration, hashes and append-only scope. This is fixture infrastructure,
-not a production legal authorization or independent audit checkpoint. PostgreSQL
-catalogue, RLS, concurrent revisions, privileges, upgrade and fixture persistence
-need CI execution plus an independent exact-head RED review. No local database or
+not a production legal authorization or independent audit checkpoint.
+
+LP-5 lifecycle hold: this command sits outside the LP-5 command lifecycle; it has
+no command registry row or lifecycle audit. This is acceptable only for this
+synthetic fixture store. Before these records feed anything real, the command
+must move onto the command boundary with a command registry row and audit.
+
+PostgreSQL catalogue, RLS, concurrent revisions, privileges, upgrade and fixture
+persistence need CI execution plus an independent exact-head RED review. No local database or
 browser execution is claimed. Migration number 0597 is reserved for batch-22; the db index and later-empty-tables exports overlap other work.
 
 ## Session route and practice preview screen (M4-19 remains open)

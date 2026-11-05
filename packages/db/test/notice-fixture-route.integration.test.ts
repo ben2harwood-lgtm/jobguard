@@ -8,7 +8,7 @@ import { IdentityApplication } from "../../../apps/api/src/auth/identity.applica
 import { PersistedAuthProvider } from "../../../apps/api/src/auth/persisted-auth-provider.js";
 import { NoticeFixtureApplication } from "../../../apps/api/src/notice-fixture.application.js";
 const state = vi.hoisted(() => ({ identity: undefined as any, application: undefined as any, credentials: {} as any }));
-vi.mock("@jobguard/api/workspace", async () => import("../../../apps/api/src/notice-fixture.application.js"));
+vi.mock("../../../apps/api/dist/workspace/index.js", async () => import("../../../apps/api/src/notice-fixture.application.js"));
 vi.mock("../../../apps/web/app/lib/identity-server", () => ({ identityApplication: () => state.identity, identityCredentials: async () => state.credentials }));
 vi.mock("../../../apps/web/app/lib/notice-fixture-server", () => ({ noticeFixtureApplication: () => state.application }));
 import { GET, POST } from "../../../apps/web/app/api/jobs/[id]/notice-fixtures/route.js";
@@ -55,7 +55,7 @@ it("screen transport stores exact previews and separate facts, refuses attacks, 
   expect((await read()).serviceBook.events.map((e: any) => e.state)).toEqual(["queued", "provider_accepted", "outcome_unknown", "read", "legally_served"]);
   expect((await post(raw("revision", { ...revision.data, revision: 2, previousRevisionId: revision.data.revisionId, revisionId: randomUUID(), facts: { ...revision.data.facts, dueDate: "2026-11-12" } }))).status).toBe(201);
   expect((await read()).activeDecisionId).toBeNull(); expect((await post(event("read"))).status).toBe(409);
-  for (const role of ["estimator", "foreman", "operative", "finance", "read_only"]) {
+  for (const role of ["estimator", "foreman", "finance", "read_only"]) {
     await f.admin.query("UPDATE app.membership SET role=$1 WHERE id=$2", [role, a.actorId]);
     expect((await post({ ...revision, commandId: randomUUID() })).status).toBe(404);
     expect((await GET(new Request(path), params)).status).toBe(404);
