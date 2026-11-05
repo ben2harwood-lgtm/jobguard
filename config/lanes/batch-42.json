@@ -39,6 +39,7 @@
         "packages/db/src/index.ts",
         "packages/db/src/northside-run.ts",
         "packages/db/src/outbox.ts",
+        "packages/db/test/command-replay-contract.integration.test.ts",
         "packages/db/test/contractor-full-demo-package.integration.test.ts",
         "packages/db/test/extra-approval-chain.integration.test.ts",
         "packages/db/test/extra-approval-timing.integration.test.ts",

@@ -524,3 +524,30 @@ Executed locally with installed dependencies only, no more than two workers and 
 - Official lane CLI was run with `LANE_BASE_REF=origin/main`; it refused inherited main files still staged in the unfinished merge. The read-only Git index still has two unmerged entries. Router must stage the resolved working files, complete the existing merge and rerun the official CLI; this is not a lane CLI PASS.
 
 CI must prove real-PostgreSQL fresh/upgrade/replay and catalog/privilege/RLS/fingerprint gates with 1040–1044; especially all five real-login session cases, both decisions committing without 42501, exact retry, authorization refusals and the unrelated deferred checks. Retain approval-chain/timing/evidence-pack, Northside/full-demo and lifecycle-upgrade suites. Run ENT-5-client-session, ENT-11a and ENT-11b at their required phone/desktop widths (at most two workers), both complete demos, and all required typecheck/lint/test/build gates against the final head. Independent RED review must bind that head before merge. No database/browser/provider/customer/live-money/deployment result or activation is claimed. Existing Q14/Q15 holds and proposed-only Final Check design status remain.
+
+
+## Batch-42 final re-check repair — 5 November 2026
+
+READY for router NOPR handoff. RED: ENT-5 client approval/session authority; second and last repair round. This entry supersedes the previous repair's readiness and local-check notes. No Git writes, commit, push, PR, merge, deployment or activation were performed.
+
+- Migration 1043 now executes `SET CONSTRAINTS app.decision_check_complete, app.extra_event_raised_audit IMMEDIATE` inside the security-definer approval routine. Both deferred invoker checks run before returning to the real identity login. No ALL, new grants, role changes or broader constraint flushing were added to production SQL. The existing five real-login tests, including both decisions committing with unrelated deferred foreign keys, are unchanged.
+- Revalidated 1043's proof: the named-constraint change alters neither static calls/writes nor catalog owner, ACL, search path or signature. Its existing `definitionSha256: null` and all other expected catalog facts therefore remain unchanged; no artificial proof delta or relaxed expectation was introduced. The proof-loader suite passes locally; PostgreSQL inventory/upgrade proof execution remains a CI hold.
+- Added an executable `/api/customer-portal/extra-approvals` replay-contract case through `identity.extra_customer_approval`, reached with a redeemed invitation and the real `jobguard_identity` login without app schema USAGE. It asserts the original approved result on exact retries, conflicts for changed decision/net/hash, another authorized job, and another real command kind in both directions. It checks one client fact on the original request and none on the conflicting job. The route remains `watchdog_live_only`; no existing contract case or refusal assertion was weakened.
+- The separate case uses the existing complete contractor fixtures because the watchdog harness is a legacy-schema fixture. Registry coverage includes this executable case; the existing generic replay/race/duplicate cases are unchanged. No new production abstraction or configuration was added.
+- `config/lanes/batch-42.json` lists exactly all 48 changed non-lane paths relative to local `origin/main` (merge-base comparison plus working changes), excludes itself and every path under `config/lanes/`.
+
+Executed local checks (installed tools only, at most two Vitest workers and at most two named files per invocation):
+
+- From repository root: `node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit` — PASS.
+- From packages/db: `./node_modules/.bin/vitest run --maxWorkers=2 test/migration-proof-loader.test.ts test/extra-approval-timing.test.ts` — 92 tests PASS (76 proof-loader, 16 timing).
+- From packages/db: `./node_modules/.bin/vitest list --maxWorkers=2 test/command-replay-contract.integration.test.ts test/extra-client-session.integration.test.ts` — PASS, 76 tests discovered including the new client replay case and five retained real-login cases. Collection is not database execution. The first collection invocation used an incorrectly root-prefixed config path; it failed config loading, then passed when rerun from packages/db with the existing config.
+- `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs` — PASS, including migration ordering.
+- `git diff --check` and exact lane-set comparison — PASS.
+
+### Named holds for landing
+
+1. CI must execute the real PostgreSQL `extra-client-session.integration.test.ts` (all five retained cases), `command-replay-contract.integration.test.ts` (including the new client case), approval-chain and migration fresh/upgrade/catalog/privilege/RLS/fingerprint checks. Neither PostgreSQL nor localhost was started here, as required by the sandbox brief; no database PASS is claimed.
+2. Required browser journeys (ENT-5-client-session, ENT-11a, ENT-11b at phone/desktop widths), both complete demos and the remaining required CI gates must pass on the router's final pushed head. This repair did not run browser or full suites.
+3. Independent RED review must bind the final committed head before landing. Q14/Q15, real customer data, providers, money, deployment and launch remain held in their own scopes. DEMO-S company Final Check remains a design document.
+
+READY. The router commits and pushes the NOPR branch after this session; this receipt is builder evidence, not independent acceptance.
