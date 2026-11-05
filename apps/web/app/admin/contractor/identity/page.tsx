@@ -1,4 +1,5 @@
 "use client";
+import { EmergencyNotice } from "./emergency-notice";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
 type Session = { csrfToken: string; memberships: { id: string; tenantId: string; name: string }[] };
@@ -81,6 +82,7 @@ export default function ContractorIdentityPage() {
   const tenantOnly = role === "finance";
 
   return <main style={{ maxWidth: 720, margin: "24px auto", padding: 20, boxSizing: "border-box", overflowWrap: "anywhere" }}>
+    {session&&tenantId&&<EmergencyNotice tenantId={tenantId} csrfToken={session.csrfToken} />}
     <h1>Contractor SAML identity</h1>
     <p role="note" aria-label="SAML sandbox notice">Practice sandbox — synthetic identities only. The in-process test identity provider is the only permitted provider. No live SSO route is approved.</p>
     <p><a href="/admin/contractor" style={field}>Contractor organisation practice</a></p>

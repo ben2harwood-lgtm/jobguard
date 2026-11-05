@@ -90,6 +90,207 @@ describe("M4-12 PostgreSQL shared reservation store", () => {
     expect((await f.read()).audit.map(a => a.state)).toEqual(["reserved", "outcome_unknown"]);
   });
 
+  it("refuses the runtime SQL attack that erases an unknown attempt and opens a second collection", async () => {
+    const f = await setup();
+    await f.executor().reserve(f.context, f.intent);
+    f.rail.crashAfterAcceptance = true;
+    await expect(f.executor().execute(f.context, id(10))).rejects.toThrow("FAKE_CRASH_AFTER_ACCEPTANCE");
+    const before = await f.read();
+    await expect(withTenant(db.runtime, testTenantContext(f.tenantId), tx => tx.$client.query(
+      "UPDATE app.fee_reservation_book SET book=jsonb_set(book,'{attempts}','[]'::jsonb) WHERE tenant_id=$1", [f.tenantId],
+    ))).rejects.toMatchObject({ code: "42501" });
+    expect(await f.read()).toEqual(before);
+    await expect(f.executor().reserve(f.context, { ...f.intent, commandId: id(11), rail: "direct_debit" }))
+      .rejects.toMatchObject({ code: "COLLECTION_REFUSED" });
+    expect(await f.executor().reserve(f.context, f.intent)).toEqual(before.attempts[0]);
+    expect(await f.read()).toEqual(before);
+  });
+
+  it("guards raw INSERT, UPDATE and DELETE without changing a book", async () => {
+    const f = await setup();
+    await f.executor().reserve(f.context, f.intent);
+    const before = await f.read();
+    for (const sql of ["UPDATE app.fee_reservation_book SET book=book WHERE tenant_id=$1",
+      "DELETE FROM app.fee_reservation_book WHERE tenant_id=$1"]) {
+      await expect(withTenant(db.runtime, testTenantContext(f.tenantId), tx => tx.$client.query(sql, [f.tenantId])))
+        .rejects.toMatchObject({ code: "42501" });
+      expect(await f.read()).toEqual(before);
+    }
+    const fresh = await setup();
+    await expect(withTenant(db.runtime, testTenantContext(fresh.tenantId), tx => tx.$client.query(
+      "INSERT INTO app.fee_reservation_book(tenant_id,book) VALUES($1,$2)",
+      [fresh.tenantId, JSON.stringify({ version: "fee-reservation-book.v1", ...before })])))
+      .rejects.toMatchObject({ code: "42501" });
+    expect((await fresh.read()).attempts).toEqual([]);
+  });
+
+  it("refuses direct routine history attacks and keeps unknown blocking the other rail", async () => {
+    const f = await setup(), predecessor = fixture();
+    await predecessor.executor.reserve(ctx, predecessor.intent);
+    predecessor.rail.crashAfterAcceptance = true;
+    await expect(predecessor.executor.execute(ctx, id(10))).rejects.toThrow("FAKE_CRASH_AFTER_ACCEPTANCE");
+    const before = structuredClone(predecessor.book());
+    // Populate an uncompacted predecessor without duplicating already archived audit.
+    const active = { version: "fee-reservation-book.v1", ...before, events: { original: "a".repeat(64) } };
+    await db.admin.query("INSERT INTO app.fee_reservation_book(tenant_id,book) VALUES($1,$2)", [f.tenantId, JSON.stringify(active)]);
+    const attacks = [
+      { ...active, attempts: [] },
+      { ...active, attempts: [{ ...active.attempts[0], amountPence: 1 }] },
+      { ...active, attempts: [{ ...active.attempts[0], state: "reserved" }] },
+      { ...active, attempts: [{ ...active.attempts[0], state: "released" }] },
+      { ...active, attempts: [{ ...active.attempts[0], state: "provider_accepted" }] },
+      { ...active, audit: [] },
+      { ...active, audit: [{ commandId: id(99), state: "reserved" }] },
+      { ...active, audit: [...active.audit].reverse() },
+      { ...active, events: {} },
+      { ...active, events: { original: "b".repeat(64) } },
+    ];
+    for (const book of attacks) {
+      await expect(withTenant(db.runtime, testTenantContext(f.tenantId), tx => tx.$client.query(
+        "SELECT app.replace_fee_reservation_book($1,$2::jsonb)", [f.tenantId, JSON.stringify(book)])))
+        .rejects.toMatchObject({ code: "23514" });
+      expect((await db.admin.query("SELECT book FROM app.fee_reservation_book WHERE tenant_id=$1", [f.tenantId])).rows[0]?.book).toEqual(active);
+    }
+    await expect(f.executor().reserve(f.context, { ...f.intent, commandId: id(11), rail: "direct_debit" }))
+      .rejects.toMatchObject({ code: "COLLECTION_REFUSED" });
+    expect(await f.executor().reserve(f.context, f.intent)).toEqual(before.attempts[0]);
+    expect((await f.read()).attempts).toEqual(before.attempts);
+  });
+
+  it("refuses routine calls for another tenant or without context", async () => {
+    const f = await setup();
+    await f.executor().reserve(f.context, f.intent);
+    const before = await f.read();
+    for (const sql of ["SELECT app.lock_fee_reservation_book($1)", "SELECT app.replace_fee_reservation_book($1,$2::jsonb)"]) {
+      const values = sql.includes("$2") ? [f.tenantId, JSON.stringify({ version: "fee-reservation-book.v1", ...before })] : [f.tenantId];
+      await expect(withTenant(db.runtime, testTenantContext(id(90)), tx => tx.$client.query(sql, values)))
+        .rejects.toMatchObject({ code: "42501" });
+      await expect(db.runtime.query(sql, values)).rejects.toMatchObject({ code: "42501" });
+      expect(await f.read()).toEqual(before);
+    }
+  });
+
+  it("compacts released rows through the guard and changes the book on later store calls", async () => {
+    const f = await setup();
+    await f.executor().reserve(f.context, f.intent);
+    f.rail.definiteFailure = true;
+    await f.executor().execute(f.context, id(10));
+    const raw = async () => (await db.admin.query(
+      "SELECT book FROM app.fee_reservation_book WHERE tenant_id=$1", [f.tenantId])).rows[0]?.book;
+    expect(await raw()).toEqual({ version: "fee-reservation-book.v1", attempts: [], events: {}, audit: [] });
+    const archived = (await db.admin.query(
+      "SELECT kind,key,payload FROM app.fee_reservation_archive WHERE tenant_id=$1 ORDER BY kind,key", [f.tenantId])).rows;
+    expect(archived.filter(row => row.kind === "attempt")).toEqual([
+      expect.objectContaining({ key: `${id(10)}:0`, payload: expect.objectContaining({ state: "released" }) }),
+    ]);
+    expect(archived.filter(row => row.kind === "audit")).toHaveLength(3);
+    const before = await f.read();
+    await f.executor().reserve(f.context, { ...f.intent, commandId: id(11), rail: "direct_debit" });
+    expect((await raw()).attempts).toEqual([expect.objectContaining({ commandId: id(11), state: "reserved" })]);
+    expect((await f.read()).attempts).toEqual([...before.attempts,
+      expect.objectContaining({ commandId: id(11), state: "reserved" })]);
+    expect((await f.read()).audit).toEqual([...before.audit, { commandId: id(11), state: "reserved" }]);
+    expect((await db.admin.query("SELECT kind,key,payload FROM app.fee_reservation_archive WHERE tenant_id=$1 ORDER BY kind,key", [f.tenantId])).rows)
+      .toEqual(expect.arrayContaining(archived));
+  });
+
+  it("refuses removal without an identical archive row, including another tenant's matching row", async () => {
+    const f = await setup(), other = await setup(), predecessor = fixture();
+    await predecessor.executor.reserve(ctx, predecessor.intent);
+    predecessor.rail.definiteFailure = true;
+    await predecessor.executor.execute(ctx, id(10));
+    const active = { version: "fee-reservation-book.v1", ...predecessor.book() };
+    await db.admin.query("INSERT INTO app.fee_reservation_book VALUES($1,$2)", [f.tenantId, JSON.stringify(active)]);
+    await other.read();
+    const refuse = async () => {
+      await expect(withTenant(db.runtime, testTenantContext(f.tenantId), tx => tx.$client.query(
+        "SELECT app.replace_fee_reservation_book($1,$2::jsonb)",
+        [f.tenantId, JSON.stringify({ ...active, attempts: [] })])))
+        .rejects.toMatchObject({ code: "23514" });
+      expect((await db.admin.query("SELECT book FROM app.fee_reservation_book WHERE tenant_id=$1", [f.tenantId])).rows[0]?.book).toEqual(active);
+    };
+    await refuse();
+    await db.admin.query("INSERT INTO app.fee_reservation_archive VALUES($1,'attempt',$2,$3)",
+      [other.tenantId, `${id(10)}:0`, JSON.stringify(active.attempts[0])]);
+    await refuse();
+    // Same tenant but different bytes cannot substitute for the released attempt either.
+    await db.admin.query("INSERT INTO app.fee_reservation_archive VALUES($1,'attempt',$2,$3)",
+      [f.tenantId, `${id(10)}:0`, JSON.stringify({ ...active.attempts[0], amountPence: 1 })]);
+    await refuse();
+  });
+
+  it("limits the migration owner's archive visibility to the session tenant and forbids archive writes", async () => {
+    const f = await setup(), other = await setup();
+    await f.read();
+    await other.read();
+    const payload = { commandId: id(10), state: "released" };
+    await db.admin.query("INSERT INTO app.fee_reservation_archive VALUES($1,'attempt',$2,$3)",
+      [f.tenantId, `${id(10)}:0`, JSON.stringify(payload)]);
+    const before = (await db.admin.query("SELECT * FROM app.fee_reservation_archive WHERE tenant_id=$1", [f.tenantId])).rows;
+    const book = (await db.admin.query("SELECT book FROM app.fee_reservation_book WHERE tenant_id=$1", [f.tenantId])).rows[0]?.book;
+    const client = await db.admin.connect();
+    const asOwner = async <T,>(tenant: string, work: () => Promise<T>) => {
+      await client.query("BEGIN");
+      try {
+        await client.query("SET LOCAL ROLE jobguard_migration");
+        await client.query("SELECT set_config('app.tenant_id',$1,true)", [tenant]);
+        return await work();
+      } finally { await client.query("ROLLBACK"); }
+    };
+    try {
+      for (const tenant of [other.tenantId, ""]) {
+        expect(await asOwner(tenant, async () => (await client.query("SELECT * FROM app.fee_reservation_archive")).rows)).toEqual([]);
+        for (const sql of ["SELECT app.lock_fee_reservation_book($1)", "SELECT app.replace_fee_reservation_book($1,$2::jsonb)"]) {
+          await expect(asOwner(tenant, () => client.query(sql, sql.includes("$2")
+            ? [f.tenantId, JSON.stringify(book)] : [f.tenantId]))).rejects.toMatchObject({ code: "42501" });
+        }
+      }
+      expect(await asOwner(f.tenantId, async () => (await client.query("SELECT * FROM app.fee_reservation_archive")).rows)).toEqual(before);
+      await expect(asOwner(f.tenantId, () => client.query(
+        "INSERT INTO app.fee_reservation_archive VALUES($1,'event','forged','null'::jsonb)", [f.tenantId])))
+        .rejects.toMatchObject({ code: "42501" });
+      // Owner table privileges exist, but no write policy: UPDATE and DELETE affect zero real rows.
+      for (const sql of ["UPDATE app.fee_reservation_archive SET payload='null'::jsonb WHERE tenant_id=$1 RETURNING *",
+        "DELETE FROM app.fee_reservation_archive WHERE tenant_id=$1 RETURNING *"]) {
+        expect(await asOwner(f.tenantId, async () => (await client.query(sql, [f.tenantId])).rows)).toEqual([]);
+        expect((await db.admin.query("SELECT * FROM app.fee_reservation_archive WHERE tenant_id=$1", [f.tenantId])).rows).toEqual(before);
+      }
+      const policies = (await db.admin.query("SELECT policyname,cmd,roles,with_check FROM pg_policies WHERE schemaname='app' AND tablename='fee_reservation_archive' ORDER BY policyname")).rows;
+      expect(policies).toEqual([
+        { policyname: "migration_tenant_select", cmd: "SELECT", roles: "{jobguard_migration}", with_check: null },
+        expect.objectContaining({ policyname: "tenant_isolation", cmd: "ALL", roles: "{jobguard_runtime}" }),
+      ]);
+      expect((await db.admin.query("SELECT book FROM app.fee_reservation_book WHERE tenant_id=$1", [f.tenantId])).rows[0]?.book).toEqual(book);
+    } finally { client.release(); }
+  });
+
+  it("keeps archive write grants unchanged and excludes infrastructure from the routines", async () => {
+    const rows = (await db.admin.query(`SELECT
+      has_table_privilege('jobguard_runtime','app.fee_reservation_archive','SELECT') AS can_read,
+      has_table_privilege('jobguard_runtime','app.fee_reservation_archive','INSERT') AS can_insert,
+      has_table_privilege('jobguard_runtime','app.fee_reservation_archive','UPDATE') AS can_update,
+      has_table_privilege('jobguard_runtime','app.fee_reservation_archive','DELETE') AS can_delete,
+      has_function_privilege('jobguard_infrastructure','app.lock_fee_reservation_book(uuid)','EXECUTE') AS infrastructure_lock,
+      has_function_privilege('jobguard_infrastructure','app.replace_fee_reservation_book(uuid,jsonb)','EXECUTE') AS infrastructure_replace`)).rows;
+    expect(rows).toEqual([{ can_read: true, can_insert: true, can_update: false, can_delete: false,
+      infrastructure_lock: false, infrastructure_replace: false }]);
+  });
+
+  it("records a callback's definite result while UNKNOWN-RESULT-AUTHORITY remains held", async () => {
+    const f = await setup();
+    await f.executor().reserve(f.context, f.intent);
+    f.rail.crashAfterAcceptance = true;
+    await expect(f.executor().execute(f.context, id(10))).rejects.toThrow("FAKE_CRASH_AFTER_ACCEPTANCE");
+    // UNKNOWN-RESULT-AUTHORITY: this audit proves reporting, not provider authenticity.
+    await f.store().transaction(f.tenantId, async book => {
+      book.attempts[0]!.state = "released";
+      book.audit.push({ commandId: id(10), state: "released" });
+    });
+    expect((await f.read()).audit.at(-1)).toEqual({ commandId: id(10), state: "released" });
+    expect((await f.read()).attempts[0]?.state).toBe("released");
+    expect((await db.admin.query("SELECT event_type FROM app.audit_event WHERE tenant_id=$1 AND event_type='fee.collection.released'", [f.tenantId])).rows).toHaveLength(1);
+  });
+
   it("releases only a definite failure and lets the other rail reserve afterward", async () => {
     const f = await setup();
     await f.executor().reserve(f.context, f.intent);
@@ -216,8 +417,9 @@ describe("M4-12 PostgreSQL shared reservation store", () => {
     await expect(f.store().transaction(id(90), async () => undefined)).rejects.toThrow("COLLECTION_REFUSED");
     await withTenant(db.runtime, testTenantContext(id(90)), async tx => {
       expect((await tx.$client.query("SELECT * FROM app.fee_reservation_book WHERE tenant_id=$1", [f.tenantId])).rows).toEqual([]);
-      expect((await tx.$client.query("UPDATE app.fee_reservation_book SET book=book WHERE tenant_id=$1", [f.tenantId])).rowCount).toBe(0);
+
     });
+    await expect(withTenant(db.runtime, testTenantContext(id(90)), tx => tx.$client.query("UPDATE app.fee_reservation_book SET book=book WHERE tenant_id=$1", [f.tenantId]))).rejects.toMatchObject({ code: "42501" });
     await expect(withTenant(db.runtime, testTenantContext(id(90)), tx => tx.$client.query("INSERT INTO app.fee_reservation_book(tenant_id) VALUES($1)", [ctx.tenantId]))).rejects.toMatchObject({ code: "42501" });
     expect((await db.runtime.query("SELECT * FROM app.fee_reservation_book")).rows).toEqual([]);
     for (const action of ["DELETE", "TRUNCATE"]) await expect(db.runtime.query(`${action === "DELETE" ? "DELETE FROM" : "TRUNCATE"} app.fee_reservation_book`)).rejects.toMatchObject({ code: "42501" });

@@ -28,6 +28,7 @@ describe("M4-12 reservation archive populated upgrade", () => {
       expect(chain).toHaveLength(3);
       await applyMigration(db, own);
       expect((await db.admin.query("SELECT book FROM app.fee_reservation_book WHERE tenant_id=$1", [ctx.tenantId])).rows[0]?.book).toEqual(legacy);
+      await migrate(db.admin);
       const store = new PostgresReservationStore(db.runtime, testTenantContext(ctx.tenantId), () => ({
         collection: async () => f.source, credit: async () => f.credit,
       }));
@@ -46,13 +47,49 @@ describe("M4-12 reservation archive populated upgrade", () => {
       });
       const before = await catalogue();
       expect(before.relation[0]).toMatchObject({ owner: "jobguard_migration", relrowsecurity: true, relforcerowsecurity: true });
-      expect(before.policy).toHaveLength(1);
+      expect(before.policy).toHaveLength(2);
+      expect(before.policy).toEqual(expect.arrayContaining([
+        expect.objectContaining({ policyname: "migration_tenant_select", roles: "{jobguard_migration}", cmd: "SELECT", with_check: null }),
+        expect.objectContaining({ policyname: "tenant_isolation", roles: "{jobguard_runtime}", cmd: "ALL" }),
+      ]));
       for (let i = 0; i < 2; i++) {
         await migrate(db.admin);
         expect(await read()).toEqual({ version: "fee-reservation-book.v1", ...f.book() });
         expect(await catalogue()).toEqual(before);
         expect((await db.admin.query("SELECT kind,key,payload FROM app.fee_reservation_archive WHERE tenant_id=$1 ORDER BY kind,key", [ctx.tenantId])).rows).toEqual(history);
       }
+    } finally { await db.close(); }
+  }, 120_000);
+});
+
+
+describe("FEE-STORE-UPDATE-GRANT populated upgrade", () => {
+  it("preserves populated unknown history, changes real rows through the owner routine and replays safely", async () => {
+    const migration = "0608_fee_reservation_book_guard.sql";
+    const db = await startBeforeMigration(migration);
+    try {
+      const f = fixture();
+      await f.executor.reserve(ctx, f.intent);
+      f.rail.crashAfterAcceptance = true;
+      await expect(f.executor.execute(ctx, id(10))).rejects.toThrow("FAKE_CRASH_AFTER_ACCEPTANCE");
+      const legacy = { version: "fee-reservation-book.v1", ...f.book() };
+      await db.admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [ctx.tenantId]);
+      await db.admin.query("INSERT INTO app.fee_reservation_book VALUES($1,$2)", [ctx.tenantId, JSON.stringify(legacy)]);
+      await applyMigration(db, migration);
+      const raw = async () => (await db.admin.query("SELECT book FROM app.fee_reservation_book WHERE tenant_id=$1", [ctx.tenantId])).rows[0]?.book;
+      expect(await raw()).toEqual(legacy);
+      const store = new PostgresReservationStore(db.runtime, testTenantContext(ctx.tenantId), () => ({
+        collection: async () => f.source, credit: async () => f.credit,
+      }));
+      expect(await store.transaction(ctx.tenantId, async book => book)).toEqual(legacy);
+      // This catches a SECURITY DEFINER owner silently seeing zero rows under FORCE RLS.
+      expect(await raw()).toEqual({ ...legacy, audit: [] });
+      await expect(withTenant(db.runtime, testTenantContext(ctx.tenantId), tx => tx.$client.query(
+        "UPDATE app.fee_reservation_book SET book=book WHERE tenant_id=$1", [ctx.tenantId])))
+        .rejects.toMatchObject({ code: "42501" });
+      await migrate(db.admin);
+      expect(await store.transaction(ctx.tenantId, async book => book)).toEqual(legacy);
+      expect(await raw()).toEqual({ ...legacy, audit: [] });
     } finally { await db.close(); }
   }, 120_000);
 });

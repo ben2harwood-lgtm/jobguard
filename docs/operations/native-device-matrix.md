@@ -191,3 +191,36 @@ Local evidence (installed workspace executables, no package downloads):
   lease/revocation bounds, migration/restore safety, support ownership and rollout
   rehearsal remain open. D08 is not approved and G3 stays closed. No real data,
   live service, deployment or launch is authorized; M3-7 is unfinished.
+
+
+## Batch-47 landing catch-up — READY (5 Nov 2026)
+
+Reconciled the working tree with incoming main `d16ef1978` (PR #574).
+Kept main's rate-baseline export alongside this group's offline-reconciliation
+and core-loop-views exports. No migration, routine, migration-proof or exact
+catalog-list difference remains against that main; inherited batch-30 changes
+are already on main. The earlier inherited-lane divergence above is historical:
+`config/lanes/batch-47.json` now exactly lists the 13 non-lane paths in this
+group's working-tree diff against incoming main, without listing itself.
+No behavior was added by this catch-up and no test was weakened.
+
+Local checks using installed workspace binaries:
+
+- Root `./node_modules/.bin/tsc -p packages/core/tsconfig.json --noEmit` — passed.
+- From `packages/core`, `./node_modules/.bin/vitest run --maxWorkers=2
+  src/offline-reconciliation.test.ts src/offline-reconciliation.properties.test.ts
+  src/native-chaos.test.ts` — 3 files, 14 tests passed.
+- From `packages/core`, `./node_modules/.bin/vitest run --maxWorkers=2
+  src/core-loop-views.test.ts src/offline-client-queue.test.ts
+  src/rate-baseline.test.ts` — 3 files, 97 tests passed.
+- From `apps/api`, `./node_modules/.bin/vitest run --maxWorkers=2
+  src/core-loop-shared.contract.test.ts` — 1 file, 2 tests passed.
+- `git diff --check` — passed. Direct path-set comparison against `MERGE_HEAD`
+  verified exact lane coverage, no migration delta, no conflict markers in group
+  paths, and preservation of every main core export. This is a working-tree
+  check, not the post-commit CI lane result.
+
+RED. PostgreSQL/browser suites, full CI and independent review remain required
+at the committed head. Physical-device evidence, D08 and G3 remain outstanding.
+Git metadata is read-only here: the conflict content is resolved, but the router
+must stage it and complete the merge before pushing. No commit or push was made.
