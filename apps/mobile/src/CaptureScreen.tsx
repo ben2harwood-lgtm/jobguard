@@ -1,3 +1,4 @@
+import React from "react";
 import { View, Text, TextInput, Button } from "react-native";
 export function CaptureScreen({ online, draft, onDraft, onCapture, rows, onMedia }: {
  online: boolean; draft: string; onDraft(value: string): void; onCapture(): void;

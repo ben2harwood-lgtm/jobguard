@@ -6,6 +6,7 @@ import { MobileClientError } from "./lifecycle-contracts";
 import type { HashPort } from "./sync";
 const entry = z.object({ upload: offlineUploadV1, reconciliation: offlineReconciliationV1 }).strict();
 type Entry = z.infer<typeof entry>;
+export type NativeReconciliationRow = ReturnType<typeof offlineReconciliationViewV1> & { commandId: string | null; jobId: string | null };
 export interface NativeQueueTransport { upload(raw: unknown): Promise<unknown> }
 /** Full original envelopes stay encrypted; reconciliation exposes metadata only. One owner per document. */
 export class DurableNativeQueue {
@@ -75,11 +76,11 @@ export class DurableNativeQueue {
    return { data: { ...data, queue: next }, result: offlineReconciliationViewV1(reconciliation) };
   });
  }
- async views() {
+ async views(): Promise<NativeReconciliationRow[]> {
   await this.authorize();
   return this.document.transaction(async data => ({ data, result: await Promise.all(data.queue.map(async raw => {
-   const value = await this.checked(raw); return value ? offlineReconciliationViewV1(value.reconciliation)
-    : { state: "needs_review" as const, reason: "INVALID_INTENT", choices: ["inspect_saved_intent"], automaticCommercialActions: false };
+   const value = await this.checked(raw); return value ? { ...offlineReconciliationViewV1(value.reconciliation), commandId: value.upload.commandId, jobId: value.upload.jobId }
+    : { commandId: null, jobId: null, state: "needs_review" as const, reason: "INVALID_INTENT" as const, choices: ["inspect_saved_intent"] as const, requiresOnlineValidation: true, automaticCommercialActions: false };
   })) }));
  }
 }
