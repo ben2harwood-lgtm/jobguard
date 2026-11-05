@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { EnterpriseIdentityRepository, SsoRequiredRepository } from "@jobguard/db";
+import { EnterpriseIdentityRepository, SsoRequiredRepository, EnterpriseAccessRepository } from "@jobguard/db";
 import type { DeploymentMode } from "@jobguard/config";
 import { AuthError } from "../auth-provider.js";
 import { PersistedAuthProvider } from "../persisted-auth-provider.js";
@@ -97,6 +97,15 @@ export class SsoRequiredApplication {
       catch(error){throw new SsoRequiredError("SSO_EMERGENCY_REFUSED",{cause:error});}
       throw new SsoRequiredError("SSO_EMERGENCY_REFUSED");
     }
+  }
+  async emergencyNotices(raw:unknown,credentials:TenantRequestCredentials) {
+    this.gate();
+    const input=z.object({requested_tenant_id:z.guid()}).strict().parse(raw);
+    const context=await resolveVerifiedTenantContext(this.provider,{...credentials,requestedTenantId:input.requested_tenant_id},this.allowedOrigin);
+    if(!credentials.sessionToken||!credentials.csrfToken)throw new SsoRequiredError("SSO_REQUIRED_FORBIDDEN");
+    const repository=new EnterpriseAccessRepository(this.base.repository.pool,this.base.repository.pool);
+    return repository.emergency(context,{sessionDigest:this.base.digest(`session:${credentials.sessionToken}`),csrfToken:credentials.csrfToken},
+      {version:"emergency.v1",operation:"notices"});
   }
   async refuseInput(emergency=false):Promise<never> {
     let code:SsoRequiredError['code']=emergency?"SSO_EMERGENCY_REFUSED":"INVALID_SSO_REQUIRED_INPUT";

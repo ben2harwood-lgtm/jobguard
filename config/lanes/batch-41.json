@@ -7,6 +7,7 @@
       ],
       "note": "Built-ahead union of ENT-13a promotion, M4-10 account view and M4-4 hold screen. RED; NOPR.",
       "allow": [
+        "apps/api/src/auth/context-boundary.test.ts",
         "apps/api/src/connectors/promotion.application.test.ts",
         "apps/api/src/connectors/promotion.application.ts",
         "apps/api/src/workspace/index.ts",
