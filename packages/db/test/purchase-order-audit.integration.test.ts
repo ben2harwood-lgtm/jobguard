@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -14,6 +14,10 @@ import { FakeMerchantOrderPort } from "../src/purchase-order-action.js";
 import { ActionExecutor, operateOutbox } from "../src/outbox.js";
 import { withTenant } from "../src/tenant-context.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
+import { meterCompany } from "./meter-persistence-fixtures.js";
+import type { WorkFixture } from "./job-work-state-fixtures.js";
+import { MaterialRepository } from "../src/material-repository.js";
+import { PurchaseOrderRepository } from "../src/purchase-order-repository.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
 
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, directory: string;
@@ -32,7 +36,7 @@ beforeAll(async () => {
   // migration through the normal runner. Fresh install is covered by tenancy's runner.
   await migrate({ query: async (sql: string, values?: unknown[]) => {
     if (sql.startsWith("SELECT 1 FROM public.jobguard_schema_migration")
-      && String(values?.[0]).endsWith("_dark_merchant_order.sql")) return { rows: [{}], rowCount: 1 };
+      && ["_dark_merchant_order.sql", "_order_attestation_session.sql"].some(stem => String(values?.[0]).endsWith(stem))) return { rows: [{}], rowCount: 1 };
     return admin.query(sql, values);
   } } as Pick<Pool, "query">);
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [DEMO_TENANT_ID]);
@@ -83,11 +87,11 @@ async function fixture(pack = false) {
   return { job, materials, orders, input, rate, command, day, auth, saved };
 }
 
-async function effects() {
+async function effects(tenantId = DEMO_TENANT_ID) {
   const counts: Record<string, number> = {};
-  for (const table of ["decision", "decision_resolution", "action_authorization", "purchase_order_placement", "audit_event",
+  for (const table of ["purchase_order_manual_attestation", "decision", "decision_resolution", "action_authorization", "purchase_order_placement", "audit_event",
     "action_outbox", "command_receipt", "watchdog_command_identity", "watchdog_command_result"]) {
-    counts[table] = Number((await admin.query(`SELECT count(*) n FROM app.${table} WHERE tenant_id=$1`, [DEMO_TENANT_ID])).rows[0].n);
+    counts[table] = Number((await admin.query(`SELECT count(*) n FROM app.${table} WHERE tenant_id=$1`, [tenantId])).rows[0].n);
   }
   return counts;
 }
@@ -136,8 +140,29 @@ describe("purchase-order audit with authenticated applications and PostgreSQL", 
 
 // Dark seam called directly with deterministic fakes; no HTTP or worker registration.
 async function darkFixture() {
-  const f = await fixture(), revision = await f.orders.revise(f.job, f.input);
-  const scoped = practiceMaterialPool(runtime, f.auth.digest);
+  const company = await meterCompany({ admin, runtime } as WorkFixture);
+  const auth = { context: company.context, membershipId: company.actorId, digest: company.digest };
+  const materialsRepo = new MaterialRepository(runtime), ordersRepo = new PurchaseOrderRepository(runtime);
+  const materials = { addRequirement: (jobId: string, raw: any) => materialsRepo.addRequirement(auth.context, { ...raw, jobId }) };
+  const orders = {
+    revise: (jobId: string, raw: any) => ordersRepo.revise(auth.context, jobId, raw),
+    place: (jobId: string, raw: any) => ordersRepo.place(auth.context, jobId, raw.command),
+  };
+  const today = new Date().toISOString().slice(0, 10);
+  const saved = await materialsRepo.addRate(auth.context, { merchantName: `Fictional ${randomUUID()}`, sku: "SESSION-1",
+    description: "Synthetic", pricePence: 2000, priceUnit: "each", taxBasis: "net", effectiveFrom: today,
+    sourceLabel: "Synthetic session fixture", expectedVersion: 0 });
+  const requirement = await materials.addRequirement(company.jobId, { scopeItemId: company.scopeId, skuId: saved.skuId,
+    quantity: "10", unit: "each", expectedRevision: 0 });
+  const input = { version: "purchase-order-draft.v1" as const, commandId: randomUUID(), requirementId: requirement.id,
+    quantity: "10", unitPricePence: 2000, recipient: "orders@fictional.invalid", requiredDate: "2030-02-15", expectedRevision: 0 };
+  const command = (order: any) => ({ command: { version: "command.v1", commandId: randomUUID(), commandType: "purchase_order.place",
+    semanticKey: randomUUID(), actorMembershipId: auth.membershipId, subjectType: "purchase_order", subjectRef: order.id,
+    action: { actionType: "purchase_order.simulate", recipient: input.recipient, contentHash: order.authorityHash,
+      aggregateRevision: order.revision, amountPence: order.orderNetPence, currency: "GBP", policyVersion: "synthetic-po.v1", expiresAt: "2099-01-01T00:00:00Z" } } });
+  const f = { auth, job: company.jobId, materials, orders, input, saved, command };
+  const revision = await orders.revise(f.job, input);
+  const scoped = runtime;
   const repo = new PurchaseOrderActionRepository(scoped);
   const scope = { version: "merchant-order-scope.v1", jobId: f.job, revisionId: revision.id };
   const preview = await repo.preview(f.auth.context, scope);
@@ -167,14 +192,14 @@ describe("M2-1 dark approved merchant action on PostgreSQL", () => {
     await Promise.all([f.executor.execute(f.auth.context, one.outboxActionId), f.executor.execute(f.auth.context, one.outboxActionId)]);
     expect(f.port.placedCount).toBe(1);
     expect((await admin.query("SELECT status FROM app.action_outbox WHERE tenant_id=$1 AND id=$2",
-      [DEMO_TENANT_ID, one.outboxActionId])).rows[0].status).toBe("succeeded");
+      [f.auth.context.tenantId, one.outboxActionId])).rows[0].status).toBe("succeeded");
     await expect(f.orders.revise(f.job, { ...f.input, commandId: randomUUID(), expectedRevision: 1, quantity: "11" })).rejects.toThrow("ORDER_ALREADY_COMMITTED");
   });
   it("checked completion rejects a full artifact bound to a false revision authority and rolls back", async () => {
     const f = await darkFixture();
     // Simulate an application read bug. All commands, grants, outbox writes and
     // completion predicates still execute on real PostgreSQL as the runtime role.
-    const scoped = practiceMaterialPool(runtime, f.auth.digest);
+    const scoped = runtime;
     const spoofed = { connect: async () => {
       const client = await scoped.connect();
       return { release: () => client.release(), query: async (sql: string, values?: unknown[]) => {
@@ -188,15 +213,15 @@ describe("M2-1 dark approved merchant action on PostgreSQL", () => {
     const repo = new PurchaseOrderActionRepository(spoofed);
     const preview = await repo.preview(f.auth.context, f.scope);
     expect(preview.order.revisionAuthorityHash).not.toBe(f.revision.authorityHash);
-    const before = await effects();
+    const before = await effects(f.auth.context.tenantId);
     await expect(repo.approve(f.auth.context, f.scope, { ...f.approved,
       action: { ...f.approved.action, contentHash: preview.contentHash } })).rejects.toThrow("AUTHORIZATION_INVALID");
-    expect(await effects()).toEqual(before);
+    expect(await effects(f.auth.context.tenantId)).toEqual(before);
     const valid = await f.repo.approve(f.auth.context, f.scope, f.approved);
     expect(valid).toMatchObject({ environment: "synthetic_demo", realExternalActions: 0 });
     expect((await admin.query(`SELECT version,payload->'references'->>'auditTrust' trust FROM app.audit_event
       WHERE tenant_id=$1 AND event_type='command.succeeded' AND payload->'references'->>'commandId'=$2`,
-      [DEMO_TENANT_ID, f.approved.commandId])).rows).toEqual([{ version: "audit.v2", trust: "checked_operation" }]);
+      [f.auth.context.tenantId, f.approved.commandId])).rows).toEqual([{ version: "audit.v2", trust: "checked_operation" }]);
   });
   it("changed quantity cancels the queued old authority before any fake delivery", async () => {
     const f = await darkFixture(), queued = await f.repo.approve(f.auth.context, f.scope, f.approved);
@@ -204,74 +229,161 @@ describe("M2-1 dark approved merchant action on PostgreSQL", () => {
     await f.executor.execute(f.auth.context, queued.outboxActionId);
     expect(f.port.placedCount).toBe(0);
     expect((await admin.query("SELECT status FROM app.action_outbox WHERE tenant_id=$1 AND id=$2",
-      [DEMO_TENANT_ID, queued.outboxActionId])).rows[0].status).toBe("cancelled");
+      [f.auth.context.tenantId, queued.outboxActionId])).rows[0].status).toBe("cancelled");
   });
   it("changed semantic payload and wrong-job/cross-tenant ids fail without another effect", async () => {
     const f = await darkFixture(); await f.repo.approve(f.auth.context, f.scope, f.approved);
-    const before = await effects();
+    const before = await effects(f.auth.context.tenantId);
     await expect(f.repo.approve(f.auth.context, f.scope, { ...f.approved, action: { ...f.approved.action, amountPence: 1 } })).rejects.toThrow("IDEMPOTENCY_CONFLICT");
     await expect(f.repo.approve(f.auth.context, f.scope, { ...f.approved, commandId: randomUUID(), action: { ...f.approved.action, amountPence: 1 } })).rejects.toThrow("COMMAND_CONFLICT");
     await expect(f.repo.preview(f.auth.context, { ...f.scope, jobId: randomUUID() })).rejects.toThrow();
     await expect(f.repo.preview(testTenantContext(randomUUID()), f.scope)).rejects.toThrow();
-    expect(await effects()).toEqual(before);
+    expect(await effects(f.auth.context.tenantId)).toEqual(before);
+  });
+  async function sessionFor(f: Awaited<ReturnType<typeof darkFixture>>, role = "owner", tenantId = f.auth.context.tenantId) {
+    const user = randomUUID(), actor = randomUUID(), digest = createHash("sha256").update(randomUUID()).digest("hex");
+    await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [user]);
+    await admin.query(`INSERT INTO app.membership(tenant_id,id,account_id,identity_user_id,role)
+      SELECT tenant_id,$1,account_id,$2,$3 FROM app.membership WHERE tenant_id=$4 LIMIT 1`, [actor,user,role,tenantId]);
+    await admin.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3)", [user,tenantId,actor]);
+    await admin.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", [`${user}@fictional.invalid`,user]);
+    await admin.query(`INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at)
+      VALUES($1,$2,'synthetic_demo',$3,$4,clock_timestamp()+interval '1 hour')`, [randomUUID(),user,digest,randomUUID()]);
+    return { actor, digest };
+  }
+  it("the session alone supplies the recorded actor, including another owner's session and replay conflicts", async () => {
+    const f = await darkFixture(), other = await sessionFor(f);
+    const before = await effects(f.auth.context.tenantId);
+    await expect(f.repo.attestManual(f.auth.context, f.manual,
+      { sessionDigest: f.auth.digest, actorMembershipId: other.actor })).rejects.toThrow();
+    expect(await effects(f.auth.context.tenantId)).toEqual(before);
+    const fact = await f.repo.attestManual(f.auth.context, f.manual, { sessionDigest: other.digest });
+    expect((await admin.query("SELECT actor_membership_id FROM app.purchase_order_manual_attestation WHERE id=$1", [fact.attestationId])).rows)
+      .toEqual([{ actor_membership_id: other.actor }]);
+    expect((await admin.query("SELECT actor_ref FROM app.audit_event WHERE tenant_id=$1 AND event_type='purchase_order.manual_attested'", [f.auth.context.tenantId])).rows)
+      .toEqual([{ actor_ref: `membership:${other.actor}` }]);
+    await expect(f.repo.attestManual(f.auth.context, f.manual, { sessionDigest: f.auth.digest })).rejects.toThrow("IDEMPOTENCY_CONFLICT");
+    expect(await f.repo.attestManual(f.auth.context, f.manual, { sessionDigest: other.digest })).toEqual(fact);
+  });
+  it.each(["revoked_session", "expired_session", "revoked_owner", "expired_owner", "admin", "finance", "foreign", "missing", "malformed"])("%s refuses with no attestation or audit", async boundary => {
+    const f = await darkFixture(), other = await sessionFor(f, ["admin","finance"].includes(boundary) ? boundary : "owner");
+    let digest: string | undefined = other.digest;
+    if (boundary === "revoked_session") await admin.query("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE token_digest=$1", [digest]);
+    if (boundary === "expired_session") await admin.query("UPDATE identity.session SET expires_at=clock_timestamp()-interval '1 second' WHERE token_digest=$1", [digest]);
+    if (boundary === "revoked_owner") await admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE id=$1", [other.actor]);
+    if (boundary === "expired_owner") await admin.query("UPDATE app.membership SET expires_at=clock_timestamp()-interval '1 second' WHERE id=$1", [other.actor]);
+    if (boundary === "foreign") digest = (await darkFixture()).auth.digest;
+    if (boundary === "missing") digest = undefined;
+    if (boundary === "malformed") digest = "bad";
+    const before = await effects(f.auth.context.tenantId);
+    await expect(f.repo.attestManual(f.auth.context, f.manual, { sessionDigest: digest! })).rejects.toThrow();
+    // Attack the database wrapper as runtime too, bypassing TypeScript validation.
+    await expect(withTenant(runtime, f.auth.context, db => db.$client.query(
+      "SELECT app.order_attestation_actor($1,$2)", [f.auth.context.tenantId,digest ?? null]))).rejects.toThrow("ORDER_ACTION_INVALID");
+    expect(await effects(f.auth.context.tenantId)).toEqual(before);
+  });
+  it("keeps the identity bridge private and exposes only the narrow actor lookup", async () => {
+    expect((await admin.query(`SELECT
+      has_function_privilege('jobguard_runtime','app.order_attestation_actor(uuid,text)','EXECUTE') narrow,
+      has_function_privilege('jobguard_runtime','app.mon1_company_actor(uuid,text)','EXECUTE') bridge,
+      has_function_privilege('jobguard_infrastructure','app.order_attestation_actor(uuid,text)','EXECUTE') infrastructure`)).rows)
+      .toEqual([{ narrow:true, bridge:false, infrastructure:false }]);
+  });
+  it("a transient database check failure leaves the order pending without an audit outcome", async () => {
+    const f = await darkFixture(), queued = await f.repo.approve(f.auth.context, f.scope, f.approved);
+    const pool = { connect: async () => {
+      const client = await runtime.connect();
+      return { release: () => client.release(), query: (sql: string, values?: unknown[]) => {
+        if (sql.includes("SELECT app.require_watchdog_live")) throw new Error("synthetic connection failure");
+        return client.query(sql,values);
+      } };
+    } } as unknown as Pool;
+    const before = await effects(f.auth.context.tenantId);
+    await expect(new ActionExecutor(pool,new Map([[f.port.name,f.port]]),{emit(){}}).execute(f.auth.context,queued.outboxActionId))
+      .rejects.toThrow("synthetic connection failure");
+    expect((await admin.query("SELECT status FROM app.action_outbox WHERE id=$1", [queued.outboxActionId])).rows).toEqual([{status:"pending"}]);
+    expect(await effects(f.auth.context.tenantId)).toEqual(before);
+    expect(f.port.placedCount).toBe(0);
+  });
+  it("a job leaving live cancels once on PostgreSQL without an aborted transaction or adapter call", async () => {
+    const f = await darkFixture(), queued = await f.repo.approve(f.auth.context, f.scope, f.approved);
+    await admin.query("UPDATE app.job SET status='invoiced' WHERE tenant_id=$1 AND id=$2", [f.auth.context.tenantId,f.job]);
+    await f.executor.execute(f.auth.context, queued.outboxActionId);
+    await f.executor.execute(f.auth.context, queued.outboxActionId);
+    expect((await admin.query("SELECT status FROM app.action_outbox WHERE id=$1", [queued.outboxActionId])).rows).toEqual([{status:"cancelled"}]);
+    expect((await admin.query("SELECT payload FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='outbox.cancelled'", [f.auth.context.tenantId,queued.outboxActionId])).rows)
+      .toEqual([expect.objectContaining({payload: expect.objectContaining({ references: expect.objectContaining({ reason: "order_authority_stale" }) })})]);
+    expect(f.port.placedCount).toBe(0);
+    await expect(operateOutbox(runtime, f.auth.context, queued.outboxActionId, "retry", true)).rejects.toThrow("UNSAFE_OUTBOX_COMMAND");
   });
   it("refuses another active owner's supplied id without recording an attestation or audit", async () => {
     const f = await darkFixture(), otherOwner = randomUUID(), otherIdentity = randomUUID();
     await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [otherIdentity]);
     await admin.query(`INSERT INTO app.membership(tenant_id,id,account_id,identity_user_id,role)
       SELECT tenant_id,$1,account_id,$2,'owner' FROM app.membership WHERE tenant_id=$3 AND id=$4`,
-      [otherOwner, otherIdentity, DEMO_TENANT_ID, f.auth.membershipId]);
-    const before = await effects();
-    await expect(f.repo.attestManual(f.auth.context, { ...f.manual, actorMembershipId: otherOwner }, f.auth.membershipId)).rejects.toThrow();
-    expect(await effects()).toEqual(before);
+      [otherOwner, otherIdentity, f.auth.context.tenantId, f.auth.membershipId]);
+    const before = await effects(f.auth.context.tenantId);
+    await expect(f.repo.attestManual(f.auth.context, { ...f.manual, actorMembershipId: otherOwner }, { sessionDigest: f.auth.digest })).rejects.toThrow();
+    expect(await effects(f.auth.context.tenantId)).toEqual(before);
     expect((await admin.query("SELECT count(*)::int n FROM app.purchase_order_manual_attestation WHERE tenant_id=$1 AND job_id=$2",
-      [DEMO_TENANT_ID, f.job])).rows[0].n).toBe(0);
+      [f.auth.context.tenantId, f.job])).rows[0].n).toBe(0);
   });
   it("rechecks a verified session's owner membership after revocation, even on replay", async () => {
     const f = await darkFixture();
-    await f.repo.attestManual(f.auth.context, f.manual, f.auth.membershipId);
-    const before = await effects();
+    await f.repo.attestManual(f.auth.context, f.manual, { sessionDigest: f.auth.digest });
+    const before = await effects(f.auth.context.tenantId);
     await admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2",
-      [DEMO_TENANT_ID, f.auth.membershipId]);
+      [f.auth.context.tenantId, f.auth.membershipId]);
     try {
-      await expect(f.repo.attestManual(f.auth.context, f.manual, f.auth.membershipId)).rejects.toThrow("ORDER_ACTION_INVALID");
-      await expect(f.repo.attestManual(f.auth.context, { ...f.manual, commandId: randomUUID() }, f.auth.membershipId)).rejects.toThrow("ORDER_ACTION_INVALID");
-      expect(await effects()).toEqual(before);
+      await expect(f.repo.attestManual(f.auth.context, f.manual, { sessionDigest: f.auth.digest })).rejects.toThrow("ORDER_ACTION_INVALID");
+      await expect(f.repo.attestManual(f.auth.context, { ...f.manual, commandId: randomUUID() }, { sessionDigest: f.auth.digest })).rejects.toThrow("ORDER_ACTION_INVALID");
+      expect(await effects(f.auth.context.tenantId)).toEqual(before);
       expect((await admin.query("SELECT count(*)::int n FROM app.purchase_order_manual_attestation WHERE tenant_id=$1 AND job_id=$2",
-        [DEMO_TENANT_ID, f.job])).rows[0].n).toBe(1);
+        [f.auth.context.tenantId, f.job])).rows[0].n).toBe(1);
     } finally {
       await admin.query("UPDATE app.membership SET revoked_at=NULL WHERE tenant_id=$1 AND id=$2",
-        [DEMO_TENANT_ID, f.auth.membershipId]);
+        [f.auth.context.tenantId, f.auth.membershipId]);
     }
   });
   it("manual placement is append-only, replayable, and mutually exclusive with either send route", async () => {
-    const f = await darkFixture(), before = await effects();
-    const fact = await f.repo.attestManual(f.auth.context, f.manual, f.auth.membershipId);
-    expect(await f.repo.attestManual(f.auth.context, f.manual, f.auth.membershipId)).toEqual(fact);
+    const f = await darkFixture(), before = await effects(f.auth.context.tenantId);
+    const [fact, concurrent] = await Promise.all([
+      f.repo.attestManual(f.auth.context, f.manual, { sessionDigest: f.auth.digest }),
+      f.repo.attestManual(f.auth.context, f.manual, { sessionDigest: f.auth.digest }),
+    ]);
+    expect(concurrent).toEqual(fact);
+    const nextDigest = createHash("sha256").update(randomUUID()).digest("hex");
+    await admin.query(`INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at)
+      SELECT $1,user_id,'synthetic_demo',$2,$3,clock_timestamp()+interval '1 hour'
+      FROM identity.session WHERE token_digest=$4`, [randomUUID(),nextDigest,randomUUID(),f.auth.digest]);
+    expect(await f.repo.attestManual(f.auth.context, f.manual, { sessionDigest: nextDigest })).toEqual(fact);
+    expect((await effects(f.auth.context.tenantId)).purchase_order_manual_attestation).toBe(before.purchase_order_manual_attestation! + 1);
+    expect((await effects(f.auth.context.tenantId)).audit_event).toBe(before.audit_event! + 1);
+    expect(await f.repo.attestManual(f.auth.context, f.manual, { sessionDigest: f.auth.digest })).toEqual(fact);
     expect((await admin.query("SELECT actor_membership_id FROM app.purchase_order_manual_attestation WHERE tenant_id=$1 AND id=$2",
-      [DEMO_TENANT_ID, fact.attestationId])).rows).toEqual([{ actor_membership_id: f.auth.membershipId }]);
+      [f.auth.context.tenantId, fact.attestationId])).rows).toEqual([{ actor_membership_id: f.auth.membershipId }]);
     expect((await admin.query(`SELECT actor_ref FROM app.audit_event WHERE tenant_id=$1 AND event_type='purchase_order.manual_attested'
-      AND payload->'references'->>'attestationId'=$2`, [DEMO_TENANT_ID, fact.attestationId])).rows)
+      AND payload->'references'->>'attestationId'=$2`, [f.auth.context.tenantId, fact.attestationId])).rows)
       .toEqual([{ actor_ref: `membership:${f.auth.membershipId}` }]);
-    expect((await effects()).action_outbox).toBe(before.action_outbox);
-    expect((await effects()).action_authorization).toBe(before.action_authorization);
+    expect((await effects(f.auth.context.tenantId)).action_outbox).toBe(before.action_outbox);
+    expect((await effects(f.auth.context.tenantId)).action_authorization).toBe(before.action_authorization);
     await expect(f.repo.approve(f.auth.context, f.scope, f.approved)).rejects.toThrow("ORDER_ALREADY_COMMITTED");
     await expect(f.orders.place(f.job, f.command(f.revision))).rejects.toThrow("ORDER_ALREADY_COMMITTED");
     await expect(withTenant(runtime, f.auth.context, db => db.$client.query("UPDATE app.purchase_order_manual_attestation SET supplier_reference_hash=$1 WHERE tenant_id=$2",
-      ["a".repeat(64), DEMO_TENANT_ID]))).rejects.toThrow(/permission denied/u);
+      ["a".repeat(64), f.auth.context.tenantId]))).rejects.toThrow(/permission denied/u);
     await expect(withTenant(runtime, f.auth.context, db => db.$client.query("DELETE FROM app.purchase_order_manual_attestation WHERE tenant_id=$1",
-      [DEMO_TENANT_ID]))).rejects.toThrow(/permission denied/u);
+      [f.auth.context.tenantId]))).rejects.toThrow(/permission denied/u);
   });
   it("one supplier reference cannot attest two drafts at the same merchant", async () => {
-    const f = await darkFixture(); await f.repo.attestManual(f.auth.context, f.manual, f.auth.membershipId);
+    const f = await darkFixture(); await f.repo.attestManual(f.auth.context, f.manual, { sessionDigest: f.auth.digest });
     const nextScope = randomUUID();
-    await admin.query("INSERT INTO app.scope_identity(tenant_id,id,job_id,state) VALUES($1,$2,$3,'confirmed')", [DEMO_TENANT_ID, nextScope, f.job]);
+    await admin.query("INSERT INTO app.scope_identity(tenant_id,id,job_id,state) VALUES($1,$2,$3,'confirmed')", [f.auth.context.tenantId, nextScope, f.job]);
     const requirement = await f.materials.addRequirement(f.job, { version: "material-requirement-command.v1", scopeItemId: nextScope,
       skuId: f.saved.skuId, quantity: "1", unit: "each", expectedRevision: 0 });
     const revision = await f.orders.revise(f.job, { ...f.input, commandId: randomUUID(), requirementId: requirement.id });
-    await expect(f.repo.attestManual(f.auth.context, { ...f.manual, commandId: randomUUID(), revisionId: revision.id }, f.auth.membershipId)).rejects.toThrow("ORDER_ALREADY_COMMITTED");
+    await expect(f.repo.attestManual(f.auth.context, { ...f.manual, commandId: randomUUID(), revisionId: revision.id }, { sessionDigest: f.auth.digest })).rejects.toThrow("ORDER_ALREADY_COMMITTED");
     expect((await admin.query("SELECT count(*)::int n FROM app.purchase_order_manual_attestation WHERE tenant_id=$1 AND merchant_id=$2",
-      [DEMO_TENANT_ID, f.saved.merchantId])).rows[0].n).toBe(1);
+      [f.auth.context.tenantId, f.saved.merchantId])).rows[0].n).toBe(1);
   });
   it("cancellation never becomes a retry or a second placement", async () => {
     const f = await darkFixture(), queued = await f.repo.approve(f.auth.context, f.scope, f.approved);
