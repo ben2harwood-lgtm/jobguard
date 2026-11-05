@@ -1,4 +1,4 @@
-# 0758 — M4-15 synthetic Direct Debit facts (RED)
+# 0596 — M4-15 synthetic Direct Debit facts (RED)
 
 Adds two private append-only fact tables and one synthetic-database-only routine.
 No backfill. Existing rows, routines, financial books and subscription mandate

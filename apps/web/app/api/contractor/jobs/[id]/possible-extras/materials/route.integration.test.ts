@@ -5,6 +5,7 @@ import { EnterpriseLivePromptRepository, EvidenceService } from "@jobguard/db";
 import { cluster, promptFixture, materialsInput, listInput, completionPhoto, promptSession } from "../../../../../../../../../packages/db/test/enterprise-live-prompt-fixtures.js";
 import { command } from "../../../../../../../../../packages/db/test/site-extra-fixtures.js";
 vi.mock("server-only", () => ({}));
+vi.mock("@jobguard/db", () => import("../../../../../../../../../packages/db/src/index.js"));
 const transport = vi.hoisted(() => ({ session: "", pool: undefined as unknown }));
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => ({ value: transport.session }) }) }));
 vi.mock("../../../../../../lib/synthetic-server", () => ({ syntheticPool: () => transport.pool }));
@@ -43,7 +44,7 @@ it.each(["return", "correction"])("keeps a %s and holds the comparison without s
   expect((await post(materials, f.sessions.finance!, materialsInput(f))).status).toBe(201);
   const response = await post(materials, f.sessions.finance!, materialsInput(f, { kind, quantity: "99" }));
   expect(response.status).toBe(201); expect(await response.json()).toMatchObject({ quarantinedComparisons: 1 });
-  expect((await c.admin.query("SELECT fact_kind,quantity::text quantity FROM app.materials_issue_fact WHERE tenant_id=$1 ORDER BY fact_kind", [f.p.tenantId])).rows).toEqual(expect.arrayContaining([{ fact_kind: kind, quantity: "99" }, { fact_kind: "issue", quantity: "100" }]));
+  expect((await c.admin.query("SELECT fact_kind,quantity::text quantity FROM app.materials_issue_fact WHERE tenant_id=$1 ORDER BY fact_kind", [f.p.tenantId])).rows).toEqual(expect.arrayContaining([{ fact_kind: kind, quantity: "99.000000" }, { fact_kind: "issue", quantity: "100.000000" }]));
 });
 it("foreign, unknown and uncovered jobs refuse identically, and revoked grants cannot replay", async () => {
   const f = await promptFixture(c), foreign = await promptFixture(c);
@@ -57,8 +58,8 @@ it("foreign, unknown and uncovered jobs refuse identically, and revoked grants c
   expect((await post(evaluate, f.sessions.supervisor!, input)).status).toBe(404);
   for (const jobId of [foreign.jobId, randomUUID()]) expect((await post(materials, f.sessions.finance!, materialsInput(f, { jobId }))).status).toBe(404);
   const foreignObservation = await post(observations, f.sessions.named!, { version: "completion-observation.v1", commandId: randomUUID(), jobId: foreign.jobId, evidenceId: randomUUID(), sha256: "a".repeat(64), objectVersion: "missing", workIdentity: "CLEAR-GUTTER", locator: { kind: "photo_tag", tag: "new gutters" } });
-  expect(foreignObservation.status).toBe(404);
-  expect(await foreignObservation.json()).toEqual({ version: "enterprise-live-prompt-error.v1", code: "NOT_FOUND" });
+  expect(foreignObservation.status).toBe(403);
+  expect(await foreignObservation.json()).toEqual({ version: "enterprise-live-prompt-error.v1", code: "EXTRA_FORBIDDEN" });
   const uncovered = await promptSession(c, f.otherSupervisor);
   expect((await post(evaluate, uncovered, { ...input, commandId: randomUUID() })).status).toBe(404);
 });

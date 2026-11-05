@@ -520,3 +520,37 @@ source-route integration, recovery eligibility, restore reconciliation, and
 phone/desktop ENT-8a journeys. Exact-head independent RED review remains a
 merge gate. This handoff is readiness for a PR, not evidence of those gates.
 No git write, commit, push, PR creation, live provider or release was performed.
+
+
+### Batch-20 PR #562 independent-check repair — 5 November 2026 (RED)
+
+Applied on clean head `40dca9548` (the merge from main following `b0b50fe6`).
+This repair changes test expectations and documentation only: the foreign
+observation expects 403 / EXTRA_FORBIDDEN per the router ruling; return/correction
+facts expect PostgreSQL's six-decimal quantity text; the route integration test
+loads @jobguard/db from source using the managed-recovery test's mock pattern.
+The 0596 note heading and proof description now identify the actual synthetic
+append-only facts routine. Product code and migration 0596 SQL are unchanged.
+
+Local checks using installed binaries, with at most two Vitest workers:
+- From apps/web: `./node_modules/.bin/vitest run --maxWorkers=2
+  'app/api/contractor/jobs/[id]/possible-extras/route.test.ts'
+  app/lib/prompt-sources-server.test.ts
+  'app/contractor/jobs/[id]/materials-issues/materials-issues.test.tsx'`
+  passed: 3 files, 31 tests.
+- From apps/web: `./node_modules/.bin/vitest list --maxWorkers=2
+  'app/api/contractor/jobs/[id]/possible-extras/materials/route.integration.test.ts'`
+  collected all 8 cases successfully. Collection is not database execution.
+- From apps/web: `./node_modules/.bin/tsc -p tsconfig.json --noEmit` passed.
+- `node tools/agent-lane-boundary-lint.mjs --lane=batch-20` and
+  `git diff --check` passed. Working-file comparison with origin/main also
+  confirms exactly 31 non-lane paths in the lane allow list, with no self-entry.
+
+READY for router commit/push and CI; not a merge or release approval.
+No database or browser suite ran here: the sandbox cannot start PostgreSQL or
+bind localhost. CI must execute the repaired source-route integration assertions,
+fresh/upgrade migration and catalogue/grant/FORCE RLS checks, Direct Debit
+repository and recorder integrations, recovery eligibility, restore checks and
+phone/desktop ENT-8a journeys, plus all mandatory typecheck/lint/test/build gates.
+The independent RED check must pass against the resulting exact head before
+merge. No live provider, real customer data, git write or release was used.
