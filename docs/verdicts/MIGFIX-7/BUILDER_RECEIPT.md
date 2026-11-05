@@ -72,3 +72,35 @@ Forward fix only: preserve disclosure/exclusion/firing/audit history, disable
 execution if needed, and use a reviewed corrective migration. No historical
 backfill or new routine grant is implied by READY. READY means prepared for the
 router's commit/push/CI/review handoff; it is not a landing or release claim.
+
+Batch-49 pre-check repair — 5 November 2026: READY, RED, NOPR.
+
+The LP-4 scan includes migration 1211 and recognizes a known LP-4 writer that
+still calls lp4_seal_audit as sealed. The original 21-writer assertion remains.
+A new assertion checks every post-0520 re-creation of an LP-4 routine, requiring
+its body to call the sealer and refusing direct audit inserts or old audit-head
+locking. The final-definition scan now follows actual migration order, so a
+later routine cannot be hidden by overlaying 0520 afterwards. No SQL changed.
+
+Actual local verification (installed binaries, at most two workers):
+- Before repair, lp4-writer-catchup.test.ts reproduced the 20-versus-21 failure.
+- From packages/db: ./node_modules/.bin/vitest run --maxWorkers=2
+  test/lp4-writer-catchup.test.ts test/migration-proof-loader.test.ts
+  test/migfix-6.test.ts: PASS, 3 files / 97 tests (including all 18 LP-4 tests).
+- Scratch-only mutation at /tmp/batch-49-lp4-mutation-20261105T200215Z:
+  removed the complete PERFORM app.lp4_seal_audit(...) statement from the copy
+  of 1211. Running the same installed Vitest runner/config with --maxWorkers=2
+  test/lp4-writer-catchup.test.ts -t 'every re-created': EXPECTED FAIL, identifying
+  1211_shadow_group_disclosure.sql: app.surface_shadow_signal_early at the new
+  sealer-call assertion (1 failed, 17 skipped). No mutation entered this worktree.
+- node tools/agent-lane-boundary-lint.mjs: PASS. A separate read-only check also
+  compared the lane allow list exactly with every non-lane path changed from
+  origin/main: PASS, 17 paths, no self-listing. Migration order validation PASS;
+  no main migration edited/deleted, only the intended 1210 and 1211 additions.
+- git diff --check: PASS.
+
+Main was already merged at 824c2b245 (origin/main 28871adf3); no Git writes were
+performed. The router owns commit/push. Database/browser suites and the required
+full CI checks remain for GitHub CI; the independent checker must confirm this
+repair delta against the final head before landing. This is readiness for that
+handoff, not a CI, independent-review, merge or release claim.

@@ -14,6 +14,7 @@
         "packages/db/MIGRATIONS.md",
         "packages/db/migrations/1210_legacy_recovery_money_integrity.sql",
         "packages/db/migrations/1211_shadow_group_disclosure.sql",
+        "packages/db/test/lp4-writer-catchup.test.ts",
         "packages/db/test/migfix-6-fixture.ts",
         "packages/db/test/migfix-6-upgrade.integration.test.ts",
         "packages/db/test/migfix-6.integration.test.ts",
