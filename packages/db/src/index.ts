@@ -195,5 +195,7 @@ export * from "./money-trail-repository.js";
 
 export * from "./ais-adapter.js";
 export * from "./ais-repository.js";
+export * from "./direct-debit-fixture-repository.js";
+
 export { InterimDraftRepository, InterimDraftRepositoryError } from "./interim-draft-repository.js";
 export * from "./extra-duplicate-candidates.js";
