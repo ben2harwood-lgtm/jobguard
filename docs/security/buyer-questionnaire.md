@@ -4,9 +4,9 @@ DRAFT for founder review. Not to be sent to any buyer until Ben approves it.
 
 `Practice build only: made-up data, a built-in test identity provider, no real customer data, no outside assessor. Nothing here has been assessed or certified by anyone outside the project.`
 
-Evidence cutoff: 96c0cb8a5b5562c65b79f5f601ba9d60f8fcf05a (12 October 2026)
+Evidence cutoff: 1df57716837b0184b1cf291c62c18a9e537276d4 (4 November 2026)
 
-These are JobGuard’s own 34 questions. A buyer’s required format is NOT DETERMINED. Answers apply only at the cutoff. “Covered” names an existing automated test; the builder ran none. Read the map’s run record separately.
+These are JobGuard’s own 34 questions. A buyer’s required format is NOT DETERMINED. Answers apply only at the cutoff. “Covered” names an existing automated test; this refresh ran the identity and signed-export unit suites, alongside the watchdog/context guards, migration-proof loader and ops-pack unit checks; PostgreSQL/browser execution awaits CI. Read the map’s run record separately.
 
 ## A Sign-in and identity
 
@@ -18,7 +18,7 @@ These are JobGuard’s own 34 questions. A buyer’s required format is NOT DETE
 
 **Merged control:** E-01, E-02, E-02b, E-02c, E-03
 
-**Verifying tests:** [identity.integration.test.ts:52](../../packages/db/test/identity.integration.test.ts#L52); [identity.integration.test.ts:66](../../packages/db/test/identity.integration.test.ts#L66); [identity.integration.test.ts:81](../../packages/db/test/identity.integration.test.ts#L81); [identity.integration.test.ts:120](../../packages/db/test/identity.integration.test.ts#L120); [saml.test.ts:72](../../apps/api/src/auth/sso/saml.test.ts#L72)
+**Verifying tests:** [identity.integration.test.ts:52](../../packages/db/test/identity.integration.test.ts#L52); [identity.integration.test.ts:66](../../packages/db/test/identity.integration.test.ts#L66); [identity.integration.test.ts:81](../../packages/db/test/identity.integration.test.ts#L81); [identity.integration.test.ts:126](../../packages/db/test/identity.integration.test.ts#L126); [saml.test.ts:72](../../apps/api/src/auth/sso/saml.test.ts#L72)
 
 **Not done:** E-50, E-53
 
@@ -36,41 +36,41 @@ These are JobGuard’s own 34 questions. A buyer’s required format is NOT DETE
 
 ### Q-03 Do you support OpenID Connect (OIDC)?
 
-**Plain answer:** Not claimed. HELD: no adapter is built. The library decision belongs to the founder.
+**Plain answer:** A synthetic OIDC adapter, persisted requests/sessions and Nest/Next paths are merged. Tests inject a fictional issuer; default composition has no issuer and refuses sign-in. The library inspection names openid-client 6.8.8. Founder decision not recorded: the pin commit cites Ben answer 19 without the decision text. Approved OpenID operation remains HELD.
 
 **Status:** not claimed
 
-**Merged control:** none
+**Merged control:** E-51 (practice construction; approval not claimed)
 
-**Verifying tests:** none — not claimed
+**Verifying tests:** [oidc-signin.integration.test.ts:10](../../packages/db/test/oidc-signin.integration.test.ts#L10); [oidc.application.test.ts:133](../../apps/api/src/auth/sso/oidc.application.test.ts#L133)
 
 **Not done:** E-51
 
-Not claimed. Waits for OpenID sign-in to merge to main with its own named test. This row does not change on the strength of a pull-request title, an order or a plan line.
+Approved OpenID operation remains not claimed: founder decision not recorded (E-51).
 
 ### Q-04 Can our identity provider create and remove accounts automatically (SCIM)?
 
-**Plain answer:** Not claimed. Automatic account provisioning and removal is NOT BUILT. SCIM is the standard used for that exchange.
+**Plain answer:** Deactivation is in place in the practice build: a connection-scoped synthetic bearer request revokes linked membership/grants and bound sessions. The next bound request fails; ordinary sessions lose the removed company but retain other companies. The message is JobGuard JSON, not the SCIM 2.0 wire protocol. Account creation and general SCIM provisioning are NOT BUILT; live interoperability is not claimed.
 
-**Status:** not claimed
+**Status:** in place for synthetic deactivation; not claimed for account creation or live use
 
-**Merged control:** none
+**Merged control:** E-52
 
-**Verifying tests:** none — not claimed
+**Verifying tests:** [scim-deactivation-access.integration.test.ts:38](../../packages/db/test/scim-deactivation-access.integration.test.ts#L38); [scim-deactivation-access.integration.test.ts:43](../../packages/db/test/scim-deactivation-access.integration.test.ts#L43)
 
 **Not done:** E-52
 
-Not claimed. Waits for automatic account provisioning and removal to merge to main with its own named test. This row does not change on the strength of a pull-request title, an order or a plan line.
+Automatic creation and live provisioning remain not claimed; deactivation coverage is bounded above (E-52).
 
 ### Q-05 Can we require everyone in our company to use single sign-on?
 
-**Plain answer:** In the practice build; default OFF. ON needs a current administrator using that company’s SAML session, a working connection and no unlinked active member. The strict guard and emergency off-only effect are INTERIM. The emergency route refuses every request until the founder supplies an approver rule. Covered by named automated tests; no green run recorded on main.
+**Plain answer:** In the practice build; default OFF. ON needs a current administrator using that company’s bound SSO session, a working connection and no unlinked active member. Merged emergency practice windows are owner-only, bounded and audited, with no new session. Usable emergency operation remains HELD for the founder approver ruling (E-54). Named tests cover practice construction, not live operation.
 
 **Status:** in place for the named practice controls; not claimed for the Not done items
 
 **Merged control:** E-41, E-41b, E-41c, E-41d, E-41e
 
-**Verifying tests:** [sso-required.integration.test.ts:84](../../packages/db/test/sso-required.integration.test.ts#L84); [sso-required.integration.test.ts:140](../../packages/db/test/sso-required.integration.test.ts#L140); [sso-required.integration.test.ts:157](../../packages/db/test/sso-required.integration.test.ts#L157); [sso-required.integration.test.ts:218](../../packages/db/test/sso-required.integration.test.ts#L218); [sso-required.integration.test.ts:172](../../packages/db/test/sso-required.integration.test.ts#L172)
+**Verifying tests:** [sso-required.integration.test.ts:86](../../packages/db/test/sso-required.integration.test.ts#L86); [sso-required.integration.test.ts:142](../../packages/db/test/sso-required.integration.test.ts#L142); [sso-required.integration.test.ts:159](../../packages/db/test/sso-required.integration.test.ts#L159); [sso-required.integration.test.ts:220](../../packages/db/test/sso-required.integration.test.ts#L220); [sso-required.integration.test.ts:174](../../packages/db/test/sso-required.integration.test.ts#L174)
 
 **Not done:** E-50, E-54
 
@@ -82,7 +82,7 @@ Not claimed. Waits for automatic account provisioning and removal to merge to ma
 
 **Merged control:** E-04, E-05, E-05b, E-06, E-06b, E-07, E-07b, E-08, E-08b, E-09
 
-**Verifying tests:** [enterprise-identity.integration.test.ts:202](../../packages/db/test/enterprise-identity.integration.test.ts#L202); [saml.test.ts:45](../../apps/api/src/auth/sso/saml.test.ts#L45); [saml.test.ts:46](../../apps/api/src/auth/sso/saml.test.ts#L46); [saml.test.ts:73](../../apps/api/src/auth/sso/saml.test.ts#L73); [saml.test.ts:77](../../apps/api/src/auth/sso/saml.test.ts#L77); [saml.test.ts:57](../../apps/api/src/auth/sso/saml.test.ts#L57); [saml.test.ts:58](../../apps/api/src/auth/sso/saml.test.ts#L58); [saml.test.ts:62](../../apps/api/src/auth/sso/saml.test.ts#L62); [enterprise-identity.integration.test.ts:248](../../packages/db/test/enterprise-identity.integration.test.ts#L248); [enterprise-identity.integration.test.ts:215](../../packages/db/test/enterprise-identity.integration.test.ts#L215)
+**Verifying tests:** [enterprise-identity.integration.test.ts:204](../../packages/db/test/enterprise-identity.integration.test.ts#L204); [saml.test.ts:45](../../apps/api/src/auth/sso/saml.test.ts#L45); [saml.test.ts:46](../../apps/api/src/auth/sso/saml.test.ts#L46); [saml.test.ts:73](../../apps/api/src/auth/sso/saml.test.ts#L73); [saml.test.ts:77](../../apps/api/src/auth/sso/saml.test.ts#L77); [saml.test.ts:57](../../apps/api/src/auth/sso/saml.test.ts#L57); [saml.test.ts:58](../../apps/api/src/auth/sso/saml.test.ts#L58); [saml.test.ts:62](../../apps/api/src/auth/sso/saml.test.ts#L62); [enterprise-identity.integration.test.ts:250](../../packages/db/test/enterprise-identity.integration.test.ts#L250); [enterprise-identity.integration.test.ts:217](../../packages/db/test/enterprise-identity.integration.test.ts#L217)
 
 **Not done:** E-50
 
@@ -94,7 +94,7 @@ Not claimed. Waits for automatic account provisioning and removal to merge to ma
 
 **Merged control:** E-10
 
-**Verifying tests:** [enterprise-identity.integration.test.ts:266](../../packages/db/test/enterprise-identity.integration.test.ts#L266)
+**Verifying tests:** [enterprise-identity.integration.test.ts:268](../../packages/db/test/enterprise-identity.integration.test.ts#L268)
 
 **Not done:** E-50
 
@@ -106,35 +106,35 @@ Not claimed. Waits for automatic account provisioning and removal to merge to ma
 
 **Merged control:** E-11, E-16
 
-**Verifying tests:** [enterprise-identity.integration.test.ts:284](../../packages/db/test/enterprise-identity.integration.test.ts#L284); [contractor.test.ts:5](../../packages/core/src/contractor.test.ts#L5)
+**Verifying tests:** [enterprise-identity.integration.test.ts:286](../../packages/db/test/enterprise-identity.integration.test.ts#L286); [contractor.test.ts:5](../../packages/core/src/contractor.test.ts#L5)
 
 **Not done:** nothing further
 
 ### Q-09 When someone leaves, how soon does access end?
 
-**Plain answer:** There is no SCIM: removal only in your identity provider does not remove the account in JobGuard. SAML sessions end within 15 minutes; next SAML sign-in replaces prior SAML sessions and unmapped grants. Unless “SSO required” is ON (default OFF), a SAML-linked account can still use emailed code. Administrator revocation takes effect on the next request on the practice contractor route.
+**Plain answer:** Synthetic SCIM deactivation refuses the next bound SSO request and removes the company from ordinary-session membership choices, while preserving other-company access. OIDC has a named SCIM regression test too. Without a deactivation message, SAML sessions end within 15 minutes and next SAML sign-in replaces old sessions/unmapped grants. Emailed-code access needs current company membership and is blocked for an SSO-required company. Every administrator-removal/native route is not established.
 
 **Status:** in place for the named practice controls; not claimed for the Not done items
 
-**Merged control:** E-17b, E-17, E-12, E-12b, E-13, E-41
+**Merged control:** E-17b, E-17, E-12, E-12b, E-13, E-41, E-52, E-73 (bounded coverage)
 
-**Verifying tests:** [contractor.integration.test.ts:262](../../packages/db/test/contractor.integration.test.ts#L262); [auth.test.ts:92](../../apps/api/src/auth/auth.test.ts#L92); [enterprise-identity.integration.test.ts:383](../../packages/db/test/enterprise-identity.integration.test.ts#L383); [enterprise-identity.integration.test.ts:312](../../packages/db/test/enterprise-identity.integration.test.ts#L312); [enterprise-identity.integration.test.ts:182](../../packages/db/test/enterprise-identity.integration.test.ts#L182); [sso-required.integration.test.ts:84](../../packages/db/test/sso-required.integration.test.ts#L84)
+**Verifying tests:** [scim-deactivation-access.integration.test.ts:38](../../packages/db/test/scim-deactivation-access.integration.test.ts#L38); [scim-deactivation-access.integration.test.ts:43](../../packages/db/test/scim-deactivation-access.integration.test.ts#L43); [oidc-signin.integration.test.ts:33](../../packages/db/test/oidc-signin.integration.test.ts#L33); [enterprise-identity.integration.test.ts:385](../../packages/db/test/enterprise-identity.integration.test.ts#L385)
 
 **Not done:** E-52, E-73
 
-Not claimed. Waits for automatic account provisioning and removal to merge to main with its own named test. This row does not change on the strength of a pull-request title, an order or a plan line.
+Universal removal coverage remains not claimed (E-73); the synthetic SCIM subset is described above.
 
 ### Q-10 How long does a session last, and how is its cookie protected?
 
-**Plain answer:** SAML sessions last at most 15 minutes. Cookies use Secure (HTTPS only), HttpOnly (unavailable to page scripts) and SameSite strict (restricted across sites). Covered by named automated tests. The merged required-switch contract states emailed-code sessions last 24 hours; no cited test pins that number.
+**Plain answer:** SAML sessions last at most 15 minutes. Cookies use Secure (HTTPS only), HttpOnly (unavailable to page scripts) and SameSite strict (restricted across sites). Contractor practice sessions copy the home deadline with a seven-day cap, support revocation and store a digest rather than the bearer; contractor revocation leaves home access unchanged. Named tests cover these synthetic controls; cutoff-head PostgreSQL execution is not claimed here. The emailed-code 24-hour contract value still lacks a cited exact-duration test.
 
 **Status:** in place for the named practice controls; not claimed for the Not done items
 
-**Merged control:** E-13, E-14, E-14b
+**Merged control:** E-13, E-14, E-14b, E-72
 
-**Verifying tests:** [enterprise-identity.integration.test.ts:182](../../packages/db/test/enterprise-identity.integration.test.ts#L182); [action-paths.test.ts:272](../../apps/api/src/auth/sso/action-paths.test.ts#L272); [identity.test.ts:20](../../apps/api/src/auth/identity.test.ts#L20)
+**Verifying tests:** [enterprise-identity.integration.test.ts:184](../../packages/db/test/enterprise-identity.integration.test.ts#L184); [action-paths.test.ts:272](../../apps/api/src/auth/sso/action-paths.test.ts#L272); [identity.test.ts:31](../../apps/api/src/auth/identity.test.ts#L31); [contractor-practice-session.integration.test.ts:24](../../packages/db/test/contractor-practice-session.integration.test.ts#L24); [contractor-practice-session.integration.test.ts:64](../../packages/db/test/contractor-practice-session.integration.test.ts#L64); [contractor-practice-session.integration.test.ts:249](../../packages/db/test/contractor-practice-session.integration.test.ts#L249)
 
-**Not done:** E-55, E-72
+**Not done:** E-55; E-72 cutoff-head run only
 
 ### Q-11 Is there multi-factor sign-in?
 
@@ -150,17 +150,17 @@ Not claimed. Waits for automatic account provisioning and removal to merge to ma
 
 ### Q-12 Is there emergency access if single sign-on is down?
 
-**Plain answer:** No usable emergency route is claimed. A route exists but refuses every request until a founder decision supplies an approver. Its only possible effect is switching “SSO required” OFF; it issues no session. That effect is INTERIM. Refusal is covered by a named automated test; no green run or verdict is recorded on main.
+**Plain answer:** Usable emergency access remains HELD for the founder approver ruling. Merged practice code permits a company owner with a fixture emailed code to record a bounded “SSO required” OFF window, approval, use and audit; it issues no new session. Non-owners and revoked/expired owner forms are refused. These are synthetic construction tests, not an approved operational access procedure.
 
 **Status:** in place for the named practice controls; not claimed for the Not done items
 
 **Merged control:** E-42
 
-**Verifying tests:** [sso-emergency.integration.test.ts:90](../../packages/db/test/sso-emergency.integration.test.ts#L90)
+**Verifying tests:** [sso-emergency.integration.test.ts:218](../../packages/db/test/sso-emergency.integration.test.ts#L218); [sso-emergency.integration.test.ts:258](../../packages/db/test/sso-emergency.integration.test.ts#L258)
 
 **Not done:** E-54
 
-Not claimed. Waits for usable emergency access to merge to main with its own named test. This row does not change on the strength of a pull-request title, an order or a plan line.
+Usable emergency access remains HELD for the founder approver ruling (E-54).
 
 ### Q-13 Does single sign-on work in mobile apps?
 
@@ -180,13 +180,13 @@ Not claimed. Waits for native mobile sign-in to merge to main with its own named
 
 ### Q-14 What roles exist, and how is access limited by team, branch, region or client?
 
-**Plain answer:** Nine roles: owner, administrator, operative, supervisor, surveyor, commercial manager, finance, read-only and client approver. A permission-by-role-by-scope matrix is covered for every combination in pure code and again against PostgreSQL. Client approvers are limited to their client. Revoked memberships fail on the next request on the practice contractor route. Practice build only.
+**Plain answer:** Nine roles: owner, administrator, operative, supervisor, surveyor, commercial manager, finance, read-only and client approver. A permission-by-role-by-scope matrix is covered for every combination in pure code and again against PostgreSQL. Client approvers are limited to their client. Revoked memberships fail on the next practice contractor request; E-73 adds ordinary/bound-session synthetic SCIM company exclusion, without universal removal coverage. Practice build only.
 
 **Status:** in place for the named practice controls; not claimed for the Not done items
 
 **Merged control:** E-16, E-16b, E-17b
 
-**Verifying tests:** [contractor.test.ts:5](../../packages/core/src/contractor.test.ts#L5); [contractor.integration.test.ts:106](../../packages/db/test/contractor.integration.test.ts#L106); [contractor.integration.test.ts:262](../../packages/db/test/contractor.integration.test.ts#L262)
+**Verifying tests:** [contractor.test.ts:5](../../packages/core/src/contractor.test.ts#L5); [contractor.integration.test.ts:109](../../packages/db/test/contractor.integration.test.ts#L109); [contractor.integration.test.ts:265](../../packages/db/test/contractor.integration.test.ts#L265)
 
 **Not done:** E-73
 
@@ -194,25 +194,25 @@ Not claimed. Waits for native mobile sign-in to merge to main with its own named
 
 ### Q-15 How is one customer’s data kept apart from another’s?
 
-**Plain answer:** Row-level security means the database filters reads and checks writes against the server’s company setting. It is forced on business tables; a catalogue test finds them automatically. Cross-company reads/writes and missing or malformed context fail. Covered by named automated tests. This does not protect against compromised identity credentials or a privileged database rewrite.
+**Plain answer:** Row-level security means the database filters reads and checks writes against the server’s company setting. It is forced on business tables; a catalogue test enumerates app tables and explicitly records infrastructure exceptions. Cross-company reads/writes and missing or malformed context fail. Covered by named automated tests. This does not protect against compromised identity credentials or a privileged database rewrite.
 
 **Status:** in place for the named practice controls; not claimed for the Not done items
 
 **Merged control:** E-18, E-19, E-19b, E-20b
 
-**Verifying tests:** [tenancy.integration.test.ts:179](../../packages/db/test/tenancy.integration.test.ts#L179); [tenancy.integration.test.ts:76](../../packages/db/test/tenancy.integration.test.ts#L76); [tenancy.integration.test.ts:87](../../packages/db/test/tenancy.integration.test.ts#L87); [tenancy.integration.test.ts:141](../../packages/db/test/tenancy.integration.test.ts#L141)
+**Verifying tests:** [tenancy.integration.test.ts:207](../../packages/db/test/tenancy.integration.test.ts#L207); [tenancy.integration.test.ts:84](../../packages/db/test/tenancy.integration.test.ts#L84); [tenancy.integration.test.ts:95](../../packages/db/test/tenancy.integration.test.ts#L95); [tenancy.integration.test.ts:152](../../packages/db/test/tenancy.integration.test.ts#L152)
 
 **Not done:** E-58
 
 ### Q-16 What can the application’s database login not do?
 
-**Plain answer:** It is not a superuser and cannot bypass or alter row-level security. It cannot change, delete or truncate audit rows. Covered by named automated tests. It can still add or change company memberships including owner, write approval records, set a job's status, agreed price and fee cap, write invoice and payment records directly, and append new audit entries. A programme to remove those rights is proposed and not yet decided. This limit does not cover the database owner login or compromise of the identity service.
+**Plain answer:** It is not a superuser and cannot bypass or alter row-level security. LP-1 removes direct account/membership creation, promotion, restoration and deletion; LP-4 removes direct audit writes and seals entries through controlled routines. Named tests cover these changes. Lower-trust authority-named audit statements remain permitted; full protection from forged owner approvals, job status/price and downstream authority is not claimed (E-71). Privileged database and identity-service compromise remain outside this limit.
 
 **Status:** in place for the named practice controls; not claimed for the Not done items
 
-**Merged control:** E-21, E-22
+**Merged control:** E-21, E-22, E-71 (narrowing only)
 
-**Verifying tests:** [tenancy.integration.test.ts:383](../../packages/db/test/tenancy.integration.test.ts#L383); [audit.integration.test.ts:107](../../packages/db/test/audit.integration.test.ts#L107)
+**Verifying tests:** [tenancy.integration.test.ts:582](../../packages/db/test/tenancy.integration.test.ts#L582); [lp1-membership-account.integration.test.ts:112](../../packages/db/test/lp1-membership-account.integration.test.ts#L112); [lp4-audit.integration.test.ts:89](../../packages/db/test/lp4-audit.integration.test.ts#L89); [lp4-audit.integration.test.ts:116](../../packages/db/test/lp4-audit.integration.test.ts#L116)
 
 **Not done:** E-58, E-71
 
@@ -232,13 +232,13 @@ Not claimed. Waits for native mobile sign-in to merge to main with its own named
 
 ### Q-18 Do you keep a tamper-evident record?
 
-**Plain answer:** A per-company chain links entries by hashes calculated from their contents; it is append-only for the runtime login. It detects change or removal of existing entries relative to a trusted checkpoint; it does not stop the app's own database login appending false new entries. A trusted checkpoint is a saved chain position and hash. Covered by named automated tests. The database owner could replace the whole chain and its in-database checkpoints. No outside anchor or timestamp is built.
+**Plain answer:** A per-company hash chain is append-only for the runtime login. It detects alteration or removal relative to a trusted checkpoint. LP-4 closes direct audit writes but permits lower_trust statements, including authority-named ones; those labels do not establish truth or authorization. The database owner could replace the chain and in-database checkpoints. A local fake TSA adapter is built, but no outside audit-chain anchor is claimed.
 
 **Status:** in place for the named practice controls; not claimed for the Not done items
 
-**Merged control:** E-22, E-23, E-24
+**Merged control:** E-22, E-23, E-24; E-71 (LP-4 narrowing only)
 
-**Verifying tests:** [audit.integration.test.ts:107](../../packages/db/test/audit.integration.test.ts#L107); [audit.integration.test.ts:85](../../packages/db/test/audit.integration.test.ts#L85); [audit.integration.test.ts:98](../../packages/db/test/audit.integration.test.ts#L98)
+**Verifying tests:** [audit.integration.test.ts:107](../../packages/db/test/audit.integration.test.ts#L107); [audit.integration.test.ts:85](../../packages/db/test/audit.integration.test.ts#L85); [audit.integration.test.ts:98](../../packages/db/test/audit.integration.test.ts#L98); [lp4-audit.integration.test.ts:89](../../packages/db/test/lp4-audit.integration.test.ts#L89); [lp4-audit.integration.test.ts:116](../../packages/db/test/lp4-audit.integration.test.ts#L116)
 
 **Not done:** E-59, E-60, E-71
 
@@ -256,13 +256,13 @@ Not claimed. Waits for native mobile sign-in to merge to main with its own named
 
 ### Q-20 Can we get our record out and check it without trusting you?
 
-**Plain answer:** A signed single-company file has an offline checker. It detects alteration, omission, reordering, truncation and invalid signatures. A new per-export signing pair is made in memory and discarded. The signature shows integrity, not truthful work; obtain the public key through a trusted channel. No signer registry, rotation, revocation or long-term promise exists. Practice build only.
+**Plain answer:** The original signed single-company audit export has an offline checker and per-export ephemeral signing keys. A separate synthetic signed-evidence wrapper adds signer versions, rotation, retained public records and stored bundle bytes with approved scope/recipient binding. Its offline checker needs independently obtained expected scope and registry input; it refuses untrusted/revoked keys and reports historical expiry. It always reports complete: false. No live key custody, current revocation service, external timestamp or long-term operating promise is claimed.
 
 **Status:** in place for the named practice controls; not claimed for the Not done items
 
-**Merged control:** E-26, E-26b, E-27, E-27b, E-28
+**Merged control:** E-26, E-26b, E-27, E-27b, E-28, E-60 (partial practice scope)
 
-**Verifying tests:** [audit-export.integration.test.ts:279](../../packages/db/test/audit-export.integration.test.ts#L279); [verify-audit-export-cli.test.ts:56](../../packages/db/test/verify-audit-export-cli.test.ts#L56); [verify-audit-export-cli.test.ts:61](../../packages/db/test/verify-audit-export-cli.test.ts#L61); [verify-audit-export-cli.test.ts:65](../../packages/db/test/verify-audit-export-cli.test.ts#L65); [verify-audit-export-cli.test.ts:44](../../packages/db/test/verify-audit-export-cli.test.ts#L44)
+**Verifying tests:** [signed-evidence-export.test.ts:43](../../packages/db/test/signed-evidence-export.test.ts#L43); [signed-evidence-export.test.ts:56](../../packages/db/test/signed-evidence-export.test.ts#L56); [signed-evidence-export.test.ts:93](../../packages/db/test/signed-evidence-export.test.ts#L93); [signed-evidence-export-store.integration.test.ts:126](../../packages/db/test/signed-evidence-export-store.integration.test.ts#L126)
 
 **Not done:** E-60
 
@@ -280,17 +280,17 @@ Not claimed. Waits for native mobile sign-in to merge to main with its own named
 
 ### Q-22 How is an export’s checkpoint taken, and is there an outside timestamp?
 
-**Plain answer:** A manual owner-run command takes and hands off each company’s checkpoint. Repeating it without new events writes nothing. A company created later needs another run before its first export. Covered by named automated tests; no green run or verdict recorded on main. No scheduled run or outside timestamp is built.
+**Plain answer:** A manual owner-run command takes and hands off each company’s checkpoint. Repeating it without new events writes nothing; a later company needs another run. Named tests cover that behavior. M5-9 adds synthetic retained checking and rotation separately (E-60); the local fake TSA (E-59) is not an outside anchor. Scheduled hand-off and an outside timestamp remain NOT BUILT.
 
 **Status:** in place for the named practice controls; not claimed for the Not done items
 
-**Merged control:** E-32, E-32b
+**Merged control:** E-32, E-32b; E-59 (local fake only), E-60 (partial practice scope)
 
-**Verifying tests:** [audit-checkpoint-handoff.test.ts:56](../../packages/db/src/audit-checkpoint-handoff.test.ts#L56); [audit-checkpoint-handoff.integration.test.ts:209](../../packages/db/test/audit-checkpoint-handoff.integration.test.ts#L209)
+**Verifying tests:** [audit-checkpoint-handoff.test.ts:59](../../packages/db/src/audit-checkpoint-handoff.test.ts#L59); [audit-checkpoint-handoff.integration.test.ts:211](../../packages/db/test/audit-checkpoint-handoff.integration.test.ts#L211)
 
 **Not done:** E-60
 
-Not claimed. Waits for long-term export checking and signer lifecycle to merge to main with its own named test. This row does not change on the strength of a pull-request title, an order or a plan line.
+Outside timestamp, scheduled hand-off and live signer operation remain not claimed (E-59/E-60).
 
 ## E Data, providers and privacy
 
@@ -372,13 +372,13 @@ Not claimed. Waits for long-term export checking and signer lifecycle to merge t
 
 ### Q-29 Do you have an incident plan, monitoring and a way to tell us?
 
-**Plain answer:** Not claimed. NOT EVIDENCED: no incident runbook is merged. Incident ownership is a pre-pilot requirement; monitoring, alerts and buyer notification need operational evidence.
+**Plain answer:** Not claimed for operations. Synthetic incident-runbook preparation and fake alert tests are merged; no pager, live monitoring, named role holders or buyer-notification exercise is installed. Operational evidence remains NOT EVIDENCED (E-65).
 
 **Status:** not claimed
 
-**Merged control:** none
+**Merged control:** E-65 (synthetic preparation only; operations not claimed)
 
-**Verifying tests:** none — not claimed
+**Verifying tests:** [ops-pack.test.mjs:12](../../tools/ops-pack.test.mjs#L12); [ops-pack.test.mjs:24](../../tools/ops-pack.test.mjs#L24)
 
 **Not done:** E-65
 
@@ -392,19 +392,19 @@ Not claimed. Waits for long-term export checking and signer lifecycle to merge t
 
 **Merged control:** E-33, E-33b, E-36, E-03, E-26
 
-**Verifying tests:** [ci.yml:26](../../.github/workflows/ci.yml#L26); [ci.yml:31](../../.github/workflows/ci.yml#L31); [agent-lane-boundary.test.mjs:35](../../tools/agent-lane-boundary.test.mjs#L35); [saml.test.ts:72](../../apps/api/src/auth/sso/saml.test.ts#L72); [audit-export.integration.test.ts:279](../../packages/db/test/audit-export.integration.test.ts#L279)
+**Verifying tests:** [ci.yml:113](../../.github/workflows/ci.yml#L113); [ci.yml:113](../../.github/workflows/ci.yml#L113); [agent-lane-boundary.test.mjs:35](../../tools/agent-lane-boundary.test.mjs#L35); [saml.test.ts:72](../../apps/api/src/auth/sso/saml.test.ts#L72); [audit-export.integration.test.ts:279](../../packages/db/test/audit-export.integration.test.ts#L279)
 
 **Not done:** E-69
 
 ### Q-31 Are exposed sensitive values and vulnerable dependencies scanned for?
 
-**Plain answer:** CI scans each pull request and main push for exposed sensitive values, with two exact exceptions for made-up test names. A dependency audit fails on findings or lookup errors. Covered by a named automated test or workflow step. These checks do not establish absence of every weakness.
+**Plain answer:** CI scans each pull request and main push for exposed sensitive values, with three exact fingerprint exceptions in .gitleaksignore. A dependency audit fails on findings or lookup errors. Covered by a named automated test or workflow step. These checks do not establish absence of every weakness.
 
 **Status:** in place (practice build)
 
 **Merged control:** E-34, E-35
 
-**Verifying tests:** [dependency-audit.test.mjs:8](../../tools/dependency-audit.test.mjs#L8); [ci.yml:37](../../.github/workflows/ci.yml#L37)
+**Verifying tests:** [dependency-audit.test.mjs:8](../../tools/dependency-audit.test.mjs#L8); [ci.yml:163](../../.github/workflows/ci.yml#L163)
 
 **Not done:** nothing further
 
