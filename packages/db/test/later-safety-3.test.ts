@@ -10,18 +10,18 @@ import { testTenantContext } from "./tenant-context-test-utils.js";
 const sql = (name: string) => { const url = new URL(`../migrations/${name}.sql`, import.meta.url); return existsSync(url) ? readFileSync(url,"utf8") : ""; };
 afterEach(()=>vi.unstubAllEnvs());
 it("company import duplicate guard is tenant/source scoped under the existing transaction lock",()=>{
- const source=sql("0778_company_import_once");
+ const source=sql("1030_company_import_once");
  expect(source).toContain("pg_advisory_xact_lock(hashtextextended(t::text,184))");
  expect(source).toContain("(t<>'11111111-1111-4111-8111-111111111111'::uuid OR session_digest=d)");
  expect(source).toContain("ON app.job_import_v3(tenant_id,source_job_id)");
 });
 it("raw AIS reads are explicitly revoked for all four tables",()=>{
- const source=sql("0779_ais_private_reads");
+ const source=sql("1031_ais_private_reads");
  for(const table of ["ais_connection","ais_lifecycle","ais_observation","ais_page"])
   expect(source).toContain(`REVOKE SELECT ON app.${table} FROM jobguard_runtime;`);
 });
 it("billability approval identity is unique independently of command and review IDs",()=>{
- const source=sql("0780_billability_one_line");
+ const source=sql("1032_billability_one_line");
  expect(source).toContain("CREATE UNIQUE INDEX billability_one_line_approval");
  expect(source).toContain("tenant_id,job_id,case_id,(payload->>'workId'),(payload->>'lineId')");
  expect(source).toContain("WHERE action='approve'");

@@ -1,5 +1,5 @@
 {
-  "migration": "0778_company_import_once.sql",
+  "migration": "1030_company_import_once.sql",
   "lp0": [
     {
       "section": "routines",

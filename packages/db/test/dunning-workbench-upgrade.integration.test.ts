@@ -40,7 +40,7 @@ it("0564_dunning_workbench_preview preserves populated history, redrafts expired
 }, 240000);
 
 it("0782 preserves populated receipts and approvals while removing admin approval authority", async () => {
- const upgraded=await startBeforeMigration("0782_dunning_owner_approval.sql");
+ const upgraded=await startBeforeMigration("1033_dunning_owner_approval.sql");
  try {
   const a=await meterCompany(upgraded as unknown as WorkFixture), invoiceId=randomUUID();
   const projection={version:"dunning-invoice.v1",environment:"synthetic_demo",tenantId:a.tenantId,jobId:a.jobId,invoiceId,
@@ -53,7 +53,7 @@ it("0782 preserves populated receipts and approvals while removing admin approva
   const approval={...input,commandId:randomUUID(),decisionId:draft.decisionId};
   const first=await repo.command(a.context,a.digest,a.jobId,"approve",approval);
   const before=await proofBefore(upgraded.admin,["app.dunning_invoice","app.dunning_reminder","app.decision","app.decision_resolution","app.command_receipt","app.audit_event"]);
-  await applyMigration(upgraded,"0782_dunning_owner_approval.sql");
+  await applyMigration(upgraded,"1033_dunning_owner_approval.sql");
   expect(await proofDifferences(upgraded.admin,before)).toEqual({rows:[],types:[]});
   expect(await repo.command(a.context,a.digest,a.jobId,"approve",approval)).toEqual(first);
   await upgraded.admin.query("UPDATE app.membership SET role='admin' WHERE tenant_id=$1 AND id=$2",[a.tenantId,a.actorId]);

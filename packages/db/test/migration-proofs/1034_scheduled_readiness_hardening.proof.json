@@ -1,5 +1,5 @@
 {
-  "migration": "0784_scheduled_readiness_hardening.sql",
+  "migration": "1034_scheduled_readiness_hardening.sql",
   "lp0": [
     {
       "section": "policies",
