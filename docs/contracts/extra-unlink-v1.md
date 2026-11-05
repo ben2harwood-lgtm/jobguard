@@ -150,3 +150,50 @@ RLS protects rows within a correctly authenticated/stamped tenant context; it ca
 - No new migration, database object, dependency, route, UI, provider or release. Other source files, indexes, shared helpers, security pins, tools, CI, AI, BUILD_PLAN and AGENTS stay untouched.
 
 Builder tests use synthetic organisations and `.invalid` members, with no outbound call. D1–D18 require actual PostgreSQL execution by the Mac helper and CI on the final head; source compilation does not prove database behavior. RED requires fresh Opus and separate Sol verdicts bound to the exact committed head, separate acceptance and dispatcher catch-up on main before a PR. Existing production/data/fee gates remain pending.
+
+## ENT-5 / ENT-3 candidate-only extension — 4 November 2026
+
+This issued extension opens the candidate list, MarkDuplicate and pre-export
+un-link transport and controls on `/approvals/extras` in synthetic practice only.
+It does not close ENT-3 or ENT-5. The historical “Not built” list above describes
+that earlier leaf; only these candidate surfaces are opened here.
+
+GET `/api/contractor/jobs/[id]/duplicate-candidates` returns
+`extra-duplicate-candidates.v1`: jobId, link-history revision, unresolved groups
+(`id`, `extras` containing extraId, canonicalId and existing description), and
+active links (linkId, endpoint IDs and their existing descriptions). No prices,
+notes, origin facts or new authority appear. Supervisor, surveyor and
+commercial_manager require the existing covering xa_covers/job.read grant.
+Owner/admin visibility remains held; their existing un-link command authority is
+unchanged. An eligible member's uncovered, missing or foreign job is NOT_FOUND;
+a member without a permitted list role is PERMISSION_DENIED.
+
+POST to that same route accepts the strict `mark-duplicate.v1` command minus
+jobId (the route supplies it). POST
+`/api/contractor/jobs/[id]/duplicate-unlinks` accepts the strict
+`extra-duplicate-unlink.v1` command minus jobId and actorMembershipId. The server
+binds both from the path and persisted session; no request may set tenant, actor,
+role, time or origin. Both POSTs require the configured trusted browser origin;
+all responses are no-store. Existing repository methods, role checks, command
+receipts, audit, replay/conflict, stale-link and exported-endpoint guards remain
+the authority. Error bodies expose only a version and closed code, and the
+screen displays the server refusal.
+
+The unresolved grouping uses exactly cb_unresolved's active-link/member/pair
+rule. The CREATE-only read leaves cb_unresolved untouched, using the issued
+agreement-test fallback rather than replacing an older routine: source pins and
+installed-routine PostgreSQL fixture comparisons guard against drift. Same visit
+OR same UTC server day; same non-null SoR code OR same non-null excess line.
+Different visits alone do not exempt same-day captures; different lines alone
+do not exempt captures with the same code. Connected candidates are displayed
+together, collapsed through active links as in cb_unresolved. There is no
+invented dismissal, keep-separate or not-a-duplicate action. The selected
+canonical controls billing identity, never the group's effective origin.
+
+Validation: local TypeScript and bounded unit guards; database integration and
+headless mobile-360/desktop rendering/transport tests are authored for CI. The
+browser case checks 44px targets, accessible control names, Chromium AA contrast,
+server refusals, linking and reason-required un-linking. These are automated
+checks, not a full human accessibility assessment. Exact-head RED independent
+review and green CI remain required before merge. NOPR; production gates stay
+closed. Dismissal still needs Ben's recorded finance decision.

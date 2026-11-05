@@ -14,6 +14,8 @@ export type JobCommandPhase = "pre_live_allowed" | "watchdog_live_only" | "post_
 /** Exhaustive web mutation registry. Dynamic actions are classified below.
  * New site facts, documents, orders, proof and messages must be live-only. */
 export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
+  "/api/jobs/[id]/recovery-cases/[caseId]/billability": "post_live_billing",
+  "/api/jobs/[id]/reconciliation/[runId]/adjustments": "post_live_billing",
   "/api/customer-portal/quote": "pre_live_allowed",
   "/api/customer-portal/quote-accept": "pre_live_allowed",
   "nest:/customer-portal/quote": "pre_live_allowed",
@@ -97,7 +99,6 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "command:ConfirmPrompt": "pre_live_allowed",
   "command:DismissPrompt": "pre_live_allowed",
   "/api/contractor/jobs/[id]/possible-extras/materials": "pre_live_allowed",
-  "/api/contractor/jobs/[id]/possible-extras/observations": "pre_live_allowed",
   "/api/contractor/jobs/[id]/possible-extras/evaluate": "pre_live_allowed",
   "nest:/contractor/jobs/:id/possible-extras/materials": "pre_live_allowed",
   "nest:/contractor/jobs/:id/possible-extras/observations": "pre_live_allowed",
@@ -106,7 +107,11 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "nest:/contractor/jobs/:id/possible-extras/:promptId/dismiss": "pre_live_allowed",
   "/api/contractor/jobs/[id]/possible-extras/[promptId]/confirm": "pre_live_allowed",
   "/api/contractor/jobs/[id]/possible-extras/[promptId]/dismiss": "pre_live_allowed",
+  "/api/contractor/jobs/[id]/possible-extras/observations": "pre_live_allowed",
   // contractor work-order jobs have no pre-live phase (they become live in the same transaction as the import), and this route carries its own live-job guard (precheck and seam, `SiteExtraRepository`).
+  // Contractor commands retain their own job/authority/export guards, like site capture.
+  "/api/contractor/jobs/[id]/duplicate-candidates": "pre_live_allowed",
+  "/api/contractor/jobs/[id]/duplicate-unlinks": "pre_live_allowed",
   "/api/contractor/jobs/[id]/site-extras": "pre_live_allowed",
   "nest:/contractor/jobs/:id/site-extras": "pre_live_allowed",
   // contractor work-order jobs have no pre-live phase (they become live in the same transaction as the import), and the route carries its own live-job guard
@@ -161,6 +166,7 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "/api/jobs/[id]/receipt-case-allocations": "post_live_billing",
   "/api/jobs/[id]/recovery-allocations/reversals": "post_live_billing",
   "/api/jobs/[id]/recovery-cases": "post_live_billing",
+  "/api/jobs/[id]/recovery-cases/[caseId]/managed-recovery": "post_live_billing",
   "/api/jobs/[id]/relevance-inbox/[action]": "watchdog_live_only",
   "/api/jobs/[id]/relevance-inbox/decisions/[decisionId]": "watchdog_live_only",
   "/api/jobs/[id]/review": "pre_live_allowed",

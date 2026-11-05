@@ -25,9 +25,10 @@ const answers = {
 class BoundaryError extends Error {
   constructor(readonly code: string) { super(code); }
 }
-function failure(error: unknown) {
+function failure(error: unknown, action: Action) {
   const code = error instanceof BoundaryError || error instanceof EnterpriseLivePromptPersistenceError
     ? error.code : (error as { code?: string } | null)?.code;
+  if (code === "EXTRA_FORBIDDEN" && action === "observations") return { code, status: 403 };
   if (code === "EXTRA_FORBIDDEN" || code === "NOT_FOUND") return { code: "NOT_FOUND", status: 404 };
   if (code === "UNAUTHENTICATED") return { code, status: 401 };
   if (["MODE_FORBIDDEN", "ORIGIN_FORBIDDEN", "PROMPT_PRACTICE_ONLY"].includes(code ?? "")) return { code, status: 403 };
@@ -56,7 +57,7 @@ export async function promptSourcesResponse(request: Request, params: Promise<{ 
       : await repository.evaluate(session!, input);
     return NextResponse.json(answers[action].parse(result), { status: 201, headers });
   } catch (error) {
-    const { code, status } = failure(error);
+    const { code, status } = failure(error, action);
     return NextResponse.json({ version: "enterprise-live-prompt-error.v1", code }, { status, headers });
   }
 }

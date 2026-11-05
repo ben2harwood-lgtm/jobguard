@@ -1,5 +1,5 @@
 {
-  "migration": "0855_direct_debit_fixture_facts.sql",
+  "migration": "0596_direct_debit_fixture_facts.sql",
   "lp0": [
     {
       "section": "groups",
@@ -23,7 +23,7 @@
         },
         "downstream": "Verified fake events only; no authorization, collection, reservation, settlement or application wiring.",
         "sources": [
-          "packages/db/migrations/0855_direct_debit_fixture_facts.sql",
+          "packages/db/migrations/0596_direct_debit_fixture_facts.sql",
           "packages/db/src/direct-debit-fixture-repository.ts"
         ],
         "tests": [
@@ -52,7 +52,7 @@
           "LP-12": "Verify narrow routine access and FORCE RLS with no direct runtime grants."
         },
         "sources": [
-          "packages/db/migrations/0855_direct_debit_fixture_facts.sql",
+          "packages/db/migrations/0596_direct_debit_fixture_facts.sql",
           "packages/db/src/direct-debit-fixture-repository.ts"
         ],
         "tests": [

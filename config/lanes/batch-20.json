@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/batch-20"
       ],
-      "note": "Built-ahead union of m4-15-debit-store and ent-8a-prompt-sources; RED; NOPR.",
+      "note": "Landing union of m4-15-debit-store and ent-8a-prompt-sources; RED; reserved migration 0596.",
       "allow": [
         "apps/api/src/fee-collection/direct-debit-fixture-recorder.test.ts",
         "apps/api/src/fee-collection/direct-debit-fixture-recorder.ts",
@@ -15,6 +15,7 @@
         "apps/web/app/api/contractor/jobs/[id]/possible-extras/materials/route.integration.test.ts",
         "apps/web/app/api/contractor/jobs/[id]/possible-extras/materials/route.ts",
         "apps/web/app/api/contractor/jobs/[id]/possible-extras/observations/route.ts",
+        "apps/web/app/api/contractor/jobs/[id]/possible-extras/route.test.ts",
         "apps/web/app/contractor/jobs/[id]/materials-issues/materials-issues.test.tsx",
         "apps/web/app/contractor/jobs/[id]/materials-issues/materials-issues.tsx",
         "apps/web/app/contractor/jobs/[id]/materials-issues/page.tsx",
@@ -27,15 +28,16 @@
         "packages/core/src/direct-debit-lifecycle.ts",
         "packages/core/src/index.ts",
         "packages/core/src/watchdog.ts",
-        "packages/db/migration-notes/0855_direct_debit_fixture_facts.md",
-        "packages/db/migrations/0855_direct_debit_fixture_facts.sql",
+        "packages/db/migration-notes/0596_direct_debit_fixture_facts.md",
+        "packages/db/migrations/0596_direct_debit_fixture_facts.sql",
         "packages/db/src/direct-debit-fixture-repository.ts",
         "packages/db/src/index.ts",
         "packages/db/test/direct-debit-fixture-repository.test.ts",
         "packages/db/test/direct-debit-fixture.integration.test.ts",
         "packages/db/test/fake-direct-debit-recorder.integration.test.ts",
         "packages/db/test/later-empty-tables.ts",
-        "packages/db/test/migration-proofs/0855_direct_debit_fixture_facts.proof.json"
+        "packages/db/test/migration-proofs/0596_direct_debit_fixture_facts.proof.json",
+        "packages/db/test/recovery-eligibility-v3.integration.test.ts"
       ]
     }
   }

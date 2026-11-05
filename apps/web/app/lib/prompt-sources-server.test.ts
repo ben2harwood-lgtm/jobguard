@@ -42,7 +42,7 @@ it.each(cases)("checks origin, mode, session, JSON and path before persistence (
   expect(mocks.pool).not.toHaveBeenCalled();
 });
 it.each(cases)("preserves typed refusals without leaking persistence details (%#)", async (post, input, method) => {
-  for (const [code, status, projected] of [["EXTRA_FORBIDDEN", 404, "NOT_FOUND"], ["PROMPT_CONFLICT", 409, "PROMPT_CONFLICT"], ["PROMPT_SOURCE_INVALID", 409, "PROMPT_SOURCE_INVALID"]] as const) {
+  for (const [code, status, projected] of [["EXTRA_FORBIDDEN", post === observations ? 403 : 404, post === observations ? "EXTRA_FORBIDDEN" : "NOT_FOUND"], ["PROMPT_CONFLICT", 409, "PROMPT_CONFLICT"], ["PROMPT_SOURCE_INVALID", 409, "PROMPT_SOURCE_INVALID"]] as const) {
     method.mockRejectedValue(new EnterpriseLivePromptPersistenceError(code));
     const response = await post(request(input), context);
     expect(response.status).toBe(status); expect(response.headers.get("cache-control")).toBe("no-store");

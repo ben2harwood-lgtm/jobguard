@@ -57,6 +57,7 @@ export function MaterialsIssues({ jobId }: { jobId: string }) {
     });
   }
   const target = { minHeight: 44, width: "100%", boxSizing: "border-box" as const };
+  const button = { ...target, color: "#0f172a", backgroundColor: busy ? "#e2e8f0" : "#ffffff", opacity: 1 };
   return <section aria-label="Stores movement" style={{ maxWidth: 520, padding: 16 }}>
     <p>Record one movement from stores. The server compares the work code and unit with the order. Returns and corrections stay on record for review.</p>
     <form onSubmit={submit}>
@@ -64,10 +65,10 @@ export function MaterialsIssues({ jobId }: { jobId: string }) {
         {([["sourceId", "Stores reference"], ["eventId", "Event reference"], ["workIdentity", "Work code"], ["unit", "Unit"], ["quantity", "Quantity"]] as const).map(([name, label]) => <label key={name} style={{ display: "block", marginBlock: 12 }} htmlFor={name}>{label}<input id={name} name={name} required maxLength={name === "quantity" ? 25 : 200} inputMode={name === "quantity" ? "decimal" : "text"} style={target} /></label>)}
         <label htmlFor="date">Date (UTC)<input id="date" name="date" type="date" min="1970-01-01" required style={target} /></label>
         <label htmlFor="kind">Movement<select id="kind" name="kind" style={target}><option value="issue">Issued to the job</option><option value="return">Returned to stores</option><option value="correction">Correction to a stores record</option></select></label>
-        <button style={{ ...target, marginBlock: 16 }} type="submit">Save materials movement</button>
+        <button style={{ ...button, marginBlock: 16 }} type="submit">Save materials movement</button>
       </fieldset>
     </form>
-    <button style={target} disabled={busy} onClick={() => void send("evaluate", {})}>Check for possible extras</button>
+    <button style={button} disabled={busy} onClick={() => void send("evaluate", {})}>Check for possible extras</button>
     <p role={refused ? "alert" : "status"} aria-live="polite">{busy ? "Waiting for the server…" : answer}</p>
   </section>;
 }

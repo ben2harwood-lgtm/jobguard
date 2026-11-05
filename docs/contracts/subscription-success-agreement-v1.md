@@ -60,3 +60,37 @@ PostgreSQL isolation tests or independent RED review. The slice needs no migrati
 no existing migrations are edited. Durable consumer wiring, live execution,
 provider cancellation, concurrency guarantees and approved legal terms remain
 outside this slice.
+
+## M4-13 owner web surface (practice only)
+
+`/plans/mandate` and GET/POST `/api/subscription-mandate` now use the existing
+mandate repository. No navigation link, migration, grant, collection or executor
+is added. A current company identity session with one owner membership supplies
+the tenant; practice cookies and caller tenant headers cannot select authority.
+POST additionally requires a configured trusted origin and session CSRF token.
+The strict browser command permits only approve, revoked and cancelled.
+
+GET supplies canonical `subscriptionAgreementText`, its server hash and a
+session-bound HMAC preview. Approval submits that exact selection without a
+tenant field; changes invalidate the preview. The practice specimen starts one
+hour after preview and expires after 24 hours, with anchor day 1 and the signed-in
+identity as recipient reference. These are fictional specimen bounds, not a
+production notice, billing-date or validity policy. Existing terms remain immutable;
+replacement approvals still return `MANDATE_NOTICE_REAUTHORISATION_REQUIRED`.
+Revoked/cancelled reads show authority not current even if the original approval
+survives. Provider cancellation is pending, never represented as completed.
+
+The client retains identical command bytes/ID in memory across uncertain retries,
+blocks changing choices until the outcome is known, confirms revoke/cancel, and
+renders server state and refusals. Routes use `no-store`; the page is not found
+outside synthetic mode. Wording and prices, D05/D09/Q9, MON-2B/M4-12 execution,
+provider settings, real rails and G0–G5 remain held for their existing approvals.
+
+New unit tests cover signed-preview tampering, strict inputs, session/owner/tenant
+boundaries and typed refusals. The new route PostgreSQL tests and headless browser
+spec must run in CI: immutable exact text/hash, one-record replay, stale sequence,
+held reapproval, ended-authority preflight refusal, actual email-code browser
+journey, confirmation, identical uncertain retries, 44px controls, keyboard naming
+and Chromium contrast audit at mobile-360 and desktop. Browser contrast/name/focus
+checks are targeted checks, not a full independent accessibility audit. No real
+provider or customer data is used. Independent RED review is still required.
