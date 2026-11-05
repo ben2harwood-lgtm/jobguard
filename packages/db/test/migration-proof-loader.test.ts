@@ -44,6 +44,22 @@ describe("strict migration proof discovery", () => {
         + legacy.filter(name => name === migration).length, migration).toBe(1);
     }
   });
+  it("records all five batch-30 identity routines, including owner-only helpers", () => {
+    const inventory = parseInventory(combineLp0(baseline(), loadMigrationProofs().proofs));
+    for (const [signature, grantees, definer] of [
+      ["dark_emergency(text,text,uuid,jsonb)", ["jobguard_identity"], true],
+      ["emergency_owner(text,text,uuid)", [], true],
+      ["scim2_audit(uuid,text,text,uuid,jsonb)", [], false],
+      ["scim2_configure(text,text,uuid,uuid,uuid,boolean,text)", ["jobguard_identity"], true],
+      ["scim2_machine(uuid,text,jsonb)", ["jobguard_scim"], true],
+    ] as const) {
+      const records = inventory.recorded.routines.filter(r => r.identity === `function:identity.${signature}`);
+      expect(records, signature).toHaveLength(1);
+      expect(records[0]).toMatchObject({ owner: "jobguard_migration", securityDefiner: definer,
+        searchPath: "search_path=pg_catalog", reachable: grantees.length > 0,
+        runtimeExecute: false, publicExecute: false, otherExecute: [...grantees] });
+    }
+  });
   it("requires exactly one proof or legacy entry for each requested stem", () => {
     const migrations = MIGRATION_URLS.map(url => url.pathname.split("/").at(-1)!)
       .filter(name => /^051[0-7]_/.test(name));

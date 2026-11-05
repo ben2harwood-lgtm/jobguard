@@ -139,11 +139,17 @@ test("DEMO-S disclosure before lock: real detection and support disclosure remai
       supportUrl.username = supportLogin; supportUrl.password = supportPassword;
       const supportPool = new Pool({ connectionString: supportUrl.href });
       const support = new db.ShadowRepository(supportPool);
+      // These emergency routines record role:<login>, not a person. Hold before
+      // real data: the break-glass identity design goes to Ben for approval.
+      // Match shadow-persistence.integration's context with no session reference.
+      const supportContext = db.verifiedTenantContextFromMembership({
+        tenantId: auth.context.tenantId, membershipId: auth.membershipId, identityUserId: auth.identityUserId,
+      } as Parameters<typeof db.verifiedTenantContextFromMembership>[0]);
       const disclosure = { version: "shadow-support-disclosure.v1", jobId, signalId, eventId: randomUUID() };
-      await expect(new db.ShadowRepository(shadow).supportDisclosure(auth.context, disclosure)).rejects.toMatchObject({ code: "42501" });
+      await expect(new db.ShadowRepository(shadow).supportDisclosure(supportContext, disclosure)).rejects.toMatchObject({ code: "42501" });
       try {
-        expect(await support.supportDisclosure(auth.context, disclosure)).toBe(disclosure.eventId);
-        expect(await support.supportDisclosure(auth.context, disclosure)).toBe(disclosure.eventId);
+        expect(await support.supportDisclosure(supportContext, disclosure)).toBe(disclosure.eventId);
+        expect(await support.supportDisclosure(supportContext, disclosure)).toBe(disclosure.eventId);
       } finally {
         await supportPool.end();
         await admin.query(`DROP ROLE "${supportLogin}"`);
