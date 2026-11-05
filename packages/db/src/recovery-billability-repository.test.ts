@@ -41,3 +41,20 @@ it("production, pilot and unconfigured paths refuse before opening a connection"
     expect(db.calls).toEqual([]);
   }
 });
+it("read uses only the guarded routine and binds the case, job and session in a tenant transaction", async () => {
+  const calls: { sql: string; values: unknown[] | undefined }[] = [];
+  const value = { version: "recovery-billability-view.v1", caseId: id(2), caseRevision: 1, lines: [], reviews: [] };
+  const pool = { connect: async () => ({ query: async (sql: string, values?: unknown[]) => {
+    calls.push({ sql, values }); return { rows: sql.startsWith("SELECT app.read_recovery_billability") ? [{ result: value }] : [] };
+  }, release: () => {} }) } as unknown as Pool;
+  const repo = new RecoveryBillabilityRepository(pool, "synthetic_demo");
+  expect(await repo.read(verifiedTenantContextForQueuedJob(id(8)), id(9), id(2), "digest")).toEqual(value);
+  expect(calls.find(c => c.sql.startsWith("SELECT app.read_recovery_billability"))?.values).toEqual([id(9), id(2), "digest"]);
+  expect(calls.at(-1)?.sql).toBe("COMMIT");
+  expect(calls.some(c => /INSERT|UPDATE|DELETE/.test(c.sql))).toBe(false);
+});
+it("read stays closed outside synthetic mode before any connection", async () => {
+  const db = database(null);
+  await expect(new RecoveryBillabilityRepository(db.pool, "production").read(verifiedTenantContextForQueuedJob(id(8)), id(9), id(2), "digest")).rejects.toThrow("BILLABILITY_NOT_FOUND");
+  expect(db.calls).toEqual([]);
+});
