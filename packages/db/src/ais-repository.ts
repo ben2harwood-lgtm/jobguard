@@ -101,5 +101,26 @@ export class DarkAisRepository {
   async read(ctx: VerifiedTenantContext, digest: string, connectionId: string) {
     return this.publicState(await this.command(ctx, digest, connectionId, "inspect", {}));
   }
+  /** Session-checked projection; no credential or consent material leaves SQL. */
+  async movements(ctx: VerifiedTenantContext, digest: string, connectionId: string | null = null) {
+    if (this.environment !== "synthetic_demo" || this.adapter.environment !== "synthetic_demo") throw new AisError("AIS_DARK_ONLY");
+    aisParse(digestV1, digest);
+    if (connectionId !== null) aisParse(idV1, connectionId);
+    const view = z.object({ version: z.literal("ais-practice-view.v1"),
+      connection: z.object({ connectionId: idV1, status: resultV1.shape.status }).strict().nullable(),
+      movements: z.array(z.object({ movementRef: z.string().regex(/^fake_[a-zA-Z0-9_-]{1,100}$/u),
+        status: z.enum(["pending", "settled", "reversed"]), pence: z.number().int().safe().min(-1_000_000_000_000).max(1_000_000_000_000),
+        currency: z.literal("GBP"), bookedOn: z.iso.date() }).strict()),
+    }).strict();
+    try {
+      return await withTenant(this.pool, ctx, async db => {
+        const response = await db.$client.query<{ result: unknown }>("SELECT app.ais_movement_read($1,$2,$3) AS result", [ctx.tenantId, digest, connectionId]);
+        return aisParse(view, response.rows[0]?.result);
+      });
+    } catch (error) {
+      const code = /^(AIS_[A-Z_]+)$/u.exec(error instanceof Error ? error.message : "")?.[1];
+      throw new AisRepositoryError(code ?? "AIS_FORBIDDEN");
+    }
+  }
   private publicState(result: Result) { return { version: "ais-status.v1" as const, connectionId: result.connectionId, status: result.status }; }
 }

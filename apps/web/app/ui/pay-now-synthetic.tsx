@@ -3,8 +3,17 @@ import * as React from "react";
 import { PAY_NOW_ENABLED, parsePayNowInvoice, payNowOptions } from "@jobguard/core";
 import { PayNowFakeProvider } from "../lib/pay-now-fake-provider";
 
-const pounds = (pence: number) => `GBP ${(pence / 100).toFixed(2)}`;
-const labels = { bank_transfer: "Bank transfer", card: "Card", pay_by_bank: "Pay by bank" };
+export const payNowPounds = (pence: number) => `GBP ${(pence / 100).toFixed(2)}`;
+export const payNowLabels = { bank_transfer: "Bank transfer", card: "Card", pay_by_bank: "Pay by bank" };
+
+export const payNowTransferWording = "Transfer directly to the builder’s own account. Ask the builder for bank details.";
+export const payNowFeeWording = "Unapproved D10 v2 synthetic reference only: card 0.3%, capped at £6; pay-by-bank 25p; bank transfer free. Fees never exceed the payment. VAT treatment awaits a ruling.";
+
+export const payNowPreviewTitle = "Pay this invoice — synthetic preview";
+export const payNowNoPayment = "No simulated payment recorded.";
+export const payNowInvoiceWording = (balancePence: number) => `Fictional invoice. No real payment links or money. Amount due ${payNowPounds(balancePence)}. No customer surcharge.`;
+export const payNowSettlementWording = (result: { destinationAccount: string; builderCredit: { pence: number }; builderFeeDebit: { pence: number } }) =>
+  `Fake settlement to ${result.destinationAccount}: ${payNowPounds(result.builderCredit.pence)}. Builder fee debit ${payNowPounds(result.builderFeeDebit.pence)}. No real money moved.`;
 
 /** Reserved invoice slot. Deliberately cannot be activated by a browser flag or prop. */
 export function CustomerInvoicePayNow({ invoice }: { invoice?: unknown }) {
@@ -22,24 +31,24 @@ export function SyntheticPayNowPreview({ invoice: raw }: { invoice: unknown }) {
     try {
       const result = provider.execute({ version: "pay-now.fake-command.v1", commandId: crypto.randomUUID(), rail });
       setOutcome({ binding, text: result.status === "stub_not_collected" ? "Direct Debit stub: nothing collected."
-        : `Fake settlement to ${result.destinationAccount}: ${pounds(result.builderCredit.pence)}. Builder fee debit ${pounds(result.builderFeeDebit.pence)}. No real money moved.` });
+        : payNowSettlementWording(result) });
     } catch { setOutcome({ binding, text: "Simulation refused. No payment recorded." }); }
   }
   return <section aria-label="Synthetic invoice payment options">
-    <h3>Pay this invoice — synthetic preview</h3>
-    <p>Fictional invoice. No real payment links or money. Amount due {pounds(invoice.balancePence)}. No customer surcharge.</p>
+    <h3>{payNowPreviewTitle}</h3>
+    <p>{payNowInvoiceWording(invoice.balancePence)}</p>
     <ul style={{ listStyle: "none", padding: 0 }}>
       {payNowOptions(invoice).map(option => <li key={option.rail} style={{ padding: 12 }}>
-        <strong>{labels[option.rail]}</strong> · {pounds(option.customerTotal.pence)}
-        {option.rail === "bank_transfer" ? <p>Transfer directly to the builder’s own account. Ask the builder for bank details.</p>
-          : <p><a href={`#fake-${invoice.invoiceId}-${option.rail}`} onClick={event => { event.preventDefault(); simulate(option.rail as "card" | "pay_by_bank"); }}>Simulate {labels[option.rail].toLowerCase()} payment</a></p>}
+        <strong>{payNowLabels[option.rail]}</strong> · {payNowPounds(option.customerTotal.pence)}
+        {option.rail === "bank_transfer" ? <p>{payNowTransferWording}</p>
+          : <p><a href={`#fake-${invoice.invoiceId}-${option.rail}`} onClick={event => { event.preventDefault(); simulate(option.rail as "card" | "pay_by_bank"); }}>Simulate {payNowLabels[option.rail].toLowerCase()} payment</a></p>}
       </li>)}
     </ul>
     {invoice.kind !== "final" && <button type="button" onClick={() => simulate("direct_debit_stub")}>Preview {invoice.kind} Direct Debit stub</button>}
-    <p role="status">{outcome?.binding === binding ? outcome.text : "No simulated payment recorded."}</p>
+    <p role="status">{outcome?.binding === binding ? outcome.text : payNowNoPayment}</p>
     <aside aria-label="Builder fee preview"><h4>Builder fee preview</h4>
-      <p>Unapproved D10 v2 synthetic reference only: card 0.3%, capped at £6; pay-by-bank 25p; bank transfer free. Fees never exceed the payment. VAT treatment awaits a ruling.</p>
-      {payNowOptions(invoice).map(option => <p key={option.rail}>{labels[option.rail]}: builder pays {pounds(option.builderFee.pence)} separately.</p>)}
+      <p>{payNowFeeWording}</p>
+      {payNowOptions(invoice).map(option => <p key={option.rail}>{payNowLabels[option.rail]}: builder pays {payNowPounds(option.builderFee.pence)} separately.</p>)}
     </aside>
   </section>;
 }

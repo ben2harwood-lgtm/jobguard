@@ -52,6 +52,12 @@ export class SiteExtraPricingController {
  sorItems(@Param("id") jobId: string, @Headers("cookie") cookie: string | undefined, @Query("q") q: unknown) {
   return this.application.sorItems(principal(cookie), jobId, { q }).catch(fail);
  }
+ @Get("jobs/:id/sor-items/recent") @Header("Cache-Control", "no-store")
+ @ApiOkResponse({ description: "Up to five of the operative's recent items on this job's price list; no prices" })
+ @ApiParam({ name: "id", type: String, format: "uuid" })
+ sorRecentItems(@Param("id") jobId: string, @Headers("cookie") cookie: string | undefined) {
+  return this.application.sorRecentItems(principal(cookie), jobId).catch(fail);
+ }
  @Get("jobs/:id/order-check") @Header("Cache-Control", "no-store")
  @ApiOkResponse({ description: "already_on_order, more_than_ordered (with the extra quantity) or new" })
  @ApiOperation({ summary: "Compare a schedule item and a total quantity with the order, before logging" })

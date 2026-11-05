@@ -6,12 +6,18 @@ import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { authenticatePracticeSession, DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID, DEMO_IDENTITY_USER_ID,
-  issuePracticeSession, migrate } from "../src/index.js";
+  issuePracticeSession, migrate, practiceMaterialPool } from "../src/index.js";
 import { MaterialApplication } from "../../../apps/api/src/material.application.js";
 import { PurchaseOrderApplication } from "../../../apps/api/src/purchase-order.application.js";
+import { PurchaseOrderActionRepository } from "../src/purchase-order-action-repository.js";
+import { FakeMerchantOrderPort } from "../src/purchase-order-action.js";
+import { ActionExecutor, operateOutbox } from "../src/outbox.js";
+import { withTenant } from "../src/tenant-context.js";
+import { testTenantContext } from "./tenant-context-test-utils.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
 
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, directory: string;
+let upgradeRevisionId: string;
 beforeAll(async () => {
   vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
   directory = await mkdtemp(join(tmpdir(), "jobguard-po-audit-"));
@@ -22,7 +28,13 @@ beforeAll(async () => {
   await postgres.initialise(); await postgres.start(); await postgres.createDatabase("jobguard_synthetic_demo");
   const connection = { host: "127.0.0.1", port, database: "jobguard_synthetic_demo" };
   admin = new Pool({ ...connection, user: "postgres", password: "synthetic" });
-  await migrate(admin);
+  // Install current main first, retain a real synthetic PO, then apply this branch's
+  // migration through the normal runner. Fresh install is covered by tenancy's runner.
+  await migrate({ query: async (sql: string, values?: unknown[]) => {
+    if (sql.startsWith("SELECT 1 FROM public.jobguard_schema_migration")
+      && String(values?.[0]).endsWith("_dark_merchant_order.sql")) return { rows: [{}], rowCount: 1 };
+    return admin.query(sql, values);
+  } } as Pick<Pool, "query">);
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [DEMO_TENANT_ID]);
   await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [DEMO_IDENTITY_USER_ID]);
   const account = randomUUID();
@@ -32,6 +44,9 @@ beforeAll(async () => {
   // Login setup only: no additional runtime privileges or grants.
   await admin.query("ALTER ROLE jobguard_runtime LOGIN PASSWORD 'synthetic'");
   runtime = new Pool({ ...connection, user: "jobguard_runtime", password: "synthetic", max: 5 });
+  const legacy = await fixture();
+  upgradeRevisionId = (await legacy.orders.revise(legacy.job, legacy.input)).id;
+  await migrate(admin);
 }, 60000);
 afterAll(async () => {
   await closeTestPools(runtime, admin); await postgres?.stop();
@@ -65,7 +80,7 @@ async function fixture(pack = false) {
       subjectType: "purchase_order", subjectRef: order.id, action: { actionType: "purchase_order.simulate", recipient,
         contentHash: order.authorityHash, aggregateRevision: order.revision, amountPence: order.orderNetPence,
         currency: "GBP", policyVersion: "synthetic-po.v1", expiresAt: "2099-01-01T00:00:00Z" } } });
-  return { job, materials, orders, input, rate, command, day };
+  return { job, materials, orders, input, rate, command, day, auth, saved };
 }
 
 async function effects() {
@@ -115,5 +130,154 @@ describe("purchase-order audit with authenticated applications and PostgreSQL", 
     // A genuine receipt replay remains valid after later edits and writes nothing.
     expect(await f.orders.place(f.job, firstCommand)).toEqual(placed);
     expect(await effects()).toEqual(before);
+  });
+});
+
+
+// Dark seam called directly with deterministic fakes; no HTTP or worker registration.
+async function darkFixture() {
+  const f = await fixture(), revision = await f.orders.revise(f.job, f.input);
+  const scoped = practiceMaterialPool(runtime, f.auth.digest);
+  const repo = new PurchaseOrderActionRepository(scoped);
+  const scope = { version: "merchant-order-scope.v1", jobId: f.job, revisionId: revision.id };
+  const preview = await repo.preview(f.auth.context, scope);
+  const approved = { version: "command.v1", commandId: randomUUID(), commandType: "purchase_order.send.dark",
+    semanticKey: `merchant-order:${f.job}:${revision.id}`, actorMembershipId: f.auth.membershipId,
+    subjectType: "purchase_order", subjectRef: revision.id,
+    action: { actionType: "purchase_order.send.dark", recipient: preview.order.recipient, contentHash: preview.contentHash,
+      aggregateRevision: revision.revision, amountPence: preview.amountPence, currency: "GBP", policyVersion: "dark-merchant-order.v1",
+      expiresAt: "2099-01-01T00:00:00Z" } };
+  const port = new FakeMerchantOrderPort();
+  const executor = new ActionExecutor(scoped, new Map([[port.name, port]]), { emit() {} });
+  const manual = { version: "manual-order-attestation.v1", jobId: f.job, revisionId: revision.id,
+    commandId: randomUUID(), supplierReference: `synthetic-${randomUUID()}` };
+  return { ...f, revision, repo, scope, preview, approved, port, executor, manual };
+}
+
+describe("M2-1 dark approved merchant action on PostgreSQL", () => {
+  it("upgrades main with a pre-existing order intact and needs no backfill", async () => {
+    expect((await admin.query("SELECT id FROM app.purchase_order_revision WHERE tenant_id=$1 AND id=$2",
+      [DEMO_TENANT_ID, upgradeRevisionId])).rows).toEqual([{ id: upgradeRevisionId }]);
+  });
+  it("concurrent confirmation and executor replay commit one effect and one fake merchant order", async () => {
+    const f = await darkFixture();
+    const [one, two] = await Promise.all([f.repo.approve(f.auth.context, f.scope, f.approved),
+      f.repo.approve(f.auth.context, f.scope, f.approved)]);
+    expect(two).toEqual(one);
+    await Promise.all([f.executor.execute(f.auth.context, one.outboxActionId), f.executor.execute(f.auth.context, one.outboxActionId)]);
+    expect(f.port.placedCount).toBe(1);
+    expect((await admin.query("SELECT status FROM app.action_outbox WHERE tenant_id=$1 AND id=$2",
+      [DEMO_TENANT_ID, one.outboxActionId])).rows[0].status).toBe("succeeded");
+    await expect(f.orders.revise(f.job, { ...f.input, commandId: randomUUID(), expectedRevision: 1, quantity: "11" })).rejects.toThrow("ORDER_ALREADY_COMMITTED");
+  });
+  it("checked completion rejects a full artifact bound to a false revision authority and rolls back", async () => {
+    const f = await darkFixture();
+    // Simulate an application read bug. All commands, grants, outbox writes and
+    // completion predicates still execute on real PostgreSQL as the runtime role.
+    const scoped = practiceMaterialPool(runtime, f.auth.digest);
+    const spoofed = { connect: async () => {
+      const client = await scoped.connect();
+      return { release: () => client.release(), query: async (sql: string, values?: unknown[]) => {
+        const result = await client.query(sql, values);
+        if (sql.startsWith("SELECT r.id,r.draft_id")) {
+          return { ...result, rows: result.rows.map(row => ({ ...row, authority_hash: "f".repeat(64) })) };
+        }
+        return result;
+      } };
+    } } as unknown as Pool;
+    const repo = new PurchaseOrderActionRepository(spoofed);
+    const preview = await repo.preview(f.auth.context, f.scope);
+    expect(preview.order.revisionAuthorityHash).not.toBe(f.revision.authorityHash);
+    const before = await effects();
+    await expect(repo.approve(f.auth.context, f.scope, { ...f.approved,
+      action: { ...f.approved.action, contentHash: preview.contentHash } })).rejects.toThrow("AUTHORIZATION_INVALID");
+    expect(await effects()).toEqual(before);
+    const valid = await f.repo.approve(f.auth.context, f.scope, f.approved);
+    expect(valid).toMatchObject({ environment: "synthetic_demo", realExternalActions: 0 });
+    expect((await admin.query(`SELECT version,payload->'references'->>'auditTrust' trust FROM app.audit_event
+      WHERE tenant_id=$1 AND event_type='command.succeeded' AND payload->'references'->>'commandId'=$2`,
+      [DEMO_TENANT_ID, f.approved.commandId])).rows).toEqual([{ version: "audit.v2", trust: "checked_operation" }]);
+  });
+  it("changed quantity cancels the queued old authority before any fake delivery", async () => {
+    const f = await darkFixture(), queued = await f.repo.approve(f.auth.context, f.scope, f.approved);
+    await f.orders.revise(f.job, { ...f.input, commandId: randomUUID(), expectedRevision: 1, quantity: "11" });
+    await f.executor.execute(f.auth.context, queued.outboxActionId);
+    expect(f.port.placedCount).toBe(0);
+    expect((await admin.query("SELECT status FROM app.action_outbox WHERE tenant_id=$1 AND id=$2",
+      [DEMO_TENANT_ID, queued.outboxActionId])).rows[0].status).toBe("cancelled");
+  });
+  it("changed semantic payload and wrong-job/cross-tenant ids fail without another effect", async () => {
+    const f = await darkFixture(); await f.repo.approve(f.auth.context, f.scope, f.approved);
+    const before = await effects();
+    await expect(f.repo.approve(f.auth.context, f.scope, { ...f.approved, action: { ...f.approved.action, amountPence: 1 } })).rejects.toThrow("IDEMPOTENCY_CONFLICT");
+    await expect(f.repo.approve(f.auth.context, f.scope, { ...f.approved, commandId: randomUUID(), action: { ...f.approved.action, amountPence: 1 } })).rejects.toThrow("COMMAND_CONFLICT");
+    await expect(f.repo.preview(f.auth.context, { ...f.scope, jobId: randomUUID() })).rejects.toThrow();
+    await expect(f.repo.preview(testTenantContext(randomUUID()), f.scope)).rejects.toThrow();
+    expect(await effects()).toEqual(before);
+  });
+  it("refuses another active owner's supplied id without recording an attestation or audit", async () => {
+    const f = await darkFixture(), otherOwner = randomUUID(), otherIdentity = randomUUID();
+    await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [otherIdentity]);
+    await admin.query(`INSERT INTO app.membership(tenant_id,id,account_id,identity_user_id,role)
+      SELECT tenant_id,$1,account_id,$2,'owner' FROM app.membership WHERE tenant_id=$3 AND id=$4`,
+      [otherOwner, otherIdentity, DEMO_TENANT_ID, f.auth.membershipId]);
+    const before = await effects();
+    await expect(f.repo.attestManual(f.auth.context, { ...f.manual, actorMembershipId: otherOwner }, f.auth.membershipId)).rejects.toThrow();
+    expect(await effects()).toEqual(before);
+    expect((await admin.query("SELECT count(*)::int n FROM app.purchase_order_manual_attestation WHERE tenant_id=$1 AND job_id=$2",
+      [DEMO_TENANT_ID, f.job])).rows[0].n).toBe(0);
+  });
+  it("rechecks a verified session's owner membership after revocation, even on replay", async () => {
+    const f = await darkFixture();
+    await f.repo.attestManual(f.auth.context, f.manual, f.auth.membershipId);
+    const before = await effects();
+    await admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2",
+      [DEMO_TENANT_ID, f.auth.membershipId]);
+    try {
+      await expect(f.repo.attestManual(f.auth.context, f.manual, f.auth.membershipId)).rejects.toThrow("ORDER_ACTION_INVALID");
+      await expect(f.repo.attestManual(f.auth.context, { ...f.manual, commandId: randomUUID() }, f.auth.membershipId)).rejects.toThrow("ORDER_ACTION_INVALID");
+      expect(await effects()).toEqual(before);
+      expect((await admin.query("SELECT count(*)::int n FROM app.purchase_order_manual_attestation WHERE tenant_id=$1 AND job_id=$2",
+        [DEMO_TENANT_ID, f.job])).rows[0].n).toBe(1);
+    } finally {
+      await admin.query("UPDATE app.membership SET revoked_at=NULL WHERE tenant_id=$1 AND id=$2",
+        [DEMO_TENANT_ID, f.auth.membershipId]);
+    }
+  });
+  it("manual placement is append-only, replayable, and mutually exclusive with either send route", async () => {
+    const f = await darkFixture(), before = await effects();
+    const fact = await f.repo.attestManual(f.auth.context, f.manual, f.auth.membershipId);
+    expect(await f.repo.attestManual(f.auth.context, f.manual, f.auth.membershipId)).toEqual(fact);
+    expect((await admin.query("SELECT actor_membership_id FROM app.purchase_order_manual_attestation WHERE tenant_id=$1 AND id=$2",
+      [DEMO_TENANT_ID, fact.attestationId])).rows).toEqual([{ actor_membership_id: f.auth.membershipId }]);
+    expect((await admin.query(`SELECT actor_ref FROM app.audit_event WHERE tenant_id=$1 AND event_type='purchase_order.manual_attested'
+      AND payload->'references'->>'attestationId'=$2`, [DEMO_TENANT_ID, fact.attestationId])).rows)
+      .toEqual([{ actor_ref: `membership:${f.auth.membershipId}` }]);
+    expect((await effects()).action_outbox).toBe(before.action_outbox);
+    expect((await effects()).action_authorization).toBe(before.action_authorization);
+    await expect(f.repo.approve(f.auth.context, f.scope, f.approved)).rejects.toThrow("ORDER_ALREADY_COMMITTED");
+    await expect(f.orders.place(f.job, f.command(f.revision))).rejects.toThrow("ORDER_ALREADY_COMMITTED");
+    await expect(withTenant(runtime, f.auth.context, db => db.$client.query("UPDATE app.purchase_order_manual_attestation SET supplier_reference_hash=$1 WHERE tenant_id=$2",
+      ["a".repeat(64), DEMO_TENANT_ID]))).rejects.toThrow(/permission denied/u);
+    await expect(withTenant(runtime, f.auth.context, db => db.$client.query("DELETE FROM app.purchase_order_manual_attestation WHERE tenant_id=$1",
+      [DEMO_TENANT_ID]))).rejects.toThrow(/permission denied/u);
+  });
+  it("one supplier reference cannot attest two drafts at the same merchant", async () => {
+    const f = await darkFixture(); await f.repo.attestManual(f.auth.context, f.manual, f.auth.membershipId);
+    const nextScope = randomUUID();
+    await admin.query("INSERT INTO app.scope_identity(tenant_id,id,job_id,state) VALUES($1,$2,$3,'confirmed')", [DEMO_TENANT_ID, nextScope, f.job]);
+    const requirement = await f.materials.addRequirement(f.job, { version: "material-requirement-command.v1", scopeItemId: nextScope,
+      skuId: f.saved.skuId, quantity: "1", unit: "each", expectedRevision: 0 });
+    const revision = await f.orders.revise(f.job, { ...f.input, commandId: randomUUID(), requirementId: requirement.id });
+    await expect(f.repo.attestManual(f.auth.context, { ...f.manual, commandId: randomUUID(), revisionId: revision.id }, f.auth.membershipId)).rejects.toThrow("ORDER_ALREADY_COMMITTED");
+    expect((await admin.query("SELECT count(*)::int n FROM app.purchase_order_manual_attestation WHERE tenant_id=$1 AND merchant_id=$2",
+      [DEMO_TENANT_ID, f.saved.merchantId])).rows[0].n).toBe(1);
+  });
+  it("cancellation never becomes a retry or a second placement", async () => {
+    const f = await darkFixture(), queued = await f.repo.approve(f.auth.context, f.scope, f.approved);
+    await operateOutbox(runtime, f.auth.context, queued.outboxActionId, "cancel");
+    await f.executor.execute(f.auth.context, queued.outboxActionId);
+    await expect(operateOutbox(runtime, f.auth.context, queued.outboxActionId, "retry", true)).rejects.toThrow("UNSAFE_OUTBOX_COMMAND");
+    expect(f.port.placedCount).toBe(0);
   });
 });

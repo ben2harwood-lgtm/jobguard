@@ -56,7 +56,7 @@ not close any of these requirements or mark full M5-6 complete.
 
 ## Synthetic merchant delivery record (partial M5-6)
 
-A separate read-only practice projection now uses migration 0769's checked routine,
+A separate read-only practice projection now uses migration `1201_merchant_delivery_record_read`'s checked routine,
 with the dunning owner/admin session check and synthetic database refusal. Each
 order's latest receipt counts once across the session's single tenant; the URL job
 must belong to it. Exact supplier_context values remain separate. Held or quarantined

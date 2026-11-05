@@ -1,0 +1,121 @@
+{
+  "migration": "1201_merchant_delivery_record_read.sql",
+  "lp0": [
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "id": "a-m5-6-merchant-read",
+        "title": "M5-6 synthetic merchant delivery read",
+        "kind": "read_access",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Bounded synthetic lifecycle dispatch; exact-head RED review and PostgreSQL CI remain required."
+        },
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Preserve per-read persisted owner/admin session and tenant binding; refuse outside the synthetic database.",
+          "LP-12": "Verify migration ownership, fixed search path, no business writes, no additional table grant and no runtime execute on the private helper."
+        },
+        "downstream": "Read-only, synthetic-database and owner/admin-session checked tenant-wide delivery projection. No table grants or writes.",
+        "sources": [
+          "packages/db/migrations/1201_merchant_delivery_record_read.sql",
+          "packages/db/src/merchant-reliability-repository.ts"
+        ],
+        "tests": [
+          "packages/db/test/merchant-reliability.integration.test.ts"
+        ],
+        "gaps": [
+          "PostgreSQL CI and exact-head independent RED review remain required."
+        ],
+        "path": "ap-m5-6-merchant-read"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.merchant_delivery_record_read(uuid,text,uuid)|jobguard_runtime|EXECUTE|-",
+        "group": "a-m5-6-merchant-read"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.merchant_delivery_record_read(uuid,text,uuid)|jobguard_migration",
+        "group": "a-m5-6-merchant-read"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.merchant_delivery_record_read(uuid,text,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.mon1_company_actor"
+        ]
+      }
+    },
+    {
+      "section": "authorityPaths",
+      "before": null,
+      "after": {
+        "id": "ap-m5-6-merchant-read",
+        "title": "M5-6 synthetic merchant delivery read",
+        "description": "Read-only, synthetic-database and owner/admin-session checked tenant-wide delivery projection. No table grants or writes.",
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Preserve authenticated company/member ownership, current session checks and synthetic database refusal.",
+          "LP-12": "Review fixed search_path, migration-owned private tables and helpers, and absence of runtime direct writes."
+        },
+        "sources": [
+          "packages/db/migrations/1201_merchant_delivery_record_read.sql",
+          "packages/db/src/merchant-reliability-repository.ts"
+        ],
+        "tests": [
+          "packages/db/test/merchant-reliability.integration.test.ts"
+        ],
+        "gaps": [
+          "PostgreSQL CI and exact-head independent RED review remain required."
+        ]
+      }
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "merchant_delivery_record_read",
+        "args": "t uuid, digest text, j uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    }
+  ],
+  "tenancy": []
+}

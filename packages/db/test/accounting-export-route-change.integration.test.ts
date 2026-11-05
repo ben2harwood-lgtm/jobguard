@@ -149,8 +149,8 @@ it("FORCE RLS, narrow grants, append-only history and session boundary are datab
  await c.admin.query("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE id=$1", [f.a.sessionId]);
  await expect(f.preview()).rejects.toThrow("EXPORT_FORBIDDEN");
 });
-it("0975_accounting_export_route_change upgrades without changing populated predecessors; only the exact checked dispatcher body changes", async () => {
- const u = await startBeforeMigration("0975_accounting_export_route_change.sql");
+it("0599_accounting_export_route_change upgrades without changing populated predecessors; only the exact checked dispatcher body changes", async () => {
+ const u = await startBeforeMigration("0599_accounting_export_route_change.sql");
  try {
   const populated = await setup(u);
   const historic = await populated.call("read");
@@ -158,7 +158,7 @@ it("0975_accounting_export_route_change upgrades without changing populated pred
   const before = await proofBefore(u.admin, tables);
   const routines = (await u.admin.query("SELECT oid,pg_get_functiondef(oid) definition,proacl::text FROM pg_proc WHERE pronamespace IN('app'::regnamespace,'identity'::regnamespace) AND prokind='f' ORDER BY oid")).rows;
   const oid = (await u.admin.query("SELECT 'app.accounting_export(uuid,text,text,text,jsonb)'::regprocedure::oid oid")).rows[0].oid;
-  await applyMigration(u, "0975_accounting_export_route_change.sql");
+  await applyMigration(u, "0599_accounting_export_route_change.sql");
   expect(await proofDifferences(u.admin, before)).toEqual({ rows: [], types: [] });
   const current = (await u.admin.query("SELECT oid,pg_get_functiondef(oid) definition,proacl::text FROM pg_proc WHERE oid=ANY($1::oid[]) ORDER BY oid", [routines.map(r=>r.oid)])).rows;
   for (const prior of routines) {
@@ -214,13 +214,13 @@ it("read refuses a pending/unknown historic export and revoked consent without s
  await c.admin.query("UPDATE app.accounting_export_fixture SET revoked=true WHERE tenant_id=$1 AND source_id=$2", [f.a.tenantId, f.next.source.sourceId]);
  await expect(f.repo.routeChangeRead(f.a.context, f.a.digest, f.next.source.sourceId)).rejects.toThrow("EXPORT_CONSENT_EXPIRED");
 });
-it("0976_accounting_export_route_change_read adds only its read routine and preserves populated predecessors on upgrade", async () => {
- const u = await startBeforeMigration("0976_accounting_export_route_change_read.sql");
+it("1200_accounting_export_route_change_read adds only its read routine and preserves populated predecessors on upgrade", async () => {
+ const u = await startBeforeMigration("1200_accounting_export_route_change_read.sql");
  try {
   const f = await setup(u); await f.confirm(await f.confirmation());
   const before = await proofBefore(u.admin, ["app.accounting_export_route_change", "app.accounting_export_ledger", "app.accounting_export_outbox", "app.audit_event"]);
   const routines = (await u.admin.query("SELECT oid,pg_get_functiondef(oid) definition,proacl::text FROM pg_proc WHERE pronamespace IN('app'::regnamespace,'identity'::regnamespace) AND prokind='f' ORDER BY oid")).rows;
-  await applyMigration(u, "0976_accounting_export_route_change_read.sql");
+  await applyMigration(u, "1200_accounting_export_route_change_read.sql");
   expect(await proofDifferences(u.admin, before)).toEqual({ rows: [], types: [] });
   expect((await u.admin.query("SELECT oid,pg_get_functiondef(oid) definition,proacl::text FROM pg_proc WHERE oid=ANY($1::oid[]) ORDER BY oid", [routines.map(r=>r.oid)])).rows).toEqual(routines);
   expect(await f.repo.routeChangeRead(f.a.context, f.a.digest, f.next.source.sourceId)).toMatchObject({ proposal: null, history: [{ revision: 1 }] });
