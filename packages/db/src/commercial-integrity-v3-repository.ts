@@ -33,7 +33,7 @@ export class CommercialIntegrityV3Repository {
    await db.$client.query("SET TRANSACTION READ ONLY");
    const family=await readIntegrityFamily(db,s); await authorizeIntegrityScope(db,s);
    return { version: "commercial-integrity-family.v1", environment: "synthetic_demo", jobId:s.jobId, family, realExternalActions:0 };
-  }), () => new PracticeAccessError("NOT_FOUND"));
+  }, "commercial-integrity-read-family"), () => new PracticeAccessError("NOT_FOUND"));
  }
  private async view(db: Parameters<typeof authorizeIntegrityScope>[0], s: CommercialIntegrityScope): Promise<CommercialIntegrityV3StoredView> {
   const source=await readCommercialIntegrityV3Input(db,s);
@@ -50,7 +50,7 @@ export class CommercialIntegrityV3Repository {
   return mapRequestBindingRefusal(withTenant(this.pool,context,async db=>{
    await db.$client.query("SET TRANSACTION READ ONLY");
    await v3(db,s);const view=await this.view(db,s);await v3(db,s);return view;
-  }), () => new PracticeAccessError("NOT_FOUND"));
+  }, "commercial-integrity-read"), () => new PracticeAccessError("NOT_FOUND"));
  }
  async review(context: VerifiedTenantContext, actor: CommercialIntegrityActor, digest: string, jobId: string, rawReview: unknown): Promise<CommercialIntegrityV3Feedback> {
   const s=canonicalIntegrityScope(context.tenantId,actor,digest,jobId);

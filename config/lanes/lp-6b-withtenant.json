@@ -25,6 +25,7 @@
         "apps/api/src/commercial-integrity-v3.boundary.test.ts",
         "apps/api/src/connectors/conformance-kit.test.ts",
         "apps/api/src/contractor/contractor-practice-session.application.test.ts",
+        "apps/api/src/contractor/enterprise-dashboard.boundaries.test.ts",
         "apps/api/src/contractor/practice-worker-switch.application.test.ts",
         "apps/api/src/contractor/site-extra.application.test.ts",
         "apps/api/src/contractor/work-order.application.test.ts",
@@ -84,6 +85,7 @@
         "packages/db/src/contractor-session-context.ts",
         "packages/db/src/enterprise-dashboard-repository.ts",
         "packages/db/src/enterprise-identity-repository.ts",
+        "packages/db/src/evidence-pack-repository.ts",
         "packages/db/src/evidence-pack-v3-sources.ts",
         "packages/db/src/index.ts",
         "packages/db/src/job-source-repository.ts",
@@ -100,6 +102,7 @@
         "packages/db/src/shadow-detection-repository.ts",
         "packages/db/src/site-extra-repository.ts",
         "packages/db/src/sso-required-repository.ts",
+        "packages/db/src/tenant-context.test.ts",
         "packages/db/src/tenant-context.ts",
         "packages/db/test/audit-api-file-final-account.test.ts",
         "packages/db/test/commercial-integrity-v3-fixtures.ts",
@@ -117,6 +120,8 @@
         "packages/db/test/job-sources-authority.integration.test.ts",
         "packages/db/test/job-work-state-fixtures.ts",
         "packages/db/test/later-empty-tables.ts",
+        "packages/db/test/lp6b-approval-binding.integration.test.ts",
+        "packages/db/test/lp6b-bind-after-locks.test.ts",
         "packages/db/test/lp6b-deferred-binding.test.ts",
         "packages/db/test/lp6b-effective-actor-upgrade.integration.test.ts",
         "packages/db/test/lp6b-withtenant.integration.test.ts",
@@ -136,7 +141,9 @@
         "packages/db/test/scim-deactivation-access.integration.test.ts",
         "packages/db/test/serious-b7.integration.test.ts",
         "packages/db/test/success-fee-fixtures.ts",
-        "packages/db/test/upgrade-proof-utils.ts"
+        "packages/db/test/upgrade-proof-utils.ts",
+        "tools/commercial-integrity-boundary.unresolved.json",
+        "tools/commercial-integrity-current-source-guard.unresolved.json"
       ]
     }
   }

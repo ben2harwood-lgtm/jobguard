@@ -56,7 +56,7 @@ export class PracticeWorkerSwitchRepository {
     const result = parsed.data;
     if (!result.replayed) await appendAuditBatch(db, [{ id: result.endEvent, version: "audit.v1", eventType: "practice.worker_switch.ended", subjectType: "practice-worker-switch", subjectRef: result.switch, actorRef: `membership:${result.owner}`, payload: { references: { switch: result.switch, session: result.session, command: command.data.commandId, owner: result.owner, worker: result.worker, reason: result.endReason, environment: "synthetic_demo" }, classifications: { action: "security" } } }]);
     return publicState({ state: result.state, switchId: result.switch, workerMembershipId: result.worker, endedAt: result.endedAt, endReason: result.endReason });
-   });
+   }, "practice-switch-off");
   } catch (error) { throw translated(error); }
  }
  async state(context: VerifiedTenantContext, sessionId: string) {

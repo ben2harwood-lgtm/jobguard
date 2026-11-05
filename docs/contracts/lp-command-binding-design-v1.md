@@ -702,3 +702,35 @@ Before real data, Ben must appoint the database/security operations owner for
 retention and removal of request-binding rows, coordinated with the LP binding
 owners and independently reviewed. This repair implements no row-removal job
 and grants no real-data readiness. All repair fixtures are made-up data.
+
+
+### LP-6b bounded transaction exceptions — Ben's ruling, 5 November 2026
+
+Ben authorized exactly the following five call sites for this repair. Four skip
+request binding and keep their existing checked SQL authorization; evidence
+approval binds later in its established lock order instead of skipping binding.
+These are named transaction exceptions, not a general role-based exemption or a
+retry after a refused bind. The temporary labels identify only the listed method.
+
+| Exact call site | Label and treatment | Existing authorization retained | Closure owner |
+| --- | --- | --- | --- |
+| `PracticeWorkerSwitchRepository.switchOff` | `practice-switch-off`: skip binding | `app.practice_worker_switch_off` authenticates the live persisted session and tenant, including the decided ability to return from a revoked worker | LP-6d, coordinated with LP-6c for the session-control boundary |
+| `ContractorPracticeSessionRepository.revoke` | `contractor-session-revoke`: skip binding | `app.revoke_contractor_practice_session` authenticates the live credential and tenant, including the holder's decided ability to end the session after membership revocation | LP-6d, coordinated with LP-6c for the session-control boundary |
+| `CommercialIntegrityV3Repository.read` | `commercial-integrity-read`: skip binding | The read-only transaction and existing before/after scope checks remain; no session-binding write or session share lock is introduced into this advisory GET | LP-6d |
+| `CommercialIntegrityV3Repository.readFamily` | `commercial-integrity-read-family`: skip binding | The read-only family/source reads and existing final scope authorization remain | LP-6d |
+| `EvidencePackRepository.approveAttachment` | `evidence-pack-approval`: late binding, **not a skip** | Existing authority and resource-lock ordering remains; binding and actor/tenant verification happen at the approved late point before approval mutation, with refusal rolling back | LP-6c for approval/commitment, coordinated with LP-6d for the evidence authority path |
+
+`PracticeWorkerSwitchRepository.switchOn`, `state` and refusal logging remain
+bound. `CommercialIntegrityV3Repository.review` remains bound. Every other call
+retains its current binding behavior; no role-based fallback, catch-and-retry
+binding bypass, or extra call site is authorized by this ruling. Credentials stay
+private and outside context JSON, responses and audit payloads. Existing SQL,
+privileges and public authorization results are unchanged by the four skip labels.
+
+**LP-6c/LP-6d must close every one of these five exceptions before any real data.**
+Closure must preserve the decided session-holder controls, read-only/nonblocking
+advisory boundary and evidence approval lock/revocation guarantees while applying
+the relevant protected actor/tenant binding. This ruling grants no real-data
+readiness and does not assign or implement request-binding-row cleanup; Ben must
+still appoint its accountable database/platform operations owner with security
+review before real data.
