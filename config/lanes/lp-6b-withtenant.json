@@ -6,7 +6,7 @@
         "codex/sandbox/lp-6b-withtenant",
         "codex/sandbox/lp-6b-repair-wip"
       ],
-      "note": "LP-6b RED repair WIP, main merged through 0605, migration 0609 with proof; identity grants unchanged. Ben authorized only S9's two recorded values on 4 Nov 2026, after the full run; Router permits the named 0596 routine successor exception; all other scanners and source pins remain frozen. Only context-boundary principal/practice/contractor pins are authorized; full real-PostgreSQL shards required; independent checks are performed separately by Claude. No self-grant.",
+      "note": "LP-6b WIP: Ben 5 Nov approved exactly four binding skips, approval late bind after locks, the fourteen-call restriction scanner, one pure import and only the two practice-session fingerprints. Main through 0605; migration 0609 SQL unchanged. Other pins/privileges stay frozen; Claude owns independent checks. No self-grant.",
       "allow": [
         "apps/api/src/accounting-export.application.test.ts",
         "apps/api/src/ai-capture-authority.test.ts",
