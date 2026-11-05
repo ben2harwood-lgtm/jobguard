@@ -14,7 +14,7 @@ const term = retentionProfileV1.shape.conditions.element;
 const inputSource = z.union([term.shape.source.options[0], term.shape.source.options[1].omit({ actorId: true })]);
 const recordInput = z.discriminatedUnion("version", [
   retentionProfileV1.omit(omitted).extend({ conditions: z.array(term.extend({ source: inputSource, dateSource: inputSource })).min(1).max(20) }),
-  retentionReviewV1.omit(omitted),
+  retentionReviewV1.omit(omitted).extend({ trigger: z.literal("human") }),
   retentionResolutionV1.omit(omitted).extend({ humanSource: retentionResolutionV1.shape.humanSource.omit({ actorId: true }) }),
   retentionReleaseV1.omit(omitted), retentionReceiptV1.omit(omitted), retentionReversalV1.omit(omitted),
 ]);

@@ -15,7 +15,8 @@ function fixture() {
 afterEach(() => vi.unstubAllEnvs());
 it("binds session membership and checks job authority before baseline or acceptance", async () => {
   const f = fixture(), token = "s".repeat(40), query = { version: "rate-query.v1" };
-  await f.application.read(token, jobId, query);
+  const screen = await f.application.read(token, jobId, query);
+  expect(screen.csrfToken).toBe("c".repeat(32));
   expect(f.repository.readAcceptances).toHaveBeenCalledWith(expect.objectContaining({ tenantId }), { kind: "human", sessionDigest: "d".repeat(64) }, jobId);
   expect(f.repository.read).toHaveBeenCalledWith(expect.objectContaining({ tenantId }), query);
   const command = { jobId };

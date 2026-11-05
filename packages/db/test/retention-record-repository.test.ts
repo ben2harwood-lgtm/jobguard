@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Pool } from "pg";
-import { assertRetentionIssueAllowed, RETENTION_BALANCES_ENABLED } from "@jobguard/core";
+import { assertRetentionIssueAllowed, RETENTION_BALANCES_ENABLED, RETENTION_REVIEW_OWNER } from "@jobguard/core";
 import { RetentionRecordRepository } from "../src/retention-record-repository.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 const id = (n: number) => `10000000-0000-4000-8000-${String(n).padStart(12,"0")}`;
@@ -53,4 +53,13 @@ describe("M4-20 retention repository", () => {
   expect(RETENTION_BALANCES_ENABLED).toBe(false);
   expect(assertRetentionIssueAllowed).toThrow("disabled");
  });
+});
+
+it("refuses a session command impersonating the timer before connecting", async () => {
+ const f = fixture();
+ await expect(f.repo.command(f.context, actor, { ...input, record: {
+  version: "retention.review.v1", profileId: id(8), conditionId: id(6),
+  owner: RETENTION_REVIEW_OWNER, trigger: "timer", raisedOn: "2099-01-01",
+ } })).rejects.toThrow("INVALID_RETENTION_INPUT");
+ expect(f.connect).not.toHaveBeenCalled();
 });

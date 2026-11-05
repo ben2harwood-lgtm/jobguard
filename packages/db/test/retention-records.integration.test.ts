@@ -36,6 +36,20 @@ describe("M4-20 durable synthetic retention books (PostgreSQL)", () => {
   for (const table of financialTables) result[table] = (await f.admin.query(`SELECT coalesce(jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text),'[]'::jsonb) rows FROM app.${table} r WHERE tenant_id=$1`,[a.tenantId])).rows[0].rows;
   return result;
  }
+ it("refuses timer impersonation at both the session and SQL boundaries without changing history", async () => {
+  const a=await company(), p=profile(), pid=randomUUID();
+  await append(a,p,pid);
+  const before=await read(a), money=await financialSnapshot(a);
+  const forged={...review(pid,p.conditions[0]!.id), trigger:"timer", raisedOn:"2099-01-01"};
+  await expect(append(a,forged)).rejects.toMatchObject({code:"INVALID_RETENTION_INPUT"});
+  await expect(workTenant(f.runtime,a.tenantId,async db=>{
+    const cid=randomUUID();
+    const prepared=(await db.query("SELECT app.retention_records($1,$2,$3,NULL,NULL,NULL) result",[a.tenantId,a.digest,a.jobId])).rows[0].result;
+    return db.query("SELECT app.retention_records($1,$2,$3,$4,$5::jsonb,$6)", [a.tenantId,a.digest,a.jobId,cid,
+      JSON.stringify({...forged,id:cid,tenantId:a.tenantId,jobId:a.jobId}),prepared.bookHash]);
+  })).rejects.toThrow("RETENTION_CONFLICT");
+  expect(await read(a)).toEqual(before); expect(await financialSnapshot(a)).toEqual(money);
+ });
  it("stores reviews without satisfaction, resolves by the session actor, serializes duplicate releases and never writes money", async () => {
   const a=await company(), p=profile(), pid=randomUUID(), rid=randomUUID(), sid=randomUUID();
   const before=await financialSnapshot(a);
