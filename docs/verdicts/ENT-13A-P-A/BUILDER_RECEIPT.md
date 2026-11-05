@@ -305,3 +305,44 @@ Type verification: `pnpm exec turbo run typecheck --filter=@jobguard/db
 also passed for the six changed DB test files and imported fixtures.
 
 READY for router staging and merge commit; no Git writes performed.
+
+## Batch-35 repair round 2 (last) — 5 November 2026
+
+RED; ENT-8a / ENT-13a, NOPR. Read the later-safety-15 precheck landing note.
+Root cause: 0990's recorded command_type_registry after-state appended EndCheck,
+whereas serious-b5-upgrade snapshots aggregate rows ORDER BY to_jsonb(t)::text.
+PostgreSQL JSONB puts the shortest key, version, first for these registry rows;
+end-check.v1 belongs between decision-resolution-command.v1 and
+rate-suggestion-accept.v1. The loader copies the recorded array exactly. This
+was an incorrectly ordered proof, not different registry contents on upgrade.
+Moved only the EndCheck row within 0990's after-state. Its before-state, all row
+values, migration SQL and the full serious-b5 snapshot comparison are unchanged.
+
+Added a regression in late-source-import-migration.test.ts: it verifies the exact
+0609-to-0990 chain, full expected row union at the sorted position, loader output
+and preserved baseline. Temporarily restoring the HEAD proof makes that test fail
+with the appended EndCheck diff; the corrected proof was restored in a finally
+block. No generic sort layer or comparison exemption was introduced.
+
+Local checks (installed executables, no downloads; Vitest maxWorkers=2):
+- packages/db: ./node_modules/.bin/vitest run --maxWorkers=2
+  test/migration-proof-loader.test.ts test/lp5-command-catalog.test.ts
+  test/late-source-import-migration.test.ts — PASS, 88 tests.
+- Original HEAD proof mutation: focused `0990 keeps` regression — FAIL as
+  expected (1 failed, 3 skipped); corrected proof restored.
+- packages/db: ./node_modules/.bin/tsc -p tsconfig.json --noEmit — PASS.
+- Root installed tsc -p /tmp/batch-35-r2-types.json --noEmit — PASS;
+  explicitly includes the changed regression test and its imports.
+- git diff --check — PASS. Exact lane comparison against the merge base with
+  cached origin/main, including working changes, using loadLanePolicy and
+  lanePathAllowed — PASS, 35 non-lane paths; no lane file is listed in allow.
+  The existing lane already contains all changed paths and needed no edit.
+
+Environment order prohibits PostgreSQL startup and localhost binding. Therefore
+serious-b5-upgrade was NOT executed locally; CI must run, from packages/db:
+  ./node_modules/.bin/vitest run --maxWorkers=2 test/serious-b5-upgrade.integration.test.ts
+The remaining required database/browser suites, full CI against current main,
+standard committed-head lane check and independent RED review remain required.
+No Git writes, push, PR, merge, provider, deployment or launch occurred.
+
+READY for router commit and NOPR push, subject to those CI/review gates.
