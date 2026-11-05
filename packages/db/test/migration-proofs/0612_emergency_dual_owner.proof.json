@@ -16,6 +16,58 @@
         "key": "owner|routine|function:identity.dark_emergency(text,text,uuid,jsonb)|jobguard_migration",
         "group": "a-owner-routines"
       }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:identity.emergency_owner(text,text,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:identity.dark_emergency(text,text,uuid,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_identity"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.membership",
+          "app.role_grant_revocation",
+          "identity.emergency_action",
+          "identity.emergency_approval",
+          "identity.emergency_request",
+          "identity.emergency_session"
+        ],
+        "staticCalls": [
+          "app.ef_audit",
+          "app.final_lock_hash",
+          "identity.emergency_owner",
+          "identity.sso_required_state"
+        ]
+      }
     }
   ],
   "upgrade": [

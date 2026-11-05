@@ -122,3 +122,21 @@ Local checks, installed dependencies only, each Vitest run at most two workers a
 - `git diff --check`: **PASS**.
 
 CI must prove real PostgreSQL bootstrap under the non-CREATEROLE migration owner, fresh and populated migration replay, exact ACL/RLS/catalogue equality (including all 13 LP-0 grant-freeze tests), existing identity/SCIM permission boundaries, sealed notice-read audit success, and all three real notices-route browser cases at phone/desktop widths. Required full CI against current main and independent RED review on the resulting exact head remain outstanding. No database/browser execution, merge, deployment, release or launch is claimed. Router owns staging, commit and push.
+
+## READY — batch-30 second repair of PR #574 — 5 November 2026
+
+**RED: sign-in. Ready for router staging, commit, push and exact-head CI/review.** Started from `b42754cc` with the launcher's main merge in progress. Resolved both working-tree conflicts as exact unions: all DB exports from both parents, and every empty-table proof key/value from both parents. Read-only Git-object comparison verified both unions. The index still contains unmerged entries because this sandbox cannot write `.git`; the router must stage these resolutions and finish the merge. Migrations stay **0612** and **0613**, after #573's reserved **0611**.
+
+- Added five `lp0.routines` records to the existing 0612/0613 proofs, following 0601's shape. Records include the owner-only `emergency_owner` and `scim2_audit` helpers, exact EXECUTE grantees, definer/search-path facts and source-derived static call/write hypotheses. No LP-0 comparator or baseline was weakened. Added a loader regression checking all five identities and their protection facts.
+- Filtered only `sso.emergency.notices` in the repository SQL read building the displayed SSO event list. The notice read still appends its audit event. Extended the PostgreSQL regression to compare the displayed events before/after each owner's notice read, retain substantive emergency events, and retain the existing assertion on all three stored viewer audit references.
+- Lane equals all **29** changed paths against local `origin/main`, excluding `config/lanes/`; no self-entry. Mainline additions were preserved.
+
+Actual local validation (installed dependencies, at most two workers, at most three named Vitest files):
+
+- From `packages/db`: `node_modules/.bin/vitest run --maxWorkers=2 test/migration-proof-loader.test.ts test/lp-0-catalog.test.ts` — **108 passed**, two files.
+- `node node_modules/typescript/bin/tsc -p packages/db/tsconfig.json --noEmit` — **PASS**.
+- `node node_modules/typescript/bin/tsc -p /tmp/batch-30-second-repair-tests-tsconfig.json` — **PASS**, compiling the changed enterprise-access PostgreSQL test and migration-proof-loader test with their dependencies; no database execution.
+- Read-only merge-parent exact-union comparison, filesystem lane equality via the existing lane-policy helpers, and migration-order check — **PASS**. `git diff --check` — **PASS**.
+- Initial `pnpm --filter @jobguard/db exec vitest ...` produced no test output and was stopped; the installed Vitest executable above completed the checks. No package installation was run.
+
+CI must prove real PostgreSQL [LP0-17] identity completeness, grant/catalogue equality, fresh/populated 0612/0613 migration replay, emergency/SCIM authorization and audit boundaries, and the added event-list/audit regression. Browser CI must rerun `ENT-10a.spec.ts` (including the two-tab consistency case) and `ENT-10-rest-notices.spec.ts` at phone/desktop widths, with no more than two workers. Full required green CI against current main and independent RED review at the resulting exact head remain required. Router must rerun official lane lint after staging/committing the merge. No PostgreSQL/browser execution, independent review, merge, deployment or launch is claimed here.

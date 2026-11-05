@@ -2,6 +2,7 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { EnterpriseIdentityRepository } from '../src/enterprise-identity-repository.js';
 import { EnterpriseAccessRepository } from '../src/enterprise-access-repository.js';
 import { EnterpriseAccessApplication } from '../../../apps/api/src/auth/sso/enterprise-access.application.js';
 import { createScimHarness, fixture, person, auditRows, type ScimHarness, type ScimFixture } from './scim-fixtures.js';
@@ -53,9 +54,15 @@ describe('ENT-10-rest dual-owner emergency capability',()=>{
   await expect(emergency(f,requester,request(id,'inspect',{tokenHash:hash('forged')}))).rejects.toHaveProperty('code','ACCESS_REFUSED');
   await emergency(f,requester,request(id,'inspect',{tokenHash:hash(token)}));
   await expect(emergency(f,requester,request(id,'revoke_member',{tokenHash:hash(token),targetMembershipId:f.principal.membershipId}))).rejects.toHaveProperty('code','ACCESS_REFUSED');
+  const identity=new EnterpriseIdentityRepository(h.identity);
+  const before=await identity.view(testTenantContext(f.principal.tenantId),requester.sessionDigest);
+  expect(before.events.map(e=>e.event_type)).toContain('sso.emergency.request');
   for(const proof of [requester,a.proof,b.proof]) {
    const notices=await emergency(f,proof,{version:'emergency.v1',operation:'notices'}) as {notices:unknown[]};
    expect(notices.notices).toHaveLength(5);
+   const after=await identity.view(testTenantContext(f.principal.tenantId),requester.sessionDigest);
+   expect(after.events).toEqual(before.events);
+   expect(after.events.some(e=>e.event_type==='sso.emergency.notices')).toBe(false);
   }
   const audit=await auditRows(h,f.principal.tenantId);
   expect(audit.filter(r=>r.event_type==='sso.emergency.notices').map(r=>r.payload.references.membershipId).sort()).toEqual([f.principal.membershipId,a.membershipId,b.membershipId].sort());

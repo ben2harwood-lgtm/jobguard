@@ -48,6 +48,87 @@
         "key": "role|jobguard_scim|super=f,inherit=f,createrole=f,createdb=f,login=f,replication=f,bypassrls=f,connlimit=-1,settings=",
         "group": "a-role-other-application"
       }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:identity.scim2_configure(text,text,uuid,uuid,uuid,boolean,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_identity"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [
+          "identity.scim2_binding"
+        ],
+        "staticCalls": [
+          "app.ef_audit",
+          "identity.emergency_owner"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:identity.scim2_audit(uuid,text,text,uuid,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.lp4_seal_audit"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:identity.scim2_machine(uuid,text,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_scim"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.contractor_member",
+          "app.membership",
+          "identity.identity_user",
+          "identity.membership_locator",
+          "identity.scim2_receipt",
+          "identity.scim2_resource",
+          "identity.sso_subject",
+          "identity.user_email"
+        ],
+        "staticCalls": [
+          "app.final_lock_hash",
+          "identity.scim2_audit",
+          "identity.scim_deactivate"
+        ]
+      }
     }
   ],
   "upgrade": [
