@@ -83,3 +83,46 @@ it("still refuses a ready delivery without a purchase order and rolls back its i
   expect(view.intakeRevision).toBe(0);
   expect(view.receipt).toBeNull();
 });
+
+it("retains the whole later-delivery position, replay identity, isolation and match allocation", async () => {
+  const deliveryJob = randomUUID(), scopeId = randomUUID();
+  await importWatchdogFixtureJob(admin, tenant, deliveryJob);
+  await admin.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state)VALUES($1,$2,$3,'confirmed')", [scopeId, tenant, deliveryJob]);
+  const materials = new MaterialRepository(runtime);
+  const rate = await materials.addRate(ctx, { merchantName: `Fictional later delivery ${deliveryJob}`, sku: "MAT-B",
+    description: "Synthetic item", pricePence: 2000, priceUnit: "each", taxBasis: "net",
+    effectiveFrom: "2026-09-20", sourceLabel: "materials-B", expectedVersion: 0 });
+  const requirement = await materials.addRequirement(ctx, { jobId: deliveryJob, scopeItemId: scopeId,
+    skuId: rate.skuId, quantity: "10", unit: "each", expectedRevision: 0 });
+  await new PurchaseOrderRepository(runtime).revise(ctx, deliveryJob, { version: "purchase-order-draft.v1",
+    requirementId: requirement.id, quantity: "10", unitPricePence: 2000,
+    recipient: "orders@fictional-merchant.invalid", requiredDate: "2026-10-01", expectedRevision: 0 });
+  const repo = new SupplierDocumentRepository(runtime);
+  await repo.intake(ctx, deliveryJob, { version: "supplier-document-intake.v1", fixtureId: "materials-B-delivery", channel: "picker", expectedRevision: 0 });
+  expect((await repo.view(ctx, deliveryJob)).receipt).toMatchObject({ revision: 1, accepted: "8", missing: "2", laterDelivered: "0" });
+  const input = { commandId: randomUUID(), accepted: "9", rejected: "0", expectedRevision: 1 };
+  const result = await repo.appendReceipt(ctx, deliveryJob, input);
+  expect(await repo.appendReceipt(ctx, deliveryJob, input)).toEqual(result);
+  expect((await repo.view(ctx, deliveryJob)).receipt).toMatchObject({ revision: 2, accepted: "9", missing: "1", laterDelivered: "1" });
+  const revisions = (await admin.query("SELECT id,revision,accepted_quantity::text FROM app.goods_receipt WHERE tenant_id=$1 AND job_id=$2 ORDER BY revision", [tenant, deliveryJob])).rows;
+  expect(revisions.map(r => Number(r.revision))).toEqual([1, 2]);
+  expect(new Set(revisions.map(r => r.id)).size).toBe(2);
+  expect(revisions.map(r => r.accepted_quantity)).toEqual(["8.000000", "9.000000"]);
+  await expect(repo.appendReceipt(ctx, deliveryJob, { ...input, commandId: randomUUID() })).rejects.toThrow("STALE_GOODS_RECEIPT");
+  expect((await repo.view(testTenantContext(other), deliveryJob)).receipt).toBeNull();
+  expect((await repo.view(ctx, wrongJob)).receipt).toBeNull();
+  await repo.intake(ctx, deliveryJob, { version: "supplier-document-intake.v1", fixtureId: "materials-B-invoice", channel: "picker", expectedRevision: 1 });
+  const facts = (await repo.view(ctx, deliveryJob)).facts;
+  await repo.confirm(ctx, deliveryJob, { version: "supplier-fact-correction.v1", documentId: facts[0].document_id,
+    commandId: randomUUID(), documentType: "invoice", quantity: "10", unitPricePence: 2500, netPence: 25000, expectedRevision: 0 });
+  const { SupplierMatchRepository } = await import("../src/index.js");
+  const match = await new SupplierMatchRepository(runtime).create(ctx, deliveryJob, { commandId: randomUUID(), expectedRevision: 0 });
+  expect(match.proposal.received).toBe("9 each");
+  const allocations = (await admin.query("SELECT quantity_decimal::text FROM app.supplier_match_allocation WHERE tenant_id=$1 AND job_id=$2", [tenant, deliveryJob])).rows;
+  expect(allocations).toHaveLength(1);
+  expect(allocations[0].quantity_decimal).toBe("9.000000");
+  await repo.appendReceipt(ctx, deliveryJob, { accepted: "8.125", rejected: "0.25", expectedRevision: 2 });
+  expect((await repo.view(ctx, deliveryJob)).receipt).toMatchObject({ accepted: "8.125", rejected: "0.25", laterDelivered: "0.125" });
+  await repo.appendReceipt(ctx, deliveryJob, { accepted: "7", rejected: "0", expectedRevision: 3 });
+  expect((await repo.view(ctx, deliveryJob)).receipt).toMatchObject({ revision: 4, accepted: "7", missing: "3", laterDelivered: "0" });
+});

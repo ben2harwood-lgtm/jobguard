@@ -155,6 +155,7 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   // Practice forecasts are operational inputs, available before the job goes live.
   "/api/jobs/[id]/exposure-schedule": "pre_live_allowed",
   "/api/jobs/[id]/proof": "watchdog_live_only",
+  "/api/jobs/[id]/purchase-orders/merchant-order": "watchdog_live_only",
   "/api/jobs/[id]/purchase-orders/placement": "watchdog_live_only",
   "/api/jobs/[id]/purchase-orders/revisions": "watchdog_live_only",
   "/api/jobs/[id]/quotes/acceptance/disposition": "pre_live_allowed",
