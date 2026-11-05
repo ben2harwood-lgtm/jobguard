@@ -1,0 +1,42 @@
+{
+  "version": 2,
+  "lanes": {
+    "batch-24": {
+      "branches": [
+        "codex/sandbox/batch-24"
+      ],
+      "note": "M4-20 draft store and synthetic timer reviews; RED; ready for PR.",
+      "allow": [
+        "apps/api/src/retention-record.application.test.ts",
+        "apps/api/src/retention-record.application.ts",
+        "apps/api/src/retention-review-task.test.ts",
+        "apps/api/src/retention-review-task.ts",
+        "apps/api/src/shadow-detection.worker.test.ts",
+        "apps/api/src/worker.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/web/app/api/jobs/[id]/retention-records/route.test.ts",
+        "apps/web/app/api/jobs/[id]/retention-records/route.ts",
+        "apps/web/app/jobs/[id]/retention-records/page.tsx",
+        "apps/web/app/jobs/[id]/retention-records/screen.test.tsx",
+        "apps/web/app/jobs/[id]/retention-records/screen.tsx",
+        "apps/web/app/lib/retention-record-server.ts",
+        "apps/web/e2e/M4-20-retention-records.spec.ts",
+        "docs/contracts/retention-records-dark-v1.md",
+        "packages/core/src/watchdog.ts",
+        "packages/db/migration-notes/0600_retention_records.md",
+        "packages/db/migration-notes/0601_retention_review_timer.md",
+        "packages/db/migrations/0600_retention_records.sql",
+        "packages/db/migrations/0601_retention_review_timer.sql",
+        "packages/db/src/index.ts",
+        "packages/db/src/retention-record-repository.ts",
+        "packages/db/test/later-empty-tables.ts",
+        "packages/db/test/migration-proofs/0600_retention_records.proof.json",
+        "packages/db/test/migration-proofs/0601_retention_review_timer.proof.json",
+        "packages/db/test/retention-record-repository.test.ts",
+        "packages/db/test/retention-records.integration.test.ts",
+        "packages/db/test/retention-review-timer.integration.test.ts",
+        "packages/db/test/retention-screen.integration.test.ts"
+      ]
+    }
+  }
+}

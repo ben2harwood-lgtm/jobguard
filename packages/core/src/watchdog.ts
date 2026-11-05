@@ -14,6 +14,8 @@ export type JobCommandPhase = "pre_live_allowed" | "watchdog_live_only" | "post_
 /** Exhaustive web mutation registry. Dynamic actions are classified below.
  * New site facts, documents, orders, proof and messages must be live-only. */
 export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
+  "/api/jobs/[id]/recovery-cases/[caseId]/billability": "post_live_billing",
+  "/api/jobs/[id]/reconciliation/[runId]/adjustments": "post_live_billing",
   "/api/customer-portal/quote": "pre_live_allowed",
   "/api/customer-portal/quote-accept": "pre_live_allowed",
   "nest:/customer-portal/quote": "pre_live_allowed",
@@ -48,7 +50,11 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "/api/contractor/jobs/[id]/billing/[action]": "pre_live_allowed",
   "nest:/contractor/jobs/:id/billing/:action": "pre_live_allowed",
   // SV6-PERSIST-B: historical attribution intent is post-live; execution remains closed.
+  "/api/jobs/[id]/invoices/[invoiceId]/pay-now-preview": "post_live_billing",
+  "/api/jobs/[id]/interim-drafts": "post_live_billing",
   "/api/jobs/[id]/dunning/[operation]": "post_live_billing",
+  "/api/jobs/[id]/retention-records": "post_live_billing",
+  "/api/jobs/[id]/notice-fixtures": "post_live_billing",
   "command:managed_recovery.elect": "post_live_billing",
   "/api/jobs/[id]/payment-fees": "post_live_billing",
   "nest:/jobs/:id/payment-fees": "post_live_billing",
@@ -96,6 +102,8 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "command:EvaluateLivePrompts": "pre_live_allowed",
   "command:ConfirmPrompt": "pre_live_allowed",
   "command:DismissPrompt": "pre_live_allowed",
+  "/api/contractor/jobs/[id]/possible-extras/materials": "pre_live_allowed",
+  "/api/contractor/jobs/[id]/possible-extras/evaluate": "pre_live_allowed",
   "nest:/contractor/jobs/:id/possible-extras/materials": "pre_live_allowed",
   "nest:/contractor/jobs/:id/possible-extras/observations": "pre_live_allowed",
   "nest:/contractor/jobs/:id/possible-extras/evaluate": "pre_live_allowed",
@@ -103,7 +111,11 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "nest:/contractor/jobs/:id/possible-extras/:promptId/dismiss": "pre_live_allowed",
   "/api/contractor/jobs/[id]/possible-extras/[promptId]/confirm": "pre_live_allowed",
   "/api/contractor/jobs/[id]/possible-extras/[promptId]/dismiss": "pre_live_allowed",
+  "/api/contractor/jobs/[id]/possible-extras/observations": "pre_live_allowed",
   // contractor work-order jobs have no pre-live phase (they become live in the same transaction as the import), and this route carries its own live-job guard (precheck and seam, `SiteExtraRepository`).
+  // Contractor commands retain their own job/authority/export guards, like site capture.
+  "/api/contractor/jobs/[id]/duplicate-candidates": "pre_live_allowed",
+  "/api/contractor/jobs/[id]/duplicate-unlinks": "pre_live_allowed",
   "/api/contractor/jobs/[id]/site-extras": "pre_live_allowed",
   "nest:/contractor/jobs/:id/site-extras": "pre_live_allowed",
   // contractor work-order jobs have no pre-live phase (they become live in the same transaction as the import), and the route carries its own live-job guard
@@ -158,6 +170,7 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "/api/jobs/[id]/receipt-case-allocations": "post_live_billing",
   "/api/jobs/[id]/recovery-allocations/reversals": "post_live_billing",
   "/api/jobs/[id]/recovery-cases": "post_live_billing",
+  "/api/jobs/[id]/recovery-cases/[caseId]/managed-recovery": "post_live_billing",
   "/api/jobs/[id]/relevance-inbox/[action]": "watchdog_live_only",
   "/api/jobs/[id]/relevance-inbox/decisions/[decisionId]": "watchdog_live_only",
   "/api/jobs/[id]/review": "pre_live_allowed",
@@ -243,6 +256,8 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "command:proof.complete": "watchdog_live_only",
   "command:purchase_order.simulate": "watchdog_live_only",
   "command:purchase_order.place": "watchdog_live_only",
+  "command:purchase_order.send.dark": "watchdog_live_only",
+  "command:purchase_order.attest_manual": "watchdog_live_only",
   "command:recovery.message.approve": "post_live_billing",
   "command:recovery.follow_up.approve_reminder": "post_live_billing",
   "command:quote.acceptance.attest": "pre_live_allowed",

@@ -125,7 +125,6 @@ export * from "./subscription-repository.js";
 export * from "./subscription-meter-source.js";
 export * from "./platform-statement-repository.js";
 export * from "./subscription-simulated-payment-adapter.js";
-export * from "./subscription-stripe-sandbox-adapter.js";
 export * from "./subscription-executor.js";
 
 export * from "./enterprise-live-prompt-repository.js";
@@ -158,6 +157,8 @@ export * from "./import-pre-adoption-repository.js";
 export * from "./plan-entitlement-service.js";
 export * from "./payment-fee-repository.js";
 export * from "./small-builder-demo-repository.js";
+export * from "./inbox-metrics-repository.js";
+export { PaymentFeeCollectionRepository, PaymentFeeCollectionSourceError } from "./payment-fee-collection-repository.js";
 export * from "./recovery-billability-repository.js";
 export * from "./managed-recovery-repository.js";
 export * from "./platform-tax-invoice-fixture-repository.js";
@@ -167,6 +168,8 @@ export * from "./resumable-evidence.js";
 export * from "./mobile-auth-store.js";
 
 export { FixtureSpeechAudioReader, SpeechAudioError } from "./speech-audio.js";
+export * from "./purchase-order-action.js";
+export * from "./purchase-order-action-repository.js";
 export * from "./evidence-bundle.js";
 export * from "./evidence-bundle-sources.js";
 export * from "./practice-photo-observation.js";
@@ -186,6 +189,7 @@ export { DunningRepository } from "./dunning-repository.js";
 export { AccountingExportRepository, StoredAccountingExportError, storedAccountingExportV1, type StoredAccountingExport } from "./accounting-export-repository.js";
 export { ShadowDemoGuideRepository } from "./shadow-demo-guide-repository.js";
 
+export * from "./shadow-pilot-financial-reader.js";
 export { importLateSource, readLateSourceObservations, readLateSources } from "./late-source-import.js";
 
 export * from "./financial-reconciliation-queue-repository.js";
@@ -196,3 +200,10 @@ export * from "./ais-repository.js";
 
 export { withEvidencePackV3Snapshot } from "./evidence-pack-v3-sources.js";
 export * from "./rate-suggestion-repository.js";
+export * from "./retention-record-repository.js";
+export * from "./pay-now-attempt-repository.js";
+export * from "./notice-fixture-repository.js";
+export * from "./direct-debit-fixture-repository.js";
+
+export { InterimDraftRepository, InterimDraftRepositoryError } from "./interim-draft-repository.js";
+export * from "./extra-duplicate-candidates.js";

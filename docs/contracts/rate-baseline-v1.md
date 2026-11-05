@@ -2,7 +2,7 @@
 
 This implements only the deterministic, synthetic portion permitted by BUILD_PLAN §12.4.
 The pure core module is exported from the core barrel. The dark stored reader and acceptance
-repository described below add migration 0762; the synthetic session route and screen below expose only stored suggestions and acceptances.
+repository described below add migration 0609; the synthetic session route and screen below expose only stored suggestions and acceptances.
 No provider or scheduler is connected. No merchant adapter is required for this synthetic foundation.
 M5-5 remains unbuilt; this work does not satisfy or bypass its real integration dependency.
 G0–G5 are unchanged and no release approval is implied.
@@ -55,7 +55,7 @@ the real M5-5 merchant adapter; any cross-tenant privacy/commercial decision and
 and activation of any live route. Synthetic passing tests do
 not close any of these requirements or mark full M5-6 complete.
 
-## Dark stored observations and human acceptance (0762)
+## Dark stored observations and human acceptance (0609)
 
 `RateSuggestionRepository.read(context, query)` reads only the context tenant's immutable
 `rate_book_observation` rows, joined by tenant/job/item/source revision to confirmed scope.
@@ -88,7 +88,7 @@ M5-6 remains open: real held-out evaluation, later drift models, recurring-extra
 merchant scoring, M5-5's real adapter and all applicable release gates remain held. There is
 no live HTTP surface, worker, merchant data or cross-tenant learning.
 
-## Synthetic session screen and retained read (0765)
+## Synthetic session screen and retained read (0610)
 
 The practice page `/jobs/[id]/rate-suggestions` and session-only GET/POST
 `/api/jobs/[id]/rate-suggestions` are refused outside `synthetic_demo`. The
@@ -99,7 +99,7 @@ requires the existing persisted small-builder owner authority covering this job,
 before baseline data is read or an acceptance is attempted.
 
 `readAcceptances(context, actor, jobId)` calls the sole read-only checked routine
-added by 0765. No table grants, roles, write routines or stored formats change.
+added by 0610. No table grants, roles, write routines or stored formats change.
 It returns actor membership ID (the stable who), server time, record/baseline
 hashes, target revision and immutable source observation/revision provenance.
 The client displays server counts, observed spread and policy; sparse data says
@@ -114,3 +114,8 @@ PostgreSQL integration and catalog/upgrade suites plus the headless browser
 reload journey must run in CI; local transport/unit tests do not establish those
 guarantees. Exact-head independent RED review is still required. This does not
 finish M5-6; drift, recurring extras, merchant scoring, M5-5 and G0–G5 stay held.
+
+The synthetic rate-acceptance command is outside the LP-5 dispatch lifecycle.
+Its dedicated routine owns authorization, idempotency and checked audit sealing;
+LP-5 lifecycle dispatch remains held for this command. Registry classification
+does not imply lifecycle execution or production readiness.

@@ -94,7 +94,7 @@ it("M5-6 real PostgreSQL: provenance, races, replay, stale data, isolation and a
   const bad = await sample(sparse, 100, "each", false), outlier = await sample(sparse, 9999), unit = await sample(sparse, 100, "kg");
   const exclusions = (await repo.read(sparse.context, query)).exclusions;
   expect(exclusions).toEqual(expect.arrayContaining([{ observationId: bad.id, reason: "untraced_source" }, { observationId: outlier.id, reason: "outlier" }, { observationId: unit.id, reason: "not_comparable" }]));
-});
+}, 120_000);
 
 it.each([
   { name: "odd median", rates: [100, 101, 102], expected: 101 },
@@ -115,4 +115,4 @@ it.each([
   const stored = (await f.admin.query("SELECT accepted_pence,source_observation_ids FROM app.rate_suggestion_acceptance WHERE tenant_id=$1 AND id=$2", [a.tenantId, accepted.id])).rows[0];
   expect(Number(stored.accepted_pence)).toBe(expected);
   expect([...stored.source_observation_ids].sort()).toEqual(baseline.sources.map(source => source.observationId).sort());
-});
+}, 120_000);

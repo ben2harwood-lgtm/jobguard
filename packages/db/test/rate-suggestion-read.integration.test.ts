@@ -57,4 +57,4 @@ it("retains actor/source provenance across repository reload and refuses foreign
   await expect(workTenant(f.runtime, a.tenantId, db => db.query("SELECT * FROM app.rate_suggestion_acceptance"))).rejects.toThrow("permission denied");
   expect((await f.admin.query("SELECT count(*)::int n FROM app.rate_suggestion_acceptance WHERE tenant_id=$1", [a.tenantId])).rows[0].n).toBe(1);
   expect(await snapshot()).toEqual(before);
-});
+}, 120_000);

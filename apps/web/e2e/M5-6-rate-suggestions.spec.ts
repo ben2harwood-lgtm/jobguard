@@ -36,12 +36,27 @@ test("stored practice acceptance survives reload with actor and sources", async 
     await expect(main.getByRole("heading", { name: "Suggested rate: 100 GBP pence" })).toBeVisible();
     await main.getByLabel("Target scope item ID").fill(scope);
     await main.getByLabel("Current target revision ID").fill(revision);
+    // Transient HTTP refusals must retain the exact command across reloads.
+    let transientCommand: string | null = null;
+    for (const status of [408, 429]) {
+      await page.route(`**/api/jobs/${job}/rate-suggestions`, route => route.fulfill({
+        status, contentType: "application/json", body: JSON.stringify({ version: "rate-error.v1", reason: "Try again shortly." }),
+      }), { times: 1 });
+      await main.getByRole("button", { name: transientCommand ? "Retry same practice acceptance" : "Accept practice suggestion", exact: true }).click();
+      await expect(main.getByRole("alert")).toContainText("Try again shortly");
+      const retained = await page.evaluate(job => sessionStorage.getItem(`practice-rate-acceptance:${job}`), job);
+      expect(retained).not.toBeNull();
+      if (transientCommand) expect(retained).toBe(transientCommand);
+      transientCommand = retained;
+      await page.reload();
+      await expect(main.getByRole("button", { name: "Retry same practice acceptance", exact: true })).toBeVisible();
+    }
     // Lose the response after the real server commits: retry must reuse exact intent.
     await page.route(`**/api/jobs/${job}/rate-suggestions`, async route => {
       if (route.request().method() !== "POST") return route.continue();
       await route.fetch(); await route.abort("failed");
     }, { times: 1 });
-    await main.getByRole("button", { name: "Accept practice suggestion", exact: true }).click();
+    await main.getByRole("button", { name: "Retry same practice acceptance", exact: true }).click();
     await expect(main.getByRole("alert")).toContainText("uncertain");
     const pending = await page.evaluate(job => sessionStorage.getItem(`practice-rate-acceptance:${job}`), job);
     await page.reload();

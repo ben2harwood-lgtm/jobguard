@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/batch-28"
       ],
-      "note": "Built ahead: m5-6-rate-baseline and m4-3-bundle-screen. RED. NOPR.",
+      "note": "RED: m5-6-rate-baseline and m4-3-bundle-screen, ready for PR and independent review.",
       "allow": [
         "apps/api/package.json",
         "apps/api/src/evidence-bundle.application.test.ts",
@@ -32,20 +32,23 @@
         "docs/contracts/rate-baseline-v1.md",
         "packages/core/src/index.ts",
         "packages/core/src/watchdog.ts",
-        "packages/db/migration-notes/0895_rate_suggestion_acceptance.md",
-        "packages/db/migration-notes/0896_rate_suggestion_acceptance_read.md",
-        "packages/db/migrations/0895_rate_suggestion_acceptance.sql",
-        "packages/db/migrations/0896_rate_suggestion_acceptance_read.sql",
+        "packages/db/migration-notes/0609_rate_suggestion_acceptance.md",
+        "packages/db/migration-notes/0610_rate_suggestion_acceptance_read.md",
+        "packages/db/migrations/0609_rate_suggestion_acceptance.sql",
+        "packages/db/migrations/0610_rate_suggestion_acceptance_read.sql",
         "packages/db/src/index.ts",
         "packages/db/src/rate-suggestion-repository.ts",
+        "packages/db/test/command-replay-contract.integration.test.ts",
         "packages/db/test/evidence-bundle-screen.integration.test.ts",
         "packages/db/test/later-empty-tables.ts",
         "packages/db/test/lp5-command-catalog.ts",
-        "packages/db/test/migration-proofs/0895_rate_suggestion_acceptance.proof.json",
-        "packages/db/test/migration-proofs/0896_rate_suggestion_acceptance_read.proof.json",
+        "packages/db/test/migration-proofs/0609_rate_suggestion_acceptance.proof.json",
+        "packages/db/test/migration-proofs/0610_rate_suggestion_acceptance_read.proof.json",
         "packages/db/test/rate-suggestion-read.integration.test.ts",
         "packages/db/test/rate-suggestion.integration.test.ts",
-        "packages/db/test/rate-suggestion.test.ts"
+        "packages/db/test/rate-suggestion.test.ts",
+        "packages/db/test/restore-reconciliation-upgrade.integration.test.ts",
+        "packages/db/test/watchdog.integration.test.ts"
       ]
     }
   }

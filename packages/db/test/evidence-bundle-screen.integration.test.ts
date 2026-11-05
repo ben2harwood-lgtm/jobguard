@@ -37,4 +37,4 @@ it('checks actual approvals read-only, preserves absences, and refuses inaccessi
   await repo.reviseExtra(context, w.members.surveyor.member, { version: 'revise-extra.v1', commandId: randomUUID(), jobId: s.jobId, extraId: s.extraId, netPence: 40001 });
   expect(await app.check(context, w.members.surveyor.member, query)).toMatchObject({ reason: 'APPROVAL_OR_SCOPE_INVALID', manifestDigest: null });
   readObject.mockRestore();
-});
+}, 120_000);

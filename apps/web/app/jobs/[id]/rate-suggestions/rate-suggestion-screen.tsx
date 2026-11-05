@@ -22,7 +22,7 @@ export function RateSuggestionScreenView({ screen }: { screen: RateSuggestionScr
       });
       if (!response.ok) {
         const failure = await response.json() as { reason: string };
-        if (response.status < 500) { sessionStorage.removeItem(key); setPending(null); }
+        if (response.status >= 400 && response.status < 500 && response.status !== 408 && response.status !== 429) { sessionStorage.removeItem(key); setPending(null); }
         setReason(failure.reason); return;
       }
       sessionStorage.removeItem(key); setPending(null); window.location.reload();
