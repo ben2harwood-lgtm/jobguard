@@ -62,3 +62,68 @@ Automatic approval review rejected extending `config/lanes/batch-15.json`, stati
 The pending request is to register only those exact paths for the existing branch, with no wildcard or rule change. This is the remaining core-checks hold; the root core-checks stage must not be described as fully green until `pnpm lint` passes.
 
 This repair adds no columns to fingerprinted tables, storage policies, existing table grants, or SET app.* function clauses. RLS, session checks, money rules, hidden-data rules and all test assertions remain enforced. All fixtures are fictional. This is builder test evidence, not an independent RED verdict or approval to merge.
+
+## ENT-3-RELINK-FIX — 5 November 2026 — RED, NOPR
+
+READY for router handoff, not PostgreSQL-verified or independently reviewed.
+Regression tests were written before migration 0966. The populated upgrade test
+reproduces same-direction/reverse-direction relink and revision failures on the
+predecessor schema before applying the repair. It then checks unchanged stored
+rows and security metadata, exactly two replaced routine bodies, migration
+replay, both relink directions and separate export through existing commands.
+Fresh-schema cases cover deterministic-candidate relink/export in both
+directions, old-unlink replay versus a fresh link, command conflict, separate
+approved extras and reapproval after revision, forged input and a mismatched
+SQL receipt actor, uncovered grants, wrong roles/tenant, a relink/unlink race,
+exported-endpoint refusal, and preservation of a duplicate-dismissed pending
+approval. No ENT-5 dismissal command exists in this branch.
+
+0966 starts from the latest xa_mark_duplicate body (0522), preserving its LP5
+effect handoff and all permission checks. The actual repair is the shared
+xa_latest_kind projection: skip only a duplicate event whose exact command's
+link was explicitly reversed in the same tenant/job. This avoids separate
+restoration logic in marking, pricing and export; it preserves stored events
+and outcomes. No columns, grants, app.* SET clauses, new commands or routes.
+The proof retains an exact SHA-256 for the replaced private helper, calculated
+from PostgreSQL 16 rendering (the same rendering matches its predecessor's
+existing protected hash). No baseline fingerprint or existing assertion was
+weakened. Recovery is a reviewed forward fix, with no history deletion.
+
+Local validation uses installed Node 24.17.0 and cached pnpm 10.28.1 via
+`node /Users/benharwood/.cache/node/corepack/v1/pnpm/10.28.1/bin/pnpm.cjs`.
+For Turbo, PATH begins with `/tmp/xa-relink-pnpm-bin`, a shim to that same cached
+pnpm; the global pnpm tried its version manager and was interrupted. Nothing
+was downloaded. At most two workers per test invocation; no database/browser
+was started.
+
+- Workspace prerequisite builds (core/config/storage, then db and ai): PASS.
+- `pnpm typecheck --concurrency=2`: PASS, all seven packages. Turbo reported
+  sandbox cache IO warnings; commands completed successfully.
+- DB Vitest `--maxWorkers=2 test/migration-proof-loader.test.ts test/extra-approval-timing.test.ts src/extra-duplicate-candidates.test.ts`: PASS, 94 tests.
+- DB Vitest `--maxWorkers=2 test/extra-relink-migration.test.ts test/migration-proof-loader.test.ts src/extra-duplicate-candidates.test.ts`: PASS, 80 tests, including the new exact writer-preservation and helper-digest checks.
+- API context-boundary and identity checks: PASS, 152 tests across the two
+  files. The companion watchdog collection initially required db/ai builds;
+  those prerequisite builds were then completed. See the final result below.
+- DB `vitest list --maxWorkers=1 test/extra-duplicate-candidates.integration.test.ts test/extra-relink-upgrade.integration.test.ts test/plan-entitlement-lifecycle-upgrade.integration.test.ts`: PASS, all 12 cases collected, including all seven new regression/upgrade cases. Collection is not database execution.
+- `node tools/plpgsql-case-in-if-lint.mjs`: PASS, 257 migrations.
+- `git diff --check`: PASS.
+- `LANE_BASE_REF=codex/sandbox/batch-15 node tools/agent-lane-boundary-lint.mjs`:
+  FAIL only for inherited changes to config/lanes/batch-14.json and
+  config/lanes/batch-15.json already present at starting HEAD. They were not
+  changed by this repair and cannot be granted by this lane. The repair-only
+  paths pass the existing lanePathAllowed validator. The new lane lists every
+  non-lane file differing from local batch-15, including inherited work, and
+  does not list itself. Router must reconcile the inherited lane changes when
+  choosing the landing base; the guard was not changed.
+
+CI must execute the real PostgreSQL regression/upgrade cases above, existing
+extra-unlink and approval-chain suites, billing export/race tests, LP0 catalog,
+tenancy and migration/fingerprint gates, plus required full CI and affected
+mobile/desktop journeys. The upgrade test must prove the old failure and repaired
+journey, not just migration parsing. Exact-head independent RED review remains
+required before merge. No git writes, commit, push, PR or release performed.
+
+Final watchdog result: `pnpm --filter @jobguard/api exec vitest run
+--maxWorkers=2 src/watchdog-registry.test.ts` — PASS, 126 tests after building
+its existing workspace prerequisites. All selected local checks now pass except
+the explicitly recorded inherited lane-file conflict.
