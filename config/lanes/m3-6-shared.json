@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "m3-6-shared": {
+      "branches": [
+        "codex/sandbox/m3-6-shared"
+      ],
+      "allow": [
+        "packages/core/src/core-loop-views.ts",
+        "packages/core/src/core-loop-views.test.ts",
+        "packages/core/src/index.ts",
+        "apps/web/app/lib/contracts.ts",
+        "apps/api/src/core-loop-shared.contract.test.ts"
+      ],
+      "note": "M3-6 RED synthetic groundwork only; native screens, device proof and D08 remain held."
+    }
+  }
+}
