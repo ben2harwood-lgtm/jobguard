@@ -58,6 +58,7 @@ test("stored practice notices survive reload, bind approval, keep service facts 
   await page.unroute(`**${route}`);
   await page.reload();
   await main.getByRole("button", { name: "Retry same saved command" }).click();
+  await expect(main.getByRole("button", { name: "Retry same saved command" })).toHaveCount(0);
   await expect(main.getByRole("heading", { name: "Record 1: revision", exact: true })).toBeVisible();
   await expect(main.getByRole("heading", { name: "Record 2: revision", exact: true })).toHaveCount(0);
   const preview = main.getByTestId("notice-preview");
