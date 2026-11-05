@@ -1,0 +1,44 @@
+{
+  "expo": {
+    "name": "JobGuard Synthetic Risk Slice",
+    "slug": "jobguard-native-risk",
+    "version": "0.0.1",
+    "scheme": "jobguard-synthetic",
+    "platforms": [
+      "ios",
+      "android"
+    ],
+    "newArchEnabled": true,
+    "ios": {
+      "bundleIdentifier": "invalid.jobguard.synthetic",
+      "supportsTablet": false
+    },
+    "android": {
+      "package": "invalid.jobguard.synthetic"
+    },
+    "plugins": [
+      [
+        "expo-dev-client",
+        {
+          "launchMode": "launcher",
+          "addGeneratedScheme": false
+        }
+      ],
+      [
+        "expo-sqlite",
+        {
+          "useSQLCipher": true
+        }
+      ],
+      [
+        "expo-secure-store",
+        {
+          "configureAndroidBackup": false
+        }
+      ]
+    ],
+    "updates": {
+      "enabled": false
+    }
+  }
+}

@@ -3,3 +3,5 @@ packages:
   - packages/*
 onlyBuiltDependencies:
   - "@embedded-postgres/linux-x64"
+# Quarantine newly resolved releases for at least fourteen days.
+minimumReleaseAge: 20160

@@ -1,0 +1,30 @@
+{
+  "version": 2,
+  "lanes": {
+    "m3-1-native": {
+      "branches": [
+        "codex/sandbox/m3-1-native"
+      ],
+      "note": "RED sign-in and offline commands. Synthetic native risk slice only; no PR. Device proof and D08 remain closed.",
+      "allow": [
+        "apps/api/src/m31-native-roundtrip.integration.test.ts",
+        "apps/mobile/.gitignore",
+        "apps/mobile/App.tsx",
+        "apps/mobile/app.json",
+        "apps/mobile/dependency-releases.json",
+        "apps/mobile/index.js",
+        "apps/mobile/package.json",
+        "apps/mobile/src/local-api.ts",
+        "apps/mobile/src/native-store.ts",
+        "apps/mobile/src/store.test.ts",
+        "apps/mobile/src/store.ts",
+        "apps/mobile/src/sync.test.ts",
+        "apps/mobile/src/sync.ts",
+        "apps/mobile/tools/supply-chain.mjs",
+        "apps/mobile/tsconfig.json",
+        "docs/contracts/m3-1-native-risk.md",
+        "pnpm-workspace.yaml"
+      ]
+    }
+  }
+}

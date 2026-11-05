@@ -1,0 +1,33 @@
+{
+  "name": "@jobguard/mobile",
+  "version": "0.0.0",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "dev": "expo start --dev-client --offline",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "prebuild": "EXPO_OFFLINE=1 EXPO_NO_TELEMETRY=1 expo prebuild --no-install",
+    "build": "EXPO_OFFLINE=1 EXPO_NO_TELEMETRY=1 expo export --platform ios --platform android --output-dir dist",
+    "typecheck": "tsc --noEmit",
+    "lint": "node tools/supply-chain.mjs && tsc --noEmit",
+    "lint:supply-chain": "node tools/supply-chain.mjs",
+    "test": "vitest run src"
+  },
+  "dependencies": {
+    "@jobguard/core": "workspace:*",
+    "expo": "54.0.20",
+    "expo-dev-client": "6.0.16",
+    "expo-sqlite": "16.0.8",
+    "expo-secure-store": "15.0.7",
+    "expo-crypto": "15.0.7",
+    "react": "19.1.0",
+    "react-native": "0.81.5",
+    "zod": "4.6.6"
+  },
+  "devDependencies": {
+    "@types/react": "19.1.8",
+    "typescript": "5.8.3",
+    "vitest": "4.1.12"
+  }
+}
