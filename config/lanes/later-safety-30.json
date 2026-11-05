@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-30": {
+      "branches": [
+        "codex/sandbox/later-safety-30"
+      ],
+      "note": "LATER-SAFETY-30 RED: synthetic v1 reversal replay payload binding; follows later-safety-17.",
+      "allow": [
+        "packages/db/migrations/0800_synthetic_reversal_replay_match.sql",
+        "packages/db/test/migration-proofs/0800_synthetic_reversal_replay_match.proof.json",
+        "packages/db/migration-notes/0800_synthetic_reversal_replay_match.md",
+        "packages/db/test/recovery.integration.test.ts"
+      ]
+    }
+  }
+}

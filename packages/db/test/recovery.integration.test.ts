@@ -89,7 +89,8 @@ describe("structural recovery fee guard",()=>{
    const before = await counts();
    expect(before).toEqual({reversals:1,derivations:3,reviews:1,journals:3});
    const retry = {...reversal,derivationId:randomUUID(),journalId:randomUUID()};
-   expect(await Promise.all([port.reverseSyntheticLanding(w.ctx,retry),port.reverseSyntheticLanding(w.ctx,retry)])).toEqual([reversal.derivationId,reversal.derivationId]);
+   await Promise.all([0,1].map(() => expect(port.reverseSyntheticLanding(w.ctx,retry)).rejects.toMatchObject({code:"23514"})));
+   expect(await counts()).toEqual(before);
    for (const conflict of [{amountPence:1}, {allocationId:second.allocationId}, {reversalId:randomUUID()}]) {
     await expect(port.reverseSyntheticLanding(w.ctx,{...retry,...conflict})).rejects.toMatchObject({code:"23514"});
    }
@@ -104,6 +105,41 @@ describe("structural recovery fee guard",()=>{
    await expect(withTenant(runtime,w.ctx,db=>db.$client.query("SELECT app.reverse_synthetic_landing($1,$2,$3,$4,$5,$6,$7)",[T,reversal.reversalId,randomUUID(),randomUUID(),first.allocationId,200000,"Tenant mismatch"]))).rejects.toMatchObject({code:"42501"});
    expect(await counts()).toEqual(before);
    expect((await admin.query("SELECT id FROM app.recovery_fee_derivation WHERE tenant_id=$1 AND source_reversal_id=$2",[w.tenant,reversal.reversalId])).rows).toEqual([{id:reversal.derivationId}]);
+  });
+
+  it.each([200000, 1])("LATER-SAFETY-30: binds reversal replay payload without writes (reversal %i pence)", async amountPence => {
+   const repo = new RecoveryCaseRepository(runtime), port = new PostgresRecoveryOutcomePostingPort(runtime), w = await createWorld(true);
+   let c = await open(repo,400000,w);
+   c = await step(repo,c,{eventType:"assemble_evidence"},w);
+   const approved = (await readyToLand(c,400000,w))(400000);
+   await land(approved,w);
+   const reversal = {version:"recovery.landing.reverse.v1",reversalId:randomUUID(),derivationId:randomUUID(),journalId:randomUUID(),allocationId:approved.allocationId,amountPence,reason:"Fictional reversal replay"};
+   expect(await port.reverseSyntheticLanding(w.ctx,reversal)).toBe(reversal.derivationId);
+   // Compare complete stored rows, including immutable timestamps and identities.
+   const snapshot = async () => {
+    const rows = [];
+    for (const table of ["landing_reversal","recovery_fee_derivation","recovery_review","recovery_fee_journal"]) {
+     rows.push((await admin.query(`SELECT * FROM app.${table} WHERE tenant_id=$1 AND job_id=$2 ORDER BY id`,[w.tenant,w.job])).rows);
+    }
+    return rows;
+   };
+   const before = await snapshot();
+   expect((await admin.query("SELECT id,kind FROM app.recovery_fee_journal WHERE tenant_id=$1 AND derivation_id=$2",[w.tenant,reversal.derivationId])).rows)
+    .toEqual(amountPence === 200000 ? [{id:reversal.journalId,kind:"compensation"}] : []);
+   expect(await port.reverseSyntheticLanding(w.ctx,reversal)).toBe(reversal.derivationId);
+   expect(await snapshot()).toEqual(before);
+   const conflicts = [{reason:"Different fictional reason"},{derivationId:randomUUID()},...(amountPence === 200000 ? [{journalId:randomUUID()}] : [])];
+   for (const conflict of conflicts) {
+    await expect(port.reverseSyntheticLanding(w.ctx,{...reversal,...conflict})).rejects.toMatchObject({code:"23514"});
+    expect(await snapshot()).toEqual(before);
+   }
+   // With no compensation row, there is no stored journal identity to bind.
+   if (amountPence === 1) {
+    expect(await port.reverseSyntheticLanding(w.ctx,{...reversal,journalId:randomUUID()})).toBe(reversal.derivationId);
+    expect(await snapshot()).toEqual(before);
+   }
+   await expect(port.reverseSyntheticLanding(context,reversal)).rejects.toMatchObject({code:"23514"});
+   expect(await snapshot()).toEqual(before);
   });
 
   it("LATER-SAFETY-17: selects the v1 cap when a hostile fixture contains another policy snapshot", async () => {
