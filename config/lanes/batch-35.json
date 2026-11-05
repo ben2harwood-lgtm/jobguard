@@ -39,6 +39,7 @@
         "packages/db/test/late-source-import-migration.test.ts",
         "packages/db/test/later-empty-tables.ts",
         "packages/db/test/lp5-command-catalog.ts",
+        "packages/db/test/m2-1-migration-proof.test.ts",
         "packages/db/test/migration-proofs/0620_contractor_job_finish.proof.json",
         "packages/db/test/migration-proofs/0621_connector_machine.proof.json",
         "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",

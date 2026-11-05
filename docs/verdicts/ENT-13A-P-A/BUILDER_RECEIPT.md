@@ -406,3 +406,34 @@ independent RED review and green CI remain merge gates.
 
 READY for router staging, merge completion, commit, push and PR opening. No Git
 write, provider call, deployment, launch or real customer data was used.
+
+
+## PR #581 M2-1 historical registry catch-up — 5 November 2026
+
+RED batch-35 (ENT-8a / dark ENT-13a), existing open-PR catch-up; no new
+behavior or repair round. Reproduced the reported M2-1 failure locally: 3 passed,
+1 failed. The 0606 proof correctly has no EndCheck row; currentCommandRegistryRows
+now includes EndCheck from 0620_contractor_job_finish.sql (formerly 0990).
+The historical comparison excluded only the later rate.suggestion_accept row.
+Excluded the exact later EndCheck identity too and documented its migration.
+Retained exact dark-command field comparison, complete historical registry
+membership and length checks, and exact before/after comparison removing only
+the dark command. No migration, proof, production code or runtime behavior changed.
+Added the changed test to the lane; exact comparison against cached origin/main
+merge-base changes plus working changes passes for all 37 non-lane paths.
+The lane does not list itself.
+
+Executed from packages/db using installed tools, no downloads:
+- ./node_modules/.bin/vitest run --maxWorkers=2 test/m2-1-migration-proof.test.ts
+  before correction: reproduced 1 failed, 3 passed.
+- ./node_modules/.bin/vitest run --maxWorkers=2 test/m2-1-migration-proof.test.ts
+  test/migration-proof-loader.test.ts after correction: PASS, 81 tests, 2 files.
+- git diff --check: PASS.
+
+The sandbox explicitly prohibits PostgreSQL startup and localhost binding, so
+serious-b5-upgrade was NOT run locally. Router/CI must run from packages/db:
+  ./node_modules/.bin/vitest run --maxWorkers=2 test/m2-1-migration-proof.test.ts test/serious-b5-upgrade.integration.test.ts
+Green required CI and exact-head independent RED review remain merge gates.
+No Git writes, commit, push, provider, deployment or launch occurred.
+
+READY for the router to commit and push to codex/sandbox/batch-35, PR #581.
