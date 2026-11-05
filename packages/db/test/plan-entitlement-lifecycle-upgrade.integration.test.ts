@@ -38,6 +38,18 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   // 0567 changes only the checked settlement overload's expected approval hash.
   const settlementOid = (await c.admin.query("SELECT 'app.record_simulated_settlement(uuid,uuid,uuid,character varying,bigint,timestamp with time zone,uuid,uuid,uuid)'::regprocedure::oid oid")).rows[0].oid;
   const selfComparison = "(SELECT content_hash FROM app.action_authorization WHERE tenant_id=p_tenant AND id=p_authorization)";
+  // ENT-5 changes only these exact routine bodies; preserve every predecessor check.
+  const clientAuthority = await readFile(new URL("../migrations/1041_extra_client_send_authority.sql", import.meta.url), "utf8");
+  const clientAttribution = await readFile(new URL("../migrations/1043_extra_customer_approval.sql", import.meta.url), "utf8");
+  const replacements = (source: string) => [...source.matchAll(/changed:=replace\((?:original|changed),'((?:[^']|'')*)',\s*'((?:[^']|'')*)'\);/g)]
+    .map(match => [match[1]!.replaceAll("''", "'"), match[2]!.replaceAll("''", "'")] as const);
+  const authorityChanges = replacements(clientAuthority), attributionChanges = replacements(clientAttribution);
+  expect(authorityChanges).toHaveLength(3); expect(attributionChanges).toHaveLength(1);
+  const clientBodyChanges = new Map([
+    ["app.xa_issue_link(p_job uuid, p_request uuid, p_command uuid, p_actor uuid, p_link uuid, p_approver uuid, p_recipient text, p_token_hash text, p_expires_at timestamp with time zone, p_authorization uuid, p_outbox uuid)", authorityChanges.slice(0, 2)],
+    ["app.lp5b_contractor_permission(p_type text, p_actor uuid, p_job uuid, p_input jsonb)", authorityChanges.slice(2)],
+    ["app.northside_capture_action()", attributionChanges],
+  ]);
   for (const prior of security) {
     const current = live.find(row => row.oid === prior.oid);
     // 0566 and 0573 extend exactly this dispatcher for managed recovery and supervisor queries.
@@ -51,6 +63,13 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     } else if (prior.oid === settlementOid) {
       expect(prior.definition).toContain(selfComparison);
       expect(current?.definition).toEqual(prior.definition.replace(selfComparison, "payload"));
+    } else if (clientBodyChanges.has(`${prior.nspname}.${prior.proname}(${prior.args})`)) {
+      let expected = prior.definition!;
+      for (const [before, after] of clientBodyChanges.get(`${prior.nspname}.${prior.proname}(${prior.args})`)!) {
+        expect(expected).toContain(before);
+        expected = expected.replaceAll(before, after);
+      }
+      expect(current?.definition).toEqual(expected);
     } else {
       expect(current?.definition).toEqual(prior.definition);
     }

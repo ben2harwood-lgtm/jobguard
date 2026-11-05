@@ -16,7 +16,7 @@ async function act(extra: Extra, action: string, body: Record<string, unknown>) 
   return { ok: r.ok, body: await r.json().catch(() => ({})) };
 }
 
-/** One list for the people who move an extra along: the surveyor prices it, the supervisor submits and approves, the owner sends it to the client. Each sees only the button for their step. */
+/** One list for the people who move an extra along: the surveyor prices it, the supervisor submits and approves, the granted surveyor or commercial manager sends it to the client. Each sees only the button for their step. */
 export function ExtraApprovals() {
   const [role, setRole] = useState(""), [extras, setExtras] = useState<Extra[] | null>(null), [rates, setRates] = useState<Record<string, Rate[]>>({}), [error, setError] = useState(""), [busy, setBusy] = useState(false);
   const [queue, setQueue] = useState<Array<{ job_id: string; variation_id: string; request_id: string; step_index: number }>>([]);
@@ -91,7 +91,7 @@ export function ExtraApprovals() {
           <p>The server calculates the revised amount from the rate card.</p>
           <button disabled={busy} onClick={() => void run(x, "revise", { sorCode: card.code, quantity: qty })}>Revise this extra</button>
         </div>}
-        {role === "owner" && x.state === "awaiting_approval" && x.nextStepRole === "client_approver" && !x.linkIssued && <div className={styles.actions}><button disabled={busy} onClick={() => void run(x, "send")}>Approve sending to the client (practice)</button></div>}
+        {(role === "surveyor" || role === "commercial_manager") && x.state === "awaiting_approval" && x.nextStepRole === "client_approver" && <div className={styles.actions}><button disabled={busy} onClick={() => void run(x, "send")}>{x.linkIssued ? "Replace client approval request (practice)" : "Approve sending to the client (practice)"}</button></div>}
         {x.linkIssued && x.state === "awaiting_approval" && <p data-testid="link-issued">Local client link prepared (practice - nothing was emailed).</p>}
         {link?.extraId === x.extraId && <p>Practice client link for {link.recipient}: <a data-testid="client-link" className={styles.link} href={link.path}>{link.path}</a></p>}
       </section>;

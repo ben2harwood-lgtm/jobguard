@@ -197,3 +197,5 @@ export * from "./ais-adapter.js";
 export * from "./ais-repository.js";
 export { InterimDraftRepository, InterimDraftRepositoryError } from "./interim-draft-repository.js";
 export * from "./extra-duplicate-candidates.js";
+
+export { deriveVisitApprovalTiming, type VisitTimingSource, type TimingRequest, type ApprovalTimingFact, type OperativeWorkStatus } from "./extra-approval-timing.js";

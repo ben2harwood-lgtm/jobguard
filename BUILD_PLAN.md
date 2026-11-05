@@ -890,6 +890,8 @@ Every card inherits §2.4 C1–C8 and AGENTS §2. Cards reuse the merged command
 - **Audit content:** audit payloads hold IDs and hashes only.
 
 ### ENT-5 Approval chain and client approval
+
+4 November synthetic client-journey rulings: Q10/Q12/Q13 are recorded in `docs/contracts/extra-client-approval-v1.md`; grant-covered surveyor/commercial-manager sends, seven-day invitations, exact decision retry, own job history and the existing customer sign-in route apply. Q14 export/refusal-audit policy and Q15 executor/scheduler activation remain held. No real delivery or scheduler is enabled.
 **Track:** contractor
 **Depends on:** ENT-3, M4-3-S-R
 **Build:**
