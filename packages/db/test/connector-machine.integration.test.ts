@@ -27,7 +27,8 @@ beforeAll(async()=>{
   f=await createWorkFixture(false);
   const index=MIGRATION_URLS.findIndex(u=>u.pathname.endsWith(own));
   expect(index).toBeGreaterThan(0);
-  for(const url of MIGRATION_URLS.slice(0,index))await f.admin.query(await readFile(url,"utf8"));
+  await f.admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
+  for(const url of MIGRATION_URLS.slice(0,index)){await f.admin.query(await readFile(url,"utf8"));await f.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)",[url.pathname.split('/').at(-1)]);}
   await installLegacySyntheticPartyFixtures(f.admin);
   const historical=await meterCompany(f);
   const row=(await f.admin.query("SELECT to_jsonb(j) value FROM app.job j WHERE tenant_id=$1",[historical.tenantId])).rows;
@@ -35,12 +36,11 @@ beforeAll(async()=>{
   await f.admin.query(await readFile(MIGRATION_URLS[index]!,"utf8"));
   expect((await f.admin.query("SELECT to_jsonb(j) value FROM app.job j WHERE tenant_id=$1",[historical.tenantId])).rows).toEqual(row);
   for(const r of routines)expect((await f.admin.query("SELECT pg_get_functiondef($1::oid) definition",[r.oid])).rows[0]!.definition).toBe(r.definition);
-  await f.admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
-  for(const url of MIGRATION_URLS.slice(0,index+1))await f.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)",[url.pathname.split('/').at(-1)]);
+  await f.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)",[own]);
   await migrate(f.admin);await migrate(f.admin);
   const secret=randomUUID(),login=`machine_${randomUUID().replaceAll('-','')}`;
   await f.admin.query(`CREATE ROLE ${login} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS PASSWORD '${secret}'; GRANT jobguard_machine TO ${login}`);
-  machine=new Pool({...f.admin.options,user:login,password:secret,max:2});
+  machine=new Pool({...f.admin.options,user:login,password:secret,max:2,options:"-c role=jobguard_machine"});
   // The ordinary test runtime login receives only the pre-existing business role.
   const runtimeLogin=`machine_owner_${randomUUID().replaceAll('-','')}`;
   await f.admin.query(`CREATE ROLE ${runtimeLogin} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${secret}'; GRANT jobguard_runtime TO ${runtimeLogin}`);

@@ -249,6 +249,15 @@
             "outbox_class": "fake_purchase_order"
           },
           {
+            "command_type": "purchase_order.send.dark",
+            "version": "command.v1",
+            "permission_rule": "owner",
+            "lock_adapter": "route_before_begin",
+            "completion_adapter": "purchase_order",
+            "audit_class": "commercial",
+            "outbox_class": "fake_merchant_order"
+          },
+          {
             "command_type": "purchase_order.simulate",
             "version": "command.v1",
             "permission_rule": "owner",
@@ -362,6 +371,15 @@
             "permission_rule": "owner",
             "lock_adapter": "route_before_begin",
             "completion_adapter": "finding",
+            "audit_class": "operational",
+            "outbox_class": null
+          },
+          {
+            "command_type": "rate.suggestion_accept",
+            "version": "rate-suggestion-accept.v1",
+            "permission_rule": "owner",
+            "lock_adapter": "route_before_begin",
+            "completion_adapter": "rate_suggestion_acceptance",
             "audit_class": "operational",
             "outbox_class": null
           },
@@ -803,6 +821,15 @@
             "outbox_class": "fake_purchase_order"
           },
           {
+            "command_type": "purchase_order.send.dark",
+            "version": "command.v1",
+            "permission_rule": "owner",
+            "lock_adapter": "route_before_begin",
+            "completion_adapter": "purchase_order",
+            "audit_class": "commercial",
+            "outbox_class": "fake_merchant_order"
+          },
+          {
             "command_type": "purchase_order.simulate",
             "version": "command.v1",
             "permission_rule": "owner",
@@ -920,11 +947,11 @@
             "outbox_class": null
           },
           {
-            "command_type": "EndCheck",
-            "version": "end-check.v1",
+            "command_type": "rate.suggestion_accept",
+            "version": "rate-suggestion-accept.v1",
             "permission_rule": "owner",
             "lock_adapter": "route_before_begin",
-            "completion_adapter": "contractor_job_finish",
+            "completion_adapter": "rate_suggestion_acceptance",
             "audit_class": "operational",
             "outbox_class": null
           },
@@ -1258,6 +1285,15 @@
             "permission_rule": "owner",
             "lock_adapter": "route_before_begin",
             "completion_adapter": "operational_record",
+            "audit_class": "operational",
+            "outbox_class": null
+          },
+          {
+            "command_type": "EndCheck",
+            "version": "end-check.v1",
+            "permission_rule": "owner",
+            "lock_adapter": "route_before_begin",
+            "completion_adapter": "contractor_job_finish",
             "audit_class": "operational",
             "outbox_class": null
           }

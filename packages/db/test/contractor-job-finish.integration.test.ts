@@ -2,8 +2,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { appendAuditBatch, EnterpriseLivePromptRepository, withTenant } from "../src/index.js";
-import { cluster, promptFixture, promptSession, ownerTx, materialsInput, listInput, type PromptFixture } from "./enterprise-live-prompt-fixtures.js";
-import { invite, command } from "./site-extra-fixtures.js";
+import { cluster, promptFixture, ownerTx, materialsInput, listInput, type PromptFixture } from "./enterprise-live-prompt-fixtures.js";
 import { ownerVisit } from "./site-visit-fixtures.js";
 vi.setConfig({ testTimeout: 90000, hookTimeout: 120000 });
 let c: Awaited<ReturnType<typeof cluster>>, repo: EnterpriseLivePromptRepository;
@@ -89,9 +88,8 @@ describe("ENT-8a owner contractor job finish", () => {
   await expect(repo.finishStatus(f.sessions[role]!, f.jobId)).rejects.toMatchObject({ code: "EXTRA_FORBIDDEN" });
  });
  it("rechecks a removed owner's authority before replay", async () => {
-  const f = await promptFixture(c), owner = await invite(c, f, "owner", { kind: "tenant", id: f.p.tenantId });
-  const session = await promptSession(c, owner), cmd = input(f); await repo.endCheck(session, cmd);
-  await command(c, f, { kind: "membership.revoke", membershipId: owner.member.membershipId });
+  const f = await promptFixture(c), session = f.sessions.owner!, cmd = input(f); await repo.endCheck(session, cmd);
+  await c.admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [f.p.tenantId, f.p.membershipId]);
   await expect(repo.endCheck(session, cmd)).rejects.toBeDefined();
   await expect(repo.finishStatus(session, f.jobId)).rejects.toBeDefined();
  });

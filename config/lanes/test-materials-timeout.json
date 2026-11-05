@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "test-materials-timeout": {
+      "branches": [
+        "codex/sandbox/test-materials-timeout"
+      ],
+      "allow": [
+        "apps/web/app/api/contractor/jobs/[id]/possible-extras/materials/route.integration.test.ts"
+      ]
+    }
+  }
+}

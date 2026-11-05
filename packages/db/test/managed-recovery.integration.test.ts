@@ -1,5 +1,6 @@
 // Real PostgreSQL regressions, executed in CI; builder sandbox cannot bind localhost.
 import { createHash, randomUUID } from "node:crypto";
+import { electManagedRecovery } from "@jobguard/core";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { ManagedRecoveryRepository } from "../src/managed-recovery-repository.js";
 import { UserCommandDispatcher } from "../src/commands.js";
@@ -13,6 +14,11 @@ it("persists the exact election; concurrent replays produce one authorization an
  const id = await newCase(c,f), input = command(id), before = await counts(c);
  const results = await Promise.all([repo().elect(f.context,f.job,input,f.actor),repo().elect(f.context,f.job,input,f.actor)]);
  expect(results[0]).toEqual(results[1]);
+ // SQL completion must preserve the core DTO and its binding hash, not trust the handler.
+ expect(results[0]).toEqual(electManagedRecovery({version:'managed-recovery-state.v1',environment:'synthetic_demo',
+  tenantId:f.tenant,jobId:f.job,caseId:id,election:null,pursuitStartedAt:null},input,
+ {environment:'synthetic_demo',tenantId:f.tenant,jobId:f.job,caseId:id,
+  actorMembershipId:f.actor.membershipId,canApprove:true,now:results[0]!.election!.electedAt}));
  expect(results[0]!.election).toMatchObject({ tenantId:f.tenant,jobId:f.job,caseId:id,selection:input.selection,termsVersion:input.termsVersion });
  expect(await repo().elect(f.context,f.job,{...input,commandId:randomUUID()},f.actor)).toEqual(results[0]);
  const after = await counts(c);
@@ -199,7 +205,8 @@ it('requires session ownership even with a matching processing receipt and appro
  const other=await fixture(c),id=await newCase(c,f),input=command(id);
  const h=createHash('sha256').update(['managed-recovery-election-command.v1',f.job,id,
   input.selection.service,input.selection.points,input.termsVersion].join('\n')).digest('hex');
- const elected=await new UserCommandDispatcher(c.admin).dispatch(f.context,{
+ let elected: Record<string,unknown> | undefined;
+ const completed=await new UserCommandDispatcher(c.admin).dispatch(f.context,{
   version:'command.v1',commandId:input.commandId,commandType:'managed_recovery.elect',
   semanticKey:`managed-recovery:${f.job}:${id}`,actorMembershipId:f.actor.membershipId,
   subjectType:'recovery_case',subjectRef:id,
@@ -221,9 +228,12 @@ it('requires session ownership even with a matching processing receipt and appro
   await expect(call(f.sessionDigest)).rejects.toMatchObject({code:'42501',message:'MANAGED_RECOVERY_FORBIDDEN'});
   await db.$client.query('ROLLBACK TO SAVEPOINT stale_approval');
   await db.$client.query('RELEASE SAVEPOINT stale_approval');
-  return (await call(f.sessionDigest)).rows[0];
+  elected=(await call(f.sessionDigest)).rows[0];
+  return elected!;
  }});
- expect(elected).toMatchObject({caseId:id,election:{actorMembershipId:f.actor.membershipId,selection:{points:5}}});
+ expect(elected).toMatchObject({case_id:id,actor_membership_id:f.actor.membershipId,points:5});
+ expect(completed).toMatchObject({caseId:id,election:{actorMembershipId:f.actor.membershipId,selection:{points:5}}});
+ expect(completed).toEqual(await repo().elect(f.context,f.job,input,f.actor));
 });
 
 // LP-5 completion must derive an immutable effect, even if a route hands it a
@@ -238,6 +248,6 @@ it('refuses completion without a stored election', async () => {
   subjectType:'recovery_case',subjectRef:id,
   action:{actionType:'managed_recovery.elect',recipient:null,contentHash:h,aggregateRevision:1,
    amountPence:null,currency:null,policyVersion:input.termsVersion,expiresAt:new Date('2099-01-01T00:00:00Z')},
- },{mutate:async()=>({case_id:id,points:5})})).rejects.toMatchObject({code:'AUTHORIZATION_INVALID'});
+ },{mutate:async()=>({case_id:id,actor_membership_id:f.actor.membershipId,points:5})})).rejects.toMatchObject({code:'AUTHORIZATION_INVALID'});
  expect(await counts(c)).toEqual(before);
 });

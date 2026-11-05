@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { money, parsePayNowInvoice, payNowOptions, PayNowSyntheticError } from "@jobguard/core";
+import { money, parsePayNowInvoice, payNowFakeResult, PayNowSyntheticError } from "@jobguard/core";
 
 const commandV1 = z.object({
   version: z.literal("pay-now.fake-command.v1"), commandId: z.guid(),
@@ -35,13 +35,7 @@ export class PayNowFakeProvider {
     if ((stub && this.invoice.kind === "final") || (!stub && this.settled)) {
       throw new PayNowSyntheticError("INVALID_INPUT");
     }
-    const option = payNowOptions(this.invoice).find(item => item.rail === command.rail);
-    const amount = stub ? money(0) : money(this.invoice.balancePence);
-    const result: Result = Object.freeze({ synthetic: true, invoiceId: this.invoice.invoiceId,
-      invoiceRevision: this.invoice.revision, destinationAccount: this.invoice.builderAccount,
-      status: stub ? "stub_not_collected" : "fake_settled", customerDebit: amount, builderCredit: amount,
-      // Fee is a separate debit to the builder; customer funds never pass through JobGuard.
-      builderFeeDebit: option?.builderFee ?? money(0), platformCustomerFunds: money(0) });
+    const result: Result = payNowFakeResult(this.invoice, command.rail);
     this.results.set(key, { payload, result });
     if (!stub) this.settled = true;
     return result;

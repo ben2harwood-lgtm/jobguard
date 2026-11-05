@@ -186,3 +186,82 @@ services, PR, release or Git mutation was used.
 
 READY for router commit and NOPR push; CI and independent RED checking remain for
 this group's turn. Not merged, independently reviewed or released.
+
+
+## Batch-35 pre-check repair (5 November 2026)
+
+RED. One authorised repair round for batch-35 (ENT-8a job finish and dark
+ENT-13a machine connections), NOPR. Read coordinator/prechecks/batch-35.md.
+Applied batch-35-proven-fixes.patch using git apply for its five unchanged target
+files; adapted the two registry-list hunks to retain main's additions. Removed
+now-unused invite/command/promptSession imports. Bootstrap pre-creates and checks
+jobguard_machine; the integration setup records predecessors before legacy
+fixtures and explicitly assumes the NOINHERIT machine role; endCheck returns a
+rejected promise for invalid input; the revoked-owner replay test revokes its
+existing owner instead of attempting a forbidden second owner. No assertion or
+authorization boundary was removed.
+
+Resolved all three original text conflicts by keeping both sides: observationEvidence
+and finishStatus, the complete empty-table union, and registry declarations before
+their consumers. The launcher's pending merge targets 62081c68933d0b953e7dd75a8cbd7b3a2fb4f304.
+While working, cached origin/main advanced to 199124c0885ca27558fbaf62a9a74dee7ad2818f
+(batch-28, migrations 0609/0610). Preserved those additional main changes in the
+working tree using read-only git show/diff and temporary three-way text merges;
+resolved their four list conflicts by retaining rateSuggestionRegistryRow and
+adding only this piece's contractorJobFinishRegistryRow. The 0990 proof now chains
+from 0609's exact after-state, adding EndCheck once. The 0606 dark-order row is
+retained throughout. The proof-loader test validates that chain.
+
+Migration inspection: all 275 migrations on that pinned main were byte-identical;
+0990 and 0991 are the only new migrations, with no repeated number. All five
+replaced lp_* routines still derive from the latest predecessor, 0196, which is
+identical on branch and main. No main migration was edited. Final-tree comparison
+against pinned main found exactly 35 non-lane changed files; batch-35.json lists
+exactly those paths and does not list itself. Existing loadLanePolicy and
+lanePathAllowed helpers accepted every path. The standard committed-head lane
+check must run after the router stages the resolved merge and commits, including
+the preserved newer-main files (some are currently untracked relative to the old
+merge index). No git index, ref or commit writes were performed here.
+
+Local verification with installed executables (no downloads, PostgreSQL or server):
+- packages/db: ./node_modules/.bin/vitest run --maxWorkers=2
+  test/migration-proof-loader.test.ts test/lp5-command-catalog.test.ts
+  test/late-source-import-migration.test.ts — PASS, 86 tests.
+- apps/api: ./node_modules/.bin/vitest run --maxWorkers=2
+  src/connectors/machine.test.ts — PASS, 20 tests.
+- apps/web: ./node_modules/.bin/vitest run --maxWorkers=2
+  'app/api/contractor/jobs/[id]/finish/route.test.ts'
+  'app/contractor/jobs/[id]/possible-extras/job-finish.test.tsx' — PASS, 20 tests.
+- packages/db, apps/api and apps/web: ./node_modules/.bin/tsc
+  -p tsconfig.json --noEmit — PASS.
+- node tools/plpgsql-case-in-if-lint.mjs — PASS, 277 migrations;
+  node tools/commercial-boundary-lint.mjs and node tools/money-arithmetic-lint.mjs
+  — PASS. git diff --check — PASS.
+
+Two initial pnpm commands stalled before checks started and were interrupted;
+installed executables supplied the results above. A premature test invocation
+encountered temporary merge markers in two files (76 proof-loader tests passed);
+after resolving the markers the complete three-file run passed 86/86. An exhaustive
+lane-comparison helper was interrupted after its migration checks completed and
+replaced with a focused comparison of candidate paths. These are local execution
+notes, not additional product repair rounds.
+
+CI must prove pnpm typecheck/lint/test/build and applicable eval gates at the final
+committed head; real PostgreSQL fresh/predecessor upgrades, demo-bootstrap,
+connector-machine and connector-intake, contractor-job-finish and end-check,
+restore/plan/server entitlement upgrades, LP-0 grants/catalogue and migration proofs.
+Required adversarial coverage includes duplicate/replay, revoked permissions,
+cross-tenant/job access, immutable finish/audit facts, machine capabilities,
+rotation/revoke/disconnect, nonce replay and rollback. Run the mandatory database
+and migration suites. CI must also execute apps/web/e2e/ENT-8a-job-finish.spec.ts
+on phone and desktop with at most two workers; no browser journey was run here.
+One independent RED review must bind to the final committed head before landing.
+No real data, live provider, deployment, launch, PR or push occurred here.
+
+Changed test files and their imported fixtures also passed the installed root tsc
+with /tmp/batch-35-repair-types.json (extends DB configuration, noEmit, repository
+rootDir, six explicitly selected test files). This proves types, not DB execution.
+
+READY for router staging/commit and NOPR push. Database/browser CI, the standard
+committed-head lane check and independent RED review remain required. Not merged,
+independently reviewed, released or launched.

@@ -219,3 +219,46 @@ the batch's database integration suites, the export-preview browser journey
 and all required typecheck/lint/test/build checks against current main.
 Independent RED review must PASS at the exact resulting head before merge;
 this local source inspection and deterministic testing are not that review.
+
+## M5-2 stored route changes (dark slice, 4 November 2026)
+
+`AccountingExportRepository.routeChangePreview` and `routeChangeConfirm` use the
+migration-owned `app.accounting_export_route` session boundary. Inputs are strict
+version-1 schemas. The destination connection/mapping proposal is an existing
+administrator-owned synthetic export fixture, identified by source ID; runtime
+callers cannot seed, edit or assert its connection state. Its full scope must
+match tenant, target company, job, source revision and mapping. No tenant-wide
+switch exists. A switch with no previous route/history is refused.
+
+The canonical database preview hash binds version, exact scope/mapping, old and
+new route, target connection revision, consent revision and the ordered historic
+ledger artifacts, references, external IDs and execution states. Every historic
+entry must be pushed with an external ID. Pending, unknown, absent, edited,
+duplicate or conflicting entries hold the switch until reconciliation. These
+are persisted synthetic observations, not fresh provider lookups or real
+provider conformance. Live connection and target-visibility verification remain
+with the held adapters/G5 work.
+
+Confirmation is an explicit human-approved `accounting_export.route` Decision,
+with an exact preview hash, tenant, expiry, command ID and single-use Decision ID.
+The current session supplies the actor; caller-supplied actors are refused.
+Confirmation appends one FORCE-RLS record and a checked-operation audit event in
+one transaction under the existing tenant export lock. Identical command replay
+returns the original record after current session, fixture consent/revisions and
+reconciliation holds are checked; altered replay and Decision reuse across route
+changes and ordinary export approvals fail. Expired confirmation cannot replay.
+
+Existing ledger artifacts, mappings, references and external IDs are never
+rewritten. Their existing export claim rules prevent reposting. A new source's
+administrator-owned fixture must match the confirmed destination route,
+connection/consent revisions and exact mapping before preview/approval; the
+server does not silently rewrite a stale proposal. Other jobs/companies retain
+their routes. No HTTP, screen, worker, scheduler, OAuth, SDK, endpoint, tax,
+settlement or recovery-proof capability is added. M5-2 remains open; G0–G5,
+provider approval, CI database execution and exact-head independent RED review
+remain held.
+
+LP-5 lifecycle hold: the dark stored route-change operation uses its own checked
+synthetic session boundary and immutable Decision record, outside LP-5 lifecycle
+dispatch. Integration with that lifecycle remains held before live route changes
+can be enabled. This slice grants no live provider or payment authority.
