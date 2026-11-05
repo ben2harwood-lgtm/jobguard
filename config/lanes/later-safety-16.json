@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-16": {
+      "branches": [
+        "codex/sandbox/later-safety-16"
+      ],
+      "note": "LATER-SAFETY-16; RED money alert; stacked on batch-37; NOPR.",
+      "allow": [
+        "packages/db/src/contractor-billing-repository.ts",
+        "packages/db/test/contractor-billing-export.integration.test.ts",
+        "packages/db/migrations/0792_relinked_extra_reconciliation.sql",
+        "packages/db/migration-notes/0792_relinked_extra_reconciliation.md",
+        "packages/db/test/migration-proofs/0792_relinked_extra_reconciliation.proof.json"
+      ]
+    }
+  }
+}
