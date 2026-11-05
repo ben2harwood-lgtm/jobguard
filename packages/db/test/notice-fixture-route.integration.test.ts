@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { IdentityRepository } from "../src/identity-repository.js";
 import { NoticeFixtureRepository } from "../src/notice-fixture-repository.js";
-import { createWorkFixture, closeWorkFixture, type WorkFixture } from "./job-work-state-fixtures.js";
+import { createWorkFixture, closeWorkFixture, workTenant, type WorkFixture } from "./job-work-state-fixtures.js";
 import { meterCompany } from "./meter-persistence-fixtures.js";
 import { IdentityApplication } from "../../../apps/api/src/auth/identity.application.js";
 import { PersistedAuthProvider } from "../../../apps/api/src/auth/persisted-auth-provider.js";
@@ -18,6 +18,7 @@ beforeAll(async () => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); f = await 
 afterAll(async () => { await closeWorkFixture(f); vi.unstubAllEnvs(); });
 it("screen transport stores exact previews and separate facts, refuses attacks, and enqueues nothing (real PostgreSQL)", async () => {
   const a = await meterCompany(f), b = await meterCompany(f);
+  // meterCompany already seeds both fictional jobs live through seedWorkJob.
   const provider = new PersistedAuthProvider(new IdentityRepository(f.admin), "fictional-notice-route-secret-32-bytes");
   state.identity = new IdentityApplication(provider, "https://fixture.invalid");
   const token = randomUUID();
@@ -42,6 +43,19 @@ it("screen transport stores exact previews and separate facts, refuses attacks, 
     expect((await post({ ...revision, commandId: randomUUID(), data })).status).toBe(409);
   }
   expect((await f.admin.query("SELECT count(*)::int n FROM app.notice_fixture_record WHERE tenant_id=$1", [a.tenantId])).rows[0].n).toBe(0);
+  await workTenant(f.admin, a.tenantId, async db => {
+    await db.query("SET LOCAL session_replication_role=replica");
+    await db.query("UPDATE app.job SET status='draft' WHERE tenant_id=$1 AND id=$2", [a.tenantId, a.jobId]);
+  });
+  const draft = await post(revision);
+  const foreign = await POST(new Request(path, { method: "POST", body: JSON.stringify({ ...revision, jobId: b.jobId }) }), { params: Promise.resolve({ id: b.jobId }) });
+  expect(draft.status).toBe(404); expect(foreign.status).toBe(404);
+  expect(await draft.json()).toEqual(await foreign.json());
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.notice_fixture_record WHERE tenant_id=$1", [a.tenantId])).rows[0].n).toBe(0);
+  await workTenant(f.admin, a.tenantId, async db => {
+    await db.query("SET LOCAL session_replication_role=replica");
+    await db.query("UPDATE app.job SET status='live' WHERE tenant_id=$1 AND id=$2", [a.tenantId, a.jobId]);
+  });
   expect((await post(revision)).status).toBe(201); expect((await post(revision)).status).toBe(201);
   expect((await post({ ...revision, data: { ...revision.data, recipientReference: "changed" } })).status).toBe(409);
   let view = await read(); expect(view.records).toHaveLength(1); expect(view.preview.input).toMatchObject(revision.data);

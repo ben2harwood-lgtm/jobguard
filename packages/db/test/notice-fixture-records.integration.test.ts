@@ -24,6 +24,64 @@ describe("M4-19 append-only durable synthetic notice book (real PostgreSQL)", ()
     const read = () => new NoticeFixtureRepository(f.runtime).read(a.context, a.jobId, n);
     return { a, n, repo, actor, command, revision, decision, event, send, read };
   }
+  // meterCompany uses seedWorkJob: these existing success fixtures already start live.
+  it("refuses fresh draft prepare and append exactly like a foreign job, without storing anything", async () => {
+    const x = await fixture(), y = await fixture(), rev = x.revision();
+    await workTenant(f.admin, x.a.tenantId, async db => {
+      // Owner-only lifecycle fixture; never a product status override.
+      await db.query("SET LOCAL session_replication_role=replica");
+      await db.query("UPDATE app.job SET status='draft' WHERE tenant_id=$1 AND id=$2", [x.a.tenantId, x.a.jobId]);
+    });
+    for (const operation of ["prepare", "append"]) {
+      const value = operation === "prepare" ? rev : { input: rev };
+      for (const context of [x.a.context, y.a.context]) {
+        await expect(workTenant(f.runtime, context.tenantId, db => db.query(
+          "SELECT app.notice_fixture_records($1,$2,$3,$4,$5::jsonb)",
+          [x.a.jobId, x.n, context === x.a.context ? x.a.digest : y.a.digest, operation, JSON.stringify(value)],
+        ))).rejects.toMatchObject({ code: "P0002", message: "NOT_FOUND" });
+      }
+    }
+    await expect(x.send(rev)).rejects.toMatchObject({ code: "NOT_FOUND", message: "NOT_FOUND" });
+    expect((await f.admin.query("SELECT count(*)::int n FROM app.notice_fixture_record WHERE tenant_id=$1", [x.a.tenantId])).rows[0].n).toBe(0);
+  });
+  it("allows fresh commands on each post-live billing status", async () => {
+    for (const status of ["live", "invoiced", "paid"]) {
+      const x = await fixture();
+      await workTenant(f.admin, x.a.tenantId, async db => {
+        await db.query("SET LOCAL session_replication_role=replica");
+        await db.query("UPDATE app.job SET status=$3 WHERE tenant_id=$1 AND id=$2", [x.a.tenantId, x.a.jobId, status]);
+      });
+      expect(await x.send(x.revision())).toMatchObject({ sequence: 1, kind: "revision" });
+    }
+  });
+  it("keeps stored replay and reads across invoiced and non-live status without relaxing authority", async () => {
+    const x = await fixture(), y = await fixture(), rev = x.revision(), first = await x.send(rev);
+    const original = await x.read();
+    for (const status of ["invoiced", "paid", "draft"]) {
+      await workTenant(f.admin, x.a.tenantId, async db => {
+        await db.query("SET LOCAL session_replication_role=replica");
+        await db.query("UPDATE app.job SET status=$3 WHERE tenant_id=$1 AND id=$2", [x.a.tenantId, x.a.jobId, status]);
+      });
+      expect(await x.send(rev)).toEqual(first);
+      expect((await x.read()).records).toEqual(original.records);
+      // Exercise both SQL replay paths, including append, which the repository's prepare replay avoids.
+      for (const operation of ["prepare", "append"]) {
+        const value = operation === "prepare" ? rev : { input: rev };
+        const result = await workTenant(f.runtime, x.a.tenantId, async db => (await db.query(
+          "SELECT app.notice_fixture_records($1,$2,$3,$4,$5::jsonb) result",
+          [x.a.jobId, x.n, x.a.digest, operation, JSON.stringify(value)],
+        )).rows[0].result);
+        expect(operation === "prepare" ? result.replay : result).toEqual(first);
+      }
+      await expect(x.repo.command(y.a.context, y.actor, rev)).rejects.toMatchObject({ code: "NOT_FOUND", message: "NOT_FOUND" });
+      await expect(x.repo.read(y.a.context, x.a.jobId, x.n)).rejects.toMatchObject({ code: "NOT_FOUND", message: "NOT_FOUND" });
+      await f.admin.query("UPDATE app.membership SET role='read_only' WHERE id=$1", [x.a.actorId]);
+      await expect(x.send(rev)).rejects.toMatchObject({ code: "NOT_FOUND", message: "NOT_FOUND" });
+      await f.admin.query("UPDATE app.membership SET role='owner' WHERE id=$1", [x.a.actorId]);
+    }
+    await expect(x.send({ ...x.revision({ recipientReference: "changed" }), commandId: rev.commandId })).rejects.toMatchObject({ code: "REPLAY_CONFLICT" });
+    expect((await x.read()).records).toHaveLength(1);
+  });
   it("reports a real PostgreSQL query fault as unavailable, not a missing notice", async () => {
     const x = await fixture();
     const faultPool = { async connect() {
