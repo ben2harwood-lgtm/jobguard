@@ -2216,3 +2216,39 @@ Final local evidence for batch-48:
 - READY for router commit as RED/NOPR; the unchanged lane CLI still reports
   only the five transient lane additions/removals and must be rerun after
   commit. Exact final-file lane coverage passed; no test was weakened.
+
+## 5 November 2026 — batch-48 current-main merge verification
+
+The launcher completed the merge at f1cfe3e06, incorporating stored origin/main
+d16ef1978. Entry was clean, with no unmerged paths. Compared the complete final
+diff against origin/main: no migrations, routines or exact database catalogs are
+changed, so no routine recreation or duplicate migration removal is applicable.
+Main's latest database bodies remain intact. No source repair or new behavior
+was needed. Existing assertions are preserved.
+
+Checks actually run on this merged tree, using installed binaries:
+- Core: `vitest run --maxWorkers=2 src/allocation.refusals.test.ts
+  src/customer-billing.history-boundaries.test.ts src/money.negative-limits.test.ts`
+  — 3 files / 20 tests PASS.
+- Config: `vitest run --maxWorkers=2 src/api-environment.boundaries.test.ts
+  src/identity-environment.database-boundary.test.ts
+  src/identity-environment.required-settings.test.ts` — 3 files / 23 tests PASS;
+  separate run of `src/identity-environment.secret-boundary.test.ts` — 4 PASS.
+- Web: Playwright `test --list --workers=2` for UIWIRE-15-READ-RECOVERY and
+  VALUE-1-READ-RECOVERY — 12 cases discovered; no browser execution.
+- DB: Vitest `list --maxWorkers=2` for commercial-integrity-v3-published and
+  commercial-integrity-v3-review integration files — 18 cases collected;
+  no PostgreSQL execution.
+- Standard `node tools/agent-lane-boundary-lint.mjs` — PASS against the merged
+  head. Exact allowlist comparison — PASS for all 18 non-lane paths; no lane
+  file lists itself. `git diff --check origin/main` — PASS.
+
+Database/browser execution and all required current-head CI, plus independent
+RED review at the resulting exact head, remain required before merge. No Git
+writes, download, provider action, deployment or launch was performed. This is
+landing preparation only; earlier initial simplicity observations stand.
+
+Web TypeScript completed successfully on the merged tree:
+`node node_modules/typescript/bin/tsc -p apps/web/tsconfig.json --noEmit
+--incremental false` — PASS. Final whitespace check passed.
+READY for router commit/push and subsequent PR admission, CI and RED review.
