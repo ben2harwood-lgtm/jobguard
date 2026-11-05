@@ -55,3 +55,24 @@ describe("ENT-13a isolated connector proof", () => {
     expect(combineLp0(baseline, [proof, addition])).toEqual(combineLp0(baseline, [proof]));
   });
 });
+
+
+describe("LATER-SAFETY-15 forward machine refusal migration", () => {
+  const sql = readFileSync(new URL("../migrations/0992_connector_intake_machine_refusal.sql", import.meta.url), "utf8");
+  const latest = readFileSync(new URL("../migrations/0576_connector_materials_stage.sql", import.meta.url), "utf8");
+  it("preserves the entire latest legacy intake body except the machine binding refusal", () => {
+    const body = latest.slice(latest.indexOf("CREATE OR REPLACE FUNCTION"), latest.indexOf("COMMIT;"));
+    const guard = " IF EXISTS(SELECT FROM connector.machine_connection m WHERE m.id=binding_id)\n THEN RAISE EXCEPTION 'CONNECTOR_INPUT_REFUSED' USING ERRCODE='42501'; END IF;\n";
+    expect(sql.slice(sql.indexOf("CREATE OR REPLACE FUNCTION connector.intake"),sql.indexOf("CREATE OR REPLACE FUNCTION connector.machine_stage")).trim().replace(guard,""))
+      .toBe(body.trim());
+  });
+  it("retains the complete staging body behind machine checks without a caller-set bypass or a grant change", () => {
+    const body = latest.slice(latest.indexOf(" -- No caller"),latest.indexOf("END $$;")).replace("id=binding_id FOR SHARE","id=c FOR SHARE");
+    const stage = sql.slice(sql.indexOf("CREATE OR REPLACE FUNCTION connector.machine_stage"));
+    expect(stage).toContain(body);
+    expect(stage).toContain("key_ref IS NULL OR key_ref=''");
+    expect(stage).toContain("input->>'kind' IS NULL OR input->>'kind'=''");
+    expect(stage).not.toContain("connector.intake(c,token,input)");
+    expect(sql).not.toMatch(/(?:GRANT|REVOKE|CREATE TABLE|SET app\.)/u);
+  });
+});

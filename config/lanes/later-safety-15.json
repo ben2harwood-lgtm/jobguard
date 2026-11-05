@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-15": {
+      "branches": [
+        "codex/sandbox/later-safety-15"
+      ],
+      "note": "LATER-SAFETY-15 RED connector authority; NOPR stacked on batch-35. Forward migration 0992 follows machine creation; PostgreSQL CI and independent RED review required.",
+      "allow": [
+        "docs/contracts/connector-capabilities-v1.md",
+        "packages/db/migration-notes/0992_connector_intake_machine_refusal.md",
+        "packages/db/migrations/0992_connector_intake_machine_refusal.sql",
+        "packages/db/test/connector-intake-proof.test.ts",
+        "packages/db/test/connector-machine.integration.test.ts",
+        "packages/db/test/migration-proofs/0992_connector_intake_machine_refusal.proof.json"
+      ]
+    }
+  }
+}

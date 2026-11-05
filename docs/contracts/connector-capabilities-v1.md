@@ -189,3 +189,10 @@ secret resolver, endpoint or network action. Existing staging still returns only
 H4, billing/materials/export promotion dependencies and every real-endpoint gate
 remain open. CI PostgreSQL proof and exact-head independent RED review are required;
 local transport/guard tests alone do not close ENT-13a or G5.
+
+LATER-SAFETY-15 hardens this fictional boundary: legacy `connector.intake` refuses
+all bindings registered as machine connections, even with a correct token or an
+existing receipt. Machine input must use `machine_stage`, whose key reference and
+capability kind must be present, nonempty and currently authorised before consuming
+a nonce. Refusals use `CONNECTOR_INPUT_REFUSED`; existing non-machine intake and
+machine staging validation, deduplication and atomic audit remain required.

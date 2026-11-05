@@ -102,3 +102,59 @@ describe("ENT-13a persisted machine authority RED",()=>{
     expect((await f.admin.query("SELECT 1 FROM pg_auth_members WHERE member='jobguard_machine'::regrole")).rows).toEqual([]);
   });
 });
+
+
+describe("LATER-SAFETY-15 machine input cannot bypass authority",()=>{
+  async function legacy(c:string,secret=token,value:unknown=input) {
+    const db=await f.admin.connect();
+    try {
+      await db.query("BEGIN");
+      await db.query("SET LOCAL ROLE jobguard_connector");
+      await db.query("SELECT connector.intake($1,$2,$3::jsonb)",[c,secret,JSON.stringify(value)]);
+      await db.query("COMMIT");
+    } catch(error) { await db.query("ROLLBACK"); throw error; }
+    finally { db.release(); }
+  }
+  async function counts(c:string) {
+    return (await f.admin.query(`SELECT
+      (SELECT count(*)::int FROM connector.input_event WHERE binding_id=$1) staged,
+      (SELECT count(*)::int FROM connector.machine_nonce WHERE connection_id=$1) nonces,
+      (SELECT count(*)::int FROM app.audit_event WHERE subject_ref=$1::text AND event_type='connector.input_staged') audited`,[c])).rows[0];
+  }
+  it("refuses machine binding tokens through legacy intake before staging or receipt replay",async()=>{
+    const s=await setup(),auth=await authority(s.c),before=await counts(s.c);
+    await expect(legacy(s.c)).rejects.toMatchObject({code:"42501",message:"CONNECTOR_INPUT_REFUSED"});
+    expect(await counts(s.c)).toEqual(before);
+    expect(await stage(s.c,auth)).toMatchObject({state:"staged",domainEffects:0});
+    const after=await counts(s.c);expect(after).toEqual({staged:1,nonces:1,audited:1});
+    await expect(legacy(s.c)).rejects.toMatchObject({code:"42501",message:"CONNECTOR_INPUT_REFUSED"});
+    expect(await counts(s.c)).toEqual(after);
+  });
+  it.each([null, ""])("refuses absent or empty key reference %s without consuming nonce",async key=>{
+    const s=await setup(),auth=await authority(s.c),before=await counts(s.c);
+    await expect(machine.query("SELECT connector.machine_stage($1,$2,$3::jsonb,$4,$5,$6::bigint,$7::jsonb)",
+      [s.c,token,JSON.stringify(auth),key,"fictional_nonce_0001",Math.floor(Date.now()/1000),JSON.stringify(input)]))
+      .rejects.toMatchObject({code:"42501",message:"CONNECTOR_INPUT_REFUSED"});
+    expect(await counts(s.c)).toEqual(before);
+    expect(await stage(s.c,auth)).toMatchObject({state:"staged",domainEffects:0});
+  });
+  it.each([null, "", undefined])("refuses NULL, empty or missing capability kind %s at the authority boundary",async kind=>{
+    const s=await setup(),auth=await authority(s.c),before=await counts(s.c);
+    await expect(stage(s.c,auth,"fictional_nonce_0001","fixture:key",{...input,kind}))
+      .rejects.toMatchObject({code:"42501",message:"CONNECTOR_INPUT_REFUSED"});
+    expect(await counts(s.c)).toEqual(before);
+    expect(await stage(s.c,auth)).toMatchObject({state:"staged",domainEffects:0});
+  });
+  it("refuses forged actor, tenant and unlisted capability without effects, and still rejects nonce replay",async()=>{
+    const s=await setup(),auth=await authority(s.c),other=await setup(),before=await counts(s.c);
+    for(const patch of [{machineActor:randomUUID()},{tenantId:other.a.tenantId},{capabilities:["work_order","materials_issue"]}]) {
+      await expect(stage(s.c,{...auth,...patch})).rejects.toMatchObject({code:"42501",message:"CONNECTOR_INPUT_REFUSED"});
+      expect(await counts(s.c)).toEqual(before);
+    }
+    await expect(legacy(other.c,token,{...input,tenantId:s.a.tenantId})).rejects.toMatchObject({code:"42501",message:"CONNECTOR_INPUT_REFUSED"});
+    expect(await counts(other.c)).toEqual({staged:0,nonces:0,audited:0});
+    await stage(s.c,auth);const after=await counts(s.c);
+    await expect(stage(s.c,auth)).rejects.toMatchObject({code:"23505",message:"CONNECTOR_INPUT_REFUSED"});
+    expect(await counts(s.c)).toEqual(after);
+  });
+});
