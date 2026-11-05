@@ -62,9 +62,11 @@ it("LATER-SAFETY-16 reconciliation restores an approved unlinked extra until its
 it("LATER-SAFETY-16 reconciliation and export exclude withdrawn and rejected extras", async () => {
  const {ExtraApprovalRepository}=await import("../src/index.js"),{submitted,approveInput}=await import("./extra-approval-chain-fixtures.js");
  const own=await world(c,338),approvals=new ExtraApprovalRepository(c.runtime),actor=own.w.members.supervisor.member;
- await approvals.withdrawExtra(own.ctx,actor,{version:"withdraw-extra.v1",commandId:randomUUID(),jobId:own.s.jobId,extraId:own.s.extraId,reasonCode:"not_done"});
- expect((await own.repo.read(own.ctx,own.session,own.s.jobId)).reconciliation.approvedNotExported).toEqual([]);
- expect((await own.exported()).lineCount).toBe(0);
+ // An approved extra cannot be withdrawn (ALREADY_DECIDED); withdraw a submitted one instead.
+ const withdrawn=await submitted(c,own.w,338);
+ await approvals.withdrawExtra(own.ctx,actor,{version:"withdraw-extra.v1",commandId:randomUUID(),jobId:withdrawn.jobId,extraId:withdrawn.extraId,reasonCode:"not_done"});
+ expect((await own.repo.read(own.ctx,own.session,withdrawn.jobId)).reconciliation.approvedNotExported).toEqual([]);
+ expect((await own.repo.finalise(own.ctx,own.session,withdrawn.jobId,own.exportInput())).lineCount).toBe(0);
  const rejected=await submitted(c,own.w,338);
  await approvals.rejectExtra(own.ctx,actor,{...approveInput(rejected,0),version:"reject-extra.v1",reasonCode:"price_not_agreed"});
  expect((await own.repo.read(own.ctx,own.session,rejected.jobId)).reconciliation.approvedNotExported).toEqual([]);
