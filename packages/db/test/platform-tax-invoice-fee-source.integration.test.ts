@@ -115,12 +115,12 @@ it("does not credit another tenant's or job's invoice after correction", async (
   await expect(t.issue({ ...credit, originalNumber: foreignInvoice.number, lines: foreign.command.lines }))
     .rejects.toThrow("PLATFORM_INVOICE_SOURCE_UNAVAILABLE");
   const otherJob = await seedWorkJob(f, t.a.tenantId);
-  const jobSource = feeSourceFixture(otherJob.jobId);
+  const jobSource = feeSourceFixture(otherJob.jobId, 3);
   await workTenant(f.admin, t.a.tenantId, async db => {
     const resolution = randomUUID();
     await db.query("INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES($1,$2,'simulation_fee_statement',$3,'success_fee.statement_approve')", [jobSource.decisionId, t.a.tenantId, jobSource.id]);
     await db.query(`INSERT INTO app.platform_fee_statement(tenant_id,job_id,id,sequence,namespace,source_hash,document,document_hash,decision_id)
-      VALUES($1,$2,$3,1,'success_fee.synthetic.v1',$4,$5::jsonb,$6,$7)`, [t.a.tenantId, otherJob.jobId, jobSource.id,
+      VALUES($1,$2,$3,3,'success_fee.synthetic.v1',$4,$5::jsonb,$6,$7)`, [t.a.tenantId, otherJob.jobId, jobSource.id,
       jobSource.source_hash, JSON.stringify(jobSource.document), jobSource.document_hash, jobSource.decisionId]);
     await db.query("INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'approved',$4)", [resolution, t.a.tenantId, jobSource.decisionId, t.a.actorId]);
     await db.query(`INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,recipient,content_hash,amount_pence,currency,aggregate_revision,policy_version,expires_at)
