@@ -186,6 +186,7 @@ test("initial pending, transport/HTTP/JSON/schema failures and GET-only recovery
 });
 
 test("refresh hides old figures; only the latest real read or failure may publish", async ({ page }) => {
+  await page.route("**/__keep-interception-on__", route => route.continue());
   const { jobId, snapshot } = await prepare(page);
   await nextRealResponse(page, jobId, () => page.goto(`/jobs/${jobId}/value`));
   await ready(page, snapshot);
