@@ -11,6 +11,7 @@
         "apps/api/src/retention-record.application.ts",
         "apps/api/src/retention-review-task.test.ts",
         "apps/api/src/retention-review-task.ts",
+        "apps/api/src/shadow-detection.worker.test.ts",
         "apps/api/src/worker.ts",
         "apps/api/src/workspace/index.ts",
         "apps/web/app/api/jobs/[id]/retention-records/route.test.ts",

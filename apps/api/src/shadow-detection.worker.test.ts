@@ -97,7 +97,7 @@ describe("SV-3 actual shared worker composition",()=>{
    vi.resetModules();await expect(import("./worker.js")).rejects.toThrow("TERMS_RELATION_UNAVAILABLE");expect(registered).not.toHaveBeenCalled();
    available=true;vi.resetModules();await import("./worker.js");expect(registered).toHaveBeenCalledTimes(1);
    const options=registered.mock.calls[0]![0] as unknown as {taskList:Record<string,(raw:unknown)=>Promise<void>>};
-   expect(Object.keys(options.taskList)).toEqual(["discover_outbox","execute_outbox","detect_shadow_evidence","final_check","discover_final_check_requests","final_check_practice_run","discover_demo_source_holds","hold_demo_sources","discover_evidence_pack_requests","build_evidence_pack_v3","discover_extra_escalations","escalate_overdue_extras"]);
+   expect(Object.keys(options.taskList)).toEqual(["discover_outbox","execute_outbox","detect_shadow_evidence","final_check","discover_final_check_requests","final_check_practice_run","discover_demo_source_holds","hold_demo_sources","discover_evidence_pack_requests","build_evidence_pack_v3","discover_extra_escalations","escalate_overdue_extras","discover_retention_reviews","raise_retention_reviews"]);
    // Practice mode includes final-check, evidence-pack and synthetic escalation tasks, never outbox delivery.
    vi.stubEnv("JOBGUARD_WORKER_PRACTICE_FINAL_CHECK_ONLY","1");vi.resetModules();await import("./worker.js");
    const practice=registered.mock.calls[1]![0] as unknown as {taskList:Record<string,unknown>;crontab:string};
