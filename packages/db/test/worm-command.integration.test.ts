@@ -99,7 +99,7 @@ beforeAll(async () => {
 afterAll(async () => { await closeTestPools(runtime, executor, operator, admin); await pg?.stop(); if (dir) await rm(dir, { recursive: true, force: true }); });
 describe("durable synthetic WORM SQL", () => {
   it("binds the submitting owner to the session on first use and replay", async () => {
-    const c = command();
+    const c = command({ action: "request_anchor", subject: "manifest" });
     const before = (await admin.query("SELECT to_jsonb(c) row FROM app.worm_command c ORDER BY id")).rows;
     await expect(secondRepo.submit(context, c)).rejects.toThrow("WORM_REFUSED");
     await expect(repo.submit(testTenantContext(other), c)).rejects.toThrow("WORM_REFUSED");
@@ -111,7 +111,7 @@ describe("durable synthetic WORM SQL", () => {
   it("refuses exact replay after the submitting session is revoked", async () => {
     const digest = "c".repeat(64);
     await admin.query("INSERT INTO identity.session(id,user_id,token_digest,csrf_token,expires_at,environment) VALUES($1,$2,$3,'synthetic-csrf',clock_timestamp()+interval '1 day','synthetic_demo')", [randomUUID(), user, digest]);
-    const bound = new WormCommandRepository(runtime, true, executor, operator, digest), c = command();
+    const bound = new WormCommandRepository(runtime, true, executor, operator, digest), c = command({ action: "request_anchor", subject: "manifest" });
     const first = await bound.submit(context, c);
     await admin.query("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE token_digest=$1", [digest]);
     await expect(bound.submit(context, c)).rejects.toThrow("WORM_REFUSED");
@@ -287,7 +287,7 @@ describe("durable synthetic WORM SQL", () => {
     expect((await admin.query("SELECT outcome,attempt FROM app.worm_attempt WHERE command_id=$1", [c.commandId])).rows).toEqual([{ outcome: "applied", attempt: 1 }]);
     await expect(withTenant(operator, context, db => db.$client.query("SELECT * FROM app.worm_claim($1)", [c.commandId]))).rejects.toMatchObject({ code: "42501" });
     const release = command({ action: "release_hold", releaseOf: c.commandId, actorMembershipId: second });
-    await fresh.submit(context, release);
+    await secondRepo.submit(context, release);
     const releaseWrite = vi.fn(async (_target: unknown, value: boolean) => { held = value; throw new Error("synthetic release acknowledgement lost"); });
     expect((await fresh.execute(context, release.commandId, { ...storage, hold: releaseWrite }, tsa)).status).toBe("outcome_unknown");
     const releaseRecovery = { version: "worm.recovery.v1", commandId: release.commandId };

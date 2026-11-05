@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { jobMutationRegistry, watchdogCommandGuards, watchdogRoutineGuards } from "@jobguard/core";
 import { readFileSync } from "node:fs";
 import { lp5RegistryRows } from "./lp5-command-catalog.js";
+import { PurchaseOrderActionRepository } from "../src/purchase-order-action-repository.js";
 import { createWatchdogHarness } from "./watchdog-command-harness.js";
 
 // CH-2 Done-when, applied to EVERY watchdog_live_only command: once a command succeeds, replaying its id returns the first
@@ -10,9 +11,40 @@ import { createWatchdogHarness } from "./watchdog-command-harness.js";
 // and a successful no-op keeps its identity. The command list is generated from the registry: a live-only registry key or a
 // guarded command that no case covers fails this file, so a new or missed command cannot pass unnoticed.
 const h = createWatchdogHarness("replay-contract", 61000);
-const { cases, caseKeys, live, probeJob, norm, CONFLICT } = h;
-beforeAll(() => h.boot(), 120000);
-afterAll(() => h.stop());
+const { caseKeys, live, probeJob, norm, CONFLICT } = h;
+// These dark commands have no route/source guard entry. Exercise their real repository
+// boundaries here without adding post-0606 facts to the pre-0096 legacy-id harness.
+const darkCases: typeof h.cases = [
+  { key: "purchase-order-action-repository.ts#attestManual", registry: ["command:purchase_order.attest_manual"],
+    prepare: async job => { await h.pre.order(job); },
+    run: async (job, id, variant) => new PurchaseOrderActionRepository(h.observed.pool).attestManual(h.ctx, {
+      version: "manual-order-attestation.v1", jobId: job, revisionId: h.st(job).order.id, commandId: id,
+      supplierReference: `synthetic-${id}${variant === "changed" ? "-changed" : ""}`,
+    }, h.member),
+    later: async job => { await h.repos.po.revise(h.ctx, job, h.orderInput(h.st(job).requirement, 1, randomUUID(), "12")); } },
+  { key: "purchase-order-action-repository.ts#approve", registry: ["command:purchase_order.send.dark"],
+    prepare: async job => {
+      await h.pre.order(job);
+      h.st(job).darkPreview = await new PurchaseOrderActionRepository(h.observed.pool).preview(h.ctx,
+        { version: "merchant-order-scope.v1", jobId: job, revisionId: h.st(job).order.id });
+    },
+    run: async (job, id, variant) => {
+      const order = h.st(job).order, preview = h.st(job).darkPreview;
+      return new PurchaseOrderActionRepository(h.observed.pool).approve(h.ctx,
+        { version: "merchant-order-scope.v1", jobId: job, revisionId: order.id },
+        { version: "command.v1", commandId: id, authorizationId: `a${id.slice(1)}`,
+          commandType: "purchase_order.send.dark", semanticKey: `merchant-order:${job}:${order.id}`,
+          actorMembershipId: h.member, subjectType: "purchase_order", subjectRef: order.id,
+          action: { actionType: "purchase_order.send.dark", recipient: preview.order.recipient,
+            contentHash: preview.contentHash, aggregateRevision: order.revision,
+            amountPence: preview.amountPence + (variant === "changed" ? 1 : 0), currency: "GBP",
+            policyVersion: "dark-merchant-order.v1", expiresAt: new Date("2099-01-01T00:00:00Z") } });
+    },
+    later: async job => { await h.repos.po.revise(h.ctx, job, h.orderInput(h.st(job).requirement, 1, randomUUID(), "12")); } },
+];
+const cases = [...h.cases, ...darkCases];
+beforeAll(async () => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); await h.boot(); }, 120000);
+afterAll(async () => { await h.stop(); vi.unstubAllEnvs(); });
 
 describe("every watchdog_live_only command is covered by this contract", () => {
   it("reconciles every dispatcher database registry key with watchdog.ts", () => {
@@ -55,7 +87,7 @@ describe("CH-2 replay contract for each watchdog_live_only command", () => {
       await expect(c.noop(a, noopId!, "changed")).rejects.toThrow(CONFLICT);
       await expect(c.noop(b, noopId!, "base")).rejects.toThrow(CONFLICT);
     }
-    // Same id, another KIND of command: all 17 share one tenant-wide identity, whichever store holds the result.
+    // Same id, another KIND of command: all share one tenant-wide identity, whichever store holds the result.
     for (const other of cases) {
       if (other === c) continue;
       const foreign = await probeJob(other);

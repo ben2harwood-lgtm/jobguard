@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MAX_MONEY_PENCE } from "./money.js";
-import { assertPayNowLiveAllowed, PAY_NOW_ENABLED, payNowOptions } from "./pay-now-synthetic.js";
+import { assertPayNowLiveAllowed, PAY_NOW_ENABLED, payNowFakeResult, payNowOptions } from "./pay-now-synthetic.js";
 
 const invoice = { version: "pay-now.synthetic-invoice.v1", environment: "synthetic_demo",
   tenantId: "11111111-1111-4111-8111-111111111111", jobId: "22222222-2222-4222-8222-222222222222",
@@ -37,4 +37,11 @@ describe("MON-6 synthetic invoice options", () => {
     expect(PAY_NOW_ENABLED).toBe(false);
     expect(() => assertPayNowLiveAllowed()).toThrow("PAY_NOW_DISABLED");
   });
+});
+
+it("shares fake result projection without changing the Direct Debit stub", () => {
+  expect(payNowFakeResult(invoice, "card")).toMatchObject({synthetic:true,status:"fake_settled",
+    customerDebit:{pence:100000},builderCredit:{pence:100000},builderFeeDebit:{pence:300},platformCustomerFunds:{pence:0}});
+  expect(payNowFakeResult({...invoice,kind:"stage"}, "direct_debit_stub")).toMatchObject({
+    status:"stub_not_collected",customerDebit:{pence:0},builderCredit:{pence:0},builderFeeDebit:{pence:0}});
 });

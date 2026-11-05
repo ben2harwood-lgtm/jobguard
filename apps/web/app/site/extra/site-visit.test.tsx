@@ -15,3 +15,8 @@ it("offers visit start without inventing an open visit", () => {
   expect(html).not.toContain("Complete visit");
   expect(html).toContain("Search schedule of rates");
 });
+it("adds no recent-items heading or empty-state copy before an optional response arrives", () => {
+ const html = renderToStaticMarkup(<SiteVisit jobId="fictional-job" openVisitId={null} />);
+ expect(html).not.toContain("Recent items");
+ expect(html).not.toContain("No matching items.");
+});

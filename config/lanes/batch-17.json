@@ -1,0 +1,33 @@
+{
+  "version": 2,
+  "lanes": {
+    "batch-17": {
+      "branches": [
+        "codex/sandbox/batch-17"
+      ],
+      "note": "ENT-5 must-decide and ENT-8a office signals; RED, ready for PR and CI.",
+      "allow": [
+        "apps/web/app/api/contractor/jobs/[id]/office-signals/route.test.ts",
+        "apps/web/app/api/contractor/jobs/[id]/office-signals/route.ts",
+        "apps/web/app/approvals/extras/extra-approvals.tsx",
+        "apps/web/app/approvals/extras/must-decide.test.tsx",
+        "apps/web/app/approvals/extras/must-decide.tsx",
+        "apps/web/app/contractor/jobs/[id]/office-signals/office-signals.tsx",
+        "apps/web/app/contractor/jobs/[id]/office-signals/page.tsx",
+        "apps/web/e2e/ENT-5-must-decide.spec.ts",
+        "apps/web/e2e/ENT-8a-office-signals.spec.ts",
+        "docs/contracts/enterprise-live-prompts-v1.md",
+        "docs/contracts/extra-approval-chain-v1.md",
+        "packages/core/src/extra-approval-inbox.test.ts",
+        "packages/core/src/extra-approval-inbox.ts",
+        "packages/core/src/index.ts",
+        "packages/db/migration-notes/0594_office_prompt_signal_read.md",
+        "packages/db/migrations/0594_office_prompt_signal_read.sql",
+        "packages/db/src/enterprise-live-prompt-repository.ts",
+        "packages/db/src/enterprise-office-signals.test.ts",
+        "packages/db/test/enterprise-live-prompt-office.integration.test.ts",
+        "packages/db/test/migration-proofs/0594_office_prompt_signal_read.proof.json"
+      ]
+    }
+  }
+}

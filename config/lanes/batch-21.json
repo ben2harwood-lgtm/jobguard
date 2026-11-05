@@ -1,0 +1,38 @@
+{
+  "version": 2,
+  "lanes": {
+    "batch-21": {
+      "branches": [
+        "codex/sandbox/batch-21"
+      ],
+      "note": "Built-ahead union of m0-13a-ops-pack, m0-13b-restore-dark, m0-13d-gate-pack and m1-15s-read-records. RED; synthetic only; NOPR.",
+      "allow": [
+        "config/foundation-gates.v1.json",
+        "config/ops-alerts.v1.json",
+        "docs/operations/foundation-gates.md",
+        "docs/operations/incident-ownership.md",
+        "docs/operations/m1-15s-read-records.md",
+        "docs/operations/provider-register.md",
+        "packages/config/src/foundation-gates.test.ts",
+        "packages/config/src/foundation-gates.ts",
+        "packages/config/src/ops-alerts.ts",
+        "packages/core/src/index.ts",
+        "packages/core/src/shadow-pilot-financial-record.ts",
+        "packages/core/src/shadow-pilot-report.test.ts",
+        "packages/core/src/shadow-pilot-report.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/shadow-pilot-financial-reader.ts",
+        "packages/db/test/deployment-preflight-checks.ts",
+        "packages/db/test/deployment-preflight.integration.test.ts",
+        "packages/db/test/ops-alerts.test.ts",
+        "packages/db/test/outbox.integration.test.ts",
+        "packages/db/test/shadow-pilot-financial.integration.test.ts",
+        "packages/db/tools/synthetic-restore.mjs",
+        "tools/deployment-preflight.mjs",
+        "tools/foundation-gates.test.mjs",
+        "tools/ops-pack.test.mjs",
+        "tools/provider-register.mjs"
+      ]
+    }
+  }
+}

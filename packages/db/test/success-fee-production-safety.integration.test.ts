@@ -141,6 +141,7 @@ it("the fee writer itself refuses changed proof rebounding below the original ap
   expect(review.statement).toMatchObject({priorPence:8000,feePence:4000,deltaPence:-4000});
   await db.query("SELECT app.write_success_fee_v3($1,$2,$3,NULL)",[x.jobId,x.auth.digest,approve(review)]);
   await db.query("SET CONSTRAINTS ALL IMMEDIATE");
+  await db.query("SET CONSTRAINTS ALL DEFERRED");
   const before=(await db.query("SELECT to_jsonb(j) row FROM app.success_fee_journal j WHERE tenant_id=$1 ORDER BY id",[x.context.tenantId])).rows;
   const zero=(await db.query("SELECT app.write_success_fee_v3($1,$2,$3,NULL) result",[x.jobId,x.auth.digest,{...command,commandId:randomUUID(),expectedPostingRevision:2}])).rows[0].result;
   expect(zero.statement.deltaPence).toBe(0);
