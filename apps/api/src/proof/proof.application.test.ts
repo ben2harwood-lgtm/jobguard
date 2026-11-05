@@ -52,7 +52,7 @@ function finalizeFixture(path: "existing" | "concurrent") {
     if (sql.includes("practice_session_digest=$3") || sql.startsWith("SELECT 1 FROM app.membership") || sql.startsWith("SELECT 1 FROM app.job j")) return [{}];
     if (sql.startsWith("SELECT id FROM app.evidence_upload")) return [{ id: pendingId }];
     if (sql.startsWith("SELECT 1 FROM app.evidence_upload")) return [{}];
-    if (sql.startsWith("SELECT job_id FROM app.evidence_upload")) return [{ job_id: jobId }];
+    if (sql.startsWith("SELECT job_id,expected_content_type FROM app.evidence_upload")) return [{ job_id: jobId, expected_content_type: "image/png" }];
     if (sql.startsWith("SELECT job_id,command_type,request_hash")) return state.identity ? [state.identity] : [];
     if (sql.startsWith("SELECT result FROM app.watchdog_command_result")) return state.result ? [{ result: state.result }] : [];
     if (sql.startsWith("SELECT * FROM app.evidence_object")) return existing ? [object] : [];

@@ -1,0 +1,9 @@
+{
+  "version": 2,
+  "lanes": {
+    "test-upgrade-grant-scope": {
+      "branches": ["codex/sandbox/test-upgrade-grant-scope"],
+      "allow": ["packages/db/test/enterprise-access-upgrade.integration.test.ts"]
+    }
+  }
+}

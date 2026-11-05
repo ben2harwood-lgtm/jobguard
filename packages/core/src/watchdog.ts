@@ -14,6 +14,8 @@ export type JobCommandPhase = "pre_live_allowed" | "watchdog_live_only" | "post_
 /** Exhaustive web mutation registry. Dynamic actions are classified below.
  * New site facts, documents, orders, proof and messages must be live-only. */
 export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
+  // Practice-only accounting route approval; checked export authority remains mandatory.
+  "/api/accounting-exports/[sourceId]/route-change": "post_live_billing",
   "/api/jobs/[id]/recovery-cases/[caseId]/billability": "post_live_billing",
   "/api/jobs/[id]/reconciliation/[runId]/adjustments": "post_live_billing",
   "/api/customer-portal/quote": "pre_live_allowed",
@@ -155,6 +157,7 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   // Practice forecasts are operational inputs, available before the job goes live.
   "/api/jobs/[id]/exposure-schedule": "pre_live_allowed",
   "/api/jobs/[id]/proof": "watchdog_live_only",
+  "/api/jobs/[id]/purchase-orders/merchant-order": "watchdog_live_only",
   "/api/jobs/[id]/purchase-orders/placement": "watchdog_live_only",
   "/api/jobs/[id]/purchase-orders/revisions": "watchdog_live_only",
   "/api/jobs/[id]/quotes/acceptance/disposition": "pre_live_allowed",
