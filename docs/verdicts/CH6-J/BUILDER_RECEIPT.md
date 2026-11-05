@@ -2089,3 +2089,66 @@ localhost binding or browser execution. Database/API HTTP integration and
 browser suites remain for GitHub CI after router push. Independent RED review
 must check the resulting committed head; no independent PASS is claimed here.
 Existing initial LATER / SIMPLICITY observation remains; no new review round.
+
+## 5 November 2026 — recover-ch6-gaps (RED, NOPR)
+
+READY for router commit and push; PostgreSQL behavior and independent review
+remain unverified. Plan piece CH-6 (§10, integrity signals for v3). Compared the
+branch-audit report on origin/codex/sandbox/branch-audit and the old ch6-gaps tip
+57b3105c4 against pinned origin/main / worktree HEAD
+62081c68933d0b953e7dd75a8cbd7b3a2fb4f304. Both requested gaps remain missing.
+The two current integration files match the old branch except for exactly the
+recovered assertions; no old migrations, catalog baselines or lane were copied.
+
+Recovered the supplementary invoice's exact command replay, original-lock and
+previous-revision lineage, and invoice-kind/lock/revision binding assertions.
+Recovered the reverse concurrency regression: a foreign tenant holds a job
+UPDATE open while the runtime review must finish under a 500 ms lock timeout,
+then replay identically through the repository. Existing assertions, including
+same-job lock protection and source freshness after contention, are unchanged.
+Current callers and latest routine body (0526_commercial_integrity_sources.sql)
+were source-inspected: tenant/job-qualified row locks already exist. No product
+fix is justified without a failing PostgreSQL result. No migration, authority,
+grant, financial policy or operational alert changed. Synthetic data only.
+
+Checks actually run with installed Node 24.17.0 / Vitest 4.1.12:
+- Root: `./node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit` — PASS;
+  this package's tsconfig includes source, not the integration test files.
+- TypeScript transpile diagnostics on both changed integration files — PASS
+  (syntax only).
+- Initial Vitest collection and input run failed to resolve @jobguard/core
+  because dist was absent. Built core and storage using the installed compiler:
+  `./node_modules/.bin/tsc -p packages/core/tsconfig.json` and
+  `./node_modules/.bin/tsc -p packages/storage/tsconfig.json` — PASS.
+- From packages/db: `./node_modules/.bin/vitest list --maxWorkers=1
+  test/commercial-integrity-v3-published.integration.test.ts
+  test/commercial-integrity-v3-review.integration.test.ts` — PASS, 18 tests
+  collected through the real runner; no database hooks executed.
+- From packages/db: `./node_modules/.bin/vitest run --maxWorkers=1
+  test/commercial-integrity-v3-input.test.ts` — PASS, 1 file / 9 tests.
+- `node tools/agent-lane-boundary-lint.mjs` refused the self-comparison range:
+  HEAD equals origin/main before router commit. Direct existing loadLanePolicy,
+  selectLane and lanePathAllowed checks and exact working-tree allowlist
+  comparison — PASS. The CLI must run again against the committed head.
+- `git diff --check` — PASS. Recovered test files equal the old branch bytes;
+  all changes are confined to the two test files, this existing receipt and the
+  recovery lane. No new reporting document or substantial complexity.
+
+Initial review: no worthwhile separate LATER / SIMPLICITY change identified;
+reused existing fixtures and retained their controls without unrelated refactoring.
+
+### Named holds for landing
+
+- PostgreSQL CI: execute both recovered integration files (at most 2 workers),
+  proving supplementary replay/lineage and foreign-tenant nonblocking review
+  alongside existing authorization, snapshot, receipt and audit regressions.
+  Collection and input unit tests are not PostgreSQL acceptance evidence.
+- Required green CI against current main, including source checks, full required
+  suites and the lane CLI after router commit. Database/migration and browser
+  suites were not run here; no localhost or PostgreSQL startup is allowed.
+- One independent RED review recorded against the exact resulting head before
+  merge. This builder's source inspection is not independent review.
+
+No fetch, Git metadata writes, commit, push, PR, merge, package download,
+provider action, deployment or real-data operation performed. Router owns the
+commit, push, queue/work-list handoff and subsequent CI/review routing.
