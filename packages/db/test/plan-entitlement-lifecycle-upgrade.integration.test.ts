@@ -40,6 +40,15 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   const selfComparison = "(SELECT content_hash FROM app.action_authorization WHERE tenant_id=p_tenant AND id=p_authorization)";
   for (const prior of security) {
     const current = live.find(row => row.oid === prior.oid);
+    // 1120 changes only these exact shadow routines; MIGFIX-7's upgrade test binds their full bodies and unchanged ACLs.
+    if (prior.nspname === "app" && (
+      (prior.proname === "record_shadow_disclosure" && prior.args === "p_tenant uuid, p_job uuid, p_signal uuid, p_event uuid, p_route text") ||
+      (prior.proname === "surface_shadow_signal_early" && prior.args === "p_tenant uuid, p_job uuid, p_signal uuid, p_firing uuid, p_decision uuid, p_disclosure uuid, p_rule text, p_version text, p_source uuid, p_object_version text, p_facts jsonb")
+    )) {
+      const own = await readFile(new URL("../migrations/1120_shadow_group_disclosure.sql", import.meta.url), "utf8");
+      expect(current?.definition?.split("$function$")[1]).toBe(own.split(`FUNCTION app.${prior.proname}(`)[1]!.split("AS $$")[1]!.split("$$;")[0]);
+      continue;
+    }
     // 0566, 0573 and 0606 extend exactly this dispatcher for managed recovery, supervisor queries and dark orders.
     if (prior.nspname === "app" && prior.proname === "lp5_command_result" && prior.args === "p_command_id uuid, p_outcome jsonb") continue;
     // 0599_accounting_export_route_change changes only this checked synthetic dispatcher; dedicated route upgrade tests bind the body.
