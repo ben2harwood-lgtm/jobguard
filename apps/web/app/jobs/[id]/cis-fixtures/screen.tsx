@@ -35,7 +35,7 @@ export function CisFixtureScreen({ jobId }: { jobId: string }) {
     try {
       const response = await fetch(url, { method: "POST", credentials: "same-origin", headers: await companyHeaders(), body: payload });
       const body = await response.json() as { reason?: string };
-      if (response.status < 500) { sessionStorage.removeItem(retryKey); setPending(null); }
+      if (response.ok || (response.status >= 400 && response.status < 500 && response.status !== 408 && response.status !== 429)) { sessionStorage.removeItem(retryKey); setPending(null); }
       if (!response.ok) throw Error(body.reason ?? "Statement refused. Review its fixture fields.");
       await load();
     } catch (reason) { setError((reason as Error).message); }

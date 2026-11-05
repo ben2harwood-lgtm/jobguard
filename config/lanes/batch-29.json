@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/batch-29"
       ],
-      "note": "M4-22 draft-store caught up on main; RED, synthetic-only, built ahead NOPR.",
+      "note": "M4-22 draft-store ready for PR; RED, synthetic-only; migration 0611 reserved.",
       "allow": [
         "apps/api/src/cis-fixture.application.test.ts",
         "apps/api/src/cis-fixture.application.ts",
@@ -19,15 +19,16 @@
         "apps/web/e2e/m4-22-cis-fixtures.spec.ts",
         "docs/contracts/cis-fixture-records-dark-v1.md",
         "packages/core/src/watchdog.ts",
-        "packages/db/migration-notes/0900_cis_fixture_records.md",
-        "packages/db/migrations/0900_cis_fixture_records.sql",
+        "packages/db/migration-notes/0611_cis_fixture_records.md",
+        "packages/db/migrations/0611_cis_fixture_records.sql",
         "packages/db/src/cis-fixture-repository.ts",
         "packages/db/src/index.ts",
         "packages/db/test/cis-fixture-records.integration.test.ts",
         "packages/db/test/cis-fixture-repository.test.ts",
         "packages/db/test/cis-fixture-route.integration.test.ts",
         "packages/db/test/later-empty-tables.ts",
-        "packages/db/test/migration-proofs/0900_cis_fixture_records.proof.json"
+        "packages/db/test/migration-proofs/0611_cis_fixture_records.proof.json",
+        "packages/db/test/watchdog.integration.test.ts"
       ]
     }
   }

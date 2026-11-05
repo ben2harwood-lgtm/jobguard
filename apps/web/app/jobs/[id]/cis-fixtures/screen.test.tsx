@@ -27,12 +27,12 @@ function buttons(node: React.ReactNode): React.ReactElement<{ onClick?: () => vo
   if (!React.isValidElement<{ children?: React.ReactNode }>(node)) return [];
   return node.type === "button" ? [node] : buttons(node.props.children);
 }
-it("retries the identical saved payload after an uncertain response, without clearing the command", async () => {
+it.each([408, 429, 503])("retries the identical saved payload after uncertain response %s, without clearing the command", async (status) => {
   const payload = JSON.stringify({ version: "cis.persist-fixture.v1", commandId: "same-fictional-id" });
   const removeItem = vi.fn(); vi.stubGlobal("sessionStorage", { removeItem });
   const fetch = vi.fn(async (url: string, _init?: RequestInit) => url === "/api/auth/session"
     ? new Response(JSON.stringify({ csrfToken: "fictional-csrf", memberships: [{ tenantId: "fictional-tenant" }] }))
-    : new Response(JSON.stringify({ reason: "Outcome unavailable; retry." }), { status: 503 }));
+    : new Response(JSON.stringify({ reason: "Outcome unavailable; retry." }), { status }));
   vi.stubGlobal("fetch", fetch);
   state.values = [null, "", false, payload];
   const retry = buttons(CisFixtureScreen({ jobId: "fictional" })).find(button => button.props.children === "Retry same command")!;

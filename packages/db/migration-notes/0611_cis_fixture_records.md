@@ -1,4 +1,4 @@
-# 0900: dark CIS fixture records (M4-22, RED)
+# 0611: dark CIS fixture records (M4-22, RED)
 
 Creates one initially empty, append-only tenant/job fixture table and one
 migration-owned SECURITY DEFINER storage routine. The routine is callable only

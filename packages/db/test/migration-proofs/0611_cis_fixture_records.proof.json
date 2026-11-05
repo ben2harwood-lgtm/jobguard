@@ -1,5 +1,5 @@
 {
-  "migration": "0900_cis_fixture_records.sql",
+  "migration": "0611_cis_fixture_records.sql",
   "lp0": [
     {
       "section": "groups",
@@ -21,7 +21,7 @@
         },
         "downstream": "Rebuilds synthetic source lineage using the existing pure calculator; no real issue or statutory processing.",
         "sources": [
-          "packages/db/migrations/0900_cis_fixture_records.sql",
+          "packages/db/migrations/0611_cis_fixture_records.sql",
           "packages/db/src/cis-fixture-repository.ts"
         ],
         "tests": [

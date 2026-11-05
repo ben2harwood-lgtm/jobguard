@@ -19,6 +19,17 @@ type Prepared = { replay?: Result; snapshot: unknown; command: unknown; authorit
  */
 export class RecoveryBillabilityRepository {
   constructor(private readonly pool: Pool, private readonly environment = process.env.JOBGUARD_ENV ?? "unconfigured") {}
+  async read(context: VerifiedTenantContext, jobId: string, caseId: string, sessionDigest: string): Promise<{
+    version: "recovery-billability-view.v1"; caseId: string; caseRevision: number;
+    lines: { workId: string; lineId: string }[];
+    reviews: { workId: string; lineId: string; review: RecoveryBillabilityReview; approved: boolean }[];
+  }> {
+    if (this.environment !== "synthetic_demo") throw new Error("BILLABILITY_NOT_FOUND");
+    const job = id.parse(jobId), recoveryCase = id.parse(caseId);
+    return withTenant(this.pool, context, async db => (await db.$client.query(
+      "SELECT app.read_recovery_billability($1,$2,$3) result", [job, recoveryCase, sessionDigest],
+    )).rows[0]!.result);
+  }
   async command(context: VerifiedTenantContext, jobId: string, sessionDigest: string, raw: unknown): Promise<Result> {
     if (this.environment !== "synthetic_demo") throw new Error("BILLABILITY_FORBIDDEN");
     const parsed = persistedBillabilityCommandV1.safeParse(raw);

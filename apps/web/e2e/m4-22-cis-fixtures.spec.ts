@@ -31,7 +31,7 @@ test("stored CIS practice statement survives reload and corrections append, with
     await main.getByLabel("Statement reference", { exact: true }).fill("Fictional CIS first");
     await main.getByRole("button", { name: "Store practice statement", exact: true }).click();
     await expect(main.getByRole("alert")).toContainText(/status|inputs/iu);
-    await main.getByLabel("Fictional status record", { exact: true }).selectOption("registered");
+    await main.getByLabel("Fictional status record").selectOption("registered");
     await main.getByLabel("Fixture valid through", { exact: true }).fill("2026-10-30");
     await main.getByRole("button", { name: "Store practice statement", exact: true }).click();
     await expect(main.getByRole("alert")).toContainText("stale");
@@ -49,7 +49,7 @@ test("stored CIS practice statement survives reload and corrections append, with
     await expect(main.getByRole("button", { name: "Issue statement — disabled", exact: true })).toBeDisabled();
     const original = await first.textContent();
     await main.getByLabel("Statement reference", { exact: true }).fill("Fictional correction");
-    await main.getByLabel("Statement kind", { exact: true }).selectOption("correction");
+    await main.getByLabel("Statement kind").selectOption("correction");
     await main.getByLabel("Cumulative paid net (pence)", { exact: true }).fill("2000");
     await main.getByRole("button", { name: "Store practice statement", exact: true }).click();
     await expect(main.getByRole("region", { name: "Statement Fictional correction", exact: true })).toBeVisible();

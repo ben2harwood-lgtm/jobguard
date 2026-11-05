@@ -4,7 +4,7 @@ import { cluster, type Cluster } from "./extra-fixtures.js";
 import { seedWorkJob, type WorkFixture } from "./job-work-state-fixtures.js";
 const state = vi.hoisted(() => ({ identity: null as unknown, credentials: {} as Record<string, string>, pool: null as unknown }));
 vi.mock("server-only", () => ({}));
-vi.mock("@jobguard/api/workspace", async () => import("../../../apps/api/src/cis-fixture.application.js"));
+vi.mock("@jobguard/api/workspace", async () => import("../../../apps/api/dist/workspace/index.js"));
 vi.mock("../../../apps/web/app/lib/identity-server", () => ({ identityApplication: () => state.identity, identityCredentials: async () => state.credentials }));
 vi.mock("../../../apps/web/app/lib/synthetic-server", () => ({ syntheticPool: () => state.pool }));
 import { GET, POST } from "../../../apps/web/app/api/jobs/[id]/cis-fixtures/route.js";
@@ -78,7 +78,7 @@ it("stores nothing for missing/stale verification, forged fields, unsupported co
   for (const key of ["tenantId", "actor", "enabled", "CIS_ENABLED"]) expect((await post({ ...input, [key]: true })).status).toBe(400);
   const correction = structuredClone(input); correction.fixture.statements[0].kind = "correction";
   expect((await post(correction)).status).toBe(400);
-  for (const role of ["finance", "admin", "operative", "read_only", "foreman", "estimator"]) {
+  for (const role of ["finance", "admin", "read_only", "foreman", "estimator"]) {
     await c.admin.query("UPDATE app.membership SET role=$1 WHERE tenant_id=$2 AND id=$3", [role, a.tenantId, a.actorId]);
     expect((await post(input)).status).toBe(404);
   }

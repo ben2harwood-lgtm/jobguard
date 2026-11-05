@@ -12,6 +12,7 @@ and payment records added by that statement. Nested tenant/job IDs are fixture
 lineage validated by core against the verified context. The actor is a separate
 server-supplied membershipId/identityUserId pair; SQL requires a current owner
 membership. The synthetic-only session application and HTTP adapter described below reach this dark repository API.
+LP-5 lifecycle dispatch remains on hold for this dark fixture operation.
 It creates no commercial authorization or command receipt.
 
 The first row contains the fixed book fields and the complete supplied VAT and
