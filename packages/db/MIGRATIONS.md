@@ -1319,3 +1319,14 @@ settlement. Audit delegates through the current `app.ef_audit` to
 Forward fix only: retain run, difference, proposal, approval and command history.
 The committed proof and queue upgrade/integration tests require real PostgreSQL
 in CI. No live provider, scheduler or production capability is enabled.
+
+## 1125 — legacy recovery money integrity (MIGFIX-6; M4-8-S / CH-7)
+
+Adds validated `landing_allocation_eligible_within_gross` and replaces only the latest
+0356 legacy v1 approval/reversal bodies. Reversals subtract all prior reversals and
+use the approval routine's settled-plan-credit predicate. Database-mode refusals,
+ownership, grants, row shapes, v3, issued-line allocation and F18 interest are preserved.
+Existing invalid rows abort migration rather than rewriting history. Forward-fix only:
+retain immutable money history and use linked compensation under review; do not roll
+back to the faulty formula. PostgreSQL upgrade/fresh-install proof and RED review
+are landing gates, not established by the source guards.
