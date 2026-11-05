@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-13": {
+      "branches": ["codex/sandbox/later-safety-13"],
+      "allow": [
+        "packages/db/migrations/0789_demo_customer_link_reference.sql",
+        "packages/db/migration-notes/0789_demo_customer_link_reference.md",
+        "packages/db/test/migration-proofs/0789_demo_customer_link_reference.proof.json",
+        "packages/db/src/shadow-demo-guide-repository.ts",
+        "packages/db/test/shadow-demo-guide.integration.test.ts"
+      ],
+      "note": "LATER-SAFETY-13, RED: remove demo customer sign-in credentials from stored outbox content; NOPR."
+    }
+  }
+}
