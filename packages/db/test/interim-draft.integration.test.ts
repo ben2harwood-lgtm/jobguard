@@ -57,11 +57,13 @@ describe("M4-18 PostgreSQL synthetic draft books",()=>{
     expect(paid.reconciliation.grossReceived.pence).toBe(2000);
     // An omission is a new stored variation revision, never a rewritten baseline.
     const variation=randomUUID(),variationRevision=randomUUID();
-    await c.admin.query("INSERT INTO app.variation(tenant_id,job_id,id,scope_item_id,capture_kind,capture_text,description) VALUES($1,$2,$3,$4,'text','Fictional omission','Fictional omission')",
-      [f.a.tenantId,f.a.jobId,variation,f.a.scopeId]);
-    await c.admin.query(`INSERT INTO app.variation_revision(tenant_id,job_id,id,variation_id,scope_item_id,revision,description,quantity_decimal,unit,unit_rate_pence,signed_delta_pence,content_hash,confirmed_by_membership_id,rate_provenance_kind,rate_source_ref,rate_source_hash,rate_version)
-      VALUES($1,$2,$3,$4,$5,1,'Fictional omission','1','item',5000,-5000,$6,$7,'human_entered','fixture',$6,'fixture.v1')`,
-      [f.a.tenantId,f.a.jobId,variationRevision,variation,f.a.scopeId,"a".repeat(64),f.a.actorId]);
+    await workTenant(c.admin,f.a.tenantId,async db=>{
+      await db.query("INSERT INTO app.variation(tenant_id,job_id,id,scope_item_id,capture_kind,capture_text,description) VALUES($1,$2,$3,$4,'text','Fictional omission','Fictional omission')",
+        [f.a.tenantId,f.a.jobId,variation,f.a.scopeId]);
+      await db.query(`INSERT INTO app.variation_revision(tenant_id,job_id,id,variation_id,scope_item_id,revision,description,quantity_decimal,unit,unit_rate_pence,signed_delta_pence,content_hash,confirmed_by_membership_id,rate_provenance_kind,rate_source_ref,rate_source_hash,rate_version)
+        VALUES($1,$2,$3,$4,$5,1,'Fictional omission','1','item',5000,-5000,$6,$7,'human_entered','fixture',$6,'fixture.v1')`,
+        [f.a.tenantId,f.a.jobId,variationRevision,variation,f.a.scopeId,"a".repeat(64),f.a.actorId]);
+    });
     const nextSchedule={...f.schedule,id:randomUUID(),revision:2,previousScheduleId:f.schedule.id,
       lines:[...f.schedule.lines,{id:randomUUID(),scopeItemId:f.a.scopeId,commercialRevisionId:variationRevision,
         sourceDocumentId:variation,kind:"approved_variation",approvalDecisionId:randomUUID(),netPence:-5000}]};

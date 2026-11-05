@@ -54,7 +54,8 @@ it("screen commands persist only draft records and refuse forged authority, repl
     await expect(repo.read(a.context,jobId)).rejects.toMatchObject({code:"NOT_FOUND"});
     await expect(repo.command(a.context,a.digest,{...command(schedule),jobId})).rejects.toMatchObject({code:"NOT_FOUND"});
   }
-  for (const role of ["admin","estimator","foreman","operative","finance","read_only"]) {
+  // Operative membership requires a contractor agreement, outside this fixture.
+  for (const role of ["admin","estimator","foreman","finance","read_only"]) {
     await c.admin.query("UPDATE app.membership SET role=$2 WHERE id=$1",[a.actorId,role]);
     // Keep precisely the repository's refusal for roles that its owner boundary rejects.
     const result = await repo.command(a.context,a.digest,first).catch(error => error);

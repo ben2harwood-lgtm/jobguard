@@ -13,6 +13,14 @@ SQL resolves the current owner/admin membership from the persisted session.
 No caller-supplied actor, cash fact or enablement option is accepted. An explicitly
 synthetic receipt's amount is fixture data, never evidence of actual cash.
 
+Named hold — LP-5 command lifecycle: `interim.persist-command.v1` is outside
+LP-5's `app.begin_command` / `app.complete_command` lifecycle. Its local replay
+checks do not create a command registry row or trusted command audit. This is
+accepted only for this synthetic draft store. Before these records feed any real
+workflow, persistence must move onto the command boundary with a command registry
+row and audit committed atomically with the records. Session checks and local
+idempotency do not satisfy that hold.
+
 One transaction locks the tenant/job book, loads and validates every stored row,
 runs `appendInterimDraftRecord`, then appends. The job lock survives the routine
 return until commit. The sequence check prevents appending against an older book.

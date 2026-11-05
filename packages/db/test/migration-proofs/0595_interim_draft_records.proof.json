@@ -11,7 +11,7 @@
         "status": "approved_current",
         "target": {
           "state": "review_at_card",
-          "note": "Bounded synthetic lifecycle dispatch; exact-head RED review and PostgreSQL CI remain required."
+          "note": "Synthetic draft persistence outside the LP-5 command lifecycle; named hold: move onto the command boundary with a registry row and audit before records feed any real workflow. Exact-head RED review and PostgreSQL CI remain required."
         },
         "cards": [
           "LP-11",
