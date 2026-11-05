@@ -78,6 +78,12 @@ request. Rendering/downloads do not issue or collect; the account fixture only
 projects fictional net receipts and explicit refund due. Canonical JSON downloads
 retain a stable SHA-256.
 
+LP-5 lifecycle dispatch remains held for this administrative fixture writer: it
+uses its existing issuer lock, request hash, immutable replay history and audit
+path, without a lifecycle claim or exact invoice Decision authorization. Source
+statement approval is not approval to issue an invoice. Production issuance
+remains disabled until those command-authority gates are satisfied.
+
 Remaining gates: contractor fee adapter/proof, practice/identity integration and exact invoice Decision authority,
 real issuer identity, approved D02 examples and rounding, production receipt/
 allocation/reversal readers, G4-S/G4-C, M4-12 collection/refund execution, complete
