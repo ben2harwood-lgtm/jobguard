@@ -10,7 +10,7 @@ function fixture() {
     callback: vi.fn(async () => { current = { connectionId: current!.connectionId, status: "linked" }; return {} as never; }),
     pull: vi.fn(), stop: vi.fn(async (_c, _d, id) => { current = { connectionId: id, status: "token_revoked" }; return {} as never; }) };
   const identity = { allowedOrigin: credentials.origin, provider: { digest: () => "a".repeat(64),
-    authenticate: vi.fn(async (token: string) => token === credentials.sessionToken ? { identityUserId: tenant, sessionId: tenant, csrfToken: credentials.csrfToken } : undefined),
+    authenticate: vi.fn(async (token: string) => token === credentials.sessionToken ? Object.defineProperty({ identityUserId: tenant, sessionId: tenant, csrfToken: credentials.csrfToken }, "sessionCredential", { value: "a".repeat(64), enumerable: false }) : undefined),
     findMembership: vi.fn(async (_p, id: string) => id === tenant ? { id: tenant, tenantId: tenant, identityUserId: tenant, role: "owner", email: "fictional@company.invalid" } : undefined) } };
   const memory = { pending: new Map(), adapter: new FakeTrueLayerAisAdapter(), vault: new SyntheticAisTokenVault(), pages: new Map() };
   const app = new PracticeBankApplication(identity as never, repository, memory);
