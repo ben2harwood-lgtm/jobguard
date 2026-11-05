@@ -1,9 +1,26 @@
-/** Exact upgrade/catalogue proof for CI; later routine replacements may change definitions only. */
+/** Exact upgrade/catalogue proof; later routine replacements and table ACL changes are scoped below. */
 import { readFile } from 'node:fs/promises';
 import { afterAll, expect, it } from 'vitest';
 import { createScimHarness, fixture, person, canonicalRows, type ScimHarness } from './scim-fixtures.js';
 import { migrate, MIGRATION_URLS } from '../src/migrate.js';
 import { predecessorCatalogue } from './contractor-entitlement-fixtures.js';
+type Relation = { nspname:string; relname:string; relacl:unknown; [key:string]:unknown };
+function expectRelationsUnchanged(before:Relation[],after:Relation[],laterAcl:Set<string>) {
+ for(const row of before){
+  if(!laterAcl.has(`${row.nspname}.${row.relname}`)){expect(after).toContainEqual(row);continue;}
+  const {relacl:_a,...kept}=row;
+  expect(after.map(({relacl:_x,...r})=>r)).toContainEqual(kept);
+ }
+}
+it('ACL comparison permits only named-table permissions and rejects column changes or unnamed-table grants',()=>{
+ const named={nspname:'app',relname:'fee_reservation_archive',relacl:['runtime=ar'],columns:[{attname:'id'}],constraints:[],relowner:1};
+ const unnamed={...named,relname:'other_table'};
+ const before=[named,unnamed],laterAcl=new Set(['app.fee_reservation_archive']);
+ const tightened={...named,relacl:['runtime=r']};
+ expectRelationsUnchanged(before,[tightened,unnamed],laterAcl);
+ expect(()=>expectRelationsUnchanged(before,[{...tightened,columns:[...named.columns,{attname:'stray'}]},unnamed],laterAcl)).toThrow();
+ expect(()=>expectRelationsUnchanged(before,[tightened,{...unnamed,relacl:['runtime=arw']}],laterAcl)).toThrow();
+});
 let h:ScimHarness|undefined;
 afterAll(async()=>{await h?.close();});
 it('emergency_dual_owner/scim2_machine preserve populated identity state, installed routines and old ACLs; new capabilities start empty and default OFF',async()=>{
@@ -20,7 +37,13 @@ it('emergency_dual_owner/scim2_machine preserve populated identity state, instal
  const later=new Set<string>();
  for(const url of MIGRATION_URLS.slice(boundary+1))
   for(const m of (await readFile(url,'utf8')).matchAll(/CREATE OR REPLACE FUNCTION ([a-z_]+)\.([a-z0-9_]+)\(/gu))later.add(`${m[1]}.${m[2]}`);
- for(const key of ['relations','policies'] as const)for(const row of catalogue[key])expect(after[key]).toContainEqual(row);
+ // A later GRANT/REVOKE on a predecessor table may change its ACL only; that migration's proof and LP-0 pin it.
+ const laterAcl=new Set<string>();
+ for(const url of MIGRATION_URLS.slice(boundary+1))
+  for(const m of (await readFile(url,'utf8')).matchAll(/\b(?:GRANT|REVOKE)\b[^;]*?\bON\s+(?:TABLE\s+)?((?:[a-z_]+\.[a-z0-9_]+)(?:\s*,\s*[a-z_]+\.[a-z0-9_]+)*)\s+(?:TO|FROM)\b/gu))
+   for(const name of m[1]!.split(','))laterAcl.add(name.trim());
+ for(const row of catalogue.policies)expect(after.policies).toContainEqual(row);
+ expectRelationsUnchanged(catalogue.relations,after.relations,laterAcl);
  for(const row of catalogue.routines){
   if(!later.has(`${row.nspname}.${row.proname}`)){expect(after.routines).toContainEqual(row);continue;}
   const {definition:_d,...kept}=row;
