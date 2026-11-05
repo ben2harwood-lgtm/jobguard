@@ -50,3 +50,41 @@ describe("M5-11 and its M0-13c dependency proof composition", () => {
     expect(result.routines.find(r => r.proname === "privacy_inventory_fence")).toMatchObject({ proowner: 42, proacl: "{jobguard_migration=X/jobguard_migration}", prosecdef: true, proconfig: ["search_path=pg_catalog"] });
   });
 });
+
+
+describe("M5-11 recorded privacy check proof", () => {
+  const all = loadMigrationProofs(PROOF_DIRECTORY).proofs;
+  const facts = all.find(p => p.migration === "0776_privacy_review_facts.sql")!;
+  it("adds one private forced-RLS table and extends only the existing command writer", () => {
+    expect(facts).toBeDefined();
+    expect(applyTenancyProofs([], [facts], "rls")).toEqual([
+      { relname: "privacy_review_fact", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+    ]);
+    const combined = [...proofs, facts];
+    const baseline = parseInventory(JSON.parse(readFileSync(new URL("../../../docs/contracts/lp-0-effective-privileges-v1.json", import.meta.url), "utf8")));
+    const inventory = parseInventory(combineLp0(baseline, combined));
+    expect(inventory.entries.filter(e => e.key.includes("privacy_review_fact"))).toEqual([]);
+    expect(inventory.recorded.routines.find(r => r.identity === "function:app.privacy_command(uuid,text,jsonb)")?.staticWrites)
+      .toEqual(["app.privacy_artifact", "app.privacy_command", "app.privacy_request", "app.privacy_review_fact", "app.privacy_subject"]);
+    const result = applyUpgradeProofs<MigrationProofSnapshot>({ rows: {}, routines: [], relations: [], policies: [] }, combined, { [owner]: 42 });
+    expect(Object.keys(result.rows).sort()).toEqual([...tables, "privacy_review_fact"].map(t => `app.${t}`).sort());
+    expect(result.relations.filter(r => String(r.relname).startsWith("privacy_review_fact")).map(r => r.relname))
+      .toEqual(["privacy_review_fact", "privacy_review_fact_pkey"]);
+    const routineChanges = facts.upgrade.filter(c => c.section === "routines");
+    expect(routineChanges).toHaveLength(1);
+    expect(routineChanges[0]!.before).toEqual(routineChanges[0]!.after);
+    expect(routineChanges[0]!.after).toMatchObject({ proname: "privacy_command", args: "t uuid, digest text, v jsonb" });
+  });
+  it("changes no other routine, keeps the trusted database fence and seals only reference/hash audit", () => {
+    const sql = readFileSync(new URL("../migrations/0776_privacy_review_facts.sql", import.meta.url), "utf8");
+    expect(sql.match(/CREATE OR REPLACE FUNCTION [^(]+/g)).toEqual(["CREATE OR REPLACE FUNCTION app.privacy_command"]);
+    expect(sql.match(/CREATE TABLE [^ (]+/g)).toEqual(["CREATE TABLE app.privacy_review_fact"]);
+    expect(sql).toContain("IF current_database()<>'jobguard_synthetic_demo'");
+    expect(sql).toContain("PERFORM app.lp4_seal_audit(");
+    expect(sql).toContain("req.review_record->>'inventoryHash' IS DISTINCT FROM snapshot");
+    expect(sql).not.toMatch(/GRANT |SET app\.|INSERT INTO app\.audit_event/);
+    const previous = readFileSync(new URL("../migrations/0585_dsar_offboarding.sql", import.meta.url), "utf8");
+    const auditBody = (text: string) => text.split(" -- Seal the event")[1]!.split("END $$;")[0];
+    expect(auditBody(sql)).toEqual(auditBody(previous));
+  });
+});

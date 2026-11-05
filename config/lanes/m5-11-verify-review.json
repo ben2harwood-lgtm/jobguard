@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "lanes": {
+    "m5-11-verify-review": {
+      "branches": [
+        "codex/sandbox/m5-11-verify-review"
+      ],
+      "allow": [
+        "packages/core/src/privacy-operations.test.ts",
+        "packages/core/src/privacy-operations.ts",
+        "packages/db/migration-notes/0776_privacy_review_facts.md",
+        "packages/db/migrations/0776_privacy_review_facts.sql",
+        "packages/db/test/dsar-migration-proofs.test.ts",
+        "packages/db/test/dsar-offboarding.integration.test.ts",
+        "packages/db/test/later-empty-tables.ts",
+        "packages/db/test/migration-proofs/0776_privacy_review_facts.proof.json",
+        "packages/db/test/privacy-review-facts.integration.test.ts"
+      ],
+      "note": "M5-11 partial RED synthetic identity/authority facts; NOPR; real requests remain gated."
+    }
+  }
+}

@@ -1,0 +1,157 @@
+{
+  "migration": "0776_privacy_review_facts.sql",
+  "lp0": [
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.privacy_command(uuid,text,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.privacy_artifact",
+          "app.privacy_command",
+          "app.privacy_request",
+          "app.privacy_subject"
+        ],
+        "staticCalls": [
+          "app.final_lock_hash",
+          "app.lp4_seal_audit",
+          "app.mon1_company_actor"
+        ]
+      },
+      "after": {
+        "identity": "function:app.privacy_command(uuid,text,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.privacy_artifact",
+          "app.privacy_command",
+          "app.privacy_request",
+          "app.privacy_review_fact",
+          "app.privacy_subject"
+        ],
+        "staticCalls": [
+          "app.final_lock_hash",
+          "app.lp4_seal_audit",
+          "app.mon1_company_actor"
+        ]
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.privacy_review_fact|tenant_isolation|PERMISSIVE|ALL|jobguard_migration|3f99274c101ea942"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.privacy_review_fact|immutable|app.reject_immutable_commercial_mutation|BEFORE DELETE/UPDATE/TRUNCATE|O"
+    },
+    {
+      "section": "rls",
+      "before": null,
+      "after": "app.privacy_review_fact|rls=t|forced=t"
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "app.privacy_review_fact",
+        "data": []
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "privacy_review_fact",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "privacy_review_fact_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "privacy_review_fact",
+        "policyname": "tenant_isolation",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "ALL",
+        "qual": "(tenant_id =\nCASE\n    WHEN pg_input_is_valid(current_setting('app.tenant_id'::text, true), 'uuid'::text) THEN (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid\n    ELSE NULL::uuid\nEND)",
+        "with_check": "(tenant_id =\nCASE\n    WHEN pg_input_is_valid(current_setting('app.tenant_id'::text, true), 'uuid'::text) THEN (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid\n    ELSE NULL::uuid\nEND)"
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "nspname": "app",
+        "proname": "privacy_command",
+        "args": "t uuid, digest text, v jsonb",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      },
+      "after": {
+        "nspname": "app",
+        "proname": "privacy_command",
+        "args": "t uuid, digest text, v jsonb",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    }
+  ],
+  "tenancy": [
+    {
+      "relname": "privacy_review_fact",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    }
+  ]
+}
