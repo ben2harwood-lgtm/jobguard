@@ -16,6 +16,7 @@
         "packages/db/src/purchase-order-action-repository.ts",
         "packages/db/src/purchase-order-action.ts",
         "packages/db/src/watchdog.ts",
+        "packages/db/test/command-replay-contract.integration.test.ts",
         "packages/db/test/late-source-import-migration.test.ts",
         "packages/db/test/later-empty-tables.ts",
         "packages/db/test/lp5-command-catalog.ts",
@@ -23,7 +24,9 @@
         "packages/db/test/migration-proofs/0606_dark_merchant_order.proof.json",
         "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
         "packages/db/test/purchase-order-action.test.ts",
-        "packages/db/test/purchase-order-audit.integration.test.ts"
+        "packages/db/test/purchase-order-audit.integration.test.ts",
+        "packages/db/test/restore-reconciliation-upgrade.integration.test.ts",
+        "packages/db/test/watchdog.integration.test.ts"
       ]
     }
   }
