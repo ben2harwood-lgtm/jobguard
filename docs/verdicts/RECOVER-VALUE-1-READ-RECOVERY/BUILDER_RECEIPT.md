@@ -29,3 +29,22 @@ No PostgreSQL, browser, localhost server, provider or real-data execution ran. N
 - Independent RED review at the exact landing head and green CI against current main remain required. No independent review, merge, deployment or release is claimed here.
 
 LATER / SIMPLICITY — apps/web/app/ui/job-value.tsx: consider reusing apps/web/app/lib/pounds.ts after verifying identical formatting; one currency formatter reduces duplicate display maintenance. Initial source-review suggestion only; non-blocking and outside this recovery.
+
+## Batch-48 landing continuation — 5 November 2026
+
+The router merged ac0886c64 into batch-48 at e3972cb26 before this continuation.
+The overlapping-read test now keeps a nonmatching interception route registered
+while its one-shot routes expire. All success responses still use the real
+backend and every existing assertion is preserved. No additional product repair
+or migration was needed; the working tree started clean with no unmerged paths.
+
+Re-executed the unchanged lane CLI: PASS for batch-48 and all 19 changed paths.
+The previous batch handoff's removed-lane hold is cleared. Playwright discovery
+for both recovery specs passed: 12 cases across mobile-360 and desktop, with
+`--workers=2`; this is collection only. `git diff --check origin/main...HEAD`
+and `git diff --check` passed. PostgreSQL/browser execution, full required CI
+against current main and an independent exact-head RED review remain named
+holds for landing. No Git writes, provider calls or downloads were performed.
+
+Web TypeScript also passed on the merged tree:
+`node node_modules/typescript/bin/tsc -p apps/web/tsconfig.json --noEmit --incremental false`.
