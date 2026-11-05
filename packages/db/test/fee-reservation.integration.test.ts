@@ -369,7 +369,7 @@ describe("M4-12 PostgreSQL shared reservation store", () => {
     await f.executor().webhook(f.context, "stripe_card", body, f.rail.sign(body));
     expect((await f.read()).attempts[0]?.state).toBe("released");
     const audit = (await db.admin.query("SELECT * FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence", [f.tenantId])).rows;
-    expect(audit.map(a => a.event_type)).toEqual(["fee.collection.reserved", "fee.collection.outcome_unknown", "fee.collection.released"]);
+    expect(audit.map(a => a.event_type)).toEqual(["fee.collection.reserved", "fee.collection.outcome_unknown", "fee.collection.released", "fee.collection.webhook_recorded"]);
     expect(audit.every(a => a.payload.references.auditTrust === "checked_operation")).toBe(true);
     for (let i=1;i<audit.length;i++) expect(audit[i].previous_hash).toBe(audit[i-1].event_hash);
     await f.executor().reserve(f.context, { ...f.intent, commandId: id(11), rail: "direct_debit" });
