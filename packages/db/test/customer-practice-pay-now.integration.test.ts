@@ -5,6 +5,7 @@ import { meterCompany } from "./meter-persistence-fixtures.js";
 import { type WorkFixture } from "./job-work-state-fixtures.js";
 import { prepareInvoicePrerequisites } from "./sv5pre-fixtures.js";
 import { PracticeInvoiceRepository } from "../src/practice-invoice-repository.js";
+import { issueApprovedCatchInvoice } from "./customer-practice-pay-now-fixtures.js";
 import { snapshotRows } from "./upgrade-proof-utils.js";
 import { PayNowAttemptApplication } from "../../../apps/api/src/pay-now-attempt.application.js";
 import { IdentityApplication } from "../../../apps/api/src/auth/identity.application.js";
@@ -25,17 +26,21 @@ describe("MON-6 customer practice read",()=>{
   catch(error){await db.query("ROLLBACK");throw error;}finally{db.release();}
  }
  async function fixture(balance=12000, includesCatch=false){
-  const a=await company(),net=balance===1?1:Number(BigInt(balance)*5n/6n),tax=balance-net,t=a.tenantId,j=a.jobId,q=randomUUID(),d=randomUUID(),r=randomUUID(),h="a".repeat(64);
+  const net=balance===1?1:Number(BigInt(balance)*5n/6n),tax=balance-net;
+  const catchFixture=includesCatch ? await issueApprovedCatchInvoice(c,net) : null;
+  const a=catchFixture?.a ?? await company(),t=a.tenantId,j=a.jobId,q=randomUUID(),d=randomUUID(),r=randomUUID(),lineId=randomUUID(),h="a".repeat(64);
+  if(!catchFixture){
   await c.admin.query("INSERT INTO app.quote_version(id,tenant_id,job_id,version,content_hash,net_value_pence,status) VALUES($1,$2,$3,1,$4,$5,'accepted')",[q,t,j,h,net]);
   await c.admin.query("INSERT INTO app.final_account_draft(id,tenant_id,job_id) VALUES($1,$2,$3)",[d,t,j]);
   await c.admin.query(`INSERT INTO app.final_account_revision(id,tenant_id,job_id,final_account_draft_id,revision,source_hash,baseline_quote_version_id,currency,tax_policy_version,net_pence,tax_pence,total_pence,issue_blocked,findings)
    VALUES($1,$2,$3,$4,1,$5,$6,'GBP','candidate_m1_standard_v1',$7,$8,$9,false,'[]')`,[r,t,j,d,h,q,net,tax,balance]);
   await c.admin.query("UPDATE app.final_account_draft SET revision=1,current_revision_id=$3 WHERE tenant_id=$1 AND id=$2",[t,d,r]);
   await c.admin.query(`INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,description,net_pence,ordinal,approval_id)
-   VALUES($1,$2,$3,$4,$8,$5,$6,$5,'Fictional source',$7,1,$9)`,[randomUUID(),t,j,r,q,a.scopeId,net,includesCatch?"variation":"baseline",includesCatch?randomUUID():null]);
+   VALUES($1,$2,$3,$4,'baseline',$5,$6,$5,'Fictional source',$7,1,NULL)`,[lineId,t,j,r,q,a.scopeId,net]);
   await prepareInvoicePrerequisites(c.admin,c.runtime,t,j,a.actorId,r);
+  }
   const invoices=new PracticeInvoiceRepository(c.runtime);
-  const invoice=await invoices.issue(a.context,{jobId:j,finalAccountRevisionId:r,actorMembershipId:a.actorId,commandId:randomUUID(),recipient:"fictional@example.invalid",issuedOn:"2026-11-04"});
+  const invoice=catchFixture ? catchFixture.invoice : await invoices.issue(a.context,{jobId:j,finalAccountRevisionId:r,actorMembershipId:a.actorId,commandId:randomUUID(),recipient:"fictional@example.invalid",issuedOn:"2026-11-04"});
   const actor={jobId:j,sessionDigest:a.digest};
   const input={version:"pay-now-attempt.v1",commandId:randomUUID(),invoiceId:invoice.id,rail:"card"};
   const party=(await c.admin.query("SELECT b.customer_id FROM app.job_party_current p JOIN app.job_party_binding b ON(b.tenant_id,b.id)=(p.tenant_id,p.binding_id) WHERE p.tenant_id=$1 AND p.job_id=$2",[t,j])).rows[0];
@@ -56,9 +61,18 @@ describe("MON-6 customer practice read",()=>{
   expect(JSON.stringify(result)).not.toMatch(/fee|catch|surcharge|policy|attempt/iu);
   expect(await snapshotRows(c.admin)).toEqual(before);
  });
- it("catch and ordinary stored invoices produce byte-identical public bodies apart from number and amount",async()=>{
+ it("catch and ordinary stored invoices produce byte-identical public bodies apart from number",async()=>{
   const a=await fixture(12000,false),b=await fixture(12000,true);
-  const redact=async(token:string)=>{const result=await app.customerPractice(request(token));return JSON.stringify({...result,invoiceNumber:"REDACTED",amountDue:{pence:12000,currency:"GBP"}});};
+  const catchLines=(await c.admin.query(`SELECT o.kind,a.id approval_id,l.approval_id line_approval_id
+   FROM app.final_account_invoiced_line i
+   JOIN app.final_account_line l ON(l.tenant_id,l.id)=(i.tenant_id,i.final_account_line_id)
+   JOIN app.variation_approval a ON(a.tenant_id,a.id)=(l.tenant_id,l.approval_id)
+   JOIN app.extra_origin o ON(o.tenant_id,o.variation_id)=(a.tenant_id,a.variation_id)
+   WHERE i.tenant_id=$1 AND i.invoice_id=$2`,[b.tenantId,b.invoice.id])).rows;
+  expect(catchLines).toHaveLength(1);
+  expect(catchLines[0]).toMatchObject({kind:"jobguard_catch",line_approval_id:catchLines[0].approval_id});
+  expect(b.invoice.balancePence).toBe(12000);
+  const redact=async(token:string)=>{const result=await app.customerPractice(request(token));expect(result.amountDue.pence).toBe(12000);return JSON.stringify({...result,invoiceNumber:"REDACTED"});};
   expect(await redact(a.token)).toBe(await redact(b.token));
  });
  it("rejects missing, revoked, expired, and foreign customer/company credentials identically without writes",async()=>{
@@ -67,7 +81,7 @@ describe("MON-6 customer practice read",()=>{
   const beforeForeign=await snapshotRows(c.admin);
   for(const token of ["",...foreign])await expect(app.customerPractice(request(token))).rejects.toMatchObject({ code: "CUSTOMER_REFUSED" });
   expect(await snapshotRows(c.admin)).toEqual(beforeForeign);
-  for(const sql of ["UPDATE app.customer_portal_session SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND job_id=$2", "UPDATE app.customer_portal_grant SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND job_id=$2", "UPDATE app.customer_portal_session SET expires_at=clock_timestamp()-interval '1 second' WHERE tenant_id=$1 AND job_id=$2"]){
+  for(const sql of ["UPDATE app.customer_portal_session SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND job_id=$2", "UPDATE app.customer_portal_grant SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND job_id=$2", "UPDATE app.customer_portal_session SET issued_at=issued_at-interval '2 hours',expires_at=expires_at-interval '2 hours' WHERE tenant_id=$1 AND job_id=$2"]){
    const w=await fixture();await c.admin.query(sql,[w.tenantId,w.jobId]);const before=await snapshotRows(c.admin);
    await expect(app.customerPractice(request(w.token))).rejects.toMatchObject({ code: "CUSTOMER_REFUSED" });
    expect(await snapshotRows(c.admin)).toEqual(before);

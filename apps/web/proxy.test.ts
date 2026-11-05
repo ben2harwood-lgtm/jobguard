@@ -3,7 +3,7 @@ import { NextRequest } from "next/server";
 import { unstable_doesMiddlewareMatch } from "next/experimental/testing/server";
 import { config, proxy } from "./proxy";
 
-const portalActions = ["issue", "revoke", "signin", "signout", "read", "messages", "quote", "quote-accept", "variations/read", "variation-approvals"];
+const portalActions = ["issue", "revoke", "signin", "signout", "read", "messages", "quote", "quote-accept", "variations/read", "variation-approvals", "practice-pay-now"];
 const request = (path: string, cookie?: string, method = "GET") => new NextRequest(`https://jobguard.example.invalid${path}`, {
   method,
   headers: cookie === undefined ? {} : { cookie },
@@ -26,7 +26,9 @@ describe("Next 16 proxy retains the customer-cookie API boundary", () => {
   });
 
   it.each([
-    "/api/jobs", "/api/auth/session", "/api/session", "/api/customer-portal",
+    "/api/jobs", "/api/auth/session", "/api/session", "/api/pay-now-attempts",
+    "/api/contractor/site/jobs", "/api/customer-portal",
+    "/api/customer-portal/practice-pay-now/", "/api/customer-portal/practice-pay-now/extra",
     "/api/customer-portal/read/", "/api/customer-portal/read/extra",
     "/api/customer-portal/unknown", "/api/customer-portal/READ",
     "/api/customer-portal/variations", "/api/customer-portal/variation-approvals/extra",

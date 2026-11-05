@@ -217,3 +217,65 @@ Local verification for this reconciliation (installed binaries; no downloads):
 - **Release scope:** synthetic data only. CustomerInvoicePayNow,
   PAY_NOW_ENABLED, live providers, payment regulation/VAT/D10/G4-S and all
   previously recorded release gates remain held.
+
+## Batch-39 pre-check repair (5 November 2026)
+
+READY for router commit/push and CI; NOPR. This is one builder repair round,
+not an independent RED pass or a database/browser execution result. The launcher
+already merged main; the comparison base is now `origin/main`
+`199124c0885ca27558fbaf62a9a74dee7ad2818f`. All existing main migrations remain
+unchanged. The only extra migration remains 1200_customer_practice_pay_now_read;
+main's fake-attempt migration is not duplicated.
+
+B1: the proxy's only product edit appends the exact `practice-pay-now` exception.
+The action matrix covers it; customer cookies (alone, empty or alongside builder
+cookies, across all tested HTTP methods) still refuse builder jobs, sessions,
+payment attempts and contractor APIs. Trailing-slash and nested variants remain
+refused. Both proxy files are in the lane.
+
+B2: the expiry fixture shifts issued_at and expires_at back together, preserving
+the required one-hour interval. Database and browser fixtures now share one real
+approved-catch setup: existing final-check helpers seed evidence, reveal it after
+the immutable baseline lock, publish the checked completion, confirm the catch,
+price it and approve its exact revision through the variation repository. The
+baseline invoice precedes a new immutable account revision and a supplementary
+invoice issued through FinalAccountLockRepository. Stored source, scope, revision
+and approval references are genuine; no guard is bypassed. This extra fixture
+setup is necessary because a real JobGuard catch happens after lock and cannot
+be inserted into the original locked invoice. The database comparison asserts
+jobguard_catch origin and the exact persisted approval and amount, and masks only
+the invoice number. The browser compares real equal balances and public markup.
+The shared final-check job fixture now explicitly binds fictional parties and a
+small-builder track before going live, so it works without legacy DB-test hooks.
+ENT-3's price assertion is retained: merged main already renders quotedPence in
+My extras. No further ENT-3 product change was needed.
+
+Local checks (installed tools, no downloads, at most two Vitest workers and three
+named files per run):
+
+- Web proxy, practice route and practice screen: 51 passed.
+- API pay-now application and customer sign-in: 70 passed.
+- DB package non-database proof loader, pay-now repository and customer-evidence
+  approval proof: 108 passed.
+- Web TypeScript and a targeted TypeScript check including both the new shared
+  fixture and the DB integration test passed. The shared fixture imported in
+  Node/tsx without starting a database; the extracted browser seed passed
+  `node --check`.
+- Playwright listing discovered all four project entries for ENT-3 and MON-6;
+  listing is not execution. ENT-3 remains mobile-only by its existing skip.
+- `node tools/lint.mjs` passed, including the normal lane check. The lane lists
+  exactly 18 changed non-lane files, including the new fixture and the adjusted
+  shared final-check fixture; it does not list itself. `git diff origin/main
+  --check` passed. No Git-writing command was run.
+
+CI must run the actual PostgreSQL customer-practice suite (including SB-25 and
+all expiry/refusal/no-write assertions), customer-signin, customer-portal-message,
+final-check catch-confirm, catch-journey, lock-run and final-account lock/invoice
+regressions affected by the shared fixture. Retain fresh/upgrade migrations,
+proof/catalogue/privilege/RLS/tenancy checks and existing mandatory suites. Execute
+MON-6 at mobile-360 and desktop and ENT-3 at mobile-360, headless with at most two
+workers. All required typecheck, lint, test and build checks and independent RED
+review must pass at the router's final exact head before merge. The sandbox cannot
+start PostgreSQL or bind localhost, so none of these database/browser results is
+claimed locally. All existing synthetic-only, provider, money, release and launch
+holds above remain in place; MON-6 is not finished.
