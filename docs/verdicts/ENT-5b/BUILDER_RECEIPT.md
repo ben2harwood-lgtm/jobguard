@@ -147,7 +147,7 @@ journey exercises the actual synthetic route, replay, conflict and history after
 approval at both configured viewports (headless, at most two workers).
 
 Initial source review — LATER / SIMPLICITY: migration
-`0987_extra_proceed_statement.sql`, `app.lp5_command_result`: consider a separately
+`1200_extra_proceed_statement.sql`, `app.lp5_command_result`: consider a separately
 reviewed split into existing per-adapter result helpers, so future additions do not
 repeat the full dispatcher body and risk losing predecessor branches. This is not
 part of the proceed slice and does not block it.
@@ -183,13 +183,13 @@ lands and the router commits this branch.
 This entry supersedes the earlier source-handoff numbering and inherited-lane holds for this batch only. Both proceed and remaining-rule behavior are retained, including inherited batch-15 work. Four working-file conflicts are resolved; the read-only Git index still records the merge until the router stages it. No Git write, fetch, database, browser, provider or release action was performed.
 
 The final migration/proof/notes references use filename stems only:
-- `0590_extra_duplicate_candidates` → `0985_extra_duplicate_candidates`.
-- `0591_contractor_job_evidence_read` → `0986_contractor_job_evidence_read`.
-- `0905_extra_proceed_statement` → `0987_extra_proceed_statement`.
-- `0930_extra_same_step` → `0988_extra_same_step`.
-- `0931_extra_withdraw_roles` → `0989_extra_withdraw_roles`.
-- `0932_extra_working_day_wait` → `0990_extra_working_day_wait`.
-- `0933_extra_rule_wait_schema` → `0991_extra_rule_wait_schema`.
+- `0590_extra_duplicate_candidates` → `0590_extra_duplicate_candidates`.
+- `0591_contractor_job_evidence_read` → `0591_contractor_job_evidence_read`.
+- `0905_extra_proceed_statement` → `1200_extra_proceed_statement`.
+- `0930_extra_same_step` → `1201_extra_same_step`.
+- `0931_extra_withdraw_roles` → `1202_extra_withdraw_roles`.
+- `0932_extra_working_day_wait` → `1203_extra_working_day_wait`.
+- `0933_extra_rule_wait_schema` → `1204_extra_rule_wait_schema`.
 
 Historical bare-number notes above are retained. The batch-34 lane replaces the three branch-added piece/batch lane files and lists exactly the 98 final non-lane paths changed from the existing `origin/main` snapshot (56b74eaec); local `main` is stale. The side-table list preserves both sides. No fingerprinted row shape or protected inventory/scanner was changed. The plan-entitlement upgrade assertion now binds seven exact predecessor routine identities to their replacement SQL bodies, retaining unchanged assertions for every other predecessor and the existing ACL proof checks. The LP-0 routine protection definitions are recorded facts, not compared definition pins; no baseline was rewritten. Real catalogue acceptance still requires CI.
 
@@ -206,3 +206,128 @@ The global pnpm launcher stalled before invoking checks and was cancelled; insta
 Official `node tools/agent-lane-boundary-lint.mjs --lane=batch-34` was run and refuses 17 removed branch-only paths still present in HEAD/index history. Every refused path is absent from both `origin/main` and final working files. A separate deterministic check using the unchanged exported lane helpers passes final-file coverage, exact allow-list equality and migration ordering. This is not an official lane PASS: the router must rerun the official command after staging/completing this permitted merge. The brief explicitly allows unresolved index entries once working files are resolved.
 
 CI must prove PostgreSQL fresh/populated upgrades, migration replay, row-shape preservation, privileges/RLS/LP-0, command authority and audit, approval/replay/race/revocation/escalation behavior, and both viewport journeys including ENT-5 proceed and chain actions, plus required lint/test/build checks. Independent RED review at the exact final head remains required before merge. READY means router commit/push handoff for the NOPR branch, not approval, merge, ENT-5 completion or release.
+
+
+## batch-34 catch-up — 5 November 2026 — READY, RED, NOPR
+
+This entry supersedes previous batch-34 migration, lane and predecessor holds.
+Comparison base is the launcher-merged `origin/main` / `MERGE_HEAD`
+`62081c68933d0b953e7dd75a8cbd7b3a2fb4f304`. Local `main` is stale at
+`694e9e175` and was not used as the landing base. Working conflicts are resolved;
+the read-only Git index still needs router staging and merge completion. No Git
+write, database, browser, provider, deployment or release action was performed.
+
+### Migration reconciliation against main
+
+- Removed branch-only `0985_extra_duplicate_candidates.sql`, its proof and note:
+  its original HEAD bytes equal main's `0590_extra_duplicate_candidates.sql`.
+  Both SQL SHA-256 values are
+  `9440b91be133cbff13999474124859837408671ca7ef3f96cfb114bfd22d5d75`.
+- Removed branch-only `0986_contractor_job_evidence_read.sql`, its proof and note:
+  original HEAD SHA-256
+  `db83a77e5df8ed450636409b05ea2b58b2c4409ef9dd383d9b324744e310b4d0`
+  is an older copy of main's `0591_contractor_job_evidence_read.sql`, SHA-256
+  `2f2dd6e2198c8d8e6f8a9a0f855ab9bf5f855809f3247d1fb67ab2dbac1a74a3`.
+  The actual diff confirms main adds both server-verified timestamp checks,
+  removes original-byte reads from the definer, and adds the separately bound
+  completion-photo tag helper. Keep main's SQL, note and proof unchanged.
+- The inherited duplicate-candidate and evidence-read pieces are wholly on main;
+  neither needs another migration. The remaining inherited batch-15 source is
+  also on main. Its mainline lane file is preserved.
+- Remaining branch migrations and proofs use filename stems only:
+  `0987_extra_proceed_statement` -> `1200_extra_proceed_statement`;
+  `0988_extra_same_step` -> `1201_extra_same_step`;
+  `0989_extra_withdraw_roles` -> `1202_extra_withdraw_roles`;
+  `0990_extra_working_day_wait` -> `1203_extra_working_day_wait`;
+  `0991_extra_rule_wait_schema` -> `1204_extra_rule_wait_schema`.
+  No separate notes existed for these five; operational/forward-fix notes remain
+  in this receipt. Renumber again in landing order, by full stems only.
+
+### Latest-main routine comparison
+
+Every re-created routine was diffed against its latest definition on main:
+
+| Routine | Latest main migration | Only this piece's delta |
+|---|---|---|
+| `app.lp5_command_result` | 0606 | Add `extra_proceed`; keep the dark purchase-order branch and every other byte |
+| `app.xa_approve` | 0522 | Same-slot cross-revision approval; rejected steps still prevent occupying a different slot |
+| `app.xa_withdraw` | 0522 | Covered surveyor/commercial manager join the supervisor before final outcome |
+| `app.lp5b_contractor_permission` | 0522 | Same withdrawal role expansion at the command boundary |
+| `app.xa_requirement` | 0158 | Freeze working-day terms in new snapshots; preserve legacy minutes |
+| `app.xa_escalate` | 0158 | Working-day deadline, latest request only, no escalation without a named backup |
+| `app.xa_queue` | 0158 | Derive overdue from the same deadline |
+| `infrastructure.discover_extra_escalations` | 0575 | Same deadline and named-backup discovery |
+| `app.valid_approval_rules` | 0054 | Validate optional working days and nullable backup role |
+
+The dispatcher regression test now compares against 0606, rather than 0573.
+The 1200 registry proof starts from 0606's exact registry, adds just
+`RecordExtraProceed`, and preserves PostgreSQL snapshot ordering by version,
+audit class and command type. The source tests assert exact predecessor retention
+and the complete current registry. The historical M2-1 proof test still asserts
+its complete historical registry, while the successor test checks both additions.
+No test was skipped or weakened. Existing seven exact ENT-5 routine replacement
+assertions and all mainline ACL/definition assertions remain intact.
+
+The merged approval screen retains main's mandatory lane plus this branch's overdue
+and escalation status; the queue type contains all required fields. Contracts keep
+both amendments. Upgrade empty-table expectations retain every mainline table and
+add `extra_proceed_statement`. No protected inventory or fingerprint was rewritten.
+The batch-34 lane lists exactly 49 changed non-lane paths against the above base,
+including the five new SQL/proof pairs; it does not grant itself or other lanes.
+
+### Local validation for this catch-up
+
+Installed repository binaries only; no package downloads. Every Vitest invocation
+used at most two workers and at most three named files. Final passing coverage:
+
+- DB: `extra-proceed-migration`, `migration-proof-loader`, `m2-1-migration-proof`:
+  82 passed; `late-source-import-migration`, `extra-approval-timing`: 20 passed.
+- Core: `extra-proceed`, `extra-approval`, `contractor`: 742 passed.
+- API: `extra-proceed.application`, `watchdog-registry`, `context-boundary`:
+  272 passed.
+- Web: proceed route and chain-actions route: 38 passed;
+  `must-decide.test.tsx`: 2 passed after rebuilding the merged core package.
+  Its initial two failures were stale generated exports, corrected by the normal
+  dependency build with no source/test alteration.
+- The added exact registry assertion first exposed an ordering mismatch against
+  the unsorted in-code catalogue. The proof now uses PostgreSQL snapshot order,
+  while the source test separately proves exact predecessor order, successor
+  membership and row count. The final three-file DB run above passed.
+- Repository TypeScript builds passed for core, storage, config, AI, DB and API;
+  web `tsc -p apps/web/tsconfig.json --noEmit` passed. These are TypeScript
+  checks/builds, not a Next.js production build or the full CI suite.
+- Core-purity, money-arithmetic, commercial-boundary, AI-provider-boundary and
+  PL/pgSQL CASE-in-IF source lints passed; `git diff --check` passed.
+
+### Named holds for landing
+
+- Router must stage resolved files, remove superseded branch paths from the index,
+  restore main's 0590/0591 SQL/proof/note paths and batch-15 lane from the
+  supplied working files (currently untracked due to rename resolution),
+  complete this pending merge, commit/push the no-PR branch and rerun the official
+  lane gate. Its local invocation currently fails because it checks historical
+  HEAD/index changes against the pre-merge base. Final working-file coverage,
+  exact allow-list equality and migration ordering were checked independently;
+  this is not an official lane PASS.
+- Provisional stems 1200–1204 must be reconciled with the actual landing order.
+  Green required CI against current main and independent RED review at the exact
+  final head remain required. This is builder source inspection and local test
+  evidence, not independent review or permission to merge.
+- CI must execute the real PostgreSQL fresh-install, migration-proof/LP-0,
+  tenancy/RLS/privilege and populated-upgrade suites. In particular run
+  `extra-proceed.integration.test.ts`, `extra-proceed-upgrade.integration.test.ts`,
+  `extra-approval-rules.integration.test.ts`,
+  `extra-approval-rules-upgrade.integration.test.ts`,
+  `extra-approval-chain.integration.test.ts`, command replay and plan-entitlement,
+  restore and contractor-entitlement upgrade tests. Prove current grants and
+  revocation, cross-tenant refusal, replay/conflict/races, audit atomicity,
+  append-only history, frozen requirements and unchanged predecessor rows/ACLs.
+  Run the dark merchant-order integration tests as well: the retained dispatcher
+  body is source-proven here, not executed against PostgreSQL.
+- CI must run `ENT-5-proceed.spec.ts`, `ENT-5-chain-actions.spec.ts` and
+  `ENT-5-must-decide.spec.ts` on mobile-360 and desktop with at most two workers,
+  and retain all existing mandatory checks. No database or localhost binding is
+  available in this sandbox. Normal required typecheck/lint/test/build stay gates.
+- Q01/Q03/Q14/Q15, wider ENT-5 acceptance, and all real-data/provider/production
+  gates remain open. READY means ready for router handoff, not ENT-5 completion,
+  independent acceptance, merge or release.

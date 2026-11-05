@@ -44,6 +44,7 @@ test("ENT-5 reject, revise, stale on screen, withdraw, replays and route race", 
   await expect(page.locator("main[data-site-extra-state]")).toHaveAttribute("data-site-extra-state", "ready", { timeout: 60_000 });
   await page.getByLabel("What is the extra work?").fill("Fictional ENT-5 correction");
   await page.getByLabel("Note for the office").fill("Made-up extra for approval testing");
+  await button(page, "Finished").click();
   await button(page, "Attach practice photo").click(); await expect(page.getByTestId("photo-attached")).toBeVisible();
   await page.getByLabel(/The resident has seen this/).check(); await button(page, "Log extra").click();
   await expect(page.getByTestId("extra-logged")).toBeVisible();
@@ -184,6 +185,7 @@ test("withdrawal requires a reason and displays the server refusal and outcome",
   let withdrawn = false, refuse = true;
   await page.route("**/api/northside", route => route.fulfill({ status: 503, json: { code: "FIXTURE_NO_PRACTICE" } }));
   await page.route("**/api/contractor/practice/acting-as", route => route.fulfill({ status: 503, json: {} }));
+  await page.route("**/api/contractor/jobs/*/duplicate-candidates", route => route.fulfill({ json: { version: "extra-duplicate-candidates.v1", jobId: extra.jobId, revision: 0, groups: [], activeLinks: [] } }));
   await page.route("**/api/northside/extras", route => route.fulfill({ json: { role: "supervisor", extras: [{ ...extra, state: withdrawn ? "withdrawn" : "logged" }], rates: {}, queue: [] } }));
   await page.route(`**/api/northside/extras/${extra.extraId}/withdraw`, route => {
     const body = route.request().postDataJSON();

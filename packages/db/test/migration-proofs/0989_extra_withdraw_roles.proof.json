@@ -1,6 +1,0 @@
-{
-  "migration": "0989_extra_withdraw_roles.sql",
-  "lp0": [],
-  "upgrade": [],
-  "tenancy": []
-}

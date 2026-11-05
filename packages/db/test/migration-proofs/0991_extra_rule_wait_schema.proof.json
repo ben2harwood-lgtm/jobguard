@@ -1,6 +1,0 @@
-{
-  "migration": "0991_extra_rule_wait_schema.sql",
-  "lp0": [],
-  "upgrade": [],
-  "tenancy": []
-}
