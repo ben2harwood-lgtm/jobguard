@@ -1,3 +1,5 @@
+import { RetentionRecordRepository } from "@jobguard/db";
+import { registerRetentionReviewTasks } from "./retention-review-task.js";
 import { registerExtraEscalationTasks } from "./extra-escalation-task.js";
 import { escalateOverdueExtrasTask } from "@jobguard/db";
 import { executeEvidencePackV3 } from "./evidence-pack-v3.worker.js";
@@ -143,13 +145,19 @@ tasks.build_evidence_pack_v3 = async payload => {
 const extraEscalationCrontab=registerExtraEscalationTasks(tasks,finalCheckEnvironment,parsed=>
  escalateOverdueExtrasTask(runtimePool,queueContext({tenantId:parsed.tenantId})));
 const extraEscalationTasks=extraEscalationCrontab?{discover_extra_escalations:tasks.discover_extra_escalations!,escalate_overdue_extras:tasks.escalate_overdue_extras!}:{};
+const retentionPool=new Pool({connectionString:environment.GRAPHILE_DATABASE_URL,application_name:"jobguard-retention-timer"});
+const retentionRepository=new RetentionRecordRepository(retentionPool);
+const retentionCrontab=registerRetentionReviewTasks(tasks,process.env.JOBGUARD_ENV??"disabled",async tenantId=>{
+ const context=queueContext({tenantId});
+ await retentionRepository.raiseTimerReviews(context);
+});
 const practiceOnly=process.env.JOBGUARD_WORKER_PRACTICE_FINAL_CHECK_ONLY==="1";
 const runner=await run({connectionString:environment.GRAPHILE_DATABASE_URL,
  logger:redactingWorkerLogger(logger),
  taskList:redactingTasks(practiceOnly?{...extraEscalationTasks,discover_final_check_requests:tasks.discover_final_check_requests!,final_check_practice_run:tasks.final_check_practice_run!,discover_evidence_pack_requests:tasks.discover_evidence_pack_requests!,build_evidence_pack_v3:tasks.build_evidence_pack_v3!,discover_demo_source_holds:tasks.discover_demo_source_holds!,hold_demo_sources:tasks.hold_demo_sources!}:tasks),
- crontab:[practiceOnly?"*/1 * * * * discover_final_check_requests\n*/1 * * * * discover_evidence_pack_requests\n*/1 * * * * discover_demo_source_holds":"*/1 * * * * discover_outbox\n*/1 * * * * discover_final_check_requests\n*/1 * * * * discover_evidence_pack_requests\n*/1 * * * * discover_demo_source_holds",extraEscalationCrontab].filter(Boolean).join("\n")});
+ crontab:[retentionCrontab && !practiceOnly ? retentionCrontab : "",practiceOnly?"*/1 * * * * discover_final_check_requests\n*/1 * * * * discover_evidence_pack_requests\n*/1 * * * * discover_demo_source_holds":"*/1 * * * * discover_outbox\n*/1 * * * * discover_final_check_requests\n*/1 * * * * discover_evidence_pack_requests\n*/1 * * * * discover_demo_source_holds",extraEscalationCrontab].filter(Boolean).join("\n")});
 for(const signal of ["SIGINT","SIGTERM"] as const)process.once(signal,()=>{
- void (async()=>{await runner.stop();await runtimePool.end();await shadowPool.end();})()
+ void (async()=>{await runner.stop();await retentionPool.end();await runtimePool.end();await shadowPool.end();})()
   .catch(()=>{logger.error("WORKER_TASK_FAILED");process.exitCode=1;});
 });
 }
