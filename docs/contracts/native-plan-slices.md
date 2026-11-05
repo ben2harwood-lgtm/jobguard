@@ -73,4 +73,39 @@ Retain all unchecked steps in the M3-1/M3-2 reports and the merged `docs/operati
 
 ## Final verification
 
-Commands use repository pnpm 10.28.1 via `PATH=/workspace/.npm-cache/_npx/116f317e7afab6e7/node_modules/.bin:$PATH`. Native/server tests are labelled by their actual scope; explicit store/React Native doubles do not prove encryption or device behavior. No package installation, new account, hosted build, upload, live service, age exception or weakened assertion was used in this continuation.
+Commands use repository pnpm 10.28.1 via `PATH=/workspace/.npm-cache/_npx/116f317e7afab6e7/node_modules/.bin:$PATH`. Native/server tests are labelled by their actual scope; explicit store/React Native doubles do not prove encryption or device behavior. No package installation, new account, hosted build, store upload, live service, age exception or weakened assertion was used in this continuation.
+
+Completed checks below apply to source head `681c7263991a147cb325c69ced8a2a1b2fa4e0ca` (ENT-12), after the model merges and staged M3-3/M3-4/M3-5/M3-6 pushes. This follow-up changes the report only; it is not an independent RED review.
+
+| Exact command | Result |
+| --- | --- |
+| `git fetch origin codex/sandbox/m3-4-reconcile:refs/remotes/origin/codex/sandbox/m3-4-reconcile codex/sandbox/m3-6-shared:refs/remotes/origin/codex/sandbox/m3-6-shared codex/sandbox/m3-7-suite:refs/remotes/origin/codex/sandbox/m3-7-suite codex/sandbox/ent-12-operative:refs/remotes/origin/codex/sandbox/ent-12-operative` | Passed; all four requested remote heads were merged and subsequently verified as ancestors with `git merge-base --is-ancestor` |
+| `git merge --no-edit origin/codex/sandbox/m3-4-reconcile`, then `git merge --no-edit origin/codex/sandbox/m3-6-shared`, then `git merge --no-edit origin/codex/sandbox/m3-7-suite`, then `git merge --no-edit origin/codex/sandbox/ent-12-operative` | Passed; additive core index conflicts retained both exports. Imported registration archives match their original SHA-256 values |
+| `pnpm --filter @jobguard/core build` | Passed after merges and after the unchanged upload-schema extraction |
+| `pnpm --filter @jobguard/mobile test` | Final completed run: 10 files / 44 tests passed. Includes encrypted-store doubles, download binding/revocation, durable replay/poison/conflict handling, original UUIDv7/HLC retention, late invalidation, cleanup-hook failure, capture holds, shared/operative model adapters and React Native host-component safety checks |
+| `pnpm --filter @jobguard/core exec vitest run src/core-loop-views.test.ts src/operative-view-models.test.ts src/offline-reconciliation.test.ts src/offline-reconciliation.properties.test.ts src/native-chaos.test.ts src/sync-device-cache.test.ts src/sync-download.test.ts src/offline-capture.test.ts` | 8 files / 65 tests passed, including the merged pure/property/chaos models |
+| `pnpm --filter @jobguard/api exec vitest run src/native-download.compat.test.ts src/m31-native-roundtrip.integration.test.ts src/m32-native-auth.integration.test.ts src/auth/mobile-auth.application.test.ts src/sync/download.application.test.ts src/offline-upload.application.test.ts src/core-loop-shared.contract.test.ts` | 7 files / 67 tests passed. Native download adapter consumes the actual DARK server application; the durable queue round trip uses actual loopback Nest controllers and PostgreSQL with a lost response after commit, restart/replay, one receipt per original command and current membership revocation. Local encrypted store remains an explicit double |
+| `pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/native-server-chaos.integration.test.ts test/offline-upload.integration.test.ts test/evidence.integration.test.ts` | 3 files / 27 tests passed. Real PostgreSQL server authority, resumable-evidence state, replay/revocation/schema/clock-chaos checks; no device, storage-provider or native encryption claim |
+| `pnpm --filter @jobguard/api openapi:check` | Passed; existing API transport/OpenAPI retained |
+| `node --test tools/*.test.mjs` | Final completed run: 423 passed, zero failed/skipped, after lane normalization; guard/assertion sources unchanged |
+| `pnpm typecheck` | Passed all 8 tasks (1m1.484s); no React-type conflict |
+| `pnpm build` | Passed all 8 tasks (1m21.977s), including both mobile Hermes bundles, API and web. JS/server export is not a native binary build or a clean frozen-install proof |
+| `pnpm lint` | Exit 1 at the unchanged mandatory supply-chain check: `expo: registry integrity missing from lock`. Core purity, lane, money/commercial/provider and other repository boundary checks passed; downstream tasks interrupted by Turbo are not claimed passed. The underlying age-enforced install is still held; no exception or bypass was introduced |
+| `node tools/agent-lane-boundary-lint.mjs`, `git diff --check`, exact inventory/hash checks | Passed. 67 changed non-lane paths listed, no self-listing or lane-register grant. Four imported registrations archived byte-for-byte; all requested remote tips are ancestors |
+| `git push origin HEAD:refs/heads/codex/sandbox/m3-1-native` after model integration and each named native piece | Passed. M3-3 `bbb5fa363`; M3-4 `4904694f7`; M3-5 `cce0874ea`; M3-6 `c3667e04e`; ENT-12 `681c72639`. No PR opened |
+
+Full `pnpm test`, physical native/build/device suites, browser journeys and complete production-release/migration/evaluation gates were not completed. No native code, approval or real-data distribution is claimed complete. The suite branch's inherited main migration is not a new migration authored by these native adapters.
+
+### Execution interruption and remaining reconnect composition
+
+After the ENT-12 push and the completed checks above, the execution environment disconnected. A proposed final follow-up to independently remount in-memory screen state on connectivity transitions could not be confirmed, tested or pushed. It is **not** part of the verified source head above. The pushed shell remounts on owner/generation/auth-epoch changes, and each new source load strips old reviews; the owning composition must advance authority generation on reconnect and supply current connectivity. Making the connectivity transition itself independently invalidate/remount stored view state remains an implementation follow-up, alongside the already-held full native composition. No unverified source was published to hide this gap.
+
+The available GitHub connector was used only to append this completed evidence and the interruption note to the existing report on the same branch, after confirming the remote was still exactly `681c72639`. All native offline cache reads and general media remain held. D08 and G3 stay closed; every person/device checklist item remains not done.
+
+### Router ownership
+
+- Security/product owners and founder-reserved D08 approval: lease/clock bounds, unsynced retention/recovery/disposal, media cipher/key/temp/backup policy and lost-device exposure.
+- Data/provider owner under D04/D08: actual EU/UK sync/processing/storage/log/backup route and authenticated token/download scope.
+- Auth owner: persisted source-session/SSO/native transport, enrolment/re-enrolment and rotation/revocation recovery.
+- Owning capture/workflow router: generic text-evidence command/transport; do not reinterpret it as LogSiteExtra or server proof.
+- Release owner and independent RED checker: physical matrix, exact-head review, G3 and rollout/rollback evidence. Pending implementation and missing evidence are holds, not approvals.
