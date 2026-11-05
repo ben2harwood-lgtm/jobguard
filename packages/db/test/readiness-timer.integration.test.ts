@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
@@ -41,6 +41,10 @@ beforeAll(async () => {
   createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
  await pg.initialise(); await pg.start();
  const connection = { host: "127.0.0.1", port, user: "postgres", password: "synthetic", database: "postgres", max: 2 };
+ const bootstrap = new Pool(connection);
+ await bootstrap.query("CREATE DATABASE jobguard_synthetic_demo");
+ await bootstrap.end();
+ connection.database = "jobguard_synthetic_demo";
  admin = new Pool(connection); await migrate(admin);
  runtime = new Pool({ ...connection, options: "-c role=jobguard_runtime" });
  infrastructure = new Pool({ ...connection, options: "-c role=jobguard_infrastructure" });
@@ -50,7 +54,9 @@ beforeAll(async () => {
 afterAll(async () => { await closeTestPools(infrastructure, runtime, admin); await pg?.stop(); });
 
 it("discovers latest identifiers through FORCE RLS, restores caller context and grants only EXECUTE", async () => {
- await store().confirm(context, "member:synthetic-builder", plan);
+ // Discovery uses the database clock; scheduling below retains fixed DST dates.
+ const today = (await admin.query("SELECT to_char(CURRENT_TIMESTAMP AT TIME ZONE 'Europe/London','YYYY-MM-DD') today")).rows[0].today as string;
+ await store().confirm(context, "member:synthetic-builder", { ...plan, plannedDate: today });
  const client = await infrastructure.connect();
  try {
   await client.query("BEGIN");
@@ -68,9 +74,12 @@ it("the real task schedules the previous workday across DST; concurrent executio
  const foreignScope = { tenantId: other, jobId: randomUUID(), taskId: randomUUID() };
  await importWatchdogFixtureJob(admin, other, foreignScope.jobId);
  await store().confirm(testTenantContext(other), "member:synthetic-builder", { ...plan, scope: foreignScope });
+ const today = (await admin.query("SELECT to_char(CURRENT_TIMESTAMP AT TIME ZONE 'Europe/London','YYYY-MM-DD') today")).rows[0].today as string;
+ await store().confirm(context, "member:synthetic-builder", { ...plan, factRevision: 2, plannedDate: today });
  const beforeJob = (await admin.query("SELECT to_jsonb(j) payload FROM app.job j WHERE tenant_id=$1 AND id=$2", [tenantId, scope.jobId])).rows;
  await tasks().discover_readiness_plans!(null, helpers);
  const scheduled = queue.find(q => q.name === "readiness_schedule" && (q.payload as {scope: typeof scope}).scope.tenantId === tenantId)!;
+ await store().confirm(context, "member:synthetic-builder", { ...plan, factRevision: 3 });
  await Promise.all([tasks().readiness_schedule!(scheduled.payload, helpers), tasks().readiness_schedule!(scheduled.payload, helpers)]);
  const evaluation = queue.find(q => q.name === "readiness_evaluate")!;
  expect(evaluation.options.runAt).toEqual(new Date("2026-03-27T09:00:00.000Z"));
@@ -89,7 +98,7 @@ it("the real task schedules the previous workday across DST; concurrent executio
  expect(await store().proposals(testTenantContext(other), scope)).toEqual([]);
  expect(await store().proposals(testTenantContext(other), foreignScope)).toEqual([]);
  expect((await admin.query("SELECT to_jsonb(j) payload FROM app.job j WHERE tenant_id=$1 AND id=$2", [tenantId, scope.jobId])).rows).toEqual(beforeJob);
- await store().confirm(context, "member:synthetic-builder", { ...plan, factRevision: 2, status: "cancelled" });
+ await store().confirm(context, "member:synthetic-builder", { ...plan, factRevision: 4, status: "cancelled", plannedDate: today });
  await tasks().readiness_evaluate!(evaluation.payload, helpers);
  expect(await store().proposals(context, scope)).toEqual(proposals);
  expect((await infrastructure.query("SELECT * FROM infrastructure.discover_readiness_plans() WHERE tenant_id=$1", [tenantId])).rows).toEqual([]);
@@ -105,7 +114,7 @@ it("through the real task preserves each missing-fact reason and Scottish holida
   { patch: { access: true, edges: [{ taskId: scope.taskId, dependsOnTaskId: randomUUID() }] }, reasons: ["Predecessor completion unknown"] },
  ];
  for (const [i, entry] of cases.entries()) {
-  const current = { ...plan, ...entry.patch, factRevision: i + 3, plannedDate: "2026-01-05" };
+  const current = { ...plan, ...entry.patch, factRevision: i + 5, plannedDate: "2026-01-05" };
   at = "2026-01-01T08:00:00.000Z"; queue.length = 0;
   await store().confirm(context, "member:synthetic-builder", current);
   await tasks().readiness_schedule!({ version: "readiness-schedule-task.v1", scope }, helpers);
@@ -120,17 +129,58 @@ it("through the real task preserves each missing-fact reason and Scottish holida
  }
 });
 it("leaves uncovered calendar years unqueued and supersedes a changed revision", async () => {
- at = "2027-01-04T08:00:00.000Z"; queue.length = 0;
- await store().confirm(context, "member:synthetic-builder", { ...plan, factRevision: 9, plannedDate: "2027-01-05" });
+ at = "2028-01-04T08:00:00.000Z"; queue.length = 0;
+ await store().confirm(context, "member:synthetic-builder", { ...plan, factRevision: 11, plannedDate: "2028-01-05" });
  await tasks().readiness_schedule!({ version: "readiness-schedule-task.v1", scope }, helpers);
  expect(queue).toEqual([]);
  at = "2026-10-23T08:00:00.000Z";
- await store().confirm(context, "member:synthetic-builder", { ...plan, factRevision: 10, plannedDate: "2026-10-26" });
+ await store().confirm(context, "member:synthetic-builder", { ...plan, factRevision: 12, plannedDate: "2026-10-26" });
  await tasks().readiness_schedule!({ version: "readiness-schedule-task.v1", scope }, helpers);
  const evaluation = queue.find(q => q.name === "readiness_evaluate")!;
- await store().confirm(context, "member:synthetic-builder", { ...plan, factRevision: 11, plannedDate: "2026-10-27" });
+ await store().confirm(context, "member:synthetic-builder", { ...plan, factRevision: 13, plannedDate: "2026-10-27" });
  const before = await store().proposals(context, scope);
  at = "2026-10-26T10:00:00.000Z";
  await tasks().readiness_evaluate!(evaluation.payload, helpers);
  expect(await store().proposals(context, scope)).toEqual(before);
 });
+
+it("rejects infrastructure discovery in a non-synthetic database", async () => {
+ const connection = { ...admin.options, database: "postgres", max: 2 };
+ const nonSynthetic = new Pool(connection);
+ const worker = new Pool({ ...connection, options: "-c role=jobguard_infrastructure" });
+ try {
+  await nonSynthetic.query("CREATE SCHEMA infrastructure");
+  await nonSynthetic.query("GRANT USAGE ON SCHEMA infrastructure TO jobguard_infrastructure");
+  // The guard runs before table access in this second database.
+  await nonSynthetic.query(await readFile(new URL("../migrations/0794_readiness_discovery_guard.sql", import.meta.url), "utf8"));
+  await expect(worker.query("SELECT * FROM infrastructure.discover_readiness_plans()"))
+   .rejects.toMatchObject({ code: "42501", message: "MODE_FORBIDDEN" });
+ } finally { await closeTestPools(worker, nonSynthetic); }
+});
+
+it("past confirmed plans cannot consume the cap ahead of another tenant's due plan", async () => {
+ const early = "00000000-0000-4000-8000-000000000001", late = "ffffffff-ffff-4fff-bfff-ffffffffffff";
+ const earlyJob = randomUUID(), lateJob = randomUUID();
+ await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1),($2)", [early, late]);
+ await importWatchdogFixtureJob(admin, early, earlyJob);
+ await importWatchdogFixtureJob(admin, late, lateJob);
+ const dates = (await admin.query(`SELECT
+  to_char((CURRENT_TIMESTAMP AT TIME ZONE 'Pacific/Kiritimati')::date - 1,'YYYY-MM-DD') past,
+  to_char(CURRENT_TIMESTAMP AT TIME ZONE 'Pacific/Kiritimati','YYYY-MM-DD') today`)).rows[0];
+ for (let i = 0; i < 101; i++) {
+  const pastScope = { tenantId: early, jobId: earlyJob, taskId: randomUUID() };
+  if (i === 0) await store().confirm(testTenantContext(early), "member:synthetic-builder", { ...plan,
+   scope: pastScope, plannedDate: dates.today, timeZone: "Pacific/Kiritimati" });
+  await store().confirm(testTenantContext(early), "member:synthetic-builder", { ...plan,
+   scope: pastScope, factRevision: i === 0 ? 2 : 1,
+   plannedDate: dates.past, timeZone: "Pacific/Kiritimati" });
+ }
+ const dueScope = { tenantId: late, jobId: lateJob, taskId: randomUUID() };
+ await store().confirm(testTenantContext(late), "member:synthetic-builder", { ...plan,
+  scope: dueScope, plannedDate: dates.today, timeZone: "Pacific/Kiritimati" });
+ const rows = (await infrastructure.query("SELECT * FROM infrastructure.discover_readiness_plans()")).rows;
+ expect(rows).toContainEqual({ tenant_id: late, job_id: lateJob, task_id: dueScope.taskId });
+ expect(rows.some(row => row.tenant_id === early)).toBe(false);
+ expect(rows.length).toBeLessThanOrEqual(100);
+ expect(rows.every(row => Object.keys(row).sort().join() === "job_id,task_id,tenant_id")).toBe(true);
+}, 120_000);

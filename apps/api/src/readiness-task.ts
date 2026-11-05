@@ -6,16 +6,16 @@ import { DarkReadinessScheduler, type ReadinessSchedulePorts } from "./readiness
 import { DurableReadinessStore } from "./readiness-store.js";
 
 const scheduleTaskV1 = z.object({ version: z.literal("readiness-schedule-task.v1"), scope: scopeV1 }).strict();
-/** Labelled fictional 2026 data; NOT a real forecast or bank-holiday calendar. No network. */
+/** Labelled fictional 2026–2027 data; NOT a real forecast or bank-holiday calendar. No network. */
 export const syntheticTimerAdapters: ReadinessAdapters = {
   async weather({ scope, date }) {
     return { version: "readiness-weather.v1", synthetic: true, revision: "generated-timer-fiction.v1", scope, date,
-      observedAt: "2026-01-01T00:00:00.000Z", expiresAt: "2027-01-01T00:00:00.000Z", suitable: true };
+      observedAt: "2026-01-01T00:00:00.000Z", expiresAt: "2028-01-01T00:00:00.000Z", suitable: true };
   },
   async holidays(region) {
     return new FixtureReadinessAdapters({ weather: [], holidays: [{
       version: "readiness-holidays.v1", synthetic: true, revision: "generated-timer-fiction.v1", jurisdiction: region,
-      observedAt: "2026-01-01T00:00:00.000Z", expiresAt: "2027-01-01T00:00:00.000Z", from: "2026-01-01", through: "2026-12-31",
+      observedAt: "2026-01-01T00:00:00.000Z", expiresAt: "2028-01-01T00:00:00.000Z", from: "2026-01-01", through: "2027-12-31",
       holidays: region === "scotland" ? ["2026-01-02"] : region === "northern-ireland" ? ["2026-07-13"] : [],
     }] }).holidays(region);
   },

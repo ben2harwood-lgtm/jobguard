@@ -2,8 +2,8 @@ import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import type { JobHelpers } from "graphile-worker";
 import { describe, expect, it, vi } from "vitest";
-import { readinessTasks } from "./readiness-task.js";
-import type { ScheduledPlan } from "./readiness-scheduler.js";
+import { readinessTasks, syntheticTimerAdapters } from "./readiness-task.js";
+import { DarkReadinessScheduler, type ScheduledPlan } from "./readiness-scheduler.js";
 
 const scope = { tenantId: randomUUID(), jobId: randomUUID(), taskId: randomUUID() };
 const plan: ScheduledPlan = { version: "readiness-scheduled-plan.v1", synthetic: true, scope, factRevision: 1,
@@ -47,4 +47,17 @@ describe("synthetic readiness worker timer", () => {
     await tasks.readiness_schedule!({ version: "readiness-schedule-task.v1", scope }, { addJob } as unknown as JobHelpers);
     expect(addJob).toHaveBeenCalledWith("readiness_evaluate", expect.anything(), expect.objectContaining({ runAt: new Date("2026-03-27T09:00:00.000Z") }));
   });
+});
+
+it("the fictional timer schedules and evaluates ready work in 2027", async () => {
+  const current = { ...plan, plannedDate: "2027-12-31", access: true as const };
+  const recordProposal = vi.fn(async () => undefined);
+  const scheduler = new DarkReadinessScheduler(syntheticTimerAdapters, {
+    load: async () => current, recordProposal,
+  }, "synthetic_demo");
+  const addJob = vi.fn(async () => ({}));
+  expect(await scheduler.schedule(scope, "2027-12-30T08:00:00.000Z", { addJob } as unknown as JobHelpers)).toBe("scheduled");
+  const payload = (addJob.mock.calls[0] as unknown as [string, unknown])[1];
+  expect(await scheduler.execute(payload, "2027-12-30T09:00:00.000Z")).toBe("evaluated");
+  expect(recordProposal).toHaveBeenCalledWith(expect.objectContaining({ ready: true, reasons: [], weather: true }));
 });
