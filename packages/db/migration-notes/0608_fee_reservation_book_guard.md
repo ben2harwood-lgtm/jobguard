@@ -1,3 +1,12 @@
+# Landing catch-up — migration 0608
+
+Reserved migration stem is now `0608_fee_reservation_book_guard`; SQL bytes are
+unchanged. The upgrade test and proof lookup use that stem. The proof's exact
+predecessor roles value follows main's `{jobguard_runtime}` representation.
+All proof entries and attack assertions remain. Current local results and router
+handoff are in the existing FEE-STORE-UPDATE-GRANT builder receipt. Historical
+1060 references below describe earlier runs, not the reserved landing number.
+
 # FEE-STORE-UPDATE-GRANT — RED, forward guard (1060 provisional)
 
 This migration revokes runtime UPDATE(book); SELECT and INSERT remain, with a

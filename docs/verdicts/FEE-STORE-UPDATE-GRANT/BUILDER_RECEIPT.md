@@ -1,3 +1,43 @@
+# FEE-STORE-UPDATE-GRANT — READY for router commit and PR (RED)
+
+Plan piece: fee-store-safety. Exact-union catch-up with batch-25 at
+`36acf72daddbaa68f09a84c67a8a22842a72928d`. Both conflict resolutions retain all
+exports/table keys from both sides and now match main. No new runtime behaviour.
+Migration SQL renamed from `1060_fee_reservation_book_guard.sql` to
+`0608_fee_reservation_book_guard.sql` without changing any SQL bytes. The note,
+proof and upgrade lookup use the reserved stem. Main's corrected PostgreSQL roles
+string is retained in every predecessor proof and in 0608's exact before value;
+no proof entry or assertion was removed. The raw runtime SQL attack is retained.
+The lane lists exactly the eight changed files outside config/lanes and excludes
+itself. The historical evidence below is retained; this section supersedes its
+old draft status and migration-not-implemented statement.
+
+Local checks (installed repository binaries, no downloads):
+- API: `./node_modules/.bin/vitest run src/fee-collection/postgres-reservation-store.test.ts src/watchdog-registry.test.ts --maxWorkers=2`:
+  adapter 15 passed; watchdog initially failed on stale built core exports.
+  Rebuilt core with `./node_modules/.bin/tsc -p packages/core/tsconfig.json`;
+  targeted watchdog rerun with `--maxWorkers=2`: 126 passed.
+- DB: `./node_modules/.bin/vitest run test/migration-proof-loader.test.ts --maxWorkers=2`:
+  initially found the predecessor roles representation mismatch; after exact
+  alignment with main, 76 passed. No tests or proof checks weakened.
+- Root: `./node_modules/.bin/tsc -p apps/api/tsconfig.json --noEmit` and
+  `./node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit`: passed.
+- Read-only byte/content checks: SQL unchanged; both adapter files unchanged;
+  attack tests retain main's added termsHash fixture binding; upgrade test lookup
+  changed only its stem; every main migration proof unchanged. Lane equality and
+  `git diff --check` passed.
+
+Router must stage the resolved files, complete the existing merge, commit, push
+and open the PR, then obtain committed-range lane verification, green required
+CI and exact-head independent RED review. No git writes ran. PostgreSQL and
+browser suites were not run in this sandbox; they remain CI gates.
+UNKNOWN-RESULT-AUTHORITY remains a hold on route/rail activation: generic caller
+result reporting is not authenticated provider-result evidence. The store stays
+dark; this catch-up does not resolve or weaken that existing hold. No live money,
+provider calls, customer data or release.
+
+## Historical diagnostic receipt (superseded draft status)
+
 # FEE-STORE-UPDATE-GRANT — NOT READY (RED)
 
 Test-first diagnostic only. No grant repair, migration 1060 or proof has been issued. Do not commit, push or open a PR for this draft as a finished repair. No scanner, pin, fingerprinted-table column, provider or function setting was changed.

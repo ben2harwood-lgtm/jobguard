@@ -1,5 +1,5 @@
 {
-  "migration": "1060_fee_reservation_book_guard.sql",
+  "migration": "0608_fee_reservation_book_guard.sql",
   "lp0": [
     {
       "section": "entries",
@@ -110,9 +110,7 @@
         "tablename": "fee_reservation_book",
         "policyname": "tenant_isolation",
         "permissive": "PERMISSIVE",
-        "roles": [
-          "jobguard_runtime"
-        ],
+        "roles": "{jobguard_runtime}",
         "cmd": "ALL",
         "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
         "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"

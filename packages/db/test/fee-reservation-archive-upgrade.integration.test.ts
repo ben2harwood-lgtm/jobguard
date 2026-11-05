@@ -65,7 +65,7 @@ describe("M4-12 reservation archive populated upgrade", () => {
 
 describe("FEE-STORE-UPDATE-GRANT populated upgrade", () => {
   it("preserves populated unknown history, changes real rows through the owner routine and replays safely", async () => {
-    const migration = "1060_fee_reservation_book_guard.sql";
+    const migration = "0608_fee_reservation_book_guard.sql";
     const db = await startBeforeMigration(migration);
     try {
       const f = fixture();
