@@ -1,0 +1,6 @@
+{
+  "migration": "0789_demo_customer_link_reference.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}
