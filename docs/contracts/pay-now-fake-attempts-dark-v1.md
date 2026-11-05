@@ -247,8 +247,9 @@ jobguard_catch origin and the exact persisted approval and amount, and masks onl
 the invoice number. The browser compares real equal balances and public markup.
 The shared final-check job fixture now explicitly binds fictional parties and a
 small-builder track before going live, so it works without legacy DB-test hooks.
-ENT-3's price assertion is retained: merged main already renders quotedPence in
-My extras. No further ENT-3 product change was needed.
+The subsequent independent re-check disproved this round's ENT-3 price-display
+claim: the list returns quotedPence null for this capture. The final repair below
+corrects the spec against the actual approval-bound quote semantics.
 
 Local checks (installed tools, no downloads, at most two Vitest workers and three
 named files per run):
@@ -279,3 +280,71 @@ review must pass at the router's final exact head before merge. The sandbox cann
 start PostgreSQL or bind localhost, so none of these database/browser results is
 claimed locally. All existing synthetic-only, provider, money, release and launch
 holds above remain in place; MON-6 is not finished.
+
+
+## Batch-39 final repair round (5 November 2026)
+
+READY for router commit/push and CI, NOPR. This is the second and last repair
+round, with no independent PASS claimed. Proxy and expiry fixes are preserved.
+
+- SB-25: baseline and supplementary invoice repositories now use the existing
+  `practiceMaterialPool` with the catch job's digest. The invoice actor guard
+  requires both the owner and this job-scoped practice session; a plain tenant
+  context cannot authorize issuance. No actor, permission or guard was changed.
+- MON-6 seed: pg parses connectionString after explicit options, so the inherited
+  admin URL overrode the shadow login in browser fixtures. Replace the URL's
+  credentials too. The generated login still has only jobguard_shadow membership.
+  A local regression uses pg's real Client parser for both discrete options and
+  URL configuration, stops before seeding, and proves the effective login,
+  database, host and port. It does not connect or prove PostgreSQL permissions.
+- ENT-3: correct the spec, leave the screen unchanged. The SoR amount is already
+  tested against the stored schedule, adjustment and origin. `quotedPence` is a
+  separate read of extra_approval_revision_binding, absent for this capture.
+  Assert the exact extra's null quote and awaiting_approval state in the API and
+  absence of a displayed quote, while retaining all stored-money, photo,
+  resident-confirmation, mobile-size, replay and close-out assertions. Do not
+  fabricate a displayed quote from another price source.
+- Keep only the existing minimal shared final-check fixture change: draft insert,
+  idempotent fictional-party binding, small-builder/synthetic track, then live.
+  These prerequisites are strictly needed in browser clusters without the legacy
+  DB-test hook: live insertion requires parties and begin requires the track.
+  No actor, final-check ordering or other shared-fixture behavior changed in this
+  round. CI must retain the shared-fixture regressions named above.
+
+Local checks (installed binaries, no downloads):
+
+- From apps/web: `./node_modules/.bin/vitest run --maxWorkers=2 proxy.test.ts
+  app/api/customer-portal/practice-pay-now/route.test.ts
+  app/customer/practice-pay-now/screen.test.tsx`: 51 passed.
+- From packages/db: `./node_modules/.bin/vitest run --maxWorkers=2
+  test/customer-practice-pay-now-fixtures.test.ts`: 2 passed, no database.
+- From apps/web: `./node_modules/.bin/tsc -p tsconfig.json --noEmit
+  --incremental false`: passed.
+- Root installed tsc with `/tmp/batch-39-repair-typecheck.json`, extending the
+  strict root config and including the catch helper, its new regression and
+  customer-practice-pay-now.integration.test.ts: passed.
+- Playwright `test --list --workers=2` for ENT-3 and MON-6: four project entries
+  discovered, not executed. ENT-3 retains its existing desktop skip.
+- `node tools/lint.mjs` and `git diff --check`: passed.
+- The pnpm launcher stalled before execution and was interrupted; the results
+  above come from the installed binaries, not those interrupted commands.
+- Lane equality against the current main/branch merge-base
+  `199124c0885ca27558fbaf62a9a74dee7ad2818f`: 19 exact non-lane paths,
+  including the new regression; the lane does not list itself. origin/main has
+  advanced to `28871adf3ba1db975b6a4beb44025bcb8a571c9c`; no catch-up or Git
+  mutation was attempted in this read-only-Git sandbox.
+
+### Named holds for landing
+
+- PostgreSQL SB-25 catch comparison and invoice authorization remain unexecuted
+  here. Run customer-practice-pay-now.integration and the customer sign-in,
+  portal-message and shared final-check regressions, plus mandatory migration,
+  catalogue, RLS, privileges and tenancy suites in CI.
+- Execute MON-6 at both widths and ENT-3 on mobile, headless, at most two workers.
+  Browser discovery and source inspection do not establish those journeys pass.
+- Router reconciles current main and migration 1200's landing number, commits and
+  pushes, then obtains required green CI and independent RED review at the exact
+  resulting head. No further local repair round is authorized.
+- Existing synthetic-only, real-provider, money, deployment and launch gates stand.
+
+READY

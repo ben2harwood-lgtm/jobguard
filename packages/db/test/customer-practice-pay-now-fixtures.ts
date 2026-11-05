@@ -4,6 +4,7 @@ import { approveVariation, priceVariation, candidateM1TaxPolicy, money } from "@
 import { FinalAccountLockRepository } from "../src/final-account-lock-repository.js";
 import { FinalCheckCompletionRepository } from "../src/shadow-detection-repository.js";
 import { FinalCheckRepository } from "../src/final-check-repository.js";
+import { practiceMaterialPool } from "../src/practice-session.js";
 import { PracticeInvoiceRepository } from "../src/practice-invoice-repository.js";
 import { approvePricedVariation, insertPricedVariation } from "../src/variation-repository.js";
 import { withTenant } from "../src/tenant-context.js";
@@ -18,16 +19,22 @@ export async function issueApprovedCatchInvoice(
  const login=`customer_catch_${randomUUID().replaceAll("-","")}`, credential=randomUUID();
  await f.admin.query(`CREATE ROLE ${login} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${credential}'; GRANT jobguard_shadow TO ${login}`);
  const database=(await f.admin.query("SELECT current_database() name")).rows[0].name;
- const shadow=new Pool({...f.admin.options,database,user:login,password:credential,max:1});
+ // pg parses connectionString after explicit fields. Replace its credentials too,
+ // otherwise browser fixtures connect as the admin (which is also a runtime member).
+ const connectionString=f.admin.options.connectionString ? new URL(f.admin.options.connectionString) : null;
+ if(connectionString){connectionString.username=login;connectionString.password=credential;}
+ const shadow=new Pool({...f.admin.options,...(connectionString?{connectionString:connectionString.href}:{}),database,user:login,password:credential,max:1});
  try {
   const fixture={...f,shadow} as FinalCheckFixture;
   const job=await seedFinalCheckJob(fixture);
   const a={...job,actorId:FINAL_CHECK_ACTOR,scopeId:job.scopeItemId};
   const account={...job,draftId:String((await f.admin.query("SELECT final_account_draft_id FROM app.final_account_revision WHERE tenant_id=$1 AND id=$2",[a.tenantId,a.revisionId])).rows[0].final_account_draft_id)};
-  const locks=new FinalAccountLockRepository(f.runtime), repo=new FinalCheckRepository(f.runtime);
+  // Invoice issuance checks the job's practice principal as well as its owner.
+  const invoicePool=practiceMaterialPool(f.runtime,a.digest);
+  const locks=new FinalAccountLockRepository(invoicePool), repo=new FinalCheckRepository(f.runtime);
   const revealed=await availableFinalCheck(fixture,job);
   await new FinalCheckCompletionRepository(shadow).publish(a.context,{version:"final-check-publication.v1",jobId:a.jobId,runId:revealed.runId,checkId:revealed.manifest.id});
-  const invoices=new PracticeInvoiceRepository(f.runtime);
+  const invoices=new PracticeInvoiceRepository(invoicePool);
   const digest=a.digest;
   const confirmed=await repo.confirmCatch(a.context,a.jobId,digest,{version:"final-check.catch.v1",commandId:randomUUID(),
    lockId:revealed.lockId,runId:revealed.runId,signalId:revealed.signalId,expectedSignalRevision:1}) as {variationId:string};

@@ -1,7 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { Pool } from "pg";
 import { installContractorAgreementFixture } from "./contractor-agreement-fixture.js";
-import { pounds } from "../app/lib/pounds.js";
 
 // RED, synthetic only. The agreement fixture is the sole route interception/admin write.
 // Its helper imports only pg and node:crypto, not the core/db package graph.
@@ -131,7 +130,13 @@ test("ENT-3 priced capture, order coverage and close-out persist in PostgreSQL a
     await page.reload(); await ready();
     await expect(reloadedExtra).toContainText("photo");
     await expect(reloadedExtra).toContainText("resident confirmed");
-    await expect(reloadedExtra).toContainText(`price ${pounds(Number(first[0]!.net_pence))}`);
+    // SoR pricing is persisted above; quotedPence is a separate approval-bound
+    // quote, absent until that revision is bound. Do not invent a displayed quote.
+    const extrasResponse = await page.request.get("/api/northside/extras");
+    expect(extrasResponse.status()).toBe(200);
+    const listed = (await extrasResponse.json()).extras.find((extra: { extraId: string }) => extra.extraId === first[0]!.variation_id);
+    expect(listed).toMatchObject({ quotedPence: null, state: "awaiting_approval" });
+    await expect(reloadedExtra).not.toContainText(" · price ");
     await expect(reloadedExtra.getByTestId("my-extra-state")).toHaveText("Waiting for approval");
     expect(await pricedRows()).toEqual(first);
     await noSideScroll(page);

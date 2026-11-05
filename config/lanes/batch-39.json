@@ -21,6 +21,7 @@
         "docs/contracts/pay-now-fake-attempts-dark-v1.md",
         "packages/db/migration-notes/1200_customer_practice_pay_now_read.md",
         "packages/db/migrations/1200_customer_practice_pay_now_read.sql",
+        "packages/db/test/customer-practice-pay-now-fixtures.test.ts",
         "packages/db/test/customer-practice-pay-now-fixtures.ts",
         "packages/db/test/customer-practice-pay-now.integration.test.ts",
         "packages/db/test/final-check-fixture.ts",
