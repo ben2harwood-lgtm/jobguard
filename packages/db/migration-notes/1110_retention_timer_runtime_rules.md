@@ -42,7 +42,7 @@ There are no registry-row, policy or tenancy deltas and no new empty table.
 
 Forward fix only: retain immutable rows and audit; repair grants/routines in a new
 migration. Do not roll back to the infrastructure book reader or digest-free read.
-Stem 0785_retention_timer_runtime_rules is claimed and renumbered at landing.
+Stem 1110_retention_timer_runtime_rules is claimed and renumbered at landing.
 
 ## Verification and named holds for landing
 
@@ -50,14 +50,10 @@ Local deterministic checks and results are recorded in the commit-message handof
 PostgreSQL, full CI and an independent RED review against the eventual exact head
 remain required. No PostgreSQL or browser was started in this sandbox.
 
-The existing apps/web/e2e/M4-20-retention-records.spec.ts fixture requires a named
-landing update outside this piece's allowed files: change its timer repository
-from infrastructure to runtime and its repo.read(verified, jobId) to
-repo.read(verified, actor, jobId). Its captured job is still draft; the fixture
-also needs the existing explicit synthetic live-job setup before retention use.
-The owner UI journey/assertions should stay unchanged. No compatibility bypass
-was added to preserve the obsolete test authority. Web typecheck reports this
-fixture's old read signature until that update is admitted.
+The existing apps/web/e2e/M4-20-retention-records.spec.ts fixture now uses
+runtime for the timer, authenticated reads with the session digest, and the same
+owner-only fictional live-job lifecycle setup as the notice fixture. Its owner UI
+journey/assertions remain unchanged. Browser execution remains a CI requirement.
 
 Changed existing expectations are confined to retention tests: timer runtime login
 and structured counts, authenticated reads/refused revoked or lower-role reads,
