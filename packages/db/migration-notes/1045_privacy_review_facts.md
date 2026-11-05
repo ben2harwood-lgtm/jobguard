@@ -79,3 +79,19 @@ router must stage the resolved file and conclude the merge.
 The additional core/db noEmit TypeScript command sequence produced no output
 and was interrupted after more than two minutes; no current-refresh typecheck
 PASS is claimed. CI must supply that result. git diff MERGE_HEAD --check passed.
+
+Landing refresh validation (5 Nov 2026, origin/main 68b104767): the launcher
+already completed the merge at a7d613476; no unresolved index entries remain.
+Compared the replacement privacy_command against main's latest 0585 body again:
+only the existing verify/review fact changes differ. Main's complete empty-table
+list is retained plus privacy_review_fact; no migration already on main is
+changed or duplicated. The lane lists exactly the nine changed non-lane paths.
+
+Installed Vitest --maxWorkers=1: privacy-operations.test.ts (5 passed),
+dsar-migration-proofs.test.ts and migration-proof-loader.test.ts (84 passed).
+At most two workers ran concurrently. Core and DB installed TypeScript noEmit
+checks passed. The actual lane boundary CLI passed against origin/main, including
+migration ordering; PL/pgSQL CASE-in-IF lint passed all 284 migrations.
+git diff origin/main --check passed. No code or test changes were needed.
+PostgreSQL, browser suites, green CI and independent RED review remain required
+on the final pushed head. READY for router commit/push and later PR opening.
