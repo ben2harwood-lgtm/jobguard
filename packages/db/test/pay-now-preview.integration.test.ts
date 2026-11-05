@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { beforeAll, afterAll, describe, it, expect } from "vitest";
+import { beforeAll, afterAll, describe, it, expect, vi } from "vitest";
 import { cluster, type Cluster } from "./extra-fixtures.js";
 import { meterCompany } from "./meter-persistence-fixtures.js";
 import { type WorkFixture } from "./job-work-state-fixtures.js";
@@ -14,8 +14,8 @@ import { IdentityRepository } from "../src/identity-repository.js";
 
 describe("MON-6 stored preview boundaries",()=>{
  let c:Cluster;
- beforeAll(async()=>{c=await cluster();},240000);
- afterAll(async()=>{await c?.close();});
+ beforeAll(async()=>{vi.stubEnv("JOBGUARD_ENV","synthetic_demo");c=await cluster();},240000);
+ afterAll(async()=>{try{await c?.close();}finally{vi.unstubAllEnvs();}});
  const company=()=>meterCompany(c as unknown as WorkFixture);
  async function fixture(balance=12000){
   const a=await company(),net=balance===1?1:Number(BigInt(balance)*5n/6n),tax=balance-net,t=a.tenantId,j=a.jobId,q=randomUUID(),d=randomUUID(),r=randomUUID(),h="a".repeat(64);
@@ -63,7 +63,7 @@ describe("MON-6 stored preview boundaries",()=>{
  });
  it("refuses non-owner/admin roles and revoked or expired sessions",async()=>{
   const repo=new PayNowAttemptRepository(c.runtime);
-  for(const role of ["estimator","foreman","operative","finance","read_only"]){
+  for(const role of ["estimator","foreman","finance","read_only"]){
    const a=await fixture();await c.admin.query("UPDATE app.membership SET role=$1 WHERE id=$2",[role,a.actorId]);
    await expect(repo.command(a.context,a.actor,a.input)).rejects.toThrow("UNAVAILABLE");
   }

@@ -32,6 +32,37 @@ ENT-5 timing source amendment, 3 November 2026: Ben answered “Use visit times 
 `doneWithoutRequiredPreapproval` is true when the frozen `aboveClientBeforeWorkThreshold` comparison requires client preapproval and the operative has stated `under_way` or `finished`, with a finished visit and no such approval or client approval strictly after the visit finish. `not_started` or a missing statement stays `uncertain` even after the visit finishes and approval arrives. A narrow `ent3_extra_work_status(job, extra)` read supplies only that statement within the verified tenant, after client link/job checks; runtime has no table read grant. It is false when no such requirement applies or approval is strictly before visit start, and `uncertain` when the interval cannot settle the order. No linked visit remains `not_derived`. A before-work comparison without a required client step stays uncertain under the held T/Y composition contract. Company step timings are also shown; this flag interprets the explicit client-before-work threshold only, and grants no proceed permission. Earlier revision requirements remain evaluated, so later approval or a new revision cannot erase a breach. Requirements superseded strictly before visit start are excluded; supersession during the visit is uncertain. The visit and approval facts are retained unchanged; no breach-clearing write exists.
 
 Still open: the proceed contract, reporting authority beyond the merged visit commands, other previously held policy items and any unproved ENT-5 Done-when (including pack verification). This amendment resolves the issued timing source only; it does not declare ENT-5 finished or enable real data.
+## ENT-5 mandatory lane (built ahead, 4 November 2026)
+
+The contractor `/approvals/extras` screen projects only the existing, server-filtered
+`ExtraApprovalRepository.queue` read into `InboxFinding`s and passes them through
+`groupInbox` with an advisory budget of zero. Each request and step has its own
+`sourceRevision`; separate extras on one job cannot coalesce. Replayed identical
+reads coalesce, and a fresh read replaces the old queue without retaining decisions
+or superseded requests. Findings contain `amount: null`, fixed wording and an
+anchor to the existing extra card; prices and arbitrary queue fields are not copied
+into the lane. Prices on the existing detailed cards are unchanged.
+
+The lane does not derive grants, escalation, timers, decisions or current revisions.
+Only rows returned for the authenticated member can appear. The server queue remains
+authoritative for tenant/job scope, revocation and listed alternates (original
+approvers remain eligible after escalation). Command authorization is rechecked by
+the existing approval path; a displayed link never grants authority.
+
+Coverage: pure projection/grouping tests exercise zero advisory budget, 200 advisory
+findings, distinct extras, replayed reads, request/step revisions, empty reads and
+price omission. Component tests cover separate links and empty replacement. The new
+`ENT-5-must-decide.spec.ts` runs on mobile-360 and desktop with synthetic transport
+fixtures, target sizes, keyboard anchor navigation, named regions/links, overflow
+checks and Chromium text-contrast auditing. It does not prove database authority or
+constitute a comprehensive accessibility audit. CI must also run the existing real
+PostgreSQL `extra-approval-chain.integration.test.ts` for grant filtering, stale
+revisions, tenant isolation, revocation, replay and escalation guarantees. No database
+or browser suite was run in the restricted builder sandbox. No migration, new
+command, grant, queue rule or escalation change. RED independent review and green CI
+remain required. ENT-5 remains open for held contracts and aggregate acceptance;
+G0–G5 stay closed, synthetic practice only.
+
 
 ## ENT-5 screen actions — reject, withdraw and revise (4 November 2026)
 

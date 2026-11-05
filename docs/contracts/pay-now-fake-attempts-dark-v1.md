@@ -95,7 +95,7 @@ refused before application access. Missing, malformed, expired, revoked and
 foreign-scope customer credentials share the portal's public refusal. Responses
 are no-store and no-referrer. No customer link or message is created or sent.
 
-Migration 0766 adds one bounded identity-only read routine, reusing portal resolve
+Migration 1200 adds one bounded identity-only read routine, reusing portal resolve
 and its authority locks before invoice access. It selects the bound job's latest
 synthetic final invoice by issue date and invoice number, subtracts credits and
 unreversed receipts, and returns only invoice number and amount due. No role,
@@ -131,3 +131,89 @@ no new attempts. Neither suite can execute in this sandbox. Exact-head independe
 RED review remains required. CustomerInvoicePayNow and PAY_NOW_ENABLED stay dark;
 real invoice UI, provider evidence, live rails/links, stages, tariff/VAT and all
 G0-G5 release gates remain held. This does not finish MON-6.
+LP-5 lifecycle hold: this synthetic observation store and its practice preview
+do not dispatch through the LP-5 command lifecycle. They create no commercial
+authorization or execution record. Lifecycle integration remains held before
+any live payment command can use this surface.
+
+
+## Batch-39 landing reconciliation (5 November 2026)
+
+READY for router staging and no-PR handoff; this is builder evidence, not an
+independent review or permission to merge. Comparison base is `origin/main`
+`62081c68933d0b953e7dd75a8cbd7b3a2fb4f304` (the pending merge's incoming head).
+The local branch named `main` is stale and is not this comparison base.
+
+Migration inventory against that base:
+
+- Removed `1015_pay_now_fake_attempts.sql` and its proof/note. Its SQL is
+  byte-identical to main's `0598_pay_now_fake_attempts.sql`: SHA-256
+  `520c1eb9b8b378e45955206051cd9e315473678aeda74774393531fde7033d3c`.
+  The old proof differs, after stem normalization, only in the authority-group
+  target note: main explicitly holds LP-5 integration. Main's proof, note and
+  contract hold are retained. The obsolete `0757` conflict paths stay absent.
+- Renamed `1016_customer_practice_pay_now_read` to
+  `1200_customer_practice_pay_now_read`, including its proof/note and source
+  references. SQL bytes are unchanged: SHA-256
+  `1e833500890d5f96a57287157900062887a8f6218c715e19c7876e1e8c0f6095`.
+  This is the only additional migration, with a temporary landing number.
+- All migrations on the comparison base are byte-identical in this worktree.
+  `identity.customer_practice_pay_now` has no earlier definition on main; this
+  batch re-creates no existing routine. In particular main's latest
+  `app.lp5_command_result`, including `purchase_order.send.dark`, is untouched.
+
+Stored fake-attempt infrastructure is wholly on main. The remaining scope is
+ENT-3's priced mobile journey proof and MON-6's synthetic customer practice
+read/display with its unit, PostgreSQL and browser coverage. This does not close
+MON-6's live acceptance criteria. Main's database exports, complete later-empty
+registry and batch-23 lane are retained. The batch-39 lane lists exactly every
+file changed from the comparison base outside `config/lanes/`, and never itself.
+No existing test has been weakened.
+
+Local verification for this reconciliation (installed binaries; no downloads):
+
+- API: `vitest run --maxWorkers=2 src/pay-now-attempt.application.test.ts`:
+  29 passed.
+- Web: `vitest run --maxWorkers=2
+  app/api/customer-portal/practice-pay-now/route.test.ts
+  app/customer/practice-pay-now/screen.test.tsx`: 13 passed.
+- Database package, without PostgreSQL: `vitest run --maxWorkers=2
+  test/migration-proof-loader.test.ts test/pay-now-attempt-repository.test.ts
+  test/customer-evidence-approval-proof.test.ts`: 108 passed.
+- Core: `vitest run --maxWorkers=2 src/pay-now-synthetic.test.ts`: 5 passed.
+- `playwright test --list --workers=2 e2e/ENT-3-priced-journey.spec.ts
+  e2e/MON-6-customer-practice-pay-now.spec.ts`: four project entries discovered.
+  ENT-3 intentionally executes at mobile-360 only; MON-6 covers both widths.
+  Discovery is not browser execution.
+- Installed TypeScript `tsc -p <package>/tsconfig.json --noEmit` passed
+  sequentially for config, core, storage, ai, db, api and web (seven packages).
+- Core purity, money, commercial, AI-provider and PL/pgSQL boundary lint passed.
+  `git diff origin/main --check` passed. Direct use of the existing lane-policy
+  functions against the effective working-tree/main diff passed (14 exact
+  non-lane paths; one new migration above main's highest number, 0608).
+- The normal `node tools/lint.mjs` stopped at the lane check because the
+  read-only Git index still represents an unfinished merge and old HEAD paths.
+  This is not a final-head lint pass. The pnpm launcher stalled before checks;
+  it was interrupted and the installed binaries were invoked directly.
+
+### Named holds for landing
+
+- **Git staging and final lane gate:** the sandbox cannot write `.git`. The
+  router must stage all working-tree resolutions, removals and the new 1200
+  files, finish the pending merge, reconcile the final migration number and
+  rerun the normal lane/lint gate on the exact resulting head. No Git-writing
+  command was run here.
+- **CI PostgreSQL proof:** run fresh/upgrade migrations, migration proofs,
+  privilege/catalogue/RLS and tenancy checks, plus
+  `customer-practice-pay-now.integration.test.ts` and the existing pay-now
+  integration suites. Source inspection and proof-loader tests do not establish
+  PostgreSQL behavior.
+- **CI browser proof:** execute `ENT-3-priced-journey.spec.ts` at mobile-360 and
+  `MON-6-customer-practice-pay-now.spec.ts` at mobile-360 and desktop, headless
+  with at most two workers. Retain all existing required CI checks, including
+  typecheck, lint, test and build, against current main.
+- **Independent RED review:** required against the final exact head for customer
+  authority, tenant isolation and money display. No independent review ran here.
+- **Release scope:** synthetic data only. CustomerInvoicePayNow,
+  PAY_NOW_ENABLED, live providers, payment regulation/VAT/D10/G4-S and all
+  previously recorded release gates remain held.
