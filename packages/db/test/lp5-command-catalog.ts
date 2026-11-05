@@ -588,6 +588,10 @@ export const lateSourceRegistryRow = {
   command_type: "LateSource.import", version: "repository-command.v1", permission_rule: "owner",
   lock_adapter: "route_before_begin", completion_adapter: "source_intake", audit_class: "operational", outbox_class: null,
 };
+export const darkOrderRegistryRow = {
+  command_type: "purchase_order.send.dark", version: "command.v1", permission_rule: "owner",
+  lock_adapter: "route_before_begin", completion_adapter: "purchase_order", audit_class: "commercial", outbox_class: "fake_merchant_order",
+};
 export const managedRecoveryRegistryRow = {
   command_type: "managed_recovery.elect", version: "command.v1", permission_rule: "owner",
   lock_adapter: "route_before_begin", completion_adapter: "managed_recovery", audit_class: "commercial", outbox_class: null,
@@ -596,7 +600,7 @@ export const siteSupervisorQueryRegistryRow = {
   command_type: "RecordSiteSupervisorQuery", version: "repository-command.v1", permission_rule: "active_member",
   lock_adapter: "route_before_begin", completion_adapter: "site_supervisor_query", audit_class: "operational", outbox_class: null,
 };
-export const currentCommandRegistryRows = [...lp5RegistryRows, lateSourceRegistryRow, managedRecoveryRegistryRow, siteSupervisorQueryRegistryRow];
+export const currentCommandRegistryRows = [...lp5RegistryRows, lateSourceRegistryRow, managedRecoveryRegistryRow, siteSupervisorQueryRegistryRow, darkOrderRegistryRow];
 export const lp5bRoutines = [
   {
     "signature": "app.lp5b_bind_follow_up_cancel()",

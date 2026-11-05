@@ -1,0 +1,52 @@
+{
+  "version": 2,
+  "lanes": {
+    "batch-38": {
+      "branches": [
+        "codex/sandbox/batch-38"
+      ],
+      "note": "Built-ahead RED union of m2-5-line-facts; synthetic only; NOPR.",
+      "allow": [
+        "docs/contracts/merchant-extraction-v1.md",
+        "docs/contracts/supplier-line-matching-v1.md",
+        "docs/decisions/d04-providers-residency.md",
+        "packages/ai/src/index.ts",
+        "packages/ai/src/merchant-extraction.test.ts",
+        "packages/ai/src/merchant-extraction.ts",
+        "packages/core/src/discrepancy-development-fixtures.ts",
+        "packages/core/src/discrepancy-evaluation.test.ts",
+        "packages/core/src/discrepancy-evaluation.ts",
+        "packages/core/src/discrepancy.ts",
+        "packages/core/src/index.ts",
+        "packages/core/src/line-discrepancy.test.ts",
+        "packages/core/src/line-discrepancy.ts",
+        "packages/core/src/supplier-line-matching.test.ts",
+        "packages/core/src/supplier-line-matching.ts",
+        "packages/core/src/supplier-match-corrections.test.ts",
+        "packages/core/src/supplier-match-corrections.ts",
+        "packages/core/src/watchdog.ts",
+        "packages/db/migrations/1010_dark_merchant_order.sql",
+        "packages/db/migrations/1011_supplier_line_corrections.sql",
+        "packages/db/src/index.ts",
+        "packages/db/src/merchant-intake-port.ts",
+        "packages/db/src/outbox.ts",
+        "packages/db/src/purchase-order-action-guard.ts",
+        "packages/db/src/purchase-order-action-repository.ts",
+        "packages/db/src/purchase-order-action.ts",
+        "packages/db/src/supplier-line-correction-repository.ts",
+        "packages/db/src/watchdog.ts",
+        "packages/db/test/late-source-import-migration.test.ts",
+        "packages/db/test/later-empty-tables.ts",
+        "packages/db/test/lp5-command-catalog.ts",
+        "packages/db/test/m2-1-migration-proof.test.ts",
+        "packages/db/test/merchant-intake-port.test.ts",
+        "packages/db/test/migration-proofs/1010_dark_merchant_order.proof.json",
+        "packages/db/test/migration-proofs/1011_supplier_line_corrections.proof.json",
+        "packages/db/test/purchase-order-action.test.ts",
+        "packages/db/test/purchase-order-audit.integration.test.ts",
+        "packages/db/test/supplier-line-corrections.integration.test.ts",
+        "packages/db/test/supplier-line-migration-proofs.test.ts"
+      ]
+    }
+  }
+}
