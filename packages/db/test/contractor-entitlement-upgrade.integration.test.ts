@@ -163,6 +163,8 @@ const emptySuccessors=[
  "app.financial_reconciliation_approval",
  "app.financial_reconciliation_command",
 
+ "app.fee_reservation_archive",
+ "app.fee_reservation_book",
  "app.practice_exposure_schedule",
  ...Object.keys(laterEmptyTables),
 
