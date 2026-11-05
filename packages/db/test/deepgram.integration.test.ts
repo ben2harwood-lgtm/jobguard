@@ -13,6 +13,7 @@ import type { PrivateVersionedStorage, StoredObject } from "@jobguard/storage";
 import { CaptureRepository, EvidenceService, FixtureSpeechAudioReader, migrate, withTenant } from "../src/index.js";
 import { MIGRATION_URLS } from "../src/migrate.js";
 
+const originalEnvironment=process.env.JOBGUARD_ENV;
 const tenant="10000000-0000-4000-8000-000000000001",other="10000000-0000-4000-8000-000000000002";
 const context=testTenantContext(tenant),foreign=testTenantContext(other);
 const own="0586_deepgram_fixture_transcripts.sql";
@@ -25,10 +26,14 @@ const storage:PrivateVersionedStorage={
 };
 let pg:EmbeddedPostgres,admin:Pool,runtime:Pool,dir:string;
 beforeAll(async()=>{
+  process.env.JOBGUARD_ENV="synthetic_demo";
   dir=await mkdtemp(join(tmpdir(),"deepgram-pg-"));const port=await freePort(56000,500);
   pg=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic-test-only",persistent:false,
     createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});
   await pg.initialise();await pg.start();admin=new Pool({host:"127.0.0.1",port,database:"postgres",user:"postgres",password:"synthetic-test-only"});
+  await admin.query("CREATE DATABASE jobguard_synthetic_demo");
+  const options={...admin.options,database:"jobguard_synthetic_demo"};
+  await admin.end();admin=new Pool(options);
   // Upgrade from every predecessor, retaining a real legacy source row.
   await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
   for(const url of MIGRATION_URLS){const name=url.pathname.split("/").at(-1)!;if(name===own)break;
@@ -43,9 +48,9 @@ beforeAll(async()=>{
   expect((await admin.query("SELECT * FROM app.capture_source")).rows).toEqual(before);
   expect((await admin.query("SELECT relname,relowner,relacl,relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=ANY(ARRAY['app.capture_source'::regclass,'app.synthetic_evidence_original'::regclass]) ORDER BY relname")).rows).toEqual(authority);
   await admin.query("CREATE ROLE speech_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOBYPASSRLS; GRANT jobguard_runtime TO speech_login");
-  runtime=new Pool({host:"127.0.0.1",port,database:"postgres",user:"speech_login",password:"synthetic"});
+  runtime=new Pool({host:"127.0.0.1",port,database:"jobguard_synthetic_demo",user:"speech_login",password:"synthetic"});
 },120_000);
-afterAll(async()=>{await closeTestPools(runtime,admin);await pg?.stop();if(dir)await rm(dir,{recursive:true,force:true})});
+afterAll(async()=>{if(originalEnvironment===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=originalEnvironment;await closeTestPools(runtime,admin);await pg?.stop();if(dir)await rm(dir,{recursive:true,force:true})});
 async function prepare(){
   const jobId=randomUUID(),scopeId=randomUUID();
   await importWatchdogFixtureJob(admin,tenant,jobId,"Generated speech fixture");
@@ -117,4 +122,13 @@ describe("dark speech registration and persistence (real PostgreSQL)",()=>{
         [randomUUID(),tenant,kind,Buffer.from("Shelf"),hash,meta,length]))).rejects.toMatchObject({code:"23514"});
     }
   });
+});
+
+it("fixture persistence rejects a non-demo database even with the demo environment",async()=>{
+ const nonDemo=new Pool({...runtime.options,database:"postgres"});
+ try {
+  const request=input(randomUUID(),randomUUID(),randomUUID());
+  await expect(new CaptureRepository(nonDemo).persistSpeechFixtureSource(context,request.captureId,{kind:request.sourceKind,text:request.text,acquisition:request.acquisition}))
+   .rejects.toThrow("SPEECH_FIXTURE_DARK_ONLY");
+ } finally { await nonDemo.end(); }
 });
