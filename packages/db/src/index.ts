@@ -197,6 +197,7 @@ export * from "./money-trail-repository.js";
 
 export * from "./ais-adapter.js";
 export * from "./ais-repository.js";
+export { VatFixtureRepository, VatFixtureRepositoryError } from "./vat-fixture-repository.js";
 export * from "./retention-record-repository.js";
 export * from "./pay-now-attempt-repository.js";
 export * from "./notice-fixture-repository.js";
