@@ -1,0 +1,37 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-23": {
+      "branches": [
+        "codex/sandbox/later-safety-23"
+      ],
+      "note": "LATER-SAFETY-23: per-row connector promotion validation and final 403 hold refusal. Stacked NOPR; includes inherited differences from batch-41. No migration.",
+      "allow": [
+        "apps/api/package.json",
+        "apps/api/src/merchant-order.application.test.ts",
+        "apps/api/src/merchant-order.application.ts",
+        "apps/api/src/merchant-order.contracts.ts",
+        "apps/web/app/api/jobs/[id]/purchase-orders/merchant-order/route.ts",
+        "apps/web/app/jobs/[id]/evidence-holds/evidence-holds.test.tsx",
+        "apps/web/app/jobs/[id]/evidence-holds/evidence-holds.tsx",
+        "apps/web/app/jobs/[id]/page.tsx",
+        "apps/web/app/lib/merchant-order-server.test.mts",
+        "apps/web/app/lib/merchant-order-server.ts",
+        "apps/web/app/ui/merchant-order.test.ts",
+        "apps/web/app/ui/merchant-order.tsx",
+        "apps/web/app/ui/supplier-documents.test.tsx",
+        "apps/web/app/ui/supplier-documents.tsx",
+        "apps/web/e2e/M2-1-order-screen.spec.ts",
+        "apps/web/e2e/M2-2-S.spec.ts",
+        "docs/verdicts/batch-33/BUILDER_RECEIPT.md",
+        "packages/core/src/watchdog.ts",
+        "packages/db/src/connector-promotion-repository.test.ts",
+        "packages/db/src/connector-promotion-repository.ts",
+        "packages/db/src/supplier-document-repository.ts",
+        "packages/db/test/command-replay-contract.integration.test.ts",
+        "packages/db/test/enterprise-access-upgrade.integration.test.ts",
+        "packages/db/test/supplier-documents.integration.test.ts"
+      ]
+    }
+  }
+}
