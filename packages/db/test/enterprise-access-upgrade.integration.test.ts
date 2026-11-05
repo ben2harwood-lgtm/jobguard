@@ -6,7 +6,7 @@ import { predecessorCatalogue } from './contractor-entitlement-fixtures.js';
 let h:ScimHarness|undefined;
 afterAll(async()=>{await h?.close();});
 it('emergency_dual_owner/scim2_machine preserve populated identity state, installed routines and old ACLs; new capabilities start empty and default OFF',async()=>{
- h=await createScimHarness('ent10-rest-upgrade-','0965_emergency_dual_owner.sql');
+ h=await createScimHarness('ent10-rest-upgrade-','0612_emergency_dual_owner.sql');
  const f=await fixture(h);await person(f,'finance');
  const tables=['identity.session','identity.sso_subject','identity.sso_emergency_window','identity.sso_required_event','app.membership','app.role_grant'];
  const before=await Promise.all(tables.map(t=>canonicalRows(h!,t))),catalogue=await predecessorCatalogue(h.admin);

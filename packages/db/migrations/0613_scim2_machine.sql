@@ -64,12 +64,14 @@ CREATE FUNCTION identity.scim2_machine(b uuid, token text, p jsonb) RETURNS json
 DECLARE binding identity.scim2_binding; t uuid; old identity.scim2_resource; rid uuid; event uuid;
  resource_kind text:=p->>'kind'; method text:=p->>'method'; doc jsonb:=p->'document'; result jsonb; previous identity.scim2_receipt;
  actor uuid; person uuid; member uuid; account uuid; address text; sh text; response jsonb; request_hash text;
- entry jsonb; rev integer; BEGIN
+ entry jsonb; rev integer;
+ caller_tenant text:=current_setting('app.tenant_id',true);
+ caller_binding text:=current_setting('app.scim2_binding',true); BEGIN
  IF current_database()<>'jobguard_synthetic_demo' THEN RAISE EXCEPTION 'SCIM_REFUSED' USING ERRCODE='42501'; END IF;
  PERFORM set_config('app.tenant_id','',true);
  PERFORM set_config('app.scim2_binding',b::text,true);
  SELECT * INTO binding FROM identity.scim2_binding WHERE id=b;
- PERFORM set_config('app.scim2_binding','',true);
+ PERFORM set_config('app.scim2_binding',coalesce(caller_binding,''),true);
  IF binding.id IS NULL OR token IS NULL OR binding.token_hash IS DISTINCT FROM encode(sha256(convert_to(token,'UTF8')),'hex')
  OR NOT binding.enabled OR binding.expires_at<=clock_timestamp() THEN RAISE EXCEPTION 'SCIM_REFUSED' USING ERRCODE='42501'; END IF;
  t:=binding.tenant_id;
@@ -95,6 +97,8 @@ DECLARE binding identity.scim2_binding; t uuid; old identity.scim2_resource; rid
   END IF;
   PERFORM identity.scim2_audit(b,'sso.scim.get','scim_binding',b,
    jsonb_build_object('classifications',jsonb_build_object('data','security')));
+  PERFORM set_config('app.tenant_id',coalesce(caller_tenant,''),true);
+  PERFORM set_config('app.scim2_binding',coalesce(caller_binding,''),true);
   RETURN response;
  END IF;
  event:=(p->>'eventId')::uuid;
@@ -103,6 +107,8 @@ DECLARE binding identity.scim2_binding; t uuid; old identity.scim2_resource; rid
  SELECT * INTO previous FROM identity.scim2_receipt WHERE tenant_id=t AND binding_id=b AND id=event;
  IF FOUND THEN
   IF previous.request_hash<>request_hash THEN RAISE EXCEPTION 'SCIM_CONFLICT' USING ERRCODE='23505'; END IF;
+  PERFORM set_config('app.tenant_id',coalesce(caller_tenant,''),true);
+  PERFORM set_config('app.scim2_binding',coalesce(caller_binding,''),true);
   RETURN previous.response;
  END IF;
  SELECT * INTO old FROM identity.scim2_resource WHERE tenant_id=t AND binding_id=b AND id=rid;
@@ -204,7 +210,13 @@ DECLARE binding identity.scim2_binding; t uuid; old identity.scim2_resource; rid
  PERFORM identity.scim2_audit(b,'sso.scim.'||lower(method),'scim_binding',b,
   jsonb_build_object('references',jsonb_build_object('bindingId',b::text,'machine','scim2'),
   'hashes',jsonb_build_object('request',request_hash),'classifications',jsonb_build_object('data','security')));
- RETURN response;
+ PERFORM set_config('app.tenant_id',coalesce(caller_tenant,''),true);
+  PERFORM set_config('app.scim2_binding',coalesce(caller_binding,''),true);
+  RETURN response;
+EXCEPTION WHEN OTHERS THEN
+ PERFORM set_config('app.tenant_id',coalesce(caller_tenant,''),true);
+  PERFORM set_config('app.scim2_binding',coalesce(caller_binding,''),true);
+  RAISE;
 END $$;
 ALTER FUNCTION identity.scim2_configure(text,text,uuid,uuid,uuid,boolean,text) OWNER TO jobguard_migration;
 ALTER FUNCTION identity.scim2_machine(uuid,text,jsonb) OWNER TO jobguard_migration;

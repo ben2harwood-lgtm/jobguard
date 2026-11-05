@@ -87,6 +87,22 @@ describe('ENT-10-rest SCIM machine provisioning',()=>{
   await expect(machine.query('SELECT * FROM identity.scim2_binding')).rejects.toHaveProperty('code','42501');
   await expect(machine.query('SELECT identity.dark_emergency(NULL,NULL,NULL,NULL)')).rejects.toHaveProperty('code','42501');
  });
+ it('restores caller tenant and binding settings on reads, writes, replay and refusal',async()=>{
+  const m=await machineFixture(),client=await machine.connect();
+  const tenant=randomUUID(),binding=randomUUID(),event=randomUUID();
+  const read={version:'scim2-machine.v1',method:'GET',kind:'Groups'};
+  const write={...read,method:'POST',id:event,eventId:event,document:{schemas:['urn:ietf:params:scim:schemas:core:2.0:Group'],displayName:'Fictional crew',members:[]}};
+  const settings=async()=>expect((await client.query("SELECT current_setting('app.tenant_id',true) tenant, current_setting('app.scim2_binding',true) binding")).rows[0]).toEqual({tenant,binding});
+  const call=(input:unknown,token=m.token)=>client.query('SELECT identity.scim2_machine($1,$2,$3::jsonb)',[m.bindingId,token,JSON.stringify(input)]);
+  try {
+   await client.query('BEGIN');
+   await client.query("SELECT set_config('app.tenant_id',$1,true),set_config('app.scim2_binding',$2,true)",[tenant,binding]);
+   for(const input of [read,write,write]) {await call(input);await settings();}
+   await client.query('SAVEPOINT refusal');
+   await expect(call(read,'invalid-token')).rejects.toHaveProperty('code','42501');
+   await client.query('ROLLBACK TO SAVEPOINT refusal');await settings();
+  } finally {await client.query('ROLLBACK');client.release();}
+ },120000);
  it('creates a user, replays idempotently, rejects changed replay, manages a group, revokes next request immediately',async()=>{
   const m=await machineFixture(),event=randomUUID();
   const created=await m.create(event) as {id:string};expect(created.id).toBe(event);expect(await m.create(event)).toEqual(created);
