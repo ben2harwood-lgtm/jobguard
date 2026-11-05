@@ -9,6 +9,7 @@
       "allow": [
         "apps/web/app/layout.tsx",
         "apps/web/e2e/ENT-3.spec.ts",
+        "apps/web/e2e/m4-16-workbench.spec.mts",
         "apps/web/package.json",
         "docs/verdicts/ENT-3-AXE/BUILDER_RECEIPT.md",
         "pnpm-lock.yaml"
