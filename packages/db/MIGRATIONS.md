@@ -1320,7 +1320,7 @@ Forward fix only: retain run, difference, proposal, approval and command history
 The committed proof and queue upgrade/integration tests require real PostgreSQL
 in CI. No live provider, scheduler or production capability is enabled.
 
-## 1125 — legacy recovery money integrity (MIGFIX-6; M4-8-S / CH-7)
+## 1210 — legacy recovery money integrity (MIGFIX-6; M4-8-S / CH-7)
 
 Adds validated `landing_allocation_eligible_within_gross` and replaces only the latest
 0356 legacy v1 approval/reversal bodies. Reversals subtract all prior reversals and
@@ -1330,3 +1330,14 @@ Existing invalid rows abort migration rather than rewriting history. Forward-fix
 retain immutable money history and use linked compensation under review; do not roll
 back to the faulty formula. PostgreSQL upgrade/fresh-install proof and RED review
 are landing gates, not established by the source guards.
+
+### 1211 — MIGFIX-7 recovered group disclosure (SV-2 / SV-3, RED)
+
+`1211_shadow_group_disclosure.sql` replaces the current disclosure routine,
+adds an ungranted coalescence trigger, and preserves the latest checked-audit
+early-firing executor while aligning its lock order. No columns, table grants,
+new commercial authority, post-lock completion or historical backfill. The proof
+lists exact routine/trigger changes; integration and own-step upgrade coverage
+require real PostgreSQL CI. Forward fix only: retain all disclosure, exclusion,
+firing and audit history; disable detection/support execution if rollback is
+needed, then apply a separately reviewed corrective migration.

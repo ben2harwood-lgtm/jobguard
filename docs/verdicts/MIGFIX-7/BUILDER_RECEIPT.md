@@ -1,0 +1,74 @@
+READY — recover-migfix-7, NOPR, RED (SV-2 / SV-3 authority, hidden data and fee eligibility).
+
+Compared current worktree/main `62081c689` with the local branch-audit snapshot
+and old `origin/codex/sandbox/migfix-7` (`9ab17353e`). Main still had single-signal
+disclosure and no group propagation. Recovered only the group disclosure/no-fee
+protection onto main, using reserved migration 1211 and its exact catalogue proof.
+No Git metadata or remote refs were changed; no fetch, commit, push or PR.
+
+The disclosure routine now locks the detection key, job and complete star-shaped
+coalesced group before applying monotonic visibility/exclusions and the existing
+audited disclosure. The trigger copies permanent exclusions and their original
+audited disclosure references when a later duplicate joins; unlike the old
+branch, an already-disclosed duplicate joining a hidden survivor also protects
+that survivor's existing siblings. No stored-row shapes or historical records
+change. No new public/runtime EXECUTE or table grants. The latest 0520
+`surface_shadow_signal_early` body retains its checked `lp4_seal_audit` path and
+current validation/search path, with the detection key acquired before its row
+locks. Existing repository/worker wiring uses this executor. No new command,
+route, environment setting, operational alert or credential is needed.
+
+Post-lock completion stays disabled: the old routine, test-only executor grant
+and completion tests were not ported. Regression coverage requires locked jobs
+to keep refusing early firing and ordinary late disclosure to record truthful
+post-lock timing. Synthetic data only; no deployment or production activation.
+
+Verification (actual results)
+
+- Installed Node v24.17.0 and local TypeScript/Vitest binaries; no package download.
+  The system pnpm launcher stalled even on `--version`; stopped those invocations.
+  Used the installed repository binaries directly, preserving runner/config.
+- `packages/db: ./node_modules/.bin/tsc -p tsconfig.json --noEmit`: PASS.
+- Built existing core/storage/config/db/ai packages with their installed `tsc -p
+  tsconfig.json` scripts to supply ignored local dist outputs for unit imports.
+- `packages/db: ./node_modules/.bin/vitest run --maxWorkers=2
+  test/migration-proof-loader.test.ts test/upgrade-proof-utils.test.ts`: 79 PASS.
+  Initial collection lacked core dist; the completed run above followed its build.
+- `apps/api: ./node_modules/.bin/vitest run --maxWorkers=2
+  src/auth/context-boundary.test.ts src/auth/identity.test.ts`: 152 PASS in
+  the three-file run; watchdog initially needed built db/ai dist. After those
+  dependency builds, `vitest run --maxWorkers=2 src/watchdog-registry.test.ts`:
+  126 PASS. No successful guard suite needed further execution.
+- `packages/db: vitest list --maxWorkers=2 test/migfix-7.integration.test.ts
+  test/migfix-7-upgrade.integration.test.ts` collects all 7 new tests. The updated
+  plan-entitlement upgrade test was also collected. Collection does not execute
+  hooks/tests or prove PostgreSQL behavior.
+- `git diff --check`: PASS.
+- `node tools/agent-lane-boundary-lint.mjs`: refuses self-comparison because
+  HEAD equals origin/main while this sandbox cannot commit. A read-only local
+  invocation of its exported policy/selection/path/migration validators passes:
+  exact lane coverage for all 10 changed paths, excluding the lane file from its
+  own allow list, and reserved 1211 is above all migrations on main. The normal
+  commit-range lane check remains required after the router commits.
+
+Named holds for landing
+
+- GitHub PostgreSQL CI must execute `migfix-7.integration.test.ts`,
+  `migfix-7-upgrade.integration.test.ts` and the updated
+  `plan-entitlement-lifecycle-upgrade.integration.test.ts`, plus required full
+  database/migration, LP-0, tenancy, fingerprint and existing shadow suites.
+  The new tests were collected locally, not database-executed. CI must prove
+  group exclusions, both racing commit orders, replay/conflict handling,
+  cross-tenant/permission refusal, audit rollback, current worker execution,
+  post-lock refusal, unchanged rows/types/ACLs and repeat migration behavior.
+- Required full typecheck/lint/test/build CI must pass against the landing head.
+  No PostgreSQL or browser server can run in this sandbox. Re-run the normal
+  lane tool after the router creates the commit.
+- Independent RED review must PASS the exact final head before landing.
+- Post-lock mandatory-firing completion is intentionally outside this recovery
+  and remains disabled; it needs separately reviewed authority/executor work.
+
+Forward fix only: preserve disclosure/exclusion/firing/audit history, disable
+execution if needed, and use a reviewed corrective migration. No historical
+backfill or new routine grant is implied by READY. READY means prepared for the
+router's commit/push/CI/review handoff; it is not a landing or release claim.

@@ -3,7 +3,7 @@ import { afterAll, expect, it } from "vitest";
 import { startBeforeMigration, applyMigration, snapshot, type Cluster } from "./contractor-entitlement-fixtures.js";
 import { legacyRecoveryFixture } from "./migfix-6-fixture.js";
 import { migrate } from "../src/migrate.js";
-const migration = "1125_legacy_recovery_money_integrity.sql";
+const migration = "1210_legacy_recovery_money_integrity.sql";
 let c: Cluster | undefined;
 const previousEnvironment = process.env.JOBGUARD_ENV;
 afterAll(async () => {

@@ -8,7 +8,7 @@ reversal predicate were still missing. No fetch, Git mutation, commit or push.
 
 ## Focused recovery
 
-Migration `1125_legacy_recovery_money_integrity.sql` adds the validated
+Migration `1210_legacy_recovery_money_integrity.sql` adds the validated
 `landing_allocation_eligible_within_gross` constraint and starts both replacement
 routines from their latest mainline bodies in 0356. Approval adds eligible <= gross;
 reversal subtracts every reversal and uses the approval routine's existing settled
@@ -25,7 +25,7 @@ Added fresh-install PostgreSQL regressions and a populated upgrade/replay test u
 current fixture helpers. The latter compares all existing rows, policies, relation
 ownership/grants/RLS and every routine; only the two exact legacy body replacements
 are permitted. The pre-existing 0556 upgrade test now binds these exact signatures
-to 1125's replacement bodies rather than exempting a class of routines. Migration
+to 1210's replacement bodies rather than exempting a class of routines. Migration
 proof records unchanged runtime-reachable routine metadata and identity arguments.
 
 ## Local evidence
@@ -64,3 +64,65 @@ proof records unchanged runtime-reachable routine metadata and identity argument
    This builder has not independently reviewed, accepted or merged the change.
 
 READY means prepared for router commit/push and CI, not cleared to land.
+
+
+## Batch-49 union, 5 November 2026
+
+RED, NOPR: recover-migfix-6 plus recover-migfix-7, compared with local
+`origin/main` at `62081c689`. Local `main` is an older ref and was not used as
+the dispatch baseline. No fetch or Git write was performed.
+
+Resolved the MIGRATIONS.md conflict by preserving both entries. Renamed the
+migration stems and their proofs/references to `1210_legacy_recovery_money_integrity`
+and `1211_shadow_group_disclosure`, in batch dependency order. Both SQL files
+are byte-identical to their recovered versions before renaming. No mainline
+migration was edited. Both exact routine exceptions remain in the plan-entitlement
+upgrade test. Removed both added piece lanes and registered batch-49 with exact
+coverage of the 16 changed non-lane files and no self-entry. The index still
+records the merge conflict; working files are resolved for the router to stage.
+
+No new tables, columns, commands, routes, application services, client imports or
+server modules are introduced. No fingerprint guard was widened. Proof argument
+identities have no DEFAULT clauses; no new LP-0 owner entries are added. There
+are no runtime writes to LP-5c protected authority tables, new outbound-pause
+fixtures, practice revocations, API-source web imports or SET app.* clauses.
+The latest 0520 early-firing body is preserved except the recovered detection
+lock-order change; its audit write remains through app.lp4_seal_audit.
+
+LATER / SIMPLICITY (initial source inspection):
+`packages/db/test/migfix-6.integration.test.ts` creates forwarding wrappers for
+most fixture functions. Use the typed fixture directly in a future focused edit
+to remove redundant aliases and make fixture changes easier to maintain. This
+is non-blocking and was not refactored in this union.
+
+Batch verification (current run):
+
+- Installed Node v24.17.0; pnpm --version stalled after eight seconds. Used the
+  installed repository TypeScript/Vitest runners with existing configurations;
+  downloaded no packages.
+- Existing TypeScript builds of core, storage, config, db and ai: PASS, sequential.
+- DB unit run, maxWorkers=2, three named files: migfix-6.test.ts,
+  migration-proof-loader.test.ts and upgrade-proof-utils.test.ts: 82 PASS.
+  Initial collection occurred before core dist was ready; the completed run
+  above followed that prerequisite build. No assertions failed.
+- API context-boundary.test.ts and identity.test.ts, maxWorkers=2: 152 PASS.
+- API watchdog-registry.test.ts, maxWorkers=2: 126 PASS. Total: 360 unit tests.
+- Explicit db, API and web tsc --noEmit checks: PASS; at most two TypeScript processes.
+- Resolved files, proof names/argument identities and function settings: PASS.
+- git diff origin/main --check: PASS.
+- Normal lane tool invoked: refuses historical HEAD/staged paths (the old lane
+  files and migration stems). With read-only Git metadata, it cannot see the
+  final commit range. The tool's exported policy/schema, exact path coverage and
+  migration-order validators PASS on the resolved working tree. Router must
+  rerun the normal tool after staging/committing the resolved merge.
+
+PostgreSQL and browser suites were not run. GitHub CI must prove both pieces'
+fresh-install/populated-upgrade/replay behavior, eligible/gross and cumulative
+reversal constraints, group-disclosure propagation/concurrency, audit rollback,
+permission/tenant boundaries, LP-0 catalogue and fingerprint preservation, and
+the amended plan-entitlement upgrade test. Required full CI and one independent
+RED review must pass on the exact landing head. No live data or release.
+
+READY — batch-49 resolved working files are ready for router staging and merge
+completion, commit and push as a NOPR branch. This does not establish CI,
+independent review, landing or release.

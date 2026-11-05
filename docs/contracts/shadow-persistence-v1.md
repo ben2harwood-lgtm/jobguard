@@ -143,3 +143,13 @@ SV-1's pre-lock duplicate marker is intentionally `reconciled/duplicate_signal`
 with a coalesced target: it records coalescing, not a completed final-check run.
 A duplicate whose provenance was disclosed stays `surfaced_early`. SV-3 must
 preserve those semantics without exposing hidden counts or content.
+
+MIGFIX-7 recovery (`1211_shadow_group_disclosure.sql`): a disclosure of any coalesced member updates its
+survivor and siblings in the same transaction. Before lock, every member retains
+permanent `disclosed_before_lock` and `surfaced_early` exclusions. A later
+coalescence inherits those exclusions and their original disclosure-event
+references, including when a disclosed duplicate joins an existing hidden group.
+Existing first-visible times never change. The original disclosure event remains
+the audited source of inherited exclusions. No historical rows are backfilled.
+The detection advisory key serializes coalescence and disclosure before the job,
+signal and audit locks. Existing support permissions and all table grants remain.

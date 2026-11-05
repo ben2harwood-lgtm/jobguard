@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "lanes": {
+    "batch-49": {
+      "branches": [
+        "codex/sandbox/batch-49"
+      ],
+      "note": "Built-ahead union of recover-migfix-6 and recover-migfix-7; RED; NOPR. Migrations 1210-1211.",
+      "allow": [
+        "docs/contracts/shadow-detection-v1.md",
+        "docs/contracts/shadow-persistence-v1.md",
+        "docs/verdicts/MIGFIX-7/BUILDER_RECEIPT.md",
+        "docs/verdicts/RECOVER-MIGFIX-6/BUILDER_RECEIPT.md",
+        "packages/db/MIGRATIONS.md",
+        "packages/db/migrations/1210_legacy_recovery_money_integrity.sql",
+        "packages/db/migrations/1211_shadow_group_disclosure.sql",
+        "packages/db/test/migfix-6-fixture.ts",
+        "packages/db/test/migfix-6-upgrade.integration.test.ts",
+        "packages/db/test/migfix-6.integration.test.ts",
+        "packages/db/test/migfix-6.test.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/migfix-7.integration.test.ts",
+        "packages/db/test/migration-proofs/1210_legacy_recovery_money_integrity.proof.json",
+        "packages/db/test/migration-proofs/1211_shadow_group_disclosure.proof.json",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts"
+      ]
+    }
+  }
+}

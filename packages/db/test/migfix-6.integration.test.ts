@@ -69,4 +69,3 @@ describe("MIGFIX-6 legacy derivation", () => {
     expect(net(rows)).toBe(15_000);
   }, 120_000);
 });
-
