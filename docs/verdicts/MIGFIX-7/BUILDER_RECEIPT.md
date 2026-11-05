@@ -104,3 +104,41 @@ performed. The router owns commit/push. Database/browser suites and the required
 full CI checks remain for GitHub CI; the independent checker must confirm this
 repair delta against the final head before landing. This is readiness for that
 handoff, not a CI, independent-review, merge or release claim.
+
+## Batch-49 current-main landing catch-up — 5 November 2026, 21:15 dispatch
+
+The launcher already completed the merge at `3d42b8afd`; `origin/main` is
+`d16ef1978`. The index and working tree had no unresolved merge entries. No Git
+write, commit, fetch, push or PR was performed in this session. No behaviour or
+test assertion needed changing for this merge.
+
+Compared all four re-created routines with their latest definitions from the
+actual `origin/main` migration tree: legacy approval/reversal from 0356,
+disclosure from 0128 and early firing from 0520. Only the existing MIGFIX-6
+eligible/gross, cumulative reversal and settled-credit changes, and MIGFIX-7
+group-disclosure/locking changes remain. Main's current support USAGE check,
+mode restrictions, authorization guards and checked audit sealer are retained.
+Neither migration is already on main; no main migration is edited or removed.
+The batch-30 migration proofs and their new inventory test are present from
+main. No additional exact-list rows are needed beside this group's rows.
+
+Current local verification, using installed runners and no package downloads:
+
+- `packages/db: ./node_modules/.bin/vitest run --maxWorkers=2
+  test/lp4-writer-catchup.test.ts test/migration-proof-loader.test.ts
+  test/migfix-6.test.ts`: PASS, 3 files / 98 tests.
+- `node tools/agent-lane-boundary-lint.mjs`: PASS against current origin/main.
+- Separate exact-set lane comparison: PASS, all 17 changed non-lane paths,
+  with no duplicate entries or lane self-entry.
+- `git diff origin/main --check`: PASS; no unresolved index paths or conflict
+  markers in the affected migration, upgrade test or receipt files.
+
+Database/browser execution stays with GitHub CI after router push. Current-head
+required CI and independent RED review remain landing gates. READY is readiness
+for router commit/push and review, not database verification or permission to
+merge or release. Existing initial LATER / SIMPLICITY observation stands; this
+catch-up adds no new review observation.
+- `node node_modules/typescript/bin/tsc -p packages/db/tsconfig.json --noEmit`:
+  PASS (exit 0, no diagnostics).
+
+READY — batch-49, RED, NOPR; router owns commit/push and the CI/review handoff.
