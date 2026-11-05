@@ -1,3 +1,4 @@
+import type { Pool } from "pg";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { IdentityRepository } from "../src/identity-repository.js";
@@ -55,6 +56,22 @@ it("screen transport stores exact previews and separate facts, refuses attacks, 
   expect((await read()).serviceBook.events.map((e: any) => e.state)).toEqual(["queued", "provider_accepted", "outcome_unknown", "read", "legally_served"]);
   expect((await post(raw("revision", { ...revision.data, revision: 2, previousRevisionId: revision.data.revisionId, revisionId: randomUUID(), facts: { ...revision.data.facts, dueDate: "2026-11-12" } }))).status).toBe(201);
   expect((await read()).activeDecisionId).toBeNull(); expect((await post(event("read"))).status).toBe(409);
+  // Query faults must remain unknown at the actual GET and POST transport boundary.
+  const faultPool = { async connect() {
+    const client = await f.runtime.connect();
+    return { release: () => client.release(), query: (sql: string, args?: unknown[]) =>
+      client.query(sql.includes("app.notice_fixture_records") ? "SELECT 1/0" : sql,
+        sql.includes("app.notice_fixture_records") ? [] : args) };
+  } } as unknown as Pool;
+  state.application = new NoticeFixtureApplication(state.identity, new NoticeFixtureRepository(faultPool));
+  for (const response of [await GET(new Request(path), params), await post(revision)]) {
+    expect(response.status).toBe(503);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(await response.json()).toMatchObject({ code: "NOTICE_UNAVAILABLE", message: expect.stringContaining("result is unknown") });
+  }
+  state.application = new NoticeFixtureApplication(state.identity, new NoticeFixtureRepository(f.runtime));
+  // A failed reply must not change the result bound to the first command.
+  expect((await post(revision)).status).toBe(201);
   for (const role of ["estimator", "foreman", "finance", "read_only"]) {
     await f.admin.query("UPDATE app.membership SET role=$1 WHERE id=$2", [role, a.actorId]);
     expect((await post({ ...revision, commandId: randomUUID() })).status).toBe(404);

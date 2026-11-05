@@ -1,3 +1,4 @@
+import type { Pool } from "pg";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { CONSTRUCTION_NOTICE_WATERMARK, CONSTRUCTION_NOTICES_ENABLED, assertRealConstructionNoticeAllowed } from "@jobguard/core";
@@ -23,6 +24,19 @@ describe("M4-19 append-only durable synthetic notice book (real PostgreSQL)", ()
     const read = () => new NoticeFixtureRepository(f.runtime).read(a.context, a.jobId, n);
     return { a, n, repo, actor, command, revision, decision, event, send, read };
   }
+  it("reports a real PostgreSQL query fault as unavailable, not a missing notice", async () => {
+    const x = await fixture();
+    const faultPool = { async connect() {
+      const client = await f.runtime.connect();
+      return { release: () => client.release(), query: (sql: string, args?: unknown[]) =>
+        client.query(sql.includes("app.notice_fixture_records") ? "SELECT 1/0" : sql,
+          sql.includes("app.notice_fixture_records") ? [] : args) };
+    } } as unknown as Pool;
+    const repo = new NoticeFixtureRepository(faultPool);
+    await expect(repo.read(x.a.context, x.a.jobId, x.n)).rejects.toMatchObject({ code: "NOTICE_UNAVAILABLE" });
+    await expect(repo.command(x.a.context, x.actor, x.revision())).rejects.toMatchObject({ code: "NOTICE_UNAVAILABLE" });
+    await expect(x.read()).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
   it("persists exact revisions, serializes competing extensions and refuses mutation even by the owner", async () => {
     const x = await fixture(), rev = x.revision(); await x.send(rev);
     const changes = { revision: 2, previousRevisionId: rev.data.revisionId, recipientReference: "fictional-B", serviceMethod: "fixture_hand_delivery" };
@@ -90,9 +104,10 @@ describe("M4-19 append-only durable synthetic notice book (real PostgreSQL)", ()
   it("returns identical not-found for foreign tenant and wrong job, and refuses direct runtime access", async () => {
     const x = await fixture(), y = await fixture(), rev = x.revision(); await x.send(rev);
     const otherJob = await seedWorkJob(f, x.a.tenantId);
-    for (const [ctx, job] of [[y.a.context, x.a.jobId], [x.a.context, otherJob.jobId]] as const) {
+    for (const [ctx, job] of [[y.a.context, x.a.jobId], [x.a.context, otherJob.jobId], [x.a.context, randomUUID()]] as const) {
       await expect(x.repo.read(ctx, job, x.n)).rejects.toMatchObject({ code: "NOT_FOUND", message: "NOT_FOUND" });
     }
+    await expect(x.repo.read(x.a.context, x.a.jobId, randomUUID())).rejects.toMatchObject({ code: "NOT_FOUND", message: "NOT_FOUND" });
     for (const sql of ["SELECT * FROM app.notice_fixture_record", "UPDATE app.notice_fixture_record SET record='{}'", "DELETE FROM app.notice_fixture_record"]) {
       await expect(workTenant(f.runtime, x.a.tenantId, db => db.query(sql))).rejects.toMatchObject({ code: "42501" });
     }
