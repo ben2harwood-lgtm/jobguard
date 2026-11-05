@@ -180,7 +180,7 @@ describe("ENT-3b transport", () => {
   expect(Reflect.getMetadata("__httpCode__", SiteVisitController.prototype.start)).toBe(201); expect(Reflect.getMetadata("__httpCode__", SiteVisitController.prototype.complete)).toBe(201);
   const workspace = await import("../workspace/index.js"); expect(workspace.siteVisitHttpFailure).toBe(siteVisitHttpFailure);
   const app = createWorkspaceApplication({ pool: new Pool(), sessionId: id() });
-  expect(Object.keys(app.siteExtras).sort()).toEqual(["assignedJobs", "completeVisit", "log", "logSor", "orderCheck", "orderLines", "sorItems", "startVisit"]);
+  expect(Object.keys(app.siteExtras).sort()).toEqual(["assignedJobs", "completeVisit", "log", "logSor", "orderCheck", "orderLines", "sorItems", "sorRecentItems", "startVisit"]);
  });
  it("[B15] a read result that carries a price or a resident key fails closed and nothing of it is returned", async () => {
   synthetic(); const pool = new Pool(); vi.spyOn(ContractorRepository.prototype, "resolveSession").mockResolvedValue(member());

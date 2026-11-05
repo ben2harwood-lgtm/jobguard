@@ -1,6 +1,36 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/privacy-rehearsal/commands": {
+      "post": {
+        "operationId": "PrivacyOperationsController_command",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "privacy-result.v1; no external action or real erasure"
+          }
+        },
+        "summary": "Synthetic privacy request, controller instruction or rehearsal; disabled by default",
+        "tags": [
+          "privacy-rehearsal"
+        ]
+      }
+    },
+    "/privacy-rehearsal/read": {
+      "post": {
+        "operationId": "PrivacyOperationsController_read",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "privacy-read.v1; private, no-store"
+          }
+        },
+        "summary": "Read a tenant-owned synthetic privacy request and its rehearsed access/export",
+        "tags": [
+          "privacy-rehearsal"
+        ]
+      }
+    },
     "/jobs/{id}/commercial-integrity/family": {
       "get": {
         "operationId": "CommercialIntegrityV3Controller_family",
@@ -2855,6 +2885,30 @@
           }
         },
         "summary": "Search the price list of this job's work order",
+        "tags": [
+          "contractor-site-extras"
+        ]
+      }
+    },
+    "/contractor/jobs/{id}/sor-items/recent": {
+      "get": {
+        "operationId": "SiteExtraPricingController_sorRecentItems",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Up to five of the operative's recent items on this job's price list; no prices"
+          }
+        },
         "tags": [
           "contractor-site-extras"
         ]
