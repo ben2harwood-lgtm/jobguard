@@ -140,3 +140,18 @@ Actual local validation (installed dependencies, at most two workers, at most th
 - Initial `pnpm --filter @jobguard/db exec vitest ...` produced no test output and was stopped; the installed Vitest executable above completed the checks. No package installation was run.
 
 CI must prove real PostgreSQL [LP0-17] identity completeness, grant/catalogue equality, fresh/populated 0612/0613 migration replay, emergency/SCIM authorization and audit boundaries, and the added event-list/audit regression. Browser CI must rerun `ENT-10a.spec.ts` (including the two-tab consistency case) and `ENT-10-rest-notices.spec.ts` at phone/desktop widths, with no more than two workers. Full required green CI against current main and independent RED review at the resulting exact head remain required. Router must rerun official lane lint after staging/committing the merge. No PostgreSQL/browser execution, independent review, merge, deployment or launch is claimed here.
+
+
+## READY — batch-30 catch-up to main after PR #573 — 5 November 2026
+
+**RED: sign-in and privileges. Ready for router staging, commit and push of PR #574's catch-up.** Resolved only the two working-tree conflicts as exact additive unions: retained both EnterpriseAccessRepository and CIS fixture exports in `packages/db/src/index.ts`, and every key/value from both parents in `packages/db/test/later-empty-tables.ts`. No new behavior or test expectation changes. Migrations **0612** and **0613** are byte-for-byte unchanged from HEAD; incoming main ends at **0611**.
+
+Read-only Git-object comparisons confirmed both unions and that every other incoming file equals main. The existing batch-30 lane already lists exactly all **29** changed paths against local `origin/main`, excluding `config/lanes/`, without listing itself; no lane edit needed. `git diff --check` passed. The Git index still has unmerged entries because this sandbox cannot write `.git`; the router must stage the resolutions and finish the merge.
+
+Actual local checks using installed dependencies, at most two workers and three named Vitest files per run:
+
+- `node node_modules/typescript/bin/tsc -p packages/db/tsconfig.json --noEmit` — PASS.
+- From `packages/db`: `node_modules/.bin/vitest run --maxWorkers=2 test/migration-proof-loader.test.ts test/lp-0-catalog.test.ts` — 108 passed, two files.
+- From `apps/api`: `node_modules/.bin/vitest run --maxWorkers=2 src/auth/sso/enterprise-access.test.ts src/auth/sso/sso-required.test.ts src/cis-fixture.application.test.ts` — final run 39 passed, three files. Initial run passed 28 identity tests but failed 11 CIS tests because local DB dist lacked main's new export. Rebuilt with `node node_modules/typescript/bin/tsc -p packages/db/tsconfig.json` (PASS), then reran the identical command successfully; no source/test change was made for this failure.
+
+Real PostgreSQL and browser suites were not run: the sandbox cannot start PostgreSQL or bind localhost. Required GitHub CI against current main and independent RED review at the resulting exact head remain outstanding. Router must run official lane lint on the staged/committed merge. No independent review, commit, push, merge, deployment or launch is claimed.
