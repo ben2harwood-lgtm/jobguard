@@ -69,7 +69,7 @@ test("stored practice notices survive reload, bind approval, keep service facts 
   await expect(main.getByText("Approval binds this exact practice preview. Nothing was sent.")).toBeVisible();
   const service = main.getByRole("form", { name: "Record service fact" });
   const fact = async (state: string) => {
-    await service.getByLabel("Separate service fact", { exact: true }).selectOption(state);
+    await service.getByLabel("Separate service fact").selectOption(state);
     await service.getByRole("button", { name: "Record practice service fact" }).click();
   };
   await fact("queued");
