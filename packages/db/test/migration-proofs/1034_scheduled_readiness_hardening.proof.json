@@ -1,0 +1,128 @@
+{
+  "migration": "1034_scheduled_readiness_hardening.sql",
+  "lp0": [
+    {
+      "section": "policies",
+      "before": "app.scheduled_readiness_plan|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_runtime|df9cc37e8a541c03",
+      "after": null
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.scheduled_readiness_plan|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_runtime|6fa387f2f629fba6"
+    },
+    {
+      "section": "policies",
+      "before": "app.scheduled_readiness_proposal|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_runtime|df9cc37e8a541c03",
+      "after": null
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.scheduled_readiness_proposal|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_runtime|6fa387f2f629fba6"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.scheduled_readiness_plan|immutable_rows|app.scheduled_readiness_immutable|BEFORE DELETE/UPDATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.scheduled_readiness_plan|immutable_table|app.scheduled_readiness_immutable|BEFORE TRUNCATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.scheduled_readiness_proposal|immutable_rows|app.scheduled_readiness_immutable|BEFORE DELETE/UPDATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.scheduled_readiness_proposal|immutable_table|app.scheduled_readiness_immutable|BEFORE TRUNCATE|O"
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.scheduled_readiness_immutable()",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": []
+      }
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "policies",
+      "before": {
+        "schemaname": "app",
+        "tablename": "scheduled_readiness_plan",
+        "policyname": "tenant_isolation",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration,jobguard_runtime}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (current_setting('app.tenant_id'::text))::uuid)",
+        "with_check": "(tenant_id = (current_setting('app.tenant_id'::text))::uuid)"
+      },
+      "after": {
+        "schemaname": "app",
+        "tablename": "scheduled_readiness_plan",
+        "policyname": "tenant_isolation",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration,jobguard_runtime}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
+      }
+    },
+    {
+      "section": "policies",
+      "before": {
+        "schemaname": "app",
+        "tablename": "scheduled_readiness_proposal",
+        "policyname": "tenant_isolation",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration,jobguard_runtime}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (current_setting('app.tenant_id'::text))::uuid)",
+        "with_check": "(tenant_id = (current_setting('app.tenant_id'::text))::uuid)"
+      },
+      "after": {
+        "schemaname": "app",
+        "tablename": "scheduled_readiness_proposal",
+        "policyname": "tenant_isolation",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration,jobguard_runtime}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "scheduled_readiness_immutable",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": false,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    }
+  ],
+  "tenancy": []
+}

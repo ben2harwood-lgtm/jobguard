@@ -1,4 +1,5 @@
 import "server-only";
+import { z } from "zod";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { ContractorRepository, contractorSessionContext, ExtraApprovalError } from "@jobguard/db";
@@ -8,7 +9,7 @@ export const duplicateJson = (body: unknown, status = 200) => NextResponse.json(
 export async function duplicateActor() {
  if (process.env.JOBGUARD_ENV !== "synthetic_demo") throw Object.assign(new Error(), { code: "MODE_FORBIDDEN" });
  const sessionId = (await cookies()).get("jg_session")?.value;
- if (!sessionId) throw Object.assign(new Error(), { code: "UNAUTHENTICATED" });
+ if (!sessionId || !z.guid().safeParse(sessionId).success) throw Object.assign(new Error(), { code: "UNAUTHENTICATED" });
  const pool = syntheticPool();
  const actor = await new ContractorRepository(pool).resolveSession(sessionId);
  const context = await contractorSessionContext(pool, sessionId);

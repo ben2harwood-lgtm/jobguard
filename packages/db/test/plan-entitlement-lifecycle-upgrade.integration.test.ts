@@ -51,6 +51,16 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     if (prior.nspname === "app" && prior.proname === "write_success_fee_v3" &&
       prior.args === "p_job uuid, p_session text, p_command jsonb, p_artifact jsonb") {
       expect(current?.definition).not.toEqual(prior.definition);
+    } else if (prior.nspname === "app" && prior.proname === "adopt_invoiced_job_v3" &&
+      prior.args === "t uuid, source_job uuid, d text, cmd uuid, auth uuid, approved jsonb, request_hash text") {
+      const migration = await readFile(new URL("../migrations/1030_company_import_once.sql", import.meta.url), "utf8");
+      const body = migration.split("CREATE OR REPLACE FUNCTION app.adopt_invoiced_job_v3")[1]!.split("AS $$")[1]!.split("$$;")[0];
+      expect(current?.definition?.split("$function$")[1]).toEqual(body);
+    } else if (prior.nspname === "app" && prior.proname === "dunning_workbench" &&
+      prior.args === "t uuid, digest text, j uuid, operation text, v jsonb") {
+      const migration = await readFile(new URL("../migrations/1033_dunning_owner_approval.sql", import.meta.url), "utf8");
+      const body = migration.split("CREATE OR REPLACE FUNCTION app.dunning_workbench")[1]!.split("AS $$")[1]!.split("$$;")[0];
+      expect(current?.definition?.split("$function$")[1]).toEqual(body);
     } else if (prior.oid === paymentFeeWriterOid) {
       expect(current?.definition?.split("$function$")[1]).toEqual(paymentFeeWriterBody);
     } else if (prior.oid === settlementOid) {

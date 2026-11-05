@@ -1,0 +1,168 @@
+{
+  "migration": "1031_ais_private_reads.sql",
+  "lp0": [
+    {
+      "section": "entries",
+      "before": {
+        "key": "acl|rel|table|app.ais_connection|jobguard_runtime|SELECT|-",
+        "group": "a-runtime-reads"
+      },
+      "after": null
+    },
+    {
+      "section": "entries",
+      "before": {
+        "key": "acl|rel|table|app.ais_lifecycle|jobguard_runtime|SELECT|-",
+        "group": "a-runtime-reads"
+      },
+      "after": null
+    },
+    {
+      "section": "entries",
+      "before": {
+        "key": "acl|rel|table|app.ais_observation|jobguard_runtime|SELECT|-",
+        "group": "a-runtime-reads"
+      },
+      "after": null
+    },
+    {
+      "section": "entries",
+      "before": {
+        "key": "acl|rel|table|app.ais_page|jobguard_runtime|SELECT|-",
+        "group": "a-runtime-reads"
+      },
+      "after": null
+    },
+    {
+      "section": "entries",
+      "before": {
+        "key": "owner|rel:table|app.ais_connection|jobguard_migration",
+        "group": "a-owner-tables-views"
+      },
+      "after": null
+    },
+    {
+      "section": "rls",
+      "before": "app.ais_connection|rls=t|forced=t",
+      "after": null
+    },
+    {
+      "section": "entries",
+      "before": {
+        "key": "owner|rel:table|app.ais_lifecycle|jobguard_migration",
+        "group": "a-owner-tables-views"
+      },
+      "after": null
+    },
+    {
+      "section": "rls",
+      "before": "app.ais_lifecycle|rls=t|forced=t",
+      "after": null
+    },
+    {
+      "section": "entries",
+      "before": {
+        "key": "owner|rel:table|app.ais_observation|jobguard_migration",
+        "group": "a-owner-tables-views"
+      },
+      "after": null
+    },
+    {
+      "section": "rls",
+      "before": "app.ais_observation|rls=t|forced=t",
+      "after": null
+    },
+    {
+      "section": "entries",
+      "before": {
+        "key": "owner|rel:table|app.ais_page|jobguard_migration",
+        "group": "a-owner-tables-views"
+      },
+      "after": null
+    },
+    {
+      "section": "rls",
+      "before": "app.ais_page|rls=t|forced=t",
+      "after": null
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "relations",
+      "before": {
+        "nspname": "app",
+        "relname": "ais_connection",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=r/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      },
+      "after": {
+        "nspname": "app",
+        "relname": "ais_connection",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": {
+        "nspname": "app",
+        "relname": "ais_lifecycle",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=r/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      },
+      "after": {
+        "nspname": "app",
+        "relname": "ais_lifecycle",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": {
+        "nspname": "app",
+        "relname": "ais_observation",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=r/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      },
+      "after": {
+        "nspname": "app",
+        "relname": "ais_observation",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": {
+        "nspname": "app",
+        "relname": "ais_page",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=r/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      },
+      "after": {
+        "nspname": "app",
+        "relname": "ais_page",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    }
+  ],
+  "tenancy": []
+}
