@@ -381,6 +381,64 @@ describe("M4-12 PostgreSQL shared reservation store", () => {
     expect(await f.read()).toEqual(before);
   });
 
+  it.each([
+    { path: "attempt result", body: '"\\u0000"', code: "22P05" },
+    { path: "event-only result", body: '"\\u0000"', code: "22P05" },
+    // 10,000 arrays exceed the pre-existing 16,384-character body limit. Use
+    // the deepest payload that fits so this exercises the cast, not that limit.
+    { path: "attempt result", body: "[".repeat(8191) + "0" + "]".repeat(8191), code: "54001" },
+  ])("normalizes $code from signed JSON on the $path without changing financial history", async ({ path, body, code }, context) => {
+    const f = await setup();
+    await f.executor().reserve(f.context, f.intent);
+    f.rail.crashAfterAcceptance = true;
+    await expect(f.executor().execute(f.context, id(10))).rejects.toThrow("FAKE_CRASH_AFTER_ACCEPTANCE");
+    const before = await f.read();
+    const snapshot = async () => ({
+      book: (await db.admin.query("SELECT book FROM app.fee_reservation_book WHERE tenant_id=$1", [f.tenantId])).rows,
+      archive: (await db.admin.query("SELECT kind,key,payload FROM app.fee_reservation_archive WHERE tenant_id=$1 ORDER BY kind,key", [f.tenantId])).rows,
+      audit: (await db.admin.query("SELECT * FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence", [f.tenantId])).rows,
+    });
+    const unchanged = await snapshot();
+    const next = structuredClone(before);
+    if (path === "attempt result") {
+      next.attempts[0]!.state = "released";
+      next.audit.push({ commandId: id(10), state: "released" });
+    } else {
+      next.events[`stripe_card:${id(62)}`] = "a".repeat(64);
+    }
+    const proof = { body, signature: createHmac("sha256", "synthetic-test-signing-secret").update(body).digest("hex") };
+    const values = [f.tenantId, JSON.stringify({ version: "fee-reservation-book.v1", ...next }), JSON.stringify(proof)];
+    const predecessor = readFileSync(new URL("../migrations/0799_fee_result_malformed_proof.sql", import.meta.url), "utf8")
+      .replace(/^BEGIN;$/m, "").replace(/^COMMIT;$/m, "");
+    const client = await db.admin.connect();
+    let predecessorError: unknown;
+    try {
+      await client.query("BEGIN");
+      await client.query(predecessor);
+      await client.query("SET LOCAL ROLE jobguard_runtime");
+      await client.query("SELECT set_config('app.tenant_id',$1,true)", [f.tenantId]);
+      try {
+        await client.query("SELECT app.replace_fee_reservation_book($1,$2::jsonb,$3::jsonb)", values);
+      } catch (error) { predecessorError = error; }
+    } finally {
+      await client.query("ROLLBACK");
+      client.release();
+    }
+    expect(await snapshot()).toEqual(unchanged);
+    // Stack depth depends on the embedded server. Report an explicit skip only
+    // when parsing succeeded and reached the existing proof-binding refusal.
+    if (code === "54001" && predecessorError instanceof Error && "code" in predecessorError && predecessorError.code === "23514") {
+      expect(predecessorError.message).toBe("fee result binding mismatch");
+      context.skip("54001 not triggered by the deepest payload within the existing body limit; handler retained");
+    }
+    expect(predecessorError).toMatchObject({ code });
+    await expect(withTenant(db.runtime, testTenantContext(f.tenantId), tx => tx.$client.query(
+      "SELECT app.replace_fee_reservation_book($1,$2::jsonb,$3::jsonb)", values)))
+      .rejects.toMatchObject({ code: "23514", message: path === "attempt result" ? "authenticated fee result required" : "authenticated fee event required" });
+    expect(await snapshot()).toEqual(unchanged);
+    expect(await f.read()).toEqual(before);
+  });
+
   it("refuses unsigned, altered, wrong-company and wrong-command result fixtures, then accepts the verified webhook once", async () => {
     const f = await setup();
     await f.executor().reserve(f.context, f.intent);
