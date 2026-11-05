@@ -1,0 +1,40 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-2": {
+      "branches": [
+        "codex/sandbox/later-safety-2"
+      ],
+      "allow": [
+        "apps/api/src/readiness-adapters.ts",
+        "apps/api/src/readiness-store.test.ts",
+        "apps/api/src/readiness-store.ts",
+        "apps/web/app/api/contractor/jobs/[id]/duplicate-candidates/transport.test.ts",
+        "apps/web/app/api/contractor/jobs/[id]/duplicate-candidates/transport.ts",
+        "apps/web/app/api/jobs/[id]/recovery-cases/[caseId]/billability/database.test.ts",
+        "apps/web/app/jobs/[id]/recovery-cases/[caseId]/billability/screen.test.tsx",
+        "apps/web/app/jobs/[id]/recovery-cases/[caseId]/billability/screen.tsx",
+        "apps/web/app/jobs/[id]/recovery-cases/[caseId]/managed-recovery/managed-recovery-screen.test.tsx",
+        "apps/web/app/jobs/[id]/recovery-cases/[caseId]/managed-recovery/managed-recovery-screen.tsx",
+        "apps/web/app/lib/managed-recovery-server.test.ts",
+        "apps/web/app/lib/managed-recovery-server.ts",
+        "apps/web/app/lib/recovery-billability-server.test.ts",
+        "apps/web/app/lib/recovery-billability-server.ts",
+        "apps/web/e2e/M4-2-billability.spec.ts",
+        "apps/web/e2e/MON-9-election-screen.spec.ts",
+        "apps/web/e2e/m2-7-dashboard.spec.ts",
+        "packages/core/src/shadow-pilot-report.test.ts",
+        "packages/core/src/shadow-pilot-report.ts",
+        "packages/db/src/enterprise-live-prompt-repository.test.ts",
+        "packages/db/src/enterprise-live-prompt-repository.ts",
+        "packages/db/src/inbox-metrics-repository.ts",
+        "packages/db/src/payment-fee-collection-repository.test.ts",
+        "packages/db/src/payment-fee-collection-repository.ts",
+        "packages/db/test/inbox-metrics.integration.test.ts",
+        "packages/db/test/inbox-metrics.test.ts",
+        "packages/db/test/readiness-store.integration.test.ts"
+      ],
+      "note": "LATER-SAFETY-2; RED authority and tenant isolation repairs. NOPR. PostgreSQL/browser CI and independent review required."
+    }
+  }
+}

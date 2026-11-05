@@ -5,6 +5,7 @@ import { inboxMetricEventV1, inboxOutcomeMetrics, InboxMetricsError, type InboxM
 import { appendAuditBatch } from "./audit.js";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 
+const actorV1 = z.object({ membershipId: z.guid(), identityUserId: z.guid() }).strict();
 const uuid = z.guid().transform(value => value.toLowerCase());
 const recordV1 = z.object({ version: z.literal("inbox-metric-record.v1"),
   environment: z.literal("synthetic_demo"), jobId: uuid, receiptId: uuid, event: z.unknown() }).strict();
@@ -24,9 +25,11 @@ const invalid = () => new InboxMetricsError("INVALID_METRICS_INPUT");
 export class InboxMetricsRepository {
   constructor(private readonly pool: Pool) {}
 
-  async record(context: VerifiedTenantContext, raw: unknown) {
+  async record(context: VerifiedTenantContext, rawActor: unknown, raw: unknown) {
     const parsed = recordV1.safeParse(raw);
     if (!parsed.success) throw invalid();
+    const actor = actorV1.safeParse(rawActor);
+    if (!actor.success) throw invalid();
     const input = parsed.data;
     const eventResult = inboxMetricEventV1.safeParse(input.event);
     const event = eventResult.success ? eventResult.data : null;
@@ -37,6 +40,19 @@ export class InboxMetricsRepository {
     } catch { throw invalid(); }
     return withTenant(this.pool, context, async db => {
       if ((await db.$client.query("SELECT current_database() name")).rows[0].name !== "jobguard_synthetic_demo") throw invalid();
+      const allowed = await db.$client.query(`SELECT 1 FROM app.membership
+        WHERE tenant_id=$1 AND id=$2 AND identity_user_id=$3 AND role IN ('owner','admin','foreman','operative')
+        AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp()) FOR SHARE`,
+      [context.tenantId, actor.data.membershipId, actor.data.identityUserId]);
+      if (!allowed.rows[0]) throw invalid();
+      // Only public inbox findings can enter metrics. Never query hidden tables or
+      // retain a rejection receipt whose presence would disclose a hidden finding.
+      if (event?.kind === "finding" && event.tenantId === context.tenantId.toLowerCase() && event.jobId === input.jobId) {
+        const visible = await db.$client.query(`SELECT 1 FROM app.inbox_finding_revision
+          WHERE tenant_id=$1 AND job_id=$2 AND id=$3`,
+        [context.tenantId, input.jobId, event.findingId]);
+        if (!visible.rows[0]) throw new InboxMetricsError("INVALID_METRICS_REFERENCE");
+      }
       await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,487))", [context.tenantId.toLowerCase()]);
       const prior = (await db.$client.query<Receipt>(
         "SELECT job_id,request_hash,rejection,event FROM app.inbox_metric_receipt WHERE tenant_id=$1 AND receipt_id=$2",
@@ -70,7 +86,7 @@ export class InboxMetricsRepository {
         }
       }
       const audit = await appendAuditBatch(db, [{ id: randomUUID(), version: "audit.v1",
-        actorRef: "system:synthetic-inbox-metrics", eventType: "inbox.metrics_recorded", subjectType: "job", subjectRef: input.jobId,
+        actorRef: `membership:${actor.data.membershipId}`, eventType: "inbox.metrics_recorded", subjectType: "job", subjectRef: input.jobId,
         payload: { references: { jobId: input.jobId, receiptId: input.receiptId }, hashes: { requestHash },
           classifications: { action: "operational" } } }]);
       await db.$client.query(`INSERT INTO app.inbox_metric_receipt
