@@ -42,7 +42,11 @@ BEGIN
   result:=app.xa_client_decide(j,q.id,(input->>'commandId')::uuid,c,k.token_hash,k.recipient,input->>'revisionHash',(input->>'netPence')::bigint,
    input->>'decision'='reject',CASE WHEN input->>'decision'='reject' THEN 'not_agreed' ELSE NULL END,'Named fictional client approver','customer-session:'||s.id::text);
   PERFORM app.append_final_check_audit(gen_random_uuid(),'membership:'||c::text,j,'contractor.extra.client_decided',jsonb_build_object('commandId',input->>'commandId','requestId',q.id,'sessionId',s.id));
-  RETURN app.complete_command((input->>'commandId')::uuid,'{}');
+  result:=app.complete_command((input->>'commandId')::uuid,'{}');
+  -- Run the invoker receipt check as this function's owner, before the identity login commits.
+  -- Leave unrelated deferred constraints in the caller's transaction unchanged.
+  SET CONSTRAINTS app.decision_check_complete IMMEDIATE;
+  RETURN result;
  END IF;
  IF EXISTS(SELECT 1 FROM app.extra_client_link_closure WHERE tenant_id=t AND link_id=k.id) THEN
   IF input->>'action'='queue' THEN RETURN jsonb_build_object('items','[]'::jsonb); END IF;

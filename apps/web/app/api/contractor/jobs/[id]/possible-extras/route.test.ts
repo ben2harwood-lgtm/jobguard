@@ -90,7 +90,7 @@ it("dismiss rejects body authority and untrusted origins before repository execu
 
 it("registers observations through the same session, origin, mode and strict body boundary", async () => {
  const POST = registerObservation;
- const write=vi.spyOn(EnterpriseLivePromptRepository.prototype,"registerObservation").mockResolvedValue({observationId:promptId});
+ const write=vi.spyOn(EnterpriseLivePromptRepository.prototype,"registerObservation").mockResolvedValue({observationId:promptId,evaluation:{promptIds:[],quarantinedComparisons:0,unevaluatedComparisons:0}});
  const raw={version:"completion-observation.v1",commandId:crypto.randomUUID(),evidenceId:promptId,sha256:"a".repeat(64),objectVersion:"fictional-v1",workIdentity:"FIT-VENT",locator:{kind:"photo_tag",tag:"Fictional vent"}};
  const response=await POST(request(raw),context);
  expect(response.status).toBe(201);expect(response.headers.get("cache-control")).toBe("no-store");
@@ -102,4 +102,13 @@ it("registers observations through the same session, origin, mode and strict bod
  expect((await POST(request(raw),context)).status).toBe(401);expect(write).not.toHaveBeenCalled();
  auth.session=job;write.mockRejectedValue(new EnterpriseLivePromptPersistenceError("EXTRA_FORBIDDEN"));
  expect((await POST(request(raw),context)).status).toBe(403);
+});
+
+it("refuses an unvalidated observation projection with a no-store unavailable response", async () => {
+ vi.spyOn(EnterpriseLivePromptRepository.prototype,"registerObservation").mockResolvedValue({observationId:promptId});
+ const raw={version:"completion-observation.v1",commandId:crypto.randomUUID(),evidenceId:promptId,sha256:"a".repeat(64),objectVersion:"fictional-v1",workIdentity:"FIT-VENT",locator:{kind:"photo_tag",tag:"Fictional vent"}};
+ const response=await registerObservation(request(raw),context);
+ expect(response.status).toBe(503);
+ expect(response.headers.get("cache-control")).toBe("no-store");
+ expect(await response.json()).toEqual({version:"enterprise-live-prompt-error.v1",code:"PROMPT_UNAVAILABLE"});
 });

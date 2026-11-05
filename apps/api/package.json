@@ -79,6 +79,14 @@
     "./accounting-export-contracts": {
       "types": "./src/accounting-export.preview-contracts.ts",
       "import": "./dist/accounting-export.preview-contracts.js"
+    },
+    "./evidence-bundle": {
+      "types": "./src/evidence-bundle.application.ts",
+      "import": "./dist/evidence-bundle.application.js"
+    },
+    "./evidence-bundle-contracts": {
+      "types": "./src/evidence-bundle.contracts.ts",
+      "import": "./dist/evidence-bundle.contracts.js"
     }
   },
   "scripts": {

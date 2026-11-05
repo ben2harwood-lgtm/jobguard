@@ -1,11 +1,19 @@
+import { Pool, type PoolClient } from "pg";
 import { randomUUID } from "node:crypto";
 import { beforeAll, afterAll, expect, it } from "vitest";
 import { ExtraApprovalRepository } from "../src/index.js";
 import { cluster, chainWorld, submitted, approveInput, emailOf, newToken, type Cluster, type ChainWorld } from "./extra-approval-chain-fixtures.js";
 import { command as contractorCommand } from "./site-extra-fixtures.js";
-let c:Cluster,w:ChainWorld;
-beforeAll(async()=>{c=await cluster();w=await chainWorld(c);},120000);
-afterAll(async()=>{await c?.close();});
+let c:Cluster,w:ChainWorld,identity:Pool;
+beforeAll(async()=>{
+ c=await cluster();
+ await c.admin.query("ALTER ROLE jobguard_identity LOGIN PASSWORD 'synthetic'");
+ identity=new Pool({...c.config,database:c.admin.options.database,user:"jobguard_identity",max:2});
+ expect((await identity.query("SELECT session_user,current_user,has_schema_privilege(current_user,'app','USAGE') app_usage")).rows)
+  .toEqual([{session_user:"jobguard_identity",current_user:"jobguard_identity",app_usage:false}]);
+ w=await chainWorld(c);
+},120000);
+afterAll(async()=>{await identity?.end();await c?.close();});
 const d="d".repeat(64),session="e".repeat(64);
 async function fixture() {
  const repo=new ExtraApprovalRepository(c.runtime),ctx=await w.ctx,s=await submitted(c,w,150000);
@@ -16,17 +24,17 @@ async function fixture() {
  const sent=await repo.issueClientApproval(ctx,w.members.surveyor.member,raw);
  expect((await c.admin.query("SELECT adapter,recipient,status FROM app.action_outbox WHERE id=$1",[sent.outboxActionId])).rows).toEqual([{adapter:"fake_email",recipient:raw.recipient,status:"pending"}]);
  expect((await c.admin.query("SELECT 1 FROM app.action_attempt WHERE action_id=$1",[sent.outboxActionId])).rows).toEqual([]);
- const use=(digest:string,operation="resolve",who=actor,job=s.jobId,tenant=w.p.tenantId)=>c.admin.query("SELECT identity.extra_customer_use($1,$2,$3,$4,$5,$6) result",[tenant,job,who,digest,operation==="redeem"?sd:null,operation]).then(r=>r.rows[0].result);
+ const use=(digest:string,operation="resolve",who=actor,job=s.jobId,tenant=w.p.tenantId)=>identity.query("SELECT identity.extra_customer_use($1,$2,$3,$4,$5,$6) result",[tenant,job,who,digest,operation==="redeem"?sd:null,operation]).then(r=>r.rows[0].result);
  const command={version:"extra-customer.v1",action:"decide",jobId:s.jobId,requestId:s.requestId,commandId:randomUUID(),revisionHash:s.hash,netPence:s.net,decision:"approve"};
- const run=(input:unknown=command,digest=sd)=>c.admin.query("SELECT identity.extra_customer_approval($1,$2,$3,$4,$5::jsonb) result",[w.p.tenantId,s.jobId,actor,digest,input]).then(r=>r.rows[0].result);
+ const run=(input:unknown=command,digest=sd,db:Pool|PoolClient=identity)=>db.query("SELECT identity.extra_customer_approval($1,$2,$3,$4,$5::jsonb) result",[w.p.tenantId,s.jobId,actor,digest,input]).then(r=>r.rows[0].result);
  return {repo,ctx,s,sent,raw,actor,signinDigest,sd,use,command,run};
 }
 it("ENT-5 sign-in requires a fresh link and current scoped named grant; replay is one effect",async()=>{
  const f=await fixture();await expect(f.run(f.command,d)).rejects.toMatchObject({code:"42501"});
  expect(await f.use(f.signinDigest,"redeem")).toMatchObject({extraApprover:true});
  await expect(f.run({...f.command,requestId:randomUUID()})).rejects.toMatchObject({code:"42501"});
- await expect(c.admin.query("SELECT identity.extra_customer_approval($1,$2,$3,$4,$5::jsonb)",[randomUUID(),f.s.jobId,f.actor,f.sd,f.command])).rejects.toMatchObject({code:"42501"});
- await expect(c.admin.query("SELECT identity.extra_customer_approval($1,$2,$3,$4,$5::jsonb)",[w.p.tenantId,f.s.jobId,w.client2.member.membershipId,f.sd,f.command])).rejects.toMatchObject({code:"42501"});
+ await expect(identity.query("SELECT identity.extra_customer_approval($1,$2,$3,$4,$5::jsonb)",[randomUUID(),f.s.jobId,f.actor,f.sd,f.command])).rejects.toMatchObject({code:"42501"});
+ await expect(identity.query("SELECT identity.extra_customer_approval($1,$2,$3,$4,$5::jsonb)",[w.p.tenantId,f.s.jobId,w.client2.member.membershipId,f.sd,f.command])).rejects.toMatchObject({code:"42501"});
  await expect(f.use(f.signinDigest,"redeem")).rejects.toMatchObject({code:"42501"});
  await expect(f.use(f.sd,"resolve",w.client2.member.membershipId)).rejects.toMatchObject({code:"42501"});
  await expect(f.run({...f.command,revisionHash:"a".repeat(64)})).rejects.toMatchObject({message:"HASH_MISMATCH"});
@@ -36,6 +44,25 @@ it("ENT-5 sign-in requires a fresh link and current scoped named grant; replay i
  const rows=await c.admin.query("SELECT actor_membership_id,actual_tester_reference FROM app.extra_approval_step_fact WHERE request_id=$1 AND actor_kind='client_approver'",[f.s.requestId]);
  expect(rows.rows).toHaveLength(1);expect(rows.rows[0].actor_membership_id).toBe(f.actor);expect(rows.rows[0].actual_tester_reference).toMatch(/^customer-session:/);
  expect(await f.run({version:"extra-customer.v1",action:"history",jobId:f.s.jobId})).toMatchObject({items:[{requestId:f.s.requestId,decision:"approve"}]});
+});
+it.each(["approve","reject"])("ENT-5 real identity %s commits while unrelated checks remain deferred",async decision=>{
+ const f=await fixture();await f.use(f.signinDigest,"redeem");
+ const db=await identity.connect();
+ try {
+  await db.query("BEGIN");
+  // A real unrelated deferred FK must survive both the approval call and later statements.
+  // SET CONSTRAINTS ALL IMMEDIATE would reject the first child inside that call.
+  await db.query("CREATE TEMP TABLE approval_deferred_parent(id integer PRIMARY KEY) ON COMMIT DROP");
+  await db.query("CREATE TEMP TABLE approval_deferred_child(parent_id integer REFERENCES approval_deferred_parent(id) DEFERRABLE INITIALLY DEFERRED) ON COMMIT DROP");
+  await db.query("INSERT INTO approval_deferred_child VALUES(1)");
+  const result=await f.run({...f.command,decision},f.sd,db);
+  expect(result).toMatchObject({state:decision==="approve"?"approved":"rejected"});
+  await db.query("INSERT INTO approval_deferred_child VALUES(2)");
+  await db.query("INSERT INTO approval_deferred_parent VALUES(1),(2)");
+  await db.query("COMMIT");
+  expect((await c.admin.query("SELECT kind FROM app.extra_approval_outcome WHERE request_id=$1",[f.s.requestId])).rows)
+   .toEqual([{kind:decision==="approve"?"approved":"rejected"}]);
+ } catch(error) {await db.query("ROLLBACK");throw error;} finally {db.release();}
 });
 it("ENT-5 replaced, expired, foreign-job and revoked grants refuse",async()=>{
  const f=await fixture();await expect(f.use(f.signinDigest,"redeem",f.actor,randomUUID())).rejects.toMatchObject({code:"42501"});
