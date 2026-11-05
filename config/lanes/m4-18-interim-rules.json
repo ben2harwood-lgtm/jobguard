@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-18-interim-rules": {
+      "branches": [
+        "codex/sandbox/m4-18-interim-rules"
+      ],
+      "note": "M4-18 RED: interim draft session/role authority and honest refusals. Named holds for landing are in the 0781 migration note; batch-19 base paths are intentionally excluded.",
+      "allow": [
+        "apps/api/src/interim-draft.application.test.ts",
+        "apps/api/src/interim-draft.application.ts",
+        "apps/web/app/api/jobs/[id]/interim-drafts/route.test.ts",
+        "apps/web/e2e/interim-drafts.spec.ts",
+        "packages/db/migration-notes/0781_interim_draft_rules.md",
+        "packages/db/migrations/0781_interim_draft_rules.sql",
+        "packages/db/src/interim-draft-repository.ts",
+        "packages/db/test/interim-draft-repository.test.ts",
+        "packages/db/test/interim-draft-screen.integration.test.ts",
+        "packages/db/test/interim-draft.integration.test.ts",
+        "packages/db/test/migration-proofs/0781_interim_draft_rules.proof.json"
+      ]
+    }
+  }
+}
