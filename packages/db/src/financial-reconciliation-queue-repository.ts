@@ -48,6 +48,18 @@ export class FinancialReconciliationQueueRepository {
   if(result&&result.runId!==runId)throw new FinancialReconciliationError("RECONCILIATION_CONFLICT");
   return result;
  }
+ async readAdjustments(context:VerifiedTenantContext,session:string,jobId:string,runId:string){
+  if(process.env.JOBGUARD_ENV!=="synthetic_demo")throw new FinancialReconciliationError("RECONCILIATION_DISABLED");
+  const raw=await withTenant(this.pool,context,async db=>{
+   const result=await db.$client.query<{result:unknown}>("SELECT app.financial_reconciliation_adjustments_read($1,$2,$3) result",[uuid.parse(session),uuid.parse(jobId),uuid.parse(runId)]);
+   return result.rows[0]?.result;
+  });
+  if(raw===null)return null;
+  const rows=z.array(z.object({adjustmentId:uuid,adjustment:financialReconciliationAdjustmentV1,contentHash:hash,approvalId:uuid.nullable()}).strict()).parse(raw);
+  for(const row of rows)if(row.adjustment.tenantId!==context.tenantId||row.adjustment.jobId!==jobId||reconciliationAdjustmentHash(row.adjustment)!==row.contentHash)
+   throw new FinancialReconciliationError("RECONCILIATION_CONFLICT");
+  return rows;
+ }
  async propose(context:VerifiedTenantContext,session:string,raw:unknown){
   const command=proposeV1.parse(raw),adjustment=command.adjustment;
   const run=await this.read(context,session,adjustment.jobId,command.runId);

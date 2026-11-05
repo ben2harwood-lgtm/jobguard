@@ -84,3 +84,8 @@ LATER / SIMPLICITY (initial review): `PayNowAttemptApplication.read` could later
 use a repository current-options projection instead of inline prepare SQL plus
 a separate balance read, keeping stored projection in one place. That requires
 a separately scoped repository-interface change outside this brief.
+
+LP-5 lifecycle hold: this synthetic observation store and its practice preview
+do not dispatch through the LP-5 command lifecycle. They create no commercial
+authorization or execution record. Lifecycle integration remains held before
+any live payment command can use this surface.

@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "batch-18": {
+      "branches": [
+        "codex/sandbox/batch-18"
+      ],
+      "note": "MON-9 actor-bind exact union with current main; RED. No new migrations: latest election and actor binding already landed as 0566 and 0568.",
+      "allow": [
+        "packages/db/test/managed-recovery-migration.test.ts",
+        "packages/db/test/managed-recovery.integration.test.ts"
+      ]
+    }
+  }
+}

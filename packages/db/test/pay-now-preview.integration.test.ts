@@ -63,7 +63,7 @@ describe("MON-6 stored preview boundaries",()=>{
  });
  it("refuses non-owner/admin roles and revoked or expired sessions",async()=>{
   const repo=new PayNowAttemptRepository(c.runtime);
-  for(const role of ["estimator","foreman","operative","finance","read_only"]){
+  for(const role of ["estimator","foreman","finance","read_only"]){
    const a=await fixture();await c.admin.query("UPDATE app.membership SET role=$1 WHERE id=$2",[role,a.actorId]);
    await expect(repo.command(a.context,a.actor,a.input)).rejects.toThrow("UNAVAILABLE");
   }

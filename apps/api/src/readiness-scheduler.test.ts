@@ -80,6 +80,40 @@ describe("M2-6 Graphile scheduled prevention", () => {
       expect([...h.records.values()][0]!.ready).toBe(Object.keys(patch).length === 0);
     }
   });
+  it.each([
+    { complete: undefined, ready: false, reasons: ["Predecessor completion unknown"] },
+    { complete: "unknown" as const, ready: false, reasons: ["Predecessor completion unknown"] },
+    { complete: false, ready: false, reasons: ["A predecessor is not complete"] },
+    { complete: true, ready: true, reasons: [] },
+  ])("evaluates dependency edges with completion $complete and dedupes replays", async ({ complete, ready, reasons }) => {
+    const h = harness({
+      edges: [{ taskId: scope.taskId, dependsOnTaskId: other }],
+      predecessors: complete === undefined ? [] : [{ taskId: other, complete }],
+    });
+    await h.scheduler.schedule(scope, now, h.queue);
+    await h.scheduler.execute(h.task(), due);
+    await h.scheduler.execute(h.task(), "2026-09-01T08:01:00.000Z");
+    expect(h.records.size).toBe(1);
+    expect([...h.records.values()][0]).toMatchObject({
+      ready, reasons, classification: "prevention", feeEligible: false, recoveryFeePence: 0,
+      status: "proposal", programmeChanged: false,
+    });
+  });
+  it("does not use another predecessor's completion for a missing dependency fact", async () => {
+    const h = harness({
+      edges: [{ taskId: scope.taskId, dependsOnTaskId: other }],
+      predecessors: [{ taskId: "10000000-0000-4000-8000-000000000005", complete: true }],
+    });
+    await h.scheduler.schedule(scope, now, h.queue);
+    await h.scheduler.execute(h.task(), due);
+    expect([...h.records.values()][0]).toMatchObject({ ready: false, reasons: ["Predecessor completion unknown"] });
+  });
+  it("does not require completion facts for another task's edges", async () => {
+    const h = harness({ edges: [{ taskId: other, dependsOnTaskId: "10000000-0000-4000-8000-000000000005" }] });
+    await h.scheduler.schedule(scope, now, h.queue);
+    await h.scheduler.execute(h.task(), due);
+    expect([...h.records.values()][0]).toMatchObject({ ready: true, reasons: [] });
+  });
   it("covers calendar differences, weekends, local midnight and both DST changes", async () => {
     const cases = [
       { at: now, region: "scotland", day: "2026-08-31", runAt: "2026-08-31T08:00:00.000Z" },

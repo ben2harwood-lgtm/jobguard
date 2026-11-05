@@ -257,3 +257,8 @@ their routes. No HTTP, screen, worker, scheduler, OAuth, SDK, endpoint, tax,
 settlement or recovery-proof capability is added. M5-2 remains open; G0–G5,
 provider approval, CI database execution and exact-head independent RED review
 remain held.
+
+LP-5 lifecycle hold: the dark stored route-change operation uses its own checked
+synthetic session boundary and immutable Decision record, outside LP-5 lifecycle
+dispatch. Integration with that lifecycle remains held before live route changes
+can be enabled. This slice grants no live provider or payment authority.

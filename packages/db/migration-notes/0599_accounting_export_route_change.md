@@ -1,6 +1,6 @@
-# 0871_accounting_export_route_change — dark stored accounting route confirmation
+# 0599_accounting_export_route_change — dark stored accounting route confirmation
 
-M5-2 partial slice; RED (money records and tenant isolation), NOPR.
+M5-2 partial slice; RED (money records and tenant isolation).
 Adds one private append-only FORCE-RLS table, a session-checked route operation,
 and one private route validator used by the existing export routine. No role or
 table grant is added. Runtime gains EXECUTE only on the checked route routine.

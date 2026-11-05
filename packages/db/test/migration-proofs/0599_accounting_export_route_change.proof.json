@@ -1,5 +1,5 @@
 {
-  "migration": "0871_accounting_export_route_change.sql",
+  "migration": "0599_accounting_export_route_change.sql",
   "lp0": [
     {
       "section": "entries",
