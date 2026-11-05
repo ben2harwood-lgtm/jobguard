@@ -50,6 +50,7 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "/api/contractor/jobs/[id]/billing/[action]": "pre_live_allowed",
   "nest:/contractor/jobs/:id/billing/:action": "pre_live_allowed",
   // SV6-PERSIST-B: historical attribution intent is post-live; execution remains closed.
+  "/api/jobs/[id]/cis-fixtures": "post_live_billing",
   // Synthetic fixture storage only: classification grants no issue authority.
   "/api/jobs/[id]/vat-fixtures": "post_live_billing",
   "/api/jobs/[id]/invoices/[invoiceId]/pay-now-preview": "post_live_billing",
@@ -276,6 +277,8 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "nest:/jobs/:id/customer-invoices/:invoiceId/receipts/reversals": "post_live_billing",
   "nest:/jobs/:id/fee-illustration": "post_live_billing",
   "nest:/jobs/:id/fee-illustration/what-if": "post_live_billing",
+  "command:rate.suggestion_accept": "pre_live_allowed",
+  "/api/jobs/[id]/rate-suggestions": "pre_live_allowed",
   "/api/jobs/[id]/final-account/lock": "post_live_billing",
   "nest:/jobs/:id/final-account/lock": "post_live_billing",
   "/api/jobs/[id]/final-account/dispositions": "post_live_billing",
