@@ -27,8 +27,7 @@
         "packages/db/test/cis-fixture-repository.test.ts",
         "packages/db/test/cis-fixture-route.integration.test.ts",
         "packages/db/test/later-empty-tables.ts",
-        "packages/db/test/migration-proofs/0611_cis_fixture_records.proof.json",
-        "packages/db/test/watchdog.integration.test.ts"
+        "packages/db/test/migration-proofs/0611_cis_fixture_records.proof.json"
       ]
     }
   }

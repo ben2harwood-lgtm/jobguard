@@ -1,8 +1,9 @@
 # M5-6 dark recent-rate baseline v1
 
 This implements only the deterministic, synthetic portion permitted by BUILD_PLAN §12.4.
-It is not exported from the core barrel or connected to a route, screen, database reader,
-writer, provider or scheduler. It needs no migration and does not need a merchant adapter.
+The pure core module is exported from the core barrel. The dark stored reader and acceptance
+repository described below add migration 0609; the synthetic session route and screen below expose only stored suggestions and acceptances.
+No provider or scheduler is connected. No merchant adapter is required for this synthetic foundation.
 M5-5 remains unbuilt; this work does not satisfy or bypass its real integration dependency.
 G0–G5 are unchanged and no release approval is implied.
 
@@ -45,11 +46,76 @@ this function cannot establish experimental independence.
 Acceptance returns a new-revision **proposal**, bound to a tenant, current/new revision,
 scope identity, actor and exact suggested amount. It copies source provenance without
 mutating the suggestion or any commercial record. It is not authorization or persistence.
-A future authenticated human command must check membership, exact intent and current
-revision and atomically create the new immutable revision/observation. No accepted quote,
+The dark authenticated command below checks membership, exact intent and current revision
+and records a separate immutable acceptance observation. It does not promote commercial scope. No accepted quote,
 agreed rate, invoice or cap is updated here.
 
-Still open for people: real held-out evaluation; any model beyond this baseline; any screen;
+Still open for people: real held-out evaluation; any model beyond this baseline;
 the real M5-5 merchant adapter; any cross-tenant privacy/commercial decision and design review;
-and wiring to a live route with authorization and persistence. Synthetic passing tests do
+and activation of any live route. Synthetic passing tests do
 not close any of these requirements or mark full M5-6 complete.
+
+## Dark stored observations and human acceptance (0609)
+
+`RateSuggestionRepository.read(context, query)` reads only the context tenant's immutable
+`rate_book_observation` rows, joined by tenant/job/item/source revision to confirmed scope.
+A source must match its revision's unit and principal rate. Untraceable rows are named
+`untraced_source` exclusions. Conflicting observations of one revision are all excluded as
+`conflicting_source_revision`; identical replays retain the core's named duplicate exclusion.
+Unit/tax/context/window/outlier exclusions remain descriptive, with sparse samples unknown.
+The baseline hash binds the policy version, normalized query and complete ordered stored source snapshot,
+including excluded rows. It is a freshness binding, not evidence authenticity.
+
+`accept(context, actor, raw)` accepts a strict versioned command with no tenant, actor or
+activation flag. The actor argument carries a human session digest, never an actor identity;
+the one write routine derives an active owner from the existing persisted session/SSO verifier.
+Only synthetic small-builder jobs are permitted. One tenant advisory lock serializes accepts;
+SQL independently verifies the bounded median/outlier policy, source IDs, snapshot hash and
+latest target revision. One target revision can be accepted once. Command replay returns its
+original record even after new observations; changed intent or actor conflicts. The transaction
+also invokes the pure acceptance proposal and seals a checked audit event with references/hashes.
+No new role or direct table grant is added.
+
+The append-only FORCE-RLS `rate_suggestion_acceptance` row is a separate accepted observation
+with `suggestion_accepted` provenance, previous scope revision, exact pence/stratum/policy,
+source observation IDs, baseline hash, session-derived actor, command/request/record hashes
+and `synthetic_demo` label. The immutable observation IDs retain the source revision links.
+It never feeds the baseline. It is not a new commercial scope revision and cannot change
+quotes, quote lines, rate-book observations, material/agreed rates, invoices or cap snapshots.
+PostgreSQL CI must verify these boundaries; local SQL transport tests do not prove them.
+
+M5-6 remains open: real held-out evaluation, later drift models, recurring-extra suggestions,
+merchant scoring, M5-5's real adapter and all applicable release gates remain held. There is
+no live HTTP surface, worker, merchant data or cross-tenant learning.
+
+## Synthetic session screen and retained read (0610)
+
+The practice page `/jobs/[id]/rate-suggestions` and session-only GET/POST
+`/api/jobs/[id]/rate-suggestions` are refused outside `synthetic_demo`. The
+sole current session membership selects the company; ambiguous sessions fail
+closed. No request tenant, actor or session selector is accepted. POST requires
+a trusted browser origin. All responses use no-store. The checked history read
+requires the existing persisted small-builder owner authority covering this job,
+before baseline data is read or an acceptance is attempted.
+
+`readAcceptances(context, actor, jobId)` calls the sole read-only checked routine
+added by 0610. No table grants, roles, write routines or stored formats change.
+It returns actor membership ID (the stable who), server time, record/baseline
+hashes, target revision and immutable source observation/revision provenance.
+The client displays server counts, observed spread and policy; sparse data says
+not enough to say. Comparison fields and target item/revision IDs are explicit
+practice inputs; the server verifies the exact target and suggestion. The client
+retains the exact serialized command in session storage across uncertain retries
+and reloads, and clears it only on success or a definite refusal. Acceptance
+remains a separate observation; quote, quote-line, rate-book, agreed-rate, invoice
+and cap rows remain unchanged. No accepted observation feeds the baseline.
+
+PostgreSQL integration and catalog/upgrade suites plus the headless browser
+reload journey must run in CI; local transport/unit tests do not establish those
+guarantees. Exact-head independent RED review is still required. This does not
+finish M5-6; drift, recurring extras, merchant scoring, M5-5 and G0–G5 stay held.
+
+The synthetic rate-acceptance command is outside the LP-5 dispatch lifecycle.
+Its dedicated routine owns authorization, idempotency and checked audit sealing;
+LP-5 lifecycle dispatch remains held for this command. Registry classification
+does not imply lifecycle execution or production readiness.

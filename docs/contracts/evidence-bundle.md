@@ -69,3 +69,34 @@ Validation: focused unit/CLI/standard-ZIP checks run locally. The new PostgreSQL
 integration test uses real ENT-5 commands and RLS; it must run in CI, since this
 sandbox cannot start PostgreSQL or bind localhost. Independent RED review and
 full required CI against current main remain outstanding.
+
+## M4-3 practice screen (partial, RED)
+
+`GET /api/contractor/jobs/:id/bundle-check?extraId=:extra&requestId=:request`
+uses the persisted `jg_session` contractor membership and the existing context
+bridge. No tenant, actor, role, disclosure or recipient is accepted from the URL.
+It is refused outside `synthetic_demo`; inaccessible and foreign jobs return the
+same `NOT_FOUND` before source/object reads. The application accepts the caller's
+context and actor, checks current job-read authority, then loads sources in
+`withEvidencePackV3Snapshot` (repeatable-read, read-only). Hydration follows commit;
+assembly and verification are in memory. Nothing is persisted and no storage
+write, download URL, send or attachment approval is created.
+
+The practice page at `/contractor/jobs/:id/bundle-check` takes the same selection
+in its link and runs the check on demand. Only section names/states, manifest
+digest and the verifier report leave the server, plus a version and bounded
+incomplete reason. Missing/unreadable originals, wrong versions, altered bytes,
+invalid source links and stale/incomplete approval or scope are safe incomplete
+results, without raw errors or source identifiers. Export/invoice/payment absence
+is preserved. The internal metadata-only assembly uses the viewer's opaque member
+reference; it establishes no recipient or send authorization. No independent
+manifest digest or trusted checkpoint is supplied, so fresh assembly cannot claim
+independent trust or external verification. Hash checks do not prove workmanship,
+customer agreement, settlement truth or fee entitlement.
+
+Local unit tests cover replay, failure reasons, minimal disclosure, access refusal,
+no writes and transaction/storage ordering. CI must prove the new real-PostgreSQL
+integration test, headless mobile-360/desktop rendering spec, full required checks
+and Cloudflare packaging. Independent RED review at the exact head is outstanding.
+No migration. This does not finish M4-3: export, recipients, recovery/small-builder
+bundles, locked storage, timestamps and signing remain outside this change.
