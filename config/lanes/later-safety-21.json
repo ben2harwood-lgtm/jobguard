@@ -1,0 +1,36 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-21": {
+      "branches": [
+        "codex/sandbox/later-safety-21"
+      ],
+      "note": "LATER-SAFETY-21: lost-job practice read absence and wrong-job value regression coverage. Stacked on batch-48; allow includes inherited branch differences. No migrations.",
+      "allow": [
+        "apps/api/package.json",
+        "apps/api/src/merchant-order.application.test.ts",
+        "apps/api/src/merchant-order.application.ts",
+        "apps/api/src/merchant-order.contracts.ts",
+        "apps/web/app/api/jobs/[id]/purchase-orders/merchant-order/route.ts",
+        "apps/web/app/jobs/[id]/page.tsx",
+        "apps/web/app/lib/merchant-order-server.test.mts",
+        "apps/web/app/lib/merchant-order-server.ts",
+        "apps/web/app/ui/job-value.test.tsx",
+        "apps/web/app/ui/merchant-order.test.ts",
+        "apps/web/app/ui/merchant-order.tsx",
+        "apps/web/app/ui/practice-journey.test.tsx",
+        "apps/web/app/ui/practice-journey.tsx",
+        "apps/web/app/ui/supplier-documents.test.tsx",
+        "apps/web/app/ui/supplier-documents.tsx",
+        "apps/web/e2e/M2-1-order-screen.spec.ts",
+        "apps/web/e2e/M2-2-S.spec.ts",
+        "docs/verdicts/batch-33/BUILDER_RECEIPT.md",
+        "packages/core/src/watchdog.ts",
+        "packages/db/src/supplier-document-repository.ts",
+        "packages/db/test/command-replay-contract.integration.test.ts",
+        "packages/db/test/enterprise-access-upgrade.integration.test.ts",
+        "packages/db/test/supplier-documents.integration.test.ts"
+      ]
+    }
+  }
+}
