@@ -145,14 +145,14 @@ it("leaves uncovered calendar years unqueued and supersedes a changed revision",
 });
 
 it("rejects infrastructure discovery in a non-synthetic database", async () => {
- const connection = { ...admin.options, database: "postgres", max: 2 };
+ const connection = { ...admin.options, password: "synthetic", database: "postgres", max: 2 };
  const nonSynthetic = new Pool(connection);
  const worker = new Pool({ ...connection, options: "-c role=jobguard_infrastructure" });
  try {
   await nonSynthetic.query("CREATE SCHEMA infrastructure");
   await nonSynthetic.query("GRANT USAGE ON SCHEMA infrastructure TO jobguard_infrastructure");
   // The guard runs before table access in this second database.
-  await nonSynthetic.query(await readFile(new URL("../migrations/0794_readiness_discovery_guard.sql", import.meta.url), "utf8"));
+  await nonSynthetic.query(await readFile(new URL("../migrations/1051_readiness_discovery_guard.sql", import.meta.url), "utf8"));
   await expect(worker.query("SELECT * FROM infrastructure.discover_readiness_plans()"))
    .rejects.toMatchObject({ code: "42501", message: "MODE_FORBIDDEN" });
  } finally { await closeTestPools(worker, nonSynthetic); }
