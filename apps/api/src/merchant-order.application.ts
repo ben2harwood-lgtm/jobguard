@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
 import { z } from "zod";
-import { PurchaseOrderActionRepository } from "@jobguard/db";
+import { PurchaseOrderActionRepository, practiceMaterialPool } from "@jobguard/db";
 import { PracticeAccess } from "./practice-access.js";
 
 const scope = z.object({ version: z.literal("merchant-order-screen.v1"), revisionId: z.uuid() });
@@ -15,8 +15,8 @@ export type MerchantOrderPreview = Awaited<ReturnType<PurchaseOrderActionReposit
 /** Request-scoped practice bridge. Neither actor nor tenant is accepted in a DTO. */
 export class MerchantOrderApplication {
   private readonly access: PracticeAccess;
-  constructor(pool: Pool, sessionId?: string,
-    private readonly repository: Pick<PurchaseOrderActionRepository, "preview" | "approve" | "attestManual"> = new PurchaseOrderActionRepository(pool)) {
+  constructor(private readonly pool: Pool, sessionId?: string,
+    private readonly repository?: Pick<PurchaseOrderActionRepository, "preview" | "approve" | "attestManual">) {
     this.access = new PracticeAccess(pool, sessionId);
   }
   async execute(jobId: string, raw: unknown) {
@@ -25,14 +25,16 @@ export class MerchantOrderApplication {
     const auth = await this.access.job(jobId);
     const input = merchantOrderRequest.parse(raw);
     const orderScope = { version: "merchant-order-scope.v1", jobId, revisionId: input.revisionId };
-    if (input.kind === "preview") return { ...await this.repository.preview(auth.context, orderScope), approvalExpiresAt: new Date(Date.now() + 10 * 60_000).toISOString() };
-    if (input.kind === "manual") return this.repository.attestManual(auth.context, {
+    // Practice materials are visible only inside the authenticated session's digest (RLS, migration 0094).
+    const repository = this.repository ?? new PurchaseOrderActionRepository(practiceMaterialPool(this.pool, auth.digest));
+    if (input.kind === "preview") return { ...await repository.preview(auth.context, orderScope), approvalExpiresAt: new Date(Date.now() + 10 * 60_000).toISOString() };
+    if (input.kind === "manual") return repository.attestManual(auth.context, {
       version: "manual-order-attestation.v1", jobId, revisionId: input.revisionId,
       commandId: input.commandId, supplierReference: input.supplierReference,
     }, auth.membershipId);
     if (Date.parse(input.expiresAt) > Date.now() + 10 * 60_000) throw new Error("ORDER_ACTION_INVALID");
     // Do not replace reviewed facts with a fresh preview: changes must invalidate authority.
-    return this.repository.approve(auth.context, orderScope, {
+    return repository.approve(auth.context, orderScope, {
       version: "command.v1", commandId: input.commandId, authorizationId: input.commandId,
       commandType: "purchase_order.send.dark", semanticKey: `merchant-order:${jobId}:${input.revisionId}`,
       actorMembershipId: auth.membershipId, subjectType: "purchase_order", subjectRef: input.revisionId,

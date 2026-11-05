@@ -1,5 +1,14 @@
 # Batch 33: M2-1 practice order screen and M2-2 later delivery
 
+## PR #575 second repair — 5 November 2026 (last round)
+
+READY: batch-33 second repair — authenticated practice material pool; RED. This section supersedes the prior repair status. Starting HEAD `cfe584a1afb44160aaf66a8fe3b909cfe66fe465` already merges main `d16ef1978eb44d7d9d33a77926fb179e794af196`; no unresolved index entries. Preserved that union without git-writing commands.
+
+- Applied only the diagnosed application fix: after job authorization, construct the default PurchaseOrderActionRepository with `practiceMaterialPool(this.pool, auth.digest)` for preview, approval and manual attestation. Existing injected repositories still work. The authenticated digest, never client input, controls practice material visibility under migration 0094. Origin gate, tests and all other behavior remain unchanged. No migration or new complexity.
+- Local checks actually run: apps/api `./node_modules/.bin/vitest run --maxWorkers=2 src/merchant-order.application.test.ts`: PASS, 5 tests. apps/web `./node_modules/.bin/vitest run --maxWorkers=2 app/lib/merchant-order-server.test.mts app/ui/merchant-order.test.ts`: PASS, 7 tests, including foreign/absent origin and unconfigured origin/forwarded-host rejection. apps/api `./node_modules/.bin/tsc -p tsconfig.json --noEmit`: PASS. `node tools/agent-lane-boundary-lint.mjs`: PASS. Exact lane comparison against origin/main: PASS, all 19 non-lane changed paths and no self-listing. `git diff --check`: PASS.
+- No tests were modified. These application unit tests inject a repository and do not prove PostgreSQL RLS behavior. The diagnosis reports production-build browser proof on a scratch copy; that was not executed in this repair session.
+- Required downstream: router commit/push; exact-head green CI including PostgreSQL and production-build browser suites (M2-1 and M2-2, phone and desktop, at most two workers); independent RED recheck. This sandbox cannot start PostgreSQL or bind localhost. No commit, push, provider, real-data, deployment or launch action performed.
+
 ## PR #575 repair — 5 November 2026
 
 READY: batch-33 origin and replay-coverage repair; RED. This section supersedes the historical merge status below. The router already merged main as `9d6aef1169f569d9f5bc8774c7ba55864cf7b98f` (parents `889b44af0` and `28871adf3`); no unresolved index entries remain. This repair preserves that union and leaves the proven later-delivery implementation unchanged. No git-writing commands were run.
