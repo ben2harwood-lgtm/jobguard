@@ -1,0 +1,31 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-4": {
+      "branches": [
+        "codex/sandbox/later-safety-4"
+      ],
+      "note": "LATER-SAFETY-4 RED, synthetic only, NOPR; finishes no plan piece.",
+      "allow": [
+        "apps/api/src/dunning.application.ts",
+        "apps/web/app/accounting-exports/[sourceId]/page.test.tsx",
+        "apps/web/app/accounting-exports/[sourceId]/page.tsx",
+        "apps/web/app/jobs/[id]/dunning/page.test.tsx",
+        "apps/web/app/jobs/[id]/dunning/page.tsx",
+        "apps/web/app/jobs/[id]/imports/page.test.tsx",
+        "apps/web/app/jobs/[id]/imports/page.tsx",
+        "apps/web/app/meter/jobs/[id]/imports/page.test.tsx",
+        "apps/web/app/meter/jobs/[id]/imports/page.tsx",
+        "packages/db/migration-notes/0782_dunning_owner_approval.md",
+        "packages/db/migrations/0782_dunning_owner_approval.sql",
+        "packages/db/src/dunning-repository.ts",
+        "packages/db/src/managed-recovery-repository.ts",
+        "packages/db/test/dunning-repository.test.ts",
+        "packages/db/test/dunning-workbench-upgrade.integration.test.ts",
+        "packages/db/test/dunning.integration.test.ts",
+        "packages/db/test/managed-recovery-preview-credit-note.integration.test.ts",
+        "packages/db/test/migration-proofs/0782_dunning_owner_approval.proof.json"
+      ]
+    }
+  }
+}
