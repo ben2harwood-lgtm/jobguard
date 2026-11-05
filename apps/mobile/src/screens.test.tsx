@@ -3,6 +3,7 @@ import { expect, it, vi } from "vitest";
 vi.mock("react-native", () => ({ View: "View", Text: "Text", ScrollView: "ScrollView", TextInput: "TextInput", Button: "Button" }));
 import { CoreLoopScreen } from "./CoreLoopScreen";
 import { ReconciliationScreen } from "./ReconciliationScreen";
+import { OperativeScreen } from "./OperativeScreen";
 import { CaptureScreen } from "./CaptureScreen";
 import { acceptanceIntentViewV1, coreLoopActionContextV1 } from "@jobguard/core";
 function nodes(node: ReactNode): ReactElement<Record<string, unknown>>[] {
@@ -26,4 +27,17 @@ it("capture controls retain permission-recovery paths and label local intent as 
  const elements = nodes(CaptureScreen({ online: false, draft: "Fictional note", onDraft: vi.fn(), onCapture: vi.fn(), rows: [], onMedia: media }));
  expect(elements.some(v => v.props.accessibilityLabel === "Fictional capture text")).toBe(true);
  const photo = elements.find(v => v.props.title === "Photo capture — held")!; (photo.props.onPress as () => void)(); expect(media).toHaveBeenCalledWith("photo");
+});
+
+it("operative screen hides assigned details offline and cannot confirm a photo without verified-content hash", () => {
+ const callback = vi.fn();
+ const props = { online: false, jobs: null, selectedJob: id, note: "Fictional note", description: "Fictional extra", workStatus: null, photoId: "", visit: null, extra: null,
+  busy: false, canQueue: false, onLoad: callback, onSelect: callback, onNote: callback, onDescription: callback, onWorkStatus: callback, onPhoto: callback,
+  onVisit: callback, onQueue: callback, onPhotoReview: callback, onOpenReview: callback };
+ expect(nodes(OperativeScreen(props)).filter(v => v.type === "Button")).toEqual([]);
+ const elements = nodes(OperativeScreen({ ...props, online: true }));
+ expect(elements.find(v => v.props.title === "Queue note intent")!.props.disabled).toBe(true);
+ expect(elements.find(v => v.props.title === "Review photo extra")!.props.disabled).toBe(true);
+ expect(elements.find(v => v.props.title === "Resident confirms this exact content")).toBeUndefined();
+ expect(elements.some(v => v.props.accessibilityLabel === "Fictional operative note")).toBe(true);
 });

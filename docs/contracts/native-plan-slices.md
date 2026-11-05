@@ -4,7 +4,7 @@
 
 ## Imported groundwork
 
-Merged the requested remote branches in order: `m3-4-reconcile` (94a30eeed), `m3-6-shared`, `m3-7-suite` (6cc9e27a3), `ent-12-operative`. Additive conflicts in `packages/core/src/index.ts` retain both exports. The suite branch includes newer already-merged main ancestry (batch-26 merchant-order and dashboard work), preserved by the merge; it is not native work authored here. Existing tests were not weakened. The merged M3-7 physical-device matrix is an obligation, not executed device evidence.
+Merged the requested remote branches in order: `m3-4-reconcile` (94a30eeed), `m3-6-shared`, `m3-7-suite` (6cc9e27a3), `ent-12-operative`. Additive conflicts in `packages/core/src/index.ts` retain both exports. The suite branch includes newer already-merged main ancestry (batch-26 merchant-order and dashboard work), preserved by the merge; it is not native work authored here. The four imported branch registrations are archived byte-for-byte with hashes and remote heads under `docs/archive/lanes/native-model-imports/`; the active native lane remains the sole owner of this branch, following existing inherited-lane conventions. No guard or assertion was relaxed. Existing tests were not weakened. The merged M3-7 physical-device matrix is an obligation, not executed device evidence.
 
 ## M3-3 — native download adapter
 
@@ -50,3 +50,27 @@ The shell mounts optional owner/generation-keyed workspace bindings, including r
 Lacks: production/native source transport and full authenticated application composition, editable forms/server mutation wiring for every core workflow, actual server-revision/audit/totals parity through a physical device, full mandatory-detail review UI and device accessibility/permission/intermittent-connectivity proof. The shared source adapter must validate and authorize its owning API responses; TypeScript/context flags do not authenticate a user. Controls are review navigation, not a claim that the full native business journey works.
 
 M3-6 verification: 39 mobile tests (9 files) and mobile typecheck passed; 65 merged core-model/reconciliation/download/capture/chaos tests (8 files) passed. Native presentation tests verify shared quote/payment outputs, stripped stale reviews, wrong-scope/offline refusal, no offline detail/action rendering, non-executing review choices and permission-recovery controls. React Native elements are tested with labelled host-component doubles, not device rendering.
+
+## ENT-12 — operative native screens
+
+Has: fresh assigned-job presentation from the native download seam; visits on the caller's own open visit; the exact shared close-out question and mandatory answer; text Log-an-extra intents retained in the durable queue with original UUIDv7/HLC/capture metadata; server-verified-photo lookup by an authenticated proof port; exact content-hash resident-statement review; and native operative controls built on the imported models. Work status is explicitly selected from the shared v4 schema, not inferred by the device. Native plans remain `recorded: false`; visit/photo actions open the owning online workflow and are never pushed through the note-only queue. A pending/local/rejected/conflicted photo cannot satisfy proof or become a priced/approved extra. Resident statement is explicitly identity-unverified; origin remains server-on-upload. No resident contacts/addresses/prices are downloaded in this profile.
+
+Lacks: connected native authenticated field application, physical operative offline journey (offline assignment reads remain denied), camera/general media pipeline, approved resident/sign-off/device policy and all server-mutation/device parity evidence. The default source/composition is absent. New-note UUIDv7/metadata production is an explicit owning-composition input; the queue never rebuilds it on retry. Existing actual server/SoR/fee/approval rules are not reimplemented or replaced. The photo/visit screen does not claim a server write merely because a model says ready for validation.
+
+The additional cleanup-hook fault test prevents an in-memory refresh/reconnect from resurrecting a partition after cleanup invalidation fails. Bearers are removed before the hook; the durable cleanup marker, pending contents and keys remain held on failure. Full OS-level atomicity and recovery policy still require approval/device evidence.
+
+## Physical-device checklist — all NOT DONE
+
+Retain all unchecked steps in the M3-1/M3-2 reports and the merged `docs/operations/native-device-matrix.md`. No result cell in that matrix was marked passed by this work.
+
+- [ ] NOT DONE: resolve/commit a mature dependency lock, frozen install and passing supply-chain lint; record actual iOS/Android artifacts, exact native dependency versions and release compiler/encryption flags.
+- [ ] NOT DONE: M3-3 real encrypted adapter/PowerSync compatibility, two-user/two-tenant/multi-role admission, paging/interruption, generation/assignment revocation, tombstone erasure and source-authority binding independently of RLS. Approve EU/UK sync routes before real data.
+- [ ] NOT DONE: M3-4 kill/reboot/reinstall before/after sending checkpoints and commit acknowledgments, stable replay, poisoned-job isolation, expired/stale approval reconciliation, DB/WAL extraction and low-storage faults in actual native builds. Bind cleanup invalidation to the single workspace owner and prove late I/O cannot resurrect removed data.
+- [ ] NOT DONE: M3-5 capture, permissions/denial, encrypted temporary/backup files, clock skew, interruption, resumable verified finalization, retention and safe cleanup on physical devices. General media stays held; generic text upload needs its owning contract.
+- [ ] NOT DONE: M3-6 complete field journey with current server revisions/totals/audit, fresh person review after reconnect, mandatory blockers visible, small-screen/a11y/media-permission recovery and supported web fallback.
+- [ ] NOT DONE: ENT-12 wrong assignment/role/tenant, own-visit close-out, original note replay, verified-photo/content-hash drift, resident-statement wording, no local money/approval/origin authority, lost device and two-crew conflicts on iOS/Android.
+- [ ] NOT DONE: M3-7 full physical chaos matrix, upgrade/restore, support ownership, telemetry and rollout/rollback evidence, independent RED review against the exact head, D08 approval and G3. These pieces cannot be called finished.
+
+## Final verification
+
+Commands use repository pnpm 10.28.1 via `PATH=/workspace/.npm-cache/_npx/116f317e7afab6e7/node_modules/.bin:$PATH`. Native/server tests are labelled by their actual scope; explicit store/React Native doubles do not prove encryption or device behavior. No package installation, new account, hosted build, upload, live service, age exception or weakened assertion was used in this continuation.

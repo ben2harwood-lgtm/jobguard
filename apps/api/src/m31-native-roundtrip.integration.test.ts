@@ -49,6 +49,20 @@ it("M3-1 real loopback API + PostgreSQL: authorized read, queued note, lost resp
   const before = await c.admin.query("SELECT count(*)::int n FROM app.extra_origin WHERE tenant_id=$1 AND command_id=$2", [f.p.tenantId, commandId]);
   expect(before.rows[0].n).toBe(1);
   expect(saved).not.toContain(token); expect(saved).not.toContain(digest);
+  // The M3-4 durable adapter uses the same real authenticated HTTP route and receipt store.
+  const { WorkspaceDocument } = await import(new URL("../../mobile/src/workspace-document.ts", import.meta.url).href);
+  const { DurableNativeQueue } = await import(new URL("../../mobile/src/durable-queue.ts", import.meta.url).href);
+  const { localData } = await import(new URL("../../mobile/src/lifecycle-contracts.ts", import.meta.url).href);
+  const partition = { userId: actor.identityUserId, tenantId: f.p.tenantId, membershipId: actor.membershipId, mobileSessionId: randomUUID(), deviceInstanceId: "fictional-native-queue" };
+  let queueBytes = JSON.stringify(localData.parse({ version: "mobile-cache.v1", metadata: { version: "mobile-local-metadata.v1", partition, localSchemaVersion: 1 }, notes: [], files: [], unsyncedWork: "none" }));
+  const queueDoc = new WorkspaceDocument({ encryption: "sqlcipher", read: async () => queueBytes, write: async (value: string) => { queueBytes = value; }, close: async () => {} }, partition);
+  const makeQueue = () => new DurableNativeQueue(queueDoc, { assertCurrent: async () => { await transport.assignedJobs(); } }, transport, hash);
+  const durable = makeQueue(), durableId = "01960000-0000-7000-8000-000000000002";
+  await durable.enqueueNote({ version: "offline-intent.v1", jobId: f.jobId, clientMetadata: { capturedAt: "2000-01-01T00:00:00Z", hlc: { wallTimeMs: 0, logical: 0, nodeId: "fictional-native-queue" } }, body: { version: "log-site-extra.v1", commandId: durableId, note: "Fictional durable note", description: "Fictional durable extra" } });
+  loseResponse = true; expect((await durable.flushOne(0)).state).toBe("retried");
+  const recoveredQueue = makeQueue(); await recoveredQueue.restore(); expect((await recoveredQueue.flushOne(1000)).state).toBe("recorded");
+  expect((await c.admin.query("SELECT count(*)::int n FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [f.p.tenantId, durableId])).rows[0].n).toBe(1);
+  expect(queueBytes).not.toContain(token); expect(queueBytes).not.toContain(digest);
   await c.admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [f.p.tenantId, actor.membershipId]);
   await expect(restarted.readAuthorized()).rejects.toThrow("AUTHORIZED_READ_REFUSED");
   const upload = { version: "offline-upload.v1", jobId: f.jobId, commandId, expectedRevision: null, body: JSON.parse(saved!).intent.body, payloadHash: JSON.parse(saved!).item.payloadHash };

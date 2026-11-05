@@ -6,9 +6,12 @@ import type { DurableNativeQueue } from "./durable-queue";
 import type { NativeCaptures } from "./capture";
 import { CoreLoopScreen } from "./CoreLoopScreen";
 import { ReconciliationScreen } from "./ReconciliationScreen";
+import { OperativeWorkflow } from "./OperativeWorkflow";
+import type { NativeOperativeScreens } from "./operative-screens";
 import { CaptureScreen } from "./CaptureScreen";
 export interface NativeWorkspaceBindings {
  partition: Partition; online: boolean; authorityGeneration: number; uuid(): string;
+ operative?: NativeOperativeScreens; makeOperativeIntent?(jobId: string, text: string, description: string): unknown; onOperativeReview?(plan: unknown): void;
  core?: NativeCoreLoopScreens; queue?: DurableNativeQueue; captures?: NativeCaptures;
  onReview?(choice: ReturnType<typeof nativeReviewChoice>): void;
  onReconcileChoice?(commandId: string | null, choice: string): void;
@@ -45,6 +48,7 @@ export function WorkspaceScreens({ binding }: { binding: NativeWorkspaceBindings
     setStatus("Local text intent retained. No server proof was created.");
     if (binding.online) setCaptures(await binding.captures!.views());
    })} onMedia={kind => { binding.captures?.media(kind, "unavailable"); setStatus("Voice/photo capture and general encrypted media remain held under D08."); }} />
+  {binding.operative ? <OperativeWorkflow source={binding.operative} online={binding.online} busy={busy} uuid={binding.uuid} run={run} {...(binding.makeOperativeIntent ? { makeIntent: binding.makeOperativeIntent } : {})} {...(binding.onOperativeReview ? { onReview: binding.onOperativeReview } : {})} /> : <Text>Operative source is not connected.</Text>}
   <View><Text accessibilityLiveRegion="polite">{status}</Text></View>
  </ScrollView>;
 }

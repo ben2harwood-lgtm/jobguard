@@ -132,3 +132,13 @@ it("future local schema and malformed attachments refuse without reset or conten
  const saved = JSON.parse(bytes!); saved.metadata.localSchemaVersion = 2; f.data.set(key, JSON.stringify(saved));
  await expect(f.client.read()).rejects.toThrow(); expect(f.destroyed).toHaveLength(0);
 });
+it("failed workspace invalidation cannot resurrect a cleanup partition via refresh or reconnect", async () => {
+ const f = setup(), client = f.make({ beforePartitionCleanup: async () => { throw new Error("fictional hook failure"); } });
+ await client.exchange(id(3));
+ await expect(client.logout()).rejects.toMatchObject({ code: "MOBILE_RECOVERY_REQUIRED" });
+ expect([...f.secure.keys()].filter(key => key.startsWith("m32.session."))).toEqual([]);
+ await expect(client.refresh()).rejects.toMatchObject({ code: "MOBILE_RECOVERY_REQUIRED" });
+ await expect(client.reconnect()).rejects.toMatchObject({ code: "MOBILE_RECOVERY_REQUIRED" });
+ expect(f.provider.rotate).not.toHaveBeenCalled(); expect(f.provider.reconnect).not.toHaveBeenCalled();
+ await expect(f.make().resume()).rejects.toThrow(); expect(f.destroyed).toHaveLength(0);
+});

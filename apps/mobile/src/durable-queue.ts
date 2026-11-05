@@ -1,10 +1,10 @@
 import { z } from "zod";
 import { offlineUploadV1, offlineUploadBodyV1, offlineReconciliationV1, offlineReconciliationViewV1,
- reconcileOfflineResultV1, addOfflineQueueItemV1, chooseOfflineQueueItemV1, restoreOfflineQueueV1 } from "@jobguard/core";
+ reconcileOfflineResultV1, addOfflineQueueItemV1, chooseOfflineQueueItemV1, restoreOfflineQueueV1, parseOfflineIntentV1 } from "@jobguard/core";
 import { WorkspaceDocument, type NativeAuthority } from "./workspace-document";
-import { MobileClientError } from "./lifecycle-contracts";
+import { MobileClientError, nativeQueueEntryV1 } from "./lifecycle-contracts";
 import type { HashPort } from "./sync";
-const entry = z.object({ upload: offlineUploadV1, reconciliation: offlineReconciliationV1 }).strict();
+const entry = nativeQueueEntryV1;
 type Entry = z.infer<typeof entry>;
 export type NativeReconciliationRow = ReturnType<typeof offlineReconciliationViewV1> & { commandId: string | null; jobId: string | null };
 export interface NativeQueueTransport { upload(raw: unknown): Promise<unknown> }
@@ -15,7 +15,8 @@ export class DurableNativeQueue {
  private async authorize() { try { await this.authority.assertCurrent(this.document.partition); } catch { throw new MobileClientError("MOBILE_DENIED"); } }
  private async checked(raw: unknown): Promise<Entry | null> {
   const parsed = entry.safeParse(raw); if (!parsed.success) return null;
-  const { upload, reconciliation: { item } } = parsed.data;
+  const { upload, reconciliation: { item }, offlineIntent } = parsed.data;
+  if (offlineIntent && (offlineIntent.jobId !== upload.jobId || JSON.stringify(offlineIntent.body) !== JSON.stringify(upload.body))) return null;
   const hash = await this.hash.sha256(JSON.stringify({ jobId: upload.jobId, body: offlineUploadBodyV1.parse(upload.body) }));
   const kind = upload.body.version === "log-site-extra.v1" ? "site_extra" : upload.body.version === "job-work-state-command.v1" ? "work_state" : "commercial_intent";
   return item.commandId === upload.commandId && item.jobId === upload.jobId && item.payloadHash === upload.payloadHash
@@ -40,7 +41,8 @@ export class DurableNativeQueue {
     reason: item.status === "needs_review" ? v.reconciliation.reason ?? "RECOVERED_REVIEW" : v.reconciliation.reason } };
   });
  }
- async enqueue(jobId: string, body: unknown) {
+ enqueueNote(raw: unknown): Promise<void> { const intent = parseOfflineIntentV1(raw); return this.enqueue(intent.jobId, intent.body, intent); }
+ async enqueue(jobId: string, body: unknown, offlineIntent?: ReturnType<typeof parseOfflineIntentV1>): Promise<void> {
   const boundary = offlineUploadBodyV1.safeParse(body); if (!boundary.success) throw new MobileClientError("MOBILE_DENIED");
   const parsed = boundary.data;
   const upload = offlineUploadV1.parse({ version: "offline-upload.v1", jobId, body: parsed, commandId: parsed.commandId,
@@ -52,8 +54,10 @@ export class DurableNativeQueue {
    const item = addOfflineQueueItemV1(valid.map(v => v.reconciliation.item), { version: "offline-queue-item.v1", environment: "synthetic_demo",
     commandId: upload.commandId, jobId: upload.jobId, payloadHash: upload.payloadHash, expectedRevision: upload.expectedRevision,
     kind, attemptCount: 0, nextAttemptAtMs: 0, status: "queued" }).find(v => v.commandId === upload.commandId)!;
-   const exists = valid.some(v => v.upload.commandId === upload.commandId);
-   return { data: { ...data, unsyncedWork: "present" as const, queue: exists ? data.queue : [...data.queue, { upload, reconciliation: { version: "offline-reconciliation.v1", item, reason: null } }] }, result: undefined };
+   const previous = valid.find(v => v.upload.commandId === upload.commandId);
+   if (previous && JSON.stringify(previous.offlineIntent ?? null) !== JSON.stringify(offlineIntent ?? null)) throw new Error("original metadata conflict");
+   const exists = previous !== undefined;
+   return { data: { ...data, unsyncedWork: "present" as const, queue: exists ? data.queue : [...data.queue, { upload, ...(offlineIntent ? { offlineIntent } : {}), reconciliation: { version: "offline-reconciliation.v1", item, reason: null } }] }, result: undefined };
   });
  }
  restore() { return this.document.transaction(async data => ({ data: { ...data, queue: await this.restoreEntries(data.queue) }, result: undefined })); }

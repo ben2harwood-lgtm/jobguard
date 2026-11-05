@@ -10,6 +10,7 @@ export interface NativeDownloadTransport extends NativeAuthority {
  page(request: unknown): Promise<unknown>;
 }
 export class NativeDownloads {
+ get partition() { return this.document.partition; }
  #subscription: z.infer<typeof subscription> | null = null;
  constructor(private readonly document: WorkspaceDocument, private readonly transport: NativeDownloadTransport) {}
  async pull() {

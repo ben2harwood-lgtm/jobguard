@@ -55,3 +55,12 @@ it("partition invalidation while upload is in flight prevents a late acknowledgm
  expect(JSON.parse(bytes).queue[0].reconciliation.item.status).toBe("sending");
  await expect(q.restore()).rejects.toMatchObject({ code: "MOBILE_DENIED" });
 });
+it("operative capture retains original UUIDv7/HLC metadata and refuses to rewrite it on retry", async () => {
+ const f = setup(), queue = f.make();
+ const intent = { version: "offline-intent.v1", jobId: id(8), clientMetadata: { capturedAt: "2000-01-01T00:00:00Z", hlc: { wallTimeMs: 0, logical: 0, nodeId: "fictional" } }, body: { ...note(10), commandId: "01960000-0000-7000-8000-000000000010" } };
+ await queue.enqueueNote(intent); expect(f.read().queue[0].offlineIntent).toEqual(intent);
+ await f.make().restore(); await queue.flushOne(0);
+ expect(f.read().queue[0].offlineIntent).toEqual(intent);
+ expect(f.transport.upload.mock.calls[0]![0]).not.toHaveProperty("offlineIntent");
+ await expect(queue.enqueueNote({ ...intent, clientMetadata: { ...intent.clientMetadata, hlc: { ...intent.clientMetadata.hlc, logical: 1 } } })).rejects.toThrow();
+});

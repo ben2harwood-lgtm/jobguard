@@ -11,6 +11,7 @@ export class MobileClient {
  #store: EncryptedStore | null = null;
  #busy = false;
  #ready = false;
+ #cleanupRequired = false;
  readonly #policy;
  readonly #provider: MobileAuthProvider;
  readonly #vault: SecureVault;
@@ -55,7 +56,7 @@ export class MobileClient {
  }
  private canRead() {
   const s = this.#session;
-  if (!this.#ready || !s) throw new MobileClientError("MOBILE_DENIED");
+  if (this.#cleanupRequired || !this.#ready || !s) throw new MobileClientError("MOBILE_DENIED");
   const result = evaluateMobileReadV1({ version: "mobile-read-evaluation.v1", policy: this.#policy, partition: s.partition,
    localMetadata: { version: "mobile-local-metadata.v1", partition: s.partition, localSchemaVersion: 1 }, lease: s.lease,
    authority: "valid", reconnectRequired: false, clock: this.#options.clock() });
@@ -94,6 +95,7 @@ export class MobileClient {
   this.#session = session;
  }); }
  reconnect() { return this.run(async () => {
+  if (this.#cleanupRequired) throw new MobileClientError("MOBILE_RECOVERY_REQUIRED");
   this.#ready = false;
   const session = this.#session; if (!session) throw new MobileClientError("MOBILE_DENIED");
   const lease = mobileReadLeaseV1.parse(await this.#provider.reconnect({ version: "mobile-reconnect.v1", deviceInstanceId: session.partition.deviceInstanceId, access: session.access }, session.partition));
@@ -102,6 +104,7 @@ export class MobileClient {
   await this.open({ ...session, lease }, false);
  }); }
  refresh() { return this.run(async () => {
+  if (this.#cleanupRequired) throw new MobileClientError("MOBILE_RECOVERY_REQUIRED");
   this.#ready = false;
   const session = this.#session; if (!session) throw new MobileClientError("MOBILE_DENIED");
   // Consume locally BEFORE sending. A lost response must never trigger automatic refresh reuse.
@@ -121,15 +124,15 @@ export class MobileClient {
   this.canRead(); await this.#store!.write(JSON.stringify(data));
  }); }
  private async markCleanup(p: Partition) {
-  this.#ready = false;
+  this.#ready = false; this.#cleanupRequired = true;
   await this.#vault.set(activeKey, JSON.stringify({ version: "mobile-active.v1", partition: p, state: "cleanup_required" }));
-  await this.#options.beforePartitionCleanup?.(p);
   await this.#vault.remove(await this.credentialKey(p));
+  await this.#options.beforePartitionCleanup?.(p);
  }
  private async erase(p: Partition) {
   await this.#store?.close(); this.#store = null; this.#session = null;
   await this.#resources.destroy(p);
-  await this.#vault.remove(activeKey);
+  await this.#vault.remove(activeKey); this.#cleanupRequired = false;
  }
  logout() { return this.run(async () => {
   this.#ready = false;
