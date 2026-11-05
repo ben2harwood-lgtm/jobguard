@@ -87,6 +87,14 @@
     "./merchant-order-contracts": {
       "types": "./src/merchant-order.contracts.ts",
       "import": "./dist/merchant-order.contracts.js"
+    },
+    "./evidence-bundle": {
+      "types": "./src/evidence-bundle.application.ts",
+      "import": "./dist/evidence-bundle.application.js"
+    },
+    "./evidence-bundle-contracts": {
+      "types": "./src/evidence-bundle.contracts.ts",
+      "import": "./dist/evidence-bundle.contracts.js"
     }
   },
   "scripts": {

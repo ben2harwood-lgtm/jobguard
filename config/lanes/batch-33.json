@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/batch-33"
       ],
-      "note": "M2-1 practice order screen and M2-2 later-delivery fix; database action already on main. RED; NOPR.",
+      "note": "M2-1 practice order screen and M2-2 later-delivery fix; database action already on main. RED; ready for PR.",
       "allow": [
         "apps/api/package.json",
         "apps/api/src/merchant-order.application.test.ts",

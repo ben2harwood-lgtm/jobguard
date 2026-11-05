@@ -1,48 +1,47 @@
 # Batch 33: M2-1 practice order screen and M2-2 later delivery
 
-READY for router staging and CI; RED. No PR, commit, push or index mutation performed.
+READY for router staging, merge completion and PR; RED. No git/index mutation, commit, push or PR performed here.
 
 ## Scope and merge
 
-Compared with incoming main `62081c68933d0b953e7dd75a8cbd7b3a2fb4f304` (MERGE_HEAD). Local `main` is older and is not the comparison baseline. Preserve the incoming main merge, then stage the resolved working files: the read-only index still reports conflicts until the router stages them.
+Compared with incoming main `199124c0885ca27558fbaf62a9a74dee7ad2818f` (both MERGE_HEAD and origin/main). HEAD remains `d15940e82bd76e03025b3c12f0da6bbc06fb3f8e` until the router completes the merge. The sole remaining content conflict was apps/api/package.json: resolved as the exact union of merchant-order and incoming evidence-bundle exports. Incoming rate-suggestion and evidence-bundle work is preserved unchanged.
 
-M2-1 database behavior is wholly on main: purchase-order action, manual attestation, audit/replay, command registry and migration proof. Only its practice screen/API bridge and route classification remain here. M2-2 retains cumulative accepted/rejected quantities when recording later delivery and exposes later-delivered quantity, with regression coverage. Live merchant/intake routes remain gated by the plan; this is fictional practice only.
+M2-1 database action, attestation, audit/replay, command registry and migration proof are already on main. This group adds its fictional practice screen/API bridge and route classification. Main still posts accepted:"1", rejected:"0" for a later delivery. The retained branch fix posts cumulative accepted quantity (8 becomes 9), preserves rejected quantity, caps the increment at the remaining missing quantity and exposes later-delivered quantity. The focused UI regression passes; browser coverage additionally asserts accepted 9, missing 1 and later delivered 1 after reload. Browser session requests now use page.evaluate fetch so secure cookies use the browser jar. No live provider, customer-data activation or release is authorized.
+
+The referenced batch-33-harden.md is absent. Applied the supplied brief, batch-9-harden.md, pre-check and existing branch hardening. Manual attestation remains outside LP-5 with its production lifecycle-adapter hold already named in docs/contracts/dark-merchant-order-v1.md; it is not lifecycle dispatch. The new bridge does not mint tenant context; PracticeAccess supplies verified context and actor. No worker tasks or new commands/tables are added.
 
 ## Migration reconciliation
 
-- Removed branch `0980_dark_merchant_order.sql`: byte-identical to main `0606_dark_merchant_order.sql`, 41,703 bytes, SHA-256 `4e4d32559295db2e10c8a0fa03e3986d49dcdd1c8263191731bd6a8630a2158f`.
-- Removed its obsolete `0980` proof; retained main's exact `0606` proof (branch proof used a different migration name and upgrade row ordering).
-- No branch-only migration notes remain. All migration SQL, proof and note paths now match incoming main. Nothing remains to number from 1200.
-- No routine is re-created by this group. In particular main's latest `lp5_command_result`, including `purchase_order.send.dark`, remains untouched.
-- Restored main's later-empty-tables, M2-1 migration proof test, plan-entitlement upgrade test and purchase-order action test verbatim; removed duplicate command keys from the merged registry, retaining only the new route classification.
-- Scoped the browser test's edited order fields to `#purchase-orders`; no assertions removed or weakened.
+- Branch migration list against incoming main: empty. All migration SQL, proofs and notes match main, whose top is 0610.
+- Previously removed 0980_dark_merchant_order repeats main 0606 and remains absent, together with its obsolete proof. Use main's 0606 and proof.
+- Routines recreated by this group: none. Consequently no routine body can replace or remove main's later guards, including lp5_command_result and outbound pause protections.
+- Main's upgrade table/catalog lists, replay cases, migration-proof tests and registry command entries are retained. Only the merchant-order HTTP route classification differs in the core registry.
 
-## Validation
+## Current local validation
 
-Executed the installed repository binaries directly; the global pnpm 11 launcher stalled before dispatch (three attempts interrupted), so no package installation or download was attempted.
+Used installed repository binaries, without package downloads. Every Vitest invocation named at most three files and used --maxWorkers=2.
 
-- `packages/core: ./node_modules/.bin/tsc -p tsconfig.json`: PASS.
-- `packages/config: ./node_modules/.bin/tsc -p tsconfig.json`: PASS.
-- `packages/db: ./node_modules/.bin/tsc -p tsconfig.json`: PASS.
-- `apps/web: ./node_modules/.bin/vitest run --maxWorkers=2 app/ui/merchant-order.test.ts app/ui/supplier-documents.test.tsx app/lib/merchant-order-server.test.mts`: PASS, 3 files / 10 tests.
-- `packages/core: ./node_modules/.bin/vitest run --maxWorkers=2 src/watchdog.test.ts`: PASS, 1 file / 7 tests.
-- `apps/api: ./node_modules/.bin/vitest run --maxWorkers=2 src/merchant-order.application.test.ts src/watchdog-registry.test.ts`: PASS, 2 files / 131 tests.
-- `apps/api: ./node_modules/.bin/tsc -p tsconfig.json --noEmit`: PASS.
-- `packages/db: ./node_modules/.bin/vitest run --maxWorkers=2 test/m2-1-migration-proof.test.ts test/migration-proof-loader.test.ts`: PASS, 2 files / 80 tests (source checks, no PostgreSQL).
-- `apps/web: ./node_modules/.bin/tsc -p tsconfig.json --noEmit`: PASS.
-- Total targeted Vitest result: 228 tests passed across 8 files; each invocation used at most 2 workers and 3 named files.
-- `git diff --check MERGE_HEAD`: PASS. Exact lane-path comparison, marker scan, migration byte comparison and recursive proof row-order comparison: PASS.
-- Source-inspected the React components using the React best-practices checklist: type-only client contract import, authenticated server bridge, event-driven requests, bounded busy controls and accessible status/error output retained. This is not an independent review.
+- packages/core: ./node_modules/.bin/tsc -p tsconfig.json: PASS.
+- packages/db: ./node_modules/.bin/tsc -p tsconfig.json: PASS.
+- apps/api and apps/web: ./node_modules/.bin/tsc -p tsconfig.json --noEmit: PASS in each workspace.
+- apps/web: ./node_modules/.bin/vitest run --maxWorkers=2 app/ui/merchant-order.test.ts app/ui/supplier-documents.test.tsx app/lib/merchant-order-server.test.mts: PASS, 3 files / 10 tests.
+- apps/api: ./node_modules/.bin/vitest run --maxWorkers=2 src/merchant-order.application.test.ts src/watchdog-registry.test.ts src/auth/context-boundary.test.ts: PASS, 3 files / 276 tests.
+- apps/api: ./node_modules/.bin/vitest run --maxWorkers=2 src/auth/identity.test.ts: PASS, 1 file / 7 tests.
+- packages/db: ./node_modules/.bin/vitest run --maxWorkers=2 test/m2-1-migration-proof.test.ts test/migration-proof-loader.test.ts: PASS, 2 files / 80 tests. These are source/proof checks, not PostgreSQL evidence.
+- Total final targeted results: 373 tests passed across 9 files. The initial API invocation overlapped the core rebuild: it saw stale compiled core (rate-suggestions unclassified) and a context scan timeout under load (load average 29.33). After core completed, the same invocation passed without source or test changes.
+- git diff --check origin/main: PASS. apps/api/package.json parses and has no conflict markers.
+- Source-inspected the new web route/server imports: package exports only, no direct apps/api source import; server module starts with server-only. Cloudflare production build was not run in this constrained environment.
+- node tools/agent-lane-boundary-lint.mjs: RUN, fails before staging because it unions the old HEAD diff with incoming main's staged files. Did not widen the lane to admit main's unrelated work. Separately applied the tool's exported lanePathAllowed to git diff origin/main: PASS, exact coverage of all 19 paths, no stale allow paths and no self-listing. Router must rerun standard lint after completing the merge.
 
-No PostgreSQL instance or browser server was started. These source/unit checks do not prove database or browser behavior.
+## Required downstream evidence
 
-## Named holds for landing
-
-- Router must stage conflict resolutions and removed duplicate files; .git is read-only here.
-- Exact-head green CI: pinned install, typecheck, lint, test and production build. PostgreSQL integration/migration suites must establish fresh and upgrade success, unchanged command/replay/privilege guarantees, and supplier-documents cumulative quantity, replay, isolation and match allocations.
-- Production-build browser CI must pass `M2-1-order-screen.spec.ts` and `M2-2-S.spec.ts` on phone and desktop, at most two workers. The earlier pre-check browser run never reached this code.
-- One independent RED review at the exact final head before merge. No independent-review or live-provider claim is made here.
+- Router stages the resolved working files and completes the pending merge; the read-only index still reports apps/api/package.json unmerged. Then run standard lane lint.
+- Exact-head green CI: pinned install, typecheck, lint, test, production build and required database/migration suites. PostgreSQL must prove fresh/upgrade success, command/replay/privilege guarantees, cumulative goods receipts, isolation and downstream match allocations.
+- Production-build browser CI: M2-1-order-screen.spec.ts and M2-2-S.spec.ts at phone and desktop widths, at most two workers. No PostgreSQL instance or browser server was started here.
+- One independent RED review at the exact final head. Local deterministic checks are not independent review or live integration evidence.
 
 ## Carried later points
 
-Pre-check follow-ups remain outside this merge repair: merchant route error allow-list, deployed-origin verification, practice panel visibility outside synthetic mode, stale repository comment, and delivered/rejected quantity semantics. No live service or customer-data activation is authorized by this group.
+Pre-check follow-ups remain outside this merge repair: merchant route error allow-list, deployed-origin verification, practice panel visibility outside synthetic mode, stale repository/contract no-HTTP wording, and delivered/rejected quantity semantics.
+
+LATER / SIMPLICITY: apps/web/app/ui/supplier-documents.tsx — extract the later-delivery handler into a readable local function on a future touch, preserving the exact integer quantity helpers and request behavior; this makes cumulative quantity/revision rules easier to maintain without reformatting the whole component. Non-blocking initial source-review observation.
