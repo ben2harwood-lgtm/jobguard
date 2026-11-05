@@ -11,9 +11,18 @@ WITH actor AS MATERIALIZED (
  SELECT g.* FROM app.role_grant g JOIN actor a ON(a.tenant_id,a.membership_id)=(g.tenant_id,g.membership_id)
  WHERE app.contractor_role_permits(g.role,'dashboard.read')
   AND NOT EXISTS(SELECT 1 FROM app.role_grant_revocation r WHERE(r.tenant_id,r.grant_id)=(g.tenant_id,g.id))
+), candidate_jobs AS MATERIALIZED (
+ -- Orders without an extra, visit or billing fact cannot contribute to this read.
+ -- Fence this set before the per-job authority checks, even with stale bulk-load statistics.
+ SELECT o.tenant_id,o.job_id FROM app.extra_origin o JOIN actor a ON a.tenant_id=o.tenant_id
+ UNION
+ SELECT v.tenant_id,v.job_id FROM app.site_visit v JOIN actor a ON a.tenant_id=v.tenant_id
+ UNION
+ SELECT f.tenant_id,f.job_id FROM app.billing_fact f JOIN actor a ON a.tenant_id=f.tenant_id
 ), jobs AS MATERIALIZED (
  SELECT w.tenant_id,w.job_id,w.id work_order_id,w.client_id,w.contract_id,t.id team_id,b.id branch_id,b.parent_id region_id
- FROM app.work_order w JOIN actor a ON a.tenant_id=w.tenant_id
+ FROM candidate_jobs candidate JOIN app.work_order w ON(w.tenant_id,w.job_id)=(candidate.tenant_id,candidate.job_id)
+ JOIN actor a ON a.tenant_id=w.tenant_id
  JOIN app.job j ON(j.tenant_id,j.id)=(w.tenant_id,w.job_id) AND j.provenance='work_order'
  JOIN app.job_commercial_track ct ON(ct.tenant_id,ct.job_id)=(w.tenant_id,w.job_id) AND ct.job_track='contractor' AND ct.environment='synthetic_demo'
  JOIN app.team t ON t.tenant_id=w.tenant_id AND t.id=app.contractor_job_team(w.job_id)
@@ -89,7 +98,7 @@ WITH actor AS MATERIALIZED (
  FROM app.work_order_line l JOIN jobs j ON(j.tenant_id,j.job_id)=(l.tenant_id,l.job_id)
  JOIN app.work_order_revision r ON(r.tenant_id,r.id)=(l.tenant_id,l.revision_id)
  LEFT JOIN LATERAL(SELECT old.quantity,old.unit FROM app.work_order_line old JOIN app.work_order_revision prior ON(prior.tenant_id,prior.id)=(old.tenant_id,old.revision_id)
-  WHERE(old.tenant_id,old.work_order_id,old.scope_item_id)=(l.tenant_id,l.work_order_id,l.scope_item_id) AND prior.revision<r.revision ORDER BY prior.revision DESC LIMIT 1) previous ON true
+  WHERE(old.tenant_id,old.work_order_id,old.scope_item_id)=(l.tenant_id,l.work_order_id,l.scope_item_id) AND prior.work_order_id=l.work_order_id AND prior.revision<r.revision ORDER BY prior.revision DESC LIMIT 1) previous ON true
 ), closeout_json AS (
  SELECT v.id,jsonb_build_object('jobId',v.job_id,'sourceId',coalesce(a.id,v.id),'at',to_char(v.completed_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
   'dimensions',jsonb_build_object('region',j.region_id,'team',j.team_id,'operative',CASE WHEN m.role='operative' THEN v.membership_id END,'client',j.client_id,'contract',j.contract_id),'answer',a.answer) content
