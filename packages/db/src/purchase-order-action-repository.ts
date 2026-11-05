@@ -86,17 +86,17 @@ export class PurchaseOrderActionRepository {
     });
   }
 
-  /** Records the owner's assertion. The authenticated caller supplies context and actor,
-   * as for the command dispatcher; the request DTO cannot select its actor. No provider confirmation. */
-  async attestManual(context: VerifiedTenantContext, raw: unknown, actorMembershipId: string) {
+  /** Records the owner resolved from the authenticated session, never from the DTO. No provider confirmation. */
+  async attestManual(context: VerifiedTenantContext, raw: unknown, actor: { sessionDigest: string }) {
     requireSyntheticOrders(); const input = attestationV1.parse(raw);
-    // The authenticated application supplies the actor separately from the untrusted DTO.
-    if (!uuid.safeParse(actorMembershipId).success) throw new InvalidTenantContextError();
+    const session = z.object({ sessionDigest: z.string().regex(/^[a-f0-9]{64}$/u) }).strict().safeParse(actor);
+    if (!session.success) throw new InvalidTenantContextError();
     try { return await withTenant(this.pool, context, async db => {
       await lockOrder(db, context.tenantId, input.jobId);
-      const member = await db.$client.query(`SELECT 1 FROM app.membership WHERE tenant_id=$1 AND id=$2 AND role='owner'
-        AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp())`, [context.tenantId, actorMembershipId]);
-      if (!member.rowCount) throw new PurchaseOrderActionError("ORDER_ACTION_INVALID");
+      const resolved = (await db.$client.query("SELECT app.order_attestation_actor($1,$2) AS actor_id",
+        [context.tenantId, session.data.sessionDigest])).rows[0]?.actor_id;
+      if (!uuid.safeParse(resolved).success) throw new PurchaseOrderActionError("ORDER_ACTION_INVALID");
+      const actorMembershipId = resolved as string;
       return runStoredCommand(db, { tenantId: context.tenantId, jobId: input.jobId, kind: "purchase_order.attest_manual",
         commandId: input.commandId, request: { ...input, actorMembershipId } }, { work: async () => {
         const order = await readMerchantOrder(db, context.tenantId, input.jobId, input.revisionId);
