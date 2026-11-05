@@ -628,3 +628,54 @@ Local checks (installed Node 24.17.0; cached pnpm 10.28.1, no downloads):
   plus required affected journeys. No localhost/browser suite ran here.
 - Exact-head independent RED review and all required green CI remain necessary.
   Synthetic fixtures only; no live provider, money, customer data or release.
+
+
+## Batch-37 merge refresh — 5 November 2026, incoming main d16ef1978
+
+READY for the router to stage the resolved merge; this is not an independent
+RED verdict or a database/browser PASS. Plan pieces: ENT-5 candidate dismissal
+and ENT-3-RELINK-FIX. No new behaviour or test weakening.
+
+Resolved later-empty-tables.ts by taking incoming main's exact list and adding
+only app.extra_duplicate_disposition. Main's CIS, emergency-access and SCIM
+rows stay intact. The lane matches all 28 non-lane paths differing from incoming
+main and excludes config/lanes/. Both 1200/1201 migrations remain unique to this
+group; neither is present on incoming main, and all main migrations are retained.
+
+Rechecked all four replacement routines against the latest definitions across
+incoming main's migration history: xa_latest_kind (0158), xa_mark_duplicate
+(0522), cb_unresolved (0243), extra_duplicate_candidates (0590). No newer body
+requires reconstruction. The mark writer differs only by its explanatory
+comment; its authority and LP-5 handoff are unchanged. Candidate role/session/
+job guards and active-link projection are preserved. The state projection and
+shared dismissal grouping contain only this group's existing behaviour.
+Diffs inspected at /tmp/batch-37-merge-routine-diffs.txt; no SQL change was needed.
+
+Local checks use installed Node 24.17.0 and cached pnpm 10.28.1 via
+node /Users/benharwood/.cache/node/corepack/v1/pnpm/10.28.1/bin/pnpm.cjs,
+with at most two Vitest workers and no downloads:
+
+- DB vitest run --maxWorkers=2 test/migration-proof-loader.test.ts
+  test/extra-relink-migration.test.ts src/extra-duplicate-candidates.test.ts:
+  PASS, 83 tests.
+- DB vitest run --maxWorkers=2 test/late-source-import-migration.test.ts
+  test/m2-1-migration-proof.test.ts: PASS, 7 tests.
+- Web vitest run --maxWorkers=2
+  app/api/contractor/jobs/[id]/duplicate-candidates/route.test.ts
+  app/api/contractor/jobs/[id]/duplicate-candidates/transport.test.ts:
+  PASS, 6 tests.
+- Exact working-tree lane equality, lanePathAllowed and
+  migrationOrderViolations: PASS, 28 paths and two ordered new migrations.
+- Core purity, money arithmetic, commercial boundary, AI provider boundary and
+  PL/pgSQL CASE-in-IF linters: PASS; 280 migrations checked by the SQL linter.
+
+The router must stage the resolved file and complete the merge because .git is
+read-only here; the index still records its original conflict. Official lane
+lint against the completed head, required real PostgreSQL fresh/upgrade and
+catalogue suites, browser journeys and exact-head independent RED review remain
+for router/CI. No PostgreSQL server or localhost/browser was started locally.
+
+- pnpm typecheck --concurrency=2: PASS, all seven workspace packages,
+  4m6.637s. PATH used /tmp/batch-37-pnpm-bin to select the cached pnpm;
+  Turbo emitted sandbox cache IO warnings but every check completed with exit 0.
+- git diff --check MERGE_HEAD and final conflict-marker scan: PASS.
