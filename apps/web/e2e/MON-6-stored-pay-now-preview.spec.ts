@@ -27,36 +27,31 @@ async function seed() {
       const digest=createHmac('sha256',process.env.AUTH_CODE_SECRET).update('session:'+token).digest('hex');
       await f.admin.query('UPDATE identity.session SET token_digest=$1 WHERE id=$2',[digest,a.sessionId]);
       const output=[];
-      for(const includesCatch of [false,true]) {
-        const b=includesCatch ? await (await import(${JSON.stringify(pathToFileURL(join(root, "packages/db/test/job-work-state-fixtures.ts")).href)})).seedWorkJob(f,a.tenantId) : a;
+      for(const includesApprovedVariation of [false,true]) {
+        const b=includesApprovedVariation ? await (await import(${JSON.stringify(pathToFileURL(join(root, "packages/db/test/job-work-state-fixtures.ts")).href)})).seedWorkJob(f,a.tenantId) : a;
         const account=await prepareWorkAccount(f,b);
-        // Explicit synthetic approved catch line in the stored final account.
+        // Explicit synthetic approved variation line in the stored final account.
         // Start a new immutable revision; never edit an earlier commercial row.
         let revision=account.revisionId;
-        if(includesCatch) {
-          // Adapt the jobguard_catch seed from helpers/customer-portal-journey.ts.
-          // Keep real origin, priced revision and approval parents with all guards enabled.
-          const variation=randomUUID(), scope=randomUUID(), priced=randomUUID(), approval=randomUUID(), signal=randomUUID(), hash='c'.repeat(64);
+        if(includesApprovedVariation) {
+          // Keep the priced revision and approval parents with all guards enabled.
+          const variation=randomUUID(), scope=randomUUID(), priced=randomUUID(), approval=randomUUID(), hash='c'.repeat(64);
           await workTenant(f.admin,a.tenantId,async db=>{
-            await db.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state) VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic.v1',clock_timestamp(),'Historical confirmed fictional catch','low','confirmed_extra')",[a.tenantId,b.jobId,signal,randomUUID()]);
-            await db.query("INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,'ConfirmJobGuardCatch',$3,$4,'processing',$5)",[a.tenantId,variation,'extra-origin:'+b.jobId+':'+variation,hash,b.actorId]);
             await db.query("INSERT INTO app.scope_identity(tenant_id,job_id,id,state) VALUES($1,$2,$3,'reserved')",[a.tenantId,b.jobId,scope]);
-            await db.query("INSERT INTO app.variation(tenant_id,job_id,id,scope_item_id,capture_kind,capture_text,description,job_track,origin) VALUES($1,$2,$3,$4,'text','Fictional approved catch','Fictional approved catch','small_builder','jobguard_catch')",[a.tenantId,b.jobId,variation,scope]);
-            await db.query("INSERT INTO app.extra_origin(tenant_id,job_id,variation_id,job_track,kind,command_id,raising_membership_id,raising_role,provenance,source_signal_id) VALUES($1,$2,$3,'small_builder','jobguard_catch',$3,$4,'owner','command',$5)",[a.tenantId,b.jobId,variation,b.actorId,signal]);
-            await db.query("UPDATE app.command_receipt SET status='succeeded',result='{}',completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2",[a.tenantId,variation]);
-            await db.query("INSERT INTO app.variation_revision(tenant_id,job_id,id,variation_id,scope_item_id,revision,description,quantity_decimal,unit,unit_rate_pence,signed_delta_pence,content_hash,confirmed_by_membership_id,rate_provenance_kind,rate_source_ref,rate_source_hash,rate_version) VALUES($1,$2,$3,$4,$5,1,'Fictional approved catch','1','item',500,500,$6,$7,'human_entered','synthetic://fixture',$6,'fixture-v1')",[a.tenantId,b.jobId,priced,variation,scope,hash,b.actorId]);
+            await db.query("INSERT INTO app.variation(tenant_id,job_id,id,scope_item_id,capture_kind,capture_text,description,job_track,origin) VALUES($1,$2,$3,$4,'text','Fictional approved variation','Fictional approved variation','small_builder','builder_logged')",[a.tenantId,b.jobId,variation,scope]);
+            await db.query("INSERT INTO app.variation_revision(tenant_id,job_id,id,variation_id,scope_item_id,revision,description,quantity_decimal,unit,unit_rate_pence,signed_delta_pence,content_hash,confirmed_by_membership_id,rate_provenance_kind,rate_source_ref,rate_source_hash,rate_version) VALUES($1,$2,$3,$4,$5,1,'Fictional approved variation','1','item',500,500,$6,$7,'human_entered','synthetic://fixture',$6,'fixture-v1')",[a.tenantId,b.jobId,priced,variation,scope,hash,b.actorId]);
             await db.query("UPDATE app.variation SET current_revision_id=$3,state='priced' WHERE tenant_id=$1 AND id=$2",[a.tenantId,variation,priced]);
           });
           const { VariationRepository, approvePricedVariation } = await import(${JSON.stringify(pathToFileURL(join(root, "packages/db/src/variation-repository.ts")).href)});
           await new VariationRepository(f.runtime).transact(b.context,db=>approvePricedVariation(db,a.tenantId,variation,{id:approval,revisionId:priced,revision:1,contentHash:hash,signedDeltaPence:500,method:'builder_attestation',actorMembershipId:b.actorId,evidenceId:null,approvedAt:new Date().toISOString()}));
           revision=randomUUID();
           await f.admin.query("INSERT INTO app.final_account_revision(id,tenant_id,job_id,final_account_draft_id,revision,source_hash,baseline_quote_version_id,currency,tax_policy_version,net_pence,tax_pence,total_pence,issue_blocked,findings) VALUES($1,$2,$3,$4,2,$5,$6,'GBP','candidate_m1_standard_v1',1000,200,1200,false,'[]')",[revision,a.tenantId,b.jobId,account.draftId,'b'.repeat(64),account.baselineId]);
-          for(const [kind,net,ordinal] of [['baseline',500,1],['variation',500,2]]) await f.admin.query("INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,approval_id,description,net_pence,ordinal) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)",[randomUUID(),a.tenantId,b.jobId,revision,kind,kind==='baseline'?account.baselineId:variation,kind==='baseline'?b.scopeId:scope,kind==='baseline'?account.baselineId:priced,kind==='baseline'?null:approval,kind==='baseline'?'Fictional baseline':'Fictional approved catch',net,ordinal]);
+          for(const [kind,net,ordinal] of [['baseline',500,1],['variation',500,2]]) await f.admin.query("INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,approval_id,description,net_pence,ordinal) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)",[randomUUID(),a.tenantId,b.jobId,revision,kind,kind==='baseline'?account.baselineId:priced,kind==='baseline'?b.scopeId:scope,kind==='baseline'?account.baselineId:priced,kind==='baseline'?null:approval,kind==='baseline'?'Fictional baseline':'Fictional approved variation',net,ordinal]);
           await f.admin.query('UPDATE app.final_account_draft SET revision=2,current_revision_id=$1 WHERE id=$2 AND tenant_id=$3',[revision,account.draftId,a.tenantId]);
         }
         await prepareInvoicePrerequisites(f.admin,f.runtime,a.tenantId,b.jobId,b.actorId,revision);
         const invoice=await new PracticeInvoiceRepository(f.runtime).issue(b.context,{jobId:b.jobId,finalAccountRevisionId:revision,actorMembershipId:b.actorId,commandId:randomUUID(),recipient:'fictional@example.invalid',issuedOn:'2026-11-04'});
-        output.push({jobId:b.jobId,invoiceId:invoice.id,includesCatch});
+        output.push({jobId:b.jobId,invoiceId:invoice.id,includesApprovedVariation});
       }
       process.stdout.write(JSON.stringify({token,tenantId:a.tenantId,actorId:a.actorId,digest,rows:output}));
     } finally {await Promise.all([f.admin.end(),f.runtime.end()]);}
@@ -65,22 +60,22 @@ async function seed() {
     cwd: join(process.cwd(), "../api"), timeout: 180000,
     env: { ...process.env, JOBGUARD_ENV: "synthetic_demo", E2E_ADMIN_DATABASE_URL, E2E_RUNTIME_URL, AUTH_CODE_SECRET: E2E_AUTH_CODE_SECRET },
   });
-  return JSON.parse(result.stdout) as { token: string; tenantId: string; actorId: string; digest: string; rows: { jobId: string; invoiceId: string; includesCatch: boolean }[] };
+  return JSON.parse(result.stdout) as { token: string; tenantId: string; actorId: string; digest: string; rows: { jobId: string; invoiceId: string; includesApprovedVariation: boolean }[] };
 }
 
-test("stored catch and ordinary invoice screens agree; retries persist and receipt reload changes balance", async ({ page, context, baseURL }) => {
+test("stored approved variation and ordinary invoice screens agree; retries persist and receipt reload changes balance", async ({ page, context, baseURL }) => {
   test.setTimeout(240000);
   const a = await seed(), db = await loadDb();
   const runtime = new Pool({ connectionString: E2E_RUNTIME_URL, max: 1 });
   try {
     await context.addCookies([{ name: "jobguard_session", value: a.token, url: baseURL! }]);
-    let withoutCatch = "";
+    let withoutApprovedVariation = "";
     for (const row of a.rows) {
       await page.goto(`/jobs/${row.jobId}/invoices/${row.invoiceId}/pay-now-preview`);
       const options = page.getByRole("region", { name: "Synthetic invoice payment options" });
       await expect(options).toContainText("GBP 12.00");
       const text = await options.innerText();
-      if (!row.includesCatch) withoutCatch = text; else expect(text).toBe(withoutCatch);
+      if (!row.includesApprovedVariation) withoutApprovedVariation = text; else expect(text).toBe(withoutApprovedVariation);
       await expect(page.getByText("Practice preview only. The customer does not see this page. No money moves.")).toBeVisible();
       for (const button of await page.getByRole("button").all()) {
         const box = await button.boundingBox(); expect(box!.height).toBeGreaterThanOrEqual(44); expect(box!.width).toBeGreaterThanOrEqual(44);
