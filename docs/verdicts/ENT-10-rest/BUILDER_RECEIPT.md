@@ -98,3 +98,27 @@ Actual local validation, installed tools only:
 - `git diff --check` and conflict-marker check — PASS.
 
 CI must still run the real PostgreSQL enterprise-access fresh/populated upgrade and adversarial tests, actual ACL/RLS/catalogue equality, setting-restoration regression, LP and existing permission/SCIM suites, plus owner-notice and existing identity browser journeys at phone/desktop widths. Required green CI against current main and one independent RED review on the exact resulting head remain required. Local source inspection, unit execution and test compilation are not independent review or database/browser proof. The router owns commit, push and PR; no merge, deployment or launch is claimed here.
+
+## Batch-30 PR #574 repair — 5 November 2026
+
+**READY — batch-30 sign-in repair for router commit and CI. RED.** Started from `f3c011f66`; the worktree and index were clean with no merge in progress. No Git-writing command was run. Migrations remain **0612** and **0613**. The buyer pack still says **Not to be sent to any buyer until Ben approves it.**
+
+Repairs from the independent check:
+
+- Synthetic bootstrap now provisions and validates `jobguard_scim` before switching to the migration owner, and checks its holders alongside the other restricted roles. SQL-trace tests include the role, its posture, holder checks and setup order.
+- E-52 and E-54 use `HELD` in the status column; dark-build/CI-pending detail remains in the row text. The M5-12 allowed-status test is unchanged.
+- The two migration proofs add exactly eight LP-0 entries: three migration-owned routine identities and their specific EXECUTE grants (`dark_emergency` and `scim2_configure` to `jobguard_identity`, `scim2_machine` to `jobguard_scim`), plus SCIM role posture and identity-schema USAGE. These are source-derived expectations; actual PostgreSQL catalogue equality remains for CI. No baseline or comparator was weakened. The audit payload correction does not change the upgrade proof's routine signature/owner/ACL snapshot.
+- Migration 0612 now supplies `references.membershipId` for the notices audit. The PostgreSQL regression checks the three owners' read-audit references. The browser test no longer mocks the notices endpoint: fictional persisted owner sessions exercise the real route, response cache policy, rendered notice and stored viewer audit reference for requester and both approvers. Other identity panels remain presentation fixtures. This browser/database coverage is written and typechecked, not executed here.
+- The lane allowlist matches every changed path against local `origin/main`, excluding all `config/lanes/` paths; it does not list itself.
+
+Local checks, installed dependencies only, each Vitest run at most two workers and three named files:
+
+- DB `vitest run --maxWorkers=2 test/demo-bootstrap.integration.test.ts -t 'bootstrap SQL trace'`: **7 passed**, 3 database tests excluded by the name filter. This is a SQL trace, not PostgreSQL proof.
+- DB `vitest run --maxWorkers=2 test/migration-proof-loader.test.ts test/lp-0-catalog.test.ts`: **107 passed**, two files. This validates proof loading/comparator fixtures, not live grants.
+- API `vitest run --maxWorkers=2 src/auth/sso/enterprise-access.test.ts src/auth/sso/sso-required.test.ts`: **28 passed**, two files.
+- `node --test tools/security-findings.test.mjs`: **2 passed**.
+- Installed TypeScript: DB source `--noEmit`, web `--noEmit`, and `/tmp/batch-30-repair-tests-tsconfig.json` covering bootstrap and both enterprise-access database test files: **PASS**.
+- `node tools/agent-lane-boundary-lint.mjs`: **PASS** at existing HEAD; filesystem lane equality against local `origin/main`: **PASS**. Router must rerun on the final committed head.
+- `git diff --check`: **PASS**.
+
+CI must prove real PostgreSQL bootstrap under the non-CREATEROLE migration owner, fresh and populated migration replay, exact ACL/RLS/catalogue equality (including all 13 LP-0 grant-freeze tests), existing identity/SCIM permission boundaries, sealed notice-read audit success, and all three real notices-route browser cases at phone/desktop widths. Required full CI against current main and independent RED review on the resulting exact head remain outstanding. No database/browser execution, merge, deployment, release or launch is claimed. Router owns staging, commit and push.

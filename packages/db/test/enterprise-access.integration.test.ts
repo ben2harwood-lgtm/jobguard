@@ -58,6 +58,7 @@ describe('ENT-10-rest dual-owner emergency capability',()=>{
    expect(notices.notices).toHaveLength(5);
   }
   const audit=await auditRows(h,f.principal.tenantId);
+  expect(audit.filter(r=>r.event_type==='sso.emergency.notices').map(r=>r.payload.references.membershipId).sort()).toEqual([f.principal.membershipId,a.membershipId,b.membershipId].sort());
   for(const operation of ['request','approve','open','inspect'])expect(audit.some(r=>r.event_type===`sso.emergency.${operation}`)).toBe(true);
   expect((await h.admin.query('SELECT count(*)::int n FROM identity.sso_emergency_window WHERE tenant_id=$1',[f.principal.tenantId])).rows[0].n).toBe(0);
  });

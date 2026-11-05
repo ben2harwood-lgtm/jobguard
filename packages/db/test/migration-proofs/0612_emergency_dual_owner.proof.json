@@ -1,6 +1,23 @@
 {
   "migration": "0612_emergency_dual_owner.sql",
-  "lp0": [],
+  "lp0": [
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:identity.dark_emergency(text,text,uuid,jsonb)|jobguard_identity|EXECUTE|-",
+        "group": "a-identity-role-routines"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:identity.dark_emergency(text,text,uuid,jsonb)|jobguard_migration",
+        "group": "a-owner-routines"
+      }
+    }
+  ],
   "upgrade": [
     {
       "section": "policies",

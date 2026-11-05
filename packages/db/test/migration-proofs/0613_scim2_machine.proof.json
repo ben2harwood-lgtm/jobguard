@@ -1,6 +1,55 @@
 {
   "migration": "0613_scim2_machine.sql",
-  "lp0": [],
+  "lp0": [
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:identity.scim2_configure(text,text,uuid,uuid,uuid,boolean,text)|jobguard_identity|EXECUTE|-",
+        "group": "a-identity-role-routines"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:identity.scim2_machine(uuid,text,jsonb)|jobguard_scim|EXECUTE|-",
+        "group": "a-identity-role-routines"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|schema|identity|jobguard_scim|USAGE|-",
+        "group": "a-schema-usage-grants"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:identity.scim2_configure(text,text,uuid,uuid,uuid,boolean,text)|jobguard_migration",
+        "group": "a-owner-routines"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:identity.scim2_machine(uuid,text,jsonb)|jobguard_migration",
+        "group": "a-owner-routines"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "role|jobguard_scim|super=f,inherit=f,createrole=f,createdb=f,login=f,replication=f,bypassrls=f,connlimit=-1,settings=",
+        "group": "a-role-other-application"
+      }
+    }
+  ],
   "upgrade": [
     {
       "section": "policies",

@@ -63,7 +63,7 @@ DECLARE a uuid; u uuid; r identity.emergency_request; op text:=p->>'operation'; 
    FROM identity.emergency_action e JOIN app.membership m ON(m.tenant_id,m.id)=(e.tenant_id,e.actor)
    JOIN identity.user_email n ON n.user_id=m.identity_user_id WHERE e.tenant_id=t;
   PERFORM app.ef_audit(a,'sso.emergency.notices','membership',a,
-   jsonb_build_object('classifications',jsonb_build_object('data','security')));
+   jsonb_build_object('references',jsonb_build_object('membershipId',a::text),'classifications',jsonb_build_object('data','security')));
   RETURN jsonb_build_object('notices',notices);
  END IF;
  rid:=(p->>'requestId')::uuid;
