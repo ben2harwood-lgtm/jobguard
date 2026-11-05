@@ -198,3 +198,4 @@ export * from "./ais-repository.js";
 export { InterimDraftRepository, InterimDraftRepositoryError } from "./interim-draft-repository.js";
 export * from "./extra-duplicate-candidates.js";
 export { PlatformInvoiceReadRepository } from "./platform-invoice-read-repository.js";
+export { WormCommandRepository, WormCommandError, type WormReceipt } from "./worm-command-repository.js";
