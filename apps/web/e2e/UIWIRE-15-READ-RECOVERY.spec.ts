@@ -36,7 +36,7 @@ await form.getByLabel("Variation price (£, optional)").fill(amount);const butto
 await button.click();try{await expect(form.getByLabel("Description",{exact:true})).toHaveValue("",{timeout:5_000});return}catch{if(attempt===3)throw new Error("variation proposal did not persist after poll-retry")}}}
 import type { Route } from "@playwright/test";
 async function recoveryAccess(page:Page){
- const journey=page.getByTestId("uiwire15-journey");
+ const journey=page.getByRole("main").getByTestId("uiwire15-journey");
  await expect(page.getByRole("note",{name:"Practice sandbox notice",exact:true})).toHaveText("Practice sandbox — synthetic data; nothing is sent or charged");
  await expect(page.getByRole("note",{name:"Practice sandbox notice",exact:true})).toBeVisible();
  const retry=journey.getByRole("button",{name:"Try checking saved progress again",exact:true});
@@ -62,7 +62,7 @@ test("initial pending and faulty reads never publish a zero projection; real GET
  const jobId=(await page.getByTestId("workspace-job-id").getAttribute("data-job-id"))!;
  const proposalResponse=await page.request.get(`/api/jobs/${jobId}/proposal`);expect(proposalResponse.ok()).toBe(true);
  const source=await proposalResponse.json();expect(source.jobId).toBe(jobId);
- const journey=page.getByTestId("uiwire15-journey"),endpoint=`**/api/jobs/${jobId}/customer-invoices`;
+ const journey=page.getByRole("main").getByTestId("uiwire15-journey"),endpoint=`**/api/jobs/${jobId}/customer-invoices`;
  let release!:()=>void;const held=new Promise<void>(resolve=>{release=resolve});
  let started!:()=>void;const requested=new Promise<void>(resolve=>{started=resolve});
  await page.route(endpoint,async route=>{started();
@@ -202,7 +202,7 @@ await expect(page.getByTestId("journey-customer-balance")).toHaveText("GBP 0.00"
 await expect(page.getByTestId("journey-real-external-actions")).toHaveText("0");
 
 // Fault injection only: no successful business response is mocked.
-const journey=page.getByTestId("uiwire15-journey");
+const journey=page.getByRole("main").getByTestId("uiwire15-journey");
 const endpoint=`**/api/jobs/${jobId}/customer-invoices`;
 await page.route(endpoint,route=>route.abort("failed"));
 await journey.getByRole("button",{name:"Check saved progress",exact:true}).click();
@@ -256,11 +256,11 @@ test("late background and abandoned requested checks preserve workbench focus",a
  await click(page,"Dismiss Replace shelves");await page.getByLabel("Dismissal reason Replace shelves").fill("Not needed");
  await page.getByLabel(/Answer Confirm disposal/u).fill("Builder removes waste");await click(page,"Confirm scope");
  await expect(page.getByTestId("job-status")).toHaveText("Quote being prepared");
- const journey=page.getByTestId("uiwire15-journey"),workbench=B(page,"Open £320 withheld payment");
+ const journey=page.getByRole("main").getByTestId("uiwire15-journey"),workbench=B(page,"Open £320 withheld payment");
  await expect(workbench).toBeEnabled();await B(page,"Open materials-320 overcharge").focus();await page.keyboard.press("Tab");
  await expect(workbench).toBeFocused();
  releaseProof();
- await expect(page.locator("#work-proof").getByRole("alert")).toHaveText("This proof record could not load. Try again.");
+ await expect(page.getByRole("main").locator("#work-proof").getByRole("alert")).toHaveText("This proof record could not load. Try again.");
  await expect(journey.getByRole("alert")).toContainText("could not be checked");await expect(workbench).toBeFocused();
  expect(await workbench.evaluate(element=>element.matches(":focus-visible")&&getComputedStyle(element).outlineStyle!=="none")).toBe(true);
  await recoveryAccess(page);

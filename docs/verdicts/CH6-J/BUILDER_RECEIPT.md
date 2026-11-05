@@ -2152,3 +2152,67 @@ reused existing fixtures and retained their controls without unrelated refactori
 No fetch, Git metadata writes, commit, push, PR, merge, package download,
 provider action, deployment or real-data operation performed. Router owns the
 commit, push, queue/work-list handoff and subsequent CI/review routing.
+
+## 5 November 2026 — batch-48 landing preparation (RED, NOPR)
+
+The five recovery pieces are already merged in this worktree. Working tree was
+clean on entry; no unfinished merge, migrations, new tables, routines, routes,
+commands or server modules. Local main is stale; comparison uses stored
+origin/main 62081c68933d0b953e7dd75a8cbd7b3a2fb4f304 without fetching.
+No product behavior changed during this preparation. Kept the recovered core,
+configuration, CH-6, practice-progress and value-read regressions together.
+Removed the five added recovery lane files and added batch-48's exact 18-path
+allowlist. Scoped the new practice browser alert locators through main,
+including the proof alert; assertions and fixture behavior are preserved.
+Inspected browser helper imports: the value contract imports only Zod; neither
+new spec statically pulls in core/db. No native-import workaround is needed.
+No new substantial complexity or separate simplification review. Existing
+initial LATER / SIMPLICITY observations above and in the piece receipts stand.
+
+Local checks use installed binaries, at most two Vitest workers and at most
+three named files per run; no PostgreSQL/browser hooks executed:
+- Core allocation refusals, billing-history boundaries, negative money limits:
+  3 files / 20 tests PASS.
+- Config API ports, identity database and required settings: 3 / 23 PASS;
+  identity secret boundaries: 1 / 4 PASS.
+- Context boundary: 1 / 145 PASS. First API guard run could not collect watchdog
+  and identity because dependency dist files were absent. Local dependency
+  builds and subsequent guard results are recorded in the final handoff below.
+- Migration-proof loader and CH-6 input: 2 / 85 PASS.
+- git diff --check: PASS.
+- node tools/agent-lane-boundary-lint.mjs executed and rejected the five removed
+  lane paths: it unions committed additions with uncommitted removals. Those
+  files exist in neither origin/main nor the final working tree. The same
+  loadLanePolicy/selectLane/lanePathAllowed functions pass for the final file
+  set, with exact allowlist equality. Router MUST rerun the unchanged CLI after
+  committing the removals, when those transient paths disappear from its diff.
+- Initial pnpm attempts produced only a configuration warning and were
+  interrupted. No packages were downloaded; used installed Vitest/TypeScript.
+
+CI must execute both changed CH-6 PostgreSQL integration files, proving real
+supplementary replay, original-lock/descendant/invoice binding and foreign-tenant
+nonblocking concurrency alongside existing same-job protection. CI must execute
+UIWIRE-15-READ-RECOVERY and VALUE-1-READ-RECOVERY in mobile-360 and desktop, plus
+all required typecheck/lint/test/build and migration/upgrade regressions. No
+local collection or unit PASS establishes those database/browser results.
+One independent RED review against the resulting exact head remains required.
+Router owns commit, push and later PR admission; no Git writes, fetch, live
+services, customer data, deployment or launch occurred here.
+
+Final local evidence for batch-48:
+- Installed compiler: `./node_modules/.bin/tsc -p <package>/tsconfig.json
+  --noEmit` for packages/core, packages/config, packages/db, apps/api and
+  apps/web: all completed without diagnostics.
+- Built packages/core, config, storage, db and ai with the same installed
+  compiler to satisfy runtime package imports. No source/config changes.
+- Identity guard rerun: 1 file / 7 tests PASS. Watchdog's second collection
+  attempt identified missing ai/dist; final result follows below.
+- `vitest list --maxWorkers=2` for the two changed CH-6 integration files:
+  18 tests collected, no database execution.
+- TypeScript transpile diagnostics for both new browser specs and both changed
+  CH-6 integration files: PASS (syntax only, not behavioral verification).
+- Final watchdog-registry run after building ai/dist: 1 file / 126 tests PASS.
+  All requested local guards and changed unit tests total 410 passing tests.
+- READY for router commit as RED/NOPR; the unchanged lane CLI still reports
+  only the five transient lane additions/removals and must be rerun after
+  commit. Exact final-file lane coverage passed; no test was weakened.
