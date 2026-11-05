@@ -61,11 +61,14 @@ test("stored practice acceptance survives reload with actor and sources", async 
     const pending = await page.evaluate(job => sessionStorage.getItem(`practice-rate-acceptance:${job}`), job);
     await page.reload();
     expect(await page.evaluate(job => sessionStorage.getItem(`practice-rate-acceptance:${job}`), job)).toBe(pending);
-    await main.getByRole("button", { name: "Retry same practice acceptance", exact: true }).click();
+    await Promise.all([
+      page.waitForEvent("load"),
+      main.getByRole("button", { name: "Retry same practice acceptance", exact: true }).click(),
+    ]);
     const stored = main.getByRole("region", { name: "Stored practice acceptances" });
     await expect(stored).toContainText(member); await expect(stored).toContainText(revision);
     await page.reload(); await expect(stored).toContainText(member); await expect(stored).toContainText("Record hash:");
-    expect((await admin.query("SELECT count(*)::int n FROM app.rate_suggestion_acceptance WHERE tenant_id=$1", [tenant])).rows[0].n).toBe(1);
+    expect((await client.query("SELECT count(*)::int n FROM app.rate_suggestion_acceptance WHERE tenant_id=$1", [tenant])).rows[0].n).toBe(1);
     await main.getByLabel("Target scope item ID").fill(scope);
     await main.getByLabel("Current target revision ID").fill(revision);
     await main.getByRole("button", { name: "Accept practice suggestion", exact: true }).click();

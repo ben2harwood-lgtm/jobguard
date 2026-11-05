@@ -107,7 +107,7 @@ export class PostgresReservationStore implements ReservationStore {
       if (context.tenantId !== tenantId) throw new FeeCollectionError("COLLECTION_REFUSED");
       return withTenant(pool, context, async db => {
         await db.$client.query(`INSERT INTO app.fee_reservation_book(tenant_id) VALUES($1) ON CONFLICT DO NOTHING`, [tenantId]);
-        const row = await db.$client.query(`SELECT book FROM app.fee_reservation_book WHERE tenant_id=$1 FOR UPDATE`, [tenantId]);
+        const row = await db.$client.query(`SELECT app.lock_fee_reservation_book($1) AS book`, [tenantId]);
         const active = parse(bookV1, row.rows[0]?.book);
         const history = await db.$client.query(`SELECT kind, key, payload FROM app.fee_reservation_archive WHERE tenant_id=$1 ORDER BY kind,key`, [tenantId]);
         const archived = parse(z.array(archiveV1), history.rows);
@@ -120,11 +120,13 @@ export class PostgresReservationStore implements ReservationStore {
           || Object.entries(original.events).some(([key, value]) => next.events[key] !== value)
           || JSON.stringify(next.audit.slice(0, original.audit.length)) !== JSON.stringify(original.audit))
           throw new FeeCollectionError("IDEMPOTENCY_CONFLICT");
+        // Validate transitions before newly archived entries could be mistaken for old history.
+        await db.$client.query(`SELECT app.replace_fee_reservation_book($1,$2::jsonb)`, [tenantId, JSON.stringify(next)]);
         const compacted = compact(next, archived);
         if (compacted.records.length) await db.$client.query(`INSERT INTO app.fee_reservation_archive(tenant_id,kind,key,payload)
           SELECT $1,kind,key,payload FROM jsonb_to_recordset($2::jsonb) AS r(kind text,key text,payload jsonb)`,
           [tenantId, JSON.stringify(compacted.records)]);
-        await db.$client.query(`UPDATE app.fee_reservation_book SET book=$2::jsonb WHERE tenant_id=$1`, [tenantId, JSON.stringify(compacted.active)]);
+        await db.$client.query(`SELECT app.replace_fee_reservation_book($1,$2::jsonb)`, [tenantId, JSON.stringify(compacted.active)]);
         // The audit head is the final lock: source readers and book persistence finish first.
         await appendAuditBatch(db, next.audit.slice(original.audit.length).map(entry => {
           const current = next.attempts.find(a => a.commandId === entry.commandId);

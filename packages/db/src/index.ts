@@ -200,6 +200,7 @@ export * from "./ais-repository.js";
 
 export { withEvidencePackV3Snapshot } from "./evidence-pack-v3-sources.js";
 export * from "./rate-suggestion-repository.js";
+export { VatFixtureRepository, VatFixtureRepositoryError } from "./vat-fixture-repository.js";
 export * from "./retention-record-repository.js";
 export * from "./pay-now-attempt-repository.js";
 export * from "./notice-fixture-repository.js";

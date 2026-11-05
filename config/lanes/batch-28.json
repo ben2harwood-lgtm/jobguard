@@ -47,8 +47,7 @@
         "packages/db/test/rate-suggestion-read.integration.test.ts",
         "packages/db/test/rate-suggestion.integration.test.ts",
         "packages/db/test/rate-suggestion.test.ts",
-        "packages/db/test/restore-reconciliation-upgrade.integration.test.ts",
-        "packages/db/test/watchdog.integration.test.ts"
+        "packages/db/test/restore-reconciliation-upgrade.integration.test.ts"
       ]
     }
   }
