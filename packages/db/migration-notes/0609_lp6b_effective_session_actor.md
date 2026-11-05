@@ -1,4 +1,4 @@
-# 0596: LP-6b effective contractor session actor
+# 0609: LP-6b effective contractor session actor
 
 Forward repair of `app.lp6_session_authority(text,text,uuid)`. The contractor
 branch resolves `app.contractor_session` exactly as the session bridge does,
@@ -11,7 +11,7 @@ No new routine, role, privilege, schema usage, column or caller setting is added
 The existing helper remains owned by `jobguard_migration`, private to
 `jobguard_binding_owner`, with `search_path=pg_catalog,pg_temp`. Its changed
 static call set is classified in the migration proof. No fingerprinted table is
-altered. Originally 0584, renumbered by stem to 0596 after main reached 0589; 0590–0595 remain reserved for other pieces. SQL bytes are unchanged.
+altered. Originally 0584, then 0596, renumbered by stem to 0609 after main reached 0605; 0606–0608 remain reserved for other pieces. SQL bytes are unchanged.
 
 `lp6b-effective-actor-upgrade.integration.test.ts` installs predecessors, proves
 the original mismatch, applies this migration alone, compares populated rows,

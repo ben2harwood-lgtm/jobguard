@@ -6,7 +6,7 @@
         "codex/sandbox/lp-6b-withtenant",
         "codex/sandbox/lp-6b-repair-wip"
       ],
-      "note": "LP-6b RED repair WIP, main merged through 0589, migration 0596 with proof; identity grants unchanged. Ben authorized only S9's two recorded values on 4 Nov 2026, after the full run; Router permits the named 0596 routine successor exception; all other scanners and source pins remain frozen. Only context-boundary principal/practice/contractor pins are authorized; full real-PostgreSQL shards required; independent checks are performed separately by Claude. No self-grant.",
+      "note": "LP-6b RED repair WIP, main merged through 0605, migration 0609 with proof; identity grants unchanged. Ben authorized only S9's two recorded values on 4 Nov 2026, after the full run; Router permits the named 0596 routine successor exception; all other scanners and source pins remain frozen. Only context-boundary principal/practice/contractor pins are authorized; full real-PostgreSQL shards required; independent checks are performed separately by Claude. No self-grant.",
       "allow": [
         "apps/api/src/accounting-export.application.test.ts",
         "apps/api/src/ai-capture-authority.test.ts",
@@ -77,8 +77,8 @@
         "docs/review/LP-6B-REPAIR-WIP-2026-11-04.md",
         "docs/review/LP-6B-ROUTER-REPAIR-2026-11-04-validation.md",
         "docs/review/LP-6B-ROUTER-REPAIR-2026-11-04.md",
-        "packages/db/migration-notes/0596_lp6b_effective_session_actor.md",
-        "packages/db/migrations/0596_lp6b_effective_session_actor.sql",
+        "packages/db/migration-notes/0609_lp6b_effective_session_actor.md",
+        "packages/db/migrations/0609_lp6b_effective_session_actor.sql",
         "packages/db/src/audit-export-repository.ts",
         "packages/db/src/commercial-integrity-v3-repository.ts",
         "packages/db/src/contractor-practice-session-repository.ts",
@@ -126,7 +126,7 @@
         "packages/db/test/lp6b-effective-actor-upgrade.integration.test.ts",
         "packages/db/test/lp6b-withtenant.integration.test.ts",
         "packages/db/test/lp6b-withtenant.test.ts",
-        "packages/db/test/migration-proofs/0596_lp6b_effective_session_actor.proof.json",
+        "packages/db/test/migration-proofs/0609_lp6b_effective_session_actor.proof.json",
         "packages/db/test/money-trail-security.integration.test.ts",
         "packages/db/test/northside-demo.integration.test.ts",
         "packages/db/test/outbound-pause-fixture.ts",

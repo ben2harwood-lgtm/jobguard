@@ -35,10 +35,10 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   const paymentFeeWriterOid = (await c.admin.query("SELECT 'app.write_payment_fee(uuid,text,jsonb)'::regprocedure::oid oid")).rows[0].oid;
   const collectRecheck = await readFile(new URL("../migrations/0587_payment_fee_collect_recheck.sql", import.meta.url), "utf8");
   const paymentFeeWriterBody = collectRecheck.split("CREATE OR REPLACE FUNCTION app.write_payment_fee")[1]!.split("AS $$")[1]!.split("$$;")[0];
-  // Ben's router ruling: the 0584 effective-session successor was renumbered to 0596 by stem only.
+  // Ben's router ruling: the 0584 effective-session successor was renumbered to 0609 by stem only.
   // Only this exact routine may take its reviewed successor body; its complete definition header stays exact.
   const effectiveSessionOid = (await c.admin.query("SELECT 'app.lp6_session_authority(text,text,uuid)'::regprocedure::oid oid")).rows[0].oid;
-  const effectiveSessionMigration = await readFile(new URL("../migrations/0596_lp6b_effective_session_actor.sql", import.meta.url), "utf8");
+  const effectiveSessionMigration = await readFile(new URL("../migrations/0609_lp6b_effective_session_actor.sql", import.meta.url), "utf8");
   const effectiveSessionBody = effectiveSessionMigration.split("AS $$")[1]!.split("$$;")[0];
   // 0567 changes only the checked settlement overload's expected approval hash.
   const settlementOid = (await c.admin.query("SELECT 'app.record_simulated_settlement(uuid,uuid,uuid,character varying,bigint,timestamp with time zone,uuid,uuid,uuid)'::regprocedure::oid oid")).rows[0].oid;
