@@ -18,7 +18,7 @@ it("adds the resume guard without rewriting predecessor data or replacing the la
   expect(await predecessorCatalogue(cluster.admin)).toEqual(catalog);
   // Check 0581 against its exact predecessor before later migrations add their catalogues.
   await migrate(cluster.admin);
-  // 0606, 0609 and 0990 add the dark-order, rate-acceptance and EndCheck rows.
+  // 0606, 0609 and 0620 add the dark-order, rate-acceptance and EndCheck rows.
   const registry = (await cluster.admin.query("SELECT jsonb_agg(value ORDER BY value::text) data FROM jsonb_array_elements($1::jsonb)",
     [JSON.stringify([...(before["app.command_type_registry"] as unknown[]), darkOrderRegistryRow, rateSuggestionRegistryRow, contractorJobFinishRegistryRow])])).rows[0].data;
   expect(await snapshot(cluster.admin)).toEqual({ ...laterEmptyTables, ...before, "app.command_type_registry": registry });

@@ -1,5 +1,5 @@
 {
-  "migration": "0991_connector_machine.sql",
+  "migration": "0621_connector_machine.sql",
   "lp0": [
     {
       "section": "groups",
@@ -23,7 +23,7 @@
         },
         "downstream": "Owner-only synthetic connection commands; separate NOLOGIN machine role with only authenticated authority lookup and capability-scoped staging. No member session, real credential, endpoint, origin, commercial effect or G5 activation.",
         "sources": [
-          "packages/db/migrations/0991_connector_machine.sql"
+          "packages/db/migrations/0621_connector_machine.sql"
         ],
         "tests": [
           "packages/db/test/connector-machine.integration.test.ts"

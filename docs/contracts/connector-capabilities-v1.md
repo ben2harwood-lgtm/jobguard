@@ -189,3 +189,10 @@ secret resolver, endpoint or network action. Existing staging still returns only
 H4, billing/materials/export promotion dependencies and every real-endpoint gate
 remain open. CI PostgreSQL proof and exact-head independent RED review are required;
 local transport/guard tests alone do not close ENT-13a or G5.
+
+### Machine command lifecycle hold
+
+The dark synthetic machine-management command uses its own connector.machine_command
+receipt and checked audit routine. It is outside the LP-5 lifecycle dispatcher;
+LP-5 integration and lifecycle replay coverage remain held before composition or
+activation. Its connector integration tests prove only this separate dark path.

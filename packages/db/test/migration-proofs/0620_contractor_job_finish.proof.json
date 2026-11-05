@@ -1,5 +1,5 @@
 {
-  "migration": "0990_contractor_job_finish.sql",
+  "migration": "0620_contractor_job_finish.sql",
   "lp0": [
     {
       "section": "policies",

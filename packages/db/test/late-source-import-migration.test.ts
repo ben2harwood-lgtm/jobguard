@@ -27,7 +27,7 @@ it("0613 extends the exact successor registry without changing historical LP-5 e
  expect(currentCommandRegistryRows.filter(row=>row.command_type==="LateSource.import")).toHaveLength(1);
 });
 
-it("0990 keeps the exact EndCheck registry delta in snapshot order",()=>{
+it("0620 keeps the exact EndCheck registry delta in snapshot order",()=>{
  const {proofs}=loadMigrationProofs();
  const registryDelta=(migration:string)=>{
   const delta=proofs.find(proof=>proof.migration===migration)!.upgrade.find(change=>
@@ -36,7 +36,7 @@ it("0990 keeps the exact EndCheck registry delta in snapshot order",()=>{
   return delta;
  };
  const previous=registryDelta("0609_rate_suggestion_acceptance.sql");
- const delta=registryDelta("0990_contractor_job_finish.sql");
+ const delta=registryDelta("0620_contractor_job_finish.sql");
  expect(delta.before).toEqual(previous.after);
  // jsonb text starts with the shortest key, `version`: end-check.v1 sorts
  // after decision-resolution-command.v1 and before rate-suggestion-accept.v1.
@@ -47,7 +47,7 @@ it("0990 keeps the exact EndCheck registry delta in snapshot order",()=>{
  const expected=[...rows.slice(0,index),contractorJobFinishRegistryRow,...rows.slice(index)];
  expect(delta.after!.data).toEqual(expected);
  const baseline={rows:{"app.command_type_registry":rows},routines:[],relations:[],policies:[]};
- const proof={migration:"0990_contractor_job_finish.sql",lp0:[],upgrade:[delta],tenancy:[]};
+ const proof={migration:"0620_contractor_job_finish.sql",lp0:[],upgrade:[delta],tenancy:[]};
  expect(applyUpgradeProofs(baseline,[proof],{}).rows["app.command_type_registry"]).toEqual(expected);
  expect(baseline.rows["app.command_type_registry"]).toEqual(previous.after!.data);
 });
