@@ -37,23 +37,23 @@ async function machineFixture() {
 describe('ENT-10-rest dual-owner emergency capability',()=>{
  it('requires two different other owners; denies self, duplicate, wrong tenant and forged actor; opens exactly one hour',async()=>{
   const f=await fixture(h),a=await owner(f),b=await owner(f),other=await fixture(h),id=randomUUID();
-  const requester=actor(f.ordinary.sessionToken,f.ordinary.csrfToken),token=randomBytes(32).toString('base64url');
+  const requester=actor(f.ordinary.sessionToken,f.ordinary.csrfToken);
   await emergency(f,requester,request(id,'request',{reasonHash:hash('fictional emergency')}));
   await expect(emergency(f,requester,request(id,'approve'))).rejects.toHaveProperty('code','ACCESS_REFUSED');
   await expect(emergency(f,a.proof,{...request(id,'approve'),actor:f.principal.membershipId})).rejects.toHaveProperty('code','INVALID_ACCESS_INPUT');
   await expect(emergency(other,a.proof,request(id,'approve'))).rejects.toHaveProperty('code','ACCESS_REFUSED');
   await emergency(f,a.proof,request(id,'approve'));
   await expect(emergency(f,a.proof,request(id,'approve'))).rejects.toThrow();
-  await expect(emergency(f,requester,request(id,'open',{tokenHash:hash(token)}))).rejects.toHaveProperty('code','ACCESS_REFUSED');
+  await expect(emergency(f,requester,request(id,'open'))).rejects.toHaveProperty('code','ACCESS_REFUSED');
   await emergency(f,b.proof,request(id,'approve'));
-  await emergency(f,requester,request(id,'open',{tokenHash:hash(token)}));
+  const {token}=await emergency(f,requester,request(id,'open')) as {token:string};
   const stored=(await h.admin.query('SELECT expires_at-opened_at duration FROM identity.emergency_session WHERE tenant_id=$1 AND request_id=$2',[f.principal.tenantId,id])).rows[0];
   expect(stored.duration.hours).toBe(1);
-  await expect(emergency(f,requester,request(id,'open',{tokenHash:hash(token)}))).rejects.toHaveProperty('code','ACCESS_REFUSED');
-  await expect(emergency(f,a.proof,request(id,'inspect',{tokenHash:hash(token)}))).rejects.toHaveProperty('code','ACCESS_REFUSED');
-  await expect(emergency(f,requester,request(id,'inspect',{tokenHash:hash('forged')}))).rejects.toHaveProperty('code','ACCESS_REFUSED');
-  await emergency(f,requester,request(id,'inspect',{tokenHash:hash(token)}));
-  await expect(emergency(f,requester,request(id,'revoke_member',{tokenHash:hash(token),targetMembershipId:f.principal.membershipId}))).rejects.toHaveProperty('code','ACCESS_REFUSED');
+  await expect(emergency(f,requester,request(id,'open'))).rejects.toHaveProperty('code','ACCESS_REFUSED');
+  await expect(emergency(f,a.proof,request(id,'inspect',{token}))).rejects.toHaveProperty('code','ACCESS_REFUSED');
+  await expect(emergency(f,requester,request(id,'inspect',{token:'0'.repeat(64)}))).rejects.toHaveProperty('code','ACCESS_REFUSED');
+  await emergency(f,requester,request(id,'inspect',{token}));
+  await expect(emergency(f,requester,request(id,'revoke_member',{token,targetMembershipId:f.principal.membershipId}))).rejects.toHaveProperty('code','ACCESS_REFUSED');
   const identity=new EnterpriseIdentityRepository(h.identity);
   const before=await identity.view(testTenantContext(f.principal.tenantId),requester.sessionDigest);
   expect(before.events.map(e=>e.event_type)).toContain('sso.emergency.request');
@@ -71,18 +71,18 @@ describe('ENT-10-rest dual-owner emergency capability',()=>{
  });
  it('expired request and expired session refuse; emergency access can revoke only a non-owner',async()=>{
   const f=await fixture(h),a=await owner(f),b=await owner(f),p=await person(f,'finance');
-  const requester=actor(f.ordinary.sessionToken,f.ordinary.csrfToken),id=randomUUID(),token=randomBytes(32).toString('base64url');
+  const requester=actor(f.ordinary.sessionToken,f.ordinary.csrfToken),id=randomUUID(),token=randomBytes(32).toString('hex');
   await emergency(f,requester,request(id,'request',{reasonHash:hash('expired fixture')}));
   // Owner-only insertion represents a clock that has passed one hour. No trigger disabling or mutated history.
   await h.admin.query("INSERT INTO identity.emergency_session VALUES($1,$2,$3,transaction_timestamp()-interval '61 minutes',transaction_timestamp()-interval '1 minute')",[f.principal.tenantId,id,hash(token)]);
-  await expect(emergency(f,requester,request(id,'inspect',{tokenHash:hash(token)}))).rejects.toHaveProperty('code','ACCESS_REFUSED');
+  await expect(emergency(f,requester,request(id,'inspect',{token}))).rejects.toHaveProperty('code','ACCESS_REFUSED');
   const expired=randomUUID();
   await h.admin.query("INSERT INTO identity.emergency_request VALUES($1,$2,$3,$4,transaction_timestamp()-interval '16 minutes',transaction_timestamp()-interval '1 minute')",[f.principal.tenantId,expired,f.principal.membershipId,hash('expired request')]);
   await expect(emergency(f,a.proof,request(expired,'approve'))).rejects.toHaveProperty('code','ACCESS_REFUSED');
   const fresh=randomUUID();await emergency(f,requester,request(fresh,'request',{reasonHash:hash('revoke compromised fictional member')}));
   await emergency(f,a.proof,request(fresh,'approve'));await emergency(f,b.proof,request(fresh,'approve'));
-  await emergency(f,requester,request(fresh,'open',{tokenHash:hash(token+'fresh')}));
-  await emergency(f,requester,request(fresh,'revoke_member',{tokenHash:hash(token+'fresh'),targetMembershipId:p.membershipId}));
+  const {token:freshToken}=await emergency(f,requester,request(fresh,'open')) as {token:string};
+  await emergency(f,requester,request(fresh,'revoke_member',{token:freshToken,targetMembershipId:p.membershipId}));
   expect(await h.provider.findMembership((await h.provider.authenticate(p.ordinary.sessionToken))!,f.principal.tenantId)).toBeUndefined();
   await auditRows(h,f.principal.tenantId);
  });
