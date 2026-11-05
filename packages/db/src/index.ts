@@ -168,6 +168,8 @@ export * from "./resumable-evidence.js";
 export * from "./mobile-auth-store.js";
 
 export { FixtureSpeechAudioReader, SpeechAudioError } from "./speech-audio.js";
+export * from "./purchase-order-action.js";
+export * from "./purchase-order-action-repository.js";
 export * from "./evidence-bundle.js";
 export * from "./evidence-bundle-sources.js";
 export * from "./practice-photo-observation.js";

@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-dashboard-slow": {
+      "branches": ["codex/sandbox/ent-dashboard-slow"],
+      "note": "ENT-DASHBOARD-SLOW: bound shared dashboard source work; RED only for tenant isolation. No session, hidden-data, cache or privilege changes.",
+      "allow": [
+        "packages/db/src/enterprise-dashboard-queries.ts",
+        "packages/db/test/enterprise-dashboard-plan.integration.test.ts",
+        "docs/verdicts/ENT-DASHBOARD-SLOW/BUILDER_RECEIPT.md",
+        "docs/verdicts/ENT-DASHBOARD-SLOW/plans.json.gz"
+      ],
+      "test": "packages/db/test/enterprise-dashboard-plan.integration.test.ts",
+      "receipt": "docs/verdicts/ENT-DASHBOARD-SLOW/BUILDER_RECEIPT.md"
+    }
+  }
+}
