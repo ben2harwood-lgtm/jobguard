@@ -119,6 +119,8 @@ export { CompanyValueApplication } from "../value/value-business.application.js"
 export * from "../receipt-case-allocation.application.js";
 
 export { DunningApplication, dunningFailure } from "../dunning.application.js";
+export { PracticeBankApplication, practiceBankFailure, type PracticeBankMemory } from "../practice-bank.application.js";
+export { RetentionRecordApplication, retentionRecordFailure } from "../retention-record.application.js";
 export { PayNowAttemptApplication, assertPayNowPreviewMode, payNowAttemptFailure } from "../pay-now-attempt.application.js";
 export { NoticeFixtureApplication, assertNoticeFixtureMode, noticeFixtureFailure, noticeFixtureRealNoticeRefusal, type NoticeFixtureView } from "../notice-fixture.application.js";
 
