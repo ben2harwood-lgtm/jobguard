@@ -1,3 +1,57 @@
+# READY — fee-store authority fix (RED)
+
+Plan piece: fee-store-authority; branch `codex/sandbox/fee-store-authority`.
+Ready for the router to finish the existing merge, commit, push and open the PR.
+This section supersedes the earlier NOPR/stem/lane handoff below. No git-writing
+command, PostgreSQL server, browser, provider call or live activation ran here.
+
+The sole textual conflict, `packages/db/test/later-empty-tables.ts`, is resolved
+as the exact union of HEAD and origin/main, including `app.fee_provider_fixture_key`.
+The read-only index still marks that path unmerged: router must stage the resolved
+file and complete its pending merge. Every migration already on origin/main is
+byte-identical; none is duplicated or amended. Main's latest fee replacement body
+is 0608 (no successor through 0613). The prechecked authority SQL is unchanged,
+renamed by stem only from 1065 to `0619_fee_store_authority.sql`, with the proof
+and populated-upgrade references aligned. 0614–0618 remain reserved for #576/#577.
+Policy-role proof representations remain PostgreSQL strings; runtime is
+`"{jobguard_runtime}"`, never an array. Historical main proofs are untouched.
+
+The forged release regression now executes the release, archive batch insert and
+empty-book compaction as independent statements/transactions, each asserting its
+own refusal (23514, 42501, 23514). The separate archive INSERT refusal, unchanged
+book, refused second collection and absence of release audit events all remain.
+No test or assertion was weakened. The lane lists exactly the 12 paths changed
+from main outside config/lanes and does not list itself; new 0619 paths are included.
+
+Local validation (installed dependencies; each Vitest invocation at most 2 workers):
+- In apps/api: `./node_modules/.bin/vitest run src/fee-collection/postgres-reservation-store.test.ts src/fee-collection/executor.test.ts src/fee-collection/fake-gocardless.test.ts --maxWorkers=2` — 116 passed.
+- In packages/db: `./node_modules/.bin/vitest run test/migration-proof-loader.test.ts test/lp-0-catalog.test.ts --maxWorkers=2` — 108 passed.
+- Root: `./node_modules/.bin/tsc -p apps/api/tsconfig.json --noEmit` and
+  `./node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit` — passed.
+- In packages/db: `./node_modules/.bin/vitest list --maxWorkers=2 test/fee-reservation.integration.test.ts test/fee-reservation-archive-upgrade.integration.test.ts` — 30 cases collected, including the repaired attack; collection only.
+- Root: `node tools/money-arithmetic-lint.mjs`,
+  `node tools/commercial-boundary-lint.mjs`,
+  `node tools/plpgsql-case-in-if-lint.mjs` — passed.
+- Read-only checks: exact table union, all main migration bytes, renamed SQL bytes,
+  exact lane membership and `git diff --check` — passed. Committed-range lane CLI
+  must run after the router stages/completes the merge and commits.
+- Initial collection command used a nonexistent root Vitest binary; corrected to
+  packages/db's installed runner. No packages were downloaded.
+
+CI must execute the two named PostgreSQL files, including every independent
+attack refusal, populated 0619 upgrade, audit/archive preservation and migration
+replay, plus mandatory full database/migration, tenancy/privilege and required
+repository checks on the final head. This sandbox does not prove those guarantees.
+The independent pre-check PASS at 4ba587bc is historical, not formal review of the
+new committed head; obtain the required independent RED exact-head review.
+Pre-check LATER items remain recorded in the existing coordinator pre-check;
+in particular signed-result replay/event-key hardening remains before real rails.
+Production authority, provider, money and release gates remain closed. Forward-fix
+only; do not restore raw archive writes or unsigned provider-result authority.
+No new complexity, operational alert, production route or commercial policy.
+
+## Earlier builder evidence (historical)
+
 # FEE-STORE-AUTHORITY — READY for router handoff (RED, NOPR)
 
 Piece FEE-STORE-AUTHORITY on `codex/sandbox/fee-store-authority`, based on

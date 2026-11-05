@@ -22,7 +22,7 @@ const tenant = randomUUID(), otherTenant = randomUUID(), member = randomUUID();
 const context = testTenantContext(tenant);
 const states = ["draft", "quoting", "accepted", "invoiced", "paid", "lost"];
 const legacy = Object.fromEntries(states.map(status => [status, { jobId: randomUUID(), uploadId: randomUUID() }]));
-const tables = ["purchase_order_draft", "purchase_order_revision", "purchase_order_placement", "supplier_document", "supplier_document_version", "supplier_document_intake", "goods_receipt", "supplier_fact_proposal", "supplier_fact_revision", "supplier_match_proposal", "supplier_match_revision", "supplier_match_allocation", "discrepancy_finding_revision", "discrepancy_review_outcome", "supplier_bill_supersession", "planned_work_revision", "readiness_snapshot", "readiness_decision", "inbox_finding_revision", "inbox_decision_revision", "inbox_outcome_event", "evidence_upload", "evidence_object", "evidence_link", "synthetic_evidence_original", "stage_completion", "watchdog_command_identity"];
+const tables = ["purchase_order_manual_attestation", "purchase_order_draft", "purchase_order_revision", "purchase_order_placement", "supplier_document", "supplier_document_version", "supplier_document_intake", "goods_receipt", "supplier_fact_proposal", "supplier_fact_revision", "supplier_match_proposal", "supplier_match_revision", "supplier_match_allocation", "discrepancy_finding_revision", "discrepancy_review_outcome", "supplier_bill_supersession", "planned_work_revision", "readiness_snapshot", "readiness_decision", "inbox_finding_revision", "inbox_decision_revision", "inbox_outcome_event", "evidence_upload", "evidence_object", "evidence_link", "synthetic_evidence_original", "stage_completion", "watchdog_command_identity"];
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, directory: string;
 const storage: PrivateVersionedStorage = {
   async createUploadUrl() { return "https://generated.invalid/upload"; },
@@ -119,7 +119,7 @@ describe("CH-2 actual PostgreSQL enforcement", () => {
     expect(protectedTables.rows.every(row=>row.relrowsecurity&&row.relforcerowsecurity&&row.rolname==='jobguard_migration')).toBe(true);
     expect((await admin.query("SELECT has_column_privilege('jobguard_runtime','app.evidence_upload','job_id','UPDATE') identity_edit,has_column_privilege('jobguard_runtime','app.evidence_upload','state','UPDATE') lifecycle_update")).rows[0]).toEqual({identity_edit:false,lifecycle_update:true});
     // Command identities and stored results are append-only for the runtime: select and insert, nothing else.
-    for (const table of ["watchdog_command_identity", "watchdog_command_result", "proof_application_response"]) {
+    for (const table of ["watchdog_command_identity", "watchdog_command_result", "proof_application_response", "purchase_order_manual_attestation"]) {
       const privilege = (role: string, kind: string) => `has_table_privilege('${role}','app.${table}','${kind}')`;
       expect((await admin.query(`SELECT ${privilege("jobguard_runtime", "SELECT")} s,${privilege("jobguard_runtime", "INSERT")} i,${privilege("jobguard_runtime", "UPDATE")} u,${privilege("jobguard_runtime", "DELETE")} d,${privilege("jobguard_runtime", "TRUNCATE")} t,${privilege("jobguard_infrastructure", "SELECT")} infra`)).rows[0]).toEqual({ s: true, i: true, u: false, d: false, t: false, infra: false });
     }

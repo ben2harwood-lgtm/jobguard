@@ -288,20 +288,23 @@ describe("M4-12 PostgreSQL shared reservation store", () => {
     const forged = structuredClone(before);
     forged.attempts[0]!.state = "released";
     forged.audit.push({ commandId: id(10), state: "released" });
-    await expect(withTenant(db.runtime, testTenantContext(f.tenantId), async tx => {
-      await tx.$client.query("SELECT app.replace_fee_reservation_book($1,$2::jsonb)", [f.tenantId, JSON.stringify(forged)]);
-      // The predecessor accepted all of these raw runtime steps: a complete
-      // forged release, matching archive rows, then an empty compacted book.
-      const records = [
-        { kind: "attempt", key: `${id(10)}:0`, payload: forged.attempts[0] },
-        ...forged.audit.map((payload, i) => ({ kind: "audit", key: String(i), payload })),
-      ];
-      await tx.$client.query(`INSERT INTO app.fee_reservation_archive(tenant_id,kind,key,payload)
+    // Each attack has its own transaction: one refusal must not skip later steps.
+    await expect(withTenant(db.runtime, testTenantContext(f.tenantId), tx => tx.$client.query(
+      "SELECT app.replace_fee_reservation_book($1,$2::jsonb)", [f.tenantId, JSON.stringify(forged)])))
+      .rejects.toMatchObject({ code: "23514" });
+    const records = [
+      { kind: "attempt", key: `${id(10)}:0`, payload: forged.attempts[0] },
+      ...forged.audit.map((payload, i) => ({ kind: "audit", key: String(i), payload })),
+    ];
+    await expect(withTenant(db.runtime, testTenantContext(f.tenantId), tx => tx.$client.query(
+      `INSERT INTO app.fee_reservation_archive(tenant_id,kind,key,payload)
         SELECT $1,kind,key,payload FROM jsonb_to_recordset($2::jsonb) r(kind text,key text,payload jsonb)
-        ON CONFLICT DO NOTHING`, [f.tenantId, JSON.stringify(records)]);
-      await tx.$client.query("SELECT app.replace_fee_reservation_book($1,$2::jsonb)",
-        [f.tenantId, JSON.stringify({ version: "fee-reservation-book.v1", attempts: [], events: {}, audit: [] })]);
-    })).rejects.toMatchObject({ code: "23514" });
+        ON CONFLICT DO NOTHING`, [f.tenantId, JSON.stringify(records)])))
+      .rejects.toMatchObject({ code: "42501" });
+    await expect(withTenant(db.runtime, testTenantContext(f.tenantId), tx => tx.$client.query(
+      "SELECT app.replace_fee_reservation_book($1,$2::jsonb)",
+      [f.tenantId, JSON.stringify({ version: "fee-reservation-book.v1", attempts: [], events: {}, audit: [] })])))
+      .rejects.toMatchObject({ code: "23514" });
     await expect(withTenant(db.runtime, testTenantContext(f.tenantId), tx => tx.$client.query(
       "INSERT INTO app.fee_reservation_archive VALUES($1,'attempt',$2,$3)",
       [f.tenantId, `${id(10)}:0`, JSON.stringify(forged.attempts[0])]))).rejects.toMatchObject({ code: "42501" });

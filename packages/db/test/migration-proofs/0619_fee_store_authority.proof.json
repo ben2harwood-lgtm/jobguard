@@ -1,5 +1,5 @@
 {
-  "migration": "1065_fee_store_authority.sql",
+  "migration": "0619_fee_store_authority.sql",
   "lp0": [
     {
       "section": "entries",
@@ -193,12 +193,12 @@
           "LP-11": "Retain authenticated tenant binding and same-transaction source locks.",
           "LP-12": "Check revoked raw archive INSERT, private fixture signing keys, exact signed result bindings, private archive seal and chained database audit. No route or live rail may use this synthetic capability."
         },
-        "downstream": "One tenant book serializes fake card and Direct Debit reservations. No live adapter or production source reader is registered. No DELETE, TRUNCATE or tenant-key UPDATE is granted. 1065 withdraws runtime archive INSERT; one guarded replacement authenticates fake provider results, compacts history through a private seal and chains actual state and lifecycle differences. Fixture keys are owner-provisioned and runtime-inaccessible.",
+        "downstream": "One tenant book serializes fake card and Direct Debit reservations. No live adapter or production source reader is registered. No DELETE, TRUNCATE or tenant-key UPDATE is granted. 0619 withdraws runtime archive INSERT; one guarded replacement authenticates fake provider results, compacts history through a private seal and chains actual state and lifecycle differences. Fixture keys are owner-provisioned and runtime-inaccessible.",
         "sources": [
           "packages/db/migrations/0603_fee_reservation_book.sql",
           "packages/db/migrations/0604_fee_reservation_archive.sql",
           "apps/api/src/fee-collection/postgres-reservation-store.ts",
-          "packages/db/migrations/1065_fee_store_authority.sql",
+          "packages/db/migrations/0619_fee_store_authority.sql",
           "apps/api/src/fee-collection/executor.ts"
         ],
         "tests": [
@@ -241,7 +241,7 @@
       "after": {
         "id": "ap-m4-12-reservations",
         "title": "M4-12 dark shared collection reservations",
-        "description": "One tenant book serializes fake card and Direct Debit reservations. No live adapter or production source reader is registered. No DELETE, TRUNCATE or tenant-key UPDATE is granted. 1065 withdraws runtime archive INSERT; one guarded replacement authenticates fake provider results, compacts history through a private seal and chains actual state and lifecycle differences. Fixture keys are owner-provisioned and runtime-inaccessible.",
+        "description": "One tenant book serializes fake card and Direct Debit reservations. No live adapter or production source reader is registered. No DELETE, TRUNCATE or tenant-key UPDATE is granted. 0619 withdraws runtime archive INSERT; one guarded replacement authenticates fake provider results, compacts history through a private seal and chains actual state and lifecycle differences. Fixture keys are owner-provisioned and runtime-inaccessible.",
         "cards": [
           "LP-11",
           "LP-12"
@@ -254,7 +254,7 @@
           "packages/db/migrations/0603_fee_reservation_book.sql",
           "packages/db/migrations/0604_fee_reservation_archive.sql",
           "apps/api/src/fee-collection/postgres-reservation-store.ts",
-          "packages/db/migrations/1065_fee_store_authority.sql",
+          "packages/db/migrations/0619_fee_store_authority.sql",
           "apps/api/src/fee-collection/executor.ts"
         ],
         "tests": [

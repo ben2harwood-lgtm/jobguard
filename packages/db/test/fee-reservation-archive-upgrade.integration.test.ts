@@ -99,7 +99,7 @@ describe("FEE-STORE-UPDATE-GRANT populated upgrade", () => {
 
 describe("FEE-STORE-AUTHORITY populated forward upgrade", () => {
   it("preserves unknown reservations, released archives and existing audit while withdrawing raw archive writes", async () => {
-    const migration = "1065_fee_store_authority.sql";
+    const migration = "0619_fee_store_authority.sql";
     const db = await startBeforeMigration(migration);
     try {
       const f = fixture();
@@ -129,12 +129,12 @@ describe("FEE-STORE-AUTHORITY populated forward upgrade", () => {
       expect((await db.admin.query("SELECT * FROM app.fee_reservation_archive WHERE tenant_id=$1 ORDER BY kind,key", [ctx.tenantId])).rows).toEqual(beforeArchive);
       expect((await db.admin.query("SELECT * FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence", [ctx.tenantId])).rows).toEqual(chain);
       const live = await catalogue();
-      const sql = await readFile(new URL("../migrations/1065_fee_store_authority.sql", import.meta.url), "utf8");
+      const sql = await readFile(new URL("../migrations/0619_fee_store_authority.sql", import.meta.url), "utf8");
       const wrapperBody = sql.split("CREATE OR REPLACE FUNCTION app.replace_fee_reservation_book")[1]!.split("AS $$")[1]!.split("$$;")[0];
       for (const prior of routines) {
         const current = live.find(row => row.oid === prior.oid);
         if (prior.identity === "app.replace_fee_reservation_book(uuid,jsonb)") {
-          // Named 1065 successor: only this exact predecessor body becomes a proof-free wrapper.
+          // Named 0619 successor: only this exact predecessor body becomes a proof-free wrapper.
           expect(current).toEqual({ ...prior, definition: current.definition });
           expect(current.definition.split("$function$")[1]).toEqual(wrapperBody);
         } else expect(current).toEqual(prior);
