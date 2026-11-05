@@ -160,11 +160,11 @@ describe("M4-7 DARK AIS PostgreSQL boundary", () => {
    const cat = (await f.admin.query("SELECT relrowsecurity,relforcerowsecurity,pg_get_userbyid(relowner) owner FROM pg_class WHERE oid=$1::regclass", [`app.${table}`])).rows[0];
    expect(cat).toEqual({ relrowsecurity: true, relforcerowsecurity: true, owner: "jobguard_migration" });
    const grants = (await f.admin.query("SELECT has_table_privilege('jobguard_runtime',$1,'INSERT,UPDATE,DELETE,TRUNCATE') writes,has_table_privilege('jobguard_runtime',$1,'SELECT') reads", [`app.${table}`])).rows[0];
-   expect(grants).toEqual({ writes: false, reads: true });
+   expect(grants).toEqual({ writes: false, reads: false });
    await expect(workTenant(f.runtime, s.a.tenantId, db => db.query(`DELETE FROM app.${table} WHERE tenant_id=$1`, [s.a.tenantId]))).rejects.toThrow();
    await expect(workTenant(f.runtime, s.a.tenantId, db => db.query(`INSERT INTO app.${table} DEFAULT VALUES`))).rejects.toThrow(/permission denied/u);
-   expect((await workTenant(f.runtime, other.tenantId, db => db.query(`SELECT * FROM app.${table} WHERE tenant_id=$1`, [s.a.tenantId]))).rows).toEqual([]);
-   expect((await f.runtime.query(`SELECT * FROM app.${table}`)).rows).toEqual([]);
+   await expect(workTenant(f.runtime, other.tenantId, db => db.query(`SELECT * FROM app.${table} WHERE tenant_id=$1`, [s.a.tenantId]))).rejects.toMatchObject({ code: "42501" });
+   await expect(f.runtime.query(`SELECT * FROM app.${table}`)).rejects.toMatchObject({ code: "42501" });
   }
   await expect(f.admin.query("DELETE FROM app.ais_connection WHERE tenant_id=$1", [s.a.tenantId])).rejects.toThrow("AIS_IMMUTABLE");
   expect((await f.runtime.query("SELECT nullif(current_setting('app.tenant_id',true),'') tenant")).rows[0].tenant).toBeNull();
@@ -176,4 +176,13 @@ describe("M4-7 DARK AIS PostgreSQL boundary", () => {
    await expect(new DarkAisRepository(liveName, s.adapter, s.vault, "synthetic_demo").read(s.a.context, s.a.digest, s.id)).rejects.toThrow("AIS_DARK_ONLY");
   } finally { await liveName.end(); await liveAdmin.end(); }
  });
+});
+
+it("runtime cannot read any raw AIS table, even within the owner's tenant", async () => {
+ const s = await linked(); await s.repository.pull(s.a.context,s.a.digest,s.id,window);
+ for (const table of ["ais_connection","ais_lifecycle","ais_observation","ais_page"]) {
+  expect((await f.admin.query("SELECT has_table_privilege('jobguard_runtime',$1,'SELECT') allowed", [`app.${table}`])).rows[0].allowed).toBe(false);
+  await expect(workTenant(f.runtime,s.a.tenantId,db=>db.query(`SELECT * FROM app.${table}`))).rejects.toMatchObject({code:"42501"});
+ }
+ expect((await s.repository.read(s.a.context,s.a.digest,s.id)).status).toBe("linked");
 });

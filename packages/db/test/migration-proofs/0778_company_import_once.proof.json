@@ -1,0 +1,85 @@
+{
+  "migration": "0778_company_import_once.sql",
+  "lp0": [
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.adopt_invoiced_job_v3(uuid,uuid,text,uuid,uuid,jsonb,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.job",
+          "app.job_commercial_track",
+          "app.job_import_v3",
+          "app.job_party_binding",
+          "app.job_party_current",
+          "app.lp_job_insert_permit",
+          "app.scope_identity"
+        ],
+        "staticCalls": [
+          "app.authenticate_practice_session",
+          "app.ch4_admit_place",
+          "app.ch5_import_actor",
+          "app.final_lock_canonical",
+          "app.lp_job_insert_shape",
+          "app.mon1_refresh_work_ledger",
+          "public.digest"
+        ]
+      },
+      "after": {
+        "identity": "function:app.adopt_invoiced_job_v3(uuid,uuid,text,uuid,uuid,jsonb,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.job",
+          "app.job_commercial_track",
+          "app.job_import_v3",
+          "app.job_party_binding",
+          "app.job_party_current",
+          "app.lp_job_insert_permit",
+          "app.scope_identity"
+        ],
+        "staticCalls": [
+          "app.authenticate_practice_session",
+          "app.ch4_admit_place",
+          "app.ch5_import_actor",
+          "app.final_lock_canonical",
+          "app.lp_job_insert_shape",
+          "app.mon1_refresh_work_ledger",
+          "public.digest"
+        ]
+      }
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "company_import_one_source",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    }
+  ],
+  "tenancy": []
+}
