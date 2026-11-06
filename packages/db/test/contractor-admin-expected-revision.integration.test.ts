@@ -31,7 +31,9 @@ describe("contractor admin requires expectedRevision (real embedded PostgreSQL)"
   const invite = await currentCommand(c, f, { kind: "member.invite", role: "read_only", scope: { kind: "tenant", id: f.p.tenantId }, clientId: null, contractId: null, email: "fictional@revision.invalid" });
   if (kind === "member.invite") return invite;
   await repo.command(f.p, invite);
-  return currentCommand(c, f, { kind, membershipId: invite.id, role: "finance", scope: { kind: "tenant", id: f.p.tenantId }, contractId: null });
+  // membership.revoke is strict: it carries only the membership to revoke.
+  return currentCommand(c, f, kind === "membership.revoke" ? { kind, membershipId: invite.id }
+   : { kind, membershipId: invite.id, role: "finance", scope: { kind: "tenant", id: f.p.tenantId }, contractId: null });
  }
  async function direct(db: PoolClient, raw: Record<string, unknown>) {
   await db.query("SELECT set_config('app.tenant_id',$1,true)", [f.p.tenantId]);
