@@ -35,3 +35,17 @@ it("E6-05 E6-27 unresolved candidates block both racing exports, MarkDuplicate t
  const races=await Promise.allSettled([marking,own.exported(),own.exported()]);expect(races[0]!.status).toBe("fulfilled");
  await own.exported();expect((await own.repo.read(own.ctx,own.session,own.s.jobId)).exports.flatMap(b=>b.artifact.lines)).toHaveLength(1);
 });
+
+it("LATER-SAFETY-81 SQL export prefixes TAB and CR formulas and preserves existing escaping",async()=>{
+ const own=await world(c);await own.exported();
+ const view=await own.repo.read(own.ctx,own.session,own.s.jobId),artifact=view.exports[0]!.artifact;
+ for(const prefix of ["\t","\r","=","+","-","@","'"]){
+  const description=prefix+'SUM(1,2) "fictional"';
+  const modified={...JSON.parse(artifact.json),lines:artifact.lines.map(line=>({...line,description}))};
+  const csv=(await c.admin.query<{csv:string}>("SELECT app.cb_csv($1::jsonb) csv",[JSON.stringify(modified)])).rows[0]!.csv;
+  expect(csv).toContain(',"\''+description.replaceAll('"','""')+'",');
+  expect(modified.lines[0]!.description).toBe(description);
+ }
+ const plain=(await c.admin.query<{cell:string}>("SELECT app.cb_csv_cell($1) cell",['Fictional "plain", cell'])).rows[0]!.cell;
+ expect(plain).toBe('"Fictional ""plain"", cell"');
+});

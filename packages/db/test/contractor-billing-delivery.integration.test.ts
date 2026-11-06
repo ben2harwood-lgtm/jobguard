@@ -56,3 +56,48 @@ it("M0-13a paused contractor delivery keeps its queued artifact and records no a
  expect(calls).toBe(1);
  expect((await w.repo.read(w.ctx,w.session,w.s.jobId)).deliveries[0]).toMatchObject({status:"succeeded"});
 });
+
+it("LATER-SAFETY-81 refuses another delivery for every non-failed outbox state without writes",async()=>{
+ const {withTenant}=await import("../src/index.js");
+ const own=await world(c),batch=await own.exported(),view=await own.repo.read(own.ctx,own.session,own.s.jobId);
+ const input={version:"billing-approve-delivery.v1",commandId:randomUUID(),batchId:batch.batchId,channel:"fake_api",destination:"fictional.invalid",contentHash:view.exports[0]!.jsonHash,expiresAt:new Date(Date.now()+3600000).toISOString()};
+ const action=await own.repo.approveDelivery(own.ctx,own.session,own.s.jobId,input);
+ const snapshot=async()=>{
+  const tenant=own.w.p.tenantId;
+  return (await c.admin.query(`SELECT
+   (SELECT count(*)::int FROM app.action_outbox WHERE tenant_id=$1) outbox,
+   (SELECT count(*)::int FROM app.billing_export_delivery WHERE tenant_id=$1) deliveries,
+   (SELECT count(*)::int FROM app.command_receipt WHERE tenant_id=$1) commands,
+   (SELECT count(*)::int FROM app.action_authorization WHERE tenant_id=$1) authorizations,
+   (SELECT count(*)::int FROM app.decision WHERE tenant_id=$1) decisions`,[tenant])).rows;
+ };
+ for(const status of ["pending","executing","succeeded","retryable","outcome_unknown","cancelled"]){
+  // Owner-only fixture: exercise the authoritative outbox state, not a delivery projection.
+  await c.admin.query("UPDATE app.action_outbox SET status=$1 WHERE tenant_id=$2 AND id=$3",[status,own.w.p.tenantId,action.outboxActionId]);
+  const before=await snapshot(),next={...input,commandId:randomUUID(),channel:"fake_sftp",destination:"another.invalid"};
+  await expect(withTenant(c.runtime,own.ctx,db=>db.$client.query("SELECT app.cb_delivery($1,$2,$3,$4::jsonb)",[own.session,own.s.jobId,next.commandId,JSON.stringify(next)]))).rejects.toMatchObject({message:"EXPORT_ALREADY_QUEUED",code:"23505"});
+  expect(await own.repo.approveDelivery(own.ctx,own.session,own.s.jobId,input)).toEqual(action);
+  expect(await snapshot()).toEqual(before);
+ }
+});
+it("LATER-SAFETY-81 terminal failure allows a fresh command while both command replays retain their results",async()=>{
+ const own=await world(c),batch=await own.exported(),view=await own.repo.read(own.ctx,own.session,own.s.jobId);
+ const input={version:"billing-approve-delivery.v1",commandId:randomUUID(),batchId:batch.batchId,channel:"fake_api",destination:"fictional.invalid",contentHash:view.exports[0]!.jsonHash,expiresAt:new Date(Date.now()+3600000).toISOString()};
+ const first=await own.repo.approveDelivery(own.ctx,own.session,own.s.jobId,input);
+ await c.admin.query("UPDATE app.action_outbox SET status='dead_letter' WHERE tenant_id=$1 AND id=$2",[own.w.p.tenantId,first.outboxActionId]);
+ const retryInput={...input,commandId:randomUUID()},retry=await own.repo.approveDelivery(own.ctx,own.session,own.s.jobId,retryInput);
+ expect(retry.outboxActionId).not.toBe(first.outboxActionId);
+ expect(await own.repo.approveDelivery(own.ctx,own.session,own.s.jobId,input)).toEqual(first);
+ expect(await own.repo.approveDelivery(own.ctx,own.session,own.s.jobId,retryInput)).toEqual(retry);
+ expect(await code(own.repo.approveDelivery(own.ctx,own.session,own.s.jobId,{...input,commandId:randomUUID()}))).toBe("BILLING_CONFLICT");
+ expect((await own.repo.read(own.ctx,own.session,own.s.jobId)).deliveries).toHaveLength(2);
+ expect((await c.admin.query("SELECT count(*)::int n FROM app.action_outbox WHERE tenant_id=$1 AND action_type='billing_export'",[own.w.p.tenantId])).rows).toEqual([{n:2}]);
+});
+it("LATER-SAFETY-81 racing delivery approvals queue exactly one outbox action",async()=>{
+ const own=await world(c),batch=await own.exported(),view=await own.repo.read(own.ctx,own.session,own.s.jobId);
+ const input={version:"billing-approve-delivery.v1",batchId:batch.batchId,channel:"fake_api",destination:"fictional.invalid",contentHash:view.exports[0]!.jsonHash,expiresAt:new Date(Date.now()+3600000).toISOString()};
+ const results=await Promise.all([code(own.repo.approveDelivery(own.ctx,own.session,own.s.jobId,{...input,commandId:randomUUID()})),code(own.repo.approveDelivery(own.ctx,own.session,own.s.jobId,{...input,commandId:randomUUID()}))]);
+ expect(results.sort()).toEqual(["BILLING_CONFLICT","ok"]);
+ expect((await own.repo.read(own.ctx,own.session,own.s.jobId)).deliveries).toHaveLength(1);
+ expect((await c.admin.query("SELECT count(*)::int n FROM app.action_outbox WHERE tenant_id=$1 AND action_type='billing_export'",[own.w.p.tenantId])).rows).toEqual([{n:1}]);
+});
