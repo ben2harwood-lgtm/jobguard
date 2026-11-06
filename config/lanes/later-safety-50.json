@@ -1,0 +1,9 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-50": {
+      "branches": ["codex/sandbox/later-safety-50"],
+      "allow": ["packages/db/test/customer-signin-lock-order.integration.test.ts"]
+    }
+  }
+}

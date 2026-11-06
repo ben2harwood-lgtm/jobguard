@@ -248,3 +248,75 @@ it("matched extra-approver approval versus xa_withdraw: 50 same-job rounds, both
     left.release(); right.release();
   }
 }, 240_000);
+
+it("matched extra-approver approval versus xa_withdraw without a barrier: 50 simultaneous same-job rounds, one outcome", async () => {
+  const w = await chainWorld(c), repo = new ExtraApprovalRepository(c.runtime), context = await w.ctx;
+  const actor = w.members.client_approver.member.membershipId, supervisor = w.members.supervisor.member.membershipId;
+  const left = await c.admin.connect(), right = await c.admin.connect();
+  try {
+    const leftPid = (await left.query("SELECT pg_backend_pid() pid")).rows[0].pid as number;
+    const rightPid = (await right.query("SELECT pg_backend_pid() pid")).rows[0].pid as number;
+    for (let round = 0; round < 50; round++) {
+      const s = await submitted(c, w, 150000), signin = digest(), session = digest();
+      const target = { tenant: w.p.tenantId, job: s.jobId };
+      await repo.approveExtraStep(context, w.members.supervisor.member, approveInput(s, 0));
+      await repo.approveExtraStep(context, w.supervisor2.member, approveInput(s, 1));
+      await repo.issueClientApproval(context, w.members.surveyor.member, {
+        version: "issue-client-approval.v1", commandId: randomUUID(), jobId: s.jobId, requestId: s.requestId,
+        approverMembershipId: actor, recipient: await emailOf(c, w, actor), linkToken: newToken(),
+        signinDigest: signin, expiresAt: new Date(Date.now() + 3600_000),
+      });
+      await begin(left);
+      expect((await left.query("SELECT identity.extra_customer_use($1,$2,$3,$4,$5,'redeem') result",
+        [target.tenant, target.job, actor, signin, session])).rows[0].result).toMatchObject({ extraApprover: true });
+      await left.query("COMMIT");
+      await begin(left);
+      await right.query("BEGIN");
+      await right.query("SET LOCAL statement_timeout='15s'");
+      await right.query("SET LOCAL ROLE jobguard_runtime");
+      await right.query("SELECT set_config('app.tenant_id',$1,true)", [target.tenant]);
+      // The approval enters through extra_customer_use; both paths acquire their
+      // own production locks, with no exclusive tenant barrier or pre-held job lock.
+      const approval = () => left.query("SELECT identity.extra_customer_approval($1,$2,$3,$4,$5::jsonb) result", [
+        target.tenant, target.job, actor, session, { version: "extra-customer.v1", action: "decide", jobId: target.job,
+          requestId: s.requestId, commandId: randomUUID(), revisionHash: s.hash, netPence: s.net, decision: "approve" },
+      ]);
+      const withdraw = async () => {
+        const db = drizzle(right) as TenantTransaction, commandId = randomUUID();
+        const content = { jobId: target.job, extraId: s.extraId, reasonCode: "not_done" };
+        // Preserve raw SQLSTATEs: repository error mapping must not hide 40P01.
+        expect(await beginRepositoryCommand(db, { tenantId: target.tenant, actorMembershipId: supervisor, commandId,
+          commandType: "WithdrawExtra", semanticKey: `extra-withdraw:${target.job}:${s.extraId}:${commandId}`,
+          jobId: target.job, legacyJson: canonicalJson({ type: "WithdrawExtra", actor: supervisor, content }) })).toMatchObject({ kind: "claim" });
+        await right.query("SELECT app.xa_withdraw($1,$2,$3,$4,'not_done')", [target.job, s.extraId, commandId, supervisor]);
+        await appendAuditBatch(db, [{ id: randomUUID(), version: "audit.v1", actorRef: `membership:${supervisor}`,
+          eventType: "contractor.extra.withdrawn", subjectType: "extra", subjectRef: s.extraId,
+          payload: { references: { command: commandId, job: target.job, extra: s.extraId, environment: "synthetic_demo" },
+            classifications: { action: "commercial" } } }]);
+        return completeRepositoryCommand(db, commandId);
+      };
+      const finish = async (db: PoolClient, pid: number, work: Promise<unknown>) => {
+        const result = await outcome(work);
+        const locks = await advisoryLocks(c.admin, pid, target);
+        if (result === "ok") expect(locks).toEqual(expect.arrayContaining([
+          { seed: 54, mode: "ShareLock", granted: true }, { seed: 417, mode: "ExclusiveLock", granted: true },
+        ]));
+        // Release the winner independently so the other operation can finish.
+        await db.query(result === "ok" ? "COMMIT" : "ROLLBACK");
+        return result;
+      };
+      const [clientResult, competitorResult] = await Promise.all([
+        finish(left, leftPid, approval()), finish(right, rightPid, withdraw()),
+      ]);
+      expect([clientResult, competitorResult]).not.toContain("40P01");
+      expect([clientResult, competitorResult].sort()).toEqual(["23514", "ok"]);
+      expect((await c.admin.query("SELECT kind FROM app.extra_approval_outcome WHERE tenant_id=$1 AND request_id=$2",
+        [target.tenant, s.requestId])).rows).toEqual([{ kind: clientResult === "ok" ? "approved" : "withdrawn" }]);
+      expect((await c.admin.query("SELECT actor_membership_id FROM app.extra_approval_step_fact WHERE tenant_id=$1 AND request_id=$2 AND actor_kind='client_approver'",
+        [target.tenant, s.requestId])).rows).toEqual(clientResult === "ok" ? [{ actor_membership_id: actor }] : []);
+    }
+  } finally {
+    await Promise.all([left.query("ROLLBACK"), right.query("ROLLBACK")]);
+    left.release(); right.release();
+  }
+}, 240_000);
