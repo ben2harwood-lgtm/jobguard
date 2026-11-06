@@ -52,6 +52,47 @@ export class WormCommandRepository {
     private readonly sessionDigest = "") {}
   private requireDark() { if (!this.enabled) throw new WormCommandError("DARK_ONLY"); }
 
+  /** Runtime SELECT grants already cover these tenant-scoped synthetic projections.
+   * An applied hold remains in force while its release is only requested.
+   */
+  async listHolds(context: VerifiedTenantContext, actorId: string, jobId: string) {
+    this.requireDark();
+    if (![actorId, jobId].every(value => uuid.safeParse(value).success)) throw new WormCommandError("INVALID_INPUT");
+    return withTenant(this.pool, context, async db => {
+      const owner = await db.$client.query(`SELECT identity_user_id FROM app.membership m
+        WHERE m.tenant_id=$1 AND m.id=$2 AND m.role='owner' AND m.revoked_at IS NULL
+        AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp())
+        AND NOT EXISTS(SELECT 1 FROM app.contractor_membership_revocation r
+          WHERE r.tenant_id=m.tenant_id AND r.membership_id=m.id)`, [context.tenantId, actorId]);
+      if (!owner.rows.length) throw new WormCommandError("WORM_REFUSED");
+      if (!(await db.$client.query("SELECT id FROM app.job WHERE tenant_id=$1 AND id=$2", [context.tenantId, jobId])).rows.length) return null;
+      return (await db.$client.query<{
+        evidenceId: string; label: string; commandId: string | null;
+        action: "apply_hold" | "release_hold" | null; status: WormReceipt["status"] | null;
+        holdId: string | null; held: boolean; canApply: boolean; canRelease: boolean;
+      }>(`SELECT e.id AS "evidenceId", e.evidence_type AS label,
+        latest.id AS "commandId", latest.action, latest.status, h.id AS "holdId",
+        coalesce(h.status='applied',false) AS held, h.id IS NULL AS "canApply",
+        coalesce(h.status='applied' AND h.identity_user_id<>$3::uuid AND NOT EXISTS(
+          SELECT 1 FROM app.worm_command r WHERE r.tenant_id=$1 AND r.release_of=h.id
+          AND r.status NOT IN ('refused','cancelled')),false) AS "canRelease"
+        FROM app.worm_synthetic_version f JOIN app.evidence_object e
+          ON (e.tenant_id,e.id,e.job_id)=(f.tenant_id,f.evidence_id,f.job_id)
+        LEFT JOIN LATERAL (SELECT c.id,c.action,c.status FROM app.worm_command c
+          WHERE c.tenant_id=$1 AND c.job_id=$2 AND c.evidence_id=e.id
+          AND c.action IN ('apply_hold','release_hold') ORDER BY c.created_at DESC,c.id DESC LIMIT 1) latest ON true
+        LEFT JOIN LATERAL (SELECT a.id,a.status,a.identity_user_id FROM app.worm_command a
+          WHERE a.tenant_id=$1 AND a.job_id=$2 AND a.evidence_id=e.id AND a.action='apply_hold'
+          AND a.status NOT IN ('refused','cancelled') AND NOT EXISTS(
+            SELECT 1 FROM app.worm_command r WHERE r.tenant_id=$1 AND r.release_of=a.id AND r.status='applied')
+          ORDER BY a.created_at DESC,a.id DESC LIMIT 1) h ON true
+        WHERE e.tenant_id=$1 AND e.job_id=$2
+          AND e.object_key LIKE 'synthetic/tenants/'||$1::text||'/%'
+          AND e.object_key !~ '(^|/)\\.\\.?(/|$)' AND e.object_version_id NOT IN ('','null')
+        ORDER BY e.id`, [context.tenantId, jobId, owner.rows[0].identity_user_id])).rows;
+    }).catch(refuse);
+  }
+
   /** Stored refusal receipts are the alert source; no second mutable alert store. */
   async operatorAlerts(context: VerifiedTenantContext): Promise<WormOperatorAlert[]> {
     this.requireDark();

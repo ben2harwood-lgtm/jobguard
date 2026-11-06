@@ -2,6 +2,8 @@ import { readFile } from "node:fs/promises";
 import { afterAll, expect, it } from "vitest";
 import { startBeforeMigration, applyMigration, snapshot, type Cluster } from "./contractor-entitlement-fixtures.js";
 import { legacyRecoveryFixture } from "./migfix-6-fixture.js";
+import { laterEmptyTables } from "./later-empty-tables.js";
+import { currentCommandRegistryRows } from "./lp5-command-catalog.js";
 import { migrate } from "../src/migrate.js";
 const migration = "0631_legacy_recovery_money_integrity.sql";
 let c: Cluster | undefined;
@@ -44,12 +46,8 @@ it("upgrades populated v1 history without changing rows, RLS, grants or unrelate
   const bound = (await c.admin.query("SELECT convalidated,pg_get_constraintdef(oid) definition FROM pg_constraint WHERE conrelid='app.landing_allocation'::regclass AND conname='landing_allocation_eligible_within_gross'")).rows;
   expect(bound).toEqual([{ convalidated: true, definition: 'CHECK ((eligible_net_pence <= gross_pence))' }]);
   await migrate(c.admin); await migrate(c.admin);
-  // 0634 adds only its empty table and one command registry row; everything else compares exactly.
-  const replayed = await snapshot(c.admin), registry = replayed["app.command_type_registry"] as { command_type: string }[];
-  expect(registry.filter(r => r.command_type !== "RecordExtraProceed")).toEqual(before["app.command_type_registry"]);
-  expect(registry.filter(r => r.command_type === "RecordExtraProceed")).toEqual([{ audit_class: "operational", command_type: "RecordExtraProceed", completion_adapter: "extra_proceed",
-    lock_adapter: "route_before_begin", outbox_class: null, permission_rule: "active_member", version: "repository-command.v1" }]);
-  expect({ ...replayed, "app.command_type_registry": before["app.command_type_registry"] }).toEqual({ ...before, "app.extra_proceed_statement": [] });
+  const registry = (await c.admin.query("SELECT jsonb_agg(value ORDER BY value::text) data FROM jsonb_array_elements($1::jsonb)", [JSON.stringify(currentCommandRegistryRows)])).rows[0].data;
+  expect(await snapshot(c.admin)).toEqual({ ...laterEmptyTables, ...before, "app.command_type_registry": registry });
   await legacy.reverse(p.allocationId, 40000);
   expect((await legacy.derivations(w.job)).at(-1)).toMatchObject({ landed: 60000, credit: 0, liability: 6000, delta: -4000 });
   expect(legacy.net(await legacy.journal(w.job))).toBe(6000);

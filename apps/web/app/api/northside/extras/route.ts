@@ -12,6 +12,6 @@ export async function GET() {
     const rates: Record<string, NorthsideRate[]> = {};
     if (role === "surveyor") for (const extra of extras) if (extra.state === "logged" && !rates[extra.jobId]) rates[extra.jobId] = await northsideRateCard(pool, member, extra.jobId, context);
     const queue = await new ExtraApprovalRepository(pool).queue(context, member.membershipId);
-    return json({ settings: await northsideRun(pool, member, context), queue, localLinks: role === "owner" ? await northsideLocalLinks(pool, member, context) : [], version: "northside-extras.v1", environment: "synthetic_demo", realExternalActions: 0, role, extras, rates });
+    return json({ settings: await northsideRun(pool, member, context), queue, localLinks: (role === "surveyor" || role === "commercial_manager") ? await northsideLocalLinks(pool, member, context) : [], version: "northside-extras.v1", environment: "synthetic_demo", realExternalActions: 0, role, extras, rates });
   } catch (error) { return failure(error); }
 }

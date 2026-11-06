@@ -33,5 +33,10 @@ it("0905 upgrades populated approval requests without changing any earlier row, 
    expect(current.definition.replace(/ WHEN 'extra_proceed' THEN[\s\S]*?(?= WHEN 'managed_recovery' THEN)/u, '')).toEqual(old.definition);
   } else expect(current).toEqual(old);
  }
- await migrate(c.admin); await migrate(c.admin); expect(await snapshot(c.admin)).toEqual(after);
+ // On replay 0639 (batch-41) and 0641 (batch-42) add only empty tables, and 0642 (Q10) moves IssueClientApproval
+ // from the owner rule to the contractor rule; every other row still compares exactly.
+ const replayedRegistry = (after["app.command_type_registry"] as { command_type: string; permission_rule: string }[]).map(row =>
+  row.command_type === "IssueClientApproval" && row.permission_rule === "owner" ? { ...row, permission_rule: "contractor" } : row);
+ await migrate(c.admin); await migrate(c.admin); expect(await snapshot(c.admin)).toEqual({ ...after, "app.connector_promotion": [],
+  "app.extra_client_command_session": [], "app.extra_client_session": [], "app.extra_client_signin": [], "app.command_type_registry": replayedRegistry });
 }, 240_000);
