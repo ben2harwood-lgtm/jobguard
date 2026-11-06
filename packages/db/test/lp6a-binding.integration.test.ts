@@ -45,6 +45,22 @@ it("fails closed on unbound/GUC/signed-context forgery, invalid credentials and 
   });
 });
 
+it("refuses ambiguous real-session actors without a binding and still binds a single membership", async () => {
+  const ambiguous = await session(), single = await session(), operative = randomUUID();
+  await db.owner.query("INSERT INTO app.membership(tenant_id,id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'operative')",
+    [ambiguous.tenant, operative, ambiguous.account, ambiguous.person]);
+  await db.owner.query("INSERT INTO identity.membership_locator VALUES($1,$2,$3)", [ambiguous.person, ambiguous.tenant, operative]);
+  await request(async c => {
+    const xid = (await c.query("SELECT pg_current_xact_id()::text xid")).rows[0].xid;
+    await failure(c, "SELECT app.bind_request('real',$1,$2)", [ambiguous.credential, ambiguous.tenant]);
+    await failure(c, "SELECT app.current_actor()");
+    expect((await db.owner.query("SELECT count(*)::int n FROM control_plane.request_binding WHERE transaction_id=$1::xid8", [xid])).rows[0].n).toBe(0);
+    await bind(c, single);
+    expect((await c.query("SELECT app.current_actor() actor,app.current_tenant() tenant")).rows[0])
+      .toEqual({ actor: single.member, tenant: single.tenant });
+  });
+});
+
 it("derives a tenant-selected actor and forbids replacement of an established binding", async () => {
   const s = await session(), other = await jobDoorsActor(db.owner);
   const member = randomUUID();

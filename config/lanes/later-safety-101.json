@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-101": {
+      "branches": [
+        "codex/sandbox/later-safety-101"
+      ],
+      "allow": [
+        "packages/db/migrations/0832_lp6_session_actor_strict.sql",
+        "packages/db/test/migration-proofs/0832_lp6_session_actor_strict.proof.json",
+        "packages/db/test/lp6a-binding.integration.test.ts"
+      ]
+    }
+  }
+}
