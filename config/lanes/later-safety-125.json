@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-125": {
+      "branches": ["codex/sandbox/later-safety-125"],
+      "allow": [
+        "packages/db/migrations/0851_outbox_status_forward_only.sql",
+        "packages/db/test/migration-proofs/0851_outbox_status_forward_only.proof.json",
+        "packages/db/test/outbox-status-forward-only.integration.test.ts"
+      ]
+    }
+  }
+}

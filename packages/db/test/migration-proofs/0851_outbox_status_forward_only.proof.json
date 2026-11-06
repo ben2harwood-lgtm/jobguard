@@ -1,0 +1,6 @@
+{
+  "migration": "0851_outbox_status_forward_only.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}
