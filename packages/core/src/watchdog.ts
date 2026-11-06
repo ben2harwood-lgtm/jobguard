@@ -241,6 +241,8 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "command:WithdrawExtra": "pre_live_allowed",
   "command:RevokeClientApproval": "pre_live_allowed",
   "command:ClientDecideExtra": "pre_live_allowed",
+  "/api/contractor/jobs/[id]/duplicate-dispositions": "pre_live_allowed",
+  "command:ResolveDuplicateCandidates": "pre_live_allowed",
   "command:MarkDuplicate": "pre_live_allowed",
   "command:LogSiteExtra": "pre_live_allowed",
   "/api/contractor/jobs/[id]/site-extras/[extraId]/proceed": "pre_live_allowed",

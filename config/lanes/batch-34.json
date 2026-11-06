@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/batch-34"
       ],
-      "note": "ENT-5 proceed and remaining rules; RED synthetic no-PR main catch-up against f5415ddb4c3a40796dd812e8b5946ba5094daa2b",
+      "note": "ENT-5 proceed and remaining rules; RED synthetic no-PR main catch-up against 919b7f3e60b82ef1ed1e32a6f259ba92246f6541",
       "allow": [
         "BUILD_PLAN.md",
         "apps/api/src/contractor/extra-proceed.application.test.ts",

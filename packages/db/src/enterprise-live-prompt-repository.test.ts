@@ -40,3 +40,12 @@ it("rejects invalid job identifiers before session resolution", async () => {
  await expect(new EnterpriseLivePromptRepository({} as Pool).observationEvidence(job, "invalid")).rejects.toMatchObject({ code: "INVALID_PROMPT_COMMAND" });
  expect(state.bridge).not.toHaveBeenCalled();
 });
+
+it.each(["FORBIDDEN", "UNAUTHENTICATED"])("types lp_authority refusal %s without turning an outage into a refusal", async message => {
+ state.bridge.mockResolvedValue(state.context);
+ state.tenant.mockRejectedValueOnce(Object.assign(new Error(message), { code: "42501" }));
+ await expect(new EnterpriseLivePromptRepository({} as Pool).detail(job, {version:"live-prompt-detail.v1",jobId:job,promptId:job}))
+  .rejects.toMatchObject({ name: "EnterpriseLivePromptPersistenceError", code: "EXTRA_FORBIDDEN" });
+ state.tenant.mockRejectedValueOnce(new Error("connection lost"));
+ await expect(new EnterpriseLivePromptRepository({} as Pool).detail(job, {version:"live-prompt-detail.v1",jobId:job,promptId:job})).rejects.toThrow("connection lost");
+});

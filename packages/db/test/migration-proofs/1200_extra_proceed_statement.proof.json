@@ -437,6 +437,15 @@
             "outbox_class": null
           },
           {
+            "command_type": "ResolveDuplicateCandidates",
+            "version": "duplicate-disposition.v1",
+            "permission_rule": "active_member",
+            "lock_adapter": "route_before_begin",
+            "completion_adapter": "duplicate_disposition",
+            "audit_class": "commercial",
+            "outbox_class": null
+          },
+          {
             "command_type": "EndCheck",
             "version": "end-check.v1",
             "permission_rule": "owner",
@@ -1015,6 +1024,15 @@
             "lock_adapter": "route_before_begin",
             "completion_adapter": "finding",
             "audit_class": "operational",
+            "outbox_class": null
+          },
+          {
+            "command_type": "ResolveDuplicateCandidates",
+            "version": "duplicate-disposition.v1",
+            "permission_rule": "active_member",
+            "lock_adapter": "route_before_begin",
+            "completion_adapter": "duplicate_disposition",
+            "audit_class": "commercial",
             "outbox_class": null
           },
           {

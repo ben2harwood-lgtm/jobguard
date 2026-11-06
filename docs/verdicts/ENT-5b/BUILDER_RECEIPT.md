@@ -458,3 +458,47 @@ must stage the resolutions and finish the pending merge. Full required CI,
 PostgreSQL fresh/upgrade/catalog tests, browser journeys and independent RED
 review must run at the final committed head. Existing wider ENT-5 holds and
 real-data, provider and release gates remain. READY means router handoff only.
+
+
+## batch-34 main merge refresh — 6 November 2026, 03:48 UTC
+
+READY for router handoff, RED ENT-5 proceed and remaining approval rules.
+Pending merge base: `919b7f3e60b82ef1ed1e32a6f259ba92246f6541` (origin/main; local main is older).
+
+Resolved the six working-file conflicts by retaining both exact registry rows
+(ResolveDuplicateCandidates and RecordExtraProceed), every main empty-table
+entry, and both sets of exact routine-body assertions. Rebound 1200's registry
+proof to 0623's complete after snapshot, preserving its ordering and inserting
+only RecordExtraProceed. Historical 0606 assertions exclude both later commands
+while retaining exact membership and counts. No test weakened.
+
+Compared every replaced routine in 1200–1204 against its latest matching main
+migration definition, including infrastructure discovery. Latest main sources
+remain 0606 (dispatcher), 0522 (approval, withdrawal and permission), 0158
+(requirement, escalation and queue), 0575 (discovery) and 0054 (validator).
+Diffs contain only this group's existing ENT-5 changes; no routine rewrite was
+needed. All main migrations are unchanged; only 1200–1204 are added, with no
+number or semantic-filename duplication. No new behavior.
+
+Local checks, installed binaries only; sequential Vitest runs, --maxWorkers=2,
+at most three named files per run:
+
+- packages/db: `./node_modules/.bin/vitest run --maxWorkers=2 test/extra-proceed-migration.test.ts test/migration-proof-loader.test.ts test/m2-1-migration-proof.test.ts` — 83 passed.
+- packages/db: `./node_modules/.bin/vitest run --maxWorkers=2 test/late-source-import-migration.test.ts test/extra-approval-timing.test.ts` — 21 passed.
+- packages/db: `./node_modules/.bin/tsc -p tsconfig.json --noEmit` — passed.
+- Root: `node tools/plpgsql-case-in-if-lint.mjs` — passed, 300 migrations.
+- Root: `git diff --check` and `git diff MERGE_HEAD --check` — passed.
+
+The first editing helper used root-relative paths from packages/db and wrote
+nothing; the accompanying pre-correction test run found four registry-proof
+failures. The helper was rerun from the explicit root, and all 104 tests above
+pass after the proof correction. Earlier source-only verification evidence is
+historical and is not claimed as rerun here.
+
+Lane allow-list exactly matches changed files against this base outside
+config/lanes and does not list itself. No Git write, database startup, browser
+or localhost suite, download, push or PR operation attempted. The read-only Git
+index still records six unmerged entries: the router must stage the working-file
+resolutions and finish the merge. Required CI, PostgreSQL fresh/upgrade/catalog
+and browser suites, and independent RED review at the final exact head remain
+required. READY means router handoff, not merged or accepted.

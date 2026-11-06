@@ -20,12 +20,12 @@ it("registers the operational command, side-table proof and no commercial writer
  const registry = proof.upgrade.find(c => c.section === "rows" && c.after?.table === "app.command_type_registry");
  const previousRegistry = predecessor.upgrade.find(c => c.section === "rows" && c.after?.table === "app.command_type_registry");
  if (registry?.section !== "rows" || previousRegistry?.section !== "rows") throw new Error("Missing exact registry proof");
- const historical = (rows: NonNullable<typeof registry.after>["data"]) => rows.filter(row => (row as { command_type: string }).command_type !== "rate.suggestion_accept" && (row as { command_type: string }).command_type !== "EndCheck");
+ const historical = (rows: NonNullable<typeof registry.after>["data"]) => rows.filter(row => (row as { command_type: string }).command_type !== "rate.suggestion_accept" && (row as { command_type: string }).command_type !== "EndCheck" && (row as { command_type: string }).command_type !== "ResolveDuplicateCandidates");
  expect(historical(registry.before!.data)).toEqual(expect.arrayContaining(previousRegistry.after!.data));
  expect(historical(registry.before!.data)).toHaveLength(previousRegistry.after!.data.length);
- const latestRegistry = loadMigrationProofs().proofs.find(p => p.migration === "0620_contractor_job_finish.sql")!.upgrade.find(c => c.section === "rows" && c.after?.table === "app.command_type_registry");
+ const latestRegistry = loadMigrationProofs().proofs.find(p => p.migration === "0623_extra_duplicate_disposition.sql")!.upgrade.find(c => c.section === "rows" && c.after?.table === "app.command_type_registry");
  expect(registry.before).toEqual(latestRegistry?.after);
- // Preserve PostgreSQL's jsonb-text snapshot order, including main's EndCheck row.
+ // Preserve PostgreSQL's jsonb-text snapshot order, including main's EndCheck and duplicate-disposition rows.
  const insertion = registry.before!.data.findIndex(row => (row as { command_type: string }).command_type === "RecordOfficeExtra");
  expect(insertion).toBeGreaterThan(0);
  expect(registry.after!.data).toEqual([...registry.before!.data.slice(0, insertion), extraProceedRegistryRow, ...registry.before!.data.slice(insertion)]);

@@ -15,3 +15,18 @@ Personal data may use only individually verified EU/UK processing, storage and l
 ## Approval requirement
 
 This record is not approval and must fail closed wherever its executable gate applies. Changing this policy requires a new version and must not rewrite historic terms or facts.
+
+## M2-2 dark inbound-intake seam (29 October 2026)
+
+`FakeMerchantIntakePort` is an unregistered, in-process test adapter, restricted by
+`JOBGUARD_ENV=synthetic_demo`; unset, pilot and production values refuse every entry point.
+It accepts only fixed fictional fixture IDs and `.invalid` sender/alias bindings supplied
+by the server-owned test setup. No mailbox, SMTP/IMAP, inbound HTTP endpoint, credentials,
+outbound email, remote-URL fetch, OCR or external storage route is implemented or approved.
+Original fixture bytes, SHA-256 hashes, synthetic object version IDs, source pages and
+receipt records stay in memory for the lifetime of the fake; there is no external storage,
+processing, logging, subprocessor, training or retention destination. Nothing is logged.
+Synthetic version IDs prove this adapter contract, not S3 verification or durable evidence.
+No new dependency or migration is required. Live intake remains behind D04 and G2 and needs
+an approved provider/data-flow entry, durable storage and command processing, real attachment
+inspection and release evidence before it can be registered. This entry grants no approval.
