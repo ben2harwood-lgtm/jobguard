@@ -15,6 +15,7 @@
         "packages/db/migrations/0799_fee_result_malformed_proof.sql",
         "packages/db/test/fee-reservation-archive-upgrade.integration.test.ts",
         "packages/db/test/fee-reservation.integration.test.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
         "packages/db/test/migration-proofs/0790_fee_result_forward_only.proof.json",
         "packages/db/test/migration-proofs/0799_fee_result_malformed_proof.proof.json"
       ]
