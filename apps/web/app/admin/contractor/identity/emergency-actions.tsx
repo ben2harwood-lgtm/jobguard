@@ -42,7 +42,7 @@ export function EmergencyActions({tenantId,csrfToken}:{tenantId:string;csrfToken
   <button style={field} disabled={busy||!tokenHash} onClick={()=>void act('inspect')}>Inspect sign-in requirement</button>
   <label>Non-owner membership ID<input style={field} value={target} onChange={e=>setTarget(e.target.value)} disabled={busy} /></label>
   <button style={field} disabled={busy||!tokenHash||!target} onClick={()=>void act('revoke_member')}>Revoke non-owner access</button>
-  {status&&<p role="status" aria-label="Emergency action result">{status}</p>}
+  {status&&<p role="status">{status}</p>}
   <EmergencyNotice key={revision} tenantId={tenantId} csrfToken={csrfToken} />
  </section>;
 }
