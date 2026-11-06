@@ -37,6 +37,46 @@ afterAll(async()=>{await closeTestPools(runtime,admin);await postgres?.stop();aw
 async function begin(bytes:Uint8Array,overrides:Record<string,unknown>={}){return service.beginUpload(context,{jobId:JOB,scopeItemId:SCOPE,expectedSha256:hash(bytes),contentType:"image/png",maximumBytes:100,expiresAt:new Date(Date.now()+60_000),...overrides});}
 
 describe("verified evidence lifecycle",()=>{
+ it("keeps verified upload proof immutable against runtime updates", async () => {
+  const bytes = validPng();
+  const upload = await begin(bytes);
+  storage.put(upload.objectKey, "immutable-v1", bytes);
+  const finalization = { uploadId: upload.id, objectVersionId: "immutable-v1", evidenceType: "site_photo" };
+  const evidence = await service.finalize(context, finalization);
+  const readUpload = () => withTenant(runtime, context, async db =>
+   (await db.$client.query("SELECT * FROM app.evidence_upload WHERE tenant_id=$1 AND id=$2", [TENANT, upload.id])).rows[0]);
+  const original = await readUpload();
+  expect(original).toMatchObject({ state: "verified", object_version_id: "immutable-v1",
+   server_verified_at: expect.any(Date), rejection_code: null });
+  // Separate transactions ensure every column is checked after the preceding refusal rolls back.
+  for (const assignment of ["state='rejected'", "object_version_id='substituted-v2'",
+   "server_verified_at=server_verified_at + interval '1 second'", "rejection_code='wrong_hash'"]) {
+   await expect(withTenant(runtime, context, db => db.$client.query(
+    `UPDATE app.evidence_upload SET ${assignment} WHERE tenant_id=$1 AND id=$2`, [TENANT, upload.id]
+   ))).rejects.toMatchObject({ code: "42501", message: "verified evidence upload is immutable" });
+   expect(await readUpload()).toEqual(original);
+  }
+  await withTenant(runtime, context, db => db.$client.query(
+   "UPDATE app.evidence_upload SET state=state,object_version_id=object_version_id,server_verified_at=server_verified_at,rejection_code=rejection_code WHERE tenant_id=$1 AND id=$2",
+   [TENANT, upload.id]));
+  expect(await readUpload()).toEqual(original);
+  expect(await service.finalize(context, finalization)).toEqual(evidence);
+  await expect(service.linkAndAssertProof(context, { id: randomUUID(), evidenceId: upload.id,
+   jobId: JOB, scopeItemId: SCOPE, requiredEvidenceType: "site_photo" })).resolves.toHaveProperty("evidence_id", upload.id);
+  // Rejection remains available before verification, both before and after quarantine.
+  for (const state of ["pending", "quarantined"]) {
+   const transient = await begin(bytes);
+   await withTenant(runtime, context, async db => {
+    if (state === "quarantined") await db.$client.query(
+     "UPDATE app.evidence_upload SET state='quarantined',object_version_id='transient-v1' WHERE tenant_id=$1 AND id=$2",
+     [TENANT, transient.id]);
+    await db.$client.query("UPDATE app.evidence_upload SET state='rejected',rejection_code='wrong_hash' WHERE tenant_id=$1 AND id=$2",
+     [TENANT, transient.id]);
+    expect((await db.$client.query("SELECT state,rejection_code FROM app.evidence_upload WHERE tenant_id=$1 AND id=$2",
+     [TENANT, transient.id])).rows[0]).toEqual({ state: "rejected", rejection_code: "wrong_hash" });
+   });
+  }
+ });
  it("forces RLS and forbids mutation of DB-backed synthetic originals",async()=>{const catalogs=await admin.query(`SELECT relrowsecurity,relforcerowsecurity,pg_get_userbyid(relowner) owner FROM pg_class WHERE oid='app.synthetic_evidence_original'::regclass`);expect(catalogs.rows[0]).toEqual({relrowsecurity:true,relforcerowsecurity:true,owner:"jobguard_migration"});await expect(withTenant(runtime,context,db=>db.$client.query("UPDATE app.synthetic_evidence_original SET bytes=$1 WHERE tenant_id=$2",[Buffer.from([1]),TENANT]))).rejects.toMatchObject({code:"42501"});await expect(withTenant(runtime,context,db=>db.$client.query(`INSERT INTO app.synthetic_evidence_original(tenant_id,upload_id,job_id,scope_item_id,object_key,object_version_id,environment,content_type,bytes) VALUES($1,$2,$3,$4,'x','v','synthetic_demo','image/png',$5)`,[TENANT,randomUUID(),randomUUID(),SCOPE,Buffer.from([1])]))).rejects.toBeTruthy()});
  it("registers one immutable exact version across finalization retries and overwrites",async()=>{const original=validPng();const upload=await begin(original,{deviceCapturedAt:new Date("2026-01-01T00:00:00Z")});storage.put(upload.objectKey,"v1",original);const first=await service.finalize(context,{uploadId:upload.id,objectVersionId:"v1",evidenceType:"site_photo"});storage.put(upload.objectKey,"v2",new Uint8Array([9,9,9]));const second=await service.finalize(context,{uploadId:upload.id,objectVersionId:"v1",evidenceType:"site_photo"});expect(second.id).toBe(first.id);expect(first.object_version_id).toBe("v1");expect(first.sha256.trim()).toBe(hash(original));expect((await storage.readExactVersion(upload.objectKey,"v1")).bytes).toEqual(original);expect(first.device_captured_at).toEqual(new Date("2026-01-01T00:00:00Z"));expect(first.server_received_at).not.toEqual(first.device_captured_at);expect(first.server_verified_at).toBeInstanceOf(Date);const previewBytes=new Uint8Array([3,2,1]);const previewKey=`${upload.objectKey}/preview`;storage.put(previewKey,"pv1",previewBytes);const preview=await service.registerPreview(context,{id:randomUUID(),originalEvidenceId:upload.id,objectKey:previewKey,objectVersionId:"pv1",contentType:"image/png",maximumBytes:10});expect(preview.kind).toBe("preview");expect(preview.original_evidence_id).toBe(upload.id);expect(preview.sha256.trim()).toBe(hash(previewBytes));expect(preview.sha256.trim()).not.toBe(first.sha256.trim());expect(first.object_version_id).toBe("v1");await expect(withTenant(runtime,context,db=>db.$client.query("UPDATE app.evidence_object SET sha256=$1",["0".repeat(64)]))).rejects.toMatchObject({code:"42501"});});
  it.each([{name:"hash",bytes:[1],opts:{expectedSha256:"0".repeat(64)},type:"image/png",max:100,version:"v1",error:"wrong_hash"},{name:"type",bytes:[2],opts:{},type:"image/jpeg",max:100,version:"v1",error:"wrong_type"},{name:"size",bytes:[1,2,3],opts:{maximumBytes:2},type:"image/png",max:2,version:"v1",error:"size_exceeded"},{name:"version",bytes:[4],opts:{},type:"image/png",max:100,version:"missing",error:"missing_version"}])("rejects wrong $name and it cannot prove work",async({bytes,opts,type,version,error})=>{const data=new Uint8Array(bytes);const upload=await begin(data,opts);if(version!=="missing")storage.put(upload.objectKey,version,data,type);await expect(service.finalize(context,{uploadId:upload.id,objectVersionId:version,evidenceType:"site_photo"})).rejects.toThrow(error);await expect(service.linkAndAssertProof(context,{id:randomUUID(),evidenceId:upload.id,jobId:JOB,scopeItemId:SCOPE,requiredEvidenceType:"site_photo"})).rejects.toBeInstanceOf(EvidenceError);});
