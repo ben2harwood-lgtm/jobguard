@@ -1,3 +1,4 @@
+import { sourceFixtureUrl } from "../source-fixture-url.js";
 import { describe, expect, it } from "vitest";
 import { fileURLToPath } from "node:url";
 import { renderBillingExport } from "@jobguard/core";
@@ -25,7 +26,7 @@ function action(): OutboundAction {
 }
 
 const synthetic: ConnectorUnderTest = {
-  sourceEntry: fileURLToPath(new URL("./sftp.synthetic.ts", import.meta.url)),
+  sourceEntry: fileURLToPath(sourceFixtureUrl("./sftp.synthetic.ts", import.meta.url)),
   create(scenario) {
     const server = createInMemorySftpServer(new Map([[id(2), id(1)]]));
     const connect = () => server.connect(environment, scope, scenario === "unknown" ? "unknown_accepted" : "success").adapter;
@@ -37,7 +38,7 @@ const synthetic: ConnectorUnderTest = {
   },
 };
 const bad: ConnectorUnderTest = {
-  sourceEntry: fileURLToPath(new URL("./conformance-kit.bad-fixture.ts", import.meta.url)),
+  sourceEntry: fileURLToPath(sourceFixtureUrl("./conformance-kit.bad-fixture.ts", import.meta.url)),
   create: (scenario, writers) => createBadConnectorFixture(action(), scenario, writers),
 };
 

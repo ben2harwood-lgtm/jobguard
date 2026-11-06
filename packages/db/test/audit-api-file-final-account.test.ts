@@ -31,6 +31,8 @@ class FinalAccountSql {
   query = async (sql: string, values: any[] = []) => {
     this.calls.push(sql);
     const rows = (items: Row[]) => ({ rows: items, rowCount: items.length });
+    if (sql === "SELECT app.bind_request($1, $2, $3)") return rows([]);
+    if (sql === "SELECT app.current_actor() actor, app.current_tenant() tenant") return rows([{ actor: jobId, tenant: tenantId }]);
     if (sql.includes("authenticate_practice_session")) return rows([{ tenant_id: tenantId, membership_id: jobId, identity_user_id: scopeId }]);
     if (sql.includes("WITH RECURSIVE practice_owned_job")) return rows([{ id: jobId }]);
     if (sql.startsWith("SELECT 1 FROM app.membership")) {

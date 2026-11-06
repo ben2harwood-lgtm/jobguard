@@ -18,6 +18,7 @@ it.each(["owned pending upload", "foreign upload", "unknown evidence"])(
   "proof complete preserves ownership and domain validation for %s", async scenario => {
     vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
     const query = vi.fn(async (sql: string, values?: unknown[]) => {
+      if (sql === "SELECT app.current_actor() actor, app.current_tenant() tenant") return { rows: [{ actor: jobId, tenant: tenantId }] };
       if (sql.includes("authenticate_practice_session")) return { rows: [{ tenant_id: tenantId, membership_id: jobId, identity_user_id: scopeId }] };
       if (sql.includes("practice_session_digest=$3")) return { rows: [{ id: jobId }] };
       if (sql.startsWith("SELECT 1 FROM app.membership")) return { rows: [{}] };
@@ -48,6 +49,7 @@ function finalizeFixture(path: "existing" | "concurrent") {
   const object = { id: pendingId, upload_id: pendingId, object_version_id: version, evidence_type: "electrical_certificate" };
   const statements: string[] = [];
   const rowsFor = (sql: string, values: unknown[], state: State): unknown[] => {
+    if (sql === "SELECT app.current_actor() actor, app.current_tenant() tenant") return [{ actor: jobId, tenant: tenantId }];
     if (sql.includes("authenticate_practice_session")) return [{ tenant_id: tenantId, membership_id: jobId, identity_user_id: scopeId }];
     if (sql.includes("practice_session_digest=$3") || sql.startsWith("SELECT 1 FROM app.membership") || sql.startsWith("SELECT 1 FROM app.job j")) return [{}];
     if (sql.startsWith("SELECT id FROM app.evidence_upload")) return [{ id: pendingId }];

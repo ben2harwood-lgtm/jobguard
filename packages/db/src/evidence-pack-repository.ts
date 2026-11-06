@@ -1,3 +1,4 @@
+import { RequestBindingRefusedError } from "./request-binding-error.js";
 import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import { z } from 'zod';
@@ -7,7 +8,7 @@ import {
 } from '@jobguard/core';
 import { appendAuditBatch } from './audit.js';
 import { loadEvidencePackSources } from './evidence-pack-sources.js';
-import { withTenant, type TenantTransaction, type VerifiedTenantContext } from './tenant-context.js';
+import { withTenant, bindAfterLocks, type TenantTransaction, type VerifiedTenantContext } from './tenant-context.js';
 
 const commandIdSchema = z.guid({ error: "Invalid uuid" }).transform(value => value.toLowerCase());
 const generateInput = z.object({ commandId: commandIdSchema, format: z.literal('TEXT').prefault('TEXT') }).strict();
@@ -143,6 +144,8 @@ export class EvidencePackRepository {
     const input = approvalInput.parse(raw), requestHash = sha256(JSON.stringify({ action: 'approve_attachment', caseId, packId, ...input, actorRef }));
     await withTenant(this.pool, ctx, async db => {
       await this.lock(db, ctx.tenantId, caseId, input.commandId);
+      try { await bindAfterLocks(db, ctx); }
+      catch (error) { if (error instanceof RequestBindingRefusedError) fail('UNAUTHENTICATED'); throw error; }
       // Fence session/member AFTER command/case waits, including replays.
       await this.authorizeAttachment(db, ctx.tenantId, actorRef);
       if ((await db.$client.query('SELECT 1 FROM app.evidence_pack_revision WHERE tenant_id=$1 AND command_id=$2', [ctx.tenantId, input.commandId])).rowCount) fail('EVIDENCE_PACK_COMMAND_CONFLICT');
@@ -161,7 +164,7 @@ export class EvidencePackRepository {
         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, [randomUUID(), ctx.tenantId, pack.job_id, caseId, packId, input.commandId, requestHash, pack.manifest_hash, pack.content_hash, actorRef]);
       await appendAuditBatch(db, [{ id: randomUUID(), version: 'audit.v1', actorRef, eventType: 'evidence_pack.attachment_approved', subjectType: 'evidence_pack', subjectRef: packId,
         payload: { references: { caseId, jobId: pack.job_id }, hashes: { manifest: pack.manifest_hash, content: pack.content_hash }, classifications: { evidence: 'operational' } } }]);
-    });
+    }, 'evidence-pack-approval');
     return (await this.list(ctx, caseId)).find(row => row.id === packId) ?? fail('EVIDENCE_PACK_NOT_FOUND');
   }
 

@@ -28,7 +28,9 @@ async function prepare() {
   const digest = (value: string) => createHmac("sha256", "fictional-m413-test-secret").update(value).digest("hex");
   const sessionDigest = digest(`session:${state.token}`);
   await fixture.admin.query("UPDATE identity.session SET token_digest=$1,csrf_token=$2 WHERE id=$3", [sessionDigest, state.csrf, company.sessionId]);
-  const principal = { identityUserId: userId, sessionId: company.sessionId, csrfToken: state.csrf };
+  const principal = Object.defineProperty(
+    { identityUserId: userId, sessionId: company.sessionId, csrfToken: state.csrf },
+    "sessionCredential", { value: sessionDigest });
   const membership = { id: company.actorId, tenantId: company.tenantId, identityUserId: userId, role: "owner", name: "Fictional owner" };
   // Authentication is a seam here; SQL re-authenticates the real persisted session and owner.
   const provider = { digest, authenticate: async () => principal, findMembership: async () => membership };

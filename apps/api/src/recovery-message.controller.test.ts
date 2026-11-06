@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { HttpException } from "@nestjs/common";
-import { PracticeAccessError, WatchdogError } from "@jobguard/db";
+import { PracticeAccessError, RequestBindingRefusedError, WatchdogError } from "@jobguard/db";
 import { PracticeErrorsFilter } from "./practice-errors.filter.js";
 import { WatchdogExceptionFilter } from "./watchdog.filter.js";
 import { recoveryMessageFailure } from "./recovery-message.errors.js";
@@ -75,7 +75,7 @@ it.each(["read/list", "draft", "approve", "advance", "reconcile", "revoke"])("Ne
   const adapters: Record<string, unknown> = {
     "server-only": {}, "next/headers": { cookies: async () => ({ get: () => token ? { value: token } : undefined }) },
     "next/server": { NextResponse: { json: (body: unknown, options?: ResponseInit) => Response.json(body, options) } },
-    "@jobguard/db": { PracticeAccessError }, "@jobguard/api/workspace": {}, "pg": {},
+    "@jobguard/db": { PracticeAccessError, RequestBindingRefusedError }, "@jobguard/api/workspace": {}, "pg": {},
   };
   function load(path: string): Record<string, (...args: any[]) => Promise<Response>> {
     const exports = {};

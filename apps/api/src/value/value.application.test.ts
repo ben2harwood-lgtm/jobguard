@@ -11,6 +11,7 @@ type Revision = { id: string; revision_id: string; revision: number; description
 function fixture(revisions: Revision[]) {
  const session = randomUUID(), jobId = randomUUID();
  const query = vi.fn(async (sql: string) => {
+  if (sql === "SELECT app.current_actor() actor, app.current_tenant() tenant") return { rows: [{ actor: DEMO_MEMBERSHIP_ID, tenant: DEMO_TENANT_ID }] };
   if (sql.includes("authenticate_practice_session")) return { rows: [{ tenant_id: DEMO_TENANT_ID, membership_id: DEMO_MEMBERSHIP_ID, identity_user_id: DEMO_IDENTITY_USER_ID }] };
   if (sql.startsWith(practiceOwnedJobsSql())) return { rows: [{ id: jobId }] };
   if (sql.startsWith("SELECT baseline_quote_version_id")) return { rows: [{ baseline_quote_version_id: null }] };

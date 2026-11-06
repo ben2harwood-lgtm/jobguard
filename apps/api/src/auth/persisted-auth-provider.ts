@@ -95,7 +95,7 @@ export class PersistedAuthProvider implements AuthProvider {
   async authenticate(sessionToken: string): Promise<AuthPrincipal | undefined> {
     const row = (await this.repository.pool.query<{id:string;user_id:string;csrf_token:string}>("SELECT id,user_id,csrf_token FROM identity.session WHERE token_digest=$1 AND revoked_at IS NULL AND expires_at>$2 AND environment=$3", [this.digest(`session:${sessionToken}`),new Date(this.now()),this.environment])).rows[0];
     if (!row || (await this.enterpriseIdentity.sessionScope(row.id))?.revoked) return undefined;
-    return {sessionId:row.id,identityUserId:row.user_id,csrfToken:row.csrf_token};
+    return Object.defineProperty({sessionId:row.id,identityUserId:row.user_id,csrfToken:row.csrf_token}, "sessionCredential", {value:this.digest(`session:${sessionToken}`)});
   }
   async memberships(principal: AuthPrincipal): Promise<(ActiveMembership & { name: string })[]> {
     const scope = await this.enterpriseIdentity.sessionScope(principal.sessionId);

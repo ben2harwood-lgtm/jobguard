@@ -10,7 +10,7 @@ const identity = { allowedOrigin: credentials.origin, provider: { authenticate, 
 const app = new VatFixtureApplication(identity as never, { read, command });
 beforeEach(() => {
   vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
-  authenticate.mockResolvedValue({ identityUserId: tenant, sessionId: member, csrfToken: credentials.csrfToken });
+  authenticate.mockResolvedValue({ identityUserId: tenant, sessionId: member, sessionCredential: "d".repeat(64), csrfToken: credentials.csrfToken });
   findMembership.mockResolvedValue({ id: member, identityUserId: tenant, tenantId: tenant, role: "owner" });
   command.mockResolvedValue({ book: {}, records: [], reconciliation: {} }); read.mockResolvedValue({ book: {}, records: [], reconciliation: {} });
 });

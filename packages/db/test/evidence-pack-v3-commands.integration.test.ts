@@ -1,3 +1,4 @@
+import { verifiedTenantContextForQueuedJob } from "../src/tenant-context.js";
 // CI-only PostgreSQL: actual activated request and checked writer boundaries.
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
@@ -17,24 +18,24 @@ it("generation, replay and approval create one exact artifact and one approval",
   const command = { version: "evidence-pack-command.v3", commandId, format: "TEXT", expectedVisibleSourceRevision: before.visibleSourceRevision };
   await repo.request(f.auth.context, f.caseId, f.auth.digest, command);
   await repo.request(f.auth.context, f.caseId, f.auth.digest, command);
-  const prepared = await worker.prepare(f.auth.context, commandId);
-  await expect(worker.finish(f.auth.context, commandId, prepared.material)).rejects.toThrow("EVIDENCE_PACK_V3_DEPENDENCY_HELD");
-  await worker.completeMustSurface(f.auth.context, commandId, prepared.visibleRevision);
+  const prepared = await worker.prepare(verifiedTenantContextForQueuedJob(f.source.tenantId), commandId);
+  await expect(worker.finish(verifiedTenantContextForQueuedJob(f.source.tenantId), commandId, prepared.material)).rejects.toThrow("EVIDENCE_PACK_V3_DEPENDENCY_HELD");
+  await worker.completeMustSurface(verifiedTenantContextForQueuedJob(f.source.tenantId), commandId, prepared.visibleRevision);
   const { assembleEvidencePackV3 } = await import("@jobguard/core");
   const packInput = assembleEvidencePackV3(prepared.material);
   for (const artifact of [packInput.artifactText + "\n", packInput.artifactText.replace('"binding":"synthetic-records"', '"binding":"unbound-specimen"')]) {
     await expect(asFixtureTenant(f.shadow, f.source.tenantId, db => db.query("SELECT app.finish_evidence_pack_v3($1,$2,$3::jsonb,$4,$5)", [f.source.tenantId, commandId, JSON.stringify(prepared.material), artifact, packInput.manifestHash]))).rejects.toThrow("EVIDENCE_PACK_CONTENT_MISMATCH");
   }
-  await worker.finish(f.auth.context, commandId, prepared.material);
-  await worker.finish(f.auth.context, commandId, prepared.material);
+  await worker.finish(verifiedTenantContextForQueuedJob(f.source.tenantId), commandId, prepared.material);
+  await worker.finish(verifiedTenantContextForQueuedJob(f.source.tenantId), commandId, prepared.material);
   const pack = (await repo.read(f.auth.context, f.caseId, f.auth.digest)).packs[0]!;
   expect(pack).toMatchObject({ id: commandId, contentMatches: true, attachmentApprovalRecorded: false });
   const approval = { version: "evidence-pack-attachment-approval.v3", commandId: randomUUID(), packId: pack.id, expectedManifestHash: pack.manifestHash, expectedContentHash: pack.contentHash };
   await repo.request(f.auth.context, f.caseId, f.auth.digest, approval);
-  const checked = await worker.prepare(f.auth.context, approval.commandId);
-  await worker.completeMustSurface(f.auth.context, approval.commandId, checked.visibleRevision);
-  await worker.finish(f.auth.context, approval.commandId, checked.material);
-  await worker.finish(f.auth.context, approval.commandId, checked.material);
+  const checked = await worker.prepare(verifiedTenantContextForQueuedJob(f.source.tenantId), approval.commandId);
+  await worker.completeMustSurface(verifiedTenantContextForQueuedJob(f.source.tenantId), approval.commandId, checked.visibleRevision);
+  await worker.finish(verifiedTenantContextForQueuedJob(f.source.tenantId), approval.commandId, checked.material);
+  await worker.finish(verifiedTenantContextForQueuedJob(f.source.tenantId), approval.commandId, checked.material);
   expect((await repo.read(f.auth.context, f.caseId, f.auth.digest)).packs).toMatchObject([{ attachmentApprovalRecorded: true }]);
   await expect(repo.request(f.auth.context, f.caseId, f.auth.digest, { ...command, expectedVisibleSourceRevision: "a".repeat(64) })).rejects.toThrow("EVIDENCE_PACK_COMMAND_CONFLICT");
   for (const table of ["evidence_pack_v3", "evidence_pack_v3_approval", "shadow_commercial_signal"])

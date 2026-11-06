@@ -81,7 +81,8 @@ async function capture(db: Pool | PoolClient): Promise<Proof> {
  return rendered(db,async client=>{
   const discovered=(await client.query(`SELECT schemaname,tablename,EXISTS(
    SELECT 1 FROM pg_index i WHERE i.indrelid=format('%I.%I',schemaname,tablename)::regclass AND i.indisprimary) AS keyed
-   FROM pg_tables WHERE schemaname IN ('app','identity','control_plane','audit_control') ORDER BY 1,2`)).rows;
+   FROM pg_tables WHERE schemaname IN ('app','identity','control_plane','audit_control')
+    AND NOT (schemaname='control_plane' AND tablename='request_binding') ORDER BY 1,2`)).rows;
   const tables=discovered.map(t=>`${t.schemaname}.${t.tablename}`);
   const unkeyedTables=discovered.filter(t=>!t.keyed).map(t=>`${t.schemaname}.${t.tablename}`);
   // Explicit inspected exception only; every unexpected unkeyed table remains a STOP.

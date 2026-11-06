@@ -103,7 +103,8 @@ describe("r1 snapshot transaction lifecycle (unit SQL doubles, not PostgreSQL pr
     if (fails) await expect(result).rejects.toBe(failure);
     else await expect(result).resolves.toBe("snapshot");
     expect(query.mock.calls).toEqual([
-      ["BEGIN ISOLATION LEVEL REPEATABLE READ, READ ONLY", undefined],
+      ["BEGIN ISOLATION LEVEL REPEATABLE READ"],
+      ["SET TRANSACTION READ ONLY"],
       ["SELECT set_config('app.tenant_id', $1, true)", [id]],
       [fails ? "ROLLBACK" : "COMMIT", undefined],
     ]);
@@ -182,7 +183,8 @@ it.each([false, true])("snapshot mode precedes tenant/source queries and release
   if (fail) await expect(work).rejects.toThrow("SOURCE_FAILURE");
   else await expect(work).resolves.toBe("snapshot");
   expect(statements).toEqual([
-    { sql: "BEGIN ISOLATION LEVEL REPEATABLE READ, READ ONLY", values: undefined },
+    { sql: "BEGIN ISOLATION LEVEL REPEATABLE READ", values: undefined },
+    { sql: "SET TRANSACTION READ ONLY", values: undefined },
     { sql: "SELECT set_config('app.tenant_id', $1, true)", values: [id] },
     { sql: "SELECT snapshot_source", values: [id] },
     { sql: fail ? "ROLLBACK" : "COMMIT", values: undefined },

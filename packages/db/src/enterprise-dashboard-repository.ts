@@ -1,3 +1,4 @@
+import { mapRequestBindingRefusal } from "./request-binding-error.js";
 import type { Pool } from "pg";
 import type { BillingStatus, BillingAllocation } from "@jobguard/core";
 import { z } from "zod";
@@ -23,7 +24,7 @@ export class EnterpriseDashboardRepository {
     if (process.env.JOBGUARD_ENV !== "synthetic_demo") throw new EnterpriseDashboardError("MODE_FORBIDDEN");
     if (!z.guid().safeParse(sessionId).success) throw new EnterpriseDashboardError("NOT_FOUND");
     const query = dashboardParse(dashboardQueryV1, raw);
-    return withTenant(this.pool, context, async db => {
+    return mapRequestBindingRefusal(withTenant(this.pool, context, async db => {
       await db.$client.query(enterpriseDashboardScopeLockSql, [context.tenantId]);
       const row = (await db.$client.query<{ authorized: boolean; facts: unknown; billing: unknown }>(
         enterpriseDashboardSourceSql, [sessionId, context.tenantId])).rows[0];
@@ -34,13 +35,13 @@ export class EnterpriseDashboardRepository {
           throw new EnterpriseDashboardError("NOT_FOUND");
       }
       return projectStoredDashboardBilling(facts, query, row.billing);
-    });
+    }), () => new EnterpriseDashboardError("NOT_FOUND"));
   }
   async read(context: VerifiedTenantContext, sessionId: string, raw: unknown) {
     if (process.env.JOBGUARD_ENV !== "synthetic_demo") throw new EnterpriseDashboardError("MODE_FORBIDDEN");
     if (!z.guid({ error: "Invalid uuid" }).safeParse(sessionId).success) throw new EnterpriseDashboardError("NOT_FOUND");
     const query = dashboardParse(dashboardQueryV1, raw);
-    return withTenant(this.pool, context, async db => {
+    return mapRequestBindingRefusal(withTenant(this.pool, context, async db => {
       await db.$client.query(enterpriseDashboardScopeLockSql, [context.tenantId]);
       const row = (await db.$client.query<{ authorized: boolean; facts: unknown; signals: unknown; signal_billing: unknown }>(enterpriseDashboardSourceSql, [sessionId, context.tenantId])).rows[0];
       if (!row?.authorized) throw new EnterpriseDashboardError("NOT_FOUND");
@@ -53,6 +54,6 @@ export class EnterpriseDashboardRepository {
       const report = projectEnterpriseDashboard(facts, query), signalFacts = dashboardParse(enterpriseSignalFactsV1, row.signals);
       const signals = scopedEnterpriseSignals(facts, query, signalFacts, billedSignals);
       return { report, signals };
-    });
+    }), () => new EnterpriseDashboardError("NOT_FOUND"));
   }
 }

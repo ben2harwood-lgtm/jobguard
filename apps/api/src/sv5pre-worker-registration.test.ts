@@ -1,10 +1,11 @@
+import { sourceFixtureUrl } from "./source-fixture-url.js";
 import { readFile } from "node:fs/promises";
 import { describe, expect, it, vi } from "vitest";
 import type { TaskList } from "graphile-worker";
 import { registerFinalCheckTask } from "./worker-task-extensions.js";
 import { executeFinalCheckTask } from "./final-check-task-executor.js";
 
-const { testTenantContext } = await import(new URL("../../../packages/db/test/tenant-context-test-utils.ts", import.meta.url).href);
+const { testTenantContext } = await import(sourceFixtureUrl("../../../packages/db/test/tenant-context-test-utils.ts", import.meta.url).href);
 const unavailablePorts = { read: vi.fn(async () => { throw new Error("FINAL_CHECK_FORBIDDEN"); }), execute: vi.fn(), publish: vi.fn() };
 const task = {
   version: "final-check-task.v1", tenantId: "10000000-0000-4000-8000-000000000001",
@@ -79,7 +80,7 @@ describe("SV5PRE final-check registration", () => {
     // Inspect the new modules' import boundaries, without pinning any shared file's bytes or hashes.
     const ts = await import("typescript");
     for (const name of ["worker-task-extensions.ts", "final-check-task-executor.ts"]) {
-      const source = ts.createSourceFile(name, await readFile(new URL(name, import.meta.url), "utf8"), ts.ScriptTarget.Latest, true);
+      const source = ts.createSourceFile(name, await readFile(sourceFixtureUrl(name, import.meta.url), "utf8"), ts.ScriptTarget.Latest, true);
       for (const statement of source.statements) if (ts.isImportDeclaration(statement) && statement.importClause && !statement.importClause.isTypeOnly) {
         const bindings = statement.importClause.namedBindings;
         if (bindings && ts.isNamedImports(bindings)) for (const element of bindings.elements) {

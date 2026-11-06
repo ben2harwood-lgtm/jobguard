@@ -20,7 +20,7 @@ export async function authenticatePracticeSession(pool: Pool, token: string | un
  const digest=digestToken(parsed.data);
  const row=(await pool.query(requestedTenantId?"SELECT * FROM app.authenticate_practice_session($1,$2)":"SELECT * FROM app.authenticate_practice_session($1)",requestedTenantId?[digest,requestedTenantId]:[digest])).rows[0];
  if(!row)throw new PracticeAccessError("UNAUTHENTICATED"); const principal=principalV1.parse(row);
- const context=verifiedTenantContextFromMembership({tenantId:principal.tenant_id,membershipId:principal.membership_id,identityUserId:principal.identity_user_id} as AuthenticatedMembership);
+ const context=verifiedTenantContextFromMembership({tenantId:principal.tenant_id,membershipId:principal.membership_id,identityUserId:principal.identity_user_id} as AuthenticatedMembership, {kind:"practice",credential:digest});
  return {context,digest,membershipId:principal.membership_id,identityUserId:principal.identity_user_id};
 }
 
@@ -55,7 +55,7 @@ export async function authorizePracticeJob(pool: Pool, token: string | undefined
 
 /**
  * Adapter for repositories that use withTenant's promise-based connect/query
- * contract. Install the authenticated digest immediately after BEGIN, before
+ * contract. Install the authenticated digest after session binding, before
  * any business SQL. Transaction-local state rolls back/commits with that work;
  * the original pool and non-practice repositories are unchanged.
  * This is an application trust boundary, not protection from stolen DB credentials.
@@ -70,10 +70,9 @@ export function practiceMaterialPool(pool: Pool, digest: string): Pool {
     return new Proxy(client,{
      get(connection,property) {
       if(property==="query")return async(sql:string,values?:unknown[])=>{
-       const result=await connection.query(sql,values);
-       // Only withTenant's exact BEGIN installs the digest; other callers run unscoped and fail closed.
-       if(sql==="BEGIN")await connection.query("SELECT set_config('app.practice_material_digest', $1, true)",[digest]);
-       return result;
+       // Only withTenant's exact tenant setup installs the digest, after binding.
+       if(sql==="SELECT set_config('app.tenant_id', $1, true)")await connection.query("SELECT set_config('app.practice_material_digest', $1, true)",[digest]);
+       return connection.query(sql,values);
       };
       const value=Reflect.get(connection,property);
       return typeof value==="function"?value.bind(connection):value;

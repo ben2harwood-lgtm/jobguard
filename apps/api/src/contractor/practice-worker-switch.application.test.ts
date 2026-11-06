@@ -9,7 +9,7 @@ const principal = { version: "contractor-principal.v1", sessionId: session };
 const on = () => ({ version: "practice-worker-switch-on.v1", commandId: randomUUID() });
 const off = () => ({ version: "practice-worker-switch-off.v1", commandId: randomUUID() });
 const answer = { version: "practice-worker-switch-state.v1", environment: "synthetic_demo", realExternalActions: 0, state: "owner", switchId: null, workerMembershipId: null, startedAt: null, expiresAt: null, endedAt: null, endReason: null };
-const query = vi.fn(async () => ({ rows: [] }));
+const query = vi.fn(async (_sql: string): Promise<{ rows: Record<string, unknown>[] }> => ({ rows: [] }));
 const release = vi.fn();
 const pool = { query, connect: vi.fn(async () => ({ query, release })) } as unknown as Pool;
 const app = new PracticeWorkerSwitchApplication(pool);
@@ -34,6 +34,7 @@ it("[PW21] exact persisted actor and route target reach the repository through t
  resolve.mockRestore();
  query.mockResolvedValueOnce({ rows: [{ tenant_id: randomUUID(), membership_id: randomUUID(), identity_user_id: randomUUID() }] } as never);
  const actor = await new ContractorRepository(pool).resolveSession(session);
+ query.mockImplementation(async sql => ({ rows: sql === "SELECT app.current_actor() actor, app.current_tenant() tenant" ? [{ actor: actor.membershipId, tenant: actor.tenantId }] : [] }));
  const lookup = vi.spyOn(ContractorRepository.prototype, "resolveSession").mockResolvedValue(actor);
  const repo = vi.spyOn(PracticeWorkerSwitchRepository.prototype, "switchOn").mockImplementation(async (context, received, value, raw) => {
   expect(received).toBe(actor); expect(value).toBe(session); expect(raw).toMatchObject({ workerId: worker });
@@ -62,8 +63,10 @@ it("[PW27] routine privilege refusal becomes unavailable and writes nothing", as
  expect(practiceWorkerSwitchHttpFailure(await app.read(principal).catch(error => error)).body.code).toBe("SWITCH_UNAVAILABLE");
 });
 it.each([null, undefined, {}, { state: "acting" }, { state: "owner", switch: null, worker: null, startedAt: null, expiresAt: null, extra: true }])("[PW23] strict routine response refuses incomplete or extra facts %j", async result => {
+ const actorRow = { tenant_id: randomUUID(), membership_id: randomUUID(), identity_user_id: randomUUID() };
  const localQuery = vi.fn(async (sql: string) => {
-  if (sql === "SELECT * FROM app.contractor_session($1)") return { rows: [{ tenant_id: randomUUID(), membership_id: randomUUID(), identity_user_id: randomUUID() }] };
+  if (sql === "SELECT app.current_actor() actor, app.current_tenant() tenant") return { rows: [{ actor: actorRow.membership_id, tenant: actorRow.tenant_id }] };
+  if (sql === "SELECT * FROM app.contractor_session($1)") return { rows: [actorRow] };
   if (sql.includes("practice_worker_switch_state")) return { rows: [{ result }] };
   return { rows: [] };
  });
@@ -76,6 +79,7 @@ it.each([null, undefined, {}, { state: "acting" }, { state: "owner", switch: nul
 it("[PW27] revoking switch-on execute yields unavailable after authentication with no audit write", async () => {
  const actorRow = { tenant_id: randomUUID(), membership_id: randomUUID(), identity_user_id: randomUUID() };
  const localQuery = vi.fn(async (sql: string) => {
+  if (sql === "SELECT app.current_actor() actor, app.current_tenant() tenant") return { rows: [{ actor: actorRow.membership_id, tenant: actorRow.tenant_id }] };
   if (sql.includes("app.contractor_session")) return { rows: [actorRow] };
   if (sql.includes("app.practice_worker_switch_on")) throw Object.assign(new Error("permission denied for function"), { code: "42501" });
   return { rows: [] };

@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { beforeAll, afterAll, expect, it, vi } from "vitest";
 import { cluster, type Cluster } from "./extra-fixtures.js";
 import { seedWorkJob, type WorkFixture } from "./job-work-state-fixtures.js";
@@ -15,8 +15,14 @@ async function setup() {
   const a = await seedWorkJob(c as unknown as WorkFixture);
   const user = (await c.admin.query("SELECT identity_user_id FROM app.membership WHERE tenant_id=$1 AND id=$2", [a.tenantId, a.actorId])).rows[0].identity_user_id as string;
   state.credentials = { sessionToken: "s".repeat(32), csrfToken: "c".repeat(24), tenantHeader: a.tenantId, origin: "https://company.invalid" };
+  const sessionId = randomUUID(), sessionCredential = createHash("sha256").update(randomUUID()).digest("hex");
+  await c.admin.query("INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at) VALUES($1,$2,'synthetic_demo',$3,$4,clock_timestamp()+interval '1 hour')",
+    [sessionId, user, sessionCredential, state.credentials.csrfToken]);
+  // LP-6b binds the real session, so give the fictional owner the identity rows a signed-in member has.
+  await c.admin.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", [`${user}@fictional.invalid`, user]);
+  await c.admin.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3)", [user, a.tenantId, a.actorId]);
   state.identity = { allowedOrigin: "https://company.invalid", provider: {
-    authenticate: async (token: string) => token === state.credentials.sessionToken ? { identityUserId: user, sessionId: user, csrfToken: state.credentials.csrfToken } : undefined,
+    authenticate: async (token: string) => token === state.credentials.sessionToken ? { identityUserId: user, sessionId, sessionCredential, csrfToken: state.credentials.csrfToken } : undefined,
     findMembership: async (_principal: unknown, tenant: string) => tenant === a.tenantId ? { id: a.actorId, tenantId: a.tenantId, identityUserId: user, role: "owner" } : undefined,
   } };
   const params = { params: Promise.resolve({ id: a.jobId }) };

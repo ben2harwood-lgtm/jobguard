@@ -17,7 +17,7 @@ const status = (state = "pending") => ({ version: 1, sourceId: source.sourceId, 
   previewHash: preview.previewHash, artifact: preview.artifact, status: state, attemptId: null, attempts: 0, externalId: null, qualifyingRecoveryProof: false });
 beforeEach(() => {
   vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
-  authenticate.mockResolvedValue({ identityUserId: tenant, sessionId: tenant, csrfToken: credentials.csrfToken });
+  authenticate.mockResolvedValue({ identityUserId: tenant, sessionId: tenant, csrfToken: credentials.csrfToken, sessionCredential: "a".repeat(64) });
   findMembership.mockImplementation(async (_: unknown, id: string) => id === tenant ? { id: tenant, tenantId: tenant, identityUserId: tenant, role: "owner" } : undefined);
   const tenantId = `demo-${tenant}`;
   preview = new AccountingExportSandbox(new FakeCodatAdapter(), [{ ...source, tenantId }], [{ ...consent, tenantId }], true)

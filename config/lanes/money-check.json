@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "lanes": {
+    "money-check": {
+      "branches": ["codex/sandbox/money-check"],
+      "note": "MONEY-CHECK: independent hand-worked penny oracle and synthetic source-level checks; NOPR, no product changes or migrations.",
+      "allow": ["tools/money-check.mjs", "tools/money-check.test.mjs"]
+    }
+  }
+}

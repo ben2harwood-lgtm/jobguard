@@ -3,7 +3,7 @@ import type { Pool } from "pg";
 import { DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID, DEMO_IDENTITY_USER_ID, FinalCheckRepository, practiceOwnedJobsSql } from "@jobguard/db";
 import { FinalCheckApplication } from "./final-check.application.js";
 const id="18000000-0000-4000-8000-000000000002",session="18000000-0000-4000-8000-000000000001";
-function fixture(owns=true){vi.stubEnv("JOBGUARD_ENV","synthetic_demo");const query=vi.fn(async(sql:string)=>({rows:sql.includes("authenticate_practice_session")?[{tenant_id:DEMO_TENANT_ID,membership_id:DEMO_MEMBERSHIP_ID,identity_user_id:DEMO_IDENTITY_USER_ID}]:sql.startsWith(practiceOwnedJobsSql())&&owns?[{id}]:[]}));return {query,app:new FinalCheckApplication({query,connect:async()=>({query,release:vi.fn()})} as unknown as Pool,session)};}
+function fixture(owns=true){vi.stubEnv("JOBGUARD_ENV","synthetic_demo");const query=vi.fn(async(sql:string)=>({rows:sql==="SELECT app.current_actor() actor, app.current_tenant() tenant"?[{actor:DEMO_MEMBERSHIP_ID,tenant:DEMO_TENANT_ID}]:sql.includes("authenticate_practice_session")?[{tenant_id:DEMO_TENANT_ID,membership_id:DEMO_MEMBERSHIP_ID,identity_user_id:DEMO_IDENTITY_USER_ID}]:sql.startsWith(practiceOwnedJobsSql())&&owns?[{id}]:[]}));return {query,app:new FinalCheckApplication({query,connect:async()=>({query,release:vi.fn()})} as unknown as Pool,session)};}
 afterEach(()=>{vi.restoreAllMocks();vi.unstubAllEnvs();});
 it("SV5-21 SV5-30 authorizes before command parsing or hidden subject lookup",async()=>{
  const f=fixture(false),spy=vi.spyOn(FinalCheckRepository.prototype,"disposition");

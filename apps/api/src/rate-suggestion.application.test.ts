@@ -6,7 +6,7 @@ const tenantId = randomUUID(), membershipId = randomUUID(), userId = randomUUID(
 function fixture() {
   vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
   const member = { id: membershipId, tenantId, identityUserId: userId, role: "owner", email: "fictional@example.invalid" };
-  const provider = { authenticate: vi.fn(async () => ({ identityUserId: userId, sessionId: randomUUID(), csrfToken: "c".repeat(32) })),
+  const provider = { authenticate: vi.fn(async () => ({ identityUserId: userId, sessionId: randomUUID(), sessionCredential: "d".repeat(64), csrfToken: "c".repeat(32) })),
     findMembership: vi.fn(async () => member), digest: vi.fn(() => "d".repeat(64)) };
   const identity = { provider, allowedOrigin: "https://practice.invalid", session: vi.fn(async () => ({ csrfToken: "c".repeat(32), memberships: [member] })) };
   const repository = { readAcceptances: vi.fn(async () => []), read: vi.fn(), accept: vi.fn() };

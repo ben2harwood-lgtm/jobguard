@@ -1,3 +1,4 @@
+import { applyRequestBindingFoundation } from "./request-binding-fixture.js";
 import { installAuditCommandWriterRoles } from "./pool-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { proofEvidenceTypeSchema } from "../../core/src/proof.js";
@@ -17,18 +18,32 @@ export async function createWorkFixture(install = true, database = "jobguard_syn
  const connection = { host: "127.0.0.1", port, database, user: "postgres", password: credential };
  const postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: credential, persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
  await postgres.initialise(); await postgres.start(); if (database !== "postgres") await postgres.createDatabase(database);
- const admin = new Pool(connection), login = `ch4_${randomUUID().replaceAll("-", "")}`;
+ const connectionEnds: Promise<void>[] = [];
+ const retainedPool = (settings: ConstructorParameters<typeof Pool>[0]) => {
+  const pool = new Pool(settings);
+  // Pool.end() may resolve before its clients emit their final socket-end events.
+  // Track connections from creation, including ones removed by the idle timer.
+  pool.on("connect", client => { connectionEnds.push(new Promise<void>(resolve => client.once("end", resolve))); });
+  return pool;
+ };
+ const admin = retainedPool(connection), login = `ch4_${randomUUID().replaceAll("-", "")}`;
  await installAuditCommandWriterRoles(admin);
  if (install) {
   const { migrate } = await import("../src/migrate.js");
   await migrate(admin); await installLegacySyntheticPartyFixtures(admin);
  }
  if (install) await admin.query(`CREATE ROLE ${login} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${credential}'; GRANT jobguard_runtime TO ${login}`);
- const runtime = new Pool({ ...connection, user: install ? login : "postgres", max: 4 });
- return { postgres, directory, admin, runtime };
+ const runtime = retainedPool({ ...connection, user: install ? login : "postgres", max: 4 });
+ return { postgres, directory, admin, runtime,
+  async waitForConnectionEnds() { await Promise.all(connectionEnds); } };
 }
 export type WorkFixture = Awaited<ReturnType<typeof createWorkFixture>>;
-export async function closeWorkFixture(f?: WorkFixture) { if (f) await closeTestDatabase(f.postgres, f.directory, f.runtime, f.admin); }
+export async function closeWorkFixture(f?: WorkFixture) {
+ if (f) await closeTestDatabase({ stop: async () => {
+  await f.waitForConnectionEnds();
+  await f.postgres.stop();
+ } }, f.directory, f.runtime, f.admin);
+}
 export async function workTenant<T>(pool: Pool, tenantId: string, work: (db: PoolClient) => Promise<T>) {
  const db = await pool.connect();
  try { await db.query("BEGIN"); await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenantId]); const result = await work(db); await db.query("COMMIT"); return result; }
@@ -101,6 +116,7 @@ export async function prepareWorkAccount(f:WorkFixture,a:WorkJob) {
 
 /** Authenticate through the product's issued synthetic session, never a fabricated stamp. */
 export async function seedWorkPractice(f:WorkFixture) {
+ await applyRequestBindingFoundation(f.admin);
  const {DEMO_TENANT_ID,DEMO_ACCOUNT_ID,DEMO_MEMBERSHIP_ID,DEMO_IDENTITY_USER_ID}=await import("../src/demo-seed.js");
  const {issuePracticeSession,authenticatePracticeSession}=await import("../src/practice-session.js");
  process.env.JOBGUARD_ENV="synthetic_demo";

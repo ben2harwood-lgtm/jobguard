@@ -104,8 +104,7 @@ export class SsoRequiredApplication {
     const context=await resolveVerifiedTenantContext(this.provider,{...credentials,requestedTenantId:input.requested_tenant_id},this.allowedOrigin);
     if(!credentials.sessionToken||!credentials.csrfToken)throw new SsoRequiredError("SSO_REQUIRED_FORBIDDEN");
     const repository=new EnterpriseAccessRepository(this.base.repository.pool,this.base.repository.pool);
-    return repository.emergency(context,{sessionDigest:this.base.digest(`session:${credentials.sessionToken}`),csrfToken:credentials.csrfToken},
-      {version:"emergency.v1",operation:"notices"});
+    return repository.emergencyNotices(context,{sessionDigest:this.base.digest(`session:${credentials.sessionToken}`),csrfToken:credentials.csrfToken});
   }
   async refuseInput(emergency=false):Promise<never> {
     let code:SsoRequiredError['code']=emergency?"SSO_EMERGENCY_REFUSED":"INVALID_SSO_REQUIRED_INPUT";

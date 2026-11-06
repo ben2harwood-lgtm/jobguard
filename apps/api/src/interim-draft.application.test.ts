@@ -14,6 +14,7 @@ function fixture() {
     lineage: "fixture_lineage_not_authority" as const, reconciliation: reconcileInterimDraftBook(book) };
   const repository = { read: vi.fn().mockResolvedValue(result), command: vi.fn().mockResolvedValue(result) };
   const principal = { identityUserId: randomUUID(), sessionId: randomUUID(), csrfToken: "c".repeat(24) };
+  Object.defineProperty(principal, "sessionCredential", { value: "a".repeat(64), enumerable: false });
   const provider = { authenticate: vi.fn().mockResolvedValue(principal),
     findMembership: vi.fn().mockResolvedValue({ id: randomUUID(), tenantId, identityUserId: principal.identityUserId }),
     digest: vi.fn().mockReturnValue("a".repeat(64)) };

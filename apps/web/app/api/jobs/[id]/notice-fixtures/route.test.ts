@@ -12,7 +12,9 @@ import { GET, POST } from "./route";
 beforeEach(() => {
   vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
   state.credentials = { sessionToken: "s".repeat(32), csrfToken: "c".repeat(24), tenantHeader: tenant, origin: "https://company.invalid" };
-  state.authenticate.mockImplementation(async (token: string) => token === "s".repeat(32) ? { identityUserId: tenant, sessionId: tenant, csrfToken: "c".repeat(24) } : undefined);
+  state.authenticate.mockImplementation(async (token: string) => token === "s".repeat(32) ? Object.defineProperty(
+    { identityUserId: tenant, sessionId: tenant, csrfToken: "c".repeat(24) },
+    "sessionCredential", { value: "a".repeat(64) }) : undefined);
   state.findMembership.mockImplementation(async (_: unknown, id: string) => id === tenant ? { id: tenant, tenantId: tenant, identityUserId: tenant, role: "owner", email: "owner@fictional.invalid" } : undefined);
   state.read.mockResolvedValue({ preview: null, decisions: [], records: [] }); state.command.mockResolvedValue({ kind: "revision" });
 });

@@ -65,7 +65,8 @@ test("owners request holds, see stored applied states, and a different person re
     expect(held).toBe(false);
     const commands = (await admin.query("SELECT id FROM app.worm_command WHERE tenant_id=$1 AND action='apply_hold'", [tenant])).rows;
     expect(commands).toHaveLength(1);
-    await repository.execute(verified, commands[0].id, storage, tsa);
+    // The WORM executor runs as a queued job: its login cannot bind a human session (LP-6b).
+    await repository.execute(db.verifiedTenantContextForQueuedJob(tenant), commands[0].id, storage, tsa);
     await main.getByRole("button", { name: "Refresh status" }).click();
     await expect(main.getByText("Stored hold is applied.", { exact: true })).toBeVisible();
     await expect(main.getByRole("button", { name: "Request release" })).toBeDisabled();
@@ -76,7 +77,7 @@ test("owners request holds, see stored applied states, and a different person re
     await expect(main.getByRole("status")).toHaveText("Release requested");
     await expect(main.getByText("Stored hold is applied.", { exact: true })).toBeVisible();
     const release = (await admin.query("SELECT id FROM app.worm_command WHERE tenant_id=$1 AND action='release_hold'", [tenant])).rows[0];
-    await repository.execute(verified, release.id, storage, tsa);
+    await repository.execute(db.verifiedTenantContextForQueuedJob(tenant), release.id, storage, tsa);
     await main.getByRole("button", { name: "Refresh status" }).click();
     await expect(main.getByText("Hold released", { exact: true })).toBeVisible();
     expect(held).toBe(false);

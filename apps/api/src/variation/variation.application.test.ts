@@ -19,6 +19,7 @@ const isOwnershipQuery = (sql: string) => sql.startsWith(practiceOwnedJobsSql())
 const view = { baselinePence: 10000, capPence: 150, parentScopeItemId: input.scopeItemId, variations: [] };
 function fixture(ownsJob: boolean, authenticates = true) {
  const query = vi.fn(async (sql: string) => ({ rows:
+  sql === "SELECT app.current_actor() actor, app.current_tenant() tenant" ? [{ actor: DEMO_MEMBERSHIP_ID, tenant: DEMO_TENANT_ID }] :
   sql.includes("authenticate_practice_session") && authenticates
    ? [{ tenant_id: DEMO_TENANT_ID, membership_id: DEMO_MEMBERSHIP_ID, identity_user_id: DEMO_IDENTITY_USER_ID }]
    : isOwnershipQuery(sql) && ownsJob ? [{ id: job }] : [],

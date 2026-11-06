@@ -38,7 +38,14 @@ describe("CH-3a application boundary", () => {
 
 function expectAccessQueries(calls: Array<[string, (unknown[] | undefined)?]>) {
   for (const [sql] of calls) {
-    expect(sql).toMatch(/authenticate_practice_session|^(BEGIN|COMMIT|ROLLBACK)$|set_config|practice_session_digest/);
+    expect(sql).toMatch(/authenticate_practice_session|^(BEGIN|COMMIT|ROLLBACK|SELECT app\.bind_request\(\$1, \$2, \$3\)|SELECT app\.current_actor\(\) actor, app\.current_tenant\(\) tenant)$|set_config|practice_session_digest/);
+  }
+  const bind = calls.findIndex(([sql]) => sql === "SELECT app.bind_request($1, $2, $3)");
+  if (bind !== -1) {
+    expect(calls[bind - 1]?.[0]).toBe("BEGIN");
+    expect(calls[bind]?.[1]).toEqual(["practice", createHash("sha256").update(token).digest("hex"), DEMO_TENANT_ID]);
+    expect(calls[bind + 1]?.[0]).toBe("SELECT app.current_actor() actor, app.current_tenant() tenant");
+    expect(calls.slice(bind + 2).find(([sql]) => sql === "COMMIT" || sql === "ROLLBACK")?.[0]).toBe("COMMIT");
   }
 }
 
@@ -48,6 +55,8 @@ function accessPool(scenario: "missing" | "invalid" | "invented" | "stranger" | 
   const query = vi.fn(async (sql: string, _values?: unknown[]) => ({ rows:
     sql.includes("authenticate_practice_session") && (scenario === "stranger" || scenario === "owner")
       ? [{ tenant_id: DEMO_TENANT_ID, membership_id: DEMO_MEMBERSHIP_ID, identity_user_id: DEMO_IDENTITY_USER_ID }]
+      : sql === "SELECT app.current_actor() actor, app.current_tenant() tenant"
+      ? [{ actor: DEMO_MEMBERSHIP_ID, tenant: DEMO_TENANT_ID }]
       : sql.includes("practice_session_digest=$3") && scenario === "owner" ? [{ id: job }] : [],
   }));
   const connect = vi.fn(async () => ({ query, release: vi.fn() }));
@@ -121,6 +130,8 @@ describe("LP-5a parties-import result contract", () => {
     // Database boundary double; CI exercises the actual SQL projection and proof.
     const query = vi.fn(async (sql: string, values: unknown[] = []) => {
       if (/^(BEGIN|COMMIT|ROLLBACK)$/.test(sql) || sql.includes("set_config")) return { rows: [] };
+      if (sql === "SELECT app.bind_request($1, $2, $3)") return { rows: [] };
+      if (sql === "SELECT app.current_actor() actor, app.current_tenant() tenant") return { rows: [{ actor: DEMO_MEMBERSHIP_ID, tenant: DEMO_TENANT_ID }] };
       if (sql.includes("authenticate_practice_session")) return { rows: [{ tenant_id: DEMO_TENANT_ID, membership_id: DEMO_MEMBERSHIP_ID, identity_user_id: DEMO_IDENTITY_USER_ID }] };
       if (sql.includes("practice_session_digest=$3")) return { rows: [{ id: job }] };
       if (sql.includes("SELECT status,result FROM app.command_receipt")) return { rows: stored ? [{ status: "succeeded", result: stored }] : [] };

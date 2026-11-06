@@ -1,3 +1,4 @@
+import { sourceFixtureUrl } from "../source-fixture-url.js";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { Pool } from "pg";
@@ -110,7 +111,7 @@ describe("audit-export shared context boundary tests", () => {
     } finally { await s.pool.end(); }
   });
   it("[X4] removes the hand-made adapter and calls the shared bridge once in the typed method", () => {
-    const text = readFileSync(new URL("./audit-export.application.ts", import.meta.url), "utf8");
+    const text = readFileSync(sourceFixtureUrl("./audit-export.application.ts", import.meta.url), "utf8");
     for (const old of ["resolveVerifiedTenantContext", "AuthProvider", "AuthError", "principal-bridge", "audit-export-internal-bridge", "fictional.invalid"]) expect(text).not.toContain(old);
     expect(text.match(/contractorSessionContext\(/gu)).toHaveLength(1);
     expect(text).toContain("const context: VerifiedTenantContext = await contractorSessionContext(this.pool, sessionId);");

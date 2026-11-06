@@ -1,0 +1,9 @@
+{
+  "version": 2,
+  "lanes": {
+    "money-check-rounding": {
+      "branches": ["codex/sandbox/money-check-rounding"],
+      "allow": ["tools/money-check.test.mjs"]
+    }
+  }
+}

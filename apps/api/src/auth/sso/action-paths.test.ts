@@ -1,3 +1,4 @@
+import { sourceFixtureUrl } from "../../source-fixture-url.js";
 import { readFile } from "node:fs/promises";
 import { runInNewContext } from "node:vm";
 import { transpileModule, ModuleKind } from "typescript";
@@ -19,7 +20,7 @@ import request from "supertest";
 import type { CacheItem, CacheProvider } from "@node-saml/node-saml";
 import { SamlAdapter, type SamlConnection } from "./saml.js";
 import { generateTestIdentityProvider } from "./test-identity-provider.js";
-const principal={identityUserId:"30000000-0000-4000-8000-000000000003",sessionId:"40000000-0000-4000-8000-000000000004",csrfToken:"a".repeat(32)};
+const principal={identityUserId:"30000000-0000-4000-8000-000000000003",sessionId:"40000000-0000-4000-8000-000000000004",csrfToken:"a".repeat(32),sessionCredential:"b".repeat(64)};
 const member={id:"50000000-0000-4000-8000-000000000005",identityUserId:principal.identityUserId,tenantId:"10000000-0000-4000-8000-000000000001",role:"read_only" as const,email:"site@fixture.invalid"};
 function fixture() {
  const base={authenticate:vi.fn(async()=>principal),findMembership:vi.fn(async()=>member),memberships:vi.fn(async()=>[{...member,name:'Fictional'}]),requestCode:vi.fn(),verifyCode:vi.fn()} as unknown as PersistedAuthProvider;
@@ -183,10 +184,10 @@ describe("Round 1 / shared Nest and Next factory composition",()=>{
  it("both server compositions use the binding-aware persisted provider even before the SSO service is constructed",async()=>{
   const environment={JOBGUARD_ENV:'synthetic_demo',IDENTITY_DATABASE_URL:'postgresql://jobguard_identity:fixture@db.fixture.invalid/jobguard_synthetic_demo',AUTH_CODE_SECRET:'factory-fixture-key-longer-than-thirty-two',AUTH_ALLOWED_ORIGIN:boundaryOrigin};
   // This is Nest's IDENTITY_APPLICATION factory; no connection or SSO service is needed.
-  const module=await readFile(new URL('../../app.module.ts',import.meta.url),'utf8');
+  const module=await readFile(sourceFixtureUrl('../../app.module.ts', import.meta.url),'utf8');
   expect(module).toContain('createIdentityApplication(process.env)');
   const nest=createIdentityApplication(environment);
-  const source=await readFile(new URL('../../../../web/app/lib/identity-server.ts',import.meta.url),'utf8');
+  const source=await readFile(sourceFixtureUrl('../../../../web/app/lib/identity-server.ts', import.meta.url),'utf8');
   const exports:Record<string,any>={};
   runInNewContext(transpileModule(source,{compilerOptions:{module:ModuleKind.CommonJS}}).outputText,{
    exports,process:{env:environment},require:(id:string)=>{

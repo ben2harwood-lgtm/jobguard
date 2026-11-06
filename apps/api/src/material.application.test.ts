@@ -23,6 +23,8 @@ function fixture() {
  const packs: { skuId: string; unit: string; quantity: string; from: string }[] = [];
  const requirements: { id: string; scopeItemId: string; skuId: string; quantity: string; unit: string; revision: number }[] = [];
  const query = vi.fn(async (sql: string, values: unknown[] = []): Promise<{ rows: object[] }> => {
+  if (sql === "SELECT app.bind_request($1, $2, $3)") return { rows: [] };
+  if (sql === "SELECT app.current_actor() actor, app.current_tenant() tenant") return { rows: [{ actor: scopeItemId, tenant: tenantId }] };
   if (sql.includes("authenticate_practice_session")) return { rows: [{ tenant_id: tenantId, membership_id: scopeItemId, identity_user_id: session }] };
   if (sql.includes("WITH RECURSIVE practice_owned_job")) return { rows: [{ id: jobId }] };
   if (/^(BEGIN|COMMIT|ROLLBACK)$/u.test(sql) || sql.includes("set_config") || sql.startsWith("SELECT pg_advisory_xact_lock(")) return { rows: [] };
