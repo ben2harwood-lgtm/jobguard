@@ -263,7 +263,7 @@ describe("ENT-4b origin persistence", () => {
    "packages/db/src/job-scheduling-repository.ts": "7517df3c6597af44f651c8b704c9bd91c4f40894ce5aa58e3b4fcea16cc9eb57",
    "packages/db/src/work-order-fixtures.ts": "703b2f726e9d4256cbd0a1908676f2cd401d64bad28741853f8131183cd0a0ea",
    // Scanner bytes change only for the renewed caller review citation above.
-   "apps/api/src/auth/context-boundary.test.ts": "b77c7b63985dc66d359af04285e099463335085aa47e64100af9473dc9f58bc0"
+   "apps/api/src/auth/context-boundary.test.ts": "413a60bc0bf8ee4d113b068a6ed6a54710e7f2cb8507206f41b4d83d1e3e80a7"
 };
   for (const [file, hash] of Object.entries(hashes)) expect(sha256Hex(await readFile(new URL(`../../../${file}`, import.meta.url), "utf8")), file).toBe(hash);
  });
