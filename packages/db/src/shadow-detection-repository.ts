@@ -67,7 +67,7 @@ export class ShadowDetectionRepository {
       // firing holds the job row until commit, fencing later same-job disclosure
       // and final-account locks; later firings reuse our already-held signal locks.
       for (const group of groups) await this.surface(db, context, group);
-    });
+    }, "shadow-persist");
     return groups;
   }
   private async surface(db: TenantTransaction, context: VerifiedTenantContext, g: DetectionGroup): Promise<void> {
