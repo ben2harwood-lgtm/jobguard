@@ -38,6 +38,15 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   // 0567 changes only the checked settlement overload's expected approval hash.
   const settlementOid = (await c.admin.query("SELECT 'app.record_simulated_settlement(uuid,uuid,uuid,character varying,bigint,timestamp with time zone,uuid,uuid,uuid)'::regprocedure::oid oid")).rows[0].oid;
   const selfComparison = "(SELECT content_hash FROM app.action_authorization WHERE tenant_id=p_tenant AND id=p_authorization)";
+  // This batch replaces only these exact routine identities; compare their complete bodies.
+  const batchBodies = await Promise.all([
+    ["retention_records", "t uuid, digest text, j uuid, cid uuid, v jsonb, expected text", "0646_retention_timer_runtime_rules.sql"],
+    ["notice_fixture_records", "j uuid, n uuid, digest text, operation text, v jsonb", "0647_notice_live_job_check.sql"],
+    ["pay_now_fake_attempt", "t uuid, digest text, j uuid, operation text, v jsonb", "0648_pay_now_catch_statement.sql"],
+  ].map(async ([name, args, migration]) => {
+    const sql = await readFile(new URL(`../migrations/${migration}`, import.meta.url), "utf8");
+    return { name, args, body: sql.split(`CREATE OR REPLACE FUNCTION app.${name}`)[1]!.split("AS $$")[1]!.split("$$;")[0] };
+  }));
   // ENT-5 changes only these exact routine bodies; preserve every predecessor check.
   const clientAuthority = await readFile(new URL("../migrations/0642_extra_client_send_authority.sql", import.meta.url), "utf8");
   const clientAttribution = await readFile(new URL("../migrations/0644_extra_customer_approval.sql", import.meta.url), "utf8");
@@ -83,6 +92,19 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   ].map(([identity, name]) => [identity, finishSql.split(`CREATE OR REPLACE FUNCTION app.${name}(`)[1]!.split("AS $$")[1]!.split("$$;")[0]]));
   for (const prior of security) {
     const current = live.find(row => row.oid === prior.oid);
+    // 0650 changes only the demo issuer body; keep its metadata and every other definition pinned.
+    if (prior.nspname === "app" && prior.proname === "demo_issue_customer_link" &&
+      prior.args === "t uuid, j uuid, c uuid, session_digest text, link_digest text, content text") {
+      expect({ ...current, definition: prior.definition }).toEqual(prior);
+      const sql = await readFile(new URL("../migrations/0650_demo_customer_link_reference.sql", import.meta.url), "utf8");
+      expect(current?.definition?.split("$function$")[1]).toBe(sql.split("FUNCTION app.demo_issue_customer_link(")[1]!.split("AS $$")[1]!.split("$$;")[0]);
+      continue;
+    }
+    const batchReplacement = batchBodies.find(row => prior.nspname === "app" && prior.proname === row.name && prior.args === row.args);
+    if (batchReplacement) {
+      expect(current?.definition?.split("$function$")[1]).toEqual(batchReplacement.body);
+      continue;
+    }
     // 0632 changes only these exact shadow routines; MIGFIX-7's upgrade test binds their full bodies and unchanged ACLs.
     if (prior.nspname === "app" && (
       (prior.proname === "record_shadow_disclosure" && prior.args === "p_tenant uuid, p_job uuid, p_signal uuid, p_event uuid, p_route text") ||

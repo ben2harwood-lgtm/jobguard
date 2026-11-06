@@ -13,7 +13,7 @@ describe("M4-20 infrastructure timer (real PostgreSQL)", () => {
   infrastructure = new Pool({ ...f.admin.options, password: f.admin.options.password, options: "-c role=jobguard_infrastructure", max: 2 });
  }, 240000);
  afterAll(async () => { await infrastructure?.end(); await closeWorkFixture(f); });
- const timer = () => new RetentionRecordRepository(infrastructure);
+ const timer = () => new RetentionRecordRepository(f.runtime);
  const human = () => new RetentionRecordRepository(f.runtime);
  const company = () => meterCompany(f);
  type Company = Awaited<ReturnType<typeof company>>;
@@ -27,7 +27,7 @@ describe("M4-20 infrastructure timer (real PostgreSQL)", () => {
  }
  const append = (a: Company, record: unknown, commandId = randomUUID()) => human().command(a.context, { sessionDigest: a.digest },
   { version: "retention-record-command.v1", commandId, jobId: a.jobId, record });
- const read = (a: Company) => human().read(a.context, a.jobId);
+ const read = (a: Company) => human().read(a.context, { sessionDigest: a.digest }, a.jobId);
  const discovery = async () => (await infrastructure.query("SELECT tenant_id FROM infrastructure.discover_retention_reviews()")).rows.map(r => r.tenant_id);
  async function moneySnapshot() {
   const result: Record<string, unknown> = {};
@@ -45,7 +45,7 @@ describe("M4-20 infrastructure timer (real PostgreSQL)", () => {
   expect(await discovery()).not.toContain(future.tenantId);
   // Crash after writes but before commit: the same real transaction must roll back records and audit together.
   const crashPool = { connect: async () => {
-   const client = await infrastructure.connect();
+   const client = await f.runtime.connect();
    return { release: () => client.release(), query: async (sql: string, values?: unknown[]) => {
     if (sql === "COMMIT") throw new Error("synthetic crash before commit");
     return client.query(sql, values);
@@ -54,9 +54,10 @@ describe("M4-20 infrastructure timer (real PostgreSQL)", () => {
   await expect(new RetentionRecordRepository(crashPool).raiseTimerReviews(a.context)).rejects.toThrow("RETENTION_UNAVAILABLE");
   expect((await read(a)).book.records).toHaveLength(1);
   const results = await Promise.all([timer().raiseTimerReviews(a.context), timer().raiseTimerReviews(a.context)]);
-  expect(results.sort()).toEqual([0, 1]);
-  expect(await timer().raiseTimerReviews(a.context)).toBe(0); // also retry after a successful commit/worker crash
-  expect(await timer().raiseTimerReviews(future.context)).toBe(0);
+  expect(results.map(r => r.appended).sort()).toEqual([0, 1]);
+  expect(results.every(r => r.refused === 0)).toBe(true);
+  expect(await timer().raiseTimerReviews(a.context)).toEqual({ appended: 0, refused: 0 }); // also retry after a successful commit/worker crash
+  expect(await timer().raiseTimerReviews(future.context)).toEqual({ appended: 0, refused: 0 });
   const current = await read(a), review = current.book.records[1]!;
   const today = (await f.admin.query("SELECT to_char(CURRENT_DATE,'YYYY-MM-DD') today")).rows[0].today;
   expect(review).toMatchObject({ version: "retention.review.v1", trigger: "timer", owner: "retention-release-review-v1", raisedOn: today });
@@ -78,14 +79,14 @@ describe("M4-20 infrastructure timer (real PostgreSQL)", () => {
   const nextId = randomUUID();
   await append(a, { ...p, revision: 2, previousProfileId: pid, conditions: p.conditions.map(c => ({ ...c, dueDate: "2001-01-01" })) }, nextId);
   await expect(append(a, { version: "retention.release.v1", resolutionId })).rejects.toMatchObject({ code: "STALE_PROFILE" });
-  expect(await timer().raiseTimerReviews(a.context)).toBe(1);
-  expect(await timer().raiseTimerReviews(a.context)).toBe(0);
+  expect(await timer().raiseTimerReviews(a.context)).toEqual({ appended: 1, refused: 0 });
+  expect(await timer().raiseTimerReviews(a.context)).toEqual({ appended: 0, refused: 0 });
   expect((await read(a)).book.records.at(-1)).toMatchObject({ version: "retention.review.v1", profileId: nextId });
  });
  it("bounds infrastructure writes, rejects foreign jobs, stale hashes/profiles, extra authority and restores context", async () => {
   const a = await company(), b = await company(), p = profile(), pid = randomUUID(); await append(a, p, pid);
-  await workTenant(infrastructure, a.tenantId, async db => {
-   const invoke = (j: string, v: unknown, hash: string | null) => db.query("SELECT infrastructure.retention_timer($1,$2,$3::jsonb,$4) result", [a.tenantId, j, v === null ? null : JSON.stringify(v), hash]);
+  await workTenant(f.runtime, a.tenantId, async db => {
+   const invoke = (j: string, v: unknown, hash: string | null) => db.query("SELECT app.retention_timer($1,$2,$3::jsonb,$4) result", [a.tenantId, j, v === null ? null : JSON.stringify(v), hash]);
    const stored = (await invoke(a.jobId, null, null)).rows[0].result;
    const valid = { version: "retention.review.v1", id: randomUUID(), tenantId: a.tenantId, jobId: a.jobId, profileId: pid,
     conditionId: p.conditions[0]!.id, owner: "retention-release-review-v1", trigger: "timer", raisedOn: stored.today };
@@ -100,13 +101,15 @@ describe("M4-20 infrastructure timer (real PostgreSQL)", () => {
     await db.query("ROLLBACK TO SAVEPOINT attack");
     expect((await db.query("SELECT current_setting('app.tenant_id') t")).rows[0].t).toBe(a.tenantId);
    }
-   await db.query("SELECT infrastructure.discover_retention_reviews()");
+   // Discovery retains the infrastructure login; the runtime cannot discover tenants.
    expect((await db.query("SELECT current_setting('app.tenant_id') t")).rows[0].t).toBe(a.tenantId);
   });
   for (const sql of ["SELECT * FROM app.retention_record", "UPDATE app.retention_record SET record='{}'", "DELETE FROM app.retention_record", "TRUNCATE app.retention_record"]) {
    await expect(infrastructure.query(sql)).rejects.toMatchObject({ code: "42501" });
   }
-  await expect(workTenant(f.runtime, a.tenantId, db => db.query("SELECT infrastructure.retention_timer($1,NULL,NULL,NULL)", [a.tenantId]))).rejects.toMatchObject({ code: "42501" });
+  await expect(workTenant(infrastructure, a.tenantId, db => db.query("SELECT app.retention_timer($1,NULL,NULL,NULL)", [a.tenantId]))).rejects.toMatchObject({ code: "42501" });
+  await expect(workTenant(infrastructure, a.tenantId, db => db.query("SELECT infrastructure.retention_timer($1,NULL,NULL,NULL)", [a.tenantId]))).rejects.toMatchObject({ code: "42501" });
+  await expect(workTenant(f.runtime, a.tenantId, db => db.query("SELECT app.retention_timer_book($1,$2)", [a.tenantId,a.jobId]))).rejects.toMatchObject({ code: "42501" });
   expect((await read(a)).book.records).toHaveLength(1);
  });
  it("fails closed on an altered stored history", async () => {
@@ -115,7 +118,9 @@ describe("M4-20 infrastructure timer (real PostgreSQL)", () => {
   const record = { ...p, id: pid, tenantId: a.tenantId, jobId: a.jobId, retained: { netPence: 1, taxPence: 0 } };
   await f.admin.query(`INSERT INTO app.retention_record(tenant_id,job_id,command_id,ordinal,record_kind,record,record_hash,actor_membership_id)
    VALUES($1,$2,$3,1,'retention.profile.v1',$4::jsonb,app.final_lock_hash($4::jsonb),$5)`, [a.tenantId, a.jobId, pid, JSON.stringify(record), a.actorId]);
-  await expect(timer().raiseTimerReviews(a.context)).rejects.toMatchObject({ code: "VALUE_LIMIT" });
-  expect((await f.admin.query("SELECT count(*)::int n FROM app.retention_record WHERE tenant_id=$1", [a.tenantId])).rows[0].n).toBe(1);
+  const later = await meterCompany(f, a.tenantId); await append(later, profile());
+  expect(await timer().raiseTimerReviews(a.context)).toEqual({ appended: 1, refused: 1 });
+  expect((await read(later)).book.records).toHaveLength(2);
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.retention_record WHERE tenant_id=$1 AND job_id=$2", [a.tenantId, a.jobId])).rows[0].n).toBe(1);
  });
 });
