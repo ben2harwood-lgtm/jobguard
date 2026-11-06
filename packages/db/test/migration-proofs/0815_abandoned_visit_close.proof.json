@@ -1,0 +1,164 @@
+{
+  "migration": "0815_abandoned_visit_close.sql",
+  "lp0": [
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "id": "a-abandoned-visit-close",
+        "title": "LATER-SAFETY-79 abandoned visit administrative close",
+        "kind": "authority",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "API and screen follow-up; production lifecycle/session integration held. Exact-head RED review and PostgreSQL CI required."
+        },
+        "cards": [
+          "LP-5b",
+          "LP-6d"
+        ],
+        "responsibilities": {
+          "LP-5b": "Synthetic receipt, one closeout answer and audit are atomic and replay-safe.",
+          "LP-6d": "Require active owner/admin and covering organisation.manage grant before execution or replay."
+        },
+        "downstream": "Synthetic administrative visit cleanup; no API, screen, commercial action or production enablement.",
+        "sources": [
+          "packages/db/migrations/0815_abandoned_visit_close.sql"
+        ],
+        "tests": [
+          "packages/db/test/site-visit-abandoned.integration.test.ts"
+        ],
+        "gaps": [
+          "API and screen follow-up; production lifecycle/session integration held. Exact-head RED review and PostgreSQL CI required."
+        ],
+        "path": "ap-abandoned-visit-close"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.ent3b_close_abandoned_visit(uuid,uuid,uuid,uuid,text)|jobguard_runtime|EXECUTE|-",
+        "group": "a-abandoned-visit-close"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.ent3b_close_abandoned_visit(uuid,uuid,uuid,uuid,text)|jobguard_migration",
+        "group": "a-abandoned-visit-close"
+      }
+    },
+    {
+      "section": "authorityPaths",
+      "before": null,
+      "after": {
+        "title": "LATER-SAFETY-79 abandoned visit administrative close",
+        "cards": [
+          "LP-5b",
+          "LP-6d"
+        ],
+        "responsibilities": {
+          "LP-5b": "Synthetic receipt, one closeout answer and audit are atomic and replay-safe.",
+          "LP-6d": "Require active owner/admin and covering organisation.manage grant before execution or replay."
+        },
+        "sources": [
+          "packages/db/migrations/0815_abandoned_visit_close.sql"
+        ],
+        "tests": [
+          "packages/db/test/site-visit-abandoned.integration.test.ts"
+        ],
+        "gaps": [
+          "API and screen follow-up; production lifecycle/session integration held. Exact-head RED review and PostgreSQL CI required."
+        ],
+        "id": "ap-abandoned-visit-close",
+        "description": "Synthetic administrative visit cleanup; no API, screen, commercial action or production enablement."
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.ent3b_close_abandoned_visit(uuid,uuid,uuid,uuid,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.closeout_answer",
+          "app.command_receipt",
+          "app.site_visit"
+        ],
+        "staticCalls": [
+          "app.append_audit",
+          "app.contractor_allowed",
+          "app.contractor_job_team",
+          "app.contractor_member_active",
+          "app.ent3b_visit_authority"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.ent3b_closeout_guard()",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "98d12eebad1ec09b9c98a6fe0023c679705e06973c3faf1e2b6a7154e95fb4ec",
+        "staticWrites": [],
+        "staticCalls": []
+      },
+      "after": {
+        "identity": "function:app.ent3b_closeout_guard()",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.contractor_allowed",
+          "app.contractor_job_team",
+          "app.contractor_member_active"
+        ]
+      }
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "ent3b_close_abandoned_visit",
+        "args": "p_actor uuid, p_command uuid, p_job uuid, p_visit uuid, p_reason text",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    }
+  ],
+  "tenancy": []
+}
