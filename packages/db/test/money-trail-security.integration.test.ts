@@ -89,7 +89,9 @@ it("[MT-04/07/14] existing customer/allocator sources use one runtime snapshot, 
  }});
  const result=await new MoneyTrailRepository(observed).availableSources(a.auth.context,a.p.jobId,a.auth.digest);
  expect(result).toEqual({version:'money-trail-available-sources.v1',environment:'synthetic_demo',jobId:a.p.jobId,incomplete:true,realExternalActions:0,unavailableFamilies:['eligibility','fee_postings','fee_statements','fee_events','subscription'],sources:[]});
- expect(statements).toHaveLength(6);expect(statements[4]).toContain('available_money_trail_sources');expect(statements[4]!.match(/s.tenant_id=\$1 AND s.job_id=\$2/gu)).toHaveLength(10);
+ expect(statements).toHaveLength(8);
+ expect(statements.slice(0,3)).toEqual(['BEGIN','SELECT app.bind_request($1, $2, $3)','SELECT app.current_actor() actor, app.current_tenant() tenant']);
+ expect(statements[6]).toContain('available_money_trail_sources');expect(statements[6]!.match(/s.tenant_id=\$1 AND s.job_id=\$2/gu)).toHaveLength(10);
  expect(statements.join('\n')).not.toMatch(/\b(?:INSERT|UPDATE|DELETE|TRUNCATE)\b|shadow_|recovery_attribution|recovery_eligibility|practice_feed/u);
  expect(await protectedSnapshot(f)).toEqual(before);
 });
