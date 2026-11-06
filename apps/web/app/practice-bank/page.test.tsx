@@ -5,7 +5,7 @@ const screen = vi.hoisted(() => vi.fn(() => null));
 vi.mock("next/navigation", () => ({ notFound: vi.fn(() => { throw new Error("NEXT_NOT_FOUND"); }) }));
 vi.mock("./screen", () => ({ PracticeBankScreen: screen }));
 import { notFound } from "next/navigation";
-import Page from "./page";
+import Page, { dynamic } from "./page";
 vi.stubGlobal("React", React);
 afterEach(() => { vi.unstubAllEnvs(); vi.clearAllMocks(); });
 it.each(["production", "pilot_no_charge", ""])("does not render the screen in %s", mode => {
@@ -15,6 +15,7 @@ it.each(["production", "pilot_no_charge", ""])("does not render the screen in %s
   expect(screen).not.toHaveBeenCalled();
 });
 it("renders the screen only in synthetic_demo", () => {
+  expect(dynamic).toBe("force-dynamic");
   vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
   renderToStaticMarkup(<Page />);
   expect(notFound).not.toHaveBeenCalled();
