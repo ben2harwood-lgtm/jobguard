@@ -43,7 +43,7 @@ async function importedChild(parent: FinalCheckJob) {
     await db.query("SET LOCAL session_replication_role='origin'");
     await db.query(`INSERT INTO app.job_import_v3
       (tenant_id,id,job_id,source_job_id,session_digest,command_id,public_request_hash,fixture_id,snapshot,result,meter_exclusion_id,meter_reason,counted_places)
-      SELECT $1,$2,$3,$4,$5,command_id,$6,'fictional-extension-v3','{}','{}',$7,'imported_at_invoiced_stage',0
+      SELECT $1,$2,$3,$4,$5,command_id,$6,'fictional-extension-v3','{"lifecyclePoint":"invoiced"}','{}',$7,'imported_at_invoiced_stage',0
       FROM app.final_account_scope_disposition WHERE tenant_id=$1 AND job_id=$3 LIMIT 1`,
       [child.tenantId, randomUUID(), child.jobId, parent.jobId, parent.digest, "b".repeat(64), randomUUID()]);
     expect((await db.query("SELECT 1 FROM app.job_import_v3 WHERE tenant_id=$1 AND job_id=$2", [child.tenantId, child.jobId])).rowCount).toBe(1);

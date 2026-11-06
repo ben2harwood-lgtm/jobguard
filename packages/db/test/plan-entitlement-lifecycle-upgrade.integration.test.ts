@@ -107,6 +107,21 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
       expect(current?.definition?.split("$function$")[1]).toBe(sql.split("FUNCTION app.demo_issue_customer_link(")[1]!.split("AS $$")[1]!.split("$$;")[0]);
       continue;
     }
+    // 0843 inserts only the practice-owner guard into lock_final_account and replaces the invoice actor check's end.
+    if (prior.nspname === "app" && prior.proname === "lock_final_account" && prior.args === "p_tenant uuid, p_job uuid, p_actor uuid, p_command uuid, p_revision uuid, p_expected integer, p_declaration text") {
+      expect({ ...current, definition: prior.definition }).toEqual(prior);
+      const owner = await readFile(new URL("../migrations/0843_final_check_practice_owner_check.sql", import.meta.url), "utf8");
+      const anchor = "BEGIN\n PERFORM app.final_lock_require_owner(p_tenant,p_actor);";
+      expect(prior.definition?.split(anchor)).toHaveLength(2);
+      expect(current?.definition).toBe(prior.definition?.replace(anchor, anchor + "\n" + owner.split("$guard$")[1]!));
+      continue;
+    }
+    if (prior.nspname === "app" && prior.proname === "final_check_require_invoice_actor" && prior.args === "p_tenant uuid, p_job uuid, p_actor uuid") {
+      expect({ ...current, definition: prior.definition }).toEqual(prior);
+      const owner = await readFile(new URL("../migrations/0843_final_check_practice_owner_check.sql", import.meta.url), "utf8");
+      expect(current?.definition?.split("$function$")[1]).toBe(owner.split("FUNCTION app.final_check_require_invoice_actor(")[1]!.split("AS $$")[1]!.split("$$;")[0]);
+      continue;
+    }
     const batchReplacement = batchBodies.find(row => prior.nspname === "app" && prior.proname === row.name && prior.args === row.args);
     if (batchReplacement) {
       expect(current?.definition?.split("$function$")[1]).toEqual(batchReplacement.body);
