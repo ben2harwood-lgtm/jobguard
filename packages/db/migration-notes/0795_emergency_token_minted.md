@@ -27,3 +27,20 @@ Local results after applying the patch (installed binaries, no downloads; each V
 Earlier execution before this scope grant recorded 1 PASS / 6 FAIL in the new boundary suite against the old API schema. The passing run above supersedes those failures. No tests were weakened. PostgreSQL and browser suites were not run: this sandbox cannot start PostgreSQL or bind localhost. CI must supply the real database, migration/upgrade/tenancy/LP-0 and browser evidence specified above; local API tests use a mocked repository and do not prove SQL execution.
 
 LP-6b #548 identity-pool bind_request grant interaction remains a named hold, unchanged. No grant change was made. Buyer security pack, register, scanner and pins are untouched. Renumber the migration filename stem at landing. Independent exact-head RED review and green CI remain required. READY means ready for router commit/push as NOPR and subsequent checks, not merge or release acceptance. No Git writes were performed. No simplification item recorded: this is a repair, not an initial independent review.
+
+
+## Landing merge verification — 6 November 2026
+
+The launcher already committed merge 62a7401b0 of origin/main 3f4fc1e95. This section supersedes the earlier pre-commit branch-state statement above. No unresolved merge entries remain. Compared all eight group paths against origin/main: the lane still lists exactly the seven non-lane paths and does not list itself. No migration from this group is already on main; 0795 is above main's latest migration, 0645. No unrelated exact lists require edits.
+
+Main's latest `identity.dark_emergency` definition is still 0612_emergency_dual_owner.sql. Diffed its complete body against 0795: the only differences are CREATE OR REPLACE, the raw-token variable, the approved token contract/minting/hashing changes, and the approved at-least-two current non-requester owner count. Every other statement is preserved, including advisory locking, owner/session/CSRF validation, request/session expiry, notice and audit handling, and restricted member revocation. No routine or test was weakened and no new behaviour was added during landing reconciliation.
+
+Local verification on the merged tree (installed Vitest, at most two workers and three named files per invocation):
+- API: `node_modules/.bin/vitest run --maxWorkers=2 src/auth/sso/sso-emergency-token.test.ts src/auth/sso/enterprise-access.test.ts src/auth/sso/sso-emergency.test.ts` — 35 passed.
+- API: `node_modules/.bin/vitest run --maxWorkers=2 src/auth/sso/sso-emergency-owner.test.ts` — 15 passed.
+- DB: `node_modules/.bin/vitest run --maxWorkers=2 test/migration-proof-loader.test.ts` — 77 passed.
+- `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs --lane=later-safety-25` — passed against 3f4fc1e95, including migration ordering; an additional exact path-set assertion passed.
+- API and DB: `node_modules/.bin/tsc -p tsconfig.json --noEmit` — both passed.
+- `git diff --check` — passed.
+
+PostgreSQL and browser suites remain for GitHub CI because this sandbox cannot start PostgreSQL or bind localhost. Independent exact-head RED review and green CI remain required. No Git writes were performed; the router commits and pushes this handoff.
