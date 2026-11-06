@@ -1,0 +1,43 @@
+{
+  "version": 2,
+  "lanes": {
+    "walk-3": {
+      "branches": [
+        "codex/sandbox/walk-3"
+      ],
+      "allow": [
+        "apps/web/app/api/practice-company/route.test.ts",
+        "apps/web/app/api/practice-company/route.ts",
+        "apps/web/app/api/session/route.ts",
+        "apps/web/app/demo-s/core-1000/instruction-tour.tsx",
+        "apps/web/app/demo-s/core-1000/journey.tsx",
+        "apps/web/app/lib/contracts.ts",
+        "apps/web/app/lib/synthetic-server.ts",
+        "apps/web/app/practice-company/page.tsx",
+        "apps/web/app/practice-company/walkthrough/page.tsx",
+        "apps/web/app/practice-company/walkthrough/screen-actions.test.ts",
+        "apps/web/app/practice-company/walkthrough/screen-actions.ts",
+        "apps/web/app/practice-company/walkthrough/voice-journey.module.css",
+        "apps/web/app/practice-company/walkthrough/voice-journey.test.tsx",
+        "apps/web/app/practice-company/walkthrough/voice-journey.tsx",
+        "apps/web/app/ui/jobguard-app.tsx",
+        "apps/web/app/ui/walkthrough/walkthrough.module.css",
+        "apps/web/app/ui/walkthrough/walkthrough.test.tsx",
+        "apps/web/app/ui/walkthrough/walkthrough.tsx",
+        "apps/web/e2e/WALK-1.spec.ts",
+        "apps/web/e2e/WALK-2.spec.ts",
+        "apps/web/e2e/WALK-3.spec.ts",
+        "packages/db/migration-notes/0657_blank_practice_company.md",
+        "packages/db/migrations/0657_blank_practice_company.sql",
+        "packages/db/src/blank-practice-company.test.ts",
+        "packages/db/src/blank-practice-company.ts",
+        "packages/db/src/index.ts",
+        "packages/db/test/blank-practice-company.integration.test.ts",
+        "packages/db/test/extra-proceed-upgrade.integration.test.ts",
+        "packages/db/test/later-empty-tables.ts",
+        "packages/db/test/migration-proofs/0657_blank_practice_company.proof.json"
+      ],
+      "note": "WALK-1, WALK-2, WALK-3 combined RED PR: guided synthetic demo walkthrough and blank practice sessions. Exact union with main; migration renumbered to 0657. PostgreSQL/browser CI and exact-head review remain release gates."
+    }
+  }
+}
