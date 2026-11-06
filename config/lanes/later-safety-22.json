@@ -7,6 +7,7 @@
       ],
       "note": "LATER-SAFETY-22: shared dashboard deadlines and role-scoped proceed history. Current origin/main merged; no migration.",
       "allow": [
+        "apps/api/src/contractor/enterprise-dashboard.boundaries.test.ts",
         "apps/web/app/site/extra/site-extra.test.tsx",
         "apps/web/app/site/extra/site-extra.tsx",
         "packages/db/src/enterprise-dashboard-queries.ts",
