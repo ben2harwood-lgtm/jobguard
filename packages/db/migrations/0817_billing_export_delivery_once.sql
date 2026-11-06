@@ -13,10 +13,10 @@ BEGIN
  IF p_payload->>'contentHash' IS DISTINCT FROM b.json_hash OR p_payload->>'channel' NOT IN('fake_download','fake_sftp','fake_api') OR p_payload->>'destination' !~ '^[a-z0-9-]+(\.[a-z0-9-]+)*\.invalid$'
  OR expiry IS NULL OR expiry<=clock_timestamp() THEN RAISE EXCEPTION 'BILLING_INVALID'; END IF;
  -- cb_begin already holds the tenant billing fence and job locks, including for racing commands.
- -- Only terminal failure releases this batch; uncertain/retryable outcomes must be reconciled.
+ -- Release only actions that cannot be sent; preserve sent or uncertain outcomes even after expiry.
  IF EXISTS(SELECT 1 FROM app.billing_export_delivery delivery
   JOIN app.action_outbox action ON(action.tenant_id,action.id)=(delivery.tenant_id,delivery.outbox_action_id)
-  WHERE(delivery.tenant_id,delivery.job_id,delivery.batch_id)=(t,p_job,b.id) AND action.status<>'dead_letter')
+  WHERE(delivery.tenant_id,delivery.job_id,delivery.batch_id)=(t,p_job,b.id) AND NOT (action.status IN('dead_letter','cancelled') OR (action.status IN('pending','retryable') AND action.authorization_expires_at<=clock_timestamp())))
  THEN RAISE EXCEPTION 'EXPORT_ALREADY_QUEUED' USING ERRCODE='23505'; END IF;
  -- Exact button approval; expiry is supplied explicitly, never a default or standing permission.
  INSERT INTO app.decision(tenant_id,id,subject_type,subject_ref,action_type) VALUES(t,d,'billing_export',b.id::text,'billing_export');

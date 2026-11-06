@@ -6,10 +6,13 @@
         "codex/sandbox/later-safety-81"
       ],
       "allow": [
+        "docs/contracts/lp-0-effective-privileges-v1.json",
         "packages/db/migrations/0817_billing_export_delivery_once.sql",
-        "packages/db/test/migration-proofs/0817_billing_export_delivery_once.proof.json",
         "packages/db/test/contractor-billing-delivery.integration.test.ts",
-        "packages/db/test/contractor-billing-export.integration.test.ts"
+        "packages/db/test/contractor-billing-export.integration.test.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/0817_billing_export_delivery_once.proof.json",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts"
       ]
     }
   }

@@ -38,6 +38,14 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     && row.args === "p_tenant uuid, p_book jsonb, p_result jsonb")).toHaveLength(1);
   expect(live.find(row => row.nspname === "app" && row.proname === "replace_fee_reservation_book"
     && row.args === "p_tenant uuid, p_book jsonb, p_result jsonb")?.definition?.split("$function$")[1]).toEqual(feeResultBody);
+  const billingSource = await readFile(new URL("../migrations/0817_billing_export_delivery_once.sql", import.meta.url), "utf8");
+  const billingBodies = new Map([
+    ["cb_delivery|p_session uuid, p_job uuid, p_command uuid, p_payload jsonb", billingSource.split("FUNCTION app.cb_delivery(")[1]!.split("AS $$")[1]!.split("$$;")[0]!],
+    ["cb_csv_cell|v text", billingSource.split("FUNCTION app.cb_csv_cell(")[1]!.split("AS $$")[1]!.split("$$;")[0]!],
+  ]);
+  for (const key of billingBodies.keys()) {
+    expect(live.filter(row => row.nspname === "app" && `${row.proname}|${row.args}` === key)).toHaveLength(1);
+  }
   // 0587 replaces only the payment-fee writer body; keep every mainline exception below.
   const paymentFeeWriterOid = (await c.admin.query("SELECT 'app.write_payment_fee(uuid,text,jsonb)'::regprocedure::oid oid")).rows[0].oid;
   const collectRecheck = await readFile(new URL("../migrations/0587_payment_fee_collect_recheck.sql", import.meta.url), "utf8");
@@ -186,6 +194,8 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
       expect(current?.definition).toEqual(expected);
     } else if (ent5Bodies.has(routineKey(`${prior.nspname}.${prior.proname}(${prior.args})`))) {
       expect(current?.definition?.split("$function$")[1]).toEqual(ent5Bodies.get(routineKey(`${prior.nspname}.${prior.proname}(${prior.args})`)));
+    } else if (prior.nspname === "app" && billingBodies.has(`${prior.proname}|${prior.args}`)) {
+      expect(current?.definition?.split("$function$")[1]).toEqual(billingBodies.get(`${prior.proname}|${prior.args}`));
     } else {
       expect(current?.definition).toEqual(prior.definition);
     }
