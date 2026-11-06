@@ -1,0 +1,9 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-54": {
+      "branches": ["codex/sandbox/later-safety-54"],
+      "allow": ["packages/core/src/native-chaos.test.ts"]
+    }
+  }
+}
