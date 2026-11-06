@@ -1,6 +1,55 @@
 {
   "migration": "0840_duplicate_canonical_guard.sql",
-  "lp0": [],
+  "lp0": [
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.xa_duplicate_canonical_guard()",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": ["app.xa_latest_kind"]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.xa_active_canonical_withdraw_guard()",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.extra_duplicate_link|z_duplicate_canonical_guard|app.xa_duplicate_canonical_guard|BEFORE INSERT|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.extra_event|z_active_canonical_withdraw_guard|app.xa_active_canonical_withdraw_guard|BEFORE INSERT|O"
+    }
+  ],
   "upgrade": [
     {
       "section": "routines",
