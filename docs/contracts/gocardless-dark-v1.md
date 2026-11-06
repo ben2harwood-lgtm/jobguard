@@ -1041,3 +1041,46 @@ all working-file conflict markers are resolved. No Git write was attempted.
 PostgreSQL, browser and full required suites remain CI gates after router push;
 exact-head independent RED review remains required before landing. No provider,
 real data, deployment or launch. Full M4-15 and M5-6 remain open.
+
+### Batch-36 PR-turn verification — 6 November 2026 (RED)
+
+READY for router commit/push and PR opening. The launcher completed the merge
+at `409caa842033ab7d04f31604553cdac97302b52e`; origin/main is
+`41938db7646c8e988e5bcdbde93f33f3c1425ad4`. No unresolved index entries or
+product repairs were needed. Main's exports and watchdog registry entries are
+preserved, and the removed fake Stripe sandbox export remains absent.
+
+Migration inventory against origin/main: none. No migration proof changes or
+SQL routine replacements exist, so there is no branch routine body to reconcile
+against main. Exact lane coverage passed for all 28 non-lane changed paths;
+the lane excludes itself. Runtime web imports use API package exports; their
+route test's source import is test-only. Cloudflare build was not executed.
+The coordinator precheck files and VERDICTS.tsv are not in this checkout;
+existing checked work was preserved without claiming those checks were rerun.
+
+Executed using installed package-local runners (Vitest 4.1.12,
+`node node_modules/vitest/vitest.mjs run --maxWorkers=2`, no more than three
+named files per run):
+- Core: `src/recurring-extras.test.ts`, `src/extra-proceed.test.ts`,
+  `src/watchdog.test.ts` — 14 passed.
+- API: `src/fee-collection/direct-debit-practice.application.test.ts`,
+  `src/fee-collection/fake-gocardless.test.ts` — 42 passed.
+- Web: `app/api/jobs/[id]/direct-debit-practice/route.test.ts`,
+  `app/api/jobs/[id]/recurring-extras/route.test.ts`,
+  `app/jobs/[id]/direct-debit-practice/screen.test.ts` — 9 passed.
+- Web: `app/jobs/[id]/recurring-extras/recurring-extras-screen.test.tsx`
+  — 2 passed.
+- DB: `test/direct-debit-fixture-repository.test.ts`,
+  `test/migration-proof-loader.test.ts` — 85 passed.
+
+Total: 152 passed. Installed `node node_modules/typescript/bin/tsc -p
+ tsconfig.json --noEmit` passed separately in core, DB, API and web.
+`LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs --lane=batch-36`
+and `git diff --check origin/main...HEAD` passed. The pnpm wrapper stalled
+before execution and was interrupted; installed runners supplied these results.
+
+CI must prove real-PostgreSQL integration, whole-database migfix-6/7 and upgrade
+snapshots including restore reconciliation, browser journeys, and all required
+checks. Exact-head independent RED review remains a merge gate. This sandbox
+ran no database, browser, provider, deployment or release. Full M4-15 and M5-6
+remain open; READY means ready for the router's PR step.
