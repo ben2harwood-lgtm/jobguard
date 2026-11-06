@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-5-price-rules": {
+      "branches": [
+        "codex/sandbox/ent-5-price-rules"
+      ],
+      "note": "ENT-5 Q01/Q03 synthetic regression coverage; RED; NOPR. Migration 0859 unused.",
+      "allow": [
+        "docs/contracts/extra-price-rules-v1.md",
+        "packages/core/src/extra-approval.test.ts",
+        "packages/db/src/extra-approval-chain-repository.test.ts",
+        "packages/db/test/extra-price-rules.integration.test.ts"
+      ]
+    }
+  }
+}
