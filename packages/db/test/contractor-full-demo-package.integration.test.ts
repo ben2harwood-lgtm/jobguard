@@ -35,7 +35,7 @@ async function world() {
   const submitted = await approval.submitExtra(await ctx(), supervisor, { version: "submit-extra.v1", commandId: randomUUID(), jobId, extraId: extra.variationId });
   await approval.approveExtraStep(await ctx(), supervisor, { version: "approve-extra-step.v1", commandId: randomUUID(), jobId, requestId: submitted.requestId, stepIndex: 0, revisionHash: submitted.revisionHash, netPence: 108000 });
   // Reuse the existing fictional local-link command. It queues fake_email; no executor or provider is initialized.
-  const owner = await act(), token = randomUUID().replaceAll("-", "").repeat(2);
+  const owner = await act(seed.surveyorMembershipId), token = randomUUID().replaceAll("-", "").repeat(2);
   await approval.issueClientApproval(await ctx(), owner, { version: "issue-client-approval.v1", commandId: randomUUID(), jobId, requestId: submitted.requestId,
     approverMembershipId: seed.clientApproverMembershipId, recipient: seed.clientApproverEmail, linkToken: token, expiresAt: new Date(Date.now() + 600000) });
   const client = await act(seed.clientApproverMembershipId);

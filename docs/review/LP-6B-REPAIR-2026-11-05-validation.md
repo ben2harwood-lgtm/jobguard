@@ -189,3 +189,88 @@ Recorded HEAD `d4ec9a658868e55423a8a8fa1e053e237a1968e1`; exit `1`.
 Recorded HEAD `f7fc0599f1ec70031599ee81682652a81389a357`; exit `1`.
 
 - test/practice-worker-switch.integration.test.ts > [PW11] concurrent duplicate and different commands serialize
+
+
+## Second-check repair local validation — 6 November 2026
+
+Used installed package binaries directly after the global pnpm launcher stalled before tests; stopped those launchers. No dependencies downloaded. Vitest invocations named at most three files and used --maxWorkers=2. No PostgreSQL or browser was started.
+
+Passed:
+- apps/api: vitest run --maxWorkers=2 src/cis-fixture.application.test.ts src/rate-suggestion.application.test.ts src/vat-fixture.application.test.ts — 25 tests.
+- apps/web: vitest run --maxWorkers=2 app/api/jobs/[id]/vat-fixtures/route.test.ts — 10 tests, original 400 assertions retained.
+- packages/db: vitest run --maxWorkers=2 test/lp6b-caller-compatibility.test.ts test/upgrade-proof-utils.test.ts test/lp6b-withtenant.test.ts — 24 tests.
+- packages/db: vitest run --maxWorkers=2 test/lp6b-deferred-binding.test.ts test/lp6b-bind-after-locks.test.ts test/cis-fixture-repository.test.ts — 17 tests.
+- packages/db: vitest run --maxWorkers=2 test/purchase-order-action.test.ts test/retention-record-repository.test.ts test/vat-fixture-repository.test.ts — 58 tests.
+- Final packages/db run after narrowing emergency behavior to notices only: vitest run --maxWorkers=2 test/lp6b-caller-compatibility.test.ts test/lp6b-deferred-binding.test.ts — 5 tests passed (/tmp/lp6b-repair-final-db.log).
+- node --test --test-concurrency=2 tools/*.test.mjs — 423 passed, zero failed/skipped.
+- Installed tsc -p packages/db/tsconfig.json --noEmit; tsc -p apps/api/tsconfig.json --noEmit; tsc -p apps/web/tsconfig.json --noEmit.
+- From apps/api: node --import tsx src/generate-openapi.ts --check. The tsx CLI itself cannot create its IPC pipe in this sandbox; using its Node loader runs the same check without a listening pipe.
+- LANE_BASE_REF=68b104767b18fad6fc5b9676f95bcd7d68bcc19d node tools/lint.mjs — passes against the reviewed base (core purity prints its existing computed-import notices). Final rerun recorded separately below if the result changes.
+
+Not ready:
+- API context-boundary.test.ts plus retention-review-task.test.ts — 152 passed, 2 failed. Both failures are the unchanged constructor allowlist rejecting the new sessionless repository constructor sites. The third requested path enterprise-access.application.test.ts does not exist and was not counted as coverage.
+- node tools/lint.mjs with default origin/main base — refuses branch migration 0619 because newer main also uses 0619. No migration renumber was attempted without router reservation/catch-up.
+
+CI still must run all real PostgreSQL integration/migration/privilege suites (including cis-fixture-route, purchase-order-audit and all seven listed upgrade snapshots), full non-DB checks, builds and ENT-10-rest-notices/ENT-10a/M4-20-retention-records browser journeys at both viewports. No local SQL double is PostgreSQL or browser evidence; no independent review was performed by this builder.
+
+Final verification: DB/API/web tsc checks and reviewed-base lint all exited 0 after the notices-only change. Final API boundary run named context-boundary.test.ts, retention-review-task.test.ts and auth/sso/sso-required.test.ts: 161 passed, the same 2 constructor-boundary assertions failed. Lane coverage has no missing non-lane path from reviewed main base 68b10476, lists no config/lanes path, and includes the local restoration of upgrade-proof-utils.ts. git diff --check passed. Migration SQL, lp6b-deferred-binding.test.ts, PW11 and DEMO-A1 have zero new working-tree changes. This handoff remains NOT READY.
+
+
+## Approved constructor sites and current-main union — 6 November 2026
+
+Prepared base: main 3f4fc1e95a212560ed060a5fcf02d6d73b5af367; uncommitted
+worktree, no exact final commit hash yet. Existing installed Node 24.17.0,
+TypeScript/Vitest binaries only; no package downloads. Each Vitest invocation
+named at most three files and used --maxWorkers=2; tools used concurrency 2.
+
+Final relevant results:
+- API context-boundary, retention-review-task, auth/sso/sso-required: 164 passed
+  (/tmp/lp6b-final-api-boundary.log). Includes rejection of extra/relocated
+  sessionless constructions. The initial union omitted the unchanged SOR pin;
+  restoring that exact mainline pin resolved the two initial failures.
+- API CIS/rate-suggestion/VAT fixtures: 25 passed (/tmp/lp6b-final-api-fixtures.log).
+- DB caller compatibility, snapshot helper, withTenant: 24 passed; deferred guard,
+  bind-after-locks, CIS: 17 passed; purchase-order, retention, VAT repositories:
+  59 passed. Final caller/snapshot/deferred-guard rerun after batch-42 union:
+  9 passed (/tmp/lp6b-final-db-regression.log). These are protocol/unit proofs,
+  not real PostgreSQL evidence.
+- Web VAT route: 10 passed with original status assertions.
+- node --test --test-concurrency=2 tools/*.test.mjs: 423 passed, zero failed or
+  skipped (/tmp/lp6b-final-tools.log). An intermediate run had one stale-baseline
+  failure while main advanced; the final current-main union run passes unchanged
+  test assertions and preserves the two previously approved fingerprints.
+- tsc -p packages/core/tsconfig.json and tsc -p packages/db/tsconfig.json: pass
+  (local package builds). tsc -p apps/api/tsconfig.json --noEmit: pass. Initial
+  union omissions of an export and upgrade-proof tail were restored with exact
+  main/branch union before final checks.
+- From apps/api, node --import tsx src/generate-openapi.ts --check: pass after
+  refreshing built core/db packages (/tmp/lp6b-final-openapi.log).
+- Core-purity, money-arithmetic, commercial-boundary, AI-provider-boundary and
+  PL/pgSQL lint commands: pass individually. Core prints 11 computed-import
+  notices; SQL checks 311 migrations. Exact 159-file main-to-worktree lane
+  coverage, migration order and changed-TypeScript syntax checks: pass.
+- Eight S9 pins match their files. Migration SQL exactly matches the original
+  0619 bytes. Existing deferred scanner and PW11 exactly match HEAD.
+
+Local constraints still requiring CI:
+- Web tsc/lint fails only in ENT-3.spec.ts: @axe-core/playwright is absent from
+  installed dependencies, with its consequent implicit-any error. Do not download
+  packages here; CI must use a clean pinned install and prove full web checks.
+- Stock node tools/lint.mjs stops at the lane check because HEAD/index still
+  predate the content merge: incoming main paths and old 0619 rename paths appear
+  in its historical/uncommitted union. Its policy was not changed or bypassed.
+  Router must record merge/stage renames, then stock lane/full lint must pass.
+- API credential-serialization and identity tests: 8 passed; the accompanying
+  practice-binding-refusal suite could not bind 127.0.0.1 (EPERM), 9 tests skipped.
+  No listening server was started; do not treat that suite as passed.
+
+CI must prove the clean pinned full unit/type/lint/build checks, real PostgreSQL
+binding/refusal/isolation/privilege and migration suites, including CIS route,
+purchase-order audit, effective-actor upgrade, lp6a practice restore (pg_dump),
+and the seven snapshot suites: customer-portal-message,
+operative-entitlements-upgrade, customer-stage-acknowledgement,
+customer-quote-acceptance, plan-entitlement-lifecycle-upgrade,
+restore-reconciliation-upgrade and server-entitlement-upgrade. Browser journeys
+must include DEMO-A1, ENT-10-rest-notices, ENT-10a and M4-20-retention-records at
+phone and desktop widths. No PostgreSQL/browser proof or independent review is
+claimed by this builder. READY is for router commit and these checks only.

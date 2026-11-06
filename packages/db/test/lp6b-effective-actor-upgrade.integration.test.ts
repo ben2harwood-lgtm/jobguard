@@ -5,7 +5,7 @@ import { proofBefore, proofDifferences } from "./upgrade-proof-utils.js";
 import type { Cluster } from "./contractor-practice-session-fixtures.js";
 
 let c: Cluster;
-const migration = "0619_lp6b_effective_session_actor.sql";
+const migration = "0651_lp6b_effective_session_actor.sql";
 beforeAll(async () => {
   process.env.JOBGUARD_ENV = "synthetic_demo";
   c = await startBeforeMigration(migration);

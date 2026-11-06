@@ -19,6 +19,7 @@ const input = () => ({ version: "vat.fixture-append.v1", commandId: id(4), jobId
       customerEndUser: false, intermediarySupplier: false, constructionReverseChargeInScope: true, qualifyingBasisReference: "fictional qualification" } }] } });
 let rows: unknown[];
 const query = vi.fn(async (sql: string, values?: unknown[]) => {
+  if (sql.includes("app.current_actor()")) return { rows: [{ actor: id(3), tenant: id(1) }] };
   if (!sql.includes("app.vat_fixture_records")) return { rows: [] };
   if (values?.[2] !== id(2)) throw new Error("VAT_FIXTURE_NOT_FOUND");
   if (values?.[3] === "append") rows.push({ input: JSON.parse(String(values[4])), actorId: id(3), recordHash: "a".repeat(64), matrixVersion: VAT_SUPPORT_MATRIX_VERSION, environment: "synthetic", label: VAT_FIXTURE_LABEL });
@@ -27,7 +28,7 @@ const query = vi.fn(async (sql: string, values?: unknown[]) => {
 beforeEach(() => {
   rows = []; vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
   state.credentials = { sessionToken: "s".repeat(32), csrfToken: "c".repeat(24), tenantHeader: id(1), origin: "https://company.invalid" };
-  state.authenticate.mockResolvedValue({ identityUserId: id(1), sessionId: id(3), csrfToken: "c".repeat(24) });
+  state.authenticate.mockResolvedValue({ identityUserId: id(1), sessionId: id(3), sessionCredential: "d".repeat(64), csrfToken: "c".repeat(24) });
   state.findMembership.mockResolvedValue({ id: id(3), tenantId: id(1), identityUserId: id(1), role: "owner" });
   state.app = new VatFixtureApplication({ allowedOrigin: "https://company.invalid", provider: { authenticate: state.authenticate, findMembership: state.findMembership },
     principal: async () => state.authenticate() } as never,

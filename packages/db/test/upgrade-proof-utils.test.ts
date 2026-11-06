@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { catalogueAdditions } from "./upgrade-proof-utils.js";
+import { catalogueAdditions, snapshotRows } from "./upgrade-proof-utils.js";
 
 const row = (name: string, privilege = "owner-only") => ({ name, privilege });
 describe("catalogue addition ordering", () => {
@@ -28,4 +28,13 @@ describe("catalogue addition ordering", () => {
     const unexpected = row("app.unapproved_table"), live = [unexpected, customer, historical];
     expect(catalogueAdditions([historical], [customer], live)).toEqual([customer, historical]);
   });
+});
+
+
+it("includes the binding table in full upgrade snapshots without filtering rows", async () => {
+  const binding = { transaction_id: "fixture", tenant_id: "fictional" };
+  const db = { query: async (sql: string) => ({ rows: sql.includes("FROM pg_tables")
+    ? [{ schemaname: "control_plane", tablename: "request_binding" }]
+    : [{ data: [binding] }] }) };
+  expect(await snapshotRows(db as never)).toEqual({ "control_plane.request_binding": [binding] });
 });

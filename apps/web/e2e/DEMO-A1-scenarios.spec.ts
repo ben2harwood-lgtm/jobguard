@@ -168,7 +168,7 @@ test("DEMO-S disclosure before lock: real detection and support disclosure remai
       // sources and publishes. The completed-state assertion remains mandatory.
       await expect.poll(async () => (await get(page, path(jobId, "final-check"))).state,
         { timeout: 180_000, intervals: [5_000] }).toBe("completed");
-      await db.withTenant(shadow, auth.context, async tx => {
+      await db.withTenant(shadow, supportContext, async tx => {
         const signal = await tx.$client.query("SELECT disclosed_before_lock FROM app.shadow_commercial_signal WHERE tenant_id=$1 AND job_id=$2 AND id=$3", [tenantId, jobId, signalId]);
         expect(signal.rows).toEqual([{ disclosed_before_lock: true }]);
         const reasons = await tx.$client.query("SELECT reason FROM app.shadow_signal_ineligibility WHERE tenant_id=$1 AND job_id=$2 AND signal_id=$3", [tenantId, jobId, signalId]);

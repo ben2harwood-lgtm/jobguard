@@ -63,6 +63,12 @@ const REAL = "apps/api/src/auth/principal-bridge.ts";
 const DEFINITION = "packages/db/src/tenant-context.ts";
 const WORKER = "apps/api/src/worker.ts";
 const REHEARSAL = "packages/db/tools/synthetic-restore.mjs";
+// Ben's 6 Nov 2026 router-chat "yes": emergency-notice port only.
+// Hold: break-glass identity design goes to Ben before real data.
+const EMERGENCY_NOTICE_PORT = "packages/db/src/enterprise-access-repository.ts";
+// Ben's 6 Nov 2026 router-chat "yes": retention-timer port only.
+// Hold: break-glass identity design goes to Ben before real data.
+const RETENTION_TIMER_PORT = "packages/db/src/retention-record-repository.ts";
 const FIXTURE_MODULE = "packages/db/src/demo-seed.ts";
 const SYNTHETIC_ROOTS = ["apps/api/src/", "packages/db/src/"];
 /** The complete, explicit set of retained synthetic-sandbox files that may build a context from the fixed DEMO identity. */
@@ -90,7 +96,11 @@ const REVIEWED_PRACTICE_SOURCES: Readonly<Record<string, string>> = {
   "packages/db/src/practice-session.ts": "4650b0963482827f605ec499e0b34a4b21d19d4fde6d639ffdba6182ffacec23",
   "packages/db/src/contractor-repository.ts": "56b95b80360434f0cf58376ef2ec44d0354b194e5080bcfd9414ac283971006c",
   "packages/db/src/contractor-party-repository.ts": "e5852288e5355b53f7548c4d5741aef54ee55a2b8a66dd56a54b08963cd1fdb0",
-  "packages/db/src/work-order-repository.ts": "6f769b3b5261219e8e277b3c8460b19b917fe93e66245d15285af5a04c098418",
+  // Renewed caller review 5 Nov 2026: Ben approved batch-41 ("Yes, all three") in the router chat.
+  // ~/.local/share/full-steam/coordinator/prechecks/batch-41.md: importCsvInTransaction makes no new context;
+  // its one new caller, ConnectorPromotionRepository.promote, takes context and principal from the same
+  // persisted session. The tenant lock and import permission check stay.
+  "packages/db/src/work-order-repository.ts": "51e64ceaa39564c8d1b083fbb6b24048143455dfe76080ff63309ce7d808dfb6",
   "packages/db/src/sor-repository.ts": "b66552d4d408c5e476ab9bff44324cf160b741561b5a03926c0697853e31514f",
   "packages/db/src/job-scheduling-repository.ts": "7517df3c6597af44f651c8b704c9bd91c4f40894ce5aa58e3b4fcea16cc9eb57",
   "packages/db/src/work-order-fixtures.ts": "703b2f726e9d4256cbd0a1908676f2cd401d64bad28741853f8131183cd0a0ea",
@@ -622,7 +632,8 @@ export function boundaryViolations(files: SourceFile[]): string[] {
 
     const membershipCalls = calls.filter(c => ts.isCallExpression(c.node) && (ts.isIdentifier(c.node.expression) ? c.node.expression.text === CONSTRUCTOR : ts.isPropertyAccessExpression(c.node.expression) ? c.node.expression.name.text === CONSTRUCTOR : ts.isElementAccessExpression(c.node.expression) && ts.isStringLiteralLike(c.node.expression.argumentExpression) && c.node.expression.argumentExpression.text === CONSTRUCTOR));
     const queuedCalls = calls.filter(c => !membershipCalls.includes(c));
-    if (file.path !== WORKER && queuedCalls.length) problems.push(`${file.path} only the worker may call the queued-job constructor`);
+    const sessionlessPort = file.path === EMERGENCY_NOTICE_PORT || file.path === RETENTION_TIMER_PORT;
+    if (file.path !== WORKER && !sessionlessPort && queuedCalls.length) problems.push(`${file.path} only the worker may call the queued-job constructor`);
     if (file.path === REAL) {
       if (calls.length !== 1 || membershipCalls.length !== 1 || casts.length || declarations.length) problems.push(`${file.path} must contain exactly one constructor call and no casts`);
       for (const c of calls) {
@@ -654,6 +665,18 @@ export function boundaryViolations(files: SourceFile[]): string[] {
     } else if (file.path === WORKER) {
       if (calls.length !== 1 || queuedCalls.length !== 1 || declarations.length || casts.length) problems.push(`${file.path} must contain exactly one queued-job constructor call and no casts`);
       for (const c of calls) if (!c.argument || c.argument.getText(source) !== "parsed.tenantId" || !/const parsed=z\.object\(\{[^}]*tenantId:z\.string\(\)\.uuid\(\)[^}]*\}\)\.strict\(\)\.parse\(payload\)/u.test(file.text)) problems.push(`${at(c.node)} worker tenant must come only from a strictly validated queue payload`);
+    } else if (sessionlessPort) {
+      const methodName = file.path === EMERGENCY_NOTICE_PORT ? "emergencyNotices" : "raiseTimerReviews";
+      const className = file.path === EMERGENCY_NOTICE_PORT ? "EnterpriseAccessRepository" : "RetentionRecordRepository";
+      if (calls.length !== 1 || queuedCalls.length !== 1 || declarations.length || casts.length) problems.push(`${file.path} must contain exactly the reviewed sessionless port constructor and no casts`);
+      for (const call of queuedCalls) {
+        const variable = call.node.parent, list = variable.parent, statement = list.parent, body = statement.parent, method = body.parent;
+        if (!ts.isVariableDeclaration(variable) || variable.name.getText(source) !== "scoped" || variable.initializer !== call.node ||
+            !ts.isVariableDeclarationList(list) || !(list.flags & ts.NodeFlags.Const) || list.declarations.length !== 1 ||
+            !ts.isVariableStatement(statement) || !ts.isBlock(body) || !ts.isMethodDeclaration(method) || method.body !== body ||
+            method.name.getText(source) !== methodName || !ts.isClassDeclaration(method.parent) || method.parent.name?.text !== className ||
+            call.argument?.getText(source) !== "context.tenantId") problems.push(`${at(call.node)} sessionless construction must stay at the exact reviewed ${className}.${methodName} port`);
+      }
     } else if (APPROVED_PRACTICE_FILES.includes(file.path)) {
       // Exact reviewed source identities and call shapes; a name on the list alone never authorizes another minting path.
       const EXPECTED_PRACTICE_CALLS: Readonly<Record<string, number>> = { "packages/db/src/practice-session.ts": 1, "packages/db/src/contractor-repository.ts": 2, "packages/db/src/contractor-party-repository.ts": 3, "packages/db/src/work-order-repository.ts": 4, "packages/db/src/sor-repository.ts": 2, "packages/db/src/job-scheduling-repository.ts": 2, "packages/db/src/work-order-fixtures.ts": 3, "packages/db/src/contractor-session-context.ts": 1 };
@@ -760,6 +783,18 @@ describe("M0-6L sole-constructor boundary across all application source", () => 
     }
     expect(boundaryViolations([...relevant, { path: WORKER, text: "const x = {} as VerifiedTenantContext;" }].filter((f, i, all) => f.path !== WORKER || i === all.length - 1))).not.toEqual([]);
   }, 30_000);
+
+  it("allows only the two reviewed sessionless port sites and refuses additions or relocation", async () => {
+    const files = await applicationSource();
+    for (const [path, method] of [[EMERGENCY_NOTICE_PORT, "emergencyNotices"], [RETENTION_TIMER_PORT, "raiseTimerReviews"]]) {
+      const file = files.find(file => file.path === path)!;
+      expect(boundaryViolations([file])).toEqual([]);
+      for (const text of [file.text.replace(method!, "otherPort"), file.text.replace("context.tenantId);", "otherTenant);"), `${file.text}\nconst extra = verifiedTenantContextForQueuedJob(context.tenantId);`]) {
+        expect(boundaryViolations([{ path: path!, text }])).not.toEqual([]);
+      }
+      expect(boundaryViolations([{ path: "packages/db/src/another-sessionless-port.ts", text: file.text }])).not.toEqual([]);
+    }
+  });
 
   it("accepts the retained synthetic shape and rejects every other constructor, alias, cast or effective-tenant assignment", () => {
     const rogue = (path: string, text: string) => boundaryViolations([{ path, text }]);
@@ -1216,7 +1251,7 @@ export const DEMO_MEMBERSHIP_ID = "d1500000-0000-4000-8000-000000000003";`;
     const constructing = files.filter(f => occurrences(f).found.some(o => o.kind === "call" || o.kind === "cast")).map(f => f.path);
     expect(APPROVED_SYNTHETIC_FILES.filter(path => !present.has(path))).toEqual([]);
     expect(APPROVED_SYNTHETIC_FILES.filter(path => !constructing.includes(path))).toEqual([]);
-    const special = new Set([REAL, DEFINITION, WORKER, REHEARSAL]);
+    const special = new Set([REAL, DEFINITION, WORKER, REHEARSAL, EMERGENCY_NOTICE_PORT, RETENTION_TIMER_PORT]);
     expect(APPROVED_PRACTICE_FILES.filter(path => !present.has(path) || !constructing.includes(path))).toEqual([]);
     expect(constructing.filter(path => !special.has(path) && !APPROVED_SYNTHETIC_FILES.includes(path) && !APPROVED_PRACTICE_FILES.includes(path))).toEqual([]);
     // The authoritative fixture module really holds literal UUID constants for every name the scan trusts.

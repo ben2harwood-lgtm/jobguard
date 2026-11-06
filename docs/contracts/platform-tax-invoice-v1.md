@@ -94,3 +94,5 @@ amount/hash/approval reconstruction, absent/foreign/corrupted source refusal,
 unsupported contractor/invalid fee refusal, persisted actor binding, revocation, cross-issuer races
 and uniqueness even after credit. Real PostgreSQL checks run in CI; the sandbox
 cannot start PostgreSQL or bind localhost.
+
+M4-10 now has a read-only owner route, `GET /api/plans/platform-documents`, and a dark synthetic page at `/plans/platform-documents`. A current company owner session reads only its stored simulation documents and linked credits; account figures use the existing fixture projection with zero linked payments. Issuing still has no route. Approved D02 examples, live issuing and payment linking remain closed.

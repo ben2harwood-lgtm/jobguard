@@ -1,3 +1,4 @@
+import { RequestBindingRefusedError } from "./request-binding-error.js";
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
@@ -113,6 +114,7 @@ export class PurchaseOrderActionRepository {
         return { attestationId: id, fact: "owner_attestation", providerConfirmed: false, realExternalActions: 0 };
       } });
     }); } catch (error) {
+      if (error instanceof RequestBindingRefusedError) throw new PurchaseOrderActionError("ORDER_ACTION_INVALID");
       if ((error as { code?: string }).code === "23505") throw new PurchaseOrderActionError("ORDER_ALREADY_COMMITTED");
       throw error;
     }
