@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-87": {
+      "branches": [
+        "codex/sandbox/later-safety-87"
+      ],
+      "allow": [
+        "packages/db/migrations/0823_baseline_ancestry_audit_trust.sql",
+        "packages/db/test/migration-proofs/0823_baseline_ancestry_audit_trust.proof.json",
+        "packages/db/test/baseline-ancestry-audit-trust.integration.test.ts"
+      ]
+    }
+  }
+}

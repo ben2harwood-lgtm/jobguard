@@ -1,0 +1,189 @@
+{
+  "migration": "0823_baseline_ancestry_audit_trust.sql",
+  "lp0": [
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.ch6_integrity_authority(uuid,uuid,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.authenticate_practice_session"
+        ]
+      },
+      "after": {
+        "identity": "function:app.ch6_integrity_authority(uuid,uuid,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.authenticate_practice_session"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.ch6_integrity_sources(uuid,uuid,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.ch6_integrity_authority",
+          "app.ch6_integrity_family",
+          "app.ch6_integrity_published",
+          "app.ch6_source"
+        ]
+      },
+      "after": {
+        "identity": "function:app.ch6_integrity_sources(uuid,uuid,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.ch6_integrity_authority",
+          "app.ch6_integrity_family",
+          "app.ch6_integrity_published",
+          "app.ch6_source"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.ch6_record_integrity_review(uuid,uuid,text,jsonb,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.command_receipt"
+        ],
+        "staticCalls": [
+          "app.authenticate_practice_session",
+          "app.ch6_append_integrity_review_audit",
+          "app.ch6_integrity_authority",
+          "app.ch6_integrity_canonical",
+          "app.ch6_integrity_family",
+          "app.ch6_integrity_source_fingerprint"
+        ]
+      },
+      "after": {
+        "identity": "function:app.ch6_record_integrity_review(uuid,uuid,text,jsonb,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.command_receipt"
+        ],
+        "staticCalls": [
+          "app.authenticate_practice_session",
+          "app.ch6_append_integrity_review_audit",
+          "app.ch6_integrity_authority",
+          "app.ch6_integrity_canonical",
+          "app.ch6_integrity_family",
+          "app.ch6_integrity_source_fingerprint"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.decision_check_command(text,jsonb,text,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "f453acc21bd13b2eda5bd9c318c63b0515e559fd7a687575dc01853095d8aa5c",
+        "staticWrites": [
+          "app.command_receipt",
+          "app.decision",
+          "app.finding_suppression",
+          "app.job_finding"
+        ],
+        "staticCalls": [
+          "app.authenticate_practice_session",
+          "app.final_lock_hash",
+          "app.lp4_seal_audit"
+        ]
+      },
+      "after": {
+        "identity": "function:app.decision_check_command(text,jsonb,text,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.command_receipt",
+          "app.decision",
+          "app.finding_suppression",
+          "app.job_finding"
+        ],
+        "staticCalls": [
+          "app.authenticate_practice_session",
+          "app.final_lock_hash",
+          "app.lp4_seal_audit"
+        ]
+      }
+    }
+  ],
+  "upgrade": [],
+  "tenancy": []
+}
