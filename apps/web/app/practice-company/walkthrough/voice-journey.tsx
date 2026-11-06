@@ -128,6 +128,12 @@ export function VoiceJourney() {
         await until(() => !!text("final-gross") && !!text("final-check-status"), signal);
         if (!text("invoice-gross")) await click("Issue and simulate this invoice", signal);
         await until(() => !!text("invoice-gross"), signal);
+        // Invoice issue and receipt history load independently. Wait for the real
+        // receipt form rather than treating the issued invoice as form readiness.
+        await until(() => {
+          const input = screen().querySelector<HTMLInputElement>('[data-testid="uiwire12-receipt-amount"]');
+          return !!input && !input.disabled && !input.closest("fieldset[disabled]");
+        }, signal);
         const amount = text("invoice-balance").replace("GBP ", "").replaceAll(",", "");
         await fill('[data-testid="uiwire12-receipt-amount"]', amount);
         await fill('[data-testid="uiwire12-receipt-reference"]', "Fictional walkthrough receipt");

@@ -5,6 +5,12 @@ test.setTimeout(360_000);
 // Both mobile-360 and desktop run these against real synthetic routes and workers.
 for (const mode of ["Play the whole thing", "Show me"] as const) {
 test(`WALK-3 ${mode} saves its own draft then honestly completes a prepared example`, async ({ page }) => {
+  // Exercise the invoice/receipt mount race: an issued invoice is visible while
+  // the separate receipt-history read is still in flight. Keep the real response.
+  await page.route(/\/api\/jobs\/[^/]+\/customer-invoices\/[^/]+\/receipts$/, async route => {
+    if (route.request().method() === "GET") await new Promise(resolve => setTimeout(resolve, 1500));
+    await route.continue();
+  });
   await page.goto("/practice-company?name=Tommy");
   await expect(page.getByRole("heading", { name: "Tommy's practice firm", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Ready for your first job" })).toBeVisible();
