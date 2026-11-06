@@ -93,7 +93,7 @@ export class AuditExportRepository {
       // The verified session supplies the tenant even if its historical actor no longer matches.
       // As in the authorization refusal path, never copy an unknown/foreign actor into the chain.
       await appendAuditBatch(db, [{ id: randomUUID(), version: "audit.v1", actorRef: member.rowCount ? `membership:${actor.membershipId}` : "security:unverified-member", eventType: "audit.export.refused", subjectType: "audit-export", subjectRef: context.tenantId, payload: { references: { action }, classifications: { action: "security" } } }]);
-    });
+    }, "audit-export-refusal");
   }
   private async authorized(db: TenantTransaction, context: VerifiedTenantContext, actor: AuditExportActor, action: "create" | "list"): Promise<boolean> {
     const allowed = (await db.$client.query<{ allowed: boolean; knownMember: boolean }>(`SELECT EXISTS(SELECT 1 FROM app.membership m JOIN app.role_grant g ON (g.tenant_id,g.membership_id)=(m.tenant_id,m.id)

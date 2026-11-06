@@ -6,6 +6,7 @@ import { ExtraRepository, type ExtraTransactionSeam, type RaisedExtra } from "./
 import { appendAuditBatch } from "./audit.js";
 import { assertContractorGate, derivedUuid } from "./work-order-repository.js";
 import { withTenant, InvalidTenantContextError, type VerifiedTenantContext, type AuthenticatedMembership, type TenantTransaction } from "./tenant-context.js";
+import { RequestBindingRefusedError } from "./request-binding-error.js";
 import { requireLiveJob, WatchdogError } from "./watchdog.js";
 import { SorSiteExtraError, canonicalSorQuantity, orderCheckV1, parseOrderCheckQuery, parseSorItemsQuery, parseSorSiteExtraInput, type SiteOrderCheck, type SorSiteExtraErrorCode } from "@jobguard/core";
 import { canonicalJson, sha256Hex } from "./work-order-repository.js";
@@ -194,6 +195,7 @@ export class SiteExtraRepository {
    }
   } catch (error) {
    if (error instanceof InvalidTenantContextError) refusal = { code: "NOT_FOUND", reason: "job_out_of_scope" };
+   else if (error instanceof RequestBindingRefusedError) refusal = { code: "EXTRA_FORBIDDEN", reason: "member_inactive" };
    else if (error instanceof WatchdogError) {
     if (error.code === "JOB_NOT_FOUND") refusal = { code: "NOT_FOUND", reason: "job_out_of_scope" };
     else throw error;
