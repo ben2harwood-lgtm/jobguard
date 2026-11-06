@@ -45,6 +45,18 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   expect((await c.admin.query("SELECT to_regprocedure('app.complete_shadow_firing_post_lock(uuid,uuid,uuid,uuid,uuid,uuid,text,text,uuid,text,jsonb)') routine")).rows[0].routine).toBeNull();
   await migrate(c.admin); await migrate(c.admin);
   expect(await proofDifferences(c.admin, rows)).toEqual({ rows: [], types: [] });
-  expect(await routines()).toEqual(afterRoutines);
+  // The branch-tip replay also adds MON-6's bounded read; pin that one addition
+  // to 0633's proof and body while preserving every existing routine exactly.
+  const replayRoutines = await routines();
+  const customerRead = replayRoutines.filter(r => r.nspname === "identity" && r.proname === "customer_practice_pay_now" && r.args === "t uuid, j uuid, c uuid, digest text");
+  expect(customerRead).toHaveLength(1);
+  const { definition, ...customerReadMetadata } = customerRead[0]!;
+  const proof = JSON.parse(await readFile(new URL("./migration-proofs/0633_customer_practice_pay_now_read.proof.json", import.meta.url), "utf8"));
+  const expectedRead = proof.upgrade.find((entry: { section: string; after: { nspname: string; proname: string } }) => entry.section === "routines" && entry.after.nspname === "identity" && entry.after.proname === "customer_practice_pay_now").after;
+  const owner = (await c.admin.query("SELECT $1::regrole::oid AS oid", [expectedRead.proowner])).rows[0].oid;
+  expect(customerReadMetadata).toEqual({ ...expectedRead, proowner: owner });
+  const customerReadSql = await readFile(new URL("../migrations/0633_customer_practice_pay_now_read.sql", import.meta.url), "utf8");
+  expect(definition.split("$function$")[1]).toBe(customerReadSql.split("AS $$")[1]!.split("$$;")[0]);
+  expect(replayRoutines.filter(r => r !== customerRead[0])).toEqual(afterRoutines);
   expect(await catalog()).toEqual(beforeCatalog);
 }, 120_000);

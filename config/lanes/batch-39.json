@@ -26,6 +26,7 @@
         "packages/db/test/customer-practice-pay-now-fixtures.ts",
         "packages/db/test/customer-practice-pay-now.integration.test.ts",
         "packages/db/test/final-check-fixture.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
         "packages/db/test/migration-proofs/0633_customer_practice_pay_now_read.proof.json",
         "packages/db/test/northside-demo.integration.test.ts",
         "packages/db/test/site-extra-priced-evidence.integration.test.ts"
