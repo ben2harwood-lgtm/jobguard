@@ -1,5 +1,5 @@
 {
-  "migration": "0795_emergency_token_minted.sql",
+  "migration": "0656_emergency_token_minted.sql",
   "lp0": [],
   "upgrade": [],
   "tenancy": []

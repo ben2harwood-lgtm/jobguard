@@ -80,7 +80,9 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   // Exact existing replacements only; all their privileges and unrelated definitions remain frozen.
   const fullBodies = new Map<string, string>();
   for (const [identity, migration] of [
-    ["identity.dark_emergency(s text, csrf text, t uuid, p jsonb)", "0795_emergency_token_minted.sql"],
+    ["identity.dark_emergency(s text, csrf text, t uuid, p jsonb)", "0656_emergency_token_minted.sql"],
+    ["app.reverse_synthetic_landing(p_tenant uuid, p_reversal uuid, p_derivation uuid, p_journal uuid, p_allocation uuid, p_amount bigint, p_reason character varying)", "0654_synthetic_reversal_money_rules.sql"],
+    ["app.replace_fee_reservation_book(p_tenant uuid, p_book jsonb, p_result jsonb)", "0651_fee_result_forward_only.sql"],
     ["app.demo_issue_customer_link(t uuid, j uuid, c uuid, session_digest text, link_digest text, content text)", "0650_demo_customer_link_reference.sql"],
     ["app.retention_records(t uuid, digest text, j uuid, cid uuid, v jsonb, expected text)", "0646_retention_timer_runtime_rules.sql"],
     ["app.notice_fixture_records(j uuid, n uuid, digest text, operation text, v jsonb)", "0647_notice_live_job_check.sql"],
