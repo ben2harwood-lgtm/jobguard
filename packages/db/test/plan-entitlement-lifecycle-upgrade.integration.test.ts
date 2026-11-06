@@ -47,6 +47,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   const selfComparison = "(SELECT content_hash FROM app.action_authorization WHERE tenant_id=p_tenant AND id=p_authorization)";
   // This batch replaces only these exact routine identities; compare their complete bodies.
   const batchBodies = await Promise.all([
+    ["ch5_history_actor", "t uuid, j uuid, d text", "0846_import_company_owner_history.sql"],
     ["retention_records", "t uuid, digest text, j uuid, cid uuid, v jsonb, expected text", "0646_retention_timer_runtime_rules.sql"],
     ["notice_fixture_records", "j uuid, n uuid, digest text, operation text, v jsonb", "0647_notice_live_job_check.sql"],
     ["pay_now_fake_attempt", "t uuid, digest text, j uuid, operation text, v jsonb", "0648_pay_now_catch_statement.sql"],
