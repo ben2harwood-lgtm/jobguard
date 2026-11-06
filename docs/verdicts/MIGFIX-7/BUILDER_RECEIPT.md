@@ -216,3 +216,46 @@ after router push, with at most 2 workers. Required current-head green CI and
 independent RED review remain landing gates. READY means prepared for router
 commit/push and CI/review, not database verification, acceptance or merge.
 Existing initial LATER / SIMPLICITY notes stand; no new review was performed.
+
+## Batch-49 merge resolution — 6 November 2026, 03:48 dispatch
+
+READY — RED, NOPR. Incoming main is MERGE_HEAD `919b7f3e60b82ef1ed1e32a6f259ba92246f6541`
+(PR #586 / batch-43). Local `main` is stale and was not the comparison base.
+Resolved the enterprise-access upgrade conflict by keeping main's exact 0629
+readiness-policy comparison and this group's exact 1210 landing-allocation CHECK
+assertion/normalization. Main's new pure policy and ACL regression assertions
+remain intact. No new behaviour and no weakened tests.
+
+Inspected and diffed all four re-created routines against the latest bodies
+in incoming main: approval/reversal in 0356, disclosure in 0128 and early firing
+in 0520. Differences remain limited to the existing MIGFIX-6 money corrections
+and MIGFIX-7 group disclosure/locking. Current support USAGE, tenant/mode checks,
+authorization and checked audit sealing survive. Neither 1210 nor 1211 exists
+in incoming main; no migration needs dropping. No additional exact-list rows
+are needed beyond retaining main's readiness-policy assertions at the conflict.
+The batch lane already lists exactly all 18 non-lane paths against incoming
+main, with no self-entry or duplicates, and needed no change.
+
+Actual local checks, installed dependencies only:
+
+- `node node_modules/typescript/bin/tsc -p packages/db/tsconfig.json --noEmit`:
+  PASS, exit 0.
+- From packages/db, `./node_modules/.bin/vitest run --maxWorkers=2
+  test/lp4-writer-catchup.test.ts test/migration-proof-loader.test.ts
+  test/migfix-6.test.ts`: PASS, 3 files / 98 tests.
+- From packages/db, `./node_modules/.bin/vitest run --maxWorkers=2
+  test/enterprise-access-upgrade.integration.test.ts -t 'policy comparison|ACL comparison'`:
+  PASS, 2 pure regression tests; the PostgreSQL upgrade test was intentionally
+  deselected (1 skipped). No database execution is claimed.
+- `git diff MERGE_HEAD --check`: PASS. Conflict markers removed from the resolved file.
+- Exported lane policy/schema/path and migration-order validators against the
+  resolved working tree and MERGE_HEAD: PASS. Exact non-lane allow set: 18 paths.
+- Normal `node tools/agent-lane-boundary-lint.mjs` currently refuses incoming-main
+  paths from the unfinished merge index. This is not a lane pass; the router
+  must stage the resolution, finish the merge, and rerun the normal command.
+
+No Git writes were performed. The index still marks the resolved file unmerged
+because .git is read-only; router staging and merge completion are required.
+Database/browser suites remain for GitHub CI after push; full current-head CI
+and one independent RED review remain landing gates. READY is the router
+commit/push/CI handoff, not evidence of merge, database execution or release.

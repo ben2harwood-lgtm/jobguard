@@ -1,4 +1,4 @@
-/** Exact upgrade/catalogue proof; later routine replacements and table ACL changes are scoped below. */
+/** Exact upgrade/catalogue proof; later routine, policy and table ACL changes are scoped below. */
 import { readFile } from 'node:fs/promises';
 import { afterAll, expect, it } from 'vitest';
 import { createScimHarness, fixture, person, canonicalRows, type ScimHarness } from './scim-fixtures.js';
@@ -12,6 +12,40 @@ function expectRelationsUnchanged(before:Relation[],after:Relation[],laterAcl:Se
   expect(after.map(({relacl:_x,...r})=>r)).toContainEqual(kept);
  }
 }
+type Policy = { schemaname:string; tablename:string; policyname:string; qual:string|null; with_check:string|null; [key:string]:unknown };
+// Exact replacement predicates pinned by 0629_scheduled_readiness_hardening.proof.json.
+const readinessPredicate="(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)";
+function expectPoliciesUnchanged(before:Policy[],after:Policy[]) {
+ for(const row of before){
+  const name=`${row.schemaname}.${row.tablename}.${row.policyname}`;
+  const expected=name==='app.scheduled_readiness_plan.tenant_isolation'
+   || name==='app.scheduled_readiness_proposal.tenant_isolation'
+   ? {...row,qual:readinessPredicate,with_check:readinessPredicate} : row;
+  expect(after).toContainEqual(expected);
+ }
+}
+it('policy comparison pins only the two 0629 replacements and rejects all other policy changes',async()=>{
+ const proof=JSON.parse(await readFile(new URL('./migration-proofs/0629_scheduled_readiness_hardening.proof.json',import.meta.url),'utf8'));
+ const replacements=proof.upgrade.filter((entry:{section:string})=>entry.section==='policies');
+ expect(replacements.map((entry:{after:Policy})=>`${entry.after.schemaname}.${entry.after.tablename}.${entry.after.policyname}`)).toEqual([
+  'app.scheduled_readiness_plan.tenant_isolation','app.scheduled_readiness_proposal.tenant_isolation',
+ ]);
+ for(const {before,after} of replacements as {before:Policy;after:Policy}[]){
+  expectPoliciesUnchanged([before],[after]);
+  expect(()=>expectPoliciesUnchanged([before],[before])).toThrow();
+  for(const field of ['qual','with_check'])
+   expect(()=>expectPoliciesUnchanged([before],[{...after,[field]:'true'}])).toThrow();
+  for(const [field,value] of Object.entries({schemaname:'identity',tablename:'other_table',policyname:'other_policy',permissive:'RESTRICTIVE',roles:'{public}',cmd:'SELECT'}))
+   expect(()=>expectPoliciesUnchanged([before],[{...after,[field]:value}])).toThrow();
+  // Neither another table/schema nor another policy on a named table gets an exception.
+  for(const identity of [{tablename:'other_table'},{schemaname:'identity'},{policyname:'other_policy'}]){
+   const original={...before,...identity};
+   expectPoliciesUnchanged([original],[original]);
+   for(const field of ['qual','with_check'])
+    expect(()=>expectPoliciesUnchanged([original],[{...original,[field]:readinessPredicate}])).toThrow();
+  }
+ }
+});
 it('ACL comparison permits only named-table permissions and rejects column changes or unnamed-table grants',()=>{
  const named={nspname:'app',relname:'fee_reservation_archive',relacl:['runtime=ar'],columns:[{attname:'id'}],constraints:[],relowner:1};
  const unnamed={...named,relname:'other_table'};
@@ -42,7 +76,7 @@ it('emergency_dual_owner/scim2_machine preserve populated identity state, instal
  for(const url of MIGRATION_URLS.slice(boundary+1))
   for(const m of (await readFile(url,'utf8')).matchAll(/\b(?:GRANT|REVOKE)\b[^;]*?\bON\s+(?:TABLE\s+)?((?:[a-z_]+\.[a-z0-9_]+)(?:\s*,\s*[a-z_]+\.[a-z0-9_]+)*)\s+(?:TO|FROM)\b/gu))
    for(const name of m[1]!.split(','))laterAcl.add(name.trim());
- for(const row of catalogue.policies)expect(after.policies).toContainEqual(row);
+ expectPoliciesUnchanged(catalogue.policies,after.policies);
  // 1210 (MIGFIX-6) adds exactly one validated CHECK to app.landing_allocation; nothing else on that table may change.
  const added='landing_allocation_eligible_within_gross';
  const isLanding=(r:Relation)=>r.nspname==='app'&&r.relname==='landing_allocation';

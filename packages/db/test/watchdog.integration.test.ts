@@ -23,6 +23,11 @@ const context = testTenantContext(tenant);
 const states = ["draft", "quoting", "accepted", "invoiced", "paid", "lost"];
 const legacy = Object.fromEntries(states.map(status => [status, { jobId: randomUUID(), uploadId: randomUUID() }]));
 const tables = ["purchase_order_manual_attestation", "purchase_order_draft", "purchase_order_revision", "purchase_order_placement", "supplier_document", "supplier_document_version", "supplier_document_intake", "goods_receipt", "supplier_fact_proposal", "supplier_fact_revision", "supplier_match_proposal", "supplier_match_revision", "supplier_match_allocation", "discrepancy_finding_revision", "discrepancy_review_outcome", "supplier_bill_supersession", "planned_work_revision", "readiness_snapshot", "readiness_decision", "inbox_finding_revision", "inbox_decision_revision", "inbox_outcome_event", "evidence_upload", "evidence_object", "evidence_link", "synthetic_evidence_original", "stage_completion", "watchdog_command_identity"];
+// Synthetic line proposals have membership/audit guards, not the watchdog live guard.
+// Still count them on every refusal and inspect their RLS/ownership below; their
+// insert/replay/audit controls are exercised in supplier-line-corrections.integration.test.ts.
+// Dispositions have no runtime table grants; their checked writer enforces access.
+const mutationTables = [...tables, "extra_duplicate_disposition", "supplier_line_match_snapshot", "supplier_line_match_correction", "privacy_review_fact"];
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, directory: string;
 const storage: PrivateVersionedStorage = {
   async createUploadUrl() { return "https://generated.invalid/upload"; },
@@ -92,7 +97,7 @@ function attempts(jobId: string, uploadId: string) {
 }
 async function counts() {
   const result: Record<string, number> = {};
-  for (const table of [...tables, "audit_event", "action_outbox", "command_receipt", "decision_resolution", "action_authorization", "job_work_state_event", "job_link", "watchdog_command_result"]) result[table] = Number((await admin.query(`SELECT count(*) n FROM app.${table}`)).rows[0].n);
+  for (const table of [...mutationTables, "audit_event", "action_outbox", "command_receipt", "decision_resolution", "action_authorization", "job_work_state_event", "job_link", "watchdog_command_result"]) result[table] = Number((await admin.query(`SELECT count(*) n FROM app.${table}`)).rows[0].n);
   return result;
 }
 describe("CH-2 actual PostgreSQL enforcement", () => {
@@ -114,8 +119,8 @@ describe("CH-2 actual PostgreSQL enforcement", () => {
     expect((await admin.query("SELECT has_function_privilege('jobguard_runtime','app.require_watchdog_live(uuid)','EXECUTE') runtime,has_function_privilege('jobguard_infrastructure','app.require_watchdog_live(uuid)','EXECUTE') infrastructure")).rows[0]).toEqual({ runtime: true, infrastructure: false });
     const role=(await admin.query("SELECT rolsuper,rolbypassrls,rolcreaterole FROM pg_roles WHERE rolname='jobguard_runtime'")).rows[0];
     expect(role).toEqual({rolsuper:false,rolbypassrls:false,rolcreaterole:false});
-    const protectedTables=await admin.query("SELECT c.relname,c.relrowsecurity,c.relforcerowsecurity,r.rolname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_roles r ON r.oid=c.relowner WHERE n.nspname='app' AND c.relname=ANY($1::text[])",[tables]);
-    expect(protectedTables.rows).toHaveLength(tables.length);
+    const protectedTables=await admin.query("SELECT c.relname,c.relrowsecurity,c.relforcerowsecurity,r.rolname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_roles r ON r.oid=c.relowner WHERE n.nspname='app' AND c.relname=ANY($1::text[])",[mutationTables]);
+    expect(protectedTables.rows).toHaveLength(mutationTables.length);
     expect(protectedTables.rows.every(row=>row.relrowsecurity&&row.relforcerowsecurity&&row.rolname==='jobguard_migration')).toBe(true);
     expect((await admin.query("SELECT has_column_privilege('jobguard_runtime','app.evidence_upload','job_id','UPDATE') identity_edit,has_column_privilege('jobguard_runtime','app.evidence_upload','state','UPDATE') lifecycle_update")).rows[0]).toEqual({identity_edit:false,lifecycle_update:true});
     // Command identities and stored results are append-only for the runtime: select and insert, nothing else.
