@@ -68,8 +68,9 @@ export type CollectionBook = {
  * and retain command/event uniqueness durably across processes and restarts.
  * Source readers run inside the same transaction and lock their source revisions.
  * No production implementation is registered by this dark slice. */
+export type SignedProviderResult = Readonly<{ body: string; signature: string }>;
 export interface ReservationStore {
-  transaction<T>(tenantId: string, work: (book: CollectionBook, sources: LockedCollectionSources) => Promise<T>): Promise<T>;
+  transaction<T>(tenantId: string, work: (book: CollectionBook, sources: LockedCollectionSources) => Promise<T>, providerResult?: () => SignedProviderResult | undefined): Promise<T>;
 }
 export interface LockedCollectionSources {
   /** Recompute current M4-10 derivations, receipts and credits; load the exact immutable invoice,
