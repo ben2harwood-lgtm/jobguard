@@ -3,8 +3,8 @@ import { readFile } from "node:fs/promises";
 import { afterAll, expect, it } from "vitest";
 import { startBeforeMigration, applyMigration, type Cluster } from "./contractor-entitlement-fixtures.js";
 import { proofBefore, proofDifferences } from "./upgrade-proof-utils.js";
-import { applyUpgradeProofs, loadMigrationProofs } from "./migration-proof-loader.js";
 import { migrate } from "../src/migrate.js";
+import { applyUpgradeProofs, loadMigrationProofs } from "./migration-proof-loader.js";
 
 const own = "0632_shadow_group_disclosure.sql";
 let c: Cluster | undefined;
@@ -82,11 +82,14 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
       expect(now.definition.split("$function$")[1]).toBe(replacements.get(key(prior)));
     } else expect(now).toEqual(prior);
   }
-  // Only these eight new routines: take exact ACL/owner/configuration from their proofs.
-  const proofs = loadMigrationProofs().proofs.filter(p => ["0633_customer_practice_pay_now_read.sql", "0634_extra_proceed_statement.sql", "0637_extra_working_day_wait.sql", "0646_retention_timer_runtime_rules.sql", "0649_order_attestation_session.sql"].includes(p.migration));
+  // Pin all ten named additions with exact ACL/owner/configuration from their proofs.
+  const proofs = loadMigrationProofs().proofs.filter(p => ["0633_customer_practice_pay_now_read.sql", "0634_extra_proceed_statement.sql", "0637_extra_working_day_wait.sql", "0639_connector_promotion.sql", "0640_platform_invoice_read.sql", "0646_retention_timer_runtime_rules.sql", "0649_order_attestation_session.sql"].includes(p.migration));
+  expect(proofs).toHaveLength(7);
   const additions = proofs.flatMap(p => p.upgrade.filter(e => e.section === "routines").map(e => ({ migration: p.migration, row: e.after! })));
   expect(additions.map(e => key(e.row as Parameters<typeof key>[0])).sort()).toEqual([
+    "app.connector_promotion(p_session uuid, p_namespace text, p_event text, p_command uuid, p_result jsonb)",
     "app.order_attestation_actor(t uuid, digest text)",
+    "app.platform_invoice_read(t uuid, digest text)",
     "app.retention_timer(t uuid, j uuid, v jsonb, expected text)",
     "app.retention_timer_book(t uuid, j uuid)",
     "app.xa_proceed(p_job uuid, p_extra uuid, p_actor uuid, p_body jsonb)",
@@ -97,7 +100,9 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   ]);
   for (const { migration, row } of additions) {
     const identity = row as Parameters<typeof key>[0];
-    const now = later.find(r => key(r) === key(identity));
+    const matches = later.filter(r => key(r) === key(identity));
+    expect(matches).toHaveLength(1);
+    const now = matches[0]!;
     const source = await readFile(new URL(`../migrations/${migration}`, import.meta.url), "utf8");
     expect(now.definition.split("$function$")[1]).toBe(source.split(`FUNCTION ${identity.nspname}.${identity.proname}(`)[1]!.split("AS $$")[1]!.split("$$;")[0]);
   }
@@ -107,13 +112,13 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     proofs.map(p => ({ ...p, upgrade: p.upgrade.filter(e => e.section === "routines") })), owners);
   expect(metadata(later)).toEqual(metadata(expected.routines as typeof later));
   const finalCatalog = await catalog();
-  const addedRelations = new Set(["extra_proceed_statement", "extra_proceed_statement_pkey", "extra_proceed_statement_tenant_id_command_id_key"]);
+  const addedRelations = new Set(["extra_proceed_statement", "extra_proceed_statement_pkey", "extra_proceed_statement_tenant_id_command_id_key", "connector_promotion", "connector_promotion_pkey", "connector_promotion_tenant_id_command_id_key"]);
   expect(finalCatalog.filter(r => r.nspname !== "app" || !addedRelations.has(r.relname))).toEqual(beforeCatalog);
   const relationMetadata = finalCatalog.filter(r => r.nspname === "app" && addedRelations.has(r.relname)).map(({ policies: _policies, ...r }) => r);
   const relationProof = applyUpgradeProofs({ rows: {}, routines: [], relations: [], policies: [] },
     proofs.map(p => ({ ...p, upgrade: p.upgrade.filter(e => e.section === "relations" || e.section === "policies") })), owners);
   expect(relationMetadata).toEqual(relationProof.relations);
-  expect((await c.admin.query("SELECT * FROM pg_policies WHERE schemaname='app' AND tablename='extra_proceed_statement' ORDER BY policyname")).rows).toEqual(relationProof.policies);
+  expect((await c.admin.query("SELECT * FROM pg_policies WHERE schemaname='app' AND tablename IN ('extra_proceed_statement','connector_promotion') ORDER BY schemaname,tablename,policyname")).rows).toEqual(relationProof.policies);
   await migrate(c.admin);
   expect(await proofDifferences(c.admin, rows)).toEqual({ rows: [], types: [] });
   expect(await routines()).toEqual(later);
