@@ -74,11 +74,11 @@ it("serializes competing resets, rejects nonblank/expired sessions and grants no
 
 it("upgrades legacy sessions without changing their jobs or credentials and refuses a non-demo database", async () => {
   const { startBeforeMigration, applyMigration } = await import("./contractor-practice-session-fixtures.js");
-  const prior = await startBeforeMigration("0658_blank_practice_company.sql");
+  const prior = await startBeforeMigration("0657_blank_practice_company.sql");
   try {
     const token = await issuePracticeSession(prior.runtime);
     const before = await prior.admin.query("SELECT row_to_json(j) value FROM app.job j WHERE practice_session_digest=$1 ORDER BY id", [digestOf(token)]);
-    await applyMigration(prior, "0658_blank_practice_company.sql");
+    await applyMigration(prior, "0657_blank_practice_company.sql");
     expect(await authenticatePracticeSession(prior.runtime, token)).toBeDefined();
     expect(await isBlankPracticeCompany(prior.runtime, digestOf(token))).toBe(false);
     expect((await prior.admin.query("SELECT row_to_json(j) value FROM app.job j WHERE practice_session_digest=$1 ORDER BY id", [digestOf(token)])).rows).toEqual(before.rows);
