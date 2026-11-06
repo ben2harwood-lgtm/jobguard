@@ -1,6 +1,7 @@
 import { assertLp4SealedEvents } from "./lp4-writer-catchup-fixture.js";
 import { randomUUID } from "node:crypto";
 import { readSmallTrip } from "../src/meter-small-trip.js";
+import { insertVariationProposal, VariationRepository } from "../src/variation-repository.js";
 import { withTenant } from "../src/tenant-context.js";
 import type { PoolClient } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -116,9 +117,18 @@ describe("MON1-T private trip foundation (source integration held MON1-I)", () =
   it("M1T-04 draft, priced, rejected and withdrawn proposals supply no approval fact", async () => {
     const a = await activated(f);
     for (const state of ["draft","priced","rejected","withdrawn"]) {
+      if (state === "draft") {
+        await withTenant(f.runtime,a.context,db=>insertVariationProposal(db,a.tenantId,{
+          version:"variation-proposal.v1",id:randomUUID(),jobId:a.jobId,scopeItemId:randomUUID(),
+          existingScopeItemId:null,lineageParentScopeItemId:null,captureKind:"text",
+          captureText:"Fictional unpriced extra",description:"Fictional unpriced extra",suggestion:null,
+        }));
+        continue;
+      }
       const p = await priced(f,a,900000,"2026-10-02T12:00:00Z",false);
-      if (state === "withdrawn") await f.admin.query("INSERT INTO app.variation_withdrawal(tenant_id,job_id,id,variation_id,actor_membership_id,reason_code) VALUES($1,$2,$3,$4,$5,'builder_withdrawn')",[a.tenantId,a.jobId,randomUUID(),p.variation,a.actorId]);
-      else await f.admin.query("UPDATE app.variation SET state=$1 WHERE tenant_id=$2 AND id=$3",[state,a.tenantId,p.variation]);
+      const variations = new VariationRepository(f.runtime);
+      if (state === "withdrawn") await variations.recordWithdrawal(a.context,{version:"variation-withdrawal.v1",id:randomUUID(),jobId:a.jobId,variationId:p.variation,actorMembershipId:a.actorId,reasonCode:"builder_withdrawn"});
+      else if (state === "rejected") await variations.transact(a.context,db=>variations.reject(db,a.tenantId,{id:randomUUID(),variationId:p.variation,revisionId:p.revision,actorMembershipId:a.actorId}));
     }
     expect(await workTenant(f.admin,a.tenantId,db=>capture(db,a,a.activation,"activation"))).toBeNull();
     expect(await observations(f,a)).toEqual([]);

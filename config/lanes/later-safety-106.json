@@ -9,7 +9,9 @@
       "allow": [
         "packages/db/migrations/0838_variation_state_transition_guard.sql",
         "packages/db/test/migration-proofs/0838_variation_state_transition_guard.proof.json",
-        "packages/db/test/variation-state-transition.integration.test.ts"
+        "packages/db/test/variation-state-transition.integration.test.ts",
+        "packages/db/test/final-account-lock.integration.test.ts",
+        "packages/db/test/meter-trip.integration.test.ts"
       ]
     }
   }

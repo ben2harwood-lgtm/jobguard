@@ -9,7 +9,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createLockSnapshot, hashLockCaptureRegister, hashLockLineSet, hashLockScopeDispositions, verifyFinalAccountLockSnapshot, captureRegisterNetPence, candidateM1TaxPolicy, money, addMoney } from "@jobguard/core";
 import { migrate } from "../src/migrate.js";
 import { FinalAccountLockRepository } from "../src/final-account-lock-repository.js";
-import { VariationRepository } from "../src/variation-repository.js";
+import { approvePricedVariation, VariationRepository } from "../src/variation-repository.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 
@@ -144,9 +144,16 @@ if (expect.getState().testPath === fileURLToPath(import.meta.url)) describe("SV-
   const logged=await addFixtureCapture(f,a,320000),reviewed=await addFixtureCapture(f,a,40000,true);
   const ids: string[]=[];
   for(const state of ['draft','priced','approved','rejected','withdrawn']){
-   const id=await addFixtureCapture(f,a,null); ids.push(id);
+   // Zero-value revisions preserve the capture-total assertion while using real pricing.
+   const id=await addFixtureCapture(f,a,['priced','approved','rejected'].includes(state)?0:null); ids.push(id);
    if(state==='withdrawn')await variations.recordWithdrawal(a.context,{version:'variation-withdrawal.v1',id:randomUUID(),jobId:a.jobId,variationId:id,actorMembershipId:LOCK_OWNER,reasonCode:'builder_withdrawn'});
-   else if(state!=='draft')await f.admin.query("UPDATE app.variation SET state=$1 WHERE tenant_id=$2 AND id=$3",[state,a.tenantId,id]);
+   else if(state==='approved'||state==='rejected'){
+    const revision=(await variations.read(a.context,a.jobId)).variations.find(v=>v.id===id)!.revisions[0]!;
+    await variations.transact(a.context,async db=>{
+     if(state==='approved')await approvePricedVariation(db,a.tenantId,id,{id:randomUUID(),revisionId:revision.id,revision:revision.revision,contentHash:revision.contentHash,signedDeltaPence:revision.signedDeltaPence,method:'builder_attestation',actorMembershipId:LOCK_OWNER,evidenceId:null,approvedAt:new Date()});
+     else await variations.reject(db,a.tenantId,{id:randomUUID(),variationId:id,revisionId:revision.id,actorMembershipId:LOCK_OWNER});
+    });
+   }
   }
   expect((await repo.read(a.context,a.jobId)).captures.map(c=>c.id)).toEqual(expect.arrayContaining([logged,reviewed,...ids]));
   await repo.lock(a.context,a.input);const row=await lockRow(f,a.tenantId,a.jobId),captures=createLockSnapshot(row.snapshot).snapshot.captureRegister;
