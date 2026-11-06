@@ -114,6 +114,8 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "nest:/contractor/jobs/:id/possible-extras/evaluate": "pre_live_allowed",
   "nest:/contractor/jobs/:id/possible-extras/:promptId/confirm": "pre_live_allowed",
   "nest:/contractor/jobs/:id/possible-extras/:promptId/dismiss": "pre_live_allowed",
+  "command:EndCheck": "pre_live_allowed",
+  "/api/contractor/jobs/[id]/finish": "pre_live_allowed",
   "/api/contractor/jobs/[id]/possible-extras/[promptId]/confirm": "pre_live_allowed",
   "/api/contractor/jobs/[id]/possible-extras/[promptId]/dismiss": "pre_live_allowed",
   "/api/contractor/jobs/[id]/possible-extras/observations": "pre_live_allowed",
