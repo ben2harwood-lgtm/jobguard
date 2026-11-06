@@ -1,5 +1,6 @@
 -- LATER-SAFETY-83: an import must have authority over its destination team.
 -- CREATE OR REPLACE preserves the existing owner and ACL; all other checks stay intact.
+BEGIN;
 CREATE OR REPLACE FUNCTION app.work_order_commit(actor uuid, payload jsonb) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; k text:=payload->>'kind'; wo app.work_order; cur app.work_order_revision; binding app.contractor_party_binding;
@@ -77,3 +78,4 @@ BEGIN
  END IF;
  RETURN jsonb_build_object('workOrderId',wo.id,'jobId',wo.job_id,'revisionId',revision_id,'revision',revision_no);
 END $$;
+COMMIT;

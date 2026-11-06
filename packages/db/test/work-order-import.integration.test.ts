@@ -702,7 +702,7 @@ describe("ENT-2 per-order authority: a manager scoped to one branch has no reach
     ] as const) {
       const created = (await importOf(actor, demoFile([row1(demo, n, { teamId: initialTeam, assignedMembershipIds: [] })]), `allowed-team-${n}.csv`)).rows[0]!;
       expect(created).toMatchObject({ outcome: "created", errorCode: null });
-      const revised = (await importOf(actor, demoFile([row1(demo, n, { expectedRevision: 1, teamId: revisedTeam, assignedMembershipIds: [] })]), `allowed-team-revise-${n}.csv`)).rows[0]!;
+      const revised = (await importOf(actor, demoFile([row1(demo, n, { expectedRevision: 1, priority: "emergency", teamId: revisedTeam, assignedMembershipIds: [] })]), `allowed-team-revise-${n}.csv`)).rows[0]!;
       expect(revised).toMatchObject({ outcome: "revised", errorCode: null });
       const team = await withTenant(runtime, ctx(actor), db => db.$client.query("SELECT app.contractor_job_team(job_id) team_id FROM app.work_order WHERE tenant_id=$1 AND id=$2", [p.tenantId, created.workOrderId]));
       expect(team.rows[0].team_id).toBe(revisedTeam);
