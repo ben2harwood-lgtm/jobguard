@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/lp-8b-outbox-evidence"
       ],
-      "note": "LP-8b RED stacked on LP-8a 2fd5439b. READY for NOPR branch save; held for landing on external storage-verifier completion, PostgreSQL catalogue/upgrade proof and exact-head independent review. No scanner, pin or guard changes.",
+      "note": "LP-8b RED stacked on LP-8a 2fd5439b. Repair round 1 applies the first security pre-check: bound active-member evidence verification and only the named runtime EXECUTE grant. READY for NOPR branch save; PostgreSQL catalogue/upgrade, CI and exact-head independent RED review remain required. No scanner, pin or guard-tool changes.",
       "allow": [
         "docs/verdicts/LP-8b/BUILDER_RECEIPT.md",
         "packages/db/migrations/0800_lp8b_outbox_evidence.sql",

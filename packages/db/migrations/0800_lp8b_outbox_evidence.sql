@@ -201,11 +201,18 @@ CREATE TRIGGER a_lp8b_upload BEFORE INSERT OR UPDATE ON app.evidence_upload FOR 
 -- cannot prove a remote store exists; the storage adapter remains a trust boundary.
 CREATE FUNCTION app.verify_evidence_upload(p_tenant uuid,p_upload uuid,p_version text,p_type text,p_bytes bytea)
 RETURNS timestamptz LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
-DECLARE u app.evidence_upload; verified timestamptz:=clock_timestamp();
+DECLARE u app.evidence_upload; actor uuid; verified timestamptz:=clock_timestamp();
 BEGIN
+ actor:=app.current_actor();
  IF p_tenant IS DISTINCT FROM app.current_tenant() OR p_tenant IS DISTINCT FROM nullif(current_setting('app.tenant_id',true),'')::uuid THEN
   RAISE EXCEPTION 'EVIDENCE_NOT_AUTHORIZED' USING ERRCODE='42501'; END IF;
  SELECT * INTO u FROM app.evidence_upload WHERE (tenant_id,id)=(p_tenant,p_upload) FOR UPDATE;
+ IF NOT EXISTS(SELECT 1 FROM app.membership m
+  JOIN app.job j ON j.tenant_id=m.tenant_id AND j.id=u.job_id
+  WHERE (m.tenant_id,m.id)=(p_tenant,actor) AND m.revoked_at IS NULL
+   AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp())
+   AND NOT EXISTS(SELECT 1 FROM app.contractor_membership_revocation x WHERE (x.tenant_id,x.membership_id)=(m.tenant_id,m.id))) THEN
+  RAISE EXCEPTION 'EVIDENCE_NOT_AUTHORIZED' USING ERRCODE='42501'; END IF;
  IF u.id IS NULL OR u.state<>'quarantined' OR u.expires_at<=verified OR u.object_version_id IS DISTINCT FROM p_version
   OR p_version IS NULL OR p_version='' OR p_type IS DISTINCT FROM u.expected_content_type OR p_bytes IS NULL
   OR octet_length(p_bytes)=0 OR octet_length(p_bytes)>u.maximum_bytes
@@ -217,11 +224,9 @@ BEGIN
 END $$;
 ALTER FUNCTION app.verify_evidence_upload(uuid,uuid,text,text,bytea) OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.verify_evidence_upload(uuid,uuid,text,text,bytea) FROM PUBLIC,jobguard_identity,jobguard_infrastructure;
--- INCOMPLETE: raw runtime SQL must not manufacture a storage verification.
--- Keep unavailable until a separately authenticated storage verifier attests the
--- exact scoped object/version/hash/length/type. The server caller is prepared,
--- but its successful path is deliberately not enabled by this draft.
-REVOKE ALL ON FUNCTION app.verify_evidence_upload(uuid,uuid,text,text,bytea) FROM jobguard_runtime;
+-- Only a live bound member of the upload's tenant/job may submit the exact
+-- bytes. External storage-read integrity remains the adapter's trust boundary.
+GRANT EXECUTE ON FUNCTION app.verify_evidence_upload(uuid,uuid,text,text,bytea) TO jobguard_runtime;
 
 CREATE FUNCTION app.lp8b_evidence_reference_guard() RETURNS trigger
 LANGUAGE plpgsql SET search_path=pg_catalog,pg_temp AS $$

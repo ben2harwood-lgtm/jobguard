@@ -84,8 +84,8 @@ it("keeps finalized evidence scoped and exact, refuses fabricated verification a
     await refused(c,"UPDATE app.evidence_upload SET state='verified',server_verified_at=clock_timestamp(),object_version_id='v1' WHERE tenant_id=$1 AND id=$2",[s.tenant,upload.id]);
     await refused(c,"UPDATE app.evidence_upload SET expected_sha256=$3 WHERE tenant_id=$1 AND id=$2",[s.tenant,upload.id,"0".repeat(64)],"55000");
     await c.query("UPDATE app.evidence_upload SET state='quarantined',object_version_id='v1' WHERE tenant_id=$1 AND id=$2",[s.tenant,upload.id]);
-    // Correct bytes still do not prove that a storage read took place.
-    await refused(c,"SELECT app.verify_evidence_upload($1,$2,'v1','image/png',$3)",[s.tenant,upload.id,Buffer.from(bytes)]);
+    // Correct bytes cannot authorize verification for a different tenant.
+    await refused(c,"SELECT app.verify_evidence_upload($1,$2,'v1','image/png',$3)",[randomUUID(),upload.id,Buffer.from(bytes)]);
   });
   storage.put(upload.objectKey,"v1",bytes);
   const evidence=await service.finalize(context,{uploadId:upload.id,objectVersionId:"v1",evidenceType:"site_photo"});
@@ -104,6 +104,41 @@ it("keeps finalized evidence scoped and exact, refuses fabricated verification a
     await refused(c,invalidation,[randomUUID(),s.tenant,upload.id,s.member]);
   });
   await request(s,async c=>{await c.query(invalidation,[randomUUID(),s.tenant,upload.id,s.member]);});
+});
+
+it("verifies exact bytes only for a live bound upload member and keeps all metadata refusals",async()=>{
+  const s=await session(), job=randomUUID(), bytes=pngBytes(42);
+  await importWatchdogFixtureJob(db.owner,s.tenant,job);
+  const service=new EvidenceService(db.runtime,new MemoryStorage());
+  const upload=await service.beginUpload(contextFor(s),{jobId:job,expectedSha256:digest(bytes),contentType:"image/png",maximumBytes:bytes.length,expiresAt:new Date("2099-01-01")});
+  // Owner setup leaves identical correct bytes available for all refusal cases.
+  await db.owner.query("UPDATE app.evidence_upload SET state='quarantined',object_version_id='v1' WHERE tenant_id=$1 AND id=$2",[s.tenant,upload.id]);
+  const sql="SELECT app.verify_evidence_upload($1,$2,$3,$4,$5) verified", args=[s.tenant,upload.id,"v1","image/png",Buffer.from(bytes)];
+  const unbound=await db.runtime.connect();
+  try{
+    await unbound.query("BEGIN");
+    await unbound.query("SELECT set_config('app.tenant_id',$1,true),set_config('app.actor_id',$2,true)",[s.tenant,s.member]);
+    await refused(unbound,sql,args);
+  }finally{await unbound.query("ROLLBACK");unbound.release();}
+  const outsider=await session();
+  await request(outsider,c=>refused(c,sql,args));
+  await request(s,async c=>{
+    for(const [index,value] of [[1,randomUUID()],[2,"v2"],[3,"image/jpeg"],[4,Buffer.from(pngBytes(43))],[4,Buffer.alloc(0)],[4,Buffer.alloc(bytes.length+1)]] as const){
+      const attack=[...args];attack[index]=value;await refused(c,sql,attack);
+    }
+    const result=await c.query(sql,args);
+    expect(result.rows[0].verified).toBeInstanceOf(Date);
+    expect((await c.query("SELECT state,verified_byte_length FROM app.evidence_upload WHERE tenant_id=$1 AND id=$2",[s.tenant,upload.id])).rows).toEqual([{state:"verified",verified_byte_length:String(bytes.length)}]);
+  });
+  // Recheck membership at execution, even after a request was bound successfully.
+  for(const column of ["revoked_at","expires_at"]){
+    try{
+      await request(s,async c=>{
+        await db.owner.query(`UPDATE app.membership SET ${column}=clock_timestamp()-interval '1 second' WHERE tenant_id=$1 AND id=$2`,[s.tenant,s.member]);
+        await refused(c,sql,args);
+      });
+    }finally{await db.owner.query(`UPDATE app.membership SET ${column}=NULL WHERE tenant_id=$1 AND id=$2`,[s.tenant,s.member]);}
+  }
 });
 
 it("requires explicit prevention attribution from the bound owner and processing command; legitimate repository facts keep their actor",async()=>{
@@ -144,6 +179,7 @@ it("keeps allocation tables SELECT-only and new security-definer entries private
   expect(rows).toHaveLength(3);
   for(const r of rows){
     expect(r.proconfig).toContain("search_path=pg_catalog, pg_temp");
+    expect((await db.owner.query("SELECT has_function_privilege('jobguard_runtime',$1,'EXECUTE') allowed",[r.signature])).rows[0].allowed).toBe(true);
     for(const role of ["jobguard_identity","jobguard_infrastructure"])expect((await db.owner.query("SELECT has_function_privilege($1,$2,'EXECUTE') allowed",[role,r.signature])).rows[0].allowed).toBe(false);
   }
 });

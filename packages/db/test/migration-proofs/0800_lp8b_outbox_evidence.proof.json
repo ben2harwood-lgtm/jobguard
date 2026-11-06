@@ -13,7 +13,7 @@
       "section": "entries",
       "before": null,
       "after": {
-        "key": "owner|routine|function:app.insert_authorized_action(uuid,uuid,uuid,uuid,text,text,text,text,text,text,integer,bigint,text,text,timestamp with time zone)|jobguard_migration",
+        "key": "acl|routine|function:app.insert_authorized_action(uuid,uuid,uuid,uuid,text,text,text,text,text,text,integer,bigint,text,text,timestamp with time zone)|jobguard_runtime|EXECUTE|-",
         "group": "x-outbox-writes"
       }
     },
@@ -21,7 +21,23 @@
       "section": "entries",
       "before": null,
       "after": {
-        "key": "acl|routine|function:app.insert_authorized_action(uuid,uuid,uuid,uuid,text,text,text,text,text,text,integer,bigint,text,text,timestamp with time zone)|jobguard_runtime|EXECUTE|-",
+        "key": "acl|routine|function:app.lp8b_check_extra_command(uuid,uuid,uuid,uuid)|jobguard_runtime|EXECUTE|-",
+        "group": "x-extra-writes"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.verify_evidence_upload(uuid,uuid,text,text,bytea)|jobguard_runtime|EXECUTE|-",
+        "group": "x-evidence-writes"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.insert_authorized_action(uuid,uuid,uuid,uuid,text,text,text,text,text,text,integer,bigint,text,text,timestamp with time zone)|jobguard_migration",
         "group": "x-outbox-writes"
       }
     },
@@ -37,27 +53,8 @@
       "section": "entries",
       "before": null,
       "after": {
-        "key": "acl|routine|function:app.lp8b_check_extra_command(uuid,uuid,uuid,uuid)|jobguard_runtime|EXECUTE|-",
-        "group": "x-extra-writes"
-      }
-    },
-    {
-      "section": "routines",
-      "before": null,
-      "after": {
-        "identity": "function:app.lp8b_outbox_guard()",
-        "owner": "jobguard_migration",
-        "securityDefiner": false,
-        "searchPath": "search_path=pg_catalog, pg_temp",
-        "returnsTrigger": true,
-        "extension": null,
-        "reachable": false,
-        "runtimeExecute": false,
-        "publicExecute": false,
-        "otherExecute": [],
-        "definitionSha256": null,
-        "staticWrites": [],
-        "staticCalls": []
+        "key": "owner|routine|function:app.verify_evidence_upload(uuid,uuid,text,text,bytea)|jobguard_migration",
+        "group": "x-evidence-writes"
       }
     },
     {
@@ -78,28 +75,6 @@
         "staticWrites": [
           "app.action_outbox"
         ],
-        "staticCalls": [
-          "app.current_actor",
-          "app.current_tenant"
-        ]
-      }
-    },
-    {
-      "section": "routines",
-      "before": null,
-      "after": {
-        "identity": "function:app.lp8b_invalidation_guard()",
-        "owner": "jobguard_migration",
-        "securityDefiner": false,
-        "searchPath": "search_path=pg_catalog, pg_temp",
-        "returnsTrigger": true,
-        "extension": null,
-        "reachable": false,
-        "runtimeExecute": false,
-        "publicExecute": false,
-        "otherExecute": [],
-        "definitionSha256": null,
-        "staticWrites": [],
         "staticCalls": [
           "app.current_actor",
           "app.current_tenant"
@@ -133,6 +108,27 @@
       "section": "routines",
       "before": null,
       "after": {
+        "identity": "function:app.lp8b_evidence_reference_guard()",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.current_tenant"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
         "identity": "function:app.lp8b_extra_fact_actor()",
         "owner": "jobguard_migration",
         "securityDefiner": false,
@@ -148,6 +144,66 @@
         "staticCalls": [
           "app.lp8b_check_extra_command"
         ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp8b_final_input_guard()",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp8b_invalidation_guard()",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.current_actor",
+          "app.current_tenant"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp8b_outbox_guard()",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": []
       }
     },
     {
@@ -170,90 +226,6 @@
           "app.current_actor",
           "app.current_tenant"
         ]
-      }
-    },
-    {
-      "section": "routines",
-      "before": null,
-      "after": {
-        "identity": "function:app.lp8b_upload_guard()",
-        "owner": "jobguard_migration",
-        "securityDefiner": false,
-        "searchPath": "search_path=pg_catalog, pg_temp",
-        "returnsTrigger": true,
-        "extension": null,
-        "reachable": false,
-        "runtimeExecute": false,
-        "publicExecute": false,
-        "otherExecute": [],
-        "definitionSha256": null,
-        "staticWrites": [],
-        "staticCalls": [
-          "app.current_tenant"
-        ]
-      }
-    },
-    {
-      "section": "routines",
-      "before": null,
-      "after": {
-        "identity": "function:app.verify_evidence_upload(uuid,uuid,text,text,bytea)",
-        "owner": "jobguard_migration",
-        "securityDefiner": true,
-        "searchPath": "search_path=pg_catalog, pg_temp",
-        "returnsTrigger": false,
-        "extension": null,
-        "reachable": false,
-        "runtimeExecute": false,
-        "publicExecute": false,
-        "otherExecute": [],
-        "definitionSha256": null,
-        "staticWrites": [
-          "app.evidence_upload"
-        ],
-        "staticCalls": [
-          "app.current_tenant"
-        ]
-      }
-    },
-    {
-      "section": "routines",
-      "before": null,
-      "after": {
-        "identity": "function:app.lp8b_evidence_reference_guard()",
-        "owner": "jobguard_migration",
-        "securityDefiner": false,
-        "searchPath": "search_path=pg_catalog, pg_temp",
-        "returnsTrigger": true,
-        "extension": null,
-        "reachable": false,
-        "runtimeExecute": false,
-        "publicExecute": false,
-        "otherExecute": [],
-        "definitionSha256": null,
-        "staticWrites": [],
-        "staticCalls": [
-          "app.current_tenant"
-        ]
-      }
-    },
-    {
-      "section": "routines",
-      "before": null,
-      "after": {
-        "identity": "function:app.lp8b_final_input_guard()",
-        "owner": "jobguard_migration",
-        "securityDefiner": false,
-        "searchPath": "search_path=pg_catalog, pg_temp",
-        "returnsTrigger": true,
-        "extension": null,
-        "reachable": false,
-        "runtimeExecute": false,
-        "publicExecute": false,
-        "otherExecute": [],
-        "definitionSha256": null,
-        "staticWrites": [],
-        "staticCalls": []
       }
     },
     {
@@ -297,34 +269,54 @@
       }
     },
     {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp8b_upload_guard()",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.current_tenant"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.verify_evidence_upload(uuid,uuid,text,text,bytea)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.evidence_upload"
+        ],
+        "staticCalls": [
+          "app.current_actor",
+          "app.current_tenant"
+        ]
+      }
+    },
+    {
       "section": "triggers",
       "before": null,
       "after": "app.action_outbox|lp8b_authorized_content|app.lp8b_outbox_guard|BEFORE INSERT/UPDATE|O"
-    },
-    {
-      "section": "triggers",
-      "before": null,
-      "after": "app.evidence_invalidation|lp8b_owner_invalidation|app.lp8b_invalidation_guard|BEFORE INSERT|O"
-    },
-    {
-      "section": "triggers",
-      "before": null,
-      "after": "app.extra_event|a_lp8b_actor|app.lp8b_extra_fact_actor|BEFORE INSERT|O"
-    },
-    {
-      "section": "triggers",
-      "before": null,
-      "after": "app.extra_duplicate_link|a_lp8b_actor|app.lp8b_extra_fact_actor|BEFORE INSERT|O"
-    },
-    {
-      "section": "triggers",
-      "before": null,
-      "after": "app.extra_order_line_link|a_lp8b_actor|app.lp8b_extra_fact_actor|BEFORE INSERT|O"
-    },
-    {
-      "section": "triggers",
-      "before": null,
-      "after": "app.property_constraint_fact|a_lp8b_actor|app.lp8b_prevention_actor|BEFORE INSERT|O"
     },
     {
       "section": "triggers",
@@ -334,7 +326,12 @@
     {
       "section": "triggers",
       "before": null,
-      "after": "app.evidence_upload|a_lp8b_upload|app.lp8b_upload_guard|BEFORE INSERT/UPDATE|O"
+      "after": "app.evidence_invalidation|lp8b_owner_invalidation|app.lp8b_invalidation_guard|BEFORE INSERT|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.evidence_link|a_lp8b_reference|app.lp8b_evidence_reference_guard|BEFORE INSERT|O"
     },
     {
       "section": "triggers",
@@ -344,7 +341,22 @@
     {
       "section": "triggers",
       "before": null,
-      "after": "app.evidence_link|a_lp8b_reference|app.lp8b_evidence_reference_guard|BEFORE INSERT|O"
+      "after": "app.evidence_upload|a_lp8b_upload|app.lp8b_upload_guard|BEFORE INSERT/UPDATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.extra_duplicate_link|a_lp8b_actor|app.lp8b_extra_fact_actor|BEFORE INSERT|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.extra_event|a_lp8b_actor|app.lp8b_extra_fact_actor|BEFORE INSERT|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.extra_order_line_link|a_lp8b_actor|app.lp8b_extra_fact_actor|BEFORE INSERT|O"
     },
     {
       "section": "triggers",
@@ -359,6 +371,11 @@
     {
       "section": "triggers",
       "before": null,
+      "after": "app.property_constraint_fact|a_lp8b_actor|app.lp8b_prevention_actor|BEFORE INSERT|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
       "after": "app.supplier_match_allocation|a_lp8b_order_reference|app.lp8b_supplier_allocation_guard|BEFORE INSERT|O"
     },
     {
@@ -369,18 +386,34 @@
   ],
   "upgrade": [
     {
-      "section": "routines",
+      "section": "relations",
+      "before": {
+        "nspname": "app",
+        "relname": "action_outbox",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=ar/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      },
+      "after": {
+        "nspname": "app",
+        "relname": "action_outbox",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=r/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
       "before": null,
       "after": {
         "nspname": "app",
-        "proname": "lp8b_outbox_guard",
-        "args": "",
-        "proowner": "jobguard_migration",
-        "proacl": "{jobguard_migration=X/jobguard_migration}",
-        "prosecdef": false,
-        "proconfig": [
-          "search_path=pg_catalog, pg_temp"
-        ]
+        "relname": "lp8b_one_outbox_per_approval",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
       }
     },
     {
@@ -403,85 +436,10 @@
       "before": null,
       "after": {
         "nspname": "app",
-        "proname": "lp8b_invalidation_guard",
-        "args": "",
-        "proowner": "jobguard_migration",
-        "proacl": "{jobguard_migration=X/jobguard_migration}",
-        "prosecdef": false,
-        "proconfig": [
-          "search_path=pg_catalog, pg_temp"
-        ]
-      }
-    },
-    {
-      "section": "routines",
-      "before": null,
-      "after": {
-        "nspname": "app",
         "proname": "lp8b_check_extra_command",
         "args": "p_tenant uuid, p_actor uuid, p_job uuid, p_command uuid",
         "proowner": "jobguard_command_writer",
         "proacl": "{jobguard_command_writer=X/jobguard_command_writer,jobguard_runtime=X/jobguard_command_writer}",
-        "prosecdef": true,
-        "proconfig": [
-          "search_path=pg_catalog, pg_temp"
-        ]
-      }
-    },
-    {
-      "section": "routines",
-      "before": null,
-      "after": {
-        "nspname": "app",
-        "proname": "lp8b_extra_fact_actor",
-        "args": "",
-        "proowner": "jobguard_migration",
-        "proacl": "{jobguard_migration=X/jobguard_migration}",
-        "prosecdef": false,
-        "proconfig": [
-          "search_path=pg_catalog, pg_temp"
-        ]
-      }
-    },
-    {
-      "section": "routines",
-      "before": null,
-      "after": {
-        "nspname": "app",
-        "proname": "lp8b_prevention_actor",
-        "args": "",
-        "proowner": "jobguard_migration",
-        "proacl": "{jobguard_migration=X/jobguard_migration}",
-        "prosecdef": false,
-        "proconfig": [
-          "search_path=pg_catalog, pg_temp"
-        ]
-      }
-    },
-    {
-      "section": "routines",
-      "before": null,
-      "after": {
-        "nspname": "app",
-        "proname": "lp8b_upload_guard",
-        "args": "",
-        "proowner": "jobguard_migration",
-        "proacl": "{jobguard_migration=X/jobguard_migration}",
-        "prosecdef": false,
-        "proconfig": [
-          "search_path=pg_catalog, pg_temp"
-        ]
-      }
-    },
-    {
-      "section": "routines",
-      "before": null,
-      "after": {
-        "nspname": "app",
-        "proname": "verify_evidence_upload",
-        "args": "p_tenant uuid, p_upload uuid, p_version text, p_type text, p_bytes bytea",
-        "proowner": "jobguard_migration",
-        "proacl": "{jobguard_migration=X/jobguard_migration}",
         "prosecdef": true,
         "proconfig": [
           "search_path=pg_catalog, pg_temp"
@@ -508,7 +466,67 @@
       "before": null,
       "after": {
         "nspname": "app",
+        "proname": "lp8b_extra_fact_actor",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": false,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
         "proname": "lp8b_final_input_guard",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": false,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp8b_invalidation_guard",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": false,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp8b_outbox_guard",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": false,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp8b_prevention_actor",
         "args": "",
         "proowner": "jobguard_migration",
         "proacl": "{jobguard_migration=X/jobguard_migration}",
@@ -549,34 +567,33 @@
       }
     },
     {
-      "section": "relations",
-      "before": {
-        "nspname": "app",
-        "relname": "action_outbox",
-        "relowner": "jobguard_migration",
-        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=ar/jobguard_migration}",
-        "relrowsecurity": true,
-        "relforcerowsecurity": true
-      },
-      "after": {
-        "nspname": "app",
-        "relname": "action_outbox",
-        "relowner": "jobguard_migration",
-        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=r/jobguard_migration}",
-        "relrowsecurity": true,
-        "relforcerowsecurity": true
-      }
-    },
-    {
-      "section": "relations",
+      "section": "routines",
       "before": null,
       "after": {
         "nspname": "app",
-        "relname": "lp8b_one_outbox_per_approval",
-        "relowner": "jobguard_migration",
-        "relacl": null,
-        "relrowsecurity": false,
-        "relforcerowsecurity": false
+        "proname": "lp8b_upload_guard",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": false,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "verify_evidence_upload",
+        "args": "p_tenant uuid, p_upload uuid, p_version text, p_type text, p_bytes bytea",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
       }
     }
   ],
