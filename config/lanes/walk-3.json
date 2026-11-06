@@ -16,7 +16,7 @@
         "apps/web/app/ui/walkthrough/walkthrough.tsx",
         "apps/web/e2e/WALK-3.spec.ts"
       ],
-      "note": "WALK-3 RED: voice-first practice journey with disclosed prepared-job handovers, restacked onto WALK-1 150cdefb and repaired WALK-2 fe9811c1. NOPR; database/browser CI and independent review pending."
+      "note": "WALK-3 RED: voice-first practice journey with disclosed prepared-job handovers, restacked onto WALK-1 150cdefb and repaired WALK-2 fe9811c1. Repair round 1 keeps the final account mounted for step 8 and covers Show me and full playback. NOPR; browser CI at mobile-360 and desktop and independent recheck pending."
     }
   }
 }

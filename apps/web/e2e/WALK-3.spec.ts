@@ -3,7 +3,8 @@ import AxeBuilder from "@axe-core/playwright";
 
 test.setTimeout(360_000);
 // Both mobile-360 and desktop run these against real synthetic routes and workers.
-test("WALK-3 playback saves its own draft then honestly completes a prepared example", async ({ page }) => {
+for (const mode of ["Play the whole thing", "Show me"] as const) {
+test(`WALK-3 ${mode} saves its own draft then honestly completes a prepared example`, async ({ page }) => {
   await page.goto("/practice-company?name=Tommy");
   await expect(page.getByRole("heading", { name: "Tommy's practice firm", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Ready for your first job" })).toBeVisible();
@@ -13,13 +14,24 @@ test("WALK-3 playback saves its own draft then honestly completes a prepared exa
   await expect(tour).toContainText("Step 1 of 9");
   await expect(page.getByLabel("Work details")).toHaveValue("");
   expect((await page.context().cookies()).find(cookie => cookie.name === "jg_session")!.value).toBe(practiceToken);
-  await tour.getByRole("button", { name: "Play the whole thing", exact: true }).click();
+  await tour.getByRole("button", { name: mode, exact: true }).click();
+  if (mode === "Show me") {
+    await expect(tour).toContainText("Step 2 of 9");
+    await tour.getByRole("button", { name: mode, exact: true }).click();
+  }
   await expect(tour).toContainText("Step 3 of 9", { timeout: 40_000 });
   await expect(tour).toContainText("This part uses a prepared example job");
   await expect(tour).toContainText("prerequisite still to build");
   const ownHref = await page.getByRole("link", { name: "Open your saved job", exact: true }).getAttribute("href");
+  if (mode === "Show me") {
+    for (let step = 3; step <= 9; step++) {
+      await expect(tour).toContainText(`Step ${step} of 9`, { timeout: 300_000 });
+      await tour.getByRole("button", { name: mode, exact: true }).click();
+    }
+  }
   await expect(page.getByLabel("Simulated customer")).toContainText("customer view is not connected");
   await expect(tour).toContainText("Tour complete", { timeout: 300_000 });
+  await expect(page).toHaveURL(/#final-account-title$/);
   await expect(page.getByTestId("value-approved-extras")).toHaveText("£125.00");
   await expect(page.getByTestId("value-invoiced-gross")).toHaveText("£1,230.00");
   await expect(page.getByTestId("value-recorded-gross")).toHaveText("£1,230.00");
@@ -32,6 +44,7 @@ test("WALK-3 playback saves its own draft then honestly completes a prepared exa
   await tour.getByRole("button", { name: "Close walkthrough" }).click();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
+}
 
 test("WALK-3 waits for real typed capture, supports keyboard close and reduced motion", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });

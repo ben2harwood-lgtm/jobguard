@@ -123,8 +123,8 @@ export function VoiceJourney() {
         }
       },
       async (_, signal) => {
-        document.getElementById("walk-refresh")?.click();
-        await new Promise(resolve => setTimeout(resolve, 0));
+        // Keep the checked bill mounted; refreshing would reopen the scope screen.
+        history.replaceState(null, "", `${location.pathname}${location.search}#final-account-title`);
         await until(() => !!text("final-gross") && !!text("final-check-status"), signal);
         if (!text("invoice-gross")) await click("Issue and simulate this invoice", signal);
         await until(() => !!text("invoice-gross"), signal);
