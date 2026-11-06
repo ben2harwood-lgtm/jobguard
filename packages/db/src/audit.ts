@@ -83,6 +83,9 @@ export async function appendAuditBatch(database: TenantTransaction, inputs: read
 // Exact legacy compatibility names; never promote their content to checked trust.
 const legacyLowerTrustEventTypes = new Set([
   "command.succeeded",
+  "contractor.extra.client_link_issued",
+  "contractor.extra.step_approved",
+  "contractor.prompt.command",
   "contractor.visit.completed",
   "customer_credit_note.synthetic_approved",
   "customer_invoice.synthetic_issued",
@@ -93,11 +96,22 @@ const legacyLowerTrustEventTypes = new Set([
   "outbox.authorization_revoked",
   "outbox.succeeded",
   "proof.completed",
+  "quote.acceptance.attested",
+  "quote.acceptance_cancelled",
+  "recovery.eligibility.approve",
   "recovery.follow_up.reminder_approved",
   "recovery.message.approved",
   "recovery.message.succeeded",
+  "recovery.payment_payer.mark_withdrawn",
+  "recovery.payment_payer.marked",
   "recovery.terms.approved",
+  "sso.oidc.request.issued",
+  "sso.oidc.signin.completed",
+  "sso.request.issued",
+  "sso.signin.completed",
+  "synthetic_obligation.simulated_settlement",
   "variation.approved",
+  "worm.authorized",
 ]);
 
 export function verifyAuditChain(events: readonly AuditEvent[], checkpoint?: AuditCheckpoint): void {

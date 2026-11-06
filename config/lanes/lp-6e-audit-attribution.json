@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/lp-6e-audit-attribution"
       ],
-      "note": "LP-6e RED NOPR; repair round 3 READY for router handoff. Rounds 1/2 retained; 14 further source-inventoried refusals listed in audit-v1.md, not allow-listed. PostgreSQL CI, exact-head independent review and authorized protected sealer pin refresh remain required.",
+      "note": "LP-6e RED NOPR; repair round 4 READY for router handoff. Rounds 1-3 retained; all 14 inventoried names now exact lower-trust exceptions, quote acceptance and enterprise SSO integration coverage added; repeat writer/payload sweep found no further refusals. PostgreSQL CI, exact-head independent RED review and authorized protected sealer pin refresh remain required.",
       "allow": [
         "apps/web/app/admin/contractor/audit-exports/page.tsx",
         "docs/contracts/audit-v1.md",

@@ -1,13 +1,14 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { ActionExecutor, FakeRecoveryMessageAdapter, RecoveryMessageRepository, EvidencePackRepository, EvidenceService, FinalAccountLockRepository, PracticeInvoiceRepository, ProofCommandService, verifiedTenantContextFromMembership, withTenant, type AuthenticatedMembership } from "../src/index.js";
+import { EnterpriseIdentityRepository, DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID, prepareActivationFixtureV3, QuoteAcceptanceRepository, ActionExecutor, FakeRecoveryMessageAdapter, RecoveryMessageRepository, EvidencePackRepository, EvidenceService, FinalAccountLockRepository, PracticeInvoiceRepository, ProofCommandService, verifiedTenantContextFromMembership, withTenant, type AuthenticatedMembership } from "../src/index.js";
 import { LOCK_OWNER, LOCK_USER, seedAccount, publishFixtureCompletion } from "./sv5pre-fixtures.js";
 import { installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { MemoryStorage, pngBytes } from "./site-extra-evidence-fixtures.js";
 import { auditActorAttribution, verifyAuditChain, type AuditEvent } from "../src/audit.js";
 import { jobDoorsActor, jobDoorsDatabase, transaction, type JobDoorsDatabase } from "./lp-job-doors-fixtures.js";
 import { seedEvidencePackFixture } from "./evidence-pack-fixture.js";
+import { createScimHarness, fixture as ssoFixture } from "./scim-fixtures.js";
 let db: JobDoorsDatabase;
 beforeAll(async () => { db = await jobDoorsDatabase(); }, 300_000);
 afterAll(async () => { await db?.close(); });
@@ -308,3 +309,63 @@ it.each(["approval", "outbox success"])("commits recovery message %s through the
       payload:{references:{auditTrust:"lower_trust",auditActorKind:"bound_member"}}});
   }
 });
+
+
+it("records practice quote acceptance and cancellation through the product command boundary", async () => {
+  const practice = await jobDoorsDatabase(true), previousEnvironment = process.env.JOBGUARD_ENV;
+  process.env.JOBGUARD_ENV = "synthetic_demo";
+  try {
+    await installLegacySyntheticPartyFixtures(practice.owner);
+    const person = randomUUID(), account = randomUUID(), credential = randomBytes(32).toString("hex");
+    await practice.owner.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [DEMO_TENANT_ID]);
+    await practice.owner.query("INSERT INTO identity.identity_user(id) VALUES($1)", [person]);
+    await practice.owner.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional practice builder')", [account,DEMO_TENANT_ID]);
+    await practice.owner.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [DEMO_MEMBERSHIP_ID,DEMO_TENANT_ID,account,person]);
+    await practice.owner.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", ["quote-lp6e@fictional.invalid",person]);
+    await practice.owner.query("INSERT INTO identity.membership_locator VALUES($1,$2,$3)", [person,DEMO_TENANT_ID,DEMO_MEMBERSHIP_ID]);
+    await practice.owner.query(`INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at)
+      VALUES($1,$2,'synthetic_demo',$3,'fictional',clock_timestamp()+interval '1 hour')`, [randomUUID(),person,credential]);
+    const context = verifiedTenantContextFromMembership({ tenantId:DEMO_TENANT_ID,membershipId:DEMO_MEMBERSHIP_ID,identityUserId:person } as AuthenticatedMembership, {kind:"real",credential});
+    const jobId = await prepareActivationFixtureV3(practice.owner,context,"LP-6e fictional practice quote",100000,practice.runtime);
+    const repository = new QuoteAcceptanceRepository(practice.runtime), before = await repository.view(context,jobId);
+    const document = before.currentDocument!;
+    const cancelled = await repository.disposition(context,jobId,{ commandId:randomUUID(),documentId:document.id,documentHash:document.hash,
+      documentVersion:document.version,kind:"acceptance_cancelled",occurredAt:"2026-11-06T10:00:00.000Z" });
+    expect(cancelled).toMatchObject({jobStatus:"quoting",activeAcceptance:null});
+    const request = { commandId:randomUUID(),documentId:document.id,documentHash:document.hash,documentVersion:document.version,
+      statedCustomerName:"Fictional Practice Customer",statedMethod:"email" as const,acceptedAt:"2026-11-06T11:00:00.000Z" };
+    const accepted = await repository.accept(context,jobId,request);
+    expect(accepted).toMatchObject({jobStatus:"accepted",activeAcceptance:{documentId:document.id,documentHash:document.hash}});
+    await repository.accept(context,jobId,request);
+    const events = await chain(context.tenantId,practice.owner); verifyAuditChain(events);
+    for (const eventType of ["quote.acceptance.attested","quote.acceptance_cancelled"]) {
+      const matches = events.filter(event=>event.eventType===eventType);
+      expect(matches).toHaveLength(1);
+      expect(matches[0]!.actorRef).toBe(`membership:${DEMO_MEMBERSHIP_ID}`);
+      expect(matches[0]!.payload.references).toMatchObject({auditTrust:"lower_trust",auditActorKind:"bound_member"});
+    }
+  } finally {
+    if (previousEnvironment === undefined) delete process.env.JOBGUARD_ENV; else process.env.JOBGUARD_ENV = previousEnvironment;
+    await practice.close();
+  }
+},300_000);
+
+it("completes enterprise SSO sign-in with lower-trust identity-bridge audits", async () => {
+  const sso = await createScimHarness("jg-lp6e-sso-");
+  try {
+    const f = await ssoFixture(sso,true,false);
+    const credentials = await f.signin(f.email,f.principal.identityUserId,true);
+    const signedIn = await sso.provider.authenticate(credentials.sessionToken);
+    expect(signedIn?.identityUserId).toBe(f.principal.identityUserId);
+    const scope = await new EnterpriseIdentityRepository(sso.identity).sessionScope(signedIn!.sessionId);
+    expect(scope).toMatchObject({tenantId:f.principal.tenantId,membershipId:f.principal.membershipId});
+    const events = await chain(f.principal.tenantId,sso.admin); verifyAuditChain(events);
+    for (const eventType of ["sso.request.issued","sso.signin.completed"]) {
+      const matches = events.filter(event=>event.eventType===eventType);
+      expect(matches).toHaveLength(1);
+      expect(matches[0]!.payload.references).toMatchObject({auditTrust:"lower_trust",auditActorKind:"system"});
+      // Bootstrap identity credentials do not authenticate the caller-supplied member actor.
+      expect(matches[0]!.actorRef).toBe("system:database:scim_fixture_identity");
+    }
+  } finally { await sso.close(); }
+},300_000);

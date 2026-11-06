@@ -47,6 +47,9 @@ BEGIN
   -- All other authority-bearing names require a checked domain operation.
   IF p_trust='lower_trust' AND (e->>'eventType') NOT IN (
    'command.succeeded',
+   'contractor.extra.client_link_issued',
+   'contractor.extra.step_approved',
+   'contractor.prompt.command',
    'contractor.visit.completed',
    'customer_credit_note.synthetic_approved',
    'customer_invoice.synthetic_issued',
@@ -57,11 +60,22 @@ BEGIN
    'outbox.authorization_revoked',
    'outbox.succeeded',
    'proof.completed',
+   'quote.acceptance.attested',
+   'quote.acceptance_cancelled',
+   'recovery.eligibility.approve',
    'recovery.follow_up.reminder_approved',
    'recovery.message.approved',
    'recovery.message.succeeded',
+   'recovery.payment_payer.mark_withdrawn',
+   'recovery.payment_payer.marked',
    'recovery.terms.approved',
-   'variation.approved') AND lower(e->>'eventType') ~
+   'sso.oidc.request.issued',
+   'sso.oidc.signin.completed',
+   'sso.request.issued',
+   'sso.signin.completed',
+   'synthetic_obligation.simulated_settlement',
+   'variation.approved',
+   'worm.authorized') AND lower(e->>'eventType') ~
    '(^|[_.:/-])(command|success[a-z]*|succeeded|approv[a-z]*|payment[a-z]*|paid|settle[a-z]*|complet[a-z]*|accept[a-z]*|authoriz[a-z]*|issued|locked)([_.:/-]|$)' THEN
    RAISE EXCEPTION 'AUDIT_CHECKED_OPERATION_REQUIRED' USING ERRCODE='42501'; END IF;
   payload:=e->'payload';

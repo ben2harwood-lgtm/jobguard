@@ -264,3 +264,72 @@ head. This sandbox cannot start PostgreSQL or bind localhost; no DB/browser PASS
 is claimed. Authorized protected sealer pin refresh and an independent RED check
 at the exact head remain required, with predecessor/LP landing order preserved.
 No commit, push, PR, merge, deployment or release was performed by this session.
+
+Repair round 4 handoff — READY (6 November 2026)
+----------------------------------------------
+
+LP-6e, RED, NOPR; Ben's extra round in the issued brief. Rounds 1–3 above
+remain historical evidence. The 14 refusals in the round-3 table are now resolved
+by exact-name additions to 0785, audit.ts and the unit-test list (30 names total).
+All remain lower_trust. No authority regex, reserved key, grant, protected pin,
+private execution path or checked-trust assertion was relaxed.
+
+Repeated the source sweep of audit writers, their callers and payload builders:
+- Literal eventType properties, shorthand eventType/type helpers, command
+  auditEvents producers, domainAudit/audit helpers and supplied audit batches.
+- Template-built names expanded from callers or versioned action/kind unions:
+  quote dispositions; contractor organisation commands, parties and work orders;
+  job parties; discrepancy outcomes; practice-feed and prevention commands;
+  recovery case and eligibility commands, allocation/reversal, message history,
+  follow-up kinds; outbox results/reconciliation/cancellation; tenant key
+  rotate/revoke; WORM authorized; SSO administration and SCIM outcomes.
+- Traced enterprise prompt output.audits through enterprise-live-prompt-repository
+  (including contractor.prompt.command), SAML/OIDC request and callback audits
+  through identity.sso_audit_append, and 0520's follow-up clock catch-up through
+  app.append_audit. Checked SQL seals remain separate from lower-trust appends.
+- Inspected references/hashes/classifications keys, helper-supplied maps and SQL
+  JSON payload builders against the sealer's reserved keys. payload/payloadHash
+  remain nested data keys, not sealed envelope collisions. The auditTrust found
+  in the stored historical-exclusions schema/test fixture is not a caller writer.
+
+No additional existing writer names or payload keys requiring compatibility
+changes were found beyond those 14. This is source inspection, not execution
+proof of every writer. Existing lower-trust business facts still need the named
+LP-6e-LEGACY-WRITERS checked-operation conversion before authority-consumer closure.
+
+Added PostgreSQL integration cases using existing product paths:
+- QuoteAcceptanceRepository cancellation followed by practice acceptance and
+  identical-command replay, with accepted document state, exactly one of each
+  lower-trust audit, bound-member attribution and a verified tenant chain.
+  Existing prepareActivationFixtureV3 supplies the initial accepted quote.
+- Enterprise SAML sign-in through the existing SCIM/SSO fixture and actual SSO
+  application, checking the persisted authenticated session and membership scope,
+  exactly one request/sign-in audit and a verified tenant chain. The identity
+  bootstrap login is explicitly system-attributed, never authenticated as the
+  caller's claimed membership. This is a synthetic IdP, not a live provider.
+
+Local checks actually run (installed tools; no downloads, DB or browser):
+- From packages/db: ./node_modules/.bin/vitest run --maxWorkers=2
+  src/lp6e-audit.test.ts src/lp4-audit.test.ts src/audit-fix-dbsrc-08.test.ts
+  — PASS, 74 tests across 3 files.
+- From packages/db: ./node_modules/.bin/tsc -p tsconfig.json --noEmit
+  — PASS; this implements both package typecheck and package lint.
+- TypeScript compiler API with package options, rootDir at repository root and
+  noEmit, rooted at test/lp6e-audit.integration.test.ts — PASS, zero diagnostics,
+  including imported integration fixtures and API sources. No DB execution.
+- LANE_BASE_REF=cdd4e3282 node tools/lint.mjs — PASS, including lane, core purity,
+  money boundaries and PL/pgSQL checks. Existing computed-import notices remain.
+- git diff --check and exact lane comparison against LP-6d cdd4e3282 — PASS;
+  8 non-lane changed paths, with no config/lanes paths in the lane allow list.
+
+CI must prove the new quote/SSO cases and the earlier LP-6e cases on PostgreSQL,
+full DB/migration fresh-install and upgrade suites, RLS/grants/catalogue checks,
+actor substitution, reserved payload/near-miss name refusals, rollback, expiry,
+concurrency and owner writers. Run affected quote/reacceptance, SSO/OIDC/SCIM,
+outbox/recovery, enterprise prompt/approval and invoice/payment regressions,
+plus all mandatory type/lint/test/build/browser checks and both demos at the
+pushed head. This Mac cannot start PostgreSQL or bind localhost; no DB/browser
+PASS is claimed. Authorized protected sealer pin refresh, predecessor landing
+order and independent RED review at the exact head remain required. READY means
+ready for router commit/push and CI, not merge or release acceptance.
+No commit, push, PR, merge, deployment or release was performed here.
