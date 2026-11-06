@@ -51,7 +51,7 @@ function storedTimer(recordsOverride?: unknown[]) {
    { id: id(6), milestone: "defects", description: "Fictional", source, dateSource: source, dueDate: "9999-12-31", cumulativeLimit: { netPence: 100, taxPence: 20 } },
   ] }];
  const query = vi.fn(async (sql: string, values?: unknown[]) => {
-  if (!sql.includes("infrastructure.retention_timer")) return { rows: [] };
+  if (!sql.includes("app.retention_timer")) return { rows: [] };
   if (values?.length === 1) return { rows: [{ result: [id(2)] }] };
   if (values?.[2]) records.push(JSON.parse(values[2] as string));
   return { rows: [{ result: { actorId: null, records: [...records], bookHash: "a".repeat(64), today: "2026-11-04" } }] };
@@ -62,17 +62,42 @@ function storedTimer(recordsOverride?: unknown[]) {
 describe("timer repository and core unit boundary", () => {
  it("uses database date, appends only a due review, skips future conditions and committed retries", async () => {
   const f = storedTimer(), context = testTenantContext(tenantId);
-  expect(await f.repo.raiseTimerReviews(context)).toBe(1);
-  expect(await f.repo.raiseTimerReviews(context)).toBe(0);
+  expect(await f.repo.raiseTimerReviews(context)).toEqual({ appended: 1, refused: 0 });
+  expect(await f.repo.raiseTimerReviews(context)).toEqual({ appended: 0, refused: 0 });
   expect(f.records).toHaveLength(2);
   expect(f.records[1]).toMatchObject({ trigger: "timer", raisedOn: "2026-11-04", profileId: id(3), conditionId: id(5), owner: "retention-release-review-v1" });
   expect(f.records[1]).not.toHaveProperty("conditionSatisfied");
-  expect(f.query.mock.calls.filter(([sql, values]) => sql.includes("infrastructure.retention_timer") && values?.[2])).toHaveLength(1);
+  expect(f.query.mock.calls.filter(([sql, values]) => sql.includes("app.retention_timer") && values?.[2])).toHaveLength(1);
  });
  it("refuses altered stored data before any timer append", async () => {
   const f = storedTimer([{ version: "retention.profile.v1", tenantId: id(9) }]);
-  await expect(f.repo.raiseTimerReviews(testTenantContext(tenantId))).rejects.toThrow("RETENTION_UNAVAILABLE");
-  expect(f.query.mock.calls.filter(([sql, values]) => sql.includes("infrastructure.retention_timer") && values?.[2])).toHaveLength(0);
+  expect(await f.repo.raiseTimerReviews(testTenantContext(tenantId))).toEqual({ appended: 0, refused: 1 });
+  expect(f.query.mock.calls.filter(([sql, values]) => sql.includes("app.retention_timer") && values?.[2])).toHaveLength(0);
   expect(f.query).toHaveBeenLastCalledWith("ROLLBACK");
  });
+});
+
+it("refuses one invalid book and continues to the next job, but retries outages", async () => {
+ const f = storedTimer(), original = f.query.getMockImplementation()!;
+ f.query.mockImplementation(async (sql, values) => {
+  if (values?.length === 1) return { rows: [{ result: [id(9), id(2)] }] };
+  if (values?.[1] === id(9)) throw new Error("RETENTION_CONFLICT");
+  return original(sql, values);
+ });
+ const refused = vi.fn();
+ expect(await f.repo.raiseTimerReviews(testTenantContext(tenantId), refused)).toEqual({ appended: 1, refused: 1 });
+ expect(refused).toHaveBeenCalledExactlyOnceWith({ jobId: id(9), code: "RETENTION_CONFLICT" });
+ const outage = storedTimer(), normal = outage.query.getMockImplementation()!;
+ outage.query.mockImplementation(async (sql, values) => {
+  if (values?.length !== 1 && sql.includes("retention_timer")) throw new Error("private connection detail");
+  return normal(sql, values);
+ });
+ await expect(outage.repo.raiseTimerReviews(testTenantContext(tenantId))).rejects.toThrow("RETENTION_UNAVAILABLE");
+});
+
+it("wires retention raises to the business pool without an infrastructure business reader", async () => {
+ const { readFileSync } = await import("node:fs");
+ const source = readFileSync(new URL("./worker.ts", import.meta.url), "utf8");
+ expect(source).toContain("new RetentionRecordRepository(runtimePool)");
+ expect(source).not.toContain("retentionPool");
 });

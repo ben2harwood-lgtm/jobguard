@@ -92,3 +92,26 @@ it("uses real current sessions and memberships; tenant and unknown-job refusals 
   await c.admin.query("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE token_digest=$1", [identity.provider.digest(`session:${revoked.session.sessionToken}`)]);
   expect((await request(revoked)).status).toBe(401);
 });
+
+it("GET permits owners/admins and denies other current roles without leaking VAT or record existence", async () => {
+  const a = await company(), b = await company(); await request(a, command(a));
+  const owner = await (await request(a)).json();
+  for (const role of ["admin", "estimator", "foreman", "finance", "read_only"]) {
+    await c.admin.query("UPDATE app.membership SET role=$1 WHERE tenant_id=$2 AND id=$3", [role, a.member.tenantId, a.member.id]);
+    if (role === "admin") expect(await (await request(a)).json()).toEqual(owner);
+    else for (const job of [a.jobId, randomUUID()]) {
+      const response = await request(a, undefined, job); expect(response.status).toBe(403);
+      expect(await response.json()).toEqual({ version: "vat.fixture-error.v1", code: "FORBIDDEN", message: "You don't have permission." });
+    }
+  }
+  // An owner in a different company cannot select this company's membership or records.
+  const foreign = await request(b, undefined, a.jobId); expect(foreign.status).toBe(404);
+  expect(JSON.stringify(await foreign.json())).not.toMatch(/fictional|vatNumber|records":/u);
+  for (const state of ["revoked", "expired"]) {
+    await c.admin.query("UPDATE app.membership SET role=$1,revoked_at=$2,expires_at=$3 WHERE tenant_id=$4 AND id=$5",
+      [state === "revoked" ? "owner" : "admin", state === "revoked" ? new Date(0) : null,
+        state === "expired" ? new Date(0) : null, a.member.tenantId, a.member.id]);
+    const response = await request(a); expect(response.status).toBe(403);
+    expect(JSON.stringify(await response.json())).not.toMatch(/fictional|vatNumber|records":/u);
+  }
+});

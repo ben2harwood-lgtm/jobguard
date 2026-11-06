@@ -8,7 +8,6 @@ import { snapshot } from "./contractor-entitlement-fixtures.js";
 import { laterEmptyTables } from "./later-empty-tables.js";
 import { currentCommandRegistryRows } from "./lp5-command-catalog.js";
 import { migrate } from "../src/migrate.js";
-import { applyUpgradeProofs, loadMigrationProofs } from "./migration-proof-loader.js";
 
 const own = "0632_shadow_group_disclosure.sql";
 let c: Cluster | undefined;
@@ -81,6 +80,12 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   // Exact existing replacements only; all their privileges and unrelated definitions remain frozen.
   const fullBodies = new Map<string, string>();
   for (const [identity, migration] of [
+    ["app.reverse_synthetic_landing(p_tenant uuid, p_reversal uuid, p_derivation uuid, p_journal uuid, p_allocation uuid, p_amount bigint, p_reason character varying)", "0654_synthetic_reversal_money_rules.sql"],
+    ["app.replace_fee_reservation_book(p_tenant uuid, p_book jsonb, p_result jsonb)", "0651_fee_result_forward_only.sql"],
+    ["app.demo_issue_customer_link(t uuid, j uuid, c uuid, session_digest text, link_digest text, content text)", "0650_demo_customer_link_reference.sql"],
+    ["app.retention_records(t uuid, digest text, j uuid, cid uuid, v jsonb, expected text)", "0646_retention_timer_runtime_rules.sql"],
+    ["app.notice_fixture_records(j uuid, n uuid, digest text, operation text, v jsonb)", "0647_notice_live_job_check.sql"],
+    ["app.pay_now_fake_attempt(t uuid, digest text, j uuid, operation text, v jsonb)", "0648_pay_now_catch_statement.sql"],
     ["app.lp5_command_result(p_command_id uuid, p_outcome jsonb)", "0634_extra_proceed_statement.sql"],
     ["app.xa_approve(p_job uuid, p_request uuid, p_command uuid, p_actor uuid, p_step integer, p_hash text, p_net bigint, p_reject boolean, p_reason text)", "0635_extra_same_step.sql"],
     ["app.xa_withdraw(p_job uuid, p_variation uuid, p_command uuid, p_actor uuid, p_reason text)", "0636_extra_withdraw_roles.sql"],
@@ -92,6 +97,15 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   ]) {
     const source = await readFile(new URL(`../migrations/${migration}`, import.meta.url), "utf8");
     fullBodies.set(identity!, source.split(`FUNCTION ${identity!.split("(")[0]}(`)[1]!.split("AS $$")[1]!.split("$$;")[0]!);
+  }
+  const namedAdditions = [
+    "connector_promotion", "order_attestation_actor", "platform_invoice_read",
+    "retention_timer", "retention_timer_book", "xa_proceed", "xa_proceed_breaches",
+    "xa_proceed_view", "xa_wait_deadline", "customer_practice_pay_now",
+  ];
+  for (const name of namedAdditions) {
+    expect(replayRoutines.filter(row => row.proname === name)).toHaveLength(1);
+    expect(afterRoutines.some(row => row.proname === name)).toBe(false);
   }
   for (const row of replayRoutines) {
     const identity = `${row.nspname}.${row.proname}(${row.args})`;
