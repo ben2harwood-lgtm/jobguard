@@ -652,3 +652,7 @@ export const lp5bRoutines = [
 ];
 
 export const lp5bReadViews = ["job_party_snapshot"];
+
+// LATER-SAFETY-53 adds the repository lifecycle without removing the historical registry row.
+export const duplicateDispositionLifecycleRegistryRow = { ...duplicateDispositionRegistryRow, version: "repository-command.v1" };
+currentCommandRegistryRows.push(duplicateDispositionLifecycleRegistryRow);

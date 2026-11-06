@@ -346,17 +346,83 @@ it("accepts both distinct-work reasons and review-changed reopening through the 
  }
 }, 120000);
 
-it("records the landing hold: the registered duplicate command cannot begin with repository-style input", async () => {
+it("begins the registered duplicate command with repository-style input", async () => {
  const w = await world(c); await pair(w);
  const group = (await agreement(w)).groups[0]!, input = disposition(group);
  const before = await facts(w);
- // Matching the registry version still enters the commercial-action schema in
- // begin_command; repository-command.v1 instead has no registry row for this type.
- await expect(ownerTx(c, w.w.p.tenantId, db => db.$client.query(
-  "SELECT app.begin_command($1,$2,'ResolveDuplicateCandidates',$3,$4::jsonb,'{}'::jsonb,$5::jsonb)",
-  [input.version, input.commandId, `duplicate-disposition:${w.s.jobId}:${input.commandId}`,
-   JSON.stringify({ tenantId: w.w.p.tenantId, actorMembershipId: w.w.members.supervisor.member.membershipId, subjectType: "job", subjectRef: w.s.jobId }),
-   JSON.stringify({ version: input.version, actorMembershipId: w.w.members.supervisor.member.membershipId, input, legacyJson: JSON.stringify(input) })]
- ))).rejects.toMatchObject({ code: "23514", message: "AUTHORIZATION_INVALID" });
+ const actor = w.w.members.supervisor.member.membershipId;
+ const content = { actor, job: w.s.jobId, body: input };
+ await expect(ownerTx(c, w.w.p.tenantId, async db => {
+  await db.$client.query("SAVEPOINT begin_probe");
+  const result = await db.$client.query(
+   "SELECT app.begin_command($1,$2,'ResolveDuplicateCandidates',$3,$4::jsonb,'{}'::jsonb,$5::jsonb) claim",
+   ["repository-command.v1", input.commandId, `duplicate-disposition:${w.s.jobId}:${input.commandId}`,
+    JSON.stringify({ tenantId: w.w.p.tenantId, actorMembershipId: actor, subjectType: "job", subjectRef: w.s.jobId }),
+    JSON.stringify({ version: "repository-command.v1", actorMembershipId: actor, input: content, legacyJson: JSON.stringify(content) })]
+  );
+  // A begin-only probe must not commit an unfinished receipt.
+  await db.$client.query("ROLLBACK TO SAVEPOINT begin_probe");
+  return result.rows[0]!.claim;
+ })).resolves.toMatchObject({ kind: "claim" });
  expect(await facts(w)).toEqual(before);
+}, 120000);
+
+it("completes only the exact fresh disposition fact after a processing receipt", async () => {
+ const w = await world(c); await pair(w);
+ const group = (await agreement(w)).groups[0]!, input = disposition(group);
+ const actor = w.w.members.supervisor.member.membershipId, fact = randomUUID();
+ const content = { actor, job: w.s.jobId, body: input };
+ await ownerTx(c, w.w.p.tenantId, async db => {
+  await db.$client.query(
+   "SELECT app.begin_command('repository-command.v1',$1,'ResolveDuplicateCandidates',$2,$3::jsonb,'{}'::jsonb,$4::jsonb)",
+   [input.commandId, `duplicate-disposition:${w.s.jobId}:${input.commandId}`,
+    JSON.stringify({ tenantId: w.w.p.tenantId, actorMembershipId: actor, subjectType: "job", subjectRef: w.s.jobId }),
+    JSON.stringify({ version: "repository-command.v1", actorMembershipId: actor, input: content, legacyJson: JSON.stringify(content) })]
+  );
+  expect((await db.$client.query("SELECT status FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [w.w.p.tenantId, input.commandId])).rows[0]).toEqual({ status: "processing" });
+  await db.$client.query("SAVEPOINT absent_effect");
+  await expect(db.$client.query("SELECT app.complete_command($1,'{}'::jsonb)", [input.commandId])).rejects.toMatchObject({ code: "23514" });
+  await db.$client.query("ROLLBACK TO SAVEPOINT absent_effect");
+  await db.$client.query(`INSERT INTO app.extra_duplicate_disposition(tenant_id,id,job_id,command_id,actor_membership_id,group_id,snapshot,fingerprint,disposition,reason_code,sequence)
+   SELECT $1,$2,$3,$4,$5,x.group_id,x.snapshot,$7,$8,$9,1 FROM app.extra_duplicate_groups($1,$3) x WHERE x.group_id=$6`,
+   [w.w.p.tenantId, fact, w.s.jobId, input.commandId, actor, group.id, group.fingerprint, input.disposition, input.reasonCode]);
+  const result = (await db.$client.query("SELECT app.complete_command($1,$2::jsonb) result", [input.commandId, JSON.stringify({ factId: randomUUID() })])).rows[0]!.result;
+  expect(result).toEqual({ version: "duplicate-disposition-result.v1", factId: fact, groupId: group.id, fingerprint: group.fingerprint, disposition: input.disposition });
+  expect((await db.$client.query("SELECT status,result FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [w.w.p.tenantId, input.commandId])).rows[0]).toEqual({ status: "succeeded", result });
+ });
+}, 120000);
+
+it("the checked writer creates a lifecycle claim and one command audit, and replays the stored result", async () => {
+ const w = await world(c); await pair(w);
+ const group = (await agreement(w)).groups[0]!, input = disposition(group), session = await sessionFor(w);
+ const before = await facts(w);
+ const result = await resolveExtraDuplicateCandidates(c.runtime, w.ctx, session, w.s.jobId, input);
+ const rows = (await c.admin.query(`SELECT r.status,r.result,l.version,l.significant_input FROM app.command_receipt r
+  JOIN app.command_lifecycle_claim l USING(tenant_id,command_id) WHERE r.tenant_id=$1 AND r.command_id=$2`, [w.w.p.tenantId, input.commandId])).rows;
+ expect(rows).toHaveLength(1);
+ expect(rows[0]).toMatchObject({ status: "succeeded", result, version: "repository-command.v1", significant_input: { input: { body: input } } });
+ const after = await facts(w);
+ expect(Number(after.audits)-Number(before.audits)).toBe(1);
+ expect(await resolveExtraDuplicateCandidates(c.runtime, w.ctx, session, w.s.jobId, input)).toEqual(result);
+ expect(await facts(w)).toEqual(after);
+}, 120000);
+
+it("replays pre-lifecycle receipts with their historical digest and refuses changed payloads", async () => {
+ const w = await world(c); await pair(w);
+ const group = (await agreement(w)).groups[0]!, input = disposition(group), session = await sessionFor(w);
+ const actor = w.w.members.supervisor.member.membershipId, fact = randomUUID();
+ const stored = { version: "duplicate-disposition-result.v1", factId: fact, groupId: group.id, fingerprint: group.fingerprint, disposition: input.disposition };
+ await ownerTx(c, w.w.p.tenantId, async db => {
+  await db.$client.query(`INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id,result,completed_at)
+   VALUES($1,$2,'ResolveDuplicateCandidates',$3,app.final_lock_hash(jsonb_build_object('actor',$4::uuid,'job',$5::uuid,'body',$6::jsonb)),'succeeded',$4,$7::jsonb,clock_timestamp())`,
+   [w.w.p.tenantId, input.commandId, `duplicate-disposition:${w.s.jobId}:${input.commandId}`, actor, w.s.jobId, JSON.stringify(input), JSON.stringify(stored)]);
+  await db.$client.query(`INSERT INTO app.extra_duplicate_disposition(tenant_id,id,job_id,command_id,actor_membership_id,group_id,snapshot,fingerprint,disposition,reason_code,sequence)
+   SELECT $1,$2,$3,$4,$5,x.group_id,x.snapshot,$7,$8,$9,1 FROM app.extra_duplicate_groups($1,$3) x WHERE x.group_id=$6`,
+   [w.w.p.tenantId, fact, w.s.jobId, input.commandId, actor, group.id, group.fingerprint, input.disposition, input.reasonCode]);
+ });
+ const before = await facts(w);
+ expect(await resolveExtraDuplicateCandidates(c.runtime, w.ctx, session, w.s.jobId, input)).toEqual(stored);
+ expect(await code(resolveExtraDuplicateCandidates(c.runtime, w.ctx, session, w.s.jobId, { ...input, reasonCode: "different_location" }))).toBe("COMMAND_CONFLICT");
+ expect(await facts(w)).toEqual(before);
+ expect((await c.admin.query("SELECT count(*)::integer n FROM app.command_lifecycle_claim WHERE tenant_id=$1 AND command_id=$2", [w.w.p.tenantId, input.commandId])).rows[0]).toEqual({ n: 0 });
 }, 120000);
