@@ -32,6 +32,11 @@ membership checks; this piece creates no HTTP management endpoint.
 
 ## Named holds for landing
 
+- `apps/api/src/auth/identity.test.ts:38` pins the literal global
+  `ApplicationAuthGuard` registration and remains unchanged in this repair.
+  The router must update that pin to accept exactly the gated
+  `machineRegistrationEnabled(process.env)?MachineApplicationAuthGuard:ApplicationAuthGuard`
+  composition and assert that the default guard is `ApplicationAuthGuard`.
 - API bootstrap currently omits Nest's `rawBody: true` option. `apps/api/src/main.ts`
   is outside this piece's allowed paths. A separately authorized bootstrap change
   and HTTP verification must enable raw-byte capture before synthetic HTTP intake

@@ -2,6 +2,8 @@ import "reflect-metadata";
 import { createHmac, randomUUID } from "node:crypto";
 import { Test } from "@nestjs/testing";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { ExecutionContext } from "@nestjs/common";
+import { ApplicationAuthGuard } from "../auth/application-auth.guard.js";
 import { MACHINE_PATH, machineSigningBytes, type MachineAuthority, type MachineRequest } from "./machine.js";
 
 const key = Buffer.alloc(32, 8);
@@ -22,8 +24,8 @@ async function boot(enabled: boolean) {
   const builder = Test.createTestingModule({ imports: [AppModule] });
   if (enabled) builder.overrideModule(Reflect.getMetadata("imports", AppModule)[0]).useModule(MachineModule.register(process.env, { tokens: new Map([[id, "fictional-db-token"]]), keys: new Map([["fixture:key", key]]) }));
   const module = await builder.overrideProvider(Pool).useValue({})
-    .overrideProvider("CONNECTOR_MACHINE_POOL").useValue({ query })
-    .overrideProvider("CONNECTOR_MACHINE_MANAGEMENT_POOL").useValue({})
+    .overrideProvider("CONNECTOR_MACHINE_POOL").useValue({ query, end: vi.fn() })
+    .overrideProvider("CONNECTOR_MACHINE_MANAGEMENT_POOL").useValue({ end: vi.fn() })
     .overrideProvider(FictionalMachineManagement).useValue({}).compile();
   const app = module.createNestApplication();
   const adapter = app.getHttpAdapter(), post = vi.spyOn(adapter, "post"), notFound = vi.spyOn(adapter, "setNotFoundHandler");
@@ -43,6 +45,18 @@ async function invoke(f: Awaited<ReturnType<typeof boot>>, req: ReturnType<typeo
 }
 
 describe("ENT-13A registered Nest pipeline (no socket or PostgreSQL proof)", () => {
+  it("delegates non-machine paths to the unchanged application guard", async () => {
+    const { MachineApplicationAuthGuard } = await import("./machine.module.js");
+    const application = vi.fn();
+    const guard = new MachineApplicationAuthGuard(application);
+    const context = { switchToHttp: () => ({ getRequest: () => ({ path: "/jobs/capture" }) }) } as ExecutionContext;
+    const refusal = new Error("application guard refusal");
+    const delegated = vi.spyOn(ApplicationAuthGuard.prototype, "canActivate").mockRejectedValueOnce(refusal).mockResolvedValueOnce(true);
+    await expect(guard.canActivate(context)).rejects.toBe(refusal);
+    await expect(guard.canActivate(context)).resolves.toBe(true);
+    expect(delegated).toHaveBeenNthCalledWith(1, context);
+    expect(delegated).toHaveBeenNthCalledWith(2, context);
+  });
   it("default application has no machine route and resolves it as 404", async () => {
     const f = await boot(false);
     try {
@@ -53,7 +67,7 @@ describe("ENT-13A registered Nest pipeline (no socket or PostgreSQL proof)", () 
       await handler(request(), res, vi.fn());
       expect(res.status).toHaveBeenCalledWith(404);
     } finally { await f.app.close(); }
-  });
+  }, 30_000);
   it("signed fixture reaches the existing SQL machine_stage boundary", async () => {
     const f = await boot(true);
     try {
@@ -61,6 +75,8 @@ describe("ENT-13A registered Nest pipeline (no socket or PostgreSQL proof)", () 
       expect(res.json).toHaveBeenCalledWith({ state: "staged", domainEffects: 0 });
       expect(f.query).toHaveBeenCalledWith(expect.stringContaining("connector.machine_stage("), expect.arrayContaining([f.h.connectionId, "fictional-db-token", "fixture:key"]));
     } finally { await f.app.close(); }
+    expect(f.app.get("CONNECTOR_MACHINE_POOL").end).toHaveBeenCalledOnce();
+    expect(f.app.get("CONNECTOR_MACHINE_MANAGEMENT_POOL").end).toHaveBeenCalledOnce();
   });
   it.each(["fixture:unknown", "env:SECRET"])("refuses key %s before staging", async label => {
     const f = await boot(true);

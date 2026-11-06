@@ -1,8 +1,10 @@
-import { Module, Injectable, UnauthorizedException, type DynamicModule, type ExecutionContext } from "@nestjs/common";
+import { Module, Inject, Injectable, UnauthorizedException, type CanActivate, type DynamicModule, type ExecutionContext } from "@nestjs/common";
 import { machineRegistrationEnabled } from "@jobguard/config";
 import { Pool } from "pg";
 import { ApplicationAuthGuard } from "../auth/application-auth.guard.js";
 import { createIdentityApplication } from "../auth/identity.application.js";
+import type { IdentityApplication } from "../auth/identity.application.js";
+import { IDENTITY_APPLICATION } from "../auth/identity-http.js";
 import { FakeMachineSecretStore, type MachineFixtureSecrets } from "./fake-secret-store.js";
 import { FictionalMachineController, FICTIONAL_MACHINE_CONNECTION } from "./machine.controller.js";
 import { FictionalMachineManagement } from "./machine-management.js";
@@ -11,10 +13,14 @@ export { machineRegistrationEnabled } from "@jobguard/config";
 
 /** Only the exact registered machine route delegates to machine authentication. */
 @Injectable()
-export class MachineApplicationAuthGuard extends ApplicationAuthGuard {
-  override async canActivate(context: ExecutionContext): Promise<boolean> {
+export class MachineApplicationAuthGuard implements CanActivate {
+  private readonly applicationGuard: ApplicationAuthGuard;
+  constructor(@Inject(IDENTITY_APPLICATION) application: () => IdentityApplication) {
+    this.applicationGuard = new ApplicationAuthGuard(application);
+  }
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<{ path: string; originalUrl: string; method: string; headers: Record<string, unknown> }>();
-    if (request.path !== MACHINE_PATH) return super.canActivate(context);
+    if (request.path !== MACHINE_PATH) return this.applicationGuard.canActivate(context);
     if (!machineRegistrationEnabled(process.env) || request.method !== "POST" || request.originalUrl !== MACHINE_PATH ||
         request.headers.cookie !== undefined || request.headers.authorization !== undefined ||
         typeof request.headers["x-connector-machine"] !== "string")
@@ -24,9 +30,6 @@ export class MachineApplicationAuthGuard extends ApplicationAuthGuard {
   }
 }
 
-class MachinePool extends Pool {
-  async onModuleDestroy() { await this.end(); }
-}
 const MACHINE_POOL = "CONNECTOR_MACHINE_POOL";
 const MANAGEMENT_POOL = "CONNECTOR_MACHINE_MANAGEMENT_POOL";
 @Module({})
@@ -38,8 +41,11 @@ export class MachineModule {
       module: MachineModule,
       controllers: [FictionalMachineController],
       providers: [
-        { provide: MACHINE_POOL, useFactory: () => new MachinePool({ connectionString: process.env.DATABASE_URL, max: 2, options: "-c role=jobguard_machine" }) },
-        { provide: MANAGEMENT_POOL, useFactory: () => new MachinePool({ connectionString: process.env.DATABASE_URL, max: 2 }) },
+        { provide: MACHINE_POOL, useFactory: () => new Pool({ connectionString: process.env.DATABASE_URL, max: 2, options: "-c role=jobguard_machine" }) },
+        { provide: MANAGEMENT_POOL, useFactory: () => new Pool({ connectionString: process.env.DATABASE_URL, max: 2 }) },
+        { provide: "CONNECTOR_MACHINE_POOL_LIFECYCLE", useFactory: (machine: Pool, management: Pool) => ({
+          async onModuleDestroy() { await Promise.all([machine.end(), management.end()]); },
+        }), inject: [MACHINE_POOL, MANAGEMENT_POOL] },
         { provide: FICTIONAL_MACHINE_CONNECTION, useFactory: (pool: Pool) => new FictionalMachineConnection(new PostgresMachineStore(pool), secrets), inject: [MACHINE_POOL] },
         { provide: FictionalMachineManagement, useFactory: (pool: Pool) => new FictionalMachineManagement(createIdentityApplication(process.env), pool), inject: [MANAGEMENT_POOL] },
       ],
