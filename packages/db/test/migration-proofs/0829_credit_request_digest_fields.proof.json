@@ -1,0 +1,58 @@
+{
+  "migration": "0829_credit_request_digest_fields.sql",
+  "lp0": [
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.issue_practice_customer_credit_note(uuid,uuid,uuid,uuid,uuid,bigint,text,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "eb8e2d4d82b0bf2c1182f6bfdef1f0e9ffad6962946cef12bd6efeca5f319df7",
+        "staticWrites": [
+          "app.action_authorization",
+          "app.command_receipt",
+          "app.customer_credit_note",
+          "app.customer_credit_note_sequence",
+          "app.decision",
+          "app.decision_resolution"
+        ],
+        "staticCalls": [
+          "public.digest"
+        ]
+      },
+      "after": {
+        "identity": "function:app.issue_practice_customer_credit_note(uuid,uuid,uuid,uuid,uuid,bigint,text,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.action_authorization",
+          "app.command_receipt",
+          "app.customer_credit_note",
+          "app.customer_credit_note_sequence",
+          "app.decision",
+          "app.decision_resolution"
+        ],
+        "staticCalls": [
+          "public.digest"
+        ]
+      }
+    }
+  ],
+  "upgrade": [],
+  "tenancy": []
+}
