@@ -9,7 +9,7 @@ let infrastructure: Pool | undefined;
 const lockId = randomUUID(), tenantId = randomUUID(), jobId = randomUUID();
 
 beforeAll(async () => {
-  // The shared fixture migrates an empty embedded PostgreSQL database through 0841.
+  // The shared fixture migrates an empty embedded PostgreSQL database through 0664.
   fixture = await createFinalCheckFixture();
   const login = `final_check_infra_${randomUUID().replaceAll("-", "")}`, password = randomUUID();
   await fixture.admin.query(`DO $body$ BEGIN EXECUTE format(
