@@ -2,9 +2,10 @@ import type { Pool } from "pg";
 import { z } from "zod";
 import { EnterpriseLivePromptPersistenceError, contractorJobFinishV1, materialsIssueV1, completionObservationV1, evaluateLivePromptsV1, confirmPromptV1, dismissPromptV1, promptListV1, promptDetailV1 } from "@jobguard/core";
 import { contractorSessionContext } from "./contractor-session-context.js";
-import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
+import { withTenant, type VerifiedTenantContext, type TenantTransaction } from "./tenant-context.js";
 import { appendAuditBatch, type AuditEventInput } from "./audit.js";
 import { readEnterpriseCompletionFindings, readStoredCompletionPhoto } from "./enterprise-live-prompt-source-reader.js";
+const commandInput = z.object({version:z.string(),jobId:z.guid({ error: "Invalid uuid" }),commandId:z.guid({ error: "Invalid uuid" })}).passthrough();
 type Result = Record<string,unknown>;
 export type EnterprisePromptItem = {id:string;jobId:string;promptHash:string;rule:"a"|"b"|"c"|"d";ruleVersion:string;surfacedAt:string;resolution:string|null};
 export type EnterprisePromptPage = {items:EnterprisePromptItem[];nextCursor:string|null};
@@ -29,9 +30,15 @@ export class EnterpriseLivePromptRepository {
   }catch(error){failure(error);}
  }
  private async write(sessionId:string,raw:unknown):Promise<Result>{
-  const input=z.object({version:z.string(),jobId:z.guid({ error: "Invalid uuid" }),commandId:z.guid({ error: "Invalid uuid" })}).passthrough().parse(raw);
+  const input=commandInput.parse(raw);
   try {const context:VerifiedTenantContext=await contractorSessionContext(this.pool,sessionId);
    return await withTenant(this.pool,context,async db=>{
+    return this.writeInTransaction(db,sessionId,input);
+   });
+  }catch(error){failure(error);}
+ }
+ private async writeInTransaction(db:TenantTransaction,sessionId:string,input:z.infer<typeof commandInput>):Promise<Result>{
+  try {
     let sourceBytes:Buffer|null=null;
     if(input.version==="completion-observation.v1" && (input.locator as {kind?:string}|undefined)?.kind==="photo_tag") {
      const source=z.object({jobId:z.guid({ error: "Invalid uuid" }),evidenceId:z.guid({ error: "Invalid uuid" }),sha256:z.string(),objectVersion:z.string()}).parse(input);
@@ -51,8 +58,11 @@ export class EnterpriseLivePromptRepository {
     await appendAuditBatch(db,output.audits);
     await db.$client.query("SELECT app.lp_finish($1,$2,$3::jsonb)",[sessionId,input.commandId,JSON.stringify(output.result)]);
     return output.result;
-   });
   }catch(error){failure(error);}
+ }
+ /** Materials-only shared path; the existing SQL still checks the human session and import authority. */
+ importMaterialsInTransaction(db:TenantTransaction,sessionId:string,raw:unknown){
+  return this.writeInTransaction(db,sessionId,commandInput.parse(this.parse(materialsIssueV1,raw)));
  }
  private async promptId(db:import("./tenant-context.js").TenantTransaction,session:string,job:string,observation:string):Promise<string>{
   return (await db.$client.query<{id:string}>("SELECT app.lp_observation_prompt($1,$2,$3) id",[session,job,observation])).rows[0]!.id;
