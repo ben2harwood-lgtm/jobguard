@@ -1,3 +1,4 @@
+import { RequestBindingRefusedError } from "./request-binding-error.js";
 import { z } from "zod";
 import type { Pool } from "pg";
 import { checkSyntheticSubscriptionAgreement, subscriptionAgreementSelectionV1, subscriptionAgreementText,
@@ -92,6 +93,7 @@ export class SubscriptionMandateRepository {
   private async run<T>(context: VerifiedTenantContext, work: (db: import("pg").PoolClient) => Promise<T>): Promise<T> {
     try { return await withTenant(this.pool, context, db => work(db.$client)); }
     catch (error) {
+      if (error instanceof RequestBindingRefusedError) throw new SubscriptionMandateError("MANDATE_FORBIDDEN");
       const message = error instanceof Error ? error.message : "";
       if (message === "METER_FORBIDDEN") throw new SubscriptionMandateError("MANDATE_FORBIDDEN");
       const known = codes.find(code => code === message);

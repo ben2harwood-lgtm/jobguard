@@ -1,3 +1,4 @@
+import { RequestBindingRefusedError } from "./request-binding-error.js";
 import type { Pool } from "pg";
 import { z } from "zod";
 import { WorkOrderError } from "@jobguard/core";
@@ -28,7 +29,10 @@ export class ConnectorPromotionRepository {
     try {
       const context: VerifiedTenantContext = await contractorSessionContext(this.pool, sessionId);
       return await withTenant(this.pool, context, db => this.events(db, sessionId, null, null));
-    } catch (error) { throw workOrderFailure(error); }
+    } catch (error) {
+      if (error instanceof RequestBindingRefusedError) throw new WorkOrderError("NOT_FOUND");
+      throw workOrderFailure(error);
+    }
   }
   async promote(sessionId: string, raw: unknown) {
     const parsed = connectorPromotionV1.safeParse(raw);
@@ -64,7 +68,10 @@ export class ConnectorPromotionRepository {
         return (await db.$client.query<{ value: Record<string, unknown> }>("SELECT app.connector_promotion($1,$2,$3,$4,$5::jsonb) value",
           [sessionId, event.namespace, event.eventId, commandId, JSON.stringify(result)])).rows[0]!.value;
       });
-    } catch (error) { throw workOrderFailure(error); }
+    } catch (error) {
+      if (error instanceof RequestBindingRefusedError) throw new WorkOrderError("NOT_FOUND");
+      throw workOrderFailure(error);
+    }
   }
   /** Read existing fictional ENT-2 setup. No setup transaction or guessed identifiers. */
   private async demo(db: TenantTransaction, tenant: string): Promise<WorkOrderDemo> {
