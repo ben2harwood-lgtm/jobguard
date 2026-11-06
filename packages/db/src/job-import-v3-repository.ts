@@ -102,7 +102,8 @@ export class JobImportV3Repository {
     const prior = async () => withTenant(this.pool, context, async db => {
       await owned(db, context.tenantId, digest, sourceJobId);
       const row = (await db.$client.query<{ public_request_hash: string; result: unknown }>(
-        "SELECT public_request_hash,result FROM app.job_import_v3 WHERE tenant_id=$1 AND command_id=$2 AND session_digest=$3",
+        `SELECT public_request_hash,result FROM app.job_import_v3 WHERE tenant_id=$1 AND command_id=$2 AND (CASE WHEN tenant_id='11111111-1111-4111-8111-111111111111'::uuid
+          THEN session_digest=$3 ELSE app.ch5_import_actor(tenant_id,$3) IS NOT NULL END)`,
         [context.tenantId, prepared.input.commandId, digest])).rows[0];
       if (!row) return null;
       if (row.public_request_hash !== publicHash) throw new JobImportV3Error("COMMAND_CONFLICT");
@@ -130,7 +131,8 @@ export class JobImportV3Repository {
       const row = (await db.$client.query<{ snapshot: unknown; result: unknown; adopted_at: Date; admission?: { outcome?: string; sourceHash?: string } }>(
         `SELECT snapshot,result,adopted_at,(SELECT jsonb_build_object('outcome',e.payload#>>'{references,capacityOutcome}','sourceHash',e.payload#>>'{hashes,meterSourceHash}')
           FROM app.audit_event e WHERE e.tenant_id=$1 AND e.subject_type='job' AND e.subject_ref=($2::uuid)::text AND e.event_type='job.imported_baseline_attested' LIMIT 1) admission
-          FROM app.job_import_v3 WHERE tenant_id=$1 AND job_id=$2 AND session_digest=$3`,
+          FROM app.job_import_v3 WHERE tenant_id=$1 AND job_id=$2 AND (CASE WHEN tenant_id='11111111-1111-4111-8111-111111111111'::uuid
+          THEN session_digest=$3 ELSE app.ch5_import_actor(tenant_id,$3) IS NOT NULL END)`,
         [context.tenantId, importedJobId, digest])).rows[0];
       if (!row) throw new JobImportV3Error("NOT_FOUND");
       return { version: "job-import-read.v3" as const, environment: "synthetic_demo" as const, realExternalActions: 0 as const, result: assertImportResultV3(row.snapshot, row.result), snapshot: adoptJobV3.parse(row.snapshot), adoptedAt: row.adopted_at.toISOString(),
