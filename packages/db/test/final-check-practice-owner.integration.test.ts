@@ -22,8 +22,17 @@ const args = (a: FinalCheckJob, command = randomUUID()) =>
   [a.tenantId, a.jobId, FINAL_CHECK_ACTOR, command, a.revisionId, "a".repeat(64)];
 const lockArgs = (a: FinalCheckJob, command: string) => args(a, command).slice(0, 5);
 const forbidden = (result: Promise<unknown>) => expect(result).rejects.toMatchObject({ code: "42501", message: "FORBIDDEN" });
-const scoped = <T>(a: FinalCheckJob, digest: string, work: (db: PoolClient) => Promise<T>) =>
-  finalCheckTenant(practiceMaterialPool(f.runtime, digest), a.tenantId, work);
+// Use withTenant's exact tenant setup: since LP-6b the practice pool installs the digest only after that statement.
+const scoped = async <T>(a: FinalCheckJob, digest: string, work: (db: PoolClient) => Promise<T>) => {
+  const db = await practiceMaterialPool(f.runtime, digest).connect();
+  try {
+    await db.query("BEGIN");
+    await db.query("SELECT set_config('app.tenant_id', $1, true)", [a.tenantId]);
+    const result = await work(db);
+    await db.query("COMMIT");
+    return result;
+  } catch (error) { await db.query("ROLLBACK"); throw error; } finally { db.release(); }
+};
 
 async function effects(a: FinalCheckJob) {
   return (await f.admin.query(`SELECT
