@@ -16,7 +16,7 @@ export const offlineQueueResultCodesV1 = [
  "STALE_REVISION", "STALE_PRICE", "ACCEPTED_VERSION_CHANGED", "APPROVAL_EXPIRED", "AUTHORITY_CHANGED",
  "COMPLETION_CONFLICT", "LOCKED_BILL", "ONLINE_REVIEW_REQUIRED", "UNAVAILABLE",
 ] as const;
-const uploadResult = z.object({
+export const offlineQueueUploadResultV1 = z.object({
  version: z.literal("offline-upload-result.v1"), commandId: z.guid(),
  state: z.enum(["acknowledged", "rejected", "conflict", "retryable"]),
  code: z.string(), realExternalActions: z.literal(0),
@@ -52,7 +52,7 @@ export function applyOfflineUploadResultV1(raw: unknown, response: unknown, nowM
  counter.max(offlineQueueRetryV1.maxJitterMs).parse(jitterMs);
  if (item.status === "recorded" || item.status === "needs_review") return item;
  const review: OfflineQueueItemV1 = { ...item, status: "needs_review" };
- const parsed = uploadResult.safeParse(response);
+ const parsed = offlineQueueUploadResultV1.safeParse(response);
  if (!parsed.success || parsed.data.commandId !== item.commandId) return review;
  const result = parsed.data;
  if (!offlineQueueResultCodesV1.some(code => code === result.code)) return review;
@@ -100,7 +100,17 @@ export function restoreOfflineQueueV1(saved: readonly unknown[]): {
  saved.forEach((raw, index) => {
   try {
    const item = parseItem(raw);
-   items = addOfflineQueueItemV1(items, item.status === "sending" ? { ...item, status: "queued" } : item);
+   const recovered = item.status === "sending" ? { ...item, status: "queued" as const } : item;
+   const previous = items.find(entry => entry.commandId === item.commandId);
+   items = addOfflineQueueItemV1(items, recovered);
+   if (previous) {
+    // Duplicate backups may be reordered. Never resurrect a terminal entry or reset its retry budget.
+    const status = previous.status === "needs_review" || recovered.status === "needs_review" ? "needs_review"
+     : previous.status === "recorded" || recovered.status === "recorded" ? "recorded" : "queued";
+    items = items.map(entry => entry.commandId === item.commandId ? { ...entry, status,
+     attemptCount: Math.max(previous.attemptCount, recovered.attemptCount),
+     nextAttemptAtMs: Math.max(previous.nextAttemptAtMs, recovered.nextAttemptAtMs) } : entry);
+   }
   } catch (error) {
    if (!(error instanceof OfflineQueueError)) throw error;
    refused.push({ index, code: error.code });

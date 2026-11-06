@@ -56,11 +56,14 @@ export class CaptureRepository {
   /** Dark fixture intake keeps the evidence's existing job. It stores a labelled
    * source only, never a second job, canonical scope, approval or commercial fact. */
   async persistSpeechFixtureSource(context: VerifiedTenantContext, captureId: string, raw: unknown) {
+    if (process.env.JOBGUARD_ENV !== "synthetic_demo") throw new Error("SPEECH_FIXTURE_DARK_ONLY");
     const source = deepgramTranscriptSourceV1.parse(raw);
     const a = source.acquisition;
     const bytes = Buffer.from(source.text, "utf8");
     const hash = createHash("sha256").update(bytes).digest("hex");
     return withTenant(this.pool, context, async db => {
+      const { database } = (await db.$client.query<{ database: string }>("SELECT current_database() AS database")).rows[0]!;
+      if (database !== "jobguard_synthetic_demo") throw new Error("SPEECH_FIXTURE_DARK_ONLY");
       await db.$client.query("SELECT pg_advisory_xact_lock(hashtext($1::uuid::text),hashtext('capture:' || $2::uuid::text))", [context.tenantId,captureId]);
       const evidence = (await db.$client.query(`SELECT e.id FROM app.evidence_object e
         JOIN app.evidence_upload u ON (u.tenant_id,u.id)=(e.tenant_id,e.upload_id)

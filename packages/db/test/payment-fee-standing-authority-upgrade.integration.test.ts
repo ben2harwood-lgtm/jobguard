@@ -43,7 +43,14 @@ it("0614 preserves existing approved statements, reservations, receipts and ledg
  expect((await fees.read(x.context,x.jobId,x.auth.digest)).standingAuthority).toBeNull();
  expect((await fees.read(x.context,x.jobId,x.auth.digest)).statements[0]).toEqual({statement:receipt,state:"approved"});
  expect(await collection.command(x.context,x.jobId,x.auth.digest,p)).toEqual({...attempt,replayed:true});
+ // 0642 changes only this registry row's permission; retain every other byte.
+ const successorProof = structuredClone(before);
+ const registry = successorProof["app.command_type_registry"]!;
+ const clientKey = Object.keys(registry.rows).find(key => JSON.parse(key).command_type === "IssueClientApproval")!;
+ const clientRow = JSON.parse(registry.rows[clientKey]!);
+ expect(clientRow.permission_rule).toBe("owner");
+ registry.rows[clientKey] = JSON.stringify({ ...clientRow, permission_rule: "contractor" });
  await migrate(f.admin);await migrate(f.admin);
- expect(await proofDifferences(f.admin,before)).toEqual({rows:[],types:[]});
+ expect(await proofDifferences(f.admin,successorProof)).toEqual({rows:[],types:[]});
  expect((await f.admin.query("SELECT count(*)::int n FROM app.payment_fee_authority")).rows).toEqual([{n:0}]);
 },120000);
