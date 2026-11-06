@@ -1,6 +1,0 @@
-{
-  "migration": "1130_retention_human_review.sql",
-  "lp0": [],
-  "upgrade": [],
-  "tenancy": []
-}

@@ -16,7 +16,7 @@ describe("M4-20 durable synthetic retention books (PostgreSQL)", () => {
  const repo = () => new RetentionRecordRepository(f.runtime);
  const input = (a: Company, record: unknown, commandId = randomUUID()) => ({ version: "retention-record-command.v1", jobId: a.jobId, commandId, record });
  const append = (a: Company, record: unknown, cid = randomUUID()) => repo().command(a.context,actor(a),input(a,record,cid));
- const read = (a: Company) => repo().read(a.context,a.jobId);
+ const read = (a: Company) => repo().read(a.context,actor(a),a.jobId);
  function profile() {
   const source = { kind: "contract_profile", profileVersion: "fictional.v1", clause: "fictional-retention" };
   return { version: "retention.profile.v1", revision: 1, previousProfileId: null as string | null,
@@ -36,20 +36,6 @@ describe("M4-20 durable synthetic retention books (PostgreSQL)", () => {
   for (const table of financialTables) result[table] = (await f.admin.query(`SELECT coalesce(jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text),'[]'::jsonb) rows FROM app.${table} r WHERE tenant_id=$1`,[a.tenantId])).rows[0].rows;
   return result;
  }
- it("refuses timer impersonation at both the session and SQL boundaries without changing history", async () => {
-  const a=await company(), p=profile(), pid=randomUUID();
-  await append(a,p,pid);
-  const before=await read(a), money=await financialSnapshot(a);
-  const forged={...review(pid,p.conditions[0]!.id), trigger:"timer", raisedOn:"2099-01-01"};
-  await expect(append(a,forged)).rejects.toMatchObject({code:"INVALID_RETENTION_INPUT"});
-  await expect(workTenant(f.runtime,a.tenantId,async db=>{
-    const cid=randomUUID();
-    const prepared=(await db.query("SELECT app.retention_records($1,$2,$3,NULL,NULL,NULL) result",[a.tenantId,a.digest,a.jobId])).rows[0].result;
-    return db.query("SELECT app.retention_records($1,$2,$3,$4,$5::jsonb,$6)", [a.tenantId,a.digest,a.jobId,cid,
-      JSON.stringify({...forged,id:cid,tenantId:a.tenantId,jobId:a.jobId}),prepared.bookHash]);
-  })).rejects.toThrow("RETENTION_CONFLICT");
-  expect(await read(a)).toEqual(before); expect(await financialSnapshot(a)).toEqual(money);
- });
  it("stores reviews without satisfaction, resolves by the session actor, serializes duplicate releases and never writes money", async () => {
   const a=await company(), p=profile(), pid=randomUUID(), rid=randomUUID(), sid=randomUUID();
   const before=await financialSnapshot(a);
@@ -104,7 +90,7 @@ describe("M4-20 durable synthetic retention books (PostgreSQL)", () => {
   const a=await company(),b=await company(),p=profile(),pid=randomUUID();await append(a,p,pid);
   const sameTenantOtherJob=await meterCompany(f,a.tenantId);
   for (const job of [b.jobId,randomUUID()]) {
-   await expect(repo().read(a.context,job)).rejects.toThrow("RETENTION_NOT_FOUND");
+   await expect(repo().read(a.context,actor(a),job)).rejects.toThrow("RETENTION_NOT_FOUND");
    await expect(repo().command(a.context,actor(a),{...input(a,p),jobId:job})).rejects.toThrow("RETENTION_NOT_FOUND");
   }
   for (const other of [b,sameTenantOtherJob]) {
@@ -113,7 +99,7 @@ describe("M4-20 durable synthetic retention books (PostgreSQL)", () => {
   for (const key of ["tenantId","actorId","enabled"]) await expect(repo().command(a.context,actor(a),{...input(a,p),[key]:a.tenantId})).rejects.toThrow("INVALID_RETENTION_INPUT");
   await f.admin.query("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE id=$1",[a.sessionId]);
   await expect(append(a,p)).rejects.toThrow();
-  expect((await read(a)).book.records).toHaveLength(1);
+  await expect(read(a)).rejects.toThrow("RETENTION_UNAUTHENTICATED");
  });
  it("enforces FORCE RLS, append-only storage, no direct runtime privileges and restores tenant context", async () => {
   const a=await company();await append(a,profile());
@@ -139,4 +125,45 @@ describe("M4-20 durable synthetic retention books (PostgreSQL)", () => {
   });
   expect((await read(a)).book.records).toHaveLength(1);
  });
+ it("requires live owner/admin sessions for SQL and repository reads, refuses timer forgery and stamps human dates", async () => {
+  const a = await company(), p = profile(), pid = randomUUID(); await append(a,p,pid);
+  const r = review(pid,p.conditions[0]!.id), cid = randomUUID();
+  await expect(append(a,{...r,trigger:"timer"})).rejects.toThrow("INVALID_RETENTION_INPUT");
+  await workTenant(f.runtime,a.tenantId,async db => {
+   const stored = (await db.query("SELECT app.retention_records($1,$2,$3,NULL,NULL,NULL) result",[a.tenantId,a.digest,a.jobId])).rows[0].result;
+   const forged = {...r,trigger:"timer",id:cid,tenantId:a.tenantId,jobId:a.jobId};
+   await db.query("SAVEPOINT forgery");
+   await expect(db.query("SELECT app.retention_records($1,$2,$3,$4,$5::jsonb,$6)",[a.tenantId,a.digest,a.jobId,cid,JSON.stringify(forged),stored.bookHash])).rejects.toThrow("RETENTION_CONFLICT");
+   await db.query("ROLLBACK TO SAVEPOINT forgery");
+  });
+  await append(a,r,cid);
+  const today = (await f.admin.query("SELECT to_char(CURRENT_DATE,'YYYY-MM-DD') today")).rows[0].today;
+  expect((await read(a)).book.records[1]).toMatchObject({raisedOn:today,trigger:"human"});
+  await append(a,r,cid); expect((await read(a)).book.records).toHaveLength(2);
+  for (const role of ["read_only","finance","foreman","estimator","admin","owner"]) {
+   await f.admin.query("UPDATE app.membership SET role=$1 WHERE tenant_id=$2 AND id=$3",[role,a.tenantId,a.actorId]);
+   const sqlRead = () => workTenant(f.runtime,a.tenantId,db => db.query("SELECT app.retention_records($1,$2,$3,NULL,NULL,NULL)",[a.tenantId,a.digest,a.jobId]));
+   if (["owner","admin"].includes(role)) { await sqlRead(); expect((await read(a)).book.records).toHaveLength(2); }
+   else { await expect(sqlRead()).rejects.toThrow("METER_FORBIDDEN"); await expect(read(a)).rejects.toThrow("RETENTION_FORBIDDEN"); }
+  }
+  for (const digest of [null,"invalid","f".repeat(64)]) {
+   await expect(workTenant(f.runtime,a.tenantId,db => db.query("SELECT app.retention_records($1,$2,$3,NULL,NULL,NULL)",[a.tenantId,digest,a.jobId]))).rejects.toThrow("RETENTION_UNAUTHENTICATED");
+  }
+ });
+
+ it("never stores the client date even when a person requests an early review", async () => {
+  const a = await company(), p = profile(), pid = randomUUID();
+  await append(a,{...p,conditions:p.conditions.map(c=>({...c,dueDate:"9999-12-31"}))},pid);
+  await workTenant(f.runtime,a.tenantId,async db => {
+   const prepared = (await db.query("SELECT app.retention_records($1,$2,$3,NULL,NULL,NULL) result",[a.tenantId,a.digest,a.jobId])).rows[0].result;
+   const cid = randomUUID(), record = {...review(pid,p.conditions[0]!.id),raisedOn:"9999-12-31",id:cid,tenantId:a.tenantId,jobId:a.jobId};
+   const invoke = (hash:string) => db.query("SELECT app.retention_records($1,$2,$3,$4,$5::jsonb,$6) result",[a.tenantId,a.digest,a.jobId,cid,JSON.stringify(record),hash]);
+   const written = (await invoke(prepared.bookHash)).rows[0].result;
+   expect((await invoke(written.bookHash)).rows[0].result).toEqual(written);
+  });
+  const today = (await f.admin.query("SELECT to_char(CURRENT_DATE,'YYYY-MM-DD') today")).rows[0].today;
+  expect((await read(a)).book.records[1]).toMatchObject({trigger:"human",raisedOn:today});
+  expect((await read(a)).reconciliation).toMatchObject({released:amount(0)});
+ });
+
 });

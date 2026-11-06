@@ -617,6 +617,8 @@ part_paid | paid -> billed | part_paid           imported payment reversal
 
 The server flags candidates deterministically (same job; same SoR code or excess on the same line; same visit or day); supervisors may also link manually. `MarkDuplicate(duplicate, canonical)` writes an immutable link; the canonical is billed, and the group's effective origin follows 9.1.5, never the linker's choice. Only the canonical can be exported, and the group counts once. Unlinking is allowed before export only, by any of the five roles Ben named on 12 October 2026 (supervisor, surveyor, commercial manager, admin and owner; each needs a grant that covers the job), with a reason. A prompt matching an existing extra coalesces into it and creates no origin.
 
+- **Candidate dismissal (Ben / router ruling, 4 November 2026).** A supervisor, surveyor or commercial_manager with a covering job grant may record `ResolveDuplicateCandidates` as `not_duplicates`, with a reason, unless they reported or priced any member. The append-only fact binds the exact member identities, canonical topology and immutable revisions. It exempts only that snapshot from the shared candidates/export refusal; a new member or revision requires fresh review. A new `reopen` fact reverses the dismissal. It never changes prices, approvals, origins or duplicate links. Synthetic practice only; RED review and green CI precede landing.
+
 - **After export,** a duplicate is repaired only by the authorized `ReconcileExportedDuplicate` command (ENT-7), never by editing links; unresolved candidates block export (ENT-6).
 #### 9.1.7 Approval chain
 
@@ -890,14 +892,19 @@ Every card inherits §2.4 C1–C8 and AGENTS §2. Cards reuse the merged command
 - **Audit content:** audit payloads hold IDs and hashes only.
 
 ### ENT-5 Approval chain and client approval
+
+4 November synthetic client-journey rulings: Q10/Q12/Q13 are recorded in `docs/contracts/extra-client-approval-v1.md`; grant-covered surveyor/commercial-manager sends, seven-day invitations, exact decision retry, own job history and the existing customer sign-in route apply. Q14 export/refusal-audit policy and Q15 executor/scheduler activation remain held. No real delivery or scheduler is enabled.
+Proceed slice (4 Nov 2026): router ruling closes only the Q05 proceed hold. Site staff may record proceeding before approval with a reason as an immutable fact bound to the priced request. It grants no authority and changes no approval, pricing, billing or export; see the two extra-approval contracts. Other holds and ENT-5 acceptance remain open.
 **Track:** contractor
 **Depends on:** ENT-3, M4-3-S-R
 **Build:**
 - **Rules engine:** a pure evaluator plus the requirement snapshot.
-- **Commands:** `SubmitExtra`, `PriceExtra`, `ApproveExtraStep`, `RejectExtra`, `ReviseExtra`, `WithdrawExtra` and `MarkDuplicate`.
+- **Commands:** `SubmitExtra`, `PriceExtra`, `ApproveExtraStep`, `RejectExtra`, `ReviseExtra`, `WithdrawExtra`, `MarkDuplicate` and `ResolveDuplicateCandidates` (the exact-snapshot dismissal/reopen command in §9.1.6).
 - **Queues:** grant-filtered queues in the mandatory lane of the Decisions inbox, with Graphile-scheduled time limits and escalation.
 - **Client approval:** invitation, sign-in and an approval page for client approvers; the approval request is sent through the outbox.
 - **Evidence packs:** packs whose subject is `extra`. The merged pack table is keyed to `recovery_case`; extend it expand-compatibly.
+
+**4 November remaining-rules slice:** Q04, Q06, Q08, Q11 and Q16 follow the router rulings in `docs/contracts/extra-approval-chain-v1.md` and `extra-approval-v1.md`: same-slot receipt replay and cross-revision separation; versioned independent T/Y; two London working days and named backup roles; covered supervisory withdrawal and required-approver rejection; explicit human submission. Q01, Q03, Q14 and Q15 remain held. This slice does not close ENT-5 or its wider Done-when assertions. Migration 0930–0933 proof and pin landing holds are in the existing ENT-5b builder receipt.
 
 **Done when:**
 - **Completeness:** no extra reaches `approved` without every step in its snapshot.

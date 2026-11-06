@@ -1,0 +1,280 @@
+{
+  "migration": "0641_extra_client_session.sql",
+  "lp0": [
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.xc_bind_link(uuid,text,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.extra_client_signin"
+        ],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.xc_bind_link(uuid,text,uuid)|jobguard_migration",
+        "group": "a-owner-routines"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.xc_bind_link(uuid,text,uuid)|jobguard_runtime|EXECUTE|-",
+        "group": "a-exec-site-extra-routines"
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.extra_client_command_session|tenant_isolation|PERMISSIVE|ALL|jobguard_migration|f4b6ad5879e052e3"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.extra_client_signin|tenant_isolation|PERMISSIVE|ALL|jobguard_migration|f4b6ad5879e052e3"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.extra_client_session|tenant_isolation|PERMISSIVE|ALL|jobguard_migration|f4b6ad5879e052e3"
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "xc_bind_link",
+        "args": "p_link uuid, p_digest text, p_actor uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "app.extra_client_command_session",
+        "data": []
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "extra_client_command_session",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "extra_client_command_session_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "extra_client_command_session",
+        "policyname": "tenant_isolation",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
+      }
+    },
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "app.extra_client_signin",
+        "data": []
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "extra_client_signin",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "extra_client_signin_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "extra_client_signin_tenant_id_signin_digest_key",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "extra_client_signin",
+        "policyname": "tenant_isolation",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
+      }
+    },
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "app.extra_client_session",
+        "data": []
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "extra_client_session",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "extra_client_session_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "extra_client_session_tenant_id_link_id_key",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "extra_client_session_tenant_id_token_digest_key",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "extra_client_session",
+        "policyname": "tenant_isolation",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
+      }
+    }
+  ],
+  "tenancy": [
+    {
+      "relname": "extra_client_command_session",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    },
+    {
+      "relname": "extra_client_signin",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    },
+    {
+      "relname": "extra_client_session",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    }
+  ]
+}

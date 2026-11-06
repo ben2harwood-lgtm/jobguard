@@ -119,6 +119,8 @@ export { CompanyValueApplication } from "../value/value-business.application.js"
 export * from "../receipt-case-allocation.application.js";
 
 export { DunningApplication, dunningFailure } from "../dunning.application.js";
+
+export { emergencyOwnerPost } from "../auth/sso/enterprise-access.http.js";
 export { RateSuggestionApplication, type RateSuggestionScreen } from "../rate-suggestion.application.js";
 
 export * from "../cis-fixture.application.js";
@@ -129,3 +131,4 @@ export { PayNowAttemptApplication, assertPayNowPreviewMode, payNowAttemptFailure
 export { NoticeFixtureApplication, assertNoticeFixtureMode, noticeFixtureFailure, noticeFixtureRealNoticeRefusal, type NoticeFixtureView } from "../notice-fixture.application.js";
 
 export { InterimDraftApplication, interimDraftFailure } from "../interim-draft.application.js";
+export { ConnectorPromotionApplication } from "../connectors/promotion.application.js";

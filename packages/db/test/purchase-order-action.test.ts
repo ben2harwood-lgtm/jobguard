@@ -1,4 +1,7 @@
 import { fakeAuditAppend } from "./audit-protocol-fixture.js";
+import { readFileSync } from "node:fs";
+import { combineLp0, proofSchema } from "./migration-proof-loader.js";
+import { parseInventory } from "./lp-0-catalog.js";
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -12,7 +15,7 @@ afterEach(() => vi.unstubAllEnvs());
 
 // Transaction protocol double. PostgreSQL constraints, RLS and actual predicates
 // have separate integration tests; this suite does not claim PostgreSQL evidence.
-function fixture() {
+function fixture(claimsEnabled = true) {
   vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
   const tenant = randomUUID(), job = randomUUID(), revision = randomUUID(), member = randomUUID(), draft = randomUUID();
   const orderRow = { id: revision, draft_id: draft, revision: 1, authority_hash: "a".repeat(64), quantity_decimal: "10", unit_price_pence: 2500,
@@ -23,12 +26,21 @@ function fixture() {
     identities: [] as any[], results: [] as any[], audits: [] as any[], grants: [] as any[], attempts: [] as any[] };
   let snapshot = structuredClone(state), active = false;
   let current = true, locked = false, owner = true;
+  let liveFailure: Error | undefined;
+  const actor = { sessionDigest: "a".repeat(64) }, otherMember = randomUUID();
   const query = vi.fn(async (sql: string, values: any[] = []) => {
     const result = (rows: any[] = [], rowCount = rows.length) => ({ rows, rowCount });
-    if (sql === "SELECT outbound_control.claims_enabled() AS enabled") return result([{ enabled: true }]);
     if (sql === "BEGIN") { snapshot = structuredClone(state); active = true; return result(); }
     if (sql === "ROLLBACK") { state = snapshot; active = false; return result(); }
     if (sql === "COMMIT") { active = false; return result(); }
+    if (sql.startsWith("SAVEPOINT ") || sql.startsWith("RELEASE SAVEPOINT ") || sql.startsWith("ROLLBACK TO SAVEPOINT ")) return result();
+    if (sql.includes("require_watchdog_live") && liveFailure) throw liveFailure;
+    if (sql.startsWith("SELECT a.membership_id FROM app.authenticate_practice_session(")) return result([]);
+    if (sql.startsWith("SELECT app.order_attestation_actor(")) {
+      if (!owner || ![actor.sessionDigest, "b".repeat(64), "d".repeat(64)].includes(values[1])) throw new Error("ORDER_ACTION_INVALID");
+      return result([{ actor_id: values[1] === "b".repeat(64) ? otherMember : member }]);
+    }
+    if (sql === "SELECT outbound_control.claims_enabled() AS enabled") return result([{ enabled: claimsEnabled }]);
     if (sql.includes("set_config") || sql.includes("pg_advisory_xact_lock") || sql.includes("require_watchdog_live")) return result();
     if (sql.startsWith("SELECT 1 FROM app.final_account_lock")) return result(locked ? [{}] : []);
     if (sql.startsWith("SELECT r.id,r.draft_id")) return result(current && values[0] === tenant && values[1] === job && values[2] === revision ? [{ ...orderRow }] : []);
@@ -110,13 +122,22 @@ function fixture() {
       action: { actionType: "purchase_order.send.dark", recipient: view.order.recipient, contentHash: view.contentHash,
         aggregateRevision: 1, amountPence: view.amountPence, currency: "GBP", policyVersion: "dark-merchant-order.v1", expiresAt: new Date("2099-01-01") } };
   }
-  return { repo, context, member, scope, command, orderRow, query, pool, port, deliver, executor, state: () => state,
+  return { repo, context, member, actor, otherMember, scope, command, orderRow, query, pool, port, deliver, executor, state: () => state,
+    failLive: (error: Error) => { liveFailure = error; },
     supersede: () => { current = false; }, lock: () => { locked = true; }, revoke: () => { owner = false; },
     manual: { version: "manual-order-attestation.v1", jobId: job, revisionId: revision, commandId: randomUUID(),
       supplierReference: "synthetic-order-1" } };
 }
 
 describe("M2-1 dark exact approved merchant action", () => {
+  it("keeps an approved order pending while commercial outbound claims are paused", async () => {
+    const f = fixture(false), queued = await f.repo.approve(f.context, f.scope, await f.command());
+    await f.executor.execute(f.context, queued.outboxActionId);
+    expect(f.state().effects[0].status).toBe("pending");
+    expect(f.state().attempts).toHaveLength(0);
+    expect(f.deliver).not.toHaveBeenCalled();
+    expect(f.port.placedCount).toBe(0);
+  });
   it("binds cited merchant, rate, item and delivery details; unknown availability and prevention stay fee-free", async () => {
     const f = fixture(), view = await f.repo.preview(f.context, f.scope);
     expect(view).toMatchObject({ stock: "unknown", leadTime: "unknown", realExternalActions: 0,
@@ -187,54 +208,88 @@ describe("M2-1 dark exact approved merchant action", () => {
     const f = fixture(), command = await f.command(); vi.stubEnv("JOBGUARD_ENV", environment);
     await expect(f.repo.preview(f.context, f.scope)).rejects.toThrow("SYNTHETIC_MODE_REQUIRED");
     await expect(f.repo.approve(f.context, f.scope, command)).rejects.toThrow("SYNTHETIC_MODE_REQUIRED");
-    await expect(f.repo.attestManual(f.context, f.manual, f.member)).rejects.toThrow("SYNTHETIC_MODE_REQUIRED");
+    await expect(f.repo.attestManual(f.context, f.manual, f.actor)).rejects.toThrow("SYNTHETIC_MODE_REQUIRED");
     expect(f.state().effects).toHaveLength(0);
   });
   it("refuses a caller-supplied different owner without any persisted effect", async () => {
     const f = fixture();
-    await expect(f.repo.attestManual(f.context, { ...f.manual, actorMembershipId: randomUUID() }, f.member)).rejects.toThrow();
+    await expect(f.repo.attestManual(f.context, { ...f.manual, actorMembershipId: randomUUID() }, f.actor)).rejects.toThrow();
     expect(f.state().attestations).toHaveLength(0);
     expect(f.state().audits).toHaveLength(0);
     expect(f.state().identities).toHaveLength(0);
   });
   it("does not replay another authenticated owner's attestation command", async () => {
-    const f = fixture(); await f.repo.attestManual(f.context, f.manual, f.member);
-    const otherMember = randomUUID();
+    const f = fixture(); await f.repo.attestManual(f.context, f.manual, f.actor);
+    const otherMember = f.otherMember;
     const other = verifiedTenantContextFromMembership({ tenantId: f.context.tenantId, membershipId: otherMember,
       identityUserId: randomUUID() } as Parameters<typeof verifiedTenantContextFromMembership>[0]);
-    await expect(f.repo.attestManual(other, f.manual, otherMember)).rejects.toThrow("IDEMPOTENCY_CONFLICT");
+    await expect(f.repo.attestManual(other, f.manual, { sessionDigest: "b".repeat(64) })).rejects.toThrow("IDEMPOTENCY_CONFLICT");
     expect(f.state().attestations).toHaveLength(1);
     expect(f.state().audits).toHaveLength(1);
   });
   it("requires an authenticated caller actor and a genuine tenant context", async () => {
     const f = fixture();
     await expect(f.repo.attestManual(verifiedTenantContextForQueuedJob(f.context.tenantId), f.manual,
-      undefined as unknown as string)).rejects.toThrow("A verified tenant context");
-    await expect(f.repo.attestManual({ ...f.context }, f.manual, f.member)).rejects.toThrow("A verified tenant context");
+      undefined as unknown as { sessionDigest: string })).rejects.toThrow("A verified tenant context");
+    await expect(f.repo.attestManual({ ...f.context }, f.manual, f.actor)).rejects.toThrow("A verified tenant context");
     expect(f.state().attestations).toHaveLength(0);
   });
   it("refuses a revoked owner, including replay after revocation", async () => {
     const f = fixture(); f.revoke();
-    await expect(f.repo.attestManual(f.context, f.manual, f.member)).rejects.toThrow("ORDER_ACTION_INVALID");
+    await expect(f.repo.attestManual(f.context, f.manual, f.actor)).rejects.toThrow("ORDER_ACTION_INVALID");
     expect(f.state().attestations).toHaveLength(0);
-    const g = fixture(); await g.repo.attestManual(g.context, g.manual, g.member); g.revoke();
-    await expect(g.repo.attestManual(g.context, g.manual, g.member)).rejects.toThrow("ORDER_ACTION_INVALID");
+    const g = fixture(); await g.repo.attestManual(g.context, g.manual, g.actor); g.revoke();
+    await expect(g.repo.attestManual(g.context, g.manual, g.actor)).rejects.toThrow("ORDER_ACTION_INVALID");
     expect(g.state().attestations).toHaveLength(1);
     expect(g.state().audits).toHaveLength(1);
   });
+  it("binds the actor exclusively to the session, refusing extra actor fields", async () => {
+    const f = fixture();
+    await expect(f.repo.attestManual(f.context, f.manual,
+      { ...f.actor, actorMembershipId: f.otherMember })).rejects.toThrow();
+    const fact = await f.repo.attestManual(f.context, f.manual, { sessionDigest: "b".repeat(64) });
+    expect(f.state().attestations[0][6]).toBe(f.otherMember);
+    expect(f.state().audits[0].actorRef).toBe(`membership:${f.otherMember}`);
+    expect(fact.fact).toBe("owner_attestation");
+  });
+  it.each(["", "bad", "c".repeat(64)])("refuses an invalid or unknown session %s with no effects", async sessionDigest => {
+    const f = fixture();
+    await expect(f.repo.attestManual(f.context, f.manual, { sessionDigest })).rejects.toThrow();
+    expect(f.state().attestations).toHaveLength(0); expect(f.state().audits).toHaveLength(0);
+  });
+  it.each(["JOB_NOT_LIVE", "JOB_NOT_FOUND"])("%s cancels once without delivery or retry", async code => {
+    const f = fixture(), queued = await f.repo.approve(f.context, f.scope, await f.command());
+    f.failLive(new Error(code));
+    await f.executor.execute(f.context, queued.outboxActionId);
+    await f.executor.execute(f.context, queued.outboxActionId);
+    expect(f.state().effects[0].status).toBe("cancelled");
+    expect(f.state().audits.filter(a => a.eventType === "outbox.cancelled")).toHaveLength(1);
+    expect(JSON.stringify(f.state().audits)).toContain("order_authority_stale");
+    expect(f.deliver).not.toHaveBeenCalled(); expect(f.state().attempts).toHaveLength(0);
+    await expect(operateOutbox(f.pool, f.context, queued.outboxActionId, "retry", true)).rejects.toThrow("UNSAFE_OUTBOX_COMMAND");
+  });
+  it("a transient preflight failure leaves pending work retryable", async () => {
+    const f = fixture(), queued = await f.repo.approve(f.context, f.scope, await f.command());
+    f.failLive(new Error("database unavailable"));
+    await expect(f.executor.execute(f.context, queued.outboxActionId)).rejects.toThrow("database unavailable");
+    expect(f.state().effects[0].status).toBe("pending");
+    expect(f.state().audits.filter(a => a.eventType === "outbox.cancelled")).toHaveLength(0);
+    expect(f.deliver).not.toHaveBeenCalled(); expect(f.state().attempts).toHaveLength(0);
+  });
   it("manual placement is a replayable separate fact, without a Decision, send or fee", async () => {
-    const f = fixture(), fact = await f.repo.attestManual(f.context, f.manual, f.member);
+    const f = fixture(), fact = await f.repo.attestManual(f.context, f.manual, f.actor);
     expect(fact).toMatchObject({ fact: "owner_attestation", providerConfirmed: false, realExternalActions: 0 });
     expect(f.state().attestations[0][6]).toBe(f.member);
     expect(f.state().audits[0].actorRef).toBe(`membership:${f.member}`);
-    expect(await f.repo.attestManual(f.context, f.manual, f.member)).toEqual(fact);
-    await expect(f.repo.attestManual(f.context, { ...f.manual, supplierReference: "synthetic-other" }, f.member)).rejects.toThrow("IDEMPOTENCY_CONFLICT");
+    expect(await f.repo.attestManual(f.context, f.manual, f.actor)).toEqual(fact);
+    expect(await f.repo.attestManual(f.context, f.manual, { sessionDigest: "d".repeat(64) })).toEqual(fact);
+    await expect(f.repo.attestManual(f.context, { ...f.manual, supplierReference: "synthetic-other" }, f.actor)).rejects.toThrow("IDEMPOTENCY_CONFLICT");
     await expect(f.repo.approve(f.context, f.scope, await f.command())).rejects.toThrow("ORDER_ALREADY_COMMITTED");
     expect(f.state().attestations).toHaveLength(1); expect(f.state().effects).toHaveLength(0); expect(f.state().grants).toHaveLength(0);
   });
   it("manual attestation cannot cause an already queued order to be placed again", async () => {
     const f = fixture(); await f.repo.approve(f.context, f.scope, await f.command());
-    await expect(f.repo.attestManual(f.context, f.manual, f.member)).rejects.toThrow("ORDER_ALREADY_COMMITTED");
+    await expect(f.repo.attestManual(f.context, f.manual, f.actor)).rejects.toThrow("ORDER_ALREADY_COMMITTED");
     expect(f.state().attestations).toHaveLength(0); expect(f.state().effects).toHaveLength(1);
   });
   it("cancellation before send is terminal; unknown outcomes need reconciliation, not blind retry", async () => {
@@ -279,5 +334,22 @@ describe("fake merchant boundary", () => {
     f.orderRow.unit_price_pence = 0; expect((await f.repo.preview(f.context, f.scope)).amountPence).toBe(0);
     f.orderRow.quantity_decimal = "2"; f.orderRow.unit_price_pence = 1_000_000_000_000;
     await expect(f.repo.preview(f.context, f.scope)).rejects.toThrow("MATERIAL_MONEY_OUT_OF_RANGE");
+  });
+});
+
+describe("LATER-SAFETY-10 migration source proof (not PostgreSQL evidence)", () => {
+  it("adds a narrow session bridge with named LP-0 and upgrade records", () => {
+    const proof = proofSchema.parse(JSON.parse(readFileSync(new URL("./migration-proofs/0649_order_attestation_session.proof.json", import.meta.url), "utf8")));
+    const baseline = parseInventory(JSON.parse(readFileSync(new URL("../../../docs/contracts/lp-0-effective-privileges-v1.json", import.meta.url), "utf8")));
+    const inventory = parseInventory(combineLp0(baseline, [proof]));
+    expect(inventory.recorded.routines.find(r => r.identity === "function:app.order_attestation_actor(uuid,text)"))
+      .toMatchObject({ runtimeExecute: true, publicExecute: false, staticWrites: [], staticCalls: ["app.mon1_company_actor"] });
+    expect(proof.upgrade).toEqual([expect.objectContaining({ section: "routines", before: null,
+      after: expect.objectContaining({ proname: "order_attestation_actor", args: "t uuid, digest text" }) })]);
+    const sql = readFileSync(new URL("../migrations/0649_order_attestation_session.sql", import.meta.url), "utf8");
+    expect(sql).toContain("actor:=app.mon1_company_actor(t,digest)");
+    expect(sql).toContain("AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp())");
+    expect(sql).toContain("AND role='owner'");
+    expect(sql).not.toMatch(/GRANT EXECUTE ON FUNCTION app.mon1_company_actor|SET app\.|ALTER TABLE/u);
   });
 });

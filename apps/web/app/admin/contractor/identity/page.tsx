@@ -1,4 +1,5 @@
 "use client";
+import { EmergencyActions } from "./emergency-actions";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
 type Session = { csrfToken: string; memberships: { id: string; tenantId: string; name: string }[] };
@@ -81,6 +82,7 @@ export default function ContractorIdentityPage() {
   const tenantOnly = role === "finance";
 
   return <main style={{ maxWidth: 720, margin: "24px auto", padding: 20, boxSizing: "border-box", overflowWrap: "anywhere" }}>
+    {session&&tenantId&&<EmergencyActions key={`${tenantId}:${session.csrfToken}`} tenantId={tenantId} csrfToken={session.csrfToken} />}
     <h1>Contractor SAML identity</h1>
     <p role="note" aria-label="SAML sandbox notice">Practice sandbox — synthetic identities only. The in-process test identity provider is the only permitted provider. No live SSO route is approved.</p>
     <p><a href="/admin/contractor" style={field}>Contractor organisation practice</a></p>
@@ -143,7 +145,7 @@ const requiredMessages:Record<string,string>={
   SSO_REQUIRED_UNLINKED_MEMBERS:"Every active member must link their SAML identity before you can turn this on.",
   STALE_SSO_REQUIRED:"Another administrator changed the requirement. Reload it before trying again.",
   SSO_ROUTE_BLOCKED:"Single sign-on administration is available only in the synthetic sandbox.",
-  SSO_EMERGENCY_REFUSED:"Emergency access is unavailable because no approver has been set.",
+  SSO_EMERGENCY_REFUSED:"Restricted emergency access requires a current owner session and two other owners.",
   SSO_REQUIRED_UNAVAILABLE:"The requirement could not be confirmed. Reload before making changes.",
 };
 function SingleSignOnRequired({session,tenantId}:{session:Session;tenantId:string}) {
@@ -190,6 +192,6 @@ function SingleSignOnRequired({session,tenantId}:{session:Session;tenantId:strin
     <textarea id="sso-required-reason" style={{...field,minHeight:88}} minLength={20} maxLength={500} disabled={pending} value={reason} onChange={e=>setReason(e.target.value)} />
     <button type="button" style={field} disabled={blocked||state?.required===true} onClick={()=>void change(true)}>Turn single sign-on requirement on</button>
     <button type="button" style={field} disabled={blocked||state?.required===false} onClick={()=>void change(false)}>Turn single sign-on requirement off</button>
-    <p>Emergency access: not available — no approver has been set</p>
+    <p>Restricted emergency access requires a current owner session and two other owners.</p>
   </section>;
 }

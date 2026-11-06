@@ -5,11 +5,11 @@ import { WormBoundaryError, type WormStorage, type TimestampResult } from "@jobg
 import { WormCommandRepository, wormCommandV1, type WormReceipt } from "./worm-command-repository.js";
 import type { VerifiedTenantContext } from "./tenant-context.js";
 
-const fake = vi.hoisted(() => ({ query: vi.fn(), audit: vi.fn(), transactions: 0, pools: [] as unknown[] }));
+const fake = vi.hoisted(() => ({ query: vi.fn(), audit: vi.fn(), transactions: 0, pools: [] as unknown[], commitError: null as unknown }));
 vi.mock("./tenant-context.js", () => ({ withTenant: async (_p: unknown, _c: unknown, fn: (db: unknown) => unknown) => {
   fake.pools.push(_p);
   fake.transactions++;
-  try { return await fn({ $client: { query: fake.query } }); } finally { fake.transactions--; }
+  try { const result = await fn({ $client: { query: fake.query } }); if (fake.commitError) throw fake.commitError; return result; } finally { fake.transactions--; }
 } }));
 vi.mock("./audit.js", () => ({ appendAuditBatch: (...args: unknown[]) => fake.audit(...args) }));
 const context = { tenantId: randomUUID() } as VerifiedTenantContext;
@@ -19,18 +19,19 @@ const command = () => ({ version: "worm.command.v1" as const, policyVersion: "sy
 const pool = {} as Pool;
 const executorPool = {} as Pool;
 const operatorPool = {} as Pool;
-const repo = () => new WormCommandRepository(pool, true, executorPool);
+const repo = () => new WormCommandRepository(pool, true, executorPool, undefined, "a".repeat(64));
 let row: WormReceipt;
 let attempts: number;
 let storage: WormStorage;
 beforeEach(() => {
-  fake.pools = [];
+  fake.pools = []; fake.commitError = null;
   fake.query.mockReset(); fake.audit.mockReset(); attempts = 0;
   const c = command();
   row = { id: c.commandId, tenant_id: context.tenantId, actor_id: c.actorMembershipId, evidence_id: c.evidenceId,
     action: c.action, payload: c, object_key: `synthetic/tenants/${context.tenantId}/one`,
     object_version_id: "immutable-v1", imprint: "a".repeat(64), attempts: 0, status: "queued", result: null };
   fake.query.mockImplementation(async (sql: string, values: unknown[]) => {
+    if (sql.includes("mon9_session")) return { rows: [{ actor: "verified" }] };
     if (sql.includes("session_user")) return { rows: [{ operator_ref: "synthetic_operator" }] };
     if (sql.includes("worm_reconcile")) row = { ...row,
       status: values[2] === (row.action === "apply_hold") ? "applied" : "outcome_unknown" };
@@ -44,6 +45,15 @@ beforeEach(() => {
 });
 const unavailable = { anchor: vi.fn(async (): Promise<TimestampResult> => ({ status: "pending", reason: "service_unavailable" })) };
 describe("dark durable WORM application", () => {
+  it("refuses a missing session before SQL and a forged actor before receipt or replay", async () => {
+    await expect(new WormCommandRepository(pool, true).submit(context, command())).rejects.toThrow("WORM_REFUSED");
+    expect(fake.query).not.toHaveBeenCalled();
+    fake.query.mockResolvedValue({ rows: [{ actor: null }] });
+    await expect(repo().submit(context, command())).rejects.toThrow("WORM_REFUSED");
+    expect(fake.query).toHaveBeenCalledExactlyOnceWith("SELECT app.mon9_session($1,$2) actor", ["a".repeat(64), expect.any(String)]);
+    expect(fake.audit).not.toHaveBeenCalled();
+  });
+
   it("defaults off before database access and refuses D07 deletion/expiry", async () => {
     await expect(new WormCommandRepository(pool).submit(context, command())).rejects.toMatchObject({ code: "DARK_ONLY" });
     expect(fake.query).not.toHaveBeenCalled(); expect(() => repo().deleteOrExpire()).toThrow("D07_REQUIRED");
@@ -120,7 +130,7 @@ describe("dark durable WORM application", () => {
   });
   it("sanitizes SQL exceptions", async () => {
     fake.query.mockRejectedValue(new Error("tenant secrets"));
-    await expect(repo().submit(context, command())).rejects.toThrow(/^WORM_REFUSED$/);
+    await expect(repo().submit(context, command())).rejects.toThrow(/^WORM_UNCONFIRMED$/);
   });
 });
 
@@ -139,7 +149,7 @@ describe("read-only operator WORM recovery", () => {
     expect(fake.pools).toEqual([operatorPool]);
     expect(storage.hold).not.toHaveBeenCalled(); expect(storage.retain).not.toHaveBeenCalled();
     fake.query.mockRejectedValue(new Error("secret database detail"));
-    await expect(operator().operatorAlerts(context)).rejects.toThrow(/^WORM_REFUSED$/);
+    await expect(operator().operatorAlerts(context)).rejects.toThrow(/^WORM_UNCONFIRMED$/);
   });
   it("requires the dark switch, strict versioned input and separate operator credentials before reading", async () => {
     await expect(new WormCommandRepository(pool).recover(context, request(), storage)).rejects.toThrow("DARK_ONLY");
@@ -182,7 +192,7 @@ describe("read-only operator WORM recovery", () => {
   });
   it("refuses unauthorized or cross-tenant SQL targets before object access", async () => {
     fake.query.mockRejectedValue(new Error("WORM_REFUSED"));
-    await expect(operator().recover(context, request(), storage)).rejects.toThrow(/^WORM_REFUSED$/);
+    await expect(operator().recover(context, request(), storage)).rejects.toThrow(/^WORM_UNCONFIRMED$/);
     expect(storage.read).not.toHaveBeenCalled();
   });
   it("collapses concurrent recoveries to one audited effect", async () => {
@@ -194,5 +204,24 @@ describe("read-only operator WORM recovery", () => {
     expect((await operator().recover(context, request(), storage)).status).toBe("applied");
     expect(fake.query.mock.calls.some(([sql]) => sql.includes("worm_reconcile"))).toBe(false);
     expect(fake.audit).not.toHaveBeenCalled();
+  });
+});
+
+describe("LATER-SAFETY-26 transaction outcomes", () => {
+  it.each(["42501", "23514", "P0001"])("sanitizes definite routine refusal %s", async code => {
+    fake.query.mockRejectedValue(Object.assign(new Error("SELECT secret_key FROM private"), { code }));
+    await expect(repo().submit(context, command())).rejects.toMatchObject({ code: "WORM_REFUSED", message: "WORM_REFUSED" });
+  });
+  it.each([undefined, "08006", "XX000"])("keeps connection/unknown error %s unconfirmed", async code => {
+    fake.query.mockRejectedValue(Object.assign(new Error("SELECT secret_key FROM private"), { code }));
+    await expect(repo().submit(context, command())).rejects.toMatchObject({ code: "WORM_UNCONFIRMED", message: "WORM_UNCONFIRMED" });
+  });
+  it.each(["08006", "42501", "23514", "P0001"])("never treats COMMIT failure %s as refusal", async code => {
+    fake.commitError = Object.assign(new Error("COMMIT secret_key"), { code });
+    await expect(repo().submit(context, command())).rejects.toMatchObject({ code: "WORM_UNCONFIRMED", message: "WORM_UNCONFIRMED" });
+  });
+  it("does not infer replay conflict from arbitrary error text", async () => {
+    fake.query.mockRejectedValue(new Error("WORM_REPLAY_CONFLICT"));
+    await expect(repo().submit(context, command())).rejects.toMatchObject({ code: "WORM_UNCONFIRMED" });
   });
 });

@@ -18,16 +18,19 @@ const input = () => ({ version: "vat.fixture-append.v1", commandId: id(4), jobId
       supplierVatRegistered: true, supplierVatNumber: "fictional-supplier-vat", customerVatRegistered: true, customerVatNumber: "fictional-customer-vat",
       customerEndUser: false, intermediarySupplier: false, constructionReverseChargeInScope: true, qualifyingBasisReference: "fictional qualification" } }] } });
 let rows: unknown[];
+let canRead: boolean;
 const query = vi.fn(async (sql: string, values?: unknown[]) => {
+  if (sql.includes("app.current_actor()")) return { rows: [{ actor: id(3), tenant: id(1) }] };
+  if (sql.includes("FROM app.membership")) return { rows: canRead ? [{ id: id(3) }] : [] };
   if (!sql.includes("app.vat_fixture_records")) return { rows: [] };
   if (values?.[2] !== id(2)) throw new Error("VAT_FIXTURE_NOT_FOUND");
   if (values?.[3] === "append") rows.push({ input: JSON.parse(String(values[4])), actorId: id(3), recordHash: "a".repeat(64), matrixVersion: VAT_SUPPORT_MATRIX_VERSION, environment: "synthetic", label: VAT_FIXTURE_LABEL });
   return { rows: [{ result: rows }] };
 });
 beforeEach(() => {
-  rows = []; vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
+  rows = []; canRead = true; vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
   state.credentials = { sessionToken: "s".repeat(32), csrfToken: "c".repeat(24), tenantHeader: id(1), origin: "https://company.invalid" };
-  state.authenticate.mockResolvedValue({ identityUserId: id(1), sessionId: id(3), csrfToken: "c".repeat(24) });
+  state.authenticate.mockResolvedValue({ identityUserId: id(1), sessionId: id(3), sessionCredential: "d".repeat(64), csrfToken: "c".repeat(24) });
   state.findMembership.mockResolvedValue({ id: id(3), tenantId: id(1), identityUserId: id(1), role: "owner" });
   state.app = new VatFixtureApplication({ allowedOrigin: "https://company.invalid", provider: { authenticate: state.authenticate, findMembership: state.findMembership },
     principal: async () => state.authenticate() } as never,
@@ -77,4 +80,17 @@ it("maps foreign and unknown repository jobs to identical no-store refusals, and
   const a = await get(id(90)), b = await get(id(91)); expect(a.status).toBe(404); expect(await a.json()).toEqual(await b.json());
   vi.stubEnv("JOBGUARD_ENV", "production"); expect((await get()).status).toBe(404); expect((await post()).status).toBe(404);
   expect(rows).toHaveLength(0);
+});
+
+it("GET refuses without revealing VAT records and ignores request-supplied actors", async () => {
+  await post(); canRead = false;
+  for (const job of [id(2), id(99)]) {
+    const response = await GET(new Request(`https://company.invalid/vat-fixtures?actor=${id(90)}&actorId=${id(90)}`,
+      { headers: { "x-actor-id": id(90) } }), params(job));
+    expect(response.status).toBe(403); expect(response.headers.get("Cache-Control")).toBe("no-store");
+    const body = await response.json();
+    expect(body).toEqual({ version: "vat.fixture-error.v1", code: "FORBIDDEN", message: "You don't have permission." });
+    expect(JSON.stringify(body)).not.toMatch(/fictional|vatNumber|records/u);
+  }
+  expect(query.mock.calls.filter(([sql]) => sql.includes("FROM app.membership")).map(([, values]) => values)).toEqual([[id(1), id(3)], [id(1), id(3)]]);
 });

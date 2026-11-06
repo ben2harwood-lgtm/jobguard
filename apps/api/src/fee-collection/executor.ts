@@ -3,9 +3,10 @@ import { checkSyntheticSubscriptionAgreement } from "@jobguard/core";
 import { rolePermits, type AuthProvider } from "../auth/auth-provider.js";
 import { collectionIntentV1, collectionSourcesV1, creditSourcesV1, FeeCollectionError, parse, refundIntentV1,
   type Attempt, type CollectionBook, type CollectionIntent, type CollectionSources, type ReservationStore,
-  type LockedCollectionSources, type CollectionSessionContext, type DirectDebitWebhookContext, type DirectDebitPaymentState } from "./contracts.js";
+  type SignedProviderResult, type LockedCollectionSources, type CollectionSessionContext, type DirectDebitWebhookContext, type DirectDebitPaymentState } from "./contracts.js";
 import { pauseSuccessFee, validateSuccessFee } from "./success-fee-direct-debit.js";
 export interface CollectionRail {
+  signStoreResult?(tenantId: string, attempt: Readonly<Attempt>): SignedProviderResult;
   readonly name: "stripe_card" | "direct_debit";
   readonly environment: "synthetic_demo";
   collectionPauseReason?(tenantId: string): "MANDATE_REVOKED" | "MANDATE_NOT_ACTIVE" | undefined;
@@ -167,6 +168,8 @@ export class DarkFeeCollectionExecutor {
   }
   private async applyEvent(ctx: DirectDebitWebhookContext, railName: CollectionRail["name"], event: RailEvent) {
     if (event.tenantId !== ctx.tenantId) return refuse();
+    const rail = this.rails.find(r => r.name === railName)!;
+    let proof: SignedProviderResult | undefined;
     await this.store.transaction(ctx.tenantId, async book => {
       const hash = fingerprint(event);
       const eventKey = `${railName}:${event.eventId}`;
@@ -180,10 +183,12 @@ export class DarkFeeCollectionExecutor {
         || (attempt.providerObjectId !== null && attempt.providerObjectId !== event.objectId)) return refuse();
       if (railName === "direct_debit") {
         this.directDebitEvent(book, attempt, event);
+        proof = rail.signStoreResult?.(ctx.tenantId, attempt);
         book.events[eventKey] = hash;
         return;
       }
       if (attempt.state === "released" && event.state === "definite_failure" && attempt.providerObjectId === event.objectId) {
+        proof = rail.signStoreResult?.(ctx.tenantId, attempt);
         book.events[eventKey] = hash; return;
       }
       if ((attempt.state === "released" && event.state === "settled")
@@ -191,6 +196,7 @@ export class DarkFeeCollectionExecutor {
         // Persist the contradictory fact and reserve its balance until explicit reconciliation.
         attempt.providerObjectId = event.objectId;
         if (attempt.state !== "reconciliation_required") transition(book, attempt, "reconciliation_required");
+        proof = rail.signStoreResult?.(ctx.tenantId, attempt);
         book.events[eventKey] = hash;
         return;
       }
@@ -198,7 +204,8 @@ export class DarkFeeCollectionExecutor {
       attempt.providerObjectId = event.objectId;
       if (attempt.state !== "settled") transition(book, attempt, event.state === "settled" ? "settled" : "released");
       book.events[eventKey] = hash;
-    });
+      proof = rail.signStoreResult?.(ctx.tenantId, attempt);
+    }, () => proof);
   }
   private directDebitEvent(book: CollectionBook, attempt: Attempt, event: RailEvent) {
     if (event.state === "settled" || event.state === "definite_failure" || attempt.state === "reserved") {
@@ -260,6 +267,7 @@ export class DarkFeeCollectionExecutor {
     });
     const rail = this.rails.find(r => r.name === attempt.rail)!;
     const result = await rail.submit(ctx.tenantId, attempt);
+    let proof: SignedProviderResult | undefined;
     await this.store.transaction(ctx.tenantId, async book => {
       const current = book.attempts.find(a => a.commandId === commandId)!;
       // A signed settlement may arrive before the submit response.
@@ -270,6 +278,7 @@ export class DarkFeeCollectionExecutor {
         if (current.rail === "direct_debit") current.paymentState ??= "pending_submission";
         transition(book, current, "provider_accepted");
       }
-    });
+      proof = rail.signStoreResult?.(ctx.tenantId, current);
+    }, () => proof);
   }
 }
