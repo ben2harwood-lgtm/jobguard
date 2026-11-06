@@ -76,7 +76,8 @@ it("a required-preapproval statement reaches the client breach view without auth
  await repo.approveExtraStep(ctx, f.members.supervisor.member, approveInput(s, 0));
  await repo.approveExtraStep(ctx, f.supervisor2.member, approveInput(s, 1));
  const email = await emailOf(c, f, f.members.client_approver.member.membershipId), token = newToken();
- await repo.issueClientApproval(ctx, f.members.owner.member, { version: "issue-client-approval.v1", commandId: randomUUID(), jobId: s.jobId, requestId: s.requestId,
+ // Q10 (0642): a job-granted surveyor or commercial manager sends client approvals, not the owner.
+ await repo.issueClientApproval(ctx, f.members.surveyor.member, { version: "issue-client-approval.v1", commandId: randomUUID(), jobId: s.jobId, requestId: s.requestId,
   approverMembershipId: f.members.client_approver.member.membershipId, recipient: email, linkToken: token, expiresAt: new Date(Date.now() + 3600000) });
  const view = { version: "client-approval-view.v1", jobId: s.jobId, requestId: s.requestId, linkToken: token, email };
  expect(await repo.clientApprovalView(ctx, f.members.client_approver.member, view)).toMatchObject({ doneWithoutRequiredPreapproval: true, workTiming: null });

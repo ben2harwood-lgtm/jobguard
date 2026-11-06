@@ -188,6 +188,7 @@ export class DarkFeeCollectionExecutor {
         return;
       }
       if (attempt.state === "released" && event.state === "definite_failure" && attempt.providerObjectId === event.objectId) {
+        proof = rail.signStoreResult?.(ctx.tenantId, attempt);
         book.events[eventKey] = hash; return;
       }
       if ((attempt.state === "released" && event.state === "settled")

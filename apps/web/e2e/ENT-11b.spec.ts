@@ -17,7 +17,7 @@ const noSideScroll = (page: Page) => page.evaluate(() => document.documentElemen
 const facts = async (page: Page) => ({ clients: await page.getByTestId("fact-clients").innerText(), operatives: await page.getByTestId("fact-operatives").innerText(), orders: await page.getByTestId("fact-orders").innerText(), value: await page.getByTestId("fact-value").innerText() });
 
 // Full generated Northside practice, independently timed on phone and laptop. Not a human rehearsal.
-for (const width of [360, 1280]) test(`ENT-11b full Northside through billing, statement and dashboard at ${width}px under ten minutes`, async ({ page }, info) => {
+for (const width of [360, 1280]) test(`ENT-11b full Northside through billing, statement and dashboard at ${width}px under ten minutes`, async ({ page, browser }, info) => {
   test.skip(info.project.name !== "desktop", "this test explicitly runs both widths");
   const startedAt = Date.now();
   await page.setViewportSize({ width, height: 800 });
@@ -116,34 +116,26 @@ for (const width of [360, 1280]) test(`ENT-11b full Northside through billing, s
   await su.page.reload();
   await expect(su.page.getByTestId("extra-steps")).toContainText("supervisor: done");
 
-  // 4. Return explicitly to the owner for exact approval of a local fake request; pending is not delivery.
-  await switchTo("owner");
-  await page.goto("/approvals/extras");
+  // Q10: a surveyor approves each exact fake send; Q13 uses the existing customer sign-in.
+  await switchTo("surveyor"); await page.goto("/approvals/extras");
   await page.getByRole("button", { name: "Approve sending to the client (practice)" }).click();
   const href = await page.getByTestId("client-link").getAttribute("href");
-  expect(href).toMatch(/^\/extra-approval\/[0-9a-f-]{36}\/[0-9a-f-]{36}#t=/);
-  await page.reload();
-  await expect(page.getByTestId("client-link")).toHaveAttribute("href", href!);
+  expect(href).toMatch(/^\/customer\/sign-in#[0-9a-f-]{36}\/[0-9a-f-]{36}\/[0-9a-f-]{36}\//);
+  await page.reload(); await expect(page.getByTestId("client-link")).toHaveAttribute("href", href!);
   const outbox = (await db.query("SELECT adapter,status,recipient FROM app.action_outbox WHERE tenant_id=$1", [tenant])).rows;
   expect(outbox).toHaveLength(1); expect(outbox[0]).toMatchObject({ adapter: "fake_email", status: "pending" }); expect(outbox[0].recipient).toMatch(/\.invalid$/);
-
-  // 5. Client decides on the link, desktop.
-  await switchTo("client_approver");
-  const cl = { page };
-  await cl.page.goto(href!);
-  await expect(cl.page.getByText(banner, { exact: true })).toHaveCount(1);
-  await cl.page.getByLabel(/The email address this link was sent to/).fill("client.approver@northside-fictional.invalid");
-  await cl.page.getByRole("button", { name: "Show the extra" }).click();
-  await expect(cl.page.getByTestId("client-amount")).toHaveText(pounds(rate * 6));
-  await expect(cl.page.getByTestId("client-description")).toHaveText(description);
-  await expect(cl.page.getByTestId("client-company-approvals")).toContainText("supervisor");
-  await expect(cl.page.getByTestId("actual-actor")).toContainText(ownerMember);
-  await cl.page.getByRole("button", { name: "Approve this extra" }).click();
-  await expect(cl.page.getByTestId("client-decided")).toContainText("approved");
-  await cl.page.reload();
-  await cl.page.getByLabel(/The email address this link was sent to/).fill("client.approver@northside-fictional.invalid");
-  await cl.page.getByRole("button", { name: "Show the extra" }).click();
-  await expect(cl.page.getByTestId("client-already")).toBeVisible();
+  const clientContext = await browser.newContext({viewport: {width,height:800}});
+  const customer = await clientContext.newPage(); await customer.goto(baseURL + href!);
+  await customer.getByRole("main").getByRole("button", {name:"Sign in",exact:true}).click();
+  await customer.getByRole("main").getByRole("link", {name:"Review client approvals",exact:true}).click();
+  await expect(customer.getByRole("main").getByRole("heading", {name:description,exact:true})).toBeVisible();
+  await expect(customer.getByRole("main")).toContainText(pounds(rate * 6));
+  expect(await noSideScroll(customer)).toBe(true);
+  await customer.getByRole("main").getByRole("button", {name:"Approve this exact revision and net",exact:true}).click();
+  await expect(customer.getByRole("main").getByRole("status")).toHaveText("Your decision is recorded.");
+  await customer.reload(); await expect(customer.getByRole("main")).toContainText(": approve");
+  await expect(customer.getByRole("main").getByRole("button", {name:"Approve this exact revision and net"})).toHaveCount(0);
+  await clientContext.close();
 
   // 6. Everyone sees the stored result after a reload; the facts are the stored rows.
   await switchTo("operative"); await page.goto("/site/extra"); await page.reload(); await expect(page.getByTestId("my-extra-state")).toHaveText("Approved");
@@ -153,15 +145,16 @@ for (const width of [360, 1280]) test(`ENT-11b full Northside through billing, s
   const outcome = (await db.query("SELECT kind,actor_kind FROM app.extra_approval_outcome WHERE tenant_id=$1", [tenant])).rows;
   expect(outcome).toEqual([{ kind: "approved", actor_kind: "client_approver" }]);
   const fact = (await db.query("SELECT fictional_role_name,actual_tester_reference FROM app.extra_approval_step_fact WHERE tenant_id=$1 AND actor_kind='client_approver'", [tenant])).rows;
-  expect(fact).toEqual([{ fictional_role_name: "Fictional client approver", actual_tester_reference: `membership:${ownerMember}` }]);
+  expect(fact).toHaveLength(1); expect(fact[0].fictional_role_name).toBe("Named fictional client approver");
+  expect(fact[0].actual_tester_reference).toMatch(/^customer-session:/);
   const nonPending = (await db.query("SELECT count(*)::int n FROM app.action_outbox WHERE tenant_id=$1 AND status NOT IN('pending','cancelled')", [tenant])).rows[0].n;
   expect(nonPending).toBe(0);
   expect((await db.query("SELECT count(*)::int n FROM app.action_attempt WHERE tenant_id=$1", [tenant])).rows[0].n).toBe(0);
   const actionBindings = (await db.query(`SELECT r.command_type,a.actor_role,a.actor_membership_id,a.tester_membership_id,a.switch_id,a.settings_version,a.settings_hash
     FROM app.command_receipt r JOIN app.northside_action_attribution a ON(a.tenant_id,a.command_id)=(r.tenant_id,r.command_id)
     WHERE r.tenant_id=$1 AND r.command_type=ANY($2::text[]) ORDER BY r.completed_at`, [tenant, ["LogSiteExtra", "PriceExtra", "SubmitExtra", "ApproveExtraStep", "IssueClientApproval", "ClientDecideExtra"]])).rows;
-  expect(actionBindings.map(a => a.actor_role)).toEqual(["operative", "surveyor", "supervisor", "supervisor", "owner", "client_approver"]);
-  for (const a of actionBindings) { expect(a.tester_membership_id).toBe(ownerMember); expect(a.settings_hash).toBe(settings.settings_hash); expect(a.settings_version).toBe(settings.settings_version); expect(a.switch_id === null).toBe(a.actor_role === "owner"); }
+  expect(actionBindings.map(a => a.actor_role)).toEqual(["operative", "surveyor", "supervisor", "supervisor", "surveyor"]);
+  for (const a of actionBindings) { expect(a.tester_membership_id).toBe(ownerMember); expect(a.settings_hash).toBe(settings.settings_hash); expect(a.settings_version).toBe(settings.settings_version); expect(a.switch_id).not.toBeNull(); }
   const attributionBefore = (await db.query("SELECT row_to_json(a)::text bytes FROM app.northside_action_attribution a WHERE tenant_id=$1 ORDER BY source_kind,source_id", [tenant])).rows;
 
 

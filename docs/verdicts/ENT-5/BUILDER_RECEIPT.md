@@ -443,6 +443,114 @@ Builder receipt only; not independently reviewed or accepted.
 - Card vs main: ENT-5 remains the foundation only (two tables, pure evaluators, source loaders). It adds no command, queue, escalation job, client link/page or outbox send, so Ben decision 18 (outbox owner-only sends), the 0153/0155 quote re-acceptance and variation/final-account changes, and the 0144 work-state guards are not touched. The card's commands, queues, client approval and the outbox request remain unbuilt (held under Q01-Q16); the client approval request through the outbox must be built later against main's outbox rules.
 - Checks (all through heavy-slot, maxWorkers=2): core `extra-approval|extra-client-approval|extra-evidence-pack` tests 21 passed; db `extra-approval-authority|extra-evidence-packs|extra-approval-upgrade` 13 passed; db `lp-0-authority-paths|lp-0-grant-freeze` 19 passed; db `tenancy|site-extra-evidence|evidence-packs` 44 passed; `typecheck` and `lint` for core and db exit 0; core-purity, money-arithmetic lints pass; `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs` passed.
 
+## 4 November 2026 — ENT-5 client approval journey on batch-15
+
+RED: customer sign-in/session authority, commercial approval and tenant isolation. Synthetic NOPR branch `codex/sandbox/ent-5-client-approval`, based on `codex/sandbox/batch-15` (`0fac585a92c88dd39d212726b913e557eb75d257`). This section supersedes the older foundation-only delivery status above for this branch; it is builder evidence, not independent acceptance or permission to land.
+
+Q10/Q12/Q13 are implemented as recorded in `docs/contracts/extra-client-approval-v1.md` and the ENT-5 plan note. A surveyor or commercial manager with a job-covering grant approves each exact `.invalid` fake-email invitation; the route creates a seven-day link and resend cancels its predecessor. The existing customer sign-in route, HMAC credentials and cookie establish a named client session. Reads, queue, exact revision/hash/net decisions and own-job history recheck that client's current membership/grant. The old Northside role-switch transport no longer authorizes client decisions. Approval and withdrawal share the existing tenant/job lock order. An exact command retry returns the stored effect; a fresh decision against a used link fails. Client session provenance is private and prevents the customer's new command from being attributed to the practice owner/switch.
+
+Migrations 0920–0924 each have a migration proof. Three companion tables preserve predecessor row shapes: sign-in binding, customer session, and command/session provenance. They have tenant-qualified foreign keys, migration ownership, FORCE RLS and no direct application/identity table grants. No fingerprinted table gains a column, no function has a `SET app.*` clause, no old rows are backfilled, and no scheduler is started. The existing command lifecycle owns receipts, exact send authorization and completion; runtime code does not regain protected write grants. Timing reads now share one SQL projection and the existing pure timing derivation, including uncertain bounds and historical preapproval breaches. That shared projection and private provenance are the necessary additional complexity.
+
+### Local evidence actually executed
+
+- Installed `tsc`: core, storage, config, AI and DB dependencies built without downloading packages. Relevant core, DB, API and web TypeScript checks passed. The `pnpm`/Turbo wrapper stalled under load and was cancelled; direct installed TypeScript runners supplied the checks.
+- API Vitest, `--maxWorkers=2`: `extra-customer.test.ts` and `customer-signin.test.ts`: **52 passed**. The new tests bind actor/tenant to the existing customer cookie, refuse absent/builder/foreign credentials and forged fields, preserve exact hash/net validation, and return typed stale conflicts. A test assertion was corrected to compare parsed JSON rather than object-key serialization order; behavior assertions remain intact.
+- API Vitest, `--maxWorkers=2`: `context-boundary.test.ts` and `identity.test.ts`: **152 passed**. `watchdog-registry.test.ts`: **126 passed** after building its installed AI dependency. The initial registry attempt could not resolve an unbuilt workspace dependency; it was rerun after that dependency build.
+- DB Vitest, `--maxWorkers=2`: `migration-proof-loader.test.ts` and `extra-approval-timing.test.ts`: **92 passed**, including the final proof set. The initial proof-loader attempt could not resolve the unbuilt core workspace dependency; it was rerun after building it.
+- Core-purity, money-arithmetic, commercial-boundary, AI-provider-boundary and PL/pgSQL CASE-in-IF lints completed without a failure. Core purity reports its existing computed-import observations; these are not new findings. `git diff --check` passed.
+- The lane CLI was run. Before its manifest existed it refused the unregistered branch. With the manifest and `LANE_BASE_REF=codex/sandbox/batch-15`, it refused a self-comparison because HEAD is still the batch-15 commit and this sandbox cannot commit. The lane lists precisely all changed paths against batch-15, excluding `config/lanes/` and itself. The router must rerun the CLI after committing this work, with batch-15 as its base. A final run using the default base also refused inherited batch-15 paths, as expected for a manifest intentionally scoped only to changes from batch-15; no inherited lane grants were added.
+
+No PostgreSQL, browser server, provider, live send or release was run here. No Git write, commit, push or PR was attempted. No independent reviewer has checked this working tree.
+
+### CI must prove
+
+Run the real required typecheck/lint/test/build gates against the resulting exact head. Run real-PostgreSQL fresh-install/upgrade, catalog/privilege/RLS/fingerprint checks and migration replay with 0920–0924 and their proofs. In particular, `extra-client-session.integration.test.ts` covers named current grants, no customer session, foreign actor/job/tenant/request, wrong hash/net, consumed/replaced/expired links and sessions, grant revocation, exact decision replay, one client fact, and approval racing withdrawal producing exactly one outcome. It also checks fake-only outbox state and zero delivery attempts. These cases are authored, **not locally executed**.
+
+Run the retained approval-chain, timing, evidence-pack, Northside and full-demo database tests after the changed sender fixtures. Run Playwright with at most two workers: `ENT-5-client-session.spec.ts` at `mobile-360` and `desktop`, the updated `ENT-11a.spec.ts` customer journey at both project widths, and `ENT-11b.spec.ts` at both explicit widths. Customers use a separate browser context and the real sign-in route. New alerts are scoped to main. Database/browser assertions are not replaced with mocks or local PASS claims. The router must arrange the independent RED review against the actual committed head before landing.
+
+### Named holds for landing
+
+1. **Protected command-registry pin:** `packages/db/test/lp5-command-catalog.ts` / `currentCommandRegistryRows` still records `IssueClientApproval` as owner-only. Migration 0921 deliberately applies Q10's contractor/grant rule; its migration proof records the exact registry-row delta. The protected pin is **not edited** in this branch, as instructed. The router must route that exact pin update before the affected upgrade/catalog suites can go green.
+2. **Protected routine/scanner acceptance:** 0921 changes only `app.xa_issue_link(uuid,uuid,uuid,uuid,uuid,uuid,text,text,timestamptz,uuid,uuid)` and `app.lp5b_contractor_permission(text,uuid,uuid,jsonb)`; 0923 changes only `app.northside_capture_action()`. Their body deltas and the five new helpers are declared in migration proofs. Any additional exact named source/catalog pin required by PostgreSQL CI must be routed at landing; no scanner or protected baseline is weakened here. There is no local database result establishing those pins pass.
+3. **Q14 and Q15 remain held:** no export/refusal-audit policy is chosen, no live executor/scheduler is activated, no real provider/customer/money is used. These holds affect those capabilities only.
+4. **Migration reservation:** 0920–0924 are the issued NOPR reservations, not a claim that the mainline migration sequence has reached them. Preserve group order and reconcile numbers/proofs at landing.
+
+LATER / SIMPLICITY (initial source inspection): `packages/db/src/extra-approval-chain-repository.ts` and `packages/db/src/commands.ts` retain separate exact-send assembly and dispatcher plumbing. A later review can consider a single typed send mutation after the customer journey is proved in CI; it would reduce duplicate action-shape maintenance. This does not block this piece and no unrelated refactor is included.
+
+READY for router NOPR handoff, subject to the named landing holds, actual PostgreSQL/browser CI and independent RED review. Not merged, released or production-enabled.
+
+
+## Batch-42 NOPR preparation — 5 November 2026
+
+READY. RED. Builder handoff only; no independent review, commit, push, PR, merge or release.
+This entry supersedes the earlier landing-pin and numbering notes for this batch. Base is local `origin/main` at `567604fdc`; local `main` is stale. No fetch was run.
+
+- Resolved `later-empty-tables.ts` as the union of both merge sides, retaining interim drafts, scheduled-readiness tables and all three client-session companion tables. The index remains unmerged because Git is read-only; the working file has no conflict markers.
+- Renamed filename stems and their references only: `0920_extra_client_session` → `0641_extra_client_session`, `0921_extra_client_send_authority` → `0642_extra_client_send_authority`, `0922_extra_customer_use` → `0643_extra_customer_use`, `0923_extra_customer_approval` → `0644_extra_customer_approval`, `0924_extra_client_timing` → `0645_extra_client_timing`. Each has its matching proof. No mainline migration was changed.
+- Updated only the current `IssueClientApproval` catalog expectation to contractor authority, retaining the original LP-5 baseline. Added exact signature-bound upgrade expectations for the three changed predecessor routines, checking the exact SQL replacements instead of omitting routine comparisons. The two migrations patch the installed latest bodies; the current audit helper seals through `app.lp4_seal_audit`.
+- Removed the three LP-0 owner entries for private companion tables: they have no non-owner grants and share the schema owner, so LP-0 does not inventory their ownership. Their RLS/policy and upgrade proof facts remain. No fingerprint guard was widened.
+- Replaced the new test's direct grant-revocation insert with the existing audited contractor command fixture. No production behavior was added or changed during batch preparation.
+- Removed both individual piece lane files; `batch-42.json` covers exactly the 45 final changed non-lane paths relative to `origin/main`, without listing itself.
+
+Executed locally, using installed binaries only, with at most two workers per run:
+
+- `node_modules/.bin/tsc -p packages/<name>/tsconfig.json` passed for core, config, storage, AI and DB; `node_modules/.bin/tsc -p apps/<name>/tsconfig.json --noEmit` passed for API and web. The global pnpm shim stalled before starting and was cancelled; no packages were downloaded. Initial API guard loading failed on unbuilt workspace packages; after compiling those dependencies, all requested suites passed.
+- API Vitest: `src/watchdog-registry.test.ts`, `src/auth/context-boundary.test.ts`, `src/auth/identity.test.ts` — 278 passed. Separate runs: `src/auth/extra-customer.test.ts` — 11 passed; `src/auth/customer-signin.test.ts` — 41 passed.
+- DB Vitest: `test/migration-proof-loader.test.ts` — 76 passed; `test/extra-approval-timing.test.ts` — 16 passed. Each invocation used `--maxWorkers=2` and no more than three named files. Total: 422 passing unit tests; no database started.
+- The exact routine-replacement parser used by the upgrade expectation found the expected three authority replacements and one attribution replacement. `git diff --check` passed.
+- `node tools/agent-lane-boundary-lint.mjs` ran and refused the old staged individual lane/migration paths, which are absent from the resolved working files but still present in the read-only index. A separate deterministic check using the linter's own policy/path and migration-order functions passed exact final working-tree coverage and migration ordering. This is not a CLI PASS: the router must stage the resolved union and renames, complete the merge, and rerun the official CLI on the resulting head.
+
+CI must prove the full required checks, real PostgreSQL fresh/upgrade/replay, privileges/RLS, LP-0 inventory, fingerprint preservation, the exact named routine upgrades, command registry and audited revocation, and the retained approval/session/timing/evidence-pack/Northside suites. CI must run ENT-5-client-session, ENT-11a and ENT-11b browser journeys at the required widths with at most two workers, plus both complete demos. No database/browser/provider/live-data results are claimed here. Independent RED review remains required against the final committed head. The DEMO-S companion remains a design document; company Final Check implementation is not claimed. Q14/Q15 and real-user activation remain outside this handoff.
+
+## Batch-42 pre-check repair — 5 November 2026
+
+READY for router handoff. RED: ENT-5 client approval/session authority. This entry supersedes the previous batch preparation base and local check status. The launcher merge targets local `origin/main` at `199124c0885ca27558fbaf62a9a74dee7ad2818f`; no fetch or Git write was performed.
+
+- `0644_extra_customer_approval.sql` stores `complete_command`'s result and fires only `SET CONSTRAINTS app.decision_check_complete IMMEDIATE` inside the definer before returning it. No `ALL`, new identity privilege, or change to the trigger's security mode.
+- The session integration fixture enables LOGIN with a synthetic password on the existing identity role, connects as that role and asserts both session/current user and absence of app-schema USAGE. All client-function calls, including refusal/replay/race paths, use that login. Two added approve/reject transactions insert an unresolved deferred FK before the call and another afterwards, repair both references, and commit. An ALL flush would fail this test inside the approval call. The committed outcome is checked separately by the admin fixture.
+- Resolved both working-file conflicts as exact unions: main's table/catalog additions plus this branch's three companion tables and the current contractor permission mapping. Main now also contains `rate.suggestion_accept`; 0642's registry proof chains from 0609's exact after-record, changing only IssueClientApproval's permission. The historical 0606 source test maps that permission back to owner and omits only its already-excluded later rate command. No existing assertion was removed.
+- Re-serialized/rechecked 0644's proof. Its catalog/ACL/static-call/static-write facts are unchanged by the named constraint flush, so its JSON is byte-identical; definition digests remain the existing null values. This is source-only proof maintenance, not PostgreSQL capture or verification. CI must corroborate the proof against real PostgreSQL.
+- Updated stale Northside route tests to use a surveyor send, the customer sign-in path, and the actual ExtraCustomerApplication with an identity-pool double. The actor-binding case refuses spoofed tester text before queries and checks the named cookie actor/tenant and exact input. The practice owner dispatcher is not used.
+- The lane manifest lists exactly all 47 changed non-lane paths against main and never lists itself. No owned migration stem already exists on main; no mainline migration was removed or edited. No unrelated refactor or additional reporting mechanism.
+
+Executed locally with installed dependencies only, no more than two workers and three named Vitest files per invocation:
+
+- DB Vitest: `test/migration-proof-loader.test.ts test/m2-1-migration-proof.test.ts test/dsar-migration-proofs.test.ts --maxWorkers=2`: **85 passed**.
+- API Vitest: `src/auth/extra-customer.test.ts --maxWorkers=2`: **11 passed**.
+- Web Vitest: `app/api/northside/routes.test.ts --maxWorkers=2`: **23 passed**. Initial loading required building the installed API workspace dependency; the first authored refusal assertion expected 403, corrected to the existing CUSTOMER_REFUSED/401 contract. Final run passed all assertions.
+- `node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit`, `... -p apps/api/tsconfig.json` (dependency build), and `... -p apps/web/tsconfig.json --noEmit`: **passed**.
+- DB `vitest list test/extra-client-session.integration.test.ts --maxWorkers=2`: discovers **five cases**, including both new deferred-constraint cases; no database started and no integration PASS claimed.
+- `git diff --check origin/main`: passed. Working files have no conflict markers. Deterministic working-tree lane coverage and the official linter's policy/path/migration-order functions passed.
+- Official lane CLI was run with `LANE_BASE_REF=origin/main`; it refused inherited main files still staged in the unfinished merge. The read-only Git index still has two unmerged entries. Router must stage the resolved working files, complete the existing merge and rerun the official CLI; this is not a lane CLI PASS.
+
+CI must prove real-PostgreSQL fresh/upgrade/replay and catalog/privilege/RLS/fingerprint gates with 0641–0645; especially all five real-login session cases, both decisions committing without 42501, exact retry, authorization refusals and the unrelated deferred checks. Retain approval-chain/timing/evidence-pack, Northside/full-demo and lifecycle-upgrade suites. Run ENT-5-client-session, ENT-11a and ENT-11b at their required phone/desktop widths (at most two workers), both complete demos, and all required typecheck/lint/test/build gates against the final head. Independent RED review must bind that head before merge. No database/browser/provider/customer/live-money/deployment result or activation is claimed. Existing Q14/Q15 holds and proposed-only Final Check design status remain.
+
+
+## Batch-42 final re-check repair — 5 November 2026
+
+READY for router NOPR handoff. RED: ENT-5 client approval/session authority; second and last repair round. This entry supersedes the previous repair's readiness and local-check notes. No Git writes, commit, push, PR, merge, deployment or activation were performed.
+
+- Migration 0644 now executes `SET CONSTRAINTS app.decision_check_complete, app.extra_event_raised_audit IMMEDIATE` inside the security-definer approval routine. Both deferred invoker checks run before returning to the real identity login. No ALL, new grants, role changes or broader constraint flushing were added to production SQL. The existing five real-login tests, including both decisions committing with unrelated deferred foreign keys, are unchanged.
+- Revalidated 0644's proof: the named-constraint change alters neither static calls/writes nor catalog owner, ACL, search path or signature. Its existing `definitionSha256: null` and all other expected catalog facts therefore remain unchanged; no artificial proof delta or relaxed expectation was introduced. The proof-loader suite passes locally; PostgreSQL inventory/upgrade proof execution remains a CI hold.
+- Added an executable `/api/customer-portal/extra-approvals` replay-contract case through `identity.extra_customer_approval`, reached with a redeemed invitation and the real `jobguard_identity` login without app schema USAGE. It asserts the original approved result on exact retries, conflicts for changed decision/net/hash, another authorized job, and another real command kind in both directions. It checks one client fact on the original request and none on the conflicting job. The route remains `watchdog_live_only`; no existing contract case or refusal assertion was weakened.
+- The separate case uses the existing complete contractor fixtures because the watchdog harness is a legacy-schema fixture. Registry coverage includes this executable case; the existing generic replay/race/duplicate cases are unchanged. No new production abstraction or configuration was added.
+- `config/lanes/batch-42.json` lists exactly all 48 changed non-lane paths relative to local `origin/main` (merge-base comparison plus working changes), excludes itself and every path under `config/lanes/`.
+
+Executed local checks (installed tools only, at most two Vitest workers and at most two named files per invocation):
+
+- From repository root: `node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit` — PASS.
+- From packages/db: `./node_modules/.bin/vitest run --maxWorkers=2 test/migration-proof-loader.test.ts test/extra-approval-timing.test.ts` — 92 tests PASS (76 proof-loader, 16 timing).
+- From packages/db: `./node_modules/.bin/vitest list --maxWorkers=2 test/command-replay-contract.integration.test.ts test/extra-client-session.integration.test.ts` — PASS, 76 tests discovered including the new client replay case and five retained real-login cases. Collection is not database execution. The first collection invocation used an incorrectly root-prefixed config path; it failed config loading, then passed when rerun from packages/db with the existing config.
+- `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs` — PASS, including migration ordering.
+- `git diff --check` and exact lane-set comparison — PASS.
+
+### Named holds for landing
+
+1. CI must execute the real PostgreSQL `extra-client-session.integration.test.ts` (all five retained cases), `command-replay-contract.integration.test.ts` (including the new client case), approval-chain and migration fresh/upgrade/catalog/privilege/RLS/fingerprint checks. Neither PostgreSQL nor localhost was started here, as required by the sandbox brief; no database PASS is claimed.
+2. Required browser journeys (ENT-5-client-session, ENT-11a, ENT-11b at phone/desktop widths), both complete demos and the remaining required CI gates must pass on the router's final pushed head. This repair did not run browser or full suites.
+3. Independent RED review must bind the final committed head before landing. Q14/Q15, real customer data, providers, money, deployment and launch remain held in their own scopes. DEMO-S company Final Check remains a design document.
+
+READY. The router commits and pushes the NOPR branch after this session; this receipt is builder evidence, not independent acceptance.
 ## ENT-5 duplicate dismissal — 4 November 2026, NOPR on batch-15
 
 READY. RED: approval authority, tenant isolation, and billing-export eligibility.
@@ -802,3 +910,291 @@ READY for router commit/push to the same branch. Full exact-head CI, PostgreSQL
 fresh/upgrade/catalogue/RLS/race suites, browser journeys and independent RED
 review remain required. No Git write, database startup, socket bind, provider,
 real customer data, release or deployment was performed.
+
+
+## Batch-42 merge refresh — 6 November 2026, incoming main 46f0be7ea
+
+READY for router staging and merge completion. Plan pieces: ENT-5 client
+approval and DEMO-S company Final Check authority design. RED: sign-in,
+commercial approval, tenant isolation and hidden-data design. Builder evidence
+only; no independent verdict, database/browser PASS or release authority.
+
+Resolved all six working-file conflicts as a union. Main's EndCheck and
+ResolveDuplicateCandidates registry rows, replay case, routine-body assertions,
+CIS/emergency/SCIM/private fixture tables and receipt sections remain. This
+group's client-session rows, sender authority and exact client replay assertions
+remain. Aliased the client fixture's cluster import to preserve both fixtures.
+The 0606 historical proof keeps its original owner authority and excludes all
+three later command types. The 0642 proof now chains from main's 0623 registry
+snapshot, adding main's two new rows to both sides and changing only this group's
+IssueClientApproval permission. No test or protected check was weakened.
+
+All five 0641–0645 migration stems are unique against incoming main; none
+needed removal. No main migration/proof was changed. Diffed all three dynamically
+re-created routines against their latest main definitions: xa_issue_link (0158),
+lp5b_contractor_permission (0522), northside_capture_action (0167). The migrations
+read the installed latest bodies; the diff contains only the existing four
+replacement fragments. Main has no later replacement or patch to these routines.
+Source-only comparison: /tmp/batch-42-merge-routine-diffs.txt.
+Lane batch-42 covers exactly all 48 changed non-lane files against MERGE_HEAD
+and excludes config/lanes/ and itself.
+
+Executed with installed Node 24.17.0 and cached pnpm 10.28.1; no downloads,
+PostgreSQL server, localhost binding, Git writes or providers:
+
+- DB Vitest --maxWorkers=2: migration-proof-loader.test.ts,
+  m2-1-migration-proof.test.ts, extra-approval-timing.test.ts: 97 PASS.
+  The initial proof run failed on the stale registry predecessor; corrected
+  the group's proof snapshot as described above and reran all three files.
+- API Vitest --maxWorkers=2: extra-customer.test.ts and customer-signin.test.ts:
+  52 PASS. watchdog-registry.test.ts: 127 PASS after rebuilding core locally.
+  Its initial run read stale core dist and failed three classification checks;
+  the unchanged source registry passed after compilation.
+- Web Vitest --maxWorkers=2: app/api/northside/routes.test.ts: 23 PASS.
+  Total successful focused cases: 299.
+- Vitest list --maxWorkers=2 collected 78 cases across
+  command-replay-contract.integration.test.ts,
+  plan-entitlement-lifecycle-upgrade.integration.test.ts and
+  extra-client-session.integration.test.ts. Collection only, not execution.
+- Core tsc build and DB/API/web tsc --noEmit: PASS.
+- Core purity, money arithmetic, commercial boundary, AI provider boundary and
+  PL/pgSQL CASE-in-IF linters: PASS (293 migrations). Core purity reports its
+  existing computed-import observations.
+- Exact working-tree lane equality, lanePathAllowed, migrationOrderViolations,
+  latest-main routine patch/diff inspection and git diff --check MERGE_HEAD: PASS.
+
+Official lane CLI was attempted and refused incoming-main staged paths because
+HEAD/index still describe the unfinished merge. This is not a CLI PASS. The
+router must stage the resolved working files, complete the merge and rerun the
+official lane check. Required exact-head CI, real PostgreSQL fresh/upgrade,
+proof/catalogue/RLS/privilege and replay/race suites, browser journeys and the
+independent RED review remain. No new behavior was introduced by this refresh.
+
+
+## Batch-42 merge refresh — 6 November 2026, incoming main 919b7f3e6
+
+READY for router staging and merge completion. ENT-5 client approval and
+DEMO-S company Final Check authority design; RED. This is builder evidence.
+
+Resolved the sole working-file conflict in later-empty-tables.ts as the union:
+main's privacy_review_fact and both supplier-line tables remain beside this
+group's three client-session tables. Existing exact registry and routine-body
+assertions retain both groups' behavior. No test was weakened or behavior added.
+
+All main migrations are byte-identical. The five unique group migrations
+0641–0645 remain; none duplicates a main migration. Scanned main's full ordered
+migration inventory for the three dynamically recreated routines. Latest bodies:
+xa_issue_link (0158), lp5b_contractor_permission (0522), northside_capture_action
+(0167). Each replacement fragment matched exactly once; source diffs contain
+only the group's existing four substitutions. The installed-body recreation
+therefore retains every main addition. Source-only evidence:
+/tmp/batch-42-merge-routine-diffs.txt.
+
+Local checks using installed Node 24.17.0 and cached pnpm 10.28.1, no downloads:
+- DB Vitest --maxWorkers=2, migration-proof-loader, m2-1-migration-proof,
+  extra-approval-timing: 97 passed.
+- DB Vitest --maxWorkers=2, late-source-import-migration and
+  supplier-line-migration-proofs: 5 passed.
+- API Vitest --maxWorkers=2, extra-customer and customer-signin: 52 passed.
+- Web Vitest --maxWorkers=2, northside/routes: 23 passed.
+- pnpm typecheck --concurrency=2: all seven packages passed, 25.494s.
+  Turbo emitted restricted cache IO warnings; no typecheck failed.
+- Core purity, money arithmetic, commercial boundary, AI provider boundary,
+  PL/pgSQL CASE-in-IF lint passed (300 migrations). Core purity reported its
+  existing computed-import observations.
+- Exact lane equality and lanePathAllowed: 51 changed non-lane paths;
+  config/lanes/ and the lane itself excluded. Migration ordering passed.
+
+The read-only index still records the original conflict. Router must stage the
+working-file resolution and complete its existing merge, then run official lane
+validation on the resulting head. Required exact-head CI, real PostgreSQL
+fresh/upgrade/catalogue/RLS/replay/race suites, affected browser journeys and
+independent RED review remain outstanding. No Git writes, PostgreSQL startup,
+localhost binding, provider, real customer data, money, deployment or launch.
+
+- Vitest list collected 78 cases across command-replay-contract,
+  plan-entitlement-lifecycle-upgrade and extra-client-session integration.
+  Collection only; no database hooks executed. Final working-file conflict
+  scan, exact lane equality and git diff --check MERGE_HEAD passed.
+
+## Batch-42 PR-opening preparation — 6 November 2026, base 7d192e5a8
+
+READY for router staging, commit, push and PR opening; ENT-5 client approval and
+DEMO-S company Final Check authority design, RED, fictional data only. The
+incoming merge was already committed (b5d4dd816); no Git writes were performed.
+This is builder evidence, not an independent review or a release approval.
+
+Migration inventory against origin/main (top 0633):
+- 0641_extra_client_session.sql (formerly 1040): three private session tables and xc_bind_link.
+- 0642_extra_client_send_authority.sql (formerly 1041): xc_send_authority, exact registry permission change and two existing-routine patches.
+- 0643_extra_customer_use.sql (formerly 1042): identity.extra_customer_use.
+- 0644_extra_customer_approval.sql (formerly 1043): identity.extra_customer_approval and the existing practice-attribution patch.
+- 0645_extra_client_timing.sql (formerly 1044): xc_timing.
+
+All five migrations are unique against main; no repeated table or routine
+creation was found. SQL bytes are identical to their pre-renumber branch files.
+Only filename stems, proof migration names and references were renumbered;
+0634–0638 remain reserved for #591 and 0639–0640 for #593. The source-only audit
+at /tmp/batch-42-migration-audit.txt compares every recreated routine against its
+latest main definition: xa_issue_link (0158), lp5b_contractor_permission (0522),
+and northside_capture_action (0167). Each of the four existing substitutions
+matches once; no mainline body addition is removed. No new product behavior,
+worker, provider route, CI image, permission or function setting was introduced.
+
+MIGFIX-6 and MIGFIX-7 now expect the explicit empty successor tables and current
+registry rows when replaying through this group. MIGFIX-7 retains raw predecessor
+catalogue/policy identities and compares all relation, policy and routine metadata
+through the existing reviewed proof loader. It pins the full bodies of every new
+routine, including MON-6's existing read, and applies only the exact three named
+routine patches. The enterprise-access allowance remains conditional on the
+plan-entitlement test's exact body assertions. The three new private tables also
+join watchdog's mutation-count and RLS/owner catalogue checks; existing direct
+watchdog insert cases remain unchanged.
+
+Both commercial-integrity baselines needed the same one-site fingerprint refresh
+at extra-approval-chain-repository.ts:94. Only that fingerprint changed in each
+file; the existing reason and nine-site baseline count remain intact. Both
+scanners now report 94 roots and zero diagnostics. The lane lists every resulting
+changed non-lane file, excludes itself, and uses only 0641–0645 paths.
+
+Local verification with installed Node 24.17.0 and cached pnpm 10.28.1:
+- DB Vitest run --maxWorkers=2: migration-proof-loader, m2-1-migration-proof,
+  extra-approval-timing: 97 passed.
+- DB Vitest run --maxWorkers=2: late-source-import-migration,
+  supplier-line-migration-proofs: 5 passed.
+- API Vitest run --maxWorkers=2: extra-customer, customer-signin: 52 passed.
+- Web Vitest run --maxWorkers=2: app/api/northside/routes: 23 passed.
+- Total executed focused cases: 177; no database hooks were executed.
+- DB tsc --noEmit, plus direct installed TypeScript checks for API and web: PASS.
+- Vitest list --maxWorkers=2 collected MIGFIX-6, MIGFIX-7 and client-session
+  integration tests; separately collected command-replay-contract,
+  plan-entitlement-lifecycle-upgrade and watchdog. Collection is not execution.
+- Core purity, money arithmetic, commercial adapter boundary, AI provider
+  boundary, PL/pgSQL CASE-in-IF lint (303 migrations), both commercial-integrity
+  guards and provider-register check passed. No provider data-flow source changed.
+- Changed web routes were source-inspected: workspace API exports are used,
+  with no imports of apps/api source. Cloudflare build was not run here.
+- Working-tree exact lane equality, lanePathAllowed and migration ordering:
+  PASS, 56 changed non-lane paths. git diff --check: PASS.
+
+The official lane CLI was run and refused only the ten old migration/proof paths
+still present in the read-only pre-renumber index/HEAD. Its result is not a PASS;
+the router must stage the renames, commit, and rerun it on the resulting head.
+The top-level pnpm typecheck --concurrency=2 failed in its child pnpm launcher
+before compilation: registry signature/version-switch fetch was unavailable.
+No package was downloaded and no package-manager policy was changed. Direct
+compiler checks are recorded separately rather than claiming that command passed.
+
+CI must prove the clean pinned install and required typecheck/lint/test/build,
+real PostgreSQL fresh/upgrade/proof/catalogue/ACL/RLS/replay/race suites, specifically
+MIGFIX-6/7, plan-entitlement and enterprise-access upgrades, restore reconciliation,
+watchdog, command replay and client-session approval/rejection commits. Preserve
+all existing approval-chain/timing/evidence-pack and Northside/full-demo gates.
+Run affected browser journeys, both complete demos and required phone/desktop
+widths with at most two workers. Independent RED review must bind the final head
+before merge. Q14/Q15 and proposed-only company Final Check authority holds remain;
+no database/browser/provider/customer/live-money/deployment or launch proof is claimed.
+
+Direct installed TypeScript checks for config, storage, core and AI also passed.
+Together with DB, API and web, all seven package compiler checks passed; this
+does not change the recorded failure of the top-level pnpm launcher command.
+
+## Batch-42 CI repair try 1 — 6 November 2026, PR #594 at 1c515e3e
+
+READY for router commit and push. ENT-5 client approval and DEMO-S company
+Final Check authority design; RED. Builder evidence, synthetic data only.
+
+Read every failed job in CI run 42175030809 through the GitHub connector after
+`gh` could not reach api.github.com. Inspected shard 5's Playwright artifact
+13483279074, including the customer page network trace. Root causes:
+
+- All four core-db shards: the common outbox claim query referenced
+  extra_client_link and xc_send_authority even for unrelated sends. Historical
+  upgrade fixtures intentionally precede one or both objects; PostgreSQL resolves
+  unused OR branches too. Moved the same scoped sender check to a separate query
+  only for the locked client-send action, before claims, attempts or delivery.
+  Current membership, revocation, exact authorization and entitlement checks stay.
+  False, missing or failed sender authority never calls the adapter.
+- Money-trail, financial-reconciliation-queue and recovery-billability successor
+  proofs expected IssueClientApproval's old owner permission after 0642. Their
+  own-step preservation checks remain byte-exact. A cloned successor expectation
+  asserts the old permission is owner, then requires contractor for exactly that
+  row; every other original column, row and type remains compared unchanged.
+- Web shards 2 and 5: ENT-11a and ENT-11b reached the new client page but the API
+  returned 401 UNAUTHENTICATED from proxy.ts. The customer-cookie allowlist omitted
+  extra-approvals. Added only that exact endpoint; route session/origin/grant
+  checks remain. Tests also refuse trailing slash, child and uppercase variants.
+- core, web and checks failed because their prerequisite shards failed. Their
+  logs show no separate root cause. core-checks and Cloudflare bundle passed on
+  the original exact head; these are historical CI results, not repaired-head proof.
+
+Local verification using installed Node 24.17.0 and cached pnpm 10.28.1:
+- DB Vitest run --maxWorkers=2 src/outbox.test.ts src/later-outbox.test.ts:
+  27 passed; includes sender refusal/error and unrelated-send regressions.
+- Web Vitest run --maxWorkers=2 proxy.test.ts app/api/northside/routes.test.ts:
+  67 passed, including the exact customer route boundary.
+- API Vitest run --maxWorkers=2 src/auth/extra-customer.test.ts
+  src/auth/customer-signin.test.ts: 52 passed. Total: 146 executed focused tests.
+- Direct installed TypeScript compiler --noEmit for DB and web: passed.
+- Vitest list --maxWorkers=2 collected all three changed upgrade cases; collection
+  only, no PostgreSQL execution or hooks.
+- Official lane boundary and commercial boundary lint passed. Both commercial
+  integrity guards passed: 94 protected roots, zero diagnostics, existing nine
+  unresolved baselines unchanged. git diff --check passed.
+
+No migrations were edited or renumbered; all main migrations remain unchanged.
+The lane includes the six additional repair paths. No tests were skipped or
+weakened, and no product policy or behavior was added. No Git writes, package
+downloads, PostgreSQL startup, localhost bind, provider, real data or deployment.
+CI must rerun all database and browser shards after the router pushes. Required
+independent RED review must bind the resulting exact head before merge. Existing
+commercial/release holds remain unchanged.
+
+### 6 November 2026: PR #594 catch-up after #591/#593
+
+Resolved working-tree conflicts against main 41938db76, retaining both sets of
+ENT-5 rulings, exports, timing/proceed behavior, registry entries, empty-table
+allowances and watchdog mutation checks. MIGFIX-7 keeps #591's exact full-body
+replacements, followed by this group's exact 0642/0644 text patches; metadata,
+ACLs, policies and unrelated definitions remain pinned. MIGFIX-6/7's shared
+laterEmptyTables includes both connector_promotion and extra_proceed_statement.
+Plan-entitlement likewise checks the 0636 permission body before the 0642 patch.
+
+Applied pr594-5f10df49-fix.diff exactly: the SV-8 stand-in grants the separate
+sender query, and payment-fee-standing-authority retains the narrow cloned
+successor proof. No assertions changed in SV-8. Refreshed only the merged source's
+line-94 fingerprint in both integrity baselines; reasons remain unchanged.
+
+The proof-loader run exposed 0642's stale pre-0634 registry snapshot. Its before
+and after now both retain the exact RecordExtraProceed row; the sole transition
+remains IssueClientApproval owner to contractor. The new proceed migration test
+also needed its current-registry comparison bound to its historical 0634 owner
+permission. Its existing exact insertion and predecessor assertions remain.
+No migration SQL was changed or renumbered: all main migration bytes and this
+branch's 0641-0645 bytes were compared and are unchanged. No new product behavior.
+
+Local verification (installed Node 24.17.0 and repository Vitest 4.1.12):
+- Outbox and later-outbox: 27/27 passed; production-settlement-guard: 60/60.
+- Migration-proof-loader, m2-1-migration-proof and extra-approval-timing:
+  98/98 passed after correcting the successor proof chain.
+- Late-source-import and supplier-line migration proofs: 5/5 passed.
+- Extra-proceed migration tests: 2/2 passed after the historical binding fix.
+- Total: 192 focused tests passed, at most two workers and three files per run.
+- The 22 targeted upgrade/predecessor files and all nine changed upgrade files
+  collected successfully in batches of at most three; no database hooks ran.
+  Collection logs: /tmp/batch42-upgrade-collection.log and
+  /tmp/batch42-changed-upgrade-collection.log. Collection is not execution.
+- DB, API and web TypeScript --noEmit passed. Both commercial-integrity guards
+  passed: 94 protected roots, zero diagnostics, nine existing baselines each.
+- Working-tree delta lane coverage and migration order passed using the existing
+  lane checker functions. The lane contains every non-lane delta against main,
+  and no config/lanes path. Official lane CLI must rerun after the router stages
+  the completed merge: its local mode still counts incoming main changes in the
+  read-only, unmerged index as this branch's edits. It was not reported as PASS.
+- git diff --check passed; no conflict markers remain in working-tree files.
+
+READY for router staging, merge completion, commit and push to the same branch.
+No Git-writing commands, package downloads, PostgreSQL startup or localhost binds
+were used. Real PostgreSQL upgrade/outbox suites and browser journeys require CI
+after push; independent RED review must bind the resulting exact head. Existing
+commercial, real-data and release holds remain unchanged.
