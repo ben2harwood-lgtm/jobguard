@@ -7,12 +7,12 @@ malformed-proof fix. Router must stage resolutions and complete the merge;
 
 Migration comparison against main:
 - 0790 was byte-identical to main's 0651; removed its SQL, note and proof.
-- 0799 was renumbered by stem to 0657, after reserved 0655/0656.
+- 0799 was renumbered by stem to 0656, for number-order landing.
 - All 319 main migrations remain byte-identical. Main's latest three-argument
-  replace_fee_reservation_book body is 0651. The complete 0657 definition differs
+  replace_fee_reservation_book body is 0651. The complete 0656 definition differs
   only in its comment and the two reviewed invalid_text_representation handlers.
 - No new table, grant, routine identity, owner, RLS policy or SET app.* clause.
-- migfix-7 and plan-entitlement pin the complete 0657 body; predecessor regression
+- migfix-7 and plan-entitlement pin the complete 0656 body; predecessor regression
   reads main's 0651. All existing attack assertions remain intact.
 - Both conflicted files retain main's content; archive-upgrade now equals main.
   The lane lists exactly seven changed paths outside config/lanes and excludes itself.
@@ -50,7 +50,7 @@ ancestry instructions.
 
 # LATER-SAFETY-28 — RED malformed synthetic fee proofs
 
-0657 recreates the latest three-argument app.replace_fee_reservation_book body from 0651. The only body changes wrap each v_payload::jsonb cast in an invalid_text_representation handler and raise SQLSTATE 23514 with the existing path-specific refusal: authenticated fee result required, or authenticated fee event required. All other checks, signatures, grants, owners, RLS, table shapes and stored data remain identical. The explicit lp0, upgrade and tenancy proof sections are empty because no tracked catalog attributes or rows change. A source comparison verified exact predecessor-body preservation outside those two exception blocks.
+0656 recreates the latest three-argument app.replace_fee_reservation_book body from 0651. The only body changes wrap each v_payload::jsonb cast in an invalid_text_representation handler and raise SQLSTATE 23514 with the existing path-specific refusal: authenticated fee result required, or authenticated fee event required. All other checks, signatures, grants, owners, RLS, table shapes and stored data remain identical. The explicit lp0, upgrade and tenancy proof sections are empty because no tracked catalog attributes or rows change. A source comparison verified exact predecessor-body preservation outside those two exception blocks.
 
 The second reported fault is already fixed in the supplied later-safety-14 tip (154842328a6aee22baf2e90a936bd318deec28e6). The complete forged-release-history test already gives all four attacks their own withTenant transaction and exact 23514/42501 assertion, preserving its unchanged-history, blocked-second-collection and zero-release-audit checks. It is left unchanged by this piece. Removing any attack refusal permits that attack's own rejects assertion to fail; a later aborted-transaction error cannot satisfy the expected code.
 
@@ -70,7 +70,7 @@ Initial local test collection needed dependency builds. The first executed new b
 
 Named holds for landing:
 - The final environment instructions forbid Git writes. Instead of the requested Git merge, the dependency delta from its merge base was applied with patch, preserving current-main changes and leaving Git metadata untouched. The router must reconcile/record the actual ancestry before committing; inherited files belong to #579/later-safety-14, not this piece. No fetch, commit, push or PR was performed here.
-- Land/catch up after #579 and later-safety-14. Recheck that 0651 remains the latest routine body; renumber 0657 at landing by full filename stem only, keeping it later than the predecessor. Update the predecessor filename reference in the new regression if that stem is renumbered.
+- Land/catch up after #579 and later-safety-14. Recheck that 0651 remains the latest routine body; renumber 0656 at landing by full filename stem only, keeping it later than the predecessor. Update the predecessor filename reference in the new regression if that stem is renumbered.
 - The official lane checker refused its uncommitted/self-comparison range. Run it against the proper committed stacked base after the router records ancestry. No scanner, pin or allowance changes were made.
 - CI must run the real PostgreSQL fee-reservation and unchanged archive-upgrade suites, fresh/upgrade migration and catalog/privilege/RLS checks, and all required checks. CI must demonstrate both predecessor 22P02 reproductions and post-migration 23514 refusals with unchanged history. Independent RED review at the exact final head and green CI remain required before merge.
 

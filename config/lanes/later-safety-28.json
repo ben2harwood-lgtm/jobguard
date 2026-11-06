@@ -7,11 +7,11 @@
       ],
       "allow": [
         "apps/api/src/fee-collection/postgres-reservation-store.test.ts",
-        "packages/db/migration-notes/0657_fee_result_malformed_proof.md",
-        "packages/db/migrations/0657_fee_result_malformed_proof.sql",
+        "packages/db/migration-notes/0656_fee_result_malformed_proof.md",
+        "packages/db/migrations/0656_fee_result_malformed_proof.sql",
         "packages/db/test/fee-reservation.integration.test.ts",
         "packages/db/test/migfix-7-upgrade.integration.test.ts",
-        "packages/db/test/migration-proofs/0657_fee_result_malformed_proof.proof.json",
+        "packages/db/test/migration-proofs/0656_fee_result_malformed_proof.proof.json",
         "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts"
       ]
     }

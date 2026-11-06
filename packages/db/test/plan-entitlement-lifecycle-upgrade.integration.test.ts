@@ -31,8 +31,8 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   // Successor migrations have their own exact reviewed routine ACL additions.
   // Keep the 0556-only assertion above, and retain every predecessor definition.
   const live = await catalogue();
-  // 0657 replaces only this exact overload; pin its entire body, including all predecessor guards.
-  const feeResult = await readFile(new URL("../migrations/0657_fee_result_malformed_proof.sql", import.meta.url), "utf8");
+  // 0656 replaces only this exact overload; pin its entire body, including all predecessor guards.
+  const feeResult = await readFile(new URL("../migrations/0656_fee_result_malformed_proof.sql", import.meta.url), "utf8");
   const feeResultBody = feeResult.split("CREATE OR REPLACE FUNCTION app.replace_fee_reservation_book")[1]!.split("AS $$")[1]!.split("$$;")[0];
   expect(live.filter(row => row.nspname === "app" && row.proname === "replace_fee_reservation_book"
     && row.args === "p_tenant uuid, p_book jsonb, p_result jsonb")).toHaveLength(1);
