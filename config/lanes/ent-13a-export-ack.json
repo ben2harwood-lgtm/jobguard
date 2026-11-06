@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-13a-export-ack": {
+      "branches": [
+        "codex/sandbox/ent-13a-export-ack"
+      ],
+      "note": "ENT-13A-EXPORT-ACK RED synthetic inbound export acknowledgement staging only; NOPR.",
+      "allow": [
+        "packages/db/migrations/0862_connector_export_delivery_staging.sql",
+        "packages/db/test/connector-export-delivery-staging.integration.test.ts",
+        "packages/db/test/migration-proofs/0862_connector_export_delivery_staging.proof.json",
+        "apps/api/src/connectors/inbound.ts",
+        "apps/api/src/connectors/inbound.test.ts",
+        "apps/api/src/connectors/conformance-kit.ts",
+        "apps/api/src/connectors/conformance-kit.test.ts",
+        "docs/contracts/connector-export-delivery-v1.md",
+        "apps/api/src/connectors/machine.ts",
+        "apps/api/src/connectors/machine.test.ts"
+      ]
+    }
+  }
+}
