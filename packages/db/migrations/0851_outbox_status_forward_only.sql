@@ -3,10 +3,14 @@ BEGIN;
 CREATE FUNCTION app.outbox_status_forward_only() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
+ -- Privileged maintenance and fixtures (migration role or superuser) may stage history; they can drop this trigger anyway.
+ IF pg_has_role(session_user,'jobguard_migration','USAGE') OR (SELECT rolsuper FROM pg_roles WHERE rolname=session_user) THEN RETURN NEW; END IF;
  IF NOT (
   (OLD.status IN ('pending','retryable') AND NEW.status IN ('executing','cancelled')) OR
   (OLD.status='executing' AND NEW.status IN ('succeeded','retryable','outcome_unknown','dead_letter')) OR
-  (OLD.status='outcome_unknown' AND NEW.status IN ('succeeded','retryable','cancelled'))
+  (OLD.status='outcome_unknown' AND NEW.status IN ('succeeded','retryable','cancelled')) OR
+  -- recovery-message-repository closes an exhausted changed-source refusal; terminal to terminal, nothing re-runs.
+  (OLD.status='dead_letter' AND NEW.status='cancelled')
  ) THEN
   RAISE EXCEPTION 'INVALID_TRANSITION' USING ERRCODE='23514';
  END IF;

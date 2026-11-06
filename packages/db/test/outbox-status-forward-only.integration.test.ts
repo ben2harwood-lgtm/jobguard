@@ -154,12 +154,13 @@ describe("LATER-SAFETY-125 outbox status transitions", () => {
     expect(await snapshot(action.id)).toEqual(before);
   });
 
-  it("rejects every unlisted edge and permits only existing nonterminal edges and no-ops", async () => {
+  it("rejects every unlisted edge and permits only existing edges and no-ops", async () => {
     const states = ["pending", "executing", "succeeded", "retryable", "outcome_unknown", "dead_letter", "cancelled"];
     const allowed: Record<string, string[]> = {
       pending: ["executing", "cancelled"], retryable: ["executing", "cancelled"],
       executing: ["succeeded", "retryable", "outcome_unknown", "dead_letter"],
       outcome_unknown: ["succeeded", "retryable", "cancelled"],
+      dead_letter: ["cancelled"],
     };
     for (const from of states) for (const to of states) {
       const id = await appendAction();

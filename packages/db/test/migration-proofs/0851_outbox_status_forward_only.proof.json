@@ -1,6 +1,22 @@
 {
   "migration": "0851_outbox_status_forward_only.sql",
   "lp0": [],
-  "upgrade": [],
+  "upgrade": [
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "outbox_status_forward_only",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    }
+  ],
   "tenancy": []
 }
