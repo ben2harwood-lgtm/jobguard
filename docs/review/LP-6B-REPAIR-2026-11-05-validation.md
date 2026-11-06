@@ -326,3 +326,44 @@ resolution restoring outdated duplicate-loading markup; final runs above pass.
 No database, browser, provider, live money or real customer-data run was attempted.
 CI must prove database/migration/browser suites and clean pinned full checks;
 the required independent RED checks still bind to the router's final exact head.
+
+
+## Check B test-only finish — READY for router, 6 November 2026
+
+Starting HEAD c25e702d0; incoming origin/main
+bd6815a55648687583a1d97f0a4b808f43f8cae1 (#597) retained. Applied the exact
+precheck lp6b-583-c25e702d-fix.diff, verified by reverse dry-run. No assertion or
+product change: the bank SQL double answers binding queries and the other-company
+principal carries its sessionCredential; both WORM executor calls use queued-job
+context. The sole conflict in migfix-7-upgrade.integration.test.ts is resolved as
+an exact both-parent union, including the LP-6b helper and incoming demo link.
+The exact two-site constructor allowance remains unchanged from c25e702d0.
+
+Fresh checks, installed binaries only, at most two workers and three named Vitest
+files per invocation:
+- API: vitest run --maxWorkers=2 src/practice-bank.application.test.ts
+  src/auth/context-boundary.test.ts src/retention-review-task.test.ts: 167 passed
+  (/tmp/lp6b-finish-api.log).
+- DB unit/protocol: vitest run --maxWorkers=2 test/lp6b-caller-compatibility.test.ts
+  test/upgrade-proof-utils.test.ts test/lp6b-withtenant.test.ts: 26 passed
+  (/tmp/lp6b-finish-db-unit.log). No PostgreSQL claim.
+- node --test --test-concurrency=2 tools/*.test.mjs: 423 passed, zero failures,
+  skips or todo (/tmp/lp6b-finish-tools.log).
+- Installed tsc -p <workspace>/tsconfig.json --noEmit: all seven workspaces pass;
+  these are also their package lint commands (/tmp/lp6b-finish-tsc.log).
+  The attempted turbo typecheck/lint wrapper stalled before completing any task
+  and was interrupted; no wrapper PASS is claimed.
+- node tools/lint.mjs: exits 1 at the lane check because the unrecorded merge
+  index counts incoming #597 paths, including its lane, as this branch's edits.
+  Core purity, money arithmetic, commercial boundary, AI provider boundary and
+  PL/pgSQL lint each pass individually (/tmp/lp6b-finish-lint.log).
+- Exact lane coverage against origin/main: 164 non-lane paths, no config/lanes
+  paths. Both-parent conflict-block preservation and git diff --check pass.
+
+The GitHub comment fetch failed connecting to api.github.com; the user-specified
+local checker diff was available and applied exactly. No downloads, Git index/ref
+writes, database server, browser, provider or real data were used. The router must
+stage the resolved file and finish the pending merge, commit, rerun stock lint,
+and push for clean pinned CI including PostgreSQL/migration/browser/build checks
+and exact-head independent RED review. READY is a router commit/CI handoff only,
+not merge acceptance. Commit message: /tmp/lp-6b-repair-wip-20261106T121454Z-commit-msg.txt.

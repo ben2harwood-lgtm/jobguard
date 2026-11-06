@@ -88,7 +88,11 @@ it("keeps production dark and redacts arbitrary exceptions", async () => {
 function linkedFixture(role = "owner") {
   const s = fixture(); let status = "linked";
   const operations: string[] = [];
+  let bound: unknown;
   const client = { release: vi.fn(), query: vi.fn(async (sql: string, values: unknown[] = []) => {
+    // LP-6b binds every session-bearing request; answer the bind check for the bound tenant's owner.
+    if (sql.startsWith("SELECT app.bind_request")) { bound = values[2]; return { rows: [] }; }
+    if (sql.includes("app.current_actor()")) return { rows: [{ actor: bound, tenant: bound }] };
     if (sql.includes("ais_movement_read")) return { rows: [{ result: { version: "ais-practice-view.v1", connection: values[0] === tenant ? { connectionId, status } : null, movements: [] } }] };
     if (!sql.includes("app.dark_ais")) return { rows: [] };
     if (values[0] !== tenant || values[2] !== connectionId) throw new Error("AIS_NOT_FOUND");
@@ -128,7 +132,7 @@ it("repository authority rejects a wrong role or another connection before token
 
 it("passes another company's verified session to its own empty view and cannot stop this connection", async () => {
   const s = linkedFixture(), other = "00000000-0000-4000-8000-000000000003";
-  s.identity.provider.authenticate.mockResolvedValue({ identityUserId: other, sessionId: other, csrfToken: credentials.csrfToken });
+  s.identity.provider.authenticate.mockResolvedValue(Object.defineProperty({ identityUserId: other, sessionId: other, csrfToken: credentials.csrfToken }, "sessionCredential", { value: "b".repeat(64), enumerable: false }));
   s.identity.provider.findMembership.mockResolvedValue({ id: other, tenantId: other, identityUserId: other, role: "owner", email: "other@company.invalid" });
   const request = { ...credentials, sessionToken: "o".repeat(32), tenantHeader: other };
   expect(await s.app.read(request)).toEqual({ version: "ais-practice-view.v1", connection: null, movements: [], credentialsUnavailable: false });
