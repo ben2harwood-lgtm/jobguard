@@ -275,3 +275,34 @@ and green CI remain required before merge. Earlier independent precheck evidence
 applies only to the heads it names. No live data, providers, deployment or launch.
 The previously omitted reservation transaction item stays omitted. No whole plan
 piece is claimed finished; the initial LATER / SIMPLICITY note remains advisory.
+
+## PR #585 core catch-up (6 November 2026)
+
+RED: session/authority error boundary. Reproduced the office-signals regression:
+12 tests passed and the revoked-session assertion failed across the two prompt
+repository suites. The group's shared failure mapper matched UNAUTHENTICATED by
+message alone, masking the contractor session bridge's typed refusal. Restrict
+that new mapping to PostgreSQL SQLSTATE 42501 so database lp_authority refusals
+still become EXTRA_FORBIDDEN while session errors propagate unchanged. No tests,
+SQL, policy pins, interfaces or other group behavior were changed.
+
+Local deterministic validation, using installed binaries in packages/db:
+- ./node_modules/.bin/vitest run --maxWorkers=2
+  src/enterprise-office-signals.test.ts
+  src/enterprise-live-prompt-repository.test.ts: 13 passed.
+- ./node_modules/.bin/vitest run --maxWorkers=2
+  test/contractor-session-context.test.ts: 17 passed.
+- ./node_modules/.bin/vitest run --maxWorkers=2
+  test/enterprise-access-upgrade.integration.test.ts
+  test/scheduled-readiness-hardening.integration.test.ts -t
+  'ACL comparison|policy comparison|declares missing-context-safe': 3 passed;
+  4 PostgreSQL tests excluded. The 0629 two-policy pin is unchanged.
+- ./node_modules/.bin/tsc -p tsconfig.json --noEmit: passed.
+- Read-only comparison against origin/main: existing lane allow-list exactly
+  matches all 69 changed paths outside config/lanes/ and does not list itself.
+- git diff --check: passed.
+
+READY for router commit/push to the same branch. No Git-writing command,
+PostgreSQL server, browser, download or provider was used. GitHub CI must run the
+real database/browser gates; exact-head independent RED review remains required.
+This is a catch-up, not another repair round or a completion claim for the group.

@@ -13,7 +13,7 @@ const pageSchema = z.object({items:z.array(itemSchema),nextCursor:z.guid({ error
 function failure(error:unknown):never {
  if(error instanceof EnterpriseLivePromptPersistenceError)throw error;
  const message=(error as {message?:string}).message;
- if (["FORBIDDEN", "UNAUTHENTICATED"].includes(message ?? "")) throw new EnterpriseLivePromptPersistenceError("EXTRA_FORBIDDEN");
+ if ((error as {code?:string}).code === "42501" && ["FORBIDDEN", "UNAUTHENTICATED"].includes(message ?? "")) throw new EnterpriseLivePromptPersistenceError("EXTRA_FORBIDDEN");
  const codes=["INVALID_PROMPT_COMMAND","EXTRA_FORBIDDEN","JOB_NOT_LIVE","PROMPT_CONFLICT","PROMPT_ORIGIN_HELD","PROMPT_SOURCE_INVALID","PROMPT_AMBIGUOUS","PROMPT_END_CHECK_HELD","PROMPT_PRACTICE_ONLY"] as const;
  const code=codes.find(c=>c===message);if(code)throw new EnterpriseLivePromptPersistenceError(code);
  if(message==="MODE_FORBIDDEN")throw new EnterpriseLivePromptPersistenceError("PROMPT_PRACTICE_ONLY");
