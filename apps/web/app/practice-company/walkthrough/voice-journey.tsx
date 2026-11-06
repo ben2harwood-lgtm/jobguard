@@ -9,6 +9,7 @@ import { Walkthrough, type WalkthroughStep } from "../../ui/walkthrough/walkthro
 import { recoverCapture } from "../../demo-s/journey-launch";
 import { core1000Source } from "../../demo-s/core-1000/journey-model";
 import styles from "./voice-journey.module.css";
+import { rememberWalkJob, resumeWalkthrough } from "./resume";
 import { click, fill, reviewAndPrice, screen, text, until } from "./screen-actions";
 
 export const stages = [
@@ -26,6 +27,7 @@ export const stages = [
 export function VoiceJourney() {
   const [tenantId, setTenantId] = useState(""), [capture, setCapture] = useState<ReviewCaptureResult | null>(null);
   const [screenVersion, setScreenVersion] = useState(0);
+  const [resumeIndex, setResumeIndex] = useState(0);
   const [prepared, setPrepared] = useState(""), [report, setReport] = useState(false), [tour, setTour] = useState(true);
   const [error, setError] = useState(""), [preparing, setPreparing] = useState(false);
   const current = useRef({ capture, prepared, report }); current.current = { capture, prepared, report };
@@ -38,6 +40,14 @@ export function VoiceJourney() {
       const response = await fetch("/api/session", { cache: "no-store" });
       if (!response.ok) throw new Error("The practice session could not load.");
       const session = sessionResponseV1.parse(await response.json());
+      const saved = await resumeWalkthrough(new URLSearchParams(location.search));
+      setCapture(saved.capture); setPrepared(saved.prepared); setResumeIndex(saved.index);
+      ownPriced.current = saved.index >= 2;
+      if (saved.prepared) {
+        const url = new URL(location.href);
+        url.hash = saved.index >= 6 ? "final-account-title" : "quote";
+        history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+      }
       setTenantId(session.tenants[0]!.id);
     })().catch(reason => setError((reason as Error).message));
   }, []);
@@ -49,7 +59,9 @@ export function VoiceJourney() {
       const key = `walk-3.prepared:${tenantId}:${current.current.capture?.jobId}`;
       let id = sessionStorage.getItem(key);
       if (!id) { id = crypto.randomUUID(); sessionStorage.setItem(key, id); }
-      setPrepared(await recoverCapture(id, core1000Source));
+      const jobId = await recoverCapture(id, core1000Source);
+      rememberWalkJob("walkExample", jobId);
+      setPrepared(jobId);
     } catch (reason) { setError((reason as Error).message); }
     finally { preparingRef.current = false; setPreparing(false); }
   }
@@ -72,7 +84,13 @@ export function VoiceJourney() {
       },
       async (_, signal) => {
         const input = screen().querySelector<HTMLInputElement>('.review-line input[aria-label^="Description "]');
-        if (!input) throw new Error("Check the captured lines first.");
+        if (!input) {
+          if (screen().querySelector(".confirmed-scope")) await click("Price the work", signal);
+          await until(() => screen().querySelector(".quote-editor")?.getAttribute("data-quote-ready") === "true", signal);
+          await click("Save draft revision", signal);
+          await until(() => Number(text("quote-revision")) > 0, signal);
+          return;
+        }
         await fill(`[aria-label=${JSON.stringify(input.getAttribute("aria-label"))}]`, `${input.value} carefully`);
         await reviewAndPrice(signal);
       },
@@ -93,7 +111,12 @@ export function VoiceJourney() {
         await click("Continue fake worker", signal);
       },
       async (_, signal) => { await click("Record practice acceptance", signal); await click("Start this practice job", signal); },
-      async (_, signal) => { await click("Attach generated practice image", signal); await click("Check file integrity", signal); await click("Complete this stage", signal); },
+      async (_, signal) => {
+        await until(() => !!text("proof-state"), signal);
+        if (text("proof-state") === "Not attached") await click("Attach generated practice image", signal);
+        if (text("proof-state") === "Uploading") await click("Check file integrity", signal);
+        await click("Complete this stage", signal);
+      },
       async (_, signal) => {
         if (!screen().querySelector(".variation-list article")) {
           await fill('.variation-entry input:not([aria-label])', "Extra preparation");
@@ -103,16 +126,20 @@ export function VoiceJourney() {
         await click("Approve exact revision", signal);
       },
       async (_, signal) => {
+        await until(() => [...screen().querySelectorAll("button")].some(button => ["Build final account", "Rebuild from approved sources"].includes(button.textContent ?? "")), signal);
         if (!text("final-gross")) await click("Build final account", signal);
-        const selects = [...screen().querySelectorAll<HTMLSelectElement>('select[aria-label^="Disposition "]')];
-        await until(() => screen().querySelectorAll('select[aria-label^="Disposition "]').length > 0, signal);
-        for (const select of (selects.length ? selects : screen().querySelectorAll<HTMLSelectElement>('select[aria-label^="Disposition "]'))) {
-          await fill(`[aria-label=${JSON.stringify(select.getAttribute("aria-label"))}]`, "done");
-          await until(() => screen().querySelector('[data-testid="final-account-lock"]')?.getAttribute("aria-busy") === "false", signal);
+        await until(() => !!text("lock-state"), signal);
+        if (text("lock-state") !== "Final account completed") {
+          const selects = [...screen().querySelectorAll<HTMLSelectElement>('select[aria-label^="Disposition "]')];
+          await until(() => screen().querySelectorAll('select[aria-label^="Disposition "]').length > 0, signal);
+          for (const select of (selects.length ? selects : screen().querySelectorAll<HTMLSelectElement>('select[aria-label^="Disposition "]'))) {
+            await fill(`[aria-label=${JSON.stringify(select.getAttribute("aria-label"))}]`, "done");
+            await until(() => screen().querySelector('[data-testid="final-account-lock"]')?.getAttribute("aria-busy") === "false", signal);
+          }
+          const terms = [...screen().querySelectorAll<HTMLButtonElement>("button")].find(b => b.textContent === "Accept final check terms");
+          if (terms && !terms.disabled) await click("Accept final check terms", signal);
+          await click("Complete final account", signal);
         }
-        const terms = [...screen().querySelectorAll<HTMLButtonElement>("button")].find(b => b.textContent === "Accept final check terms");
-        if (terms && !terms.disabled) await click("Accept final check terms", signal);
-        await click("Complete final account", signal);
         // Reload the existing screen's read models after the immutable lock commits.
         await until(() => text("lock-state") === "Final account completed", signal);
         await click("Load the saved final check", signal);
@@ -154,8 +181,8 @@ export function VoiceJourney() {
       {error && <p role="alert">{error}</p>}
     </header>
     <div id="walk-screen" className={styles.screen} tabIndex={-1}>
-      {!tenantId ? <p role="status">Loading your private practice firm…</p> : prepared ? report ? <ValuePage jobId={prepared} /> : <WorkspaceShell key={`${prepared}:${screenVersion}`} jobId={prepared} /> : capture ? <ReviewProposal result={capture} back={() => location.assign("/practice-company")} /> : <WalkIt tenantId={tenantId} initialText="" close={() => location.assign("/practice-company")} onCaptured={setCapture} />}
+      {!tenantId ? <p role="status">Loading your private practice firm…</p> : prepared ? report ? <ValuePage jobId={prepared} /> : <WorkspaceShell key={`${prepared}:${screenVersion}`} jobId={prepared} /> : capture ? <ReviewProposal result={capture} back={() => location.assign("/practice-company")} /> : <WalkIt tenantId={tenantId} initialText="" close={() => location.assign("/practice-company")} onCaptured={result => { rememberWalkJob("walkJob", result.jobId); setCapture(result); }} />}
     </div>
-    {tenantId && tour && <Walkthrough steps={steps} onClose={() => setTour(false)} />}
+    {tenantId && tour && <Walkthrough steps={steps} initialIndex={resumeIndex} onClose={() => setTour(false)} />}
   </>;
 }

@@ -30,8 +30,8 @@ export function visibleTarget(selector: string): HTMLElement | null {
   return element;
 }
 
-export function Walkthrough({ steps, onClose }: { steps: readonly WalkthroughStep[]; onClose: () => void }) {
-  const [index, setIndex] = useState(0), [playing, setPlaying] = useState(false);
+export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: readonly WalkthroughStep[]; onClose: () => void; initialIndex?: number }) {
+  const [index, setIndex] = useState(initialIndex), [playing, setPlaying] = useState(false);
   const [busy, setBusy] = useState(false), [done, setDone] = useState(false), [error, setError] = useState("");
   const [box, setBox] = useState<Box | null>(null), [finished, setFinished] = useState(false), [waiting, setWaiting] = useState(false);
   const card = useRef<HTMLElement>(null), action = useRef<AbortController | null>(null), running = useRef(false);
