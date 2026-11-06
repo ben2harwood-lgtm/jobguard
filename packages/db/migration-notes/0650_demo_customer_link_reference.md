@@ -114,3 +114,46 @@ customer data, database server or browser server was used.
   normal lane CLI in CI after commit. No git writes or fetch performed.
 - The pnpm version command stalled and was interrupted; validation used installed
   package binaries directly.
+
+## PR #597 merge catch-up — 6 November 2026, 10:58 UTC
+
+READY for router staging, commit and push to `codex/sandbox/later-safety-13`.
+RED remains unchanged. The launcher began merging main d78e60463 into this
+worktree; this sandbox resolved the two working-file conflicts without writing
+Git metadata. The router must stage those files and finish the pending merge.
+
+- MIGFIX-7 retains main's 0646 retention, 0647 notice and 0648 pay-now full-body
+  entries plus this piece's single exact `demo_issue_customer_link` 0650 entry.
+- Plan-entitlement retains main's batch replacement branch and this piece's
+  exact demo issuer branch, including its unchanged metadata comparison.
+- `later-empty-tables.ts` is byte-identical to current main's union. The lane
+  already lists exactly all seven non-lane paths changed against that main,
+  excludes itself, and needs no additional paths.
+- 0650 SQL is byte-identical to the pre-catch-up HEAD; migration order passes
+  above main's 0649. No product behaviour, SQL, or fingerprints were changed.
+  Both commercial-integrity guards pass with zero diagnostics (nine baselined
+  unresolved cases each); the line-94 helper and its existing reason remain.
+
+Observed local checks using installed binaries, with no package downloads:
+
+- PASS: `node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit`.
+- PASS: from packages/db, `./node_modules/.bin/vitest run --maxWorkers=2
+  test/migfix-6.test.ts test/migration-proof-loader.test.ts`: 80 tests, 2 files.
+- PASS: from apps/api, `./node_modules/.bin/vitest run --maxWorkers=2
+  src/shadow-demo-guide.application.test.ts src/auth/customer-signin.test.ts`:
+  47 tests, 2 files.
+- PASS: `node tools/commercial-integrity-current-source-guard.mjs`,
+  `node tools/commercial-integrity-boundary.mjs`, and
+  `node tools/plpgsql-case-in-if-lint.mjs` (315 migrations).
+- PASS: existing lane helpers on the final working-tree diff against main;
+  exact lane inventory and migration order; TypeScript syntax transpilation of
+  both resolved upgrade files; `git diff --check`.
+
+Not executed here: PostgreSQL and browser suites, because this sandbox cannot
+start PostgreSQL or bind localhost. CI after the router push must execute
+MIGFIX-6-upgrade, MIGFIX-7-upgrade, plan-entitlement-lifecycle-upgrade,
+customer-portal-message/customer-signin, outbox/later-outbox and the existing
+0650 shadow-demo-guide regressions, with at most two workers and at most three
+named Vitest files per invocation. Required green CI and an independent RED
+review of the final head remain merge gates. No commit, push, completed Git
+merge, live delivery, release or deployment is claimed by this sandbox.
