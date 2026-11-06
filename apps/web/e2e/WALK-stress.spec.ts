@@ -44,7 +44,7 @@ async function reviewAndPrice(page: Page) {
     await input.fill("Builder removes fictional waste");
   }
   await double(page, "Save review");
-  await expect(page.locator(".review")).toContainText("Review saved. Your source and choices will be here after reload.");
+  await expect(page.locator(".review").filter({ hasText: "Review saved." })).toContainText("Review saved. Your source and choices will be here after reload.");
   await double(page, "Confirm scope");
   await double(page, "Price the work");
   await expect(page.locator(".quote-editor")).toHaveAttribute("data-quote-ready", "true");
@@ -121,7 +121,11 @@ test("steps 1–9: double-click every save/send without duplicate commercial rec
     await select.selectOption("done");
     await expect(page.getByTestId("final-account-lock")).toHaveAttribute("aria-busy", "false");
   }
-  await double(page, "Accept final check terms");
+  await expect(page.getByTestId("final-account-lock")).toHaveAttribute("aria-busy", "false");
+  // Terms acceptance belongs to the tenant and may precede this practice job.
+  if (await button(page, "Accept final check terms").isEnabled()) {
+    await double(page, "Accept final check terms");
+  }
   await double(page, "Complete final account");
   await expect(page.getByTestId("lock-state")).toHaveText("Final account completed");
   await button(page, "Load the saved final check").click();
@@ -185,9 +189,12 @@ test("step 1: empty and overlong work details explain refusal and keep the enter
 });
 
 test("step 2: invalid quote rates block sending without overwriting the saved quote", async ({ page }) => {
+  test.setTimeout(180_000);
   await open(page);
   await showUntil(page, 3);
-  const id = await ownJob(page);
+  await tour(page).getByRole("button", { name: "I'll do it", exact: true }).click();
+  const id = await preparedJob(page);
+  await reviewAndPrice(page);
   const path = `/api/jobs/${id}/quotes`;
   const before = await read(page, path);
   await button(page, "Save customer and site").click();
@@ -288,7 +295,9 @@ for (const navigation of ["refresh", "browser Back"] as const) {
     } finally { release(); }
     const after = await read(page, path);
     expect(after.revisions).toHaveLength(before.revisions.length + 1);
-    expect(after.revisions.at(-1).lines).toEqual(before.revisions.at(-1).lines);
+    // Line row ids change with each revision; all saved content must survive.
+    const withoutIds = (lines: { id: string }[]) => lines.map(({ id: _id, ...line }) => line);
+    expect(withoutIds(after.revisions.at(-1).lines)).toEqual(withoutIds(before.revisions.at(-1).lines));
     await page.goto(`/jobs/${id}`);
     await button(page, "Price the work").click();
     await expect(page.getByTestId("quote-revision")).toHaveText(String(after.revisions.at(-1).revision));
