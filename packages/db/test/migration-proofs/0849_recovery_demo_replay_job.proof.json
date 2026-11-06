@@ -1,6 +1,0 @@
-{
-  "migration": "0849_recovery_demo_replay_job.sql",
-  "lp0": [],
-  "upgrade": [],
-  "tenancy": []
-}

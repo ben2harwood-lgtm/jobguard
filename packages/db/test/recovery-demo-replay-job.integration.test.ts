@@ -70,7 +70,7 @@ describe("LATER-SAFETY-122 recovery demo command replay", () => {
     const source = await readFile(new URL("../migrations/0356_unchecked_job_doors.sql", import.meta.url), "utf8");
     const oldRoutine = "CREATE OR REPLACE FUNCTION app.configure_recovery_demo"
       + source.split("CREATE OR REPLACE FUNCTION app.configure_recovery_demo")[1]!.split("END$$;")[0]! + "END$$;";
-    const fixedMigration = await readFile(new URL("../migrations/0849_recovery_demo_replay_job.sql", import.meta.url), "utf8");
+    const fixedMigration = await readFile(new URL("../migrations/0670_recovery_demo_replay_job.sql", import.meta.url), "utf8");
     const client = await db.owner.connect();
     try {
       const definition = (await client.query("SELECT pg_get_functiondef('app.configure_recovery_demo(uuid,uuid,varchar)'::regprocedure) definition")).rows[0]!.definition;
