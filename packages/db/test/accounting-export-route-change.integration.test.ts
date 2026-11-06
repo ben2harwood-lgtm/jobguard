@@ -226,3 +226,45 @@ it("0617_accounting_export_route_change_read adds only its read routine and pres
   expect(await f.repo.routeChangeRead(f.a.context, f.a.digest, f.next.source.sourceId)).toMatchObject({ proposal: null, history: [{ revision: 1 }] });
  } finally { await u.close(); }
 }, 240000);
+
+
+it("exported codat source has no backwards proposal after confirming xero, while history remains readable", async () => {
+ const f = await setup();
+ const confirmed = await f.confirm(await f.confirmation());
+ const before = await proofBefore(c.admin, ["app.accounting_export_route_change", "app.accounting_export_ledger", "app.accounting_export_outbox", "app.audit_event"]);
+ expect(await f.repo.routeChangeRead(f.a.context, f.a.digest, f.old.source.sourceId))
+  .toEqual({ version: 1, proposal: null, confirmed, history: [confirmed] });
+ expect(await proofDifferences(c.admin, before)).toEqual({ rows: [], types: [] });
+});
+
+it("unexported source still receives a differing-route proposal after a confirmed switch", async () => {
+ const f = await setup();
+ expect(await f.repo.routeChangeRead(f.a.context, f.a.digest, f.next.source.sourceId))
+  .toEqual({ version: 1, proposal: await f.preview(), confirmed: null, history: [] });
+ const confirmed = await f.confirm(await f.confirmation());
+ const pending = structuredClone(f.old);
+ pending.scope.sourceId = pending.source.sourceId = pending.target.sourceId = "demo-unexported";
+ await c.admin.query("INSERT INTO app.accounting_export_fixture(tenant_id,source_id,artifact,consent_expires_at) VALUES($1,$2,$3,clock_timestamp()+interval '1 hour')", [f.a.tenantId, pending.source.sourceId, pending]);
+ const request = { version: 1, scope: pending.scope, from: "xero", to: "codat", connectionRevision: pending.connectionRevision, consentRevision: pending.consentRevision };
+ const proposal = await f.repo.routeChangePreview(f.a.context, f.a.digest, pending.source.sourceId, request);
+ expect(await f.repo.routeChangeRead(f.a.context, f.a.digest, pending.source.sourceId))
+  .toEqual({ version: 1, proposal, confirmed, history: [confirmed] });
+});
+
+it("0802_accounting_export_route_read_exported removes the backwards proposal on upgrade without changing stored facts or routine guards", async () => {
+ const u = await startBeforeMigration("0802_accounting_export_route_read_exported.sql");
+ try {
+  const f = await setup(u), confirmed = await f.confirm(await f.confirmation());
+  const read = () => f.repo.routeChangeRead(f.a.context, f.a.digest, f.old.source.sourceId);
+  // Failing-first witness against the predecessor body, executed on real PostgreSQL in CI.
+  expect(await read()).toMatchObject({ proposal: { artifact: { from: "xero", to: "codat" } }, confirmed, history: [confirmed] });
+  const before = await proofBefore(u.admin, ["app.accounting_export_route_change", "app.accounting_export_ledger", "app.accounting_export_outbox", "app.audit_event"]);
+  const routine = async () => (await u.admin.query("SELECT oid,pg_get_functiondef(oid) definition,proowner,proacl::text,prosecdef,proconfig FROM pg_proc WHERE oid='app.accounting_export_route_read(uuid,text,text)'::regprocedure")).rows[0]!;
+  const prior = await routine();
+  await applyMigration(u, "0802_accounting_export_route_read_exported.sql");
+  expect(await read()).toEqual({ version: 1, proposal: null, confirmed, history: [confirmed] });
+  expect(await proofDifferences(u.admin, before)).toEqual({ rows: [], types: [] });
+  const current = await routine();
+  expect({ ...current, definition: current.definition.replace("\n  AND NOT EXISTS(SELECT 1 FROM app.accounting_export_ledger WHERE tenant_id=t AND source_id=source)", "") }).toEqual(prior);
+ } finally { await u.close(); }
+}, 240000);
