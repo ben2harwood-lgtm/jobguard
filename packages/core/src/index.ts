@@ -185,6 +185,8 @@ export * from "./direct-debit-lifecycle.js";
 
 export * from "./extra-approval-inbox.js";
 export * from "./deepgram-transcript.js";
+export * from "./offline-reconciliation.js";
+export * from "./core-loop-views.js";
 
 export * from "./extra-proceed.js";
 export * from "./merchant-reliability.js";
