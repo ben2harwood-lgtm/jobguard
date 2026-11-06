@@ -87,6 +87,22 @@
     "./direct-debit-practice-contracts": {
       "types": "./src/fee-collection/direct-debit-practice.contracts.ts",
       "import": "./dist/fee-collection/direct-debit-practice.contracts.js"
+    },
+    "./merchant-order": {
+      "types": "./src/merchant-order.application.ts",
+      "import": "./dist/merchant-order.application.js"
+    },
+    "./merchant-order-contracts": {
+      "types": "./src/merchant-order.contracts.ts",
+      "import": "./dist/merchant-order.contracts.js"
+    },
+    "./evidence-bundle": {
+      "types": "./src/evidence-bundle.application.ts",
+      "import": "./dist/evidence-bundle.application.js"
+    },
+    "./evidence-bundle-contracts": {
+      "types": "./src/evidence-bundle.contracts.ts",
+      "import": "./dist/evidence-bundle.contracts.js"
     }
   },
   "scripts": {

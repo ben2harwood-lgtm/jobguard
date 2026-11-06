@@ -888,3 +888,47 @@ Local checks used installed dependencies only, with Node 24.17.0 and Vitest
   provider, commercial and release gates remain separate; made-up data only.
 
 No Git write command, commit, push, PR, provider call or deployment was performed.
+
+
+### Batch-36 pre-check repair — 6 November 2026 (RED, NOPR)
+
+READY for router staging and completion of the existing merge. Incoming main is
+MERGE_HEAD / origin/main `f5415ddb4c3a40796dd812e8b5946ba5094daa2b`.
+Resolved the three export-list/contract-note conflicts as unions, retaining main's
+merchant and rate-suggestion exports and notes beside this group's practice slices.
+Removed the subscription-stripe-sandbox-adapter barrel export identified by
+coordinator/prechecks/batch-36.md. This supersedes the earlier receipt's statement
+that this export should be retained; main intentionally removed it in f67b4c1f1.
+No tests or application behavior were otherwise changed.
+
+Working-tree comparison against incoming main confirms all 512 migration, note
+and proof files are byte-for-byte identical, with no branch-only files in those
+three directories. No migration or routine override remains to recreate; main's
+latest routine bodies are preserved unchanged. The existing lane exactly lists
+all 28 changed non-lane paths and does not list itself.
+
+Checks executed using installed package-local tools (Node 24.17.0, Vitest 4.1.12):
+- packages/db: `node node_modules/vitest/vitest.mjs run --maxWorkers=2
+  src/subscription-webhook-verifier.test.ts` — 28 passed, including the unchanged
+  application/DB barrel boundary guard.
+- packages/core: same runner/options with `src/recurring-extras.test.ts`,
+  `src/rate-baseline.test.ts`, `src/watchdog.test.ts` — 34 passed.
+- apps/api: same runner/options with
+  `src/fee-collection/direct-debit-practice.application.test.ts`,
+  `src/fee-collection/direct-debit-fixture-recorder.test.ts`,
+  `src/fee-collection/fake-gocardless-recorder.test.ts` — 16 passed.
+- apps/web: same runner/options with
+  `app/api/jobs/[id]/direct-debit-practice/route.test.ts`,
+  `app/api/jobs/[id]/recurring-extras/route.test.ts`,
+  `app/jobs/[id]/recurring-extras/recurring-extras-screen.test.tsx` — 9 passed.
+- apps/api: `node node_modules/typescript/bin/tsc -p tsconfig.json --noEmit`
+  passed. API package JSON parses; working-file conflict markers are absent;
+  `git diff --check MERGE_HEAD` passed.
+
+87 tests passed; at most two test workers and three named files per run. The pnpm
+version probe stalled and was interrupted, so checks used installed runners.
+The read-only index still has unmerged entries: router must stage these working
+resolutions and complete the merge, then run standard lane lint. PostgreSQL,
+browser and full required CI checks remain for GitHub CI after router push;
+exact-head independent RED review remains required. No Git writes, commit, push,
+PR, provider use or release occurred here. Neither full plan piece is finished.
