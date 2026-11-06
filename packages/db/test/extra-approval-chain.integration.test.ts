@@ -336,7 +336,7 @@ it.each(["pending", "retryable"])("LATER-SAFETY-36 cancels a %s send after its s
   expect(await q.attempts()).toHaveLength(attempts);
   expect(await q.audit()).toEqual([{
     actor_ref: "system:outbox", subject_ref: q.sent.outboxActionId,
-    payload: { references: { outcome: "cancelled", code: "AUTHORIZATION_REVOKED" }, classifications: { action: "security" } },
+    payload: { references: { auditTrust: "lower_trust", outcome: "cancelled", code: "AUTHORIZATION_REVOKED" }, classifications: { action: "security" } },
   }]);
   await command(c, q.world, { kind: "grant.create", membershipId: q.sender.member.membershipId,
     role: "surveyor", scope: { kind: "branch", id: q.world.demo.branchId }, contractId: null });
