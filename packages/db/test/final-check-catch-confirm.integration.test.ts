@@ -47,6 +47,14 @@ it("the builder's priced approval opens the catch case with no claim; the custom
  expect(cases).toHaveLength(1);
  expect(cases[0]).toMatchObject({state:"identified",claim_pence:"50000",case_type:"missed_variation_final_account",book:"builder_customer"});
  expect(cases[0].source_refs).toEqual([`variation:${confirmed.variationId}`,`revision:${priced.id}`,`signal:${r.signalId}`]);
+ // LATER-SAFETY-77: a later price would no longer match the immutable case sources.
+ const repriced=priceVariation({id:randomUUID(),variationId:confirmed.variationId,previous:priced,proposal,description:v.description,contentHash:"f".repeat(64),
+  confirmed:{quantity:"1",unit:"item",unitRatePence:60000,direction:"addition",confirmedByMembershipId:FINAL_CHECK_ACTOR,rateProvenance:priced.rateProvenance}});
+ await expect(withTenant(f.runtime,a.context,db=>insertPricedVariation(db,a.tenantId,repriced))).rejects.toMatchObject({name:"VariationRevisionConflict",code:"CATCH_PRICE_LOCKED"});
+ expect((await f.admin.query("SELECT id FROM app.variation_revision WHERE tenant_id=$1 AND variation_id=$2",[a.tenantId,confirmed.variationId])).rows).toEqual([{id:priced.id}]);
+ expect((await f.admin.query("SELECT current_revision_id FROM app.variation WHERE tenant_id=$1 AND id=$2",[a.tenantId,confirmed.variationId])).rows[0].current_revision_id).toBe(priced.id);
+ // An exact committed replay remains harmless after the lock.
+ await withTenant(f.runtime,a.context,db=>insertPricedVariation(db,a.tenantId,priced));
  const claims=async()=>(await f.admin.query("SELECT revision,claimed_net_pence FROM app.recovery_claim_revision WHERE tenant_id=$1 AND case_id=$2",[a.tenantId,cases[0].id])).rows;
  expect(await claims()).toEqual([]);
  expect(await new RecoveryCaseRepository(f.runtime).list(a.context,a.jobId)).toEqual([]);
@@ -67,4 +75,20 @@ it("the builder's priced approval opens the catch case with no claim; the custom
  expect(workbench.sources.filter(source=>source.recorded)).toHaveLength(2);
  expect(workbench.history?.map(entry=>entry.kind)).toEqual(expect.arrayContaining(["opened","claim_revision"]));
  expect(await count("recovery_case",a.tenantId,a.jobId)).toBe(1);
+});
+
+it("LATER-SAFETY-77 ordinary variations still accept a second priced revision",async()=>{
+ const {priceVariation}=await import("@jobguard/core");
+ const {insertVariationProposal,insertPricedVariation}=await import("../src/variation-repository.js");
+ const {withTenant}=await import("../src/tenant-context.js");
+ const {FINAL_CHECK_ACTOR}=await import("./final-check-fixture.js");
+ const a=await seedFinalCheckJob(f);
+ const proposal={version:"variation-proposal.v1" as const,id:randomUUID(),jobId:a.jobId,scopeItemId:randomUUID(),existingScopeItemId:null,lineageParentScopeItemId:null,captureKind:"text" as const,captureText:"Synthetic extra",description:"Synthetic extra",suggestion:null};
+ await withTenant(f.runtime,a.context,db=>insertVariationProposal(db,a.tenantId,proposal));
+ const confirmed={quantity:"1",unit:"item",unitRatePence:1000,direction:"addition" as const,confirmedByMembershipId:FINAL_CHECK_ACTOR,rateProvenance:{kind:"human_entered" as const,sourceRef:"synthetic://builder-entered",sourceHash:"8".repeat(64),rateVersion:"builder-price-v1"}};
+ const first=priceVariation({id:randomUUID(),variationId:proposal.id,previous:null,proposal,description:proposal.description,contentHash:"a".repeat(64),confirmed});
+ const second=priceVariation({id:randomUUID(),variationId:proposal.id,previous:first,proposal,description:proposal.description,contentHash:"b".repeat(64),confirmed:{...confirmed,unitRatePence:2000}});
+ await withTenant(f.runtime,a.context,async db=>{await insertPricedVariation(db,a.tenantId,first);await insertPricedVariation(db,a.tenantId,second);});
+ expect((await f.admin.query("SELECT id FROM app.variation_revision WHERE tenant_id=$1 AND variation_id=$2 ORDER BY revision",[a.tenantId,proposal.id])).rows).toEqual([{id:first.id},{id:second.id}]);
+ expect(await count("recovery_case",a.tenantId,a.jobId)).toBe(0);
 });
