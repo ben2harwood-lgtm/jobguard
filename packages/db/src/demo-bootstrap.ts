@@ -2,6 +2,7 @@ import { beginRepositoryCommand, completeRepositoryCommand } from "./repository-
 import type { TenantTransaction } from "./tenant-context.js";
 import { seedSyntheticPartyFixture } from "./synthetic-party-fixture.js";
 import { Pool, type PoolClient } from "pg";
+import { randomBytes } from "node:crypto";
 import { migrate } from "./migrate.js";
 import {
   DEMO_ACCOUNT_ID, DEMO_EMPTY_ACCOUNT_ID, DEMO_EMPTY_MEMBERSHIP_ID, DEMO_EMPTY_TENANT_ID, DEMO_IDENTITY_USER_ID, DEMO_JOB_ID, DEMO_MEMBERSHIP_ID,
@@ -193,7 +194,13 @@ async function seedDatabase(client: PoolClient) {
       VALUES($1,'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','small_builder','synthetic_demo','legacy_synthetic_live_fixture','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')
       ON CONFLICT(tenant_id,job_id) DO NOTHING`, [DEMO_TENANT_ID]);
     await client.query("UPDATE app.job SET status='live' WHERE tenant_id=$1 AND id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' AND status='quoting'",[DEMO_TENANT_ID]);
+    // Seed through the same protected practice identity as a request. This
+    // transaction-only credential is never returned and is revoked before commit.
+    const seedDigest = randomBytes(32).toString("hex");
+    await client.query(`INSERT INTO control_plane.practice_session(token_digest,expires_at)
+      VALUES($1,clock_timestamp()+interval '1 hour')`, [seedDigest]);
     await client.query("SET LOCAL ROLE jobguard_runtime");
+    await client.query("SELECT app.bind_request('practice',$1,$2)", [seedDigest, DEMO_TENANT_ID]);
     const pendingSeedCommands: string[] = [];
     await seedDemo("synthetic_demo", { execute: async (command: DemoSeedCommand) => {
       const db = { $client: client } as TenantTransaction;
@@ -207,6 +214,8 @@ async function seedDatabase(client: PoolClient) {
 
     }});
     for(const commandId of pendingSeedCommands)await completeRepositoryCommand({$client:client} as TenantTransaction,commandId);
+    await client.query("SET LOCAL ROLE jobguard_migration");
+    await client.query("UPDATE control_plane.practice_session SET revoked_at=clock_timestamp() WHERE token_digest=$1", [seedDigest]);
     await client.query("COMMIT");
   } catch (error) { await client.query("ROLLBACK"); throw error; }
 }
