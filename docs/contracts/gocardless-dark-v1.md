@@ -932,3 +932,43 @@ resolutions and complete the merge, then run standard lane lint. PostgreSQL,
 browser and full required CI checks remain for GitHub CI after router push;
 exact-head independent RED review remains required. No Git writes, commit, push,
 PR, provider use or release occurred here. Neither full plan piece is finished.
+
+### Batch-36 landing verification — 6 November 2026 (RED, NOPR)
+
+READY for the router's commit/push and subsequent PR turn. This supersedes the
+earlier unresolved-index hold: the launcher already completed the main merge at
+`ae9b3295cd893e79290e4e7c8c80bbfab71767a2`; the index has no unmerged entries.
+The comparison base is origin/main `919b7f3e60b82ef1ed1e32a6f259ba92246f6541`
+(the local main branch is stale). No additional code repair was necessary.
+
+Main's migrations, migration notes and migration proofs are unchanged. No
+branch-only migration or SQL routine override remains. Shared exports, package
+exports and the watchdog registry differ only by this group's additions; main's
+rows remain intact. The lane lists exactly the 28 changed non-lane paths and
+does not list itself. No test or product behavior was changed in this pass.
+
+Executed with installed package-local Vitest 4.1.12 (`run --maxWorkers=2`):
+- Core: `src/recurring-extras.test.ts`, `src/watchdog.test.ts`,
+  `src/rate-baseline.test.ts` — 34 passed.
+- API: `src/fee-collection/direct-debit-practice.application.test.ts`,
+  `src/fee-collection/fake-gocardless.test.ts` — 42 passed.
+- Web: `app/api/jobs/[id]/direct-debit-practice/route.test.ts`,
+  `app/api/jobs/[id]/recurring-extras/route.test.ts`,
+  `app/jobs/[id]/direct-debit-practice/screen.test.ts` — 9 passed.
+- Web: `app/jobs/[id]/recurring-extras/recurring-extras-screen.test.tsx`
+  — 2 passed.
+- DB: `src/subscription-webhook-verifier.test.ts`,
+  `test/migration-proof-loader.test.ts` — 105 passed; the same invocation's
+  mistyped `src/direct-debit-fixture-repository.test.ts` matched no file.
+- DB: corrected `test/direct-debit-fixture-repository.test.ts` — 8 passed.
+
+Total: 200 tests passed, at most three named filters per invocation. Installed
+`tsc -p tsconfig.json --noEmit` passed separately in core, DB, API and web.
+`LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs --lane=batch-36`
+and `git diff --check origin/main` passed. The pnpm wrapper stalled before
+checks began and was interrupted; direct installed runners supplied the results.
+
+PostgreSQL and browser suites were not run in this sandbox. Full required CI
+and independent RED review against the resulting exact head remain required
+before merge. Neither full M4-15 nor full M5-6 is finished. No Git write,
+provider call, deployment or release was performed.
