@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { ExtraApprovalRepository } from "../src/extra-approval-chain-repository.js";
 import { cluster as clientCluster, chainWorld, submitted, approveInput, emailOf, newToken } from "./extra-approval-chain-fixtures.js";
@@ -24,13 +24,14 @@ const h = createWatchdogHarness("replay-contract", 61000);
 const { caseKeys, live, probeJob, norm, CONFLICT } = h;
 // These dark commands have no source guard entry. Exercise their real repository
 // boundaries here without adding post-0606 facts to the pre-0096 legacy-id harness.
+const attestationDigest = createHash("sha256").update(randomUUID()).digest("hex");
 const darkCases: typeof h.cases = [
   { key: "purchase-order-action-repository.ts#attestManual", registry: ["command:purchase_order.attest_manual"],
     prepare: async job => { await h.pre.order(job); },
     run: async (job, id, variant) => new PurchaseOrderActionRepository(h.observed.pool).attestManual(h.ctx, {
       version: "manual-order-attestation.v1", jobId: job, revisionId: h.st(job).order.id, commandId: id,
       supplierReference: `synthetic-${id}${variant === "changed" ? "-changed" : ""}`,
-    }, h.member),
+    }, { sessionDigest: attestationDigest }),
     later: async job => { await h.repos.po.revise(h.ctx, job, h.orderInput(h.st(job).requirement, 1, randomUUID(), "12")); } },
   { key: "purchase-order-action-repository.ts#approve", registry: ["command:purchase_order.send.dark", "/api/jobs/[id]/purchase-orders/merchant-order"],
     prepare: async job => {
@@ -56,7 +57,13 @@ const cases = [...h.cases, ...darkCases];
 // This route uses credential-bound client commands and needs the complete contractor
 // schema, rather than the legacy-id watchdog harness. Its executable case is below.
 const clientReplayCase = { key: "/api/customer-portal/extra-approvals", registry: ["/api/customer-portal/extra-approvals"] };
-beforeAll(async () => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); await h.boot(); }, 120000);
+beforeAll(async () => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); await h.boot();
+  const user = (await h.admin.query("SELECT identity_user_id FROM app.membership WHERE tenant_id=$1 AND id=$2", [h.tenant,h.member])).rows[0].identity_user_id;
+  await h.admin.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3)", [user,h.tenant,h.member]);
+  await h.admin.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", [`${user}@fictional.invalid`,user]);
+  await h.admin.query(`INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at)
+    VALUES($1,$2,'synthetic_demo',$3,$4,clock_timestamp()+interval '1 hour')`, [randomUUID(),user,attestationDigest,randomUUID()]);
+}, 120000);
 afterAll(async () => { await h.stop(); vi.unstubAllEnvs(); });
 
 describe("every watchdog_live_only command is covered by this contract", () => {
