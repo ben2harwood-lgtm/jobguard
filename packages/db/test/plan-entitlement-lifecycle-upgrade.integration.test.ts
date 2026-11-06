@@ -76,6 +76,11 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
       prior.args === "t uuid, digest text, operation text, source text, v jsonb") {
       expect(current?.definition).not.toEqual(prior.definition);
     } else
+    // 0808 changes only this exact authority body, preserving all routine metadata and grants.
+    if (prior.nspname === "app" && prior.proname === "lp_authority" && prior.args === "p_session uuid, p_job uuid, p_action text") {
+      const sql = await readFile(new URL("../migrations/0808_end_check_rule_a_rerun.sql", import.meta.url), "utf8");
+      expect(current?.definition?.split("$function$")[1]).toEqual(sql.split("AS $$")[1]!.split("$$;")[0]);
+    } else
     // 0620 extends only these exact live-prompt bodies; preserve their full replacements.
     if (prior.nspname === "app" && finishRoutineBodies.has(`${prior.proname}|${prior.args}`)) {
       expect(current?.definition?.split("$function$")[1]).toEqual(finishRoutineBodies.get(`${prior.proname}|${prior.args}`));

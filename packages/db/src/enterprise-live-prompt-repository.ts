@@ -40,7 +40,7 @@ export class EnterpriseLivePromptRepository {
     }
     const output=(await db.$client.query<{value:{replay:boolean;result:Result;audits:AuditEventInput[]}}>("SELECT app.lp_command($1,$2::jsonb,$3::bytea) value",[sessionId,JSON.stringify(input),sourceBytes])).rows[0]!.value;
     if(output.replay)return output.result;
-    if(input.version==="completion-observation.v1"||input.version==="evaluate-live-prompts.v1"){
+    if(input.version==="completion-observation.v1"||input.version==="evaluate-live-prompts.v1"||input.version==="end-check.v1"){
      // Rule (a) is rerun from stored bytes, tags/locators and the bound order, never a supplied snapshot.
      // SQL independently enforces the persisted result; disagreement rolls back the entire command.
      const findings=await readEnterpriseCompletionFindings(db,sessionId,input.jobId);
