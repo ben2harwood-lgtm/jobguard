@@ -20,7 +20,7 @@ it("adds the resume guard without rewriting predecessor data or replacing the la
   await migrate(cluster.admin);
   // 0606, 0609, 0620 and 0623 add the dark-order, rate-acceptance, EndCheck and duplicate-disposition rows.
   const registry = (await cluster.admin.query("SELECT jsonb_agg(value ORDER BY value::text) data FROM jsonb_array_elements($1::jsonb)",
-    [JSON.stringify([...(before["app.command_type_registry"] as unknown[]), darkOrderRegistryRow, rateSuggestionRegistryRow, contractorJobFinishRegistryRow, duplicateDispositionRegistryRow])])).rows[0].data;
+    [JSON.stringify([...(before["app.command_type_registry"] as { command_type: string }[]).map(row => row.command_type === "IssueClientApproval" ? { ...row, permission_rule: "contractor" } : row), darkOrderRegistryRow, rateSuggestionRegistryRow, contractorJobFinishRegistryRow, duplicateDispositionRegistryRow])])).rows[0].data;
   expect(await snapshot(cluster.admin)).toEqual({ ...laterEmptyTables, ...before, "app.command_type_registry": registry });
   expect((await cluster.admin.query("SELECT * FROM outbound_control.state")).rows).toEqual(state);
   expect((await cluster.admin.query("SELECT pg_get_functiondef('outbound_control.command(uuid,text,integer,uuid)'::regprocedure) definition")).rows).toEqual(command);

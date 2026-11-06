@@ -41,10 +41,12 @@
         "packages/db/src/outbox.ts",
         "packages/db/test/command-replay-contract.integration.test.ts",
         "packages/db/test/contractor-full-demo-package.integration.test.ts",
+        "packages/db/test/enterprise-access-upgrade.integration.test.ts",
         "packages/db/test/extra-approval-chain.integration.test.ts",
         "packages/db/test/extra-approval-timing.integration.test.ts",
         "packages/db/test/extra-client-session.integration.test.ts",
         "packages/db/test/extra-evidence-packs.integration.test.ts",
+        "packages/db/test/late-source-import-migration.test.ts",
         "packages/db/test/later-empty-tables.ts",
         "packages/db/test/lp5-command-catalog.ts",
         "packages/db/test/m2-1-migration-proof.test.ts",
@@ -54,7 +56,8 @@
         "packages/db/test/migration-proofs/1043_extra_customer_approval.proof.json",
         "packages/db/test/migration-proofs/1044_extra_client_timing.proof.json",
         "packages/db/test/northside-demo.integration.test.ts",
-        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts"
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
+        "packages/db/test/restore-reconciliation-upgrade.integration.test.ts"
       ]
     }
   }
