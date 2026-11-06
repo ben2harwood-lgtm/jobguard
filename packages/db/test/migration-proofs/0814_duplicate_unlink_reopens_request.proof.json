@@ -1,0 +1,49 @@
+{
+  "migration": "0814_duplicate_unlink_reopens_request.sql",
+  "lp0": [
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.xa_reopen_unlinked_request()",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.xa_open_request"
+        ]
+      }
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.extra_duplicate_link|reopen_unlinked_request|app.xa_reopen_unlinked_request|AFTER INSERT|O"
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "xa_reopen_unlinked_request",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    }
+  ],
+  "tenancy": []
+}
