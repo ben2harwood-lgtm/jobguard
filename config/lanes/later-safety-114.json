@@ -10,7 +10,8 @@
         "packages/db/test/migration-proofs/0843_final_check_practice_owner_check.proof.json",
         "packages/db/test/final-check-practice-owner.integration.test.ts",
         "packages/db/test/migfix-7-upgrade.integration.test.ts",
-        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts"
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
+        "packages/db/test/enterprise-access-upgrade.integration.test.ts"
       ]
     }
   }
