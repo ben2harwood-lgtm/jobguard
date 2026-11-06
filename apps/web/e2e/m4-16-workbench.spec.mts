@@ -39,7 +39,7 @@ test("M4-16 exact preview approval, suppression, stale balance and tenant refusa
   await expect(page.getByText("Reversed — collection stopped", { exact: true })).toBeVisible();
   await expect(page.getByText("No-charge pilot — reminders unavailable", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Draft reminder Decision" })).toHaveCount(1);
-  await expect(page.getByRole("region")).toHaveCount(4); // paid invoices are absent
+  await expect(page.getByRole("main").getByRole("region")).toHaveCount(4); // paid invoices are absent
   await page.getByRole("button", { name: "Draft reminder Decision" }).click();
   await page.getByRole("button", { name: "Approve this exact £100.00 reminder preview" }).click();
   await expect(page.getByText("Approved preview only. Nothing was sent.")).toBeVisible();
