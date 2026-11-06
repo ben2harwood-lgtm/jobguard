@@ -15,7 +15,16 @@ export type WalkthroughStep = {
 type Box = { left: number; top: number; width: number; height: number };
 export function visibleTarget(selector: string): HTMLElement | null {
   const element = document.querySelector<HTMLElement>(selector);
-  if (!element || !element.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) || !element.getClientRects().length) return null;
+  if (!element || !element.getClientRects().length) return null;
+  if (typeof element.checkVisibility === "function") {
+    if (!element.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) return null;
+  } else {
+    const style = getComputedStyle(element);
+    if (style.visibility === "hidden" || style.visibility === "collapse") return null;
+    for (let ancestor: HTMLElement | null = element; ancestor; ancestor = ancestor.parentElement) {
+      if (getComputedStyle(ancestor).opacity === "0") return null;
+    }
+  }
   return element;
 }
 
@@ -88,7 +97,7 @@ export function Walkthrough({ steps, onClose }: { steps: readonly WalkthroughSte
   useEffect(() => { if (waiting && done && !busy) advance(); }, [waiting, done, busy]);
   useEffect(() => { if (playing && !busy && !finished) void show(); }, [playing, busy, index, finished]); // one action at a time
   useEffect(() => {
-    function escape(event: KeyboardEvent) { if (event.key === "Escape") { action.current?.abort(); setPlaying(false); onClose(); } }
+    function escape(event: KeyboardEvent) { if (event.key === "Escape" && !event.defaultPrevented) { action.current?.abort(); setPlaying(false); onClose(); } }
     window.addEventListener("keydown", escape); return () => window.removeEventListener("keydown", escape);
   }, [onClose]);
   if (!step) return null;

@@ -4,7 +4,21 @@ import AxeBuilder from "@axe-core/playwright";
 test.describe("WALK-1 core instruction tour (job actions are wired by WALK-3)", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/demo-s/core-1000");
+    for (let i = 0; i < 9; i++) await expect(page.locator(`#core-guide-${i}`)).toHaveAttribute("open", "");
     await page.getByRole("button", { name: "Tour the core guide instructions" }).click();
+  });
+  test("handled Escape leaves the tour open; closing restores the open guide", async ({ page }) => {
+    const card = page.getByRole("region", { name: "Guided walkthrough" });
+    await card.evaluate(element => element.addEventListener("keydown", event => {
+      if ((event as KeyboardEvent).key === "Escape") event.preventDefault();
+    }, { once: true }));
+    await page.keyboard.press("Escape");
+    await expect(card).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(card).toHaveCount(0);
+    for (let i = 0; i < 9; i++) await expect(page.locator(`#core-guide-${i}`)).toHaveAttribute("open", "");
+    await page.getByRole("button", { name: "Tour the core guide instructions" }).click();
+    await expect(card.getByRole("button", { name: "Next", exact: true })).toBeDisabled();
   });
   test("all nine real targets are visible and keyboard operation reaches the end", async ({ page }) => {
     const card = page.getByRole("region", { name: "Guided walkthrough" });
