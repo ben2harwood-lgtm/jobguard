@@ -75,7 +75,8 @@ function routeKeys(files: ReadonlyMap<string, string>): string[] {
   for (const file of files.keys()) {
     if (!/(?:^|\/)app\/api\/.*\/route\.ts$/u.test(file)) continue;
     const route = "/api/" + file.split("/app/api/")[1]!.replace(/\/route\.ts$/u, "");
-    if (!/^\/api\/(?:jobs|decisions|recovery-cases|customer-portal|contractor\/(?:jobs|work-order-imports|work-orders))(?:\/|$)/u.test(route)) continue;
+    if (!/^\/api\/(?:jobs|decisions|recovery-cases|customer-portal|contractor\/(?:jobs|work-order-imports|work-orders))(?:\/|$)/u.test(route)
+      && route !== "/api/accounting-exports/[sourceId]/route-change") continue;
     for (const verb of routeVerbs(file, read)) keys.push(routeKey(verb, route));
   }
   return keys.sort();
@@ -249,6 +250,13 @@ describe("CH-2 command coverage and lock order", () => {
     expect(() => assertClassified(nest, unclassified)).toThrow("Unclassified job mutation: nest:/contractor/work-order-imports");
     expect(() => assertClassified(next, { ...unclassified, "/api/contractor/work-order-imports": "pre_live_allowed", "PATCH /api/contractor/jobs/[id]/unclassified": "watchdog_live_only", "PUT /api/contractor/work-orders/[workOrderId]/revisions": "watchdog_live_only" })).not.toThrow();
     expect(() => assertClassified(nest, { ...unclassified, "nest:/contractor/work-order-imports": "pre_live_allowed" })).not.toThrow();
+  });
+  it("discovers the source-scoped accounting route change and refuses it without classification", () => {
+    const route = "/api/accounting-exports/[sourceId]/route-change";
+    const found = routeKeys(new Map([[`/x/app${route}/route.ts`, "export async function POST() {} export async function GET() {}"]]));
+    expect(found).toEqual([route]);
+    expect(() => assertClassified(found, {})).toThrow("Unclassified job mutation");
+    expect(jobMutationRegistry[route]).toBe("post_live_billing");
   });
   it("fails when any job mutation route is unclassified", async () => {
     const found = routeKeys(await readTree(new URL("apps/web/app/api/", root), name => name === "route.ts"));

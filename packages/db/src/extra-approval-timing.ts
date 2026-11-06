@@ -11,7 +11,7 @@ export type ApprovalTimingFact = { request_id: string; step_index: number; step_
 export type TimingRequest = { id: string; preapproval_required: boolean | null; superseded_us: string | null };
 
 /** Visit bounds are an interval for the extra, never a claim of an exact per-extra work time. */
-export function deriveVisitApprovalTiming(visit: VisitTimingSource | undefined, requests: TimingRequest[], facts: ApprovalTimingFact[], requestId: string, workStatus?: OperativeWorkStatus) {
+export function deriveVisitApprovalTiming(visit: VisitTimingSource | undefined, requests: TimingRequest[], facts: ApprovalTimingFact[], requestId: string, workStatus?: OperativeWorkStatus, proceedRequestIds: readonly string[] = []) {
   const timing = (at: string): Timing => {
     if (!visit) return "not_derived";
     if (BigInt(at) < BigInt(visit.start_us)) return "before_work";
@@ -19,6 +19,7 @@ export function deriveVisitApprovalTiming(visit: VisitTimingSource | undefined, 
     return "uncertain"; // Includes equality at either bound and an unfinished visit.
   };
   const breaches: Breach[] = requests.map(request => {
+    if (request.preapproval_required === true && proceedRequestIds.includes(request.id)) return true;
     if (!visit) return "not_derived";
     if (request.preapproval_required === false) return false;
     if (request.superseded_us !== null && BigInt(request.superseded_us) < BigInt(visit.start_us)) return false;
@@ -31,7 +32,7 @@ export function deriveVisitApprovalTiming(visit: VisitTimingSource | undefined, 
     return when === "before_work" ? false : when === "after_work" ? (endedDuringVisit || !workReportedDone ? "uncertain" : true) : "uncertain";
   });
   // Every earlier frozen requirement remains relevant. A later approval/revision cannot erase a breach.
-  const doneWithoutRequiredPreapproval: Breach = !visit ? "not_derived" : breaches.includes(true) ? true : breaches.includes("uncertain") ? "uncertain" : false;
+  const doneWithoutRequiredPreapproval: Breach = breaches.includes(true) ? true : !visit ? "not_derived" : breaches.includes("uncertain") ? "uncertain" : false;
   return {
     doneWithoutRequiredPreapproval,
     workTiming: visit ? { source: "site_visit" as const, visitId: visit.visit_id, startedAt: visit.started_at, finishedAt: visit.completed_at,
@@ -64,5 +65,7 @@ export async function readExtraApprovalTiming(db: TenantTransaction, tenant: str
      FROM app.extra_approval_step_fact WHERE tenant_id=$1 AND job_id=$2 AND variation_id=$3 ORDER BY step_index`, [tenant, job, extra])).rows;
   const workStatus = (await db.$client.query<{ work_status: OperativeWorkStatus | null }>(
     "SELECT app.ent3_extra_work_status($1,$2) work_status", [job, extra])).rows[0]?.work_status;
-  return deriveVisitApprovalTiming(visit, requests, facts, requestId, workStatus ?? undefined);
+  const proceed = (await db.$client.query<{ ids: string[] }>(
+    "SELECT app.xa_proceed_breaches($1,$2) ids", [job, extra])).rows[0]?.ids ?? [];
+  return deriveVisitApprovalTiming(visit, requests, facts, requestId, workStatus ?? undefined, proceed);
 }

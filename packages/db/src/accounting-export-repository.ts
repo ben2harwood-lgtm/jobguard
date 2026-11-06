@@ -24,8 +24,10 @@ const routeArtifact = routeRequest.extend({ entries: z.array(z.object({ sourceId
 export const storedAccountingRoutePreviewV1 = z.object({ version: z.literal(1), artifact: routeArtifact, previewHash: hash }).strict();
 export const storedAccountingRouteChangeV1 = storedAccountingRoutePreviewV1.extend({ commandId: uuid, decisionId: uuid,
  actorId: uuid, revision }).strict();
+const storedRouteReadV1 = z.object({ version: z.literal(1), proposal: storedAccountingRoutePreviewV1.nullable(),
+ confirmed: storedAccountingRouteChangeV1.nullable(), history: z.array(storedAccountingRouteChangeV1) }).strict();
 const schemas = {
- routeChangePreview: routeRequest, routeChangeConfirm: routeConfirmation,
+ routeChangeRead: z.object({}).strict(), routeChangePreview: routeRequest, routeChangeConfirm: routeConfirmation,
  preview: z.object({}).strict(), read: z.object({}).strict(),
  approve: z.object({ version: z.literal(1), decisionId: uuid, previewHash: hash,
   expiresAt: z.iso.datetime(), humanConfirmed: z.literal(true) }).strict(),
@@ -41,26 +43,32 @@ export type StoredAccountingExport = z.infer<typeof storedAccountingExportV1>;
 export class StoredAccountingExportError extends Error {
  constructor(readonly code: string) { super(code); }
 }
-/** Dark synthetic persistence. No API route, scheduler, provider or production enablement. */
+/** Synthetic persistence; no scheduler, provider execution or production enablement. */
 export class AccountingExportRepository {
  constructor(private readonly pool: Pool) {}
+ async routeChangeRead(context: VerifiedTenantContext, digest: string, sourceId: string) {
+  return storedRouteReadV1.parse(await this.execute(context, digest, "routeChangeRead", sourceId));
+ }
  async routeChangePreview(context: VerifiedTenantContext, digest: string, sourceId: string, input: unknown) {
   return storedAccountingRoutePreviewV1.parse(await this.execute(context, digest, "routeChangePreview", sourceId, input));
  }
- async routeChangeConfirm(context: VerifiedTenantContext, digest: string, sourceId: string, input: unknown) {
-  return storedAccountingRouteChangeV1.parse(await this.execute(context, digest, "routeChangeConfirm", sourceId, input));
+ async routeChangeConfirm(context: VerifiedTenantContext, digest: string, sourceId: string, input: unknown, actorId?: string) {
+  return storedAccountingRouteChangeV1.parse(await this.execute(context, digest, "routeChangeConfirm", sourceId, input, actorId));
  }
- async execute(context: VerifiedTenantContext, digest: string, operation: keyof typeof schemas, sourceId: string, input: unknown = {}): Promise<unknown> {
+ async execute(context: VerifiedTenantContext, digest: string, operation: keyof typeof schemas, sourceId: string, input: unknown = {}, actorId?: string): Promise<unknown> {
   const parsed = schemas[operation]?.safeParse(input);
   if (!parsed?.success || !syntheticId.safeParse(sourceId).success || !hash.safeParse(digest).success)
    throw new StoredAccountingExportError("EXPORT_INVALID_INPUT");
   try {
    return await withTenant(this.pool, context, async db => {
     const routeOperation = operation === "routeChangePreview" || operation === "routeChangeConfirm";
-    const sql = routeOperation ? "SELECT app.accounting_export_route($1,$2,$3,$4,$5::jsonb) result"
+    const sql = operation === "routeChangeRead" ? "SELECT app.accounting_export_route_read($1,$2,$3) result" : routeOperation ? "SELECT app.accounting_export_route($1,$2,$3,$4,$5::jsonb) result"
      : "SELECT app.accounting_export($1,$2,$3,$4,$5::jsonb) result";
     const result = (await db.$client.query(sql,
-     [context.tenantId, digest, operation, sourceId, JSON.stringify(parsed.data)])).rows[0]?.result;
+     operation === "routeChangeRead" ? [context.tenantId, digest, sourceId] : [context.tenantId, digest, operation, sourceId, JSON.stringify(parsed.data)])).rows[0]?.result;
+    if (operation === "routeChangeRead") return storedRouteReadV1.parse(result);
+    if (operation === "routeChangeConfirm" && actorId !== undefined && storedAccountingRouteChangeV1.parse(result).actorId !== actorId)
+     throw new StoredAccountingExportError("EXPORT_FORBIDDEN");
     if (operation === "routeChangePreview") return storedAccountingRoutePreviewV1.parse(result);
     if (operation === "routeChangeConfirm") return storedAccountingRouteChangeV1.parse(result);
     return operation === "preview" ? z.object({ version: z.literal(1), artifact: z.record(z.string(), z.unknown()), previewHash: hash }).strict().parse(result)

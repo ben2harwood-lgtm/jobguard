@@ -1,0 +1,50 @@
+import { readFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { afterAll, expect, it } from "vitest";
+import { ExtraApprovalRepository, ExtraRepository } from "../src/index.js";
+import { startBeforeMigration, snapshot } from "./contractor-entitlement-fixtures.js";
+import { world, code, type World } from "./contractor-billing-fixtures.js";
+import { raiseOn, approveInput, type Cluster } from "./extra-approval-chain-fixtures.js";
+let c: Cluster | undefined;
+afterAll(async () => { await c?.close(); });
+const migration = "0622_extra_duplicate_relink.sql";
+const mark = (w: World, duplicateId: string, canonicalId: string) => ({version:"mark-duplicate.v1",commandId:randomUUID(),jobId:w.s.jobId,duplicateId,canonicalId});
+it("1200 reproduces the populated predecessor failure, changes only two routine bodies and repairs both relink directions", async () => {
+ c = await startBeforeMigration(migration);
+ const w = await world(c), approvals = new ExtraApprovalRepository(c.runtime), extras = new ExtraRepository(c.runtime);
+ const a = w.s.extraId, b = await raiseOn(c,w.w,w.s.jobId);
+ await approvals.priceExtra(w.ctx,w.w.members.surveyor.member,{version:"price-extra.v1",commandId:randomUUID(),jobId:w.s.jobId,extraId:b,netPence:338});
+ const submitted = await approvals.submitExtra(w.ctx,w.w.members.supervisor.member,{version:"submit-extra.v1",commandId:randomUUID(),jobId:w.s.jobId,extraId:b});
+ await approvals.approveExtraStep(w.ctx,w.w.members.supervisor.member,approveInput({jobId:w.s.jobId,requestId:String(submitted.requestId),hash:String(submitted.revisionHash),net:338},0));
+ const actor = w.w.members.supervisor.member;
+ const first = await approvals.markDuplicate(w.ctx,actor,mark(w,a,b));
+ const unlink = async (linkId: string) => extras.unlinkDuplicate(w.ctx,{version:"extra-duplicate-unlink.v1",commandId:randomUUID(),jobId:w.s.jobId,actorMembershipId:actor.membershipId,linkId,expectedRevision:(await extras.readDuplicateLinks(w.ctx,w.s.jobId)).revision,reasonCode:"linked_in_error"});
+ await unlink(String(first.linkId));
+ const same = mark(w,a,b), reverse = mark(w,b,a);
+ const revision = {version:"revise-extra.v1",commandId:randomUUID(),jobId:w.s.jobId,extraId:a,netPence:24001};
+ expect(await code(approvals.markDuplicate(w.ctx,actor,same))).toBe("INVALID_TRANSITION");
+ expect(await code(approvals.markDuplicate(w.ctx,actor,reverse))).toBe("INVALID_TRANSITION");
+ expect(await code(approvals.reviseExtra(w.ctx,w.w.members.surveyor.member,revision))).toBe("INVALID_TRANSITION");
+ const before = await snapshot(c.admin);
+ const catalogue = async () => (await c!.admin.query(`SELECT p.oid,p.proowner,p.proacl,p.prosecdef,p.proconfig,pg_get_functiondef(p.oid) definition
+  FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname IN('app','identity','control_plane','audit_control','worm_control') AND p.prokind='f' ORDER BY p.oid`)).rows;
+ const routines = await catalogue();
+ const sql = await readFile(new URL(`../migrations/${migration}`,import.meta.url),"utf8");
+ await c.admin.query(sql);
+ expect(await snapshot(c.admin)).toEqual(before);
+ const current = await catalogue();
+ const changed = current.filter((row,i)=>row.definition!==routines[i]!.definition);
+ expect(changed.map(row=>row.definition.match(/CREATE OR REPLACE FUNCTION ([^(]+)/)?.[1]).sort()).toEqual(["app.xa_latest_kind","app.xa_mark_duplicate"]);
+ expect(current.map(({definition:_definition,...row})=>row)).toEqual(routines.map(({definition:_definition,...row})=>row));
+ await c.admin.query(sql);
+ expect(await catalogue()).toEqual(current); expect(await snapshot(c.admin)).toEqual(before);
+ // Reuse failed command IDs: predecessor refusals rolled the claims back.
+ const relinked = await approvals.markDuplicate(w.ctx,actor,same);
+ await unlink(String(relinked.linkId));
+ const reversed = await approvals.markDuplicate(w.ctx,actor,reverse);
+ await unlink(String(reversed.linkId));
+ // No deterministic candidate exists for these distinct free-text extras: both original approvals export again.
+ await w.exported();
+ const lines = (await w.repo.read(w.ctx,w.session,w.s.jobId)).exports.flatMap(x=>x.artifact.lines);
+ expect(lines.map(x=>x.extraId).sort()).toEqual([a,b].sort());
+},240000);
