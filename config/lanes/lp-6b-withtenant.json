@@ -6,7 +6,7 @@
         "codex/sandbox/lp-6b-withtenant",
         "codex/sandbox/lp-6b-repair-wip"
       ],
-      "note": "LP-6b RED repair: main d78e60463 batch-46 content retained; merge markers resolved in working files, router must stage resolutions (sandbox .git read-only). Migration reserved 0651, stem-only SQL unchanged. Ben 6 Nov router-chat yes authorizes exactly emergency-notice and retention-timer constructor sites; break-glass identity design goes to Ben before real data. No added grant, named opt-out or sixth skip; existing deferred scanner unchanged. Independent security checks and CI remain required.",
+      "note": "LP-6b RED landing catch-up only: exact content union with origin/main b0ae55c4686861e61af7b6b2b759ecdcb425205e. Router must stage resolutions and finish the pending merge (.git read-only here). Migration reserved 0655; main owns 0651\u20130652 and #601/#602 reserve 0653\u20130654. SQL bytes, behavior and assertions unchanged; duplicate merge import removed. Prior RED checks PASS at b530f334; new-head CI and required review remain router gates.",
       "allow": [
         "apps/api/src/accounting-export.application.test.ts",
         "apps/api/src/ai-capture-authority.test.ts",
@@ -95,8 +95,8 @@
         "docs/review/LP-6B-REPAIR-WIP-2026-11-04.md",
         "docs/review/LP-6B-ROUTER-REPAIR-2026-11-04-validation.md",
         "docs/review/LP-6B-ROUTER-REPAIR-2026-11-04.md",
-        "packages/db/migration-notes/0651_lp6b_effective_session_actor.md",
-        "packages/db/migrations/0651_lp6b_effective_session_actor.sql",
+        "packages/db/migration-notes/0655_lp6b_effective_session_actor.md",
+        "packages/db/migrations/0655_lp6b_effective_session_actor.sql",
         "packages/db/src/audit-export-repository.ts",
         "packages/db/src/cis-fixture-repository.ts",
         "packages/db/src/commercial-integrity-v3-repository.ts",
@@ -152,7 +152,7 @@
         "packages/db/test/lp6b-withtenant.integration.test.ts",
         "packages/db/test/lp6b-withtenant.test.ts",
         "packages/db/test/migfix-7-upgrade.integration.test.ts",
-        "packages/db/test/migration-proofs/0651_lp6b_effective_session_actor.proof.json",
+        "packages/db/test/migration-proofs/0655_lp6b_effective_session_actor.proof.json",
         "packages/db/test/money-trail-security.integration.test.ts",
         "packages/db/test/northside-demo.integration.test.ts",
         "packages/db/test/outbound-pause-fixture.ts",

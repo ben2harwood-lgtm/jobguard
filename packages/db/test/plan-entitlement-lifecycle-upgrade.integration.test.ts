@@ -31,14 +31,21 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   // Successor migrations have their own exact reviewed routine ACL additions.
   // Keep the 0556-only assertion above, and retain every predecessor definition.
   const live = await catalogue();
+  // 0651 replaces only this exact overload; pin its entire body, including all predecessor guards.
+  const feeResult = await readFile(new URL("../migrations/0651_fee_result_forward_only.sql", import.meta.url), "utf8");
+  const feeResultBody = feeResult.split("CREATE OR REPLACE FUNCTION app.replace_fee_reservation_book")[1]!.split("AS $$")[1]!.split("$$;")[0];
+  expect(live.filter(row => row.nspname === "app" && row.proname === "replace_fee_reservation_book"
+    && row.args === "p_tenant uuid, p_book jsonb, p_result jsonb")).toHaveLength(1);
+  expect(live.find(row => row.nspname === "app" && row.proname === "replace_fee_reservation_book"
+    && row.args === "p_tenant uuid, p_book jsonb, p_result jsonb")?.definition?.split("$function$")[1]).toEqual(feeResultBody);
   // 0587 replaces only the payment-fee writer body; keep every mainline exception below.
   const paymentFeeWriterOid = (await c.admin.query("SELECT 'app.write_payment_fee(uuid,text,jsonb)'::regprocedure::oid oid")).rows[0].oid;
   const collectRecheck = await readFile(new URL("../migrations/0587_payment_fee_collect_recheck.sql", import.meta.url), "utf8");
   const paymentFeeWriterBody = collectRecheck.split("CREATE OR REPLACE FUNCTION app.write_payment_fee")[1]!.split("AS $$")[1]!.split("$$;")[0];
-  // Ben's router ruling: the 0584 effective-session successor was renumbered to 0651 by stem only.
+  // Ben's router ruling: the 0584 effective-session successor was renumbered to 0655 by stem only.
   // Only this exact routine may take its reviewed successor body; its complete definition header stays exact.
   const effectiveSessionOid = (await c.admin.query("SELECT 'app.lp6_session_authority(text,text,uuid)'::regprocedure::oid oid")).rows[0].oid;
-  const effectiveSessionMigration = await readFile(new URL("../migrations/0651_lp6b_effective_session_actor.sql", import.meta.url), "utf8");
+  const effectiveSessionMigration = await readFile(new URL("../migrations/0655_lp6b_effective_session_actor.sql", import.meta.url), "utf8");
   const effectiveSessionBody = effectiveSessionMigration.split("AS $$")[1]!.split("$$;")[0];
   // 0567 changes only the checked settlement overload's expected approval hash.
   const settlementOid = (await c.admin.query("SELECT 'app.record_simulated_settlement(uuid,uuid,uuid,character varying,bigint,timestamp with time zone,uuid,uuid,uuid)'::regprocedure::oid oid")).rows[0].oid;

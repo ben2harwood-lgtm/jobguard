@@ -367,3 +367,54 @@ stage the resolved file and finish the pending merge, commit, rerun stock lint,
 and push for clean pinned CI including PostgreSQL/migration/browser/build checks
 and exact-head independent RED review. READY is a router commit/CI handoff only,
 not merge acceptance. Commit message: /tmp/lp-6b-repair-wip-20261106T121454Z-commit-msg.txt.
+
+
+## 6 November 2026 — 0655 landing catch-up (READY)
+
+Source: reviewed HEAD b530f334cff1244868bb9b255bf740bd2d0fd234, pending merge
+from origin/main b0ae55c4686861e61af7b6b2b759ecdcb425205e. Merge content is the
+union, with the duplicated MIGFIX-7 import collapsed. SQL bytes are unchanged;
+all active LP-6b stem references now use 0655. Request-binding fixture,
+upgrade-proof helpers and all test expectations remain unchanged from HEAD.
+
+Actual checks using installed binaries, at most two workers and three named
+Vitest files per invocation:
+
+- In packages/db: node_modules/.bin/vitest run --maxWorkers=2
+  test/lp6b-withtenant.test.ts test/lp6b-caller-compatibility.test.ts
+  test/upgrade-proof-utils.test.ts — 26 passed.
+- In packages/db: node_modules/.bin/vitest run --maxWorkers=2
+  test/lp6b-bind-after-locks.test.ts test/lp6b-deferred-binding.test.ts
+  src/tenant-context.test.ts — 28 passed.
+  Both groups: /tmp/lp6b-landing-db-unit.log. Protocol/source checks only.
+- In apps/api: node_modules/.bin/vitest run --maxWorkers=2
+  src/practice-bank.application.test.ts src/auth/context-boundary.test.ts
+  src/retention-review-task.test.ts — 167 passed
+  (/tmp/lp6b-landing-api-unit.log).
+- node --test --test-concurrency=2 tools/*.test.mjs — 423 passed, zero failures,
+  skips, cancellations or todo (/tmp/lp6b-landing-tools.log).
+- node_modules/.bin/tsc -p <workspace>/tsconfig.json --noEmit, sequentially for
+  packages/config, core, storage, ai, db and apps/api, web — all seven exit 0
+  (/tmp/lp6b-landing-types.log).
+- node tools/lint.mjs — core purity passes; lane lint exits 1 because the
+  read-only pending merge index includes incoming main files and old 0651 paths
+  (/tmp/lp6b-landing-lint.log). No stock root lint PASS is claimed.
+- node tools/{money-arithmetic,commercial-boundary,ai-provider-boundary,
+  plpgsql-case-in-if}-lint.mjs, each run separately — all exit 0
+  (/tmp/lp6b-landing-component-lints.log).
+- Content-only lane check uses the existing selectLane/lanePathAllowed and
+  migrationOrderViolations exports against origin/main: exactly 164 non-lane
+  paths, no config/lanes paths, and 0655 above main's 0652 — PASS.
+- Both-parent MIGFIX-7 line preservation, 15 other incoming main files' byte
+  preservation, affected integration/helper TypeScript parsing (five files),
+  SQL SHA-256 preservation and git diff --check — PASS.
+
+The pnpm --version wrapper attempted registry resolution and failed; no package
+was installed. All validation above used existing installed binaries. No local
+PostgreSQL, browser, provider, real data, git index/ref write or push was used.
+The router must stage the resolved file and 0655 renames, complete the pending
+merge, rerun stock lane lint and push for GitHub CI database/migration, browser
+and build gates. Prior RED checks PASS at b530f334; new-head review evidence is
+not claimed here. READY means ready for router commit and CI, not merge acceptance.
+
+Commit message: /tmp/lp-6b-repair-wip-20261106T132237Z-commit-msg.txt.
