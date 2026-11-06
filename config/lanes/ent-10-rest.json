@@ -19,6 +19,7 @@
         "apps/web/app/api/auth/sso-required/emergency-actions/[operation]/route.ts",
         "apps/web/app/api/auth/sso-required/emergency/route.ts",
         "apps/web/e2e/ENT-10-emergency-cutover.spec.ts",
+        "apps/web/e2e/ENT-10d.spec.ts",
         "docs/security/not-claimed-register.md",
         "docs/verdicts/ENT-10-rest/BUILDER_RECEIPT.md",
         "packages/db/test/enterprise-access.integration.test.ts"

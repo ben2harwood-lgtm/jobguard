@@ -145,7 +145,7 @@ const requiredMessages:Record<string,string>={
   SSO_REQUIRED_UNLINKED_MEMBERS:"Every active member must link their SAML identity before you can turn this on.",
   STALE_SSO_REQUIRED:"Another administrator changed the requirement. Reload it before trying again.",
   SSO_ROUTE_BLOCKED:"Single sign-on administration is available only in the synthetic sandbox.",
-  SSO_EMERGENCY_REFUSED:"Emergency access is unavailable because no approver has been set.",
+  SSO_EMERGENCY_REFUSED:"Restricted emergency access requires a current owner session and two other owners.",
   SSO_REQUIRED_UNAVAILABLE:"The requirement could not be confirmed. Reload before making changes.",
 };
 function SingleSignOnRequired({session,tenantId}:{session:Session;tenantId:string}) {

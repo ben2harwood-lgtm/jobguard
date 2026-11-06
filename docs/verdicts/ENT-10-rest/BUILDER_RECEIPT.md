@@ -1,3 +1,20 @@
+## READY — ent-10-rest repair round 3 — 6 November 2026
+
+RED, plan piece ENT-10-rest, NOPR; Ben-authorized extra repair round. The launcher already completed the main merge at `a2843cad5`; the index has no unmerged entries and the starting worktree was clean. No merge resolution or Git-writing command was needed.
+
+Applied only the three prescribed behavior/test corrections: render the emergency action status paragraph only when its text is nonempty; replace ENT-10d's obsolete no-approver expectation with the exact current owner/two-other-owners sentence; use that same plain sentence for `SSO_EMERGENCY_REFUSED`. Updated this piece's lane with ENT-10d; it equals all 16 non-lane paths changed from local `origin/main` and does not list itself. No SQL, migration, authorization behavior or unrelated source changed.
+
+Actual local checks, installed dependencies only:
+
+- From `apps/api`: `node_modules/.bin/vitest run --maxWorkers=2 src/auth/sso/sso-emergency-owner.test.ts src/auth/sso/sso-emergency.test.ts src/auth/sso/enterprise-access.http.test.ts` — **38 passed**, three files, at most two workers.
+- `node node_modules/typescript/bin/tsc -p apps/web/tsconfig.json --noEmit` — **PASS**.
+- From `apps/web`: `node_modules/.bin/playwright test ENT-10a.spec.ts ENT-10d.spec.ts ENT-10-emergency-cutover.spec.ts --list --project=mobile-360 --project=desktop --workers=2` — **PASS**, 10 cases discovered in three files across both widths. Discovery only; no browser execution.
+- `node tools/agent-lane-boundary-lint.mjs` — **PASS**. Read-only filesystem lane equality against local `origin/main` and `git diff --check` — **PASS**.
+
+READY for router commit/push and CI. The sandbox cannot start PostgreSQL or bind localhost, so CI must execute the three named browser specs headless at both widths with at most two workers, focused real PostgreSQL suites and required checks. Independent RED review remains required at the resulting exact head. No database/browser execution, independent review, commit, push, PR, deployment or launch is claimed.
+
+---
+
 ## READY — landing merge verification — 6 November 2026
 
 RED, plan piece ENT-10-rest. The launcher has already completed the main merge at `3d6ad4f98`; the index has no unmerged entries. Compared the resulting filesystem with current local `origin/main` (`daed0c282`). Restored `config/lanes/batch-30.json` byte-for-byte from that main ref, removing this group's inherited edits to another lane. No behavior, test, SQL routine or migration changed in this run. All main workspace export lines remain present. No migration differences exist against main, so no duplicate migration or routine recreation is needed. This lane still equals all 15 non-lane paths changed from main, without listing itself.
