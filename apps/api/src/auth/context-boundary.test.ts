@@ -86,8 +86,9 @@ const APPROVED_PRACTICE_FILES = [
 // (Ben, 9 Oct, card jobguard-m06l-scanner-ent2-files-2026-10-09), not arbitrary code at these paths.
 // A change to any bridge requires renewed caller review; the hashes are NOT computed from the tree under test.
 const REVIEWED_PRACTICE_SOURCES: Readonly<Record<string, string>> = {
-  // renewed caller review 28 Oct (jg-checks, ch9-p2 review)
-  "packages/db/src/practice-session.ts": "9b765f410777c28334f9f7d8388e0a3c6e30f52bb6d4b4070c9b69e4ecbf1b14",
+  // Renewed caller source review 6 Nov 2026, later-safety-108 CI repair: only ownership traversal changes.
+  // Persisted-session authentication, synthetic-only gate and the sole context constructor are unchanged; RED review remains required.
+  "packages/db/src/practice-session.ts": "f7f5dcfff5d08482bccd7c1a19c22fd864eb398ddcc55f7ee4ab54108dc6c84d",
   "packages/db/src/contractor-repository.ts": "56b95b80360434f0cf58376ef2ec44d0354b194e5080bcfd9414ac283971006c",
   "packages/db/src/contractor-party-repository.ts": "e5852288e5355b53f7548c4d5741aef54ee55a2b8a66dd56a54b08963cd1fdb0",
   // Renewed caller review 5 Nov 2026: Ben approved batch-41 ("Yes, all three") in the router chat.

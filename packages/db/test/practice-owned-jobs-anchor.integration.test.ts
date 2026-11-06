@@ -1,5 +1,7 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { UserCommandDispatcher } from "../src/commands.js";
+import { AdoptInFlightJobMutation } from "../src/job-import-repository.js";
 import { appendAuditBatch } from "../src/audit.js";
 import { JobImportV3Repository } from "../src/job-import-v3-repository.js";
 import { authorizePracticeJob } from "../src/practice-session.js";
@@ -46,7 +48,7 @@ describe("practice ownership uses the trusted import source — PostgreSQL", () 
     expect((await authorizePracticeJob(f.runtime, owner.sessionId, jobId)).digest).toBe(auth.digest);
   });
 
-  it("keeps a real v1 parties import owned through its source-bound baseline hash", async () => {
+  it("keeps a real v1 parties import owned through its original adoption event", async () => {
     const { JobPartiesApplication } = await import("../../../apps/api/src/job-parties.application.js");
     const owner = await seedWorkPractice(f), stranger = await seedWorkPractice(f);
     const binding = (await f.admin.query("SELECT binding_id FROM app.job_party_current WHERE tenant_id=$1 AND job_id=$2",
@@ -61,4 +63,41 @@ describe("practice ownership uses the trusted import source — PostgreSQL", () 
     }]));
     await expect(authorizePracticeJob(f.runtime, stranger.sessionId, result.jobId)).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
+
+  it("preserves legacy v1 arbitrary hashes and rejects later forged source attestations", async () => {
+    const owner = await seedWorkPractice(f), stranger = await seedWorkPractice(f);
+    const tenantId = owner.auth.context.tenantId, jobId = randomUUID(), baselineId = randomUUID();
+    const parties = (await f.admin.query(`SELECT customer_revision_id AS "customerRevisionId",
+      site_revision_id AS "siteRevisionId", paying_party_revision_id AS "payingPartyRevisionId"
+      FROM app.job_party_binding WHERE tenant_id=$1 AND job_id=$2 ORDER BY revision DESC LIMIT 1`,
+    [tenantId, owner.jobId])).rows[0];
+    // The controlled v1 contract accepts arbitrary baseline hashes, as CH-3a's original adoption does.
+    const baselineHash = createHash("sha256").update("Fictional inherited ownership").digest("hex");
+    const mutation = new AdoptInFlightJobMutation(tenantId, "synthetic_candidate", {
+      version: "adopt-job.v1", jobId, baselineId, title: "Fictional legacy import", lifecyclePoint: "live",
+      provenance: "imported", lineageStrength: "builder_attested_weaker", baselineHash,
+      baselineDescription: "Fictional baseline", acceptedNetValuePence: 100000, recoveryCapPence: 1500,
+      acceptedValueSource: "builder_attestation", attestedByMembershipId: owner.auth.membershipId,
+      attestedAt: new Date(0), importTermsVersion: "synthetic_import_terms_candidate.v1",
+      feePolicyVersion: "reference_fee_policy_v1", mode: "synthetic_candidate", parties,
+    });
+    await new UserCommandDispatcher(f.runtime).dispatch(owner.auth.context, {
+      version: "command.v1", commandId: randomUUID(), commandType: "job.adopt_in_flight", semanticKey: `import:${jobId}`,
+      actorMembershipId: owner.auth.membershipId, subjectType: "job", subjectRef: jobId,
+      action: { actionType: "job.adopt_in_flight", recipient: null, contentHash: baselineHash, aggregateRevision: 0,
+        amountPence: 100000, currency: "GBP", policyVersion: "synthetic_import_terms_candidate.v1",
+        expiresAt: new Date(Date.now() + 300000) },
+    }, { mutate: mutation.mutate.bind(mutation), auditEvents: (result, command) => mutation.auditEvents(result, command).map(event => ({
+      ...event, payload: { ...event.payload, references: { ...event.payload.references, sourceJobId: owner.jobId } },
+    })) });
+    expect((await authorizePracticeJob(f.runtime, owner.sessionId, jobId)).digest).toBe(owner.auth.digest);
+    await withTenant(f.runtime, stranger.auth.context, db => appendAuditBatch(db, [{
+      id: randomUUID(), version: "audit.v1", actorRef: `membership:${stranger.auth.membershipId}`,
+      eventType: "job.imported_baseline_attested", subjectType: "job", subjectRef: jobId,
+      payload: { references: { sourceJobId: stranger.jobId, baselineId }, hashes: { baselineHash } },
+    }]));
+    await expect(authorizePracticeJob(f.runtime, stranger.sessionId, jobId)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect((await authorizePracticeJob(f.runtime, owner.sessionId, jobId)).digest).toBe(owner.auth.digest);
+  });
+
 });
