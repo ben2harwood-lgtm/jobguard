@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "demo-bootstrap-guard": {
+      "branches": ["codex/sandbox/demo-bootstrap-guard"],
+      "note": "RED: refuse a synthetic demo account belonging to an older tenant before membership bootstrap.",
+      "allow": [
+        "packages/db/src/demo-bootstrap.ts",
+        "packages/db/test/demo-bootstrap.integration.test.ts"
+      ]
+    }
+  }
+}
