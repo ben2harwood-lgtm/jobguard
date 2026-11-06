@@ -392,3 +392,69 @@ browser journeys and independent RED review at the final exact head remain
 required. Earlier receipt instructions about the previous merge's 0590/0591
 restoration are historical; the current working-tree comparison shows those main
 paths preserved. Wider ENT-5 acceptance and production/provider gates stay open.
+
+## batch-34 main merge catch-up — 6 November 2026
+
+READY for router handoff. RED: ENT-5 proceed statement and remaining approval
+rules. Builder verification only; independent RED review and required CI remain.
+Base is the pending MERGE_HEAD / origin/main
+`f5415ddb4c3a40796dd812e8b5946ba5094daa2b` (local `main` is older).
+
+- Resolved all six working-file conflicts as unions: retain main's merchant
+  reliability export, EndCheck registry row, contractor-job-finish and provider-key
+  empty tables, all latest routine checks, and this group's ENT-5 additions.
+- Rechained 1200's exact registry `before` to 0620's `after`, including EndCheck.
+  Its `after` preserves PostgreSQL jsonb-text snapshot order with only
+  RecordExtraProceed inserted. A strengthened exact-order assertion covers this.
+  Historical 0606 checks exclude the three subsequent registry additions and
+  retain exact historical membership and count.
+- Compared every replacement routine in 1200–1204 with the latest matching body
+  across main's migrations, including infrastructure discovery. Differences are
+  only the existing ENT-5 proceed adapter, repeat-slot rule, withdrawal roles,
+  working-day wait consumers and rule validation. No newer main routine behavior
+  is removed; the latest dispatcher remains 0606, permission/approval/withdrawal
+  0522, requirement/escalation/queue 0158, discovery 0575 and validation 0054.
+  No routine rewrite was needed beyond the already-correct group replacements.
+- Every main migration is byte-preserved. Only 1200–1204 are added; none duplicates
+  a main semantic filename or migration number, so none needs dropping.
+- Lane allow-list matches all 49 changed paths against this base outside
+  config/lanes; it does not list itself. No new product behavior or weakened test.
+
+Local checks used installed binaries; no downloads. Vitest runs were sequential,
+with at most three named files and --maxWorkers=2:
+
+- packages/db: `./node_modules/.bin/vitest run --maxWorkers=2
+  test/extra-proceed-migration.test.ts test/migration-proof-loader.test.ts
+  test/m2-1-migration-proof.test.ts` — 83 passed on final tree.
+- packages/db: `./node_modules/.bin/vitest run --maxWorkers=2
+  test/late-source-import-migration.test.ts test/extra-approval-timing.test.ts`
+  — 21 passed.
+- packages/core: `./node_modules/.bin/vitest run --maxWorkers=2
+  src/extra-proceed.test.ts src/extra-approval.test.ts src/rate-baseline.test.ts`
+  — 38 passed.
+- apps/api: `./node_modules/.bin/vitest run --maxWorkers=2
+  src/contractor/extra-proceed.application.test.ts` — 1 passed.
+- apps/web: `./node_modules/.bin/vitest run --maxWorkers=2
+  'app/api/contractor/jobs/[id]/site-extras/[extraId]/proceed/route.test.ts'
+  'app/api/northside/extras/[extraId]/[action]/chain-actions.test.ts'`
+  — 38 passed. Total: 181 targeted tests passed.
+- Root: `packages/core/node_modules/.bin/tsc -p packages/core/tsconfig.json
+  --noEmit` and `packages/db/node_modules/.bin/tsc -p packages/db/tsconfig.json
+  --noEmit` — passed.
+- apps/api: `node_modules/.bin/tsc -p tsconfig.json --noEmit` — passed.
+- apps/web: `node_modules/.bin/tsc -p tsconfig.json --noEmit --incremental false`
+  — passed.
+- Root: `node tools/plpgsql-case-in-if-lint.mjs` — passed, 291 migrations.
+  `git diff --check` — passed; no merge markers in changed working files.
+
+The first targeted run preceded the registry-proof correction and failed its
+exact proof-chain assertions; those pass after correction. One editing helper
+initially used a root-relative path from packages/db, wrote nothing, and was
+rerun from the repository root.
+
+No Git write, PostgreSQL startup, browser/localhost suite, push or PR operation
+was attempted. The read-only index still records six unmerged paths: the router
+must stage the resolutions and finish the pending merge. Full required CI,
+PostgreSQL fresh/upgrade/catalog tests, browser journeys and independent RED
+review must run at the final committed head. Existing wider ENT-5 holds and
+real-data, provider and release gates remain. READY means router handoff only.
