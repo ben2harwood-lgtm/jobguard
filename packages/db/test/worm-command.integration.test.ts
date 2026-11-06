@@ -180,6 +180,39 @@ describe("durable synthetic WORM SQL", () => {
     await expect(repo.submit(context, command({ evidenceId: randomUUID() }))).rejects.toThrow("WORM_REFUSED");
     await expect(repo.submit(context, command({ action: "release_hold", releaseOf: randomUUID() }))).rejects.toThrow("WORM_REFUSED");
   });
+  it("LATER-SAFETY-26 refuses apply/release atomically without storing any request", async () => {
+    for (const c of [command({ evidenceId: randomUUID() }), command({ action: "release_hold", releaseOf: randomUUID() })]) {
+      const before = (await admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1", [tenant])).rows;
+      await expect(repo.submit(context, c)).rejects.toMatchObject({ code: "WORM_REFUSED", message: "WORM_REFUSED" });
+      expect((await admin.query("SELECT id FROM app.worm_command WHERE id=$1 OR idempotency_key=$2", [c.commandId, c.idempotencyKey])).rows).toEqual([]);
+      expect((await admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1", [tenant])).rows).toEqual(before);
+    }
+  });
+  it("LATER-SAFETY-26 replays the stored hold after a committed request loses its acknowledgement", async () => {
+    const c = command();
+    const client = await runtime.connect();
+    const query = client.query.bind(client);
+    let lost = false;
+    const lossy = { connect: async () => ({
+      query: async (sql: string, values?: unknown[]) => {
+        const result = await query(sql, values);
+        if (sql === "COMMIT" && !lost) {
+          lost = true;
+          // Even a refusal-shaped error after a real COMMIT is unconfirmed.
+          throw Object.assign(new Error("COMMIT synthetic/private/key"), { code: "42501" });
+        }
+        return result;
+      }, release: () => client.release(),
+    }) } as unknown as Pool;
+    const interrupted = new WormCommandRepository(lossy, true, executor, undefined, sessionDigest);
+    await expect(interrupted.submit(context, c)).rejects.toMatchObject({ code: "WORM_UNCONFIRMED", message: "WORM_UNCONFIRMED" });
+    const stored = (await admin.query("SELECT * FROM app.worm_command WHERE id=$1", [c.commandId])).rows[0];
+    expect(stored).toMatchObject({ id: c.commandId, idempotency_key: c.idempotencyKey, status: "queued" });
+    expect(await repo.submit(context, c)).toEqual(stored);
+    expect((await admin.query("SELECT id FROM app.audit_event WHERE tenant_id=$1 AND event_type='worm.authorized' AND payload->'references'->>'command'=$2", [tenant, c.commandId])).rows).toHaveLength(1);
+    // Finish this synthetic fixture as refused so subsequent hold cases remain independent.
+    await repo.execute(context, c.commandId, { ...storage, hold: async () => { throw new WormBoundaryError("INVALID_INPUT"); } }, tsa);
+  });
   it("atomically records one authorization/audit/outbox for concurrent duplicates, refusing either conflicting identity", async () => {
     const c = command();
     const [a, b] = await Promise.all([repo.submit(context, c), repo.submit(context, c)]);
