@@ -73,7 +73,7 @@ it('emergency_dual_owner/scim2_machine preserve populated identity state, instal
   for(const m of (await readFile(url,'utf8')).matchAll(/CREATE OR REPLACE FUNCTION ([a-z_]+)\.([a-z0-9_]+)\(/gu))later.add(`${m[1]}.${m[2]}`);
  // 0642 and 0644 re-create these exact bodies by text replacement; plan-entitlement-lifecycle-upgrade pins each body.
  for(const name of ['app.xa_issue_link','app.lp5b_contractor_permission','app.northside_capture_action'])later.add(name);
- // 0843 inserts the practice-owner guard into lock_final_account by text replacement; migfix-7 and plan-entitlement pin the body.
+ // 0667 inserts the practice-owner guard into lock_final_account by text replacement; migfix-7 and plan-entitlement pin the body.
  later.add('app.lock_final_account');
  // A later GRANT/REVOKE on a predecessor table may change its ACL only; that migration's proof and LP-0 pin it.
  const laterAcl=new Set<string>();

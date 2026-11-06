@@ -1,3 +1,4 @@
+import { mapRequestBindingRefusal } from "./request-binding-error.js";
 import {z} from "zod";
 import type {Pool} from "pg";
 import {diaryReadV1,customerMessageReadV1,jobSourceIntakeReceiptV1,JobSourceError,JobWorkStateError,type DiaryRead,type CustomerMessageRead,type JobSourceIntakeReceipt} from "@jobguard/core";
@@ -10,12 +11,12 @@ export class JobSourceRepository {
  read(context:VerifiedTenantContext,jobId:string,digest:string,kind:"customer_message"):Promise<CustomerMessageRead>;
  async read(context:VerifiedTenantContext,jobId:string,digest:string,kind:"diary"|"customer_message"):Promise<DiaryRead|CustomerMessageRead>{
   if(!z.guid({ error: "Invalid uuid" }).safeParse(jobId).success || !/^[a-f0-9]{64}$/u.test(digest))throw new JobSourceError("INVALID_JOB_SOURCE_INPUT");
-  return withTenant(this.pool,context,async db=>{
+  return mapRequestBindingRefusal(withTenant(this.pool,context,async db=>{
    try{
     const result=(await db.$client.query<{result:unknown}>("SELECT app.read_job_sources($1,$2,$3,$4) result",[context.tenantId,jobId,digest,kind])).rows[0]?.result;
     const parsed=(kind==="diary"?diaryReadV1:customerMessageReadV1).safeParse(result);if(!parsed.success)throw new JobSourceError("SOURCE_NOT_FINALIZED");return parsed.data;
    }catch(error){if(error instanceof Error && error.message==="JOB_SOURCE_FORBIDDEN")throw new JobSourceError("JOB_SOURCE_FORBIDDEN");throw error}
-  });
+  }), () => new JobSourceError("JOB_SOURCE_FORBIDDEN"));
  }
  /** Diary notes and fictional customer messages through app.sv7a_intake_job_source only.
   * `owner` is the practice session digest, or a trusted server membership id: the same CH-4 authority seam
@@ -23,7 +24,7 @@ export class JobSourceRepository {
   * routine replays first, then refuses a new note on a job that is not live. */
  async intake(context:VerifiedTenantContext,jobId:string,owner:string,kind:"diary"|"customer_message",raw:unknown):Promise<JobSourceIntakeReceipt>{
   if(!z.guid({ error: "Invalid uuid" }).safeParse(jobId).success || !(/^[a-f0-9]{64}$/u.test(owner) || z.guid().safeParse(owner).success))throw new JobSourceError("INVALID_JOB_SOURCE_INPUT");
-  return withTenant(this.pool,context,async db=>{
+  return mapRequestBindingRefusal(withTenant(this.pool,context,async db=>{
    try{
     // Separate first lock, with authority checked before and after the wait.
     // The writer rechecks lifecycle after replay, so post-live retries still work.
@@ -41,6 +42,6 @@ export class JobSourceRepository {
     if(error.message==="JOB_NOT_LIVE"||error.message==="IDEMPOTENCY_CONFLICT")throw new WatchdogError(error.message);
     throw error;
    }
-  });
+  }), () => new JobSourceError("JOB_SOURCE_FORBIDDEN"));
  }
 }

@@ -1,3 +1,4 @@
+import { sourceFixtureUrl } from "./source-fixture-url.js";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { subscriptionCatalogueQueryV1, subscriptionOnboardingAssessmentV1 } from "./subscription.contracts.js";
@@ -14,7 +15,7 @@ describe("MON-2A held-route contracts", () => {
     expect(subscriptionOnboardingAssessmentV1.safeParse({ ...input, siteStaffCapture: undefined }).success).toBe(false);
   });
   it("M2A-30 M2A-34 this module exposes schemas only, with no route or context constructor", () => {
-    const source = readFileSync(new URL("./subscription.contracts.ts",import.meta.url),"utf8");
+    const source = readFileSync(sourceFixtureUrl("./subscription.contracts.ts", import.meta.url),"utf8");
     expect(source).not.toMatch(/@(?:Controller|Get|Post)|VerifiedTenantContext|authenticate|Pool|Dispatcher|fetch\s*\(/u);
     expect([...source.matchAll(/from\s+["']([^"']+)["']/gu)].map(m => m[1])).toEqual(["zod"]);
   });

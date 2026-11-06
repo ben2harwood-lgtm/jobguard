@@ -1,5 +1,5 @@
 {
-  "migration": "0843_final_check_practice_owner_check.sql",
+  "migration": "0667_final_check_practice_owner_check.sql",
   "lp0": [],
   "upgrade": [
     {

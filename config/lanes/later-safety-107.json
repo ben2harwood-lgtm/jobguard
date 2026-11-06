@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-107": {
+      "branches": ["codex/sandbox/later-safety-107"],
+      "allow": [
+        "packages/storage/src/index.ts",
+        "packages/storage/test/versioned-storage-null-version.test.ts"
+      ]
+    }
+  }
+}

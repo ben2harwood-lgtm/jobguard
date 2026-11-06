@@ -11,7 +11,7 @@ import {
 let f: FinalCheckFixture;
 beforeAll(async () => {
   vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
-  // This fixture migrates a fresh embedded PostgreSQL 16 database, including 0843.
+  // This fixture migrates a fresh embedded PostgreSQL 16 database, including 0667.
   f = await createFinalCheckFixture();
 }, 60000);
 afterAll(async () => { await closeFinalCheckFixture(f); vi.unstubAllEnvs(); });
