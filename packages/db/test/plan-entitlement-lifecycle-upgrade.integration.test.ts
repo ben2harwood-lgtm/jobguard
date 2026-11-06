@@ -31,6 +31,13 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   // Successor migrations have their own exact reviewed routine ACL additions.
   // Keep the 0556-only assertion above, and retain every predecessor definition.
   const live = await catalogue();
+  // 0651 replaces only this exact overload; pin its entire body, including all predecessor guards.
+  const feeResult = await readFile(new URL("../migrations/0651_fee_result_forward_only.sql", import.meta.url), "utf8");
+  const feeResultBody = feeResult.split("CREATE OR REPLACE FUNCTION app.replace_fee_reservation_book")[1]!.split("AS $$")[1]!.split("$$;")[0];
+  expect(live.filter(row => row.nspname === "app" && row.proname === "replace_fee_reservation_book"
+    && row.args === "p_tenant uuid, p_book jsonb, p_result jsonb")).toHaveLength(1);
+  expect(live.find(row => row.nspname === "app" && row.proname === "replace_fee_reservation_book"
+    && row.args === "p_tenant uuid, p_book jsonb, p_result jsonb")?.definition?.split("$function$")[1]).toEqual(feeResultBody);
   // 0587 replaces only the payment-fee writer body; keep every mainline exception below.
   const paymentFeeWriterOid = (await c.admin.query("SELECT 'app.write_payment_fee(uuid,text,jsonb)'::regprocedure::oid oid")).rows[0].oid;
   const collectRecheck = await readFile(new URL("../migrations/0587_payment_fee_collect_recheck.sql", import.meta.url), "utf8");
@@ -116,11 +123,12 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     }
     // 0566, 0573 and 0606 extend exactly this dispatcher for managed recovery, supervisor queries and dark orders.
     if (prior.nspname === "app" && prior.proname === "lp5_command_result" && prior.args === "p_command_id uuid, p_outcome jsonb") continue;
-    // 0631 replaces exactly the legacy v1 landing bodies; its populated upgrade test binds both replacements.
+    // 0631 replaces the legacy v1 landing bodies; 0654 extends only the reversal replay/policy checks.
     if (prior.nspname === "app" && (
       (prior.proname === "approve_synthetic_landing" && prior.args === "p jsonb") ||
       (prior.proname === "reverse_synthetic_landing" && prior.args === "p_tenant uuid, p_reversal uuid, p_derivation uuid, p_journal uuid, p_allocation uuid, p_amount bigint, p_reason character varying"))) {
-      const sql = await readFile(new URL("../migrations/0631_legacy_recovery_money_integrity.sql", import.meta.url), "utf8");
+      const migration = prior.proname === "reverse_synthetic_landing" ? "0654_synthetic_reversal_money_rules.sql" : "0631_legacy_recovery_money_integrity.sql";
+      const sql = await readFile(new URL(`../migrations/${migration}`, import.meta.url), "utf8");
       const body = sql.split(`CREATE OR REPLACE FUNCTION app.${prior.proname}(`)[1]!.split("AS $$")[1]!.split("$$;")[0];
       expect(current?.definition?.split("$function$")[1]).toEqual(body);
     } else
@@ -187,9 +195,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     .sort((a,b) => a.nspname.localeCompare(b.nspname) || a.proname.localeCompare(b.proname) || a.args.localeCompare(b.args));
   const ownerOids = Object.fromEntries((await c.admin.query("SELECT rolname,oid FROM pg_roles")).rows.map(row => [row.rolname,row.oid]));
   const successors = loadMigrationProofs().proofs.filter(proof => proof.migration > "0556_mon8_job_track_and_trial.sql")
-    // Only the schemas `security`/`live` read; a successor's infrastructure routine is pinned by its own suite.
-    .map(proof => ({ ...proof, upgrade: proof.upgrade.filter(change => change.section === "routines" &&
-      ["app", "identity", "control_plane", "audit_control", "worm_control"].includes((change.after ?? change.before)!.nspname)) }));
+    .map(proof => ({ ...proof, upgrade: proof.upgrade.filter(change => change.section === "routines") }));
   const expected = applyUpgradeProofs({ rows: {}, routines: privileges(security), relations: [], policies: [] }, successors, ownerOids);
   expect(privileges(live)).toEqual(privileges(expected.routines as typeof security));
 }, 120000);
