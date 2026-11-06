@@ -5,7 +5,7 @@ import { startBeforeMigration, applyMigration, type Cluster } from "./contractor
 import { proofBefore, proofDifferences } from "./upgrade-proof-utils.js";
 import { migrate } from "../src/migrate.js";
 
-const own = "1211_shadow_group_disclosure.sql";
+const own = "0632_shadow_group_disclosure.sql";
 let c: Cluster | undefined;
 afterAll(async () => { await c?.close(); });
 it("MIGFIX-7 preserves populated rows, types and privileges; changes only the two named routines and adds an ungranted trigger", async () => {

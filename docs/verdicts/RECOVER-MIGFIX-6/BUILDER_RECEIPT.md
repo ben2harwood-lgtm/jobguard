@@ -8,7 +8,7 @@ reversal predicate were still missing. No fetch, Git mutation, commit or push.
 
 ## Focused recovery
 
-Migration `1210_legacy_recovery_money_integrity.sql` adds the validated
+Migration `0631_legacy_recovery_money_integrity.sql` adds the validated
 `landing_allocation_eligible_within_gross` constraint and starts both replacement
 routines from their latest mainline bodies in 0356. Approval adds eligible <= gross;
 reversal subtracts every reversal and uses the approval routine's existing settled
@@ -25,7 +25,7 @@ Added fresh-install PostgreSQL regressions and a populated upgrade/replay test u
 current fixture helpers. The latter compares all existing rows, policies, relation
 ownership/grants/RLS and every routine; only the two exact legacy body replacements
 are permitted. The pre-existing 0556 upgrade test now binds these exact signatures
-to 1210's replacement bodies rather than exempting a class of routines. Migration
+to 0631's replacement bodies rather than exempting a class of routines. Migration
 proof records unchanged runtime-reachable routine metadata and identity arguments.
 
 ## Local evidence
@@ -73,8 +73,8 @@ RED, NOPR: recover-migfix-6 plus recover-migfix-7, compared with local
 the dispatch baseline. No fetch or Git write was performed.
 
 Resolved the MIGRATIONS.md conflict by preserving both entries. Renamed the
-migration stems and their proofs/references to `1210_legacy_recovery_money_integrity`
-and `1211_shadow_group_disclosure`, in batch dependency order. Both SQL files
+migration stems and their proofs/references to `0631_legacy_recovery_money_integrity`
+and `0632_shadow_group_disclosure`, in batch dependency order. Both SQL files
 are byte-identical to their recovered versions before renaming. No mainline
 migration was edited. Both exact routine exceptions remain in the plan-entitlement
 upgrade test. Removed both added piece lanes and registered batch-49 with exact

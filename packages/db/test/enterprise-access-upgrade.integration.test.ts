@@ -77,7 +77,7 @@ it('emergency_dual_owner/scim2_machine preserve populated identity state, instal
   for(const m of (await readFile(url,'utf8')).matchAll(/\b(?:GRANT|REVOKE)\b[^;]*?\bON\s+(?:TABLE\s+)?((?:[a-z_]+\.[a-z0-9_]+)(?:\s*,\s*[a-z_]+\.[a-z0-9_]+)*)\s+(?:TO|FROM)\b/gu))
    for(const name of m[1]!.split(','))laterAcl.add(name.trim());
  expectPoliciesUnchanged(catalogue.policies,after.policies);
- // 1210 (MIGFIX-6) adds exactly one validated CHECK to app.landing_allocation; nothing else on that table may change.
+ // 0631 (MIGFIX-6) adds exactly one validated CHECK to app.landing_allocation; nothing else on that table may change.
  const added='landing_allocation_eligible_within_gross';
  const isLanding=(r:Relation)=>r.nspname==='app'&&r.relname==='landing_allocation';
  type Con={name:string;definition:string};

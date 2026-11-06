@@ -29,7 +29,7 @@ login gains business-table SELECT. Existing completed alert replay returns its
 immutable result; new alerts require accepted terms. Startup checks the actual
 relation before registering either worker task, including shared outbox work.
 
-MIGFIX-7 recovery (`1211_shadow_group_disclosure.sql`) retains the latest mainline early-firing executor and
+MIGFIX-7 recovery (`0632_shadow_group_disclosure.sql`) retains the latest mainline early-firing executor and
 its `lp4_seal_audit` checked-operation writer. It acquires the detection advisory
 key before job/signal locks; its existing disclosure call now excludes the whole
 duplicate group. The existing worker/repository uses that executor without new

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { expect, it } from "vitest";
 import { loadMigrationProofs } from "./migration-proof-loader.js";
 const read = (file: string) => readFileSync(new URL(file, import.meta.url), "utf8");
-const sql = read("../migrations/1210_legacy_recovery_money_integrity.sql");
+const sql = read("../migrations/0631_legacy_recovery_money_integrity.sql");
 const previous = read("../migrations/0356_unchecked_job_doors.sql");
 const routine = (source: string, name: string) => source.match(new RegExp(`CREATE OR REPLACE FUNCTION app\\.${name}\\([\\s\\S]*?END\\$\\$;`, "u"))![0];
 it("retains every latest approval restriction apart from adding eligible <= gross", () => {
@@ -19,7 +19,7 @@ it("changes only cumulative reversals and settled credit in the latest reversal 
     .replace(credit, "credit:=least(7900,fee);")).toBe(routine(previous, "reverse_synthetic_landing"));
 });
 it("has a discoverable body-only proof and adds no columns, grants, routines or session settings", () => {
-  const proof = loadMigrationProofs().proofs.find(p => p.migration === "1210_legacy_recovery_money_integrity.sql")!;
+  const proof = loadMigrationProofs().proofs.find(p => p.migration === "0631_legacy_recovery_money_integrity.sql")!;
   expect(proof.lp0).toHaveLength(2); expect(proof.upgrade).toHaveLength(2); expect(proof.tenancy).toEqual([]);
   for (const change of [...proof.lp0, ...proof.upgrade]) expect(change.after).toEqual(change.before);
   expect(sql).not.toMatch(/\b(?:GRANT|REVOKE|ADD COLUMN|CREATE TABLE|SET app\.)\b/u);

@@ -144,7 +144,7 @@ with a coalesced target: it records coalescing, not a completed final-check run.
 A duplicate whose provenance was disclosed stays `surfaced_early`. SV-3 must
 preserve those semantics without exposing hidden counts or content.
 
-MIGFIX-7 recovery (`1211_shadow_group_disclosure.sql`): a disclosure of any coalesced member updates its
+MIGFIX-7 recovery (`0632_shadow_group_disclosure.sql`): a disclosure of any coalesced member updates its
 survivor and siblings in the same transaction. Before lock, every member retains
 permanent `disclosed_before_lock` and `surfaced_early` exclusions. A later
 coalescence inherits those exclusions and their original disclosure-event

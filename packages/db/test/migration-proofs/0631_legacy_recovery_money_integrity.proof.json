@@ -1,5 +1,5 @@
 {
-  "migration": "1210_legacy_recovery_money_integrity.sql",
+  "migration": "0631_legacy_recovery_money_integrity.sql",
   "lp0": [
     {
       "section": "routines",

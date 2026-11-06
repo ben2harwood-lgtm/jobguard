@@ -3,7 +3,7 @@ READY — recover-migfix-7, NOPR, RED (SV-2 / SV-3 authority, hidden data and fe
 Compared current worktree/main `62081c689` with the local branch-audit snapshot
 and old `origin/codex/sandbox/migfix-7` (`9ab17353e`). Main still had single-signal
 disclosure and no group propagation. Recovered only the group disclosure/no-fee
-protection onto main, using reserved migration 1211 and its exact catalogue proof.
+protection onto main, using reserved migration 0632 and its exact catalogue proof.
 No Git metadata or remote refs were changed; no fetch, commit, push or PR.
 
 The disclosure routine now locks the detection key, job and complete star-shaped
@@ -48,7 +48,7 @@ Verification (actual results)
   HEAD equals origin/main while this sandbox cannot commit. A read-only local
   invocation of its exported policy/selection/path/migration validators passes:
   exact lane coverage for all 10 changed paths, excluding the lane file from its
-  own allow list, and reserved 1211 is above all migrations on main. The normal
+  own allow list, and reserved 0632 is above all migrations on main. The normal
   commit-range lane check remains required after the router commits.
 
 Named holds for landing
@@ -75,7 +75,7 @@ router's commit/push/CI/review handoff; it is not a landing or release claim.
 
 Batch-49 pre-check repair — 5 November 2026: READY, RED, NOPR.
 
-The LP-4 scan includes migration 1211 and recognizes a known LP-4 writer that
+The LP-4 scan includes migration 0632 and recognizes a known LP-4 writer that
 still calls lp4_seal_audit as sealed. The original 21-writer assertion remains.
 A new assertion checks every post-0520 re-creation of an LP-4 routine, requiring
 its body to call the sealer and refusing direct audit inserts or old audit-head
@@ -89,14 +89,14 @@ Actual local verification (installed binaries, at most two workers):
   test/migfix-6.test.ts: PASS, 3 files / 97 tests (including all 18 LP-4 tests).
 - Scratch-only mutation at /tmp/batch-49-lp4-mutation-20261105T200215Z:
   removed the complete PERFORM app.lp4_seal_audit(...) statement from the copy
-  of 1211. Running the same installed Vitest runner/config with --maxWorkers=2
+  of 0632. Running the same installed Vitest runner/config with --maxWorkers=2
   test/lp4-writer-catchup.test.ts -t 'every re-created': EXPECTED FAIL, identifying
-  1211_shadow_group_disclosure.sql: app.surface_shadow_signal_early at the new
+  0632_shadow_group_disclosure.sql: app.surface_shadow_signal_early at the new
   sealer-call assertion (1 failed, 17 skipped). No mutation entered this worktree.
 - node tools/agent-lane-boundary-lint.mjs: PASS. A separate read-only check also
   compared the lane allow list exactly with every non-lane path changed from
   origin/main: PASS, 17 paths, no self-listing. Migration order validation PASS;
-  no main migration edited/deleted, only the intended 1210 and 1211 additions.
+  no main migration edited/deleted, only the intended 0631 and 0632 additions.
 - git diff --check: PASS.
 
 Main was already merged at 824c2b245 (origin/main 28871adf3); no Git writes were
@@ -222,7 +222,7 @@ Existing initial LATER / SIMPLICITY notes stand; no new review was performed.
 READY — RED, NOPR. Incoming main is MERGE_HEAD `919b7f3e60b82ef1ed1e32a6f259ba92246f6541`
 (PR #586 / batch-43). Local `main` is stale and was not the comparison base.
 Resolved the enterprise-access upgrade conflict by keeping main's exact 0629
-readiness-policy comparison and this group's exact 1210 landing-allocation CHECK
+readiness-policy comparison and this group's exact 0631 landing-allocation CHECK
 assertion/normalization. Main's new pure policy and ACL regression assertions
 remain intact. No new behaviour and no weakened tests.
 
@@ -230,7 +230,7 @@ Inspected and diffed all four re-created routines against the latest bodies
 in incoming main: approval/reversal in 0356, disclosure in 0128 and early firing
 in 0520. Differences remain limited to the existing MIGFIX-6 money corrections
 and MIGFIX-7 group disclosure/locking. Current support USAGE, tenant/mode checks,
-authorization and checked audit sealing survive. Neither 1210 nor 1211 exists
+authorization and checked audit sealing survive. Neither 0631 nor 0632 exists
 in incoming main; no migration needs dropping. No additional exact-list rows
 are needed beyond retaining main's readiness-policy assertions at the conflict.
 The batch lane already lists exactly all 18 non-lane paths against incoming
@@ -259,3 +259,63 @@ because .git is read-only; router staging and merge completion are required.
 Database/browser suites remain for GitHub CI after push; full current-head CI
 and one independent RED review remain landing gates. READY is the router
 commit/push/CI handoff, not evidence of merge, database execution or release.
+
+## Batch-49 PR preparation — 6 November 2026, 03:52 dispatch
+
+READY — RED, prepared for router commit/push/PR. The launcher completed the
+main merge at `ebbd979892588e56740d7c02cf9d4f3faf9846a6`; no conflict or
+unfinished merge remained. Compared against current `origin/main`
+`c219dda6e35830ed616fa6d11337e4a5074b514a` (including #586 and #588), rather
+than stale local main.
+
+Final branch migration inventory against that main:
+
+- `0631_legacy_recovery_money_integrity.sql` (renumbered from 1210).
+- `0632_shadow_group_disclosure.sql` (renumbered from 1211).
+
+Main ends at `0630_privacy_review_facts.sql`. Neither branch migration repeats
+a migration on main; both remain forward differences. SQL bytes are unchanged.
+Renamed both proof files and every batch-owned reference, including the exact
+named, definition-pinned CHECK allowance in enterprise-access-upgrade. No test
+was weakened. The lane lists exactly the final 18 non-lane paths, no self-entry
+or duplicates. No provider-register source, API, web route or CI image changed.
+
+Diffed every re-created routine against its latest main body before handoff:
+`approve_synthetic_landing` and `reverse_synthetic_landing` against 0356,
+`record_shadow_disclosure` against 0128, and `surface_shadow_signal_early`
+against 0520. Differences remain only the intended eligible/gross guard,
+cumulative reversals and settled-credit predicate, group disclosure propagation,
+and detection advisory locking. Main's mode checks, tenant checks, support USAGE,
+authorization, terms checks and checked audit sealing remain. The propagation
+trigger routine is new, rather than a replacement. No new behavior was added
+in this preparation. Existing initial LATER / SIMPLICITY notes stand.
+
+Actual local checks, installed dependencies only, at most two workers:
+
+- `node node_modules/typescript/bin/tsc -p packages/db/tsconfig.json --noEmit`:
+  PASS, exit 0.
+- From packages/db, `./node_modules/.bin/vitest run --maxWorkers=2
+  test/lp4-writer-catchup.test.ts test/migration-proof-loader.test.ts
+  test/migfix-6.test.ts`: PASS, 3 files / 98 tests.
+- From packages/db, `./node_modules/.bin/vitest run --maxWorkers=2
+  test/enterprise-access-upgrade.integration.test.ts -t 'policy comparison|ACL comparison'`:
+  PASS, 2 pure regression tests; 1 database test deselected.
+- `node tools/agent-lane-boundary-lint.mjs`: PASS before renumbering. After
+  renumbering it refuses exactly the four old migration/proof paths still in
+  HEAD; the read-only Git index cannot record their renames here. This is not
+  a post-renumber standard-lint pass. Router must stage/commit the renames and
+  rerun the standard lane lint. The exported lane policy/schema/path and
+  migration-order validators PASS against the final existing working-tree
+  paths and origin/main, with an exact-set assertion for all 18 allowed paths.
+- Exact SQL comparison against pre-rename HEAD: PASS for both migrations.
+- Old-stem search over batch-owned files: no remaining references (historical
+  rename provenance in this receipt excepted).
+- `git diff --check`: PASS.
+
+No Git writes, downloads, database startup, browser execution, push or PR were
+performed. GitHub CI must prove real PostgreSQL fresh installs, populated
+upgrades and exact catalogue/ACL preservation, money/reversal/replay/isolation
+and disclosure/coalescence concurrency, plus all required existing suites.
+Database/browser checks cannot run in this sandbox. Green CI on the final head
+and the required independent RED check remain merge gates. READY means the
+router handoff, not database verification, acceptance, merge or release.
