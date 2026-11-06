@@ -7,14 +7,14 @@ import type { Cluster } from "./extra-fixtures.js";
 export { cluster, chain, command, invite };
 export type { Cluster };
 
-const supervisorStep = { role: "supervisor", timeLimitMinutes: 1, escalationRole: "commercial_manager", alternateRoles: ["surveyor"] };
+const supervisorStep = { role: "supervisor", timeLimitMinutes: 1, waitWorkingDays: null, escalationRole: "commercial_manager", alternateRoles: ["surveyor"] };
 /** Demo fixture rules: thresholds in whole pence. T (client approval) = 100000, Y (client before work) = 50000, X (proceed limit) = 25000. One-minute step waits so the escalation test can run. */
 export const demoRules = approvalRulesV1.parse({
   version: "approval-rules.v1", proceedLimit: { pence: 25000, currency: "GBP" },
   bands: [
     { upToPence: 50000, steps: [supervisorStep] },
     { upToPence: 150000, steps: [supervisorStep, supervisorStep] },
-    { upToPence: null, steps: [supervisorStep, { role: "commercial_manager", timeLimitMinutes: 1, escalationRole: "commercial_manager", alternateRoles: ["surveyor"] }] },
+    { upToPence: null, steps: [supervisorStep, { role: "commercial_manager", timeLimitMinutes: 1, waitWorkingDays: null, escalationRole: "commercial_manager", alternateRoles: ["surveyor"] }] },
   ],
   clientApproval: { kind: "threshold", abovePence: 100000, beforeWorkAbovePence: 50000, timeLimitMinutes: 2880 },
   evidence: { photosRequired: true, residentConfirmationRequired: false },
@@ -24,7 +24,11 @@ export async function chainWorld(c: Cluster) {
   const supervisor2 = await invite(c, f, "supervisor", { kind: "team", id: f.demo.teamId });
   const client2 = await invite(c, f, "client_approver", { kind: "client", id: f.demo.clientId });
   const world = { ...f, supervisor2, client2, nextOrder: 10 };
-  await reviseRules(c, world, demoRules);
+  const supportsWorkingDays = (await c.admin.query("SELECT 1 FROM public.jobguard_schema_migration WHERE migration_name='0637_extra_rule_wait_schema.sql'")).rows.length > 0;
+  const rules = structuredClone(demoRules);
+  // Upgrade fixtures still need to seed the actual predecessor rule schema.
+  if (!supportsWorkingDays) for (const band of rules.bands) for (const step of band.steps) delete step.waitWorkingDays;
+  await reviseRules(c, world, rules);
   return world;
 }
 export type ChainWorld = Awaited<ReturnType<typeof chainWorld>>;
