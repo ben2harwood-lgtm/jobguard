@@ -1,0 +1,125 @@
+{
+  "migration": "0615_success_fee_changed_proof.sql",
+  "lp0": [
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.success_fee_inputs(uuid,uuid,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.ef_round_half_even",
+          "app.final_lock_hash",
+          "app.recovery_allocation_fraction_sum",
+          "app.recovery_attribution_sources",
+          "app.recovery_job_payer_type"
+        ]
+      },
+      "after": {
+        "identity": "function:app.success_fee_inputs(uuid,uuid,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.ef_round_half_even",
+          "app.final_lock_hash",
+          "app.recovery_allocation_fraction_sum",
+          "app.recovery_attribution_sources",
+          "app.recovery_job_payer_type"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.write_success_fee_v3(uuid,text,jsonb,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.action_authorization",
+          "app.decision",
+          "app.decision_resolution",
+          "app.success_fee_command",
+          "app.success_fee_derivation",
+          "app.success_fee_journal",
+          "app.success_fee_journal_line",
+          "app.success_fee_review",
+          "app.success_fee_source"
+        ],
+        "staticCalls": [
+          "app.append_final_check_audit",
+          "app.ef_round_half_even",
+          "app.final_check_builder",
+          "app.final_lock_hash",
+          "app.lock_success_fee_sources",
+          "app.read_success_fee_v3",
+          "app.recovery_allocation_fraction_sum",
+          "app.recovery_attribution_sources",
+          "app.recovery_job_payer_type"
+        ]
+      },
+      "after": {
+        "identity": "function:app.write_success_fee_v3(uuid,text,jsonb,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.action_authorization",
+          "app.decision",
+          "app.decision_resolution",
+          "app.success_fee_command",
+          "app.success_fee_derivation",
+          "app.success_fee_journal",
+          "app.success_fee_journal_line",
+          "app.success_fee_review",
+          "app.success_fee_source"
+        ],
+        "staticCalls": [
+          "app.append_final_check_audit",
+          "app.ef_round_half_even",
+          "app.final_check_builder",
+          "app.final_lock_hash",
+          "app.lock_success_fee_sources",
+          "app.read_success_fee_v3",
+          "app.recovery_allocation_fraction_sum",
+          "app.recovery_attribution_sources",
+          "app.recovery_job_payer_type"
+        ]
+      }
+    }
+  ],
+  "upgrade": [],
+  "tenancy": []
+}

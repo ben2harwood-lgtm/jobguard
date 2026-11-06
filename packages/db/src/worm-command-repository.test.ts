@@ -19,7 +19,7 @@ const command = () => ({ version: "worm.command.v1" as const, policyVersion: "sy
 const pool = {} as Pool;
 const executorPool = {} as Pool;
 const operatorPool = {} as Pool;
-const repo = () => new WormCommandRepository(pool, true, executorPool);
+const repo = () => new WormCommandRepository(pool, true, executorPool, undefined, "a".repeat(64));
 let row: WormReceipt;
 let attempts: number;
 let storage: WormStorage;
@@ -31,6 +31,7 @@ beforeEach(() => {
     action: c.action, payload: c, object_key: `synthetic/tenants/${context.tenantId}/one`,
     object_version_id: "immutable-v1", imprint: "a".repeat(64), attempts: 0, status: "queued", result: null };
   fake.query.mockImplementation(async (sql: string, values: unknown[]) => {
+    if (sql.includes("mon9_session")) return { rows: [{ actor: "verified" }] };
     if (sql.includes("session_user")) return { rows: [{ operator_ref: "synthetic_operator" }] };
     if (sql.includes("worm_reconcile")) row = { ...row,
       status: values[2] === (row.action === "apply_hold") ? "applied" : "outcome_unknown" };
@@ -44,6 +45,15 @@ beforeEach(() => {
 });
 const unavailable = { anchor: vi.fn(async (): Promise<TimestampResult> => ({ status: "pending", reason: "service_unavailable" })) };
 describe("dark durable WORM application", () => {
+  it("refuses a missing session before SQL and a forged actor before receipt or replay", async () => {
+    await expect(new WormCommandRepository(pool, true).submit(context, command())).rejects.toThrow("WORM_REFUSED");
+    expect(fake.query).not.toHaveBeenCalled();
+    fake.query.mockResolvedValue({ rows: [{ actor: null }] });
+    await expect(repo().submit(context, command())).rejects.toThrow("WORM_REFUSED");
+    expect(fake.query).toHaveBeenCalledExactlyOnceWith("SELECT app.mon9_session($1,$2) actor", ["a".repeat(64), expect.any(String)]);
+    expect(fake.audit).not.toHaveBeenCalled();
+  });
+
   it("defaults off before database access and refuses D07 deletion/expiry", async () => {
     await expect(new WormCommandRepository(pool).submit(context, command())).rejects.toMatchObject({ code: "DARK_ONLY" });
     expect(fake.query).not.toHaveBeenCalled(); expect(() => repo().deleteOrExpire()).toThrow("D07_REQUIRED");
