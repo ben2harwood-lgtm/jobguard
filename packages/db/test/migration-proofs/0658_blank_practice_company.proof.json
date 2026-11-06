@@ -1,5 +1,5 @@
 {
-  "migration": "0901_blank_practice_company.sql",
+  "migration": "0658_blank_practice_company.sql",
   "lp0": [
     {
       "section": "groups",
@@ -23,7 +23,7 @@
         },
         "downstream": "Start an empty synthetic session or revoke and replace only the presented live blank session; no business deletion or commercial action.",
         "sources": [
-          "packages/db/migrations/0901_blank_practice_company.sql",
+          "packages/db/migrations/0658_blank_practice_company.sql",
           "packages/db/src/blank-practice-company.ts"
         ],
         "tests": [
@@ -50,7 +50,7 @@
           "LP-12": "Retain narrow runtime execute only; do not expose the private identity bridge."
         },
         "sources": [
-          "packages/db/migrations/0901_blank_practice_company.sql",
+          "packages/db/migrations/0658_blank_practice_company.sql",
           "packages/db/src/blank-practice-company.ts"
         ],
         "tests": [

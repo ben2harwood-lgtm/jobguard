@@ -10,6 +10,18 @@ const reset = { ...start, action: "reset" };
 beforeAll(async () => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); c = await cluster(); await seedHomeOwner(c); }, 240_000);
 afterAll(async () => { await c?.close(); vi.unstubAllEnvs(); });
 
+it("pins the named sample trigger and keeps its existing routine", async () => {
+  const trigger = await c.admin.query(`SELECT tgname, tgtype, tgenabled,
+    tgfoid::regprocedure::text routine, pg_get_triggerdef(oid) definition
+    FROM pg_trigger WHERE tgrelid='control_plane.practice_session'::regclass
+      AND tgname='saved_v1_sample_on_session' AND NOT tgisinternal`);
+  expect(trigger.rows).toEqual([{
+    tgname: "saved_v1_sample_on_session", tgtype: 5, tgenabled: "O",
+    routine: "app.seed_saved_v1_sample()",
+    definition: "CREATE TRIGGER saved_v1_sample_on_session AFTER INSERT ON control_plane.practice_session FOR EACH ROW WHEN ((NOT app.is_blank_practice_company((new.token_digest)::text))) EXECUTE FUNCTION app.seed_saved_v1_sample()",
+  }]);
+});
+
 it("starts empty, isolates testers, retains history and rejects old credentials after reset", async () => {
   const first = await startBlankPracticeCompany(c.runtime, start);
   const second = await startBlankPracticeCompany(c.runtime, start);
@@ -62,11 +74,11 @@ it("serializes competing resets, rejects nonblank/expired sessions and grants no
 
 it("upgrades legacy sessions without changing their jobs or credentials and refuses a non-demo database", async () => {
   const { startBeforeMigration, applyMigration } = await import("./contractor-practice-session-fixtures.js");
-  const prior = await startBeforeMigration("0901_blank_practice_company.sql");
+  const prior = await startBeforeMigration("0658_blank_practice_company.sql");
   try {
     const token = await issuePracticeSession(prior.runtime);
     const before = await prior.admin.query("SELECT row_to_json(j) value FROM app.job j WHERE practice_session_digest=$1 ORDER BY id", [digestOf(token)]);
-    await applyMigration(prior, "0901_blank_practice_company.sql");
+    await applyMigration(prior, "0658_blank_practice_company.sql");
     expect(await authenticatePracticeSession(prior.runtime, token)).toBeDefined();
     expect(await isBlankPracticeCompany(prior.runtime, digestOf(token))).toBe(false);
     expect((await prior.admin.query("SELECT row_to_json(j) value FROM app.job j WHERE practice_session_digest=$1 ORDER BY id", [digestOf(token)])).rows).toEqual(before.rows);
