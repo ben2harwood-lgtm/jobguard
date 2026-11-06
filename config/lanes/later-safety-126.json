@@ -7,10 +7,10 @@
       ],
       "note": "LATER-SAFETY-126: RED practice credit-note session isolation; NOPR.",
       "allow": [
-        "packages/db/migrations/0660_credit_note_practice_session_guard.sql",
-        "packages/db/test/migration-proofs/0660_credit_note_practice_session_guard.proof.json",
+        "packages/db/migrations/0659_credit_note_practice_session_guard.sql",
+        "packages/db/test/migration-proofs/0659_credit_note_practice_session_guard.proof.json",
         "packages/db/test/credit-note-practice-session.integration.test.ts",
-        "packages/db/migration-notes/0660_credit_note_practice_session_guard.md"
+        "packages/db/migration-notes/0659_credit_note_practice_session_guard.md"
       ]
     }
   }

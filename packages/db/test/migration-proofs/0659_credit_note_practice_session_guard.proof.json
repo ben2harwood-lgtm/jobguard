@@ -1,5 +1,5 @@
 {
-  "migration": "0660_credit_note_practice_session_guard.sql",
+  "migration": "0659_credit_note_practice_session_guard.sql",
   "lp0": [
     {
       "section": "routines",

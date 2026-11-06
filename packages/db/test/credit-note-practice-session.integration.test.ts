@@ -18,7 +18,7 @@ describe("LATER-SAFETY-126 credit-note practice session boundary (real PostgreSQ
  const priorEnvironment = process.env.JOBGUARD_ENV;
  beforeAll(async () => {
   process.env.JOBGUARD_ENV = "synthetic_demo";
-  // Fresh empty database: the normal migrator discovers and applies 0660.
+  // Fresh empty database: the normal migrator discovers and applies 0659.
   f = await createWorkFixture();
   a = await seedWorkPractice(f); b = await seedWorkPractice(f);
  }, 60_000);
@@ -82,7 +82,7 @@ describe("LATER-SAFETY-126 credit-note practice session boundary (real PostgreSQ
    FROM pg_proc p WHERE p.oid='app.guard_credit_note_practice_session()'::regprocedure`)).rows[0];
   expect(routine).toEqual({prosecdef:true,proconfig:["search_path=pg_catalog"],owner:"jobguard_migration",runtime:false,identity:false,infrastructure:false});
   expect((await f.admin.query("SELECT tgenabled FROM pg_trigger WHERE tgrelid='app.customer_credit_note'::regclass AND tgname=$1",[trigger])).rows).toEqual([{tgenabled:"O"}]);
-  expect((await f.admin.query("SELECT 1 FROM public.jobguard_schema_migration WHERE migration_name='0660_credit_note_practice_session_guard.sql'")).rowCount).toBe(1);
+  expect((await f.admin.query("SELECT 1 FROM public.jobguard_schema_migration WHERE migration_name='0659_credit_note_practice_session_guard.sql'")).rowCount).toBe(1);
  });
  it("credits A's own invoice through the real guarded repository, preserving figures and replay", async () => {
   const target = await visitorInvoice(a), input = await command(target);
