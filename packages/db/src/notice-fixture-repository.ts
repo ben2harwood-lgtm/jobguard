@@ -80,10 +80,16 @@ export class NoticeFixtureRepository {
     try { return await work(); } catch (error) {
       if (error instanceof ConstructionNoticeError) throw error;
       const message = error instanceof Error ? error.message : "";
-      if (["STALE_REVISION", "REPLAY_CONFLICT", "APPROVAL_REQUIRED", "INVALID_SERVICE_STATE", "INVALID_INPUT"].includes(message)) {
+      if (error instanceof Error && "code" in error && error.code === "P0001"
+        && ["STALE_REVISION", "REPLAY_CONFLICT", "APPROVAL_REQUIRED", "INVALID_SERVICE_STATE", "INVALID_INPUT"].includes(message)) {
         throw new ConstructionNoticeError(message as ConstructionNoticeError["code"], message);
       }
-      throw new NoticeFixtureRepositoryError("NOT_FOUND");
+      // Keep the routine's scope refusal and its session helper's explicit
+      // authority refusal indistinguishable. Other SQL faults are unknown.
+      const notFound = error instanceof Error && "code" in error
+        && ((message === "NOT_FOUND" && error.code === "P0002")
+          || (message === "METER_FORBIDDEN" && error.code === "42501"));
+      throw new NoticeFixtureRepositoryError(notFound ? "NOT_FOUND" : "NOTICE_UNAVAILABLE");
     }
   }
   async read(context: VerifiedTenantContext, jobId: string, noticeId: string) {
@@ -139,5 +145,5 @@ export class NoticeFixtureRepository {
   }
 }
 export class NoticeFixtureRepositoryError extends Error {
-  constructor(public readonly code: "NOT_FOUND") { super(code); this.name = "NoticeFixtureRepositoryError"; }
+  constructor(public readonly code: "NOT_FOUND" | "NOTICE_UNAVAILABLE") { super(code); this.name = "NoticeFixtureRepositoryError"; }
 }
