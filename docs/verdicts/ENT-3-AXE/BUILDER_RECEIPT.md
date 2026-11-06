@@ -217,3 +217,48 @@ Checks actually run with installed binaries (no package downloads):
 READY for router commit/push and the group's PR turn. Required CI, actual
 PostgreSQL/browser execution and independent RED review at the eventual head
 remain outstanding. No new behaviour, weakened tests, deployment or release.
+
+
+## batch-45 landing refresh — 6 November 2026, 02:31 order
+
+Starting HEAD `62c3c302ce383bfcb82f339e16006a4f3e9eb01b` already contains
+cached `origin/main` `a9d46885cdb23fb92132b17a946c70876f89692c` (#584).
+The worktree was clean, main is an ancestor and there are no unresolved index
+entries. The merge is complete; no source or dependency edits were needed.
+Preserved all prior work and read all four coordinator/prechecks/batch-45 notes,
+including the independent catch-up PASS at `47c5ecdea`.
+
+Reviewed plan §9.2 ENT-3 and the remaining seven-path diff. The lane still lists
+exactly the six changed non-lane paths and does not list itself. The existing
+sandbox notice contract, exact invoice count within main, main's recent-item
+journeys, test-only exact axe pin and retry assertions are retained. No web API
+route changes or direct API source imports were found in the affected site and
+contractor route paths; Cloudflare build was not run locally.
+
+Migration comparison against cached main: **none**. There are no changes anywhere
+in packages/db, so there are no repeated migrations, proof changes or recreated
+SQL routines to compare. No migration was added.
+
+Checks actually run with installed binaries, no dependency installation:
+
+- Repository: `node tools/agent-lane-boundary-lint.mjs` — passed.
+- Repository: `git diff origin/main --check` — passed.
+- apps/web: `./node_modules/.bin/tsc -p tsconfig.json --noEmit` — passed.
+- apps/web: `./node_modules/.bin/vitest run --maxWorkers=2 app/site/extra/site-visit.test.tsx 'app/api/contractor/jobs/[id]/site-visits/[visitId]/complete/route.test.ts' 'app/api/contractor/jobs/[id]/site-extras/sor/route.test.ts'`
+  — 3 files, 95 tests passed.
+- apps/web: `./node_modules/.bin/playwright test --list ENT-3.spec.ts m4-16-workbench.spec.mts --workers=2`
+  — 24 cases collected at both widths; collection only, no browser execution.
+- Deterministic Python check — exact lane equality, registered branch, cached
+  main ancestry, no database changes, unresolved entries or conflict markers.
+
+`git show --remerge-diff` could not create its temporary object directory in the
+read-only git sandbox; no automatic-merge-tree equivalence is claimed from that
+command. `pnpm --version` stalled after a warning from the installed wrapper;
+checks above used existing package binaries directly.
+
+READY for the router to commit, push and open the PR. RED for test supply chain;
+the earlier independent PASS is preserved but does not cover a future commit.
+Required CI at the eventual head must prove full typecheck/lint/test/build,
+PostgreSQL/migration guarantees, browser journeys at both widths and the
+Cloudflare build. Independent review at the final head remains required. No
+new database, browser, merge acceptance, deployment or release pass is claimed.
