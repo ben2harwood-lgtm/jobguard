@@ -1,3 +1,4 @@
+import ts from "typescript";
 import { sourceFixtureUrl } from "../source-fixture-url.js";
 import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
@@ -195,7 +196,7 @@ describe("principal to tenant bridge", () => {
     expect(work).not.toHaveBeenCalled();
   });
 
-  it("allows only the worker to call the queued-system-job context constructor", async () => {
+  it("allows only the worker, EnterpriseAccessRepository.emergencyNotices and RetentionRecordRepository.raiseTimerReviews to build sessionless contexts", async () => {
     const root = sourceFixtureUrl("../../../../", import.meta.url);
     const callers: string[] = [];
     async function inspect(directory: string): Promise<void> {
@@ -206,12 +207,40 @@ describe("principal to tenant bridge", () => {
         else if (/\.(?:[cm]?[jt]s|tsx)$/u.test(entry.name) && !/\.(?:test|spec)\./u.test(entry.name)) {
           // The definition and public re-export are not constructor callers.
           if (["packages/db/src/tenant-context.ts", "packages/db/src/index.ts"].includes(path)) continue;
-          if ((await readFile(join(root.pathname, path), "utf8")).includes("verifiedTenantContextForQueuedJob")) callers.push(path);
+          const source = await readFile(join(root.pathname, path), "utf8");
+          if (!source.includes("verifiedTenantContextForQueuedJob")) continue;
+          callers.push(path);
+          const port = path === "packages/db/src/enterprise-access-repository.ts" ? ["EnterpriseAccessRepository", "emergencyNotices"]
+            : path === "packages/db/src/retention-record-repository.ts" ? ["RetentionRecordRepository", "raiseTimerReviews"] : null;
+          if (port) {
+            const file = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true);
+            let imports = 0, calls = 0;
+            function check(node: ts.Node): void {
+              if (ts.isIdentifier(node) && node.text === "verifiedTenantContextForQueuedJob") {
+                if (ts.isImportSpecifier(node.parent) && node.parent.name === node && !node.parent.propertyName) imports++;
+                else {
+                  expect(ts.isCallExpression(node.parent) && node.parent.expression === node).toBe(true);
+                  let method: ts.Node | undefined = node.parent;
+                  while (method && !ts.isMethodDeclaration(method)) method = method.parent;
+                  expect(method && ts.isMethodDeclaration(method) && method.name.getText(file)).toBe(port![1]);
+                  expect(method?.parent && ts.isClassDeclaration(method.parent) && method.parent.name?.text).toBe(port![0]);
+                  calls++;
+                }
+              }
+              ts.forEachChild(node, check);
+            }
+            check(file);
+            expect({ imports, calls }).toEqual({ imports: 1, calls: 1 });
+          }
         }
       }
     }
     for (const directory of ["apps", "packages", "tools"]) await inspect(directory);
-    expect(callers.sort()).toEqual(["apps/api/src/worker.ts"]);
+    expect(callers.sort()).toEqual([
+      "apps/api/src/worker.ts",
+      "packages/db/src/enterprise-access-repository.ts",
+      "packages/db/src/retention-record-repository.ts",
+    ]);
   });
 });
 

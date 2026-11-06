@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { afterEach, expect, it, vi } from "vitest";
+import { ConnectorPromotionRepository } from "../src/connector-promotion-repository.js";
+import { ContractorRepository } from "../src/contractor-repository.js";
 import { CisFixtureRepository } from "../src/cis-fixture-repository.js";
 import { PurchaseOrderActionRepository } from "../src/purchase-order-action-repository.js";
 import { EnterpriseAccessRepository } from "../src/enterprise-access-repository.js";
@@ -18,7 +20,7 @@ function fixture() {
   const release = vi.fn(), pool = { connect: async () => ({ query, release }) } as unknown as Pool;
   return { member, context, query, release, pool };
 }
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); });
 it("maps refused CIS proof to the existing not-found response after rollback, without business SQL", async () => {
   const f = fixture();
   await expect(new CisFixtureRepository(f.pool).read(f.context, randomUUID())).rejects.toMatchObject({ code: "NOT_FOUND" });
@@ -54,4 +56,15 @@ it("uses a sessionless tenant context only for the infrastructure timer; human r
   f.query.mockClear();
   await expect(repo.read(f.context, { sessionDigest: "a".repeat(64) }, randomUUID())).rejects.toMatchObject({ code: "RETENTION_UNAVAILABLE" });
   expect(f.query.mock.calls.map(([sql]) => sql)).toEqual(["BEGIN", "SELECT app.bind_request($1, $2, $3)", "ROLLBACK"]);
+});
+
+it.each(["list", "promote"] as const)("maps refused connector %s binding to NOT_FOUND after rollback and before business SQL", async operation => {
+  vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
+  const f = fixture(), repo = new ConnectorPromotionRepository(f.pool), sessionId = randomUUID();
+  vi.spyOn(ContractorRepository.prototype, "resolveSession").mockResolvedValue(f.member);
+  await expect(operation === "list" ? repo.list(sessionId)
+    : repo.promote(sessionId, { version: "connector-promotion.v1", namespace: "fixture:test", eventId: "fixture:event" }))
+    .rejects.toMatchObject({ code: "NOT_FOUND", message: "NOT_FOUND" });
+  expect(f.query.mock.calls.map(([sql]) => sql)).toEqual(["BEGIN", "SELECT app.bind_request($1, $2, $3)", "ROLLBACK"]);
+  expect(f.release).toHaveBeenCalledOnce();
 });
