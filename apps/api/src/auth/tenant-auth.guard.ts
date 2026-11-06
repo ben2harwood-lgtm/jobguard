@@ -1,4 +1,4 @@
-import type { CanActivate, ExecutionContext } from "@nestjs/common";
+import { UnauthorizedException, type CanActivate, type ExecutionContext } from "@nestjs/common";
 import type { VerifiedTenantContext } from "@jobguard/db";
 import type { AuthProvider } from "./auth-provider.js";
 import { resolveVerifiedTenantContext } from "./principal-bridge.js";
@@ -16,6 +16,7 @@ export class TenantAuthGuard implements CanActivate {
 
   async canActivate(executionContext: ExecutionContext): Promise<boolean> {
     const request = executionContext.switchToHttp().getRequest<GuardRequest>();
+    if (request.headers["x-connector-machine"] !== undefined) throw new UnauthorizedException({ code: "UNAUTHENTICATED" });
     const context = await resolveVerifiedTenantContext(this.provider, {
       sessionToken: request.cookies?.jobguard_session,
       requestedTenantId: request.body?.requested_tenant_id,

@@ -185,4 +185,5 @@ export * from "./deepgram-transcript.js";
 export * from "./offline-reconciliation.js";
 export * from "./core-loop-views.js";
 
+export * from "./merchant-reliability.js";
 export * from "./rate-baseline.js";
