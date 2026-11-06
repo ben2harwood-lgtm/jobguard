@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-130": {
+      "branches": [
+        "codex/sandbox/later-safety-130"
+      ],
+      "allow": [
+        "packages/db/migrations/0855_work_order_expected_revision.sql",
+        "packages/db/test/migration-proofs/0855_work_order_expected_revision.proof.json",
+        "packages/db/test/work-order-import.integration.test.ts"
+      ]
+    }
+  }
+}

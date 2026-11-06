@@ -585,6 +585,77 @@ describe("ENT-2 per-order authority: a manager scoped to one branch has no reach
     };
   };
 
+  it("requires an exact expectedRevision for revise, including cancellation, as the runtime role", async () => {
+    const s = await seed(80), before = await counts(fixture.p.tenantId);
+    const stale = { ok: false, code: "40001", message: "STALE_REVISION" };
+    for (const payload of [commitPayloads(s.a).revise(), commitPayloads(s.a).cancel()]) {
+      for (const expectedRevision of [undefined, null, 0, 2]) {
+        expect(await probe(adminAll, commitSql, [adminAll.membershipId, JSON.stringify({ ...payload, expectedRevision })]), `revise ${payload.status}, expectedRevision=${expectedRevision}`).toEqual(stale);
+        expect(await stateOf(s.a.id)).toEqual({ revision: 1, status: "ordered" });
+        expect(await revisionCount(s.a.id)).toBe(1);
+        expect(await counts(fixture.p.tenantId)).toEqual(before);
+      }
+      expect(await probe(adminAll, commitSql, [adminAll.membershipId, JSON.stringify(payload)]), `correct revision, ${payload.status}`).toMatchObject({ ok: true, value: { result: { revision: 2 } } });
+    }
+  });
+
+  it("requires expectedRevision zero for create, refusing missing, null and wrong values without writing an order", async () => {
+    const s = await seed(82), row = rowB(83), jobId = randomUUID(), workOrderId = randomUUID();
+    const rollback = new Error("roll expected-revision create probe back");
+    await expect(withTenant(runtime, ctx(adminAll), async db => {
+      const c = db.$client;
+      await c.query("SET LOCAL ROLE jobguard_runtime");
+      await c.query("SELECT app.work_order_begin($1,$2,'Expected revision probe')", [adminAll.membershipId, jobId]);
+      await parties.bindInTransaction(db, adminAll, { version: "contractor-party-import.v1", environment: "synthetic_demo", commandId: randomUUID(), jobId, workOrderId, expectedJobRevision: 0, clientId: demoB.clientId, contractId: demoB.contractId, siteRevisionId: row.siteRevisionId, resident: { kind: "contact", contact: (row.resident as { contact: unknown }).contact } });
+      const payload = { ...commitPayloads(s.b).revise(), kind: "create", jobId, workOrderId, reference: "WO-EXPECTED-REVISION" };
+      const before = (await c.query("SELECT status,revision FROM app.job WHERE tenant_id=$1 AND id=$2", [fixture.p.tenantId, jobId])).rows;
+      for (const expectedRevision of [undefined, null, 1, 0]) {
+        await c.query("SAVEPOINT expected_revision_create");
+        let outcome: unknown;
+        try { outcome = { ok: true, result: (await c.query(commitSql, [adminAll.membershipId, JSON.stringify({ ...payload, expectedRevision })])).rows[0].result }; }
+        catch (error) { outcome = { ok: false, code: (error as { code?: string }).code, message: (error as Error).message }; }
+        finally { await c.query("ROLLBACK TO SAVEPOINT expected_revision_create"); }
+        expect(outcome, `create expectedRevision=${expectedRevision}`).toMatchObject(expectedRevision === 0
+          ? { ok: true, result: { revision: 1 } }
+          : { ok: false, code: "40001", message: "STALE_REVISION" });
+        expect((await c.query("SELECT id FROM app.work_order WHERE tenant_id=$1 AND id=$2", [fixture.p.tenantId, workOrderId])).rows).toEqual([]);
+        expect((await c.query("SELECT status,revision FROM app.job WHERE tenant_id=$1 AND id=$2", [fixture.p.tenantId, jobId])).rows).toEqual(before);
+      }
+      throw rollback;
+    })).rejects.toBe(rollback);
+  });
+
+  it("detects the old missing-revision bypass in a transactional scratch routine and restores it", async () => {
+    const s = await seed(84), c = await admin.connect();
+    const comparison = "cur.revision IS DISTINCT FROM (payload->>'expectedRevision')::integer";
+    const definition = (await c.query("SELECT pg_get_functiondef('app.work_order_commit(uuid,jsonb)'::regprocedure) definition")).rows[0].definition as string;
+    expect(definition.split(comparison)).toHaveLength(2);
+    const payload: Record<string, unknown> = { ...commitPayloads(s.a).revise() };
+    delete payload.expectedRevision;
+    const attempt = async () => {
+      await c.query("SAVEPOINT expected_revision_mutation");
+      try {
+        await c.query("SET LOCAL ROLE jobguard_runtime");
+        return { ok: true, result: (await c.query(commitSql, [adminAll.membershipId, JSON.stringify(payload)])).rows[0].result };
+      } catch (error) { return { ok: false, code: (error as { code?: string }).code, message: (error as Error).message }; }
+      finally { await c.query("ROLLBACK TO SAVEPOINT expected_revision_mutation"); }
+    };
+    try {
+      await c.query("BEGIN");
+      await c.query("SELECT set_config('app.tenant_id',$1,true)", [fixture.p.tenantId]);
+      expect(await attempt()).toEqual({ ok: false, code: "40001", message: "STALE_REVISION" });
+      await c.query(definition.replace(comparison, "cur.revision<>(payload->>'expectedRevision')::integer"));
+      // Restoring <> makes the missing-key refusal assertion fail: the revision succeeds.
+      expect(await attempt()).toMatchObject({ ok: true, result: { revision: 2 } });
+    } finally {
+      await c.query("ROLLBACK");
+      c.release();
+    }
+    expect((await admin.query("SELECT pg_get_functiondef('app.work_order_commit(uuid,jsonb)'::regprocedure) definition")).rows[0].definition).toBe(definition);
+    expect(await stateOf(s.a.id)).toEqual({ revision: 1, status: "ordered" });
+    expect(await revisionCount(s.a.id)).toBe(1);
+  });
+
   it("answers a branch-A admin's party check on a branch-B order with the not-found whatever is guessed: the check is no yes/no oracle on another branch's resident contact", async () => {
     const s = await seed(40), row = rowB(41), resident = { kind: "contact", contact: (row.resident as { contact: unknown }).contact }, wrong = JSON.stringify({ kind: "none", reason: "void_property" });
     const check = "SELECT app.work_order_parties_unchanged($1,$2,$3,$4,$5,$6::jsonb) same", args = [s.b.id, demoB.clientId, demoB.contractId, row.siteRevisionId];
