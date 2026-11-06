@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-116": {
+      "branches": [
+        "codex/sandbox/later-safety-116"
+      ],
+      "allow": [
+        "packages/db/migrations/0845_contractor_admin_expected_revision.sql",
+        "packages/db/test/migration-proofs/0845_contractor_admin_expected_revision.proof.json",
+        "packages/db/test/contractor-admin-expected-revision.integration.test.ts"
+      ]
+    }
+  }
+}
