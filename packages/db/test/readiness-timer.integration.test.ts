@@ -24,6 +24,10 @@ const plan: ScheduledPlan = { version: "readiness-scheduled-plan.v1", synthetic:
   ruleRevision: "readiness-scheduled.v1", status: "confirmed", plannedDate: "2026-03-30", jurisdiction: "scotland",
   localTime: "09:00", timeZone: "Europe/London", predecessors: [], edges: [], material: { requiredUnits: 1, landedUnits: 1 }, access: "unknown", crew: true };
 const store = () => new DurableReadinessStore(runtime, "synthetic_demo");
+async function confirm(context: ReturnType<typeof testTenantContext>, raw: unknown) {
+ const member = (await admin.query("SELECT id,identity_user_id FROM app.membership WHERE tenant_id=$1 AND role='owner' LIMIT 1", [context.tenantId])).rows[0]!;
+ return store().confirm(context, { membershipId: member.id, identityUserId: member.identity_user_id }, raw);
+}
 const queue: { name: string; payload: unknown; options: { runAt?: Date; jobKey: string } }[] = [];
 const helpers = {
  async addJob(name: string, payload: unknown, options: { runAt?: Date; jobKey: string }) { queue.push({ name, payload, options }); return {}; },
@@ -56,7 +60,7 @@ afterAll(async () => { await closeTestPools(infrastructure, runtime, admin); awa
 it("discovers latest identifiers through FORCE RLS, restores caller context and grants only EXECUTE", async () => {
  // Discovery uses the database clock; scheduling below retains fixed DST dates.
  const today = (await admin.query("SELECT to_char(CURRENT_TIMESTAMP AT TIME ZONE 'Europe/London','YYYY-MM-DD') today")).rows[0].today as string;
- await store().confirm(context, "member:synthetic-builder", { ...plan, plannedDate: today });
+ await confirm(context, { ...plan, plannedDate: today });
  const client = await infrastructure.connect();
  try {
   await client.query("BEGIN");
@@ -73,13 +77,13 @@ it("discovers latest identifiers through FORCE RLS, restores caller context and 
 it("the real task schedules the previous workday across DST; concurrent executions and crash replay persist one prevention proposal", async () => {
  const foreignScope = { tenantId: other, jobId: randomUUID(), taskId: randomUUID() };
  await importWatchdogFixtureJob(admin, other, foreignScope.jobId);
- await store().confirm(testTenantContext(other), "member:synthetic-builder", { ...plan, scope: foreignScope });
+ await confirm(testTenantContext(other), { ...plan, scope: foreignScope });
  const today = (await admin.query("SELECT to_char(CURRENT_TIMESTAMP AT TIME ZONE 'Europe/London','YYYY-MM-DD') today")).rows[0].today as string;
- await store().confirm(context, "member:synthetic-builder", { ...plan, factRevision: 2, plannedDate: today });
+ await confirm(context, { ...plan, factRevision: 2, plannedDate: today });
  const beforeJob = (await admin.query("SELECT to_jsonb(j) payload FROM app.job j WHERE tenant_id=$1 AND id=$2", [tenantId, scope.jobId])).rows;
  await tasks().discover_readiness_plans!(null, helpers);
  const scheduled = queue.find(q => q.name === "readiness_schedule" && (q.payload as {scope: typeof scope}).scope.tenantId === tenantId)!;
- await store().confirm(context, "member:synthetic-builder", { ...plan, factRevision: 3 });
+ await confirm(context, { ...plan, factRevision: 3 });
  await Promise.all([tasks().readiness_schedule!(scheduled.payload, helpers), tasks().readiness_schedule!(scheduled.payload, helpers)]);
  const evaluation = queue.find(q => q.name === "readiness_evaluate")!;
  expect(evaluation.options.runAt).toEqual(new Date("2026-03-27T09:00:00.000Z"));
@@ -98,7 +102,7 @@ it("the real task schedules the previous workday across DST; concurrent executio
  expect(await store().proposals(testTenantContext(other), scope)).toEqual([]);
  expect(await store().proposals(testTenantContext(other), foreignScope)).toEqual([]);
  expect((await admin.query("SELECT to_jsonb(j) payload FROM app.job j WHERE tenant_id=$1 AND id=$2", [tenantId, scope.jobId])).rows).toEqual(beforeJob);
- await store().confirm(context, "member:synthetic-builder", { ...plan, factRevision: 4, status: "cancelled", plannedDate: today });
+ await confirm(context, { ...plan, factRevision: 4, status: "cancelled", plannedDate: today });
  await tasks().readiness_evaluate!(evaluation.payload, helpers);
  expect(await store().proposals(context, scope)).toEqual(proposals);
  expect((await infrastructure.query("SELECT * FROM infrastructure.discover_readiness_plans() WHERE tenant_id=$1", [tenantId])).rows).toEqual([]);
@@ -116,7 +120,7 @@ it("through the real task preserves each missing-fact reason and Scottish holida
  for (const [i, entry] of cases.entries()) {
   const current = { ...plan, ...entry.patch, factRevision: i + 5, plannedDate: "2026-01-05" };
   at = "2026-01-01T08:00:00.000Z"; queue.length = 0;
-  await store().confirm(context, "member:synthetic-builder", current);
+  await confirm(context, current);
   await tasks().readiness_schedule!({ version: "readiness-schedule-task.v1", scope }, helpers);
   const evaluation = queue.find(q => q.name === "readiness_evaluate")!;
   // Fictional Scottish fixture closes Friday 2 January: Thursday is the preceding workday.
@@ -130,14 +134,14 @@ it("through the real task preserves each missing-fact reason and Scottish holida
 });
 it("leaves uncovered calendar years unqueued and supersedes a changed revision", async () => {
  at = "2028-01-04T08:00:00.000Z"; queue.length = 0;
- await store().confirm(context, "member:synthetic-builder", { ...plan, factRevision: 11, plannedDate: "2028-01-05" });
+ await confirm(context, { ...plan, factRevision: 11, plannedDate: "2028-01-05" });
  await tasks().readiness_schedule!({ version: "readiness-schedule-task.v1", scope }, helpers);
  expect(queue).toEqual([]);
  at = "2026-10-23T08:00:00.000Z";
- await store().confirm(context, "member:synthetic-builder", { ...plan, factRevision: 12, plannedDate: "2026-10-26" });
+ await confirm(context, { ...plan, factRevision: 12, plannedDate: "2026-10-26" });
  await tasks().readiness_schedule!({ version: "readiness-schedule-task.v1", scope }, helpers);
  const evaluation = queue.find(q => q.name === "readiness_evaluate")!;
- await store().confirm(context, "member:synthetic-builder", { ...plan, factRevision: 13, plannedDate: "2026-10-27" });
+ await confirm(context, { ...plan, factRevision: 13, plannedDate: "2026-10-27" });
  const before = await store().proposals(context, scope);
  at = "2026-10-26T10:00:00.000Z";
  await tasks().readiness_evaluate!(evaluation.payload, helpers);
@@ -169,14 +173,14 @@ it("past confirmed plans cannot consume the cap ahead of another tenant's due pl
   to_char(CURRENT_TIMESTAMP AT TIME ZONE 'Pacific/Kiritimati','YYYY-MM-DD') today`)).rows[0];
  for (let i = 0; i < 101; i++) {
   const pastScope = { tenantId: early, jobId: earlyJob, taskId: randomUUID() };
-  if (i === 0) await store().confirm(testTenantContext(early), "member:synthetic-builder", { ...plan,
+  if (i === 0) await confirm(testTenantContext(early), { ...plan,
    scope: pastScope, plannedDate: dates.today, timeZone: "Pacific/Kiritimati" });
-  await store().confirm(testTenantContext(early), "member:synthetic-builder", { ...plan,
+  await confirm(testTenantContext(early), { ...plan,
    scope: pastScope, factRevision: i === 0 ? 2 : 1,
    plannedDate: dates.past, timeZone: "Pacific/Kiritimati" });
  }
  const dueScope = { tenantId: late, jobId: lateJob, taskId: randomUUID() };
- await store().confirm(testTenantContext(late), "member:synthetic-builder", { ...plan,
+ await confirm(testTenantContext(late), { ...plan,
   scope: dueScope, plannedDate: dates.today, timeZone: "Pacific/Kiritimati" });
  const rows = (await infrastructure.query("SELECT * FROM infrastructure.discover_readiness_plans()")).rows;
  expect(rows).toContainEqual({ tenant_id: late, job_id: lateJob, task_id: dueScope.taskId });

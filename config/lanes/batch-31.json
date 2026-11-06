@@ -1,0 +1,46 @@
+{
+  "version": 2,
+  "lanes": {
+    "batch-31": {
+      "branches": [
+        "codex/sandbox/batch-31"
+      ],
+      "note": "Built-ahead union: later-safety-1, m4-10-fee-source, m5-4-held-delivery. RED. Reserved migrations 0614-0616; exact changed paths against current main, including PR #576 CI repair.",
+      "allow": [
+        "apps/api/src/proof/proof.application.test.ts",
+        "apps/web/app/ui/supplier-documents.tsx",
+        "docs/contracts/platform-tax-invoice-v1.md",
+        "packages/core/src/platform-tax-invoice.test.ts",
+        "packages/core/src/platform-tax-invoice.ts",
+        "packages/db/migrations/0614_mon9_database_gate.sql",
+        "packages/db/migrations/0615_success_fee_changed_proof.sql",
+        "packages/db/migrations/0616_payment_fee_current_review.sql",
+        "packages/db/src/evidence-finalization-race.test.ts",
+        "packages/db/src/evidence-synthetic-audio.test.ts",
+        "packages/db/src/evidence.ts",
+        "packages/db/src/inbox-relevance-repository.ts",
+        "packages/db/src/merchant-ingestion.test.ts",
+        "packages/db/src/platform-tax-invoice-fixture-repository.ts",
+        "packages/db/src/resumable-evidence.test.ts",
+        "packages/db/src/supplier-document-repository.ts",
+        "packages/db/src/worm-command-repository.test.ts",
+        "packages/db/src/worm-command-repository.ts",
+        "packages/db/test/evidence.integration.test.ts",
+        "packages/db/test/later-safety-catalog.test.ts",
+        "packages/db/test/later-safety-upgrade.integration.test.ts",
+        "packages/db/test/merchant-ingestion.integration.test.ts",
+        "packages/db/test/migration-proofs/0614_mon9_database_gate.proof.json",
+        "packages/db/test/migration-proofs/0615_success_fee_changed_proof.proof.json",
+        "packages/db/test/migration-proofs/0616_payment_fee_current_review.proof.json",
+        "packages/db/test/payment-fee-statements.integration.test.ts",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
+        "packages/db/test/platform-tax-invoice-fee-fixtures.ts",
+        "packages/db/test/platform-tax-invoice-fee-source.integration.test.ts",
+        "packages/db/test/platform-tax-invoice-fee-source.test.ts",
+        "packages/db/test/success-fee-production-safety.integration.test.ts",
+        "packages/db/test/supplier-documents.integration.test.ts",
+        "packages/db/test/worm-command.integration.test.ts"
+      ]
+    }
+  }
+}
