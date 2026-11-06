@@ -1,4 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
+import { Pool } from "pg";
+import { ExtraApprovalRepository } from "../src/extra-approval-chain-repository.js";
+import { cluster as clientCluster, chainWorld, submitted, approveInput, emailOf, newToken } from "./extra-approval-chain-fixtures.js";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { jobMutationRegistry, watchdogCommandGuards, watchdogRoutineGuards } from "@jobguard/core";
 import { readFileSync } from "node:fs";
@@ -51,6 +54,9 @@ const darkCases: typeof h.cases = [
     later: async job => { await h.repos.po.revise(h.ctx, job, h.orderInput(h.st(job).requirement, 1, randomUUID(), "12")); } },
 ];
 const cases = [...h.cases, ...darkCases];
+// This route uses credential-bound client commands and needs the complete contractor
+// schema, rather than the legacy-id watchdog harness. Its executable case is below.
+const clientReplayCase = { key: "/api/customer-portal/extra-approvals", registry: ["/api/customer-portal/extra-approvals"] };
 beforeAll(async () => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); await h.boot();
   const user = (await h.admin.query("SELECT identity_user_id FROM app.membership WHERE tenant_id=$1 AND id=$2", [h.tenant,h.member])).rows[0].identity_user_id;
   await h.admin.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3)", [user,h.tenant,h.member]);
@@ -74,7 +80,7 @@ describe("every watchdog_live_only command is covered by this contract", () => {
   });
   it("covers every watchdog_live_only registry key (web routes, dynamic actions, commands and Nest routes), and no stale key", () => {
     const liveOnly = Object.entries(jobMutationRegistry).filter(([, phase]) => phase === "watchdog_live_only").map(([key]) => key).sort();
-    const covered = new Set(cases.flatMap(c => c.registry));
+    const covered = new Set([...cases, clientReplayCase].flatMap(c => c.registry));
     expect(liveOnly.filter(key => !covered.has(key))).toEqual([]);
     expect([...covered].filter(key => !liveOnly.includes(key)).sort()).toEqual([]);
   });
@@ -163,6 +169,53 @@ it("rate acceptance replays the stored result after new evidence and rejects cha
   } finally { await closeWorkFixture(f); }
 }, 120_000);
 
+it(`${clientReplayCase.key}: client decision replays the first result and conflicts across payload, job and kind`, async () => {
+  const c = await clientCluster();
+  let identity: Pool | undefined;
+  try {
+    await c.admin.query("ALTER ROLE jobguard_identity LOGIN PASSWORD 'synthetic'");
+    identity = new Pool({ ...c.config, database: c.admin.options.database, user: "jobguard_identity", max: 1 });
+    expect((await identity.query("SELECT session_user,current_user,has_schema_privilege(current_user,'app','USAGE') app_usage")).rows)
+      .toEqual([{ session_user: "jobguard_identity", current_user: "jobguard_identity", app_usage: false }]);
+    const w = await chainWorld(c), repo = new ExtraApprovalRepository(c.runtime), ctx = await w.ctx;
+    const actor = w.members.client_approver.member.membershipId;
+    async function client() {
+      const s = await submitted(c, w, 150000);
+      await repo.approveExtraStep(ctx, w.members.supervisor.member, approveInput(s, 0));
+      await repo.approveExtraStep(ctx, w.supervisor2.member, approveInput(s, 1));
+      const signin = randomUUID().replaceAll("-", "").repeat(2), digest = randomUUID().replaceAll("-", "").repeat(2);
+      await repo.issueClientApproval(ctx, w.members.surveyor.member, {
+        version: "issue-client-approval.v1", commandId: randomUUID(), jobId: s.jobId, requestId: s.requestId,
+        approverMembershipId: actor, recipient: await emailOf(c, w, actor), linkToken: newToken(),
+        signinDigest: signin, expiresAt: new Date(Date.now() + 7 * 86400000),
+      });
+      await identity!.query("SELECT identity.extra_customer_use($1,$2,$3,$4,$5,'redeem')", [w.p.tenantId, s.jobId, actor, signin, digest]);
+      const input = { version: "extra-customer.v1", action: "decide", jobId: s.jobId, requestId: s.requestId,
+        commandId: randomUUID(), revisionHash: s.hash, netPence: s.net, decision: "approve" };
+      const run = (command = input) => identity!.query("SELECT identity.extra_customer_approval($1,$2,$3,$4,$5::jsonb) result",
+        [w.p.tenantId, s.jobId, actor, digest, command]).then(r => r.rows[0].result);
+      return { s, input, run };
+    }
+    const a = await client(), b = await client(), first = await a.run();
+    expect(first).toMatchObject({ state: "approved" });
+    expect(await a.run()).toEqual(first);
+    for (const change of [{ decision: "reject" }, { netPence: a.input.netPence + 1 }, { revisionHash: "a".repeat(64) }])
+      await expect(a.run({ ...a.input, ...change })).rejects.toThrow(CONFLICT);
+    await expect(b.run({ ...b.input, commandId: a.input.commandId })).rejects.toThrow(CONFLICT);
+    // Both directions share tenant-wide command identity with a real other command kind.
+    const other = await submitted(c, w, 150000);
+    await expect(repo.approveExtraStep(ctx, w.members.supervisor.member,
+      approveInput(other, 0, { commandId: a.input.commandId }))).rejects.toThrow(CONFLICT);
+    const otherId = randomUUID();
+    await repo.approveExtraStep(ctx, w.members.supervisor.member, approveInput(other, 0, { commandId: otherId }));
+    await expect(b.run({ ...b.input, commandId: otherId })).rejects.toThrow(CONFLICT);
+    expect(await a.run()).toEqual(first);
+    expect((await c.admin.query("SELECT count(*)::int n FROM app.extra_approval_step_fact WHERE tenant_id=$1 AND request_id=$2 AND actor_kind='client_approver'",
+      [w.p.tenantId, a.s.requestId])).rows).toEqual([{ n: 1 }]);
+    expect((await c.admin.query("SELECT count(*)::int n FROM app.extra_approval_step_fact WHERE tenant_id=$1 AND request_id=$2 AND actor_kind='client_approver'",
+      [w.p.tenantId, b.s.requestId])).rows).toEqual([{ n: 0 }]);
+  } finally { await identity?.end(); await c.close(); }
+}, 240000);
 // Dedicated receipt path: LP-5 lifecycle integration remains held in extra-unlink-v1.
 it("ResolveDuplicateCandidates replays one stored result and refuses changed intent", async () => {
   const c = await cluster();
