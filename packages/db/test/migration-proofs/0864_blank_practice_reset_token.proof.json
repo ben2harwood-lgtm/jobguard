@@ -10,6 +10,14 @@
       "after": null
     },
     {
+      "section": "entries",
+      "before": {
+        "key": "owner|routine|function:app.start_blank_practice_company(text,text)|jobguard_migration",
+        "group": "a-blank-practice-company"
+      },
+      "after": null
+    },
+    {
       "section": "routines",
       "before": {
         "identity": "function:app.start_blank_practice_company(text,text)",
