@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-94": {
+      "branches": [
+        "codex/sandbox/later-safety-94"
+      ],
+      "allow": [
+        "packages/db/migrations/0828_variation_post_lock_refusal.sql",
+        "packages/db/test/migration-proofs/0828_variation_post_lock_refusal.proof.json",
+        "packages/db/test/variation-post-lock.integration.test.ts",
+        "packages/db/src/variation-repository.ts"
+      ]
+    }
+  }
+}
