@@ -7,8 +7,8 @@
       ],
       "note": "LATER-SAFETY-106 RED: variation state and revision integrity; NOPR.",
       "allow": [
-        "packages/db/migrations/0838_variation_state_transition_guard.sql",
-        "packages/db/test/migration-proofs/0838_variation_state_transition_guard.proof.json",
+        "packages/db/migrations/0662_variation_state_transition_guard.sql",
+        "packages/db/test/migration-proofs/0662_variation_state_transition_guard.proof.json",
         "packages/db/test/variation-state-transition.integration.test.ts",
         "packages/db/test/final-account-lock.integration.test.ts",
         "packages/db/test/meter-trip.integration.test.ts"
