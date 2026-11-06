@@ -181,3 +181,39 @@ Local checks used installed binaries, without downloading packages:
 READY for router commit/push and the group's PR turn. Full required CI,
 PostgreSQL/browser execution and independent RED review at the eventual head
 remain outstanding. No new browser pass, merge acceptance or release is claimed.
+
+## batch-45 landing refresh — 6 November 2026, 00:59 order
+
+The launcher already completed the main merge: starting HEAD
+`c7bcf8874cbc4a2ac273225b93b6523d06900995`, cached `origin/main`
+`f5415ddb4c3a40796dd812e8b5946ba5094daa2b`. The working tree was clean;
+there were no unresolved index entries. No git-writing commands were run.
+
+Inspected the complete remaining diff against cached main and plan §9.2 ENT-3.
+Both sides' behaviour is retained without further source changes. Main's
+`app/northside/northside.module.css` is byte-identical. Main's recent-item
+journeys and existing assertions remain; the invoice-region assertion keeps its
+exact count of four inside main, excluding the sandbox landmark. The sandbox
+notice retains its text, role and name. No migrations, SQL routines, command
+catalogs or exact database lists differ from main, so no SQL regeneration or
+renumbering is necessary. The lane lists exactly all six changed non-lane paths,
+and does not list itself. Only this existing receipt needed an update.
+
+Checks actually run with installed binaries (no package downloads):
+
+- Repository: `node tools/agent-lane-boundary-lint.mjs` — passed.
+- Repository: `git diff origin/main --check` — passed.
+- apps/web: `./node_modules/.bin/tsc -p tsconfig.json --noEmit` — passed.
+- apps/web: `./node_modules/.bin/vitest run --maxWorkers=2 app/site/extra/site-visit.test.tsx 'app/api/contractor/jobs/[id]/site-visits/[visitId]/complete/route.test.ts' 'app/api/contractor/jobs/[id]/site-extras/sor/route.test.ts'`
+  — 3 files, 95 tests passed.
+- apps/web: `./node_modules/.bin/playwright test --list ENT-3.spec.ts m4-16-workbench.spec.mts --workers=2`
+  — 24 cases collected across phone and desktop; collection only, no browser run.
+- A deterministic Python check confirmed exact lane equality, branch registration,
+  conflict-marker absence, main CSS equality and preservation of main's browser
+  assertions (with the invoice-region scope adjustment described above). Its
+  first invocation used an incorrect CSS path and failed before that comparison;
+  after locating the existing file, the corrected invocation passed.
+
+READY for router commit/push and the group's PR turn. Required CI, actual
+PostgreSQL/browser execution and independent RED review at the eventual head
+remain outstanding. No new behaviour, weakened tests, deployment or release.
