@@ -133,8 +133,8 @@ describe("structural recovery fee guard",()=>{
    expect(await constraints()).toEqual(before);
   });
 
-  it("LATER-SAFETY-17: proves the predecessor overstates the second reversal, then preserves history and recomputes all reversals", async () => {
-   const repo = new RecoveryCaseRepository(runtime), w = await createWorld(true);
+  it.each([true, false])("LATER-SAFETY-17: proves the historical defect and preserves cumulative reversals and settled-plan credit (settled=%s)", async (planCredit) => {
+   const repo = new RecoveryCaseRepository(runtime), w = await createWorld(planCredit);
    let c = await open(repo,400000,w);
    c = await step(repo,c,{eventType:"assemble_evidence"},w);
    // Each allocation needs its own settled receipt (unique tenant/receipt/case/evidence).
@@ -167,7 +167,7 @@ describe("structural recovery fee guard",()=>{
     await db.query("CREATE OR REPLACE FUNCTION app.reverse_synthetic_landing" + fixed + "END$$;");
     expect(await metadata()).toEqual(before);
     expect((await db.query("SELECT * FROM app.recovery_fee_derivation WHERE tenant_id=$1 AND job_id=$2 ORDER BY id",[w.tenant,w.job])).rows).toEqual(rows.rows);
-    expect(await reverseBoth()).toEqual({cumulative_landed_pence:"150000",capped_fee_pence:"15000",liability_pence:"7100",posting_delta_pence:"-13200"});
+    expect(await reverseBoth()).toEqual({cumulative_landed_pence:"150000",capped_fee_pence:"15000",liability_pence:planCredit ? "7100" : "15000",posting_delta_pence:"-13200"});
    });
   });
 
