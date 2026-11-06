@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-76": {
+      "branches": [
+        "codex/sandbox/later-safety-76"
+      ],
+      "allow": [
+        "packages/db/migrations/0812_enterprise_fee_period_order.sql",
+        "packages/db/test/migration-proofs/0812_enterprise_fee_period_order.proof.json",
+        "packages/db/test/enterprise-fee-posting.integration.test.ts"
+      ]
+    }
+  }
+}
