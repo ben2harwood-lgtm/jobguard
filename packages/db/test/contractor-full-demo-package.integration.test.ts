@@ -1,3 +1,4 @@
+import { requestContext } from "./practice-worker-switch-fixtures.js";
 // Practice sandbox — synthetic data; nothing is sent or charged
 // Real PostgreSQL only. NOT RUN locally; dispatcher/CI owns execution and failing-first database evidence.
 import { randomUUID } from "node:crypto";
@@ -18,8 +19,8 @@ async function world() {
   const f = await startSession(c), seed = await seedNorthsideDemo(c.runtime, f.p, f.context);
   const switches = new PracticeWorkerSwitchRepository(c.runtime);
   const act = async (target?: string) => {
-    if ((await switches.state(f.context, f.session)).state !== "owner") await switches.switchOff(f.context, f.p, f.session, { version: "practice-worker-switch-off.v1", commandId: randomUUID() });
-    if (target) await switches.switchOn(f.context, f.p, f.session, { version: "practice-worker-switch-on.v1", commandId: randomUUID(), workerId: target });
+    if ((await switches.state(await requestContext(c, f), f.session)).state !== "owner") await switches.switchOff(await requestContext(c, f), f.p, f.session, { version: "practice-worker-switch-off.v1", commandId: randomUUID() });
+    if (target) await switches.switchOn(await requestContext(c, f), f.p, f.session, { version: "practice-worker-switch-on.v1", commandId: randomUUID(), workerId: target });
     return new ContractorRepository(c.runtime).resolveSession(f.session);
   };
   const ctx = () => contractorSessionContext(c.runtime, f.session);
@@ -88,7 +89,7 @@ it("A14 foreign tenant client job and revoked-session reads refuse", async () =>
   }
   await w.act(w.seed.supervisorMembershipId);
   await other.act();
-  await new ContractorPracticeSessionRepository(c.runtime).revoke(other.f.context, other.f.session);
+  await new ContractorPracticeSessionRepository(c.runtime).revoke(await requestContext(c, other.f), other.f.session);
   await expect(read(other.f.session)).rejects.toMatchObject({ code: "NOT_FOUND" });
 });
 it("A15 reads create no commercial audit outbox or money effects", async () => {
@@ -114,7 +115,7 @@ it("A16 reset preserves prior run history and isolates the next run", async () =
   await w.act();
   const tables = ["app.northside_run", "app.northside_action_attribution", "app.extra_origin", "app.evidence_object", "app.audit_event"];
   const before = await proofBefore(c.admin, tables);
-  await new ContractorPracticeSessionRepository(c.runtime).revoke(w.f.context, w.f.session);
+  await new ContractorPracticeSessionRepository(c.runtime).revoke(await requestContext(c, w.f), w.f.session);
   const fresh = await startSession(c), seed = await seedNorthsideDemo(c.runtime, fresh.p, fresh.context);
   expect(fresh.p.tenantId).not.toBe(w.f.p.tenantId);
   expect(await proofDifferences(c.admin, before)).toEqual({ rows: [], types: [] });
