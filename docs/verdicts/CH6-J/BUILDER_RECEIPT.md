@@ -2252,3 +2252,43 @@ Web TypeScript completed successfully on the merged tree:
 `node node_modules/typescript/bin/tsc -p apps/web/tsconfig.json --noEmit
 --incremental false` — PASS. Final whitespace check passed.
 READY for router commit/push and subsequent PR admission, CI and RED review.
+
+
+## 6 November 2026 — batch-48 landing merge READY
+
+Entry HEAD 77357959f already completed the launcher merge of stored origin/main
+f5415ddb4 (batch-35, PR #581). Working tree was clean and no unmerged paths
+remained. Inspected the complete diff against that main: no migrations, SQL
+routines or exact database lists differ, so no migration removal, routine
+recreation or list reconciliation is needed. Main's database implementation is
+unchanged. No product code or test assertions changed during this verification.
+The existing lane lists exactly all 18 changed non-lane paths and excludes itself.
+
+Checks actually run, using installed binaries with at most two workers and no
+more than three named Vitest files per run:
+- From packages/core: `node node_modules/vitest/vitest.mjs run --maxWorkers=2
+  src/allocation.refusals.test.ts src/customer-billing.history-boundaries.test.ts
+  src/money.negative-limits.test.ts` — 3 files, 20 tests PASS.
+- From packages/config: same runner/options for
+  src/api-environment.boundaries.test.ts,
+  src/identity-environment.database-boundary.test.ts and
+  src/identity-environment.required-settings.test.ts — 3 files, 23 tests PASS;
+  separate run for src/identity-environment.secret-boundary.test.ts — 4 PASS.
+- `node node_modules/typescript/bin/tsc -p apps/web/tsconfig.json --noEmit
+  --incremental false` — PASS.
+- From apps/web: `node node_modules/@playwright/test/cli.js test --list
+  --workers=2 UIWIRE-15-READ-RECOVERY.spec.ts VALUE-1-READ-RECOVERY.spec.ts`
+  — 12 cases discovered, no browser execution.
+- From packages/db: `node node_modules/vitest/vitest.mjs list --maxWorkers=2
+  test/commercial-integrity-v3-published.integration.test.ts
+  test/commercial-integrity-v3-review.integration.test.ts` — 18 cases collected,
+  no PostgreSQL execution.
+- `node tools/agent-lane-boundary-lint.mjs` — PASS. Independent exact-path set
+  comparison — PASS, all 18 non-lane paths. Whitespace verification passed.
+
+READY for router commit/push and PR admission. RED: CH-6 / CH6-J, UIWIRE-15
+read recovery, VALUE-1 read recovery, TESTS-CORE-2 and RECOVER-TESTS-CONFIG-1.
+Required current-head CI, database/browser execution and independent RED review
+remain merge gates. No Git writes, package downloads, real data or deployment.
+Earlier initial LATER / SIMPLICITY observations stand; no new behavior or
+substantial complexity was introduced.
