@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-92": {
+      "branches": [
+        "codex/sandbox/later-safety-92"
+      ],
+      "allow": [
+        "packages/db/src/review-repository.ts",
+        "packages/db/src/quote-repository.ts",
+        "packages/db/test/review.integration.test.ts",
+        "packages/db/test/quote.integration.test.ts"
+      ]
+    }
+  }
+}
