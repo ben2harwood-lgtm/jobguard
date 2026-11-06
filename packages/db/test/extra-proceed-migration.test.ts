@@ -33,6 +33,8 @@ it("registers the operational command, side-table proof and no commercial writer
  expect(withoutProceed).toEqual(expect.arrayContaining(registry.before!.data));
  expect(withoutProceed).toHaveLength(registry.before!.data.length);
  expect(registry.after?.data).toHaveLength(currentCommandRegistryRows.length);
- expect(registry.after?.data).toEqual(expect.arrayContaining(currentCommandRegistryRows));
+ // 0634 predates 0642: client sends still require owner in this exact proof.
+ expect(registry.after?.data).toEqual(expect.arrayContaining(currentCommandRegistryRows.map(row =>
+  row.command_type === "IssueClientApproval" ? { ...row, permission_rule: "owner" } : row)));
  expect(proof.tenancy).toEqual([{ relname: "extra_proceed_statement", before: null, after: { relrowsecurity: true, relforcerowsecurity: true, guarded: true, owner: "jobguard_migration" } }]);
 });
