@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHmac, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PostgresReservationStore } from "../../../apps/api/src/fee-collection/postgres-reservation-store.js";
 import { DarkFeeCollectionExecutor } from "../../../apps/api/src/fee-collection/executor.js";
@@ -711,6 +711,57 @@ describe("M4-12 PostgreSQL shared reservation store", () => {
     const failure = JSON.stringify({ events: [event(id(88), "failed")] });
     expect(await executor.directDebitWebhook(f.context, failure, dd.sign(failure))).toEqual([{ code: "processed" }]);
     expect((await f.read()).attempts[0]).toMatchObject({ paymentState: "failed", state: "reconciliation_required" });
+  });
+
+  it("reports malformed signed JSON as typed without writes and commits the next item in the batch", async () => {
+    const f = await setup();
+    await f.executor().reserve(f.context, { ...f.intent, rail: "direct_debit" });
+    await f.store().transaction(f.tenantId, async book => {
+      book.attempts[0]!.state = "outcome_unknown";
+      book.audit.push({ commandId: id(10), state: "outcome_unknown" });
+    });
+    const dd = new FakeGoCardlessRail("fake-dd-test-signing-secret");
+    const before = await f.read();
+    const beforeAudit = (await db.admin.query("SELECT * FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence", [f.tenantId])).rows;
+    // Keep batch verification real; only the first store result has a malformed body.
+    const sign = dd.signStoreResult.bind(dd);
+    let first = true;
+    dd.signStoreResult = (tenantId, attempt) => {
+      if (!first) return sign(tenantId, attempt);
+      first = false;
+      const body = '{"version":';
+      return { body, signature: createHmac("sha256", "fake-dd-test-signing-secret").update(body).digest("hex") };
+    };
+    // verifyWebhookBatch validates the object's known fake submission identity.
+    const mandateId = id(82);
+    dd.setup({ version: "fake-dd-setup.v1", environment: "synthetic_demo", tenantId: f.tenantId,
+      commandId: id(83), mandateId, approvedDecisionId: id(84), noticeApproved: true, providerDefaultsDisabled: true });
+    const mandateBody = JSON.stringify({ events: [{ version: "fake-dd-mandate-event.v1", environment: "synthetic_demo",
+      account: "fake_jobguard_dd", tenantId: f.tenantId, mandateId, eventId: id(85), state: "active" }] });
+    dd.ingestMandates(mandateBody, dd.sign(mandateBody));
+    await dd.submit(f.tenantId, (await f.read()).attempts[0]!);
+    const event = (eventId: string, state: string) => ({ version: "fake-dd-event.v1", environment: "synthetic_demo",
+      account: "fake_jobguard_dd", tenantId: f.tenantId, eventId, commandId: id(10), objectId: dd.objectId(f.tenantId, id(10)),
+      amountPence: 600, kind: "collection", state });
+    const executor = new DarkFeeCollectionExecutor(f.store(), [dd]);
+    const body = JSON.stringify({ events: [event(id(86), "submitted"), event(id(87), "confirmed")] });
+    expect(await executor.directDebitWebhook(f.context, body, dd.sign(body)))
+      .toEqual([{ code: "COLLECTION_REFUSED" }, { code: "processed" }]);
+    const after = await f.read();
+    expect(after.attempts[0]).toMatchObject({ paymentState: "confirmed", state: "outcome_unknown" });
+    expect(after.events[`direct_debit:${id(86)}`]).toBeUndefined();
+    expect(after.events[`direct_debit:${id(87)}`]).toBeDefined();
+    expect(after.audit).toEqual(before.audit);
+    const books = (await db.admin.query("SELECT book FROM app.fee_reservation_book WHERE tenant_id=$1", [f.tenantId])).rows;
+    expect(books).toHaveLength(1);
+    expect(books[0]!.book.attempts).toEqual(after.attempts);
+    const recorded = (await db.admin.query("SELECT * FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence", [f.tenantId])).rows;
+    expect(recorded.slice(0, beforeAudit.length)).toEqual(beforeAudit);
+    // Only the confirmed lifecycle and its webhook receipt were appended.
+    expect(recorded.slice(beforeAudit.length).map(row => row.event_type)).toEqual([
+      "fee.collection.lifecycle", "fee.collection.webhook_recorded",
+    ]);
+    expect(recorded[beforeAudit.length]!.payload.references.paymentState).toBe("confirmed");
   });
 
 });

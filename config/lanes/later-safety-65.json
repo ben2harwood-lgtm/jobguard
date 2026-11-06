@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-65": {
+      "branches": ["codex/sandbox/later-safety-65"],
+      "allow": [
+        "apps/api/src/fee-collection/postgres-reservation-store.ts",
+        "apps/api/src/fee-collection/postgres-reservation-store.test.ts",
+        "packages/db/test/fee-reservation.integration.test.ts"
+      ]
+    }
+  }
+}
