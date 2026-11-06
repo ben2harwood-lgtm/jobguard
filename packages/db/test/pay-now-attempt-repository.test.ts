@@ -59,3 +59,14 @@ describe("MON-6 dark stored attempt boundary",()=>{
   await expect(f.repo.command(f.context,actor,input)).rejects.toThrow("UNAVAILABLE");expect(f.query).toHaveBeenLastCalledWith("ROLLBACK");
  });
 });
+
+it.each([["METER_FORBIDDEN", "FORBIDDEN"], ["PAY_NOW_UNAUTHENTICATED", "UNAUTHENTICATED"],
+ ["private database fault", "UNAVAILABLE"]] as const)("classifies SQL %s as %s", async (message, code) => {
+ const f=fixture();
+ f.query.mockImplementation(async sql=>{
+  if(sql.includes("pay_now_fake_attempt"))throw new Error(message);
+  return {rows:[]};
+ });
+ await expect(f.repo.command(f.context,actor,input)).rejects.toMatchObject({code});
+ expect(f.query).toHaveBeenLastCalledWith("ROLLBACK");
+});

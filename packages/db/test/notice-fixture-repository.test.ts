@@ -8,7 +8,7 @@ import { testTenantContext } from "./tenant-context-test-utils.js";
 
 // Protocol double only. PostgreSQL locking, grants, RLS and durable replay have
 // separate real-database tests; this double does not claim to prove them.
-function fixture() {
+function fixture(queryError?: unknown) {
   const tenantId = randomUUID(), jobId = randomUUID(), noticeId = randomUUID(), actorId = randomUUID();
   let records: any[] = [];
   const calls: string[] = [];
@@ -16,6 +16,7 @@ function fixture() {
   const client = { release() {}, async query(sql: string, args?: any[]) {
     calls.push(sql);
     if (!sql.includes("app.notice_fixture_records")) return { rows: [] };
+    if (queryError) throw queryError;
     const op = sql.includes("NULL,'read'") ? "read" : args![3];
     if (op === "read") return { rows: [{ result: { records } }] };
     const v = JSON.parse(args![4]);
@@ -39,6 +40,31 @@ function fixture() {
 }
 
 describe("dark notice fixture repository protocol and core rules", () => {
+  it.each([
+    new Error("database connection lost"),
+    Object.assign(new Error("NOT_FOUND"), { code: "XX000" }),
+    Object.assign(new Error("query cancelled"), { code: "57014" }),
+    Object.assign(new Error("permission denied"), { code: "42501" }),
+    Object.assign(new Error("METER_FORBIDDEN"), { code: "XX000" }),
+    Object.assign(new Error("INVALID_INPUT"), { code: "XX000" }),
+  ])("reports an unexpected query failure as unavailable for reads and commands: %s", async error => {
+    const f = fixture(error);
+    for (const result of [() => f.repo.read(f.context, f.jobId, f.noticeId), () => f.send(f.revision())]) {
+      await expect(result()).rejects.toMatchObject({ code: "NOTICE_UNAVAILABLE", message: "NOTICE_UNAVAILABLE" });
+    }
+  });
+  it.each(["STALE_REVISION", "REPLAY_CONFLICT", "APPROVAL_REQUIRED", "INVALID_SERVICE_STATE", "INVALID_INPUT"])(
+    "preserves the explicit SQL domain refusal %s", async message => {
+      const f = fixture(Object.assign(new Error(message), { code: "P0001" }));
+      await expect(f.send(f.revision())).rejects.toMatchObject({ code: message });
+    });
+  it.each([
+    ["NOT_FOUND", "P0002"], ["METER_FORBIDDEN", "42501"],
+  ])("preserves the explicit scope/session refusal %s (%s)", async (message, code) => {
+    const f = fixture(Object.assign(new Error(message), { code }));
+    await expect(f.repo.read(f.context, f.jobId, f.noticeId)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(f.send(f.revision())).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
   it("binds exact stored facts and session actor, recreates views, and never enqueues or sends", async () => {
     const f = fixture(), rev = f.revision(); await f.send(rev);
     const approval = f.decision(rev); const stored = await f.send(approval);
