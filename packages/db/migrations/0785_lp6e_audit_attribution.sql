@@ -52,6 +52,9 @@ BEGIN
    'customer_invoice.synthetic_issued',
    'customer_payment.recorded',
    'customer_payment.synthetic_recorded',
+   'customer_payment.synthetic_reversed',
+   'evidence_pack.attachment_approved',
+   'outbox.authorization_revoked',
    'proof.completed',
    'recovery.terms.approved',
    'variation.approved') AND lower(e->>'eventType') ~

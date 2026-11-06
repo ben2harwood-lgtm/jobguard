@@ -1,12 +1,13 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { EvidenceService, FinalAccountLockRepository, PracticeInvoiceRepository, ProofCommandService, verifiedTenantContextFromMembership, withTenant, type AuthenticatedMembership } from "../src/index.js";
+import { EvidencePackRepository, EvidenceService, FinalAccountLockRepository, PracticeInvoiceRepository, ProofCommandService, verifiedTenantContextFromMembership, withTenant, type AuthenticatedMembership } from "../src/index.js";
 import { LOCK_OWNER, LOCK_USER, seedAccount, publishFixtureCompletion } from "./sv5pre-fixtures.js";
 import { installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { MemoryStorage, pngBytes } from "./site-extra-evidence-fixtures.js";
 import { auditActorAttribution, verifyAuditChain, type AuditEvent } from "../src/audit.js";
 import { jobDoorsActor, jobDoorsDatabase, transaction, type JobDoorsDatabase } from "./lp-job-doors-fixtures.js";
+import { seedEvidencePackFixture } from "./evidence-pack-fixture.js";
 let db: JobDoorsDatabase;
 beforeAll(async () => { db = await jobDoorsDatabase(); }, 300_000);
 afterAll(async () => { await db?.close(); });
@@ -235,4 +236,27 @@ it.each(["PROOF.COMPLETED", "proof.completed.forged", "customer_payment.recorded
   await expect(transaction(db.runtime,p.tenant,async c => { await bind(c,p); await append(c,[input({eventType})]); }))
     .rejects.toMatchObject({code:"42501",message:"AUDIT_CHECKED_OPERATION_REQUIRED"});
   expect(await chain(p.tenant)).toEqual([]);
+});
+
+it("records attachment approval through the product repository after 0785", async () => {
+  await installLegacySyntheticPartyFixtures(db.owner);
+  const fixture = await seedEvidencePackFixture(db.owner), credential = randomBytes(32).toString("hex");
+  await db.owner.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", ["lp6e-pack@fictional.invalid",fixture.identityId]);
+  await db.owner.query("INSERT INTO identity.membership_locator VALUES($1,$2,$3)", [fixture.identityId,fixture.tenantId,fixture.memberId]);
+  await db.owner.query(`INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at)
+    VALUES($1,$2,'synthetic_demo',$3,'fictional',clock_timestamp()+interval '1 hour')`, [randomUUID(),fixture.identityId,credential]);
+  const context = verifiedTenantContextFromMembership({ tenantId:fixture.tenantId, membershipId:fixture.memberId,
+    identityUserId:fixture.identityId } as AuthenticatedMembership, { kind:"real",credential });
+  const repo = new EvidencePackRepository(db.runtime), actorRef = `membership:${fixture.memberId}`;
+  const pack = await repo.generate(context,fixture.caseId,{commandId:randomUUID()},actorRef);
+  const approval = {commandId:randomUUID(),expectedManifestHash:pack.manifestHash,expectedContentHash:pack.contentHash};
+  expect(await repo.approveAttachment(context,fixture.caseId,pack.id,approval,actorRef)).toMatchObject({attachmentApprovalValid:true});
+  await repo.approveAttachment(context,fixture.caseId,pack.id,approval,actorRef);
+  const events = await chain(fixture.tenantId);
+  verifyAuditChain(events);
+  const approvals = events.filter(event => event.eventType === "evidence_pack.attachment_approved");
+  expect(approvals).toHaveLength(1);
+  expect(approvals[0]).toMatchObject({version:"audit.v3",actorRef,subjectRef:pack.id,
+    payload:{references:{caseId:fixture.caseId,jobId:fixture.jobId,auditTrust:"lower_trust",auditActorKind:"bound_member"},
+      hashes:{manifest:pack.manifestHash,content:pack.contentHash}}});
 });
