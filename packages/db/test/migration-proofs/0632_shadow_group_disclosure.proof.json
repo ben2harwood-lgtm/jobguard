@@ -1,0 +1,154 @@
+{
+  "migration": "0632_shadow_group_disclosure.sql",
+  "lp0": [
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.record_shadow_disclosure(uuid,uuid,uuid,uuid,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_shadow",
+          "jobguard_shadow_emergency_access"
+        ],
+        "definitionSha256": "c867d53537f1680761fc3ec76247fc5799e75ddd83dd3f2d50cd35c18380e2c3",
+        "staticWrites": [
+          "app.shadow_commercial_signal",
+          "app.shadow_disclosure_event",
+          "app.shadow_signal_ineligibility"
+        ],
+        "staticCalls": [
+          "app.append_shadow_audit"
+        ]
+      },
+      "after": {
+        "identity": "function:app.record_shadow_disclosure(uuid,uuid,uuid,uuid,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_shadow",
+          "jobguard_shadow_emergency_access"
+        ],
+        "definitionSha256": "b7c72d6078dc5505c1fa37313053e7246800b1a2b15edaddaa05581bf6105888",
+        "staticWrites": [
+          "app.shadow_commercial_signal",
+          "app.shadow_disclosure_event",
+          "app.shadow_signal_ineligibility"
+        ],
+        "staticCalls": [
+          "app.append_shadow_audit"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.propagate_shadow_group_disclosure()",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "cdf395463e64a63723cf1860334ee492fd480e72647bd15c7cd5722551c91e9c",
+        "staticWrites": [
+          "app.shadow_commercial_signal",
+          "app.shadow_signal_ineligibility"
+        ],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.surface_shadow_signal_early(uuid,uuid,uuid,uuid,uuid,uuid,text,text,uuid,text,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_shadow"
+        ],
+        "definitionSha256": "f6b388a68b4ac29d5d0e063b1e9fdd23e3de236c524978e7f37dc7e19651cf7e",
+        "staticWrites": [
+          "app.audit_event",
+          "app.decision",
+          "app.job_finding",
+          "app.shadow_must_surface_firing"
+        ],
+        "staticCalls": [
+          "app.advance_audit_head",
+          "app.lock_audit_head",
+          "app.record_shadow_disclosure"
+        ]
+      },
+      "after": {
+        "identity": "function:app.surface_shadow_signal_early(uuid,uuid,uuid,uuid,uuid,uuid,text,text,uuid,text,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_shadow"
+        ],
+        "definitionSha256": "3f66ba3f811f20893372ec0d672dcb1bc210cf46b40dc2a5254576a5c41dfda4",
+        "staticWrites": [
+          "app.decision",
+          "app.job_finding",
+          "app.shadow_must_surface_firing"
+        ],
+        "staticCalls": [
+          "app.lp4_seal_audit",
+          "app.record_shadow_disclosure"
+        ]
+      }
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.shadow_commercial_signal|shadow_group_disclosure|app.propagate_shadow_group_disclosure|AFTER UPDATE|O"
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "propagate_shadow_group_disclosure",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, app"
+        ]
+      }
+    }
+  ],
+  "tenancy": []
+}
