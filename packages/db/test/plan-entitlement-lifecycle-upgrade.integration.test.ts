@@ -31,6 +31,13 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   // Successor migrations have their own exact reviewed routine ACL additions.
   // Keep the 0556-only assertion above, and retain every predecessor definition.
   const live = await catalogue();
+  // 0655 replaces only the emergency capability body; pin the complete reviewed replacement.
+  const emergency = await readFile(new URL("../migrations/0655_emergency_token_minted.sql", import.meta.url), "utf8");
+  const emergencyBody = emergency.split("FUNCTION identity.dark_emergency(")[1]!.split("AS $$")[1]!.split("$$;")[0];
+  const emergencyRoutines = live.filter(row => row.nspname === "identity" && row.proname === "dark_emergency"
+    && row.args === "s text, csrf text, t uuid, p jsonb");
+  expect(emergencyRoutines).toHaveLength(1);
+  expect(emergencyRoutines[0]?.definition?.split("$function$")[1]).toEqual(emergencyBody);
   // 0651 replaces only this exact overload; pin its entire body, including all predecessor guards.
   const feeResult = await readFile(new URL("../migrations/0651_fee_result_forward_only.sql", import.meta.url), "utf8");
   const feeResultBody = feeResult.split("CREATE OR REPLACE FUNCTION app.replace_fee_reservation_book")[1]!.split("AS $$")[1]!.split("$$;")[0];
