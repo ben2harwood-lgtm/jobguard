@@ -8,6 +8,7 @@
       "allow": [
         "apps/api/src/auth/sso/enterprise-access.contracts.ts",
         "apps/api/src/auth/sso/sso-emergency-token.test.ts",
+        "apps/web/app/admin/contractor/identity/emergency-actions.tsx",
         "packages/db/migration-notes/0656_emergency_token_minted.md",
         "packages/db/migrations/0656_emergency_token_minted.sql",
         "packages/db/test/enterprise-access.integration.test.ts",
