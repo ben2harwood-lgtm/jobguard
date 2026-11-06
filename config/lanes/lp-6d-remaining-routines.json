@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/lp-6d-remaining-routines"
       ],
-      "note": "LP-6d RED, held NOPR serial chain; repair round 1 passes caller session contexts without weakening guards or grants. Exact non-lane paths from LP-6c base 531e7d633. Router owns commit/push, later chain catch-up and landing.",
+      "note": "LP-6d RED, NOPR serial LP chain; last repair round 2. Exact non-lane paths over LP-6c 397a5a53. Router stages the resolved merge and commits/pushes; real PostgreSQL, main catch-up and exact-head independent RED review remain required.",
       "allow": [
         "apps/api/src/audit-export/audit-export.application.test.ts",
         "apps/api/src/audit-export/audit-export.context.test.ts",
@@ -25,6 +25,7 @@
         "apps/api/src/workspace/recovery.application.ts",
         "apps/web/app/api/contractor/jobs/[id]/site-extras/route.test.ts",
         "apps/web/app/lib/northside-server.ts",
+        "docs/contracts/lp-0-effective-privileges-v1.md",
         "packages/db/migration-notes/0780_lp6d_remaining_routines.md",
         "packages/db/migrations/0780_lp6d_remaining_routines.sql",
         "packages/db/src/contractor-party-repository.ts",
@@ -39,7 +40,9 @@
         "packages/db/src/work-order-repository.ts",
         "packages/db/test/contractor-parties.integration.test.ts",
         "packages/db/test/contractor.integration.test.ts",
+        "packages/db/test/extra-fixtures.ts",
         "packages/db/test/fee-illustration-later.integration.test.ts",
+        "packages/db/test/lp6d-main-predecessors.json",
         "packages/db/test/lp6d-repository-context.test.ts",
         "packages/db/test/lp6d-routines.integration.test.ts",
         "packages/db/test/lp6d-routines.json",

@@ -555,3 +555,15 @@ and database OID directly; there is no control-file grant or environment helper.
 `0591_lp6c_money_binding.sql` guards 28 existing definitions without withdrawing compatibility parameters or changing existing runtime grants. The new `a-lp6c-money-binding` inventory group records exactly five owner-only binding EXECUTE grants. The meter bridge now selects identity through `bind_request`, retaining synthetic-environment and live owner/admin restrictions. Financial authorization membership, command resource/claim actors and all explicit actor/tenant arguments covered by this slice must match the protected binding before business access or replay returns.
 
 The body-preservation regression checks the latest predecessor definitions; permission, exact approval, money formulas and CH-7-TERMS clocks remain independent controls. See `packages/db/migration-notes/0591_lp6c_money_binding.md` and `packages/db/test/lp6c-money-routines.integration.test.ts`. LP-6b ca05fd9240627059cbbd19f4104fa5e8b690b96d is the predecessor; its JSON baseline remains unchanged and the LP-6c inventory delta is in the 0591 proof fragment. This is source-inspected construction, not PostgreSQL-executed or independently verified closure. Full PostgreSQL CI, two exact-head security checks and remaining LP-6d/LP-8/LP-9 gates remain required.
+
+## LP-6d round 2 catalogue amendment (0780)
+
+The migration proof explicitly retains migration ownership of
+`app.apply_recovery_timeline_signal(uuid,jsonb)` after withdrawing runtime EXECUTE.
+It also names the owner-only `app.lp6d_contractor_session_identity(uuid)` projection
+and the bound `app.revoke_recovery_message_authorization(uuid,uuid,uuid,uuid)` entry
+point in the recorded routine catalogue. Both new routines remain owned by
+`jobguard_migration`; only the revocation entry point grants runtime EXECUTE.
+The private projection has no PUBLIC or application-role EXECUTE. These reviewed
+source expectations require LP0-02 and LP0-17 on real PostgreSQL; they do not
+assert a live catalogue pass or independent acceptance.

@@ -9,11 +9,11 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { migrate, DEMO_TENANT_ID as T, DEMO_MEMBERSHIP_ID as M, QuoteAcceptanceRepository, PracticeActivationRepository, prepareActivationFixtureV3 } from "../src/index.js";
 import { freePort, closeTestPools } from "./pool-test-utils.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { rolledBack } from "./upgrade-proof-utils.js";
 
 // QUOTE-REACCEPT (audit finding 5; founder decisions 21-23, 14 Oct 2026). Synthetic data only, real PostgreSQL, runtime login, demo owner.
-const context = testTenantContext(T), original = process.env.JOBGUARD_ENV;
+let context=testTenantContext(T); const original = process.env.JOBGUARD_ENV;
 let pg: EmbeddedPostgres, admin: Pool, runtime: Pool, dir: string, acceptance: QuoteAcceptanceRepository;
 beforeAll(async () => {
   process.env.JOBGUARD_ENV = "synthetic_demo";
@@ -24,6 +24,7 @@ beforeAll(async () => {
   admin = await syntheticOwnerPool({ host: "127.0.0.1", port, user: "postgres", password: "synthetic" });
   await migrate(admin);
   await admin.query(`INSERT INTO control_plane.tenant(id)VALUES('${T}');INSERT INTO identity.identity_user(id)VALUES('d1550000-0000-4000-8000-000000000001');INSERT INTO app.account(id,tenant_id,name)VALUES('d1550000-0000-4000-8000-000000000002','${T}','Synthetic');INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)VALUES('${M}','${T}','d1550000-0000-4000-8000-000000000002','d1550000-0000-4000-8000-000000000001','owner');CREATE ROLE rq_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOBYPASSRLS;GRANT jobguard_runtime TO rq_login;`);
+context = await testBoundTenantContext(admin, T, M);
   runtime = new Pool({ host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "rq_login", password: "synthetic", max: 6 });
   acceptance = new QuoteAcceptanceRepository(runtime);
 }, 90_000);

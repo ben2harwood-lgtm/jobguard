@@ -120,7 +120,7 @@
   "app.mon3_simulate_card(uuid,text,uuid,jsonb)": "LP-6c",
   "app.mon8_company_feature(text,text,uuid)": "LP-6c",
   "app.mon8_contractor_agreement_context(uuid)": "LP-6c",
-  "app.mon8_feature_decision(uuid,text,text)": "LP-6d; subject membership for company entitlement, not permission delegation",
+  "app.mon8_feature_decision(uuid,text,text)": "LP-6d subject feature lookup; pre-session SSO and retained readers; request wrappers remain bound",
   "app.mon8_require_feature(uuid,text)": "LP-6d via mon8_feature_decision; subject membership preserved",
   "app.mon8_retained_baseline_actor(uuid)": "LP-6d",
   "app.mon8_retained_contractor_workspace(uuid,jsonb)": "LP-6c",

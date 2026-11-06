@@ -1,3 +1,4 @@
+import { RequestBindingRefusedError } from "./request-binding-error.js";
 import type { ContractorSessionMembership } from "./contractor-repository.js";
 import { serverEntitlement } from "./plan-entitlement-service.js";
 import { createHash, randomUUID } from "node:crypto";
@@ -29,6 +30,7 @@ const uuidSchema = z.string().uuid();
 
 /** Maps whatever a transaction raised to a typed refusal. Nothing from PostgreSQL (DETAIL, arguments, contacts) is propagated. */
 export function workOrderFailure(error: unknown): WorkOrderError {
+  if (error instanceof RequestBindingRefusedError) return new WorkOrderError("NOT_FOUND");
   if (error instanceof WorkOrderError) return error;
   if (error instanceof ContractorError) {
     return new WorkOrderError(error.code === "UNAUTHENTICATED" ? "UNAUTHENTICATED" : error.code === "MODE_FORBIDDEN" ? "MODE_FORBIDDEN" : error.code === "COMMAND_CONFLICT" ? "COMMAND_CONFLICT" : error.code === "STALE_REVISION" ? "STALE_REVISION" : error.code === "INVALID_COMMAND" || error.code === "INVALID_RULE_DOCUMENT" ? "INVALID_COMMAND" : "NOT_FOUND");

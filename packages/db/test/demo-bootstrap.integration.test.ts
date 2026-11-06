@@ -80,11 +80,12 @@ describe("bootstrap SQL trace (no PostgreSQL proof)", () => {
     }
   });
 
-  it.each([[false, false], [false, true], [true, false]])("binds the synthetic small-builder track and cleans migration grants (failure=%s, seedReplay=%s)", async (migrationFailure, seedReplay) => {
+  it.each([[false, false, false], [false, true, false], [true, false, false], [false, false, true]])("binds the synthetic small-builder track and cleans migration grants (failure=%s, seedReplay=%s, bindingFailure=%s)", async (migrationFailure, seedReplay, bindingFailure) => {
     const queries: Array<{ sql: string; values: unknown[] }> = [];
     const client = { release() {}, async query(sql: string, values: unknown[] = []) {
       queries.push({ sql, values });
       if (migrationFailure && sql.startsWith("CREATE TABLE IF NOT EXISTS public.jobguard_schema_migration")) throw new Error("synthetic migration failure");
+      if (bindingFailure && sql === "SELECT app.bind_request('real',$1,$2)") throw new Error("REQUEST_BINDING_REFUSED");
       if (sql.startsWith("SELECT app.begin_command(")) return { rowCount: 1, rows: [{ result: seedReplay ? { kind: "replay", result: {} } : { kind: "claim" } }] };
       if (sql.startsWith("SELECT app.complete_command(")) return { rowCount: 1, rows: [{ result: {} }] };
       if (sql.includes("FROM pg_roles WHERE rolname='jobguard_runtime'")) return { rowCount: 1, rows: [{ rolsuper: false, rolbypassrls: false, rolcreatedb: false, rolcreaterole: false, rolinherit: false, rolcanlogin: true }] };
@@ -103,6 +104,7 @@ describe("bootstrap SQL trace (no PostgreSQL proof)", () => {
     try {
       const bootstrap = bootstrapSyntheticDemo({ ownerUrl: `postgresql://synthetic_owner:fixture@localhost/${SYNTHETIC_DATABASE_NAME}`, runtimeUrl: `postgresql://jobguard_runtime:fixture@localhost/${SYNTHETIC_DATABASE_NAME}` });
       if (migrationFailure) await expect(bootstrap).rejects.toThrow("synthetic migration failure");
+      else if (bindingFailure) await expect(bootstrap).rejects.toThrow("REQUEST_BINDING_REFUSED");
       else await bootstrap;
       for (const role of ["jobguard_audit_writer", "jobguard_command_writer", "jobguard_binding_owner"]) {
         const create = queries.findIndex(({sql}) => sql.includes(`CREATE ROLE ${role} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS`));
@@ -120,8 +122,29 @@ describe("bootstrap SQL trace (no PostgreSQL proof)", () => {
         return;
       }
       const begins = queries.filter(({sql}) => sql.startsWith("SELECT app.begin_command("));
+      const session = queries.findIndex(({sql}) => sql.startsWith("INSERT INTO identity.session("));
+      const bind = queries.findIndex(({sql}) => sql === "SELECT app.bind_request('real',$1,$2)");
+      expect(session).toBeGreaterThan(-1);
+      expect(queries.some(({sql}) => sql.startsWith("INSERT INTO control_plane.practice_session("))).toBe(false);
+      expect(bind).toBeGreaterThan(session);
+      expect(queries[session]!.values[0]).toMatch(/^[0-9a-f]{64}$/u);
+      expect(queries[bind]!.values).toEqual([queries[session]!.values[0], DEMO_TENANT_ID]);
+      expect(queries.slice(session, bind).filter(({sql}) => sql.startsWith("SET LOCAL ROLE")).at(-1)?.sql).toBe("SET LOCAL ROLE jobguard_runtime");
+      if (bindingFailure) {
+        expect(begins).toHaveLength(0);
+        expect(queries.slice(bind).some(({sql}) => sql === "COMMIT")).toBe(false);
+        expect(queries[bind + 1]!.sql).toBe("ROLLBACK");
+        return;
+      }
+      expect(queries.indexOf(begins[0]!)).toBeGreaterThan(bind);
       const records = queries.filter(({sql}) => sql.startsWith("SELECT app.record_repository_command("));
       const completes = queries.filter(({sql}) => sql.startsWith("SELECT app.complete_command("));
+      const revoke = queries.findIndex(({sql}) => sql.startsWith("UPDATE identity.session SET revoked_at="));
+      expect(revoke).toBeGreaterThan(queries.indexOf(begins.at(-1)!));
+      if (!seedReplay) expect(revoke).toBeGreaterThan(queries.indexOf(completes.at(-1)!));
+      expect(queries[revoke]!.values).toEqual([queries[session]!.values[0]]);
+      expect(queries[revoke - 1]!.sql).toBe("SET LOCAL ROLE jobguard_migration");
+      expect(queries[revoke + 1]!.sql).toBe("COMMIT");
       expect(begins).toHaveLength(demoCheckpoints.length);
       expect(records).toHaveLength(seedReplay ? 0 : demoCheckpoints.length);
       expect(completes).toHaveLength(seedReplay ? 0 : demoCheckpoints.length);

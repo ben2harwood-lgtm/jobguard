@@ -50,7 +50,7 @@ export async function fixture(c: Cluster, n = 1) {
  await new WorkOrderRepository(c.runtime).importCsv(p, { commandId: randomUUID(), name: "fictional.csv", kind: "csv", csv: demoFile([demoRow(demo, n)]) });
  const row = (await c.admin.query("SELECT w.id order_id,w.job_id,c.revision_id FROM app.work_order w JOIN app.work_order_current c ON (c.tenant_id,c.work_order_id)=(w.tenant_id,w.id) WHERE w.tenant_id=$1", [p.tenantId])).rows[0];
  const grant = (await c.admin.query("SELECT id FROM app.role_grant WHERE tenant_id=$1 AND membership_id=$2 AND scope_kind='tenant'", [p.tenantId, p.membershipId])).rows[0];
- const ctx = testTenantContext(p.tenantId);
+ const ctx = p.context;
  return { p, demo, ctx, jobId: row.job_id as string, orderId: row.order_id as string, revisionId: row.revision_id as string, grantId: grant.id as string };
 }
 export type Fixture = Awaited<ReturnType<typeof fixture>>;

@@ -611,21 +611,17 @@ describe("ENT-2 per-order authority: a manager scoped to one branch has no reach
 
   it("refuses at work_order_commit a create whose parties were bound to a branch-B client when branch A's admin commits it (defence in depth), and accepts it for the tenant-wide admin", async () => {
     const s = await seed(48), row = rowB(49), resident = { kind: "contact", contact: (row.resident as { contact: unknown }).contact }, payloads = commitPayloads(s.b);
-    const created: Array<{ ok: boolean; code?: string | undefined; message?: string | undefined }> = [];
-    await withTenant(runtime, ctx(adminAll), async db => {
-      const c = db.$client, jobId = randomUUID(), workOrderId = randomUUID();
-      await c.query("SELECT app.work_order_begin($1,$2,'Work order probe')", [adminAll.membershipId, jobId]);
-      await parties.bindInTransaction(db, adminAll, { version: "contractor-party-import.v1", environment: "synthetic_demo", commandId: randomUUID(), jobId, workOrderId, expectedJobRevision: 0, clientId: demoB.clientId, contractId: demoB.contractId, siteRevisionId: row.siteRevisionId, resident });
-      const create = () => JSON.stringify({ ...payloads.revise(), kind: "create", jobId, workOrderId, reference: "WO-PROBE-CREATE", expectedRevision: 0 });
-      for (const actor of [adminA, adminAll]) {
-        await c.query("SAVEPOINT create_probe");
-        try { await c.query(commitSql, [actor.membershipId, create()]); created.push({ ok: true }); }
-        catch (error) { created.push({ ok: false, code: (error as { code?: string }).code, message: (error as Error).message }); }
-        finally { await c.query("ROLLBACK TO SAVEPOINT create_probe"); }
-      }
-      throw new Error("roll the probe back");
-    }).catch(error => { if ((error as Error).message !== "roll the probe back") throw error; });
-    expect(created).toEqual([refused, { ok: true }]);
+    // Prepare an audited party binding under the tenant-wide admin, then probe
+    // commit in separate transactions bound to each exact actor. No rebinding.
+    const jobId = randomUUID();
+    await withTenant(runtime, ctx(adminAll), db => db.$client.query("SELECT app.work_order_begin($1,$2,'Work order probe')", [adminAll.membershipId, jobId]));
+    const workOrderId = randomUUID();
+    await parties.bind(adminAll, { version: "contractor-party-import.v1", environment: "synthetic_demo", commandId: randomUUID(), jobId, workOrderId, expectedJobRevision: 0, clientId: demoB.clientId, contractId: demoB.contractId, siteRevisionId: row.siteRevisionId, resident });
+    const payload = JSON.stringify({ ...payloads.revise(), kind: "create", jobId, workOrderId, reference: "WO-PROBE-CREATE", expectedRevision: 0 });
+    const created = [];
+    for (const actor of [adminA, adminAll]) created.push(await probe(actor, commitSql, [actor.membershipId, payload]));
+    expect(created[0]).toEqual(refused);
+    expect(created[1]).toMatchObject({ ok: true });
     expect((await admin.query("SELECT count(*)::int n FROM app.work_order WHERE reference='WO-PROBE-CREATE'")).rows[0].n).toBe(0);
   });
 
@@ -653,9 +649,14 @@ describe("ENT-2 tenant boundary", () => {
     // A principal naming tenant B with tenant A's membership, or tenant A's with an unrelated membership, is a non-member everywhere.
     await expect(importOf({ ...a.p, tenantId: b.p.tenantId }, demoFile([row1(b.demo, 2)]))).rejects.toMatchObject({ code: "NOT_FOUND" });
     await expect(orders.overview({ ...b.p, membershipId: a.p.membershipId })).rejects.toMatchObject({ code: "NOT_FOUND" });
-    // The controlled routines refuse to run without a transaction-local tenant, and a tenant context made by hand never reaches PostgreSQL.
+    // Unbound calls fail at the binding boundary; a bound reader still reaches
+    // the original business refusal. A hand-built context never reaches SQL.
+    const reader = await member(a.p, "read_only", { kind: "tenant", id: a.p.tenantId });
     for (const sql of ["SELECT app.work_order_begin($1,$2,'x')", "SELECT app.work_order_commit($1,'{}'::jsonb)", "SELECT app.import_batch_record($1,'{}'::jsonb)", "SELECT app.import_sor_version($1,'{}'::jsonb)", "SELECT app.work_order_parties_unchanged($1,$1,$1,$1,$1,'{}'::jsonb)"]) {
-      await expect(runtime.query(sql, sql.includes("$2") ? [a.p.membershipId, randomUUID()] : [a.p.membershipId]), sql).rejects.toMatchObject({ message: expect.stringMatching(/^(NOT_FOUND|MODE_FORBIDDEN|INVALID_COMMAND)$/u) });
+      const values = sql.includes("$2") ? [reader.membershipId, randomUUID()] : [reader.membershipId];
+      await expect(runtime.query(sql, values), sql).rejects.toMatchObject({ code: "42501", message: "REQUEST_BINDING_REFUSED" });
+      await expect(withTenant(runtime, ctx(reader), db => db.$client.query(sql, values)), sql)
+        .rejects.toMatchObject({ message: expect.stringMatching(/^(NOT_FOUND|MODE_FORBIDDEN|INVALID_COMMAND)$/u) });
     }
     await expect(withTenant(runtime, { tenantId: a.p.tenantId } as never, db => db.$client.query("SELECT 1"))).rejects.toMatchObject({ code: "INVALID_TENANT_CONTEXT" });
     await expect(importOf({ ...a.p, tenantId: "not-a-uuid" }, demoFile([row1(a.demo, 3)]))).rejects.toMatchObject({ code: "NOT_FOUND" });

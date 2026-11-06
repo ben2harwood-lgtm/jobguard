@@ -1206,7 +1206,7 @@ END;
 END
 $$;
 
--- Latest body: packages/db/migrations/0196_enterprise_live_prompts.sql
+-- Latest body: packages/db/migrations/0620_contractor_job_finish.sql
 CREATE OR REPLACE FUNCTION app.lp_read(p_session uuid,p_input jsonb) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
@@ -1218,6 +1218,13 @@ BEGIN
  END IF;
 DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; j uuid:=(p_input->>'jobId')::uuid; a uuid; result jsonb; lim integer:=coalesce((p_input->>'limit')::integer,50); x jsonb;
 BEGIN
+ IF p_input->>'version'='contractor-job-finish-status.v1' THEN
+  PERFORM app.lp_authority(p_session,j,'endcheck');
+  IF p_input-ARRAY['version','jobId']<>'{}'::jsonb THEN RAISE EXCEPTION 'INVALID_PROMPT_COMMAND'; END IF;
+  SELECT cr.result INTO result FROM app.contractor_job_finish f JOIN app.command_receipt cr
+   ON(cr.tenant_id,cr.command_id)=(f.tenant_id,f.command_id) WHERE f.tenant_id=t AND f.job_id=j;
+  RETURN jsonb_build_object('canFinish',true,'finish',result);
+ END IF;
  a:=app.lp_authority(p_session,j,CASE p_input->>'version' WHEN 'live-prompt-list.v1' THEN 'list' ELSE 'detail' END);
  IF p_input->>'version'='live-prompt-list.v1' THEN
   IF p_input-ARRAY['version','jobId','limit','after']<>'{}'::jsonb OR lim NOT BETWEEN 1 AND 100 OR EXISTS(SELECT 1 FROM jsonb_each(p_input) e WHERE jsonb_typeof(e.value) IS DISTINCT FROM CASE WHEN e.key='limit' THEN 'number' ELSE 'string' END) THEN RAISE EXCEPTION 'INVALID_PROMPT_COMMAND'; END IF;
@@ -1239,7 +1246,7 @@ END;
 END
 $$;
 
--- Latest body: packages/db/migrations/0196_enterprise_live_prompts.sql
+-- Latest body: packages/db/migrations/0620_contractor_job_finish.sql
 CREATE OR REPLACE FUNCTION app.lp_command(p_session uuid,p_input jsonb,p_source_bytes bytea DEFAULT NULL) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
@@ -1252,22 +1259,23 @@ BEGIN
 DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; j uuid:=(p_input->>'jobId')::uuid; a uuid; cid uuid:=(p_input->>'commandId')::uuid;
  ver text:=p_input->>'version'; typ text; h text; old app.command_receipt; answer jsonb; evaluation jsonb; fact app.materials_issue_fact; source_hash text; source uuid;
  p app.extra_prompt; chosen uuid; n integer; v uuid:=gen_random_uuid(); scope uuid:=gen_random_uuid(); grant_id uuid; role_name text; origin_hash text; audits jsonb:='[]'; pid uuid; rev uuid; selected_identity text; excess_scope uuid; selected_unit text; settings app.extra_prompt_rule_settings; term text; original_bytes bytea; tags jsonb; source_kind text; expected_keys text[];
+ ag app.enterprise_agreement_version; finished app.contractor_job_finish; check_enabled boolean; before_prompts integer;
 BEGIN
  typ:=CASE ver WHEN 'materials-issue.v1' THEN 'ImportMaterialsIssue' WHEN 'completion-observation.v1' THEN 'RegisterCompletionObservation' WHEN 'evaluate-live-prompts.v1' THEN 'EvaluateLivePrompts' WHEN 'confirm-prompt.v1' THEN 'ConfirmPrompt' WHEN 'dismiss-prompt.v1' THEN 'DismissPrompt' WHEN 'end-check.v1' THEN 'EndCheck' ELSE NULL END;
  IF typ IS NULL OR cid IS NULL OR j IS NULL THEN RAISE EXCEPTION 'INVALID_PROMPT_COMMAND'; END IF;
  a:=app.lp_authority(p_session,j,CASE WHEN typ='ImportMaterialsIssue' THEN 'materials' WHEN typ='EndCheck' THEN 'endcheck' ELSE 'resolve' END);
- IF typ='EndCheck' THEN RAISE EXCEPTION 'PROMPT_END_CHECK_HELD'; END IF;
  expected_keys:=CASE typ WHEN 'ImportMaterialsIssue' THEN ARRAY['version','commandId','jobId','sourceId','eventId','workIdentity','unit','quantity','occurredAtMicros','kind']
  WHEN 'RegisterCompletionObservation' THEN ARRAY['version','commandId','jobId','evidenceId','sha256','objectVersion','locator','workIdentity','sourceText']
  WHEN 'ConfirmPrompt' THEN ARRAY['version','commandId','jobId','promptId','promptHash','confirmedWorkIdentity','excessScopeItemId','existingExtraId']
+ WHEN 'EndCheck' THEN ARRAY['version','commandId','jobId','agreementVersionId']
  WHEN 'DismissPrompt' THEN ARRAY['version','commandId','jobId','promptId','promptHash','reason'] ELSE ARRAY['version','commandId','jobId'] END;
- IF p_input-expected_keys<>'{}'::jsonb OR EXISTS(SELECT 1 FROM unnest(expected_keys) k WHERE k NOT IN('confirmedWorkIdentity','excessScopeItemId','existingExtraId','sourceText') AND (NOT p_input ? k OR p_input->k='null'::jsonb))
+ IF p_input-expected_keys<>'{}'::jsonb OR EXISTS(SELECT 1 FROM unnest(expected_keys) k WHERE k NOT IN('agreementVersionId','confirmedWorkIdentity','excessScopeItemId','existingExtraId','sourceText') AND (NOT p_input ? k OR p_input->k='null'::jsonb))
   OR EXISTS(SELECT 1 FROM jsonb_each(p_input) e WHERE jsonb_typeof(e.value) IS DISTINCT FROM CASE WHEN e.key='locator' THEN 'object' ELSE 'string' END)
  THEN RAISE EXCEPTION 'INVALID_PROMPT_COMMAND'; END IF;
  h:=encode(sha256(convert_to(jsonb_build_array(a,p_input)::text,'UTF8')),'hex');
  -- Shared tenant command namespace; authority/live check occurs BEFORE replay.
  PERFORM pg_advisory_xact_lock(hashtextextended(t::text||':'||cid::text,8189));
- PERFORM app.lp_authority(p_session,j,CASE WHEN typ='ImportMaterialsIssue' THEN 'materials' ELSE 'resolve' END);
+ PERFORM app.lp_authority(p_session,j,CASE WHEN typ='ImportMaterialsIssue' THEN 'materials' WHEN typ='EndCheck' THEN 'endcheck' ELSE 'resolve' END);
  SELECT * INTO old FROM app.command_receipt WHERE tenant_id=t AND command_id=cid;
  IF old.command_id IS NOT NULL THEN
   IF old.request_hash<>h OR old.command_type<>typ OR old.status<>'succeeded' THEN RAISE EXCEPTION 'PROMPT_CONFLICT'; END IF;
@@ -1276,7 +1284,26 @@ BEGIN
  END IF;
  INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id)
  VALUES(t,cid,typ,CASE WHEN typ='ConfirmPrompt' THEN 'extra-origin:'||j::text||':'||v::text ELSE 'live-prompt:'||j::text||':'||cid::text END,h,'processing',a);
- IF typ='ImportMaterialsIssue' THEN
+ IF typ='EndCheck' THEN
+  -- The owner/session checks and key 417 precede the receipt. Upgrade the job lock
+  -- before checking visits: concurrent starts hold a job SHARE lock through commit.
+  PERFORM 1 FROM app.job WHERE tenant_id=t AND id=j FOR UPDATE;
+  IF EXISTS(SELECT 1 FROM app.contractor_job_finish WHERE tenant_id=t AND job_id=j)
+   OR EXISTS(SELECT 1 FROM app.site_visit WHERE tenant_id=t AND job_id=j AND completed_at IS NULL)
+  THEN RAISE EXCEPTION 'PROMPT_CONFLICT'; END IF;
+  SELECT * INTO ag FROM app.enterprise_agreement_version
+   WHERE tenant_id=t AND environment='synthetic_demo' AND effective_from<=statement_timestamp()
+   ORDER BY effective_from DESC LIMIT 1 FOR SHARE;
+  IF p_input ? 'agreementVersionId' AND (p_input->>'agreementVersionId')::uuid IS DISTINCT FROM ag.id
+  THEN RAISE EXCEPTION 'PROMPT_CONFLICT'; END IF;
+  check_enabled:=coalesce(ag.end_of_job_check,false);
+  SELECT count(*) INTO before_prompts FROM app.extra_prompt WHERE tenant_id=t AND job_id=j;
+  IF check_enabled THEN evaluation:=app.lp_evaluate(j,cid); END IF;
+  INSERT INTO app.contractor_job_finish(tenant_id,job_id,actor_membership_id,command_id,request_hash,agreement_version_id,check_ran)
+   VALUES(t,j,a,cid,h,ag.id,check_enabled) RETURNING * INTO finished;
+  SELECT jsonb_build_object('jobId',j,'finishedAt',finished.finished_at,'checkRan',check_enabled,
+   'promptsRaised',count(*)-before_prompts) INTO answer FROM app.extra_prompt WHERE tenant_id=t AND job_id=j;
+ ELSIF typ='ImportMaterialsIssue' THEN
   IF p_input->>'kind' NOT IN('issue','return','correction') OR p_input->>'quantity' !~ '^(0|[1-9][0-9]{0,17})(\.[0-9]{1,6})?$' OR (p_input->>'quantity')::numeric<0 OR (p_input->>'kind'='issue' AND (p_input->>'quantity')::numeric=0) OR p_input->>'occurredAtMicros' !~ '^(0|[1-9][0-9]{0,23})$'
    OR EXISTS(SELECT 1 FROM unnest(ARRAY['sourceId','eventId','workIdentity','unit']) k WHERE length(btrim(p_input->>k)) NOT BETWEEN 1 AND 200) THEN RAISE EXCEPTION 'INVALID_PROMPT_COMMAND'; END IF;
   source_hash:=encode(sha256(convert_to((p_input-ARRAY['commandId','version'])::text,'UTF8')),'hex');
@@ -1387,7 +1414,7 @@ END;
 END
 $$;
 
--- Latest body: packages/db/migrations/0196_enterprise_live_prompts.sql
+-- Latest body: packages/db/migrations/0620_contractor_job_finish.sql
 CREATE OR REPLACE FUNCTION app.lp_finish(p_session uuid,p_command uuid,p_result jsonb) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
@@ -1400,7 +1427,7 @@ DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; a uuid; 
 BEGIN
  SELECT s.membership_id INTO a FROM app.contractor_session(p_session) s WHERE s.tenant_id=t;
  SELECT * INTO r FROM app.command_receipt WHERE tenant_id=t AND command_id=p_command;
- IF a IS NULL OR r.actor_membership_id IS DISTINCT FROM a OR r.status<>'succeeded' OR r.result IS DISTINCT FROM p_result OR r.command_type NOT IN('ImportMaterialsIssue','RegisterCompletionObservation','EvaluateLivePrompts','ConfirmPrompt','DismissPrompt')
+ IF a IS NULL OR r.actor_membership_id IS DISTINCT FROM a OR r.status<>'succeeded' OR r.result IS DISTINCT FROM p_result OR r.command_type NOT IN('ImportMaterialsIssue','RegisterCompletionObservation','EvaluateLivePrompts','ConfirmPrompt','DismissPrompt','EndCheck')
  OR NOT EXISTS(SELECT 1 FROM app.audit_event e WHERE e.tenant_id=t AND e.id=p_command AND e.event_type='contractor.prompt.command' AND e.actor_ref='membership:'||a AND e.payload->'hashes'->>'input'=r.request_hash
  AND e.payload->'hashes'->>'result'=encode(sha256(convert_to(p_result::text,'UTF8')),'hex')) THEN RAISE EXCEPTION 'PROMPT_CONFLICT'; END IF;
  -- No locks or business writes after the audit head.
@@ -3855,7 +3882,7 @@ END;
 END
 $$;
 
--- Latest body: packages/db/migrations/0558_accounting_export_persistence.sql
+-- Latest body: packages/db/migrations/0599_accounting_export_route_change.sql
 CREATE OR REPLACE FUNCTION app.accounting_export(t uuid,digest text,operation text,source text,v jsonb) RETURNS jsonb
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
@@ -3879,6 +3906,7 @@ BEGIN
  SELECT * INTO f FROM app.accounting_export_fixture WHERE tenant_id=t AND source_id=source;
  IF f.source_id IS NULL THEN RAISE EXCEPTION 'EXPORT_NOT_FOUND'; END IF;
  IF f.revoked OR f.consent_expires_at<=clock_timestamp() THEN RAISE EXCEPTION 'EXPORT_CONSENT_EXPIRED'; END IF;
+ f.artifact:=app.accounting_export_routed_artifact(t,f.artifact);
  -- Preserve the source and locked-bill invariants even for administrator-seeded fixtures.
  IF f.artifact #>> '{source,kind}' IS NULL
   OR f.artifact #>> '{source,kind}' NOT IN('customer_invoice','credit','receipt')
@@ -3922,6 +3950,8 @@ BEGIN
   IF v-ARRAY['version','decisionId','previewHash','expiresAt','humanConfirmed']<>'{}'::jsonb
    OR v->>'version' IS DISTINCT FROM '1' OR v->'humanConfirmed' IS DISTINCT FROM 'true'::jsonb
    OR v->>'previewHash' IS DISTINCT FROM h THEN RAISE EXCEPTION 'EXPORT_APPROVAL_REQUIRED'; END IF;
+  IF EXISTS(SELECT 1 FROM app.accounting_export_route_change WHERE tenant_id=t AND decision_id=(v->>'decisionId')::uuid)
+   THEN RAISE EXCEPTION 'EXPORT_REPLAY_CONFLICT'; END IF;
   decision:=(v->>'decisionId')::uuid; expiry:=(v->>'expiresAt')::timestamptz;
   IF decision IS NULL OR expiry IS NULL OR expiry<=clock_timestamp() OR expiry>f.consent_expires_at THEN RAISE EXCEPTION 'EXPORT_APPROVAL_REQUIRED'; END IF;
   SELECT * INTO d FROM app.accounting_export_decision WHERE tenant_id=t AND id=decision;
@@ -4242,7 +4272,7 @@ END;
 END
 $$;
 
--- Latest body: packages/db/migrations/0566_managed_recovery_election.sql
+-- Latest body: packages/db/migrations/0614_mon9_database_gate.sql
 CREATE OR REPLACE FUNCTION app.mon9_elect(j uuid,c uuid,actor uuid,command uuid,auth_id uuid,service text,points integer,terms text)
 RETURNS app.managed_recovery_election LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 BEGIN
@@ -4254,6 +4284,9 @@ BEGIN
  END IF;
 DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; prior app.managed_recovery_election; h text;
 BEGIN
+ IF current_database()<>'jobguard_synthetic_demo' THEN
+  RAISE EXCEPTION 'MANAGED_RECOVERY_FORBIDDEN' USING ERRCODE='42501';
+ END IF;
  IF t IS NULL THEN RAISE EXCEPTION 'MANAGED_RECOVERY_FORBIDDEN' USING ERRCODE='42501'; END IF;
  PERFORM pg_advisory_xact_lock(hashtext(t::text),hashtext(c::text));
  IF terms IS DISTINCT FROM 'managed-recovery.synthetic-terms.v1' OR
@@ -4320,6 +4353,9 @@ BEGIN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
 BEGIN
+ IF current_database()<>'jobguard_synthetic_demo' THEN
+  RAISE EXCEPTION 'MANAGED_RECOVERY_FORBIDDEN' USING ERRCODE='42501';
+ END IF;
  IF app.mon9_session(digest,actor) IS NULL THEN
   RAISE EXCEPTION 'MANAGED_RECOVERY_FORBIDDEN' USING ERRCODE='42501';
  END IF;
@@ -5704,55 +5740,5 @@ END;
 END
 $$;
 -- Latest body: packages/db/migrations/0548_server_plan_entitlements.sql
-CREATE OR REPLACE FUNCTION app.mon8_feature_decision(actor uuid, feature text, purpose text DEFAULT 'new_work') RETURNS jsonb
-LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog AS $$
-BEGIN
- -- LP6D_BOUND: subject membership is deliberately separate from the request actor.
- PERFORM app.current_actor();
- IF nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text THEN
-  RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
- END IF;
-DECLARE t uuid; assignment app.commercial_track_assignment; status app.contractor_agreement_status_revision;
- agreement app.subscription_agreement_revision; entitlement text:='held'; reason text:='agreement_authority_held';
- contractor_feature boolean; today date;
-BEGIN
- IF current_database()<>'jobguard_synthetic_demo' OR current_setting('transaction_isolation')<>'read committed' THEN RAISE EXCEPTION 'MODE_FORBIDDEN' USING ERRCODE='42501'; END IF;
- BEGIN t:=nullif(current_setting('app.tenant_id',true),'')::uuid; EXCEPTION WHEN invalid_text_representation THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END;
- IF t IS NULL OR actor IS NULL OR feature IS NULL OR purpose IS NULL
- OR feature NOT IN('watchdog','final_check','invoices','recovery_cases','pay_now','accounting_export','operative_roles','site_origin_capture','approval_chains','work_orders','sso')
- OR purpose NOT IN('new_work','retained_read') THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
- -- Organisation/status before subscription/lifecycle before business locks before audit.
- contractor_feature:=feature IN('operative_roles','site_origin_capture','approval_chains','work_orders','sso');
- PERFORM pg_advisory_xact_lock_shared(hashtextextended(t::text,54));
- IF NOT contractor_feature AND purpose='new_work' THEN PERFORM pg_advisory_xact_lock_shared(hashtextextended(t::text,184)); END IF;
- -- Read after both waits. The actor belongs to this transaction's verified tenant.
- IF NOT EXISTS(SELECT 1 FROM app.membership m WHERE m.tenant_id=t AND m.id=actor AND m.revoked_at IS NULL
- AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp())
- AND NOT EXISTS(SELECT 1 FROM app.contractor_membership_revocation r WHERE r.tenant_id=t AND r.membership_id=m.id)) THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
- IF purpose='retained_read' THEN
-  -- Availability only: each reader must still enforce its exact role/resource/export permissions.
-  entitlement:='included'; reason:='available';
- ELSE
-  SELECT * INTO assignment FROM app.commercial_track_assignment WHERE tenant_id=t ORDER BY revision DESC LIMIT 1;
-  today:=(clock_timestamp() AT TIME ZONE 'Europe/London')::date;
-  IF NOT contractor_feature THEN SELECT * INTO agreement FROM app.subscription_agreement_revision WHERE tenant_id=t AND effective_date<=today ORDER BY effective_date DESC,revision DESC LIMIT 1; END IF;
-  IF assignment.commercial_track='contractor' THEN
-   IF contractor_feature THEN
-    SELECT * INTO status FROM app.contractor_agreement_status_revision WHERE tenant_id=t AND assignment_id=assignment.id ORDER BY revision DESC LIMIT 1;
-    IF status.status='active' THEN entitlement:='included'; reason:='available'; END IF;
-   ELSE entitlement:='excluded'; reason:='track_forbidden'; END IF;
-  ELSIF assignment.commercial_track='small_builder' OR (assignment.id IS NULL AND (agreement.id IS NOT NULL OR contractor_feature)) THEN
-   IF contractor_feature THEN entitlement:='excluded'; reason:='track_forbidden';
-   ELSIF agreement.id IS NOT NULL AND agreement.plan IN('Solo','Builder') THEN
-    entitlement:='included';
-    -- Live payment/accounting readiness and persisted MON-3 trial authority are not on main.
-    reason:=CASE WHEN feature IN('pay_now','accounting_export') THEN 'feature_disabled' ELSE 'available' END;
-   END IF;
-  END IF;
- END IF;
- RETURN jsonb_build_object('version','plan-entitlement-decision.v1','environment','synthetic_demo','feature',feature,
-  'entitlement',entitlement,'executable',reason='available','reason',reason);
-END;
-END
-$$;
+
 COMMIT;

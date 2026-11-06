@@ -1,5 +1,71 @@
 # LP-6d remaining routines — RED, NOPR, held for landing
 
+## 6 November — real-PostgreSQL recheck repair round 2 (last): READY
+
+READY for router staging, NOPR commit/push and CI; not database verification,
+independent RED acceptance or permission to land. Pending merge is LP-6c
+`397a5a53e11fcd5a30121e0ec65762f129e2edbc`. The contractor-party fixture conflict
+is resolved in the working file, retaining the session changes from both sides;
+the sandbox leaves the Git index unmerged for the router.
+
+Repairs:
+
+- Remove only the `mon8_feature_decision` replacement from the bound set. Its
+  unchanged subject-membership feature lookup serves pre-session SSO and retained
+  scheduling reads. All other routine guards remain; its request wrappers still
+  enforce their actor/tenant checks. Manifest/classification tests name the exception.
+- Work-order and contractor-party error mappers hide `RequestBindingRefusedError`
+  as NOT_FOUND. Adapter tests assert that result without leaking database details.
+- Bind contractor bootstrap immediately after issuing the credential and before
+  tenant reads/audit. The shared extras fixture now uses that principal's context.
+  Fee illustration binds before revoking the owner to test the owner recheck;
+  recovery-legacy uses an issued practice session. Raw routine tests separately
+  assert unbound refusal and the original business refusals with bound callers.
+  Cross-branch commit probes prepare an audited binding and use separate actor
+  transactions, preserving the commit-level defence without rebinding.
+- LP0-02 proof names retained timeline ownership and private session ownership;
+  LP0-17 records both new routine identities and their exact execution disposition.
+  The human catalogue describes the amendment; no scanner or fingerprint is edited.
+- Copy main's latest `lp_read`, `lp_command`, `lp_finish` (0620),
+  `accounting_export` (0599), and both `mon9_elect` overloads (0614), retaining
+  the binding guards. Main inspected: `128260957477d6be9aa88e94789095ac23a175f6`.
+  This serial branch lacks those main migrations. Exact source snapshots in
+  `test/lp6d-main-predecessors.json` support the body-preservation tests until
+  router catch-up; an installed predecessor takes precedence over the snapshot.
+  The snapshots do not install tables or pretend the branch is caught up.
+
+Executed locally (installed binaries, no installation, at most two workers):
+
+- From `packages/db`: `./node_modules/.bin/vitest run --maxWorkers=2 test/lp6d-routines.test.ts test/lp6d-repository-context.test.ts test/migration-proof-loader.test.ts`
+  — **104 passed**.
+- From `packages/db`: `./node_modules/.bin/vitest run --maxWorkers=2 test/lp6c-money-routines.test.ts test/lp-0-catalog.test.ts src/recovery-legacy-later.test.ts`
+  — **54 passed**.
+- From repository root: `./packages/db/node_modules/.bin/vitest run --config packages/db/vitest.config.ts --maxWorkers=2 apps/api/src/workspace/fee-illustration-later.test.ts apps/api/src/contractor/contractor-parties.application.test.ts apps/api/src/contractor/work-order.application.test.ts`
+  — **49 passed**. Total **207** targeted tests.
+- `./packages/db/node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit`
+  — passed. TypeScript transpilation syntax check of seven changed fixture/test
+  files — passed. `git diff --check` — passed.
+- `LANE_BASE_REF=origin/codex/sandbox/lp-6c-money-routines node tools/lint.mjs`
+  — core purity passed; lane check blocked by 14 inherited LP-6c files still
+  present in the pending merge index. Router must stage the resolved merge and
+  repeat the actual guard. Lane allow-list is the exact 47 non-lane paths changed
+  over LP-6c, including untracked source snapshot, excluding all config/lanes paths.
+- The default pnpm wrapper could not verify pinned 10.28.1 via the restricted
+  registry. Direct installed runners above completed the checks. No packages
+  were installed and the version-verification setting was not changed.
+
+CI after router catch-up/push must prove (at most two workers per run, at most
+three named Vitest files per run): enterprise-identity; work-order-import;
+contractor-parties; fee-illustration-later; recovery-legacy-later; lp6d-routines;
+quote; quote-reacceptance; lp-0-grant-freeze (LP0-02); lp-0-authority-paths
+(LP0-17); contractor-full-demo-package; sor-pricing; evidence; proof-replay;
+serious-b4-evidence-proof. Also required: full ordinary CI and fresh/upgrade/repeat
+PostgreSQL migrations, applicable browser journeys, current-main routine
+classification, customer-proof sibling landing and exact-head independent RED
+review. PostgreSQL and browser execution are prohibited by this sandbox; none
+was attempted or claimed. Earlier customer-proof/source-guard and migration
+reservation holds below remain separate router landing work.
+
 ## 6 November — security precheck repair round 1: READY
 
 Repair of the single blocking finding against `cdd4e3282`, on LP-6c base

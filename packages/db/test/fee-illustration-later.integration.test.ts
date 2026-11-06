@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { FeeIllustrationRepository, PracticeActivationRepository, QuoteRepository, QuoteDeliveryRepository, QuoteAcceptanceRepository, DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID } from "../src/index.js";
+import { FeeIllustrationRepository, PracticeActivationRepository, QuoteRepository, QuoteDeliveryRepository, QuoteAcceptanceRepository, DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID, withTenant } from "../src/index.js";
 import { FeeIllustrationApplication } from "../../../apps/api/src/workspace/fee-illustration.application.js";
 import { createWorkFixture, closeWorkFixture, seedWorkPractice, workTenant, type WorkFixture } from "./job-work-state-fixtures.js";
 import { proofBefore, proofDifferences, rolledBack } from "./upgrade-proof-utils.js";
@@ -111,14 +111,15 @@ describe("LATER-B18 persisted synthetic illustration", () => {
     expect(rights.writable).toBe(false);
     for (const jobId of [owner.jobId, randomUUID()]) await rolledBack(f.admin, async db => {
       await db.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
+      await db.query("SELECT app.bind_request('practice',$1,$2)", [owner.auth.digest, DEMO_TENANT_ID]);
       await db.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID]);
       await db.query("SET LOCAL ROLE jobguard_runtime");
       await expect(db.query("SELECT app.create_fee_illustration_source($1,$2)", [jobId, randomUUID()])).rejects.toMatchObject({ code: "42501", message: "FEE_ILLUSTRATION_FORBIDDEN" });
     });
-    await expect(workTenant(f.runtime, DEMO_TENANT_ID, db =>
-      db.query("SELECT app.create_fee_illustration_source($1,$2)", [owner.jobId, null]))).rejects.toMatchObject({ code: "22023" });
+    await expect(withTenant(f.runtime, owner.auth.context, db =>
+      db.$client.query("SELECT app.create_fee_illustration_source($1,$2)", [owner.jobId, null]))).rejects.toMatchObject({ code: "22023" });
     await expect(f.runtime.query("SELECT app.create_fee_illustration_source($1,$2)", [owner.jobId, randomUUID()]))
-      .rejects.toMatchObject({ code: "42501", message: "FEE_ILLUSTRATION_FORBIDDEN" });
+      .rejects.toMatchObject({ code: "42501", message: "REQUEST_BINDING_REFUSED" });
   });
 
   it("L101 concurrent changed commands on one job create one source and one typed conflict", async () => {

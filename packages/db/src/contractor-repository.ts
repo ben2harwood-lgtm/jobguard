@@ -42,6 +42,8 @@ export class ContractorRepository {
   try {
    await client.query("BEGIN");
    const tenantId=(await client.query<{tenant_id:string}>("SELECT app.start_contractor_practice($1) tenant_id",[sessionId])).rows[0]!.tenant_id;
+   // Bind the issued credential before reading or auditing its tenant state.
+   await client.query("SELECT app.bind_request('contractor_practice',$1,$2)",[sessionId,tenantId]);
    // start_contractor_practice sets transaction-local context before returning.
    await client.query("SELECT set_config('app.tenant_id',$1,true)",[tenantId]);
    const assignments=(await client.query<{id:string}>("SELECT id FROM app.commercial_track_assignment WHERE tenant_id=$1 AND NOT EXISTS(SELECT 1 FROM app.audit_event a WHERE a.tenant_id=$1 AND a.id=app.commercial_track_assignment.id)",[tenantId])).rows;

@@ -10,13 +10,16 @@ import { DEMO_TENANT_ID } from "../src/demo-seed.js";
 import { RecoveryDemoRepository } from "../src/recovery-demo-repository.js";
 import { PostgresRecoveryOutcomePostingPort } from "../src/recovery-repository.js";
 import { withTenant } from "../src/tenant-context.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { seedWorkPractice, type WorkFixture } from "./job-work-state-fixtures.js";
+import type { VerifiedTenantContext } from "../src/tenant-context.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
 
 // CI only: real PostgreSQL, isolated made-up v1 records. No new schema or grants
 // on application tables. Fixture setup uses the test administrator, never runtime.
 let postgres: EmbeddedPostgres | undefined, admin: Pool | undefined, runtime: Pool;
-const tenant = DEMO_TENANT_ID, context = testTenantContext(tenant);
+const tenant = DEMO_TENANT_ID;
+let context: VerifiedTenantContext;
+const previousEnvironment = process.env.JOBGUARD_ENV;
 beforeAll(async () => {
   const directory = await mkdtemp(join(tmpdir(), "later-b17-pg-"));
   const port = await freePort(57800, 100), credential = randomUUID();
@@ -30,8 +33,10 @@ beforeAll(async () => {
   // This isolated test role inherits the existing runtime privileges only.
   await admin.query(`CREATE ROLE later_b17_login LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '${credential}'; GRANT jobguard_runtime TO later_b17_login`);
   runtime = new Pool({ host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "later_b17_login", password: credential, max: 2 });
+  const practice = await seedWorkPractice({ admin, runtime } as WorkFixture);
+  context = practice.auth.context;
 }, 120_000);
-afterAll(async () => { await closeTestPools(runtime, admin); await postgres?.stop(); });
+afterAll(async () => { await closeTestPools(runtime, admin); await postgres?.stop(); if (previousEnvironment === undefined) delete process.env.JOBGUARD_ENV; else process.env.JOBGUARD_ENV = previousEnvironment; });
 
 async function fixture() {
   const job = randomUUID(), activation = randomUUID(), upload = randomUUID(), evidence = randomUUID();

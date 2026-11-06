@@ -205,6 +205,62 @@
           "identity.sso_session_memberships"
         ]
       }
+    },
+    {
+      "section": "entries",
+      "before": {
+        "key": "owner|routine|function:app.apply_recovery_timeline_signal(uuid,jsonb)|jobguard_migration",
+        "group": "a-owner-routines"
+      },
+      "after": {
+        "key": "owner|routine|function:app.apply_recovery_timeline_signal(uuid,jsonb)|jobguard_migration",
+        "group": "a-lp6d-routine-binding"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp6d_contractor_session_identity(uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.contractor_practice_session_live"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.revoke_recovery_message_authorization(uuid,uuid,uuid,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.action_authorization"
+        ],
+        "staticCalls": [
+          "app.current_actor",
+          "app.current_tenant"
+        ]
+      }
     }
   ],
   "upgrade": [

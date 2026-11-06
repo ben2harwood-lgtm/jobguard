@@ -1,3 +1,4 @@
+import { RequestBindingRefusedError } from "./request-binding-error.js";
 import type { ContractorSessionMembership } from "./contractor-repository.js";
 import type { Pool } from "pg";
 import { z } from "zod";
@@ -8,6 +9,7 @@ import { withTenant, type AuthenticatedMembership, type TenantTransaction } from
 const uuid = z.string().uuid();
 /** Never propagate PostgreSQL DETAIL, query arguments or untrusted contacts into HTTP/log errors. */
 function failure(error: unknown): never {
+  if (error instanceof RequestBindingRefusedError) throw new ContractorPartyError("NOT_FOUND");
   if (error instanceof ContractorPartyError) throw error;
   const e = error as { code?: string; message?: string };
   const known = contractorPartyErrorCodes.find(code => e.message === code || e.code === code);

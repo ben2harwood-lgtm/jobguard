@@ -53,3 +53,20 @@ it("keeps the contractor credential out of the returned principal's JSON", async
   const { pool } = fixture();
   expect(JSON.stringify(await new ContractorRepository(pool).resolveSession(session))).not.toContain(session);
 });
+
+it.each(["work orders", "contractor parties"] as const)("hides rejected bindings as NOT_FOUND for %s", async path => {
+  const { pool } = fixture(true);
+  await expect(call(path, pool)).rejects.toMatchObject({ code: "NOT_FOUND", message: "NOT_FOUND" });
+});
+
+it("binds a newly issued contractor credential before bootstrap reads and audit", async () => {
+  const query = vi.fn(async (sql: string) => ({ rows: sql.includes("start_contractor_practice") ? [{ tenant_id: member.tenantId }] : [] }));
+  const pool = {
+    connect: async () => ({ query, release: vi.fn() }),
+    query: async () => ({ rows: [{ tenant_id: member.tenantId, membership_id: member.membershipId, identity_user_id: member.identityUserId }] }),
+  } as unknown as Pool;
+  await new ContractorRepository(pool).startPractice(session);
+  expect(query.mock.calls.map(([sql]) => sql).slice(0, 3)).toEqual([
+    "BEGIN", "SELECT app.start_contractor_practice($1) tenant_id", "SELECT app.bind_request('contractor_practice',$1,$2)",
+  ]);
+});

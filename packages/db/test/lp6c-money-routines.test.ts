@@ -76,3 +76,11 @@ it("declares exactly the five owner-only binding grants and exact identity-form 
     expect(after).toEqual(before);
   }
 });
+
+it("pins pg_temp last on every legacy and authorized acceptance, activation and settlement overload", () => {
+  const names = ["record_builder_attested_acceptance", "record_quote_disposition", "switch_job_live", "record_simulated_settlement"];
+  const definitions = functions(sql()).filter(m => names.includes(m[1]!));
+  expect(definitions).toHaveLength(8);
+  for (const definition of definitions)
+    expect(definition[3], key(definition)).toMatch(/SET search_path=pg_catalog,app,pg_temp\s*$/u);
+});

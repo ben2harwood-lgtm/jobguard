@@ -219,21 +219,21 @@
   {
     "name": "app.lp_read",
     "arguments": "p_session uuid,p_input jsonb",
-    "source": "packages/db/migrations/0196_enterprise_live_prompts.sql",
+    "source": "packages/db/migrations/0620_contractor_job_finish.sql",
     "actor": null,
     "tenant": null
   },
   {
     "name": "app.lp_command",
     "arguments": "p_session uuid,p_input jsonb,p_source_bytes bytea DEFAULT NULL",
-    "source": "packages/db/migrations/0196_enterprise_live_prompts.sql",
+    "source": "packages/db/migrations/0620_contractor_job_finish.sql",
     "actor": null,
     "tenant": null
   },
   {
     "name": "app.lp_finish",
     "arguments": "p_session uuid,p_command uuid,p_result jsonb",
-    "source": "packages/db/migrations/0196_enterprise_live_prompts.sql",
+    "source": "packages/db/migrations/0620_contractor_job_finish.sql",
     "actor": null,
     "tenant": null
   },
@@ -613,7 +613,7 @@
   {
     "name": "app.accounting_export",
     "arguments": "t uuid,digest text,operation text,source text,v jsonb",
-    "source": "packages/db/migrations/0558_accounting_export_persistence.sql",
+    "source": "packages/db/migrations/0599_accounting_export_route_change.sql",
     "actor": null,
     "tenant": "t"
   },
@@ -641,14 +641,14 @@
   {
     "name": "app.mon9_elect",
     "arguments": "j uuid,c uuid,actor uuid,command uuid,auth_id uuid,service text,points integer,terms text",
-    "source": "packages/db/migrations/0566_managed_recovery_election.sql",
+    "source": "packages/db/migrations/0614_mon9_database_gate.sql",
     "actor": "actor",
     "tenant": null
   },
   {
     "name": "app.mon9_elect",
     "arguments": "digest text,j uuid,c uuid,actor uuid,command uuid,auth_id uuid,service text,points integer,terms text",
-    "source": "packages/db/migrations/0568_managed_recovery_actor_bind.sql",
+    "source": "packages/db/migrations/0614_mon9_database_gate.sql",
     "actor": "actor",
     "tenant": null
   },
@@ -812,13 +812,5 @@
     "source": "packages/db/migrations/0406_success_fee_catch_posting.sql",
     "actor": null,
     "tenant": null
-  },
-  {
-    "name": "app.mon8_feature_decision",
-    "arguments": "actor uuid, feature text, purpose text DEFAULT 'new_work'",
-    "source": "packages/db/migrations/0548_server_plan_entitlements.sql",
-    "actor": null,
-    "tenant": null,
-    "subjectActor": "actor"
   }
 ]

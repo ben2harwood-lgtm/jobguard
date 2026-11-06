@@ -1,5 +1,6 @@
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { expect, it } from "vitest";
+import mainPredecessors from "./lp6d-main-predecessors.json";
 import routines from "./lp6d-routines.json";
 import classification from "./lp6d-runtime-classification.json";
 import { loadReviewedInventory, pathCompleteness, repoFileExists } from "./lp-0-catalog.js";
@@ -12,7 +13,8 @@ const body = (source: string, routine: typeof routines[number]) => definitions(s
 
 it("keeps every predecessor body and permission rule behind an early binding check", () => {
   for (const routine of routines) {
-    const source = read(`../../../${routine.source}`);
+    const source = existsSync(new URL(`../../../${routine.source}`, import.meta.url))
+      ? read(`../../../${routine.source}`) : (mainPredecessors.sources as Record<string, string>)[routine.source]!;
     let previous = body(source, routine).trim().replace(/;$/, "").replace("#variable_conflict use_column", "").trim();
     if (routine.name === "app.ch4_work_state_command") {
       // 0380 patches pg_get_functiondef rather than declaring another CREATE.
@@ -74,7 +76,7 @@ it("converts the invitation bridge and withdraws direct authorization revocation
   const { inventory } = await loadReviewedInventory();
   expect(pathCompleteness(inventory, repoFileExists)).toEqual([]);
   expect(inventory.entries.some(e => e.key === "acl|col|app.action_authorization.revoked_at|jobguard_runtime|UPDATE|-")).toBe(false);
-  expect(inventory.entries.filter(e => e.group === "a-lp6d-routine-binding")).toHaveLength(3);
+  expect(inventory.entries.filter(e => e.group === "a-lp6d-routine-binding")).toHaveLength(4);
 });
 
 it("leaves the final-lock owner helper exclusively to LP-6c", () => {
@@ -86,6 +88,12 @@ it("starts from the latest exact predecessor overload rather than an earlier cop
   const latest = new Map<string, string>();
   for (const file of readdirSync(new URL("../migrations/", import.meta.url)).filter(f => f.endsWith(".sql") && f < "0780").sort()) {
     for (const m of definitions(read(`../migrations/${file}`))) latest.set(m[1]! + argumentsKey(m[2]!), `packages/db/migrations/${file}`);
+  }
+  // Main-only predecessors are exact source snapshots until the router restacks
+  // this serial LP branch. A present migration always wins over a snapshot.
+  for (const [path, source] of Object.entries(mainPredecessors.sources)) {
+    if (existsSync(new URL(`../../../${path}`, import.meta.url))) continue;
+    for (const m of definitions(source)) latest.set(m[1]! + argumentsKey(m[2]!), path);
   }
   for (const routine of routines) expect(routine.source, routine.name + routine.arguments)
     .toBe(latest.get(routine.name + argumentsKey(routine.arguments)));
@@ -119,4 +127,21 @@ it("reuses every actual LP-6c replacement without recreating its routines", () =
   const own = new Set(definitions(sql).map(m => m[1]! + argumentsKey(m[2]!)));
   expect(previous).toHaveLength(28);
   for (const m of previous) expect(own.has(m[1]! + argumentsKey(m[2]!)), m[1]).toBe(false);
+});
+
+it("keeps the pre-session feature lookup available while retaining request guards elsewhere", () => {
+  expect(routines.some(r => r.name === "app.mon8_feature_decision")).toBe(false);
+  expect(sql).not.toContain("CREATE OR REPLACE FUNCTION app.mon8_feature_decision(");
+  expect(classification["app.mon8_feature_decision(uuid,text,text)"]).toContain("pre-session SSO");
+  const sso = read("../migrations/0549_contractor_feature_guards.sql");
+  expect(sso).toContain("app.mon8_feature_decision");
+});
+
+it("records both private and request routine identities and the retained worker owner", async () => {
+  const { inventory } = await loadReviewedInventory();
+  for (const signature of ["lp6d_contractor_session_identity(uuid)", "revoke_recovery_message_authorization(uuid,uuid,uuid,uuid)"]) {
+    expect(inventory.recorded.routines.filter(r => r.identity === `function:app.${signature}`)).toHaveLength(1);
+    expect(inventory.entries.some(e => e.key === `owner|routine|function:app.${signature}|jobguard_migration`)).toBe(true);
+  }
+  expect(inventory.entries.some(e => e.key === "owner|routine|function:app.apply_recovery_timeline_signal(uuid,jsonb)|jobguard_migration")).toBe(true);
 });
