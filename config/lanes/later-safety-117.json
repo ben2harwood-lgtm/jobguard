@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-117": {
+      "branches": [
+        "codex/sandbox/later-safety-117"
+      ],
+      "allow": [
+        "apps/api/src/contractor/contractor-parties.controller.test.ts",
+        "apps/api/src/contractor/contractor-parties.controller.ts",
+        "apps/api/src/contractor/contractor.controller.test.ts",
+        "apps/api/src/contractor/contractor.controller.ts",
+        "apps/api/src/contractor/work-order.controller.test.ts",
+        "apps/api/src/contractor/work-order.controller.ts"
+      ]
+    }
+  }
+}
