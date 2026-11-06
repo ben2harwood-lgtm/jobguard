@@ -16,6 +16,9 @@ const tenant = "00000000-0000-4000-8000-000000000001";
 const foreign = "00000000-0000-4000-8000-000000000002";
 const commandId = "00000000-0000-4000-8000-000000000003";
 const csrf = "c".repeat(24);
+const authPrincipal = (sessionId: string, token: string) => Object.defineProperty(
+  { identityUserId: tenant, sessionId, csrfToken: csrf }, "sessionCredential",
+  { value: createHmac("sha256", "fictional-preview-secret").update(`session:${token}`).digest("hex") });
 const session = () => ({ principal: { id: tenant, sessionId: commandId }, csrfToken: csrf, memberships: [{ id: tenant, tenantId: tenant, role: "owner" }] });
 const request = (body?: unknown, headers = {}) => new Request("https://company.invalid/api/subscription-mandate", {
   ...(body === undefined ? {} : { method: "POST", body: JSON.stringify(body) }), headers: { origin: "https://company.invalid", ...headers },
@@ -30,7 +33,7 @@ beforeEach(() => {
   vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); vi.stubEnv("JOBGUARD_ALLOWED_ORIGINS", "https://company.invalid");
   state.credentials = { sessionToken: "s".repeat(32), csrfToken: csrf, origin: "https://company.invalid" };
   state.session.mockResolvedValue(session());
-  state.authenticate.mockImplementation(async (token: string) => token === "s".repeat(32) ? { identityUserId: tenant, sessionId: commandId, csrfToken: csrf } : undefined);
+  state.authenticate.mockImplementation(async (token: string) => token === "s".repeat(32) ? authPrincipal(commandId, token) : undefined);
   state.findMembership.mockResolvedValue({ id: tenant, tenantId: tenant, identityUserId: tenant, role: "owner" });
   state.read.mockResolvedValue({ record: null, reason: "NOT_APPROVED" });
   state.command.mockResolvedValue({ version: "subscription-mandate-result.v1", sequence: 1, state: "active", productionEnabled: false });
@@ -63,7 +66,7 @@ describe("M4-13 session-only practice boundary", () => {
     state.findMembership.mockResolvedValue({ id: foreign, tenantId: foreign, identityUserId: tenant, role: "owner" });
     expect((await POST(request(input))).status).toBe(400); expect(state.command).not.toHaveBeenCalled();
     state.session.mockResolvedValue(session()); state.credentials.sessionToken = "another-current-session".padEnd(32, "x");
-    state.authenticate.mockResolvedValue({ identityUserId: tenant, sessionId: foreign, csrfToken: csrf });
+    state.authenticate.mockResolvedValue(authPrincipal(foreign, state.credentials.sessionToken));
     expect((await POST(request(input))).status).toBe(400); expect(state.command).not.toHaveBeenCalled();
   });
   it.each(["paused", "renewal_failed", "superseded"])("refuses forged browser state %s", async kind => {

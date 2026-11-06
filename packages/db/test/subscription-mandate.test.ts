@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { subscriptionAgreementHash } from "@jobguard/core";
-import { SubscriptionMandateRepository } from "../src/subscription-mandate-repository.js";
+import { SubscriptionMandateError, SubscriptionMandateRepository } from "../src/subscription-mandate-repository.js";
+import { verifiedTenantContextFromMembership, type AuthenticatedMembership } from "../src/tenant-context.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 const tenantId = randomUUID(), recipientRef = randomUUID(), digest = "a".repeat(64);
 const selection = { version: "subscription-agreement-selection.v1", termsVersion: "synthetic_subscription_success_terms.v1",
@@ -17,12 +18,12 @@ const request = { version: "subscription-mandate-collection.v1", environment: "s
   recipientRef, currentRevision: 1, currentTermsHash: termsHash, billingMode: "paid", providerDefaultsDisabled: true,
   amountPence: 2900, reservedAndCollectedPeriodPence: 0 };
 const snapshot = { now: "2026-10-29T00:00:00Z", sequence: 1, authorityCurrent: true, providerCancellation: "not_requested", record };
-function fake(value: unknown = snapshot, failure?: string) {
+function fake(value: unknown = snapshot, failure?: string | Error) {
   const calls: { sql: string; args: unknown[] }[] = [];
   const client = { query: async (sql: string, args: unknown[] = []) => {
     calls.push({ sql, args });
     if (sql.startsWith("SELECT app.m413")) {
-      if (failure) throw new Error(failure);
+      if (failure) throw typeof failure === "string" ? new Error(failure) : failure;
       return { rows: [{ result: value }] };
     }
     return { rows: [] };
@@ -73,5 +74,37 @@ describe("M4-13 persisted mandate consumer boundary (deterministic SQL fake)", (
     await expect(bad.repository.read(context, digest)).rejects.toThrow(/^MANDATE_UNAVAILABLE$/u);
     expect(bad.calls.at(-1)?.sql).toBe("ROLLBACK");
     await expect(fake(snapshot, "MANDATE_STALE").repository.read(context, digest)).rejects.toThrow("MANDATE_STALE");
+  });
+
+  it.each(["bind", "authority lookup"] as const)("maps %s refusal after rollback and release without accessing mandate SQL", async stage => {
+    const bindSql = "SELECT app.bind_request($1, $2, $3)";
+    const authoritySql = "SELECT app.current_actor() actor, app.current_tenant() tenant";
+    const calls: string[] = [], business = vi.fn(), release = vi.fn();
+    const query = async (sql: string) => {
+      calls.push(sql);
+      if (sql.startsWith("SELECT app.m413")) business();
+      if (sql === (stage === "bind" ? bindSql : authoritySql)) {
+        throw Object.assign(new Error("fictional private database detail"), { code: "42501" });
+      }
+      return { rows: [] };
+    };
+    const membership = { tenantId, identityUserId: randomUUID(), membershipId: randomUUID() } as AuthenticatedMembership;
+    const verified = verifiedTenantContextFromMembership(membership, { kind: "real", credential: digest });
+    const repository = new SubscriptionMandateRepository({ connect: async () => ({ query, release }) } as unknown as Pool);
+    const failure = await repository.read(verified, digest).catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(SubscriptionMandateError);
+    expect(failure).toMatchObject({ code: "MANDATE_FORBIDDEN", message: "MANDATE_FORBIDDEN" });
+    expect(calls).toEqual(stage === "bind" ? ["BEGIN", bindSql, "ROLLBACK"] : ["BEGIN", bindSql, authoritySql, "ROLLBACK"]);
+    expect(business).not.toHaveBeenCalled();
+    expect(release).toHaveBeenCalledOnce();
+  });
+  it.each([
+    Object.assign(new Error("FORBIDDEN"), { code: "42501" }),
+    Object.assign(new Error("FORBIDDEN"), { name: "RequestBindingRefusedError" }),
+  ])("does not misclassify unrelated business SQL or forged error names as binding refusals", async failure => {
+    const f = fake(snapshot, failure);
+    await expect(f.repository.read(context, digest)).rejects.toMatchObject({ code: "MANDATE_UNAVAILABLE" });
+    expect(f.calls.some(call => call.sql.startsWith("SELECT app.m413"))).toBe(true);
+    expect(f.calls.at(-1)?.sql).toBe("ROLLBACK");
   });
 });

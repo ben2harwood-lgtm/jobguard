@@ -1,3 +1,4 @@
+import { sourceFixtureUrl } from "../source-fixture-url.js";
 import "reflect-metadata";
 import { readFile } from "node:fs/promises";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -63,19 +64,19 @@ describe("ENT-2 transport (adapter tests, not PostgreSQL proof)", () => {
     ["/contractor/work-orders/{workOrderId}/revisions", "get", "workOrderId"], ["/contractor/sor-versions", "get", undefined], ["/contractor/sor-versions", "post", undefined],
     ["/contractor/jobs/{id}/assignments", "get", "id"], ["/contractor/jobs/{id}/site-visits", "get", "id"],
   ])("documents %s %s, with the UUID path parameter where there is one", async (path, method, name) => {
-    const spec = JSON.parse(await readFile(new URL("../../openapi.json", import.meta.url), "utf8"));
+    const spec = JSON.parse(await readFile(sourceFixtureUrl("../../openapi.json", import.meta.url), "utf8"));
     expect(spec.paths[path]?.[method], `${method} ${path}`).toBeTruthy();
     if (name) expect(spec.paths[path][method].parameters).toContainEqual({ name, required: true, in: "path", schema: { format: "uuid", type: "string" } });
   });
   it("exposes the scheduling projections for GET only: no scheduling write route exists at the transport", async () => {
-    const spec = JSON.parse(await readFile(new URL("../../openapi.json", import.meta.url), "utf8"));
+    const spec = JSON.parse(await readFile(sourceFixtureUrl("../../openapi.json", import.meta.url), "utf8"));
     for (const path of ["/contractor/jobs/{id}/assignments", "/contractor/jobs/{id}/site-visits"]) expect(Object.keys(spec.paths[path])).toEqual(["get"]);
     expect(Object.keys(spec.paths).filter(p => /assign|schedul|visit/u.test(p))).toEqual(["/contractor/jobs/{id}/site-visits/start", "/contractor/jobs/{id}/site-visits/{visitId}/complete", "/contractor/jobs/{id}/assignments", "/contractor/jobs/{id}/site-visits"]);
     for (const route of ["jobs/[id]/assignments", "jobs/[id]/site-visits"]) {
-      const source = await readFile(new URL(`../../../web/app/api/contractor/${route}/route.ts`, import.meta.url), "utf8");
+      const source = await readFile(sourceFixtureUrl(`../../../web/app/api/contractor/${route}/route.ts`, import.meta.url), "utf8");
       expect([...source.matchAll(/export (?:async )?function (\w+)/gu)].map(m => m[1])).toEqual(["GET"]);
     }
-    const controller = await readFile(new URL("./scheduling.controller.ts", import.meta.url), "utf8");
+    const controller = await readFile(sourceFixtureUrl("./scheduling.controller.ts", import.meta.url), "utf8");
     expect(controller).not.toMatch(/@(Post|Put|Patch|Delete)\(/u);
   });
   it("uses the cookie session as the only principal and gives hidden and absent resources the identical 404 body", async () => {

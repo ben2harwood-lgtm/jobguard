@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-21": {
+      "branches": [
+        "codex/sandbox/later-safety-21"
+      ],
+      "note": "LATER-SAFETY-21: lost-job practice read absence and wrong-job value regression coverage. Caught up with origin/main; no migrations.",
+      "allow": [
+        "apps/web/app/ui/job-value.test.tsx",
+        "apps/web/app/ui/practice-journey.test.tsx",
+        "apps/web/app/ui/practice-journey.tsx"
+      ]
+    }
+  }
+}

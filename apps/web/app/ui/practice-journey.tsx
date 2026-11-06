@@ -36,7 +36,7 @@ export function PracticeJourney({ jobId, status }: { jobId: string; status: stri
   const isCurrent = () => request === generation.current && !controller.signal.aborted && currentJob.current.jobId === jobId && currentJob.current.status === status;
   setState({ jobId, status, phase: "loading" });
   try {
-   const path = `/api/jobs/${jobId}`, beforeActivation = ["draft", "quoting", "accepted"].includes(status);
+   const path = `/api/jobs/${jobId}`, beforeActivation = ["draft", "quoting", "accepted", "lost"].includes(status);
    const [proofRaw, variationsRaw, invoicesRaw, feeRaw] = await Promise.all([
     readJson(`${path}/proof`, controller.signal, status === "draft" ? { status: 404, code: "NOT_FOUND" } : undefined),
     readJson(`${path}/variations`, controller.signal, beforeActivation ? { status: 400, code: "ACTIVATION_REQUIRED" } : undefined),
