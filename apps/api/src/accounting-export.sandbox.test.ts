@@ -167,10 +167,15 @@ describe.each([
     expect(() => model.push(ctx, secondCommand, 100)).toThrow("reference_conflict");
     expect(adapter.pushes).toBe(1);
     model.setSyntheticSource({ ...b, amount: { pence: 41, currency: "GBP" } });
-    expect(model.push(ctx, command(model, secondScope, "exact"), 100).status).toBe("pushed");
+    if (companyId !== scope.companyId) {
+      expect(() => model.push(ctx, command(model, secondScope, "exact"), 100)).toThrow("reference_conflict");
+      expect(adapter.pushes).toBe(1);
+    } else {
+      expect(model.push(ctx, command(model, secondScope, "exact"), 100).status).toBe("pushed");
+      expect(adapter.objects.reduce((sum, object) => sum + object.payload.amount.pence, 0)).toBe(source.amount.pence);
+      expect(adapter.pushes).toBe(2);
+    }
     expect(model.push(ctx, firstCommand, 100).status).toBe("pushed");
-    expect(adapter.objects.reduce((sum, object) => sum + object.payload.amount.pence, 0)).toBe(source.amount.pence);
-    expect(adapter.pushes).toBe(2);
   });
   it.each(["credit", "receipt"] as const)("counts the same %s source reserved in another company", kind => {
     const a = adjustment(kind, 60);
@@ -184,6 +189,25 @@ describe.each([
     expect(() => model.push(ctx, secondCommand, 100)).toThrow("reference_conflict");
     expect(model.push(ctx, firstCommand, 100).status).toBe("pushed");
     expect(adapter.pushes).toBe(1);
+  });
+  it.each(["credit", "receipt"] as const)("binds %s to its parent's exported company and customer", kind => {
+    for (const field of ["company", "customer"] as const) {
+      const item = adjustment(kind, 1);
+      const { model, adapter } = setup([source, item]);
+      model.push(ctx, command(model, scope, "parent"), 100);
+      const companyId = field === "company" ? "demo-company-two" : scope.companyId;
+      model.setSyntheticConsent({ ...consent, companyId });
+      const childScope = { ...scopeFor(item), companyId, mapping: { ...scope.mapping, companyId,
+        customerId: field === "customer" ? "demo-other-customer" : scope.mapping.customerId } };
+      expect(() => model.preview(ctx, childScope, 100)).toThrow("reference_conflict");
+      expect(adapter.pushes).toBe(1);
+    }
+  });
+  it("keeps a parent invoice bound to an earlier adjustment's company/customer", () => {
+    const item = adjustment("credit", 1), { model } = setup([source, item]);
+    model.push(ctx, command(model, scopeFor(item)), 100);
+    expect(() => model.preview(ctx, { ...scope, mapping: { ...scope.mapping, customerId: "demo-other-customer" } }, 100))
+      .toThrow("reference_conflict");
   });
   it("rejects adjustments before their invoice, wrong-job references and amounts above invoice", () => {
     const a = adjustment("credit", 102);

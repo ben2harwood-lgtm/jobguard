@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
+import { syntheticSpeechAudio } from "@jobguard/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ResumableEvidenceService } from "./resumable-evidence.js";
 import { beginEvidenceUploadSchema, hasCompletePcmWav } from "./evidence.js";
@@ -33,7 +34,7 @@ function fixture() {
       }
       return { rows: [row] };
     }
-    if (sql.startsWith("SELECT job_id FROM app.evidence_upload")) return {rows:[{job_id:input.jobId}]};
+    if (sql.startsWith("SELECT job_id,expected_content_type FROM app.evidence_upload")) return {rows:[{job_id:input.jobId,expected_content_type:row.expected_content_type}]};
     if (sql.startsWith("SELECT * FROM app.evidence_upload")) return {rows:[row]};
     if (sql.startsWith("SELECT * FROM app.evidence_object")) return {rows:original?[original]:[]};
     if (sql.includes("SET state='quarantined'")) { row.state="quarantined"; row.object_version_id=values[2] as string; }
@@ -57,6 +58,26 @@ function beginRequest() {
 }
 beforeEach(() => { vi.restoreAllMocks(); vi.mocked(refuseLockedNewSource).mockReset(); });
 describe("dark resumable transfer orchestration (SQL isolation is tested in CI)", () => {
+  it("maps only a typed bind refusal to NOT_FOUND across every request-bound entry", async () => {
+    const bound = verifiedTenantContextFromMembership({ tenantId: tenant, ...actor } as Parameters<typeof verifiedTenantContextFromMembership>[0],
+      { kind: "practice", credential: "a".repeat(64) });
+    const statements: string[] = [], release = vi.fn();
+    const query = vi.fn(async (sql: string) => {
+      statements.push(sql);
+      if (sql === "SELECT app.bind_request($1, $2, $3)") throw Object.assign(new Error("private binding detail"), { code: "42501" });
+      return { rows: [] };
+    });
+    const pool = { connect: async () => ({ query, release }) } as unknown as Pool;
+    const service = new ResumableEvidenceService(pool, true);
+    await expect(service.begin(bound, actor, beginRequest())).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(service.status(bound, actor, input)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(service.append(bound, actor, { ...input, offset: 0, bytes: Buffer.from("data") })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(service.finalize(bound, actor, { ...input, commandId: randomUUID(), evidenceType: "site_voice" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(service.storageForProof(bound, actor, input).readExactVersion("synthetic-original", "synthetic-version"))
+      .rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(statements).toEqual(Array.from({ length: 5 }, () => ["BEGIN", "SELECT app.bind_request($1, $2, $3)", "ROLLBACK"]).flat());
+    expect(release).toHaveBeenCalledTimes(5);
+  });
   it("refuses every default-off entry before touching a pool", async () => {
     const f=fixture(), service=new ResumableEvidenceService(f.pool);
     for (const method of ["begin", "append", "status", "finalize"] as const)
@@ -170,6 +191,16 @@ describe("dark resumable transfer orchestration (SQL isolation is tested in CI)"
     await expect(f.service.finalize(context, actor, {...input,commandId:randomUUID(),evidenceType:"site_photo"})).rejects.toMatchObject({code:"OBJECT_INVALID",message:"wrong_hash"});
     expect(f.row.state).toBe("rejected");
     await expect(f.service.append(context, actor, {...input,offset:0,bytes:new Uint8Array([1])})).rejects.toMatchObject({code:"CONFLICT"});
+  });
+  it("keeps non-silent resumable WAV uploads independent of the Deepgram fixture restriction", async () => {
+    const f=fixture(), bytes=Buffer.from(syntheticSpeechAudio());
+    bytes[45]=1;
+    const hash=createHash("sha256").update(bytes).digest("hex");
+    await f.service.begin(context, actor, {...beginRequest(), contentType:"audio/wav", maximumBytes:bytes.length, expectedSha256:hash});
+    await f.service.append(context, actor, {...input,offset:0,bytes});
+    await expect(f.service.finalize(context, actor, {...input,commandId:randomUUID(),evidenceType:"synthetic_voice"}))
+      .resolves.toMatchObject({id:input.uploadId,sha256:hash});
+    expect(f.row.state).toBe("verified");
   });
   it("validates narrow synthetic voice bytes without widening the ordinary upload boundary", () => {
     const bytes=Buffer.alloc(46); bytes.write("RIFF");bytes.writeUInt32LE(38,4);bytes.write("WAVEfmt ",8);

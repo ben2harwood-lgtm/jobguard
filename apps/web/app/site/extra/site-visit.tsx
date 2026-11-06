@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { closeoutQuestionText, siteOrderLinesV1, siteSorItemsV1, siteVisitStartedV1, siteVisitCompletedV1, type SiteSorItems } from "@jobguard/core";
+import { closeoutQuestionText, siteOrderLinesV1, siteSorItemsV1, siteSorRecentItemsV1, siteVisitStartedV1, siteVisitCompletedV1, type SiteSorItems } from "@jobguard/core";
 import styles from "../../northside/northside.module.css";
 
 async function read(response: Response) {
@@ -13,6 +13,7 @@ async function read(response: Response) {
 export function SiteVisit({ jobId, openVisitId, onSelect, onVisitChange, locked = false }: { jobId: string; openVisitId: string | null; onSelect?: (item: SiteSorItems["items"][number]) => void; onVisitChange?: (id: string | null) => void; locked?: boolean }) {
   const [visitId, setVisitId] = useState(openVisitId), [answer, setAnswer] = useState<"" | "yes" | "no">("");
   const [lines, setLines] = useState<ReturnType<typeof siteOrderLinesV1.parse> | null>(null), [items, setItems] = useState<SiteSorItems | null>(null);
+  const [recent, setRecent] = useState<ReturnType<typeof siteSorRecentItemsV1.parse> | null>(null);
   const [query, setQuery] = useState(""), [error, setError] = useState(""), [busy, setBusy] = useState(false), [completed, setCompleted] = useState(false);
   const command = useRef(crypto.randomUUID());
   const pending = useRef(false);
@@ -40,6 +41,17 @@ export function SiteVisit({ jobId, openVisitId, onSelect, onVisitChange, locked 
     }, 250);
     return () => { clearTimeout(timer); controller.abort(); };
   }, [jobId, query]);
+  useEffect(() => {
+    const controller = new AbortController();
+    setRecent(null);
+    void fetch(`/api/contractor/jobs/${jobId}/sor-items/recent`, { cache: "no-store", signal: controller.signal }).then(read).then(body => {
+      const parsed = siteSorRecentItemsV1.parse(body);
+      if (parsed.jobId !== jobId) throw new Error("Job response mismatch.");
+      if (!controller.signal.aborted) setRecent(parsed);
+    }).catch(() => { /* Recents are optional; search remains available. */ });
+    return () => controller.abort();
+  }, [jobId]);
+  const shownItems = query.trim() ? items?.items : recent?.items;
   async function submit() {
     if (pending.current || completed || (visitId && !answer)) return;
     pending.current = true; setBusy(true); setError("");
@@ -73,6 +85,8 @@ export function SiteVisit({ jobId, openVisitId, onSelect, onVisitChange, locked 
     <h3>Order lines</h3>
     {lines ? <ul>{lines.lines.map(line => <li key={line.scopeItemId}>{line.sorCode}: {line.description} · {line.quantity} {line.unit}</li>)}</ul> : <p>Order lines unavailable until loaded.</p>}
     <div className={styles.row}><label htmlFor="sor-search">Search schedule of rates</label><input id="sor-search" maxLength={80} value={query} onChange={e => setQuery(e.target.value)} /></div>
-    {items && <><ul>{items.items.map(item => <li key={item.code}>{onSelect ? <button disabled={locked} onClick={() => onSelect(item)}>{item.code}: {item.description} ({item.unit})</button> : <>{item.code}: {item.description} ({item.unit})</>}</li>)}</ul>{items.items.length === 0 && <p>No matching items.</p>}{items.truncated && <p>More results available. Narrow your search.</p>}</>}
+    {!query.trim() && !!recent?.items.length && <h3>Recent items</h3>}
+    {shownItems && <ul>{shownItems.map(item => <li key={item.code}>{onSelect ? <button disabled={locked} onClick={() => onSelect(item)}>{item.code}: {item.description} ({item.unit})</button> : <>{item.code}: {item.description} ({item.unit})</>}</li>)}</ul>}
+    {!!query.trim() && items && <>{items.items.length === 0 && <p>No matching items.</p>}{items.truncated && <p>More results available. Narrow your search.</p>}</>}
   </section>;
 }

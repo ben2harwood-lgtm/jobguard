@@ -1,0 +1,62 @@
+{
+  "version": 2,
+  "lanes": {
+    "batch-16": {
+      "branches": [
+        "codex/sandbox/batch-16"
+      ],
+      "note": "RED group: M4-13 mandate, M4-2 billability review, M4-17 adjustments and MON-9 election screens. Reserved migrations 0592–0593; ready for PR testing and independent review.",
+      "allow": [
+        "apps/web/app/styles.css",
+        "apps/web/app/api/jobs/[id]/reconciliation/[runId]/adjustments/route.test.ts",
+        "apps/web/app/api/jobs/[id]/reconciliation/[runId]/adjustments/route.ts",
+        "apps/web/app/api/jobs/[id]/recovery-cases/[caseId]/billability/database.test.ts",
+        "apps/web/app/api/jobs/[id]/recovery-cases/[caseId]/billability/route.test.ts",
+        "apps/web/app/api/jobs/[id]/recovery-cases/[caseId]/billability/route.ts",
+        "apps/web/app/api/jobs/[id]/recovery-cases/[caseId]/managed-recovery/route.integration.test.ts",
+        "apps/web/app/api/jobs/[id]/recovery-cases/[caseId]/managed-recovery/route.test.ts",
+        "apps/web/app/api/jobs/[id]/recovery-cases/[caseId]/managed-recovery/route.ts",
+        "apps/web/app/api/subscription-mandate/route.integration.test.ts",
+        "apps/web/app/api/subscription-mandate/route.ts",
+        "apps/web/app/jobs/[id]/reconciliation/[runId]/adjustments/adjustments-screen.test.tsx",
+        "apps/web/app/jobs/[id]/reconciliation/[runId]/adjustments/adjustments-screen.tsx",
+        "apps/web/app/jobs/[id]/reconciliation/[runId]/adjustments/page.tsx",
+        "apps/web/app/jobs/[id]/recovery-cases/[caseId]/billability/page.tsx",
+        "apps/web/app/jobs/[id]/recovery-cases/[caseId]/billability/screen.test.tsx",
+        "apps/web/app/jobs/[id]/recovery-cases/[caseId]/billability/screen.tsx",
+        "apps/web/app/jobs/[id]/recovery-cases/[caseId]/managed-recovery/managed-recovery-screen.test.tsx",
+        "apps/web/app/jobs/[id]/recovery-cases/[caseId]/managed-recovery/managed-recovery-screen.tsx",
+        "apps/web/app/jobs/[id]/recovery-cases/[caseId]/managed-recovery/page.tsx",
+        "apps/web/app/lib/financial-reconciliation-adjustments-server.ts",
+        "apps/web/app/lib/managed-recovery-server.test.ts",
+        "apps/web/app/lib/managed-recovery-server.ts",
+        "apps/web/app/lib/recovery-billability-server.test.ts",
+        "apps/web/app/lib/recovery-billability-server.ts",
+        "apps/web/app/lib/subscription-mandate-server.test.ts",
+        "apps/web/app/lib/subscription-mandate-server.ts",
+        "apps/web/app/plans/mandate/mandate-screen.test.tsx",
+        "apps/web/app/plans/mandate/mandate-screen.tsx",
+        "apps/web/app/plans/mandate/page.tsx",
+        "apps/web/e2e/M4-13-mandate-screen.spec.ts",
+        "apps/web/e2e/M4-17-adjustments.spec.ts",
+        "apps/web/e2e/M4-2-billability.spec.ts",
+        "apps/web/e2e/MON-9-election-screen.spec.ts",
+        "docs/contracts/managed-recovery-v1.md",
+        "docs/contracts/money-trail-reconciliation-v1.md",
+        "docs/contracts/recovery-billability-policy-v1.md",
+        "docs/contracts/subscription-success-agreement-v1.md",
+        "packages/core/src/watchdog.ts",
+        "packages/db/migration-notes/0592_recovery_billability_read.md",
+        "packages/db/migration-notes/0593_financial_reconciliation_adjustments_read.md",
+        "packages/db/migrations/0592_recovery_billability_read.sql",
+        "packages/db/migrations/0593_financial_reconciliation_adjustments_read.sql",
+        "packages/db/src/financial-reconciliation-queue-repository.ts",
+        "packages/db/src/recovery-billability-repository.test.ts",
+        "packages/db/src/recovery-billability-repository.ts",
+        "packages/db/test/financial-reconciliation-adjustments.integration.test.ts",
+        "packages/db/test/migration-proofs/0592_recovery_billability_read.proof.json",
+        "packages/db/test/migration-proofs/0593_financial_reconciliation_adjustments_read.proof.json"
+      ]
+    }
+  }
+}

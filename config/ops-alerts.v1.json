@@ -1,0 +1,50 @@
+{
+  "version": "ops-alerts.v1",
+  "alerts": [
+    {
+      "id": "queue_failure",
+      "signal": "outbox.failure",
+      "source": "packages/db/src/outbox.ts",
+      "condition": "A delivery exhausts its five attempts.",
+      "severity": "critical",
+      "ownerRole": "QUEUE_OPERATOR",
+      "runbook": "docs/operations/incident-ownership.md#queue-failure"
+    },
+    {
+      "id": "unknown_send",
+      "signal": "outbox.unknown_outcome",
+      "source": "packages/db/src/outbox.ts",
+      "condition": "A delivery outcome is unknown, including a stale claim.",
+      "severity": "critical",
+      "ownerRole": "INCIDENT_COMMANDER",
+      "runbook": "docs/operations/incident-ownership.md#unknown-send"
+    },
+    {
+      "id": "backup_failure",
+      "signal": "backup.failed",
+      "source": "packages/db/tools/synthetic-restore.mjs",
+      "condition": "A scheduled backup or backup verification exits unsuccessfully.",
+      "severity": "critical",
+      "ownerRole": "BACKUP_OPERATOR",
+      "runbook": "docs/operations/incident-ownership.md#backup-failure"
+    },
+    {
+      "id": "unauthorized_route",
+      "signal": "route.denied",
+      "source": "packages/ai/src/claude-provider.ts",
+      "condition": "A provider route configuration is refused before transport.",
+      "severity": "critical",
+      "ownerRole": "SECURITY_OPERATOR",
+      "runbook": "docs/operations/incident-ownership.md#unauthorized-route"
+    },
+    {
+      "id": "storage_verification_error",
+      "signal": "storage.verification_failed",
+      "source": "packages/db/src/evidence.ts",
+      "condition": "An original fails byte, hash, type or immutable-version verification.",
+      "severity": "error",
+      "ownerRole": "STORAGE_OPERATOR",
+      "runbook": "docs/operations/incident-ownership.md#storage-verification-error"
+    }
+  ]
+}

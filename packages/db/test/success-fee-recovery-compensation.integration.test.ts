@@ -2,6 +2,7 @@
 import {randomUUID} from "node:crypto";
 import {afterAll,beforeAll,expect,it} from "vitest";
 import {createFinalCheckFixture,closeFinalCheckFixture,finalCheckTenant,type FinalCheckFixture} from "./final-check-fixture.js";
+import {catchFeeFixture} from "./success-fee-catch-fixture.js";
 import {recoveryFeeFixture} from "./success-fee-recovery-fixture.js";
 let f:FinalCheckFixture;
 beforeAll(async()=>{f=await createFinalCheckFixture();},120000);
@@ -72,4 +73,28 @@ it("a saved statement is stale after another case allocation and direct inserts 
  for(const name of ["source","derivation","journal","journal_line"])
   await expect(f.runtime.query(`INSERT INTO app.success_fee_${name} DEFAULT VALUES`)).rejects.toMatchObject({code:"42501"});
  expect(await journals(x)).toHaveLength(0);
+});
+
+it("one derivation combines catch and recovery principal, then compensates only the reversed recovery",async()=>{
+ const caught=await catchFeeFixture(f),x=await recoveryFeeFixture(f,true,caught);
+ await x.allocate(0);
+ const review=await x.review();
+ expect(review.statement).toMatchObject({qualifyingPrincipal:{numerator:"112000",denominator:"1"},feePence:11200,deltaPence:11200});
+ expect(review.statement.sources).toHaveLength(2);
+ expect(review.statement.sources).toEqual(expect.arrayContaining([
+  expect.objectContaining({assessmentId:caught.assessment.assessmentId}),
+  expect.objectContaining({caseId:x.opened[0]!.id,recoveryAllocationId:expect.any(String)}),
+ ]));
+ const original=await x.approve(review);
+ expect(await journals(x)).toEqual([{id:original.journalId,amount_pence:"11200",reverses_journal_id:null}]);
+ await x.reverse(0);
+ const correction=await x.review(1);
+ expect(correction.statement).toMatchObject({qualifyingPrincipal:{numerator:"80000",denominator:"1"},feePence:8000,deltaPence:-3200,
+  compensationLinks:[{journalId:original.journalId,amountPence:3200}]});
+ const compensated=await x.approve(correction);
+ expect(await journals(x)).toEqual([
+  {id:compensated.journalId,amount_pence:"-3200",reverses_journal_id:original.journalId},
+  {id:original.journalId,amount_pence:"11200",reverses_journal_id:null},
+ ]);
+ expect((await x.approve(await x.review(2))).journalId).toBeNull();
 });

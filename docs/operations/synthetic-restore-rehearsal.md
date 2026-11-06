@@ -51,17 +51,26 @@ every regular file by SHA-256, refuses symlinks/external tablespace paths, prese
 file ownership/permissions, archives the original offline, and restores a separate
 copy at a different port. It never labels a live directory copy a valid backup.
 
-The restored server must reproduce every recorded row hash. Additional assertions
+The restored server must reproduce every recorded business/control row hash. The
+`outbound_control` infrastructure schema is verified separately: its inherited
+enabled state is deliberately replaced by an audited pause before runtime startup.
+Additional assertions
 verify exact evidence key/version/bytes, invoice PDF hash and balance, idempotent
 manual-receipt replay, the audit chain/checkpoint, runtime permissions, forced RLS,
 cross-tenant download denial and a tenant-scoped export slice. Orphan cleanup with a
 future fixture clock must leave retained evidence intact.
 
-A rehearsal-only dispatch wrapper starts paused. An attempted dispatch must fail
-without changing queued work. After all restore checks, the harness permits only
-its in-process fake adapter: concurrent/repeated attempts produce one effect for
+M0-13b replaces the rehearsal-only wrapper with the actual database pause. The
+source has claims enabled; after the isolated restored server starts, a generated
+operator pauses it before any runtime connection is opened. Actual executor
+attempts leave the queue and attempt history unchanged. The harness reconciles
+restored fake work, requests resume, records a reconciliation receipt reference,
+and uses a second generated operator to approve it. Approval without reconciliation
+or by the same operator is refused. The receipt records the pause, resume request
+and reconciliation reference. After these checks, only its in-process fake adapter runs: concurrent/repeated attempts produce one effect for
 pending work, completed actions are not resent, and unknown outcomes cannot be
-blindly retried. Unknown reconciliation stays unknown.
+blindly retried. Unknown reconciliation stays unknown. The harness pauses the database again after
+these fake dispatch checks and records `finalPaused: true` before cleanup.
 
 ## Negative controls and interpretation
 
@@ -84,15 +93,15 @@ capture-to-invoice browser journey.
 ## Explicit remaining work
 
 The receipt retains NOT RUN items for hosted backup/restore/PITR, MinIO/S3 restoration,
-a global application outbound kill switch with independently authorized unpause,
+deployed reconciliation and independently authorized unpause,
 the full privacy/export/deletion/retention/legal-hold workflow, physical devices,
 and independent review/founder release. The small export is only a synthetic
 job/evidence-reference slice; it is not a general legal data-export implementation.
-The local dispatch wrapper must not be represented as a deployed kill switch.
+The fixture database pause must not be represented as a deployed recovery rehearsal.
 Do not close #20 as fully independently accepted on these tests alone.
 
-No migration, grant, business formula, production feature flag or provider was
-changed. Existing tests/security gates remain mandatory. The new integration test
+M0-13b adds migration `0581_restore_reconciliation` and its restricted reconciliation grants; no business
+formula, production feature flag or provider is changed. Existing tests/security gates remain mandatory. The new integration test
 is automatically collected by the existing database suite; the CLI is also runnable
 separately. No new package dependency is introduced.
 

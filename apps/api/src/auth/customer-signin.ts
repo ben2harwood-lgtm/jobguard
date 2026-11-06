@@ -49,7 +49,7 @@ export class CustomerSigninApplication {
       if (action === "signin") {
         const input = signin.parse(raw);
         const token = `${input.tenantId}.${input.jobId}.${input.customerId}.${randomBytes(32).toString("base64url")}`;
-        await this.query("SELECT identity.customer_portal_use($1,$2,$3,$4,$5,'redeem') result", [input.tenantId, input.jobId, input.customerId, this.identity.provider.digest(`customer-link:${input.token}`), this.identity.provider.digest(`customer-session:${token}`)]);
+        await this.query("SELECT coalesce(identity.extra_customer_use($1,$2,$3,$4,$5,'redeem'),identity.customer_portal_use($1,$2,$3,$4,$5,'redeem')) result", [input.tenantId, input.jobId, input.customerId, this.identity.provider.digest(`customer-link:${input.token}`), this.identity.provider.digest(`customer-session:${token}`)]);
         return { body: { version: "customer-signed-in.v1" }, cookie: token };
       }
       const input = action === "read" ? read.parse(raw) : signout.parse(raw);
@@ -57,7 +57,7 @@ export class CustomerSigninApplication {
       const [tenantId, jobId, customerId] = credential.parse(token?.split("."));
       // Do not look up the requested job at all when it differs from the cookie's bound job.
       if ("jobId" in input && input.jobId !== jobId) throw new CustomerRefused();
-      const body = await this.query("SELECT identity.customer_portal_use($1,$2,$3,$4,NULL,$5) result", [tenantId, jobId, customerId, this.identity.provider.digest(`customer-session:${token}`), action === "read" ? "resolve" : "signout"]);
+      const body = await this.query("SELECT coalesce(identity.extra_customer_use($1,$2,$3,$4,NULL,$5),identity.customer_portal_use($1,$2,$3,$4,NULL,$5)) result", [tenantId, jobId, customerId, this.identity.provider.digest(`customer-session:${token}`), action === "read" ? "resolve" : "signout"]);
       return action === "signout" ? { body: { version: "customer-signed-out.v1" }, clearCookie: true } : { body };
     } catch (error) {
       // Credential state, foreign scope, schema failures and unknown resources have one public refusal.

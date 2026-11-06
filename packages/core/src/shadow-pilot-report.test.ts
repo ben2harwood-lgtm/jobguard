@@ -1,9 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { generateShadowPilotReport } from "./shadow-pilot-report.js";
+import { shadowPilotFinancialHash } from "./shadow-pilot-financial-record.js";
+import { generateShadowPilotReport, ShadowPilotReportError } from "./shadow-pilot-report.js";
 
 const id = (n: number) => `10000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const binding = { tenantId: id(1), jobId: id(2), lockId: id(3) };
 const access = { ...binding, environment: "synthetic_demo", audience: "synthetic_researcher" };
+function financialFixture() {
+  const record = { version: "shadow-pilot-financial-record.v1" as const, tenantId: binding.tenantId,
+    jobIds: [binding.jobId], sources: [] };
+  return { ...record, sourceHash: shadowPilotFinancialHash(record) };
+}
 function fixture() {
   return {
     version: "shadow-pilot-report-input.v1", environment: "synthetic_demo",
@@ -18,7 +24,7 @@ function fixture() {
     fairness: [{ ...binding, id: "synthetic:answer-1", revealId: "synthetic:reveal-1",
       answeredAt: "2026-10-30T12:01:00Z", rating: 4 }],
     harm: [{ ...binding, id: "synthetic:harm-1", harmObserved: false }],
-    financialEffects: { accruals: 0, invoices: 0, collections: 0 },
+    financialRecord: financialFixture(),
   };
 }
 const report = (raw: unknown = fixture()) => generateShadowPilotReport(raw, access);
@@ -65,9 +71,27 @@ describe("M1-15S synthetic pilot report", () => {
     }
   });
 
-  it.each(["accruals", "invoices", "collections"] as const)("fails on any pilot fee %s, including a later reversal", field => {
-    for (const value of [1, -1, null, undefined]) {
-      expect(() => report({ ...fixture(), financialEffects: { ...fixture().financialEffects, [field]: value } })).toThrow("INVALID_PILOT_REPORT");
+  it.each(["accruals", "invoices", "collections"] as const)("rejects legacy caller-claimed %s values, including zero and reversals", field => {
+    for (const value of [0, 1, -1, null, undefined]) {
+      expect(() => report({ ...fixture(), financialEffects: { accruals: 0, invoices: 0, collections: 0, [field]: value } })).toThrow("INVALID_PILOT_REPORT");
+    }
+  });
+
+  it("rejects missing, tampered and cross-tenant/job financial records", () => {
+    expect(() => report({ ...fixture(), financialRecord: undefined })).toThrow("INVALID_PILOT_REPORT");
+    for (const change of [{ tenantId: id(99) }, { jobIds: [id(99)] }, { sourceHash: "0".repeat(64) }])
+      expect(() => report({ ...fixture(), financialRecord: { ...financialFixture(), ...change } })).toThrow("INVALID_PILOT_REPORT");
+  });
+
+  it.each(["accruals", "invoices", "collections"] as const)("retains stored %s row references offline and refuses", kind => {
+    const financial = { ...financialFixture(), sources: [{ kind, table: "success_fee_journal" as const,
+      jobId: binding.jobId, rowId: id(98), rowHash: "a".repeat(64) }] };
+    const { sourceHash: _, ...record } = financial;
+    try { report({ ...fixture(), financialRecord: { ...record, sourceHash: shadowPilotFinancialHash(record) } }); throw new Error("Expected refusal"); }
+    catch (error) {
+      expect(error).toBeInstanceOf(ShadowPilotReportError);
+      expect((error as ShadowPilotReportError).message).toBe("INVALID_PILOT_REPORT");
+      expect((error as ShadowPilotReportError).financialSources).toEqual(financial.sources);
     }
   });
 
@@ -92,6 +116,7 @@ describe("M1-15S synthetic pilot report", () => {
     input.fairness[1]!.rating = 2;
     expect(() => report(input)).toThrow("INVALID_PILOT_REPORT");
     expect(Object.isFrozen(original.records.fairness![0])).toBe(true);
+    expect(Object.isFrozen(original.records.financialRecord.sources)).toBe(true);
     input.fairness[0]!.rating = 1;
     expect(original.records.fairness![0]!.rating).toBe(4);
   });
@@ -106,4 +131,12 @@ describe("M1-15S synthetic pilot report", () => {
     expect(() => report({ ...fixture(), customerName: "unapproved field" })).toThrow("INVALID_PILOT_REPORT");
     expect(() => report({ ...fixture(), measurement: { ...fixture().measurement, environment: "production" } })).toThrow("INVALID_PILOT_REPORT");
   });
+});
+
+it("keeps financial identifiers only in offline structured error fields", () => {
+  const sources = [{ id: "synthetic:private-fee-row" }];
+  const error = new ShadowPilotReportError(sources);
+  expect(error.message).toBe("INVALID_PILOT_REPORT");
+  expect(error.stack).not.toContain("private-fee-row");
+  expect(error.financialSources).toEqual(sources);
 });

@@ -48,15 +48,17 @@ describe("ENT-5 independent requirements", () => {
     expect(extraRoleConstraint({ version: "extra-role-constraint.v1", action: "price", role: "surveyor", siteStaff: false })).toBe("permitted_constraint");
     for (const role of ["supervisor", "operative", "owner", "admin"]) expect(extraRoleConstraint({ version: "extra-role-constraint.v1", action: "price", role, siteStaff: true })).toBe("refused");
   });
-  it("BEN-Q11 supervisor withdrawal does not infer wider role authority", () => {
+  it("BEN-Q11 only covered supervisory roles may withdraw", () => {
     expect(extraRoleConstraint({ version: "extra-role-constraint.v1", action: "withdraw", role: "supervisor", siteStaff: true })).toBe("permitted_constraint");
-    for (const role of ["surveyor", "owner", "admin", "commercial_manager", "operative"]) expect(extraRoleConstraint({ version: "extra-role-constraint.v1", action: "withdraw", role, siteStaff: true })).toBe("held");
+    for (const role of ["surveyor", "commercial_manager"]) expect(extraRoleConstraint({ version: "extra-role-constraint.v1", action: "withdraw", role, siteStaff: true })).toBe("permitted_constraint");
+    for (const role of ["owner", "admin", "operative"]) expect(extraRoleConstraint({ version: "extra-role-constraint.v1", action: "withdraw", role, siteStaff: true })).toBe("refused");
   });
   it("BEN-Q04 revision cannot bypass separation or self-approval", () => {
     const base = { version: "extra-separation.v1", raiserPerson: id(1), candidatePerson: id(2), stepKey: "surveyor", revisionId: id(7), history: [{ person: id(2), stepKey: "supervisor", revisionId: id(6) }] };
     expect(approvalSeparationConstraint(base)).toBe("refused_reused_person");
     expect(approvalSeparationConstraint({ ...base, candidatePerson: id(1), history: [] })).toBe("refused_self");
-    expect(approvalSeparationConstraint({ ...base, stepKey: "supervisor" })).toBe("held_repeat_semantics");
+    expect(approvalSeparationConstraint({ ...base, stepKey: "supervisor" })).toBe("permitted_constraint");
+    expect(approvalSeparationConstraint({ ...base, stepKey: "supervisor", revisionId: id(6) })).toBe("repeat_first_outcome");
     expect(approvalSeparationConstraint({ ...base, candidatePerson: id(3) })).toBe("permitted_constraint");
     expect(() => approvalSeparationConstraint({ ...base, history: [{ person: id(2), revisionId: id(6) }] })).toThrow();
   });
@@ -68,8 +70,8 @@ describe("ENT-5 independent requirements", () => {
   it.each([[person, mixedCasePerson], [mixedCasePerson, person]])("BEN-Q04 mixed-case UUIDs cannot bypass cross-step reuse (%s, %s)", (previousPerson, candidatePerson) => {
     expect(approvalSeparationConstraint({ version: "extra-separation.v1", raiserPerson: id(1), candidatePerson, stepKey: "surveyor", revisionId: id(7), history: [{ person: previousPerson, stepKey: "supervisor", revisionId: id(6) }] })).toBe("refused_reused_person");
   });
-  it.each([[person, mixedCasePerson], [mixedCasePerson, person]])("BEN-Q04 mixed-case UUIDs preserve held same-step repeat semantics (%s, %s)", (previousPerson, candidatePerson) => {
-    expect(approvalSeparationConstraint({ version: "extra-separation.v1", raiserPerson: id(1), candidatePerson, stepKey: "supervisor", revisionId: id(7), history: [{ person: previousPerson, stepKey: "supervisor", revisionId: id(6) }] })).toBe("held_repeat_semantics");
+  it.each([[person, mixedCasePerson], [mixedCasePerson, person]])("BEN-Q04 mixed-case UUIDs permit the same slot across revisions (%s, %s)", (previousPerson, candidatePerson) => {
+    expect(approvalSeparationConstraint({ version: "extra-separation.v1", raiserPerson: id(1), candidatePerson, stepKey: "supervisor", revisionId: id(7), history: [{ person: previousPerson, stepKey: "supervisor", revisionId: id(6) }] })).toBe("permitted_constraint");
   });
   it("BEN-Q05 start and finish representations retain uncertainty and established breaches", () => {
     const before = { version: "extra-work-history.v1", start: { reference: "reported-start", uncertainty: "time uncertain" }, finish: { reference: "reported-finish", uncertainty: "scope uncertain" }, establishedBreaches: ["breach-fact-1"] };
@@ -89,4 +91,16 @@ describe("ENT-5 independent requirements", () => {
     expect(overdueEligibilityConstraint({ ...input, agreedBackupPeople: [], agreedWaitElapsed: true })).toEqual([id(1)]);
     expect(() => overdueEligibilityConstraint({ ...input, escalationRole: "owner" })).toThrow();
   });
+});
+it("Q08 new proposal steps default to two working days; versioned overrides and no backup are explicit", () => {
+  expect(evaluateExtraApprovalRequirement(proposal(400)).companySteps[0]!.waitWorkingDays).toBe(2);
+  for (const waitWorkingDays of [3, null]) {
+    const document = rules();
+    document.bands[1]!.steps[0] = { ...document.bands[1]!.steps[0]!, waitWorkingDays, escalationRole: null, alternateRoles: [] };
+    expect(evaluateExtraApprovalRequirement(proposal(400, approvalRulesV1.parse(document))).companySteps[0]).toMatchObject({ waitWorkingDays, escalationRole: null, alternateRoles: [] });
+  }
+  for (const waitWorkingDays of [0, -1, 261, 1.5, "2"]) {
+    const document = rules();
+    expect(approvalRulesV1.safeParse({ ...document, bands: [{ upToPence: null, steps: [{ ...document.bands[1]!.steps[0], waitWorkingDays }] }] }).success).toBe(false);
+  }
 });

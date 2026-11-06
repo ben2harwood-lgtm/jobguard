@@ -13,11 +13,11 @@ it("zero is non-positive approval basis; negative, fractional and unsafe review 
   expect(persistedBillabilityCommandV1.safeParse({ ...command, claimedEligiblePrincipalPence: 0 }).success).toBe(true);
   for (const amount of [-1, 0.1, Number.MAX_SAFE_INTEGER]) expect(persistedBillabilityCommandV1.safeParse({ ...command, claimedEligiblePrincipalPence: amount }).success).toBe(false);
 });
-function database(result: unknown, fail = false) {
+function database(result: unknown, failure?: unknown) {
   const calls: string[] = [];
   const pool = { connect: async () => ({ query: async (sql: string) => {
     calls.push(sql);
-    if (sql.startsWith("SELECT app.recovery_billability")) { if (fail) throw new Error("BILLABILITY_STALE"); return { rows: [{ result: { replay: result } }] }; }
+    if (sql.startsWith("SELECT app.recovery_billability")) { if (failure) throw failure; return { rows: [{ result: { replay: result } }] }; }
     return { rows: [] };
   }, release: () => { calls.push("release"); } }) } as unknown as Pool;
   return { pool, calls };
@@ -30,7 +30,7 @@ it("exact replay returns the first database result inside one committed tenant t
   expect(db.calls.filter(c => c.startsWith("SELECT app.recovery_billability"))).toHaveLength(1);
 });
 it("a database rejection rolls back the transaction and propagates its typed error", async () => {
-  const db = database(null, true);
+  const db = database(null, new Error("BILLABILITY_STALE"));
   await expect(new RecoveryBillabilityRepository(db.pool, "synthetic_demo").command(verifiedTenantContextForQueuedJob(id(8)), id(9), "a".repeat(64), command)).rejects.toThrow("BILLABILITY_STALE");
   expect(db.calls.at(-2)).toBe("ROLLBACK"); expect(db.calls).not.toContain("COMMIT");
 });
@@ -40,4 +40,35 @@ it("production, pilot and unconfigured paths refuse before opening a connection"
     await expect(new RecoveryBillabilityRepository(db.pool, mode).command(verifiedTenantContextForQueuedJob(id(8)), id(9), "a".repeat(64), command)).rejects.toThrow("BILLABILITY_FORBIDDEN");
     expect(db.calls).toEqual([]);
   }
+});
+it("read uses only the guarded routine and binds the case, job and session in a tenant transaction", async () => {
+  const calls: { sql: string; values: unknown[] | undefined }[] = [];
+  const value = { version: "recovery-billability-view.v1", caseId: id(2), caseRevision: 1, lines: [], reviews: [] };
+  const pool = { connect: async () => ({ query: async (sql: string, values?: unknown[]) => {
+    calls.push({ sql, values }); return { rows: sql.startsWith("SELECT app.read_recovery_billability") ? [{ result: value }] : [] };
+  }, release: () => {} }) } as unknown as Pool;
+  const repo = new RecoveryBillabilityRepository(pool, "synthetic_demo");
+  expect(await repo.read(verifiedTenantContextForQueuedJob(id(8)), id(9), id(2), "digest")).toEqual(value);
+  expect(calls.find(c => c.sql.startsWith("SELECT app.read_recovery_billability"))?.values).toEqual([id(9), id(2), "digest"]);
+  expect(calls.at(-1)?.sql).toBe("COMMIT");
+  expect(calls.some(c => /INSERT|UPDATE|DELETE/.test(c.sql))).toBe(false);
+});
+it("read stays closed outside synthetic mode before any connection", async () => {
+  const db = database(null);
+  await expect(new RecoveryBillabilityRepository(db.pool, "production").read(verifiedTenantContextForQueuedJob(id(8)), id(9), id(2), "digest")).rejects.toThrow("BILLABILITY_NOT_FOUND");
+  expect(db.calls).toEqual([]);
+});
+
+it.each([
+  ["23505", "billability_one_line_approval", true],
+  ["23505", "recovery_billability_command_pkey", false],
+  ["23503", "billability_one_line_approval", false],
+])("maps only duplicate line approval (%s, %s)", async (code, constraint, mapped) => {
+  const failure = Object.assign(new Error("database constraint failure"), { code, constraint });
+  const db = database(null, failure);
+  const attempt = new RecoveryBillabilityRepository(db.pool, "synthetic_demo").command(verifiedTenantContextForQueuedJob(id(8)), id(9), "a".repeat(64), command);
+  if (mapped) await expect(attempt).rejects.toThrow("BILLABILITY_LINE_ALREADY_APPROVED");
+  else await expect(attempt).rejects.toBe(failure);
+  expect(db.calls.at(-2)).toBe("ROLLBACK");
+  expect(db.calls).not.toContain("COMMIT");
 });

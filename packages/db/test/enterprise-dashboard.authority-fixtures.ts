@@ -40,14 +40,22 @@ export async function authorityCluster() {
     createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
   const config = { host: "127.0.0.1", port, user: "postgres", password: "synthetic" };
   const pools: Pool[] = [];
+  const connectionEnds: Promise<void>[] = [];
   const retainedPool = (settings: ConstructorParameters<typeof Pool>[0]) => {
-    const pool = new Pool(settings); pools.push(pool); return pool;
+    const pool = new Pool(settings);
+    // Pool.end() can resolve before Client's final socket-end event under load.
+    // Observe real connection completion before stopping this fixture's PostgreSQL.
+    pool.on("connect", client => { connectionEnds.push(new Promise<void>(resolve => client.once("end", resolve))); });
+    pools.push(pool); return pool;
   };
   const control = retainedPool(config);
   const admin = retainedPool({ ...config, database: "jobguard_synthetic_demo", statement_timeout: 15000 });
   const runtimePool = (name: string, max = 4) => retainedPool({ ...config, database: "jobguard_synthetic_demo", user: "dashboard_authority_login",
     application_name: name, max, connectionTimeoutMillis: 8000, lock_timeout: 12000, statement_timeout: 15000 });
-  const close = () => closeTestDatabase(postgres, directory, ...pools);
+  const close = () => closeTestDatabase({ stop: async () => {
+    await Promise.all(connectionEnds);
+    await postgres.stop();
+  } }, directory, ...pools);
   try {
     await postgres.initialise(); await postgres.start();
     await control.query("CREATE DATABASE jobguard_synthetic_demo");

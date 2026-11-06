@@ -202,7 +202,7 @@ positive test is replaced with privileged fixture success.
 
 Actual source-chain reading/allocation validation and immutable run persistence,
 MT-01's command-built £320/£22,176/£32/£250 fixture, no-offset integration,
-event restart/race/rebuild and cold-restore proofs remain DEPENDENCY-BOUND on
+event restart/race/rebuild and production cold-restore proofs remain DEPENDENCY-BOUND on
 the actual missing source contracts. The independent reference tests do not
 close those assertions. Non-catch qualification authority and negative-
 compensation execution remain unbuilt. Screens and exact plan V(...) IDs,
@@ -287,7 +287,7 @@ No contractor formula or historical v1 cap/credit policy is silently substituted
 NOT built: authoritative invoice/journal/reservation/provider source adapters,
 durable scheduled runs/queue/adjustments, real membership/Decision verification,
 provider webhook authentication or live rails, cross-rail collection control,
-financial restore/replay certification, UI, external security review and the
+production financial restore/replay certification, UI, external security review and the
 G4-S/G4-C evidence packs. The base source/authority holds above remain. This
 slice does not complete the whole M4-17 card or release either track.
 
@@ -304,7 +304,7 @@ were not executed here. The pnpm launcher stalled before invoking checks and
 was interrupted; verification used the already-installed Vitest and TypeScript
 binaries from the repository's package scripts. No package was downloaded.
 
-## M4-17 queue persistence (0479; synthetic reference analysis only)
+## M4-17 queue persistence (`0572_financial_reconciliation_queue.sql`; synthetic reference analysis only)
 
 The `FinancialReconciliationQueueRepository` stores the existing supplied fake
 snapshots and deterministic reports, plus each report's unexplained differences.
@@ -313,7 +313,7 @@ No authoritative source adapter, route, scheduler, provider or live execution is
 added. Every report retains all four reference/disabled flags. This extends only
 the dark M4-17 seam; the accepted-source/production run holds above remain.
 
-0479 adds five append-only, FORCE-RLS tables: `financial_reconciliation_run`,
+`0572_financial_reconciliation_queue.sql` adds five append-only, FORCE-RLS tables: `financial_reconciliation_run`,
 `financial_reconciliation_difference`, `financial_reconciliation_adjustment`,
 `financial_reconciliation_approval`, and `financial_reconciliation_command`.
 The last retains exact command payloads, identity and result references, including
@@ -353,7 +353,7 @@ exact indexes/policies, and the one new routine's LP-0 owner/EXECUTE/protection
 record. Existing expectations and migrations remain intact. No data migration or
 backfill occurs. Forward-fix by additive migration; do not edit or remove stored
 history. Restore uses these immutable snapshots for deterministic report rebuild;
-this does not certify full financial restore, external replay prevention or a
+this alone does not certify full financial restore, external replay prevention or a
 production gate. External execution remains absent/disabled.
 
 Initial self-review: LATER / SIMPLICITY at
@@ -367,6 +367,44 @@ approval, privilege, upgrade and RLS tests are CI-only in this sandbox. Full
 workspace checks and the independent exact-head Claude RED review remain owed.
 This is not completion of M4-17's production reconciliation/security/restore gate.
 
+## M4-17 synthetic cold-restore regression (m4-17-restore-proof)
+
+`packages/db/test/financial-restore-proof.integration.test.ts` adds one PostgreSQL
+integration test using the existing disposable whole-cluster cold-copy tool.
+Its in-process fixture hooks populate a separate `jobguard_synthetic_demo`
+database in that same cluster; the CLI accepts no new options or destinations.
+Existing command writers allocate £320 and £2,500 of qualifying net principal,
+post £282 of fees, collect through the fake rail, reverse the second receipt,
+post linked compensation and refund £250. Collection/refund reservations are
+asserted before settlement; their pending/settled histories and final zero
+reservations are retained. No qualifying financial rows are inserted by the test.
+
+The test asserts exact full-row equality for every `app` table in the financial
+database immediately after restore, including invoice bytes, balanced journal
+lines, derivations and source links, version-specific evidence metadata,
+allocations/reversals, authorizations, attempts/events and audit history. It then
+compares collection balances and rebuilt reconciliation snapshots, hashes and
+reports. Exact command replay and fresh attempts to settle completed work must
+leave those rows unchanged; another tenant cannot replay the saved run.
+The restored financial database is paused before runtime connections and stays
+paused through reconciliation and the negative control. Deliberate privileged
+corruption of one restored debit line must produce `UNBALANCED_JOURNAL` and
+invalidate the old restore checkpoint; this tests detection, not automatic repair.
+
+The same cold-copy rehearsal retains its existing actual outbox-executor checks:
+no attempts while paused, reconciliation required before independently approved
+fixture resume, one pending fake delivery despite concurrent/repeated execution,
+no resend of succeeded work, and unknown outcomes held. Those outbox actions are
+synthetic messages; they do not certify a fee-provider dispatcher. The test has
+explicit `NOT COVERED` todos for the absent live fee dispatcher, deployed/object
+backup and independent security review. Evidence here is database metadata;
+the existing rehearsal separately checks its DB-backed synthetic object bytes.
+
+**Execution status:** the new PostgreSQL test is not executed in this sandbox,
+which cannot start PostgreSQL or bind localhost. Its assertions are CI obligations,
+not a completed restore rehearsal or a release claim. Local verification is in
+the existing router commit-message handoff. No migration or production behavior
+changes; the independent exact-head RED review and all G0–G5 gates remain owed.
 ### M4-17 queue follow-up: SQL source and report verification
 
 Branch-owned 0479 now rebuilds the entire synthetic customer-invoice set for
@@ -456,3 +494,13 @@ Validation for this catch-up (installed local binaries, no package downloads):
 The global pnpm launcher stalled before starting its commands and was stopped;
 checks above used existing package-local `.bin` executables. No tests failed,
 no expectations were weakened, and no git write or network action was run.
+
+## M4-17 adjustment web surface (partial, synthetic only)
+
+`/jobs/[id]/reconciliation/[runId]/adjustments` reads one already stored run and its adjustment proposals. The session-only GET/POST endpoint at the matching `/api/jobs/.../adjustments` path never starts a run. Outside `synthetic_demo`, page and endpoint return not-found. POST requires a trusted configured browser origin. All responses are no-store.
+
+Commands retain the repository's versioned propose/approve envelopes. On proposal transport, tenantId and jobId are omitted from the adjustment and its fact/correction: the server binds these exclusively from the resolved session and path, then passes the strict bound command to the repository. Caller tenant, actor, status and approved fields are refused. Run/hash/revision and approval content hash remain exact client-reviewed bindings. The UI displays server report figures and stored proposal content; its server-provided missing-payment-journal proposal is reviewed explicitly and never automatically submitted. Pending complete payloads stay in browser session storage across uncertain responses and reloads; retries use the same command ID.
+
+0572 requires another finance identity to approve; even a second session of the proposer cannot self-approve. A changed content/report hash or superseded run is refused. An approval records simulated review, never a posted correction: invoices, journals, provider rows and stored runs stay unchanged. The new read routine uses the same ef_actor finance/session/entitlement authority and existing FORCE RLS tenant policies; no caller context setting changes or table grants are added. Missing and foreign run reads both return null.
+
+M4-17 remains open: restore proof, independent money-surface security review, real rails, collection and G4-C/G4-S stay held. No new alert or provider flow is introduced. CI must execute real PostgreSQL replay/concurrency/isolation/immutability tests, fresh/upgrade migration and catalogue proofs, and the headless journey at mobile-360 and desktop; these cannot execute in the builder sandbox.

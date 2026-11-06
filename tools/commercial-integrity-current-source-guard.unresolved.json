@@ -16,7 +16,7 @@
   {
     "file": "packages/db/src/practice-session.ts",
     "line": 73,
-    "fingerprint": "ad3ac47cb73083599ccbd5fd355eb9f2f313b9af4ceca2115da91270658d50ca",
+    "fingerprint": "a52add41726877212b3d0441a7351647222c7aa760b4e2be0f07d3ea2fd00c04",
     "reason": "Generic local query helper receives runtime sql/values parameters; callers are not specialized by runtime data flow.",
     "code": "UNRESOLVED_COVERED_EDGE"
   },
@@ -50,8 +50,8 @@
   },
   {
     "file": "packages/db/src/subscription-stripe-sandbox-adapter.ts",
-    "line": 103,
-    "fingerprint": "cca1e585bf32c7408b19ff8bbb7a528bc17aa2440a1daa23e3bfc71f8526682c",
+    "line": 110,
+    "fingerprint": "5fb98f0e7f16d382aef5d7ecabe4a34d02404237cf544dde1099a7bdebc91df2",
     "reason": "Calls the synthetic payment adapter's execute method with a typed work object; this is not a database query.",
     "code": "UNRESOLVED_COVERED_EDGE"
   },
@@ -59,7 +59,7 @@
     "code": "UNRESOLVED_COVERED_EDGE",
     "file": "packages/db/src/extra-approval-chain-repository.ts",
     "line": 94,
-    "fingerprint": "afbffeb30d1a014e8ccd5823926378c931403a72313c2e51287461f81173cc8b",
+    "fingerprint": "a2152ab0e4c54d80c5b08e6884e852d11613f2fdece5ab6140a8c790d0e9a5ff",
     "reason": "Generic local call helper receives runtime sql/args; all nine callers pass literal SELECT app.xa_* calls and none reads advisory results."
   }
 ]

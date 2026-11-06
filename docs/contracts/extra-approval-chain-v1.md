@@ -31,4 +31,126 @@ ENT-5 timing source amendment, 3 November 2026: Ben answered “Use visit times 
 
 `doneWithoutRequiredPreapproval` is true when the frozen `aboveClientBeforeWorkThreshold` comparison requires client preapproval and the operative has stated `under_way` or `finished`, with a finished visit and no such approval or client approval strictly after the visit finish. `not_started` or a missing statement stays `uncertain` even after the visit finishes and approval arrives. A narrow `ent3_extra_work_status(job, extra)` read supplies only that statement within the verified tenant, after client link/job checks; runtime has no table read grant. It is false when no such requirement applies or approval is strictly before visit start, and `uncertain` when the interval cannot settle the order. No linked visit remains `not_derived`. A before-work comparison without a required client step stays uncertain under the held T/Y composition contract. Company step timings are also shown; this flag interprets the explicit client-before-work threshold only, and grants no proceed permission. Earlier revision requirements remain evaluated, so later approval or a new revision cannot erase a breach. Requirements superseded strictly before visit start are excluded; supersession during the visit is uncertain. The visit and approval facts are retained unchanged; no breach-clearing write exists.
 
-Still open: the proceed contract, reporting authority beyond the merged visit commands, other previously held policy items and any unproved ENT-5 Done-when (including pack verification). This amendment resolves the issued timing source only; it does not declare ENT-5 finished or enable real data.
+Still open: reporting authority beyond the merged visit commands, other previously held policy items and any unproved ENT-5 Done-when (including pack verification). This amendment resolves the issued timing source only; it does not declare ENT-5 finished or enable real data.
+## ENT-5 mandatory lane (built ahead, 4 November 2026)
+
+The contractor `/approvals/extras` screen projects only the existing, server-filtered
+`ExtraApprovalRepository.queue` read into `InboxFinding`s and passes them through
+`groupInbox` with an advisory budget of zero. Each request and step has its own
+`sourceRevision`; separate extras on one job cannot coalesce. Replayed identical
+reads coalesce, and a fresh read replaces the old queue without retaining decisions
+or superseded requests. Findings contain `amount: null`, fixed wording and an
+anchor to the existing extra card; prices and arbitrary queue fields are not copied
+into the lane. Prices on the existing detailed cards are unchanged.
+
+The lane does not derive grants, escalation, timers, decisions or current revisions.
+Only rows returned for the authenticated member can appear. The server queue remains
+authoritative for tenant/job scope, revocation and listed alternates (original
+approvers remain eligible after escalation). Command authorization is rechecked by
+the existing approval path; a displayed link never grants authority.
+
+Coverage: pure projection/grouping tests exercise zero advisory budget, 200 advisory
+findings, distinct extras, replayed reads, request/step revisions, empty reads and
+price omission. Component tests cover separate links and empty replacement. The new
+`ENT-5-must-decide.spec.ts` runs on mobile-360 and desktop with synthetic transport
+fixtures, target sizes, keyboard anchor navigation, named regions/links, overflow
+checks and Chromium text-contrast auditing. It does not prove database authority or
+constitute a comprehensive accessibility audit. CI must also run the existing real
+PostgreSQL `extra-approval-chain.integration.test.ts` for grant filtering, stale
+revisions, tenant isolation, revocation, replay and escalation guarantees. No database
+or browser suite was run in the restricted builder sandbox. No migration, new
+command, grant, queue rule or escalation change. RED independent review and green CI
+remain required. ENT-5 remains open for held contracts and aggregate acceptance;
+G0–G5 stay closed, synthetic practice only.
+
+
+## ENT-5 screen actions — reject, withdraw and revise (4 November 2026)
+
+This partial ENT-5 addition exposes the existing commands in the synthetic Northside
+practice route and `/approvals/extras`. It does not close ENT-5 or open G0–G5.
+
+- Reject uses the same eligible queue and exact request/hash/net/step binding as
+  approve, with a required reason. The screen offers the existing `not_agreed`
+  reason; the command's existing reason-code grammar remains authoritative.
+- Withdraw offers only supervisors the four existing reasons: `not_done`,
+  `raised_in_error`, `resident_cancelled`, `already_on_order`. Database authority
+  remains decisive, including job coverage and current membership.
+- Surveyors can revise an approved or rejected extra using a rate-card code and
+  measured integer quantity. The route calculates pence from the stored job rate;
+  the client cannot submit a revised amount. A read-only `GET` on the same revise
+  URL supplies those controls after the extra has left the logged list. Its
+  session, visible-extra and pricing-grant checks precede the rate read.
+- Every mutation requires trusted browser origin and a session-derived tenant and
+  actor. Strict schemas reject supplied authority, clock and other unknown fields.
+  The existing command registry already classifies RejectExtra, WithdrawExtra and
+  ReviseExtra; this adds no command type or mutation route path.
+- Rejection retries can leave the eligible queue. A tenant/actor/type-scoped receipt
+  read binds its original request to the URL extra and job, then permits only the
+  existing repository replay path; it never returns
+  a result itself. The command boundary rechecks authority and exact command content.
+  Withdraw and revise likewise use the existing durable command implementation.
+- Outcomes and refusals are displayed from the server. In particular an old open
+  approval screen displays `STALE_REVISION` after revision; the client does not
+  infer that refusal from its local state.
+
+Validation: route unit tests cover binding, queue exclusion, stale amounts, missing
+reasons/steps, untrusted origins, forged fields, supervisor-only withdrawal,
+server-derived revised pricing, uncovered pricing grants, scoped rate reads and
+forwarding of durable replay/conflict results. These use command doubles, not a
+PostgreSQL integration claim. The existing price/send route tests stay unchanged.
+The new `ENT-5-chain-actions.spec.ts` is for CI at `mobile-360` and `desktop`, headless
+with at most two workers. Its real synthetic journey covers rejection, replay and
+changed-payload conflict, revision and its replay/conflict, stale approval on screen,
+approve/withdraw racing through the route with a single stored outcome, withdrawal
+replay/conflict, foreign-tenant refusal and unknown job/extra refusal. A separate
+transport fixture always exercises the withdrawal button and server refusal.
+Focused accessibility assertions check visible control names, labels, duplicate IDs,
+44px targets and horizontal overflow; they are not a full WCAG/axe audit.
+
+No migration, fee, role, proceed, duplicate or client-link policy changes. The
+existing approval-chain PostgreSQL suites and both viewport journeys must pass in
+CI; no database or browser execution is possible in this build sandbox. A fresh
+independent RED review at the committed head and green CI remain required.
+
+## Remaining held rules amendment — ENT-5, 4 November 2026
+
+Authority: Ben's 4 November instruction, “Make all the decisions, say yes, and just get it coding”, and the router's Q04/Q06/Q08/Q11/Q16 rulings recorded in `~/.local/share/full-steam/AGENT_CHOICES.md`. This section supersedes the historical holds for those questions above. These are company defaults; changing a default requires a new immutable rule version, never an edit to an existing request snapshot. Ben may reverse these defaults. Synthetic practice only; no live services or release authority is added.
+
+- **Q04:** a person occupies only one step of an extra across request revisions. That person may approve the same slot on a new request revision; they may never occupy another slot. A repeat on the same request/step returns the original durable command result with no second fact, outcome or audit effect. The receipt still binds type, person, request, step, hash, net and rejection reason, and current membership and job grants are checked on replay. Changed content conflicts. Self-approval remains refused. Existing persisted identity is the membership key; no Q13 identity bridge is invented. Rejection also occupies its required slot in subsequent revisions.
+- **Q06:** T and Y belong to the immutable rule version and have no built-in monetary defaults. All example amounts are made-up fixtures. `net > T` and `net > Y` remain independent, including Y < T; equality is not above, and an unpriced extra is above both. Any required client step follows every required company step. This grants no permission to proceed with work.
+- **Q08:** new company-step snapshots default to two working days, counted Monday–Friday in Europe/London at the same local wall-clock time, including clock changes. No external holiday calendar is consulted. A new rule version may specify `waitWorkingDays` (1–260); explicit null selects that version's existing `timeLimitMinutes` override. Existing snapshots without the field retain their elapsed-minute terms. `escalationRole` and `alternateRoles` name the backup roles, still requiring a current grant covering the job. A null escalation role and no alternates means no backup: no escalation fact is created, and the original approver's mandatory item remains waiting and overdue. Original approvers stay eligible. The mandatory queue shows an overdue/backup notice in the app only; no email, outbound message or automatic submission is added. Existing synthetic Graphile discovery/task registration is reused; the live scheduler remains held under Q15.
+- **Q11:** any currently required, eligible approver may reject with a reason. A supervisor, surveyor or commercial manager with a current job-covering grant may withdraw before the outcome is final. Both outcomes are append-only. A revision creates a fresh request; it does not erase the earlier outcome, timing or approval history. Approve/withdraw continue to serialize on the existing job lock and unique outcome key.
+- **Q16:** submission is always a person's explicit `SubmitExtra` command. Logging, pricing, queries, timers and revisions do not automatically submit a logged extra. Revising an already submitted extra retains the existing explicit revision command's new-request behavior.
+
+Q01 (pricing), Q03 (applicable contract), Q14 (exports/authority-loss behavior) and Q15 (live scheduling/execution) remain held. Other unresolved invitation, identity and proceed questions are unchanged. No ENT-5-wide completion or production approval is claimed.
+
+Migrations reserved here: 0930 (cross-revision separation), 0931 (withdrawal and replay authority), 0932 (new snapshot wait terms and existing timer consumers); 0933 (expand-compatible rule validation); 0934 unused. No columns or stored row formats change. Roll forward to correct a routine; do not rewrite immutable snapshots or outcomes. Deployment order is migrations before application code. Existing pin/scanner holds and actual validation are recorded in `docs/verdicts/ENT-5b/BUILDER_RECEIPT.md`.
+
+
+## ENT-5 proceed statement ruling — 4 November 2026
+
+Ben instructed the router to decide and proceed ("Make all the decisions, say yes,
+and just get it coding"). The router's ruling in AGENT_CHOICES.md is that site
+staff may record "proceeding before approval", with a reason, as a fact only.
+This closes only the Q05 proceed hold; all other holds remain unchanged.
+
+`RecordExtraProceed` records one append-only operational statement, with the
+session-derived operative, server time, reason and exact priced request/revision.
+It uses the sibling reporting authority: a current operative with assigned job
+coverage and site-origin capture entitlement. The strict input accepts no actor,
+tenant, clock, amount, requirement or approval. Current authority is checked on
+replay too. Supervisors may read history through their existing covered-job grant.
+Only a current priced, undecided request accepts a new statement; stale/unpriced
+requests are refused. A retry is bound to its complete original input.
+
+The statement never approves, fills or skips a step, changes a requirement, or
+feeds pricing, billing or exports. The extra screen shows its immutable history.
+Where the bound snapshot explicitly requires client approval before work, the
+existing client breach projection includes this statement as a reported breach,
+including without a visit-derived time. It does not invent an exact work time.
+Later approval, a revision or a visit change cannot erase the earlier statement
+or breach. Held T/Y composition stays uncertain; no new requirement is inferred.
+
+Synthetic data only. Migration 0905 adds a side table without changing predecessor
+row shapes. Forward-fix only: preserve statements; disable the route if needed.
+No provider call, new alert or production release is introduced.

@@ -4,6 +4,8 @@ import { instantV1 } from "./receipt-allocation.js";
 import { freezeShadow, shadowId } from "./shadow-domain/types.js";
 import { measureShadowPilot, ShadowPilotMeasurementError, shadowPilotMeasurementV1 } from "./shadow-pilot-measurement.js";
 
+import { shadowPilotFinancialRecordV1, shadowPilotFinancialHash, shadowPilotFinancialCounts } from "./shadow-pilot-financial-record.js";
+
 const ref = z.string().regex(/^synthetic:[a-z0-9_.-]+$/u).max(150);
 const binding = { tenantId: shadowId, jobId: shadowId, lockId: shadowId };
 // This new fixture contract uses millisecond precision so Date.parse compares exactly.
@@ -19,13 +21,15 @@ export const shadowPilotReportInputV1 = z.object({
   reveal: z.object({ ...binding, id: ref, revealedAt: reportInstant }).strict().nullable(),
   fairness: z.array(fairnessResponse).max(10_000).nullable(),
   harm: z.array(harmObservation).max(10_000).nullable(),
-  // Complete immutable fixture assertion: gross action counts, never net of reversals.
-  financialEffects: z.object({ accruals: z.literal(0), invoices: z.literal(0), collections: z.literal(0) }).strict(),
+  financialRecord: shadowPilotFinancialRecordV1,
 }).strict();
 
 export class ShadowPilotReportError extends Error {
   readonly code = "INVALID_PILOT_REPORT";
-  constructor() { super("INVALID_PILOT_REPORT"); this.name = "ShadowPilotReportError"; }
+  constructor(readonly financialSources: readonly unknown[] = []) {
+    super("INVALID_PILOT_REPORT");
+    this.name = "ShadowPilotReportError";
+  }
 }
 function invalid(): never { throw new ShadowPilotReportError(); }
 function observations<T extends { id: string; tenantId: string; jobId: string; lockId: string }>(
@@ -52,6 +56,13 @@ export function generateShadowPilotReport(raw: unknown, access: Parameters<typeo
   const parsed = shadowPilotReportInputV1.safeParse(raw);
   if (!parsed.success) invalid();
   const input = parsed.data, usage = measureShadowPilot(input.measurement, access);
+  const { sourceHash, ...financial } = input.financialRecord;
+  if (financial.tenantId !== usage.tenantId || !financial.jobIds.includes(usage.jobId)
+    || new Set(financial.jobIds).size !== financial.jobIds.length
+    || [...financial.jobIds].sort().join() !== financial.jobIds.join()
+    || shadowPilotFinancialHash(financial) !== sourceHash
+    || financial.sources.some(row => !financial.jobIds.includes(row.jobId))) invalid();
+  if (financial.sources.length) throw new ShadowPilotReportError(financial.sources);
   const fairness = observations(input.fairness, input.measurement), harm = observations(input.harm, input.measurement);
   const reveal = input.reveal;
   if (reveal && (reveal.tenantId !== usage.tenantId || reveal.jobId !== usage.jobId || reveal.lockId !== usage.lockId)) invalid();
@@ -73,7 +84,7 @@ export function generateShadowPilotReport(raw: unknown, access: Parameters<typeo
     harmFromWithholding: metric("harmFromWithholding", harm?.length ? harm.map(row => ({ observationId: row.id, harmObserved: row.harmObserved })) : null,
       "List distinct explicit synthetic withholding-harm observations, including explicit negative observations; absent observations never mean no harm."),
     missing, notCollected: ["randomised hidden-versus-shown trial (requires approved D13 scope and human observations)"],
-    effects: input.financialEffects, releaseApproval: false,
+    effects: shadowPilotFinancialCounts(input.financialRecord), financialRecord: input.financialRecord, releaseApproval: false,
     reviewRequirement: "Report review required before G4-S; this report is evidence for decisions, not an approval.",
   });
 }

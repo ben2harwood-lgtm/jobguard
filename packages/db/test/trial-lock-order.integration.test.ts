@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { FreeFirstJobLifecycleRepository } from "../src/free-first-job-lifecycle-repository.js";
-import { createWorkFixture, closeWorkFixture, meterCompany, verifyBusiness, workTenant, type WorkFixture } from "./free-first-job-admission-fixtures.js";
+import { createWorkFixture, closeWorkFixture, meterCompany, verifyBusiness, requestCard, workTenant, type WorkFixture } from "./free-first-job-admission-fixtures.js";
+import { seedWorkJob } from "./job-work-state-fixtures.js";
 import { activateMeterJob } from "./meter-journey-fixtures.js";
 import { exactTarget } from "./free-first-job-lifecycle-fixtures.js";
 import { historicalAgreement } from "./subscription-persistence-fixtures.js";
@@ -101,4 +102,38 @@ describe("lock-order-418 trial versus MON-1 admission (real PostgreSQL)", () => 
    await meter.query("ROLLBACK"); meter.release(); await pending;
   }
  });
+ it("concurrent trial-path activations cannot exceed Solo's six-place cap enforced by the live-source trigger", async () => {
+  const a = await meterCompany(f); await verifyBusiness(f, a); await historicalAgreement(f, a, "Solo");
+  const repo = new FreeFirstJobLifecycleRepository(f.runtime);
+  const prepare = async (jobId: string) => {
+   // Large, distinct customer/site fixtures: none can share a place or use the small-job allowance.
+   await exactTarget(f, { ...a, jobId }, true);
+   return { version: "trial-switch-live.v1", commandId: randomUUID(), jobId,
+    ...(await repo.read(a.context, a.digest, jobId)).target };
+  };
+  const activate = (input: Awaited<ReturnType<typeof prepare>>) => repo.activate(a.context, a.digest, a.actorId, input);
+  await activate(await prepare(a.jobId));
+  const card = randomUUID(); await requestCard(f, a, card);
+  await workTenant(f.runtime, a.tenantId, db => db.query("SELECT app.mon3_simulate_card($1,$2,$3,'{\"version\":\"trial-card-simulate.v1\"}')", [a.tenantId, a.digest, card]));
+  for (let n = 0; n < 4; n++) {
+   const job = await seedWorkJob(f, a.tenantId); await activate(await prepare(job.jobId));
+  }
+  const inputs = [];
+  for (let n = 0; n < 2; n++) {
+   const job = await seedWorkJob(f, a.tenantId); inputs.push(await prepare(job.jobId));
+  }
+  const results = await Promise.allSettled(inputs.map(activate));
+  expect(results.filter(r => r.status === "fulfilled")).toHaveLength(1);
+  expect(results.filter(r => r.status === "rejected").map(r => (r as PromiseRejectedResult).reason.message))
+   .toEqual(["METER_UPGRADE_REQUIRED"]);
+  expect((await f.admin.query(`SELECT count(*)::int n FROM app.job_activation_terms
+   WHERE tenant_id=$1 AND NOT small_job`, [a.tenantId])).rows).toEqual([{ n: 6 }]);
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.trial_admission WHERE tenant_id=$1", [a.tenantId])).rows).toEqual([{ n: 6 }]);
+  const loser = inputs[results.findIndex(r => r.status === "rejected")]!;
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [a.tenantId, loser.commandId])).rows).toEqual([{ n: 0 }]);
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.job_activation WHERE tenant_id=$1 AND job_id=$2", [a.tenantId, loser.jobId])).rows).toEqual([{ n: 0 }]);
+  // A serial retry also reaches capacity admission, rather than an earlier trial/card gate.
+  await expect(activate(loser)).rejects.toThrow("METER_UPGRADE_REQUIRED");
+ });
+
 });

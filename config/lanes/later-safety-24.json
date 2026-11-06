@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-24": {
+      "branches": [
+        "codex/sandbox/later-safety-24"
+      ],
+      "note": "LATER-SAFETY-24; RED merchant order disclosure, synthetic panel and receipt quantity cap; no migration.",
+      "allow": [
+        "apps/web/app/jobs/[id]/page.tsx",
+        "apps/web/app/lib/merchant-order-server.test.mts",
+        "apps/web/app/lib/merchant-order-server.ts",
+        "apps/web/e2e/M2-2-S.spec.ts",
+        "packages/db/src/supplier-document-repository.ts",
+        "packages/db/test/audit-api-file-supplier-document.test.ts",
+        "packages/db/test/supplier-documents.integration.test.ts"
+      ]
+    }
+  }
+}

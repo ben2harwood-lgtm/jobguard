@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { FakeOpsSink } from "../../config/src/ops-alerts.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { importWatchdogFixtureJob } from "./watchdog-fixtures.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
@@ -366,19 +368,23 @@ describe("commercial outbound pause", () => {
       VALUES($1,$2,$3,$4,$5,'text/plain',100,'standard_evidence','2099-01-01')`,
       [uploadId,TENANT,jobId,`synthetic-pause/${uploadId}`,hash("Synthetic evidence")]));
     const evidence = (await admin.query("SELECT * FROM app.evidence_upload WHERE id=$1", [uploadId])).rows;
+    const auditBefore = (await admin.query("SELECT * FROM app.audit_event ORDER BY tenant_id,sequence")).rows;
     const pause = randomUUID(), request = randomUUID(), approval = randomUUID();
     let revision = (await operatorA.query("SELECT revision FROM outbound_control.state")).rows[0].revision;
     const paused = await command(operatorA, pause, "pause", revision);
     expect(await command(operatorA, pause, "pause", revision)).toBe(paused);
     await expect(command(operatorA, pause, "pause", paused)).rejects.toThrow("OUTBOUND_IDEMPOTENCY_CONFLICT");
     const deliver = vi.fn(async () => ({ kind: "succeeded" as const, providerReference: "synthetic:pause" }));
-    const executor = new ActionExecutor(runtime, new Map([["fake_capture", adapter(deliver)]]), telemetry);
+    const sink = new FakeOpsSink(JSON.parse(readFileSync(new URL("../../../config/ops-alerts.v1.json", import.meta.url), "utf8")));
+    const executor = new ActionExecutor(runtime, new Map([["fake_capture", adapter(deliver)]]), sink.outboxTelemetry());
     try {
       await executor.execute(context, action.id);
       await executor.execute(context, action.id);
       expect(deliver).not.toHaveBeenCalled();
       expect((await admin.query("SELECT * FROM app.action_outbox WHERE id=$1", [action.id])).rows).toEqual(before);
       expect((await admin.query("SELECT * FROM app.evidence_upload WHERE id=$1", [uploadId])).rows).toEqual(evidence);
+      expect((await admin.query("SELECT * FROM app.audit_event ORDER BY tenant_id,sequence")).rows).toEqual(auditBefore);
+      expect(sink.records).toEqual([]);
       expect((await admin.query("SELECT count(*)::int n FROM app.action_attempt WHERE action_id=$1", [action.id])).rows[0].n).toBe(0);
       // A business runtime cannot unpause via routine, direct SQL, role or GUC.
       await expect(command(runtime, randomUUID(), "approve_resume", paused, request)).rejects.toMatchObject({ code: "42501" });
@@ -392,6 +398,19 @@ describe("commercial outbound pause", () => {
       await expect(command(operatorA, approval, "approve_resume", requested, request)).rejects.toThrow("OUTBOUND_SECOND_PERSON_REQUIRED");
       await expect(command(operatorB, randomUUID(), "approve_resume", requested, randomUUID())).rejects.toThrow("OUTBOUND_SECOND_PERSON_REQUIRED");
       await expect(command(operatorB, approval, "approve_resume", paused, request)).rejects.toThrow("OUTBOUND_STALE_REVISION");
+      await expect(command(operatorB, approval, "approve_resume", requested, request)).rejects.toThrow("OUTBOUND_RECONCILIATION_REQUIRED");
+      const receipt = randomUUID();
+      await expect(runtime.query("SELECT outbound_control.record_reconciliation($1,$2)", [request, receipt])).rejects.toMatchObject({code:"42501"});
+      await operatorA.query("SELECT outbound_control.record_reconciliation($1,$2)", [request, receipt]);
+      await operatorA.query("SELECT outbound_control.record_reconciliation($1,$2)", [request, receipt]);
+      await expect(operatorA.query("SELECT outbound_control.record_reconciliation($1,$2)", [request, randomUUID()])).rejects.toThrow("OUTBOUND_RECONCILIATION_CONFLICT");
+      await expect(operatorB.query("SELECT outbound_control.record_reconciliation($1,$2)", [request, receipt])).rejects.toThrow("OUTBOUND_RECONCILIATION_CONFLICT");
+      expect((await operatorA.query("SELECT request_id,receipt_id,actor FROM outbound_control.reconciliation WHERE request_id=$1", [request])).rows).toEqual([
+        {request_id:request,receipt_id:receipt,actor:"outbound_operator_a"},
+      ]);
+      await expect(runtime.query("SELECT * FROM outbound_control.reconciliation")).rejects.toMatchObject({code:"42501"});
+      await expect(operatorA.query("UPDATE outbound_control.reconciliation SET receipt_id=$1 WHERE request_id=$2", [randomUUID(),request])).rejects.toMatchObject({code:"42501"});
+      await expect(operatorA.query("DELETE FROM outbound_control.reconciliation")).rejects.toMatchObject({code:"42501"});
       revision = await command(operatorB, approval, "approve_resume", requested, request);
       expect(await command(operatorB, approval, "approve_resume", requested, request)).toBe(revision);
       expect((await operatorA.query("SELECT operation,actor FROM outbound_control.event WHERE command_id=ANY($1::uuid[]) ORDER BY result_revision", [[pause,request,approval]])).rows).toEqual([
@@ -409,6 +428,7 @@ describe("commercial outbound pause", () => {
       if (state.paused) {
         const cleanup = randomUUID();
         const requested = await command(operatorA, cleanup, "request_resume", state.revision);
+        await operatorA.query("SELECT outbound_control.record_reconciliation($1,$2)", [cleanup, randomUUID()]);
         await command(operatorB, randomUUID(), "approve_resume", requested, cleanup);
       }
     }
@@ -434,10 +454,14 @@ it("a later pause permanently supersedes an earlier resume approval request", as
   revision = await cmd(operatorA,"pause",revision);
   const oldRequest = randomUUID();
   revision = (await operatorA.query("SELECT outbound_control.command($1,'request_resume',$2) revision", [oldRequest,revision])).rows[0].revision;
+  await operatorA.query("SELECT outbound_control.record_reconciliation($1,$2)", [oldRequest, randomUUID()]);
   revision = await cmd(operatorA,"pause",revision);
+  await expect(operatorA.query("SELECT outbound_control.record_reconciliation($1,$2)", [oldRequest, randomUUID()])).rejects.toThrow("OUTBOUND_STALE_RECONCILIATION");
   await expect(cmd(operatorB,"approve_resume",revision,oldRequest)).rejects.toThrow("OUTBOUND_SECOND_PERSON_REQUIRED");
   const newRequest = randomUUID();
   revision = (await operatorA.query("SELECT outbound_control.command($1,'request_resume',$2) revision", [newRequest,revision])).rows[0].revision;
+  await expect(cmd(operatorB,"approve_resume",revision,newRequest)).rejects.toThrow("OUTBOUND_RECONCILIATION_REQUIRED");
+  await operatorA.query("SELECT outbound_control.record_reconciliation($1,$2)", [newRequest, randomUUID()]);
   await cmd(operatorB,"approve_resume",revision,newRequest);
 });
 
@@ -460,5 +484,6 @@ it("pause serializes with an already open claim and a failed lock attempt has no
   const paused = (await operatorA.query("SELECT outbound_control.command($1,'pause',$2) revision", [id,revision])).rows[0].revision;
   const request = randomUUID();
   const requested = (await operatorA.query("SELECT outbound_control.command($1,'request_resume',$2) revision", [request,paused])).rows[0].revision;
+  await operatorA.query("SELECT outbound_control.record_reconciliation($1,$2)", [request, randomUUID()]);
   await operatorB.query("SELECT outbound_control.command($1,'approve_resume',$2,$3)", [randomUUID(),requested,request]);
 });

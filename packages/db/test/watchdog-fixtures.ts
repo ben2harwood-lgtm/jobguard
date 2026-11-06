@@ -1,10 +1,14 @@
 import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
-import { AdoptInFlightJobMutation, UserCommandDispatcher, withTenant } from "../src/index.js";
+import type { VerifiedTenantContext } from "../src/index.js";
 
 /** Minimal synthetic M1-17 command fixture. Never inserts/updates job status. */
-export async function importWatchdogFixtureJob(admin: Pool, tenantId: string, jobId: string, title = "Fictional watchdog job", lifecyclePoint: "live" | "invoiced" = "live") {
+export async function importWatchdogFixtureJob(admin: Pool, tenantId: string, jobId: string, title = "Fictional watchdog job", lifecyclePoint: "live" | "invoiced" = "live",
+  loaded?: { db: typeof import("../src/index.js"); context: VerifiedTenantContext }) {
+  // Browser fixtures supply their native ESM module/context so Playwright never loads the source gateway.
+  const { AdoptInFlightJobMutation, UserCommandDispatcher, withTenant } = loaded?.db ?? await import("../src/index.js");
+  const context = loaded?.context ?? testTenantContext(tenantId);
   const userId = randomUUID(), accountId = randomUUID(), membershipId = randomUUID();
   await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [userId]);
   await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Synthetic watchdog fixture')", [accountId, tenantId]);

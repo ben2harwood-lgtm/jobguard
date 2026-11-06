@@ -89,7 +89,7 @@ export class EnterpriseIdentityRepository {
       const connections=(await db.$client.query<{metadata:SsoView['connections'][number]}>("SELECT metadata FROM identity.sso_connection ORDER BY created_at,id")).rows.map(({metadata})=>({id:metadata.id,idpEntityId:metadata.idpEntityId,spEntityId:metadata.spEntityId,callbackUrl:metadata.callbackUrl,sessionLimitSeconds:metadata.sessionLimitSeconds}));
       const domains=(await db.$client.query<SsoView['domains'][number]>("SELECT connection_id,domain FROM identity.verified_domain ORDER BY domain")).rows;
       const mappings=(await db.$client.query<SsoView['mappings'][number]>("SELECT DISTINCT ON(connection_id,idp_group) connection_id,idp_group,revision,role,scope_kind,scope_id,enabled FROM identity.idp_group_role_mapping ORDER BY connection_id,idp_group,revision DESC")).rows;
-      const events=(await db.$client.query<SsoView['events'][number]>("SELECT * FROM identity.sso_admin_events($1,$2)",[sessionDigest,context.tenantId])).rows;
+      const events=(await db.$client.query<SsoView['events'][number]>("SELECT * FROM identity.sso_admin_events($1,$2) WHERE event_type <> 'sso.emergency.notices'",[sessionDigest,context.tenantId])).rows;
       return {version:"sso-admin-view.v1",environment:"synthetic_demo",tenantId:context.tenantId,connections,domains,mappings,events};
     }, "identity-sso");
   }

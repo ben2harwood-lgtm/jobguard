@@ -1267,6 +1267,44 @@ Adds `recovery_timeline_run` and `recovery_timeline_signal`, owned by `jobguard_
 
 Expand-only forward fix: disable the unregistered synthetic runtime if necessary; retain both history tables and apply a new migration to repair defects. Do not drop history or edit this migration after merge. Populated predecessor/privilege preservation is covered by the SERIOUS-B5 upgrade suite; real PostgreSQL behavior is covered in recovery-follow-up.integration.test.ts and tenancy/catalogue checks. These are CI gates, not locally executed PostgreSQL evidence.
 
+## M4-17 report catch-up — availability and reference queue (RED, dark)
+
+The availability migration is already on main as `0571_money_trail_reconciliation.sql`;
+the reference queue migration is already on main as
+`0572_financial_reconciliation_queue.sql`. Both retain their original SQL bytes.
+Main's `0512_simulation_money_trail_run.sql` remains unchanged: its simulation-run
+routine does not define either of these two entry points. No existing routine is
+re-created, and no main migration is edited. The two matching migration proof
+files carry exact additive LP-0, upgrade and tenancy expectations; the protected
+baseline lists stay unchanged.
+
+`0572_financial_reconciliation_queue.sql` adds the five private, forced-RLS, immutable reference queue tables, their
+indexes/policies and the finance-session checked queue routine. It adds no money
+posting or external execution. No historical data is backfilled. Forward fix:
+disable the reference path and append a reviewed migration while retaining all
+run/proposal/approval history. PostgreSQL fresh/upgrade, RLS and privilege checks
+remain CI evidence requirements; local unit tests do not establish them.
+
+## Batch-10 migration order (RED, sixth small group)
+
+Incoming main at `f78c81684` already contains `0552_commercial_outbound_pause.sql`
+and byte-identical SQL for `0571_money_trail_reconciliation.sql` and
+`0572_financial_reconciliation_queue.sql`. Keep main's migrations and corrected
+proof fragments once; archived duplicate branch copies are not installed again.
+The remaining batch migrations follow main's 0580 consecutively. Only filename
+stems and exact references change; SQL behavior is preserved:
+
+- `0571_money_trail_reconciliation.sql`: dependency availability read.
+- `0572_financial_reconciliation_queue.sql`: private reference queue.
+- `0581_restore_reconciliation.sql`: extends the existing outbound pause control with independently recorded reconciliation before resume.
+- `0582_dark_ais.sql`: isolated synthetic AIS observations; no live rail.
+- `0583_success_fee_production_safety.sql`: extends main's latest `0537_fee_invalid_proof_reduction.sql` writer with independent derivation and posting guards, preserving reversal-netted caps, strictly negative invalid-proof compensation and existing command/audit authority.
+
+Each has its matching proof fragment in `test/migration-proofs/`. New empty app
+tables are registered in `test/later-empty-tables.ts`. No main migration is
+changed. No backfill or production enablement. Retain history and forward-fix
+with an additive migration; keep external execution disabled during restore.
+PostgreSQL fresh/upgrade, privilege/RLS and restore proofs remain CI gates.
 ### 0572_financial_reconciliation_queue — M4-17 reference queue (RED)
 
 Adds five initially empty, append-only, FORCE-RLS financial reconciliation tables
@@ -1281,3 +1319,25 @@ settlement. Audit delegates through the current `app.ef_audit` to
 Forward fix only: retain run, difference, proposal, approval and command history.
 The committed proof and queue upgrade/integration tests require real PostgreSQL
 in CI. No live provider, scheduler or production capability is enabled.
+
+## 0631 — legacy recovery money integrity (MIGFIX-6; M4-8-S / CH-7)
+
+Adds validated `landing_allocation_eligible_within_gross` and replaces only the latest
+0356 legacy v1 approval/reversal bodies. Reversals subtract all prior reversals and
+use the approval routine's settled-plan-credit predicate. Database-mode refusals,
+ownership, grants, row shapes, v3, issued-line allocation and F18 interest are preserved.
+Existing invalid rows abort migration rather than rewriting history. Forward-fix only:
+retain immutable money history and use linked compensation under review; do not roll
+back to the faulty formula. PostgreSQL upgrade/fresh-install proof and RED review
+are landing gates, not established by the source guards.
+
+### 0632 — MIGFIX-7 recovered group disclosure (SV-2 / SV-3, RED)
+
+`0632_shadow_group_disclosure.sql` replaces the current disclosure routine,
+adds an ungranted coalescence trigger, and preserves the latest checked-audit
+early-firing executor while aligning its lock order. No columns, table grants,
+new commercial authority, post-lock completion or historical backfill. The proof
+lists exact routine/trigger changes; integration and own-step upgrade coverage
+require real PostgreSQL CI. Forward fix only: retain all disclosure, exclusion,
+firing and audit history; disable detection/support execution if rollback is
+needed, then apply a separately reviewed corrective migration.

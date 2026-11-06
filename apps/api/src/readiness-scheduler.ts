@@ -97,8 +97,14 @@ export class DarkReadinessScheduler {
     const calendar = await readHolidays(this.adapters, plan.jurisdiction, now);
     if (calendar.state === "known" && digest(calendar.value) !== task.calendarHash) return "calendar_changed";
     const weather = await readWeather(this.adapters, { scope: plan.scope, date: plan.plannedDate }, now);
+    const predecessors = [...plan.predecessors];
+    for (const edge of plan.edges) {
+      if (edge.taskId === plan.scope.taskId && !predecessors.some(fact => fact.taskId === edge.dependsOnTaskId)) {
+        predecessors.push({ taskId: edge.dependsOnTaskId, complete: "unknown" });
+      }
+    }
     const result = evaluateReadiness({ version: "readiness-input.v1", taskId: plan.scope.taskId, taskRevision: plan.factRevision, ruleRevision: plan.ruleRevision,
-      predecessors: plan.predecessors, material: plan.material, access: plan.access, crew: plan.crew, evaluatedAt: now,
+      predecessors, material: plan.material, access: plan.access, crew: plan.crew, evaluatedAt: now,
       weather: weather.state === "known" ? { suitable: weather.value.suitable, observedAt: weather.value.observedAt, staleAfterMinutes: (Date.parse(weather.value.expiresAt) - Date.parse(weather.value.observedAt)) / 60_000, synthetic: true, adapterRevision: weather.value.revision } : null,
       ...(plan.labourRatePence === undefined ? {} : { labourRatePence: plan.labourRatePence }),
       ...(plan.uncertainDurationHours === undefined ? {} : { uncertainDurationHours: plan.uncertainDurationHours }),

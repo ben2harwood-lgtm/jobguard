@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { MAX_MONEY_PENCE, moneyFromBigInt } from "./money.js";
 import { multiplyRatio } from "./rational.js";
-import { vatTreatmentFixtureBookV1, reconcileVatTreatmentFixtures } from "./vat-treatments.js";
-import { retentionBookV1, reconcileRetentionBook } from "./retention-balances.js";
+import { vatTreatmentFixtureBookV1, reconcileVatRetentionFixtures, VatTreatmentError } from "./vat-treatments.js";
+import { retentionBookV1 } from "./retention-balances.js";
 
 export const CIS_ENABLED = false as const;
 export const CIS_FIXTURE_LABEL = "fixture, awaiting adviser approval" as const;
@@ -79,11 +79,18 @@ function sources(book: CisFixtureBook) {
     }
     if (verification.validFrom > verification.validThrough) fail("STALE_VERIFICATION", "Invalid explicit fixture validity interval");
   }
-  const vat = reconcileVatTreatmentFixtures(book.vatBook), retention = reconcileRetentionBook(book.retentionBook);
-  const latest = vat.documents[vat.documents.length - 1]!;
-  if (latest.cumulative.retained.pence !== retention.remaining.netPence
-    || latest.cumulative.retainedVat.pence !== retention.remaining.taxPence) fail("VALUE_LIMIT", "VAT and retention balances do not reconcile");
-  return vat;
+  for (const [index, verification] of book.verifications.entries()) {
+    if (book.verifications.slice(index + 1).some(other => other.status !== verification.status
+      && other.validFrom <= verification.validThrough && verification.validFrom <= other.validThrough)) {
+      fail("INVALID_LINEAGE", "Conflicting CIS statuses have overlapping validity for the same parties");
+    }
+  }
+  try {
+    return reconcileVatRetentionFixtures(book.vatBook, book.retentionBook);
+  } catch (error) {
+    if (error instanceof VatTreatmentError && error.code === "VALUE_LIMIT") fail("VALUE_LIMIT", error.message);
+    throw error;
+  }
 }
 
 /** Pure cumulative fictional statements; no status lookup, evidence verification, posting or issue. */
@@ -118,11 +125,8 @@ export function reconcileCisFixtures(input: unknown) {
     const source = vat.documents[vatIndex];
     const profile = book.retentionBook.records.find(item => item.version === "retention.profile.v1" && item.id === current.retentionProfileId);
     if (!source || !profile || source.source.retentionProfileId !== profile.id || vatIndex < previousVatIndex
-      || source.source.documentDate > current.documentDate) fail("MISSING_SOURCE", "Missing, future or out-of-order VAT/retention source");
-    if (source.source.retentionReleaseId !== null && !book.retentionBook.records.some(item =>
-      item.version === "retention.release.v1" && item.id === source.source.retentionReleaseId)) {
-      fail("MISSING_SOURCE", "VAT release requires its M4-20 release record");
-    }
+      || source.source.documentDate > current.documentDate
+      || vat.documents.slice(vatIndex + 1).some(item => item.source.documentDate <= current.documentDate)) fail("MISSING_SOURCE", "Missing, future or out-of-order VAT/retention source");
     const net = BigInt(current.cumulativePaidNetPence), materials = BigInt(current.cumulativeDirectMaterialsPence);
     const paidVat = BigInt(current.cumulativePaidVatPence), base = net - materials;
     if (materials > net || net > BigInt(source.cumulative.net.pence) - BigInt(source.cumulative.retained.pence)
