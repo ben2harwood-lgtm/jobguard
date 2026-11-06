@@ -141,6 +141,7 @@
     "supertest": "7.1.1",
     "tsx": "4.20.3",
     "typescript": "5.8.3",
-    "vitest": "4.1.12"
+    "vitest": "4.1.12",
+    "@jobguard/mobile": "workspace:*"
   }
 }

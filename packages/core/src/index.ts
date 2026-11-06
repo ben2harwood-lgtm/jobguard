@@ -192,3 +192,5 @@ export * from "./recurring-extras.js";
 export * from "./extra-proceed.js";
 export * from "./merchant-reliability.js";
 export * from "./rate-baseline.js";
+export * from "./operative-view-models.js";
+export * from "./offline-upload-contract.js";
