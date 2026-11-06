@@ -6,7 +6,7 @@ import { randomUUID } from "node:crypto";
 import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { bootstrapSyntheticDemo, finalizeMeterLifecycleOwnership, SYNTHETIC_DATABASE_NAME } from "../src/demo-bootstrap.js";
-import { DEMO_TENANT_ID, demoCheckpoints } from "../src/demo-seed.js";
+import { DEMO_ACCOUNT_ID, DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID, demoCheckpoints } from "../src/demo-seed.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
 import { MIGRATION_URLS } from "../src/migrate.js";
 
@@ -93,6 +93,7 @@ describe("bootstrap SQL trace (no PostgreSQL proof)", () => {
       if (sql.includes("SELECT pg_get_userbyid(proowner) AS owner")) return { rowCount: 1, rows: [{ owner: "jobguard_migration" }] };
       if (sql === "SELECT current_user") return { rowCount: 1, rows: [{ current_user: "synthetic_owner" }] };
       if (sql.includes("SELECT 1 FROM public.jobguard_schema_migration")) return { rowCount: 1, rows: [{}] };
+      if (sql.startsWith("SELECT 1 FROM app.account WHERE tenant_id=$1 AND id=$2")) return { rowCount: 1, rows: [{}] };
       if (sql.includes("count(*)::int count")) return { rowCount: 1, rows: [{ count: 45 }] };
       return { rowCount: sql.startsWith("SELECT") ? 0 : 1, rows: [] };
     } } as unknown as PoolClient;
@@ -379,5 +380,26 @@ describe("synthetic Vercel/Neon bootstrap", () => {
     await expect(bootstrapSyntheticDemo({ ownerUrl, runtimeUrl })).rejects.toMatchObject({ code: "DEMO_BOOTSTRAP_TARGET_FORBIDDEN" });
     process.env.JOBGUARD_ENV = "synthetic_demo";
     await expect(bootstrapSyntheticDemo({ ownerUrl: ownerUrl.replace(SYNTHETIC_DATABASE_NAME, "postgres"), runtimeUrl })).rejects.toMatchObject({ code: "DEMO_BOOTSTRAP_TARGET_FORBIDDEN" });
+  });
+  // Re-run on a database first seeded in September 2026, when the demo tenant was d1500000-...-0015: the demo
+  // account id is already taken by that older tenant, so ON CONFLICT DO NOTHING skips the account silently.
+  // Runs last: it rewrites the seeded rows into that older shape as the superuser.
+  it("refuses, in plain words, a re-run where the demo account id belongs to an older demo tenant", async () => {
+    process.env.JOBGUARD_ENV = "synthetic_demo";
+    const superuser = new Pool({ host: "127.0.0.1", port, user: "postgres", password, database: SYNTHETIC_DATABASE_NAME });
+    try {
+      const stale = "d1500000-0000-4000-8000-000000000015";
+      const c = await superuser.connect();
+      try {
+        await c.query("BEGIN"); await c.query("SET LOCAL session_replication_role = replica");
+        await c.query("INSERT INTO control_plane.tenant(id) VALUES($1) ON CONFLICT DO NOTHING", [stale]);
+        await c.query("UPDATE app.account SET tenant_id=$1 WHERE id=$2", [stale, DEMO_ACCOUNT_ID]);
+        await c.query("UPDATE app.membership SET tenant_id=$1 WHERE tenant_id=$2 AND id=$3", [stale, DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID]);
+        await c.query("COMMIT");
+      } finally { c.release(); }
+      await expect(bootstrapSyntheticDemo({ ownerUrl, runtimeUrl })).rejects.toMatchObject({
+        code: "DEMO_BOOTSTRAP_TARGET_FORBIDDEN", message: expect.stringContaining("older demo tenant"),
+      });
+    } finally { await superuser.end(); }
   });
 });

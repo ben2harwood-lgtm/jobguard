@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-17": {
+      "branches": [
+        "codex/sandbox/later-safety-17"
+      ],
+      "note": "LATER-SAFETY-17, RED: synthetic v1 reversal money rules only; PR landing reconciliation.",
+      "allow": [
+        "packages/db/migrations/0793_synthetic_reversal_money_rules.sql",
+        "packages/db/migration-notes/0793_synthetic_reversal_money_rules.md",
+        "packages/db/test/migration-proofs/0793_synthetic_reversal_money_rules.proof.json",
+        "packages/db/migrations/0654_synthetic_reversal_money_rules.sql",
+        "packages/db/migration-notes/0654_synthetic_reversal_money_rules.md",
+        "packages/db/test/migration-proofs/0654_synthetic_reversal_money_rules.proof.json",
+        "packages/db/test/recovery.integration.test.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts"
+      ]
+    }
+  }
+}

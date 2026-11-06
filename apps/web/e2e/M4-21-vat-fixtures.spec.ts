@@ -90,7 +90,8 @@ test("stored VAT documents: explicit facts, refusal, uncertain replay and reload
     const headers = { cookie: `jobguard_session=${token}`, origin: baseURL!, "x-csrf-token": session.csrfToken, "x-tenant-id": verified.tenantId };
     const conflict = await page.request.post(path, { headers, data: { ...original, book: { ...original.book, customerReference: "changed" } } });
     expect(conflict.status()).toBe(409); expect((await conflict.json()).message).toContain("fixed fields");
-    const saved = await new VatFixtureRepository(runtime).read(verified, job.id);
+    const owner = await identity.provider.findMembership(await identity.principal(token), verified.tenantId);
+    const saved = await new VatFixtureRepository(runtime).read(verified, owner!.id, job.id);
     expect(saved.records).toHaveLength(1); expect(saved.records[0]!.input.commandId).toBe(original.commandId);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
     for (const control of await page.locator("main input, main select, main button").all()) {

@@ -14,7 +14,7 @@ const command={version:"sso-required-command.v1",requested_tenant_id:tenant,requ
 function fixture(mode:"synthetic_demo"|"pilot_no_charge"|"production"|undefined="synthetic_demo") {
  const auth=new PersistedAuthProvider(new IdentityRepository({} as Pool),"s".repeat(40)),repo=new SsoRequiredRepository(auth.repository.pool);
  const app=new SsoRequiredApplication(auth,repo,origin,mode as never),credentials={sessionToken:"t".repeat(43),csrfToken:"c".repeat(32),origin};
- vi.spyOn(app.provider,"authenticate").mockResolvedValue({sessionId:randomUUID(),identityUserId:user,csrfToken:credentials.csrfToken});
+ vi.spyOn(app.provider,"authenticate").mockResolvedValue({sessionId:randomUUID(),identityUserId:user,csrfToken:credentials.csrfToken,sessionCredential:"a".repeat(64)});
  vi.spyOn(app.provider,"findMembership").mockResolvedValue({id:member,identityUserId:user,tenantId:tenant,role:"owner",email:"owner@fixture.invalid"});
  vi.spyOn(repo.enterprise,"sessionScope").mockResolvedValue({tenantId:tenant,membershipId:member,connectionId:connection});
  const read=vi.spyOn(repo,"detail").mockResolvedValue(detail),refusal=vi.spyOn(repo,"refusal").mockResolvedValue(undefined);

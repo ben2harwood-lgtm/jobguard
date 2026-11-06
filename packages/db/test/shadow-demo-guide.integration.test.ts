@@ -23,6 +23,62 @@ beforeAll(async () => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); f = await 
 afterAll(async () => { await closeFinalCheckFixture(f); vi.unstubAllEnvs(); });
 
 describe("0518 demo-only guide helpers", () => {
+ it("0650 never stores the demo sign-in path or secret, including legacy path callers", async () => {
+  const a = await guide.locked(), secret = Buffer.from(randomUUID() + randomUUID()).toString("base64url").slice(0, 43);
+  const l = link(a, a.customer, secret);
+  const issued = await issue(a, a.customer, a.digest, l.digest, l.path);
+  expect(issued).toHaveProperty("ok");
+  const rows = (await f.admin.query("SELECT o.* FROM app.customer_portal_grant g JOIN app.action_outbox o ON(o.tenant_id,o.id)=(g.tenant_id,g.outbox_id) WHERE g.tenant_id=$1 AND g.id=$2", [a.tenantId, issued.ok!.result])).rows;
+  expect(rows).toHaveLength(1);
+  expect(JSON.stringify(rows)).not.toContain("/customer/sign-in#");
+  expect(JSON.stringify(rows)).not.toContain(secret);
+  const content = `customer-signin-redacted.v1:${hash(l.path)}`;
+  expect(rows[0]).toMatchObject({ immutable_content: content, content_hash: hash(content) });
+ }, 600000);
+ it("0650 returns the requested link directly while storing an independent reference and matching authorization hash", async () => {
+  const a = await guide.locked();
+  const { ShadowDemoGuideApplication } = await import("../../../apps/api/src/shadow-demo-guide.application.js");
+  const result = await new ShadowDemoGuideApplication(f.runtime, a.sessionId, "synthetic_demo").issueCustomerLink(a.jobId, { version: "shadow-guide-customer-link.v1", customerId: a.customer }, hash);
+  expect(result).toMatchObject({ version: "shadow-guide-customer-link-issued.v1", delivery: "simulated_delivery", realExternalActions: 0 });
+  expect(result.path).toMatch(new RegExp(`^/customer/sign-in#${a.tenantId}/${a.jobId}/${a.customer}/[A-Za-z0-9_-]{43}$`));
+  const secret = result.path.split("/").at(-1)!;
+  const rows = (await f.admin.query("SELECT o.*,a.content_hash authorization_hash,g.token_digest FROM app.customer_portal_grant g JOIN app.action_outbox o ON(o.tenant_id,o.id)=(g.tenant_id,g.outbox_id) JOIN app.action_authorization a ON(a.tenant_id,a.id)=(o.tenant_id,o.authorization_id) WHERE g.tenant_id=$1 AND g.job_id=$2", [a.tenantId, a.jobId])).rows;
+  expect(rows).toHaveLength(1);
+  expect(rows[0].immutable_content).toMatch(new RegExp(`^customer-signin-reference\\.v1:${a.tenantId}/${a.jobId}/${a.customer}/[A-Za-z0-9_-]{43}$`));
+  expect(rows[0]).toMatchObject({ content_hash: hash(rows[0].immutable_content), authorization_hash: hash(rows[0].immutable_content), token_digest: hash(`customer-link:${secret}`) });
+  expect(JSON.stringify(rows)).not.toContain("/customer/sign-in#");
+  expect(JSON.stringify(rows)).not.toContain(secret);
+ }, 600000);
+ it("0650 redacts historical demo rows, revokes their grants and appends the 0533 security audit events once", async () => {
+  const a = await guide.locked(), l = link(a, a.customer);
+  const predecessor = await readFile(new URL("../migrations/0518_shadow_demo_guide.sql", import.meta.url), "utf8");
+  const migration = await readFile(new URL("../migrations/0650_demo_customer_link_reference.sql", import.meta.url), "utf8");
+  const original = predecessor.slice(predecessor.indexOf("CREATE FUNCTION app.demo_issue_customer_link("), predecessor.indexOf("ALTER FUNCTION app.demo_issue_customer_link")).replace("CREATE FUNCTION", "CREATE OR REPLACE FUNCTION");
+  let grant: string;
+  try {
+   // Recreate the actual predecessor writer, rather than manufacturing a plaintext outbox row.
+   await f.admin.query(original);
+   const issued = await issue(a, a.customer, a.digest, l.digest, l.path);
+   expect(issued).toHaveProperty("ok");
+   grant = issued.ok!.result;
+   expect((await f.admin.query("SELECT o.immutable_content FROM app.customer_portal_grant g JOIN app.action_outbox o ON(o.tenant_id,o.id)=(g.tenant_id,g.outbox_id) WHERE g.tenant_id=$1 AND g.id=$2", [a.tenantId, grant])).rows[0].immutable_content).toBe(l.path);
+  } finally { await f.admin.query(migration); }
+  const content = `customer-signin-redacted.v1:${hash(l.path)}`;
+  const stored = (await f.admin.query("SELECT o.*,g.revoked_at FROM app.customer_portal_grant g JOIN app.action_outbox o ON(o.tenant_id,o.id)=(g.tenant_id,g.outbox_id) WHERE g.tenant_id=$1 AND g.id=$2", [a.tenantId, grant!])).rows[0];
+  expect(stored).toMatchObject({ immutable_content: content, content_hash: hash(content), status: "cancelled", revoked_at: expect.any(Date) });
+  expect(JSON.stringify(stored)).not.toContain(l.path);
+  expect(JSON.stringify(stored)).not.toContain(l.path.split("/").at(-1)!);
+  const events = async () => (await f.admin.query("SELECT event_type,subject_ref,payload FROM app.audit_event WHERE tenant_id=$1 AND ((event_type='action_outbox.redacted' AND subject_ref=$2) OR (event_type='customer_portal.redacted' AND subject_ref=$3)) ORDER BY sequence", [a.tenantId, stored.id, grant!])).rows;
+  const history = await events();
+  expect(history).toHaveLength(2);
+  expect(history[0]).toMatchObject({ event_type: "action_outbox.redacted", subject_ref: stored.id, payload: {
+   references: { outboxId: stored.id }, hashes: { originalContentHash: hash(l.path), redactedContentHash: hash(content) }, classifications: { action: "security" }
+  } });
+  expect(history[1].event_type).toBe("customer_portal.redacted");
+  expect(JSON.stringify(history)).not.toContain(l.path);
+  await f.admin.query(migration);
+  expect(await events()).toEqual(history);
+ }, 600000);
  it("the migration is applied once and listed", async () => {
   expect((await f.admin.query("SELECT count(*)::int n FROM public.jobguard_schema_migration WHERE migration_name='0518_shadow_demo_guide.sql'")).rows[0].n).toBe(1);
   expect(await readFile(new URL("./migration-proofs/legacy-migrations.json", import.meta.url), "utf8")).toContain("0518_shadow_demo_guide.sql");

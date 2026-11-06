@@ -8,7 +8,7 @@ const own = ["packages/core/src/enterprise-dashboard.ts", "packages/core/src/ent
 it("[E9-27 E9-34] advisory/read modules import only pure readers and the tenant/session boundary; no writer, provider, outbox or privileged client", async () => {
   const allowed: Record<string, string[]> = {
     core: ["zod", "./money.js", "./evidence-pack.js", "./receipt-allocation.js", "./enterprise-domain/contracts.js", "./enterprise-dashboard.js", "./contractor-billing.js", "./cumulative-fee.js", "./rational.js"],
-    db: ["pg", "zod", "@jobguard/core", "./tenant-context.js", "./enterprise-dashboard-queries.js", "./enterprise-dashboard-signals.js"],
+    db: ["pg", "zod", "@jobguard/core", "./tenant-context.js", "./request-binding-error.js", "./enterprise-dashboard-queries.js", "./enterprise-dashboard-signals.js"],
     api: ["pg", "zod", "@jobguard/core", "@jobguard/db"],
   };
   for (const path of own) {
