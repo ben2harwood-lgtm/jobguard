@@ -93,7 +93,10 @@ export class PurchaseOrderActionRepository {
     if (!session.success) throw new InvalidTenantContextError();
     try { return await withTenant(this.pool, context, async db => {
       await lockOrder(db, context.tenantId, input.jobId);
-      const resolved = (await db.$client.query("SELECT app.order_attestation_actor($1,$2) AS actor_id",
+      // A practice session resolves its fixed owner membership through the existing practice bridge; a company session uses 1203.
+      const practice = (await db.$client.query(`SELECT a.membership_id FROM app.authenticate_practice_session($1,$2) a JOIN app.membership m ON (m.tenant_id,m.id)=($2,a.membership_id)
+        WHERE m.role='owner' AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp())`, [session.data.sessionDigest, context.tenantId])).rows[0]?.membership_id;
+      const resolved = practice ?? (await db.$client.query("SELECT app.order_attestation_actor($1,$2) AS actor_id",
         [context.tenantId, session.data.sessionDigest])).rows[0]?.actor_id;
       if (!uuid.safeParse(resolved).success) throw new PurchaseOrderActionError("ORDER_ACTION_INVALID");
       const actorMembershipId = resolved as string;

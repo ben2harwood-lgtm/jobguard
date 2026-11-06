@@ -8,6 +8,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { authenticatePracticeSession, DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID, DEMO_IDENTITY_USER_ID,
   issuePracticeSession, migrate, practiceMaterialPool } from "../src/index.js";
 import { MaterialApplication } from "../../../apps/api/src/material.application.js";
+import { MerchantOrderApplication } from "../../../apps/api/src/merchant-order.application.js";
 import { PurchaseOrderApplication } from "../../../apps/api/src/purchase-order.application.js";
 import { PurchaseOrderActionRepository } from "../src/purchase-order-action-repository.js";
 import { FakeMerchantOrderPort } from "../src/purchase-order-action.js";
@@ -84,7 +85,7 @@ async function fixture(pack = false) {
       subjectType: "purchase_order", subjectRef: order.id, action: { actionType: "purchase_order.simulate", recipient,
         contentHash: order.authorityHash, aggregateRevision: order.revision, amountPence: order.orderNetPence,
         currency: "GBP", policyVersion: "synthetic-po.v1", expiresAt: "2099-01-01T00:00:00Z" } } });
-  return { job, materials, orders, input, rate, command, day, auth, saved };
+  return { job, materials, orders, input, rate, command, day, auth, saved, token };
 }
 
 async function effects(tenantId = DEMO_TENANT_ID) {
@@ -97,6 +98,55 @@ async function effects(tenantId = DEMO_TENANT_ID) {
 }
 
 describe("purchase-order audit with authenticated applications and PostgreSQL", () => {
+  async function practiceManual() {
+    const f = await fixture(), revision = await f.orders.revise(f.job, f.input);
+    const request = { version: "merchant-order-screen.v1", kind: "manual", revisionId: revision.id,
+      commandId: randomUUID(), supplierReference: `synthetic-${randomUUID()}` };
+    return { ...f, request, application: new MerchantOrderApplication(runtime, f.token) };
+  }
+  it("records and replays the practice owner's own manual placement", async () => {
+    const f = await practiceManual();
+    const fact = await f.application.execute(f.job, f.request);
+    expect(fact).toMatchObject({ fact: "owner_attestation", providerConfirmed: false, realExternalActions: 0 });
+    const attestationId = (fact as { attestationId: string }).attestationId;
+    expect((await admin.query("SELECT actor_membership_id FROM app.purchase_order_manual_attestation WHERE id=$1", [attestationId])).rows)
+      .toEqual([{ actor_membership_id: f.auth.membershipId }]);
+    const before = await effects();
+    expect(await f.application.execute(f.job, f.request)).toEqual(fact);
+    expect(await effects()).toEqual(before);
+  });
+  it("refuses a practice session whose membership is no longer an owner", async () => {
+    const f = await practiceManual(), before = await effects();
+    await admin.query("UPDATE app.membership SET role='admin' WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, f.auth.membershipId]);
+    try {
+      const repo = new PurchaseOrderActionRepository(practiceMaterialPool(runtime, f.auth.digest));
+      const { kind: _kind, ...request } = f.request;
+      await expect(repo.attestManual(f.auth.context, { ...request, version: "manual-order-attestation.v1", jobId: f.job },
+        { sessionDigest: f.auth.digest })).rejects.toThrow();
+      await expect(f.application.execute(f.job, f.request)).rejects.toThrow();
+      expect(await effects()).toEqual(before);
+    } finally {
+      await admin.query("UPDATE app.membership SET role='owner' WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, f.auth.membershipId]);
+    }
+  });
+  it("refuses a practice digest used for another tenant's order", async () => {
+    const f = await practiceManual(), company = await darkFixture();
+    const before = await effects(company.auth.context.tenantId), practiceBefore = await effects();
+    const repo = new PurchaseOrderActionRepository(practiceMaterialPool(runtime, f.auth.digest));
+    await expect(repo.attestManual(company.auth.context, company.manual, { sessionDigest: f.auth.digest })).rejects.toThrow();
+    await expect(f.application.execute(company.job, { ...f.request, revisionId: company.revision.id })).rejects.toThrow();
+    expect(await effects(company.auth.context.tenantId)).toEqual(before);
+    expect(await effects()).toEqual(practiceBefore);
+  });
+  it("refuses another practice session's job even in the same tenant", async () => {
+    const f = await practiceManual(), other = await practiceManual(), before = await effects();
+    await expect(f.application.execute(other.job, other.request)).rejects.toThrow("NOT_FOUND");
+    const repo = new PurchaseOrderActionRepository(practiceMaterialPool(runtime, f.auth.digest));
+    const { kind: _kind, ...request } = other.request;
+    await expect(repo.attestManual(f.auth.context, { ...request, version: "manual-order-attestation.v1", jobId: other.job },
+      { sessionDigest: f.auth.digest })).rejects.toThrow();
+    expect(await effects()).toEqual(before);
+  });
   it("normalizes box agreement before purchase-order comparison", async () => {
     const f = await fixture(true);
     await f.orders.revise(f.job, f.input);

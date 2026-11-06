@@ -36,6 +36,7 @@ function fixture() {
     if (sql === "COMMIT") { active = false; return result(); }
     if (sql.startsWith("SAVEPOINT ") || sql.startsWith("RELEASE SAVEPOINT ") || sql.startsWith("ROLLBACK TO SAVEPOINT ")) return result();
     if (sql.includes("require_watchdog_live") && liveFailure) throw liveFailure;
+    if (sql.startsWith("SELECT a.membership_id FROM app.authenticate_practice_session(")) return result([]);
     if (sql.startsWith("SELECT app.order_attestation_actor(")) {
       if (!owner || ![actor.sessionDigest, "b".repeat(64), "d".repeat(64)].includes(values[1])) throw new Error("ORDER_ACTION_INVALID");
       return result([{ actor_id: values[1] === "b".repeat(64) ? otherMember : member }]);
