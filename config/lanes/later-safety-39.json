@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-39": {
+      "branches": [
+        "codex/sandbox/later-safety-39"
+      ],
+      "allow": [
+        "apps/web/app/lib/merchant-order-server.test.mts",
+        "apps/web/app/lib/merchant-order-server.ts"
+      ]
+    }
+  }
+}
