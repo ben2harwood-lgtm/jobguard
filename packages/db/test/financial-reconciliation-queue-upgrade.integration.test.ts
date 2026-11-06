@@ -22,6 +22,13 @@ it("adds only its tables and one runtime routine while preserving populated hist
   expect(catalog).toEqual({relrowsecurity:true,relforcerowsecurity:true,owner:'jobguard_migration',runtime:false,infrastructure:false});
  }
  expect((await c.admin.query("SELECT prosecdef,proconfig,pg_get_userbyid(proowner) owner,has_function_privilege('jobguard_runtime',oid,'EXECUTE') runtime,has_function_privilege('jobguard_infrastructure',oid,'EXECUTE') infrastructure,EXISTS(SELECT 1 FROM aclexplode(proacl) WHERE grantee=0) public FROM pg_proc WHERE oid='app.financial_reconciliation_queue(uuid,uuid,jsonb)'::regprocedure")).rows).toEqual([{prosecdef:true,proconfig:['search_path=pg_catalog'],owner:'jobguard_migration',runtime:true,infrastructure:false,public:false}]);
+ // 0642 changes only this registry row's permission; retain every other byte.
+ const successorProof = structuredClone(proof);
+ const registry = successorProof["app.command_type_registry"]!;
+ const clientKey = Object.keys(registry.rows).find(key => JSON.parse(key).command_type === "IssueClientApproval")!;
+ const clientRow = JSON.parse(registry.rows[clientKey]!);
+ expect(clientRow.permission_rule).toBe("owner");
+ registry.rows[clientKey] = JSON.stringify({ ...clientRow, permission_rule: "contractor" });
  await migrate(c.admin);await migrate(c.admin);
- expect(await proofDifferences(c.admin,proof)).toEqual({rows:[],types:[]});
+ expect(await proofDifferences(c.admin,successorProof)).toEqual({rows:[],types:[]});
 });

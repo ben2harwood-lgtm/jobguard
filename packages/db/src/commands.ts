@@ -84,7 +84,11 @@ export class UserCommandDispatcher {
     const command = binding ? { ...parsed, semanticKey: parsed.semanticKey.replace(/:lp3=[a-f0-9]{64}$/u, "") + `:lp3=${binding}` } : parsed;
     if (command.semanticKey.length > 300) throw new CommandError("COMMAND_CONFLICT");
     return withTenant(this.pool, context, async database => {
-      await requireOwner(database, context.tenantId, command.actorMembershipId);
+      if (command.commandType === "IssueClientApproval") {
+        const allowed = (await database.$client.query<{ allowed: boolean }>(
+          "SELECT app.xc_send_authority($1,$2) allowed", [command.actorMembershipId, command.subjectRef])).rows[0]?.allowed;
+        if (!allowed) throw new CommandError("FORBIDDEN");
+      } else await requireOwner(database, context.tenantId, command.actorMembershipId);
       await handler.lock?.(database, command);
       const resource = { tenantId: context.tenantId, actorMembershipId: command.actorMembershipId, subjectType: command.subjectType, subjectRef: command.subjectRef };
       const claimed = (await database.$client.query(`SELECT app.begin_command($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7::jsonb) result`,

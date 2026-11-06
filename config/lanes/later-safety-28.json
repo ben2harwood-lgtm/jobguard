@@ -6,10 +6,16 @@
         "codex/sandbox/later-safety-28"
       ],
       "allow": [
+        "apps/api/src/fee-collection/executor.ts",
         "apps/api/src/fee-collection/postgres-reservation-store.test.ts",
+        "apps/api/src/fee-collection/postgres-reservation-store.ts",
+        "packages/db/migration-notes/0790_fee_result_forward_only.md",
         "packages/db/migration-notes/0799_fee_result_malformed_proof.md",
+        "packages/db/migrations/0790_fee_result_forward_only.sql",
         "packages/db/migrations/0799_fee_result_malformed_proof.sql",
+        "packages/db/test/fee-reservation-archive-upgrade.integration.test.ts",
         "packages/db/test/fee-reservation.integration.test.ts",
+        "packages/db/test/migration-proofs/0790_fee_result_forward_only.proof.json",
         "packages/db/test/migration-proofs/0799_fee_result_malformed_proof.proof.json"
       ]
     }

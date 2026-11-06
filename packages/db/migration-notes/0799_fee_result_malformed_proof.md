@@ -1,3 +1,37 @@
+# READY — LATER-SAFETY-28 landing catch-up (6 November 2026)
+
+RED. Working files resolve the pending merge of main at 3f4fc1e95. Router must
+stage the six resolved paths and finish the merge because .git is read-only here.
+This handoff supersedes the historical ancestry/lane holds below. No Git write ran.
+
+Main's migrations are all byte-identical. Main's latest three-argument routine is
+0619_fee_store_authority.sql. Comparing its complete body to 0790 shows only the
+inherited forward-payment checks, signed event-key checks and event audit additions;
+no main lines are removed (apart from CREATE becoming CREATE OR REPLACE). Comparing
+0790 to 0799 shows only the two invalid_text_representation handlers. No new
+behaviour was added during this catch-up. Main's exact empty-table list already
+contains this group's fixture-key row and both newly merged rows, so it is retained
+unchanged. The lane now lists exactly all 11 changed paths from merged main outside
+config/lanes, including inherited later-safety-14 files, and excludes itself.
+The merged FEE-STORE-AUTHORITY receipt and all attack assertions are preserved.
+
+Local checks using installed binaries, at most two Vitest workers and three named
+files per run:
+- apps/api: vitest run --maxWorkers=2 src/fee-collection/postgres-reservation-store.test.ts src/fee-collection/executor.test.ts src/fee-collection/fake-gocardless.test.ts — 118 passed.
+- packages/db: vitest run --maxWorkers=2 test/migration-proof-loader.test.ts test/lp-0-catalog.test.ts — 108 passed.
+- Root: tsc -p apps/api/tsconfig.json --noEmit and tsc -p packages/db/tsconfig.json --noEmit — passed.
+- packages/db: vitest list --maxWorkers=2 test/fee-reservation.integration.test.ts test/fee-reservation-archive-upgrade.integration.test.ts — 36 cases collected only.
+- Money arithmetic, commercial boundary and PL/pgSQL CASE-in-IF lint — passed.
+- Main migration byte comparison, exact lane membership and whitespace checks — passed.
+
+CI must execute PostgreSQL/migration and all required suites after router push;
+independent RED review must bind the final exact head. Database/browser execution
+was not performed in this sandbox. No provider, real data, release or deployment.
+The initial simplification observation remains in the inherited authority receipt;
+no repeat review or new reporting machinery is introduced.
+
+## Historical piece evidence
+
 # LATER-SAFETY-28 — RED malformed synthetic fee proofs
 
 0799 recreates the latest three-argument app.replace_fee_reservation_book body from 0790. The only body changes wrap each v_payload::jsonb cast in an invalid_text_representation handler and raise SQLSTATE 23514 with the existing path-specific refusal: authenticated fee result required, or authenticated fee event required. All other checks, signatures, grants, owners, RLS, table shapes and stored data remain identical. The explicit lp0, upgrade and tenancy proof sections are empty because no tracked catalog attributes or rows change. A source comparison verified exact predecessor-body preservation outside those two exception blocks.
