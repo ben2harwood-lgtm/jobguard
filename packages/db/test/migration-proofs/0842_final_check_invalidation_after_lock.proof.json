@@ -1,0 +1,6 @@
+{
+  "migration": "0842_final_check_invalidation_after_lock.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}
