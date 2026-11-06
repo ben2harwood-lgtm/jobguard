@@ -31,6 +31,45 @@ JobSource.customer_message classification remain. No new alert is required.
 Forward-fix only: retain customer/member separation and correct the caller; do
 not restore sponsor impersonation or enable argument-only identity.
 
+## Security pre-check repair round 1 — READY
+
+Applied the sole blocking finding in
+`~/.local/share/full-steam/coordinator/prechecks/lp-6d-customer-proof.md`:
+rebuilt `app.evidence_pack_v3_ordinary` from 0375's latest body, restoring its
+exact `jobguard_catch` filter and retaining only the customer-message union.
+Read-only inspection of `origin/main` at `46f0be7ea` confirms 0375 is its latest
+definition; its file is byte-identical here. The local `main` ref is older.
+The full function diff against that latest definition contains only the union.
+The new regression assertion compares the entire body after removing exactly
+one customer union with 0375, so omitting the catch filter fails independently
+of the upgrade test's migration-derived expectation. Existing refusals remain.
+
+Repair checks actually run, using installed binaries without package downloads:
+
+- From `packages/db`, `./node_modules/.bin/vitest run --maxWorkers=1
+  test/lp6d-customer-binding.test.ts test/migration-proof-loader.test.ts
+  test/lp6d-routines.test.ts`: **91 passed**, three files, Vitest 4.1.12.
+- From `packages/db`, `./node_modules/.bin/tsc -p tsconfig.json --noEmit`:
+  passed for typecheck and passed again for lint (both package scripts use it).
+- `node tools/plpgsql-case-in-if-lint.mjs`,
+  `node tools/money-arithmetic-lint.mjs`,
+  `node tools/commercial-boundary-lint.mjs`, and `git diff --check`: passed.
+- Read-only comparison against `cdd4e3282` confirms all 14 non-lane paths
+  exactly match the existing lane; the lane does not list itself.
+
+The initial `pnpm --filter` unit/type/lint invocations stalled without executing
+the checks and were interrupted; the installed package binaries above supplied
+the actual results. No PostgreSQL or browser was started, no Git-writing command
+was run, no earlier migration or grant changed, and no proof rows were rewritten.
+No new complexity or separate simplification finding is introduced by this repair.
+
+CI must still prove fresh/populated upgrade SQL execution, catalogue/ACL/RLS and
+owner posture, customer-message replay/refusal/expiry/revocation/isolation,
+ordinary evidence-pack exclusion of uncited catches and inclusion of customer
+sources, all mandatory DB suites, the customer browser journey and normal full
+checks. Exact-head independent RED review and serial LP-chain catch-up and
+renumbering remain router gates; they were not performed here.
+
 ## Actual local checks
 
 Installed dependencies only, at most two concurrent processes, one Vitest worker,

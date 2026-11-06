@@ -51,6 +51,14 @@ it("preserves member read authorization and adds customer evidence to every sour
   expect(body("app.evidence_pack_v3_ordinary")).toContain("app.customer_portal_message_record");
 });
 
+it("preserves the latest evidence-pack catch-origin filter with only the customer source union added", () => {
+  const previous = read("../migrations/0375_evidence_pack_v3_activation.sql").match(/CREATE OR REPLACE FUNCTION app\.evidence_pack_v3_ordinary\([\s\S]*?\$\$(.*?)\$\$;/s)![1]!;
+  const addition = " UNION ALL\n SELECT 'customer_portal_message_record:'||r.id::text sid,r.source_received_at ts,(to_jsonb(r)-'bytes')||jsonb_build_object('originalBytesBase64',encode(r.bytes,'base64')) body FROM app.customer_portal_message_record r WHERE r.tenant_id=t AND r.job_id=rc.job_id\n";
+  const current = body("app.evidence_pack_v3_ordinary");
+  expect(current.split(addition)).toHaveLength(2);
+  expect(current.replace(addition, "")).toBe(previous);
+});
+
 it("loads migration 1000 with strict proof identities and complete review paths", async () => {
   expect(loadMigrationProofs().proofs.filter(p => p.migration === "1000_lp6d_customer_binding.sql")).toHaveLength(1);
   const { inventory } = await loadReviewedInventory();

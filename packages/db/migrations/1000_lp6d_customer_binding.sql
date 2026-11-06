@@ -212,7 +212,7 @@ CREATE OR REPLACE FUNCTION app.evidence_pack_v3_ordinary(t uuid,c uuid) RETURNS 
  UNION ALL SELECT 'purchase_order_revision:'||r.id::text,r.created_at,to_jsonb(r) FROM app.purchase_order_revision r WHERE r.tenant_id=t AND r.job_id=rc.job_id
  UNION ALL SELECT 'final_account_revision:'||r.id::text,r.created_at,to_jsonb(r) FROM app.final_account_revision r WHERE r.tenant_id=t AND r.job_id=rc.job_id
  UNION ALL SELECT 'final_account_line:'||r.id::text,rc.created_at,to_jsonb(r) FROM app.final_account_line r WHERE r.tenant_id=t AND r.job_id=rc.job_id
- UNION ALL SELECT 'extra_origin:'||r.variation_id::text,rc.created_at,to_jsonb(r) FROM app.extra_origin r WHERE r.tenant_id=t AND r.job_id=rc.job_id
+ UNION ALL SELECT 'extra_origin:'||r.variation_id::text,rc.created_at,to_jsonb(r) FROM app.extra_origin r WHERE r.tenant_id=t AND r.job_id=rc.job_id AND (r.kind<>'jobguard_catch' OR EXISTS(SELECT 1 FROM app.variation_revision vr WHERE vr.tenant_id=t AND vr.job_id=rc.job_id AND vr.variation_id=r.variation_id AND rc.source_refs ? ('revision:'||vr.id::text) AND rc.source_refs ? ('variation:'||r.variation_id::text)))
  UNION ALL SELECT 'evidence_invalidation:'||r.id::text,r.invalidated_at,to_jsonb(r) FROM app.evidence_invalidation r
  WHERE r.tenant_id=t AND EXISTS(SELECT 1 FROM app.evidence_object e WHERE e.tenant_id=t AND e.job_id=rc.job_id AND e.id=r.evidence_id)
  ) x WHERE rc.tenant_id=t AND rc.id=c
