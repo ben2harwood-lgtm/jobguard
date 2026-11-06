@@ -12,7 +12,7 @@ afterEach(() => vi.unstubAllEnvs());
 
 // Transaction protocol double. PostgreSQL constraints, RLS and actual predicates
 // have separate integration tests; this suite does not claim PostgreSQL evidence.
-function fixture() {
+function fixture(claimsEnabled = true) {
   vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
   const tenant = randomUUID(), job = randomUUID(), revision = randomUUID(), member = randomUUID(), draft = randomUUID();
   const orderRow = { id: revision, draft_id: draft, revision: 1, authority_hash: "a".repeat(64), quantity_decimal: "10", unit_price_pence: 2500,
@@ -25,10 +25,10 @@ function fixture() {
   let current = true, locked = false, owner = true;
   const query = vi.fn(async (sql: string, values: any[] = []) => {
     const result = (rows: any[] = [], rowCount = rows.length) => ({ rows, rowCount });
-    if (sql === "SELECT outbound_control.claims_enabled() AS enabled") return result([{ enabled: true }]);
     if (sql === "BEGIN") { snapshot = structuredClone(state); active = true; return result(); }
     if (sql === "ROLLBACK") { state = snapshot; active = false; return result(); }
     if (sql === "COMMIT") { active = false; return result(); }
+    if (sql === "SELECT outbound_control.claims_enabled() AS enabled") return result([{ enabled: claimsEnabled }]);
     if (sql.includes("set_config") || sql.includes("pg_advisory_xact_lock") || sql.includes("require_watchdog_live")) return result();
     if (sql.startsWith("SELECT 1 FROM app.final_account_lock")) return result(locked ? [{}] : []);
     if (sql.startsWith("SELECT r.id,r.draft_id")) return result(current && values[0] === tenant && values[1] === job && values[2] === revision ? [{ ...orderRow }] : []);
@@ -117,6 +117,14 @@ function fixture() {
 }
 
 describe("M2-1 dark exact approved merchant action", () => {
+  it("keeps an approved order pending while commercial outbound claims are paused", async () => {
+    const f = fixture(false), queued = await f.repo.approve(f.context, f.scope, await f.command());
+    await f.executor.execute(f.context, queued.outboxActionId);
+    expect(f.state().effects[0].status).toBe("pending");
+    expect(f.state().attempts).toHaveLength(0);
+    expect(f.deliver).not.toHaveBeenCalled();
+    expect(f.port.placedCount).toBe(0);
+  });
   it("binds cited merchant, rate, item and delivery details; unknown availability and prevention stay fee-free", async () => {
     const f = fixture(), view = await f.repo.preview(f.context, f.scope);
     expect(view).toMatchObject({ stock: "unknown", leadTime: "unknown", realExternalActions: 0,

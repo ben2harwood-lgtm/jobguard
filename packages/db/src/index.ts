@@ -170,6 +170,8 @@ export * from "./mobile-auth-store.js";
 export { FixtureSpeechAudioReader, SpeechAudioError } from "./speech-audio.js";
 export * from "./purchase-order-action.js";
 export * from "./purchase-order-action-repository.js";
+export * from "./merchant-intake-port.js";
+export * from "./supplier-line-correction-repository.js";
 export * from "./evidence-bundle.js";
 export * from "./evidence-bundle-sources.js";
 export * from "./practice-photo-observation.js";
@@ -212,3 +214,5 @@ export * from "./direct-debit-fixture-repository.js";
 
 export { InterimDraftRepository, InterimDraftRepositoryError } from "./interim-draft-repository.js";
 export * from "./extra-duplicate-candidates.js";
+
+export * from "./extra-proceed.js";
