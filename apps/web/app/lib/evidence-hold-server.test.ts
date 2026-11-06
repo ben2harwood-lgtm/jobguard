@@ -89,3 +89,14 @@ describe("session-only evidence hold transport", () => {
     expect((await (await GET(new Request("https://holds.invalid"), params)).json()).items[0]).toMatchObject({ message: "Hold released", held: false });
   });
 });
+
+it.each([["WORM_REFUSED", 403], ["WORM_UNCONFIRMED", 503], ["WORM_REPLAY_CONFLICT", 409]] as const)(
+  "LATER-SAFETY-26 maps %s to %s without internal detail", async (code, status) => {
+    const error = new WormCommandError(code); error.message = "SELECT secret_key FROM private";
+    f.submit.mockRejectedValueOnce(error);
+    const response = await POST(req(), params);
+    expect(response.status).toBe(status);
+    const body = await response.json();
+    expect(JSON.stringify(body)).not.toMatch(/SELECT|secret_key|private/);
+    if (status === 503) expect(body).toEqual({ code: "UNAVAILABLE", message: "The server could not confirm this request. Retry the same request." });
+  });

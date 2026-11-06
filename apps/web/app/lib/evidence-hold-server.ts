@@ -60,7 +60,7 @@ export async function evidenceHoldResponse(request: Request, jobId: string, muta
     if (error instanceof HoldFailure) return NextResponse.json({ code: error.code, message: error.message }, { status: error.status, headers });
     if (error instanceof SyntaxError) return NextResponse.json({ code: "INVALID_INPUT", message: "The hold request is invalid." }, { status: 400, headers });
     if (error instanceof ContractorError && error.code === "UNAUTHENTICATED") return NextResponse.json({ code: error.code, message: "Sign in to synthetic practice first." }, { status: 401, headers });
-    if (error instanceof WormCommandError) {
+    if (error instanceof WormCommandError && error.code !== "WORM_UNCONFIRMED") {
       const conflict = error.code === "WORM_REPLAY_CONFLICT";
       return NextResponse.json({ code: error.code, message: conflict ? "This request key was already used for different content." : "Request refused. An active owner must request a hold; a different person must release an applied hold. An existing hold or release request must be resolved first." }, { status: conflict ? 409 : 403, headers });
     }
