@@ -7,7 +7,9 @@
       ],
       "allow": [
         "packages/db/migrations/0831_sync_checkpoint_synthetic_guard.sql",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
         "packages/db/test/migration-proofs/0831_sync_checkpoint_synthetic_guard.proof.json",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
         "packages/db/test/sync-snapshot.integration.test.ts"
       ]
     }

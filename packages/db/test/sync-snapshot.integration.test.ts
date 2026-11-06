@@ -56,7 +56,8 @@ describe("M3-3 durable checkpoint SQL", () => {
   it("refuses synthetic checkpoint writes in a differently named database after a fresh migration", async () => {
     const database = "jobguard_sync_checkpoint_guard";
     await admin.query(`CREATE DATABASE ${database}`);
-    guardAdmin = new Pool({ ...admin.options, database });
+    // pg hides the password from Pool.options, so state it when reusing the options.
+    guardAdmin = new Pool({ ...admin.options, password: "synthetic-only", database });
     await migrate(guardAdmin); // Fresh install of all migrations, including the new guard.
     expect((await guardAdmin.query("SELECT current_database() AS name")).rows[0].name).toBe(database);
     await guardAdmin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [a]);
@@ -64,7 +65,7 @@ describe("M3-3 durable checkpoint SQL", () => {
     await guardAdmin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Synthetic guard fixture')", [id(20), a]);
     await guardAdmin.query(`INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)
       VALUES($1,$2,$3,$4,'owner')`, [id(22), a, id(20), user]);
-    guardRuntime = new Pool({ ...runtime.options, database });
+    guardRuntime = new Pool({ ...runtime.options, password: "synthetic-runtime", database });
     // Valid tenant, active member and synthetic environment: only the database name differs.
     await expect(withTenant(guardRuntime, testTenantContext(a), db => advance(db.$client)))
       .rejects.toThrow("SYNC_CHECKPOINT_INVALID");
