@@ -9,7 +9,7 @@ export class ContractorController {
  private readonly application:ContractorApplication;
  constructor(pool:Pool) {this.application=new ContractorApplication(pool);}
  private async call(work:()=>Promise<unknown>) {try{return await work();}catch(error){throw new HttpException({code:(error as {code?:string}).code??"DATABASE_UNAVAILABLE"},contractorHttpStatus(error));}}
- private origin(origin?:string) {if(origin!=="http://localhost:3000") throw new HttpException({code:"FORBIDDEN"},403);}
+ private origin(origin?:string) {const allowed=(process.env.JOBGUARD_ALLOWED_ORIGINS??"http://localhost:3000").split(",").map(v=>v.trim());if(!origin||!allowed.includes(origin)) throw new HttpException({code:"FORBIDDEN"},403);}
  @Post("practice") @ApiOperation({summary:"Generate an isolated synthetic contractor organisation; no sends or charges"})
  start(@Headers("cookie")cookie:string|undefined,@Headers("origin")origin:string|undefined,@Body()body:unknown) {this.origin(origin);return this.call(()=>this.application.start(principal(cookie),body));}
  @Get() @ApiOperation({summary:"Read contractor organisation or scoped immutable client contracts"})
