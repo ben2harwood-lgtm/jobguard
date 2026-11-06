@@ -1,3 +1,32 @@
+# READY — LATER-SAFETY-28-CATCHUP / PR #611 (6 November 2026)
+
+RED. Catch-up against origin/main `2857cf49397623baa7fed60ce9c93f7f0378cd4d` preserves main's complete
+0655 emergency-token assertions and this piece's complete 0656 fee-result pin.
+The migfix-7 replacement list retains all entries in migration order. No new
+behaviour, other test changes or migration renumbering in this catch-up.
+All 320 main migrations are byte-identical; 0656 is unchanged from this branch's
+pre-merge HEAD. The lane still lists exactly all seven changed paths outside
+config/lanes/, excluding itself. No conflict markers remain in working files.
+The read-only Git index still records the conflict; the router must stage the
+resolved file and complete the merge. No Git writes were run here.
+
+Current local checks (installed binaries, at most two Vitest workers per run):
+- API postgres-reservation-store.test.ts: 17 tests passed.
+- DB migration-proof-loader.test.ts and lp-0-catalog.test.ts: 108 tests passed.
+- DB TypeScript: `../../node_modules/.bin/tsc -p tsconfig.json --noEmit` passed.
+- Vitest list --filesOnly found fee-reservation, migfix-7-upgrade and
+  plan-entitlement-lifecycle-upgrade integration suites; no database execution.
+- Exact lane coverage, main migration byte preservation, migration-order pins,
+  conflict-marker scan, money arithmetic, commercial boundary, PL/pgSQL
+  CASE-in-IF lint and `git diff origin/main --check`: passed.
+- Two pnpm-wrapper invocations stalled and were interrupted; the installed
+  Vitest and TypeScript binaries above completed successfully.
+
+READY is the router handoff. PostgreSQL and browser suites remain for GitHub CI;
+this sandbox cannot start PostgreSQL or bind localhost. Green required CI and
+independent RED review at the final head remain required before merge. Earlier
+checks below are historical evidence and do not establish current-head approval.
+
 # READY — LATER-SAFETY-28 landing union (6 November 2026)
 
 RED. Working files resolve the pending merge of origin/main at
