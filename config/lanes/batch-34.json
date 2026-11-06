@@ -34,11 +34,6 @@
         "packages/db/migrations/0635_extra_withdraw_roles.sql",
         "packages/db/migrations/0636_extra_working_day_wait.sql",
         "packages/db/migrations/0637_extra_rule_wait_schema.sql",
-        "packages/db/migrations/1200_extra_proceed_statement.sql",
-        "packages/db/migrations/1201_extra_same_step.sql",
-        "packages/db/migrations/1202_extra_withdraw_roles.sql",
-        "packages/db/migrations/1203_extra_working_day_wait.sql",
-        "packages/db/migrations/1204_extra_rule_wait_schema.sql",
         "packages/db/src/extra-approval-chain-repository.ts",
         "packages/db/src/extra-approval-timing.ts",
         "packages/db/src/extra-proceed.ts",
@@ -60,14 +55,11 @@
         "packages/db/test/migration-proofs/0635_extra_withdraw_roles.proof.json",
         "packages/db/test/migration-proofs/0636_extra_working_day_wait.proof.json",
         "packages/db/test/migration-proofs/0637_extra_rule_wait_schema.proof.json",
-        "packages/db/test/migration-proofs/1200_extra_proceed_statement.proof.json",
-        "packages/db/test/migration-proofs/1201_extra_same_step.proof.json",
-        "packages/db/test/migration-proofs/1202_extra_withdraw_roles.proof.json",
-        "packages/db/test/migration-proofs/1203_extra_working_day_wait.proof.json",
-        "packages/db/test/migration-proofs/1204_extra_rule_wait_schema.proof.json",
         "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
         "packages/db/test/restore-reconciliation-upgrade.integration.test.ts",
-        "packages/db/test/watchdog.integration.test.ts"
+        "packages/db/test/watchdog.integration.test.ts",
+        "tools/commercial-integrity-boundary.unresolved.json",
+        "tools/commercial-integrity-current-source-guard.unresolved.json"
       ]
     }
   }

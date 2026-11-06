@@ -123,11 +123,13 @@ export class ExtraApprovalRepository {
     let semantic = `extra-step:${i.requestId}:${i.stepIndex}:${member}`;
     try {
       const prior = await withTenant(this.pool, context, async db => (await db.$client.query<{ semantic_key: string }>(
+        // Every receipt for this step (legacy :commandId or current :member keys) shares the
+        // step prefix, so no receipt result is read to choose the key to reuse.
         `SELECT r.semantic_key FROM app.command_receipt r
-         WHERE r.tenant_id=$1 AND r.actor_membership_id=$2 AND r.command_type=$3 AND
-          (r.command_id=$4 OR (r.status='succeeded' AND r.result->>'requestId'=$5 AND r.result->>'stepIndex'=$6))
+         WHERE r.tenant_id=$1 AND r.actor_membership_id=$2 AND r.command_type=$3 AND starts_with(r.semantic_key,$5) AND
+          (r.command_id=$4 OR r.status='succeeded')
          ORDER BY (r.command_id=$4) DESC,r.created_at,r.command_id LIMIT 1`,
-        [context.tenantId, member, type, i.commandId, i.requestId, String(i.stepIndex)])).rows[0]);
+        [context.tenantId, member, type, i.commandId, `extra-step:${i.requestId}:${i.stepIndex}:`])).rows[0]);
       if (prior) semantic = prior.semantic_key;
     } catch (error) { failure(error); }
     return this.run(context, actor, type, i.commandId, semantic, { jobId: i.jobId, requestId: i.requestId, stepIndex: i.stepIndex, hash: i.revisionHash, net: i.netPence, reasonCode }, async (db, _t, m) => {
