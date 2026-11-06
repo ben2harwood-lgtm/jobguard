@@ -26,3 +26,18 @@ export function parseConnectorEnvironment(raw: unknown): ConnectorEnvironment {
   if (!result.success) throw new ConnectorConfigurationError();
   return Object.freeze(result.data);
 }
+
+const machineRegistrationV1 = z.object({
+  JOBGUARD_CONNECTOR_MACHINE: z.literal("synthetic").optional(),
+  JOBGUARD_ENV: z.unknown().optional(),
+});
+
+/** Off by default; reuses the connector's existing synthetic environment gate. */
+export function machineRegistrationEnabled(raw: unknown): boolean {
+  const parsed = machineRegistrationV1.safeParse(raw);
+  if (!parsed.success) throw new ConnectorConfigurationError();
+  if (parsed.data.JOBGUARD_CONNECTOR_MACHINE === undefined) return false;
+  if (!connectorEnvironmentV1.shape.JOBGUARD_ENV.safeParse(parsed.data.JOBGUARD_ENV).success)
+    throw new ConnectorConfigurationError();
+  return true;
+}
