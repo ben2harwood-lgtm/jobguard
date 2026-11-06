@@ -17,10 +17,30 @@ This sandbox cannot run PostgreSQL or browser suites. CI must prove fresh and
 populated upgrade/catalog/grants/RLS checks, contractor billing integration suites
 and ENT-11b unchanged. Independent RED review is required at the exact final head.
 
-0792 is provisional: renumber by filename stem at landing after the stacked
-batch-37 migrations, preserving their effective-state repair. No backfill.
+0792 remains reserved above the current main migration sequence (through 0640).
+Main already includes the 0622 effective-state repair; no copy or replacement of
+that routine is needed. No backfill.
 Recovery is a reviewed forward migration; preserve immutable event/link history.
 
 LATER / SIMPLICITY: contractor-billing-repository.ts read: put this approval
 query behind the existing effective-state function through one narrow read
 routine, so duplicate reversal semantics stay maintained in one place (implemented).
+
+Landing catch-up, 6 November 2026: READY against origin/main
+`9d4677cbd66051cf6e7f2abdea8823593050e72b`. The launcher's merge was
+already committed with no unresolved paths. Diff inspection confirms the only
+production change is the intended reconciliation read plus its new routine;
+main's existing routine bodies and tests are retained. The lane lists all five
+changed paths outside `config/lanes/` and does not list itself.
+
+Local deterministic checks passed:
+- `./node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit`.
+- From `packages/db`: `./node_modules/.bin/vitest run --maxWorkers=1 test/migration-proof-loader.test.ts` (77 tests).
+- `node tools/plpgsql-case-in-if-lint.mjs` (306 migrations).
+- `node tools/migration-renumber.mjs` (no renumber required).
+- Exact lane-versus-diff comparison and `git diff --check origin/main`.
+
+The pnpm wrapper did not start either check promptly and was stopped; the
+installed package binaries above completed successfully without downloading.
+PostgreSQL, browser suites, full CI and independent exact-head RED review remain
+for the router's PR flow; none is claimed as executed here.

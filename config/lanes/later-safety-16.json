@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/later-safety-16"
       ],
-      "note": "LATER-SAFETY-16; RED money alert; stacked on batch-37; NOPR.",
+      "note": "LATER-SAFETY-16; RED money alert; caught up with origin/main through batch-36; NOPR.",
       "allow": [
         "packages/db/src/contractor-billing-repository.ts",
         "packages/db/test/contractor-billing-export.integration.test.ts",
