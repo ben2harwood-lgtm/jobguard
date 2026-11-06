@@ -48,6 +48,7 @@
         "packages/db/src/worm-hold-read.test.ts",
         "packages/db/test/connector-promotion.integration.test.ts",
         "packages/db/test/extra-origin.integration.test.ts",
+        "packages/db/test/extra-proceed-upgrade.integration.test.ts",
         "packages/db/test/later-empty-tables.ts",
         "packages/db/test/migfix-6-upgrade.integration.test.ts",
         "packages/db/test/migfix-7-upgrade.integration.test.ts",
