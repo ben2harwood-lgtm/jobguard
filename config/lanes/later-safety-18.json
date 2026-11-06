@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-18": {
+      "branches": [
+        "codex/sandbox/later-safety-18"
+      ],
+      "note": "LATER-SAFETY-18 RED: typed duplicate-line billability approval refusal. Reconciled with current main; no migration.",
+      "allow": [
+        "apps/web/app/lib/recovery-billability-server.test.ts",
+        "apps/web/app/lib/recovery-billability-server.ts",
+        "docs/contracts/recovery-billability-policy-v1.md",
+        "packages/db/src/recovery-billability-repository.test.ts",
+        "packages/db/src/recovery-billability-repository.ts",
+        "packages/db/test/recovery-billability.integration.test.ts"
+      ]
+    }
+  }
+}
