@@ -84,9 +84,9 @@ it("allows same-job evidence outside the locked manifest and another job's evide
   await expectLocked(a, evidenceId);
 });
 
-it("fresh migration installs 0842 and the refusal depends on its trigger (rolled-back scratch mutation)", async () => {
+it("fresh migration installs 0666 and the refusal depends on its trigger (rolled-back scratch mutation)", async () => {
   expect((await f.admin.query(`SELECT migration_name FROM public.jobguard_schema_migration
-    WHERE migration_name='0842_final_check_invalidation_after_lock.sql'`)).rowCount).toBe(1);
+    WHERE migration_name='0666_final_check_invalidation_after_lock.sql'`)).rowCount).toBe(1);
   const { a, evidenceId } = await completedJob();
   const db = await f.admin.connect();
   try {
