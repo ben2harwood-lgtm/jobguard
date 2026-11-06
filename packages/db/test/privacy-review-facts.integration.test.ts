@@ -136,7 +136,7 @@ describe("M5-11 recorded identity and authority checks (synthetic only)", () => 
   it("upgrades existing requests and reviews without rewriting rows or other routine definitions", async () => {
     const upgrade = await createWorkFixture(false);
     try {
-      const index = MIGRATION_URLS.findIndex(u => u.pathname.endsWith("1045_privacy_review_facts.sql"));
+      const index = MIGRATION_URLS.findIndex(u => u.pathname.endsWith("0630_privacy_review_facts.sql"));
       expect(index).toBeGreaterThan(0);
       for (const url of MIGRATION_URLS.slice(0, index)) await upgrade.admin.query(await readFile(url, "utf8"));
       const a = await meterCompany(upgrade), subjectId = randomUUID(), requestId = randomUUID();

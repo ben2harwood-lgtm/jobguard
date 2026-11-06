@@ -9,13 +9,14 @@
       "allow": [
         "packages/core/src/privacy-operations.test.ts",
         "packages/core/src/privacy-operations.ts",
-        "packages/db/migration-notes/1045_privacy_review_facts.md",
-        "packages/db/migrations/1045_privacy_review_facts.sql",
+        "packages/db/migration-notes/0630_privacy_review_facts.md",
+        "packages/db/migrations/0630_privacy_review_facts.sql",
         "packages/db/test/dsar-migration-proofs.test.ts",
         "packages/db/test/dsar-offboarding.integration.test.ts",
         "packages/db/test/later-empty-tables.ts",
-        "packages/db/test/migration-proofs/1045_privacy_review_facts.proof.json",
-        "packages/db/test/privacy-review-facts.integration.test.ts"
+        "packages/db/test/migration-proofs/0630_privacy_review_facts.proof.json",
+        "packages/db/test/privacy-review-facts.integration.test.ts",
+        "packages/db/test/watchdog.integration.test.ts"
       ]
     }
   }

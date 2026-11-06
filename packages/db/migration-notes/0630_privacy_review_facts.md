@@ -13,7 +13,7 @@ and references only. No real-person identity policy is implied.
 Upgrade does not backfill or rewrite requests, existing review records, or any
 other table/routine. Existing historical reviews remain readable unchanged. New
 reviews require facts. Forward fix with a new migration if needed; do not delete
-facts or weaken the review checks. Batch migration 1045_privacy_review_facts is renumbered again at landing.
+facts or weaken the review checks. Landing migration: 0630_privacy_review_facts (reserved after 0624–0629).
 
 The dsar-offboarding integration command and review helpers now record real
 synthetic facts and translate their two extra revisions for the existing journey
@@ -65,7 +65,7 @@ entries are retained. Compared the complete replacement privacy_command body
 against main's latest definition in 0585_dsar_offboarding.sql: only this group's
 existing verify/review fact changes differ; main's database fence, actor checks,
 locking, instruction, inventory, execution and sealed audit paths are preserved.
-Main has no copy of migration 1045, so no duplicate migration was removed.
+Main has no copy of migration 0630, so no duplicate migration was removed.
 
 Current refresh checks: direct installed Vitest runners, --maxWorkers=1 per run,
 privacy-operations.test.ts (5 passed), dsar-migration-proofs.test.ts and
@@ -95,3 +95,31 @@ migration ordering; PL/pgSQL CASE-in-IF lint passed all 284 migrations.
 git diff origin/main --check passed. No code or test changes were needed.
 PostgreSQL, browser suites, green CI and independent RED review remain required
 on the final pushed head. READY for router commit/push and later PR opening.
+
+PR landing refresh (6 Nov 2026): resolved later-empty-tables.ts as the exact
+union, retaining main's order and adding privacy_review_fact. Main ends at
+0623_extra_duplicate_disposition; this branch adds only 0630_privacy_review_facts
+(reserved after #584's 0624 and #585's 0625–0629). No main migration has the
+privacy_review_facts stem, so no duplicate was removed. Renamed only the 1045
+stem in SQL, proof, note, tests and lane. Diffed the complete re-created
+privacy_command against main's latest body, 0585_dsar_offboarding.sql: only the
+prechecked verify/review fact changes differ; actor/database fences, locking,
+instruction, execution and sealed audit remain intact. No new behavior added.
+Added the private fact table to watchdog.integration's tables list as required
+by the landing brief; restore-reconciliation-upgrade already uses laterEmptyTables.
+
+Current local checks: installed Vitest --maxWorkers=1, core privacy-operations
+5/5 and DB dsar-migration-proofs + migration-proof-loader 84/84 passed. At most
+two workers ran concurrently. Installed DB TypeScript --noEmit passed. PL/pgSQL CASE-in-IF lint passed
+all 289 migrations.
+git diff origin/main --check passed. No PostgreSQL or browser suite ran here.
+The pnpm launcher cannot verify/download its pinned executable in this restricted
+network, so installed runners were used without downloading dependencies.
+The actual lane CLI was run and rejects the unfinished merge/index range (main's
+incoming files and the old renamed paths). Its exported policy checks PASS on
+the exact prospective merge diff against origin/main: all ten non-lane changed
+paths, no self-entry, correct migration ordering. Router must conclude the merge
+and rerun the actual lane CLI on the committed range. CI must prove the full
+PostgreSQL fresh/upgrade, catalog/RLS, replay/race, watchdog, restore-reconciliation,
+privacy journey and remaining required suites; exact-head RED review and green
+CI remain merge gates. READY for router merge completion, commit, push and PR.

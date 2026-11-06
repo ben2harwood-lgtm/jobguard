@@ -73,7 +73,9 @@ describe("M2-1 checked command compatibility", () => {
     const proof = proofSchema.parse(JSON.parse(readFileSync(new URL("./migration-proofs/0606_dark_merchant_order.proof.json", import.meta.url), "utf8")));
     const delta = proof.upgrade.find(change => change.section === "rows" && change.after?.table === "app.command_type_registry")!;
     if (delta.section !== "rows") throw new Error("Missing registry proof");
-    const historicalCommandRegistryRows = currentCommandRegistryRows.filter(row => row.command_type !== "rate.suggestion_accept");
+    // The 0606 proof predates rate suggestions, EndCheck and duplicate dispositions.
+    const historicalCommandRegistryRows = currentCommandRegistryRows.filter(row =>
+      !["rate.suggestion_accept", "EndCheck", "ResolveDuplicateCandidates"].includes(row.command_type));
     expect(delta.after!.data).toEqual(expect.arrayContaining(historicalCommandRegistryRows));
     expect(delta.after!.data).toHaveLength(historicalCommandRegistryRows.length);
     expect(delta.after!.data.filter(row => (row as { command_type: string }).command_type !== "purchase_order.send.dark")).toEqual(delta.before!.data);

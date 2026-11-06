@@ -54,7 +54,7 @@ describe("M5-11 and its M0-13c dependency proof composition", () => {
 
 describe("M5-11 recorded privacy check proof", () => {
   const all = loadMigrationProofs(PROOF_DIRECTORY).proofs;
-  const facts = all.find(p => p.migration === "1045_privacy_review_facts.sql")!;
+  const facts = all.find(p => p.migration === "0630_privacy_review_facts.sql")!;
   it("adds one private forced-RLS table and extends only the existing command writer", () => {
     expect(facts).toBeDefined();
     expect(applyTenancyProofs([], [facts], "rls")).toEqual([
@@ -76,7 +76,7 @@ describe("M5-11 recorded privacy check proof", () => {
     expect(routineChanges[0]!.after).toMatchObject({ proname: "privacy_command", args: "t uuid, digest text, v jsonb" });
   });
   it("changes no other routine, keeps the trusted database fence and seals only reference/hash audit", () => {
-    const sql = readFileSync(new URL("../migrations/1045_privacy_review_facts.sql", import.meta.url), "utf8");
+    const sql = readFileSync(new URL("../migrations/0630_privacy_review_facts.sql", import.meta.url), "utf8");
     expect(sql.match(/CREATE OR REPLACE FUNCTION [^(]+/g)).toEqual(["CREATE OR REPLACE FUNCTION app.privacy_command"]);
     expect(sql.match(/CREATE TABLE [^ (]+/g)).toEqual(["CREATE TABLE app.privacy_review_fact"]);
     expect(sql).toContain("IF current_database()<>'jobguard_synthetic_demo'");

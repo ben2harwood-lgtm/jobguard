@@ -1,5 +1,5 @@
 {
-  "migration": "1045_privacy_review_facts.sql",
+  "migration": "0630_privacy_review_facts.sql",
   "lp0": [
     {
       "section": "routines",
