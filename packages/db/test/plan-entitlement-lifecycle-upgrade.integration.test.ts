@@ -187,7 +187,9 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     .sort((a,b) => a.nspname.localeCompare(b.nspname) || a.proname.localeCompare(b.proname) || a.args.localeCompare(b.args));
   const ownerOids = Object.fromEntries((await c.admin.query("SELECT rolname,oid FROM pg_roles")).rows.map(row => [row.rolname,row.oid]));
   const successors = loadMigrationProofs().proofs.filter(proof => proof.migration > "0556_mon8_job_track_and_trial.sql")
-    .map(proof => ({ ...proof, upgrade: proof.upgrade.filter(change => change.section === "routines") }));
+    // Only the schemas `security`/`live` read; a successor's infrastructure routine is pinned by its own suite.
+    .map(proof => ({ ...proof, upgrade: proof.upgrade.filter(change => change.section === "routines" &&
+      ["app", "identity", "control_plane", "audit_control", "worm_control"].includes((change.after ?? change.before)!.nspname)) }));
   const expected = applyUpgradeProofs({ rows: {}, routines: privileges(security), relations: [], policies: [] }, successors, ownerOids);
   expect(privileges(live)).toEqual(privileges(expected.routines as typeof security));
 }, 120000);

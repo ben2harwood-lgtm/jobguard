@@ -55,7 +55,10 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   expect(await proofDifferences(c.admin, rows)).toEqual({ rows: [], types: [] });
   // Successors add only their reviewed metadata; every replaced and added body is pinned below.
   const successors = loadMigrationProofs().proofs.filter(p => p.migration > own)
-    .map(p => ({ ...p, upgrade: p.upgrade.filter(change => change.section !== "rows") }));
+    // This test reads routines only in these schemas; a successor's routine in another schema (1050's
+    // infrastructure.discover_readiness_plans) is pinned by its own suite, not here.
+    .map(p => ({ ...p, upgrade: p.upgrade.filter(change => change.section !== "rows" && !(change.section === "routines" &&
+      !["app", "identity", "control_plane", "audit_control"].includes((change.after ?? change.before)!.nspname))) }));
   const ownerOids = Object.fromEntries((await c.admin.query("SELECT rolname,oid FROM pg_roles")).rows.map(row => [row.rolname,row.oid]));
   const metadata = (entries: typeof afterRoutines) => entries.map(({ definition: _definition, ...row }) => row);
   const relationMetadata = (entries: typeof beforeCatalog) => entries.map(({ policies: _policies, ...row }) => row);

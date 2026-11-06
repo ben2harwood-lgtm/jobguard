@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/later-safety-29"
       ],
-      "note": "LATER-SAFETY-29 landing group, including batch-44 and LATER-SAFETY-20; exact working-tree diff from current main (MERGE_HEAD 3f4fc1e95), excluding config/lanes/. RED: tenant-bound discovery routine; independent check required.",
+      "note": "LATER-SAFETY-29 landing group, including batch-44 and LATER-SAFETY-20; exact working-tree diff from origin/main, excluding config/lanes/. RED: tenant-bound discovery routine; independent check required.",
       "allow": [
         "apps/api/src/readiness-scheduler.test.ts",
         "apps/api/src/readiness-scheduler.ts",
@@ -25,9 +25,11 @@
         "packages/db/migrations/1051_readiness_discovery_guard.sql",
         "packages/db/migrations/1052_readiness_bad_timezone.sql",
         "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
         "packages/db/test/migration-proofs/1050_readiness_plan_discovery.proof.json",
         "packages/db/test/migration-proofs/1051_readiness_discovery_guard.proof.json",
         "packages/db/test/migration-proofs/1052_readiness_bad_timezone.proof.json",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
         "packages/db/test/readiness-store.integration.test.ts",
         "packages/db/test/readiness-timer.integration.test.ts"
       ]
