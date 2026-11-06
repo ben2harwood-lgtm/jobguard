@@ -26,8 +26,9 @@ export class PayNowAttemptApplication {
     // History alone is tenant-scoped. Apply the same owner/admin membership gate
     // through the existing identity provider; the private SQL actor helper has no runtime grant.
     const principal = await this.identity.provider.authenticate(credentials.sessionToken!);
-    const membership = principal ? await this.identity.provider.findMembership(principal, context.tenantId) : undefined;
-    if (!membership || !["owner", "admin"].includes(membership.role)) throw new PayNowAttemptError("UNAVAILABLE");
+    if (!principal) throw new PayNowAttemptError("UNAUTHENTICATED");
+    const membership = await this.identity.provider.findMembership(principal, context.tenantId);
+    if (!membership || !["owner", "admin"].includes(membership.role)) throw new PayNowAttemptError("FORBIDDEN");
     const invoice = (await new PracticeInvoiceRepository(this.pool).list(context, jobId)).find(row => row.id === invoiceId.toLowerCase());
     if (!invoice) throw new PayNowAttemptError("NOT_FOUND");
     let options: ReturnType<typeof payNowOptions> = [];
@@ -35,7 +36,7 @@ export class PayNowAttemptApplication {
       const source = await withTenant(this.pool, context, async db => (await db.$client.query(
         "SELECT app.pay_now_fake_attempt($1,$2,$3,'prepare',$4::jsonb) result",
         [context.tenantId, digest, jobId, JSON.stringify({ version: "pay-now-attempt.v1", commandId: randomUUID(), invoiceId, rail: "bank_transfer" })],
-      )).rows[0]?.result as { invoice: unknown });
+      )).rows[0]?.result as { invoice: unknown }).catch(error => { throw PayNowAttemptError.fromDatabase(error); });
       const current = parsePayNowInvoice(source.invoice);
       if (current.tenantId !== context.tenantId || current.jobId !== jobId.toLowerCase() || current.invoiceId !== invoiceId.toLowerCase()) throw new PayNowAttemptError("UNAVAILABLE");
       options = payNowOptions(current);
@@ -84,6 +85,7 @@ export class PayNowAttemptApplication {
 }
 export function payNowAttemptFailure(error: unknown) {
   if (error instanceof PayNowAttemptError) return { status: error.code === "NOT_FOUND" ? 404 : error.code === "INVALID_INPUT" ? 400
+    : error.code === "FORBIDDEN" ? 403 : error.code === "UNAUTHENTICATED" ? 401
     : error.code === "REPLAY_CONFLICT" || error.code === "ALREADY_ATTEMPTED" ? 409 : 503, body: { version: "pay-now-preview-error.v1", code: error.code } };
   const auth = identityStatus(error);
   return { status: auth.status, body: { version: "pay-now-preview-error.v1", code: auth.code } };
