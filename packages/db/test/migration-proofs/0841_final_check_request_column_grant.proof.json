@@ -1,6 +1,23 @@
 {
   "migration": "0841_final_check_request_column_grant.sql",
-  "lp0": [],
+  "lp0": [
+    {
+      "section": "entries",
+      "before": {
+        "key": "acl|rel|table|infrastructure.final_check_request|jobguard_infrastructure|UPDATE|-",
+        "group": "a-infrastructure-role-grants"
+      },
+      "after": null
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|col|infrastructure.final_check_request.enqueued_at|jobguard_infrastructure|UPDATE|-",
+        "group": "a-infrastructure-role-grants"
+      }
+    }
+  ],
   "upgrade": [],
   "tenancy": []
 }
