@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-106": {
+      "branches": [
+        "codex/sandbox/later-safety-106"
+      ],
+      "note": "LATER-SAFETY-106 RED: variation state and revision integrity; NOPR.",
+      "allow": [
+        "packages/db/migrations/0838_variation_state_transition_guard.sql",
+        "packages/db/test/migration-proofs/0838_variation_state_transition_guard.proof.json",
+        "packages/db/test/variation-state-transition.integration.test.ts"
+      ]
+    }
+  }
+}
