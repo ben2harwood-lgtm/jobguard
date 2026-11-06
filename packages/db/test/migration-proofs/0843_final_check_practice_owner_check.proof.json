@@ -1,0 +1,6 @@
+{
+  "migration": "0843_final_check_practice_owner_check.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}
