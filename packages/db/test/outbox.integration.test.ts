@@ -1,7 +1,7 @@
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { verifiedTenantContextFromMembership } from "../src/tenant-context.js";
 import { importWatchdogFixtureJob } from "./watchdog-fixtures.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -24,7 +24,11 @@ const TENANT = "91000000-0000-4000-8000-000000000001";
 const ACCOUNT = "92000000-0000-4000-8000-000000000001";
 const USER = "93000000-0000-4000-8000-000000000001";
 const MEMBER = "94000000-0000-4000-8000-000000000001";
-const context = testTenantContext(TENANT);
+const credential = randomBytes(32).toString("hex");
+const contextFor = (tenantId: string) => verifiedTenantContextFromMembership({
+  identityUserId: USER, tenantId, membershipId: MEMBER,
+} as Parameters<typeof verifiedTenantContextFromMembership>[0], { kind: "real", credential });
+const context = contextFor(TENANT);
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 
 let postgres: EmbeddedPostgres;
@@ -67,6 +71,9 @@ beforeAll(async () => {
     CREATE ROLE outbound_operator_b LOGIN PASSWORD 'synthetic-b' NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOBYPASSRLS;
     GRANT jobguard_outbound_operator TO outbound_operator_a, outbound_operator_b;
   `);
+  await admin.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", ["outbox@fictional.invalid", USER]);
+  await admin.query("INSERT INTO identity.membership_locator VALUES($1,$2,$3)", [USER, TENANT, MEMBER]);
+  await admin.query("INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at) VALUES($1,$2,'synthetic_demo',$3,'fictional',clock_timestamp()+interval '1 hour')", [randomUUID(), USER, credential]);
   runtime = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "outbox_runtime", password: "runtime-only", application_name: "outbox-test-business-worker", max: 5 });
   infrastructure = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "outbox_infrastructure", password: "infra-only" });
   operatorA = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "outbound_operator_a", password: "synthetic-a" });
@@ -145,7 +152,7 @@ describe("transactional outbox and fake worker execution", () => {
       "SELECT action_id,tenant_id FROM infrastructure.outbox_signal WHERE action_id=$1", [action.id],
     )).rows[0];
     expect(signal).toEqual({ action_id: action.id, tenant_id: TENANT });
-    const signalledContext = testTenantContext(signal!.tenant_id);
+    const signalledContext = contextFor(signal!.tenant_id);
     const snapshot = () => withTenant(runtime, context, async (db) => ({
       outbox: (await db.$client.query("SELECT * FROM app.action_outbox WHERE id=$1", [action.id])).rows,
       attempts: (await db.$client.query("SELECT * FROM app.action_attempt WHERE action_id=$1 ORDER BY attempt_number", [action.id])).rows,

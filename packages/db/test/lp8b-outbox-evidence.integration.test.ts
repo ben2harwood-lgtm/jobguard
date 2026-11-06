@@ -5,7 +5,7 @@ import { EvidenceService } from "../src/evidence.js";
 import { PreventionCheckRepository } from "../src/prevention-check-repository.js";
 import { JobPartiesRepository } from "../src/job-parties-repository.js";
 import { ExtraRepository } from "../src/extra-repository.js";
-import { verifiedTenantContextFromMembership } from "../src/tenant-context.js";
+import { verifiedTenantContextFromMembership, withTenant } from "../src/tenant-context.js";
 import { jobDoorsActor, jobDoorsDatabase, transaction, type JobDoorsDatabase } from "./lp-job-doors-fixtures.js";
 import { MemoryStorage, pngBytes } from "./site-extra-evidence-fixtures.js";
 import { fixture, raise, type Cluster } from "./extra-fixtures.js";
@@ -82,7 +82,7 @@ it("keeps finalized evidence scoped and exact, refuses fabricated verification a
   const upload=await service.beginUpload(context,{jobId:job,expectedSha256:digest(bytes),contentType:"image/png",maximumBytes:1000,expiresAt:new Date("2099-01-01")});
   await request(s,async c=>{
     await refused(c,"UPDATE app.evidence_upload SET state='verified',server_verified_at=clock_timestamp(),object_version_id='v1' WHERE tenant_id=$1 AND id=$2",[s.tenant,upload.id]);
-    await refused(c,"UPDATE app.evidence_upload SET expected_sha256=$3 WHERE tenant_id=$1 AND id=$2",[s.tenant,upload.id,"0".repeat(64)],"55000");
+    await refused(c,"UPDATE app.evidence_upload SET expected_sha256=$3 WHERE tenant_id=$1 AND id=$2",[s.tenant,upload.id,"0".repeat(64)],"42501");
     await c.query("UPDATE app.evidence_upload SET state='quarantined',object_version_id='v1' WHERE tenant_id=$1 AND id=$2",[s.tenant,upload.id]);
     // Correct bytes cannot authorize verification for a different tenant.
     await refused(c,"SELECT app.verify_evidence_upload($1,$2,'v1','image/png',$3)",[randomUUID(),upload.id,Buffer.from(bytes)]);
@@ -111,8 +111,8 @@ it("verifies exact bytes only for a live bound upload member and keeps all metad
   await importWatchdogFixtureJob(db.owner,s.tenant,job);
   const service=new EvidenceService(db.runtime,new MemoryStorage());
   const upload=await service.beginUpload(contextFor(s),{jobId:job,expectedSha256:digest(bytes),contentType:"image/png",maximumBytes:bytes.length,expiresAt:new Date("2099-01-01")});
-  // Owner setup leaves identical correct bytes available for all refusal cases.
-  await db.owner.query("UPDATE app.evidence_upload SET state='quarantined',object_version_id='v1' WHERE tenant_id=$1 AND id=$2",[s.tenant,upload.id]);
+  // Commit through the bound runtime path so every refusal sees the quarantined upload.
+  await withTenant(db.runtime,contextFor(s),tx=>tx.$client.query("UPDATE app.evidence_upload SET state='quarantined',object_version_id='v1' WHERE tenant_id=$1 AND id=$2",[s.tenant,upload.id]));
   const sql="SELECT app.verify_evidence_upload($1,$2,$3,$4,$5) verified", args=[s.tenant,upload.id,"v1","image/png",Buffer.from(bytes)];
   const unbound=await db.runtime.connect();
   try{

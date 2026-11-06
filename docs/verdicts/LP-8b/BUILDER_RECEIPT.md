@@ -1,4 +1,4 @@
-# LP-8b builder receipt — 6 November 2026, repair round 1
+# LP-8b builder receipt — 6 November 2026, repair round 2
 
 RED — permissions, money dependencies and evidence. NOPR. **READY for branch save; held for landing.** This records source inspection and local checks, not acceptance.
 
@@ -8,7 +8,7 @@ The router completed the predecessor merge at 353a0ad89fc642d6a14c65c96f35ab22a2
 
 LP-8a retains its latest advance_final_account_draft body (0795), extending LP-6d's binding preamble. LP-8b does not recreate that routine, audit sealing, member administration or any other predecessor routine. The actual LP-6b session-bearing withTenant path replaces LP-8b's temporary pool proxy in integration fixtures. No caller binding work is left to an absent predecessor.
 
-The lane contains exactly the eight non-lane paths changed relative to LP-8a. No scanner, source pin or guard was changed; no old/new protected value is requested. Reserved migration 0800 and its existing source-derived proof are retained, ordered after LP-8a 0795. No Git writes, fetch, package download, database startup, localhost binding, real data, live provider, CI or PR action occurred.
+The lane contains exactly the nine non-lane paths changed relative to LP-8a (including the outbox integration fixture added in round 2). No scanner, source pin or guard was changed; no old/new protected value is requested. Reserved migration 0800 and its existing source-derived proof are retained, ordered after LP-8a 0795. No Git writes, fetch, package download, database startup, localhost binding, real data, live provider, CI or PR action occurred.
 
 ## Built and retained
 
@@ -18,7 +18,7 @@ Owner-only evidence invalidation; extra event/duplicate/order input checks retai
 
 Evidence checks preserve scoped object keys, immutable versions, hashes, measured byte lengths and server metadata. Storage orchestration checks key/version/actual bytes before SQL. Raw runtime SQL still cannot assert that an external storage read occurred. The round-1 checked runtime grant below preserves that adapter trust boundary; SQL verifies the supplied bytes and metadata, not the occurrence of an external read.
 
-Integration fixtures now use genuine session references rather than a pool wrapper or queued-job context. Added unbound forged-GUC refusals, wrong actor/tenant calls to the extra-command helper and an overload-count assertion covering all three LP-8b entry points. Existing outbox field attacks and positive assertions remain. The expected upload identity-mutation error is corrected to the guard's specific 55000; the refusal assertion remains mandatory.
+Integration fixtures now use genuine session references rather than a pool wrapper or queued-job context. Added unbound forged-GUC refusals, wrong actor/tenant calls to the extra-command helper and an overload-count assertion covering all three LP-8b entry points. Existing outbox field attacks and positive assertions remain. The expected upload hash-mutation error is 42501: migration 0096 already withholds that column's UPDATE grant, so PostgreSQL refuses the write before the immutability trigger. The object-version mutation still expects 55000; both refusal assertions remain mandatory.
 
 ## Named holds for landing
 
@@ -57,3 +57,32 @@ No new abstraction or substantial complexity was introduced. The existing initia
 CI after router push must run the two named integration suites on real PostgreSQL, full database/catalogue/migration/upgrade checks and the predecessor compatibility cases in hold 2, then the required pinned-install/typecheck/lint/test/build and affected browser journeys in hold 3. No PostgreSQL server, browser, localhost binding, package download or Git write was attempted here. No proof of CI, merge, deployment or independent approval is claimed.
 
 **READY** for router commit and NOPR branch save on codex/sandbox/lp-8b-outbox-evidence only; serial LP landing and exact-head RED review gates remain.
+
+
+## Repair round 2 (last) — 6 November 2026
+
+Applied only the three test-harness corrections from the independent real-PostgreSQL recheck at `~/.local/share/full-steam/coordinator/prechecks/lp-8b-outbox-evidence-pg-recheck.md`. Round-1 production code, migration 0800 and its proof remain unchanged. No refusal, assertion, grant or production binding requirement was weakened.
+
+- The runtime `expected_sha256` UPDATE still must fail, now with its actual column-privilege error `42501` rather than `55000`.
+- The exact-byte regression quarantines its upload using the existing `withTenant` helper with a genuine session-bearing context and runtime pool. This commits the authorized update before the separate refusal transactions; owner autocommit setup is removed.
+- The existing outbox suite seeds an identity email, membership locator and expiring synthetic session for its actual owner membership, then uses session-bearing contexts for both normal and signalled work. It retains every existing rollback, delivery, deduplication, retry, exact-content, permission and pause assertion. Worker-role separation remains LP-10's scope.
+
+No new production abstraction or substantial complexity. The initial-review LATER / SIMPLICITY note above is retained. The lane allow-list includes all nine non-lane paths relative to base `2fd5439bdf80bb1669d1872fcbabd52b360ce7a0`, with no self-entry.
+
+### Local checks for repair round 2
+
+- From repository root, `./node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit`: PASS (database package lint/typecheck implementation; its config covers src, not integration test files).
+- From packages/db, `./node_modules/.bin/vitest run --maxWorkers=1 test/lp8b-storage.test.ts test/migration-proof-loader.test.ts src/tenant-context.test.ts`: PASS, 105 tests across three files. Storage orchestration doubles, proof-loader validation and session-binding unit tests; not PostgreSQL proof.
+- From repository root, `LANE_BASE_REF=origin/codex/sandbox/lp-8a-billing-revokes node tools/lint.mjs`: PASS. Existing computed-import notices remain informational.
+- From packages/db, `./node_modules/.bin/vitest list --maxWorkers=1 test/lp8b-outbox-evidence.integration.test.ts test/outbox.integration.test.ts test/evidence.integration.test.ts`: PASS, all 7 + 15 + 16 tests collected through the real runner. No database hooks or assertions executed.
+- `git diff --check`: PASS. Complete branch-base non-lane paths compared with the lane allow-list: nine exact paths, no missing or extra paths.
+
+The supplied environment explicitly forbids PostgreSQL startup and localhost binding; no embedded server or browser run was attempted. No package downloads, Git writes, pushes or PR actions occurred.
+
+### CI proof and remaining landing holds
+
+After router push, CI must execute the three collected integration suites on real PostgreSQL (at most two workers per invocation), including the corrected privilege refusal, committed quarantine, bound positive verification and all 15 outbox assertions. The independent recheck proved round 1's bound upload-finalization repair on PostgreSQL, but this round has only local non-database checks and collection evidence.
+
+The recheck also identifies inherited failures that remain outside this test-only repair: LP-6c's unbound shared watchdog import fixture; LP-6e 0785 audit.v3 versus the 0521 completion check; LP-6d's extras practice fixture binding; and LP-8a 0795 invoice grants / LP-0 expectations. These must be fixed in their owning layers and the affected suites rerun. LP-12 also needs catch-up from the stale 2ae799a6 base. This branch does not repair or bypass those failures. Full database/catalogue/migration/upgrade, backfill/unique-index compatibility, required CI and exact-head independent RED review gates above remain open.
+
+**READY** for router commit and NOPR branch save only. This is not a PostgreSQL PASS, independent acceptance or landing approval.

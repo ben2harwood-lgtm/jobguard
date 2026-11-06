@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/lp-8b-outbox-evidence"
       ],
-      "note": "LP-8b RED stacked on LP-8a 2fd5439b. Repair round 1 applies the first security pre-check: bound active-member evidence verification and only the named runtime EXECUTE grant. READY for NOPR branch save; PostgreSQL catalogue/upgrade, CI and exact-head independent RED review remain required. No scanner, pin or guard-tool changes.",
+      "note": "LP-8b RED stacked on LP-8a 2fd5439b. Repair round 2 retains round 1 and repairs only test harnesses: exact permission refusal, committed bound quarantine and bound outbox session contexts. READY for NOPR branch save; PostgreSQL catalogue/upgrade, CI and exact-head independent RED review remain required. No scanner, pin or guard-tool changes.",
       "allow": [
         "docs/verdicts/LP-8b/BUILDER_RECEIPT.md",
         "packages/db/migrations/0800_lp8b_outbox_evidence.sql",
@@ -14,6 +14,7 @@
         "packages/db/src/prevention-check-repository.ts",
         "packages/db/test/lp8b-outbox-evidence.integration.test.ts",
         "packages/db/test/lp8b-storage.test.ts",
+        "packages/db/test/outbox.integration.test.ts",
         "packages/db/test/migration-proofs/0800_lp8b_outbox_evidence.proof.json"
       ],
       "receipt": "docs/verdicts/LP-8b/BUILDER_RECEIPT.md"
