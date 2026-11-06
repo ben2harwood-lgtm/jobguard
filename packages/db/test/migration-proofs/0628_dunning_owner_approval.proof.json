@@ -1,5 +1,5 @@
 {
-  "migration": "1033_dunning_owner_approval.sql",
+  "migration": "0628_dunning_owner_approval.sql",
   "lp0": [],
   "upgrade": [],
   "tenancy": []

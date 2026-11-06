@@ -7,7 +7,7 @@ import { withTenant } from "../src/tenant-context.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 
 const tables = ["scheduled_readiness_plan", "scheduled_readiness_proposal"] as const;
-const migration = new URL("../migrations/1034_scheduled_readiness_hardening.sql", import.meta.url);
+const migration = new URL("../migrations/0629_scheduled_readiness_hardening.sql", import.meta.url);
 it("declares missing-context-safe policies and immutable row/table guards for both stores", () => {
   const sql = readFileSync(migration, "utf8");
   for (const table of tables) {

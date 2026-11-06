@@ -1,5 +1,5 @@
 {
-  "migration": "1031_ais_private_reads.sql",
+  "migration": "0626_ais_private_reads.sql",
   "lp0": [
     {
       "section": "entries",

@@ -53,11 +53,11 @@ was checked against the available origin/main base 567604fdc (local main is stal
 no fetch or Git-writing command was run). Migrations and matching notes/proofs now
 use these stems, in dependency order:
 
-- 1030_company_import_once
-- 1031_ais_private_reads
-- 1032_billability_one_line
-- 1033_dunning_owner_approval
-- 1034_scheduled_readiness_hardening
+- 0625_company_import_once
+- 0626_ais_private_reads
+- 0627_billability_one_line
+- 0628_dunning_owner_approval
+- 0629_scheduled_readiness_hardening
 
 Only complete filename stems were replaced. The recreated import and dunning
 bodies retain the latest base bodies except their existing intended predicates.
@@ -109,8 +109,8 @@ entries or conflict markers remain. Local main is stale and was not used as the
 comparison base. No Git-writing command was run in this sandbox.
 
 Compared both replacement routines against the latest definitions on origin/main:
-1030 retains the complete 0534 import body with only its tenant/source duplicate
-predicate; 1033 retains the complete 0564 dunning body with only its current-owner
+0625 retains the complete 0534 import body with only its tenant/source duplicate
+predicate; 0628 retains the complete 0564 dunning body with only its current-owner
 approval predicate. No main behavior was removed. All five migrations are absent
 from main, above its 0613 maximum, and have matching proofs. No migration needed
 dropping. Main's new rows in the shared registers were retained by the merge.
@@ -149,14 +149,14 @@ current-main merge verification above: origin/main is now
 f763dc659d83a2e1a63d67f85c288dd25a648e59, and this merge is still uncommitted.
 The sole conflicted file, plan-entitlement-lifecycle-upgrade.integration.test.ts,
 now retains main's exact 0615 success-fee and 0616 payment-fee body assertions
-and this group's exact 1030 import and 1033 dunning body assertions. No test was
+and this group's exact 0625 import and 0628 dunning body assertions. No test was
 weakened. The index remains unmerged until the router stages the resolution;
 no Git-writing command was run in this sandbox.
 
 Compared replacement routines to the latest bodies on this origin/main again:
-1030 differs from 0534 only in its intended tenant/source duplicate predicate;
-1033 differs from 0564 only in its intended current-owner approval predicate.
-All five reserved 1030–1034 migrations are absent from main, with no duplicate
+0625 differs from 0534 only in its intended tenant/source duplicate predicate;
+0628 differs from 0564 only in its intended current-owner approval predicate.
+All five reserved 0625–0629 migrations are absent from main, with no duplicate
 migration suffix, so none needed dropping. No additional exact-list edits were
 needed. The lane allow-list exactly matches all 68 changed paths outside
 config/lanes/ and excludes itself.
@@ -186,7 +186,7 @@ was added on this follow-up; the initial LATER suggestion above remains advisory
 ## Final catch-up repair (6 November 2026)
 
 READY for router commit/push, CI and independent RED recheck; batch-40 remains NOPR.
-The enterprise-access upgrade comparator now permits only the exact 1034 qual and
+The enterprise-access upgrade comparator now permits only the exact 0629 qual and
 with_check for app.scheduled_readiness_plan.tenant_isolation and
 app.scheduled_readiness_proposal.tenant_isolation. Both full policy rows still
 compare exactly, preserving roles, command, schema, name and permissiveness.
@@ -197,7 +197,7 @@ migration SQL, proofs and the main catch-up remain unchanged.
 Local checks used the installed package Vitest binary with --maxWorkers=2:
 - enterprise-access-upgrade.integration.test.ts, filtered to 'ACL comparison|policy comparison':
   2 passed; 1 PostgreSQL test excluded. Regression checks bind both replacements
-  to 1034's proof and reject the old predicates, changes to either predicate or
+  to 0629's proof and reject the old predicates, changes to either predicate or
   metadata, and changes on other tables, schemas or policies.
 - later-safety-3.test.ts, migration-proof-loader.test.ts, inbox-metrics.test.ts:
   97 passed.
@@ -218,3 +218,60 @@ itself, and preserves the rest of the catch-up. Earlier LATER notes stand.
 LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs --lane=batch-40
 passed; the allow-list matches all 69 branch paths outside config/lanes.
 git diff --check passed.
+
+
+## PR preparation: reserved landing range (6 November 2026)
+
+READY for router commit/push and PR opening. Compared against origin/main
+f5415ddb4c3a40796dd812e8b5946ba5094daa2b (maximum migration 0621).
+HEAD 88ba4dbac already contains that main; the working tree had no unfinished
+merge or unresolved entries. Prechecked changes and the narrow policy comparator
+repair are preserved. This preparation adds no product behavior.
+
+The branch migrations against main, in their original order, are:
+- 0625_company_import_once
+- 0626_ais_private_reads
+- 0627_billability_one_line
+- 0628_dunning_owner_approval
+- 0629_scheduled_readiness_hardening
+
+All five are absent from main by suffix and no copy needed dropping. Each SQL
+file is byte-identical to its prechecked predecessor; notes, proofs, lane paths
+and every source reference were renumbered with it. The complete proof chain
+passes with the reserved order. Compared every re-created routine to its latest
+main body: 0625 preserves 0534 except the intended tenant/source duplicate
+predicate; 0628 preserves 0564 except the intended current-owner approval check.
+0629's trigger routine is new. No main routine behavior was removed. No new
+tables, worker tasks, providers, CI images or function SET app.* clauses appear.
+Changed web production sources were read for direct apps/api/src imports; none
+were found. Cloudflare build was not run in this restricted environment.
+
+Local checks used installed binaries, without downloads or Git-writing commands:
+- packages/db ./node_modules/.bin/vitest run --maxWorkers=1
+  test/later-safety-3.test.ts test/migration-proof-loader.test.ts
+  test/inbox-metrics.test.ts: 97 passed.
+- packages/db ./node_modules/.bin/vitest run --maxWorkers=1
+  test/enterprise-access-upgrade.integration.test.ts -t
+  'ACL comparison|policy comparison': 2 passed; 1 database test excluded.
+- packages/db ./node_modules/.bin/vitest run --maxWorkers=1
+  test/scheduled-readiness-hardening.integration.test.ts -t
+  'declares missing-context-safe': 1 passed; 3 database tests excluded.
+- packages/db ./node_modules/.bin/tsc -p tsconfig.json --noEmit: passed.
+- node tools/plpgsql-case-in-if-lint.mjs: passed, 291 migrations.
+- git diff --check: passed.
+
+LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs --lane=batch-40
+was run. It refuses only the 15 old filenames still in committed HEAD, because
+its local mode unions HEAD's branch delta with uncommitted deletions. Do not add
+obsolete paths to the final lane to silence this. Direct working-tree comparison
+confirms the lane lists exactly all 69 final changed paths outside config/lanes
+and excludes itself; the lint's migration-order helper also passes for 0625–0629.
+The router must rerun the full lane lint after committing these renames.
+
+CI must prove fresh/populated-upgrade PostgreSQL, catalogue/RLS/grants, command
+replays and authority, audit and fingerprint preservation, import/AIS/billability/
+dunning/readiness behavior, and affected browser journeys. Exact-head RED review
+and green CI remain required before merge. Earlier independent precheck evidence
+applies only to the heads it names. No live data, providers, deployment or launch.
+The previously omitted reservation transaction item stays omitted. No whole plan
+piece is claimed finished; the initial LATER / SIMPLICITY note remains advisory.

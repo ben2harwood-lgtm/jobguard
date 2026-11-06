@@ -1,7 +1,7 @@
 # LATER-SAFETY-4 — owner-only reminder approval (RED)
 
 Verified against origin/main d16ef1978eb44d7d9d33a77926fb179e794af196. The latest routine is
-0564_dunning_workbench_preview.sql. 1033 copies that body and adds only the current
+0564_dunning_workbench_preview.sql. 0628 copies that body and adds only the current
 owner predicate from mon1_lifecycle_actor after the source lock, before receipt
 lookup. Read and request remain owner/admin. Wrong-role approval raises the
 existing DUNNING_UNAVAILABLE with SQLSTATE 42501; the repository preserves a
@@ -18,7 +18,7 @@ migration body while preserving all other tracked routines.
 
 Forward fix only: retain historical approved previews and receipts. If correction
 is needed, add a successor migration preserving owner-only approval; do not
-restore admin authority or edit this migration after landing. 1033 is reserved
+restore admin authority or edit this migration after landing. 0628 is reserved
 for this branch, above the current main migration maximum of 0613.
 
 PostgreSQL and browser checks cannot run in this sandbox. CI must prove fresh

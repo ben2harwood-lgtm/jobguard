@@ -1,5 +1,5 @@
 {
-  "migration": "1032_billability_one_line.sql",
+  "migration": "0627_billability_one_line.sql",
   "lp0": [],
   "upgrade": [
     {

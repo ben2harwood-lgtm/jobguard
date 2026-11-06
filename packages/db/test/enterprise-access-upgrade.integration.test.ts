@@ -13,7 +13,7 @@ function expectRelationsUnchanged(before:Relation[],after:Relation[],laterAcl:Se
  }
 }
 type Policy = { schemaname:string; tablename:string; policyname:string; qual:string|null; with_check:string|null; [key:string]:unknown };
-// Exact replacement predicates pinned by 1034_scheduled_readiness_hardening.proof.json.
+// Exact replacement predicates pinned by 0629_scheduled_readiness_hardening.proof.json.
 const readinessPredicate="(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)";
 function expectPoliciesUnchanged(before:Policy[],after:Policy[]) {
  for(const row of before){
@@ -24,8 +24,8 @@ function expectPoliciesUnchanged(before:Policy[],after:Policy[]) {
   expect(after).toContainEqual(expected);
  }
 }
-it('policy comparison pins only the two 1034 replacements and rejects all other policy changes',async()=>{
- const proof=JSON.parse(await readFile(new URL('./migration-proofs/1034_scheduled_readiness_hardening.proof.json',import.meta.url),'utf8'));
+it('policy comparison pins only the two 0629 replacements and rejects all other policy changes',async()=>{
+ const proof=JSON.parse(await readFile(new URL('./migration-proofs/0629_scheduled_readiness_hardening.proof.json',import.meta.url),'utf8'));
  const replacements=proof.upgrade.filter((entry:{section:string})=>entry.section==='policies');
  expect(replacements.map((entry:{after:Policy})=>`${entry.after.schemaname}.${entry.after.tablename}.${entry.after.policyname}`)).toEqual([
   'app.scheduled_readiness_plan.tenant_isolation','app.scheduled_readiness_proposal.tenant_isolation',
