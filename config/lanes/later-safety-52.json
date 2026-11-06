@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-52": {
+      "branches": ["codex/sandbox/later-safety-52"],
+      "allow": [
+        "packages/db/migrations/0806_duplicate_disposition_no_truncate.sql",
+        "packages/db/test/migration-proofs/0806_duplicate_disposition_no_truncate.proof.json",
+        "packages/db/test/extra-duplicate-candidates.integration.test.ts"
+      ]
+    }
+  }
+}
