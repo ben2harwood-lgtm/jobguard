@@ -306,3 +306,55 @@ READY for router commit/push to the same branch. No Git-writing command,
 PostgreSQL server, browser, download or provider was used. GitHub CI must run the
 real database/browser gates; exact-head independent RED review remains required.
 This is a catch-up, not another repair round or a completion claim for the group.
+
+
+## Batch-40 catch-up to #582 (6 November 2026)
+
+READY for router staging of the two resolved paths, merge commit and push to
+codex/sandbox/batch-40 / PR #585. RED. The launcher's incoming merge is
+origin/main 46f0be7ea6758835db8797aa4bccdd9193fcbe63 (#582). The available ref
+ends at 0623; #584 / 0624 remains a required predecessor at landing and is not
+claimed merged or tested here. No Git-writing command was run; the index still
+has unmerged entries until the router stages the resolved working files.
+
+Resolved duplicate-candidates/transport.test.ts as the exact behavioral union:
+the group's validated UUID session and 401 regressions plus main's sessionId
+return field. Resolved plan-entitlement-lifecycle-upgrade.integration.test.ts by
+retaining both exact 0625/0628 assertions and main's 0622 relink / 0623 unresolved
+body assertions. No other test expectations changed in this catch-up.
+
+Recreated both replacement routine definitions from the latest available main
+bodies, then compared each: 0625 versus 0534 differs only by the intended company
+source duplicate predicate; 0628 versus 0564 differs only by the intended current
+owner approval check. All five branch-only migrations remain 0625–0629 with
+matching proofs. Main's 0622–0623 migrations and shared exact-list/catalogue files
+are byte-identical to origin/main, so no duplicate migration needed dropping.
+The UNAUTHENTICATED SQLSTATE fix and the 0629 two-policy pin/proof are byte-identical
+to HEAD. The lane exactly covers all 69 changed paths outside config/lanes/,
+excludes itself, and requires no additions for main-only files.
+
+Local deterministic validation used installed binaries only, no downloads.
+At most two one-worker Vitest runs overlapped, with at most three named files
+per invocation. From packages/db, ./node_modules/.bin/vitest run --maxWorkers=1:
+- test/migration-proof-loader.test.ts test/later-safety-3.test.ts test/late-source-import-migration.test.ts: 91 passed.
+- test/enterprise-access-upgrade.integration.test.ts test/scheduled-readiness-hardening.integration.test.ts -t 'ACL comparison|policy comparison|declares missing-context-safe': 3 passed; 4 PostgreSQL tests excluded.
+- src/enterprise-office-signals.test.ts src/enterprise-live-prompt-repository.test.ts test/extra-relink-migration.test.ts: 15 passed.
+From apps/web, ./node_modules/.bin/vitest run --maxWorkers=1:
+- app/api/contractor/jobs/[id]/duplicate-candidates/transport.test.ts app/api/contractor/jobs/[id]/duplicate-candidates/route.test.ts app/lib/recovery-billability-server.test.ts: 34 passed.
+Total final selected results: 143 passed. The first web run had two failures from
+stale built DB exports (DuplicateDispositionError); rebuilding packages/db with
+./node_modules/.bin/tsc -p tsconfig.json fixed test discovery, and the same three
+files then passed without source or expectation changes. That DB compile passed;
+apps/web ./node_modules/.bin/tsc -p tsconfig.json --noEmit passed.
+
+SQL CASE-in-IF lint passed all 293 migrations; git diff --check passed; no conflict
+markers remain in the branch delta. Working-tree lane policy helpers passed branch,
+path and migration-order checks, and exact path-set comparison passed. The full
+LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs --lane=batch-40
+command refuses main's staged incoming merge files against this group's lane;
+router must rerun after staging/committing, without adding main-only paths.
+
+GitHub CI must run PostgreSQL and browser suites after router push, and an
+independent RED review must bind the final exact head. No PostgreSQL server,
+localhost listener, provider, customer data or release was used. No new behavior
+or additional simplification finding was introduced in this catch-up.
