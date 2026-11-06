@@ -16,6 +16,7 @@ afterAll(async () => { await c?.close(); vi.unstubAllEnvs(); });
 async function bound(member: AuthenticatedMembership) {
   const credential = randomBytes(32).toString("hex");
   await c.admin.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING", [member.identityUserId, member.tenantId, member.membershipId]);
+  await c.admin.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2) ON CONFLICT DO NOTHING", [`${member.identityUserId}@fictional.invalid`, member.identityUserId]);
   await c.admin.query(`INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at)
     VALUES($1,$2,'synthetic_demo',$3,'fictional',clock_timestamp()+interval '1 hour')`, [randomUUID(), member.identityUserId, credential]);
   return verifiedTenantContextFromMembership(member, { kind: "real", credential });
