@@ -55,7 +55,11 @@ BEGIN
    'customer_payment.synthetic_reversed',
    'evidence_pack.attachment_approved',
    'outbox.authorization_revoked',
+   'outbox.succeeded',
    'proof.completed',
+   'recovery.follow_up.reminder_approved',
+   'recovery.message.approved',
+   'recovery.message.succeeded',
    'recovery.terms.approved',
    'variation.approved') AND lower(e->>'eventType') ~
    '(^|[_.:/-])(command|success[a-z]*|succeeded|approv[a-z]*|payment[a-z]*|paid|settle[a-z]*|complet[a-z]*|accept[a-z]*|authoriz[a-z]*|issued|locked)([_.:/-]|$)' THEN

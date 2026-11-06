@@ -194,3 +194,73 @@ results is claimed. Protected sealer definition/static-call pin refresh remains
 with its authorized owner; catalogue CI stays held until supplied. NOPR serial
 landing remains after LP-6b/c/d, with an independent RED check at the exact head.
 No commit, push, PR, merge, release or deployment was performed here.
+
+
+Repair round 3 handoff — READY (6 November 2026)
+----------------------------------------------
+
+LP-6e, RED, NOPR; round 3 expressly authorized in the issued brief (6 November
+11:14). Rounds 1 and 2 remain intact. Added exactly `outbox.succeeded`,
+`recovery.message.approved`, `recovery.message.succeeded`, and
+`recovery.follow_up.reminder_approved` to migration 0785, the verifier and the
+unit-test list. These remain lower-trust compatibility events; no private writer,
+grant, checked-trust assertion, protected pin or product policy was changed.
+
+Two new PostgreSQL integration cases use a bound runtime and the product recovery
+repository, not a direct audit append. They assert approval replay produces one
+approval audit, then fake outbox success commits its action/attempt/sink and both
+outbox and recovery-history success audits exactly once despite replay. Each
+resulting tenant chain is verified with bound attribution and lower-trust labels.
+The fake adapter sends nothing externally. These cases are source/type checked
+locally; PostgreSQL execution is pending CI.
+
+Completed a source inventory of production `appendAuditBatch` calls, command
+`auditEvents` producers, audit helper callers (including `domainAudit`,
+`auditInput`, `messageAuditInput`, `auditOutcome`), and template-built names in
+packages/db/src and their API callers. Expanded outbox statuses, recovery message
+history outcomes, follow-up kinds, and action/kind unions from their producers.
+Also traced SQL-produced enterprise prompt batches, SSO's lower-trust SQL bridge
+and the follow-up SQL audit catch-up. Checked-operation SQL seals are separate
+from generic lower-trust appends. The following 14 additional reachable event
+names still match the refusal rule and are NOT added by this repair:
+
+| Still refused name | Producer / path to the lower-trust append |
+| --- | --- |
+| `quote.acceptance.attested` | acceptance-repository.ts:34, `domainAudit` -> dispatcher `auditEvents` |
+| `quote.acceptance_cancelled` | acceptance-repository.ts:41, `quote.${input.kind}` -> dispatcher |
+| `synthetic_obligation.simulated_settlement` | activation-repository.ts:35 -> dispatcher |
+| `contractor.extra.step_approved` | extra-approval-chain-repository.ts:123 -> `audit` |
+| `contractor.extra.client_link_issued` | extra-approval-chain-repository.ts:170 -> `audit` |
+| `contractor.prompt.command` | 0780_lp6d_remaining_routines.sql:1383 produces `output.audits`, appended by enterprise-live-prompt-repository.ts:52 |
+| `recovery.eligibility.approve` | recovery-case-repository.ts:97, `recovery.eligibility.${input.action}` |
+| `recovery.payment_payer.marked` | recovery-payment-payer-repository.ts:29 |
+| `recovery.payment_payer.mark_withdrawn` | recovery-payment-payer-repository.ts:29 |
+| `worm.authorized` | worm-command-repository.ts:72 -> `worm.${phase}` (dark WORM path) |
+| `sso.oidc.request.issued` | oidc-repository.ts:23 -> enterprise identity audit bridge |
+| `sso.request.issued` | apps/api/src/auth/sso/sso.application.ts:105 -> identity.sso_audit_append |
+| `sso.signin.completed` | apps/api/src/auth/sso/sso.application.ts:131 -> identity.sso_audit_append |
+| `sso.oidc.signin.completed` | apps/api/src/auth/sso/oidc.application.ts:73 -> identity.sso_audit_append |
+
+This is a source-derived refusal inventory, not execution evidence for those
+paths. Existing checked seals do not exempt a subsequent generic append bearing
+the same business fact. The four-name repair is READY for router handoff; the
+remaining refusals require separate scoped work and prevent a blanket claim of
+all-writer compatibility. No unlisted compatibility exceptions were introduced.
+
+Local checks actually run (installed tools, no dependency download):
+- From packages/db: `./node_modules/.bin/vitest run --maxWorkers=2 src/lp6e-audit.test.ts src/lp4-audit.test.ts src/audit-fix-dbsrc-08.test.ts` — 60 passed in 3 files.
+- From packages/db: `./node_modules/.bin/tsc -p tsconfig.json --noEmit` — PASS; also the package's lint implementation.
+- TypeScript compiler API using packages/db/tsconfig.json options, noEmit and repository rootDir, rooted at test/lp6e-audit.integration.test.ts — PASS, zero diagnostics (including imported fixtures). No PostgreSQL execution.
+- `LANE_BASE_REF=cdd4e3282 node tools/lint.mjs` — PASS, including lane, core purity, money boundaries and PL/pgSQL lint; existing computed-import notices remain non-failing.
+- `git diff --check` and exact lane comparison against LP-6d cdd4e3282 — PASS, 8 non-lane paths; exact exception delta is the four authorized names.
+- Initial pnpm filtered check invocations made no check progress and were interrupted; only the completed direct installed-tool runs above count as evidence.
+
+CI must run test/lp6e-audit.integration.test.ts (including both new product cases),
+the complete PostgreSQL and migration suites (fresh install and upgrade), RLS and
+privilege/catalogue checks, binding/forgery/expiry/rollback/concurrency coverage,
+outbox and recovery message/follow-up regressions, and affected product journeys.
+All mandatory CI type/lint/test/build/browser gates remain required on the pushed
+head. This sandbox cannot start PostgreSQL or bind localhost; no DB/browser PASS
+is claimed. Authorized protected sealer pin refresh and an independent RED check
+at the exact head remain required, with predecessor/LP landing order preserved.
+No commit, push, PR, merge, deployment or release was performed by this session.

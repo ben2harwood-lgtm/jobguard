@@ -83,7 +83,7 @@ it.each(["payload", "payloadHash"])("accepts nested %s while still checking the 
   verifyAuditChain([event]);
   expect(() => verifyAuditChain([{ ...event, payloadHash: "b".repeat(64) }])).toThrow("Invalid audit chain");
 });
-it.each(["command.succeeded", "contractor.visit.completed", "customer_credit_note.synthetic_approved", "customer_invoice.synthetic_issued", "customer_payment.recorded", "customer_payment.synthetic_recorded", "customer_payment.synthetic_reversed", "evidence_pack.attachment_approved", "outbox.authorization_revoked", "proof.completed", "recovery.terms.approved", "variation.approved"])("keeps exact legacy %s lower trust with matching SQL policy", eventType => {
+it.each(["command.succeeded", "contractor.visit.completed", "customer_credit_note.synthetic_approved", "customer_invoice.synthetic_issued", "customer_payment.recorded", "customer_payment.synthetic_recorded", "customer_payment.synthetic_reversed", "evidence_pack.attachment_approved", "outbox.authorization_revoked", "outbox.succeeded", "proof.completed", "recovery.follow_up.reminder_approved", "recovery.message.approved", "recovery.message.succeeded", "recovery.terms.approved", "variation.approved"])("keeps exact legacy %s lower trust with matching SQL policy", eventType => {
   const sql = readFileSync(new URL("../migrations/0785_lp6e_audit_attribution.sql", import.meta.url), "utf8");
   expect(sql).toContain(`'${eventType}'`);
   const event = sealed({ eventType });

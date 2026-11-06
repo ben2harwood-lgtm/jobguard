@@ -91,7 +91,11 @@ const legacyLowerTrustEventTypes = new Set([
   "customer_payment.synthetic_reversed",
   "evidence_pack.attachment_approved",
   "outbox.authorization_revoked",
+  "outbox.succeeded",
   "proof.completed",
+  "recovery.follow_up.reminder_approved",
+  "recovery.message.approved",
+  "recovery.message.succeeded",
   "recovery.terms.approved",
   "variation.approved",
 ]);

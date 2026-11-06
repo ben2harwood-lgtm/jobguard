@@ -1,7 +1,7 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { EvidencePackRepository, EvidenceService, FinalAccountLockRepository, PracticeInvoiceRepository, ProofCommandService, verifiedTenantContextFromMembership, withTenant, type AuthenticatedMembership } from "../src/index.js";
+import { ActionExecutor, FakeRecoveryMessageAdapter, RecoveryMessageRepository, EvidencePackRepository, EvidenceService, FinalAccountLockRepository, PracticeInvoiceRepository, ProofCommandService, verifiedTenantContextFromMembership, withTenant, type AuthenticatedMembership } from "../src/index.js";
 import { LOCK_OWNER, LOCK_USER, seedAccount, publishFixtureCompletion } from "./sv5pre-fixtures.js";
 import { installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { MemoryStorage, pngBytes } from "./site-extra-evidence-fixtures.js";
@@ -259,4 +259,52 @@ it("records attachment approval through the product repository after 0785", asyn
   expect(approvals[0]).toMatchObject({version:"audit.v3",actorRef,subjectRef:pack.id,
     payload:{references:{caseId:fixture.caseId,jobId:fixture.jobId,auditTrust:"lower_trust",auditActorKind:"bound_member"},
       hashes:{manifest:pack.manifestHash,content:pack.contentHash}}});
+});
+
+
+it.each(["approval", "outbox success"])("commits recovery message %s through the product path after 0785", async stage => {
+  await installLegacySyntheticPartyFixtures(db.owner);
+  const fixture = await seedEvidencePackFixture(db.owner), credential = randomBytes(32).toString("hex");
+  await db.owner.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", [`${fixture.identityId}@fictional.invalid`,fixture.identityId]);
+  await db.owner.query("INSERT INTO identity.membership_locator VALUES($1,$2,$3)", [fixture.identityId,fixture.tenantId,fixture.memberId]);
+  await db.owner.query(`INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at)
+    VALUES($1,$2,'synthetic_demo',$3,'fictional',clock_timestamp()+interval '1 hour')`, [randomUUID(),fixture.identityId,credential]);
+  const context = verifiedTenantContextFromMembership({ tenantId:fixture.tenantId, membershipId:fixture.memberId,
+    identityUserId:fixture.identityId } as AuthenticatedMembership, { kind:"real",credential });
+  const actor = { membershipId:fixture.memberId, actorRef:`membership:${fixture.memberId}` };
+  const packs = new EvidencePackRepository(db.runtime), messages = new RecoveryMessageRepository(db.runtime);
+  const pack = await packs.generate(context,fixture.caseId,{commandId:randomUUID()},actor.actorRef);
+  await packs.approveAttachment(context,fixture.caseId,pack.id,{commandId:randomUUID(),expectedManifestHash:pack.manifestHash,expectedContentHash:pack.contentHash},actor.actorRef);
+  const ready = await messages.read(context,fixture.caseId);
+  expect(ready.readiness.packId).toBe(pack.id);
+  const preview = await messages.preview(context,fixture.caseId,{version:"recovery-message-preview.v1",commandId:randomUUID(),
+    expectedCaseRevision:ready.readiness.caseRevision,packId:pack.id},actor);
+  const view = preview.latest!;
+  const command = {version:"recovery-message-command.v1",commandId:randomUUID(),action:"approve",messageId:view.id,
+    expectedRevision:view.revision,recipient:view.message.recipient,body:view.message.body,amountPence:view.message.amountPence,
+    packId:view.message.packId,contentHash:view.message.contentHash};
+  const approved = await messages.command(context,fixture.caseId,command,actor);
+  const outboxId = approved.latest!.approval!.outboxActionId;
+  await messages.command(context,fixture.caseId,command,actor);
+  if (stage === "outbox success") {
+    const fake = new FakeRecoveryMessageAdapter(db.runtime,"success");
+    const adapter = {name:fake.name,supportsProviderDeduplication:fake.supportsProviderDeduplication,
+      deliver:(action:Parameters<typeof fake.deliver>[1]) => fake.deliver(context,action),
+      reconcile:(key:string) => fake.reconcile(context,key)};
+    const executor = new ActionExecutor(db.runtime,new Map([[adapter.name,adapter]]),{emit:() => undefined});
+    await executor.execute(context,outboxId);
+    await executor.execute(context,outboxId);
+    await messages.read(context,fixture.caseId);
+    expect((await db.owner.query("SELECT status FROM app.action_outbox WHERE id=$1",[outboxId])).rows).toEqual([{status:"succeeded"}]);
+    expect((await db.owner.query("SELECT outcome FROM app.action_attempt WHERE action_id=$1",[outboxId])).rows).toEqual([{outcome:"succeeded"}]);
+    expect((await db.owner.query("SELECT count(*)::int n FROM app.recovery_message_sink WHERE message_id=$1",[view.id])).rows[0].n).toBe(1);
+  }
+  const events = await chain(fixture.tenantId); verifyAuditChain(events);
+  const names = stage === "approval" ? ["recovery.message.approved"] : ["recovery.message.approved","outbox.succeeded","recovery.message.succeeded"];
+  for (const eventType of names) {
+    const matching = events.filter(event => event.eventType === eventType);
+    expect(matching).toHaveLength(1);
+    expect(matching[0]).toMatchObject({version:"audit.v3",actorRef:actor.actorRef,
+      payload:{references:{auditTrust:"lower_trust",auditActorKind:"bound_member"}}});
+  }
 });
