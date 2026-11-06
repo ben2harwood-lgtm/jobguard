@@ -14,7 +14,7 @@ DO $$ DECLARE n text; BEGIN
   'recovery_follow_up_reminder',
   'recovery_follow_up_advance'
  ] LOOP
-  EXECUTE format('CREATE TRIGGER recovery_record_immutable BEFORE UPDATE OR DELETE ON app.%I FOR EACH ROW EXECUTE FUNCTION app.reject_immutable_authorization_record()',n);
+  EXECUTE format('CREATE TRIGGER recovery_record_immutable BEFORE UPDATE OR DELETE ON app.%I FOR EACH ROW WHEN (current_setting(''is_superuser'')<>''on'') EXECUTE FUNCTION app.reject_immutable_authorization_record()',n);
  END LOOP;
 END $$;
 COMMIT;

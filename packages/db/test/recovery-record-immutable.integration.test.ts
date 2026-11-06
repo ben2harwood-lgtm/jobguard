@@ -212,6 +212,7 @@ async function asOwner(run: (client: PoolClient) => Promise<void>) {
     await client.query("SET LOCAL ROLE jobguard_migration");
     await client.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
     expect((await client.query("SELECT current_user AS role")).rows).toEqual([{ role: "jobguard_migration" }]);
+    expect((await client.query("SELECT current_setting('is_superuser') AS value")).rows).toEqual([{ value: "off" }]);
     await run(client);
   } finally { await client.query("ROLLBACK"); client.release(); }
 }
@@ -225,6 +226,21 @@ describe("LATER-SAFETY-104 owner-proof append-only recovery records", () => {
     expect(journey.followUp.state).toBe("review_reminder");
     expect((await admin.query("SELECT count(*)::int n FROM app.recovery_message_sink WHERE case_id=$1", [journey.caseId])).rows)
       .toEqual([{ n: 1 }]);
+  });
+
+  it("allows superuser fixture backdating but still refuses owner UPDATE and DELETE", async () => {
+    const client = await admin.connect();
+    try {
+      await client.query("BEGIN");
+      expect((await client.query("SELECT current_setting('is_superuser') AS value")).rows).toEqual([{ value: "on" }]);
+      const result = await client.query("UPDATE app.recovery_message_event SET created_at=created_at-interval '10 minutes' WHERE ctid=(SELECT ctid FROM app.recovery_message_event ORDER BY ctid LIMIT 1)");
+      expect(result.rowCount).toBe(1);
+      await client.query("SET LOCAL ROLE jobguard_migration");
+      await client.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
+      expect((await client.query("SELECT current_setting('is_superuser') AS value")).rows).toEqual([{ value: "off" }]);
+      await assertRefused(client, "recovery_message_event", "UPDATE");
+      await assertRefused(client, "recovery_message_event", "DELETE");
+    } finally { await client.query("ROLLBACK"); client.release(); }
   });
 
   it.each(coveredTables)("refuses owner UPDATE and DELETE of %s without changing its row", async table => {
