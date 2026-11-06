@@ -11,6 +11,7 @@
         "apps/api/src/auth/extra-customer.ts",
         "packages/db/migrations/0809_extra_client_timing_proceed.sql",
         "packages/db/test/extra-client-session.integration.test.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
         "packages/db/test/migration-proofs/0809_extra_client_timing_proceed.proof.json"
       ]
     }
