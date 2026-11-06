@@ -143,7 +143,7 @@ describe("structural recovery fee guard",()=>{
    const signature = "app.reverse_synthetic_landing(uuid,uuid,uuid,uuid,uuid,bigint,character varying)";
    const historical = await readFile(new URL("../migrations/0356_unchecked_job_doors.sql",import.meta.url),"utf8");
    const predecessor = "CREATE OR REPLACE FUNCTION app.reverse_synthetic_landing" + historical.split("CREATE OR REPLACE FUNCTION app.reverse_synthetic_landing")[1]!.split("END$$;")[0]! + "END$$;";
-   const fixed = (await readFile(new URL("../migrations/0793_synthetic_reversal_money_rules.sql",import.meta.url),"utf8")).split("CREATE OR REPLACE FUNCTION app.reverse_synthetic_landing")[1]!.split("END$$;")[0]!;
+   const fixed = (await readFile(new URL("../migrations/0654_synthetic_reversal_money_rules.sql",import.meta.url),"utf8")).split("CREATE OR REPLACE FUNCTION app.reverse_synthetic_landing")[1]!.split("END$$;")[0]!;
    await rolledBack(admin, async db => {
     await db.query("SELECT set_config('app.tenant_id',$1,true)",[w.tenant]);
     const rows = await db.query("SELECT * FROM app.recovery_fee_derivation WHERE tenant_id=$1 AND job_id=$2 ORDER BY id",[w.tenant,w.job]);
