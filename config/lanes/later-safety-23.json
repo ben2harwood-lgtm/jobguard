@@ -7,7 +7,9 @@
       ],
       "note": "LATER-SAFETY-23: per-row connector promotion validation; retain exact hold retry IDs for uncertain 403 outcomes. Current origin/main merged; no migration.",
       "allow": [
+        "apps/web/app/admin/contractor/identity/emergency-actions.tsx",
         "apps/web/app/jobs/[id]/evidence-holds/evidence-holds.test.tsx",
+        "apps/web/e2e/ENT-10-emergency-cutover.spec.ts",
         "packages/db/src/connector-promotion-repository.test.ts",
         "packages/db/src/connector-promotion-repository.ts"
       ]

@@ -48,27 +48,27 @@ test('dual-owner request to revocation, notices and retired-route refusal',async
  await signIn(page.context(),requester!.token);let controls=await screen(page);
  await controls.getByLabel('Emergency reason').fill('Fictional compromised non-owner account');
  await controls.getByRole('button',{name:'Request emergency access',exact:true}).click();
- await expect(controls.getByRole('status')).toHaveText('request recorded.');
+ await expect(controls.getByRole('status',{name:'Emergency action result',exact:true})).toHaveText('request recorded.');
  const id=await controls.getByLabel('Emergency request ID').inputValue();expect(id).toMatch(/^[a-f0-9-]{36}$/);
  await controls.getByRole('button',{name:'Open emergency access',exact:true}).click();
- await expect(controls.getByRole('status')).toContainText('refused');
+ await expect(controls.getByRole('status',{name:'Emergency action result',exact:true})).toContainText('refused');
  for(const approver of [a!,b!]) {
   const context=await browser.newContext({viewport:page.viewportSize()!});
   try {
    await signIn(context,approver.token);const tab=await context.newPage(),approval=await screen(tab);
    await approval.getByLabel('Emergency request ID').fill(id);
    await approval.getByRole('button',{name:'Approve emergency request',exact:true}).click();
-   await expect(approval.getByRole('status')).toHaveText('approve recorded.');
+   await expect(approval.getByRole('status',{name:'Emergency action result',exact:true})).toHaveText('approve recorded.');
    await expect(approval.getByRole('alert',{name:'Emergency access activity'})).toContainText(requester!.email);
   }finally{await context.close();}
  }
  await controls.getByRole('button',{name:'Open emergency access',exact:true}).click();
- await expect(controls.getByRole('status')).toContainText('open recorded');
+ await expect(controls.getByRole('status',{name:'Emergency action result',exact:true})).toContainText('open recorded');
  await controls.getByRole('button',{name:'Inspect sign-in requirement',exact:true}).click();
- await expect(controls.getByRole('status')).toHaveText('Single sign-on required: Off');
+ await expect(controls.getByRole('status',{name:'Emergency action result',exact:true})).toHaveText('Single sign-on required: Off');
  await controls.getByLabel('Non-owner membership ID').fill(target!.membershipId);
  await controls.getByRole('button',{name:'Revoke non-owner access',exact:true}).click();
- await expect(controls.getByRole('status')).toHaveText('revoke_member recorded.');
+ await expect(controls.getByRole('status',{name:'Emergency action result',exact:true})).toHaveText('revoke_member recorded.');
  const notice=controls.getByRole('alert',{name:'Emergency access activity'});
  await expect(notice).toContainText('revoke_member');await expect(notice).toContainText(a!.email);await expect(notice).toContainText(b!.email);
  const refused=await page.request.post('/api/auth/sso-required/emergency',{data:{version:'sso-emergency.v2',requested_tenant_id:f.tenantId}});
