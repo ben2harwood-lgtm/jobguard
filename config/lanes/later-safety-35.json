@@ -7,6 +7,7 @@
       ],
       "note": "LATER-SAFETY-35 RED: typed merchant refusals and practice delivery fixture cap; follows later-safety-24. No migration.",
       "allow": [
+        "apps/web/app/jobs/[id]/page.tsx",
         "apps/web/app/lib/merchant-order-server.test.mts",
         "apps/web/app/lib/merchant-order-server.ts",
         "apps/web/e2e/M2-2-S.spec.ts",
