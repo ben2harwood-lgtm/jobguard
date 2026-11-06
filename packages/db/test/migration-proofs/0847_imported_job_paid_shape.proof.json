@@ -1,6 +1,0 @@
-{
-  "migration": "0847_imported_job_paid_shape.sql",
-  "lp0": [],
-  "upgrade": [],
-  "tenancy": []
-}

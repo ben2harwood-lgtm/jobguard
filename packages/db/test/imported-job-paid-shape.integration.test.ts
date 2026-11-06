@@ -8,7 +8,7 @@ import { historicalAgreement, meterCompany } from "./subscription-persistence-fi
 const oldMigration = readFileSync(new URL("../migrations/0534_import_work_admission.sql", import.meta.url), "utf8");
 const oldConstraint = oldMigration.slice(oldMigration.indexOf("ALTER TABLE app.job DROP CONSTRAINT job_baseline_shape;"),
   oldMigration.indexOf("\n);", oldMigration.indexOf("ALTER TABLE app.job DROP CONSTRAINT job_baseline_shape;")) + 3);
-const migration = readFileSync(new URL("../migrations/0847_imported_job_paid_shape.sql", import.meta.url), "utf8");
+const migration = readFileSync(new URL("../migrations/0669_imported_job_paid_shape.sql", import.meta.url), "utf8");
 
 describe("LATER-SAFETY-119 source-only migration scope", () => {
   it("copies the latest validated constraint, adding only paid to imported v3 statuses", () => {

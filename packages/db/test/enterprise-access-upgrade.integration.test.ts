@@ -84,7 +84,7 @@ it('emergency_dual_owner/scim2_machine preserve populated identity state, instal
  const isLanding=(r:Relation)=>r.nspname==='app'&&r.relname==='landing_allocation';
  type Con={name:string;definition:string};
  expect((after.relations.find(isLanding)!.constraints as Con[]).filter(c=>c.name===added)).toEqual([{name:added,definition:'CHECK ((eligible_net_pence <= gross_pence))'}]);
- // 0847 (LATER-SAFETY-119) only adds 'paid' to job_baseline_shape's imported v3 status list; nothing else on app.job may change.
+ // 0669 (LATER-SAFETY-119) only adds 'paid' to job_baseline_shape's imported v3 status list; nothing else on app.job may change.
  const isJob=(r:Relation)=>r.nspname==='app'&&r.relname==='job',shape='job_baseline_shape';
  const priorShape=(catalogue.relations.find(isJob)!.constraints as Con[]).find(c=>c.name===shape)!;
  const nextShape=(after.relations.find(isJob)!.constraints as Con[]).find(c=>c.name===shape)!;
