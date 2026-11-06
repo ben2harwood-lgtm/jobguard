@@ -72,8 +72,8 @@ it("allows same-job evidence outside the locked manifest and another job's evide
   await finalCheckTenant(f.admin, a.tenantId, db => db.query(`INSERT INTO app.evidence_object
     (id,tenant_id,job_id,scope_item_id,kind,original_evidence_id,evidence_type,
      object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)
-    SELECT $1,tenant_id,job_id,scope_item_id,'preview',id,evidence_type,
-     $2,$1::text,sha256,byte_length,content_type,retention_class,clock_timestamp(),clock_timestamp()
+    SELECT $1::uuid,tenant_id,job_id,scope_item_id,'preview',id,evidence_type,
+     $2,$1::uuid::text,sha256,byte_length,content_type,retention_class,clock_timestamp(),clock_timestamp()
     FROM app.evidence_object WHERE tenant_id=$3 AND id=$4`,
   [previewId, `synthetic/preview/${previewId}`, a.tenantId, evidenceId]));
   expect((await f.admin.query(`SELECT id FROM app.final_check_manifest_source

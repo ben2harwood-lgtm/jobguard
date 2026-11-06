@@ -1,6 +1,22 @@
 {
   "migration": "0842_final_check_invalidation_after_lock.sql",
   "lp0": [],
-  "upgrade": [],
+  "upgrade": [
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "refuse_final_check_locked_invalidation",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, app"
+        ]
+      }
+    }
+  ],
   "tenancy": []
 }

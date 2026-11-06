@@ -7,7 +7,8 @@
       "allow": [
         "packages/db/migrations/0842_final_check_invalidation_after_lock.sql",
         "packages/db/test/migration-proofs/0842_final_check_invalidation_after_lock.proof.json",
-        "packages/db/test/final-check-invalidation-lock.integration.test.ts"
+        "packages/db/test/final-check-invalidation-lock.integration.test.ts",
+        "packages/db/test/final-check-manifest.integration.test.ts"
       ]
     }
   }
