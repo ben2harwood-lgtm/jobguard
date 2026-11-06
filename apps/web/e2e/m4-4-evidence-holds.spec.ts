@@ -3,6 +3,7 @@ import { randomUUID, createHash, createHmac } from "node:crypto";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Pool } from "pg";
+import { importWatchdogFixtureJob } from "../../../packages/db/test/watchdog-fixtures";
 import { E2E_AUTH_CODE_SECRET } from "./global-setup";
 // Native import preserves the built ESM context stamp and avoids Playwright's source loader.
 const loadDb = () => (new Function("specifier", "return import(specifier)") as (s: string) => Promise<typeof import("@jobguard/db")>)(pathToFileURL(join(process.cwd(), "../../packages/db/dist/index.js")).href);
@@ -34,13 +35,16 @@ test("owners request holds, see stored applied states, and a different person re
         VALUES($1,$2,$3,$4,$5,now(),now()+interval '1 day')`, [randomUUID(), tenant, members[n], user, createHash("sha256").update(sessions[n]!).digest("hex")]);
     }
     const verified = await db.contractorSessionContext(runtime, sessions[0]!);
-    await new db.JobRepository(runtime).create(verified, ["job:update"], { id: job, title: "Fictional evidence hold" });
+    await importWatchdogFixtureJob(admin, tenant, job, "Fictional evidence hold", "live", { db, context: verified });
     const key = `synthetic/tenants/${tenant}/manifest`;
-    await admin.query(`INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at)
-      VALUES($1,$2,$3,$4,$5,'application/json',100,'standard_evidence',now()+interval '1 day')`, [evidence, tenant, job, key, "a".repeat(64)]);
-    await admin.query(`INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)
-      VALUES($1,$2,$1,$3,'original','manifest',$4,'v1',$5,2,'application/json','standard_evidence',now(),now())`, [evidence, tenant, job, key, "a".repeat(64)]);
-    await admin.query("INSERT INTO app.worm_synthetic_version VALUES($1,$2,$3)", [tenant, evidence, job]);
+    // Evidence triggers read the job under transaction-local tenant context, even for owner fixtures.
+    await db.withTenant(admin, verified, async tx => {
+      await tx.$client.query(`INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at)
+        VALUES($1,$2,$3,$4,$5,'application/json',100,'standard_evidence',now()+interval '1 day')`, [evidence, tenant, job, key, "a".repeat(64)]);
+      await tx.$client.query(`INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)
+        VALUES($1,$2,$1,$3,'original','manifest',$4,'v1',$5,2,'application/json','standard_evidence',now(),now())`, [evidence, tenant, job, key, "a".repeat(64)]);
+      await tx.$client.query("INSERT INTO app.worm_synthetic_version VALUES($1,$2,$3)", [tenant, evidence, job]);
+    });
     await admin.query(`CREATE ROLE ${role} LOGIN PASSWORD 'fictional-executor' NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOBYPASSRLS`);
     await admin.query(`GRANT jobguard_worm_executor TO ${role}`);
     executor = new Pool({ connectionString: `postgresql://${role}:fictional-executor@127.0.0.1:55432/jobguard_synthetic_demo`, max: 1 });

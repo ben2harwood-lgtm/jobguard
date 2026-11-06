@@ -51,6 +51,7 @@
         "packages/db/test/migration-proofs/0639_connector_promotion.proof.json",
         "packages/db/test/migration-proofs/0640_platform_invoice_read.proof.json",
         "packages/db/test/platform-invoice-read.integration.test.ts",
+        "packages/db/test/watchdog-fixtures.ts",
         "packages/db/test/watchdog.integration.test.ts",
         "packages/db/test/worm-hold-screen.integration.test.ts"
       ]
