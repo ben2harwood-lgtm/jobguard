@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { expect, it } from "vitest";
 import { loadMigrationProofs } from "./migration-proof-loader.js";
 import { extraProceedRegistryRow, currentCommandRegistryRows } from "./lp5-command-catalog.js";
-const sql = readFileSync(new URL("../migrations/0633_extra_proceed_statement.sql", import.meta.url), "utf8");
+const sql = readFileSync(new URL("../migrations/0634_extra_proceed_statement.sql", import.meta.url), "utf8");
 const previous = readFileSync(new URL("../migrations/0606_dark_merchant_order.sql", import.meta.url), "utf8");
 it("extends only the result adapter, preserving all previous branches byte for byte", () => {
  const body = (s: string) => s.slice(s.indexOf("CREATE OR REPLACE FUNCTION app.lp5_command_result"), s.lastIndexOf("COMMIT;")).trim();
@@ -15,7 +15,7 @@ it("registers the operational command, side-table proof and no commercial writer
  expect(writer.match(/INSERT INTO app\.[a-z_]+/gu)).toEqual(["INSERT INTO app.extra_proceed_statement"]);
  expect(writer).not.toMatch(/UPDATE app\.|DELETE FROM app\.|app\.xa_(?:approve|price|open_request|resolve_decision|event)\(/u);
  expect(sql).not.toMatch(/ADD COLUMN|SET app\./u);
- const proof = loadMigrationProofs().proofs.find(p => p.migration === "0633_extra_proceed_statement.sql")!;
+ const proof = loadMigrationProofs().proofs.find(p => p.migration === "0634_extra_proceed_statement.sql")!;
  const predecessor = loadMigrationProofs().proofs.find(p => p.migration === "0606_dark_merchant_order.sql")!;
  const registry = proof.upgrade.find(c => c.section === "rows" && c.after?.table === "app.command_type_registry");
  const previousRegistry = predecessor.upgrade.find(c => c.section === "rows" && c.after?.table === "app.command_type_registry");

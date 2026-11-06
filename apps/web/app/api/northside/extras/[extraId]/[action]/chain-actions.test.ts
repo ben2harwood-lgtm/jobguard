@@ -118,3 +118,19 @@ it("refuses a replay receipt bound to another URL extra", async () => {
 it.each(["tenantId", "actorMembershipId", "serverTime"])("manual submit refuses forged %s", async field => {
   expect((await call("submit", { [field]: id(99) })).status).toBe(422);
 });
+
+it("checks eligibility before receipt reuse when no command ID was supplied", async () => {
+  h.queue.mockResolvedValue([]);
+  h.query.mockResolvedValue({ rows: [{ extra_id: id(99), job_id: extra.jobId }] });
+  expect((await call("approve", { ...binding, commandId: undefined })).status).toBe(403);
+  expect(h.query).not.toHaveBeenCalled();
+  expect(h.extras).not.toHaveBeenCalled();
+  expect(h.approve).not.toHaveBeenCalled();
+});
+it("rejects a stale displayed approval before checking a conflicting receipt", async () => {
+  h.query.mockResolvedValue({ rows: [{ extra_id: id(99), job_id: extra.jobId }] });
+  const response = await call("approve", { ...binding, netPence: 1001 });
+  expect(await response.json()).toEqual({ code: "STALE_REVISION" });
+  expect(h.query).not.toHaveBeenCalled();
+  expect(h.approve).not.toHaveBeenCalled();
+});

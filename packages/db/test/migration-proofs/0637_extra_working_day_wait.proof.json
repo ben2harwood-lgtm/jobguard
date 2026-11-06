@@ -1,5 +1,5 @@
 {
-  "migration": "0636_extra_working_day_wait.sql",
+  "migration": "0637_extra_working_day_wait.sql",
   "lp0": [
     {
       "section": "entries",

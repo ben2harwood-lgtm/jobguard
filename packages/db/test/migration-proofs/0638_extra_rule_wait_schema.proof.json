@@ -1,5 +1,5 @@
 {
-  "migration": "0637_extra_rule_wait_schema.sql",
+  "migration": "0638_extra_rule_wait_schema.sql",
   "lp0": [],
   "upgrade": [],
   "tenancy": []

@@ -7,7 +7,7 @@ let c: Cluster | undefined;
 afterAll(async () => { await c?.close(); vi.unstubAllEnvs(); });
 it("0905 upgrades populated approval requests without changing any earlier row, column or privilege, and reruns harmlessly", async () => {
  vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
- c = await startBeforeMigration("0633_extra_proceed_statement.sql");
+ c = await startBeforeMigration("0634_extra_proceed_statement.sql");
  const w = await chainWorld(c); await submitted(c, w, 150000);
  const before = await snapshot(c.admin);
  const catalogue = async () => (await c!.admin.query(`SELECT p.oid,n.nspname,p.proname,p.proowner,p.proacl,p.prosecdef,p.proconfig,
@@ -18,7 +18,7 @@ it("0905 upgrades populated approval requests without changing any earlier row, 
   FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid JOIN pg_namespace n ON n.oid=c.relnamespace
   WHERE n.nspname='app' AND c.relkind='r' AND c.relname<>'extra_proceed_statement' AND a.attnum>0 AND NOT a.attisdropped ORDER BY 1,2,a.attnum`)).rows;
  const previousColumns = await columns();
- await applyMigration(c, "0633_extra_proceed_statement.sql");
+ await applyMigration(c, "0634_extra_proceed_statement.sql");
  const after = await snapshot(c.admin);
  expect({ ...after, "app.command_type_registry": before["app.command_type_registry"] }).toEqual({ ...before, "app.extra_proceed_statement": [] });
  const previousRegistry = before["app.command_type_registry"] as unknown[], registry = after["app.command_type_registry"] as unknown[];
