@@ -1,13 +1,25 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { quoteDocumentV1, renderQuotePdf } from "@jobguard/core";
-import { hasSyntheticSession } from "../../../lib/synthetic-server";
+import { authenticatePracticeSession } from "@jobguard/db";
+import { hasSyntheticSession, practiceFailure, syntheticPool } from "../../../lib/synthetic-server";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
-  if (!hasSyntheticSession((await cookies()).get("jg_session")?.value))
+  const token = (await cookies()).get("jg_session")?.value;
+  if (!hasSyntheticSession(token))
     return NextResponse.json({ code: "UNAUTHENTICATED" }, { status: 401 });
+
+  try {
+    await authenticatePracticeSession(syntheticPool(), token);
+  } catch (error) {
+    const denied = practiceFailure(error);
+    if (denied) return denied;
+    const code = error instanceof Error && "code" in error && error.code === "UNAUTHENTICATED"
+      ? "UNAUTHENTICATED" : "DATABASE_UNAVAILABLE";
+    return NextResponse.json({ code }, { status: code === "UNAUTHENTICATED" ? 401 : 503 });
+  }
 
   const parsed = quoteDocumentV1.safeParse(await request.json().catch(() => null));
   if (!parsed.success)
