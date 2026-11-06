@@ -600,3 +600,137 @@ catalogue/privilege proofs, restore and binding boundaries. No local database or
 browser suite was run. RED independent review must bind the final exact head.
 The router must stage the resolved union and rename and complete the pending
 merge; this sandbox made no git writes.
+
+### LP-6b withTenant and reviewed bridges (3 November 2026)
+
+Built on origin/main c829a9394 (LP-5c and LP-6a #544), taking main's prerequisite
+implementations and migration numbers unchanged. No new SQL, tables, privileges,
+owner credentials or migration are needed: LP-6a's bind_request supplies the
+checked operation.
+
+The principal bridge carries the authenticated provider's real-session digest;
+the home practice bridge carries its authenticated SHA-256 digest; the contractor
+bridge carries the UUID it just resolved through the persisted session lookup.
+The constructor snapshots kind, credential and verified membership in a private
+WeakMap keyed by the frozen stamped context. Public context shape and serialization
+remain tenantId only. The database derives live identity from the credential;
+withTenant compares its actor and tenant to the context before business work.
+A bind refusal rolls back and never invokes the callback. Each new transaction
+binds again, including reuse of the same context or pooled connection.
+
+Cutover remains compatible and scoped. Membership-only retained synthetic
+composition (contractor/party/work-order/SOR/scheduling fixtures and repositories,
+demo seeds, bootstrap and restore) and queued system work keep their existing
+transaction-local setting path. They cannot call current_actor/current_tenant
+without a session binding; their prior authorization checks remain mandatory.
+Pre-LP-6c routines and RLS still consume the transaction-local tenant setting,
+installed after binding on the new paths. This piece does not globally enforce
+binding or change their actor parameter contracts. MemoryAuthProvider carries its
+fixture digest for protocol tests; only persisted session records bind in SQL.
+
+Missing provider credentials fail before context minting. Supplied malformed
+references fail rather than downgrading. Unstamped/copied contexts still fail
+before connection checkout. Session or membership revocation after bridge
+lookup is checked when bind_request starts. LP-6a holds a session row share lock
+through the transaction, so a racing revocation waits (or times out); this does
+not promise instantaneous cancellation of already-authorized in-flight work.
+Its existing PostgreSQL tests cover that boundary and lock order.
+
+Scanner edits are limited to the authorized membership-constructor DEFINITION
+body and the renewed practice-session/contractor-session-context source pins.
+The stamp checks, principal lookup restriction, other pins and origin assertions
+remain. Runtime bridge tests assert actual credential flow in addition to source
+identity. No contractor lookup change was necessary.
+
+Local validation and CI handoff are recorded in the LP-6b commit message.
+PostgreSQL/browser execution and independent RED review remain CI/router work;
+no live services or customer data are used. LP-3 #546 has now landed; the
+4 November catch-up is ready for a PR with CI and independent review pending.
+The pending merge retains main’s prerequisite changes, the LP-6b authenticated
+fixture credential, and this LP-6b design section without new runtime behavior.
+
+### LP-6b repair WIP: explicit retained exceptions (4 November 2026)
+
+Repair branch `codex/sandbox/lp-6b-repair-wip` includes the clean merge of
+`origin/main` at `f78c8168449a08b3db6719a3388d9c23d325ac14`. Migration 0584 repairs
+only effective contractor actor selection; it does not widen any grants.
+`withTenant` binds a session before tenant setup and runs no callback after
+binding refusal or actor/tenant mismatch. Credentials stay in the private weak
+map, outside context JSON, audit payloads and responses. Refused binding becomes
+a public error before repository-specific error translation. The typed refusal
+carries only session kind. The practice-access and Next boundaries retain
+`UNAUTHENTICATED` for practice requests; existing typed domain translations still
+win. Nest registers a separate binding-only filter, retaining the existing practice
+and watchdog filter families and their guards unchanged. Generic real/contractor
+refusals retain `FORBIDDEN`. Business-query `42501` errors and forged error names
+are not treated as binding failures.
+
+The following exact calls temporarily defer session binding. Their existing SQL
+authorization remains mandatory. `lp6b-deferred-binding.test.ts` checks direct
+named calls within `packages/db/src`. Independent review found that it does not
+cover other workspace packages or local aliases/re-exports. Ben owns any scanner
+expansion under the repair limits; complete workspace enforcement is not claimed.
+No role-based or catch-and-retry opt-out exists.
+
+| Call site | Reason | Closure owner |
+| --- | --- | --- |
+| `EnterpriseIdentityRepository.admin` | Restricted identity login; SQL validates its session digest and admin command | LP-6d, coordinated with LP-6c for authority-changing commands |
+| `EnterpriseIdentityRepository.view` | Identity-only projection; SQL validates its admin session | LP-6d |
+| `EnterpriseIdentityRepository.allowed` | Identity session/action verifier; retains existing permission checks | LP-6d |
+| `OidcRepository.create` | Restricted identity login and existing session-checked OIDC writer | LP-6d |
+| `SsoRequiredRepository.view` | Identity-only requirement projection checks the digest | LP-6d |
+| `SsoRequiredRepository.detail` | Identity-only detail projection checks the digest | LP-6d |
+| `SsoRequiredRepository.command` | Existing identity writer checks the exact session/admin authority | LP-6d, coordinated with LP-6c |
+| `ShadowDetectionRepository.persist` | Shadow-only login; preserves batch tenant/job checks and existing controlled writers | LP-6d, coordinated with LP-6c for must-surface commitment |
+| `AuditExportRepository.refuse` | Refusal audit only, including a historical revoked member; never export access | LP-6d |
+
+No `app` schema usage or `bind_request` execution is granted to
+`jobguard_identity`. Customer-portal-message and job-sources-isolation use the
+named shadow sink and receive no separate exception. The evidence-pack worker
+uses the existing queued-job context in production; its SB-02 test now uses the
+same worker context rather than passing a browser credential to the shadow login.
+The read snapshot starts repeatable-read, binds while writable, then becomes
+read-only before tenant setup. Snapshot comparisons exclude only
+`control_plane.request_binding`; every other selected table remains exact.
+
+The independent `[S9]` pins in `extra-origin.integration.test.ts` are unchanged
+and remain Ben's decision. Only the approved practice-session pin inside
+`context-boundary.test.ts` was refreshed for moving the compatibility digest
+setting after binding. No scanner definition or other source pin was changed.
+
+Before real data, Ben must appoint the database/security operations owner for
+retention and removal of request-binding rows, coordinated with the LP binding
+owners and independently reviewed. This repair implements no row-removal job
+and grants no real-data readiness. All repair fixtures are made-up data.
+
+
+### LP-6b bounded transaction exceptions — Ben's ruling, 5 November 2026
+
+Ben authorized exactly the following five call sites for this repair. Four skip
+request binding and keep their existing checked SQL authorization; evidence
+approval binds later in its established lock order instead of skipping binding.
+These are named transaction exceptions, not a general role-based exemption or a
+retry after a refused bind. The temporary labels identify only the listed method.
+
+| Exact call site | Label and treatment | Existing authorization retained | Closure owner |
+| --- | --- | --- | --- |
+| `PracticeWorkerSwitchRepository.switchOff` | `practice-switch-off`: skip binding | `app.practice_worker_switch_off` authenticates the live persisted session and tenant, including the decided ability to return from a revoked worker | LP-6d, coordinated with LP-6c for the session-control boundary |
+| `ContractorPracticeSessionRepository.revoke` | `contractor-session-revoke`: skip binding | `app.revoke_contractor_practice_session` authenticates the live credential and tenant, including the holder's decided ability to end the session after membership revocation | LP-6d, coordinated with LP-6c for the session-control boundary |
+| `CommercialIntegrityV3Repository.read` | `commercial-integrity-read`: skip binding | The read-only transaction and existing before/after scope checks remain; no session-binding write or session share lock is introduced into this advisory GET | LP-6d |
+| `CommercialIntegrityV3Repository.readFamily` | `commercial-integrity-read-family`: skip binding | The read-only family/source reads and existing final scope authorization remain | LP-6d |
+| `EvidencePackRepository.approveAttachment` | `evidence-pack-approval`: late binding, **not a skip** | Existing authority and resource-lock ordering remains; binding and actor/tenant verification happen at the approved late point before approval mutation, with refusal rolling back | LP-6c for approval/commitment, coordinated with LP-6d for the evidence authority path |
+
+`PracticeWorkerSwitchRepository.switchOn`, `state` and refusal logging remain
+bound. `CommercialIntegrityV3Repository.review` remains bound. Every other call
+retains its current binding behavior; no role-based fallback, catch-and-retry
+binding bypass, or extra call site is authorized by this ruling. Credentials stay
+private and outside context JSON, responses and audit payloads. Existing SQL,
+privileges and public authorization results are unchanged by the four skip labels.
+
+**LP-6c/LP-6d must close every one of these five exceptions before any real data.**
+Closure must preserve the decided session-holder controls, read-only/nonblocking
+advisory boundary and evidence approval lock/revocation guarantees while applying
+the relevant protected actor/tenant binding. This ruling grants no real-data
+readiness and does not assign or implement request-binding-row cleanup; Ben must
+still appoint its accountable database/platform operations owner with security
+review before real data.

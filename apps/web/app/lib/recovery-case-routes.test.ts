@@ -93,6 +93,7 @@ it.each([
   const target=scenario==="nonexistent"?nonexistentJob:existingJob;
   const principal={tenant_id:tenantId,membership_id:randomUUID(),identity_user_id:randomUUID()};
   const query=vi.fn(async(sql:string,values?:unknown[])=>({rows:
+   sql === "SELECT app.current_actor() actor, app.current_tenant() tenant" ? [{ actor: principal.membership_id, tenant: tenantId }] :
    sql.includes("authenticate_practice_session") && values?.[0]===hash(strangerToken) ? [principal] :
    sql.includes("FROM app.job") ? jobs.filter(j=>values?.[0]===tenantId&&values?.[1]===j.id&&values?.[2]===j.digest).map(j=>({id:j.id})) : []}));
   spies.token=token;

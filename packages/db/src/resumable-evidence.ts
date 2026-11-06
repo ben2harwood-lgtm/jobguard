@@ -3,6 +3,7 @@ import { z } from "zod";
 import { sha256, type PrivateVersionedStorage } from "@jobguard/storage";
 import { EvidenceError, EvidenceService, syntheticMediaUploadSchema } from "./evidence.js";
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
+import { mapRequestBindingRefusal } from "./request-binding-error.js";
 import { requireLiveJob } from "./watchdog.js";
 import { refuseLockedNewSource } from "./job-work-state-sources.js";
 
@@ -19,6 +20,7 @@ const actorV1 = z.object({ membershipId: uuid, identityUserId: uuid }).strict();
 type Actor = z.infer<typeof actorV1>;
 type Upload = { id: string; object_key: string; expected_content_type: string; maximum_bytes: string;
   state: string; expires_at: Date };
+const bindingNotFound = () => new ResumableEvidenceError("NOT_FOUND");
 
 export class ResumableEvidenceError extends Error {
   constructor(readonly code: "DISABLED" | "NOT_FOUND" | "CONFLICT" | "LIMIT" | "INCOMPLETE") {
@@ -63,10 +65,10 @@ export class ResumableEvidenceService {
     if (parsed.expiresAt.getTime() <= now) throw new ResumableEvidenceError("LIMIT");
     const input = { ...parsed, expiresAt: new Date(Math.min(parsed.expiresAt.getTime(), now + maximumUploadLifetimeMs)) };
     const target = { ...input, uploadId: input.id };
-    await withTenant(this.pool, context, db => this.authorize(db, context, actor, target));
+    await mapRequestBindingRefusal(withTenant(this.pool, context, db => this.authorize(db, context, actor, target)), bindingNotFound);
     const evidence = new EvidenceService(this.pool, this.storage(context, actor, target), true);
     // The existing two-phase command owns identity, labelled client hash/time and expiry.
-    const result = await evidence.beginUpload(context, input, db => this.authorize(db, context, actor, target));
+    const result = await mapRequestBindingRefusal(evidence.beginUpload(context, input, db => this.authorize(db, context, actor, target)), bindingNotFound);
     const { uploadUrl: _url, ...upload } = result;
     return { version: "resumable-evidence.v1" as const, upload };
   }
@@ -90,12 +92,12 @@ export class ResumableEvidenceService {
     this.checkEnabled();
     const actor = this.actor(rawActor);
     const input = access.parse(raw);
-    return withTenant(this.pool, context, async db => {
+    return mapRequestBindingRefusal(withTenant(this.pool, context, async db => {
       const upload = await this.readUpload(db, context, actor, input, false);
       const parts = await this.parts(db, context, input.uploadId);
       return { version: "resumable-evidence.v1" as const, state: upload.state,
         nextOffset: parts.reduce((total, part) => total + part.bytes.length, 0) };
-    });
+    }), bindingNotFound);
   }
 
   async append(context: VerifiedTenantContext, rawActor: unknown, raw: unknown) {
@@ -104,7 +106,7 @@ export class ResumableEvidenceService {
     const input = chunk.parse(raw);
     // Copy before the first await so the caller cannot mutate an in-flight payload.
     const bytes = Buffer.from(input.bytes);
-    return withTenant(this.pool, context, async db => {
+    return mapRequestBindingRefusal(withTenant(this.pool, context, async db => {
       const upload = await this.readUpload(db, context, actor, input);
       await refuseLockedNewSource(db, input.jobId);
       if (upload.state !== "pending" || upload.expires_at.getTime() <= Date.now()) throw new ResumableEvidenceError("CONFLICT");
@@ -120,26 +122,26 @@ export class ResumableEvidenceService {
       await db.$client.query(`INSERT INTO app.synthetic_evidence_chunk(tenant_id,upload_id,byte_offset,bytes)
         VALUES($1,$2,$3,$4)`, [context.tenantId, input.uploadId, input.offset, bytes]);
       return { nextOffset: nextOffset + bytes.length };
-    });
+    }), bindingNotFound);
   }
 
   async finalize(context: VerifiedTenantContext, rawActor: unknown, raw: unknown) {
     this.checkEnabled();
     const actor = this.actor(rawActor);
     const input = finish.parse(raw);
-    const object = await withTenant(this.pool, context, async db => {
+    const object = await mapRequestBindingRefusal(withTenant(this.pool, context, async db => {
       const upload = await this.readUpload(db, context, actor, input);
       const parts = await this.parts(db, context, input.uploadId);
       const bytes = Buffer.concat(parts.map(part => part.bytes));
       if (bytes.length < Number(upload.maximum_bytes)) throw new ResumableEvidenceError("INCOMPLETE");
       return { key: upload.object_key, versionId: `synthetic-${sha256(bytes)}`, bytes,
         byteLength: bytes.length, contentType: upload.expected_content_type };
-    });
+    }), bindingNotFound);
     // No client-supplied object version or digest becomes authoritative. The finaliser
     // verifies the server-read bytes against the labelled client expectation as usual.
-    return new EvidenceService(this.pool, this.storage(context, actor, input), true).finalize(context, {
+    return mapRequestBindingRefusal(new EvidenceService(this.pool, this.storage(context, actor, input), true).finalize(context, {
       commandId: input.commandId, uploadId: input.uploadId, objectVersionId: object.versionId, evidenceType: input.evidenceType,
-    }, db => this.authorize(db, context, actor, input));
+    }, db => this.authorize(db, context, actor, input)), bindingNotFound);
   }
 
   /** Use with the existing ProofCommandService so stage completion re-reads these exact bytes. */
@@ -153,13 +155,13 @@ export class ResumableEvidenceService {
       createUploadUrl: async () => "synthetic-resumable.invalid",
       createDownloadUrl: async () => { throw new ResumableEvidenceError("DISABLED"); },
       deleteExactVersion: async () => { throw new ResumableEvidenceError("DISABLED"); },
-      readExactVersion: async (key, versionId) => withTenant(this.pool, context, async db => {
+      readExactVersion: async (key, versionId) => mapRequestBindingRefusal(withTenant(this.pool, context, async db => {
         const upload = await this.readUpload(db, context, actor, input);
         const parts = await this.parts(db, context, input.uploadId);
         const bytes = Buffer.concat(parts.map(part => part.bytes));
         if (key !== upload.object_key || versionId !== `synthetic-${sha256(bytes)}`) throw new EvidenceError("OBJECT_INVALID");
         return { key, versionId, bytes, byteLength: bytes.length, contentType: upload.expected_content_type };
-      }),
+      }), bindingNotFound),
     };
   }
 }

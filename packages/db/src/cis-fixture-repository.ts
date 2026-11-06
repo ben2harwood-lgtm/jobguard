@@ -1,3 +1,4 @@
+import { RequestBindingRefusedError } from "./request-binding-error.js";
 import { createHash } from "node:crypto";
 import type { Pool } from "pg";
 import { isDeepStrictEqual } from "node:util";
@@ -36,6 +37,7 @@ export class CisFixtureRepository {
   constructor(private readonly pool: Pool) {}
   private async guarded<T>(work: () => Promise<T>): Promise<T> {
     try { return await work(); } catch (error) {
+      if (error instanceof RequestBindingRefusedError) fail("NOT_FOUND");
       if (error instanceof CisFixturePersistenceError || error instanceof CisDeductionError) throw error;
       const message = error instanceof Error ? error.message : "";
       if (message === "CIS_FIXTURE_NOT_FOUND") fail("NOT_FOUND");

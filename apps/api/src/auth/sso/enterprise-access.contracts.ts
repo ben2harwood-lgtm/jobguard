@@ -4,9 +4,9 @@ const base={version:z.literal('emergency.v1'),requestId:uuid};
 export const emergencyCommandV1=z.discriminatedUnion('operation',[
  z.object({...base,operation:z.literal('request'),reasonHash:hash}).strict(),
  z.object({...base,operation:z.literal('approve')}).strict(),
- z.object({...base,operation:z.literal('open'),tokenHash:hash}).strict(),
- z.object({...base,operation:z.literal('inspect'),tokenHash:hash}).strict(),
- z.object({...base,operation:z.literal('revoke_member'),tokenHash:hash,targetMembershipId:uuid}).strict(),
+ z.object({...base,operation:z.literal('open')}).strict(),
+ z.object({...base,operation:z.literal('inspect'),token:hash}).strict(),
+ z.object({...base,operation:z.literal('revoke_member'),token:hash,targetMembershipId:uuid}).strict(),
  z.object({version:z.literal('emergency.v1'),operation:z.literal('notices')}).strict(),
 ]);
 export const scim2User=z.object({schemas:z.tuple([z.literal('urn:ietf:params:scim:schemas:core:2.0:User')]),
