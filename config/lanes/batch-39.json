@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/batch-39"
       ],
-      "note": "RED. ENT-3 priced journey and MON-6 customer practice display; NOPR. Stored attempt infrastructure already on main.",
+      "note": "RED. ENT-3 priced journey and MON-6 customer practice display; PR landing. Stored attempt infrastructure already on main.",
       "allow": [
         "apps/api/src/pay-now-attempt.application.test.ts",
         "apps/api/src/pay-now-attempt.application.ts",
@@ -19,14 +19,14 @@
         "apps/web/proxy.test.ts",
         "apps/web/proxy.ts",
         "docs/contracts/pay-now-fake-attempts-dark-v1.md",
-        "packages/db/migration-notes/1200_customer_practice_pay_now_read.md",
-        "packages/db/migrations/1200_customer_practice_pay_now_read.sql",
+        "packages/db/migration-notes/0638_customer_practice_pay_now_read.md",
+        "packages/db/migrations/0638_customer_practice_pay_now_read.sql",
         "packages/db/src/northside-demo.ts",
         "packages/db/test/customer-practice-pay-now-fixtures.test.ts",
         "packages/db/test/customer-practice-pay-now-fixtures.ts",
         "packages/db/test/customer-practice-pay-now.integration.test.ts",
         "packages/db/test/final-check-fixture.ts",
-        "packages/db/test/migration-proofs/1200_customer_practice_pay_now_read.proof.json",
+        "packages/db/test/migration-proofs/0638_customer_practice_pay_now_read.proof.json",
         "packages/db/test/northside-demo.integration.test.ts",
         "packages/db/test/site-extra-priced-evidence.integration.test.ts"
       ]

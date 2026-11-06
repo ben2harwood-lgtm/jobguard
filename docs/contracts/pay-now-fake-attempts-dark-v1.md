@@ -95,7 +95,7 @@ refused before application access. Missing, malformed, expired, revoked and
 foreign-scope customer credentials share the portal's public refusal. Responses
 are no-store and no-referrer. No customer link or message is created or sent.
 
-Migration 1200 adds one bounded identity-only read routine, reusing portal resolve
+Migration 0638 adds one bounded identity-only read routine, reusing portal resolve
 and its authority locks before invoice access. It selects the bound job's latest
 synthetic final invoice by issue date and invoice number, subtracts credits and
 unreversed receipts, and returns only invoice number and amount due. No role,
@@ -153,7 +153,7 @@ Migration inventory against that base:
   target note: main explicitly holds LP-5 integration. Main's proof, note and
   contract hold are retained. The obsolete `0757` conflict paths stay absent.
 - Renamed `1016_customer_practice_pay_now_read` to
-  `1200_customer_practice_pay_now_read`, including its proof/note and source
+  `0638_customer_practice_pay_now_read`, including its proof/note and source
   references. SQL bytes are unchanged: SHA-256
   `1e833500890d5f96a57287157900062887a8f6218c715e19c7876e1e8c0f6095`.
   This is the only additional migration, with a temporary landing number.
@@ -199,7 +199,7 @@ Local verification for this reconciliation (installed binaries; no downloads):
 ### Named holds for landing
 
 - **Git staging and final lane gate:** the sandbox cannot write `.git`. The
-  router must stage all working-tree resolutions, removals and the new 1200
+  router must stage all working-tree resolutions, removals and the new 0638
   files, finish the pending merge, reconcile the final migration number and
   rerun the normal lane/lint gate on the exact resulting head. No Git-writing
   command was run here.
@@ -224,7 +224,7 @@ READY for router commit/push and CI; NOPR. This is one builder repair round,
 not an independent RED pass or a database/browser execution result. The launcher
 already merged main; the comparison base is now `origin/main`
 `199124c0885ca27558fbaf62a9a74dee7ad2818f`. All existing main migrations remain
-unchanged. The only extra migration remains 1200_customer_practice_pay_now_read;
+unchanged. The only extra migration remains 0638_customer_practice_pay_now_read;
 main's fake-attempt migration is not duplicated.
 
 B1: the proxy's only product edit appends the exact `practice-pay-now` exception.
@@ -342,7 +342,7 @@ Local checks (installed binaries, no downloads):
   catalogue, RLS, privileges and tenancy suites in CI.
 - Execute MON-6 at both widths and ENT-3 on mobile, headless, at most two workers.
   Browser discovery and source inspection do not establish those journeys pass.
-- Router reconciles current main and migration 1200's landing number, commits and
+- Router reconciles current main and migration 0638's landing number, commits and
   pushes, then obtains required green CI and independent RED review at the exact
   resulting head. No further local repair round is authorized.
 - Existing synthetic-only, real-provider, money, deployment and launch gates stand.
@@ -370,7 +370,7 @@ wording; it does not claim an independent PASS or an executed browser/DB pass.
   Retain final-check-fixture.ts's explicit draft/party/track/live setup: MON-6
   still calls that helper in the browser cluster without the legacy test hooks.
 - Lane inventory covers every non-lane path changed from origin/main, and does
-  not list itself. No new migration; 1200 remains subject to landing reservation.
+  not list itself. No new migration; 0638 remains subject to landing reservation.
 
 Local validation with installed binaries (no downloads):
 
@@ -407,7 +407,7 @@ No code changes were necessary. ENT-3 priced journey and MON-6 customer
 practice display remain the plan pieces; this group is RED.
 
 - All main migration files are byte-identical. The sole additional migration is
-  1200_customer_practice_pay_now_read.sql, creating a new routine; no existing
+  0638_customer_practice_pay_now_read.sql, creating a new routine; no existing
   routine is replaced, so no latest-main routine body needs re-creation.
 - Main's stages and stage-acknowledge proxy routes and their coverage remain
   beside practice-pay-now. The lane exactly covers all 22 non-lane paths changed
@@ -430,3 +430,56 @@ checks above successfully. No package download was requested.
 PostgreSQL and browser execution remain for GitHub CI after router push;
 required CI and independent RED review must bind the resulting exact head.
 No commit, push, PR, provider action, deployment or release was performed here.
+
+
+### Batch-39 PR landing — 6 November 2026, reserved migration 0638
+
+READY for the router to commit, push and open this group's PR. RED: ENT-3
+priced journey and MON-6 customer practice display. This is builder evidence;
+exact-head independent RED review and green CI remain required before merge.
+HEAD fd3a4e2b3 already completes the launcher merge; no unmerged paths exist.
+Comparison base: origin/main 5bcdc8a8402a85f4c62b4301ea6383fc2f7d3926.
+
+Migration inventory against that base: all 295 main SQL files are retained
+byte-for-byte. The only additional migration is
+`0638_customer_practice_pay_now_read.sql`, renamed from the temporary number
+by stem only, together with its proof, note and references. Its unchanged SQL
+SHA-256 is `1e833500890d5f96a57287157900062887a8f6218c715e19c7876e1e8c0f6095`.
+It creates `identity.customer_practice_pay_now`, which is absent from main;
+no existing routine is re-created or replaced, and no duplicate remains.
+No product behaviour or existing test changed in this landing pass. Per-project
+customer tokens and the server-priced extra's displayed price are retained.
+Web route/server imports use API workspace exports, not API source paths
+(source inspection; Cloudflare build was not executed).
+
+Local checks used installed binaries, no downloads and at most two workers per
+Vitest invocation, with no more than three named files per invocation:
+
+- API: `vitest run --maxWorkers=2 src/pay-now-attempt.application.test.ts`:
+  29 passed.
+- Web: `vitest run --maxWorkers=2 proxy.test.ts
+  app/api/customer-portal/practice-pay-now/route.test.ts
+  app/customer/practice-pay-now/screen.test.tsx`: 53 passed.
+- DB helpers: `vitest run --maxWorkers=2
+  test/customer-practice-pay-now-fixtures.test.ts
+  test/site-extra-priced-evidence.test.ts test/migration-proof-loader.test.ts`:
+  92 passed without starting PostgreSQL.
+- Web TypeScript `tsc -p tsconfig.json --noEmit --incremental false` and API
+  TypeScript `tsc -p tsconfig.json --noEmit` passed.
+- Browser discovery: `playwright test --list --workers=2
+  e2e/ENT-3-priced-journey.spec.ts e2e/MON-6-customer-practice-pay-now.spec.ts`
+  found four project entries; ENT-3 retains its desktop skip. No browser executed.
+- Core purity, money, commercial, AI-provider and PL/pgSQL boundary lints passed;
+  `git diff --check origin/main` passed.
+- Normal lane lint was run and reports only the three deleted temporary-number
+  paths, still present in read-only HEAD/index. It cannot see a staged rename
+  here. Using the existing lane-policy functions on the effective main/worktree
+  diff passes exact path coverage (23 paths including the lane) and migration
+  order. The lane lists all 22 non-lane paths and never itself. Router must stage
+  the renames and rerun normal lane lint at the resulting committed head.
+
+CI must prove fresh/upgrade/catalogue/RLS PostgreSQL guarantees, the customer
+practice integration, priced-extra and northside integration cases, and both
+MON-6 browser widths plus ENT-3 mobile, alongside all required checks. No database,
+localhost server, provider, real money, release or launch was used here. MON-6's
+live acceptance criteria and all existing release holds remain open.
