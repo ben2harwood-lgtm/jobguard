@@ -1,5 +1,11 @@
 import { z } from "zod";
 
+// Link name is display-only: bounded, rendered as React text, never a business fact.
+export function practiceFirmName(raw: unknown): string {
+  const name = z.string().trim().min(1).max(40).safeParse(raw);
+  return `${name.success ? name.data : "Builder"}'s practice firm`;
+}
+
 export const tenantIdV1 = z.guid({ error: "Invalid uuid" });
 export const jobStatusV1 = z.enum(["draft", "quoting", "accepted", "live", "invoiced", "paid", "lost"]);
 export const deliveryStateV1 = z.enum(["not_sent", "queued", "outcome_unknown", "delivered", "unknown"]);

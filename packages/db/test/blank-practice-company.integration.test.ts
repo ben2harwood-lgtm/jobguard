@@ -39,7 +39,7 @@ it("starts empty, isolates testers, retains history and rejects old credentials 
   await expect(startBlankPracticeCompany(c.runtime, reset, first)).rejects.toThrow("UNAUTHENTICATED");
   expect(await authenticatePracticeSession(c.runtime, second)).toBeDefined();
   expect((await c.admin.query("SELECT practice_session_digest FROM app.job WHERE id=$1", [job])).rows[0].practice_session_digest).toBe(a.digest);
-  expect((await c.admin.query("SELECT revoked_at,replaced_by FROM control_plane.practice_session WHERE token_digest=$1", [a.digest])).rows[0]).toEqual({ revoked_at: expect.any(Date), replaced_by: current.digest });
+  expect((await c.admin.query("SELECT s.revoked_at,b.replaced_by FROM control_plane.practice_session s JOIN control_plane.blank_practice_session b USING(token_digest) WHERE s.token_digest=$1", [a.digest])).rows[0]).toEqual({ revoked_at: expect.any(Date), replaced_by: current.digest });
 });
 it("serializes competing resets, rejects nonblank/expired sessions and grants no table access", async () => {
   const token = await startBlankPracticeCompany(c.runtime, start);
@@ -49,6 +49,10 @@ it("serializes competing resets, rejects nonblank/expired sessions and grants no
   const legacy = await issuePracticeSession(c.runtime);
   await expect(startBlankPracticeCompany(c.runtime, reset, legacy)).rejects.toThrow("UNAUTHENTICATED");
   expect(await authenticatePracticeSession(c.runtime, legacy)).toBeDefined();
+  const legacyJobs = await c.admin.query("SELECT title FROM app.job WHERE practice_session_digest=$1 AND saved_v1_sample", [digestOf(legacy)]);
+  expect(legacyJobs.rows).toEqual([{ title: "Earlier proposed pricing (v1)" }]);
+  await expect(c.runtime.query("SELECT * FROM control_plane.blank_practice_session")).rejects.toThrow(/permission denied/u);
+  expect((await c.admin.query("SELECT relrowsecurity,relforcerowsecurity,pg_get_userbyid(relowner) owner FROM pg_class WHERE oid='control_plane.blank_practice_session'::regclass")).rows[0]).toEqual({ relrowsecurity: true, relforcerowsecurity: false, owner: "jobguard_migration" });
   const expired = await startBlankPracticeCompany(c.runtime, start);
   await c.admin.query("UPDATE control_plane.practice_session SET expires_at=clock_timestamp()-interval '1 second' WHERE token_digest=$1", [digestOf(expired)]);
   await expect(startBlankPracticeCompany(c.runtime, reset, expired)).rejects.toThrow("UNAUTHENTICATED");
