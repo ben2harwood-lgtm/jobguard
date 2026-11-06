@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "walk-1": {
+      "branches": ["codex/sandbox/walk-1"],
+      "allow": [
+        "apps/web/app/ui/walkthrough/walkthrough.tsx",
+        "apps/web/app/ui/walkthrough/walkthrough.module.css",
+        "apps/web/app/ui/walkthrough/walkthrough.test.tsx",
+        "apps/web/app/demo-s/core-1000/instruction-tour.tsx",
+        "apps/web/app/demo-s/core-1000/journey.tsx",
+        "apps/web/e2e/WALK-1.spec.ts"
+      ],
+      "note": "WALK-1: reusable walkthrough layer; instruction-only first consumer. WALK-3 wires voice-first job actions."
+    }
+  }
+}
