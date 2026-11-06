@@ -47,6 +47,15 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   await migrate(c.admin);
   expect(await proofDifferences(c.admin, rows)).toEqual({ rows: [], types: [] });
   const later = await routines();
+  const customerRead = later.filter(r => r.nspname === "identity" && r.proname === "customer_practice_pay_now" && r.args === "t uuid, j uuid, c uuid, digest text");
+  expect(customerRead).toHaveLength(1);
+  const { definition, ...customerReadMetadata } = customerRead[0]!;
+  const proof = JSON.parse(await readFile(new URL("./migration-proofs/0633_customer_practice_pay_now_read.proof.json", import.meta.url), "utf8"));
+  const expectedRead = proof.upgrade.find((entry: { section: string; after: { nspname: string; proname: string } }) => entry.section === "routines" && entry.after.nspname === "identity" && entry.after.proname === "customer_practice_pay_now").after;
+  const owner = (await c.admin.query("SELECT $1::regrole::oid AS oid", [expectedRead.proowner])).rows[0].oid;
+  expect(customerReadMetadata).toEqual({ ...expectedRead, proowner: owner });
+  const customerReadSql = await readFile(new URL("../migrations/0633_customer_practice_pay_now_read.sql", import.meta.url), "utf8");
+  expect(definition.split("$function$")[1]).toBe(customerReadSql.split("AS $$")[1]!.split("$$;")[0]);
   const key = (r: { nspname: string; proname: string; args: string }) => `${r.nspname}.${r.proname}(${r.args})`;
   // Exact existing replacements only; all their privileges and unrelated definitions remain frozen.
   const replacements = new Map<string, string>();
@@ -70,14 +79,15 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
       expect(now.definition.split("$function$")[1]).toBe(replacements.get(key(prior)));
     } else expect(now).toEqual(prior);
   }
-  // Only these four new routines: take exact ACL/owner/configuration from the two proofs.
-  const proofs = loadMigrationProofs().proofs.filter(p => ["0634_extra_proceed_statement.sql", "0637_extra_working_day_wait.sql"].includes(p.migration));
+  // Only these five new routines: take exact ACL/owner/configuration from the three proofs.
+  const proofs = loadMigrationProofs().proofs.filter(p => ["0633_customer_practice_pay_now_read.sql", "0634_extra_proceed_statement.sql", "0637_extra_working_day_wait.sql"].includes(p.migration));
   const additions = proofs.flatMap(p => p.upgrade.filter(e => e.section === "routines").map(e => ({ migration: p.migration, row: e.after! })));
   expect(additions.map(e => key(e.row as Parameters<typeof key>[0])).sort()).toEqual([
     "app.xa_proceed(p_job uuid, p_extra uuid, p_actor uuid, p_body jsonb)",
     "app.xa_proceed_breaches(p_job uuid, p_extra uuid)",
     "app.xa_proceed_view(p_job uuid, p_extra uuid)",
     "app.xa_wait_deadline(p_started timestamp with time zone, p_step jsonb)",
+    "identity.customer_practice_pay_now(t uuid, j uuid, c uuid, digest text)",
   ]);
   for (const { migration, row } of additions) {
     const identity = row as Parameters<typeof key>[0];
