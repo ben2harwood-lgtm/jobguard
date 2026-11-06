@@ -134,7 +134,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "0000000000000000000000000000000000000000000000000000000000000000",
         "staticWrites": [],
         "staticCalls": [
           "app.contractor_member_active"
@@ -151,7 +151,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "0000000000000000000000000000000000000000000000000000000000000000",
         "staticWrites": [],
         "staticCalls": [
           "app.contractor_member_active",
@@ -174,9 +174,9 @@
         "otherExecute": [],
         "definitionSha256": null,
         "staticWrites": [
-          "app.extra_client_link_closure",
           "app.extra_approval_outcome",
-          "app.extra_approval_step_fact"
+          "app.extra_approval_step_fact",
+          "app.extra_client_link_closure"
         ],
         "staticCalls": [
           "app.contractor_member_active",
@@ -199,9 +199,9 @@
         "otherExecute": [],
         "definitionSha256": null,
         "staticWrites": [
-          "app.extra_client_link_closure",
           "app.extra_approval_outcome",
-          "app.extra_approval_step_fact"
+          "app.extra_approval_step_fact",
+          "app.extra_client_link_closure"
         ],
         "staticCalls": [
           "app.contractor_member_active",

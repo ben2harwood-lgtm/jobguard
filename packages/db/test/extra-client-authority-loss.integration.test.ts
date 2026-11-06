@@ -26,7 +26,10 @@ async function invitation(w: ChainWorld, onJob?: string) {
   } else s = await submitted(c, w, 150000);
   await repo.approveExtraStep(ctx, w.members.supervisor.member, approveInput(s, 0));
   await repo.approveExtraStep(ctx, w.supervisor2.member, approveInput(s, 1));
-  const actor = w.members.client_approver.member.membershipId;
+  return issueInvitation(w, repo, ctx, s);
+}
+async function issueInvitation(w: ChainWorld, repo: ExtraApprovalRepository, ctx: Awaited<ChainWorld["ctx"]>,
+  s: Awaited<ReturnType<typeof submitted>>, actor = w.members.client_approver.member.membershipId) {
   const token = newToken(), signinDigest = randomUUID().replaceAll("-", "").repeat(2);
   const sd = randomUUID().replaceAll("-", "").repeat(2);
   const recipient = await emailOf(c, w, actor);
@@ -45,7 +48,7 @@ async function invitation(w: ChainWorld, onJob?: string) {
   const view = () => repo.clientApprovalView(ctx, w.members.client_approver.member, {
     version: "client-approval-view.v1", jobId: s.jobId, requestId: s.requestId, linkToken: token, email: recipient,
   });
-  return { w, repo, ctx, s, sent, actor, use, run, view, sd };
+  return { w, repo, ctx, s, sent, actor, use, run, view, sd, token, recipient };
 }
 async function revoke(w: ChainWorld, kind: string) {
   if (kind === "membership") await command(c, w, { kind: "membership.revoke", membershipId: w.members.client_approver.member.membershipId });
@@ -53,6 +56,36 @@ async function revoke(w: ChainWorld, kind: string) {
 }
 const facts = async (request: string) => (await c.admin.query(
   "SELECT to_jsonb(f) fact FROM app.extra_approval_step_fact f WHERE request_id=$1 ORDER BY step_index", [request])).rows;
+
+it("A3 control: approver who keeps authority is not over-cancelled; send delivers once and link works", async () => {
+  const w = await chainWorld(c), lost = await invitation(w);
+  const kept = await issueInvitation(w, lost.repo, lost.ctx, lost.s, w.client2.member.membershipId);
+  await command(c, w, { kind: "membership.revoke", membershipId: lost.actor });
+  const deliver = vi.fn(async () => ({ kind: "succeeded" as const, providerReference: "fictional" }));
+  const adapter = { name: "fake_email" as const, supportsProviderDeduplication: true, deliver, reconcile: async () => "unknown" as const };
+  const executor = new ActionExecutor(c.runtime, new Map([["fake_email", adapter]]), { emit: vi.fn() });
+  const status = async (id: string) => (await c.admin.query("SELECT status FROM app.action_outbox WHERE id=$1", [id])).rows[0].status;
+  await executor.execute(lost.ctx, lost.sent.outboxActionId as string);
+  expect(await status(lost.sent.outboxActionId as string)).toBe("cancelled");
+  expect(await status(kept.sent.outboxActionId as string)).toBe("pending");
+  await executor.execute(kept.ctx, kept.sent.outboxActionId as string);
+  await executor.execute(kept.ctx, kept.sent.outboxActionId as string);
+  expect(deliver).toHaveBeenCalledTimes(1);
+  expect(await status(kept.sent.outboxActionId as string)).toBe("succeeded");
+  expect((await kept.use()).rows[0].result).toMatchObject({ extraApprover: true });
+  expect(await kept.run("decide")).toMatchObject({ state: expect.any(String) });
+});
+
+it("A8 legacy runtime decide path refuses an unused link after sender grant loss", async () => {
+  const f = await invitation(await chainWorld(c));
+  await revoke(f.w, "sender grant");
+  await expect(f.repo.decideClientApproval(f.ctx, f.w.members.client_approver.member, {
+    version: "decide-client-approval.v1", commandId: randomUUID(), jobId: f.s.jobId, requestId: f.s.requestId,
+    linkToken: f.token, email: f.recipient, revisionHash: f.s.hash, netPence: f.s.net, decision: "approve",
+    fictionalRoleName: "Fictional Housing Approver", actualTesterReference: "tester:practice-ben",
+  })).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
+  expect((await c.admin.query("SELECT count(*)::int n FROM app.extra_client_link_closure WHERE link_id=$1", [f.sent.linkId])).rows[0].n).toBe(0);
+});
 
 it.each(["membership", "client grant", "sender grant"])("Q14 %s loss cancels pending and retryable sends, preserves decisions and current-authority reads", async kind => {
   const w = await chainWorld(c), history = await invitation(w);

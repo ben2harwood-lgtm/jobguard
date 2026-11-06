@@ -7,11 +7,13 @@
       ],
       "note": "ENT-5 Q14, RED authorization; synthetic only, NOPR.",
       "allow": [
+        "docs/contracts/extra-authority-loss-v1.md",
         "packages/db/migrations/0858_extra_client_authority_loss.sql",
-        "packages/db/test/extra-client-authority-loss.integration.test.ts",
-        "packages/db/test/migration-proofs/0858_extra_client_authority_loss.proof.json",
         "packages/db/src/outbox.ts",
-        "docs/contracts/extra-authority-loss-v1.md"
+        "packages/db/test/extra-client-authority-loss.integration.test.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/0858_extra_client_authority_loss.proof.json",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts"
       ]
     }
   }
