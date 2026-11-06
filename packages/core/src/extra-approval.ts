@@ -30,7 +30,7 @@ export function evaluateExtraApprovalRequirement(raw: unknown) {
     withinProceedLimit: net !== null && net <= rules.proceedLimit.pence,
     aboveClientThreshold: rules.clientApproval.kind === "threshold" ? net === null || net > rules.clientApproval.abovePence : false,
     aboveClientBeforeWorkThreshold: rules.clientApproval.kind === "threshold" ? net === null || net > rules.clientApproval.beforeWorkAbovePence : false,
-  }, companySteps: rules.bands[bandIndex]!.steps, approvalAuthority: false as const });
+  }, companySteps: rules.bands[bandIndex]!.steps.map(step => ({ ...step, waitWorkingDays: step.waitWorkingDays === undefined ? 2 : step.waitWorkingDays })), approvalAuthority: false as const });
 }
 const companyRole = z.enum(["supervisor", "surveyor", "commercial_manager"]);
 export const extraStepFactV1 = z.discriminatedUnion("kind", [
@@ -49,7 +49,7 @@ export function extraRoleConstraint(raw: unknown): "permitted_constraint" | "hel
   const input = readExtraConstraint(extraRoleConstraintV1, raw);
   if (input.action === "price") return input.role === "surveyor" ? "permitted_constraint" : "refused";
   if (input.action === "report") return input.siteStaff ? "permitted_constraint" : "held";
-  return input.role === "supervisor" ? "permitted_constraint" : "held";
+  return ["supervisor", "surveyor", "commercial_manager"].includes(input.role) ? "permitted_constraint" : "refused";
 }
 const slot = z.string().trim().min(1).max(100);
 const personUuid = uuid.transform(value => value.toLowerCase());
@@ -59,7 +59,7 @@ export function approvalSeparationConstraint(raw: unknown) {
   const input = readExtraConstraint(extraSeparationV1, raw);
   if (input.raiserPerson === input.candidatePerson) return "refused_self" as const;
   if (input.history.some(h => h.person === input.candidatePerson && h.stepKey !== input.stepKey)) return "refused_reused_person" as const;
-  if (input.history.some(h => h.person === input.candidatePerson)) return "held_repeat_semantics" as const;
+  if (input.history.some(h => h.person === input.candidatePerson && h.revisionId === input.revisionId)) return "repeat_first_outcome" as const;
   return "permitted_constraint" as const;
 }
 const workReport = z.object({ reference: slot, uncertainty: z.string().trim().min(1).max(1000).nullable() }).strict();

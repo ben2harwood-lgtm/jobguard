@@ -10,7 +10,7 @@ const review = z.object({
   assessment: z.object({ classification: z.enum(["eligible_for_review", "non_billable"]), exclusions: z.array(z.string()) }),
 });
 export const billabilityView = z.object({
-  version: z.literal("recovery-billability-view.v1"), caseId: uuid, caseRevision: z.number().int().positive(),
+  version: z.literal("recovery-billability-view.v1"), csrfToken: z.string().min(1), caseId: uuid, caseRevision: z.number().int().positive(),
   lines: z.array(z.object({ workId: uuid, lineId: uuid })),
   reviews: z.array(z.object({ workId: uuid, lineId: uuid, review, approved: z.boolean() })),
 });
@@ -70,7 +70,7 @@ export function BillabilityScreen({ jobId, caseId }: { jobId: string; caseId: st
       // Write before sending. A reload or lost response must retain the same ID and payload.
       sessionStorage.setItem(storageKey, JSON.stringify(body));
       setPending({ body, uncertain: true });
-      const response = await fetch(endpoint, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), cache: "no-store" });
+      const response = await fetch(endpoint, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", "x-csrf-token": view?.csrfToken ?? "" }, body: JSON.stringify(body), cache: "no-store" });
       const answer: unknown = await response.json();
       if (billabilityAnswer(response.status, answer, body.commandId)) {
         sessionStorage.removeItem(storageKey); setPending(null);
@@ -81,7 +81,7 @@ export function BillabilityScreen({ jobId, caseId }: { jobId: string; caseId: st
         await refresh();
       } else {
         const refusal = z.object({ version: z.literal("recovery-billability-error.v1"), code: z.string(), message: z.string() }).safeParse(answer);
-        const known = refusal.success && [400, 404, 409, 422].includes(response.status);
+        const known = refusal.success && [400, 403, 404, 409, 422].includes(response.status);
         setMessage(known ? `${refusal.data.message}${earlierUnknown ? ` ${unknownAnswer}` : ""}` : unknownAnswer);
         if (known && !earlierUnknown) { sessionStorage.removeItem(storageKey); setPending(null); }
       }
