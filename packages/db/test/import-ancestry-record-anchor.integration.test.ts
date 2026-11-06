@@ -5,6 +5,7 @@ import { appendAuditBatch } from "../src/audit.js";
 import { JobImportV3Repository } from "../src/job-import-v3-repository.js";
 import { withTenant } from "../src/tenant-context.js";
 import { closeWorkFixture, createImportFixture, freshIntent, type ImportFixture } from "./job-import-v3-fixtures.js";
+import { importWorkJob } from "./job-work-state-command-fixtures.js";
 import { seedWorkPractice, workTenant } from "./job-work-state-fixtures.js";
 
 const migration = readFileSync(new URL("../migrations/0839_import_ancestry_record_anchor.sql", import.meta.url), "utf8");
@@ -18,7 +19,7 @@ const sources = {
   adopt_invoiced_job_v3: "0625_company_import_once.sql",
   apply_recovery_timeline_signal: "0506_recovery_timeline_store.sql",
 };
-const anchor = /\n    AND EXISTS \(SELECT 1 FROM app\.job_import_v3 iv WHERE iv\.tenant_id=[\w.]+ AND iv\.job_id=\w+\.id AND iv\.source_job_id=\w+\.id\)/g;
+const anchor = /\n    AND \(EXISTS \(SELECT 1 FROM app\.job_import_v3 iv WHERE iv\.tenant_id=([\w.]+) AND iv\.job_id=(\w+)\.id AND iv\.source_job_id=(\w+)\.id\)\n     OR EXISTS \(SELECT 1 FROM app\.command_receipt rv WHERE rv\.tenant_id=\1 AND rv\.command_type='job.adopt_in_flight' AND rv\.status='succeeded'\n      AND rv\.semantic_key='import:'\|\|\2\.id::text AND rv\.result->>'jobId'=\2\.id::text AND rv\.result->>'sourceJobId'=\3\.id::text\)\)/g;
 function definition(sql: string, name: string) {
   const start = sql.search(new RegExp(`CREATE (?:OR REPLACE )?FUNCTION app\\.${name}\\(`));
   expect(start, name).toBeGreaterThanOrEqual(0);
@@ -43,7 +44,7 @@ describe("LATER-SAFETY-109 migration source", () => {
 
 describe("LATER-SAFETY-109 import ancestry — real PostgreSQL", () => {
   let f: ImportFixture;
-  let realJob: string, wrongParentJob: string;
+  let realJob: string, wrongParentJob: string, v1Job: string, v1WrongParentJob: string;
   const forgedJob = randomUUID(), unownedJob = randomUUID(), sku = randomUUID();
   const facts = new Map<string, { caseId: string; runId: string; followUpId: string }>();
   beforeAll(async () => {
@@ -62,6 +63,17 @@ describe("LATER-SAFETY-109 import ancestry — real PostgreSQL", () => {
       { ...f.request, expectedBindingId: binding, lifecyclePoint: "invoiced" });
     wrongParentJob = String((await repo.adopt(other.auth.context, other.auth.digest, other.jobId,
       freshIntent(binding, otherPreview.previewHash, "invoiced"))).jobId);
+    // v1 uses the product-shaped command receipt, without a job_import_v3 row.
+    v1Job = (await importWorkJob(f, f.practice)).jobId;
+    v1WrongParentJob = (await importWorkJob(f, other)).jobId;
+    const receipts = (await f.admin.query(`SELECT semantic_key,result FROM app.command_receipt
+      WHERE tenant_id=$1 AND command_type='job.adopt_in_flight' AND status='succeeded'
+       AND result->>'jobId'=ANY($2::text[])`, [auth.context.tenantId, [v1Job, v1WrongParentJob]])).rows;
+    expect(receipts).toHaveLength(2);
+    expect(receipts).toContainEqual(expect.objectContaining({ semantic_key: `import:${v1Job}`,
+      result: expect.objectContaining({ jobId: v1Job, sourceJobId: f.practice.jobId }) }));
+    expect((await f.admin.query("SELECT count(*)::int n FROM app.job_import_v3 WHERE job_id=ANY($1::uuid[])",
+      [[v1Job, v1WrongParentJob]])).rows[0].n).toBe(0);
     await workTenant(f.admin, auth.context.tenantId, async db => {
       // Owner-only synthetic fixture rows: copy a constraint-valid imported shape,
       // but deliberately create neither import records nor inherited ownership.
@@ -79,7 +91,7 @@ describe("LATER-SAFETY-109 import ancestry — real PostgreSQL", () => {
       await db.query("INSERT INTO app.merchant(id,tenant_id,name) VALUES($1,$2,'Fictional ancestry supplier')", [merchant, auth.context.tenantId]);
       await db.query(`INSERT INTO app.merchant_sku(id,tenant_id,merchant_id,sku,description,base_unit,practice_session_digest)
         VALUES($1,$2,$3,'ANCESTRY-109','Fictional item','each',$4)`, [sku, auth.context.tenantId, merchant, auth.digest]);
-      for (const job of [realJob, forgedJob, unownedJob, wrongParentJob]) {
+      for (const job of [realJob, forgedJob, unownedJob, wrongParentJob, v1Job, v1WrongParentJob]) {
         const row = { caseId: randomUUID(), runId: randomUUID(), followUpId: randomUUID() };
         facts.set(job, row);
         await db.query(`INSERT INTO app.recovery_case(id,tenant_id,job_id,claim_pence,currency,state,synthetic)
@@ -131,8 +143,8 @@ describe("LATER-SAFETY-109 import ancestry — real PostgreSQL", () => {
           return db.$client.query("SELECT app.later109_owner_probe($1,$2,$3,$4,$5) value", [kind, auth.context.tenantId, job, digest, row.caseId]);
         }
         case "adopt_invoiced_job_v3":
-          return db.$client.query("SELECT app.adopt_invoiced_job_v3($1,$2,$3,$4,$5,'{}',$6)",
-            [auth.context.tenantId, job, digest, randomUUID(), randomUUID(), "a".repeat(64)]);
+          return db.$client.query("SELECT app.adopt_invoiced_job_v3($1,$2,$3,$4,$5,$6::jsonb,$7)",
+            [auth.context.tenantId, job, digest, randomUUID(), randomUUID(), { lifecyclePoint: "invoiced" }, "a".repeat(64)]);
         case "apply_recovery_timeline_signal":
           return db.$client.query("SELECT app.apply_recovery_timeline_signal($1,$2) value", [auth.context.tenantId, {
             version: "recovery-timeline-signal.v2", signalId: randomUUID(), eventId: randomUUID(), kind: "timer",
@@ -148,18 +160,23 @@ describe("LATER-SAFETY-109 import ancestry — real PostgreSQL", () => {
     evidence_pack_v3_owner: "NOT_FOUND", adopt_invoiced_job_v3: "FORBIDDEN",
     apply_recovery_timeline_signal: "RECOVERY_TIMELINE_FORBIDDEN",
   };
-  it.each(Object.keys(sources) as (keyof typeof sources)[])("%s preserves real adoption and refuses forged/unowned ancestry", async name => {
+  const cases = (Object.keys(sources) as (keyof typeof sources)[]).flatMap(name =>
+    (["v3", "v1"] as const).map(version => ({ name, version })));
+  it.each(cases)("$name preserves $version adoption and refuses forged/unowned ancestry", async ({ name, version }) => {
     const { auth } = f.practice;
+    const ownJob = version === "v3" ? realJob : v1Job;
+    const strangerJob = version === "v3" ? wrongParentJob : v1WrongParentJob;
     if (name === "adopt_invoiced_job_v3") {
-      // Reaching the chain guard proves the importing session passed ownership.
-      await expect(call(name, realJob)).rejects.toThrow("IMPORT_ALREADY_ADOPTED");
+      // A valid lifecycle snapshot reaches the ownership and chain guards.
+      await expect(call(name, ownJob)).rejects.toThrow("IMPORT_ALREADY_ADOPTED");
     } else {
-      const result = await call(name, realJob);
+      const result = await call(name, ownJob);
       expect(result.rowCount).toBe(1);
-      if (name === "ch4_read_work_facts") expect(result.rows[0].value).toMatchObject({ jobId: realJob, version: "job-work-state-read.v1" });
+      if (name === "ch4_read_work_facts") expect(result.rows[0].value).toMatchObject({ jobId: ownJob, version: "job-work-state-read.v1" });
       if (name === "ch4_require_command_owner" || name === "final_check_builder") expect(result.rows[0].value).toBe(auth.membershipId);
-      if (name === "evidence_pack_v3_owner") expect(result.rows[0].value).toBe(realJob);
+      if (name === "evidence_pack_v3_owner") expect(result.rows[0].value).toBe(ownJob);
     }
+    await expect(call(name, strangerJob)).rejects.toThrow(refusals[name]);
     await expect(call(name, unownedJob)).rejects.toThrow(refusals[name]);
     // app.append_audit is runtime reachable; it must not turn its caller's claim
     // into ownership. Each routine receives a fresh forged event through it.
@@ -169,13 +186,42 @@ describe("LATER-SAFETY-109 import ancestry — real PostgreSQL", () => {
       payload: { references: { sourceJobId: f.practice.jobId } },
     }]));
     await expect(call(name, forgedJob)).rejects.toThrow(refusals[name]);
-    // A real import record for a DIFFERENT parent must not validate this claim.
+    // A real import record or receipt for a DIFFERENT parent cannot validate this claim.
     await withTenant(f.runtime, auth.context, db => appendAuditBatch(db, [{
       id: randomUUID(), version: "audit.v1", actorRef: `membership:${auth.membershipId}`,
-      eventType: "job.imported_baseline_attested", subjectType: "job", subjectRef: wrongParentJob,
+      eventType: "job.imported_baseline_attested", subjectType: "job", subjectRef: strangerJob,
       payload: { references: { sourceJobId: f.practice.jobId } },
     }]));
-    await expect(call(name, wrongParentJob)).rejects.toThrow(refusals[name]);
+    await expect(call(name, strangerJob)).rejects.toThrow(refusals[name]);
+  });
+
+  it.each(["receipt", "parent"] as const)("detects a removed v1 %s check (transactional scratch mutation)", async removed => {
+    const { auth } = f.practice, client = await f.admin.connect();
+    try {
+      await client.query("BEGIN");
+      const original = (await client.query("SELECT pg_get_functiondef('app.ch4_read_work_facts(uuid,uuid,text)'::regprocedure) body")).rows[0].body as string;
+      const weakened = removed === "receipt"
+        ? original.replace(/\n     OR EXISTS \(SELECT 1 FROM app\.command_receipt rv[^;]*?rv\.result->>'sourceJobId'=source\.id::text\)/, "")
+        : original.replace(" AND rv.result->>'sourceJobId'=source.id::text", "");
+      expect(weakened).not.toBe(original);
+      await client.query(weakened);
+      await client.query("SELECT set_config('app.tenant_id',$1,true)", [auth.context.tenantId]);
+      await client.query("SET LOCAL ROLE jobguard_runtime");
+      if (removed === "receipt") {
+        await expect(client.query("SELECT app.ch4_read_work_facts($1,$2,$3)",
+          [auth.context.tenantId, v1Job, auth.digest])).rejects.toThrow("WORK_STATE_FORBIDDEN");
+      } else {
+        // The preceding cases appended an event falsely naming this session's parent.
+        const leaked = await client.query("SELECT app.ch4_read_work_facts($1,$2,$3) value",
+          [auth.context.tenantId, v1WrongParentJob, auth.digest]);
+        expect(leaked.rows[0].value).toMatchObject({ jobId: v1WrongParentJob });
+      }
+    } finally {
+      await client.query("ROLLBACK");
+      client.release();
+    }
+    expect((await call("ch4_read_work_facts", v1Job)).rowCount).toBe(1);
+    await expect(call("ch4_read_work_facts", v1WrongParentJob)).rejects.toThrow("WORK_STATE_FORBIDDEN");
   });
 
   it("the forged work-state assertion detects a removed anchor (transactional scratch mutation)", async () => {

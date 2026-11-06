@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import { jobWorkStateReadV1 } from "@jobguard/core";
 import { seedWorkPractice as seedPractice, workTenant, type WorkFixture, type WorkJob } from "./job-work-state-fixtures.js";
@@ -58,11 +58,12 @@ export async function linkPair(f:WorkFixture,preLive=false,successorOwner?:WorkP
 }
 export async function runLink(pool:Pool,p:WorkPractice,input:unknown,jobId=p.jobId){return workTenant(pool,p.auth.context.tenantId,async db=>jobWorkStateReadV1.parse((await db.query("SELECT app.ch4_link_post_lock_job($1,$2,$3,$4::jsonb) result",[p.auth.context.tenantId,jobId,p.auth.digest,JSON.stringify(input)])).rows[0].result))}
 
-/** Real synthetic adoption command; source lineage is the existing immutable audit contract. */
+/** Real synthetic adoption command; source lineage is bound by the succeeded command receipt. */
 export async function importWorkJob(f:WorkFixture,p:WorkPractice,sourceJobId=p.jobId){
  const {AdoptInFlightJobMutation,UserCommandDispatcher}=await import("../src/index.js");
- const t=p.auth.context.tenantId,jobId=randomUUID(),baselineHash="b".repeat(64);
+ const t=p.auth.context.tenantId,jobId=randomUUID();
  const binding=(await f.admin.query("SELECT b.* FROM app.job_party_binding b JOIN app.job_party_current c ON(c.tenant_id,c.job_id,c.binding_id)=(b.tenant_id,b.job_id,b.id) WHERE b.tenant_id=$1 AND b.job_id=$2",[t,sourceJobId])).rows[0]!;
+ const baselineHash=createHash("sha256").update(JSON.stringify({sourceJobId,bindingId:binding.id,baselineDescription:"Fictional baseline",netPence:100000})).digest("hex");
  const mutation=new AdoptInFlightJobMutation(t,"synthetic_candidate",{
   version:"adopt-job.v1",jobId,baselineId:randomUUID(),title:"Fictional inherited work job",lifecyclePoint:"live",
   provenance:"imported",lineageStrength:"builder_attested_weaker",baselineHash,baselineDescription:"Fictional baseline",
@@ -75,7 +76,7 @@ export async function importWorkJob(f:WorkFixture,p:WorkPractice,sourceJobId=p.j
   actorMembershipId:p.auth.membershipId,subjectType:"job",subjectRef:jobId,
   action:{actionType:"job.adopt_in_flight",recipient:null,contentHash:baselineHash,aggregateRevision:0,amountPence:100000,
    currency:"GBP",policyVersion:"synthetic_import_terms_candidate.v1",expiresAt:new Date(Date.now()+300000)},
- },{mutate:mutation.mutate.bind(mutation),auditEvents:(result,cmd)=>mutation.auditEvents(result,cmd).map(event=>({
+ },{mutate:async(db,cmd)=>({...await mutation.mutate(db,cmd),sourceJobId,sourceBindingId:binding.id}),auditEvents:(result,cmd)=>mutation.auditEvents(result,cmd).map(event=>({
   ...event,payload:{...event.payload,references:{...event.payload.references,sourceJobId}},
  }))});
  return {...p,jobId};

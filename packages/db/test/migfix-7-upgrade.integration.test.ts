@@ -80,6 +80,14 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   // Exact existing replacements only; all their privileges and unrelated definitions remain frozen.
   const fullBodies = new Map<string, string>();
   for (const [identity, migration] of [
+    ["app.guard_practice_material_requirement()", "0839_import_ancestry_record_anchor.sql"],
+    ["app.ch4_read_work_facts(t uuid, j uuid, digest text)", "0839_import_ancestry_record_anchor.sql"],
+    ["app.read_job_sources(t uuid, j uuid, digest text, source text)", "0839_import_ancestry_record_anchor.sql"],
+    ["app.ch4_require_command_owner(t uuid, j uuid, digest text)", "0839_import_ancestry_record_anchor.sql"],
+    ["app.final_check_builder(t uuid, j uuid, d text, locking boolean)", "0839_import_ancestry_record_anchor.sql"],
+    ["app.evidence_pack_v3_owner(t uuid, c uuid, d text)", "0839_import_ancestry_record_anchor.sql"],
+    ["app.adopt_invoiced_job_v3(t uuid, source_job uuid, d text, cmd uuid, auth uuid, approved jsonb, request_hash text)", "0839_import_ancestry_record_anchor.sql"],
+    ["app.apply_recovery_timeline_signal(p_tenant uuid, p_signal jsonb)", "0839_import_ancestry_record_anchor.sql"],
     ["app.reverse_synthetic_landing(p_tenant uuid, p_reversal uuid, p_derivation uuid, p_journal uuid, p_allocation uuid, p_amount bigint, p_reason character varying)", "0654_synthetic_reversal_money_rules.sql"],
     ["app.replace_fee_reservation_book(p_tenant uuid, p_book jsonb, p_result jsonb)", "0651_fee_result_forward_only.sql"],
     ["app.demo_issue_customer_link(t uuid, j uuid, c uuid, session_digest text, link_digest text, content text)", "0650_demo_customer_link_reference.sql"],

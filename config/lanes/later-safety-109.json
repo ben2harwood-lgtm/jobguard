@@ -7,8 +7,11 @@
       ],
       "allow": [
         "packages/db/migrations/0839_import_ancestry_record_anchor.sql",
+        "packages/db/test/import-ancestry-record-anchor.integration.test.ts",
+        "packages/db/test/job-work-state-command-fixtures.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
         "packages/db/test/migration-proofs/0839_import_ancestry_record_anchor.proof.json",
-        "packages/db/test/import-ancestry-record-anchor.integration.test.ts"
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts"
       ]
     }
   }

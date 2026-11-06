@@ -14,7 +14,9 @@ CREATE OR REPLACE FUNCTION app.guard_practice_material_requirement() RETURNS tri
     AND e.payload->'references'->>'sourceJobId'=source.id::text
    JOIN app.job j ON j.tenant_id=e.tenant_id AND j.id::text=e.subject_ref
     AND j.provenance='imported' AND j.practice_session_digest IS NULL
-    AND EXISTS (SELECT 1 FROM app.job_import_v3 iv WHERE iv.tenant_id=NEW.tenant_id AND iv.job_id=j.id AND iv.source_job_id=source.id)
+    AND (EXISTS (SELECT 1 FROM app.job_import_v3 iv WHERE iv.tenant_id=NEW.tenant_id AND iv.job_id=j.id AND iv.source_job_id=source.id)
+     OR EXISTS (SELECT 1 FROM app.command_receipt rv WHERE rv.tenant_id=NEW.tenant_id AND rv.command_type='job.adopt_in_flight' AND rv.status='succeeded'
+      AND rv.semantic_key='import:'||j.id::text AND rv.result->>'jobId'=j.id::text AND rv.result->>'sourceJobId'=source.id::text))
   )
   SELECT 1 FROM owned JOIN app.merchant_sku s ON s.tenant_id=NEW.tenant_id
    WHERE owned.id=NEW.job_id AND s.id=NEW.sku_id
@@ -37,7 +39,9 @@ BEGIN
   SELECT id FROM app.job WHERE tenant_id=t AND practice_session_digest=digest
   UNION SELECT job.id FROM owned source JOIN app.audit_event e ON e.tenant_id=t AND e.subject_type='job' AND e.event_type='job.imported_baseline_attested' AND e.payload->'references'->>'sourceJobId'=source.id::text
    JOIN app.job job ON job.tenant_id=e.tenant_id AND job.id::text=e.subject_ref AND job.provenance='imported' AND job.practice_session_digest IS NULL
-    AND EXISTS (SELECT 1 FROM app.job_import_v3 iv WHERE iv.tenant_id=t AND iv.job_id=job.id AND iv.source_job_id=source.id)
+    AND (EXISTS (SELECT 1 FROM app.job_import_v3 iv WHERE iv.tenant_id=t AND iv.job_id=job.id AND iv.source_job_id=source.id)
+     OR EXISTS (SELECT 1 FROM app.command_receipt rv WHERE rv.tenant_id=t AND rv.command_type='job.adopt_in_flight' AND rv.status='succeeded'
+      AND rv.semantic_key='import:'||job.id::text AND rv.result->>'jobId'=job.id::text AND rv.result->>'sourceJobId'=source.id::text))
  ) SELECT 1 FROM owned JOIN app.job_commercial_track track ON track.tenant_id=t AND track.job_id=owned.id WHERE owned.id=j AND track.job_track='small_builder' AND track.environment='synthetic_demo') THEN RAISE EXCEPTION 'WORK_STATE_FORBIDDEN' USING ERRCODE='42501'; END IF;
  SELECT coalesce(jsonb_agg(jsonb_build_object('version',version,'id',id,'jobId',job_id,'sequence',sequence,'kind',kind,'factAt',to_char(fact_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),'recordedAt',to_char(recorded_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),'sourceReceiptId',source_receipt_id,'commandId',command_id,'predecessorId',predecessor_id,'closeReason',close_reason,'closeNote',close_note) ORDER BY fact_at,id),'[]') INTO events FROM app.job_work_state_event WHERE tenant_id=t AND job_id=j;
  SELECT jsonb_build_object('id',id,'lockedAt',to_char(locked_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"')) INTO lock FROM app.final_account_lock WHERE tenant_id=t AND job_id=j;
@@ -54,7 +58,9 @@ BEGIN
   SELECT id FROM app.job WHERE tenant_id=t AND practice_session_digest=digest
   UNION SELECT job.id FROM owned source_job JOIN app.audit_event e ON e.tenant_id=t AND e.subject_type='job' AND e.event_type='job.imported_baseline_attested' AND e.payload->'references'->>'sourceJobId'=source_job.id::text
    JOIN app.job job ON job.tenant_id=e.tenant_id AND job.id::text=e.subject_ref AND job.provenance='imported' AND job.practice_session_digest IS NULL
-    AND EXISTS (SELECT 1 FROM app.job_import_v3 iv WHERE iv.tenant_id=t AND iv.job_id=job.id AND iv.source_job_id=source_job.id)
+    AND (EXISTS (SELECT 1 FROM app.job_import_v3 iv WHERE iv.tenant_id=t AND iv.job_id=job.id AND iv.source_job_id=source_job.id)
+     OR EXISTS (SELECT 1 FROM app.command_receipt rv WHERE rv.tenant_id=t AND rv.command_type='job.adopt_in_flight' AND rv.status='succeeded'
+      AND rv.semantic_key='import:'||job.id::text AND rv.result->>'jobId'=job.id::text AND rv.result->>'sourceJobId'=source_job.id::text))
  ) SELECT 1 FROM owned JOIN app.job_commercial_track track ON track.tenant_id=t AND track.job_id=owned.id WHERE owned.id=j AND track.job_track='small_builder' AND track.environment='synthetic_demo') THEN RAISE EXCEPTION 'JOB_SOURCE_FORBIDDEN' USING ERRCODE='42501'; END IF;
  IF source NOT IN('diary','customer_message') OR source IS NULL THEN RAISE EXCEPTION 'INVALID_JOB_SOURCE_INPUT' USING ERRCODE='22023'; END IF;
  IF source='diary' THEN
@@ -83,7 +89,9 @@ BEGIN
    SELECT id FROM app.job WHERE tenant_id=t AND practice_session_digest=digest
    UNION SELECT job.id FROM owned source JOIN app.audit_event e ON e.tenant_id=t AND e.subject_type='job' AND e.event_type='job.imported_baseline_attested' AND e.payload->'references'->>'sourceJobId'=source.id::text
     JOIN app.job job ON job.tenant_id=e.tenant_id AND job.id::text=e.subject_ref AND job.provenance='imported' AND job.practice_session_digest IS NULL
-    AND EXISTS (SELECT 1 FROM app.job_import_v3 iv WHERE iv.tenant_id=t AND iv.job_id=job.id AND iv.source_job_id=source.id)
+    AND (EXISTS (SELECT 1 FROM app.job_import_v3 iv WHERE iv.tenant_id=t AND iv.job_id=job.id AND iv.source_job_id=source.id)
+     OR EXISTS (SELECT 1 FROM app.command_receipt rv WHERE rv.tenant_id=t AND rv.command_type='job.adopt_in_flight' AND rv.status='succeeded'
+      AND rv.semantic_key='import:'||job.id::text AND rv.result->>'jobId'=job.id::text AND rv.result->>'sourceJobId'=source.id::text))
   ) SELECT 1 FROM owned WHERE id=j) THEN RAISE EXCEPTION 'WORK_STATE_FORBIDDEN' USING ERRCODE='42501'; END IF;
  END IF;
  IF actor IS NULL OR NOT EXISTS(SELECT 1 FROM app.job x JOIN app.job_commercial_track c ON(c.tenant_id,c.job_id)=(x.tenant_id,x.id) WHERE x.tenant_id=t AND x.id=j AND c.job_track='small_builder' AND c.environment='synthetic_demo')
@@ -112,7 +120,9 @@ BEGIN
   SELECT id FROM app.job WHERE tenant_id=t AND practice_session_digest=d
   UNION SELECT child.id FROM owned_jobs source JOIN app.audit_event e ON e.tenant_id=t AND e.subject_type='job' AND e.event_type='job.imported_baseline_attested' AND e.payload->'references'->>'sourceJobId'=source.id::text
   JOIN app.job child ON child.tenant_id=e.tenant_id AND child.id::text=e.subject_ref AND child.provenance='imported' AND child.practice_session_digest IS NULL
-    AND EXISTS (SELECT 1 FROM app.job_import_v3 iv WHERE iv.tenant_id=t AND iv.job_id=child.id AND iv.source_job_id=source.id)
+    AND (EXISTS (SELECT 1 FROM app.job_import_v3 iv WHERE iv.tenant_id=t AND iv.job_id=child.id AND iv.source_job_id=source.id)
+     OR EXISTS (SELECT 1 FROM app.command_receipt rv WHERE rv.tenant_id=t AND rv.command_type='job.adopt_in_flight' AND rv.status='succeeded'
+      AND rv.semantic_key='import:'||child.id::text AND rv.result->>'jobId'=child.id::text AND rv.result->>'sourceJobId'=source.id::text))
  ) SELECT EXISTS(SELECT 1 FROM owned_jobs WHERE id=j) INTO owned;
  IF NOT EXISTS(SELECT 1 FROM app.final_check_terms_acceptance WHERE tenant_id=t AND terms_version='synthetic_final_check_terms.v1') THEN RAISE EXCEPTION 'FINAL_CHECK_FORBIDDEN' USING ERRCODE='42501'; END IF;
  IF NOT owned OR NOT EXISTS(SELECT 1 FROM app.job_commercial_track WHERE tenant_id=t AND job_id=j AND job_track='small_builder' AND environment='synthetic_demo') THEN RAISE EXCEPTION 'FINAL_CHECK_FORBIDDEN' USING ERRCODE='42501'; END IF;
@@ -137,7 +147,9 @@ BEGIN
   SELECT id FROM app.job WHERE tenant_id=t AND practice_session_digest=d
   UNION SELECT child.id FROM owned_jobs source JOIN app.audit_event e ON e.tenant_id=t AND e.subject_type='job' AND e.event_type='job.imported_baseline_attested' AND e.payload->'references'->>'sourceJobId'=source.id::text
   JOIN app.job child ON child.tenant_id=e.tenant_id AND child.id::text=e.subject_ref AND child.provenance='imported' AND child.practice_session_digest IS NULL
-    AND EXISTS (SELECT 1 FROM app.job_import_v3 iv WHERE iv.tenant_id=t AND iv.job_id=child.id AND iv.source_job_id=source.id)
+    AND (EXISTS (SELECT 1 FROM app.job_import_v3 iv WHERE iv.tenant_id=t AND iv.job_id=child.id AND iv.source_job_id=source.id)
+     OR EXISTS (SELECT 1 FROM app.command_receipt rv WHERE rv.tenant_id=t AND rv.command_type='job.adopt_in_flight' AND rv.status='succeeded'
+      AND rv.semantic_key='import:'||child.id::text AND rv.result->>'jobId'=child.id::text AND rv.result->>'sourceJobId'=source.id::text))
  ) SELECT EXISTS(SELECT 1 FROM owned_jobs WHERE id=j) INTO owned;
  IF NOT owned OR NOT EXISTS(SELECT 1 FROM app.job_commercial_track WHERE tenant_id=t AND job_id=j AND environment='synthetic_demo' AND job_track='small_builder')
  OR NOT EXISTS(SELECT 1 FROM app.final_check_terms_acceptance WHERE tenant_id=t AND terms_version='synthetic_final_check_terms.v1') THEN RAISE EXCEPTION 'NOT_FOUND'; END IF;
@@ -165,7 +177,9 @@ BEGIN
   UNION SELECT j.id FROM owned s JOIN app.audit_event e ON e.tenant_id=t AND e.subject_type='job'
    AND e.event_type='job.imported_baseline_attested' AND e.payload->'references'->>'sourceJobId'=s.id::text
    JOIN app.job j ON j.tenant_id=t AND j.id::text=e.subject_ref AND j.provenance='imported' AND j.practice_session_digest IS NULL
-    AND EXISTS (SELECT 1 FROM app.job_import_v3 iv WHERE iv.tenant_id=t AND iv.job_id=j.id AND iv.source_job_id=s.id)
+    AND (EXISTS (SELECT 1 FROM app.job_import_v3 iv WHERE iv.tenant_id=t AND iv.job_id=j.id AND iv.source_job_id=s.id)
+     OR EXISTS (SELECT 1 FROM app.command_receipt rv WHERE rv.tenant_id=t AND rv.command_type='job.adopt_in_flight' AND rv.status='succeeded'
+      AND rv.semantic_key='import:'||j.id::text AND rv.result->>'jobId'=j.id::text AND rv.result->>'sourceJobId'=s.id::text))
  ) SELECT 1 FROM owned WHERE id=source_job) THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
  IF EXISTS(SELECT 1 FROM app.job_commercial_track WHERE tenant_id=t AND job_id=source_job AND job_track<>'small_builder') THEN
   RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
@@ -302,7 +316,9 @@ BEGIN
        AND e.event_type='job.imported_baseline_attested' AND e.payload->'references'->>'sourceJobId'=source.id::text
       JOIN app.job j ON j.tenant_id=e.tenant_id AND j.id::text=e.subject_ref
        AND j.provenance='imported' AND j.practice_session_digest IS NULL
-    AND EXISTS (SELECT 1 FROM app.job_import_v3 iv WHERE iv.tenant_id=p_tenant AND iv.job_id=j.id AND iv.source_job_id=source.id)
+    AND (EXISTS (SELECT 1 FROM app.job_import_v3 iv WHERE iv.tenant_id=p_tenant AND iv.job_id=j.id AND iv.source_job_id=source.id)
+     OR EXISTS (SELECT 1 FROM app.command_receipt rv WHERE rv.tenant_id=p_tenant AND rv.command_type='job.adopt_in_flight' AND rv.status='succeeded'
+      AND rv.semantic_key='import:'||j.id::text AND rv.result->>'jobId'=j.id::text AND rv.result->>'sourceJobId'=source.id::text))
      ) SELECT 1 FROM owned_job WHERE id=f.job_id
     ) THEN
   RAISE EXCEPTION 'RECOVERY_TIMELINE_FORBIDDEN' USING ERRCODE='42501';

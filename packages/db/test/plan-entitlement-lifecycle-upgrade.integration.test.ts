@@ -47,6 +47,14 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   const selfComparison = "(SELECT content_hash FROM app.action_authorization WHERE tenant_id=p_tenant AND id=p_authorization)";
   // This batch replaces only these exact routine identities; compare their complete bodies.
   const batchBodies = await Promise.all([
+    ["guard_practice_material_requirement", "", "0839_import_ancestry_record_anchor.sql"],
+    ["ch4_read_work_facts", "t uuid, j uuid, digest text", "0839_import_ancestry_record_anchor.sql"],
+    ["read_job_sources", "t uuid, j uuid, digest text, source text", "0839_import_ancestry_record_anchor.sql"],
+    ["ch4_require_command_owner", "t uuid, j uuid, digest text", "0839_import_ancestry_record_anchor.sql"],
+    ["final_check_builder", "t uuid, j uuid, d text, locking boolean", "0839_import_ancestry_record_anchor.sql"],
+    ["evidence_pack_v3_owner", "t uuid, c uuid, d text", "0839_import_ancestry_record_anchor.sql"],
+    ["adopt_invoiced_job_v3", "t uuid, source_job uuid, d text, cmd uuid, auth uuid, approved jsonb, request_hash text", "0839_import_ancestry_record_anchor.sql"],
+    ["apply_recovery_timeline_signal", "p_tenant uuid, p_signal jsonb", "0839_import_ancestry_record_anchor.sql"],
     ["retention_records", "t uuid, digest text, j uuid, cid uuid, v jsonb, expected text", "0646_retention_timer_runtime_rules.sql"],
     ["notice_fixture_records", "j uuid, n uuid, digest text, operation text, v jsonb", "0647_notice_live_job_check.sql"],
     ["pay_now_fake_attempt", "t uuid, digest text, j uuid, operation text, v jsonb", "0648_pay_now_catch_statement.sql"],
@@ -109,6 +117,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     }
     const batchReplacement = batchBodies.find(row => prior.nspname === "app" && prior.proname === row.name && prior.args === row.args);
     if (batchReplacement) {
+      expect({ ...current, definition: prior.definition }).toEqual(prior);
       expect(current?.definition?.split("$function$")[1]).toEqual(batchReplacement.body);
       continue;
     }
@@ -151,11 +160,6 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
       prior.args === "t uuid, j uuid, s uuid, actor uuid") {
       const sql = await readFile(new URL("../migrations/0616_payment_fee_current_review.sql", import.meta.url), "utf8");
       expect(current?.definition?.split("$function$")[1]).toEqual(sql.split("AS $$")[1]!.split("$$;")[0]);
-    } else if (prior.nspname === "app" && prior.proname === "adopt_invoiced_job_v3" &&
-      prior.args === "t uuid, source_job uuid, d text, cmd uuid, auth uuid, approved jsonb, request_hash text") {
-      const migration = await readFile(new URL("../migrations/0625_company_import_once.sql", import.meta.url), "utf8");
-      const body = migration.split("CREATE OR REPLACE FUNCTION app.adopt_invoiced_job_v3")[1]!.split("AS $$")[1]!.split("$$;")[0];
-      expect(current?.definition?.split("$function$")[1]).toEqual(body);
     } else if (prior.nspname === "app" && prior.proname === "dunning_workbench" &&
       prior.args === "t uuid, digest text, j uuid, operation text, v jsonb") {
       const migration = await readFile(new URL("../migrations/0628_dunning_owner_approval.sql", import.meta.url), "utf8");
