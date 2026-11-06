@@ -6,6 +6,7 @@
         "codex/sandbox/later-safety-58"
       ],
       "allow": [
+        "apps/api/src/contractor/enterprise-dashboard.boundaries.test.ts",
         "packages/db/src/enterprise-dashboard-queries.ts",
         "packages/db/test/enterprise-dashboard.integration.test.ts"
       ]
