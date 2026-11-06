@@ -3,7 +3,7 @@ import { NextRequest } from "next/server";
 import { unstable_doesMiddlewareMatch } from "next/experimental/testing/server";
 import { config, proxy } from "./proxy";
 
-const portalActions = ["issue", "revoke", "signin", "signout", "read", "messages", "quote", "quote-accept", "variations/read", "variation-approvals", "practice-pay-now"];
+const portalActions = ["issue", "revoke", "signin", "signout", "read", "messages", "quote", "quote-accept", "stages", "stage-acknowledge", "variations/read", "variation-approvals", "practice-pay-now"];
 const request = (path: string, cookie?: string, method = "GET") => new NextRequest(`https://jobguard.example.invalid${path}`, {
   method,
   headers: cookie === undefined ? {} : { cookie },
