@@ -140,3 +140,22 @@ it("CH-6 review completes while another tenant holds a conflicting job write",as
   expect(await f.repo.review(f.auth.context,actor,f.auth.digest,job,review)).toEqual(result.rows[0].result);
  }finally{await reviewer.query("ROLLBACK");await writer.query("ROLLBACK");reviewer.release();writer.release();}
 });
+
+it("CH-6 refuses a job with no commercial track; scratch NULL-guard removal restores the bypass",async()=>{
+ const {job:normal}=await seedIntegrityJob(f,false),job=randomUUID(),db=await f.admin.connect();
+ try{
+  await db.query("BEGIN");await db.query("SELECT set_config('app.tenant_id',$1,true)",[tenant]);
+  await db.query("INSERT INTO app.job(id,tenant_id,title,practice_session_digest,practice_scenario) VALUES($1,$2,'Fictional unclassified job',$3,'capture')",[job,tenant,f.auth.digest]);
+  expect((await db.query("SELECT count(*)::int n FROM app.job_commercial_track WHERE tenant_id=$1 AND job_id=$2",[tenant,job])).rows[0].n).toBe(0);
+  await db.query("SET LOCAL ROLE jobguard_migration");
+  const definition=(await db.query("SELECT pg_get_functiondef('app.ch6_integrity_family(uuid,uuid)'::regprocedure) body")).rows[0].body as string;
+  expect((await db.query("SELECT app.ch6_integrity_family($1,$2) family",[tenant,normal])).rows[0].family).toBe('v3');
+  await db.query("SAVEPOINT checked_family");
+  await expect(db.query("SELECT app.ch6_integrity_family($1,$2)",[tenant,job])).rejects.toThrow('INTEGRITY_FAMILY_UNAVAILABLE');
+  await db.query("ROLLBACK TO SAVEPOINT checked_family");
+  const mutant=definition.replace("coalesce(r.environment,'')<>'synthetic_demo'","(r.environment IS NOT NULL AND r.environment<>'synthetic_demo')");
+  expect(mutant).not.toBe(definition);await db.query(mutant);
+  expect((await db.query("SELECT app.ch6_integrity_family($1,$2) family",[tenant,job])).rows[0].family).toBe('v3');
+ }finally{await db.query("ROLLBACK");db.release();}
+ expect((await f.admin.query("SELECT pg_get_functiondef('app.ch6_integrity_family(uuid,uuid)'::regprocedure) body")).rows[0].body).toContain("coalesce(r.environment,'')<>'synthetic_demo'");
+});
