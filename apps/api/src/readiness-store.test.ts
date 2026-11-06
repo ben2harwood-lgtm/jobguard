@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { describe, expect, it, vi } from "vitest";
-import type { VerifiedTenantContext } from "@jobguard/db";
+import { verifiedTenantContextFromMembership, type VerifiedTenantContext } from "@jobguard/db";
 import { DurableReadinessStore } from "./readiness-store.js";
 import type { ReadinessProposal, ScheduledPlan } from "./readiness-scheduler.js";
 
@@ -52,4 +52,19 @@ describe("durable readiness store boundaries", () => {
     await expect(store.recordProposal(context, null)).rejects.toThrow("INVALID_READINESS_PROPOSAL");
     expect(connect).not.toHaveBeenCalled();
   });
+});
+
+it("refuses a caller-written audit reference rather than treating it as a session actor", async () => {
+ const { store, connect } = fixture();
+ await expect(store.confirm(context, "member:synthetic", plan)).rejects.toThrow("READINESS_FORBIDDEN");
+ expect(connect).not.toHaveBeenCalled();
+});
+
+it("checks the session actor's current identity and permitted role before replay or inserts",async()=>{
+ const actor={membershipId:randomUUID(),identityUserId:randomUUID()};
+ const verified=verifiedTenantContextFromMembership({...actor,tenantId:scope.tenantId} as Parameters<typeof verifiedTenantContextFromMembership>[0]);
+ const query=vi.fn(async(_sql:string)=>({rows:[],rowCount:0}));
+ const store=new DurableReadinessStore({connect:async()=>({query,release:vi.fn()})} as unknown as Pool,"synthetic_demo");
+ await expect(store.confirm(verified,actor,plan)).rejects.toThrow("READINESS_FORBIDDEN");
+ expect(query.mock.calls.some(([sql])=>String(sql).includes("INSERT"))).toBe(false);
 });

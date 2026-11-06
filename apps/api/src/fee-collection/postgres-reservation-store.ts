@@ -1,8 +1,7 @@
-import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
-import { appendAuditBatch, withTenant, type TenantTransaction, type VerifiedTenantContext } from "@jobguard/db";
-import { FeeCollectionError, parse, pence, type Attempt, type CollectionBook, type LockedCollectionSources, type ReservationStore } from "./contracts.js";
+import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "@jobguard/db";
+import { FeeCollectionError, parse, pence, type Attempt, type CollectionBook, type LockedCollectionSources, type ReservationStore, type SignedProviderResult } from "./contracts.js";
 
 const id = z.string().uuid();
 const hash = z.string().regex(/^[a-f0-9]{64}$/u);
@@ -75,22 +74,6 @@ function restore(active: z.infer<typeof bookV1>, records: ArchiveRecord[]) {
   return parse(bookV1, { ...active, attempts: [...attempts.values()], events,
     audit: [...audit.map(r => r.payload), ...active.audit] });
 }
-function compact(book: z.infer<typeof bookV1>, archived: ArchiveRecord[]) {
-  const keys = new Set(archived.map(r => `${r.kind}:${r.key}`));
-  const releases = releasedHistory(archived);
-  const records: ArchiveRecord[] = [
-    ...book.attempts.filter(a => a.state === "released").flatMap(payload => {
-      const previous = releases.get(payload.commandId);
-      return previous && JSON.stringify(previous.payload) === JSON.stringify(payload) ? []
-        : [{ kind: "attempt" as const, key: `${payload.commandId}:${(previous?.revision ?? -1) + 1}`, payload }];
-    }),
-    ...Object.entries(book.events).map(([key, payload]) => ({ kind: "event" as const, key, payload })),
-    ...book.audit.map((payload, i) => ({ kind: "audit" as const, key: String(i), payload })),
-  ];
-  return { records: records.filter(r => !keys.has(`${r.kind}:${r.key}`)),
-    active: { ...book, attempts: book.attempts.filter(a => a.state !== "released"), events: {}, audit: [] } };
-}
-
 /** Server-only, dark store: no route or live rail is registered. One row lock serializes
  * both rails and refunds for a tenant, including first-use races. The server-supplied
  * source factory MUST read and lock current sources using this transaction only.
@@ -103,7 +86,7 @@ export class PostgresReservationStore implements ReservationStore {
     context: VerifiedTenantContext,
     sources: (db: TenantTransaction) => LockedCollectionSources) {
     // Keep the caller's whole verified context in the transaction closure.
-    this.transaction = async <T>(tenantId: string, work: (book: CollectionBook, sources: LockedCollectionSources) => Promise<T>): Promise<T> => {
+    this.transaction = async <T>(tenantId: string, work: (book: CollectionBook, sources: LockedCollectionSources) => Promise<T>, providerResult?: () => SignedProviderResult | undefined): Promise<T> => {
       if (context.tenantId !== tenantId) throw new FeeCollectionError("COLLECTION_REFUSED");
       return withTenant(pool, context, async db => {
         await db.$client.query(`INSERT INTO app.fee_reservation_book(tenant_id) VALUES($1) ON CONFLICT DO NOTHING`, [tenantId]);
@@ -120,22 +103,9 @@ export class PostgresReservationStore implements ReservationStore {
           || Object.entries(original.events).some(([key, value]) => next.events[key] !== value)
           || JSON.stringify(next.audit.slice(0, original.audit.length)) !== JSON.stringify(original.audit))
           throw new FeeCollectionError("IDEMPOTENCY_CONFLICT");
-        // Validate transitions before newly archived entries could be mistaken for old history.
-        await db.$client.query(`SELECT app.replace_fee_reservation_book($1,$2::jsonb)`, [tenantId, JSON.stringify(next)]);
-        const compacted = compact(next, archived);
-        if (compacted.records.length) await db.$client.query(`INSERT INTO app.fee_reservation_archive(tenant_id,kind,key,payload)
-          SELECT $1,kind,key,payload FROM jsonb_to_recordset($2::jsonb) AS r(kind text,key text,payload jsonb)`,
-          [tenantId, JSON.stringify(compacted.records)]);
-        await db.$client.query(`SELECT app.replace_fee_reservation_book($1,$2::jsonb)`, [tenantId, JSON.stringify(compacted.active)]);
-        // The audit head is the final lock: source readers and book persistence finish first.
-        await appendAuditBatch(db, next.audit.slice(original.audit.length).map(entry => {
-          const current = next.attempts.find(a => a.commandId === entry.commandId);
-          if (!current) throw new FeeCollectionError("COLLECTION_REFUSED");
-          return { id: randomUUID(), version: "audit.v1" as const, actorRef: current.actorMembershipId,
-            eventType: `fee.collection.${entry.state}`, subjectType: "fee_collection_attempt", subjectRef: entry.commandId,
-            payload: { references: { invoice: current.invoiceId, rail: current.rail }, hashes: { fingerprint: current.fingerprint },
-              classifications: { action: "financial" as const } } };
-        }));
+        // The routine authenticates lifecycle results, archives and seals audit atomically.
+        await db.$client.query(`SELECT app.replace_fee_reservation_book($1,$2::jsonb,$3::jsonb)`,
+          [tenantId, JSON.stringify(next), JSON.stringify(providerResult?.() ?? null)]);
         return result;
       });
     };

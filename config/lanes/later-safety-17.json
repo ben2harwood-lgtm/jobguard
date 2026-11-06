@@ -10,7 +10,8 @@
         "packages/db/migrations/0793_synthetic_reversal_money_rules.sql",
         "packages/db/migration-notes/0793_synthetic_reversal_money_rules.md",
         "packages/db/test/migration-proofs/0793_synthetic_reversal_money_rules.proof.json",
-        "packages/db/test/recovery.integration.test.ts"
+        "packages/db/test/recovery.integration.test.ts",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts"
       ]
     }
   }

@@ -65,7 +65,8 @@ describe("ENT-13a RED dark connector PostgreSQL authority and durability", () =>
       WHERE n.nspname IN('connector','app','identity','control_plane','audit_control') AND c.relkind='r'
       AND (has_table_privilege('jobguard_connector',c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER'))`)).rows).toEqual([]);
     expect((await f.admin.query("SELECT relname,relrowsecurity,relforcerowsecurity FROM pg_class WHERE relnamespace='connector'::regnamespace AND relkind='r' ORDER BY relname")).rows)
-      .toEqual([{relname:'binding',relrowsecurity:true,relforcerowsecurity:true},{relname:'input_event',relrowsecurity:true,relforcerowsecurity:true}]);
+      .toEqual([{relname:'binding',relrowsecurity:true,relforcerowsecurity:true},{relname:'input_event',relrowsecurity:true,relforcerowsecurity:true},
+      ...['machine_capability','machine_command','machine_connection','machine_key','machine_nonce'].map(relname=>({relname,relrowsecurity:true,relforcerowsecurity:true}))]);
     const functionRow = (await f.admin.query(`SELECT prosecdef,pg_get_userbyid(proowner) owner,proconfig FROM pg_proc WHERE oid='connector.intake(uuid,text,jsonb)'::regprocedure`)).rows[0];
     expect(functionRow).toEqual({prosecdef:true,owner:'jobguard_migration',proconfig:['search_path=pg_catalog']});
     for (const role of ['jobguard_runtime','jobguard_infrastructure']) expect((await f.admin.query("SELECT has_function_privilege($1,'connector.intake(uuid,text,jsonb)','EXECUTE') yes",[role])).rows[0].yes).toBe(false);
