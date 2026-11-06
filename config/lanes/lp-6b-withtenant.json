@@ -6,7 +6,7 @@
         "codex/sandbox/lp-6b-withtenant",
         "codex/sandbox/lp-6b-repair-wip"
       ],
-      "note": "LP-6b RED: exact union with origin/main a0a6e824780d785704ed4b046067aa28f314d3e4 is committed at aaddeadc8. Migration stays 0655 (main ends at 0654). Ben, 6 Nov 2026 router chat, \"Yes, option A\": EnterpriseAccessRepository.emergency uses the existing identity-sso-required named opt-out; identity SQL retains locked session, CSRF and live-owner checks. No grants or additional sessionless constructor sites. Router must commit, push, obtain exact-head CI and independent RED review.",
+      "note": "LP-6b RED: exact union with origin/main a0a6e824780d785704ed4b046067aa28f314d3e4 is committed at aaddeadc8. Migration renumbered by stem only to 0658; 0655\u20130657 are reserved by #610, #611 and #612 in coordinator/MIGRATIONS.txt. Ben, 6 Nov 2026 router chat, \"Yes, option A\": EnterpriseAccessRepository.emergency uses the existing identity-sso-required named opt-out; identity SQL retains locked session, CSRF and live-owner checks. No grants or additional sessionless constructor sites. Router must commit, push, obtain exact-head CI and independent RED review.",
       "allow": [
         "apps/api/src/accounting-export.application.test.ts",
         "apps/api/src/ai-capture-authority.test.ts",
@@ -96,8 +96,8 @@
         "docs/review/LP-6B-REPAIR-WIP-2026-11-04.md",
         "docs/review/LP-6B-ROUTER-REPAIR-2026-11-04-validation.md",
         "docs/review/LP-6B-ROUTER-REPAIR-2026-11-04.md",
-        "packages/db/migration-notes/0655_lp6b_effective_session_actor.md",
-        "packages/db/migrations/0655_lp6b_effective_session_actor.sql",
+        "packages/db/migration-notes/0658_lp6b_effective_session_actor.md",
+        "packages/db/migrations/0658_lp6b_effective_session_actor.sql",
         "packages/db/src/audit-export-repository.ts",
         "packages/db/src/cis-fixture-repository.ts",
         "packages/db/src/commercial-integrity-v3-repository.ts",
@@ -153,7 +153,7 @@
         "packages/db/test/lp6b-withtenant.integration.test.ts",
         "packages/db/test/lp6b-withtenant.test.ts",
         "packages/db/test/migfix-7-upgrade.integration.test.ts",
-        "packages/db/test/migration-proofs/0655_lp6b_effective_session_actor.proof.json",
+        "packages/db/test/migration-proofs/0658_lp6b_effective_session_actor.proof.json",
         "packages/db/test/money-trail-security.integration.test.ts",
         "packages/db/test/northside-demo.integration.test.ts",
         "packages/db/test/outbound-pause-fixture.ts",

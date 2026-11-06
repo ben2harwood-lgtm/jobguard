@@ -369,12 +369,12 @@ and exact-head independent RED review. READY is a router commit/CI handoff only,
 not merge acceptance. Commit message: /tmp/lp-6b-repair-wip-20261106T121454Z-commit-msg.txt.
 
 
-## 6 November 2026 — 0655 landing catch-up (READY)
+## 6 November 2026 — 0658 landing catch-up (READY)
 
 Source: reviewed HEAD b530f334cff1244868bb9b255bf740bd2d0fd234, pending merge
 from origin/main b0ae55c4686861e61af7b6b2b759ecdcb425205e. Merge content is the
 union, with the duplicated MIGFIX-7 import collapsed. SQL bytes are unchanged;
-all active LP-6b stem references now use 0655. Request-binding fixture,
+all active LP-6b stem references now use 0658. Request-binding fixture,
 upgrade-proof helpers and all test expectations remain unchanged from HEAD.
 
 Actual checks using installed binaries, at most two workers and three named
@@ -404,7 +404,7 @@ Vitest files per invocation:
   (/tmp/lp6b-landing-component-lints.log).
 - Content-only lane check uses the existing selectLane/lanePathAllowed and
   migrationOrderViolations exports against origin/main: exactly 164 non-lane
-  paths, no config/lanes paths, and 0655 above main's 0652 — PASS.
+  paths, no config/lanes paths, and 0658 above main's 0652 — PASS.
 - Both-parent MIGFIX-7 line preservation, 15 other incoming main files' byte
   preservation, affected integration/helper TypeScript parsing (five files),
   SQL SHA-256 preservation and git diff --check — PASS.
@@ -412,7 +412,7 @@ Vitest files per invocation:
 The pnpm --version wrapper attempted registry resolution and failed; no package
 was installed. All validation above used existing installed binaries. No local
 PostgreSQL, browser, provider, real data, git index/ref write or push was used.
-The router must stage the resolved file and 0655 renames, complete the pending
+The router must stage the resolved file and 0658 renames, complete the pending
 merge, rerun stock lane lint and push for GitHub CI database/migration, browser
 and build gates. Prior RED checks PASS at b530f334; new-head review evidence is
 not claimed here. READY means ready for router commit and CI, not merge acceptance.
@@ -424,13 +424,13 @@ Commit message: /tmp/lp-6b-repair-wip-20261106T132237Z-commit-msg.txt.
 
 Pending merge: HEAD 994cfe35e07cbacc213e19d9b31854fafb74508b with origin/main
 128260957477d6be9aa88e94789095ac23a175f6. Resolved the only remaining conflict
-in MIGFIX-7 by retaining both the 0655 LP-6b authority entry and main's 0654
+in MIGFIX-7 by retaining both the 0658 LP-6b authority entry and main's 0654
 synthetic reversal entry. Neither parent's map entries were removed. The
 plan-entitlement auto-merge retains LP-6b and main's 0654 successor checks.
 The later-empty-tables helper retains all main keys except the existing LP-6b
 exclusion of control_plane.request_binding, which upgrade snapshots omit as
 transaction bookkeeping. No behavior or test-expectation changes were made.
-0655 SQL, migration note and proof are byte-identical to HEAD. Incoming main
+0658 SQL, migration note and proof are byte-identical to HEAD. Incoming main
 files outside the two overlapping upgrade tests are byte-identical to main.
 Lane registration lists exactly 164 changed non-lane paths relative to main,
 with no config/lanes entries, and both LP-6b branch names.
@@ -459,8 +459,8 @@ three named Vitest files per run), logs under /tmp/lp6b-143136-*:
   passed (<name>-lint.log).
 - Content-only lane check using the existing loadLanePolicy/selectLane,
   lanePathAllowed and migrationOrderViolations exports — exact 164 paths,
-  migration 0655 above main's 0654: PASS.
-- Both-parent MIGFIX-7 preservation, incoming main byte preservation, 0655
+  migration 0658 above main's 0654: PASS.
+- Both-parent MIGFIX-7 preservation, incoming main byte preservation, 0658
   byte preservation, TypeScript syntax parsing of the three merge-sensitive
   upgrade/helper files, and git diff --check — PASS.
 
@@ -471,3 +471,24 @@ providers were used. Router must complete the merge, rerun stock lane lint,
 and push for GitHub CI database/migration/browser/build checks and required
 exact-head independent RED review. No merge acceptance or new-head review is
 claimed. Commit message: /tmp/lp-6b-repair-wip-20261106T143136Z-commit-msg.txt.
+
+## 6 November 2026 — 0658 number-order fix (READY)
+
+Renumbered the LP-6b SQL, proof and note by stem only to
+`0658_lp6b_effective_session_actor`; 0655–0657 are reserved for
+#610/#611/#612. Updated all stem references and upgrade-test pins, including
+the MIGFIX-7 list. SQL bytes and SHA-256 remain unchanged:
+`fc85804a10686e5d3799e0519ab67c28b43cad98e9d89efebe9eaedff352aa06`.
+
+- Installed DB Vitest: `./node_modules/.bin/vitest run --maxWorkers=2 test/migration-proof-loader.test.ts test/upgrade-proof-utils.test.ts`
+  from `packages/db` — PASS, 2 files, 81 tests.
+- Read-only static assertions — PASS: SQL byte identity against HEAD, proof
+  stem-only identity, exact numeric-only changes in all three upgrade tests,
+  no old-stem references, lane equals all 165 changed non-lane paths against
+  origin/main with no config/lanes entries.
+- `git diff --check` — PASS.
+- The pnpm wrapper attempt produced no test results and was interrupted; the
+  installed Vitest executable above completed successfully without downloads.
+
+No Git writes performed. Real PostgreSQL and browser suites remain for GitHub
+CI after the router commits and pushes; RED exact-head review remains required.
