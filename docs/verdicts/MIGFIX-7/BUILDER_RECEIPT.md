@@ -142,3 +142,39 @@ catch-up adds no new review observation.
   PASS (exit 0, no diagnostics).
 
 READY — batch-49, RED, NOPR; router owns commit/push and the CI/review handoff.
+
+
+## Batch-49 current-main landing catch-up — 6 November 2026, 01:00 dispatch
+
+READY — RED, NOPR. The launcher completed the merge at `4263d0fa9`, including
+`origin/main` at `f5415ddb4`. No unresolved index paths or working-tree conflicts
+remained. No Git write, fetch, commit, push or PR was performed in this session.
+No code or test assertion needed changing; this receipt is the only catch-up edit.
+
+Scanned every migration on the actual origin/main tree in migration order and
+diffed all four replacement routines against their latest definitions: approval
+and reversal from 0356, disclosure from 0128, early firing from 0520. Only the
+intended MIGFIX-6 eligible/gross, cumulative-reversal and settled-credit changes,
+and MIGFIX-7 group-disclosure and detection-lock changes remain. Main's USAGE
+support check, tenant/mode/authorization guards and checked audit sealer survive.
+The two migrations are absent from main; no main migration is edited or removed.
+Main's new 0620/0621 migrations and proofs remain present. No new main rows belong
+beside this group's rows in an affected exact list, so none were added.
+
+Actual local verification with installed dependencies and no downloads:
+
+- `node node_modules/typescript/bin/tsc -p packages/db/tsconfig.json --noEmit`:
+  PASS, exit 0 with no diagnostics.
+- From packages/db: `./node_modules/.bin/vitest run --maxWorkers=2
+  test/lp4-writer-catchup.test.ts test/migration-proof-loader.test.ts
+  test/migfix-6.test.ts`: PASS, 3 files / 98 tests.
+- `node tools/agent-lane-boundary-lint.mjs`: PASS against origin/main f5415ddb4.
+- Independent exact-set comparison of lane allow paths with changed non-lane
+  paths: PASS, 17 paths, no duplicates or self-entry; unresolved index paths: none.
+- `git diff origin/main --check`: PASS.
+
+Database and browser execution remain with GitHub CI after router push. Required
+current-head CI and one independent RED review remain landing gates. Existing
+initial LATER / SIMPLICITY observation stands without a new review observation.
+READY means prepared for router commit/push and CI/review; it does not establish
+database verification, independent acceptance, merge or release.
