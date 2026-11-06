@@ -71,13 +71,15 @@ The original pure matcher remains unchanged. The dark synthetic correction seam
 is specified below. Inline fixtures are development regression tests, not frozen
 human ground truth, a held-out benchmark or G2 release evidence.
 
-## M2-4 stored reviewer corrections (`1200_supplier_line_corrections.sql`)
+## M2-4 stored reviewer corrections (`0624_supplier_line_corrections.sql`)
 
 `SupplierLineCorrectionRepository` stores an immutable, server-owned confirmed
 synthetic snapshot using `supplier-line-snapshot.v1`. The caller supplies a verified
 tenant context and the authenticated server principal's identity user/membership
 IDs. Every create, read, correction and replay checks current active owner
-membership, including identity, expiry and revocation. No HTTP route is registered.
+membership, including identity, expiry and revocation. No HTTP route is registered. Snapshot creation and correction remain outside the
+LP-5 command lifecycle: they use this seam's local command/replay and audit
+protocol, and lifecycle dispatch is held until a separately approved integration.
 The seam requires `JOBGUARD_ENV=synthetic_demo`; it cannot accept real uploads or
 activate live matching. Fixture confirmation/source authenticity is the trusted
 caller's responsibility, as in the pure input contract above.
@@ -104,7 +106,7 @@ same match and discrepancy IDs. New confirmed source versions require a new
 snapshot, never edits to a stored one. No finding, debt, invoice, payment or fee
 is created by these proposal corrections.
 
-Migration `1200_supplier_line_corrections.sql` adds only `supplier_line_match_snapshot`,
+Migration `0624_supplier_line_corrections.sql` adds only `supplier_line_match_snapshot`,
 `supplier_line_match_correction` and their trigger guard. Tenant-qualified job,
 snapshot, actor and deferred audit foreign keys, FORCE RLS, append-only grants,
 immutable triggers, revision uniqueness and audit actor/type/subject/command/hash
@@ -116,7 +118,7 @@ not evidence of agreed debt or verified original bytes.
 
 Upgrade is additive and backfills no source or financial data. Roll forward with
 a new migration to repair defects; keep the existing tables/history and disable
-the dark caller if necessary. Never edit `1200_supplier_line_corrections.sql` after merge. PostgreSQL integration,
+the dark caller if necessary. Never edit `0624_supplier_line_corrections.sql` after merge. PostgreSQL integration,
 full migration/catalogue CI and one independent RED review remain required before
 merge. There is no browser change or new provider route in this piece.
 
@@ -128,7 +130,7 @@ correction repository includes its result as `discrepancies` on create, correcti
 read and replay. It reconstructs historical facts first, so historical command
 replays retain the original result. Current reads use the current correction
 revision. No findings are persisted and M2-5 itself needs no migration. The stacked prerequisites use
-`0606_dark_merchant_order.sql` and `1200_supplier_line_corrections.sql`.
+`0606_dark_merchant_order.sql` and `0624_supplier_line_corrections.sql`.
 The stacked M2-1 dark order uses the checked `app.begin_command`,
 `app.complete_command` and `app.append_audit` protocol from `c70d7d20`.
 Migration 0606 registers only `purchase_order.send.dark` with owner permission
@@ -205,7 +207,7 @@ Migration inventory against that main:
   This also removes the duplicate re-creation of `app.lp5_command_result`, preserving
   main's latest dark-order branch and every other adapter without a later overwrite.
 - Retained `1011_supplier_line_corrections` as provisional stem
-  `1200_supplier_line_corrections`, with its proof and all callers updated.
+  `0624_supplier_line_corrections`, with its proof and all callers updated.
   SQL body is byte-identical (SHA-256
   `4d8b129f60489377865da77073fdd15303c17c2c4080cdda4bac674a682002a3`).
   It creates two tables and a new audit trigger function; it re-creates no existing
@@ -234,7 +236,7 @@ Executed from the respective package directories:
   `node tools/plpgsql-case-in-if-lint.mjs` — passed. Core purity reports 11
   pre-existing computed test imports as unverifiable, not refused.
 - Read-only lane inventory: exactly 28 changed paths against merged origin/main,
-  including the new 1200 migration and proof, excluding all `config/lanes/` paths.
+  including the new 0624 migration and proof, excluding all `config/lanes/` paths.
   Existing lane policy parser and path authorization passed. Final commit-bound
   lane lint remains for CI because the index still contains the pending merge.
 
@@ -250,3 +252,58 @@ Executed from the respective package directories:
 - Independent RED review at the exact final head. This builder check is not that review.
 - Live routes/providers, frozen held-out benchmark and G2 remain closed as above;
   this synthetic work supplies no release or production authorization.
+
+
+## Batch-38 final landing reconciliation — 6 November 2026
+
+RED; plan pieces M2-2 through M2-5, dark synthetic line-facts seams only.
+This entry supersedes the earlier landing inventory and numbering holds above.
+Comparison base is incoming main `f5415ddb4c3a40796dd812e8b5946ba5094daa2b`
+(`MERGE_HEAD` / `origin/main`); the local `main` ref is stale.
+
+Migration inventory against incoming main:
+- Only added migration: `0624_supplier_line_corrections.sql` and its proof.
+  Main ends at 0621; 0622–0623 are reserved for #582 by the router.
+- No repeated migration stem exists on main. Main's 0606 dark merchant order
+  SQL/proof remain unchanged; the earlier duplicate is already absent.
+- The 0624 SQL is byte-identical to the prechecked branch SQL, SHA-256
+  `4d8b129f60489377865da77073fdd15303c17c2c4080cdda4bac674a682002a3`.
+  All filename, proof, test, lane and contract references use the new stem.
+- The sole defined routine, `app.supplier_line_match_audit_guard`, is new:
+  searching every main migration finds no existing definition to re-create or
+  overwrite. No existing routine body is replaced and no function has SET app.*.
+
+Resolved the sole text conflict as main's empty-table fixture list, in its order,
+plus both supplier-line tables. Restore-reconciliation-upgrade consumes this list;
+0624 adds no command-registry rows. Added both tables to watchdog's mutation-count
+list as required. There are no product behaviour changes in this reconciliation.
+The contract explicitly names the local replay/audit seam's LP-5 integration hold.
+
+Local verification (installed tools, Node 24.17.0, at most two Vitest workers and
+three named files per invocation; commands run in their package directories):
+- core `vitest run --maxWorkers=2 src/line-discrepancy.test.ts src/discrepancy-evaluation.test.ts src/supplier-line-matching.test.ts`: 49 passed.
+- core `vitest run --maxWorkers=1 src/supplier-match-corrections.test.ts`: 5 passed.
+- ai `vitest run --maxWorkers=1 src/merchant-extraction.test.ts`: 33 passed.
+- db `vitest run --maxWorkers=2 test/supplier-line-migration-proofs.test.ts test/m2-1-migration-proof.test.ts test/late-source-import-migration.test.ts`: 9 passed.
+- db `vitest run --maxWorkers=2 test/merchant-intake-port.test.ts test/purchase-order-action.test.ts`: 61 passed (protocol doubles).
+- core, ai, db `tsc -p tsconfig.json --noEmit`: passed.
+- Core-purity, money-arithmetic, AI-provider-boundary, commercial-boundary and
+  PL/pgSQL CASE-in-IF lints passed. Core purity reports 11 existing unverifiable
+  computed test imports. `git diff --check MERGE_HEAD` passed.
+- `node tools/provider-register.mjs --write` passed; generated register is identical
+  to incoming main. No new provider destination or application/web path is added.
+- Ran `node tools/agent-lane-boundary-lint.mjs --lane=batch-38`: refused the
+  incoming main/index paths and pre-rename paths while the merge is uncommitted.
+  Did not expand the lane to include those unrelated paths. A separate read-only
+  check using the real lane parser/path/order validators against MERGE_HEAD and
+  the final working tree passed: exactly 29 non-lane paths, no missing/surplus
+  lane paths, no migration-order violations. Lane file does not list itself.
+
+Router must stage the resolved merge and rename, complete the merge, and rerun
+commit-bound lane lint. CI must prove real PostgreSQL fresh install/upgrade,
+proof/catalogue/privilege/RLS checks, supplier-line correction/replay/concurrency,
+purchase-order audit, watchdog and restore reconciliation, plus all required
+checks and journeys at the final head. No PostgreSQL or browser suite ran here;
+this sandbox cannot start PostgreSQL or bind localhost. Independent RED review
+must bind the final head. Held-out corpus, live providers, G2 and release gates
+remain closed. Earlier independent-check LATER notes remain unchanged.
