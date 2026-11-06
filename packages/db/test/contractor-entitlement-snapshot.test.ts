@@ -47,3 +47,20 @@ it("fails if a tracked table disappears instead of filtering it out", async () =
   delete f.tables["app.account"];
   await expect(snapshot(f.db, Object.keys(before))).rejects.toThrow("missing relation");
 });
+
+it("excludes only request_binding while retaining every identity/control-plane row comparison", async () => {
+  const f = fixture();
+  f.tables["control_plane.request_binding"] = [{ transaction_id: "fictional-transaction-1" }];
+  f.tables["control_plane.practice_session"] = [{ id: "fictional-session" }];
+  f.tables["identity.identity_user"] = [{ id: "fictional-person" }];
+  const before = await snapshot(f.db);
+  expect(before).not.toHaveProperty("control_plane.request_binding");
+  f.tables["control_plane.request_binding"]!.push({ transaction_id: "fictional-transaction-2" });
+  expect(await snapshot(f.db)).toEqual(before);
+  for (const table of ["control_plane.practice_session", "identity.identity_user"]) {
+    const previous = structuredClone(f.tables[table]);
+    f.tables[table]!.push({ id: "unexpected-row" });
+    expect(await snapshot(f.db)).not.toEqual(before);
+    f.tables[table] = previous!;
+  }
+});

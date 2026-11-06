@@ -1,3 +1,4 @@
+import { mapRequestBindingRefusal } from "./request-binding-error.js";
 import type { Pool } from "pg";
 import { z } from "zod";
 import { jobWorkStateReadV1, jobWorkStateMutationV1, JobWorkStateError } from "@jobguard/core";
@@ -12,12 +13,12 @@ export class JobWorkStateRepository {
  constructor(private readonly pool:Pool) {}
  async read(context:VerifiedTenantContext,jobId:string,digest:string) {
   if(!z.guid({ error: "Invalid uuid" }).safeParse(jobId).success || (!z.guid({ error: "Invalid uuid" }).safeParse(digest).success && !/^[a-f0-9]{64}$/u.test(digest)))throw new JobWorkStateError("INVALID_WORK_STATE_INPUT");
-  return withTenant(this.pool,context,async db=>{
+  return mapRequestBindingRefusal(withTenant(this.pool,context,async db=>{
    try {
     const row=(await db.$client.query<{result:unknown}>("SELECT app.ch4_read_work_facts($1,$2,$3) result",[context.tenantId,jobId,digest])).rows[0];
     const parsed=workStateReadV1.safeParse(row?.result);if(!parsed.success)throw new JobWorkStateError("INVALID_WORK_STATE_INPUT");return parsed.data;
    } catch(error) {if(error instanceof Error && error.message==="WORK_STATE_FORBIDDEN")throw new JobWorkStateError("WORK_STATE_FORBIDDEN");throw error;}
-  });
+  }), () => new JobWorkStateError("WORK_STATE_FORBIDDEN"));
  }
  // Authentication precedes the live SHARE guard. SQL never upgrades finish/cancel locks.
  async finish(context:VerifiedTenantContext,jobId:string,digest:string,raw:unknown) { const input=jobWorkStateMutationV1.safeParse(raw);if(!input.success||input.data.action!=="finish")throw new JobWorkStateError("INVALID_WORK_STATE_INPUT");return this.execute(context,jobId,digest,input.data,async db=>{await requireLiveJob(db,jobId);}); }
@@ -34,7 +35,7 @@ export class JobWorkStateRepository {
  private async execute(context:VerifiedTenantContext,jobId:string,digest:string,raw:unknown,precheck?: (db:TenantTransaction)=>Promise<void>) {
   const input=jobWorkStateMutationV1.safeParse(raw);
   if(!input.success || !z.guid({ error: "Invalid uuid" }).safeParse(jobId).success || (!z.guid({ error: "Invalid uuid" }).safeParse(digest).success && !/^[a-f0-9]{64}$/u.test(digest)))throw new JobWorkStateError("INVALID_WORK_STATE_INPUT");
-  return withTenant(this.pool,context,async db=>{
+  return mapRequestBindingRefusal(withTenant(this.pool,context,async db=>{
    try {
     if(precheck) {
      // Plain reads only: authenticate before the first business lock. Controlled
@@ -67,7 +68,7 @@ export class JobWorkStateRepository {
     }
     throw error;
    }
-  });
+  }), () => new JobWorkStateError("WORK_STATE_FORBIDDEN"));
  }
 
 }
