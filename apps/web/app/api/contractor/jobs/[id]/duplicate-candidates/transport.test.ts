@@ -13,7 +13,7 @@ import { duplicateActor, duplicateFailure, duplicateJson } from "./transport";
 beforeEach(() => { vi.clearAllMocks(); vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); state.session = "10000000-0000-4000-8000-000000000001"; state.resolve.mockResolvedValue({ membershipId: "stored-member" }); state.context.mockResolvedValue("stamped-context"); });
 afterEach(() => vi.unstubAllEnvs());
 it("uses only the persisted session bridge and refuses missing sessions and non-demo mode", async () => {
- expect(await duplicateActor()).toEqual({ pool: "pool", actor: { membershipId: "stored-member" }, context: "stamped-context" });
+ expect(await duplicateActor()).toEqual({ pool: "pool", actor: { membershipId: "stored-member" }, context: "stamped-context", sessionId: "10000000-0000-4000-8000-000000000001" });
  expect(state.resolve).toHaveBeenCalledWith("10000000-0000-4000-8000-000000000001"); expect(state.context).toHaveBeenCalledWith("pool", "10000000-0000-4000-8000-000000000001");
  state.session = undefined; await expect(duplicateActor()).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
  vi.stubEnv("JOBGUARD_ENV", "production"); await expect(duplicateActor()).rejects.toMatchObject({ code: "MODE_FORBIDDEN" });
