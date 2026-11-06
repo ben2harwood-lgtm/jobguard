@@ -381,7 +381,7 @@ describe("M4-12 PostgreSQL shared reservation store", () => {
     expect(await f.read()).toEqual(before);
   });
 
-  it.each([
+  it.for([
     { path: "attempt result", body: '"\\u0000"', code: "22P05" },
     { path: "event-only result", body: '"\\u0000"', code: "22P05" },
     // 10,000 arrays exceed the pre-existing 16,384-character body limit. Use
