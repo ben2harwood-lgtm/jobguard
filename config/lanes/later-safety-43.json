@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-43": {
+      "branches": [
+        "codex/sandbox/later-safety-43"
+      ],
+      "allow": [
+        "apps/web/e2e/ENT-10-emergency-cutover.spec.ts"
+      ]
+    }
+  }
+}
