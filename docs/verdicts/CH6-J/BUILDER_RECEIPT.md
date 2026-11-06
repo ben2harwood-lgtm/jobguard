@@ -2252,3 +2252,87 @@ Web TypeScript completed successfully on the merged tree:
 `node node_modules/typescript/bin/tsc -p apps/web/tsconfig.json --noEmit
 --incremental false` — PASS. Final whitespace check passed.
 READY for router commit/push and subsequent PR admission, CI and RED review.
+
+
+## 6 November 2026 — batch-48 landing merge READY
+
+Entry HEAD 77357959f already completed the launcher merge of stored origin/main
+f5415ddb4 (batch-35, PR #581). Working tree was clean and no unmerged paths
+remained. Inspected the complete diff against that main: no migrations, SQL
+routines or exact database lists differ, so no migration removal, routine
+recreation or list reconciliation is needed. Main's database implementation is
+unchanged. No product code or test assertions changed during this verification.
+The existing lane lists exactly all 18 changed non-lane paths and excludes itself.
+
+Checks actually run, using installed binaries with at most two workers and no
+more than three named Vitest files per run:
+- From packages/core: `node node_modules/vitest/vitest.mjs run --maxWorkers=2
+  src/allocation.refusals.test.ts src/customer-billing.history-boundaries.test.ts
+  src/money.negative-limits.test.ts` — 3 files, 20 tests PASS.
+- From packages/config: same runner/options for
+  src/api-environment.boundaries.test.ts,
+  src/identity-environment.database-boundary.test.ts and
+  src/identity-environment.required-settings.test.ts — 3 files, 23 tests PASS;
+  separate run for src/identity-environment.secret-boundary.test.ts — 4 PASS.
+- `node node_modules/typescript/bin/tsc -p apps/web/tsconfig.json --noEmit
+  --incremental false` — PASS.
+- From apps/web: `node node_modules/@playwright/test/cli.js test --list
+  --workers=2 UIWIRE-15-READ-RECOVERY.spec.ts VALUE-1-READ-RECOVERY.spec.ts`
+  — 12 cases discovered, no browser execution.
+- From packages/db: `node node_modules/vitest/vitest.mjs list --maxWorkers=2
+  test/commercial-integrity-v3-published.integration.test.ts
+  test/commercial-integrity-v3-review.integration.test.ts` — 18 cases collected,
+  no PostgreSQL execution.
+- `node tools/agent-lane-boundary-lint.mjs` — PASS. Independent exact-path set
+  comparison — PASS, all 18 non-lane paths. Whitespace verification passed.
+
+READY for router commit/push and PR admission. RED: CH-6 / CH6-J, UIWIRE-15
+read recovery, VALUE-1 read recovery, TESTS-CORE-2 and RECOVER-TESTS-CONFIG-1.
+Required current-head CI, database/browser execution and independent RED review
+remain merge gates. No Git writes, package downloads, real data or deployment.
+Earlier initial LATER / SIMPLICITY observations stand; no new behavior or
+substantial complexity was introduced.
+
+
+## 6 November 2026 — batch-48 PR handoff at main c7cf720a0
+
+Entry HEAD 027f094bed71dcb9f3a7ee8565d1dad2dbc5233f already contains
+stored origin/main c7cf720a02aa9308fe2596c230439a88b9b265ac. Working tree
+was clean, with no unfinished merge or unmerged paths. All 13 product/test
+files are byte-identical to the latest independently prechecked batch head
+85f00fae40ec59deee0bfe8a608074972a84b610. Preserved the prechecked work;
+this handoff changes only this receipt. Earlier initial LATER / SIMPLICITY
+notes remain unchanged.
+
+Migration comparison against origin/main: **none** added, changed or removed.
+No SQL routines are re-created, so no latest-body reconciliation applies.
+No provider-register source changed. No new commands, tables or workers.
+The two changed web components use exported API contracts, with no direct
+apps/api source imports; Cloudflare build was checked by reading this boundary,
+not executed here.
+
+Checks actually run using installed Node v24.17.0 binaries, <=2 test workers,
+and <=3 named Vitest files per run:
+- packages/core Vitest: allocation.refusals, customer-billing.history-boundaries,
+  money.negative-limits — 3 files / 20 PASS.
+- packages/config Vitest: api-environment.boundaries, identity-environment.database-boundary,
+  identity-environment.required-settings — 3 files / 23 PASS; separate
+  identity-environment.secret-boundary run — 1 file / 4 PASS.
+- TypeScript noEmit: config, core and web PASS (web --incremental false).
+- Playwright --list for UIWIRE-15-READ-RECOVERY and VALUE-1-READ-RECOVERY:
+  12 cases discovered across phone/desktop; no browser executed.
+- DB Vitest list for commercial-integrity-v3-published.integration and
+  commercial-integrity-v3-review.integration: 18 cases collected; no DB executed.
+- Money arithmetic lint PASS. Commercial-integrity current-source and boundary
+  guards PASS, zero diagnostics, existing nine baselined sites unchanged.
+- Lane lint PASS and exact allowlist comparison PASS (18 non-lane paths,
+  no self entry). git diff --check PASS.
+- git show --remerge-diff could not run because its temporary Git object
+  directory is read-only; no automatic-merge tree proof is claimed here.
+
+READY for router commit, push and PR opening. RED: CH-6 / CH6-J,
+UIWIRE-15 read recovery, VALUE-1 read recovery, TESTS-CORE-2 and
+RECOVER-TESTS-CONFIG-1. Current-head CI must prove the required full checks,
+PostgreSQL integration/migrations and browser journeys; exact-head independent
+RED review remains required before merge. Earlier prechecks are historical
+passes, not review of this final head. Made-up data only; no release or deployment.

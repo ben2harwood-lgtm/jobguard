@@ -61,6 +61,13 @@ it("[MT-19] adds only the exact new availability routine, preserving populated p
   ['app','read_money_trail_availability','p_job uuid, p_session text'],
  ]);
  expect(after.routines.filter(r=>!added.includes(r))).toEqual(before.routines);expect(await named()).toEqual(values);expect(await proofDifferences(f.admin,proof)).toEqual({rows:[],types:[]});await compareKeyless();
- for(let n=0;n<2;n++){await migrate(f.admin);expect(await named()).toEqual(values);expect(await proofDifferences(f.admin,proof)).toEqual({rows:[],types:[]});await compareKeyless();}
+ // 0642 changes only this registry row's permission; retain every other byte.
+ const successorProof = structuredClone(proof);
+ const registry = successorProof["app.command_type_registry"]!;
+ const clientKey = Object.keys(registry.rows).find(key => JSON.parse(key).command_type === "IssueClientApproval")!;
+ const clientRow = JSON.parse(registry.rows[clientKey]!);
+ expect(clientRow.permission_rule).toBe("owner");
+ registry.rows[clientKey] = JSON.stringify({ ...clientRow, permission_rule: "contractor" });
+ for(let n=0;n<2;n++){await migrate(f.admin);expect(await named()).toEqual(values);expect(await proofDifferences(f.admin,successorProof)).toEqual({rows:[],types:[]});await compareKeyless();}
  expect((await f.admin.query("SELECT count(*)::int n FROM public.jobguard_schema_migration WHERE migration_name=$1",[own])).rows).toEqual([{n:1}]);
 },120000);

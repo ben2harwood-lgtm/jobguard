@@ -2,6 +2,8 @@
 import { useEffect, useState } from "react";
 import { exportPreviewV1, exportStatusV1, type ExportPreview, type ExportStatus } from "@jobguard/api/accounting-export-contracts";
 
+import { RouteChange } from "./route-change";
+
 type Session = { csrfToken: string; memberships: { tenantId: string }[] };
 const statusText: Record<ExportStatus["status"], string> = {
   pending: "Approved; waiting for the fake executor.", pushed: "Linked to the fake accounting object.",
@@ -71,6 +73,7 @@ export function ExportScreen({ sourceId }: { sourceId: string }) {
       <button disabled={busy} onClick={() => void act("read")}>Refresh status</button>
     </>}
     {error && <p role="alert">{error}. Load a current preview if the source or mapping changed.</p>}
+    {session && <RouteChange key={`${tenantId}:${sourceId}`} sourceId={sourceId} tenantId={tenantId} csrfToken={session.csrfToken} />}
     {preview && <section aria-label="Exact export artifact">
       <h2>Review the exact export</h2>
       <p>Target company: {preview.artifact.scope.companyId}</p>
