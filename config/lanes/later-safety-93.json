@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-93": {
+      "branches": [
+        "codex/sandbox/later-safety-93"
+      ],
+      "allow": [
+        "packages/db/src/commands.ts",
+        "packages/db/src/commercial-outbound-paths.test.ts",
+        "packages/db/test/later-empty-tables.ts",
+        "packages/db/test/commands.integration.test.ts",
+        "packages/db/migrations/0827_commercial_grant_single_use.sql",
+        "packages/db/test/migration-proofs/0827_commercial_grant_single_use.proof.json"
+      ]
+    }
+  }
+}

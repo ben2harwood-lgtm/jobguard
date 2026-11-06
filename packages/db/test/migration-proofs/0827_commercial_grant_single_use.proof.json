@@ -1,0 +1,159 @@
+{
+  "migration": "0827_commercial_grant_single_use.sql",
+  "lp0": [
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "id": "a-commercial-grant-use",
+        "title": "LATER-SAFETY-93 one-time legacy commercial grant consumption",
+        "kind": "authority",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Append-only tenant-scoped consumption records refuse reuse before the legacy adapter is invoked."
+        },
+        "cards": [
+          "LP-8b"
+        ],
+        "responsibilities": {
+          "LP-8b": "Record one use per exact grant under a grant-row lock before invoking the legacy adapter."
+        },
+        "downstream": "Runtime can consume an existing grant but cannot alter or delete its consumption record. No new live caller.",
+        "sources": [
+          "packages/db/src/commands.ts"
+        ],
+        "tests": [
+          "packages/db/test/commands.integration.test.ts"
+        ],
+        "gaps": [
+          "Real PostgreSQL CI and exact-head independent RED review remain required."
+        ],
+        "path": "ap-commercial-grant-use"
+      }
+    },
+    {
+      "section": "authorityPaths",
+      "before": null,
+      "after": {
+        "id": "ap-commercial-grant-use",
+        "title": "LATER-SAFETY-93 one-time legacy commercial grant consumption",
+        "description": "Runtime can consume an existing grant but cannot alter or delete its consumption record. No new live caller.",
+        "cards": [
+          "LP-8b"
+        ],
+        "responsibilities": {
+          "LP-8b": "Record one use per exact grant under a grant-row lock before invoking the legacy adapter."
+        },
+        "sources": [
+          "packages/db/src/commands.ts"
+        ],
+        "tests": [
+          "packages/db/test/commands.integration.test.ts"
+        ],
+        "gaps": [
+          "Real PostgreSQL CI and exact-head independent RED review remain required."
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|rel:table|app.commercial_grant_use|jobguard_migration",
+        "group": "a-commercial-grant-use"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|rel|table|app.commercial_grant_use|jobguard_runtime|INSERT|-",
+        "group": "a-commercial-grant-use"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|rel|table|app.commercial_grant_use|jobguard_runtime|SELECT|-",
+        "group": "a-commercial-grant-use"
+      }
+    },
+    {
+      "section": "rls",
+      "before": null,
+      "after": "app.commercial_grant_use|rls=t|forced=t"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.commercial_grant_use|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_runtime|6fa387f2f629fba6"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.commercial_grant_use|commercial_grant_use_immutable|app.reject_immutable_authorization_record|BEFORE DELETE/UPDATE|O"
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "app.commercial_grant_use",
+        "data": []
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "commercial_grant_use",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=ar/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "commercial_grant_use_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "commercial_grant_use",
+        "policyname": "tenant_isolation",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration,jobguard_runtime}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
+      }
+    }
+  ],
+  "tenancy": [
+    {
+      "relname": "commercial_grant_use",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    }
+  ]
+}
