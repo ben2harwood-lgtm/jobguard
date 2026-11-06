@@ -13,8 +13,19 @@ const storedV1 = z.object({ synthetic: z.literal(true), commandId: id, actorId: 
   rail: z.enum(["bank_transfer", "card", "pay_by_bank"]), invoice: z.unknown(),
   snapshotHash: z.string().regex(/^[a-f0-9]{64}$/u), result: z.unknown(), options: z.unknown() }).strict();
 export class PayNowAttemptError extends Error {
-  constructor(readonly code: "INVALID_INPUT" | "NOT_FOUND" | "REPLAY_CONFLICT" | "ALREADY_ATTEMPTED" | "UNAVAILABLE") {
+  constructor(readonly code: "INVALID_INPUT" | "NOT_FOUND" | "REPLAY_CONFLICT" | "ALREADY_ATTEMPTED" | "UNAVAILABLE" | "FORBIDDEN" | "UNAUTHENTICATED") {
     super(code); this.name = "PayNowAttemptError";
+  }
+  /** Share SQL refusal classification with the application's read-only prepare. */
+  static fromDatabase(error: unknown): PayNowAttemptError {
+    if (error instanceof PayNowAttemptError) return error;
+    const message = error instanceof Error ? error.message : "";
+    if (message === "METER_FORBIDDEN") return new PayNowAttemptError("FORBIDDEN");
+    if (message === "PAY_NOW_UNAUTHENTICATED") return new PayNowAttemptError("UNAUTHENTICATED");
+    for (const code of ["NOT_FOUND", "REPLAY_CONFLICT", "ALREADY_ATTEMPTED"] as const) {
+      if (message === code) return new PayNowAttemptError(code);
+    }
+    return new PayNowAttemptError("UNAVAILABLE");
   }
 }
 function checked(raw: unknown, tenantId: string, jobId: string, invoiceId: string) {
@@ -29,12 +40,7 @@ export class PayNowAttemptRepository {
   constructor(private readonly pool: Pool) {}
   private async guarded<T>(work: () => Promise<T>): Promise<T> {
     try { return await work(); } catch (error) {
-      if (error instanceof PayNowAttemptError) throw error;
-      const message = error instanceof Error ? error.message : "";
-      if (["NOT_FOUND", "REPLAY_CONFLICT", "ALREADY_ATTEMPTED"].includes(message)) {
-        throw new PayNowAttemptError(message as "NOT_FOUND" | "REPLAY_CONFLICT" | "ALREADY_ATTEMPTED");
-      }
-      throw new PayNowAttemptError("UNAVAILABLE");
+      throw PayNowAttemptError.fromDatabase(error);
     }
   }
   async command(context: VerifiedTenantContext, actor: unknown, raw: unknown) {

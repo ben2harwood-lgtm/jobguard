@@ -28,7 +28,7 @@ export function DuplicateCandidates({ jobId, onChange }: { jobId: string; onChan
  return <section aria-label={`Possible duplicates on job ${jobId}`} className={styles.card}>
   <h3 style={{ overflowWrap: "anywhere" }}>Job {jobId}</h3>
   {error && <p role="alert">{error}</p>}
-  {!data ? (error ? null : <p role="status">Loading possible duplicates…</p>) : <>
+  {!data ? (error ? null : <p>Loading possible duplicates…</p>) : <>
    {data.groups.length === 0 ? <p>No unresolved candidate groups.</p> : <p>These extras stop the billing export until they are linked or reviewed as not duplicates.</p>}
    {data.groups.map(group => {
     const roots = group.extras.filter(x => x.extraId === x.canonicalId);

@@ -187,9 +187,22 @@ it("one case/work/line accepts one approval across competing reviews and command
   const approvals = [approval(command), approval(second)];
   const results = await Promise.allSettled(approvals.map(p => send(x, p, reviewer.digest)));
   expect(results.filter(r => r.status === "fulfilled")).toHaveLength(1);
-  expect((results.find(r => r.status === "rejected") as PromiseRejectedResult).reason).toMatchObject({ code: "23505", constraint: "billability_one_line_approval" });
+  expect((results.find(r => r.status === "rejected") as PromiseRejectedResult).reason).toMatchObject({ message: "BILLABILITY_LINE_ALREADY_APPROVED" });
   const winner = results.findIndex(r => r.status === "fulfilled");
   expect(await send(x, approvals[winner], reviewer.digest)).toEqual((results[winner] as PromiseFulfilledResult<unknown>).value);
-  await expect(send(x, { ...approvals[winner], commandId: randomUUID() }, reviewer.digest)).rejects.toMatchObject({ code: "23505" });
+  await expect(send(x, { ...approvals[winner], commandId: randomUUID() }, reviewer.digest)).rejects.toThrow("BILLABILITY_LINE_ALREADY_APPROVED");
   expect((await f.admin.query("SELECT count(*)::int n FROM app.recovery_billability_command WHERE tenant_id=$1 AND job_id=$2 AND action='approve'", [x.context.tenantId,x.jobId])).rows[0].n).toBe(1);
+});
+
+it("repository refuses a second line approval, preserves exact replay and refuses forged authority", async () => {
+  const { x, command } = await ready(), reviewer = await ownerSession(x), otherOwner = await ownerSession(x);
+  const secondReview = { ...command, commandId: randomUUID() };
+  await send(x, command); await send(x, secondReview);
+  const firstCommand = approval(command), first = await send(x, firstCommand, reviewer.digest);
+  await expect(send(x, approval(secondReview), otherOwner.digest)).rejects.toThrow("BILLABILITY_LINE_ALREADY_APPROVED");
+  expect(await send(x, firstCommand, reviewer.digest)).toEqual(first);
+  await expect(repo().command(testTenantContext(randomUUID()), x.jobId, reviewer.digest, firstCommand)).rejects.toThrow();
+  await expect(send(x, { ...approval(secondReview), actorMembershipId: reviewer.member }, otherOwner.digest)).rejects.toThrow("INVALID_BILLABILITY_INPUT");
+  await expect(send(x, approval(secondReview), x.auth.digest)).rejects.toThrow("BILLABILITY_FORBIDDEN");
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.recovery_billability_command WHERE tenant_id=$1 AND job_id=$2 AND action='approve'", [x.context.tenantId, x.jobId])).rows[0].n).toBe(1);
 });
