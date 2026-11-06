@@ -1,3 +1,26 @@
+## READY — PR-opening handoff — 6 November 2026
+
+RED, plan piece ENT-10-rest. Launcher merge `59d8bd9a57b0f700786b00855ba2d2178c5fbe49` includes locally available main `b0ae55c4686861e61af7b6b2b759ecdcb425205e`. Starting worktree clean; no unmerged index entries. No product, test, lane, SQL or migration changes were needed; this run adds only this receipt entry. Router owns commit, push and opening the PR.
+
+Preserved the independent delta PASS at `8ff74629c19488007d2660caa94ac7d9a823cb63` (`coordinator/prechecks/ent-10-rest-delta3.md`, VERDICTS.tsv). Read-only Git-object comparison found every reviewed piece file byte-identical after the merge except the shared workspace registry, where every reviewed export and every main export survives. The independent PASS is historical evidence for that reviewed head, not a new review of this handoff head.
+
+Migration inventory against local `origin/main`: **none** (including migration notes and proof files). No routine is re-created, so no duplicate migration removal or routine-body pin is applicable. Main's 0651/0652 remain inherited mainline work. Lane allowlist equals all 16 changed non-lane paths and does not list itself. New web routes use `@jobguard/api/workspace`, with no direct API source import. No provider-register source changed. No behavior, protected fingerprint, guard or test was weakened.
+
+Actual local checks, installed dependencies only:
+
+- From `apps/api`: `node_modules/.bin/vitest run --maxWorkers=2 src/auth/sso/sso-emergency-owner.test.ts src/auth/sso/sso-emergency.test.ts src/auth/sso/enterprise-access.http.test.ts` — **38 passed**, three files.
+- `node node_modules/typescript/bin/tsc -p apps/api/tsconfig.json --noEmit --incremental false` and the same command for `apps/web/tsconfig.json` — **PASS**.
+- `node tools/lint.mjs` — **PASS**, including commercial, provider, money, core, lane and PL/pgSQL boundary checks. Existing computed-import reports are nonblocking tool output.
+- From `apps/api`: `node --import tsx src/generate-openapi.ts --check` — **PASS**.
+- From `apps/web`: `node_modules/.bin/playwright test ENT-10a.spec.ts ENT-10d.spec.ts ENT-10-emergency-cutover.spec.ts --list --project=mobile-360 --project=desktop --workers=2` — **PASS**, 10 cases discovered, no browser execution.
+- Exact filesystem lane equality, reviewed-file/export preservation and `git diff --check` — **PASS**. `git show --remerge-diff HEAD` could not create a temporary object directory in read-only Git storage; the read-only object comparisons above establish preservation without writing Git objects.
+
+CI must prove the whole real-PostgreSQL suite, including migfix-6/7, plan-entitlement and other upgrade snapshots, enterprise-access integration/upgrade and restore reconciliation; run the affected browser journeys at both widths with at most two workers; and pass required checks against current main. Cloudflare build is deferred to CI; route package imports were source-inspected here. Database/browser execution and a new exact-head independent RED review are not claimed. Existing general sign-in, live-provider, fewer-than-three-owner and no-live-owner-session holds remain. No deployment, launch or real customer data.
+
+READY for router commit/push and PR opening; this supersedes historical NOPR wording only for this handoff. Commit message is in `/tmp/ent-10-rest-20261106T125103Z-commit-msg.txt`.
+
+---
+
 ## READY — ent-10-rest repair round 3 — 6 November 2026
 
 RED, plan piece ENT-10-rest, NOPR; Ben-authorized extra repair round. The launcher already completed the main merge at `a2843cad5`; the index has no unmerged entries and the starting worktree was clean. No merge resolution or Git-writing command was needed.
