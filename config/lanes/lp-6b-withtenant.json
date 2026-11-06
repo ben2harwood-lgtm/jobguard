@@ -6,7 +6,7 @@
         "codex/sandbox/lp-6b-withtenant",
         "codex/sandbox/lp-6b-repair-wip"
       ],
-      "note": "LP-6b RED landing catch-up only: exact union with origin/main 128260957477d6be9aa88e94789095ac23a175f6 including merged #600, #601 (0653), #602 (0654). LP-6b migration stays 0655. No behavior or test-expectation changes. Router must stage resolution and complete pending merge (.git read-only here), then run new-head CI and required independent RED review.",
+      "note": "LP-6b RED: exact union with origin/main a0a6e824780d785704ed4b046067aa28f314d3e4 is committed at aaddeadc8. Migration stays 0655 (main ends at 0654). Ben, 6 Nov 2026 router chat, \"Yes, option A\": EnterpriseAccessRepository.emergency uses the existing identity-sso-required named opt-out; identity SQL retains locked session, CSRF and live-owner checks. No grants or additional sessionless constructor sites. Router must commit, push, obtain exact-head CI and independent RED review.",
       "allow": [
         "apps/api/src/accounting-export.application.test.ts",
         "apps/api/src/ai-capture-authority.test.ts",

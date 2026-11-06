@@ -6,7 +6,7 @@ export class EnterpriseAccessRepository {
  async emergency(context: VerifiedTenantContext, actor: {sessionDigest:string;csrfToken:string}, input: unknown): Promise<unknown> {
   return withTenant(this.identity,context,async db => (await db.$client.query<{result:unknown}>(
    'SELECT identity.dark_emergency($1,$2,$3,$4::jsonb) result',
-   [actor.sessionDigest,actor.csrfToken,context.tenantId,JSON.stringify(input)])).rows[0]?.result);
+   [actor.sessionDigest,actor.csrfToken,context.tenantId,JSON.stringify(input)])).rows[0]?.result, "identity-sso-required");
  }
  async emergencyNotices(context: VerifiedTenantContext, actor: {sessionDigest:string;csrfToken:string}): Promise<unknown> {
   // Ben's 6 Nov 2026 router-chat "yes": this named sessionless port only.

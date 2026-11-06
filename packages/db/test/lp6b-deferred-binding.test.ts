@@ -18,6 +18,8 @@ function productionFiles(directory: string): string[] {
 const roots = ["apps", "packages"].flatMap(directory => productionFiles(join(workspace, directory)));
 const approved = [
   'audit-export-repository.ts#refuse:"audit-export-refusal"',
+  // Ben's 6 Nov 2026 router-chat "Yes, option A": sixth reviewed opt-out.
+  'enterprise-access-repository.ts#emergency:"identity-sso-required"',
   'enterprise-identity-repository.ts#admin:"identity-sso"',
   'enterprise-identity-repository.ts#allowed:"identity-sso"',
   'enterprise-identity-repository.ts#view:"identity-sso"',

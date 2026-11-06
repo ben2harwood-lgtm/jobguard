@@ -45,8 +45,9 @@ it("keeps emergency notices sessionless while passing the exact session, CSRF an
     [actor.sessionDigest, actor.csrfToken, f.member.tenantId, JSON.stringify(input)]);
   expect(f.query.mock.calls.some(([sql]) => sql.includes("bind_request"))).toBe(false);
   f.query.mockClear();
-  await expect(repo.emergency(f.context, actor, { version: "emergency.v1", operation: "open" })).rejects.toThrow("FORBIDDEN");
-  expect(f.query.mock.calls.map(([sql]) => sql)).toEqual(["BEGIN", "SELECT app.bind_request($1, $2, $3)", "ROLLBACK"]);
+  await expect(repo.emergency(f.context, actor, { version: "emergency.v1", operation: "open" })).resolves.toEqual({ notices: [] });
+  expect(f.query.mock.calls).toEqual([["BEGIN"], ["SELECT set_config('app.tenant_id', $1, true)", [f.member.tenantId]],
+    ['SELECT identity.dark_emergency($1,$2,$3,$4::jsonb) result', [actor.sessionDigest, actor.csrfToken, f.member.tenantId, JSON.stringify({ version: "emergency.v1", operation: "open" })]], ["COMMIT"]]);
 });
 it("uses a sessionless tenant context only for the infrastructure timer; human reads still bind", async () => {
   const f = fixture(), repo = new RetentionRecordRepository(f.pool);
