@@ -223,3 +223,4 @@ export * from "./connector-promotion-repository.js";
 
 export * from "./recurring-extras-repository.js";
 export * from "./extra-proceed.js";
+export * from "./blank-practice-company.js";
