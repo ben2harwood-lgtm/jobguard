@@ -460,6 +460,14 @@
       "section": "entries",
       "before": null,
       "after": {
+        "key": "acl|col|app.command_lifecycle_claim.authorization_id|jobguard_command_writer|UPDATE|-",
+        "group": "a-lp12-narrow-owners"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
         "key": "acl|col|app.command_lifecycle_claim.effect_ref|jobguard_command_writer|UPDATE|-",
         "group": "a-lp12-narrow-owners"
       }

@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { Pool } from "pg";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { LedgerRepository } from "../src/ledger.js";
-import { jobDoorsActor, jobDoorsDatabase, type JobDoorsDatabase } from "./lp-job-doors-fixtures.js";
+import { adoptionFixture, jobDoorsActor, jobDoorsDatabase, type JobDoorsDatabase } from "./lp-job-doors-fixtures.js";
 import { verifiedTenantContextFromMembership } from "../src/tenant-context.js";
 import { lp12ColumnGrants, lp12Moved, lp12Owners, lp12TableGrants } from "./lp12-narrow-owners.js";
 
@@ -254,6 +254,7 @@ it("leaves only the necessary command-table grants after removing table custody"
     FROM pg_class c JOIN pg_attribute col ON col.attrelid=c.oid,LATERAL aclexplode(col.attacl) a
     WHERE c.oid='app.command_lifecycle_claim'::regclass AND a.grantee='jobguard_command_writer'::regrole
     ORDER BY col.attname`)).rows).toEqual([
+    { relname: "command_lifecycle_claim", attname: "authorization_id", privilege_type: "UPDATE", is_grantable: false },
     { relname: "command_lifecycle_claim", attname: "effect_ref", privilege_type: "UPDATE", is_grantable: false },
     { relname: "command_lifecycle_claim", attname: "outcome", privilege_type: "UPDATE", is_grantable: false },
   ]);
@@ -304,4 +305,39 @@ it("refuses a same-tenant forged author at each moved posting without a journal 
   for (const table of ["journal", "journal_line", "audit_event"]) {
     expect((await db.owner.query(`SELECT count(*)::int n FROM app.${table} WHERE tenant_id=$1`, [actor.tenant])).rows[0].n).toBe(0);
   }
+});
+
+
+it("commits and replays an effect-binding adoption while refusing runtime claim updates", async () => {
+  const { UserCommandDispatcher } = await import("../src/commands.js");
+  const { AdoptInFlightJobMutation } = await import("../src/job-import-repository.js");
+  const f = await adoptionFixture(db), credential = randomBytes(32).toString("hex");
+  await db.owner.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", [`${f.actor.person}@fictional.invalid`, f.actor.person]);
+  await db.owner.query("INSERT INTO identity.membership_locator VALUES($1,$2,$3)", [f.actor.person, f.actor.tenant, f.actor.member]);
+  await db.owner.query(`INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at)
+    VALUES($1,$2,'synthetic_demo',$3,'fictional',clock_timestamp()+interval '1 hour')`, [randomUUID(), f.actor.person, credential]);
+  const context = verifiedTenantContextFromMembership({ identityUserId: f.actor.person, tenantId: f.actor.tenant,
+    membershipId: f.actor.member } as Parameters<typeof verifiedTenantContextFromMembership>[0], { kind: "real", credential });
+  const dispatcher = new UserCommandDispatcher(db.runtime);
+  const mutation = new AdoptInFlightJobMutation(f.actor.tenant, "synthetic_candidate", f.input);
+  const result = await dispatcher.dispatch(context, f.command, mutation);
+  expect(result).toMatchObject({ jobId: f.input.jobId, baselineId: f.input.baselineId });
+  expect(await dispatcher.dispatch(context, f.command, { mutate: async () => { throw new Error("replay mutated"); } })).toEqual(result);
+  const claim = (await db.owner.query(`SELECT c.effect_ref,c.authorization_id,r.status FROM app.command_lifecycle_claim c
+    JOIN app.command_receipt r USING(tenant_id,command_id) WHERE c.tenant_id=$1 AND c.command_id=$2`,
+  [f.actor.tenant, f.command.commandId])).rows[0];
+  expect(claim).toEqual({ effect_ref: { baselineId: f.input.baselineId }, authorization_id: expect.any(String), status: "succeeded" });
+  const client = await db.runtime.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT app.bind_request('real',$1,$2)", [credential, f.actor.tenant]);
+    for (const column of ["effect_ref", "outcome", "authorization_id"]) {
+      await client.query("SAVEPOINT refused");
+      await expect(client.query(`UPDATE app.command_lifecycle_claim SET ${column}=${column} WHERE tenant_id=$1 AND command_id=$2`,
+        [f.actor.tenant, f.command.commandId])).rejects.toMatchObject({ code: "42501" });
+      await client.query("ROLLBACK TO refused");
+    }
+  } finally { await client.query("ROLLBACK"); client.release(); }
+  expect((await db.owner.query("SELECT effect_ref,authorization_id FROM app.command_lifecycle_claim WHERE tenant_id=$1 AND command_id=$2",
+    [f.actor.tenant, f.command.commandId])).rows).toEqual([{ effect_ref: claim.effect_ref, authorization_id: claim.authorization_id }]);
 });

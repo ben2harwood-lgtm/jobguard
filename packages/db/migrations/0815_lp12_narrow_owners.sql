@@ -33,7 +33,7 @@ ALTER TABLE app.repository_operational_record OWNER TO jobguard_migration;
 GRANT SELECT,INSERT ON app.repository_operational_record TO jobguard_command_writer;
 GRANT SELECT ON app.command_type_registry TO jobguard_command_writer;
 GRANT SELECT,INSERT ON app.command_lifecycle_claim TO jobguard_command_writer;
-GRANT UPDATE(effect_ref,outcome) ON app.command_lifecycle_claim TO jobguard_command_writer;
+GRANT UPDATE(effect_ref,outcome,authorization_id) ON app.command_lifecycle_claim TO jobguard_command_writer;
 
 -- Keep credential-row locking separate from the binding-store owner. PostgreSQL
 -- requires UPDATE on at least one column for FOR SHARE; these columns are used

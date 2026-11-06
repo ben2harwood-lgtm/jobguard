@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/lp-12-narrow-owner"
       ],
-      "note": "LP-12 RED NOPR on inherited LP-11 858c129f616dfe042d5311dcbf3d26c1358c9355; reserved 0815. READY for branch save; landing held for inherited credential/worker compatibility, catalogue registration, API failures, PostgreSQL CI and independent exact-head review.",
+      "note": "LP-12 RED NOPR on inherited LP-11 858c129f616dfe042d5311dcbf3d26c1358c9355; reserved 0815. READY for branch save; landing held for inherited credential/worker compatibility, catalogue registration, API failures, PostgreSQL CI and independent exact-head review. Repair round 1: exact authorization_id column grant restored for lp5_bind_effect; adoption commit/replay and runtime claim UPDATE refusal regression added. No broader grant or predecessor migration change.",
       "allow": [
         "docs/contracts/lp-0-effective-privileges-v1.md",
         "packages/db/migrations/0815_lp12_narrow_owners.sql",

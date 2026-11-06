@@ -76,3 +76,16 @@ it("chains accessor ACLs from LP-6e/LP-11 and permits LP-6d's effective-practice
   expect(own.upgrade.find((c: { after?: { proname?: string } }) => c.after?.proname === "lp6d_contractor_session_identity").after.proacl)
     .toBe("{jobguard_migration=X/jobguard_migration,jobguard_binding_lookup_owner=X/jobguard_migration}");
 });
+
+
+it("grants only the effect-binding columns needed after command claim custody moves", async () => {
+  expect(sql).toContain("GRANT UPDATE(effect_ref,outcome,authorization_id) ON app.command_lifecycle_claim TO jobguard_command_writer;");
+  const { inventory } = await loadReviewedInventory();
+  expect(inventory.entries.filter(e => e.group === "a-lp12-narrow-owners" &&
+    e.key.startsWith("acl|col|app.command_lifecycle_claim.")).map(e => e.key).sort()).toEqual([
+    "acl|col|app.command_lifecycle_claim.authorization_id|jobguard_command_writer|UPDATE|-",
+    "acl|col|app.command_lifecycle_claim.effect_ref|jobguard_command_writer|UPDATE|-",
+    "acl|col|app.command_lifecycle_claim.outcome|jobguard_command_writer|UPDATE|-",
+  ]);
+  expect(sql).not.toMatch(/GRANT UPDATE ON app\.command_lifecycle_claim|GRANT UPDATE\([^)]*\) ON app\.command_lifecycle_claim TO jobguard_runtime/i);
+});

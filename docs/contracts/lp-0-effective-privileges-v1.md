@@ -670,3 +670,28 @@ and holder checks. A focused later change could share the list to reduce the
 risk of provisioning a role without its matching custody check. No unrelated
 refactor was made here. Forward fix requires a new reviewed migration restoring
 owners/revoking grants, never edits to installed history.
+
+
+LP-12 repair round 1 (6 November 2026): READY for router branch save, NOPR.
+The first security check found that removing command-claim ownership also
+removed the writer's UPDATE on authorization_id, still used by lp5_bind_effect.
+0815 now grants exactly UPDATE(effect_ref,outcome,authorization_id); the proof
+adds that one column permission and the exact-grant assertion includes it in
+sorted column order. No predecessor migration, routine body, refusal assertion
+or runtime grant changes. The new PostgreSQL regression uses the existing
+checked adoption path through lp5_bind_effect, asserts committed effect and
+authorization plus replay, and requires runtime UPDATE refusal for all three
+columns. It collects with all 14 existing cases; execution remains CI work.
+The three named source/proof/catalogue Vitest files pass 113 tests with two
+workers. CI must prove the new adoption regression against real PostgreSQL,
+exact catalogue/proof agreement, fresh/upgrade migrations and unchanged
+site-visit/extra-approval/invoice-lock journeys, alongside the existing gates
+above. Inherited LP-11 holds and independent exact-head RED review remain.
+Database source typecheck (`node node_modules/typescript/bin/tsc -p
+packages/db/tsconfig.json --noEmit`) passes. Repository lint (`node tools/lint.mjs`)
+passes with LANE_BASE_REF=858c129f616dfe042d5311dcbf3d26c1358c9355 (the reviewed
+LP-11 branch base). The initial default-main lane comparison refused inherited
+LP changes outside this lane; those files were not added to its allow list.
+Exact working-tree lane coverage and git diff --check pass. The installed
+Vitest executable was used directly after the pnpm launcher stalled before
+starting checks and was interrupted; no dependency installation was performed.
