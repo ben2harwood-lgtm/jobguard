@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-104": {
+      "branches": [
+        "codex/sandbox/later-safety-104"
+      ],
+      "note": "LATER-SAFETY-104: RED append-only recovery message and follow-up records; NOPR.",
+      "allow": [
+        "packages/db/migrations/0835_recovery_record_immutable.sql",
+        "packages/db/test/migration-proofs/0835_recovery_record_immutable.proof.json",
+        "packages/db/test/recovery-record-immutable.integration.test.ts"
+      ]
+    }
+  }
+}
