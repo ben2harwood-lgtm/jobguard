@@ -67,6 +67,29 @@ async function finishSnapshot(f: PromptFixture) {
  return snapshot;
 }
 describe('end-check stored rule (a) recheck', () => {
+ it('finishes without evaluating a recognised off-order observation when the end check is disabled', async () => {
+  const f = await promptFixture(c);
+  await pendingCompletion(f, 'CLEAR-GUTTER');
+  const agreementVersionId = randomUUID();
+  await ownerTx(c, f.p.tenantId, db => db.$client.query(`INSERT INTO app.enterprise_agreement_version
+   (tenant_id,id,agreement_ref,rate_numerator,rate_denominator,basis,policy_version,effective_from,end_of_job_check,content_hash,environment,operations_actor_ref)
+   VALUES($1,$2,'fictional-disabled-rule-a',1,10,'on_payment','enterprise_site_capture_policy_v1','2021-01-01',false,$3,'synthetic_demo','fictional-test')`, [f.p.tenantId,agreementVersionId,'d'.repeat(64)]));
+  // Recognised stored work is off-order and has no prompt awaiting the optional evaluation.
+  const before = await finishSnapshot(f);
+  expect(before['app.extra_prompt']).toEqual([]);
+  const cmd = {version: 'end-check.v1',commandId: randomUUID(),jobId: f.jobId,agreementVersionId};
+  const result = await repo.endCheck(f.sessions.owner!, cmd);
+  expect(result).toEqual({jobId: f.jobId,finishedAt: expect.any(String),checkRan: false,promptsRaised: 0});
+  expect((await c.admin.query('SELECT agreement_version_id,check_ran,command_id,actor_membership_id FROM app.contractor_job_finish WHERE tenant_id=$1 AND job_id=$2', [f.p.tenantId,f.jobId])).rows).toEqual([
+   {agreement_version_id: agreementVersionId,check_ran: false,command_id: cmd.commandId,actor_membership_id: f.p.membershipId},
+  ]);
+  expect((await c.admin.query('SELECT status,result FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2', [f.p.tenantId,cmd.commandId])).rows).toEqual([{status: 'succeeded',result}]);
+  expect((await c.admin.query('SELECT event_type FROM app.audit_event WHERE tenant_id=$1 AND id=$2', [f.p.tenantId,cmd.commandId])).rows).toEqual([{event_type: 'contractor.prompt.command'}]);
+  const after = await finishSnapshot(f);
+  for (const table of ['app.extra_prompt','app.extra_prompt_citation','app.extra_completion_observation','app.job']) expect(after[table]).toEqual(before[table]);
+  await expect(repo.endCheck(f.sessions.owner!, cmd)).resolves.toEqual(result);
+  expect(await finishSnapshot(f)).toEqual(after);
+ });
  it('refuses a stored identity/PNG finding mismatch and rolls back the entire finish', async () => {
   const f = await promptFixture(c), agreementVersionId = await pendingCompletion(f, 'REPAIR-DOOR');
   const before = await finishSnapshot(f);
