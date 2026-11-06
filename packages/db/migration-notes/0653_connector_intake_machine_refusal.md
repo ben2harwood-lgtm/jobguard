@@ -25,7 +25,7 @@ sections are empty for that reason. No baseline pin/scanner changes are made.
 
 ## Named holds for landing
 
-- Migration ordering repaired: 0992 follows 0991_connector_machine on batch-35.
+- Migration ordering repaired: 0653 follows 0991_connector_machine on batch-35.
   Migration SQL is unchanged; only the complete filename stems and references were
   renumbered. The proof-loader suite now passes without weakening its guards.
 - No scanner/pin edit is currently justified. If CI requires one, its exact finding
@@ -94,7 +94,7 @@ READY for router staging and merge commit. Incoming main is
 is older and was not used as the comparison base. The contract conflict retains
 both the machine-refusal paragraph and main's machine-command lifecycle hold.
 Main already carries the parent batch, including machine creation renumbered to
-0621; none of that parent work remains in this group's diff. Migration 0992 is
+0621; none of that parent work remains in this group's diff. Migration 0653 is
 still unique and above main's latest 0640. No duplicate migration was found.
 
 Compared both replacement routines against main's latest definitions: intake
@@ -121,3 +121,58 @@ No PostgreSQL/browser execution, independent review, git writes, commit, push or
 PR here. The read-only index still records the resolved documentation conflict;
 the router must stage the resolution and finish the existing merge. Required CI,
 real-PostgreSQL proof and independent RED review remain before landing.
+
+## PR-opening reconciliation — 6 November 2026
+
+READY for router staging, commit, push and PR. The launcher completed the merge:
+HEAD `4b99436b8` contains current available origin/main `d78e60463` (main's
+migration high-water mark is 0649). No merge conflict remains. Preserve the prior
+precheck and catch-up review evidence; neither is an exact-head review of this
+final renumbered change.
+
+Migrations against origin/main: **only
+0653_connector_intake_machine_refusal.sql**. Its stem is unique on main; no
+migration repeats a merged migration. File, proof, note, test reference and lane
+paths were renumbered together. The SQL bytes are identical to the pre-renumber
+HEAD version. 0650 is reserved for #597 and 0651 for LP-6b under the issued order;
+this change uses only its assigned 0653.
+
+Rechecked every main migration for definitions of the two replaced routines:
+connector.intake is latest in 0576_connector_materials_stage.sql;
+connector.machine_stage is latest in 0621_connector_machine.sql. The three
+existing exact-body comparisons pass: intake differs only by the refusal,
+machine_stage's wrapper differs only by explicit guards and inline staging, and
+the inline staging body equals latest intake. No main routine body was lost.
+MIGFIX-6/7 and plan-entitlement routine snapshots exclude the connector schema;
+restore-reconciliation pins its separate outbound routine. No snapshot exception,
+proof baseline, fingerprint or test expectation was broadened. No tables, workers,
+web routes, providers, function settings or product behaviour were added here.
+
+Local checks (installed tools, at most two workers):
+
+- From packages/db: `./node_modules/.bin/vitest run --maxWorkers=2 test/connector-intake-proof.test.ts test/migration-proof-loader.test.ts`:
+  PASS, 84 tests in two files, including all three exact-body comparisons.
+- From packages/db: `./node_modules/.bin/tsc -p tsconfig.json --noEmit`: PASS.
+- `node tools/plpgsql-case-in-if-lint.mjs`: PASS, 315 migrations.
+- `node tools/commercial-integrity-current-source-guard.mjs`: PASS,
+  94 protected roots, zero diagnostics; no fingerprint changes needed.
+- `node tools/money-arithmetic-lint.mjs` and
+  `node tools/commercial-boundary-lint.mjs`: PASS.
+- `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs --lane=later-safety-15`:
+  run; refuses only the three deleted pre-renumber paths. Local mode unions the
+  committed branch diff with worktree changes, so it still sees the previous
+  filenames even though they do not exist on main or in the final tree.
+  `node tools/lint.mjs` passes core purity, then stops on the same lane diagnostic.
+  Exported loadLanePolicy/lanePathAllowed checks pass for all seven final PR paths;
+  migrationOrderViolations against origin/main returns no violations. The lane
+  lists exactly the six non-lane final paths and excludes itself. Router must
+  rerun formal lane lint after staging/committing the rename; no obsolete path
+  allowance or guard bypass was added.
+- `git diff --check`: PASS.
+
+CI must still prove the real-PostgreSQL connector regressions, LP-0, populated
+upgrade/replay and full database/migration suites (including MIGFIX-6/7,
+plan-entitlement and restore-reconciliation), and all required repository checks.
+No PostgreSQL or browser suite ran in this sandbox. Exact-head independent RED
+review and green CI remain landing gates. No git writes, commit, push or PR were
+performed by this builder.
