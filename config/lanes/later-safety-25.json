@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-25": {
+      "branches": [
+        "codex/sandbox/later-safety-25"
+      ],
+      "allow": [
+        "apps/api/src/auth/sso/enterprise-access.contracts.ts",
+        "apps/api/src/auth/sso/sso-emergency-token.test.ts",
+        "apps/web/app/admin/contractor/identity/emergency-actions.tsx",
+        "packages/db/migration-notes/0655_emergency_token_minted.md",
+        "packages/db/migrations/0655_emergency_token_minted.sql",
+        "packages/db/test/enterprise-access.integration.test.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/0655_emergency_token_minted.proof.json",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
+        "packages/db/test/sso-emergency-token.integration.test.ts"
+      ]
+    }
+  }
+}
