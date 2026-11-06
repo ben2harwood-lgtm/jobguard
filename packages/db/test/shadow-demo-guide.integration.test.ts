@@ -23,7 +23,7 @@ beforeAll(async () => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); f = await 
 afterAll(async () => { await closeFinalCheckFixture(f); vi.unstubAllEnvs(); });
 
 describe("0518 demo-only guide helpers", () => {
- it("0789 never stores the demo sign-in path or secret, including legacy path callers", async () => {
+ it("0650 never stores the demo sign-in path or secret, including legacy path callers", async () => {
   const a = await guide.locked(), secret = Buffer.from(randomUUID() + randomUUID()).toString("base64url").slice(0, 43);
   const l = link(a, a.customer, secret);
   const issued = await issue(a, a.customer, a.digest, l.digest, l.path);
@@ -35,7 +35,7 @@ describe("0518 demo-only guide helpers", () => {
   const content = `customer-signin-redacted.v1:${hash(l.path)}`;
   expect(rows[0]).toMatchObject({ immutable_content: content, content_hash: hash(content) });
  }, 600000);
- it("0789 returns the requested link directly while storing an independent reference and matching authorization hash", async () => {
+ it("0650 returns the requested link directly while storing an independent reference and matching authorization hash", async () => {
   const a = await guide.locked();
   const { ShadowDemoGuideApplication } = await import("../../../apps/api/src/shadow-demo-guide.application.js");
   const result = await new ShadowDemoGuideApplication(f.runtime, a.sessionId, "synthetic_demo").issueCustomerLink(a.jobId, { version: "shadow-guide-customer-link.v1", customerId: a.customer }, hash);
@@ -49,10 +49,10 @@ describe("0518 demo-only guide helpers", () => {
   expect(JSON.stringify(rows)).not.toContain("/customer/sign-in#");
   expect(JSON.stringify(rows)).not.toContain(secret);
  }, 600000);
- it("0789 redacts historical demo rows, revokes their grants and appends the 0533 security audit events once", async () => {
+ it("0650 redacts historical demo rows, revokes their grants and appends the 0533 security audit events once", async () => {
   const a = await guide.locked(), l = link(a, a.customer);
   const predecessor = await readFile(new URL("../migrations/0518_shadow_demo_guide.sql", import.meta.url), "utf8");
-  const migration = await readFile(new URL("../migrations/0789_demo_customer_link_reference.sql", import.meta.url), "utf8");
+  const migration = await readFile(new URL("../migrations/0650_demo_customer_link_reference.sql", import.meta.url), "utf8");
   const original = predecessor.slice(predecessor.indexOf("CREATE FUNCTION app.demo_issue_customer_link("), predecessor.indexOf("ALTER FUNCTION app.demo_issue_customer_link")).replace("CREATE FUNCTION", "CREATE OR REPLACE FUNCTION");
   let grant: string;
   try {

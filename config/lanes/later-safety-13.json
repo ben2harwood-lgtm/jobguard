@@ -4,13 +4,15 @@
     "later-safety-13": {
       "branches": ["codex/sandbox/later-safety-13"],
       "allow": [
-        "packages/db/migrations/0789_demo_customer_link_reference.sql",
-        "packages/db/migration-notes/0789_demo_customer_link_reference.md",
-        "packages/db/test/migration-proofs/0789_demo_customer_link_reference.proof.json",
+        "packages/db/migrations/0650_demo_customer_link_reference.sql",
+        "packages/db/migration-notes/0650_demo_customer_link_reference.md",
+        "packages/db/test/migration-proofs/0650_demo_customer_link_reference.proof.json",
         "packages/db/src/shadow-demo-guide-repository.ts",
-        "packages/db/test/shadow-demo-guide.integration.test.ts"
+        "packages/db/test/shadow-demo-guide.integration.test.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts"
       ],
-      "note": "LATER-SAFETY-13, RED: remove demo customer sign-in credentials from stored outbox content; NOPR."
+      "note": "LATER-SAFETY-13, RED: remove demo customer sign-in credentials from stored outbox content; PR-opening catch-up, migration 0650."
     }
   }
 }
