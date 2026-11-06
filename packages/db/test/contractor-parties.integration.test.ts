@@ -19,7 +19,8 @@ const query = (p: AuthenticatedMembership) => contractors.query(p, { version: "c
 const command = async (p: AuthenticatedMembership, fields: Record<string, unknown>) => contractors.command(p, { version: "contractor-command.v1", environment: "synthetic_demo", commandId: randomUUID(), id: randomUUID(), expectedRevision: (await query(p)).revision, ...fields });
 async function setup(type = "insurer") {
   const session = randomUUID(), p = await contractors.startPractice(session); await seedActiveContractorAgreement(admin,p.tenantId); const v = await query(p);
-  const job = (await new JobRepository(runtime).create(ctx(p), ["job:update"], { title: "Fictional contractor job" })).id as string;
+  const job = randomUUID();
+  await withTenant(runtime, ctx(p), db => db.$client.query("SELECT app.work_order_begin($1,$2,$3)", [p.membershipId, job, "Fictional contractor job"]));
   const jp = new JobPartiesRepository(runtime);
   const customer = jobPartiesCommandResultV1.parse(await jp.command(ctx(p), p.membershipId, job, { version: "job-parties-command.v1", commandId: randomUUID(), action: "create_customer", customer: { version: "customer.v1", name: "Fictional Client", type, email: "client@example.invalid" } }));
   const site = jobPartiesCommandResultV1.parse(await jp.command(ctx(p), p.membershipId, job, { version: "job-parties-command.v1", commandId: randomUUID(), action: "create_site", site: { version: "site.v1", addressLines: ["1 Fictional Street"], town: "London", postcode: "SW1A1AA" } }));
