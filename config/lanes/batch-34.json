@@ -55,7 +55,8 @@
         "packages/db/test/migration-proofs/1202_extra_withdraw_roles.proof.json",
         "packages/db/test/migration-proofs/1203_extra_working_day_wait.proof.json",
         "packages/db/test/migration-proofs/1204_extra_rule_wait_schema.proof.json",
-        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts"
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
+        "packages/db/test/restore-reconciliation-upgrade.integration.test.ts"
       ]
     }
   }
