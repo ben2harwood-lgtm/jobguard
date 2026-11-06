@@ -9,7 +9,7 @@ let c: Awaited<ReturnType<typeof cluster>>;
 let approvals: ExtraApprovalRepository;
 let extras: ExtraRepository;
 beforeAll(async () => {
- c = await cluster(); // Real embedded PostgreSQL; fresh migration from empty includes 0840.
+ c = await cluster(); // Real embedded PostgreSQL; fresh migration from empty includes 0663.
  approvals = new ExtraApprovalRepository(c.runtime);
  extras = new ExtraRepository(c.runtime);
 }, 240000);
@@ -138,7 +138,7 @@ it("mutation control: removing the withdraw guard admits an active canonical wit
 }, 120000);
 
 it("fresh migration installs private definer guards after the existing BEFORE guards", async () => {
- expect((await c.admin.query("SELECT migration_name FROM public.jobguard_schema_migration WHERE migration_name='0840_duplicate_canonical_guard.sql'")).rows).toHaveLength(1);
+ expect((await c.admin.query("SELECT migration_name FROM public.jobguard_schema_migration WHERE migration_name='0663_duplicate_canonical_guard.sql'")).rows).toHaveLength(1);
  for (const [table, original, added, routine] of [
   ["extra_duplicate_link", "extra_duplicate_link_insert_guard", "z_duplicate_canonical_guard", "xa_duplicate_canonical_guard"],
   ["extra_event", "extra_event_insert_guard", "z_active_canonical_withdraw_guard", "xa_active_canonical_withdraw_guard"],
