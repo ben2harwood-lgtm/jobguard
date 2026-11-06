@@ -3,6 +3,10 @@ import { readFile } from "node:fs/promises";
 import { afterAll, expect, it } from "vitest";
 import { startBeforeMigration, applyMigration, type Cluster } from "./contractor-entitlement-fixtures.js";
 import { proofBefore, proofDifferences } from "./upgrade-proof-utils.js";
+import { applyUpgradeProofs, loadMigrationProofs } from "./migration-proof-loader.js";
+import { snapshot } from "./contractor-entitlement-fixtures.js";
+import { laterEmptyTables } from "./later-empty-tables.js";
+import { currentCommandRegistryRows } from "./lp5-command-catalog.js";
 import { migrate } from "../src/migrate.js";
 
 const own = "0632_shadow_group_disclosure.sql";
@@ -25,7 +29,8 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN('app','identity','control_plane','audit_control') ORDER BY 1,2`)).rows;
   const routines = async () => (await c!.admin.query(`SELECT n.nspname,p.proname,pg_get_function_identity_arguments(p.oid) args,p.proowner,p.proacl,p.prosecdef,p.proconfig,pg_get_functiondef(p.oid) definition
     FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname IN('app','identity','control_plane','audit_control') AND p.prokind='f' ORDER BY 1,2,3`)).rows;
-  const beforeCatalog = await catalog(), beforeRoutines = await routines();
+  const policies = async () => (await c!.admin.query("SELECT * FROM pg_policies ORDER BY schemaname,tablename,policyname")).rows;
+  const beforeCatalog = await catalog(), beforeRoutines = await routines(), beforePolicies = await policies();
   await applyMigration(c, own);
   expect(await proofDifferences(c.admin, rows)).toEqual({ rows: [], types: [] });
   expect(await catalog()).toEqual(beforeCatalog);
@@ -43,20 +48,52 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   const added = afterRoutines.find(r => r.proname === "propagate_shadow_group_disclosure");
   expect(added).toMatchObject({ proacl: "{jobguard_migration=X/jobguard_migration}", prosecdef: true, proconfig: ["search_path=pg_catalog, app"] });
   expect((await c.admin.query("SELECT to_regprocedure('app.complete_shadow_firing_post_lock(uuid,uuid,uuid,uuid,uuid,uuid,text,text,uuid,text,jsonb)') routine")).rows[0].routine).toBeNull();
+  const beforeReplay = await snapshot(c.admin);
   await migrate(c.admin); await migrate(c.admin);
+  const registry = (await c.admin.query("SELECT jsonb_agg(value ORDER BY value::text) data FROM jsonb_array_elements($1::jsonb)", [JSON.stringify(currentCommandRegistryRows)])).rows[0].data;
+  expect(await snapshot(c.admin)).toEqual({ ...laterEmptyTables, ...beforeReplay, "app.command_type_registry": registry });
   expect(await proofDifferences(c.admin, rows)).toEqual({ rows: [], types: [] });
-  // The branch-tip replay also adds MON-6's bounded read; pin that one addition
-  // to 0633's proof and body while preserving every existing routine exactly.
-  const replayRoutines = await routines();
-  const customerRead = replayRoutines.filter(r => r.nspname === "identity" && r.proname === "customer_practice_pay_now" && r.args === "t uuid, j uuid, c uuid, digest text");
-  expect(customerRead).toHaveLength(1);
-  const { definition, ...customerReadMetadata } = customerRead[0]!;
-  const proof = JSON.parse(await readFile(new URL("./migration-proofs/0633_customer_practice_pay_now_read.proof.json", import.meta.url), "utf8"));
-  const expectedRead = proof.upgrade.find((entry: { section: string; after: { nspname: string; proname: string } }) => entry.section === "routines" && entry.after.nspname === "identity" && entry.after.proname === "customer_practice_pay_now").after;
-  const owner = (await c.admin.query("SELECT $1::regrole::oid AS oid", [expectedRead.proowner])).rows[0].oid;
-  expect(customerReadMetadata).toEqual({ ...expectedRead, proowner: owner });
-  const customerReadSql = await readFile(new URL("../migrations/0633_customer_practice_pay_now_read.sql", import.meta.url), "utf8");
-  expect(definition.split("$function$")[1]).toBe(customerReadSql.split("AS $$")[1]!.split("$$;")[0]);
-  expect(replayRoutines.filter(r => r !== customerRead[0])).toEqual(afterRoutines);
-  expect(await catalog()).toEqual(beforeCatalog);
+  // Successors add only their reviewed metadata; every replaced and added body is pinned below.
+  const successors = loadMigrationProofs().proofs.filter(p => p.migration > own)
+    .map(p => ({ ...p, upgrade: p.upgrade.filter(change => change.section !== "rows") }));
+  const ownerOids = Object.fromEntries((await c.admin.query("SELECT rolname,oid FROM pg_roles")).rows.map(row => [row.rolname,row.oid]));
+  const metadata = (entries: typeof afterRoutines) => entries.map(({ definition: _definition, ...row }) => row);
+  const relationMetadata = (entries: typeof beforeCatalog) => entries.map(({ policies: _policies, ...row }) => row);
+  const expected = applyUpgradeProofs({ rows: {}, routines: metadata(afterRoutines), relations: relationMetadata(beforeCatalog), policies: beforePolicies }, successors, ownerOids);
+  const replayRoutines = await routines(), replayCatalog = await catalog();
+  expect(metadata(replayRoutines)).toEqual(expected.routines);
+  expect(relationMetadata(replayCatalog)).toEqual(expected.relations);
+  expect(await policies()).toEqual(expected.policies);
+  // Preserve all raw predecessor catalogue fields, including policy identities.
+  for (const row of beforeCatalog) expect(replayCatalog).toContainEqual(row);
+  const authority = await readFile(new URL("../migrations/0642_extra_client_send_authority.sql", import.meta.url), "utf8");
+  const attribution = await readFile(new URL("../migrations/0644_extra_customer_approval.sql", import.meta.url), "utf8");
+  const replacements = (source: string) => [...source.matchAll(/changed:=replace\((?:original|changed),'((?:[^']|'')*)',\s*'((?:[^']|'')*)'\);/g)]
+    .map(match => [match[1]!.replaceAll("''", "'"), match[2]!.replaceAll("''", "'")] as const);
+  const authorityChanges = replacements(authority), attributionChanges = replacements(attribution);
+  expect(authorityChanges).toHaveLength(3); expect(attributionChanges).toHaveLength(1);
+  const patches = new Map([
+    ["app.xa_issue_link(p_job uuid, p_request uuid, p_command uuid, p_actor uuid, p_link uuid, p_approver uuid, p_recipient text, p_token_hash text, p_expires_at timestamp with time zone, p_authorization uuid, p_outbox uuid)", authorityChanges.slice(0, 2)],
+    ["app.lp5b_contractor_permission(p_type text, p_actor uuid, p_job uuid, p_input jsonb)", authorityChanges.slice(2)],
+    ["app.northside_capture_action()", attributionChanges],
+  ]);
+  for (const row of replayRoutines) {
+    const identity = `${row.nspname}.${row.proname}(${row.args})`;
+    const prior = afterRoutines.find(r => `${r.nspname}.${r.proname}(${r.args})` === identity);
+    if (prior) {
+      let definition = prior.definition;
+      for (const [before, after] of patches.get(identity) ?? []) {
+        expect(definition.split(before)).toHaveLength(2);
+        definition = definition.replace(before, after);
+      }
+      expect(row.definition).toBe(definition);
+    } else {
+      // Metadata equality above binds the exact overload; each new body's source is unique.
+      const source = successors.find(p => p.upgrade.some(change => change.section === "routines" && change.after?.nspname === row.nspname && change.after.proname === row.proname && change.after.args === row.args));
+      expect(source).toBeDefined();
+      const sql = await readFile(new URL(`../migrations/${source!.migration}`, import.meta.url), "utf8");
+      const body = sql.split(`FUNCTION ${row.nspname}.${row.proname}(`)[1]!.split("AS $$")[1]!.split("$$;")[0];
+      expect(row.definition.split("$function$")[1]).toBe(body);
+    }
+  }
 }, 120_000);

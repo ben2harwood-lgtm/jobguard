@@ -486,7 +486,7 @@ READY. RED. Builder handoff only; no independent review, commit, push, PR, merge
 This entry supersedes the earlier landing-pin and numbering notes for this batch. Base is local `origin/main` at `567604fdc`; local `main` is stale. No fetch was run.
 
 - Resolved `later-empty-tables.ts` as the union of both merge sides, retaining interim drafts, scheduled-readiness tables and all three client-session companion tables. The index remains unmerged because Git is read-only; the working file has no conflict markers.
-- Renamed filename stems and their references only: `0920_extra_client_session` → `1040_extra_client_session`, `0921_extra_client_send_authority` → `1041_extra_client_send_authority`, `0922_extra_customer_use` → `1042_extra_customer_use`, `0923_extra_customer_approval` → `1043_extra_customer_approval`, `0924_extra_client_timing` → `1044_extra_client_timing`. Each has its matching proof. No mainline migration was changed.
+- Renamed filename stems and their references only: `0920_extra_client_session` → `0641_extra_client_session`, `0921_extra_client_send_authority` → `0642_extra_client_send_authority`, `0922_extra_customer_use` → `0643_extra_customer_use`, `0923_extra_customer_approval` → `0644_extra_customer_approval`, `0924_extra_client_timing` → `0645_extra_client_timing`. Each has its matching proof. No mainline migration was changed.
 - Updated only the current `IssueClientApproval` catalog expectation to contractor authority, retaining the original LP-5 baseline. Added exact signature-bound upgrade expectations for the three changed predecessor routines, checking the exact SQL replacements instead of omitting routine comparisons. The two migrations patch the installed latest bodies; the current audit helper seals through `app.lp4_seal_audit`.
 - Removed the three LP-0 owner entries for private companion tables: they have no non-owner grants and share the schema owner, so LP-0 does not inventory their ownership. Their RLS/policy and upgrade proof facts remain. No fingerprint guard was widened.
 - Replaced the new test's direct grant-revocation insert with the existing audited contractor command fixture. No production behavior was added or changed during batch preparation.
@@ -506,10 +506,10 @@ CI must prove the full required checks, real PostgreSQL fresh/upgrade/replay, pr
 
 READY for router handoff. RED: ENT-5 client approval/session authority. This entry supersedes the previous batch preparation base and local check status. The launcher merge targets local `origin/main` at `199124c0885ca27558fbaf62a9a74dee7ad2818f`; no fetch or Git write was performed.
 
-- `1043_extra_customer_approval.sql` stores `complete_command`'s result and fires only `SET CONSTRAINTS app.decision_check_complete IMMEDIATE` inside the definer before returning it. No `ALL`, new identity privilege, or change to the trigger's security mode.
+- `0644_extra_customer_approval.sql` stores `complete_command`'s result and fires only `SET CONSTRAINTS app.decision_check_complete IMMEDIATE` inside the definer before returning it. No `ALL`, new identity privilege, or change to the trigger's security mode.
 - The session integration fixture enables LOGIN with a synthetic password on the existing identity role, connects as that role and asserts both session/current user and absence of app-schema USAGE. All client-function calls, including refusal/replay/race paths, use that login. Two added approve/reject transactions insert an unresolved deferred FK before the call and another afterwards, repair both references, and commit. An ALL flush would fail this test inside the approval call. The committed outcome is checked separately by the admin fixture.
-- Resolved both working-file conflicts as exact unions: main's table/catalog additions plus this branch's three companion tables and the current contractor permission mapping. Main now also contains `rate.suggestion_accept`; 1041's registry proof chains from 0609's exact after-record, changing only IssueClientApproval's permission. The historical 0606 source test maps that permission back to owner and omits only its already-excluded later rate command. No existing assertion was removed.
-- Re-serialized/rechecked 1043's proof. Its catalog/ACL/static-call/static-write facts are unchanged by the named constraint flush, so its JSON is byte-identical; definition digests remain the existing null values. This is source-only proof maintenance, not PostgreSQL capture or verification. CI must corroborate the proof against real PostgreSQL.
+- Resolved both working-file conflicts as exact unions: main's table/catalog additions plus this branch's three companion tables and the current contractor permission mapping. Main now also contains `rate.suggestion_accept`; 0642's registry proof chains from 0609's exact after-record, changing only IssueClientApproval's permission. The historical 0606 source test maps that permission back to owner and omits only its already-excluded later rate command. No existing assertion was removed.
+- Re-serialized/rechecked 0644's proof. Its catalog/ACL/static-call/static-write facts are unchanged by the named constraint flush, so its JSON is byte-identical; definition digests remain the existing null values. This is source-only proof maintenance, not PostgreSQL capture or verification. CI must corroborate the proof against real PostgreSQL.
 - Updated stale Northside route tests to use a surveyor send, the customer sign-in path, and the actual ExtraCustomerApplication with an identity-pool double. The actor-binding case refuses spoofed tester text before queries and checks the named cookie actor/tenant and exact input. The practice owner dispatcher is not used.
 - The lane manifest lists exactly all 47 changed non-lane paths against main and never lists itself. No owned migration stem already exists on main; no mainline migration was removed or edited. No unrelated refactor or additional reporting mechanism.
 
@@ -523,15 +523,15 @@ Executed locally with installed dependencies only, no more than two workers and 
 - `git diff --check origin/main`: passed. Working files have no conflict markers. Deterministic working-tree lane coverage and the official linter's policy/path/migration-order functions passed.
 - Official lane CLI was run with `LANE_BASE_REF=origin/main`; it refused inherited main files still staged in the unfinished merge. The read-only Git index still has two unmerged entries. Router must stage the resolved working files, complete the existing merge and rerun the official CLI; this is not a lane CLI PASS.
 
-CI must prove real-PostgreSQL fresh/upgrade/replay and catalog/privilege/RLS/fingerprint gates with 1040–1044; especially all five real-login session cases, both decisions committing without 42501, exact retry, authorization refusals and the unrelated deferred checks. Retain approval-chain/timing/evidence-pack, Northside/full-demo and lifecycle-upgrade suites. Run ENT-5-client-session, ENT-11a and ENT-11b at their required phone/desktop widths (at most two workers), both complete demos, and all required typecheck/lint/test/build gates against the final head. Independent RED review must bind that head before merge. No database/browser/provider/customer/live-money/deployment result or activation is claimed. Existing Q14/Q15 holds and proposed-only Final Check design status remain.
+CI must prove real-PostgreSQL fresh/upgrade/replay and catalog/privilege/RLS/fingerprint gates with 0641–0645; especially all five real-login session cases, both decisions committing without 42501, exact retry, authorization refusals and the unrelated deferred checks. Retain approval-chain/timing/evidence-pack, Northside/full-demo and lifecycle-upgrade suites. Run ENT-5-client-session, ENT-11a and ENT-11b at their required phone/desktop widths (at most two workers), both complete demos, and all required typecheck/lint/test/build gates against the final head. Independent RED review must bind that head before merge. No database/browser/provider/customer/live-money/deployment result or activation is claimed. Existing Q14/Q15 holds and proposed-only Final Check design status remain.
 
 
 ## Batch-42 final re-check repair — 5 November 2026
 
 READY for router NOPR handoff. RED: ENT-5 client approval/session authority; second and last repair round. This entry supersedes the previous repair's readiness and local-check notes. No Git writes, commit, push, PR, merge, deployment or activation were performed.
 
-- Migration 1043 now executes `SET CONSTRAINTS app.decision_check_complete, app.extra_event_raised_audit IMMEDIATE` inside the security-definer approval routine. Both deferred invoker checks run before returning to the real identity login. No ALL, new grants, role changes or broader constraint flushing were added to production SQL. The existing five real-login tests, including both decisions committing with unrelated deferred foreign keys, are unchanged.
-- Revalidated 1043's proof: the named-constraint change alters neither static calls/writes nor catalog owner, ACL, search path or signature. Its existing `definitionSha256: null` and all other expected catalog facts therefore remain unchanged; no artificial proof delta or relaxed expectation was introduced. The proof-loader suite passes locally; PostgreSQL inventory/upgrade proof execution remains a CI hold.
+- Migration 0644 now executes `SET CONSTRAINTS app.decision_check_complete, app.extra_event_raised_audit IMMEDIATE` inside the security-definer approval routine. Both deferred invoker checks run before returning to the real identity login. No ALL, new grants, role changes or broader constraint flushing were added to production SQL. The existing five real-login tests, including both decisions committing with unrelated deferred foreign keys, are unchanged.
+- Revalidated 0644's proof: the named-constraint change alters neither static calls/writes nor catalog owner, ACL, search path or signature. Its existing `definitionSha256: null` and all other expected catalog facts therefore remain unchanged; no artificial proof delta or relaxed expectation was introduced. The proof-loader suite passes locally; PostgreSQL inventory/upgrade proof execution remains a CI hold.
 - Added an executable `/api/customer-portal/extra-approvals` replay-contract case through `identity.extra_customer_approval`, reached with a redeemed invitation and the real `jobguard_identity` login without app schema USAGE. It asserts the original approved result on exact retries, conflicts for changed decision/net/hash, another authorized job, and another real command kind in both directions. It checks one client fact on the original request and none on the conflicting job. The route remains `watchdog_live_only`; no existing contract case or refusal assertion was weakened.
 - The separate case uses the existing complete contractor fixtures because the watchdog harness is a legacy-schema fixture. Registry coverage includes this executable case; the existing generic replay/race/duplicate cases are unchanged. No new production abstraction or configuration was added.
 - `config/lanes/batch-42.json` lists exactly all 48 changed non-lane paths relative to local `origin/main` (merge-base comparison plus working changes), excludes itself and every path under `config/lanes/`.
@@ -925,11 +925,11 @@ CIS/emergency/SCIM/private fixture tables and receipt sections remain. This
 group's client-session rows, sender authority and exact client replay assertions
 remain. Aliased the client fixture's cluster import to preserve both fixtures.
 The 0606 historical proof keeps its original owner authority and excludes all
-three later command types. The 1041 proof now chains from main's 0623 registry
+three later command types. The 0642 proof now chains from main's 0623 registry
 snapshot, adding main's two new rows to both sides and changing only this group's
 IssueClientApproval permission. No test or protected check was weakened.
 
-All five 1040–1044 migration stems are unique against incoming main; none
+All five 0641–0645 migration stems are unique against incoming main; none
 needed removal. No main migration/proof was changed. Diffed all three dynamically
 re-created routines against their latest main definitions: xa_issue_link (0158),
 lp5b_contractor_permission (0522), northside_capture_action (0167). The migrations
@@ -982,7 +982,7 @@ group's three client-session tables. Existing exact registry and routine-body
 assertions retain both groups' behavior. No test was weakened or behavior added.
 
 All main migrations are byte-identical. The five unique group migrations
-1040–1044 remain; none duplicates a main migration. Scanned main's full ordered
+0641–0645 remain; none duplicates a main migration. Scanned main's full ordered
 migration inventory for the three dynamically recreated routines. Latest bodies:
 xa_issue_link (0158), lp5b_contractor_permission (0522), northside_capture_action
 (0167). Each replacement fragment matched exactly once; source diffs contain
@@ -1016,3 +1016,85 @@ localhost binding, provider, real customer data, money, deployment or launch.
   plan-entitlement-lifecycle-upgrade and extra-client-session integration.
   Collection only; no database hooks executed. Final working-file conflict
   scan, exact lane equality and git diff --check MERGE_HEAD passed.
+
+## Batch-42 PR-opening preparation — 6 November 2026, base 7d192e5a8
+
+READY for router staging, commit, push and PR opening; ENT-5 client approval and
+DEMO-S company Final Check authority design, RED, fictional data only. The
+incoming merge was already committed (b5d4dd816); no Git writes were performed.
+This is builder evidence, not an independent review or a release approval.
+
+Migration inventory against origin/main (top 0633):
+- 0641_extra_client_session.sql (formerly 1040): three private session tables and xc_bind_link.
+- 0642_extra_client_send_authority.sql (formerly 1041): xc_send_authority, exact registry permission change and two existing-routine patches.
+- 0643_extra_customer_use.sql (formerly 1042): identity.extra_customer_use.
+- 0644_extra_customer_approval.sql (formerly 1043): identity.extra_customer_approval and the existing practice-attribution patch.
+- 0645_extra_client_timing.sql (formerly 1044): xc_timing.
+
+All five migrations are unique against main; no repeated table or routine
+creation was found. SQL bytes are identical to their pre-renumber branch files.
+Only filename stems, proof migration names and references were renumbered;
+0634–0638 remain reserved for #591 and 0639–0640 for #593. The source-only audit
+at /tmp/batch-42-migration-audit.txt compares every recreated routine against its
+latest main definition: xa_issue_link (0158), lp5b_contractor_permission (0522),
+and northside_capture_action (0167). Each of the four existing substitutions
+matches once; no mainline body addition is removed. No new product behavior,
+worker, provider route, CI image, permission or function setting was introduced.
+
+MIGFIX-6 and MIGFIX-7 now expect the explicit empty successor tables and current
+registry rows when replaying through this group. MIGFIX-7 retains raw predecessor
+catalogue/policy identities and compares all relation, policy and routine metadata
+through the existing reviewed proof loader. It pins the full bodies of every new
+routine, including MON-6's existing read, and applies only the exact three named
+routine patches. The enterprise-access allowance remains conditional on the
+plan-entitlement test's exact body assertions. The three new private tables also
+join watchdog's mutation-count and RLS/owner catalogue checks; existing direct
+watchdog insert cases remain unchanged.
+
+Both commercial-integrity baselines needed the same one-site fingerprint refresh
+at extra-approval-chain-repository.ts:94. Only that fingerprint changed in each
+file; the existing reason and nine-site baseline count remain intact. Both
+scanners now report 94 roots and zero diagnostics. The lane lists every resulting
+changed non-lane file, excludes itself, and uses only 0641–0645 paths.
+
+Local verification with installed Node 24.17.0 and cached pnpm 10.28.1:
+- DB Vitest run --maxWorkers=2: migration-proof-loader, m2-1-migration-proof,
+  extra-approval-timing: 97 passed.
+- DB Vitest run --maxWorkers=2: late-source-import-migration,
+  supplier-line-migration-proofs: 5 passed.
+- API Vitest run --maxWorkers=2: extra-customer, customer-signin: 52 passed.
+- Web Vitest run --maxWorkers=2: app/api/northside/routes: 23 passed.
+- Total executed focused cases: 177; no database hooks were executed.
+- DB tsc --noEmit, plus direct installed TypeScript checks for API and web: PASS.
+- Vitest list --maxWorkers=2 collected MIGFIX-6, MIGFIX-7 and client-session
+  integration tests; separately collected command-replay-contract,
+  plan-entitlement-lifecycle-upgrade and watchdog. Collection is not execution.
+- Core purity, money arithmetic, commercial adapter boundary, AI provider
+  boundary, PL/pgSQL CASE-in-IF lint (303 migrations), both commercial-integrity
+  guards and provider-register check passed. No provider data-flow source changed.
+- Changed web routes were source-inspected: workspace API exports are used,
+  with no imports of apps/api source. Cloudflare build was not run here.
+- Working-tree exact lane equality, lanePathAllowed and migration ordering:
+  PASS, 56 changed non-lane paths. git diff --check: PASS.
+
+The official lane CLI was run and refused only the ten old migration/proof paths
+still present in the read-only pre-renumber index/HEAD. Its result is not a PASS;
+the router must stage the renames, commit, and rerun it on the resulting head.
+The top-level pnpm typecheck --concurrency=2 failed in its child pnpm launcher
+before compilation: registry signature/version-switch fetch was unavailable.
+No package was downloaded and no package-manager policy was changed. Direct
+compiler checks are recorded separately rather than claiming that command passed.
+
+CI must prove the clean pinned install and required typecheck/lint/test/build,
+real PostgreSQL fresh/upgrade/proof/catalogue/ACL/RLS/replay/race suites, specifically
+MIGFIX-6/7, plan-entitlement and enterprise-access upgrades, restore reconciliation,
+watchdog, command replay and client-session approval/rejection commits. Preserve
+all existing approval-chain/timing/evidence-pack and Northside/full-demo gates.
+Run affected browser journeys, both complete demos and required phone/desktop
+widths with at most two workers. Independent RED review must bind the final head
+before merge. Q14/Q15 and proposed-only company Final Check authority holds remain;
+no database/browser/provider/customer/live-money/deployment or launch proof is claimed.
+
+Direct installed TypeScript checks for config, storage, core and AI also passed.
+Together with DB, API and web, all seven package compiler checks passed; this
+does not change the recorded failure of the top-level pnpm launcher command.

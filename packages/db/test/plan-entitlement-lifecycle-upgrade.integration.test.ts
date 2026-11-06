@@ -39,8 +39,8 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   const settlementOid = (await c.admin.query("SELECT 'app.record_simulated_settlement(uuid,uuid,uuid,character varying,bigint,timestamp with time zone,uuid,uuid,uuid)'::regprocedure::oid oid")).rows[0].oid;
   const selfComparison = "(SELECT content_hash FROM app.action_authorization WHERE tenant_id=p_tenant AND id=p_authorization)";
   // ENT-5 changes only these exact routine bodies; preserve every predecessor check.
-  const clientAuthority = await readFile(new URL("../migrations/1041_extra_client_send_authority.sql", import.meta.url), "utf8");
-  const clientAttribution = await readFile(new URL("../migrations/1043_extra_customer_approval.sql", import.meta.url), "utf8");
+  const clientAuthority = await readFile(new URL("../migrations/0642_extra_client_send_authority.sql", import.meta.url), "utf8");
+  const clientAttribution = await readFile(new URL("../migrations/0644_extra_customer_approval.sql", import.meta.url), "utf8");
   const replacements = (source: string) => [...source.matchAll(/changed:=replace\((?:original|changed),'((?:[^']|'')*)',\s*'((?:[^']|'')*)'\);/g)]
     .map(match => [match[1]!.replaceAll("''", "'"), match[2]!.replaceAll("''", "'")] as const);
   const authorityChanges = replacements(clientAuthority), attributionChanges = replacements(clientAttribution);

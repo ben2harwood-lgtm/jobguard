@@ -1,5 +1,5 @@
 {
-  "migration": "1040_extra_client_session.sql",
+  "migration": "0641_extra_client_session.sql",
   "lp0": [
     {
       "section": "routines",

@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/batch-42"
       ],
-      "note": "ENT-5 client approval and DEMO-S trial Final Check authority design; RED, synthetic only, NOPR.",
+      "note": "ENT-5 client approval and DEMO-S trial Final Check authority design; RED, synthetic only.",
       "allow": [
         "BUILD_PLAN.md",
         "apps/api/src/auth/customer-signin.ts",
@@ -28,11 +28,11 @@
         "docs/contracts/extra-client-approval-v1.md",
         "docs/verdicts/ENT-5/BUILDER_RECEIPT.md",
         "packages/core/src/watchdog.ts",
-        "packages/db/migrations/1040_extra_client_session.sql",
-        "packages/db/migrations/1041_extra_client_send_authority.sql",
-        "packages/db/migrations/1042_extra_customer_use.sql",
-        "packages/db/migrations/1043_extra_customer_approval.sql",
-        "packages/db/migrations/1044_extra_client_timing.sql",
+        "packages/db/migrations/0641_extra_client_session.sql",
+        "packages/db/migrations/0642_extra_client_send_authority.sql",
+        "packages/db/migrations/0643_extra_customer_use.sql",
+        "packages/db/migrations/0644_extra_customer_approval.sql",
+        "packages/db/migrations/0645_extra_client_timing.sql",
         "packages/db/src/commands.ts",
         "packages/db/src/extra-approval-chain-repository.ts",
         "packages/db/src/extra-approval-timing.ts",
@@ -50,14 +50,19 @@
         "packages/db/test/later-empty-tables.ts",
         "packages/db/test/lp5-command-catalog.ts",
         "packages/db/test/m2-1-migration-proof.test.ts",
-        "packages/db/test/migration-proofs/1040_extra_client_session.proof.json",
-        "packages/db/test/migration-proofs/1041_extra_client_send_authority.proof.json",
-        "packages/db/test/migration-proofs/1042_extra_customer_use.proof.json",
-        "packages/db/test/migration-proofs/1043_extra_customer_approval.proof.json",
-        "packages/db/test/migration-proofs/1044_extra_client_timing.proof.json",
+        "packages/db/test/migfix-6-upgrade.integration.test.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/0641_extra_client_session.proof.json",
+        "packages/db/test/migration-proofs/0642_extra_client_send_authority.proof.json",
+        "packages/db/test/migration-proofs/0643_extra_customer_use.proof.json",
+        "packages/db/test/migration-proofs/0644_extra_customer_approval.proof.json",
+        "packages/db/test/migration-proofs/0645_extra_client_timing.proof.json",
         "packages/db/test/northside-demo.integration.test.ts",
         "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
-        "packages/db/test/restore-reconciliation-upgrade.integration.test.ts"
+        "packages/db/test/restore-reconciliation-upgrade.integration.test.ts",
+        "packages/db/test/watchdog.integration.test.ts",
+        "tools/commercial-integrity-boundary.unresolved.json",
+        "tools/commercial-integrity-current-source-guard.unresolved.json"
       ]
     }
   }

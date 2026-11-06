@@ -1,5 +1,5 @@
 {
-  "migration": "1041_extra_client_send_authority.sql",
+  "migration": "0642_extra_client_send_authority.sql",
   "lp0": [
     {
       "section": "routines",

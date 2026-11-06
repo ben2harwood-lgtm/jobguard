@@ -1,5 +1,5 @@
 {
-  "migration": "1043_extra_customer_approval.sql",
+  "migration": "0644_extra_customer_approval.sql",
   "lp0": [
     {
       "section": "routines",
