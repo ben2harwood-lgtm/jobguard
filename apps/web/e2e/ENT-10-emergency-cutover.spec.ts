@@ -1,25 +1,35 @@
 import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { Pool } from 'pg';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { seedActiveContractorAgreement } from '../../../packages/db/test/contractor-agreement-test-fixture';
 const origin='http://127.0.0.1:3000';
+// Playwright loads specs as CommonJS; the workspace database package exposes ESM only.
+const database=()=> (new Function('specifier','return import(specifier)') as (s:string)=>Promise<typeof import('@jobguard/db')>)(pathToFileURL(join(process.cwd(),'../../packages/db/dist/index.js')).href);
 // Real routes/PostgreSQL; fictional identities only. Both configured projects run this at 360px and desktop.
 async function seed() {
  const pool=new Pool({host:'127.0.0.1',port:55432,user:'postgres',password:'sbox-e2e-owner',database:'jobguard_synthetic_demo',max:1});
- const tenantId=randomUUID(),account=randomUUID();
- const actors=Array.from({length:4},(_,i)=>({membershipId:randomUUID(),userId:randomUUID(),sessionId:randomUUID(),
-  email:`emergency-${i}-${randomUUID()}@fixture.invalid`,token:randomBytes(32).toString('base64url'),csrf:randomBytes(24).toString('base64url'),role:i===3?'read_only':'owner'}));
  try {
+  // The audited synthetic bootstrap creates the contractor assignment and initial owner grant.
+  // Approvers use owner memberships, as in enterprise-access.integration.test.ts.
+  // Ordinary grant.create deliberately refuses owner grants.
+  const {ContractorRepository}=await database();
+  const principal=await new ContractorRepository(pool).startPractice(randomUUID());
+  const {tenantId}=principal;
+  await seedActiveContractorAgreement(pool,tenantId);
+  const account=(await pool.query('SELECT account_id FROM app.membership WHERE tenant_id=$1 AND id=$2',[tenantId,principal.membershipId])).rows[0].account_id;
+  const actors=Array.from({length:4},(_,i)=>({membershipId:i===0?principal.membershipId:randomUUID(),userId:i===0?principal.identityUserId:randomUUID(),sessionId:randomUUID(),
+   email:`emergency-${i}-${randomUUID()}@fixture.invalid`,token:randomBytes(32).toString('base64url'),csrf:randomBytes(24).toString('base64url'),role:i===3?'read_only':'owner'}));
   await pool.query('BEGIN');
-  await pool.query('INSERT INTO control_plane.tenant(id) VALUES($1)',[tenantId]);
-  await pool.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional emergency contractor')",[account,tenantId]);
-  await pool.query("INSERT INTO app.org_unit(tenant_id,id,kind,name) VALUES($1,$1,'tenant','Fictional emergency contractor')",[tenantId]);
-  for(const a of actors) {
-   await pool.query('INSERT INTO identity.identity_user(id) VALUES($1)',[a.userId]);
+  for(const [i,a] of actors.entries()) {
+   if(i!==0) {
+    await pool.query('INSERT INTO identity.identity_user(id) VALUES($1)',[a.userId]);
+    await pool.query('INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,$5)',[a.membershipId,tenantId,account,a.userId,a.role]);
+    await pool.query('INSERT INTO app.contractor_member(tenant_id,membership_id,email) VALUES($1,$2,$3)',[tenantId,a.membershipId,a.email]);
+   }
    await pool.query('INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)',[a.email,a.userId]);
-   await pool.query('INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,$5)',[a.membershipId,tenantId,account,a.userId,a.role]);
    await pool.query('INSERT INTO identity.membership_locator VALUES($1,$2,$3)',[a.userId,tenantId,a.membershipId]);
-   await pool.query('INSERT INTO app.contractor_member(tenant_id,membership_id,email) VALUES($1,$2,$3)',[tenantId,a.membershipId,a.email]);
-   if(a.role==='owner')await pool.query("INSERT INTO app.role_grant(tenant_id,id,membership_id,role,scope_kind,scope_id) VALUES($1,$2,$3,'owner','tenant',$1)",[tenantId,randomUUID(),a.membershipId]);
    const digest=createHmac('sha256','sbox-only-identity-hmac-secret-32-bytes').update(`session:${a.token}`).digest('hex');
    await pool.query("INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at) VALUES($1,$2,'synthetic_demo',$3,$4,clock_timestamp()+interval '1 day')",[a.sessionId,a.userId,digest,a.csrf]);
   }

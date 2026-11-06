@@ -1,3 +1,23 @@
+## READY — ent-10-rest repair round 2 (last) — 6 November 2026
+
+RED, ENT-10-rest, NOPR. Fixed finding 4 from `coordinator/prechecks/later-safety-43.md`: the emergency-cutover seed now calls `ContractorRepository.startPractice` for the initial owner grant and audited contractor-track assignment, then uses the existing `seedActiveContractorAgreement` fixture. It no longer inserts into `app.role_grant`. The requester uses the bootstrap's real user/membership; the other two emergency owners use owner memberships following `enterprise-access.integration.test.ts` (ordinary contractor commands intentionally refuse new owner grants). The non-owner revocation target remains read-only. All journey assertions remain byte-for-byte unchanged. No trigger, migration, production code or authorization check changed.
+
+Reused the existing browser specs' native ESM import pattern because Playwright loads specs as CommonJS. An initial direct source import failed test discovery with the core package's missing CommonJS export; the final native import passes discovery. No dependency downloads or package changes.
+
+Actual local checks (installed dependencies only):
+
+- From `apps/api`: `node_modules/.bin/vitest run --maxWorkers=2 src/auth/sso/sso-emergency-owner.test.ts src/auth/sso/sso-emergency.test.ts src/auth/sso/enterprise-access.http.test.ts` — **38/38 passed**, three files.
+- `node node_modules/typescript/bin/tsc -p apps/web/tsconfig.json --noEmit --incremental false` — **PASS**.
+- From `apps/web`: `node_modules/.bin/playwright test ENT-10-emergency-cutover.spec.ts --list --project=mobile-360 --project=desktop --workers=2` — **PASS**, two project cases discovered. Discovery only, not browser execution.
+
+The unchanged lane matches all 15 branch paths against the merge base with locally available `origin/main`, including this repair and excluding all `config/lanes/` paths, without listing itself. A direct two-dot comparison included newer unrelated mainline work; the merge-base comparison correctly checks this branch alone. The old local `main` branch predates current work; no fetch or Git write was performed. `git diff --check` passes. Read-only comparison verifies the complete test body and every assertion remain unchanged.
+
+Official `node tools/agent-lane-boundary-lint.mjs` was also run and **failed** on the pre-existing branch change to `config/lanes/batch-30.json`. This repair does not modify that file, and the ENT-10-rest lane must not grant another lane file. Router must reconcile that inherited lane change with main before CI can pass; no lint success is claimed.
+
+Router/CI must run the spec headless at both widths with at most two workers, the focused real PostgreSQL enterprise-access suites, required CI against current main, and independent RED review on the resulting exact head. Database/browser execution is explicitly deferred because the sandbox cannot start PostgreSQL or bind localhost. READY means ready for router commit/push and CI, not independently verified or merged. No commit, push, PR, deployment or release performed.
+
+---
+
 ## READY — repair handoff — 6 November 2026
 
 RED, plan piece ENT-10-rest, NOPR. Resolved the launcher's working-tree merge conflicts in `apps/api/src/workspace/index.ts` and `docs/security/not-claimed-register.md`: retained every export from both parents, main's batch-30 evidence wording and this branch's HTTP-cutover facts. The Git index remains unmerged because `.git` is read-only; the router must stage the two resolutions and finish the merge.
