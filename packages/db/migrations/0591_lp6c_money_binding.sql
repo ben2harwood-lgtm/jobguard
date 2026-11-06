@@ -162,7 +162,7 @@ BEGIN
 END $$;
 
 -- Latest predecessor: 0155_quote_reacceptance.sql.
-CREATE OR REPLACE FUNCTION app.record_builder_attested_acceptance(p_tenant uuid,p_acceptance uuid,p_event uuid,p_job uuid,p_document uuid,p_version integer,p_hash char(64),p_total bigint,p_expected integer,p_actor uuid,p_customer varchar,p_method varchar,p_accepted_at timestamptz,p_evidence uuid) RETURNS app.quote_acceptance LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$ DECLARE j app.job;d app.quote_document_version;a app.quote_acceptance;prev_id uuid;prev_seq integer;BEGIN
+CREATE OR REPLACE FUNCTION app.record_builder_attested_acceptance(p_tenant uuid,p_acceptance uuid,p_event uuid,p_job uuid,p_document uuid,p_version integer,p_hash char(64),p_total bigint,p_expected integer,p_actor uuid,p_customer varchar,p_method varchar,p_accepted_at timestamptz,p_evidence uuid) RETURNS app.quote_acceptance LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app,pg_temp AS $$ DECLARE j app.job;d app.quote_document_version;a app.quote_acceptance;prev_id uuid;prev_seq integer;BEGIN
  -- LP-6c identity only; existing permission and exact-approval checks follow.
  IF p_tenant IS DISTINCT FROM app.current_tenant() OR p_actor IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
@@ -207,7 +207,7 @@ CREATE OR REPLACE FUNCTION app.record_builder_attested_acceptance(p_tenant uuid,
  UPDATE app.job SET status='accepted',revision=revision+1,accepted_quote_version_id=p_document,updated_at=transaction_timestamp() WHERE tenant_id=p_tenant AND id=p_job;RETURN a;END $$;
 
 -- Latest predecessor: 0155_quote_reacceptance.sql.
-CREATE OR REPLACE FUNCTION app.record_quote_disposition(p_tenant uuid,p_event uuid,p_job uuid,p_document uuid,p_version integer,p_hash char(64),p_expected integer,p_actor uuid,p_kind varchar,p_occurred timestamptz) RETURNS app.acceptance_event LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$ DECLARE j app.job;d app.quote_document_version;a_id uuid;e app.acceptance_event;BEGIN
+CREATE OR REPLACE FUNCTION app.record_quote_disposition(p_tenant uuid,p_event uuid,p_job uuid,p_document uuid,p_version integer,p_hash char(64),p_expected integer,p_actor uuid,p_kind varchar,p_occurred timestamptz) RETURNS app.acceptance_event LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app,pg_temp AS $$ DECLARE j app.job;d app.quote_document_version;a_id uuid;e app.acceptance_event;BEGIN
  -- LP-6c identity only; existing permission and exact-approval checks follow.
  IF p_tenant IS DISTINCT FROM app.current_tenant() OR p_actor IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
@@ -228,7 +228,7 @@ CREATE OR REPLACE FUNCTION app.record_quote_disposition(p_tenant uuid,p_event uu
  INSERT INTO app.acceptance_event(id,tenant_id,job_id,document_id,document_version,document_hash,acceptance_id,kind,actor_membership_id,occurred_at) VALUES(p_event,p_tenant,p_job,p_document,p_version,p_hash,a_id,p_kind,p_actor,p_occurred) RETURNING * INTO e;RETURN e;END $$;
 
 -- Latest predecessor: 0095_job_parties.sql.
-CREATE OR REPLACE FUNCTION app.switch_job_live(p_tenant uuid,p_activation uuid,p_cap_snapshot uuid,p_obligation uuid,p_job uuid,p_document uuid,p_version integer,p_hash char(64),p_expected integer,p_net bigint,p_cap bigint,p_mode varchar,p_terms varchar,p_policy varchar,p_actor uuid,p_activated timestamptz) RETURNS app.job_activation LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
+CREATE OR REPLACE FUNCTION app.switch_job_live(p_tenant uuid,p_activation uuid,p_cap_snapshot uuid,p_obligation uuid,p_job uuid,p_document uuid,p_version integer,p_hash char(64),p_expected integer,p_net bigint,p_cap bigint,p_mode varchar,p_terms varchar,p_policy varchar,p_actor uuid,p_activated timestamptz) RETURNS app.job_activation LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app,pg_temp AS $$
 DECLARE j app.job;d app.quote_document_version;q app.quote_version;a app.job_activation;BEGIN
  -- LP-6c identity only; existing permission and exact-approval checks follow.
  IF p_tenant IS DISTINCT FROM app.current_tenant() OR p_actor IS DISTINCT FROM app.current_actor() THEN
@@ -252,7 +252,7 @@ DECLARE j app.job;d app.quote_document_version;q app.quote_version;a app.job_act
  RETURN a;END $$;
 
 -- Latest predecessor: 0012_job_activation.sql.
-CREATE OR REPLACE FUNCTION app.record_simulated_settlement(p_tenant uuid,p_id uuid,p_obligation uuid,p_provider_event varchar,p_amount bigint,p_simulated_at timestamptz) RETURNS app.simulated_settlement_event LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
+CREATE OR REPLACE FUNCTION app.record_simulated_settlement(p_tenant uuid,p_id uuid,p_obligation uuid,p_provider_event varchar,p_amount bigint,p_simulated_at timestamptz) RETURNS app.simulated_settlement_event LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app,pg_temp AS $$
 DECLARE o app.synthetic_obligation;e app.simulated_settlement_event;BEGIN
  -- LP-6c identity only; existing permission and exact-approval checks follow.
  IF p_tenant IS DISTINCT FROM app.current_tenant() THEN

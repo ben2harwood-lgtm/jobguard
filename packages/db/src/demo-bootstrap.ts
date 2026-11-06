@@ -194,13 +194,16 @@ async function seedDatabase(client: PoolClient) {
       VALUES($1,'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','small_builder','synthetic_demo','legacy_synthetic_live_fixture','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')
       ON CONFLICT(tenant_id,job_id) DO NOTHING`, [DEMO_TENANT_ID]);
     await client.query("UPDATE app.job SET status='live' WHERE tenant_id=$1 AND id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' AND status='quoting'",[DEMO_TENANT_ID]);
-    // Seed through the same protected practice identity as a request. This
-    // transaction-only credential is never returned and is revoked before commit.
+    // Seed through a protected real session in the synthetic environment. This
+    // internal credential is revoked before commit; no practice sample trigger fires.
     const seedDigest = randomBytes(32).toString("hex");
-    await client.query(`INSERT INTO control_plane.practice_session(token_digest,expires_at)
-      VALUES($1,clock_timestamp()+interval '1 hour')`, [seedDigest]);
+    await client.query("INSERT INTO identity.user_email(email,user_id) VALUES('synthetic-seed@example.invalid',$1) ON CONFLICT DO NOTHING", [DEMO_IDENTITY_USER_ID]);
+    await client.query(`INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id)
+      VALUES($1,$2,$3) ON CONFLICT(user_id,tenant_id) DO NOTHING`, [DEMO_IDENTITY_USER_ID, DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID]);
+    await client.query(`INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at)
+      VALUES(gen_random_uuid(),$2,'synthetic_demo',$1,'synthetic-seed',clock_timestamp()+interval '1 hour')`, [seedDigest, DEMO_IDENTITY_USER_ID]);
     await client.query("SET LOCAL ROLE jobguard_runtime");
-    await client.query("SELECT app.bind_request('practice',$1,$2)", [seedDigest, DEMO_TENANT_ID]);
+    await client.query("SELECT app.bind_request('real',$1,$2)", [seedDigest, DEMO_TENANT_ID]);
     const pendingSeedCommands: string[] = [];
     await seedDemo("synthetic_demo", { execute: async (command: DemoSeedCommand) => {
       const db = { $client: client } as TenantTransaction;
@@ -215,7 +218,7 @@ async function seedDatabase(client: PoolClient) {
     }});
     for(const commandId of pendingSeedCommands)await completeRepositoryCommand({$client:client} as TenantTransaction,commandId);
     await client.query("SET LOCAL ROLE jobguard_migration");
-    await client.query("UPDATE control_plane.practice_session SET revoked_at=clock_timestamp() WHERE token_digest=$1", [seedDigest]);
+    await client.query("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE token_digest=$1", [seedDigest]);
     await client.query("COMMIT");
   } catch (error) { await client.query("ROLLBACK"); throw error; }
 }

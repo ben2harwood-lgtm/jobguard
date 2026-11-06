@@ -5,17 +5,25 @@
       "branches": [
         "codex/sandbox/lp-6c-money-routines"
       ],
-      "note": "LP-6c RED built on LP-6b ca05fd9240627059cbbd19f4104fa5e8b690b96d. NOPR. Shared inventory/upgrade test serialize; full PostgreSQL CI and two exact-head security checks required before landing. Router stages the resolved merge. Own lane file is implicitly permitted. Repair round 1 binds synthetic seeding. Landing must include repaired LP-6d customer-proof binding in the same PR; no independent LP-6c landing. Catch-up and renumbering remain router work.",
+      "note": "LP-6c RED built on LP-6b ca05fd9240627059cbbd19f4104fa5e8b690b96d. NOPR. Shared inventory/upgrade test serialize; full PostgreSQL CI and two exact-head security checks required before landing. Router stages the resolved merge. Own lane file is implicitly permitted. Repair round 1 binds synthetic seeding. Landing must include repaired LP-6d customer-proof binding in the same PR; no independent LP-6c landing. Catch-up and renumbering remain router work. Repair round 2 binds real fixture sessions, avoids the practice seed trigger, and restores pg_temp on retained overloads. Database/browser execution remains CI-only.",
       "allow": [
         "docs/contracts/lp-0-effective-privileges-v1.md",
         "packages/db/migration-notes/0591_lp6c_money_binding.md",
         "packages/db/migrations/0591_lp6c_money_binding.sql",
         "packages/db/src/demo-bootstrap.ts",
+        "packages/db/test/commands.integration.test.ts",
+        "packages/db/test/contractor-parties.integration.test.ts",
         "packages/db/test/demo-bootstrap.integration.test.ts",
+        "packages/db/test/lp5-commands.integration.test.ts",
         "packages/db/test/lp6c-money-routines.integration.test.ts",
         "packages/db/test/lp6c-money-routines.test.ts",
         "packages/db/test/migration-proofs/0591_lp6c_money_binding.proof.json",
-        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts"
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
+        "packages/db/test/quote-reacceptance.integration.test.ts",
+        "packages/db/test/quote.integration.test.ts",
+        "packages/db/test/tenant-context-test-utils.ts",
+        "packages/db/test/watchdog-command-harness.ts",
+        "packages/db/test/watchdog-fixtures.ts"
       ]
     }
   }
