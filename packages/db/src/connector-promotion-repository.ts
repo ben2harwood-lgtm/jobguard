@@ -9,7 +9,7 @@ import { WorkOrderRepository, derivedUuid, workOrderFailure } from "./work-order
 import { generateWorkOrderSample, type WorkOrderDemo } from "./work-order-fixtures.js";
 
 const ref = z.string().regex(/^fixture:[a-z0-9_-]{1,112}$(?![\s\S])/u);
-export const connectorPromotionV1 = z.object({ version: z.literal("connector-promotion.v1"), namespace: ref, eventId: ref }).strict();
+export const connectorPromotionV1 = z.object({ version: z.literal("connector-promotion.v1"), namespace: ref, eventId: ref, billingImport: z.string().uuid().transform(value => value.toLowerCase()).optional() }).strict();
 const staged = z.object({ namespace: ref, eventId: ref, kind: z.enum(["work_order", "materials_issue", "billing_status"]), subject: ref,
   revision: z.number().int().positive(), document: ref.nullable(), result: z.record(z.string(), z.unknown()).nullable(), hold: z.string().nullable() }).strict();
 export type StagedPromotionEvent = z.infer<typeof staged>;
@@ -39,7 +39,13 @@ export class ConnectorPromotionRepository {
       return await withTenant(this.pool, context, async db => {
         const input = parsed.data;
         const event = (await this.events(db, sessionId, input.namespace, input.eventId))[0]!;
-        if (event.kind === "billing_status") throw new WorkOrderError("INVALID_COMMAND");
+        if (event.kind === "billing_status") {
+          if (!input.billingImport) throw new WorkOrderError("INVALID_COMMAND");
+          const result = { version: "connector-billing-status-link.v1", billingImport: input.billingImport };
+          return (await db.$client.query<{ value: Record<string, unknown> }>("SELECT app.connector_promotion($1,$2,$3,$4,$5::jsonb) value",
+            [sessionId, event.namespace, event.eventId, derivedUuid(`${context.tenantId}:${event.namespace}:${event.eventId}`), JSON.stringify(result)])).rows[0]!.value;
+        }
+        if (input.billingImport) throw new WorkOrderError("INVALID_COMMAND");
         if (event.result) return event.result;
         const commandId = derivedUuid(`${context.tenantId}:${event.namespace}:${event.eventId}`);
         let result: Record<string, unknown>;

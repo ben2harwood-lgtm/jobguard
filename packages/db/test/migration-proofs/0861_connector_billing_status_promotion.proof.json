@@ -1,0 +1,61 @@
+{
+  "migration": "0861_connector_billing_status_promotion.sql",
+  "lp0": [
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.connector_promotion(uuid,text,text,uuid,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.connector_promotion"
+        ],
+        "staticCalls": [
+          "app.contractor_allowed",
+          "app.contractor_member_active",
+          "app.contractor_practice_session_digest",
+          "app.contractor_session",
+          "app.lp4_seal_audit",
+          "app.lp_authority",
+          "app.work_order_client_permitted"
+        ]
+      },
+      "after": {
+        "identity": "function:app.connector_promotion(uuid,text,text,uuid,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.connector_promotion"
+        ],
+        "staticCalls": [
+          "app.cb_authority",
+          "app.contractor_allowed",
+          "app.contractor_member_active",
+          "app.contractor_practice_session_digest",
+          "app.contractor_session",
+          "app.lp4_seal_audit",
+          "app.lp_authority",
+          "app.work_order_client_permitted"
+        ]
+      }
+    }
+  ],
+  "upgrade": [],
+  "tenancy": []
+}
