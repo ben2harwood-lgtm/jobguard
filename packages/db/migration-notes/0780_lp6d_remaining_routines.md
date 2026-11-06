@@ -1,5 +1,60 @@
 # LP-6d remaining routines — RED, NOPR, held for landing
 
+## 6 November — security precheck repair round 1: READY
+
+Repair of the single blocking finding against `cdd4e3282`, on LP-6c base
+`531e7d633`. READY means source repair ready for the router's NOPR save and CI;
+it is not PostgreSQL execution, an independent review PASS or landing approval.
+
+- Contractor session resolution now carries its genuine session-bearing context
+  with the resolved membership. Work-order, SoR, contractor-party and contractor
+  administration repositories consume that context instead of minting a bare
+  membership context. Generated work-order/Northside callers retain that type.
+  This reuses the existing membership/session constructor and `withTenant`; no
+  new binding mode, fallback, opt-out or runtime grant is introduced.
+- Recovery and fee-illustration methods require the caller's context. Their API
+  applications pass `practice.context`; reads use its tenant rather than the
+  module-level demo identity. Existing command, approval and money checks stay.
+- Update affected adapter-double types and fictional member fixtures to carry
+  the tested member's own credential. Keep all refusal assertions. Add 13 adapter
+  regressions across all six paths: bind before business SQL, fail before business
+  SQL on refused binding, and keep credentials out of principal JSON.
+- No SQL body, manifest or migration proof was changed in this repair; therefore
+  no routine was re-created from an older main body. Main-body catch-up,
+  classification of later routines and renumbering remain the router's later
+  link-by-link chain work. Existing refusal suites and all named holds remain.
+  The old pending-index hold below is historical: the supplied starting branch
+  was clean at `cdd4e3282`; this sandbox performs no Git-writing operation.
+
+Executed locally using installed runners, at most two workers:
+
+- `packages/db/node_modules/.bin/vitest run --root packages/db --maxWorkers=2 test/lp6d-repository-context.test.ts test/lp6d-routines.test.ts src/recovery-legacy-later.test.ts`
+  — **40 passed**, three files.
+- `packages/db/node_modules/.bin/vitest run --config packages/db/vitest.config.ts --maxWorkers=2 apps/api/src/contractor/contractor.projection.test.ts apps/api/src/contractor/work-order.application.test.ts apps/api/src/workspace/fee-illustration-later.test.ts`
+  — **49 passed**, three files.
+- Installed `node_modules/.bin/tsc -p <package>/tsconfig.json --noEmit`
+  for `packages/db`, `apps/api` and `apps/web` — **passed** (also each affected
+  package's lint script).
+- `LANE_BASE_REF=531e7d633 node tools/lint.mjs` — **passed** after selecting
+  this serial link's actual branch base; default origin/main includes predecessor
+  work and is not this link's lane range. `git diff --check` — **passed**.
+- The default pnpm launcher could not verify/start pinned pnpm 10.28.1 through
+  the restricted registry. No install was performed; the installed TypeScript
+  and Vitest entry points above ran the real checks directly.
+
+CI must prove the full required suites, especially real-PostgreSQL
+`fee-illustration-later.integration.test.ts`,
+`contractor-full-demo-package.integration.test.ts`,
+`contractor-parties.integration.test.ts`, `contractor.integration.test.ts`,
+`work-order-import.integration.test.ts`, `work-order-concurrency.integration.test.ts`,
+`sor-pricing.integration.test.ts`, `recovery-legacy-later.integration.test.ts`,
+and `lp6d-routines.integration.test.ts`; fresh/upgrade/repeat migrations,
+LP-0 catalogue/ACL/RLS/proof validation, and the two phone/desktop demos.
+No PostgreSQL or browser was started here. The inherited demo-bootstrap,
+customer-message and source-pin holds are not repaired or waived by this round.
+An exact-head independent RED check and green CI remain required before landing.
+
+
 4 November chain update onto supplied LP-6c `531e7d6339e483add1989d47765140c700ec716e`
 (the pending MERGE_HEAD). READY for the router's held NOPR branch save. This is
 source-built work, not database execution, independent review or landing approval.

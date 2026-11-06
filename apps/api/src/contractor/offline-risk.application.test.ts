@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterEach, expect, it, vi } from "vitest";
 import { parseOfflineIntentV1, toLogSiteExtraV1, siteAssignedJobsV1, siteExtraLoggedV1, SiteExtraError } from "@jobguard/core";
-import { ContractorEntitlementAuthorityRepository, ContractorRepository, SiteExtraRepository, SiteVisitRepository, type AuthenticatedMembership } from "@jobguard/db";
+import { ContractorEntitlementAuthorityRepository, ContractorRepository, SiteExtraRepository, SiteVisitRepository, type ContractorSessionMembership as AuthenticatedMembership } from "@jobguard/db";
 import { SiteExtraApplication, siteExtraHttpFailure } from "./site-extra.application.js";
 
 const queued = () => parseOfflineIntentV1({ version: "offline-intent.v1", jobId: randomUUID(), clientMetadata: { capturedAt: "2099-01-01T00:00:00Z", hlc: { wallTimeMs: Number.MAX_SAFE_INTEGER, logical: 0, nodeId: "fictional-node" } }, body: { version: "log-site-extra.v1", commandId: "01960000-0000-7000-8000-000000000001", note: " Fictional note ", description: "Fictional extra" } });

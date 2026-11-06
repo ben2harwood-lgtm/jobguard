@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterEach, expect, it, vi } from "vitest";
-import { ContractorRepository, SiteExtraRepository, type AuthenticatedMembership } from "@jobguard/db";
+import { ContractorRepository, SiteExtraRepository, type ContractorSessionMembership as AuthenticatedMembership } from "@jobguard/db";
 import { SiteExtraError } from "@jobguard/core";
 import { SiteExtraApplication, siteExtraHttpFailure } from "./site-extra.application.js";
 const raw = () => ({ version: "offline-intent.v1", jobId: randomUUID(), clientMetadata: { capturedAt: "1970-01-01T00:00:00Z", hlc: { wallTimeMs: 0, logical: 0, nodeId: "fictional-device" } }, body: { version: "log-site-extra.v1", commandId: "01960000-0000-7000-8000-000000000001", description: "Fictional extra", note: "Fictional note" } });

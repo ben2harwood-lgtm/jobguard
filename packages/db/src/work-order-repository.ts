@@ -1,3 +1,4 @@
+import type { ContractorSessionMembership } from "./contractor-repository.js";
 import { serverEntitlement } from "./plan-entitlement-service.js";
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
@@ -11,7 +12,7 @@ import {
 import { appendAuditBatch, type AuditEventInput } from "./audit.js";
 import { ContractorPartyRepository } from "./contractor-party-repository.js";
 import { ContractorRepository } from "./contractor-repository.js";
-import { verifiedTenantContextFromMembership, withTenant, type AuthenticatedMembership, type TenantTransaction } from "./tenant-context.js";
+import { withTenant, type AuthenticatedMembership, type TenantTransaction } from "./tenant-context.js";
 
 export const canonicalJson = (value: unknown): string => value === null || typeof value !== "object" ? JSON.stringify(value)
   : Array.isArray(value) ? `[${value.map(canonicalJson).join(",")}]`
@@ -113,12 +114,12 @@ export class WorkOrderRepository {
    * failing row commits no part of its order and is recorded (with a typed error) in its receipt; the batch, its receipts and every audit
    * event are written last. The same command with the same file, or the same file again after a clean import, is replayed and writes nothing.
    */
-  async importCsv(principal: AuthenticatedMembership, input: { commandId: string; name: string; kind: "generated" | "csv"; csv: string }) {
+  async importCsv(principal: ContractorSessionMembership, input: { commandId: string; name: string; kind: "generated" | "csv"; csv: string }) {
     if (!uuidSchema.safeParse(input.commandId).success || typeof input.csv !== "string") throw new WorkOrderError("INVALID_COMMAND");
     const records = parseWorkOrderCsv(input.csv);
     const sourceSha256 = sha256Hex(input.csv);
     try {
-      return await withTenant(this.pool, verifiedTenantContextFromMembership(principal), async db => {
+      return await withTenant(this.pool, principal.context, async db => {
         const c = db.$client;
         // Every contractor command of a tenant serialises on the ENT-1 lock; a concurrent import of the same file then sees this one's batch.
         await c.query("SELECT pg_advisory_xact_lock(hashtextextended($1,54))", [principal.tenantId]);
@@ -301,9 +302,9 @@ export class WorkOrderRepository {
   }
 
   /** Office view: recent import batches and the order register. Resident contact is never part of it (CH-3b). */
-  async overview(principal: AuthenticatedMembership) {
+  async overview(principal: ContractorSessionMembership) {
     try {
-      return await withTenant(this.pool, verifiedTenantContextFromMembership(principal), async db => {
+      return await withTenant(this.pool, principal.context, async db => {
         await assertContractorGate(db, principal, "retained_import");
         const c = db.$client;
         // Only what this member may import for: orders of clients they cover, and batches holding a receipt for such an order (or recorded by them),
@@ -327,10 +328,10 @@ export class WorkOrderRepository {
     } catch (error) { throw workOrderFailure(error); }
   }
 
-  async batch(principal: AuthenticatedMembership, batchId: string) {
+  async batch(principal: ContractorSessionMembership, batchId: string) {
     if (!uuidSchema.safeParse(batchId).success) throw new WorkOrderError("NOT_FOUND");
     try {
-      return await withTenant(this.pool, verifiedTenantContextFromMembership(principal), async db => {
+      return await withTenant(this.pool, principal.context, async db => {
         await assertContractorGate(db, principal, "retained_import");
         const { result, createdAt } = await this.batchResult(db, principal, batchId);
         return workOrderBatchDetailV1.parse({ ...result, version: "work-order-batch.v1", createdAt });
@@ -339,10 +340,10 @@ export class WorkOrderRepository {
   }
 
   /** Revisions with their diffs and stable line identities. Members who may import for the order's client, or who may read this job through its assignment; any other order is the not-found. */
-  async revisions(principal: AuthenticatedMembership, workOrderId: string) {
+  async revisions(principal: ContractorSessionMembership, workOrderId: string) {
     if (!uuidSchema.safeParse(workOrderId).success) throw new WorkOrderError("NOT_FOUND");
     try {
-      return await withTenant(this.pool, verifiedTenantContextFromMembership(principal), async db => {
+      return await withTenant(this.pool, principal.context, async db => {
         await assertContractorGate(db, principal, "retained_member");
         const c = db.$client;
         const order = (await c.query<{ id: string; reference: string; job_id: string; job_status: string; allowed: boolean }>(

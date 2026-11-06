@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { Pool } from "pg";
-import { ContractorEntitlementAuthorityRepository, ContractorRepository, SiteExtraRepository, type AuthenticatedMembership } from "@jobguard/db";
+import { ContractorEntitlementAuthorityRepository, ContractorRepository, SiteExtraRepository, type ContractorSessionMembership as AuthenticatedMembership } from "@jobguard/db";
 import { ContractorError } from "@jobguard/core";
 import { ContractorApplication, contractorHttpStatus } from "./contractor.application.js";
 import { SiteExtraApplication, siteExtraHttpFailure, sorSiteExtraHttpFailure } from "./site-extra.application.js";

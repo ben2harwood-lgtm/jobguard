@@ -68,21 +68,21 @@ describe("LATER-B18 persisted synthetic illustration", () => {
       await db.query("INSERT INTO app.job(id,tenant_id,title) VALUES($1,$2,'Fictional contractor job')", [contractorJobId, DEMO_TENANT_ID]);
       await db.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'contractor','synthetic_demo','work_order_import')", [DEMO_TENANT_ID, contractorJobId]);
     });
-    await expect(repo.create(contractorJobId, randomUUID())).rejects.toMatchObject({ code: "42501", message: "FEE_ILLUSTRATION_FORBIDDEN" });
+    await expect(repo.create(owner.auth.context, contractorJobId, randomUUID())).rejects.toMatchObject({ code: "42501", message: "FEE_ILLUSTRATION_FORBIDDEN" });
   });
 
   it("L101 concurrent identical creation returns one persisted illustration; stable replay", async () => {
     const commandId = randomUUID();
-    const replies = await Promise.all(Array.from({ length: 4 }, () => repo.create(owner.jobId, commandId)));
+    const replies = await Promise.all(Array.from({ length: 4 }, () => repo.create(owner.auth.context, owner.jobId, commandId)));
     expect(replies[0]).not.toBeNull();
     for (const reply of replies) expect(reply).toEqual(replies[0]);
-    expect(await repo.create(owner.jobId, commandId)).toEqual(replies[0]);
+    expect(await repo.create(owner.auth.context, owner.jobId, commandId)).toEqual(replies[0]);
     const rows = (await f.admin.query("SELECT command_id,source_ids FROM app.fee_illustration_source WHERE tenant_id=$1 AND job_id=$2", [DEMO_TENANT_ID, owner.jobId])).rows;
     expect(rows).toHaveLength(1); expect(rows[0].command_id).toBe(commandId);
     expect(rows[0].source_ids).toEqual(replies[0]!.sourceIds);
-    await expect(repo.create(owner.jobId, randomUUID())).rejects.toMatchObject({ code: "23505", message: "FEE_ILLUSTRATION_CONFLICT" });
+    await expect(repo.create(owner.auth.context, owner.jobId, randomUUID())).rejects.toMatchObject({ code: "23505", message: "FEE_ILLUSTRATION_CONFLICT" });
     const another = await seedWorkPractice(f);
-    await expect(repo.create(another.jobId, commandId)).rejects.toMatchObject({ code: "23505", message: "FEE_ILLUSTRATION_CONFLICT" });
+    await expect(repo.create(owner.auth.context, another.jobId, commandId)).rejects.toMatchObject({ code: "23505", message: "FEE_ILLUSTRATION_CONFLICT" });
   });
 
   it("L101 changed job/content under same ID conflicts; no hidden financial effect", async () => {
@@ -94,8 +94,8 @@ describe("LATER-B18 persisted synthetic illustration", () => {
     const allRows = async () => Promise.all(tracked.map(async table => (await f.admin.query(`SELECT row_to_json(t)::text bytes FROM ${table} t ORDER BY row_to_json(t)::text COLLATE "C"`)).rows));
     // Session issuance is fixture setup; take the financial snapshot after it.
     const afterSetup = await allRows(), snapshot = await proofBefore(f.admin, tracked);
-    const id = randomUUID(); await repo.create(another.jobId, id);
-    await expect(repo.create(owner.jobId, id)).rejects.toMatchObject({ code: "23505" });
+    const id = randomUUID(); await repo.create(owner.auth.context, another.jobId, id);
+    await expect(repo.create(owner.auth.context, owner.jobId, id)).rejects.toMatchObject({ code: "23505" });
     const app = new FeeIllustrationApplication(f.runtime, owner.sessionId);
     for (const eligibleNetPence of [0, 282000, 1000000000000]) {
       const body = { version: "fee-what-if.v1", acceptedNetPence: 1880000, eligibleNetPence, settledBasePlanPence: 7900 };
@@ -123,7 +123,7 @@ describe("LATER-B18 persisted synthetic illustration", () => {
 
   it("L101 concurrent changed commands on one job create one source and one typed conflict", async () => {
     const another = await seedWorkPractice(f);
-    const outcomes = await Promise.allSettled([repo.create(another.jobId, randomUUID()), repo.create(another.jobId, randomUUID())]);
+    const outcomes = await Promise.allSettled([repo.create(owner.auth.context, another.jobId, randomUUID()), repo.create(owner.auth.context, another.jobId, randomUUID())]);
     expect(outcomes.filter(result => result.status === "fulfilled")).toHaveLength(1);
     const refused = outcomes.find(result => result.status === "rejected");
     expect(refused).toMatchObject({ status: "rejected", reason: { code: "23505", message: "FEE_ILLUSTRATION_CONFLICT" } });

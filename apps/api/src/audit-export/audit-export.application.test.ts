@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Pool } from "pg";
-import { AuditExportRepository, ContractorRepository, type AuthenticatedMembership } from "@jobguard/db";
+import { AuditExportRepository, ContractorRepository, type ContractorSessionMembership as AuthenticatedMembership } from "@jobguard/db";
 import { AuditExportController } from "./audit-export.controller.js";
 import { createWorkspaceApplication } from "../workspace/application.js";
 import { AuditExportApplication, auditExportHttpFailure } from "./audit-export.application.js";

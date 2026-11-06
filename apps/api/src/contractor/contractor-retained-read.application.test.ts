@@ -11,7 +11,7 @@ function setup() {
  // Keep the pre-implementation red phase an assertion failure, not a missing import.
  const ctor=(db as unknown as Record<string,{prototype:object}>).ContractorRetainedReadRepository;
  expect(ctor,"persisted retained reader must be exported").toBeDefined();
- vi.spyOn(db.ContractorRepository.prototype,"resolveSession").mockResolvedValue({tenantId:id,membershipId:id,identityUserId:id} as db.AuthenticatedMembership);
+ vi.spyOn(db.ContractorRepository.prototype,"resolveSession").mockResolvedValue({tenantId:id,membershipId:id,identityUserId:id} as db.ContractorSessionMembership);
  vi.spyOn(db.ContractorRepository.prototype,"query").mockResolvedValue({membershipId:"legacy"} as db.ContractorView);
  const retained=ctor!.prototype as {query:()=>Promise<unknown>;resume:()=>Promise<unknown>};
  return {read:vi.spyOn(retained,"query").mockResolvedValue({membershipId:"effective"}),resume:vi.spyOn(retained,"resume").mockResolvedValue({membershipId:"effective"}),app:new ContractorApplication({} as Pool)};
@@ -28,7 +28,7 @@ it("forged authority fields and non-synthetic mode fail before reading",async()=
  vi.stubEnv("JOBGUARD_ENV","production");await expect(f.app.resume(principal)).rejects.toMatchObject({code:"MODE_FORBIDDEN"});expect(f.read).not.toHaveBeenCalled();expect(f.resume).not.toHaveBeenCalled();
 });
 it("commands do not use retained-read authority",async()=>{
- const f=setup();const member={tenantId:id,membershipId:id,identityUserId:id} as db.AuthenticatedMembership;
+ const f=setup();const member={tenantId:id,membershipId:id,identityUserId:id} as db.ContractorSessionMembership;
  vi.spyOn(db.ContractorRepository.prototype,"resolveSession").mockResolvedValue(member);
  const command=vi.spyOn(db.ContractorRepository.prototype,"command").mockRejectedValue(new Error("command boundary"));
  const raw={version:"contractor-command.v1",environment:"synthetic_demo",commandId:id,id,expectedRevision:0,kind:"grant.revoke",grantId:id};

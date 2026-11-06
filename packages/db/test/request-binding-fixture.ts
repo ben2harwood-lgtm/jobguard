@@ -17,3 +17,14 @@ export async function applyRequestBindingFoundation(admin: Pick<Pool | PoolClien
   await admin.query(await readFile(url, "utf8"));
   await admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)", [foundation]);
 }
+
+/** Administrator-only fictional credential for the exact member under test. */
+export async function contractorMemberSession(admin: Pool, runtime: Pool, member: import("../src/tenant-context.js").AuthenticatedMembership) {
+  const { randomUUID, createHash } = await import("node:crypto");
+  const { ContractorRepository } = await import("../src/contractor-repository.js");
+  const credential = randomUUID();
+  await admin.query(`INSERT INTO control_plane.contractor_practice_session(session_id,tenant_id,membership_id,identity_user_id,session_digest,created_at,expires_at)
+    VALUES($1,$2,$3,$4,$5,clock_timestamp(),clock_timestamp()+interval '1 day')`,
+  [randomUUID(), member.tenantId, member.membershipId, member.identityUserId, createHash("sha256").update(credential).digest("hex")]);
+  return new ContractorRepository(runtime).resolveSession(credential);
+}

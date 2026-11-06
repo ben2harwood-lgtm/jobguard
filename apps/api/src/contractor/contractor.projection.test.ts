@@ -1,10 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Pool } from 'pg';
-import { ContractorRepository, type AuthenticatedMembership } from '@jobguard/db';
+import { ContractorRepository, verifiedTenantContextFromMembership, type ContractorSessionMembership as AuthenticatedMembership } from '@jobguard/db';
+const membership={tenantId:'11111111-1111-4111-8111-111111111111',membershipId:'11111111-1111-4111-8111-111111111111',identityUserId:'11111111-1111-4111-8111-111111111111'} as AuthenticatedMembership;
+const context=verifiedTenantContextFromMembership(membership,{kind:'contractor_practice',credential:membership.tenantId});
 const id='11111111-1111-4111-8111-111111111111';
 // Adapter-level only. PostgreSQL proves the persisted grant checks in contractor.integration.test.ts.
 function repository(role:'commercial_manager'|'client_approver'|'read_only') {
  const query=vi.fn(async(sql:string)=>{
+  if(sql.includes('app.current_actor()'))return {rows:[{actor:id,tenant:id}]};
   if(sql.includes('SELECT 1 FROM app.membership'))return {rows:[{}]};
   if(sql.includes('SELECT count(*)'))return {rows:[{n:'7'}]};
   if(sql.includes('contractor_allowed')&&sql.includes('contract.manage'))return {rows:[{allowed:role==='commercial_manager'}]};
@@ -15,11 +18,11 @@ function repository(role:'commercial_manager'|'client_approver'|'read_only') {
 }
 describe('contractor command revision projection',()=>{
  it('exposes the command revision to a commercial writer without organisation.read',async()=>{
-  const view=await repository('commercial_manager').query({tenantId:id,membershipId:id,identityUserId:id} as AuthenticatedMembership,{version:'contractor-query.v1',tenantId:id,resource:'contracts'});
+  const view=await repository('commercial_manager').query({...membership,context},{version:'contractor-query.v1',tenantId:id,resource:'contracts'});
   expect(view.revision).toBe(7);expect(view.units).toEqual([]);expect(view.members).toEqual([]);expect(view.grants).toEqual([]);
  });
  for(const role of ['client_approver','read_only'] as const)it(`${role} cannot infer administrative activity from revision`,async()=>{
-  const view=await repository(role).query({tenantId:id,membershipId:id,identityUserId:id} as AuthenticatedMembership,{version:'contractor-query.v1',tenantId:id,resource:'contracts'});
+  const view=await repository(role).query({...membership,context},{version:'contractor-query.v1',tenantId:id,resource:'contracts'});
   expect(view.revision).toBe(0);
  });
 });

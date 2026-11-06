@@ -1,3 +1,4 @@
+import { contractorMemberSession } from "./request-binding-fixture.js";
 import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
 import { randomUUID } from "node:crypto";
 import { writeSync } from "node:fs";
@@ -10,7 +11,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { contractorPermissionMatrix, contractorRoles, encodeWorkOrderCsv, watchdogActive, type ContractorRole } from "@jobguard/core";
 import {
   ContractorPartyRepository, ContractorRepository, JobSchedulingRepository, MIGRATION_URLS, SorRepository, WorkOrderRepository, addBranchClient, assertContractorPartiesRequired, canonicalJson, demoFile, demoRow, migrate, prepareWorkOrderDemo, sha256Hex,
-  verifiedTenantContextFromMembership, withTenant, type AuthenticatedMembership, type WorkOrderDemo,
+  verifiedTenantContextFromMembership, withTenant, type ContractorSessionMembership as AuthenticatedMembership, type WorkOrderDemo,
 } from "../src/index.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
@@ -18,7 +19,7 @@ import { testTenantContext } from "./tenant-context-test-utils.js";
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, dir: string, contractors: ContractorRepository, parties: ContractorPartyRepository, orders: WorkOrderRepository, rates: SorRepository, scheduling: JobSchedulingRepository;
 const ENT2_TABLES = ["schedule_of_rates", "sor_version", "sor_item", "import_batch", "import_row_receipt", "work_order", "work_order_revision", "work_order_line", "work_order_current", "job_assignment", "site_visit"];
 const SPINE_TABLES = ["job", "scope_identity", "job_commercial_track", "contractor_party_binding", "contractor_resident_contact", "job_party_binding", "job_party_current", "command_receipt", "audit_event"];
-const ctx = (p: AuthenticatedMembership) => verifiedTenantContextFromMembership(p);
+const ctx = (p: AuthenticatedMembership) => p.context;
 const resident = (n: number) => ({ name: `Fictional Resident ${String(n).padStart(4, "0")}`, phone: `0000${String(n).padStart(6, "0")}`, email: `resident${String(n).padStart(4, "0")}@resident-canary.invalid` });
 const view = (p: AuthenticatedMembership) => contractors.query(p, { version: "contractor-query.v1", tenantId: p.tenantId, resource: "organisation" });
 const command = async (p: AuthenticatedMembership, fields: Record<string, unknown>) => contractors.command(p, { version: "contractor-command.v1", environment: "synthetic_demo", commandId: randomUUID(), id: randomUUID(), expectedRevision: (await view(p)).revision, ...fields });
@@ -26,7 +27,7 @@ async function member(p: AuthenticatedMembership, role: string, scope: { kind: s
   const id = randomUUID();
   await command(p, { kind: "member.invite", id, role, email: `${id}@fictional.invalid`, scope, clientId, contractId: null });
   const row = (await admin.query<{ identity_user_id: string }>("SELECT identity_user_id FROM app.membership WHERE tenant_id=$1 AND id=$2", [p.tenantId, id])).rows[0]!;
-  return { ...p, membershipId: id, identityUserId: row.identity_user_id } as AuthenticatedMembership;
+  return contractorMemberSession(admin, runtime, { ...p, membershipId: id, identityUserId: row.identity_user_id });
 }
 async function org(siteCount = 5) { const p = await contractors.startPractice(randomUUID()); await seedActiveContractorAgreement(admin,p.tenantId); const demo = await prepareWorkOrderDemo(runtime, p, { siteCount }); return { p, demo }; }
 const counts = async (tenantId: string, tables = [...ENT2_TABLES, ...SPINE_TABLES]) => Object.fromEntries(await Promise.all(tables.map(async t => [t, (await admin.query(`SELECT count(*)::int n FROM app.${t} WHERE tenant_id=$1`, [tenantId])).rows[0].n as number])));
@@ -680,7 +681,7 @@ describe("ENT-2 office reads", () => {
     // The assigned operative reads the job's order through the assignment, not through import authority.
     const unassigned = await member(p, "operative", { kind: "team", id: demo.teamId });
     await expect(orders.revisions(unassigned, first.rows[0]!.workOrderId!)).rejects.toMatchObject({ code: "NOT_FOUND" });
-    const assigned = { ...p, membershipId: demo.operativeMembershipId, identityUserId: (await admin.query("SELECT identity_user_id FROM app.membership WHERE id=$1", [demo.operativeMembershipId])).rows[0].identity_user_id } as AuthenticatedMembership;
+    const assigned = await contractorMemberSession(admin, runtime, { ...p, membershipId: demo.operativeMembershipId, identityUserId: (await admin.query("SELECT identity_user_id FROM app.membership WHERE id=$1", [demo.operativeMembershipId])).rows[0].identity_user_id });
     expect((await orders.revisions(assigned, first.rows[0]!.workOrderId!)).revisions).toHaveLength(2);
     await expect(orders.overview(assigned)).rejects.toMatchObject({ code: "NOT_FOUND" });
   });

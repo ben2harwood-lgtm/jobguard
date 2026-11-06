@@ -7,7 +7,7 @@ import { Test } from "@nestjs/testing";
 import request from "supertest";
 import { Pool } from "pg";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ContractorRepository, SiteVisitRepository, type AuthenticatedMembership } from "@jobguard/db";
+import { ContractorRepository, SiteVisitRepository, type ContractorSessionMembership as AuthenticatedMembership } from "@jobguard/db";
 import { SiteVisitError } from "@jobguard/core";
 import * as bridge from "@jobguard/db";
 import { AppModule } from "../app.module.js";

@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import * as ts from "typescript";
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { Pool } from "pg";
-import { ContractorRepository, SiteExtraRepository, SiteVisitRepository, WatchdogError, withTenant, type AuthenticatedMembership } from "@jobguard/db";
+import { ContractorRepository, SiteExtraRepository, SiteVisitRepository, WatchdogError, withTenant, type ContractorSessionMembership as AuthenticatedMembership } from "@jobguard/db";
 import * as bridge from "@jobguard/db";
 import { SiteVisitError, siteVisitErrorCodes, siteVisitHttpStatus } from "@jobguard/core";
 import { SiteExtraApplication, siteVisitHttpFailure } from "./site-extra.application.js";
@@ -49,7 +49,7 @@ describe("ENT-3b service: authority comes only from the persisted session", () =
   const lookup = vi.spyOn(ContractorRepository.prototype, "resolveSession").mockResolvedValue(m);
   const real = bridge.contractorSessionContext, observe = vi.spyOn(bridge, "contractorSessionContext").mockImplementation(real);
   const marker = new Error("connection attempted after stamp verification"); vi.spyOn(pool, "connect").mockRejectedValue(marker);
-  const check = (name: string) => async (context: bridge.VerifiedTenantContext, actor: AuthenticatedMembership) => {
+  const check = (name: string) => async (context: bridge.VerifiedTenantContext, actor: import("@jobguard/db").AuthenticatedMembership) => {
    expect(actor, name).toBe(m); expect(context.tenantId).toBe(m.tenantId); expect(Object.isFrozen(context)).toBe(true);
    await expect(withTenant(pool, context, async () => undefined)).rejects.toBe(marker);
   };

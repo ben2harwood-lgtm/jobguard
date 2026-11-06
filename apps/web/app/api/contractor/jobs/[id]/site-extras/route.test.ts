@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { WatchdogError, type AuthenticatedMembership } from "@jobguard/db";
+import { WatchdogError, type ContractorSessionMembership as AuthenticatedMembership } from "@jobguard/db";
 import * as bridge from "@jobguard/db";
 import { logSiteExtraV1, SiteExtraError, siteExtraHttpStatus } from "@jobguard/core";
 const { log, workspace } = vi.hoisted(() => { const log = vi.fn(); return { log, workspace: vi.fn<() => Promise<{ siteExtras: { log: (jobId: string, raw: unknown) => Promise<unknown> } }>>(async () => ({ siteExtras: { log } })) }; });

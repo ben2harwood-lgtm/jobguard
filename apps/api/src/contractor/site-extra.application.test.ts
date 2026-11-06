@@ -3,7 +3,7 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { resolve, relative } from "node:path";
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { Pool, type PoolClient } from "pg";
-import { ContractorRepository, ExtraRepository, SiteExtraRepository, WatchdogError, withTenant, type AuthenticatedMembership } from "@jobguard/db";
+import { ContractorRepository, ExtraRepository, SiteExtraRepository, WatchdogError, withTenant, type ContractorSessionMembership as AuthenticatedMembership } from "@jobguard/db";
 import { SiteExtraError, siteExtraHttpStatus } from "@jobguard/core";
 import * as bridge from "@jobguard/db";
 import { SiteExtraApplication, siteExtraHttpFailure } from "./site-extra.application.js";

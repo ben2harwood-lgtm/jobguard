@@ -82,7 +82,7 @@ describe("LATER-B17 historical v1 repository boundaries", () => {
       scenario: "eligible", case_id: randomUUID(), receipt_id: randomUUID(), evidence_id: randomUUID(),
       allocation_id: allocation, liability_pence: liability, posting_delta_pence: delta,
     }]);
-    const result = await new RecoveryDemoRepository(db.pool).read(job);
+    const result = await new RecoveryDemoRepository(db.pool).read(context,job);
     expect(result).toMatchObject({ jobId: job, allocationId: allocation, approved: true, additionalFeePence: Number(delta) });
     const read = db.query.mock.calls.find(([sql]) => sql.includes("FROM app.recovery_demo_selection"));
     expect(read?.[0]).toContain("d.posting_delta_pence");
@@ -94,6 +94,6 @@ describe("LATER-B17 historical v1 repository boundaries", () => {
       scenario: "eligible", case_id: randomUUID(), receipt_id: randomUUID(), evidence_id: randomUUID(),
       allocation_id: null, posting_delta_pence: null,
     }]);
-    expect(await new RecoveryDemoRepository(db.pool).read(randomUUID())).toMatchObject({ approved: false, additionalFeePence: 0 });
+    expect(await new RecoveryDemoRepository(db.pool).read(context,randomUUID())).toMatchObject({ approved: false, additionalFeePence: 0 });
   });
 });

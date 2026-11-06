@@ -4,7 +4,7 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { resolve, relative } from "node:path";
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { Pool } from "pg";
-import { ContractorRepository, SiteExtraRepository, type AuthenticatedMembership } from "@jobguard/db";
+import { ContractorRepository, SiteExtraRepository, type ContractorSessionMembership as AuthenticatedMembership } from "@jobguard/db";
 import { SiteExtraError, siteExtraHttpStatus, siteExtraLoggedV3, siteExtraLoggedV1, siteExtraContentSha256V1 } from "@jobguard/core";
 import { SiteExtraApplication, siteExtraHttpFailure } from "./site-extra.application.js";
 import { SiteExtraController } from "./site-extra.controller.js";

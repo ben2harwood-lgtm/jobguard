@@ -84,8 +84,8 @@ describe("LATER-B17 historical v1 PostgreSQL boundaries", () => {
   it("L119 displays only the second landing delta after a prior net posting", async () => {
     const input = await fixture(), repository = new RecoveryDemoRepository(runtime);
     await new PostgresRecoveryOutcomePostingPort(runtime).approveSyntheticLanding(context, input);
-    await repository.select(input.jobId, randomUUID(), "eligible");
-    const view = await repository.approve(input.jobId, randomUUID());
+    await repository.select(context, input.jobId, randomUUID(), "eligible");
+    const view = await repository.approve(context, input.jobId, randomUUID());
     expect(view).toMatchObject({ approved: true, additionalFeePence: 1500 });
     const stored = await withTenant(runtime, context, db => db.$client.query(
       "SELECT liability_pence::text,posting_delta_pence::text FROM app.recovery_fee_derivation WHERE tenant_id=$1 AND source_allocation_id=$2", [tenant, view.allocationId],

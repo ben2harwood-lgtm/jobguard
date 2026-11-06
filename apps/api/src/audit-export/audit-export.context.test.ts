@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { Pool } from "pg";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { AuditExportRepository, ContractorRepository, type AuthenticatedMembership } from "@jobguard/db";
+import { AuditExportRepository, ContractorRepository, type ContractorSessionMembership as AuthenticatedMembership } from "@jobguard/db";
 import { AuditExportApplication, auditExportHttpFailure } from "./audit-export.application.js";
 
 const { bridge } = vi.hoisted(() => ({ bridge: vi.fn() }));

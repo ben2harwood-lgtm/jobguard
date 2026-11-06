@@ -1,9 +1,10 @@
+import type { ContractorSessionMembership } from "./contractor-repository.js";
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { WorkOrderError, sorVersionAuditPayloadV1, sorVersionImportV1, sorVersionListV1, sorVersionResultV1 } from "@jobguard/core";
 import { appendAuditBatch } from "./audit.js";
 import { assertContractorGate, canonicalJson, sha256Hex, workOrderFailure } from "./work-order-repository.js";
-import { verifiedTenantContextFromMembership, withTenant, type AuthenticatedMembership } from "./tenant-context.js";
+import { withTenant } from "./tenant-context.js";
 
 /**
  * Schedule-of-rates versions: immutable, imported by a member holding contract.manage (owner, admin, commercial_manager - Ben, 9 Oct 2026,
@@ -11,14 +12,14 @@ import { verifiedTenantContextFromMembership, withTenant, type AuthenticatedMemb
  */
 export class SorRepository {
   constructor(private readonly pool: Pool) {}
-  async importVersion(principal: AuthenticatedMembership, raw: unknown) {
+  async importVersion(principal: ContractorSessionMembership, raw: unknown) {
     const parsed = sorVersionImportV1.safeParse(raw);
     if (!parsed.success) throw new WorkOrderError("INVALID_COMMAND");
     const command = parsed.data;
     const contentHash = sha256Hex(canonicalJson({ reference: command.reference, effectiveFrom: command.effectiveFrom, items: [...command.items].sort((a, b) => a.code.localeCompare(b.code)) }));
     const requestHash = sha256Hex(canonicalJson(command));
     try {
-      return await withTenant(this.pool, verifiedTenantContextFromMembership(principal), async db => {
+      return await withTenant(this.pool, principal.context, async db => {
         await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,54))", [principal.tenantId]);
         await assertContractorGate(db, principal, "sor");
         const row = (await db.$client.query<{ result: { versionId: string; scheduleId: string; itemCount: number; effectiveFrom: string; replayed: boolean } }>("SELECT app.import_sor_version($1,$2::jsonb) result", [principal.membershipId, JSON.stringify({
@@ -35,9 +36,9 @@ export class SorRepository {
       });
     } catch (error) { throw workOrderFailure(error); }
   }
-  async list(principal: AuthenticatedMembership) {
+  async list(principal: ContractorSessionMembership) {
     try {
-      return await withTenant(this.pool, verifiedTenantContextFromMembership(principal), async db => {
+      return await withTenant(this.pool, principal.context, async db => {
         // Reading price lists needs a contract-level read grant (owner, admin, commercial_manager, supervisor, surveyor, finance, read_only): the same members who can read contracts.
         await assertContractorGate(db, principal, "retained_member");
         // Client approvers read approval packs only; a client contract grant cannot unlock the general schedule list.
