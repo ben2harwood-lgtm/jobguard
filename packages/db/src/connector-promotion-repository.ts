@@ -19,7 +19,10 @@ export class ConnectorPromotionRepository {
   constructor(private readonly pool: Pool) {}
   private async events(db: TenantTransaction, sessionId: string, namespace: string | null, eventId: string | null) {
     const value = (await db.$client.query<{ value: unknown }>("SELECT app.connector_promotion($1,$2,$3,NULL,NULL) value", [sessionId, namespace, eventId])).rows[0]!.value;
-    return z.array(staged).parse(value);
+    return z.array(z.unknown()).parse(value).flatMap(row => {
+      const parsed = staged.safeParse(row);
+      return parsed.success ? [parsed.data] : [];
+    });
   }
   async list(sessionId: string) {
     try {
