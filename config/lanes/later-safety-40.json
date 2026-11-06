@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-40": {
+      "branches": ["codex/sandbox/later-safety-40"],
+      "note": "LATER-SAFETY-40: test-only follow-up to later-safety-37; RED sign-in lock order. Router merges prerequisite branches before landing.",
+      "allow": ["packages/db/test/customer-signin-lock-order.integration.test.ts"]
+    }
+  }
+}
