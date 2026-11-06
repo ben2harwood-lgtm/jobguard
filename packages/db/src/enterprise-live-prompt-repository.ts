@@ -1,12 +1,11 @@
 import type { Pool } from "pg";
 import { z } from "zod";
-import { EnterpriseLivePromptPersistenceError, materialsIssueV1, completionObservationV1, evaluateLivePromptsV1, confirmPromptV1, dismissPromptV1, promptListV1, promptDetailV1 } from "@jobguard/core";
+import { EnterpriseLivePromptPersistenceError, contractorJobFinishV1, materialsIssueV1, completionObservationV1, evaluateLivePromptsV1, confirmPromptV1, dismissPromptV1, promptListV1, promptDetailV1 } from "@jobguard/core";
 import { contractorSessionContext } from "./contractor-session-context.js";
 import { withTenant, type VerifiedTenantContext, type TenantTransaction } from "./tenant-context.js";
 import { appendAuditBatch, type AuditEventInput } from "./audit.js";
 import { readEnterpriseCompletionFindings, readStoredCompletionPhoto } from "./enterprise-live-prompt-source-reader.js";
 const commandInput = z.object({version:z.string(),jobId:z.guid({ error: "Invalid uuid" }),commandId:z.guid({ error: "Invalid uuid" })}).passthrough();
-const endInput = z.object({version:z.literal("end-check.v1"),commandId:z.guid({ error: "Invalid uuid" }),jobId:z.guid({ error: "Invalid uuid" }),agreementVersionId:z.guid({ error: "Invalid uuid" }).optional(),completionEventId:z.guid({ error: "Invalid uuid" }).optional(),visitId:z.guid({ error: "Invalid uuid" }).optional()}).strict();
 type Result = Record<string,unknown>;
 export type EnterprisePromptItem = {id:string;jobId:string;promptHash:string;rule:"a"|"b"|"c"|"d";ruleVersion:string;surfacedAt:string;resolution:string|null};
 export type EnterprisePromptPage = {items:EnterprisePromptItem[];nextCursor:string|null};
@@ -15,6 +14,7 @@ const pageSchema = z.object({items:z.array(itemSchema),nextCursor:z.guid({ error
 function failure(error:unknown):never {
  if(error instanceof EnterpriseLivePromptPersistenceError)throw error;
  const message=(error as {message?:string}).message;
+ if ((error as {code?:string}).code === "42501" && ["FORBIDDEN", "UNAUTHENTICATED"].includes(message ?? "")) throw new EnterpriseLivePromptPersistenceError("EXTRA_FORBIDDEN");
  const codes=["INVALID_PROMPT_COMMAND","EXTRA_FORBIDDEN","JOB_NOT_LIVE","PROMPT_CONFLICT","PROMPT_ORIGIN_HELD","PROMPT_SOURCE_INVALID","PROMPT_AMBIGUOUS","PROMPT_END_CHECK_HELD","PROMPT_PRACTICE_ONLY"] as const;
  const code=codes.find(c=>c===message);if(code)throw new EnterpriseLivePromptPersistenceError(code);
  if(message==="MODE_FORBIDDEN")throw new EnterpriseLivePromptPersistenceError("PROMPT_PRACTICE_ONLY");
@@ -68,6 +68,7 @@ export class EnterpriseLivePromptRepository {
  private async promptId(db:import("./tenant-context.js").TenantTransaction,session:string,job:string,observation:string):Promise<string>{
   return (await db.$client.query<{id:string}>("SELECT app.lp_observation_prompt($1,$2,$3) id",[session,job,observation])).rows[0]!.id;
  }
+ async finishStatus(sessionId:string,jobId:string){return this.read(sessionId,{version:"contractor-job-finish-status.v1",jobId:z.guid().parse(jobId)});}
  /** Narrow, session-authorised completion-source projection; never returns stored bytes. */
  async observationEvidence(sessionId:string,jobId:string) {
   if(!z.guid().safeParse(jobId).success)throw new EnterpriseLivePromptPersistenceError("INVALID_PROMPT_COMMAND");
@@ -108,5 +109,5 @@ export class EnterpriseLivePromptRepository {
  evaluate(sessionId:string,raw:unknown){return this.write(sessionId,this.parse(evaluateLivePromptsV1,raw));}
  confirm(sessionId:string,raw:unknown){return this.write(sessionId,this.parse(confirmPromptV1,raw));}
  dismiss(sessionId:string,raw:unknown){return this.write(sessionId,this.parse(dismissPromptV1,raw));}
- endCheck(sessionId:string,raw:unknown){return this.write(sessionId,this.parse(endInput,raw));}
+ async endCheck(sessionId:string,raw:unknown){return this.write(sessionId,this.parse(contractorJobFinishV1,raw));}
 }

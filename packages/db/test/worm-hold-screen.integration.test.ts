@@ -16,8 +16,9 @@ import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from ".
 const tenant = randomUUID(), other = randomUUID(), job = randomUUID(), evidence = randomUUID();
 const actor = randomUUID(), second = randomUUID(), samePerson = randomUUID(), user = randomUUID();
 const context = testTenantContext(tenant);
+const sessionDigest = "a".repeat(64), secondDigest = "b".repeat(64);
 const unregistered = randomUUID(), foreignJob = randomUUID(), foreignEvidence = randomUUID();
-let pg: EmbeddedPostgres, admin: Pool, runtime: Pool, executor: Pool, dir: string, repo: WormCommandRepository;
+let pg: EmbeddedPostgres, admin: Pool, runtime: Pool, executor: Pool, dir: string, repo: WormCommandRepository, secondRepo: WormCommandRepository;
 let held = false;
 const storage = { retain: async () => undefined, hold: async (_v: unknown, value: boolean) => { held = value; },
   read: async () => ({ held, retainUntil: null }) };
@@ -33,6 +34,9 @@ beforeAll(async () => {
   await pg.initialise(); await pg.start();
   // Use the actual migration chain and the same non-owner runtime role as the application.
   const config = { host: "127.0.0.1", port, database: "postgres" };
+  const bootstrap = new Pool({ ...config, user: "postgres", password: "synthetic-only" });
+  await bootstrap.query("CREATE DATABASE jobguard_synthetic_demo"); await bootstrap.end();
+  config.database = "jobguard_synthetic_demo";
   admin = new Pool({ ...config, user: "postgres", password: "synthetic-only" });
   await migrate(admin);
   await installLegacySyntheticPartyFixtures(admin);
@@ -42,6 +46,11 @@ beforeAll(async () => {
   await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Synthetic fixture')", [account, tenant]);
   for (const [id, uid] of [[actor, user], [second, otherUser], [samePerson, user]]) {
     await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [id, tenant, account, uid]);
+  }
+  for (const [uid, digest, member] of [[user, sessionDigest, actor], [otherUser, secondDigest, second]]) {
+    await admin.query("INSERT INTO identity.session(id,user_id,token_digest,csrf_token,expires_at,environment) VALUES($1,$2,$3,'synthetic-csrf',clock_timestamp()+interval '1 day','synthetic_demo')", [randomUUID(), uid, digest]);
+    await admin.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3)", [uid, tenant, member]);
+    await admin.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", [`worm-${uid}@fictional.invalid`, uid]);
   }
   await importWatchdogFixtureJob(admin, tenant, job, "Synthetic retention");
   expect((await admin.query("SELECT id FROM app.job WHERE tenant_id=$1 AND id=$2", [tenant, job])).rows).toEqual([{ id: job }]);
@@ -61,7 +70,8 @@ beforeAll(async () => {
   await admin.query("CREATE ROLE worm_executor_login LOGIN PASSWORD 'synthetic-executor' NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOBYPASSRLS");
   await admin.query("GRANT jobguard_worm_executor TO worm_executor_login");
   executor = new Pool({ ...config, user: "worm_executor_login", password: "synthetic-executor" });
-  repo = new WormCommandRepository(runtime, true, executor);
+  repo = new WormCommandRepository(runtime, true, executor, undefined, sessionDigest);
+  secondRepo = new WormCommandRepository(runtime, true, executor, undefined, secondDigest);
 }, 60000);
 afterAll(async () => { await closeTestPools(runtime, executor, admin); await pg?.stop(); if (dir) await rm(dir, { recursive: true, force: true }); });
 
@@ -95,7 +105,7 @@ it("projects real requested/applied/released commands, races, permissions and id
   }
   expect((await repo.listHolds(context, second, job))![0]!.canRelease).toBe(true);
   const release = command({ action: "release_hold", releaseOf: c.commandId, actorMembershipId: second });
-  await repo.submit(context, release);
+  await secondRepo.submit(context, release);
   expect((await list())![0]).toMatchObject({ status: "queued", action: "release_hold", held: true, canApply: false, canRelease: false });
   await repo.execute(context, release.commandId, storage, tsa);
   expect(held).toBe(false);

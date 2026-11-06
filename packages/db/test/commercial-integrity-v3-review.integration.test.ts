@@ -118,3 +118,25 @@ it("CH-6 source validation takes a fresh snapshot after waiting for this job",as
   expect((await f.admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1 AND payload->'references'->>'commandId'=$2",[tenant,review.commandId])).rows[0].n).toBe(0);
  }finally{await holder.query("ROLLBACK");holder.release();await pending;}
 });
+
+it("CH-6 review completes while another tenant holds a conflicting job write",async()=>{
+ const {job}=await seedIntegrityJob(f),review=await reviewFor(f,job);
+ const snapshot=(await f.repo.read(f.auth.context,actor,f.auth.digest,job)).result.findings[0]!.sourceSnapshot;
+ const foreignTenant=randomUUID(),foreignJob=randomUUID();
+ await f.admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)",[foreignTenant]);
+ await f.admin.query("INSERT INTO app.job(id,tenant_id,title) VALUES($1,$2,'Fictional held company')",[foreignJob,foreignTenant]);
+ const writer=await f.admin.connect(),reviewer=await f.runtime.connect();
+ try{
+  await writer.query("BEGIN");
+  await writer.query("UPDATE app.job SET title='Fictional uncommitted write' WHERE tenant_id=$1 AND id=$2",[foreignTenant,foreignJob]);
+  await reviewer.query("BEGIN");
+  await reviewer.query("SELECT set_config('app.tenant_id',$1,true)",[tenant]);
+  // A historical table-wide SHARE lock conflicts with the foreign writer's
+  // ROW EXCLUSIVE lock. The current tenant/job row locks must complete instead.
+  await reviewer.query("SET LOCAL lock_timeout='500ms'");
+  const result=await reviewer.query("SELECT app.ch6_record_integrity_review($1,$2,$3,$4::jsonb,$5::jsonb) result",[tenant,job,f.auth.digest,JSON.stringify(review),JSON.stringify(snapshot)]);
+  expect(result.rows[0].result).toMatchObject({commandId:review.commandId,jobId:job});
+  await reviewer.query("COMMIT");
+  expect(await f.repo.review(f.auth.context,actor,f.auth.digest,job,review)).toEqual(result.rows[0].result);
+ }finally{await reviewer.query("ROLLBACK");await writer.query("ROLLBACK");reviewer.release();writer.release();}
+});

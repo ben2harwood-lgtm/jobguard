@@ -81,7 +81,7 @@ it("requirement, step actors and outcome are exact persisted versioned sources",
   await repo.approveExtraStep(ctx, w.members.supervisor.member, approveInput(s, 0));
   await repo.approveExtraStep(ctx, w.supervisor2.member, approveInput(s, 1));
   const token = newToken(), recipient = await emailOf(c, w, w.members.client_approver.member.membershipId);
-  const sent = await repo.issueClientApproval(ctx, w.members.owner.member, { version: "issue-client-approval.v1", commandId: randomUUID(), jobId: s.jobId, requestId: s.requestId,
+  const sent = await repo.issueClientApproval(ctx, w.members.surveyor.member, { version: "issue-client-approval.v1", commandId: randomUUID(), jobId: s.jobId, requestId: s.requestId,
     approverMembershipId: w.members.client_approver.member.membershipId, recipient, linkToken: token, expiresAt: new Date(Date.now() + 3600_000) });
   await repo.revokeClientApproval(ctx, w.members.owner.member, { version: "revoke-client-approval.v1", commandId: randomUUID(), jobId: s.jobId, linkId: sent.linkId });
   const decide = (linkToken: string) => repo.decideClientApproval(ctx, w.members.client_approver.member, { version: "decide-client-approval.v1", commandId: randomUUID(), jobId: s.jobId, requestId: s.requestId,
@@ -90,7 +90,7 @@ it("requirement, step actors and outcome are exact persisted versioned sources",
   const revoked = await loadPackSources(ctx, s.jobId, s.extraId);
   expect(revoked.omissions.join(" ")).toContain("pending; 2/3");
   const replacement = newToken();
-  await repo.issueClientApproval(ctx, w.members.owner.member, { version: "issue-client-approval.v1", commandId: randomUUID(), jobId: s.jobId, requestId: s.requestId,
+  await repo.issueClientApproval(ctx, w.members.surveyor.member, { version: "issue-client-approval.v1", commandId: randomUUID(), jobId: s.jobId, requestId: s.requestId,
     approverMembershipId: w.members.client_approver.member.membershipId, recipient, linkToken: replacement, expiresAt: new Date(Date.now() + 3600_000) });
   await decide(replacement);
   const approved = await loadPackSources(ctx, s.jobId, s.extraId);

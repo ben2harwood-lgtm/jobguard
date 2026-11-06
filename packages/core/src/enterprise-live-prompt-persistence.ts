@@ -14,6 +14,7 @@ const completionObservationObjectV1 = z.object({ ...common, version: z.literal("
 const observationContent = (value: { locator: { kind: string }; sourceText?: string | undefined }) => value.locator.kind === "text_span" ? value.sourceText !== undefined : value.sourceText === undefined;
 export const completionObservationV1 = completionObservationObjectV1.refine(observationContent, { path: ["sourceText"], message: "Text spans require source text; photo tags use stored original bytes" });
 export const completionObservationBodyV1 = completionObservationObjectV1.omit({ jobId: true }).refine(observationContent, { path: ["sourceText"], message: "Text spans require source text; photo tags use stored original bytes" });
+export const contractorJobFinishV1 = z.object({ ...common, version: z.literal("end-check.v1"), agreementVersionId: id.optional() }).strict();
 export const evaluateLivePromptsV1 = z.object({ ...common, version: z.literal("evaluate-live-prompts.v1") }).strict();
 export const confirmPromptV1 = z.object({ ...common, version: z.literal("confirm-prompt.v1"), promptId: id, promptHash: hash, confirmedWorkIdentity: text.optional(), excessScopeItemId: id.optional(), existingExtraId: id.optional() }).strict();
 export const dismissPromptV1 = z.object({ ...common, version: z.literal("dismiss-prompt.v1"), promptId: id, promptHash: hash, reason: z.string().trim().min(1).max(2000) }).strict();

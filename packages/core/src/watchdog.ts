@@ -14,6 +14,8 @@ export type JobCommandPhase = "pre_live_allowed" | "watchdog_live_only" | "post_
 /** Exhaustive web mutation registry. Dynamic actions are classified below.
  * New site facts, documents, orders, proof and messages must be live-only. */
 export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
+  // Practice-only accounting route approval; checked export authority remains mandatory.
+  "/api/accounting-exports/[sourceId]/route-change": "post_live_billing",
   "/api/jobs/[id]/recovery-cases/[caseId]/billability": "post_live_billing",
   "/api/jobs/[id]/reconciliation/[runId]/adjustments": "post_live_billing",
   "/api/customer-portal/quote": "pre_live_allowed",
@@ -32,6 +34,7 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "nest:/customer-portal/variation-approvals": "pre_live_allowed",
   "/api/customer-portal/issue": "pre_live_allowed",
   "/api/customer-portal/revoke": "pre_live_allowed",
+  "/api/customer-portal/extra-approvals": "watchdog_live_only",
   "/api/customer-portal/signin": "pre_live_allowed",
   "/api/customer-portal/signout": "pre_live_allowed",
   "/api/customer-portal/messages": "watchdog_live_only",
@@ -112,6 +115,8 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "nest:/contractor/jobs/:id/possible-extras/evaluate": "pre_live_allowed",
   "nest:/contractor/jobs/:id/possible-extras/:promptId/confirm": "pre_live_allowed",
   "nest:/contractor/jobs/:id/possible-extras/:promptId/dismiss": "pre_live_allowed",
+  "command:EndCheck": "pre_live_allowed",
+  "/api/contractor/jobs/[id]/finish": "pre_live_allowed",
   "/api/contractor/jobs/[id]/possible-extras/[promptId]/confirm": "pre_live_allowed",
   "/api/contractor/jobs/[id]/possible-extras/[promptId]/dismiss": "pre_live_allowed",
   "/api/contractor/jobs/[id]/possible-extras/observations": "pre_live_allowed",
@@ -149,6 +154,7 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "/api/jobs/[id]/parties/import-v3": "pre_live_allowed",
   "/api/jobs/[id]/parties/import-v3/preview": "pre_live_allowed",
   // M4-7-S: the synthetic practice feed is session-owned practice data that no watchdog table records, usable at any job stage.
+  "/api/jobs/[id]/direct-debit-practice": "pre_live_allowed",
   "/api/jobs/[id]/practice-feed": "pre_live_allowed",
   "/api/jobs/[id]/practice-facts": "pre_live_allowed",
   "/api/jobs/[id]/prevention-checks/[action]": "pre_live_allowed",
@@ -239,8 +245,12 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "command:WithdrawExtra": "pre_live_allowed",
   "command:RevokeClientApproval": "pre_live_allowed",
   "command:ClientDecideExtra": "pre_live_allowed",
+  "/api/contractor/jobs/[id]/duplicate-dispositions": "pre_live_allowed",
+  "command:ResolveDuplicateCandidates": "pre_live_allowed",
   "command:MarkDuplicate": "pre_live_allowed",
   "command:LogSiteExtra": "pre_live_allowed",
+  "/api/contractor/jobs/[id]/site-extras/[extraId]/proceed": "pre_live_allowed",
+  "command:RecordExtraProceed": "pre_live_allowed",
   "command:RecordSiteSupervisorQuery": "pre_live_allowed",
   "command:RecordOfficeExtra": "pre_live_allowed",
   "command:RecordClientInstruction": "pre_live_allowed",

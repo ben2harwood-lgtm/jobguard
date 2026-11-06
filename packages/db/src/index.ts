@@ -170,6 +170,8 @@ export * from "./mobile-auth-store.js";
 export { FixtureSpeechAudioReader, SpeechAudioError } from "./speech-audio.js";
 export * from "./purchase-order-action.js";
 export * from "./purchase-order-action-repository.js";
+export * from "./merchant-intake-port.js";
+export * from "./supplier-line-correction-repository.js";
 export * from "./evidence-bundle.js";
 export * from "./evidence-bundle-sources.js";
 export * from "./practice-photo-observation.js";
@@ -197,6 +199,8 @@ export * from "./money-trail-repository.js";
 
 export * from "./ais-adapter.js";
 export * from "./ais-repository.js";
+
+export * from "./merchant-reliability-repository.js";
 export { EnterpriseAccessRepository } from './enterprise-access-repository.js';
 export { CisFixtureRepository, CisFixturePersistenceError } from "./cis-fixture-repository.js";
 
@@ -210,6 +214,11 @@ export * from "./direct-debit-fixture-repository.js";
 
 export { InterimDraftRepository, InterimDraftRepositoryError } from "./interim-draft-repository.js";
 export * from "./extra-duplicate-candidates.js";
+
+export { deriveVisitApprovalTiming, type VisitTimingSource, type TimingRequest, type ApprovalTimingFact, type OperativeWorkStatus } from "./extra-approval-timing.js";
 export { PlatformInvoiceReadRepository } from "./platform-invoice-read-repository.js";
 export { WormCommandRepository, WormCommandError, type WormReceipt } from "./worm-command-repository.js";
 export * from "./connector-promotion-repository.js";
+
+export * from "./recurring-extras-repository.js";
+export * from "./extra-proceed.js";

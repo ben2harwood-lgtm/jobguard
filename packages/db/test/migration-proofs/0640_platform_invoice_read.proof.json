@@ -1,5 +1,5 @@
 {
-  "migration": "1036_platform_invoice_read.sql",
+  "migration": "0640_platform_invoice_read.sql",
   "lp0": [
     {
       "section": "groups",
@@ -14,7 +14,7 @@
           "LP-5c": "M4-10 read-only documents require a current tenant owner and persisted synthetic company session"
         },
         "sources": [
-          "packages/db/migrations/1036_platform_invoice_read.sql"
+          "packages/db/migrations/0640_platform_invoice_read.sql"
         ],
         "tests": [
           "packages/db/test/platform-invoice-read.integration.test.ts"
@@ -83,7 +83,7 @@
           "LP-5c": "M4-10 read-only documents require a current tenant owner and persisted synthetic company session"
         },
         "sources": [
-          "packages/db/migrations/1036_platform_invoice_read.sql"
+          "packages/db/migrations/0640_platform_invoice_read.sql"
         ],
         "tests": [
           "packages/db/test/platform-invoice-read.integration.test.ts"

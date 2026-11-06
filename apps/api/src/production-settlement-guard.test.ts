@@ -30,6 +30,8 @@ function outbox(actionType: string, mode?: string) {
     if (sql.startsWith("SELECT o.*,a.actor_membership_id AS authorization_actor FROM app.action_outbox")) return { rows: [row], rowCount: 1 };
     if (sql.startsWith("SELECT app.mon8_feature_decision")) return { rows: [{ decision: { version: "plan-entitlement-decision.v1", environment: "synthetic_demo", feature: "approval_chains", entitlement: "included", executable: true, reason: "available" } }], rowCount: 1 };
     if (sql.startsWith("SELECT count(*)::int n")) return { rows: [{ n: 0 }], rowCount: 1 };
+    // ENT-5 checks a client send's sender authority separately; model it as granted here.
+    if (sql.includes("app.xc_send_authority(")) return { rows: [{ allowed: true }], rowCount: 1 };
     return { rows: [], rowCount: 0 };
   });
   const pool = { connect: async () => ({ query, release: vi.fn() }) } as unknown as Pool;

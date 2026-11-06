@@ -5,12 +5,20 @@ import { lp4WriterSources } from "./lp4-writer-catchup-fixture.js";
 const directory = new URL("../migrations/", import.meta.url);
 const functions = (sql: string) => [...sql.matchAll(/CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+([\w.]+)\s*\(.*?\bAS\s+(\$\w*\$).*?\2\s*;/gis)]
   .map(m => ({ name: m[1]!, sql: m[0] }));
+const sealingMigration = "0520_lp4_database_audit.sql";
+const replacements = new Map(functions(readFileSync(new URL(sealingMigration, directory), "utf8")).map(fn => [fn.name, fn.sql]));
 const main = new Map<string, { file: string; sql: string }>();
-for (const file of readdirSync(directory).filter(f => /^\d{4}.*\.sql$/.test(f) && f !== "0520_lp4_database_audit.sql").sort()) {
-  for (const fn of functions(readFileSync(new URL(file, directory), "utf8"))) main.set(fn.name, { file, sql: fn.sql });
+const final = new Map<string, string>();
+const recreatedWriters: { name: string; file: string; sql: string }[] = [];
+for (const file of readdirSync(directory).filter(f => /^\d{4}.*\.sql$/.test(f)).sort()) {
+  for (const fn of functions(readFileSync(new URL(file, directory), "utf8"))) {
+    final.set(fn.name, fn.sql);
+    if (file !== sealingMigration) main.set(fn.name, { file, sql: fn.sql });
+    if (file > sealingMigration && replacements.has(fn.name)) recreatedWriters.push({ ...fn, file });
+  }
 }
-const replacements = new Map(functions(readFileSync(new URL("0520_lp4_database_audit.sql", directory), "utf8")).map(fn => [fn.name, fn.sql]));
 const directWrite = /INSERT\s+INTO\s+app\.audit_event/i;
+const sealedCall = /\b(?:PERFORM|SELECT)\s+app\.lp4_seal_audit\s*\(/i;
 const normalize = (sql: string) => sql.replace(/--[^\n]*/g, "").replace(/\s+/g, " ").trim();
 
 // Deliberately compare the WHOLE latest routine, including every guard, branch,
@@ -57,12 +65,22 @@ describe("LP-4 catch-up preserves latest main routine behaviour", () => {
       expect(rows[0].staticWrites, name).not.toContain("app.audit_event");
     }
   });
+  it("every re-created LP-4 audit writer keeps its sealer call", () => {
+    expect(recreatedWriters.length).toBeGreaterThan(0);
+    for (const { name, file, sql } of recreatedWriters) {
+      const body = sql.slice(sql.search(/\bAS\s+\$\w*\$/i)).replace(/--[^\n]*/g, "");
+      expect(body, `${file}: ${name}`).toMatch(sealedCall);
+      expect(body, `${file}: ${name}`).not.toMatch(directWrite);
+      expect(body, `${file}: ${name}`).not.toContain("app.lock_audit_head()");
+    }
+  });
   it("every audit-writing routine on main is replaced; only the private sealer writes directly", () => {
-    const writers = [...main].filter(([, fn]) => directWrite.test(fn.sql)).map(([name]) => name);
+    // Later migrations may re-create an already sealed LP-4 writer. Count it
+    // by its sealer call, without treating unrelated newer callers as originals.
+    const writers = [...main].filter(([name, fn]) => directWrite.test(fn.sql) ||
+      (replacements.has(name) && sealedCall.test(fn.sql))).map(([name]) => name);
     expect(writers).toHaveLength(21);
     for (const name of writers) expect(replacements.has(name), name).toBe(true);
-    const final = new Map([...main].map(([name, fn]) => [name, fn.sql]));
-    for (const [name, sql] of replacements) final.set(name, sql);
     expect([...final].filter(([, sql]) => directWrite.test(sql)).map(([name]) => name)).toEqual(["app.lp4_seal_audit"]);
   });
 });
