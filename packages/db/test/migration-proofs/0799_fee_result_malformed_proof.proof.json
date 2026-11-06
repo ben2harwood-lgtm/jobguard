@@ -1,6 +1,0 @@
-{
-  "migration": "0799_fee_result_malformed_proof.sql",
-  "lp0": [],
-  "upgrade": [],
-  "tenancy": []
-}

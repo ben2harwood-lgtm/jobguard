@@ -1,4 +1,4 @@
--- LATER-SAFETY-28 RED. Preserve latest 0790 body and all existing checks/ACLs.
+-- LATER-SAFETY-28 RED. Preserve latest 0651 body and all existing checks/ACLs.
 BEGIN;
 CREATE OR REPLACE FUNCTION app.replace_fee_reservation_book(p_tenant uuid, p_book jsonb, p_result jsonb) RETURNS void
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, app AS $$

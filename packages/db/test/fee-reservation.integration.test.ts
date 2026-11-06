@@ -359,7 +359,7 @@ describe("M4-12 PostgreSQL shared reservation store", () => {
     const values = [f.tenantId, JSON.stringify({ version: "fee-reservation-book.v1", ...next }), JSON.stringify(proof)];
     // Reproduce the predecessor defect in a rolled-back DDL transaction. The
     // installed forward migration remains authoritative for the runtime check below.
-    const predecessor = readFileSync(new URL("../migrations/0790_fee_result_forward_only.sql", import.meta.url), "utf8")
+    const predecessor = readFileSync(new URL("../migrations/0651_fee_result_forward_only.sql", import.meta.url), "utf8")
       .replace(/^BEGIN;$/m, "").replace(/^COMMIT;$/m, "");
     const client = await db.admin.connect();
     try {
