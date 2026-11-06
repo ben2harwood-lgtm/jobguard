@@ -60,6 +60,7 @@
         "packages/db/test/dunning-repository.test.ts",
         "packages/db/test/dunning-workbench-upgrade.integration.test.ts",
         "packages/db/test/dunning.integration.test.ts",
+        "packages/db/test/enterprise-access-upgrade.integration.test.ts",
         "packages/db/test/inbox-metrics.integration.test.ts",
         "packages/db/test/inbox-metrics.test.ts",
         "packages/db/test/job-import-v3-admission.integration.test.ts",

@@ -181,3 +181,40 @@ tree path comparison confirms exact coverage; the router must rerun full lane
 lint after staging and committing the merge. PostgreSQL, browser suites, committed-
 head CI and independent RED review remain required. No further simplification
 was added on this follow-up; the initial LATER suggestion above remains advisory.
+
+
+## Final catch-up repair (6 November 2026)
+
+READY for router commit/push, CI and independent RED recheck; batch-40 remains NOPR.
+The enterprise-access upgrade comparator now permits only the exact 1034 qual and
+with_check for app.scheduled_readiness_plan.tenant_isolation and
+app.scheduled_readiness_proposal.tenant_isolation. Both full policy rows still
+compare exactly, preserving roles, command, schema, name and permissiveness.
+All other policies retain the predecessor byte comparison. No generic
+CREATE POLICY discovery or predicate omission was introduced. Product code,
+migration SQL, proofs and the main catch-up remain unchanged.
+
+Local checks used the installed package Vitest binary with --maxWorkers=2:
+- enterprise-access-upgrade.integration.test.ts, filtered to 'ACL comparison|policy comparison':
+  2 passed; 1 PostgreSQL test excluded. Regression checks bind both replacements
+  to 1034's proof and reject the old predicates, changes to either predicate or
+  metadata, and changes on other tables, schemas or policies.
+- later-safety-3.test.ts, migration-proof-loader.test.ts, inbox-metrics.test.ts:
+  97 passed.
+- scheduled-readiness-hardening.integration.test.ts, filtered to
+  'declares missing-context-safe': 1 passed; 3 PostgreSQL tests excluded.
+- packages/db ./node_modules/.bin/tsc -p tsconfig.json --noEmit: passed.
+
+PostgreSQL and browser execution are reserved for GitHub CI by this sandbox's
+instructions; these local results are deterministic checks, not live database
+proof or independent review. The pnpm version probe stalled and was stopped;
+no packages were downloaded. No Git-writing commands were run. Lane validation
+uses origin/main's merge base, as the repository lane checker requires; local
+main is stale. The fetched origin/main has advanced to 1c2d1f2f7 since this
+branch's existing catch-up at 68b104767; this repair does not merge that new work.
+The lane allow-list includes every changed path outside config/lanes, excludes
+itself, and preserves the rest of the catch-up. Earlier LATER notes stand.
+
+LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs --lane=batch-40
+passed; the allow-list matches all 69 branch paths outside config/lanes.
+git diff --check passed.
