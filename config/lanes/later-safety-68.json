@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-68": {
+      "branches": [
+        "codex/sandbox/later-safety-68"
+      ],
+      "note": "LATER-SAFETY-68: RED preview object-key isolation; no migration.",
+      "allow": [
+        "packages/db/src/evidence.ts",
+        "packages/db/test/evidence.integration.test.ts"
+      ]
+    }
+  }
+}
