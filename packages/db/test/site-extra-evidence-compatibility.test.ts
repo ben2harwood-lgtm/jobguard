@@ -45,6 +45,7 @@ describe("ENT-3d schema compatibility routing", () => {
   await expect(f.repo.logSiteExtra(f.context, f.actor, f.input)).resolves.toEqual({ variationId: f.variationId });
   expect(f.query.mock.calls.map(([sql]) => sql)).toEqual([
    "SELECT decision,reason_code,raising_grant FROM app.ent3a_extra_authority($1,$2,$3)",
+   "SELECT 1 FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2 AND command_type=$3 AND actor_membership_id=$4 AND status='succeeded'",
    "SELECT app.require_watchdog_live($1::uuid)",
    "SELECT app.require_watchdog_live($1::uuid)",
    "SELECT app.ent3a_require_extra_authority($1,$2)",
