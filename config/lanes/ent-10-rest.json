@@ -5,40 +5,24 @@
       "branches": [
         "codex/sandbox/ent-10-rest"
       ],
+      "note": "RED ENT-10-rest emergency HTTP cutover and prescribed retired-handler regression repair. Synthetic only; no new migration.",
       "allow": [
         "apps/api/openapi.json",
-        "apps/api/src/auth/sso/enterprise-access.application.ts",
-        "apps/api/src/auth/sso/enterprise-access.contracts.ts",
         "apps/api/src/auth/sso/enterprise-access.http.test.ts",
         "apps/api/src/auth/sso/enterprise-access.http.ts",
-        "apps/api/src/auth/sso/enterprise-access.test.ts",
-        "apps/api/src/auth/sso/scim2.controller.ts",
+        "apps/api/src/auth/sso/sso-emergency-owner.test.ts",
         "apps/api/src/auth/sso/sso-emergency.test.ts",
-        "apps/api/src/auth/sso/sso-required.application.ts",
         "apps/api/src/auth/sso/sso-required.controller.ts",
         "apps/api/src/workspace/index.ts",
         "apps/web/app/admin/contractor/identity/emergency-actions.tsx",
-        "apps/web/app/admin/contractor/identity/emergency-notice.tsx",
         "apps/web/app/admin/contractor/identity/page.tsx",
         "apps/web/app/api/auth/sso-required/emergency-actions/[operation]/route.ts",
-        "apps/web/app/api/auth/sso-required/emergency-notices/route.ts",
         "apps/web/app/api/auth/sso-required/emergency/route.ts",
         "apps/web/e2e/ENT-10-emergency-cutover.spec.ts",
-        "apps/web/e2e/ENT-10-rest-notices.spec.ts",
         "docs/security/not-claimed-register.md",
         "docs/verdicts/ENT-10-rest/BUILDER_RECEIPT.md",
-        "packages/db/migrations/0950_emergency_dual_owner.sql",
-        "packages/db/migrations/0951_scim2_machine.sql",
-        "packages/db/src/enterprise-access-repository.ts",
-        "packages/db/src/index.ts",
-        "packages/db/test/enterprise-access-upgrade.integration.test.ts",
-        "packages/db/test/enterprise-access.integration.test.ts",
-        "packages/db/test/later-empty-tables.ts",
-        "packages/db/test/migration-proofs/0950_emergency_dual_owner.proof.json",
-        "packages/db/test/migration-proofs/0951_scim2_machine.proof.json"
-      ],
-      "receipt": "docs/verdicts/ENT-10-rest/BUILDER_RECEIPT.md",
-      "note": "ENT-10-rest dark RED build; CI, independent review and named landing holds remain."
+        "packages/db/test/enterprise-access.integration.test.ts"
+      ]
     }
   }
 }

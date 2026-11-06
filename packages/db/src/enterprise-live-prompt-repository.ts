@@ -1,11 +1,10 @@
 import type { Pool } from "pg";
 import { z } from "zod";
-import { EnterpriseLivePromptPersistenceError, materialsIssueV1, completionObservationV1, evaluateLivePromptsV1, confirmPromptV1, dismissPromptV1, promptListV1, promptDetailV1 } from "@jobguard/core";
+import { EnterpriseLivePromptPersistenceError, contractorJobFinishV1, materialsIssueV1, completionObservationV1, evaluateLivePromptsV1, confirmPromptV1, dismissPromptV1, promptListV1, promptDetailV1 } from "@jobguard/core";
 import { contractorSessionContext } from "./contractor-session-context.js";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 import { appendAuditBatch, type AuditEventInput } from "./audit.js";
 import { readEnterpriseCompletionFindings, readStoredCompletionPhoto } from "./enterprise-live-prompt-source-reader.js";
-const endInput = z.object({version:z.literal("end-check.v1"),commandId:z.guid({ error: "Invalid uuid" }),jobId:z.guid({ error: "Invalid uuid" }),agreementVersionId:z.guid({ error: "Invalid uuid" }).optional(),completionEventId:z.guid({ error: "Invalid uuid" }).optional(),visitId:z.guid({ error: "Invalid uuid" }).optional()}).strict();
 type Result = Record<string,unknown>;
 export type EnterprisePromptItem = {id:string;jobId:string;promptHash:string;rule:"a"|"b"|"c"|"d";ruleVersion:string;surfacedAt:string;resolution:string|null};
 export type EnterprisePromptPage = {items:EnterprisePromptItem[];nextCursor:string|null};
@@ -58,12 +57,46 @@ export class EnterpriseLivePromptRepository {
  private async promptId(db:import("./tenant-context.js").TenantTransaction,session:string,job:string,observation:string):Promise<string>{
   return (await db.$client.query<{id:string}>("SELECT app.lp_observation_prompt($1,$2,$3) id",[session,job,observation])).rows[0]!.id;
  }
+ async finishStatus(sessionId:string,jobId:string){return this.read(sessionId,{version:"contractor-job-finish-status.v1",jobId:z.guid().parse(jobId)});}
+ /** Narrow, session-authorised completion-source projection; never returns stored bytes. */
+ async observationEvidence(sessionId:string,jobId:string) {
+  if(!z.guid().safeParse(jobId).success)throw new EnterpriseLivePromptPersistenceError("INVALID_PROMPT_COMMAND");
+  try {
+   const context:VerifiedTenantContext=await contractorSessionContext(this.pool,sessionId);
+   return await withTenant(this.pool,context,async db=>{
+    const snapshot=z.object({version:z.literal("observation-evidence.v1"),items:z.array(z.object({
+     evidenceId:z.guid(),sha256:z.string(),objectVersion:z.string(),mediaKind:z.enum(["completion_photo","completion_note"]),contentType:z.string(),capturedAt:z.string().nullable(),
+    }).strict())}).strict().parse((await db.$client.query<{result:unknown}>("SELECT app.contractor_job_evidence_read($1,$2) result",[sessionId,jobId])).rows[0]!.result);
+    const items=[];
+    for(const {contentType,...item} of snapshot.items){
+     let photoTags:string[]=[];
+     if(item.mediaKind==="completion_photo" && contentType==="image/png"){
+      const bytes=await readStoredCompletionPhoto(db,sessionId,{jobId,...item});
+      photoTags=z.array(z.string()).parse((await db.$client.query<{tags:unknown}>("SELECT app.contractor_completion_photo_tags($1,$2,$3,$4,$5,$6::bytea) tags",[sessionId,jobId,item.evidenceId,item.sha256,item.objectVersion,bytes])).rows[0]!.tags);
+     }
+     items.push({...item,photoTags});
+    }
+    return {version:snapshot.version,items};
+   });
+  }catch(error){failure(error);}
+ }
  async list(sessionId:string,raw:unknown):Promise<EnterprisePromptPage>{return pageSchema.parse(await this.read(sessionId,this.parse(promptListV1,raw)));}
+ /** Office signals are read-only; strict projections prevent accidental commercial-field disclosure. */
+ async officeSignals(sessionId:string,raw:unknown) {
+  const input=this.parse(z.object({version:z.literal("office-signals.v1"),jobId:z.guid(),limit:z.number().int().min(1).max(100).default(50),after:z.guid().optional()}).strict(),raw) as {jobId:string;limit:number;after?:string};
+  try {
+   const context:VerifiedTenantContext=await contractorSessionContext(this.pool,sessionId);
+   return await withTenant(this.pool,context,async db=>{
+    const result=(await db.$client.query<{result:unknown}>("SELECT app.lp_office_signals($1,$2,$3,$4) result",[sessionId,input.jobId,input.limit,input.after??null])).rows[0]!.result;
+    return z.object({items:z.array(z.object({promptId:z.guid(),variationId:z.guid(),recordedAt:z.iso.datetime({offset:true})}).strict()),nextCursor:z.guid().nullable()}).strict().parse(result);
+   });
+  }catch(error){failure(error);}
+ }
  detail(sessionId:string,raw:unknown){return this.read(sessionId,this.parse(promptDetailV1,raw));}
  importMaterials(sessionId:string,raw:unknown){return this.write(sessionId,this.parse(materialsIssueV1,raw));}
  registerObservation(sessionId:string,raw:unknown){return this.write(sessionId,this.parse(completionObservationV1,raw));}
  evaluate(sessionId:string,raw:unknown){return this.write(sessionId,this.parse(evaluateLivePromptsV1,raw));}
  confirm(sessionId:string,raw:unknown){return this.write(sessionId,this.parse(confirmPromptV1,raw));}
  dismiss(sessionId:string,raw:unknown){return this.write(sessionId,this.parse(dismissPromptV1,raw));}
- endCheck(sessionId:string,raw:unknown){return this.write(sessionId,this.parse(endInput,raw));}
+ async endCheck(sessionId:string,raw:unknown){return this.write(sessionId,this.parse(contractorJobFinishV1,raw));}
 }

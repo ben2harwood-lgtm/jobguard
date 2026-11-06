@@ -2,6 +2,7 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { EnterpriseIdentityRepository } from '../src/enterprise-identity-repository.js';
 import { EnterpriseAccessRepository } from '../src/enterprise-access-repository.js';
 import { EnterpriseAccessApplication } from '../../../apps/api/src/auth/sso/enterprise-access.application.js';
 import { createScimHarness, fixture, person, auditRows, type ScimHarness, type ScimFixture } from './scim-fixtures.js';
@@ -53,11 +54,18 @@ describe('ENT-10-rest dual-owner emergency capability',()=>{
   await expect(emergency(f,requester,request(id,'inspect',{tokenHash:hash('forged')}))).rejects.toHaveProperty('code','ACCESS_REFUSED');
   await emergency(f,requester,request(id,'inspect',{tokenHash:hash(token)}));
   await expect(emergency(f,requester,request(id,'revoke_member',{tokenHash:hash(token),targetMembershipId:f.principal.membershipId}))).rejects.toHaveProperty('code','ACCESS_REFUSED');
+  const identity=new EnterpriseIdentityRepository(h.identity);
+  const before=await identity.view(testTenantContext(f.principal.tenantId),requester.sessionDigest);
+  expect(before.events.map(e=>e.event_type)).toContain('sso.emergency.request');
   for(const proof of [requester,a.proof,b.proof]) {
    const notices=await emergency(f,proof,{version:'emergency.v1',operation:'notices'}) as {notices:unknown[]};
    expect(notices.notices).toHaveLength(5);
+   const after=await identity.view(testTenantContext(f.principal.tenantId),requester.sessionDigest);
+   expect(after.events).toEqual(before.events);
+   expect(after.events.some(e=>e.event_type==='sso.emergency.notices')).toBe(false);
   }
   const audit=await auditRows(h,f.principal.tenantId);
+  expect(audit.filter(r=>r.event_type==='sso.emergency.notices').map(r=>r.payload.references.membershipId).sort()).toEqual([f.principal.membershipId,a.membershipId,b.membershipId].sort());
   for(const operation of ['request','approve','open','inspect'])expect(audit.some(r=>r.event_type===`sso.emergency.${operation}`)).toBe(true);
   expect((await h.admin.query('SELECT count(*)::int n FROM identity.sso_emergency_window WHERE tenant_id=$1',[f.principal.tenantId])).rows[0].n).toBe(0);
  });
@@ -87,6 +95,22 @@ describe('ENT-10-rest SCIM machine provisioning',()=>{
   await expect(machine.query('SELECT * FROM identity.scim2_binding')).rejects.toHaveProperty('code','42501');
   await expect(machine.query('SELECT identity.dark_emergency(NULL,NULL,NULL,NULL)')).rejects.toHaveProperty('code','42501');
  });
+ it('restores caller tenant and binding settings on reads, writes, replay and refusal',async()=>{
+  const m=await machineFixture(),client=await machine.connect();
+  const tenant=randomUUID(),binding=randomUUID(),event=randomUUID();
+  const read={version:'scim2-machine.v1',method:'GET',kind:'Groups'};
+  const write={...read,method:'POST',id:event,eventId:event,document:{schemas:['urn:ietf:params:scim:schemas:core:2.0:Group'],displayName:'Fictional crew',members:[]}};
+  const settings=async()=>expect((await client.query("SELECT current_setting('app.tenant_id',true) tenant, current_setting('app.scim2_binding',true) binding")).rows[0]).toEqual({tenant,binding});
+  const call=(input:unknown,token=m.token)=>client.query('SELECT identity.scim2_machine($1,$2,$3::jsonb)',[m.bindingId,token,JSON.stringify(input)]);
+  try {
+   await client.query('BEGIN');
+   await client.query("SELECT set_config('app.tenant_id',$1,true),set_config('app.scim2_binding',$2,true)",[tenant,binding]);
+   for(const input of [read,write,write]) {await call(input);await settings();}
+   await client.query('SAVEPOINT refusal');
+   await expect(call(read,'invalid-token')).rejects.toHaveProperty('code','42501');
+   await client.query('ROLLBACK TO SAVEPOINT refusal');await settings();
+  } finally {await client.query('ROLLBACK');client.release();}
+ },120000);
  it('creates a user, replays idempotently, rejects changed replay, manages a group, revokes next request immediately',async()=>{
   const m=await machineFixture(),event=randomUUID();
   const created=await m.create(event) as {id:string};expect(created.id).toBe(event);expect(await m.create(event)).toEqual(created);
@@ -97,7 +121,12 @@ describe('ENT-10-rest SCIM machine provisioning',()=>{
   const list=await m.call({method:'GET',kind:'Groups'}) as {totalResults:number};expect(list.totalResults).toBe(1);
   await m.call({method:'PATCH',kind:'Users',id:event,eventId:randomUUID(),expectedRevision:1,body:{schemas:['urn:ietf:params:scim:api:messages:2.0:PatchOp'],Operations:[{op:'replace',path:'active',value:false}]}});
   expect(await h.provider.authenticate(linked.sessionToken)).toBeUndefined();
-  const rows=await auditRows(h,m.f.principal.tenantId);expect(rows.some(r=>r.actor_ref===`machine:scim:${m.bindingId}`)).toBe(true);
+  const rows=await auditRows(h,m.f.principal.tenantId);const machineEvents=rows.filter(r=>r.actor_ref===`machine:scim:${m.bindingId}`);
+  expect(machineEvents.length).toBeGreaterThan(0);
+  for(const event of machineEvents) {
+   expect(event.version).toBe('audit.v2');
+   expect(event.payload.references.auditTrust).toBe('checked_operation');
+  }
  });
  it('refuses cross-tenant members, forged owners, existing account linking, wrong bearer and last-owner mutation',async()=>{
   const m=await machineFixture(),n=await machineFixture(),event=randomUUID();await m.create(event);

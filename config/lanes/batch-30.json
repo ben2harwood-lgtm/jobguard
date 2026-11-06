@@ -1,0 +1,52 @@
+{
+  "version": 2,
+  "lanes": {
+    "batch-30": {
+      "branches": [
+        "codex/sandbox/batch-30"
+      ],
+      "note": "ENT-10 pack refresh and dark enterprise access; RED landing batch.",
+      "allow": [
+        "apps/api/openapi.json",
+        "apps/api/src/auth/sso/enterprise-access.application.ts",
+        "apps/api/src/auth/sso/enterprise-access.contracts.ts",
+        "apps/api/src/auth/sso/enterprise-access.http.test.ts",
+        "apps/api/src/auth/sso/enterprise-access.http.ts",
+        "apps/api/src/auth/sso/enterprise-access.test.ts",
+        "apps/api/src/auth/sso/scim2.controller.ts",
+        "apps/api/src/auth/sso/sso-emergency.test.ts",
+        "apps/api/src/auth/sso/sso-required.application.ts",
+        "apps/api/src/auth/sso/sso-required.controller.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/web/app/admin/contractor/identity/emergency-actions.tsx",
+        "apps/web/app/admin/contractor/identity/emergency-notice.tsx",
+        "apps/web/app/admin/contractor/identity/page.tsx",
+        "apps/web/app/api/auth/sso-required/emergency-actions/[operation]/route.ts",
+        "apps/web/app/api/auth/sso-required/emergency-notices/route.ts",
+        "apps/web/app/api/auth/sso-required/emergency/route.ts",
+        "apps/web/e2e/ENT-10-emergency-cutover.spec.ts",
+        "apps/web/e2e/ENT-10-rest-notices.spec.ts",
+        "docs/contracts/scim-deactivation-v1.md",
+        "docs/contracts/sso-required-v1.md",
+        "docs/security/README.md",
+        "docs/security/buyer-questionnaire.md",
+        "docs/security/evidence-map.md",
+        "docs/security/not-claimed-register.md",
+        "docs/verdicts/ENT-10-rest/BUILDER_RECEIPT.md",
+        "packages/db/migrations/0612_emergency_dual_owner.sql",
+        "packages/db/migrations/0613_scim2_machine.sql",
+        "packages/db/src/demo-bootstrap.ts",
+        "packages/db/src/enterprise-access-repository.ts",
+        "packages/db/src/enterprise-identity-repository.ts",
+        "packages/db/src/index.ts",
+        "packages/db/test/demo-bootstrap.integration.test.ts",
+        "packages/db/test/enterprise-access-upgrade.integration.test.ts",
+        "packages/db/test/enterprise-access.integration.test.ts",
+        "packages/db/test/later-empty-tables.ts",
+        "packages/db/test/migration-proof-loader.test.ts",
+        "packages/db/test/migration-proofs/0612_emergency_dual_owner.proof.json",
+        "packages/db/test/migration-proofs/0613_scim2_machine.proof.json"
+      ]
+    }
+  }
+}
