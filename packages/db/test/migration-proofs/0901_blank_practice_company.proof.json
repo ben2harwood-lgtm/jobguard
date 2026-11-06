@@ -133,6 +133,7 @@
         "otherExecute": [],
         "definitionSha256": null,
         "staticWrites": [
+          "control_plane.blank_practice_session",
           "control_plane.practice_session"
         ],
         "staticCalls": [
@@ -170,6 +171,38 @@
         "proconfig": [
           "search_path=pg_catalog"
         ]
+      }
+    },
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "control_plane.blank_practice_session",
+        "data": []
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "control_plane",
+        "relname": "blank_practice_session",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "control_plane",
+        "relname": "blank_practice_session_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
       }
     }
   ],

@@ -2,11 +2,14 @@ import { expect, test } from "@playwright/test";
 test.setTimeout(120_000);
 
 test("blank practice is private, survives reload and resets to empty", async ({ page, browser }) => {
-  await page.goto("/practice-company");
+  await page.goto("/practice-company?name=Tommy");
+  await expect(page.getByRole("heading", { name: "Tommy's practice firm", exact: true })).toBeVisible();
+  await expect(page.getByLabel("Select workspace").locator("option")).toHaveText("Tommy's practice firm");
   await expect(page.getByRole("heading", { name: "Ready for your first job" })).toBeVisible();
   await expect(page.getByLabel("Select workspace")).toHaveValue("11111111-1111-4111-8111-111111111111");
   await expect(page.getByLabel("Select workspace").locator("option")).toHaveCount(1);
   await expect(page.getByText("Kitchen extension", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Earlier proposed pricing (v1)", { exact: true })).toHaveCount(0);
   await expect(page.getByText(/Do not enter real customer names/u)).toBeVisible();
   const firstToken = (await page.context().cookies()).find(cookie => cookie.name === "jg_session")!.value;
   const session = await (await page.request.get("/api/session")).json();
@@ -34,6 +37,7 @@ test("blank practice is private, survives reload and resets to empty", async ({ 
     await expect(page.getByRole("heading", { name: "Ready for your first job" })).toBeVisible();
     expect((await page.request.get(`/api/jobs/${jobId}`)).status()).toBe(404);
     await page.reload();
+    await expect(page.getByRole("heading", { name: "Tommy's practice firm", exact: true })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Ready for your first job" })).toBeVisible();
     expect((await other.cookies()).find(cookie => cookie.name === "jg_session")!.value).toBe(otherToken);
     await page.getByRole("button", { name: "＋ Start a new job" }).click();
