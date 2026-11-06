@@ -55,6 +55,8 @@
         "packages/db/src/managed-recovery-repository.ts",
         "packages/db/src/payment-fee-collection-repository.test.ts",
         "packages/db/src/payment-fee-collection-repository.ts",
+        "packages/db/src/shadow-pilot-financial-reader.test.ts",
+        "packages/db/src/shadow-pilot-financial-reader.ts",
         "packages/db/test/ais.integration.test.ts",
         "packages/db/test/deepgram.integration.test.ts",
         "packages/db/test/dunning-repository.test.ts",

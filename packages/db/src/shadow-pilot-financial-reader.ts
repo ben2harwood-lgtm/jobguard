@@ -60,6 +60,14 @@ export class ShadowPilotFinancialReader {
     if (typeof raw !== "object" || raw === null || "financialEffects" in raw || "financialRecord" in raw)
       throw new ShadowPilotReportError();
     const financialRecord = await this.read(context, jobIds);
-    return generateShadowPilotReport({ ...raw, financialRecord }, access);
+    try {
+      return generateShadowPilotReport({ ...raw, financialRecord }, access);
+    } catch (error) {
+      // Only this offline research boundary names validated stored rows. Shared
+      // domain errors keep generic messages so ordinary logs cannot expose them.
+      if (error instanceof ShadowPilotReportError && error.financialSources.length)
+        error.message = `INVALID_PILOT_REPORT: fee rows ${JSON.stringify(error.financialSources)}`;
+      throw error;
+    }
   }
 }
