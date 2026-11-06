@@ -46,6 +46,7 @@ An absence is labelled `none_recorded` (none recorded), never paid. The statemen
 details are included. This trace is frozen at issuance; replay and credits retain
 that original trace while revalidating the statement and approval. It is historical
 provenance, not a current balance or authority to collect.
+Only new invoice issuance requires the latest statement; exact stored-document replays and credits against a stored invoice revalidate its original statement and approval even after a newer statement exists.
 
 This remains an administrative synthetic adapter under existing privileges and
 RLS, requiring the existing persisted owner identity session. The separate practice
