@@ -1149,3 +1149,52 @@ downloads, PostgreSQL startup, localhost bind, provider, real data or deployment
 CI must rerun all database and browser shards after the router pushes. Required
 independent RED review must bind the resulting exact head before merge. Existing
 commercial/release holds remain unchanged.
+
+### 6 November 2026: PR #594 catch-up after #591/#593
+
+Resolved working-tree conflicts against main 41938db76, retaining both sets of
+ENT-5 rulings, exports, timing/proceed behavior, registry entries, empty-table
+allowances and watchdog mutation checks. MIGFIX-7 keeps #591's exact full-body
+replacements, followed by this group's exact 0642/0644 text patches; metadata,
+ACLs, policies and unrelated definitions remain pinned. MIGFIX-6/7's shared
+laterEmptyTables includes both connector_promotion and extra_proceed_statement.
+Plan-entitlement likewise checks the 0636 permission body before the 0642 patch.
+
+Applied pr594-5f10df49-fix.diff exactly: the SV-8 stand-in grants the separate
+sender query, and payment-fee-standing-authority retains the narrow cloned
+successor proof. No assertions changed in SV-8. Refreshed only the merged source's
+line-94 fingerprint in both integrity baselines; reasons remain unchanged.
+
+The proof-loader run exposed 0642's stale pre-0634 registry snapshot. Its before
+and after now both retain the exact RecordExtraProceed row; the sole transition
+remains IssueClientApproval owner to contractor. The new proceed migration test
+also needed its current-registry comparison bound to its historical 0634 owner
+permission. Its existing exact insertion and predecessor assertions remain.
+No migration SQL was changed or renumbered: all main migration bytes and this
+branch's 0641-0645 bytes were compared and are unchanged. No new product behavior.
+
+Local verification (installed Node 24.17.0 and repository Vitest 4.1.12):
+- Outbox and later-outbox: 27/27 passed; production-settlement-guard: 60/60.
+- Migration-proof-loader, m2-1-migration-proof and extra-approval-timing:
+  98/98 passed after correcting the successor proof chain.
+- Late-source-import and supplier-line migration proofs: 5/5 passed.
+- Extra-proceed migration tests: 2/2 passed after the historical binding fix.
+- Total: 192 focused tests passed, at most two workers and three files per run.
+- The 22 targeted upgrade/predecessor files and all nine changed upgrade files
+  collected successfully in batches of at most three; no database hooks ran.
+  Collection logs: /tmp/batch42-upgrade-collection.log and
+  /tmp/batch42-changed-upgrade-collection.log. Collection is not execution.
+- DB, API and web TypeScript --noEmit passed. Both commercial-integrity guards
+  passed: 94 protected roots, zero diagnostics, nine existing baselines each.
+- Working-tree delta lane coverage and migration order passed using the existing
+  lane checker functions. The lane contains every non-lane delta against main,
+  and no config/lanes path. Official lane CLI must rerun after the router stages
+  the completed merge: its local mode still counts incoming main changes in the
+  read-only, unmerged index as this branch's edits. It was not reported as PASS.
+- git diff --check passed; no conflict markers remain in working-tree files.
+
+READY for router staging, merge completion, commit and push to the same branch.
+No Git-writing commands, package downloads, PostgreSQL startup or localhost binds
+were used. Real PostgreSQL upgrade/outbox suites and browser journeys require CI
+after push; independent RED review must bind the resulting exact head. Existing
+commercial, real-data and release holds remain unchanged.

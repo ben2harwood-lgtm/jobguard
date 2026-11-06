@@ -19,7 +19,7 @@ async function act(extra: Extra, action: string, body: Record<string, unknown>) 
 /** One list for the people who move an extra along: the surveyor prices it, the supervisor submits and approves, the granted surveyor or commercial manager sends it to the client. Each sees only the button for their step. */
 export function ExtraApprovals() {
   const [role, setRole] = useState(""), [extras, setExtras] = useState<Extra[] | null>(null), [rates, setRates] = useState<Record<string, Rate[]>>({}), [error, setError] = useState(""), [busy, setBusy] = useState(false);
-  const [queue, setQueue] = useState<Array<{ job_id: string; variation_id: string; request_id: string; step_index: number }>>([]);
+  const [queue, setQueue] = useState<Array<{ job_id: string; variation_id: string; request_id: string; step_index: number; overdue: boolean; escalated: boolean }>>([]);
   const [links, setLinks] = useState<Record<string, { extraId: string; path: string; recipient: string }>>({});
   const [reason, setReason] = useState<Record<string, string>>({}), [outcome, setOutcome] = useState("");
   const [pick, setPick] = useState<Record<string, { code: string; quantity: string }>>({});
@@ -76,12 +76,13 @@ export function ExtraApprovals() {
           <p>Demo setting, not a real rule. Fictional rate card price: <strong data-testid="price-preview">{total === null ? "-" : pounds(total)}</strong></p>
           <div className={styles.actions}><button disabled={busy || total === null} onClick={() => void run(x, "price", { sorCode: card.code, quantity: qty })}>Price this extra</button></div></div>}
         {role === "supervisor" && x.state === "logged" && x.quotedPence !== null && x.requestId === null && <div className={styles.actions}><button disabled={busy} onClick={() => void run(x, "submit")}>Submit for approval</button></div>}
+        {queue.some(q => q.request_id === x.requestId && q.overdue) && <p role="status">Mandatory approval overdue. {queue.some(q => q.request_id === x.requestId && q.escalated) ? "The named backup is now eligible; original approvers remain eligible." : "Waiting for an eligible approver."}</p>}
         {x.state === "awaiting_approval" && queue.some(q => q.variation_id === x.extraId && q.request_id === x.requestId && q.step_index === x.nextStepIndex) && <div className={styles.actions}><button disabled={busy} onClick={() => void run(x, "approve")}>Approve as {role.replace("_", " ")}</button></div>}
         {x.state === "awaiting_approval" && queue.some(q => q.variation_id === x.extraId && q.request_id === x.requestId && q.step_index === x.nextStepIndex) && <div>
           <div className={styles.row}><label htmlFor={`reject-${x.extraId}`}>Reason for rejection</label><select id={`reject-${x.extraId}`} required value={reason[`reject-${x.extraId}`] ?? ""} onChange={e => setReason({ ...reason, [`reject-${x.extraId}`]: e.target.value })}><option value="">Choose a reason</option><option value="not_agreed">Not agreed</option></select></div>
           <button disabled={busy || !reason[`reject-${x.extraId}`]} onClick={() => void run(x, "reject", { reasonCode: reason[`reject-${x.extraId}`] })}>Reject this extra</button>
         </div>}
-        {role === "supervisor" && ["logged", "awaiting_approval"].includes(x.state) && <div>
+        {["supervisor", "surveyor", "commercial_manager"].includes(role) && ["logged", "awaiting_approval"].includes(x.state) && <div>
           <div className={styles.row}><label htmlFor={`withdraw-${x.extraId}`}>Reason for withdrawal</label><select id={`withdraw-${x.extraId}`} required value={reason[`withdraw-${x.extraId}`] ?? ""} onChange={e => setReason({ ...reason, [`withdraw-${x.extraId}`]: e.target.value })}><option value="">Choose a reason</option><option value="not_done">Not done</option><option value="raised_in_error">Raised in error</option><option value="resident_cancelled">Resident cancelled</option><option value="already_on_order">Already on order</option></select></div>
           <button disabled={busy || !reason[`withdraw-${x.extraId}`]} onClick={() => void run(x, "withdraw", { reasonCode: reason[`withdraw-${x.extraId}`] })}>Withdraw this extra</button>
         </div>}

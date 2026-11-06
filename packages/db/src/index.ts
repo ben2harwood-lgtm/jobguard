@@ -216,3 +216,8 @@ export { InterimDraftRepository, InterimDraftRepositoryError } from "./interim-d
 export * from "./extra-duplicate-candidates.js";
 
 export { deriveVisitApprovalTiming, type VisitTimingSource, type TimingRequest, type ApprovalTimingFact, type OperativeWorkStatus } from "./extra-approval-timing.js";
+export { PlatformInvoiceReadRepository } from "./platform-invoice-read-repository.js";
+export { WormCommandRepository, WormCommandError, type WormReceipt } from "./worm-command-repository.js";
+export * from "./connector-promotion-repository.js";
+
+export * from "./extra-proceed.js";

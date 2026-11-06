@@ -115,10 +115,17 @@ export class WorkOrderRepository {
    */
   async importCsv(principal: AuthenticatedMembership, input: { commandId: string; name: string; kind: "generated" | "csv"; csv: string }) {
     if (!uuidSchema.safeParse(input.commandId).success || typeof input.csv !== "string") throw new WorkOrderError("INVALID_COMMAND");
+    try {
+      return await withTenant(this.pool, verifiedTenantContextFromMembership(principal), db => this.importCsvInTransaction(db, principal, input));
+    } catch (error) { throw workOrderFailure(error); }
+  }
+
+  /** Same import and authority checks, using the caller's open tenant transaction. Never commits it. */
+  async importCsvInTransaction(db: TenantTransaction, principal: AuthenticatedMembership, input: { commandId: string; name: string; kind: "generated" | "csv"; csv: string }) {
+    if (!uuidSchema.safeParse(input.commandId).success || typeof input.csv !== "string") throw new WorkOrderError("INVALID_COMMAND");
     const records = parseWorkOrderCsv(input.csv);
     const sourceSha256 = sha256Hex(input.csv);
     try {
-      return await withTenant(this.pool, verifiedTenantContextFromMembership(principal), async db => {
         const c = db.$client;
         // Every contractor command of a tenant serialises on the ENT-1 lock; a concurrent import of the same file then sees this one's batch.
         await c.query("SELECT pg_advisory_xact_lock(hashtextextended($1,54))", [principal.tenantId]);
@@ -166,7 +173,6 @@ export class WorkOrderRepository {
         // Audit is the last business lock in the transaction.
         await appendAuditBatch(db, events);
         return workOrderImportResultV1.parse({ ...(await this.batchResult(db, principal, context.batchId)).result, replayed: false });
-      });
     } catch (error) { throw workOrderFailure(error); }
   }
 

@@ -894,6 +894,7 @@ Every card inherits §2.4 C1–C8 and AGENTS §2. Cards reuse the merged command
 ### ENT-5 Approval chain and client approval
 
 4 November synthetic client-journey rulings: Q10/Q12/Q13 are recorded in `docs/contracts/extra-client-approval-v1.md`; grant-covered surveyor/commercial-manager sends, seven-day invitations, exact decision retry, own job history and the existing customer sign-in route apply. Q14 export/refusal-audit policy and Q15 executor/scheduler activation remain held. No real delivery or scheduler is enabled.
+Proceed slice (4 Nov 2026): router ruling closes only the Q05 proceed hold. Site staff may record proceeding before approval with a reason as an immutable fact bound to the priced request. It grants no authority and changes no approval, pricing, billing or export; see the two extra-approval contracts. Other holds and ENT-5 acceptance remain open.
 **Track:** contractor
 **Depends on:** ENT-3, M4-3-S-R
 **Build:**
@@ -902,6 +903,8 @@ Every card inherits §2.4 C1–C8 and AGENTS §2. Cards reuse the merged command
 - **Queues:** grant-filtered queues in the mandatory lane of the Decisions inbox, with Graphile-scheduled time limits and escalation.
 - **Client approval:** invitation, sign-in and an approval page for client approvers; the approval request is sent through the outbox.
 - **Evidence packs:** packs whose subject is `extra`. The merged pack table is keyed to `recovery_case`; extend it expand-compatibly.
+
+**4 November remaining-rules slice:** Q04, Q06, Q08, Q11 and Q16 follow the router rulings in `docs/contracts/extra-approval-chain-v1.md` and `extra-approval-v1.md`: same-slot receipt replay and cross-revision separation; versioned independent T/Y; two London working days and named backup roles; covered supervisory withdrawal and required-approver rejection; explicit human submission. Q01, Q03, Q14 and Q15 remain held. This slice does not close ENT-5 or its wider Done-when assertions. Migration 0930–0933 proof and pin landing holds are in the existing ENT-5b builder receipt.
 
 **Done when:**
 - **Completeness:** no extra reaches `approved` without every step in its snapshot.

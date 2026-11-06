@@ -534,6 +534,15 @@
             "outbox_class": null
           },
           {
+            "command_type": "RecordExtraProceed",
+            "version": "repository-command.v1",
+            "permission_rule": "active_member",
+            "lock_adapter": "route_before_begin",
+            "completion_adapter": "extra_proceed",
+            "audit_class": "operational",
+            "outbox_class": null
+          },
+          {
             "command_type": "RecordOfficeExtra",
             "version": "repository-command.v1",
             "permission_rule": "contractor",
@@ -1120,6 +1129,15 @@
             "permission_rule": "contractor",
             "lock_adapter": "route_before_begin",
             "completion_adapter": "contractor_extra",
+            "audit_class": "operational",
+            "outbox_class": null
+          },
+          {
+            "command_type": "RecordExtraProceed",
+            "version": "repository-command.v1",
+            "permission_rule": "active_member",
+            "lock_adapter": "route_before_begin",
+            "completion_adapter": "extra_proceed",
             "audit_class": "operational",
             "outbox_class": null
           },

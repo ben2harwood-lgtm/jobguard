@@ -193,6 +193,7 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "/api/jobs/capture": "pre_live_allowed",
   // ENT-2: the work-order import creates each job, binds its parties and enters live in one transaction; tenant administration and SoR imports are outside this registry.
   "/api/contractor/work-order-imports": "pre_live_allowed",
+  "/api/contractor/work-order-imports/connector-promotions": "pre_live_allowed",
   "/api/decisions#evaluate": "pre_live_allowed",
   "/api/decisions#resolve": "pre_live_allowed",
   "/api/recovery-cases/[id]/evidence-packs": "post_live_billing",
@@ -212,6 +213,7 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
 
   // Dark evidence controls preserve integrity at any job phase; they do not add site facts.
   "method:worm-command-repository.ts#submit": "pre_live_allowed",
+  "/api/jobs/[id]/evidence-holds": "pre_live_allowed",
   "method:worm-command-repository.ts#execute": "pre_live_allowed",
   "method:worm-command-repository.ts#recover": "pre_live_allowed",
   "method:inbox-relevance-repository.ts#setBudget": "pre_live_allowed",
@@ -246,6 +248,8 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "command:ResolveDuplicateCandidates": "pre_live_allowed",
   "command:MarkDuplicate": "pre_live_allowed",
   "command:LogSiteExtra": "pre_live_allowed",
+  "/api/contractor/jobs/[id]/site-extras/[extraId]/proceed": "pre_live_allowed",
+  "command:RecordExtraProceed": "pre_live_allowed",
   "command:RecordSiteSupervisorQuery": "pre_live_allowed",
   "command:RecordOfficeExtra": "pre_live_allowed",
   "command:RecordClientInstruction": "pre_live_allowed",
