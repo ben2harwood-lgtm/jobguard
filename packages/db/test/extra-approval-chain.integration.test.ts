@@ -14,7 +14,7 @@ const outcome = async (request: string) => (await sql("SELECT kind,actor_kind,by
 const lastEvent = async (extra: string) => (await sql("SELECT kind FROM app.extra_event WHERE variation_id=$1 ORDER BY sequence DESC LIMIT 1", [extra]))[0]?.kind as string;
 const issue = (s: { jobId: string; requestId: string }, over: Record<string, unknown> = {}) => {
   const token = newToken();
-  return emailOf(c, w, client().membershipId).then(async recipient => ({ token, recipient, run: () => repo.issueClientApproval(ctx, owner(), { version: "issue-client-approval.v1", commandId: randomUUID(), jobId: s.jobId, requestId: s.requestId, approverMembershipId: client().membershipId, recipient, linkToken: token, expiresAt: new Date(Date.now() + 3600_000), ...over }) }));
+  return emailOf(c, w, client().membershipId).then(async recipient => ({ token, recipient, run: () => repo.issueClientApproval(ctx, surveyor(), { version: "issue-client-approval.v1", commandId: randomUUID(), jobId: s.jobId, requestId: s.requestId, approverMembershipId: client().membershipId, recipient, linkToken: token, expiresAt: new Date(Date.now() + 3600_000), ...over }) }));
 };
 const decide = (s: { jobId: string; requestId: string; hash: string; net: number }, token: string, email: string, over: Record<string, unknown> = {}, by = client()) =>
   repo.decideClientApproval(ctx, by, { version: "decide-client-approval.v1", commandId: randomUUID(), jobId: s.jobId, requestId: s.requestId, linkToken: token, email, revisionHash: s.hash, netPence: s.net, decision: "approve", fictionalRoleName: "Fictional Housing Approver", actualTesterReference: "tester:practice-ben", ...over });
@@ -73,8 +73,8 @@ it("E5B-02 stale revision, wrong hash/net, unpriced and replay semantics", async
   expect(await code(repo.reviseExtra(ctx, surveyor(), { ...revise, netPence: 60001 }))).toBe("COMMAND_CONFLICT"); // same command id, different content
   expect(await code(repo.approveExtraStep(ctx, sup2(), approveInput(s, 0)))).toBe("STALE_REVISION"); // revision 1 after 2 exists (even though it was decided)
   const s2 = { ...s, requestId: second.requestId as string, hash: second.revisionHash as string, net: 60000 };
-  expect(await code(repo.approveExtraStep(ctx, sup(), approveInput(s2, 0)))).toBe("REPEAT_HELD"); // same person, same slot, later version: held, refused
-  expect(await code(repo.approveExtraStep(ctx, sup2(), approveInput(s2, 0)))).toBe("ok");
+  expect(await code(repo.approveExtraStep(ctx, sup(), approveInput(s2, 0)))).toBe("ok"); // Q04: same person can occupy the same slot on a new request revision
+  expect(await code(repo.approveExtraStep(ctx, sup2(), approveInput(s2, 0)))).toBe("STEP_OUT_OF_ORDER");
   expect(await code(repo.approveExtraStep(ctx, sup(), approveInput(s2, 1)))).toBe("REUSED_APPROVER"); // approved step 0 of the first version, may not fill step 1 of the next
   const bindings = await sql("SELECT logical_revision,source_kind FROM app.extra_approval_revision_binding WHERE variation_id=$1 ORDER BY logical_revision", [s.extraId]);
   expect(bindings).toEqual([{ logical_revision: 1, source_kind: "ordinary" }, { logical_revision: 2, source_kind: "ordinary" }]);
@@ -172,10 +172,10 @@ it("E5B-07 the send is owner-only and exact", async () => {
   expect(await sql("SELECT 1 FROM app.action_outbox WHERE action_type='extra.client_approval_request.send' AND recipient LIKE 'real.person%'")).toEqual([]);
 });
 
-it("E5B-08 withdraw (supervisors only), reject, and duplicate", async () => {
+it("E5B-08 withdraw (covered supervisory roles), reject, and duplicate", async () => {
   const s = await submitted(c, w, 40000), w2 = { version: "withdraw-extra.v1", commandId: randomUUID(), jobId: s.jobId, extraId: s.extraId, reasonCode: "not_done" };
   expect(await code(repo.withdrawExtra(ctx, w.members.operative.member, w2))).toBe("PERMISSION_DENIED");
-  expect(await code(repo.withdrawExtra(ctx, surveyor(), { ...w2, commandId: randomUUID() }))).toBe("PERMISSION_DENIED"); // wider roles held
+  expect(await code(repo.withdrawExtra(ctx, w.members.owner.member, { ...w2, commandId: randomUUID() }))).toBe("PERMISSION_DENIED"); // Q11: owner is not a covered withdrawer
   expect(await code(repo.withdrawExtra(ctx, sup(), w2))).toBe("ok");
   expect(await outcome(s.requestId)).toEqual([{ kind: "withdrawn", actor_kind: "member", by_rule: false }]);
   expect(await code(repo.withdrawExtra(ctx, sup(), { ...w2, commandId: randomUUID() }))).toBe("ALREADY_DECIDED");
@@ -281,7 +281,7 @@ it("MON-8 a queued approval message is cancelled after agreement loss without an
   await repository.approveExtraStep(context,other.members.supervisor.member,approveInput(s,0));
   await repository.approveExtraStep(context,other.supervisor2.member,approveInput(s,1));
   const token=newToken(),recipient=await emailOf(c,other,other.members.client_approver.member.membershipId);
-  const sent=await repository.issueClientApproval(context,other.members.owner.member,{version:"issue-client-approval.v1",commandId:randomUUID(),jobId:s.jobId,requestId:s.requestId,
+  const sent=await repository.issueClientApproval(context,other.members.surveyor.member,{version:"issue-client-approval.v1",commandId:randomUUID(),jobId:s.jobId,requestId:s.requestId,
     approverMembershipId:other.members.client_approver.member.membershipId,recipient,linkToken:token,expiresAt:new Date(Date.now()+3600_000)});
   await c.admin.query(`INSERT INTO app.contractor_agreement_status_revision
     SELECT tenant_id,$2,assignment_id,revision+1,'suspended',schema_version,environment,clock_timestamp(),$3
