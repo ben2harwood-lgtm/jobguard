@@ -998,3 +998,46 @@ and the required browser/full checks after router push. Main has advanced beyond
 this branch; current-main catch-up and exact-head independent RED review remain
 landing gates. No migration, assertion, product change, Git write, provider call,
 deployment or release occurred. Neither full plan piece is declared finished.
+
+
+### Batch-36 current-main merge — 6 November 2026 (RED, NOPR)
+
+READY for router staging and merge commit. Incoming main is
+`daed0c282aee4337eac5630a9f26cc8901ea553b` (MERGE_HEAD / origin/main;
+local main is stale). Resolved the two export-list conflicts by retaining both
+recurring-extra exports and main's extra-proceed exports. No new behavior or
+test changes. Relative to incoming main, every changed file is additions only;
+no migration, migration note, proof or SQL routine differs. The lane covers
+exactly the 28 changed non-lane paths and excludes itself.
+
+Executed using installed package-local runners, at most two Vitest workers and
+at most three named files per invocation:
+- Core: `node node_modules/vitest/vitest.mjs run --maxWorkers=2
+  src/recurring-extras.test.ts src/extra-proceed.test.ts src/watchdog.test.ts`
+  — 14 passed.
+- API: same runner with `src/fee-collection/direct-debit-practice.application.test.ts
+  src/fee-collection/fake-gocardless.test.ts` — 42 passed.
+- Web: same runner with `app/api/jobs/[id]/direct-debit-practice/route.test.ts`,
+  `app/api/jobs/[id]/recurring-extras/route.test.ts`, and
+  `app/jobs/[id]/direct-debit-practice/screen.test.ts` — 9 passed.
+- Web: same runner with
+  `app/jobs/[id]/recurring-extras/recurring-extras-screen.test.tsx` — 2 passed.
+- DB: same runner with `test/direct-debit-fixture-repository.test.ts` — 8 passed.
+- `node node_modules/typescript/bin/tsc -p tsconfig.json --noEmit` passed
+  separately in core, DB, API and web.
+- `git diff --check MERGE_HEAD` passed. Exact lane equality and preservation
+  of all incoming main exports passed. The existing lane policy's exported
+  `loadLanePolicy`, `selectLane`, and `lanePathAllowed` accepted all 29 paths
+  from `git diff MERGE_HEAD --name-only`, including the lane file.
+
+The pnpm wrapper stalled before execution and was interrupted; installed
+runners produced the results above. The standard lane CLI currently fails
+because its uncommitted-merge comparison counts incoming main's staged files
+as this branch's changes. Do not widen the lane: rerun the standard lane CLI
+against origin/main after the router stages the resolutions and commits.
+The index still reports unmerged entries until that authorized router step;
+all working-file conflict markers are resolved. No Git write was attempted.
+
+PostgreSQL, browser and full required suites remain CI gates after router push;
+exact-head independent RED review remains required before landing. No provider,
+real data, deployment or launch. Full M4-15 and M5-6 remain open.

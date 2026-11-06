@@ -1,7 +1,7 @@
 import {readFileSync} from "node:fs";
 import {expect,it} from "vitest";
 import {applyUpgradeProofs,loadMigrationProofs} from "./migration-proof-loader.js";
-import {lateSourceRegistryRow,currentCommandRegistryRows,lp5RegistryRows,managedRecoveryRegistryRow,siteSupervisorQueryRegistryRow,darkOrderRegistryRow,rateSuggestionRegistryRow,contractorJobFinishRegistryRow,duplicateDispositionRegistryRow} from "./lp5-command-catalog.js";
+import {lateSourceRegistryRow,currentCommandRegistryRows,lp5RegistryRows,managedRecoveryRegistryRow,siteSupervisorQueryRegistryRow,darkOrderRegistryRow,rateSuggestionRegistryRow,contractorJobFinishRegistryRow,duplicateDispositionRegistryRow,extraProceedRegistryRow} from "./lp5-command-catalog.js";
 const sql=readFileSync(new URL("../migrations/0541_late_source_import.sql",import.meta.url),"utf8");
 it("0613 preserves the latest command-result body apart from its new source proof",()=>{
  const original=readFileSync(new URL("../migrations/0522_lp5b_writers.sql",import.meta.url),"utf8");
@@ -23,7 +23,7 @@ it("0613 extends the exact successor registry without changing historical LP-5 e
  const seed=sql.split("INSERT INTO app.command_type_registry VALUES")[1]!.split(";")[0]!;
  const values=seed.match(/\(([^()]+)\)/)![1]!.split(",").map(value=>value.trim()==="NULL"?null:value.trim().slice(1,-1));
  expect(Object.fromEntries(Object.keys(lateSourceRegistryRow).map((key,index)=>[key,values[index]]))).toEqual(lateSourceRegistryRow);
- expect(currentCommandRegistryRows).toEqual([...lp5RegistryRows,lateSourceRegistryRow,managedRecoveryRegistryRow,siteSupervisorQueryRegistryRow,darkOrderRegistryRow,rateSuggestionRegistryRow,contractorJobFinishRegistryRow,duplicateDispositionRegistryRow]);
+ expect(currentCommandRegistryRows).toEqual([...lp5RegistryRows,lateSourceRegistryRow,managedRecoveryRegistryRow,siteSupervisorQueryRegistryRow,darkOrderRegistryRow,rateSuggestionRegistryRow,contractorJobFinishRegistryRow,duplicateDispositionRegistryRow,extraProceedRegistryRow]);
  expect(currentCommandRegistryRows.filter(row=>row.command_type==="LateSource.import")).toHaveLength(1);
 });
 
