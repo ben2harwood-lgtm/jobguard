@@ -224,3 +224,30 @@ RED. PostgreSQL/browser suites, full CI and independent review remain required
 at the committed head. Physical-device evidence, D08 and G3 remain outstanding.
 Git metadata is read-only here: the conflict content is resolved, but the router
 must stage it and complete the merge before pushing. No commit or push was made.
+
+### Batch 47 landing verification — 6 November 2026
+
+READY for router handoff. The launcher has already committed the incoming-main
+merge as `3d9e891125c01b9b6c72d828315d11dd273e75e0`, incorporating
+`origin/main` at `f5415ddb4c3a40796dd812e8b5946ba5094daa2b`. The preceding
+receipt's instruction to complete the merge is historical. No further code
+resolution was needed. Against this main, there are no migration or routine
+changes; main's integration assertions and core exports remain present. The
+lane covers exactly all 13 non-lane changed paths and excludes itself.
+
+Current local verification, using installed package-local binaries:
+
+- `packages/core`: `./node_modules/.bin/vitest run --maxWorkers=2 src/offline-reconciliation.test.ts src/offline-reconciliation.properties.test.ts src/native-chaos.test.ts` — 14 tests passed.
+- `packages/core`: `./node_modules/.bin/vitest run --maxWorkers=2 src/core-loop-views.test.ts src/offline-client-queue.test.ts` — 76 tests passed.
+- `apps/api`: `./node_modules/.bin/vitest run --maxWorkers=2 src/core-loop-shared.contract.test.ts src/offline-client-queue.compat.test.ts` — 3 tests passed.
+- Core and API: `./node_modules/.bin/tsc -p tsconfig.json --noEmit` from each package — passed.
+- Web: `./node_modules/.bin/tsc -p tsconfig.json --noEmit --incremental false` — passed.
+- `node tools/core-purity-lint.mjs`, `node tools/agent-lane-boundary-lint.mjs`, exact lane path-set comparison against `origin/main`, and `git diff --check origin/main` — passed. Core purity reports 11 computed-import notices without failing.
+
+The initial pnpm invocation stalled before Vitest started and was interrupted;
+the successful runs above used installed binaries without downloading packages.
+No tests were weakened and no behaviour was added. RED review and full CI,
+including PostgreSQL/browser suites, remain required on the router's final head.
+Physical-device proof, D08 and G3 remain outstanding; no native task is declared
+finished. No git-writing command, commit, push, provider call or release occurred
+in this verification session.
