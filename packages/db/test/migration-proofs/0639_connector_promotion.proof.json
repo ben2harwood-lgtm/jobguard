@@ -1,5 +1,5 @@
 {
-  "migration": "1035_connector_promotion.sql",
+  "migration": "0639_connector_promotion.sql",
   "lp0": [
     {
       "section": "groups",
@@ -11,7 +11,7 @@
         "status": "approved_current",
         "target": {
           "state": "review_at_card",
-          "note": "Bounded synthetic lifecycle dispatch; exact-head RED review and PostgreSQL CI remain required."
+          "note": "Separate dark promotion receipt outside LP-5 lifecycle dispatch; LP-5 integration remains held before composition or activation. Exact-head RED review and PostgreSQL CI remain required."
         },
         "cards": [
           "LP-11",
@@ -23,7 +23,7 @@
         },
         "downstream": "Human session promotes fixture references through existing imports only. Connector capabilities and receipts stay unchanged.",
         "sources": [
-          "packages/db/migrations/1035_connector_promotion.sql",
+          "packages/db/migrations/0639_connector_promotion.sql",
           "packages/db/src/connector-promotion-repository.ts"
         ],
         "tests": [
@@ -51,7 +51,7 @@
           "LP-12": "Review fixed search_path, migration-owned private tables and helpers, and absence of runtime direct writes."
         },
         "sources": [
-          "packages/db/migrations/1035_connector_promotion.sql",
+          "packages/db/migrations/0639_connector_promotion.sql",
           "packages/db/src/connector-promotion-repository.ts"
         ],
         "tests": [

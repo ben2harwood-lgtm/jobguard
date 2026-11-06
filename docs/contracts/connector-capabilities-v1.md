@@ -161,6 +161,10 @@ Billing status is held as `BILLING_COMPOSITION_REQUIRED`; machine landing, expor
 delivery, SFTP, reconciliation authority and G5 remain closed. Independent RED review
 and PostgreSQL/browser CI are still required; this does not finish ENT-13a.
 
+Human promotion uses its own append-only receipt outside the LP-5 lifecycle dispatcher.
+LP-5 integration and dispatcher replay coverage remain held before composition or activation.
+The promotion integration suite proves only this separate dark path.
+
 ## ENT-13a machine connection — fictional rulings, 4 November 2026
 
 This section supersedes the historical Q2/H1, Q3/H2, Q4/H3 and Q7/H5 STOPs **only
