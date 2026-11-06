@@ -54,7 +54,22 @@ describe("ordinary variation prices and approvals stop at the immutable final-ac
   const pending = price({ ...proposal, id: pendingId, scopeItemId: pendingScope }, null);
   await repo.transact(a.context, db => insertPricedVariation(db, a.tenantId, pending));
   const locks = await prepareLock(f, a);
-  await locks.lock(a.context, a.input);
+  // As in MIGFIX-5, assemble the baseline plus the latest approved extra before locking.
+  const accountRevisionId = randomUUID();
+  await asFixtureTenant(f.admin, a.tenantId, async db => {
+   await db.query(`INSERT INTO app.final_account_revision(id,tenant_id,job_id,final_account_draft_id,revision,previous_revision_id,source_hash,baseline_quote_version_id,currency,tax_policy_version,net_pence,tax_pence,total_pence,issue_blocked,findings)
+    SELECT $1,tenant_id,job_id,final_account_draft_id,2,id,$2,baseline_quote_version_id,currency,tax_policy_version,3380000,676000,4056000,false,findings
+    FROM app.final_account_revision WHERE tenant_id=$3 AND id=$4`, [accountRevisionId, "b".repeat(64), a.tenantId, a.revisionId]);
+   await db.query(`INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,approval_id,description,net_pence,ordinal)
+    SELECT gen_random_uuid(),tenant_id,job_id,$1,line_kind,source_id,scope_item_id,commercial_revision_id,approval_id,description,net_pence,ordinal
+    FROM app.final_account_line WHERE tenant_id=$2 AND final_account_revision_id=$3`, [accountRevisionId, a.tenantId, a.revisionId]);
+   await db.query(`INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,approval_id,description,net_pence,ordinal)
+    SELECT gen_random_uuid(),r.tenant_id,r.job_id,$1,'variation',r.id,$2,r.id,x.id,r.description,r.signed_delta_pence,2
+    FROM app.variation_revision r JOIN app.variation_approval x ON (x.tenant_id,x.revision_id)=(r.tenant_id,r.id)
+    WHERE r.tenant_id=$3 AND r.id=$4`, [accountRevisionId, proposal.scopeItemId, a.tenantId, revised.id]);
+   await db.query("UPDATE app.final_account_draft SET current_revision_id=$1,revision=2 WHERE tenant_id=$2 AND id=$3", [accountRevisionId, a.tenantId, a.draftId]);
+  });
+  await locks.lock(a.context, { ...a.input, finalAccountRevisionId: accountRevisionId, expectedRevision: 2 });
   expect((await f.admin.query("SELECT status FROM app.job WHERE tenant_id=$1 AND id=$2", [a.tenantId, a.jobId])).rows[0].status).toBe("live");
   const facts = async () => (await f.admin.query(`SELECT
    (SELECT count(*)::int FROM app.variation_revision WHERE tenant_id=$1 AND variation_id=$2) revisions,
