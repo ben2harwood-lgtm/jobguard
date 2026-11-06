@@ -4,11 +4,15 @@ import AxeBuilder from "@axe-core/playwright";
 test.setTimeout(360_000);
 // Both mobile-360 and desktop run these against real synthetic routes and workers.
 test("WALK-3 playback saves its own draft then honestly completes a prepared example", async ({ page }) => {
-  await page.goto("/practice-company");
+  await page.goto("/practice-company?name=Tommy");
+  await expect(page.getByRole("heading", { name: "Tommy's practice firm", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Ready for your first job" })).toBeVisible();
+  const practiceToken = (await page.context().cookies()).find(cookie => cookie.name === "jg_session")!.value;
   await page.getByRole("link", { name: "Walk your first practice job", exact: true }).click();
   const tour = page.getByRole("region", { name: "Guided walkthrough" });
   await expect(tour).toContainText("Step 1 of 9");
   await expect(page.getByLabel("Work details")).toHaveValue("");
+  expect((await page.context().cookies()).find(cookie => cookie.name === "jg_session")!.value).toBe(practiceToken);
   await tour.getByRole("button", { name: "Play the whole thing", exact: true }).click();
   await expect(tour).toContainText("Step 3 of 9", { timeout: 40_000 });
   await expect(tour).toContainText("This part uses a prepared example job");
