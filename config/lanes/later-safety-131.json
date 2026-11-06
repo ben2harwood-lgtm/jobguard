@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-131": {
+      "branches": [
+        "codex/sandbox/later-safety-131"
+      ],
+      "allow": [
+        "packages/db/migrations/0856_duplicate_unlink_command_binding.sql",
+        "packages/db/test/migration-proofs/0856_duplicate_unlink_command_binding.proof.json",
+        "packages/db/test/duplicate-unlink-command-binding.integration.test.ts"
+      ]
+    }
+  }
+}

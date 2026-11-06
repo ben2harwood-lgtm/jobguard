@@ -1,0 +1,40 @@
+{
+  "migration": "0856_duplicate_unlink_command_binding.sql",
+  "lp0": [
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.ent4b_fact_guard()",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "0630a3d76833ca3cdd9b2e788402560a39a38a71e0f0a0048df449011bff8c03",
+        "staticWrites": [],
+        "staticCalls": []
+      },
+      "after": {
+        "identity": "function:app.ent4b_fact_guard()",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": []
+      }
+    }
+  ],
+  "upgrade": [],
+  "tenancy": []
+}
