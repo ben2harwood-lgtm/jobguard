@@ -7,7 +7,11 @@ import { refreshMeter } from "./meter-persistence-fixtures.js";
 // Multi-period/correction scenarios below have bounded 120s budgets for real PostgreSQL CI.
 // Their full month inputs, deferred integrity checks and assertions remain enabled.
 describe("MON-2A-P persisted subscription", () => {
- let f: WorkFixture; beforeAll(async () => { f = await createWorkFixture(); }, 60000); afterAll(async () => closeWorkFixture(f));
+ let f: WorkFixture; beforeAll(async () => { f = await createWorkFixture();
+  // Admin-only issuance clock: all fixture periods through December 2026 have ended.
+  // This isolated cluster exposes no runtime clock override or new grant.
+  const definition = (await f.admin.query("SELECT pg_get_functiondef('app.mon2_issue(uuid,text,date,integer)'::regprocedure) definition")).rows[0].definition as string;
+  await f.admin.query(definition.replaceAll("clock_timestamp()", "'2027-01-01T12:00:00Z'::timestamptz")); }, 60000); afterAll(async () => closeWorkFixture(f));
  it("all nine card figures survive persisted issue", async () => {
   const actual: number[] = [];
   for (const [plan, profile] of [["Solo", [1,1,1,2,2,2,2,2,2,3,3,4]], ["Builder", [3,4,4,4,4,5,5,5,5,6,6,7]]] as const) {

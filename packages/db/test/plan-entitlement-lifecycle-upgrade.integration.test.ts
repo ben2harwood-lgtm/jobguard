@@ -168,6 +168,11 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
       const source = await readFile(new URL("../migrations/0623_extra_duplicate_disposition.sql", import.meta.url), "utf8");
       const body = source.split("CREATE OR REPLACE FUNCTION app.cb_unresolved")[1]!.split("AS $$")[1]!.split("$$;")[0];
       expect(current?.definition?.split("$function$")[1]).toEqual(body);
+    } else if (prior.nspname === "app" && prior.proname === "mon2_issue" &&
+      prior.args === "t uuid, digest text, start_day date, revision integer") {
+      const migration = await readFile(new URL("../migrations/0821_subscription_period_open_refusal.sql", import.meta.url), "utf8");
+      const body = migration.split("CREATE OR REPLACE FUNCTION app.mon2_issue")[1]!.split("AS $$")[1]!.split("$$;")[0];
+      expect(current?.definition?.split("$function$")[1]).toEqual(body);
     } else if (prior.oid === paymentFeeWriterOid) {
       expect(current?.definition?.split("$function$")[1]).toEqual(paymentFeeWriterBody);
     } else if (prior.oid === settlementOid) {
