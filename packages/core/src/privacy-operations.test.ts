@@ -33,3 +33,22 @@ describe("expanded DSAR boundaries", () => {
     expect(privacyCommandV2.safeParse({ ...open, version: "privacy-command.v2", operation: "offboard" }).success).toBe(true);
   });
 });
+
+
+describe("recorded synthetic privacy checks", () => {
+  it("accepts only strict v2 identity/authority evidence commands", async () => {
+    const { privacyCommand } = await import("./privacy-operations.js");
+    const verify = { version: "privacy-command.v2", action: "verify", commandId: uuid, requestId: uuid,
+      expectedRevision: 0, kind: "identity", evidenceHash: "A".repeat(64) };
+    for (const kind of ["identity", "authority"]) expect(privacyCommand.safeParse({ ...verify, kind }).success).toBe(true);
+    for (const patch of [{ version: "privacy-command.v1" }, { kind: "retention" }, { kind: null },
+      { evidenceHash: "g".repeat(64) }, { evidenceHash: "a".repeat(63) }, { evidenceHash: null },
+      { expectedRevision: -1 }, { expectedRevision: 1.5 }, { requestId: "bad" },
+      { method: "synthetic_fixture" }, { verifiedBy: uuid }, { tenantId: uuid }, { verifiedAt: "now" }]) {
+      expect(privacyCommand.safeParse({ ...verify, ...patch }).success).toBe(false);
+    }
+    for (const key of ["requestId", "expectedRevision", "kind", "evidenceHash"]) {
+      expect(privacyCommand.safeParse({ ...verify, [key]: undefined }).success).toBe(false);
+    }
+  });
+});
