@@ -15,7 +15,7 @@ import { createWatchdogHarness } from "./watchdog-command-harness.js";
 // guarded command that no case covers fails this file, so a new or missed command cannot pass unnoticed.
 const h = createWatchdogHarness("replay-contract", 61000);
 const { caseKeys, live, probeJob, norm, CONFLICT } = h;
-// These dark commands have no route/source guard entry. Exercise their real repository
+// These dark commands have no source guard entry. Exercise their real repository
 // boundaries here without adding post-0606 facts to the pre-0096 legacy-id harness.
 const darkCases: typeof h.cases = [
   { key: "purchase-order-action-repository.ts#attestManual", registry: ["command:purchase_order.attest_manual"],
@@ -25,7 +25,7 @@ const darkCases: typeof h.cases = [
       supplierReference: `synthetic-${id}${variant === "changed" ? "-changed" : ""}`,
     }, h.member),
     later: async job => { await h.repos.po.revise(h.ctx, job, h.orderInput(h.st(job).requirement, 1, randomUUID(), "12")); } },
-  { key: "purchase-order-action-repository.ts#approve", registry: ["command:purchase_order.send.dark"],
+  { key: "purchase-order-action-repository.ts#approve", registry: ["command:purchase_order.send.dark", "/api/jobs/[id]/purchase-orders/merchant-order"],
     prepare: async job => {
       await h.pre.order(job);
       h.st(job).darkPreview = await new PurchaseOrderActionRepository(h.observed.pool).preview(h.ctx,

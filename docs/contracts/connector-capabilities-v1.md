@@ -141,3 +141,58 @@ The SFTP parser separately detects changed raw domain proposals. Every kind rema
 Existing fake_sftp authorised export delivery and reconciliation are unchanged and
 covered by their existing contract tests. No domain promotion or real endpoint is
 released; Q2/H1, Q3, Q4, Q7 and G5 remain held. This does not close ENT-13a.
+
+## ENT-13a machine connection — fictional rulings, 4 November 2026
+
+This section supersedes the historical Q2/H1, Q3/H2, Q4/H3 and Q7/H5 STOPs **only
+for fictional connections**. Router rulings supplied with ENT-13a-machine, under
+Ben's 4 November instruction to decide and keep coding, are adopted as follows.
+No ruling here approves a real partner, credential, data flow, SFTP library or G5.
+
+| Ruling | Adopted fictional contract and implementation |
+|---|---|
+| Q2 / H1 | One server-generated distinct `machine_actor` per connection; immutable association with one binding's tenant and `synthetic_demo`, one fixture client contract, and a separate human owner sponsor. Signed requests grant only listed staging capabilities; no membership or member session is created. |
+| Q3 / H2 | Current tenant owner alone provisions, widens, rotates, revokes or disconnects via the normal membership bridge and SQL owner recheck. Command ID/payload-bound immutable receipt and audit commit together. Widening appends a capability revision; it never edits an old revision. Rotation and revocation serialize against requests on the connection row. A request ordered after revocation refuses, including source-event retries. |
+| Q4 / H3 | HMAC-SHA-256; exact UTF-8 signing bytes below; ±5 minutes inclusive, nonce remembered at least 10 minutes, old keys overlap at most 24 hours, transport body limit 1 MiB (1,048,576 bytes). Key storage contains only fictional `fixture:` labels. Signing bytes are supplied by an injected fake store, never stored in SQL/logs. SFTP stays HELD pending reviewed pinned library/toolchain. |
+| Q7 / H5 | Scope is unchanged from merged ENT-2 identity/revision/baseline pricing. This slice stages references only; it adds no work-order promotion or connector origin-write path. |
+
+`connector-machine-signature.v1` signs newline-joined version, uppercase `POST`,
+exact `/connectors/machine/intake` path (no query string), connection UUID, tenant
+UUID, `synthetic_demo`, fixture client contract, fixture key label, ten-digit Unix
+seconds, nonce, and lowercase SHA-256 of the original body bytes. There is no final
+newline. The lowercase hex HMAC is compared in constant time. Header is a strict
+JSON object in `x-connector-machine`; unknown fields refuse. Environment, tenant,
+contract and key must match authenticated stored authority, before body staging.
+Existing strict `connector-input.v1` and SQL envelope limits still apply; a 1 MiB
+transport ceiling does not widen domain content or permit raw customer material.
+
+Migration 0940 adds private FORCE-RLS connection, capability, key-label, nonce and
+command tables in the connector identity/control-plane boundary. It does not alter
+fingerprinted rows. Nonces commit with intake; failures roll them back. A new signed
+request with a new nonce may return an old immutable source receipt. Replaying an
+accepted nonce refuses even if the source event itself would otherwise deduplicate.
+No rows are pruned; reuse of an expired nonce renews its expiry after authentication.
+
+`jobguard_machine` is a separate NOLOGIN, NOINHERIT, non-owner, non-BYPASSRLS role,
+with no role memberships or table access, only schema usage and authenticated
+`machine_authority` / `machine_stage` execution. It cannot call legacy intake or
+member commands. Its credential is a trusted in-process adapter credential: HMAC
+is checked in the transport, while SQL reauthenticates the fictional binding token
+and current capability/key version under locks. A compromised adapter/database
+credential is outside that request-signature trust boundary; no claim otherwise.
+All member guard paths refuse the machine header even with a member/practice cookie.
+
+The controller and management application are deliberately unregistered. There is
+no application-module composition, socket, environment activation switch, real
+secret resolver, endpoint or network action. Existing staging still returns only
+`staged`, `domainEffects: 0`; it does not settle payments or create business facts.
+H4, billing/materials/export promotion dependencies and every real-endpoint gate
+remain open. CI PostgreSQL proof and exact-head independent RED review are required;
+local transport/guard tests alone do not close ENT-13a or G5.
+
+### Machine command lifecycle hold
+
+The dark synthetic machine-management command uses its own connector.machine_command
+receipt and checked audit routine. It is outside the LP-5 lifecycle dispatcher;
+LP-5 integration and lifecycle replay coverage remain held before composition or
+activation. Its connector integration tests prove only this separate dark path.
