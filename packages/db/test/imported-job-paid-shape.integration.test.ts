@@ -56,6 +56,8 @@ describe("LATER-SAFETY-119 imported job paid shape — PostgreSQL", () => {
       expect(fixed[0].convalidated).toBe(true);
       // Isolated fixture database only: rollback restores both DDL and the failed update.
       // No historical migration file is edited, and no scratch constraint is committed.
+      // Fire the invoice transition's deferred checks first; ALTER TABLE refuses pending trigger events.
+      await db.query("SET CONSTRAINTS ALL IMMEDIATE");
       await db.query("SAVEPOINT scratch_definition");
       try {
         await db.query(oldConstraint);
