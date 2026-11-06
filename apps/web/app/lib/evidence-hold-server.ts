@@ -5,6 +5,7 @@ import { z } from "zod";
 import { ContractorError } from "@jobguard/core";
 import { ContractorRepository, contractorSessionContext, WormCommandRepository, WormCommandError, type VerifiedTenantContext, type WormReceipt } from "@jobguard/db";
 import { syntheticPool } from "./synthetic-server";
+import { identityApplication, identityCredentials } from "./identity-server";
 import { isTrustedBrowserOrigin } from "../api/contractor/origin";
 
 const fields = { version: z.literal("evidence-hold.v1"), commandId: z.uuid(), idempotencyKey: z.uuid(), evidenceId: z.uuid() };
@@ -38,7 +39,13 @@ export async function evidenceHoldResponse(request: Request, jobId: string, muta
     const member = await new ContractorRepository(pool).resolveSession(sessionId);
     const context: VerifiedTenantContext = await contractorSessionContext(pool, sessionId);
     if (!z.uuid().safeParse(jobId).success) throw notFound();
-    const repository = new WormCommandRepository(pool, true);
+    let digest = "";
+    if (mutation) {
+      const credentials = await identityCredentials(request);
+      if (!z.string().min(32).safeParse(credentials.sessionToken).success) throw new HoldFailure("UNAUTHENTICATED", 401, "Sign in to synthetic practice first.");
+      digest = identityApplication().provider.digest(`session:${credentials.sessionToken}`);
+    }
+    const repository = new WormCommandRepository(pool, true, undefined, undefined, digest);
     const items = await repository.listHolds(context, member.membershipId, jobId);
     if (!items) throw notFound();
     if (!mutation) return NextResponse.json({ version: "evidence-holds.v1", items: items.map(item => ({

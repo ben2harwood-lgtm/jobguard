@@ -9,12 +9,15 @@ const loadDb = () => (new Function("specifier","return import(specifier)") as (s
 test.setTimeout(240_000);
 test("a human promotes a staged work order and materials issue at phone and desktop widths",async({page,context})=>{
  const {ContractorRepository,prepareWorkOrderDemo}=await loadDb();
- const runtime=new Pool({connectionString:process.env.DATABASE_URL ?? "postgresql://jobguard_runtime:sbox-e2e-runtime@127.0.0.1:55432/jobguard_synthetic_demo",max:1});
+ // prepareWorkOrderDemo holds one connection for its session lock while repositories use another.
+ const runtime=new Pool({connectionString:process.env.DATABASE_URL ?? "postgresql://jobguard_runtime:sbox-e2e-runtime@127.0.0.1:55432/jobguard_synthetic_demo",max:2});
  const admin=new Pool({connectionString:process.env.E2E_ADMIN_DATABASE_URL,max:1});
  try {
   const session=randomUUID(),member=await new ContractorRepository(runtime).startPractice(session);
   await seedActiveContractorAgreement(admin,member.tenantId);
-  await prepareWorkOrderDemo(runtime,member);
+  await test.step("Prepare generated work orders with a separate lock connection", async () => {
+   await prepareWorkOrderDemo(runtime,member);
+  });
   const binding=randomUUID(),token="fictional-browser-promotion-token-0001";
   await admin.query(`INSERT INTO connector.binding(tenant_id,id,namespace,environment,endpoint_kind,token_sha256,expires_at)
    VALUES($1,$2,'fixture:browser','synthetic_demo','fake',$3,clock_timestamp()+interval '1 hour')`,[member.tenantId,binding,createHash("sha256").update(token).digest("hex")]);

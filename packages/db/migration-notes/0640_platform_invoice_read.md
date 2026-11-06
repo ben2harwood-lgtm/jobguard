@@ -1,4 +1,4 @@
-# 0777 — M4-10 synthetic owner document read (RED)
+# 0640 — M4-10 synthetic owner document read (RED)
 
 Adds only app.platform_invoice_read(t uuid, digest text), owned by jobguard_migration with a pg_catalog search path. Runtime gets EXECUTE only. The routine delegates current synthetic company-session and tenant checks to mon1_company_actor, then requires the returned active membership to be an owner. It reads stored documents in issuer/sequence order; no financial state, audit rows or collection work is written. No table or existing routine changes.
 
