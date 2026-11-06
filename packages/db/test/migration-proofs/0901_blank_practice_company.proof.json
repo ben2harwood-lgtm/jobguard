@@ -1,0 +1,177 @@
+{
+  "migration": "0901_blank_practice_company.sql",
+  "lp0": [
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "id": "a-blank-practice-company",
+        "title": "WALK-2 blank synthetic practice namespaces",
+        "kind": "authority",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Made-up practice only; no real signup or production identity. PostgreSQL CI and exact-head RED review remain required."
+        },
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Authenticate the persisted live blank session before reset; revoke it under a row lock and preserve historical business rows.",
+          "LP-12": "Retain narrow runtime execute only; do not expose the private identity bridge."
+        },
+        "downstream": "Start an empty synthetic session or revoke and replace only the presented live blank session; no business deletion or commercial action.",
+        "sources": [
+          "packages/db/migrations/0901_blank_practice_company.sql",
+          "packages/db/src/blank-practice-company.ts"
+        ],
+        "tests": [
+          "packages/db/src/blank-practice-company.test.ts",
+          "packages/db/test/blank-practice-company.integration.test.ts"
+        ],
+        "gaps": [
+          "Existing shared synthetic tenant and practice membership remain; this is session isolation, not separate company tenants. PostgreSQL CI and exact-head RED review remain required."
+        ],
+        "path": "ap-blank-practice-company"
+      }
+    },
+    {
+      "section": "authorityPaths",
+      "before": null,
+      "after": {
+        "title": "WALK-2 blank synthetic practice namespaces",
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Authenticate the persisted live blank session before reset; revoke it under a row lock and preserve historical business rows.",
+          "LP-12": "Retain narrow runtime execute only; do not expose the private identity bridge."
+        },
+        "sources": [
+          "packages/db/migrations/0901_blank_practice_company.sql",
+          "packages/db/src/blank-practice-company.ts"
+        ],
+        "tests": [
+          "packages/db/src/blank-practice-company.test.ts",
+          "packages/db/test/blank-practice-company.integration.test.ts"
+        ],
+        "gaps": [
+          "Existing shared synthetic tenant and practice membership remain; this is session isolation, not separate company tenants. PostgreSQL CI and exact-head RED review remain required."
+        ],
+        "id": "ap-blank-practice-company",
+        "description": "Start an empty synthetic session or revoke and replace only the presented live blank session; no business deletion or commercial action."
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.is_blank_practice_company(text)|jobguard_runtime|EXECUTE|-",
+        "group": "a-blank-practice-company"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.is_blank_practice_company(text)|jobguard_migration",
+        "group": "a-blank-practice-company"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.is_blank_practice_company(text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.authenticate_practice_session"
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.start_blank_practice_company(text,text)|jobguard_runtime|EXECUTE|-",
+        "group": "a-blank-practice-company"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.start_blank_practice_company(text,text)|jobguard_migration",
+        "group": "a-blank-practice-company"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.start_blank_practice_company(text,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "control_plane.practice_session"
+        ],
+        "staticCalls": [
+          "app.is_blank_practice_company"
+        ]
+      }
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "is_blank_practice_company",
+        "args": "digest text",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "start_blank_practice_company",
+        "args": "digest text, previous_digest text",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    }
+  ],
+  "tenancy": []
+}
