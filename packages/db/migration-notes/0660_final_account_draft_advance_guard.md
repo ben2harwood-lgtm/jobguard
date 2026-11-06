@@ -1,11 +1,11 @@
-# 0661: final-account draft advance guard
+# 0660: final-account draft advance guard
 
 LATER-SAFETY-124-CATCHUP (RED: final-account money and tenant-scoped reads).
 The launcher merged origin/main at 02b46ac6f into this branch at 813326f74.
 The merge retains main's routine bodies and this piece's additional trigger;
 no existing routine is re-created. Migration SQL and behavioural test
 expectations are unchanged. The migration and its proof were renamed by stem
-only from 0850 to the coordinator's reserved 0661.
+only from 0850 to the coordinator's reserved 0660.
 
 The trigger permits a changed draft head only at the next revision, linked to
 its previous head and belonging to the same tenant and draft. Its owner-only

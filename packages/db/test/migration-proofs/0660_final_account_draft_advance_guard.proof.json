@@ -1,5 +1,5 @@
 {
-  "migration": "0661_final_account_draft_advance_guard.sql",
+  "migration": "0660_final_account_draft_advance_guard.sql",
   "lp0": [],
   "upgrade": [
     {

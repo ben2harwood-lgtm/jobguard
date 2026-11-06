@@ -6,10 +6,10 @@
         "codex/sandbox/later-safety-124"
       ],
       "allow": [
-        "packages/db/migration-notes/0661_final_account_draft_advance_guard.md",
-        "packages/db/migrations/0661_final_account_draft_advance_guard.sql",
+        "packages/db/migration-notes/0660_final_account_draft_advance_guard.md",
+        "packages/db/migrations/0660_final_account_draft_advance_guard.sql",
         "packages/db/test/final-account-draft-advance-guard.integration.test.ts",
-        "packages/db/test/migration-proofs/0661_final_account_draft_advance_guard.proof.json"
+        "packages/db/test/migration-proofs/0660_final_account_draft_advance_guard.proof.json"
       ]
     }
   }
