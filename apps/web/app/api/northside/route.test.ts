@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const h = vi.hoisted(() => ({ actor: vi.fn(), run: vi.fn(), targets: vi.fn(), end: vi.fn() }));
+const h = vi.hoisted(() => ({ actor: vi.fn(), run: vi.fn(), targets: vi.fn(), end: vi.fn(), state: vi.fn() }));
 vi.mock("server-only", () => ({}));
 vi.mock("@jobguard/db", () => ({
+  PracticeWorkerSwitchRepository: class { state = h.state; },
   northsideRun: h.run, northsideSwitchTargets: h.targets, northsideTargets: {},
   northsideFacts: vi.fn(async () => ({ companyName: "Fictional Northside" })),
   northsideOwnActions: vi.fn(async () => []),
@@ -33,6 +34,7 @@ beforeEach(() => {
   vi.stubEnv("JOBGUARD_ALLOWED_ORIGINS", "https://practice.invalid");
   h.run.mockResolvedValue({ testerMembershipId: tester, settings: { version: "northside-settings.v1" } });
   h.targets.mockResolvedValue(targets);
+  h.state.mockResolvedValue({ state: "owner" });
   actor(tester, "owner");
 });
 afterEach(() => vi.unstubAllEnvs());
@@ -56,7 +58,9 @@ describe("Northside switch target disclosure (handler doubles)", () => {
   it.each(["operative", "client_approver"])("keeps the tester's independent return-to-owner path while acting as %s", async role => {
     const worker = targets.find(target => target.role === role)!;
     actor(worker.membershipId, role);
-    expect((await (await GET()).json()).targetsToSwitch).toEqual([]);
+    h.state.mockResolvedValue({ state: "acting" });
+    expect((await (await GET()).json()).targetsToSwitch).toEqual(targets);
+    expect(h.state).toHaveBeenCalledWith({}, "tester-session");
     // NorthsidePractice's Return to owner button calls this endpoint without a target ID.
     h.end.mockImplementation(async () => { actor(tester, "owner"); return { state: "owner" }; });
     const body = { version: "practice-worker-switch-off.v1", commandId: "00000000-0000-4000-8000-000000000009" };
@@ -67,6 +71,15 @@ describe("Northside switch target disclosure (handler doubles)", () => {
     expect(await response.json()).toEqual({ state: "owner" });
     expect(h.end).toHaveBeenCalledWith({ version: "contractor-principal.v1", sessionId: "tester-session" }, body);
     expect((await (await GET()).json()).targetsToSwitch).toEqual(targets);
+  });
+
+  it("hides targets when the switch state lookup fails", async () => {
+    actor(targets[0]!.membershipId, "operative");
+    h.state.mockRejectedValue(new Error("switch state unavailable"));
+    const response = await GET();
+    expect(response.status).toBe(200);
+    expect((await response.json()).targetsToSwitch).toEqual([]);
+    expect(h.targets).not.toHaveBeenCalled();
   });
 
   it("returns no targets before a run exists", async () => {
