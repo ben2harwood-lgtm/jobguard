@@ -35,6 +35,7 @@
         "apps/web/app/practice-bank/page.tsx",
         "apps/web/app/practice-bank/screen.test.tsx",
         "apps/web/app/practice-bank/screen.tsx",
+        "apps/web/e2e/ENT-5-chain-actions.spec.ts",
         "apps/web/e2e/M4-19-notice-fixtures.spec.ts",
         "apps/web/e2e/M4-20-retention-records.spec.ts",
         "apps/web/e2e/M4-21-vat-fixtures.spec.ts",

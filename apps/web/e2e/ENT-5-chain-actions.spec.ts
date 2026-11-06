@@ -70,7 +70,8 @@ test("ENT-5 reject, revise, stale on screen, withdraw, replays and route race", 
     await timerDb.query("COMMIT");
   } catch (error) { await timerDb.query("ROLLBACK"); throw error; } finally { await timerDb.end(); }
   await page.reload();
-  await expect(page.locator("main").getByRole("status")).toContainText("Mandatory approval overdue");
+  // Duplicate candidates load independently and may expose another status at the same time.
+  await expect(page.locator("main").getByRole("status").filter({ hasText: "Mandatory approval overdue" })).toContainText("Mandatory approval overdue");
 
   const stalePage = await page.context().newPage(); await stalePage.goto("/approvals/extras"); await expect(button(stalePage, "Approve as supervisor")).toBeVisible();
   expect(await button(page, "Reject this extra").isDisabled()).toBe(true);
@@ -80,7 +81,7 @@ test("ENT-5 reject, revise, stale on screen, withdraw, replays and route race", 
   await button(page, "Reject this extra").click();
   const rejectedBody = (await rejectedRequest).postDataJSON();
   await expect(page.getByTestId("extra-state")).toHaveText("Not approved");
-  await expect(page.locator("main").getByRole("status")).toHaveText("Extra rejected.");
+  await expect(page.locator("main").getByRole("status").filter({ hasText: "Extra rejected." })).toHaveText("Extra rejected.");
   const retry = await post(page, old, "reject", rejectedBody); expect(retry.status()).toBe(200);
   const conflict = await post(page, old, "reject", { ...rejectedBody, reasonCode: "other_reason" }); expect((await conflict.json()).code).toBe("COMMAND_CONFLICT");
   expect((await post(page, old, "approve", bound(old))).ok()).toBe(false);
@@ -91,7 +92,7 @@ test("ENT-5 reject, revise, stale on screen, withdraw, replays and route race", 
   const revisedRequest = page.waitForRequest(r => r.url().endsWith("/revise") && r.method() === "POST");
   await button(page, "Revise this extra").click();
   const revisedBody = (await revisedRequest).postDataJSON();
-  await expect(page.locator("main").getByRole("status")).toHaveText("Price revised. A new approval request was created.");
+  await expect(page.locator("main").getByRole("status").filter({ hasText: "Price revised. A new approval request was created." })).toHaveText("Price revised. A new approval request was created.");
   let revised = (await extras())[0]!; expect(revised.requestId).not.toBe(old.requestId);
   const revisionReplay = await post(page, old, "revise", revisedBody); expect(revisionReplay.status()).toBe(200);
   expect((await revisionReplay.json()).result.requestId).toBe(revised.requestId);
@@ -126,7 +127,7 @@ test("ENT-5 reject, revise, stale on screen, withdraw, replays and route race", 
   if (final.state === "approved") {
     await switchTo(page, "surveyor"); await page.goto("/approvals/extras");
     await page.getByLabel("Revised quantity measured").fill("3"); await button(page, "Revise this extra").click();
-    await expect(page.locator("main").getByRole("status")).toContainText("Price revised"); await switchTo(page, "supervisor");
+    await expect(page.locator("main").getByRole("status").filter({ hasText: "Price revised" })).toContainText("Price revised"); await switchTo(page, "supervisor");
   }
   await page.goto("/approvals/extras");
   if ((await extras())[0]!.state !== "withdrawn") {
@@ -200,7 +201,7 @@ test("withdrawal requires a reason and displays the server refusal and outcome",
   await button(page, "Withdraw this extra").click();
   await expect(page.locator("main").getByRole("alert")).toContainText("PERMISSION_DENIED");
   refuse = false; await button(page, "Withdraw this extra").click();
-  await expect(page.locator("main").getByRole("status")).toHaveText("Extra withdrawn.");
+  await expect(page.locator("main").getByRole("status").filter({ hasText: "Extra withdrawn." })).toHaveText("Extra withdrawn.");
   await expect(page.getByTestId("extra-state")).toHaveText("Withdrawn");
   await expect(button(page, "Withdraw this extra")).toHaveCount(0);
 });
