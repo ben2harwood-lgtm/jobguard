@@ -339,14 +339,14 @@ describe("fake merchant boundary", () => {
 
 describe("LATER-SAFETY-10 migration source proof (not PostgreSQL evidence)", () => {
   it("adds a narrow session bridge with named LP-0 and upgrade records", () => {
-    const proof = proofSchema.parse(JSON.parse(readFileSync(new URL("./migration-proofs/1203_order_attestation_session.proof.json", import.meta.url), "utf8")));
+    const proof = proofSchema.parse(JSON.parse(readFileSync(new URL("./migration-proofs/0649_order_attestation_session.proof.json", import.meta.url), "utf8")));
     const baseline = parseInventory(JSON.parse(readFileSync(new URL("../../../docs/contracts/lp-0-effective-privileges-v1.json", import.meta.url), "utf8")));
     const inventory = parseInventory(combineLp0(baseline, [proof]));
     expect(inventory.recorded.routines.find(r => r.identity === "function:app.order_attestation_actor(uuid,text)"))
       .toMatchObject({ runtimeExecute: true, publicExecute: false, staticWrites: [], staticCalls: ["app.mon1_company_actor"] });
     expect(proof.upgrade).toEqual([expect.objectContaining({ section: "routines", before: null,
       after: expect.objectContaining({ proname: "order_attestation_actor", args: "t uuid, digest text" }) })]);
-    const sql = readFileSync(new URL("../migrations/1203_order_attestation_session.sql", import.meta.url), "utf8");
+    const sql = readFileSync(new URL("../migrations/0649_order_attestation_session.sql", import.meta.url), "utf8");
     expect(sql).toContain("actor:=app.mon1_company_actor(t,digest)");
     expect(sql).toContain("AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp())");
     expect(sql).toContain("AND role='owner'");

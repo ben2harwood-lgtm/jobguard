@@ -1,5 +1,5 @@
 {
-  "migration": "1201_notice_live_job_check.sql",
+  "migration": "0636_extra_withdraw_roles.sql",
   "lp0": [],
   "upgrade": [],
   "tenancy": []

@@ -1,5 +1,5 @@
 {
-  "migration": "1203_order_attestation_session.sql",
+  "migration": "0649_order_attestation_session.sql",
   "lp0": [
     {
       "section": "groups",
@@ -23,7 +23,7 @@
         },
         "downstream": "Read-only session/company actor lookup under the caller order lock. No commercial action or lifecycle adapter.",
         "sources": [
-          "packages/db/migrations/1203_order_attestation_session.sql",
+          "packages/db/migrations/0649_order_attestation_session.sql",
           "packages/db/src/purchase-order-action-repository.ts"
         ],
         "tests": [
@@ -68,7 +68,7 @@
           "LP-12": "Retain narrow runtime execute only; do not expose the private identity bridge."
         },
         "sources": [
-          "packages/db/migrations/1203_order_attestation_session.sql",
+          "packages/db/migrations/0649_order_attestation_session.sql",
           "packages/db/src/purchase-order-action-repository.ts"
         ],
         "tests": [

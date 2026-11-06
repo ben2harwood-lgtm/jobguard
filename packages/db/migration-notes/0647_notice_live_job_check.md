@@ -1,4 +1,4 @@
-# 1201 — live-job check for practice notice records
+# 0647 — live-job check for practice notice records
 
 LATER-SAFETY-7, RED: authority. Replaces only app.notice_fixture_records from
 0597, adding the neighbouring 0166 billing status rule: live, invoiced or paid.
@@ -31,7 +31,7 @@ No new command/route, command registry entry, table or app.* SET clause is added
 
 Forward fix only: preserve all fixture history and correct defects with another
 reviewed migration. Do not roll back by removing the status guard. No backfill or
-schema rollback is needed. 1201 is reserved and is renumbered at landing.
+schema rollback is needed. 0647 is the reserved landing stem (renamed from 1201).
 
 CI must prove the real PostgreSQL notice-record and route suites, fresh/upgrade,
 LP-0/serious-b5/tenancy guards, and the unchanged browser assertions at mobile-360

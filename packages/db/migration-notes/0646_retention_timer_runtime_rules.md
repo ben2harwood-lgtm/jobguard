@@ -12,7 +12,7 @@ launcher at 9c19c7564. No git-writing commands were run here.
   record and new timer review now checks live/invoiced/paid with FOR SHARE before
   INSERT, raising JOB_NOT_LIVE otherwise. Reads and stored-command replay retain
   authentication, tenant scope, hashes and audit semantics at every job status.
-  The 1200 proof removes the two obsolete require_watchdog_live static calls.
+  The 0646 proof removes the two obsolete require_watchdog_live static calls.
   The saved invoiced-job probe is now retention-post-live.integration.test.ts,
   also covering paid jobs, quoting-job new-human/new-timer refusal, unchanged book
   and exact replay, and a pending timer that succeeds once invoiced without a
@@ -29,7 +29,7 @@ launcher at 9c19c7564. No git-writing commands were run here.
   All owner/admin, other-role, expiry/revocation and foreign-tenant assertions stay.
 - Restored main's config/lanes/batch-27.json exactly. All 275 migrations on this
   main remain byte-identical; no duplicate migration suffixes exist. Only the four
-  unique 1200–1203 migrations remain additional; the duplicate VAT foundation
+  unique 0646–0649 migrations remain additional; the duplicate VAT foundation
   stays removed. The batch-46 lane lists the exact diff from main outside
   config/lanes, including the new regression, and does not list itself.
 
@@ -72,19 +72,19 @@ has not written the git index, committed, pushed or opened a PR.
 
 ## Migration inventory against main
 
-- 1110_retention_timer_runtime_rules -> 1200: retained; main has no equivalent.
+- 1110_retention_timer_runtime_rules -> 0646: retained; main has no equivalent.
   Replacement retention_records starts from main's latest 0600 body. Its diff
   adds session validation, the live-job check, human/server-date review rules and
   server date output. New timer helpers preserve the 0601 timer's limits while
   moving book access from infrastructure to runtime. No unrelated body is lost.
-- 1111_notice_live_job_check -> 1201: retained; latest body is main's 0597.
+- 1111_notice_live_job_check -> 0647: retained; latest body is main's 0597.
   Complete routine diff adds only the fresh-command live/invoiced/paid guard,
   after stored replay, preserving historical reads and exact replay.
-- 1112_pay_now_catch_statement -> 1202: retained; latest body is main's 0598.
+- 1112_pay_now_catch_statement -> 0648: retained; latest body is main's 0598.
   Complete routine diff adds session checks before and after lock waits and the
   tenant/job/revision-qualified includesCatch lookup. Stored replay, fingerprint,
   fees, balance limits and other result checks are unchanged.
-- 1113_order_attestation_session -> 1203: retained; its actor wrapper is new on
+- 1113_order_attestation_session -> 0649: retained; its actor wrapper is new on
   this main. Main's 0606 dark order dispatcher is unchanged, including
   purchase_order.send.dark in lp5_command_result.
 - 1114_vat_fixture_records: removed with its proof and note. SQL is byte-identical
@@ -203,7 +203,7 @@ There are no registry-row, policy or tenancy deltas and no new empty table.
 
 Forward fix only: retain immutable rows and audit; repair grants/routines in a new
 migration. Do not roll back to the infrastructure book reader or digest-free read.
-Stem 1200_retention_timer_runtime_rules is claimed and renumbered at landing.
+Stem 0646_retention_timer_runtime_rules is reserved for landing (renamed from 1200).
 
 ## Verification and named holds for landing
 

@@ -1,0 +1,6 @@
+{
+  "migration": "0648_pay_now_catch_statement.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}

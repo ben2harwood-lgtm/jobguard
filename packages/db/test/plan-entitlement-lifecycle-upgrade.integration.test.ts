@@ -40,14 +40,33 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   const selfComparison = "(SELECT content_hash FROM app.action_authorization WHERE tenant_id=p_tenant AND id=p_authorization)";
   // This batch replaces only these exact routine identities; compare their complete bodies.
   const batchBodies = await Promise.all([
-    ["retention_records", "t uuid, digest text, j uuid, cid uuid, v jsonb, expected text", "1200_retention_timer_runtime_rules.sql"],
-    ["notice_fixture_records", "j uuid, n uuid, digest text, operation text, v jsonb", "1201_notice_live_job_check.sql"],
-    ["pay_now_fake_attempt", "t uuid, digest text, j uuid, operation text, v jsonb", "1202_pay_now_catch_statement.sql"],
+    ["retention_records", "t uuid, digest text, j uuid, cid uuid, v jsonb, expected text", "0646_retention_timer_runtime_rules.sql"],
+    ["notice_fixture_records", "j uuid, n uuid, digest text, operation text, v jsonb", "0647_notice_live_job_check.sql"],
+    ["pay_now_fake_attempt", "t uuid, digest text, j uuid, operation text, v jsonb", "0648_pay_now_catch_statement.sql"],
   ].map(async ([name, args, migration]) => {
     const sql = await readFile(new URL(`../migrations/${migration}`, import.meta.url), "utf8");
     return { name, args, body: sql.split(`CREATE OR REPLACE FUNCTION app.${name}`)[1]!.split("AS $$")[1]!.split("$$;")[0] };
   }));
-  // 1200 changes exactly the effective-state read and retains the latest mark writer.
+  // ENT-5 changes only these exact predecessor routines; all other definitions stay pinned.
+  const routineKey = (identity: string) => identity.replace(/,\s*/gu, ",");
+  const ent5Bodies = new Map<string, string>();
+  const ent5Replacements = [
+    ["app.xa_approve(p_job uuid,p_request uuid,p_command uuid,p_actor uuid,p_step integer,p_hash text,p_net bigint,p_reject boolean,p_reason text)", "0635_extra_same_step.sql"],
+    ["app.xa_withdraw(p_job uuid,p_variation uuid,p_command uuid,p_actor uuid,p_reason text)", "0636_extra_withdraw_roles.sql"],
+    ["app.lp5b_contractor_permission(p_type text,p_actor uuid,p_job uuid,p_input jsonb)", "0636_extra_withdraw_roles.sql"],
+    ["app.xa_requirement(p_rules jsonb,p_net bigint)", "0637_extra_working_day_wait.sql"],
+    ["app.xa_escalate()", "0637_extra_working_day_wait.sql"],
+    ["app.xa_queue(p_member uuid)", "0637_extra_working_day_wait.sql"],
+    ["app.valid_approval_rules(d jsonb)", "0638_extra_rule_wait_schema.sql"],
+  ] as const;
+  for (const [identity, file] of ent5Replacements) {
+    const sql = await readFile(new URL(`../migrations/${file}`, import.meta.url), "utf8");
+    const replacement = [...sql.matchAll(/CREATE OR REPLACE FUNCTION ([\w.]+)\(([^)]*)\)[\s\S]*?AS \$\$([\s\S]*?)\$\$;/gu)]
+      .find(match => routineKey(`${match[1]}(${match[2]})`) === identity);
+    expect(replacement, identity).toBeDefined();
+    ent5Bodies.set(identity, replacement![3]!);
+  }
+  // 0622 changes exactly the effective-state read and retains the latest mark writer.
   const relink = await readFile(new URL("../migrations/0622_extra_duplicate_relink.sql", import.meta.url), "utf8");
   const relinkBodies = Object.fromEntries(["xa_latest_kind", "xa_mark_duplicate"].map(name => [name,
     relink.split(`CREATE OR REPLACE FUNCTION app.${name}`)[1]!.split("AS $$")[1]!.split("$$;")[0]]));
@@ -66,8 +85,25 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
       expect(current?.definition?.split("$function$")[1]).toEqual(batchReplacement.body);
       continue;
     }
+    // 0632 changes only these exact shadow routines; MIGFIX-7's upgrade test binds their full bodies and unchanged ACLs.
+    if (prior.nspname === "app" && (
+      (prior.proname === "record_shadow_disclosure" && prior.args === "p_tenant uuid, p_job uuid, p_signal uuid, p_event uuid, p_route text") ||
+      (prior.proname === "surface_shadow_signal_early" && prior.args === "p_tenant uuid, p_job uuid, p_signal uuid, p_firing uuid, p_decision uuid, p_disclosure uuid, p_rule text, p_version text, p_source uuid, p_object_version text, p_facts jsonb")
+    )) {
+      const own = await readFile(new URL("../migrations/0632_shadow_group_disclosure.sql", import.meta.url), "utf8");
+      expect(current?.definition?.split("$function$")[1]).toBe(own.split(`FUNCTION app.${prior.proname}(`)[1]!.split("AS $$")[1]!.split("$$;")[0]);
+      continue;
+    }
     // 0566, 0573 and 0606 extend exactly this dispatcher for managed recovery, supervisor queries and dark orders.
     if (prior.nspname === "app" && prior.proname === "lp5_command_result" && prior.args === "p_command_id uuid, p_outcome jsonb") continue;
+    // 0631 replaces exactly the legacy v1 landing bodies; its populated upgrade test binds both replacements.
+    if (prior.nspname === "app" && (
+      (prior.proname === "approve_synthetic_landing" && prior.args === "p jsonb") ||
+      (prior.proname === "reverse_synthetic_landing" && prior.args === "p_tenant uuid, p_reversal uuid, p_derivation uuid, p_journal uuid, p_allocation uuid, p_amount bigint, p_reason character varying"))) {
+      const sql = await readFile(new URL("../migrations/0631_legacy_recovery_money_integrity.sql", import.meta.url), "utf8");
+      const body = sql.split(`CREATE OR REPLACE FUNCTION app.${prior.proname}(`)[1]!.split("AS $$")[1]!.split("$$;")[0];
+      expect(current?.definition?.split("$function$")[1]).toEqual(body);
+    } else
     // 0599_accounting_export_route_change changes only this checked synthetic dispatcher; dedicated route upgrade tests bind the body.
     if (prior.nspname === "app" && prior.proname === "accounting_export" &&
       prior.args === "t uuid, digest text, operation text, source text, v jsonb") {
@@ -110,6 +146,8 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     } else if (prior.oid === settlementOid) {
       expect(prior.definition).toContain(selfComparison);
       expect(current?.definition).toEqual(prior.definition.replace(selfComparison, "payload"));
+    } else if (ent5Bodies.has(routineKey(`${prior.nspname}.${prior.proname}(${prior.args})`))) {
+      expect(current?.definition?.split("$function$")[1]).toEqual(ent5Bodies.get(routineKey(`${prior.nspname}.${prior.proname}(${prior.args})`)));
     } else {
       expect(current?.definition).toEqual(prior.definition);
     }

@@ -24,7 +24,7 @@ prove real session predicates, RLS/ACL/owner/search_path, upgrade/fresh install,
 concurrent replay, and cancellation without an aborted transaction.
 
 Named holds for landing: current reconciliation and CI gates are recorded in
-1200_retention_timer_runtime_rules.md. Runtime
+0646_retention_timer_runtime_rules.md. Runtime
 raw INSERT on the attestation table (hold 2) and production LP-5 lifecycle adapter
 remain held. No HTTP route, real merchant/provider, fee store, D-decision or
 G0–G5 change. Exact-head independent RED review and green CI are still required.

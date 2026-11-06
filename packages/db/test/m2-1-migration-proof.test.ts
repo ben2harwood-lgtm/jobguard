@@ -75,7 +75,7 @@ describe("M2-1 checked command compatibility", () => {
     if (delta.section !== "rows") throw new Error("Missing registry proof");
     // The 0606 proof predates rate suggestions, EndCheck and duplicate dispositions.
     const historicalCommandRegistryRows = currentCommandRegistryRows.filter(row =>
-      !["rate.suggestion_accept", "EndCheck", "ResolveDuplicateCandidates"].includes(row.command_type));
+      !["rate.suggestion_accept", "EndCheck", "ResolveDuplicateCandidates", "RecordExtraProceed"].includes(row.command_type));
     expect(delta.after!.data).toEqual(expect.arrayContaining(historicalCommandRegistryRows));
     expect(delta.after!.data).toHaveLength(historicalCommandRegistryRows.length);
     expect(delta.after!.data.filter(row => (row as { command_type: string }).command_type !== "purchase_order.send.dark")).toEqual(delta.before!.data);

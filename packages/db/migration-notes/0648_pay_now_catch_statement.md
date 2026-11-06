@@ -2,7 +2,7 @@
 
 Forward replacement of the latest main routine in 0598 only. No table shape,
 owner, privilege, RLS policy, trigger, function signature or stored row changes.
-1202 is the reserved stem; the router renumbers it at landing.
+0648 is the reserved landing stem (renamed from 1202).
 
 Invalid, expired or revoked company sessions now raise PAY_NOW_UNAUTHENTICATED
 (28000), before the existing mon1_company_actor owner/admin gate. Both checks
@@ -60,13 +60,13 @@ completion helper classify the signal instead of publishing an incomplete
 zero result. sv5pre-fixtures.ts, B1/B3 fixes and every assertion are unchanged.
 Local pay-now repository unit checks: 34 passed with at most two workers.
 PostgreSQL/browser execution is unavailable in this sandbox; the catch,
-equal-debit and predecessor/1202 replay assertions still require CI and
+equal-debit and predecessor/0648 replay assertions still require CI and
 exact-head independent RED review before landing.
 
 Landing catch-up (6 November 2026), B2-TEST-74: resolved the lifecycle
 upgrade conflict by retaining both the batch's exact routine-body checks and
 main 46f0be7ea's complete newer routine checks. Compared every replacement
-in 1200-1203 against main's latest definition (0600 retention, 0597 notice,
+in 0646-0649 against main's latest definition (0600 retention, 0597 notice,
 0598 pay-now); only this batch's existing safety deltas remain. The timer and
 attestation routines are new; no main migration is modified or duplicated.
 The options comparison excludes only destinationAccount and separately checks
@@ -89,3 +89,45 @@ Local checks (installed binaries, maxWorkers=2, at most three named files/run):
 PostgreSQL and browser suites were not run: this sandbox cannot start the
 services or bind localhost. CI and exact-head RED review remain landing gates.
 READY for router staging/commit; the read-only Git index is left to the router.
+
+
+Landing preparation (6 November 2026, batch-46):
+- Resolved the unfinished main merge as the union of both pay-now test groups
+  and both lifecycle-upgrade routine inventories; retained practiceDarkFixture
+  and B2-TEST-74's per-tenant destination assertions.
+- Final migration inventory against origin/main daed0c282: 0646 retention timer
+  runtime rules, 0647 notice live-job check, 0648 pay-now catch statement and
+  0649 order attestation actor. SQL files are byte-identical to the prechecked
+  1200–1203 files; all their named references, proof files and notes moved.
+  None duplicates main. Compared all three replaced app routines against main's
+  latest bodies (0600, 0597, 0598); only the existing batch safety deltas differ.
+  The other three app routines are additions. No new table or registry row is
+  introduced here, so MIGFIX-6 and restore-reconciliation row snapshots remain
+  exact without new exceptions. MIGFIX-7 now pins the three replacement bodies
+  and the three additions' bodies and proof metadata, retaining every other
+  comparison. No provider-register source changed.
+- Passed local checks using installed pnpm 10.28.1: typecheck (all seven
+  workspaces, turbo --concurrency=2); database Vitest migration-proof-loader,
+  purchase-order-action and pay-now-attempt-repository (153 tests); API Vitest
+  pay-now-attempt.application, retention-record.application and
+  notice-fixture.application (59 tests); web Vitest pay-now-preview/screen,
+  notice-fixtures/screen and practice-bank/screen (21 tests). Each Vitest run
+  used --maxWorkers=2 and at most three named files.
+- Static core-purity, money-arithmetic, commercial-boundary, AI-provider-boundary
+  and PL/pgSQL CASE-in-IF lint checks pass (zero SQL exceptions).
+- Both commercial-integrity guards pass (94 protected roots, zero diagnostics);
+  existing fingerprints and reasons need no further change. Affected production
+  web routes use @jobguard/api/workspace, with no direct api source import;
+  Cloudflare build was not run. git diff --check passes.
+- Ran the standard lane lint: its local mode includes merged-in index paths and
+  old deleted stems while the merge index is read-only, so it cannot pass until
+  the launcher stages/completes the merge. Separately ran the same exported
+  lanePathAllowed and migrationOrderViolations checks on the final working-tree
+  diff against MERGE_HEAD/origin/main: 71 paths, zero violations, exactly the
+  four migrations above, all above main's 0638. Lane lists the exact final diff
+  and excludes itself. Launcher must rerun the standard lane lint after staging.
+- PostgreSQL fresh/upgrade/catalogue/privilege/RLS, MIGFIX-6/7, restore
+  reconciliation, compiled-test execution and browser journeys remain CI proof;
+  no database or localhost execution was attempted here. This landing requires
+  green CI and independent RED review at its final committed head. Prior PASS
+  3d644538 is precheck evidence, not review of this new landing head.
