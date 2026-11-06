@@ -62,3 +62,30 @@ Local pay-now repository unit checks: 34 passed with at most two workers.
 PostgreSQL/browser execution is unavailable in this sandbox; the catch,
 equal-debit and predecessor/1202 replay assertions still require CI and
 exact-head independent RED review before landing.
+
+Landing catch-up (6 November 2026), B2-TEST-74: resolved the lifecycle
+upgrade conflict by retaining both the batch's exact routine-body checks and
+main 46f0be7ea's complete newer routine checks. Compared every replacement
+in 1200-1203 against main's latest definition (0600 retention, 0597 notice,
+0598 pay-now); only this batch's existing safety deltas remain. The timer and
+attestation routines are new; no main migration is modified or duplicated.
+The options comparison excludes only destinationAccount and separately checks
+every option against its own tenant's fake destination. All remaining money,
+replay and isolation assertions are unchanged. Lane paths exactly match the
+diff from the merged main, excluding config/lanes/.
+
+Local checks (installed binaries, maxWorkers=2, at most three named files/run):
+- packages/db/node_modules/.bin/vitest run --maxWorkers=2
+  test/pay-now-attempt-repository.test.ts test/migration-proof-loader.test.ts
+  test/notice-fixture-repository.test.ts: 128 passed.
+- packages/db/node_modules/.bin/vitest run --maxWorkers=2
+  test/retention-record-repository.test.ts test/vat-fixture-repository.test.ts
+  test/purchase-order-action.test.ts: 71 passed.
+- node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit: passed.
+- TypeScript transpileModule syntax checks for the two resolved/authorized
+  integration-test edits: passed; this does not execute those integrations.
+- Existing lane policy loader, exact path equality and migration-order check:
+  passed. git diff --check MERGE_HEAD: passed.
+PostgreSQL and browser suites were not run: this sandbox cannot start the
+services or bind localhost. CI and exact-head RED review remain landing gates.
+READY for router staging/commit; the read-only Git index is left to the router.

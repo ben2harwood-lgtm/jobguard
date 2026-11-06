@@ -4,9 +4,9 @@ DRAFT for founder review. Not to be sent to any buyer until Ben approves it.
 
 `Practice build only: made-up data, a built-in test identity provider, no real customer data, no outside assessor. Nothing here has been assessed or certified by anyone outside the project.`
 
-Evidence cutoff: 96c0cb8a5b5562c65b79f5f601ba9d60f8fcf05a (12 October 2026)
+Evidence cutoff: 1df57716837b0184b1cf291c62c18a9e537276d4 (4 November 2026)
 
-Audit note: the evidence cutoff predates the internal security audit of 12 October 2026 and any remediation of its findings (the audit is an internal document, not yet in this repository). Q-09, Q-10, Q-14, Q-16, Q-18, E-17b, E-21, E-22, E-23, the register's administrator-revocation row and the new not-claimed rows E-71 to E-73 reflect it.
+Audit note: refreshed by source inspection of the cutoff above, including later merged practice controls. The internal audit of 12 October 2026 remains historical context, not an outside assessment or a run record for this cutoff.
 
 ## 1 What this is and who it is for
 
@@ -14,7 +14,7 @@ A practice questionnaire and source map for a contractor’s IT buyer. It is an 
 
 ## 2 What it covers (product, build, as of which commit)
 
-The contractor track’s practice identity, company-scoped access and audit records at the cutoff above. Companies and accounts are made-up fixtures. It does not describe every product feature or a real-data service. Each source and test line was source-inspected at that commit; cited tests were not run by this builder.
+The contractor track’s practice identity, company-scoped access and audit records at the cutoff above. Companies and accounts are made-up fixtures. It does not describe every product feature or a real-data service. Each source and test line was source-inspected at that commit; only the local unit checks named in the evidence map were executed by this builder; database/browser coverage is source-inspected and awaits CI.
 
 ## 3 How to read an answer
 
@@ -45,15 +45,15 @@ The identical scope disclaimer and verbatim source/test quotes are printed in ba
 
 ## 6 What this pack does not cover
 
-- Automatic provisioning/removal (SCIM), OpenID sign-in, usable emergency access and native mobile sign-in: E-51, E-52, E-54, E-57 not claimed. See internal dependencies in the register.
-- Long-term export checking, rotation and outside timestamps: E-59 and E-60 NOT BUILT.
-- Forgery by the app's database login of owner approvals, membership changes, job status and price, or audit entries: E-71 not claimed (NOT IN PLACE; hardening proposed, founder decision pending).
-- Practice-area session expiry, revocation and hashed storage: E-72 NOT BUILT (piece issued, not built). Removal of a member on every sign-in route: E-73 NOT EVIDENCED beyond the practice contractor route.
+- Full SCIM provisioning and approved OpenID operation remain not claimed. Synthetic deactivation and OIDC adapter/persistence paths are merged (E-51/E-52); OIDC requires an injected test issuer and default composition refuses sign-in. Founder library decision not recorded. Usable emergency access E-54 and native mobile E-57 remain HELD.
+- Synthetic signer rotation, retained public keys/export bytes and offline checking are built (E-60). Outside anchoring remains NOT BUILT (E-59); the merged local fake timestamp adapter is not an outside anchor. Live key custody, current revocation service, scheduled hand-off and long-term operating evidence remain not claimed.
+- Full protection from forgery by the app's database login stays not claimed (E-71 HELD). LP-1 removes direct account/membership writes; LP-4 closes direct audit writes but allows lower_trust statements. Remaining authority paths and founder rulings stay open.
+- Practice-area expiry, revocation and hashed bearer storage are in place in the practice build (E-72); its pending register label concerns cutoff-head PostgreSQL execution evidence. E-73 now covers ordinary/bound-session synthetic SCIM exclusion, including OIDC, but universal member-removal coverage remains NOT EVIDENCED.
 - Independent assessment and Cyber Essentials, Cyber Essentials Plus, ISO 27001 or SOC 2: E-66, E-67, E-67a, E-68 and E-68a NOT COMMISSIONED / NOT STARTED.
 - Master services agreement, data processing agreement (DPA), sub-processor list, data protection impact assessment (DPIA) and pilot runbook: E-61 NOT PRODUCED; contract-set work is identified in the register.
 - Real-data hosting, encryption, retention, backups, incidents and monitoring: E-61 to E-65 not claimed.
 - D04, D07, D12 and D16 remain proposed; G1, G4-C and G5 remain unpassed (E-70 HELD). Proposed recovery targets are not approved or measured; no candidate numbers are quoted.
-- Full enterprise identity/security acceptance remains outstanding, including automatic leaver removal, other sign-in protocols, usable emergency access, mobile coverage and outside evidence. The register maps every parent assertion.
+- Full enterprise identity/security acceptance remains outstanding, including full provisioning, founder-approved identity choices, usable emergency access, mobile coverage and outside evidence. The register maps every parent assertion.
 
 ## 7 When a row may change
 

@@ -198,6 +198,10 @@ export * from "./money-trail-repository.js";
 export * from "./ais-adapter.js";
 export * from "./ais-repository.js";
 
+export * from "./merchant-reliability-repository.js";
+export { EnterpriseAccessRepository } from './enterprise-access-repository.js';
+export { CisFixtureRepository, CisFixturePersistenceError } from "./cis-fixture-repository.js";
+
 export { withEvidencePackV3Snapshot } from "./evidence-pack-v3-sources.js";
 export * from "./rate-suggestion-repository.js";
 export { VatFixtureRepository, VatFixtureRepositoryError } from "./vat-fixture-repository.js";

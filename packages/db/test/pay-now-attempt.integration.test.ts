@@ -71,7 +71,10 @@ describe("MON-6 durable fake attempts on real PostgreSQL",()=>{
   const plain=await repo.command(ordinary.context,ordinary.actor,ordinary.input);
   const current=await repo.command(caught.context,caught.actor,caught.input);
   expect(plain.invoice.includesCatch).toBe(false);expect(current.invoice.includesCatch).toBe(true);
-  expect(current.options).toEqual(plain.options);
+  expect(current.options.map(({destinationAccount: _destinationAccount,...option})=>option))
+   .toEqual(plain.options.map(({destinationAccount: _destinationAccount,...option})=>option));
+  for(const option of current.options) expect(option.destinationAccount).toBe(`fake-builder-${caught.tenantId}`);
+  for(const option of plain.options) expect(option.destinationAccount).toBe(`fake-builder-${ordinary.tenantId}`);
   expect(current.result.customerDebit).toEqual(plain.result.customerDebit);
   expect(current.result.builderFeeDebit).toEqual(plain.result.builderFeeDebit);
   const oldSql=await readFile(new URL("../migrations/0598_pay_now_fake_attempts.sql",import.meta.url),"utf8");
