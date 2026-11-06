@@ -2,8 +2,9 @@
 
 Source inspection confirms the fault in 0793: a repeated reversal identity checks
 allocation and amount but silently accepts changed reason, derivation and journal
-identities. 0793 is the latest routine body in this worktree (merged at
-32a8f30df from cb0e9cd9). 0800 copies that body and changes only the replay guard:
+identities. 0793 is the latest routine body in this worktree (predecessor
+ae998706, caught up from main's 0631 body). 0800 copies that body, preserving
+its settled-plan credit check and cumulative reversal calculation, and changes only the replay guard:
 stored reason and derivation identity must match; any compensation journal for
 that derivation must have the requested journal identity. Missing derivation or
 any mismatch raises the existing `invalid reversal` / 23514 error before writes.
@@ -27,7 +28,10 @@ the pre-existing LATER-SAFETY-17 case is the router-authorized fresh-identity re
 23514 with unchanged counts; its exact-identity concurrent replay still succeeds.
 PostgreSQL execution, including failing-first evidence, is deferred to CI because
 this sandbox cannot start a database or bind localhost. Local checks and their
-results are recorded in the router commit message.
+results are recorded in the router commit message. The catch-up adds a source
+comparison in migfix-6.test.ts: removing exactly the reason, derivation and
+compensation-journal replay guards must reproduce 0793's routine byte for byte.
+It failed against the old 0800 monetary calculation before the repair.
 
 ## Named holds for landing
 
@@ -37,13 +41,14 @@ results are recorded in the router commit message.
   to 0800's full body, retaining ACL/owner and all other routine checks. This
   scanner/pin edit is outside this piece's allowed files and is not made here;
   it supersedes the same named hold in 0793's notes.
-- CI must run recovery.integration.test.ts, the PostgreSQL migration/catalog and
+- CI must run migfix-6.integration.test.ts (including "partial reversal preserves
+  liability without settled plan credit"), migfix-6-upgrade.integration.test.ts,
+  recovery.integration.test.ts (including LATER-SAFETY-30's replay cases), the PostgreSQL migration/catalog and
   upgrade suites, and required repository checks; exact-head independent RED
   review is still required before merge. No database pass is claimed locally.
-- Full lane lint against origin/main currently includes the already merged
-  later-safety-17 changes, outside this lane. Router must use the appropriate
-  caught-up base at landing; working-tree paths are checked separately. Do not
-  widen this lane to absorb predecessor or unrelated changes.
+- The lane lists exactly this piece's changes over later-safety-17 (excluding
+  config/lanes/). Use that caught-up base to check the lane; do not widen it to
+  absorb predecessor or unrelated changes.
 
 Forward-only function replacement; no financial history rollback. Any correction
 requires a reviewed forward migration, with linked compensations if applicable.

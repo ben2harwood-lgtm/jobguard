@@ -10,7 +10,8 @@
         "packages/db/migrations/0800_synthetic_reversal_replay_match.sql",
         "packages/db/test/migration-proofs/0800_synthetic_reversal_replay_match.proof.json",
         "packages/db/migration-notes/0800_synthetic_reversal_replay_match.md",
-        "packages/db/test/recovery.integration.test.ts"
+        "packages/db/test/recovery.integration.test.ts",
+        "packages/db/test/migfix-6.test.ts"
       ]
     }
   }
