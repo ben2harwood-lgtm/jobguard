@@ -437,3 +437,50 @@ Green required CI and exact-head independent RED review remain merge gates.
 No Git writes, commit, push, provider, deployment or launch occurred.
 
 READY for the router to commit and push to codex/sandbox/batch-35, PR #581.
+
+## PR #581 current-main union catch-up — 6 November 2026
+
+RED batch-35, ENT-8a job finish / dark ENT-13a machine connections. Incoming
+main is 1c2d1f2f75944ee31c7fec22e12e8b12860d2b83, including merged #579.
+Resolved later-empty-tables.ts as the exact set union: retain contractor_job_finish
+and fee_provider_fixture_key with every predecessor entry. Main's 0619 SQL and
+proof are byte-identical; they are inherited, not added again. Only this group's
+0620_contractor_job_finish.sql and 0621_connector_machine.sql are added to main.
+Kept the M2-1 historical EndCheck filter unchanged. No new behavior or test
+expectation changes in this catch-up.
+
+Compared all five replaced routines in 0620 against their latest definitions on
+incoming main (0196_enterprise_live_prompts.sql): lp_command, lp_read, lp_finish,
+lp_require_audit and lp_receipt_immutable. Checked all main migrations for later
+references/redefinitions. Each diff contains only the existing batch-35 EndCheck
+extension and CREATE OR REPLACE; no predecessor body/control is removed beyond
+the superseded EndCheck hold. The three 0621 machine routines are new identities.
+The current routine bodies already equal the required main-plus-batch union, so
+no SQL rewrite was needed. Main's fee-store source/tests are preserved unchanged.
+
+Executed installed tools without downloads, all Vitest runs maxWorkers=2 and at
+most three named files per run:
+- packages/db: ./node_modules/.bin/vitest run --maxWorkers=2
+  test/m2-1-migration-proof.test.ts test/migration-proof-loader.test.ts
+  test/late-source-import-migration.test.ts — PASS, 85 tests / 3 files.
+- apps/api: ./node_modules/.bin/vitest run --maxWorkers=2
+  src/connectors/machine.test.ts src/fee-collection/postgres-reservation-store.test.ts
+  — PASS, 35 tests / 2 files (unit doubles, not real PostgreSQL proof).
+- apps/web: ./node_modules/.bin/vitest run --maxWorkers=2
+  'app/api/contractor/jobs/[id]/finish/route.test.ts'
+  'app/contractor/jobs/[id]/possible-extras/job-finish.test.tsx'
+  — PASS, 20 tests / 2 files (unit tests, not browser proof).
+- packages/db: ./node_modules/.bin/tsc -p tsconfig.json --noEmit — PASS.
+- Exact lane comparison against MERGE_HEAD using loadLanePolicy/lanePathAllowed:
+  PASS, all 37 non-lane changed paths and no self-listing. Migration-order check:
+  PASS, only 0620–0621 above main's 0619. git diff --check and
+  git diff MERGE_HEAD --check — PASS. Conflict-marker scan: none.
+
+PostgreSQL/browser suites were not run: the sandbox prohibits PostgreSQL startup
+and localhost binding. Router must stage the resolved file (the read-only Git
+index still records it unmerged), finish the merge, commit and push the same
+codex/sandbox/batch-35 branch / PR #581. Required CI, PostgreSQL upgrade/preservation
+and browser checks, committed-head lane validation and independent exact-head RED
+review remain merge gates. No Git write, push, provider, deployment or launch.
+
+READY for router staging, merge completion, commit and push.
