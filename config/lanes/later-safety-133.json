@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-133": {
+      "branches": [
+        "codex/sandbox/later-safety-133"
+      ],
+      "note": "RED sign-in. READY prepared PROPOSAL, NEEDS BEN typed approval before landing. NOPR.",
+      "allow": [
+        "apps/api/src/auth/identity-rate-limit.test.ts",
+        "apps/api/src/auth/persisted-auth-provider.ts",
+        "apps/web/app/api/auth/request/route.test.ts",
+        "apps/web/app/api/auth/request/route.ts",
+        "apps/web/app/lib/identity-server.ts",
+        "docs/contracts/authentication-v1.md",
+        "docs/verdicts/LATER-SAFETY-133/BUILDER_RECEIPT.md",
+        "packages/db/test/identity.integration.test.ts"
+      ]
+    }
+  }
+}

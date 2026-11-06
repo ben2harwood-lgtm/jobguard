@@ -1,8 +1,18 @@
 import "server-only";
+import { isIP } from "node:net";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { createIdentityApplication, identityStatus, type IdentityApplication } from "@jobguard/api/identity";
 const registry=globalThis as typeof globalThis & {__jobguardIdentityApplication?:IdentityApplication};
+export function identityClientAddress(request: Request): string {
+  // Only the deployment-selected Workers ingress may supply this identity.
+  // Local/Node requests retain the shared fail-closed bucket, even with CF headers.
+  const address = process.env.JOBGUARD_HOSTING === "cloudflare"
+    ? request.headers.get("cf-connecting-ip") : null;
+  if (!address || !isIP(address)) return "web-bootstrap";
+  return isIP(address) === 6
+    ? new URL(`http://[${address}]`).hostname.slice(1, -1) : address;
+}
 export function identityApplication() {
   // Never retain a Worker socket between requests; release closes the connection.
   if (process.env.JOBGUARD_HOSTING === "cloudflare") return createIdentityApplication(process.env,{max:1,maxUses:1});
