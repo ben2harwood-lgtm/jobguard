@@ -7,6 +7,8 @@
       ],
       "note": "LATER-SAFETY-6 through LATER-SAFETY-11; RED money/session boundaries; main 46f0be7ea exact union; B1/B3 preserved; B2-TEST-74 tenant destination assertions corrected. Unique migrations 1200-1203. NOPR; READY for CI and exact-head review. Allow list excludes config/lanes/.",
       "allow": [
+        "apps/api/src/merchant-order.application.test.ts",
+        "apps/api/src/merchant-order.application.ts",
         "apps/api/src/notice-fixture.application.test.ts",
         "apps/api/src/notice-fixture.application.ts",
         "apps/api/src/pay-now-attempt.application.test.ts",
