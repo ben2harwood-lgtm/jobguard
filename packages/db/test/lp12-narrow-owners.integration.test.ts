@@ -139,13 +139,19 @@ it("posts, settles and reverses through the narrow money and audit owners", asyn
 
 it("completes and replays a checked command after removing claim-table ownership", async () => {
   const { UserCommandDispatcher } = await import("../src/commands.js");
-  const f = await session(), job = randomUUID(), id = randomUUID();
-  await db.owner.query("INSERT INTO app.job(tenant_id,id,title,status) VALUES($1,$2,'Fictional LP12 job','live')", [f.tenant, job]);
+  const { AdoptInFlightJobMutation } = await import("../src/job-import-repository.js");
+  const fixture = await adoptionFixture(db), credential = randomBytes(32).toString("hex");
+  const f = { ...fixture.actor, credential }, job = fixture.input.jobId, id = randomUUID();
+  await db.owner.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", [`${f.person}@fictional.invalid`, f.person]);
+  await db.owner.query("INSERT INTO identity.membership_locator VALUES($1,$2,$3)", [f.person, f.tenant, f.member]);
+  await db.owner.query(`INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at)
+    VALUES($1,$2,'synthetic_demo',$3,'fictional',clock_timestamp()+interval '1 hour')`, [randomUUID(), f.person, credential]);
   const command = { version: "command.v1", commandId: id, commandType: "synthetic.lock", semanticKey: `lp12:${id}`,
     actorMembershipId: f.member, subjectType: "job", subjectRef: job,
     action: { actionType: "synthetic.lock", recipient: null, contentHash: "a".repeat(64), aggregateRevision: 1,
       amountPence: null, currency: null, policyVersion: "synthetic_demo_activation.v3", expiresAt: new Date("2099-01-01") } };
   const dispatcher = new UserCommandDispatcher(db.runtime), context = verifiedTenantContextFromMembership({ identityUserId: f.person, tenantId: f.tenant, membershipId: f.member } as Parameters<typeof verifiedTenantContextFromMembership>[0], { kind: "real", credential: f.credential });
+  await dispatcher.dispatch(context, fixture.command, new AdoptInFlightJobMutation(f.tenant, "synthetic_candidate", fixture.input));
   expect(await dispatcher.dispatch(context, command, { mutate: async () => ({ locked: job }) })).toEqual({ locked: job });
   expect(await dispatcher.dispatch(context, command, { mutate: async () => { throw new Error("replay mutated"); } })).toEqual({ locked: job });
   expect((await db.owner.query("SELECT status FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [f.tenant, id])).rows[0].status).toBe("succeeded");
