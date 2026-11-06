@@ -20,6 +20,7 @@
         "apps/api/src/auth/persisted-auth-provider.ts",
         "apps/api/src/auth/principal-bridge.ts",
         "apps/api/src/auth/sso/action-paths.test.ts",
+        "apps/api/src/auth/sso/enterprise-access.http.test.ts",
         "apps/api/src/auth/sso/later-sso-resource.test.ts",
         "apps/api/src/auth/sso/sso-required-unlinked.test.ts",
         "apps/api/src/auth/sso/sso-required.application.ts",
