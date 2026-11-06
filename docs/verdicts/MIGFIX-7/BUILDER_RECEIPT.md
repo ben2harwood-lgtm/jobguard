@@ -178,3 +178,41 @@ current-head CI and one independent RED review remain landing gates. Existing
 initial LATER / SIMPLICITY observation stands without a new review observation.
 READY means prepared for router commit/push and CI/review; it does not establish
 database verification, independent acceptance, merge or release.
+
+
+## Batch-49 repair round 2 (last) — 6 November 2026, 01:55 dispatch
+
+READY — RED, NOPR. Applied the exact narrow test change from
+`~/.local/share/full-steam/coordinator/prechecks/batch-49-catchup3.md`.
+The enterprise-access upgrade proof now requires exactly the named validated
+`landing_allocation_eligible_within_gross` constraint with definition
+`CHECK ((eligible_net_pence <= gross_pence))` on `app.landing_allocation`, then
+removes only that constraint from the catalogue comparison. Every remaining
+catalogue field, constraint and other relation still goes through the existing
+comparison, retaining its pre-existing named-table ACL rules. No SQL, migration
+proof, writer test, catch-up merge or other product behavior changed.
+
+Actual local verification with installed dependencies (no downloads):
+
+- From packages/db: `./node_modules/.bin/vitest run --maxWorkers=2
+  test/enterprise-access-upgrade.integration.test.ts -t 'ACL comparison'`:
+  PASS, 1 passed / 1 deselected. The PostgreSQL upgrade case was not executed.
+- From packages/db: `./node_modules/.bin/vitest run --maxWorkers=2
+  test/lp4-writer-catchup.test.ts`: PASS, all 18 tests. The unmodified scan reads
+  every migration file and still asserts exactly 21 writers; no file excluded.
+- `node node_modules/typescript/bin/tsc -p packages/db/tsconfig.json --noEmit`:
+  PASS, exit 0 with no diagnostics.
+- `node tools/agent-lane-boundary-lint.mjs`: PASS against origin/main 46f0be7ea
+  using the existing merge-base comparison. Separate exact-set check: PASS,
+  all 18 changed non-lane paths, no duplicates or lane self-entry.
+- `git diff --check`: PASS.
+
+The catch-up merge remains at 4263d0fa9 (main f5415ddb4), exactly as instructed;
+no Git write, fetch, merge, commit, push or PR was performed. origin/main has
+advanced to 46f0be7ea; bringing that head in remains router-owned. The sandbox
+cannot start PostgreSQL or bind localhost. Full enterprise-access-upgrade and
+plan-entitlement-lifecycle-upgrade execution therefore remain with GitHub CI
+after router push, with at most 2 workers. Required current-head green CI and
+independent RED review remain landing gates. READY means prepared for router
+commit/push and CI/review, not database verification, acceptance or merge.
+Existing initial LATER / SIMPLICITY notes stand; no new review was performed.
