@@ -43,6 +43,6 @@ it("rejects client-selected authority and all non-synthetic environments", async
 it("records manual placement through a separate authenticated fact", async () => {
   const f = fixture(), commandId = randomUUID();
   await f.app.execute(job, { ...raw, kind: "manual", commandId, supplierReference: "synthetic-example" });
-  expect(f.repo.attestManual).toHaveBeenCalledWith(f.context, { version: "manual-order-attestation.v1", jobId: job, revisionId, commandId, supplierReference: "synthetic-example" }, actor);
+  expect(f.repo.attestManual).toHaveBeenCalledWith(f.context, { version: "manual-order-attestation.v1", jobId: job, revisionId, commandId, supplierReference: "synthetic-example" }, { sessionDigest: "fixture" });
   expect(f.repo.approve).not.toHaveBeenCalled();
 });

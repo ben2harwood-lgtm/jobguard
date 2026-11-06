@@ -38,6 +38,15 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   // 0567 changes only the checked settlement overload's expected approval hash.
   const settlementOid = (await c.admin.query("SELECT 'app.record_simulated_settlement(uuid,uuid,uuid,character varying,bigint,timestamp with time zone,uuid,uuid,uuid)'::regprocedure::oid oid")).rows[0].oid;
   const selfComparison = "(SELECT content_hash FROM app.action_authorization WHERE tenant_id=p_tenant AND id=p_authorization)";
+  // This batch replaces only these exact routine identities; compare their complete bodies.
+  const batchBodies = await Promise.all([
+    ["retention_records", "t uuid, digest text, j uuid, cid uuid, v jsonb, expected text", "1200_retention_timer_runtime_rules.sql"],
+    ["notice_fixture_records", "j uuid, n uuid, digest text, operation text, v jsonb", "1201_notice_live_job_check.sql"],
+    ["pay_now_fake_attempt", "t uuid, digest text, j uuid, operation text, v jsonb", "1202_pay_now_catch_statement.sql"],
+  ].map(async ([name, args, migration]) => {
+    const sql = await readFile(new URL(`../migrations/${migration}`, import.meta.url), "utf8");
+    return { name, args, body: sql.split(`CREATE OR REPLACE FUNCTION app.${name}`)[1]!.split("AS $$")[1]!.split("$$;")[0] };
+  }));
   // 1200 changes exactly the effective-state read and retains the latest mark writer.
   const relink = await readFile(new URL("../migrations/0622_extra_duplicate_relink.sql", import.meta.url), "utf8");
   const relinkBodies = Object.fromEntries(["xa_latest_kind", "xa_mark_duplicate"].map(name => [name,
@@ -52,6 +61,11 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   ].map(([identity, name]) => [identity, finishSql.split(`CREATE OR REPLACE FUNCTION app.${name}(`)[1]!.split("AS $$")[1]!.split("$$;")[0]]));
   for (const prior of security) {
     const current = live.find(row => row.oid === prior.oid);
+    const batchReplacement = batchBodies.find(row => prior.nspname === "app" && prior.proname === row.name && prior.args === row.args);
+    if (batchReplacement) {
+      expect(current?.definition?.split("$function$")[1]).toEqual(batchReplacement.body);
+      continue;
+    }
     // 0566, 0573 and 0606 extend exactly this dispatcher for managed recovery, supervisor queries and dark orders.
     if (prior.nspname === "app" && prior.proname === "lp5_command_result" && prior.args === "p_command_id uuid, p_outcome jsonb") continue;
     // 0599_accounting_export_route_change changes only this checked synthetic dispatcher; dedicated route upgrade tests bind the body.
