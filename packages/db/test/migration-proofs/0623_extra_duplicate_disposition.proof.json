@@ -525,6 +525,15 @@
             "outbox_class": null
           },
           {
+            "command_type": "EndCheck",
+            "version": "end-check.v1",
+            "permission_rule": "owner",
+            "lock_adapter": "route_before_begin",
+            "completion_adapter": "contractor_job_finish",
+            "audit_class": "operational",
+            "outbox_class": null
+          },
+          {
             "command_type": "rate.suggestion_accept",
             "version": "rate-suggestion-accept.v1",
             "permission_rule": "owner",
@@ -1103,6 +1112,15 @@
             "lock_adapter": "route_before_begin",
             "completion_adapter": "duplicate_disposition",
             "audit_class": "commercial",
+            "outbox_class": null
+          },
+          {
+            "command_type": "EndCheck",
+            "version": "end-check.v1",
+            "permission_rule": "owner",
+            "lock_adapter": "route_before_begin",
+            "completion_adapter": "contractor_job_finish",
+            "audit_class": "operational",
             "outbox_class": null
           },
           {

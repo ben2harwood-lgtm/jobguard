@@ -42,6 +42,14 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   const relink = await readFile(new URL("../migrations/0622_extra_duplicate_relink.sql", import.meta.url), "utf8");
   const relinkBodies = Object.fromEntries(["xa_latest_kind", "xa_mark_duplicate"].map(name => [name,
     relink.split(`CREATE OR REPLACE FUNCTION app.${name}`)[1]!.split("AS $$")[1]!.split("$$;")[0]]));
+  const finishSql = await readFile(new URL("../migrations/0620_contractor_job_finish.sql", import.meta.url), "utf8");
+  const finishRoutineBodies = new Map([
+    ["lp_command|p_session uuid, p_input jsonb, p_source_bytes bytea", "lp_command"],
+    ["lp_read|p_session uuid, p_input jsonb", "lp_read"],
+    ["lp_finish|p_session uuid, p_command uuid, p_result jsonb", "lp_finish"],
+    ["lp_require_audit|", "lp_require_audit"],
+    ["lp_receipt_immutable|", "lp_receipt_immutable"],
+  ].map(([identity, name]) => [identity, finishSql.split(`CREATE OR REPLACE FUNCTION app.${name}(`)[1]!.split("AS $$")[1]!.split("$$;")[0]]));
   for (const prior of security) {
     const current = live.find(row => row.oid === prior.oid);
     // 0566, 0573 and 0606 extend exactly this dispatcher for managed recovery, supervisor queries and dark orders.
@@ -50,6 +58,10 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     if (prior.nspname === "app" && prior.proname === "accounting_export" &&
       prior.args === "t uuid, digest text, operation text, source text, v jsonb") {
       expect(current?.definition).not.toEqual(prior.definition);
+    } else
+    // 0620 extends only these exact live-prompt bodies; preserve their full replacements.
+    if (prior.nspname === "app" && finishRoutineBodies.has(`${prior.proname}|${prior.args}`)) {
+      expect(current?.definition?.split("$function$")[1]).toEqual(finishRoutineBodies.get(`${prior.proname}|${prior.args}`));
     } else
     // 0615 extends the exact success-fee writer from 0583; retain its full latest body.
     if (prior.nspname === "app" && prior.proname === "write_success_fee_v3" &&

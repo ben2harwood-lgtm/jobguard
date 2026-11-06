@@ -747,3 +747,58 @@ watchdog, relink/unlink, approval/export and race suites. Browser CI must run
 ENT-5-duplicate-candidates on phone and desktop and affected mandatory journeys.
 Required full CI and exact-head independent RED review remain outstanding.
 Only made-up fixtures; no providers, real money/customer data or release.
+
+
+## batch-37 catch-up to #579 and #581 — 6 November 2026
+
+RED; catch-up only for PR #582, branch `codex/sandbox/batch-37`.
+Compared against incoming main `f5415ddb4c3a40796dd812e8b5946ba5094daa2b`.
+Resolved all six working-file conflicts as a union: EndCheck and
+ResolveDuplicateCandidates both survive in the current registry, historical
+filters, restore snapshots and later-empty-table catalogue. The exact 0620
+live-prompt assertions and 0622/0623 duplicate assertions both remain.
+Updated 0623's registry proof to start from 0620's exact 64-row snapshot and
+retain both commands in its sorted 65-row successor. No other expectation
+change or new product behaviour.
+
+Every migration already on main is byte-identical. Only this group's 0622 and
+0623 are added. Scanned main's migrations in order for each replaced routine;
+compared full definitions against latest main: xa_latest_kind (0158),
+xa_mark_duplicate (0522), cb_unresolved (0243), extra_duplicate_candidates
+(0590). The existing replacements already preserve main's latest behaviour
+apart from this group's intended relink/disposition changes, so no SQL-body
+rewrite was needed. In particular the mark writer retains its LP-5 effect
+binding and the candidate reader retains every mainline permission/mode check,
+active-link field and candidate predicate.
+
+Local checks with installed Node 24.17.0 and cached pnpm 10.28.1:
+- Vitest, maxWorkers=2, late-source-import-migration,
+  m2-1-migration-proof and extra-relink-migration: 10 passed.
+- Vitest, maxWorkers=2, migration-proof-loader,
+  src/extra-duplicate-candidates and lp5-command-catalog: 81 passed in two
+  test files; lp5-command-catalog is an imported catalogue, not a test suite.
+- Web Vitest, maxWorkers=2, duplicate-candidates route and transport: 6 passed.
+- `pnpm typecheck --concurrency=2`: all seven package tasks passed in 25.045s.
+  Turbo reported restricted shared-cache IO warnings; no task failed.
+- Core purity, money arithmetic, commercial boundary, AI provider boundary and
+  PL/pgSQL CASE-in-IF linters passed (288 migrations checked).
+- Read-only checks: all main migrations byte-identical; only 0622/0623 added;
+  0623 exact registry predecessor and PostgreSQL jsonb-text ordering verified;
+  lanePathAllowed and exact lane equality passed for 30 non-lane paths.
+- Vitest list collected 17 cases across plan-entitlement-lifecycle-upgrade,
+  restore-reconciliation-upgrade and extra-duplicate-candidates integration.
+  Collection is syntax/import evidence only; no database hooks ran.
+- `git diff --check origin/main` passed; no conflict markers remain in the
+  working files. The read-only index still records the six original conflicts;
+  the router must stage these resolutions and finish its existing merge.
+
+The global pnpm shim stalled before running tests and was interrupted; the
+first typecheck attempt through that shim was also interrupted (zero completed
+checks). Used a /tmp wrapper around the already-cached pinned pnpm thereafter;
+no packages downloaded. An escaped-bracket web filter collected no files;
+corrected literal paths ran the six tests above. No checks were weakened.
+
+READY for router commit/push to the same branch. Full exact-head CI, PostgreSQL
+fresh/upgrade/catalogue/RLS/race suites, browser journeys and independent RED
+review remain required. No Git write, database startup, socket bind, provider,
+real customer data, release or deployment was performed.
