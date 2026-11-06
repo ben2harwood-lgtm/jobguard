@@ -1,4 +1,4 @@
-# 0638 — MON-6 customer practice display
+# 0633 — MON-6 customer practice display
 
 Adds one identity-only read routine; no tables, columns, roles or table grants.
 Its EXECUTE permission is restricted to the existing identity login, as for other
@@ -11,4 +11,4 @@ by resolve/read. Existing resolve locks also serialize grant revocation.
 
 Forward fix: replace this routine in a reviewed migration; disable the practice
 route while investigating. No data rollback is necessary because it writes none.
-The 0638 proof is a declared catalogue expectation, awaiting PostgreSQL CI.
+The 0633 proof is a declared catalogue expectation, awaiting PostgreSQL CI.

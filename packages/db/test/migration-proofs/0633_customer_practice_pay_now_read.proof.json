@@ -1,5 +1,5 @@
 {
-  "migration": "0638_customer_practice_pay_now_read.sql",
+  "migration": "0633_customer_practice_pay_now_read.sql",
   "lp0": [
     {
       "section": "groups",
@@ -23,7 +23,7 @@
         },
         "downstream": "Read-only invoice number and current balance. No hidden data, attempts or financial writes.",
         "sources": [
-          "packages/db/migrations/0638_customer_practice_pay_now_read.sql",
+          "packages/db/migrations/0633_customer_practice_pay_now_read.sql",
           "apps/api/src/pay-now-attempt.application.ts"
         ],
         "tests": [
@@ -65,7 +65,7 @@
           "LP-12": "Only the identity login executes this bounded read routine."
         },
         "sources": [
-          "packages/db/migrations/0638_customer_practice_pay_now_read.sql",
+          "packages/db/migrations/0633_customer_practice_pay_now_read.sql",
           "apps/api/src/pay-now-attempt.application.ts"
         ],
         "tests": [

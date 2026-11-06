@@ -19,14 +19,14 @@
         "apps/web/proxy.test.ts",
         "apps/web/proxy.ts",
         "docs/contracts/pay-now-fake-attempts-dark-v1.md",
-        "packages/db/migration-notes/0638_customer_practice_pay_now_read.md",
-        "packages/db/migrations/0638_customer_practice_pay_now_read.sql",
+        "packages/db/migration-notes/0633_customer_practice_pay_now_read.md",
+        "packages/db/migrations/0633_customer_practice_pay_now_read.sql",
         "packages/db/src/northside-demo.ts",
         "packages/db/test/customer-practice-pay-now-fixtures.test.ts",
         "packages/db/test/customer-practice-pay-now-fixtures.ts",
         "packages/db/test/customer-practice-pay-now.integration.test.ts",
         "packages/db/test/final-check-fixture.ts",
-        "packages/db/test/migration-proofs/0638_customer_practice_pay_now_read.proof.json",
+        "packages/db/test/migration-proofs/0633_customer_practice_pay_now_read.proof.json",
         "packages/db/test/northside-demo.integration.test.ts",
         "packages/db/test/site-extra-priced-evidence.integration.test.ts"
       ]
