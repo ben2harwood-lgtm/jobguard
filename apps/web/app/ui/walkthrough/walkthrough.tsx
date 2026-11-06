@@ -6,7 +6,9 @@ import styles from "./walkthrough.module.css";
  * Actions must use the screen's existing controls and respect cancellation. */
 export type WalkthroughStep = {
   id: string;
+  timeoutMs?: number;
   target: string;
+  spotlightTarget?: () => HTMLElement | null;
   title: string;
   words: string;
   isDone: () => boolean;
@@ -47,7 +49,7 @@ export function Walkthrough({ steps, onClose }: { steps: readonly WalkthroughSte
     card.current?.focus({ preventScroll: true });
     let highlighted: HTMLElement | null = null;
     function update() {
-      const target = visibleTarget(step!.target);
+      const target = step!.spotlightTarget?.() ?? visibleTarget(step!.target);
       if (highlighted !== target) { highlighted?.classList.remove(styles.target!); highlighted = target; highlighted?.classList.add(styles.target!); }
       if (target) {
         const rect = target.getBoundingClientRect();
@@ -72,7 +74,7 @@ export function Walkthrough({ steps, onClose }: { steps: readonly WalkthroughSte
     if (!step || running.current) return;
     running.current = true; setBusy(true); setError("");
     const controller = new AbortController(); action.current = controller;
-    const timeout = window.setTimeout(() => controller.abort(), 12_000);
+    const timeout = window.setTimeout(() => controller.abort(), step.timeoutMs ?? 12_000);
     try {
       const target = visibleTarget(step.target);
       if (!target) throw new Error("This step's control is unavailable. Stop the tour or return when the screen is ready.");

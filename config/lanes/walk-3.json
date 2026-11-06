@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "lanes": {
+    "walk-3": {
+      "branches": [
+        "codex/sandbox/walk-3"
+      ],
+      "allow": [
+        "apps/web/app/practice-company/walkthrough/page.tsx",
+        "apps/web/app/practice-company/walkthrough/screen-actions.test.ts",
+        "apps/web/app/practice-company/walkthrough/screen-actions.ts",
+        "apps/web/app/practice-company/walkthrough/voice-journey.module.css",
+        "apps/web/app/practice-company/walkthrough/voice-journey.test.tsx",
+        "apps/web/app/practice-company/walkthrough/voice-journey.tsx",
+        "apps/web/app/ui/jobguard-app.tsx",
+        "apps/web/app/ui/walkthrough/walkthrough.tsx",
+        "apps/web/e2e/WALK-3.spec.ts"
+      ],
+      "note": "WALK-3 RED: voice-first practice journey with disclosed prepared-job handovers. NOPR; database/browser CI and independent review pending."
+    }
+  }
+}
