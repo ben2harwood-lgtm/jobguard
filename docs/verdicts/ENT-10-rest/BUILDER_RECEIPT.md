@@ -1,3 +1,22 @@
+## READY — landing merge verification — 6 November 2026
+
+RED, plan piece ENT-10-rest. The launcher has already completed the main merge at `3d6ad4f98`; the index has no unmerged entries. Compared the resulting filesystem with current local `origin/main` (`daed0c282`). Restored `config/lanes/batch-30.json` byte-for-byte from that main ref, removing this group's inherited edits to another lane. No behavior, test, SQL routine or migration changed in this run. All main workspace export lines remain present. No migration differences exist against main, so no duplicate migration or routine recreation is needed. This lane still equals all 15 non-lane paths changed from main, without listing itself.
+
+Actual local checks (installed dependencies, no Git writes or downloads):
+
+- From `apps/api`: `node_modules/.bin/vitest run --maxWorkers=2 src/auth/sso/sso-emergency-owner.test.ts src/auth/sso/sso-emergency.test.ts src/auth/sso/enterprise-access.http.test.ts` — **38 passed**, three files.
+- `node node_modules/typescript/bin/tsc -p apps/api/tsconfig.json --noEmit` — **PASS**.
+- `node node_modules/typescript/bin/tsc -p apps/web/tsconfig.json --noEmit --incremental false` — **PASS**.
+- From `apps/api`: `node --import tsx src/generate-openapi.ts --check` — **PASS**. Initial attempts found stale DB/core dist exports from before the main merge. Rebuilt installed sources with `node node_modules/typescript/bin/tsc -p packages/db/tsconfig.json` and the same command for `packages/core/tsconfig.json` (both PASS); the final OpenAPI check passed without source changes.
+- From `apps/web`: `node_modules/.bin/playwright test ENT-10-emergency-cutover.spec.ts --list --project=mobile-360 --project=desktop --workers=2` — **PASS**, two project cases discovered; discovery only.
+- Filesystem lane equality, main workspace export preservation, unchanged batch-30 lane against main and absence of migration differences — **PASS**, checked using read-only Git objects. `git diff --check` — **PASS**.
+
+Official lane lint still reports the historical committed batch-30 lane delta: its local mode unions the committed diff and working-tree paths rather than evaluating their cancellation. The working-tree restoration is exact; router must commit it and rerun `node tools/agent-lane-boundary-lint.mjs` on that resulting head. No scanner or allowlist was relaxed.
+
+READY for router staging/commit/push and CI. Real PostgreSQL and browser execution, required green CI against current main, and independent RED review at the resulting exact head remain required. No commit, push, PR, deployment or release performed.
+
+---
+
 ## READY — ent-10-rest repair round 2 (last) — 6 November 2026
 
 RED, ENT-10-rest, NOPR. Fixed finding 4 from `coordinator/prechecks/later-safety-43.md`: the emergency-cutover seed now calls `ContractorRepository.startPractice` for the initial owner grant and audited contractor-track assignment, then uses the existing `seedActiveContractorAgreement` fixture. It no longer inserts into `app.role_grant`. The requester uses the bootstrap's real user/membership; the other two emergency owners use owner memberships following `enterprise-access.integration.test.ts` (ordinary contractor commands intentionally refuse new owner grants). The non-owner revocation target remains read-only. All journey assertions remain byte-for-byte unchanged. No trigger, migration, production code or authorization check changed.
