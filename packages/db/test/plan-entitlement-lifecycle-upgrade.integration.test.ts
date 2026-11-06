@@ -56,6 +56,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     ["decision_check_command", "p_digest text, p_command jsonb, p_phase text, p_data jsonb", "0823_baseline_ancestry_audit_trust.sql"],
   ].map(async ([name, args, migration]) => {
     const sql = await readFile(new URL(`../migrations/${migration}`, import.meta.url), "utf8");
+    if (name === "decision_check_command") expect(sql).toContain("rv.result->>'sourceJobId'=source.id::text");
     return { name, args, body: sql.split(`CREATE OR REPLACE FUNCTION app.${name}`)[1]!.split("AS $$")[1]!.split("$$;")[0] };
   }));
   // ENT-5 changes only these exact routine bodies; preserve every predecessor check.

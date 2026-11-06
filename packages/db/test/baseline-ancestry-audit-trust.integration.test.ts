@@ -5,15 +5,15 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { MIGRATION_URLS } from "../src/migrate.js";
 import { actor, member, tenant, importIntegrityJob, createIntegrityFixture, seedIntegrityJob, reviewFor, transaction, type IntegrityFixture } from "./commercial-integrity-v3-fixtures.js";
 
-const binding = " AND EXISTS(SELECT 1 FROM app.job_import_v3 iv WHERE iv.tenant_id=t AND iv.job_id=child.id AND iv.source_job_id=parent.id)";
-const bindings = [binding, binding,
- " AND EXISTS(SELECT 1 FROM app.job_import_v3 iv WHERE iv.tenant_id=t AND iv.job_id=x.id AND iv.source_job_id=source.id)",
- " AND EXISTS(SELECT 1 FROM app.job_import_v3 iv WHERE iv.tenant_id=t AND iv.job_id=next_job.id AND iv.source_job_id=source.id)"];
+const trustedBinding = (child: string, parent: string) =>
+ ` AND (EXISTS(SELECT 1 FROM app.job_import_v3 iv WHERE iv.tenant_id=t AND iv.job_id=${child}.id AND iv.source_job_id=${parent}.id) OR EXISTS(SELECT 1 FROM app.command_receipt rv WHERE rv.tenant_id=t AND rv.command_type='job.adopt_in_flight' AND rv.status='succeeded' AND rv.semantic_key='import:'||${child}.id::text AND rv.result->>'jobId'=${child}.id::text AND rv.result->>'sourceJobId'=${parent}.id::text))`;
+const binding = trustedBinding("child", "parent");
+const bindings = [binding, binding, trustedBinding("x", "source"), trustedBinding("next_job", "source")];
 const migration = MIGRATION_URLS.find(u => u.pathname.endsWith("_baseline_ancestry_audit_trust.sql"))!;
 const sql = readFileSync(migration, "utf8");
 const names = ["ch6_integrity_authority", "ch6_integrity_sources", "ch6_record_integrity_review", "decision_check_command"];
 
-it("copies every latest authority consumer with only the trusted import-record binding added", () => {
+it("copies every latest authority consumer with only the trusted import-record or receipt binding added", () => {
   for (const [index, name] of names.entries()) {
     const pattern = new RegExp(`CREATE (?:OR REPLACE )?FUNCTION app\\.${name}\\([\\s\\S]*?\\$\\$;`, "g");
     const previous = MIGRATION_URLS.filter(u => u.pathname < migration.pathname)

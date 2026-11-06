@@ -99,6 +99,9 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.valid_approval_rules(d jsonb)", "0638_extra_rule_wait_schema.sql"],
   ]) {
     const source = await readFile(new URL(`../migrations/${migration}`, import.meta.url), "utf8");
+    if (identity!.startsWith("app.decision_check_command(")) {
+      expect(source).toContain("rv.semantic_key='import:'||next_job.id::text AND rv.result->>'jobId'=next_job.id::text AND rv.result->>'sourceJobId'=source.id::text");
+    }
     fullBodies.set(identity!, source.split(`FUNCTION ${identity!.split("(")[0]}(`)[1]!.split("AS $$")[1]!.split("$$;")[0]!);
   }
   const namedAdditions = [

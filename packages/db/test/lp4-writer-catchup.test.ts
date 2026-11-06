@@ -58,6 +58,8 @@ describe("LP-4 catch-up preserves latest main routine behaviour", () => {
     expect(successor).toHaveLength(1);
     expect(final.get("app.decision_check_command")).toBe(successor[0]!.sql);
     expect(successor[0]!.sql).toContain("iv.job_id=next_job.id AND iv.source_job_id=source.id");
+    expect(successor[0]!.sql).toContain("rv.command_type='job.adopt_in_flight' AND rv.status='succeeded'");
+    expect(successor[0]!.sql).toContain("rv.semantic_key='import:'||next_job.id::text AND rv.result->>'jobId'=next_job.id::text AND rv.result->>'sourceJobId'=source.id::text");
   });
   it("LP-0 retains the sealed definition and call inventory for every rerouted writer", () => {
     const catalogue = JSON.parse(readFileSync(new URL("../../../docs/contracts/lp-0-effective-privileges-v1.json", import.meta.url), "utf8"));

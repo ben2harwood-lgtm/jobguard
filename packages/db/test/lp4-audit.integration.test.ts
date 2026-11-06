@@ -54,6 +54,8 @@ describe("LP-4 actual runtime audit boundary (PostgreSQL)", () => {
       const successor = readFileSync(new URL("../migrations/0823_baseline_ancestry_audit_trust.sql", import.meta.url), "utf8");
       const body = successor.split("FUNCTION app.decision_check_command(")[1]!.split("AS $$")[1]!.split("$$;")[0];
       expect(rows[0].source).toBe(body);
+      expect(body).toContain("rv.command_type='job.adopt_in_flight' AND rv.status='succeeded'");
+      expect(body).toContain("rv.semantic_key='import:'||next_job.id::text AND rv.result->>'jobId'=next_job.id::text AND rv.result->>'sourceJobId'=source.id::text");
       expect(rows[0]).toMatchObject({ owner: expected[0].owner, security: expected[0].securityDefiner,
         config: [expected[0].searchPath], runtime: expected[0].runtimeExecute });
     } else {

@@ -10,6 +10,7 @@
         "packages/db/test/baseline-ancestry-audit-trust.integration.test.ts",
         "packages/db/test/commercial-integrity-v3-fixtures.ts",
         "packages/db/test/commercial-integrity-v3-sources.integration.test.ts",
+        "packages/db/test/decisions-later.integration.test.ts",
         "packages/db/test/lp4-audit.integration.test.ts",
         "packages/db/test/lp4-writer-catchup.test.ts",
         "packages/db/test/migfix-7-upgrade.integration.test.ts",
