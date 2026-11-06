@@ -27,7 +27,7 @@ beforeAll(async () => {
   const control = new Pool({ host: "127.0.0.1", port, user: "postgres", password: "synthetic", database: "postgres" });
   try { await control.query("CREATE DATABASE jobguard_synthetic_demo"); } finally { await control.end(); }
   admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password: "synthetic", database: "jobguard_synthetic_demo" });
-  // Fresh database, real migrator, including 0853; a second pass must be harmless.
+  // Fresh database, real migrator, including 0671; a second pass must be harmless.
   await migrate(admin); await migrate(admin);
   await admin.query("CREATE ROLE party_work_order_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_runtime TO party_work_order_login");
   runtime = new Pool({ host: "127.0.0.1", port, user: "party_work_order_login", password: "synthetic", database: "jobguard_synthetic_demo", max: 2 });
@@ -111,8 +111,8 @@ describe("LATER-SAFETY-127 contractor party binding", () => {
     await assertHomeownerRefused(await fixture("quoting"));
   });
 
-  it("installs 0853 once and restricts the trigger function to its migration owner", async () => {
-    expect((await admin.query("SELECT count(*)::int n FROM public.jobguard_schema_migration WHERE migration_name='0853_contractor_party_bind_work_order_only.sql'")).rows).toEqual([{ n: 1 }]);
+  it("installs 0671 once and restricts the trigger function to its migration owner", async () => {
+    expect((await admin.query("SELECT count(*)::int n FROM public.jobguard_schema_migration WHERE migration_name='0671_contractor_party_bind_work_order_only.sql'")).rows).toEqual([{ n: 1 }]);
     const row = (await admin.query(`SELECT pg_get_userbyid(proowner) AS owner,prosecdef,proconfig,
       has_function_privilege('jobguard_runtime',oid,'EXECUTE') AS runtime,
       has_function_privilege('jobguard_identity',oid,'EXECUTE') AS identity,

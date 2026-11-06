@@ -1,5 +1,5 @@
 {
-  "migration": "0853_contractor_party_bind_work_order_only.sql",
+  "migration": "0671_contractor_party_bind_work_order_only.sql",
   "lp0": [
     {
       "section": "routines",
