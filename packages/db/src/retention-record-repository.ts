@@ -14,15 +14,15 @@ const term = retentionProfileV1.shape.conditions.element;
 const inputSource = z.union([term.shape.source.options[0], term.shape.source.options[1].omit({ actorId: true })]);
 const recordInput = z.discriminatedUnion("version", [
   retentionProfileV1.omit(omitted).extend({ conditions: z.array(term.extend({ source: inputSource, dateSource: inputSource })).min(1).max(20) }),
-  retentionReviewV1.omit(omitted),
+  retentionReviewV1.omit(omitted).extend({ trigger: z.literal("human") }),
   retentionResolutionV1.omit(omitted).extend({ humanSource: retentionResolutionV1.shape.humanSource.omit({ actorId: true }) }),
   retentionReleaseV1.omit(omitted), retentionReceiptV1.omit(omitted), retentionReversalV1.omit(omitted),
 ]);
 const commandV1 = z.object({ version: z.literal("retention-record-command.v1"), commandId: id, jobId: id, record: recordInput }).strict();
 const actorV1 = z.object({ sessionDigest: z.string().regex(/^[a-f0-9]{64}$/u) }).strict();
-const preparedV1 = z.object({ actorId: id.nullable(), records: z.array(retentionRecordV1), bookHash: z.string().regex(/^[a-f0-9]{64}$/u) }).strict();
+const preparedV1 = z.object({ actorId: id.nullable(), records: z.array(retentionRecordV1), bookHash: z.string().regex(/^[a-f0-9]{64}$/u), today: z.iso.date() }).strict();
 export class RetentionRecordRepositoryError extends Error {
-  constructor(public readonly code: "INVALID_RETENTION_INPUT" | "RETENTION_NOT_FOUND" | "RETENTION_CONFLICT" | "RETENTION_DARK" | "RETENTION_UNAVAILABLE") {
+  constructor(public readonly code: "INVALID_RETENTION_INPUT" | "RETENTION_NOT_FOUND" | "RETENTION_CONFLICT" | "RETENTION_DARK" | "RETENTION_UNAVAILABLE" | "RETENTION_FORBIDDEN" | "RETENTION_UNAUTHENTICATED") {
     super(code); this.name = "RetentionRecordRepositoryError";
   }
 }
@@ -36,7 +36,11 @@ export class RetentionRecordRepository {
     try { return await work(); } catch (error) {
       if (error instanceof RetentionError || error instanceof RetentionRecordRepositoryError) throw error;
       if ((error as { code?: string } | null)?.code === "23505") throw new RetentionRecordRepositoryError("RETENTION_CONFLICT");
+      if (error instanceof z.ZodError) throw new RetentionRecordRepositoryError("RETENTION_CONFLICT");
       const message = error instanceof Error ? error.message : "";
+      if (message === "JOB_NOT_LIVE") throw new RetentionRecordRepositoryError("RETENTION_CONFLICT");
+      if (message === "METER_FORBIDDEN") throw new RetentionRecordRepositoryError("RETENTION_FORBIDDEN");
+      if (message === "RETENTION_UNAUTHENTICATED") throw new RetentionRecordRepositoryError("RETENTION_UNAUTHENTICATED");
       if (["RETENTION_NOT_FOUND", "RETENTION_CONFLICT", "RETENTION_DARK"].includes(message)) {
         throw new RetentionRecordRepositoryError(message as "RETENTION_NOT_FOUND" | "RETENTION_CONFLICT" | "RETENTION_DARK");
       }
@@ -44,22 +48,23 @@ export class RetentionRecordRepository {
     }
   }
   /** Infrastructure-only timer port: no actor, arbitrary record or date input. */
-  async raiseTimerReviews(context: VerifiedTenantContext) {
+  async raiseTimerReviews(context: VerifiedTenantContext, onRefused: (refusal: { jobId: string; code: string }) => void = () => {}) {
     // Ben's 6 Nov 2026 router-chat "yes": this named sessionless port only.
     // Sessionless by design: the infrastructure timer login cannot bind a human session.
     // Hold: the break-glass identity design goes to Ben before real data.
     const scoped = verifiedTenantContextForQueuedJob(context.tenantId);
     const jobs = await this.guarded(() => withTenant(this.pool, scoped, async db =>
       z.array(id).parse((await db.$client.query(
-        "SELECT infrastructure.retention_timer($1,NULL,NULL,NULL) result", [context.tenantId],
+        "SELECT app.retention_timer($1,NULL,NULL,NULL) result", [context.tenantId],
       )).rows[0]?.result)));
-    let appended = 0;
-    for (const jobId of jobs) appended += await this.guarded(() => withTenant(this.pool, scoped, async db => {
+    let appended = 0, refused = 0;
+    for (const jobId of jobs) {
+     try { appended += await this.guarded(() => withTenant(this.pool, scoped, async db => {
       const invoke = async (record: unknown, expected: string | null) => (await db.$client.query(
-        "SELECT infrastructure.retention_timer($1,$2,$3::jsonb,$4) result",
+        "SELECT app.retention_timer($1,$2,$3::jsonb,$4) result",
         [context.tenantId, jobId, record === null ? null : JSON.stringify(record), expected],
       )).rows[0]?.result;
-      let stored = preparedV1.extend({ today: z.iso.date() }).parse(await invoke(null, null));
+      let stored = preparedV1.parse(await invoke(null, null));
       let book = retentionBookV1.parse({ version: "retention.book.v1", environment: "synthetic", tenantId: context.tenantId, jobId, records: stored.records });
       reconcileRetentionBook(book); // Reject altered histories even when there is nothing due.
       const profile = book.records.findLast(row => row.version === "retention.profile.v1");
@@ -74,18 +79,25 @@ export class RetentionRecordRepository {
           if (error instanceof RetentionError && error.code === "CONDITION_UNMET") continue;
           throw error;
         }
-        stored = preparedV1.extend({ today: z.iso.date() }).parse(await invoke(record, stored.bookHash));
+        stored = preparedV1.parse(await invoke(record, stored.bookHash));
         count++;
       }
       return count;
     }));
-    return appended;
+     } catch (error) {
+      if (!(error instanceof RetentionError || error instanceof RetentionRecordRepositoryError)
+        || (error instanceof RetentionRecordRepositoryError && !["RETENTION_CONFLICT", "RETENTION_NOT_FOUND"].includes(error.code))) throw error;
+      refused++;
+      onRefused({ jobId, code: error.code });
+     }
+    }
+    return { appended, refused };
   }
-  async read(context: VerifiedTenantContext, jobId: string) {
-    const job = id.safeParse(jobId);
-    if (!job.success) throw new RetentionRecordRepositoryError("INVALID_RETENTION_INPUT");
+  async read(context: VerifiedTenantContext, actor: { sessionDigest: string }, jobId: string) {
+    const job = id.safeParse(jobId), session = actorV1.safeParse(actor);
+    if (!job.success || !session.success) throw new RetentionRecordRepositoryError("INVALID_RETENTION_INPUT");
     return this.guarded(() => withTenant(this.pool, context, async db => {
-      const stored = preparedV1.parse((await db.$client.query("SELECT app.retention_records($1,NULL,$2,NULL,NULL,NULL) result", [context.tenantId, job.data])).rows[0]?.result);
+      const stored = preparedV1.parse((await db.$client.query("SELECT app.retention_records($1,$2,$3,NULL,NULL,NULL) result", [context.tenantId, session.data.sessionDigest, job.data])).rows[0]?.result);
       const book = retentionBookV1.parse({ version: "retention.book.v1", environment: "synthetic", tenantId: context.tenantId, jobId: job.data, records: stored.records });
       return { book, reconciliation: reconcileRetentionBook(book) };
     }));
@@ -102,7 +114,10 @@ export class RetentionRecordRepository {
       const stored = preparedV1.parse(await invoke(null, null));
       if (!stored.actorId) throw new RetentionRecordRepositoryError("RETENTION_NOT_FOUND");
       const stamp = (source: z.infer<typeof inputSource>) => source.kind === "human_input" ? { ...source, actorId: stored.actorId } : source;
-      const fields = input.record.version === "retention.profile.v1"
+      const prior = stored.records.find(row => row.id === input.commandId);
+      const fields = input.record.version === "retention.review.v1"
+        ? { ...input.record, raisedOn: prior?.version === "retention.review.v1" ? prior.raisedOn : stored.today }
+        : input.record.version === "retention.profile.v1"
         ? { ...input.record, conditions: input.record.conditions.map(item => ({ ...item, source: stamp(item.source), dateSource: stamp(item.dateSource) })) }
         : input.record.version === "retention.resolution.v1"
           ? { ...input.record, humanSource: { ...input.record.humanSource, actorId: stored.actorId } } : input.record;

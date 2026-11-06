@@ -31,10 +31,10 @@ describe("catalogue addition ordering", () => {
 });
 
 
-it("includes the binding table in full upgrade snapshots without filtering rows", async () => {
+it("leaves the per-transaction binding table out of full upgrade snapshots", async () => {
   const binding = { transaction_id: "fixture", tenant_id: "fictional" };
   const db = { query: async (sql: string) => ({ rows: sql.includes("FROM pg_tables")
     ? [{ schemaname: "control_plane", tablename: "request_binding" }]
     : [{ data: [binding] }] }) };
-  expect(await snapshotRows(db as never)).toEqual({ "control_plane.request_binding": [binding] });
+  expect(await snapshotRows(db as never)).toEqual({});
 });

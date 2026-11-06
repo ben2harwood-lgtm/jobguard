@@ -18,6 +18,9 @@ async function setup() {
   const sessionId = randomUUID(), sessionCredential = createHash("sha256").update(randomUUID()).digest("hex");
   await c.admin.query("INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at) VALUES($1,$2,'synthetic_demo',$3,$4,clock_timestamp()+interval '1 hour')",
     [sessionId, user, sessionCredential, state.credentials.csrfToken]);
+  // LP-6b binds the real session, so give the fictional owner the identity rows a signed-in member has.
+  await c.admin.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", [`${user}@fictional.invalid`, user]);
+  await c.admin.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3)", [user, a.tenantId, a.actorId]);
   state.identity = { allowedOrigin: "https://company.invalid", provider: {
     authenticate: async (token: string) => token === state.credentials.sessionToken ? { identityUserId: user, sessionId, sessionCredential, csrfToken: state.credentials.csrfToken } : undefined,
     findMembership: async (_principal: unknown, tenant: string) => tenant === a.tenantId ? { id: a.actorId, tenantId: a.tenantId, identityUserId: user, role: "owner" } : undefined,

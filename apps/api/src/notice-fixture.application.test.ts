@@ -70,3 +70,10 @@ it("marks only an exact unexpired approved server preview as usable", async () =
   x.repository.read.mockResolvedValue({ preview: exact, records: [], decisions: [approved] } as never);
   expect((await x.app.read(credentials, jobId, jobId)).activeDecisionId).toBe(actorId);
 });
+
+it("maps a repository outage to an unknown result and 503 without leaking details", () => {
+  expect(noticeFixtureFailure(new NoticeFixtureRepositoryError("NOTICE_UNAVAILABLE"))).toEqual({
+    status: 503, body: { version: "notice.fixture-error.v1", code: "NOTICE_UNAVAILABLE",
+      message: "Practice notice records could not be loaded. The result is unknown. Refresh or retry the same saved command." },
+  });
+});

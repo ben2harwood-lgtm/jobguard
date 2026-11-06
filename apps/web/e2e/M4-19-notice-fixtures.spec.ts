@@ -26,6 +26,27 @@ test("stored practice notices survive reload, bind approval, keep service facts 
     await pool.query("INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at) VALUES($1,$2,'synthetic_demo',$3,$4,clock_timestamp()+interval '1 hour')", [randomUUID(), userId, digest, csrf]);
     // Seed the job through the repository, never an HTTP route.
     jobId = (await new db.JobRepository(pool).create(verified, ["job:update"], { title: "Fictional notice practice job" })).id;
+    const baseline = randomUUID(), revision = randomUUID(), scopeId = randomUUID();
+    // Source lineage fixtures, never issue authority or a commercial document.
+    await pool.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')", [scopeId,tenantId,jobId]);
+    await pool.query("INSERT INTO app.quote_version(tenant_id,job_id,id,version,content_hash,net_value_pence,status) VALUES($1,$2,$3,1,$4,10000,'accepted')", [tenantId,jobId,baseline,"a".repeat(64)]);
+    await pool.query("INSERT INTO app.scope_revision(tenant_id,job_id,id,scope_item_id,revision,description,quantity_decimal,unit,unit_price_pence,total_pence) VALUES($1,$2,$3,$4,1,'Fictional work','1','item',10000,10000)", [tenantId,jobId,revision,scopeId]);
+    // Owner-only fictional lifecycle fixture, as in interim-drafts; never a route or issue authority.
+    const fixture = await pool.connect();
+    try {
+      await fixture.query("BEGIN");
+      await fixture.query("SET LOCAL session_replication_role=replica");
+      await fixture.query("SELECT set_config('app.tenant_id',$1,true)", [tenantId]);
+      const lifecycle = (await fixture.query("SELECT revision FROM app.job WHERE tenant_id=$1 AND id=$2", [tenantId,jobId])).rows[0] as { revision: number };
+      const move = (expected: number, to: string, reason: string, live = false) => fixture.query(
+        "SELECT app.transition_job($1,$2,$3,$4,$5,$6,$7,$8,$9)",
+        [tenantId,jobId,expected,to,reason,baseline,live?10000:null,live?"reference_fee_policy_v1":null,live?150:null]);
+      await move(lifecycle.revision,"quoting","start_quote");
+      await move(lifecycle.revision+1,"accepted","accept_quote");
+      await move(lifecycle.revision+2,"live","switch_live",true);
+      await fixture.query("SET LOCAL session_replication_role=origin");
+      await fixture.query("COMMIT");
+    } catch (error) { await fixture.query("ROLLBACK"); throw error; } finally { fixture.release(); }
   } finally { await pool.end(); }
   await context.addCookies([{ name: "jobguard_session", value: token, url: baseURL!, httpOnly: true, sameSite: "Strict" }]);
   const main = page.getByRole("main"), route = `/api/jobs/${jobId}/notice-fixtures`;

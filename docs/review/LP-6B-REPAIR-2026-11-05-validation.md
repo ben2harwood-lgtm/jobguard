@@ -274,3 +274,55 @@ restore-reconciliation-upgrade and server-entitlement-upgrade. Browser journeys
 must include DEMO-A1, ENT-10-rest-notices, ENT-10a and M4-20-retention-records at
 phone and desktop widths. No PostgreSQL/browser proof or independent review is
 claimed by this builder. READY is for router commit and these checks only.
+
+
+## Test-only finish and actual main merge — 6 November 2026 10:57 UTC
+
+READY for router staging/commit and CI; not a merge/release or independent RED PASS.
+Incoming main is d78e60463 (#595, batch-46), newer than check A's comparison.
+Resolved all 12 working-file conflicts; the read-only Git index remains unmerged
+until the router stages them. No Git write command was run. Preserve MERGE_HEAD
+when recording this real merge. The three named conflict files retain LP-6b's
+versions plus the newer main routine-body checks. All main business-table keys
+remain; only control_plane.request_binding is excluded as requested.
+
+Applied the supplied lp6b-583-af34badd-fix.diff exactly; reverse dry-run confirms
+all five hunks. Main #595's session-digest manual-attestation signature, timer
+refusal callback/result and app.retention_timer route are retained. Updated the
+existing LP-6b caller-compatibility unit fixture to these main interfaces without
+weakening its rollback, no-business-SQL or human-binding assertions. Retained
+main's duplicate-loading markup and new accessibility test. No new product policy,
+grant or guard change. The migration SQL, tenant context, emergency reader,
+two-site constructor guard and deferred-binding scanner are byte-identical to
+pre-repair HEAD. Main audit: 454 incoming paths byte-identical to main; 19 paths
+have the existing LP-6b changes or necessary conflict unions.
+
+Checks run with installed Node 24.17.0, TypeScript and Vitest only, no downloads:
+- node_modules/.bin/tsc -p <workspace>/tsconfig.json --noEmit: all seven workspaces
+  pass (core, config, storage, ai, db, api, web). The package lint scripts use these
+  same TypeScript commands. Built core/config/storage/ai/db with installed tsc to
+  refresh stale local dist before rerunning affected API/web checks; all pass.
+- Vitest, at most three named files per invocation, maxWorkers=1 or 2: 343 passed.
+  DB snapshot/withTenant/caller compatibility: 24; deferred/bind-after-locks: 7;
+  purchase-order/retention/VAT repositories: 72; API boundary/timer/SSO: 166;
+  CIS/rate/VAT application fixtures: 26; pay-now application: 36; web VAT route
+  and duplicate-candidates accessibility: 12. Final logs: /tmp/lp6b-db-unit-a.log,
+  /tmp/lp6b-db-guards.log, /tmp/lp6b-db-repos.log, /tmp/lp6b-api-boundary.log,
+  /tmp/lp6b-api-fixtures.log, /tmp/lp6b-api-pay-now.log, /tmp/lp6b-web.log.
+- node --test --test-concurrency=1 tools/*.test.mjs: 423 passed, 0 failed/skipped
+  (/tmp/lp6b-tools.log).
+- Core purity, money arithmetic, commercial boundary, AI provider boundary and
+  PL/pgSQL lint pass (315 migrations). Stock node tools/lint.mjs stops at lane
+  inspection because HEAD/index still predate this merge; do not treat it as a
+  full lint PASS. Exact origin/main-to-working-file lane coverage: 161 non-lane
+  paths, no config/lanes path included. Router must rerun stock lint after staging
+  and recording the real merge. git diff --check origin/main passes; no conflict
+  markers remain in source files.
+
+The initial pnpm wrapper stalled before executing checks; stopped it and used
+installed binaries. Initial unit failures were stale compiled output, main's
+new interface expectations in the LP-6b compatibility fixture, and a conflict
+resolution restoring outdated duplicate-loading markup; final runs above pass.
+No database, browser, provider, live money or real customer-data run was attempted.
+CI must prove database/migration/browser suites and clean pinned full checks;
+the required independent RED checks still bind to the router's final exact head.

@@ -30,7 +30,7 @@ it("maps refused manual-order proof to ORDER_ACTION_INVALID before writes, inclu
   const f = fixture(), repo = new PurchaseOrderActionRepository(f.pool);
   const input = { version: "manual-order-attestation.v1", jobId: randomUUID(), revisionId: randomUUID(), commandId: randomUUID(), supplierReference: "synthetic-test" };
   for (let attempt = 0; attempt < 2; attempt++) {
-    await expect(repo.attestManual(f.context, input, f.member.membershipId)).rejects.toMatchObject({ code: "ORDER_ACTION_INVALID" });
+    await expect(repo.attestManual(f.context, input, { sessionDigest: "a".repeat(64) })).rejects.toMatchObject({ code: "ORDER_ACTION_INVALID" });
   }
   expect(f.query.mock.calls.map(([sql]) => sql)).toEqual(Array(2).fill(["BEGIN", "SELECT app.bind_request($1, $2, $3)", "ROLLBACK"]).flat());
   expect(f.release).toHaveBeenCalledTimes(2);
@@ -48,10 +48,10 @@ it("keeps emergency notices sessionless while passing the exact session, CSRF an
 });
 it("uses a sessionless tenant context only for the infrastructure timer; human reads still bind", async () => {
   const f = fixture(), repo = new RetentionRecordRepository(f.pool);
-  await expect(repo.raiseTimerReviews(f.context)).resolves.toBe(0);
-  expect(f.query).toHaveBeenCalledWith("SELECT infrastructure.retention_timer($1,NULL,NULL,NULL) result", [f.member.tenantId]);
+  await expect(repo.raiseTimerReviews(f.context)).resolves.toEqual({ appended: 0, refused: 0 });
+  expect(f.query).toHaveBeenCalledWith("SELECT app.retention_timer($1,NULL,NULL,NULL) result", [f.member.tenantId]);
   expect(f.query.mock.calls.some(([sql]) => sql.includes("bind_request"))).toBe(false);
   f.query.mockClear();
-  await expect(repo.read(f.context, randomUUID())).rejects.toMatchObject({ code: "RETENTION_UNAVAILABLE" });
+  await expect(repo.read(f.context, { sessionDigest: "a".repeat(64) }, randomUUID())).rejects.toMatchObject({ code: "RETENTION_UNAVAILABLE" });
   expect(f.query.mock.calls.map(([sql]) => sql)).toEqual(["BEGIN", "SELECT app.bind_request($1, $2, $3)", "ROLLBACK"]);
 });

@@ -6,7 +6,7 @@
         "codex/sandbox/lp-6b-withtenant",
         "codex/sandbox/lp-6b-repair-wip"
       ],
-      "note": "LP-6b RED repair: main 3f4fc1e95 content union retained; router must record git merge (sandbox .git read-only). Migration reserved 0651, stem-only SQL unchanged. Ben 6 Nov router-chat yes authorizes exactly emergency-notice and retention-timer constructor sites; break-glass identity design goes to Ben before real data. No added grant, named opt-out or sixth skip; existing deferred scanner unchanged. Independent security checks and CI remain required.",
+      "note": "LP-6b RED repair: main d78e60463 batch-46 content retained; merge markers resolved in working files, router must stage resolutions (sandbox .git read-only). Migration reserved 0651, stem-only SQL unchanged. Ben 6 Nov router-chat yes authorizes exactly emergency-notice and retention-timer constructor sites; break-glass identity design goes to Ben before real data. No added grant, named opt-out or sixth skip; existing deferred scanner unchanged. Independent security checks and CI remain required.",
       "allow": [
         "apps/api/src/accounting-export.application.test.ts",
         "apps/api/src/ai-capture-authority.test.ts",
@@ -148,6 +148,7 @@
         "packages/db/test/lp6b-effective-actor-upgrade.integration.test.ts",
         "packages/db/test/lp6b-withtenant.integration.test.ts",
         "packages/db/test/lp6b-withtenant.test.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
         "packages/db/test/migration-proofs/0651_lp6b_effective_session_actor.proof.json",
         "packages/db/test/money-trail-security.integration.test.ts",
         "packages/db/test/northside-demo.integration.test.ts",
@@ -165,6 +166,7 @@
         "packages/db/test/subscription-mandate.test.ts",
         "packages/db/test/success-fee-fixtures.ts",
         "packages/db/test/upgrade-proof-utils.test.ts",
+        "packages/db/test/upgrade-proof-utils.ts",
         "tools/commercial-integrity-boundary.unresolved.json",
         "tools/commercial-integrity-current-source-guard.unresolved.json"
       ]
