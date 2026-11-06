@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-58": {
+      "branches": [
+        "codex/sandbox/later-safety-58"
+      ],
+      "allow": [
+        "packages/db/src/enterprise-dashboard-queries.ts",
+        "packages/db/test/enterprise-dashboard.integration.test.ts"
+      ]
+    }
+  }
+}
