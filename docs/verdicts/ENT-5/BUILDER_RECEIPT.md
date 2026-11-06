@@ -1098,3 +1098,54 @@ no database/browser/provider/customer/live-money/deployment or launch proof is c
 Direct installed TypeScript checks for config, storage, core and AI also passed.
 Together with DB, API and web, all seven package compiler checks passed; this
 does not change the recorded failure of the top-level pnpm launcher command.
+
+## Batch-42 CI repair try 1 — 6 November 2026, PR #594 at 1c515e3e
+
+READY for router commit and push. ENT-5 client approval and DEMO-S company
+Final Check authority design; RED. Builder evidence, synthetic data only.
+
+Read every failed job in CI run 42175030809 through the GitHub connector after
+`gh` could not reach api.github.com. Inspected shard 5's Playwright artifact
+13483279074, including the customer page network trace. Root causes:
+
+- All four core-db shards: the common outbox claim query referenced
+  extra_client_link and xc_send_authority even for unrelated sends. Historical
+  upgrade fixtures intentionally precede one or both objects; PostgreSQL resolves
+  unused OR branches too. Moved the same scoped sender check to a separate query
+  only for the locked client-send action, before claims, attempts or delivery.
+  Current membership, revocation, exact authorization and entitlement checks stay.
+  False, missing or failed sender authority never calls the adapter.
+- Money-trail, financial-reconciliation-queue and recovery-billability successor
+  proofs expected IssueClientApproval's old owner permission after 0642. Their
+  own-step preservation checks remain byte-exact. A cloned successor expectation
+  asserts the old permission is owner, then requires contractor for exactly that
+  row; every other original column, row and type remains compared unchanged.
+- Web shards 2 and 5: ENT-11a and ENT-11b reached the new client page but the API
+  returned 401 UNAUTHENTICATED from proxy.ts. The customer-cookie allowlist omitted
+  extra-approvals. Added only that exact endpoint; route session/origin/grant
+  checks remain. Tests also refuse trailing slash, child and uppercase variants.
+- core, web and checks failed because their prerequisite shards failed. Their
+  logs show no separate root cause. core-checks and Cloudflare bundle passed on
+  the original exact head; these are historical CI results, not repaired-head proof.
+
+Local verification using installed Node 24.17.0 and cached pnpm 10.28.1:
+- DB Vitest run --maxWorkers=2 src/outbox.test.ts src/later-outbox.test.ts:
+  27 passed; includes sender refusal/error and unrelated-send regressions.
+- Web Vitest run --maxWorkers=2 proxy.test.ts app/api/northside/routes.test.ts:
+  67 passed, including the exact customer route boundary.
+- API Vitest run --maxWorkers=2 src/auth/extra-customer.test.ts
+  src/auth/customer-signin.test.ts: 52 passed. Total: 146 executed focused tests.
+- Direct installed TypeScript compiler --noEmit for DB and web: passed.
+- Vitest list --maxWorkers=2 collected all three changed upgrade cases; collection
+  only, no PostgreSQL execution or hooks.
+- Official lane boundary and commercial boundary lint passed. Both commercial
+  integrity guards passed: 94 protected roots, zero diagnostics, existing nine
+  unresolved baselines unchanged. git diff --check passed.
+
+No migrations were edited or renumbered; all main migrations remain unchanged.
+The lane includes the six additional repair paths. No tests were skipped or
+weakened, and no product policy or behavior was added. No Git writes, package
+downloads, PostgreSQL startup, localhost bind, provider, real data or deployment.
+CI must rerun all database and browser shards after the router pushes. Required
+independent RED review must bind the resulting exact head before merge. Existing
+commercial/release holds remain unchanged.
