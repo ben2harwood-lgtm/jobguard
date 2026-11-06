@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-108": {
+      "branches": ["codex/sandbox/later-safety-108"],
+      "note": "LATER-SAFETY-108: RED practice-session ownership anchored to the trusted v3 import source. No migration.",
+      "allow": [
+        "packages/db/src/practice-session.ts",
+        "packages/db/test/practice-owned-jobs-anchor.integration.test.ts"
+      ]
+    }
+  }
+}
