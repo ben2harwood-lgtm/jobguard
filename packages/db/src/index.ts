@@ -217,3 +217,5 @@ export * from "./extra-duplicate-candidates.js";
 export { PlatformInvoiceReadRepository } from "./platform-invoice-read-repository.js";
 export { WormCommandRepository, WormCommandError, type WormReceipt } from "./worm-command-repository.js";
 export * from "./connector-promotion-repository.js";
+
+export * from "./extra-proceed.js";
