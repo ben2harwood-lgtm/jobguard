@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-90": {
+      "branches": [
+        "codex/sandbox/later-safety-90"
+      ],
+      "note": "LATER-SAFETY-90, RED: signed practice invoice VAT; synthetic only, NOPR.",
+      "allow": [
+        "packages/db/migrations/0826_invoice_line_vat_signed_split.sql",
+        "packages/db/test/migration-proofs/0826_invoice_line_vat_signed_split.proof.json",
+        "packages/db/test/invoice-line-vat-signed-split.integration.test.ts"
+      ]
+    }
+  }
+}
