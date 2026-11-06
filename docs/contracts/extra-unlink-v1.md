@@ -247,6 +247,10 @@ revision/link commands and export. Authority and feature entitlement are checked
 before replay; a new command requires the exact current group. Reporter and
 pricing checks cover every member, including linked members and past bindings.
 It writes one receipt, one disposition fact and one final audit append atomically.
+LP-5 lifecycle integration remains held: `ResolveDuplicateCandidates` uses this
+checked writer and its own receipt/replay path; it does not dispatch through
+`begin_command` / `complete_command` or `lp5_command_result`. The registry row
+does not establish lifecycle completion. Production remains disabled.
 No price, approval, origin, link, extra event or export line is changed. The latest
 fact for the exact snapshot decides whether it is unresolved. `reopen` records a
 new fact under the same authority, reason and snapshot rules; history is retained.

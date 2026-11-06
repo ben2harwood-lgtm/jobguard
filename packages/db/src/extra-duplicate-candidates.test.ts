@@ -30,7 +30,7 @@ it("strict disposition command refuses forged authority and requires an exact sn
  for (const patch of [{ fingerprint: "" }, { reasonCode: "" }, { disposition: "approved" }, { groupId: "unknown" }]) expect(duplicateDispositionV1.safeParse({ ...command, ...patch }).success).toBe(false);
 });
 it("the list and export share the exact unresolved groups and preserve the original candidate predicate", () => {
- const added = sql("1201_extra_duplicate_disposition");
+ const added = sql("0623_extra_duplicate_disposition");
  const cb = added.split("CREATE OR REPLACE FUNCTION app.cb_unresolved")[1]!.split("$$;")[0]!;
  const read = added.split("CREATE OR REPLACE FUNCTION app.extra_duplicate_candidates")[1]!.split("$$;")[0]!;
  expect(cb).toContain("app.extra_duplicate_unresolved(p_tenant,p_job)");

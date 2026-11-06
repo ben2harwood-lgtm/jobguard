@@ -1,5 +1,5 @@
 {
-  "migration": "1200_extra_duplicate_relink.sql",
+  "migration": "0622_extra_duplicate_relink.sql",
   "lp0": [
     {
       "section": "routines",
