@@ -4,6 +4,7 @@ import { afterAll, expect, it } from "vitest";
 import { startBeforeMigration, applyMigration, type Cluster } from "./contractor-entitlement-fixtures.js";
 import { proofBefore, proofDifferences } from "./upgrade-proof-utils.js";
 import { migrate } from "../src/migrate.js";
+import { applyUpgradeProofs, loadMigrationProofs } from "./migration-proof-loader.js";
 
 const own = "0632_shadow_group_disclosure.sql";
 let c: Cluster | undefined;
@@ -45,6 +46,32 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   expect((await c.admin.query("SELECT to_regprocedure('app.complete_shadow_firing_post_lock(uuid,uuid,uuid,uuid,uuid,uuid,text,text,uuid,text,jsonb)') routine")).rows[0].routine).toBeNull();
   await migrate(c.admin); await migrate(c.admin);
   expect(await proofDifferences(c.admin, rows)).toEqual({ rows: [], types: [] });
-  expect(await routines()).toEqual(afterRoutines);
-  expect(await catalog()).toEqual(beforeCatalog);
+  // Only batch-41's two new routines are allowed after replay. Existing bodies and privileges stay exact.
+  const proofs = loadMigrationProofs().proofs.filter(p => ["0639_connector_promotion.sql", "0640_platform_invoice_read.sql"].includes(p.migration));
+  expect(proofs).toHaveLength(2);
+  const additions = proofs.flatMap(p => p.upgrade.filter(e => e.section === "routines").map(e => ({ migration: p.migration, row: e.after! })));
+  const key = (r: { nspname: string; proname: string; args: string }) => `${r.nspname}.${r.proname}(${r.args})`;
+  expect(additions.map(e => key(e.row as Parameters<typeof key>[0])).sort()).toEqual([
+    "app.connector_promotion(p_session uuid, p_namespace text, p_event text, p_command uuid, p_result jsonb)",
+    "app.platform_invoice_read(t uuid, digest text)",
+  ]);
+  const replayRoutines = await routines();
+  for (const { migration, row } of additions) {
+    const identity = row as Parameters<typeof key>[0];
+    const matches = replayRoutines.filter(r => key(r) === key(identity));
+    expect(matches).toHaveLength(1);
+    const source = await readFile(new URL(`../migrations/${migration}`, import.meta.url), "utf8");
+    expect(matches[0]!.definition.split("$function$")[1]).toBe(source.split(`FUNCTION ${identity.nspname}.${identity.proname}(`)[1]!.split("AS $$")[1]!.split("$$;")[0]);
+  }
+  const owners = Object.fromEntries((await c.admin.query("SELECT rolname,oid FROM pg_roles")).rows.map(r => [r.rolname, r.oid]));
+  const metadata = (rs: typeof replayRoutines) => rs.map(({ definition: _definition, ...r }) => r);
+  const expected = applyUpgradeProofs({ rows: {}, routines: metadata(afterRoutines), relations: [], policies: [] }, proofs, owners);
+  expect(metadata(replayRoutines)).toEqual(expected.routines);
+  const addedKeys = new Set(additions.map(e => key(e.row as Parameters<typeof key>[0])));
+  expect(replayRoutines.filter(r => !addedKeys.has(key(r)))).toEqual(afterRoutines);
+  const finalCatalog = await catalog();
+  const addedRelations = new Set(["connector_promotion", "connector_promotion_pkey", "connector_promotion_tenant_id_command_id_key"]);
+  expect(finalCatalog.filter(r => r.nspname !== "app" || !addedRelations.has(r.relname))).toEqual(beforeCatalog);
+  expect(finalCatalog.filter(r => r.nspname === "app" && addedRelations.has(r.relname)).map(({ policies: _policies, ...r }) => r)).toEqual(expected.relations);
+  expect((await c.admin.query("SELECT * FROM pg_policies WHERE schemaname='app' AND tablename='connector_promotion' ORDER BY policyname")).rows).toEqual(expected.policies);
 }, 120_000);
