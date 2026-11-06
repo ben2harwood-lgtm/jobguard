@@ -972,3 +972,29 @@ PostgreSQL and browser suites were not run in this sandbox. Full required CI
 and independent RED review against the resulting exact head remain required
 before merge. Neither full M4-15 nor full M5-6 is finished. No Git write,
 provider call, deployment or release was performed.
+
+### Batch-36 catch-up5 fixture alignment — 6 November 2026 (RED, NOPR)
+
+READY for router commit/push. Applied the checker's
+`coordinator/prechecks/batch-36-catchup5-fix.diff` exactly to
+`packages/db/test/direct-debit-practice.integration.test.ts`: reuse
+`seedHomeOwner(c)` after cluster setup and select each session's existing
+practice job instead of inserting a job directly. Assertions and product code
+are unchanged. This is fixture-only catch-up for M4-15 / M5-6, not a repair round.
+
+Local checks using installed package-local Vitest 4.1.12:
+- From packages/db: `node node_modules/vitest/vitest.mjs run --maxWorkers=2
+  test/direct-debit-fixture-repository.test.ts` — 8 passed.
+- From apps/api: `node node_modules/vitest/vitest.mjs run --maxWorkers=2
+  src/fee-collection/direct-debit-practice.application.test.ts` — 5 passed.
+- Exact fixture edit comparison passed. `LANE_BASE_REF=origin/main node
+  tools/agent-lane-boundary-lint.mjs --lane=batch-36` passed. The unchanged lane
+  covers exactly all 28 branch-changed non-lane paths relative to the merge-base
+  with origin/main and excludes itself. `git diff --check` passed.
+
+PostgreSQL and browser suites were not run in this sandbox. CI must run
+`direct-debit-practice.integration.test.ts` (expected 1/1; not locally verified)
+and the required browser/full checks after router push. Main has advanced beyond
+this branch; current-main catch-up and exact-head independent RED review remain
+landing gates. No migration, assertion, product change, Git write, provider call,
+deployment or release occurred. Neither full plan piece is declared finished.
