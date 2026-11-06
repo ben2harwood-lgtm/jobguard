@@ -418,3 +418,56 @@ and build gates. Prior RED checks PASS at b530f334; new-head review evidence is
 not claimed here. READY means ready for router commit and CI, not merge acceptance.
 
 Commit message: /tmp/lp-6b-repair-wip-20261106T132237Z-commit-msg.txt.
+
+
+## 6 November 2026 — post-#600/#601/#602 landing union (READY)
+
+Pending merge: HEAD 994cfe35e07cbacc213e19d9b31854fafb74508b with origin/main
+128260957477d6be9aa88e94789095ac23a175f6. Resolved the only remaining conflict
+in MIGFIX-7 by retaining both the 0655 LP-6b authority entry and main's 0654
+synthetic reversal entry. Neither parent's map entries were removed. The
+plan-entitlement auto-merge retains LP-6b and main's 0654 successor checks.
+The later-empty-tables helper retains all main keys except the existing LP-6b
+exclusion of control_plane.request_binding, which upgrade snapshots omit as
+transaction bookkeeping. No behavior or test-expectation changes were made.
+0655 SQL, migration note and proof are byte-identical to HEAD. Incoming main
+files outside the two overlapping upgrade tests are byte-identical to main.
+Lane registration lists exactly 164 changed non-lane paths relative to main,
+with no config/lanes entries, and both LP-6b branch names.
+
+Actual local checks (installed binaries, no downloads; at most two workers and
+three named Vitest files per run), logs under /tmp/lp6b-143136-*:
+
+- packages/db: node_modules/.bin/vitest run --maxWorkers=2
+  test/lp6b-withtenant.test.ts test/lp6b-caller-compatibility.test.ts
+  test/upgrade-proof-utils.test.ts — 26 passed (db-unit-1.log).
+- packages/db: node_modules/.bin/vitest run --maxWorkers=2
+  test/lp6b-bind-after-locks.test.ts test/lp6b-deferred-binding.test.ts
+  src/tenant-context.test.ts — 28 passed (db-unit-2.log).
+- apps/api: node_modules/.bin/vitest run --maxWorkers=2
+  src/practice-bank.application.test.ts src/auth/context-boundary.test.ts
+  src/retention-review-task.test.ts — 167 passed (api-unit.log).
+- node --test --test-concurrency=2 tools/*.test.mjs — 423 passed, zero failures,
+  skips or cancellations (tools.log).
+- node_modules/.bin/tsc -p <workspace>/tsconfig.json --noEmit, sequentially for
+  packages/config, core, storage, ai, db and apps/api, web — all seven passed
+  (types-<workspace>.log). These also run the workspace lint scripts' checks.
+- node tools/lint.mjs — core purity passed; stock lane lint fails because its
+  read-only pending merge index includes incoming main files (lint.log).
+  No stock root lint PASS is claimed. Standalone core-purity, money-arithmetic,
+  commercial-boundary, ai-provider-boundary and plpgsql-case-in-if lints all
+  passed (<name>-lint.log).
+- Content-only lane check using the existing loadLanePolicy/selectLane,
+  lanePathAllowed and migrationOrderViolations exports — exact 164 paths,
+  migration 0655 above main's 0654: PASS.
+- Both-parent MIGFIX-7 preservation, incoming main byte preservation, 0655
+  byte preservation, TypeScript syntax parsing of the three merge-sensitive
+  upgrade/helper files, and git diff --check — PASS.
+
+READY means ready for router staging/commit/CI only. The pending index still
+shows UU until the router stages MIGFIX-7; no git index/ref writes or pushes
+were performed. No local PostgreSQL/browser servers, real customer data or
+providers were used. Router must complete the merge, rerun stock lane lint,
+and push for GitHub CI database/migration/browser/build checks and required
+exact-head independent RED review. No merge acceptance or new-head review is
+claimed. Commit message: /tmp/lp-6b-repair-wip-20261106T143136Z-commit-msg.txt.

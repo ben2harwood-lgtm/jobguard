@@ -6,7 +6,7 @@
         "codex/sandbox/lp-6b-withtenant",
         "codex/sandbox/lp-6b-repair-wip"
       ],
-      "note": "LP-6b RED landing catch-up only: exact content union with origin/main b0ae55c4686861e61af7b6b2b759ecdcb425205e. Router must stage resolutions and finish the pending merge (.git read-only here). Migration reserved 0655; main owns 0651\u20130652 and #601/#602 reserve 0653\u20130654. SQL bytes, behavior and assertions unchanged; duplicate merge import removed. Prior RED checks PASS at b530f334; new-head CI and required review remain router gates.",
+      "note": "LP-6b RED landing catch-up only: exact union with origin/main 128260957477d6be9aa88e94789095ac23a175f6 including merged #600, #601 (0653), #602 (0654). LP-6b migration stays 0655. No behavior or test-expectation changes. Router must stage resolution and complete pending merge (.git read-only here), then run new-head CI and required independent RED review.",
       "allow": [
         "apps/api/src/accounting-export.application.test.ts",
         "apps/api/src/ai-capture-authority.test.ts",
