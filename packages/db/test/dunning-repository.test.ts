@@ -81,6 +81,14 @@ describe("durable dunning repository boundary", () => {
   await expect(f.repo.command(f.context,digest,uuid(2),"request",{...input,decisionId:uuid(4)})).rejects.toThrow("INVALID_DUNNING_INPUT");
   await expect(f.repo.read(f.context,"bad",{jobId:uuid(2),nowTick:3})).rejects.toThrow("INVALID_DUNNING_INPUT");expect(f.connect).not.toHaveBeenCalled();
  });
+ it("preserves wrong-actor refusal as a definitive 403 without retrying",async()=>{
+  const f=fixture();f.query.mockImplementation(async sql=>{if(sql.includes("$4,$5"))throw Object.assign(new Error("DUNNING_UNAVAILABLE"),{code:"42501"});return {rows:sql.includes("dunning_workbench")?[{result:[{invoiceId:uuid(3),projection:invoice,snapshotHash}]}]:[]};});
+  const { dunningFailure } = await import("../../../apps/api/src/dunning.application.js");
+  const error = await f.repo.command(f.context,digest,uuid(2),"approve",{...input,decisionId:uuid(4)}).catch((error: unknown) => error);
+  expect(error).toMatchObject({code:"DUNNING_UNAVAILABLE",status:403});
+  expect(dunningFailure(error)).toEqual({status:403,body:{version:"dunning-error.v1",code:"DUNNING_UNAVAILABLE"}});
+  expect(f.query.mock.calls.filter(([sql])=>sql.includes("$4,$5"))).toHaveLength(1);
+ });
  it("redacts unexpected database errors and rolls back",async()=>{
   const f=fixture();f.query.mockImplementation(async sql=>{if(sql.includes("dunning_workbench"))throw new Error("secret database row");return {rows:[]};});
   await expect(f.repo.read(f.context,digest,{jobId:uuid(2),nowTick:3})).rejects.toThrow("DUNNING_UNAVAILABLE");

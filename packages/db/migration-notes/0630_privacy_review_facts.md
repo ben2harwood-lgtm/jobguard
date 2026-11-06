@@ -123,3 +123,31 @@ and rerun the actual lane CLI on the committed range. CI must prove the full
 PostgreSQL fresh/upgrade, catalog/RLS, replay/race, watchdog, restore-reconciliation,
 privacy journey and remaining required suites; exact-head RED review and green
 CI remain merge gates. READY for router merge completion, commit, push and PR.
+
+PR #586 catch-up after #584/#585 (6 Nov 2026, origin/main c7cf720a0):
+resolved both working-file conflicts as exact unions. laterEmptyTables is main's
+complete registry plus privacy_review_fact. Watchdog keeps main's live-guarded
+tables and all its mutationTables entries, with privacy_review_fact added only
+to mutationTables. No other test expectation changed. Re-created privacy_command
+from main's latest 0585 body and diffed the full routine: only this group's
+existing verify/review fact declarations, validation, binding and result differ.
+The routine is byte-identical to the pre-catch-up 0630 body. Main's migrations
+through 0629 are unchanged; 0630 is the only added migration, with no duplicate.
+
+Current checks (installed runners, no downloads):
+- packages/core: ./node_modules/.bin/vitest run --maxWorkers=1 src/privacy-operations.test.ts: 5 passed.
+- packages/db: ./node_modules/.bin/vitest run --maxWorkers=1 test/dsar-migration-proofs.test.ts test/migration-proof-loader.test.ts: 84 passed.
+- Installed core and DB tsc -p tsconfig.json --noEmit: passed.
+- Root installed tsc --noEmit --strict --noUncheckedIndexedAccess --exactOptionalPropertyTypes --skipLibCheck --target ES2023 --module NodeNext --moduleResolution NodeNext on dsar-migration-proofs, dsar-offboarding.integration, privacy-review-facts.integration, watchdog.integration and later-empty-tables: passed.
+- node tools/plpgsql-case-in-if-lint.mjs: all 295 migrations passed.
+- git diff origin/main --check: passed.
+- Exported lane policy checks against the prospective merge diff: passed, exactly
+  ten non-lane paths, no self-entry, only migration 0630 and correct ordering.
+  The actual lane CLI still rejects the uncommitted merge range because it counts
+  main's incoming changes against the old HEAD. Router must stage the resolved
+  files, conclude the merge and rerun the CLI on the committed range.
+At most two Vitest workers ran concurrently; no PostgreSQL or browser suites ran.
+No git writes were attempted. CI must run the database/browser and remaining
+required suites; exact-head independent RED review and green CI remain required.
+READY for router merge completion, commit and push to codex/sandbox/batch-43
+for the existing PR #586.
