@@ -9,7 +9,9 @@
         "packages/db/migrations/0807_duplicate_disposition_command_lifecycle.sql",
         "packages/db/test/migration-proofs/0807_duplicate_disposition_command_lifecycle.proof.json",
         "packages/db/test/extra-duplicate-candidates.integration.test.ts",
-        "packages/db/test/lp5-command-catalog.ts"
+        "packages/db/test/lp5-command-catalog.ts",
+        "packages/db/test/late-source-import-migration.test.ts",
+        "packages/db/test/restore-reconciliation-upgrade.integration.test.ts"
       ]
     }
   }

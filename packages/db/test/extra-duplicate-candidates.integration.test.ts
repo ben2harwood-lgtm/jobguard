@@ -383,10 +383,11 @@ it("completes only the exact fresh disposition fact after a processing receipt",
   await db.$client.query("SAVEPOINT absent_effect");
   await expect(db.$client.query("SELECT app.complete_command($1,'{}'::jsonb)", [input.commandId])).rejects.toMatchObject({ code: "23514" });
   await db.$client.query("ROLLBACK TO SAVEPOINT absent_effect");
+  await db.$client.query("RELEASE SAVEPOINT absent_effect");
   await db.$client.query(`INSERT INTO app.extra_duplicate_disposition(tenant_id,id,job_id,command_id,actor_membership_id,group_id,snapshot,fingerprint,disposition,reason_code,sequence)
    SELECT $1,$2,$3,$4,$5,x.group_id,x.snapshot,$7,$8,$9,1 FROM app.extra_duplicate_groups($1,$3) x WHERE x.group_id=$6`,
    [w.w.p.tenantId, fact, w.s.jobId, input.commandId, actor, group.id, group.fingerprint, input.disposition, input.reasonCode]);
-  const result = (await db.$client.query("SELECT app.complete_command($1,$2::jsonb) result", [input.commandId, JSON.stringify({ factId: randomUUID() })])).rows[0]!.result;
+  const result = (await db.$client.query("SELECT app.complete_command($1,$2::jsonb) result", [input.commandId, JSON.stringify({ id: randomUUID() })])).rows[0]!.result;
   expect(result).toEqual({ version: "duplicate-disposition-result.v1", factId: fact, groupId: group.id, fingerprint: group.fingerprint, disposition: input.disposition });
   expect((await db.$client.query("SELECT status,result FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [w.w.p.tenantId, input.commandId])).rows[0]).toEqual({ status: "succeeded", result });
  });
