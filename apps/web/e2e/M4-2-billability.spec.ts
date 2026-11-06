@@ -13,7 +13,8 @@ const storedReview=(commandId:string)=>({version:"recovery-billability-review.v1
 test("human review, lost-answer replay, stored second-person approval and accessible controls",async({page})=>{
  const requests:Record<string,unknown>[]=[];let loseFirst=true;let stored:ReturnType<typeof storedReview>|undefined;let approved=false;
  await page.route(api,async route=>{
-  if(route.request().method()==="GET")return route.fulfill({json:{version:"recovery-billability-view.v1",caseId:id(2),caseRevision:2,lines:[line],reviews:stored?[{...line,review:stored,approved}]:[]}});
+  if(route.request().method()==="GET")return route.fulfill({json:{version:"recovery-billability-view.v1",csrfToken:"fictional-csrf",caseId:id(2),caseRevision:2,lines:[line],reviews:stored?[{...line,review:stored,approved}]:[]}});
+  expect(route.request().headers()["x-csrf-token"]).toBe("fictional-csrf");
   const body=route.request().postDataJSON() as Record<string,unknown>;requests.push(body);
   if(body.action==="review"){
    stored=storedReview(String(body.commandId));
@@ -58,7 +59,7 @@ for(const refusal of ["pending cash","ordinary customer payment","duplicate clai
  test(`shows the server refusal for ${refusal}`,async({page})=>{
   await page.route(api,route=>route.fulfill({status:route.request().method()==="POST"?422:200,json:route.request().method()==="POST"
    ?{version:"recovery-billability-error.v1",code:"BILLABILITY_NOT_APPROVABLE",message:`Cannot approve: ${refusal}.`}
-   :{version:"recovery-billability-view.v1",caseId:id(2),caseRevision:2,lines:[line],reviews:[{...line,review:storedReview(id(5)),approved:false}]}}));
+   :{version:"recovery-billability-view.v1",csrfToken:"fictional-csrf",caseId:id(2),caseRevision:2,lines:[line],reviews:[{...line,review:storedReview(id(5)),approved:false}]}}));
   await page.goto(path);const main=page.getByRole("main");await main.getByRole("button",{name:"Approve review",exact:true}).click();
   await expect(main.getByRole("alert")).toHaveText(`Cannot approve: ${refusal}.`);
  });

@@ -969,3 +969,50 @@ router must stage the resolved working files, complete the merge and rerun the
 official lane check. Required exact-head CI, real PostgreSQL fresh/upgrade,
 proof/catalogue/RLS/privilege and replay/race suites, browser journeys and the
 independent RED review remain. No new behavior was introduced by this refresh.
+
+
+## Batch-42 merge refresh — 6 November 2026, incoming main 919b7f3e6
+
+READY for router staging and merge completion. ENT-5 client approval and
+DEMO-S company Final Check authority design; RED. This is builder evidence.
+
+Resolved the sole working-file conflict in later-empty-tables.ts as the union:
+main's privacy_review_fact and both supplier-line tables remain beside this
+group's three client-session tables. Existing exact registry and routine-body
+assertions retain both groups' behavior. No test was weakened or behavior added.
+
+All main migrations are byte-identical. The five unique group migrations
+1040–1044 remain; none duplicates a main migration. Scanned main's full ordered
+migration inventory for the three dynamically recreated routines. Latest bodies:
+xa_issue_link (0158), lp5b_contractor_permission (0522), northside_capture_action
+(0167). Each replacement fragment matched exactly once; source diffs contain
+only the group's existing four substitutions. The installed-body recreation
+therefore retains every main addition. Source-only evidence:
+/tmp/batch-42-merge-routine-diffs.txt.
+
+Local checks using installed Node 24.17.0 and cached pnpm 10.28.1, no downloads:
+- DB Vitest --maxWorkers=2, migration-proof-loader, m2-1-migration-proof,
+  extra-approval-timing: 97 passed.
+- DB Vitest --maxWorkers=2, late-source-import-migration and
+  supplier-line-migration-proofs: 5 passed.
+- API Vitest --maxWorkers=2, extra-customer and customer-signin: 52 passed.
+- Web Vitest --maxWorkers=2, northside/routes: 23 passed.
+- pnpm typecheck --concurrency=2: all seven packages passed, 25.494s.
+  Turbo emitted restricted cache IO warnings; no typecheck failed.
+- Core purity, money arithmetic, commercial boundary, AI provider boundary,
+  PL/pgSQL CASE-in-IF lint passed (300 migrations). Core purity reported its
+  existing computed-import observations.
+- Exact lane equality and lanePathAllowed: 51 changed non-lane paths;
+  config/lanes/ and the lane itself excluded. Migration ordering passed.
+
+The read-only index still records the original conflict. Router must stage the
+working-file resolution and complete its existing merge, then run official lane
+validation on the resulting head. Required exact-head CI, real PostgreSQL
+fresh/upgrade/catalogue/RLS/replay/race suites, affected browser journeys and
+independent RED review remain outstanding. No Git writes, PostgreSQL startup,
+localhost binding, provider, real customer data, money, deployment or launch.
+
+- Vitest list collected 78 cases across command-replay-contract,
+  plan-entitlement-lifecycle-upgrade and extra-client-session integration.
+  Collection only; no database hooks executed. Final working-file conflict
+  scan, exact lane equality and git diff --check MERGE_HEAD passed.
