@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-type View = { version: "ais-practice-view.v1"; connection: { connectionId: string; status: string } | null;
+type View = { credentialsUnavailable?: boolean; version: "ais-practice-view.v1"; connection: { connectionId: string; status: string } | null;
   movements: { movementRef: string; status: "pending" | "settled" | "reversed"; pence: number; currency: "GBP"; bookedOn: string }[] };
 const statuses: Record<string, string> = { awaiting_consent: "Waiting for practice consent", linked: "Fictional account linked for practice",
   revoked: "Practice consent revoked. Connect again for fresh consent.", unlinked: "Fictional account unlinked. Connect again for fresh consent.",
@@ -46,14 +46,14 @@ export function PracticeBankScreen() {
     {busy ? <p role="status">Updating practice bank…</p> : null}
     <button disabled={busy} onClick={() => void update()}>Refresh practice bank</button>
     {view ? <>
-      <p role="status">{view.connection ? statuses[view.connection.status] ?? "Practice account unavailable" : "No fictional account linked"}</p>
+      <p role="status">{view.credentialsUnavailable ? statuses.token_revoked : view.connection ? statuses[view.connection.status] ?? "Practice account unavailable" : "No fictional account linked"}</p>
       <button disabled={busy} onClick={() => void update("start")}>{view.connection ? "Reconnect fictional account" : "Connect fictional account"}</button>
       {view.connection?.status === "awaiting_consent" ? <section aria-label="Practice consent">
         <h2>Practice consent</h2><p>Allow this company session to read made-up movements from a fictional account for one hour. You can revoke or unlink at any time.</p>
         <button disabled={busy} onClick={() => void update("approve-fake-consent")}>Approve practice consent</button>
       </section> : null}
       {view.connection ? <>
-        <button disabled={busy} onClick={() => void update("pull")}>Pull fictional movements</button>
+        <button disabled={busy || view.credentialsUnavailable === true} onClick={() => void update("pull")}>Pull fictional movements</button>
         <button disabled={busy} onClick={() => void update("revoke")}>Revoke practice consent</button>
         <button disabled={busy} onClick={() => void update("unlink")}>Unlink fictional account</button>
       </> : null}
