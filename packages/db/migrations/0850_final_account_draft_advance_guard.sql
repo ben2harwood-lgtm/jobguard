@@ -16,10 +16,6 @@ BEGIN
       WHERE r.tenant_id=NEW.tenant_id AND r.id=NEW.current_revision_id
        AND r.final_account_draft_id=NEW.id AND r.revision=NEW.revision
        AND r.previous_revision_id IS NOT DISTINCT FROM OLD.current_revision_id
-     )
-     OR EXISTS (
-      SELECT 1 FROM app.final_account_lock l
-      WHERE l.tenant_id=NEW.tenant_id AND l.job_id=NEW.job_id
      ) THEN
    RAISE EXCEPTION 'INVALID_TRANSITION' USING ERRCODE='23514';
   END IF;

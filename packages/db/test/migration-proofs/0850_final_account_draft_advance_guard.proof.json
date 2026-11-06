@@ -1,6 +1,22 @@
 {
   "migration": "0850_final_account_draft_advance_guard.sql",
   "lp0": [],
-  "upgrade": [],
+  "upgrade": [
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "guard_final_account_draft_advance",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    }
+  ],
   "tenancy": []
 }

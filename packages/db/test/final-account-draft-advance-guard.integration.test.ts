@@ -173,8 +173,8 @@ describe("final-account draft advance guard (real PostgreSQL)", () => {
     const a = await prepared();
     await refused(a, null, 3);
   });
-  it("refuses an otherwise valid advance after the real lock command", async () => {
-    const a = await prepared(), id = await candidate(a, 3, a.second.id);
+  it("refuses a non-descendant advance after the real lock command", async () => {
+    const a = await prepared(), id = await candidate(a, 3, a.first.id);
     const locks = new FinalAccountLockRepository(runtime);
     await locks.acceptTerms(context, { actorMembershipId: memberId, commandId: randomUUID(), termsVersion: "synthetic_final_check_terms.v1" });
     await locks.disposition(context, { jobId: a.jobId, actorMembershipId: memberId, commandId: randomUUID(), scopeItemId: a.scopeId, disposition: "done" });
