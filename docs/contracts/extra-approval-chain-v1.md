@@ -31,7 +31,7 @@ ENT-5 timing source amendment, 3 November 2026: Ben answered “Use visit times 
 
 `doneWithoutRequiredPreapproval` is true when the frozen `aboveClientBeforeWorkThreshold` comparison requires client preapproval and the operative has stated `under_way` or `finished`, with a finished visit and no such approval or client approval strictly after the visit finish. `not_started` or a missing statement stays `uncertain` even after the visit finishes and approval arrives. A narrow `ent3_extra_work_status(job, extra)` read supplies only that statement within the verified tenant, after client link/job checks; runtime has no table read grant. It is false when no such requirement applies or approval is strictly before visit start, and `uncertain` when the interval cannot settle the order. No linked visit remains `not_derived`. A before-work comparison without a required client step stays uncertain under the held T/Y composition contract. Company step timings are also shown; this flag interprets the explicit client-before-work threshold only, and grants no proceed permission. Earlier revision requirements remain evaluated, so later approval or a new revision cannot erase a breach. Requirements superseded strictly before visit start are excluded; supersession during the visit is uncertain. The visit and approval facts are retained unchanged; no breach-clearing write exists.
 
-Still open: the proceed contract, reporting authority beyond the merged visit commands, other previously held policy items and any unproved ENT-5 Done-when (including pack verification). This amendment resolves the issued timing source only; it does not declare ENT-5 finished or enable real data.
+Still open: reporting authority beyond the merged visit commands, other previously held policy items and any unproved ENT-5 Done-when (including pack verification). This amendment resolves the issued timing source only; it does not declare ENT-5 finished or enable real data.
 ## ENT-5 mandatory lane (built ahead, 4 November 2026)
 
 The contractor `/approvals/extras` screen projects only the existing, server-filtered
@@ -111,3 +111,46 @@ No migration, fee, role, proceed, duplicate or client-link policy changes. The
 existing approval-chain PostgreSQL suites and both viewport journeys must pass in
 CI; no database or browser execution is possible in this build sandbox. A fresh
 independent RED review at the committed head and green CI remain required.
+
+## Remaining held rules amendment — ENT-5, 4 November 2026
+
+Authority: Ben's 4 November instruction, “Make all the decisions, say yes, and just get it coding”, and the router's Q04/Q06/Q08/Q11/Q16 rulings recorded in `~/.local/share/full-steam/AGENT_CHOICES.md`. This section supersedes the historical holds for those questions above. These are company defaults; changing a default requires a new immutable rule version, never an edit to an existing request snapshot. Ben may reverse these defaults. Synthetic practice only; no live services or release authority is added.
+
+- **Q04:** a person occupies only one step of an extra across request revisions. That person may approve the same slot on a new request revision; they may never occupy another slot. A repeat on the same request/step returns the original durable command result with no second fact, outcome or audit effect. The receipt still binds type, person, request, step, hash, net and rejection reason, and current membership and job grants are checked on replay. Changed content conflicts. Self-approval remains refused. Existing persisted identity is the membership key; no Q13 identity bridge is invented. Rejection also occupies its required slot in subsequent revisions.
+- **Q06:** T and Y belong to the immutable rule version and have no built-in monetary defaults. All example amounts are made-up fixtures. `net > T` and `net > Y` remain independent, including Y < T; equality is not above, and an unpriced extra is above both. Any required client step follows every required company step. This grants no permission to proceed with work.
+- **Q08:** new company-step snapshots default to two working days, counted Monday–Friday in Europe/London at the same local wall-clock time, including clock changes. No external holiday calendar is consulted. A new rule version may specify `waitWorkingDays` (1–260); explicit null selects that version's existing `timeLimitMinutes` override. Existing snapshots without the field retain their elapsed-minute terms. `escalationRole` and `alternateRoles` name the backup roles, still requiring a current grant covering the job. A null escalation role and no alternates means no backup: no escalation fact is created, and the original approver's mandatory item remains waiting and overdue. Original approvers stay eligible. The mandatory queue shows an overdue/backup notice in the app only; no email, outbound message or automatic submission is added. Existing synthetic Graphile discovery/task registration is reused; the live scheduler remains held under Q15.
+- **Q11:** any currently required, eligible approver may reject with a reason. A supervisor, surveyor or commercial manager with a current job-covering grant may withdraw before the outcome is final. Both outcomes are append-only. A revision creates a fresh request; it does not erase the earlier outcome, timing or approval history. Approve/withdraw continue to serialize on the existing job lock and unique outcome key.
+- **Q16:** submission is always a person's explicit `SubmitExtra` command. Logging, pricing, queries, timers and revisions do not automatically submit a logged extra. Revising an already submitted extra retains the existing explicit revision command's new-request behavior.
+
+Q01 (pricing), Q03 (applicable contract), Q14 (exports/authority-loss behavior) and Q15 (live scheduling/execution) remain held. Other unresolved invitation, identity and proceed questions are unchanged. No ENT-5-wide completion or production approval is claimed.
+
+Migrations reserved here: 0930 (cross-revision separation), 0931 (withdrawal and replay authority), 0932 (new snapshot wait terms and existing timer consumers); 0933 (expand-compatible rule validation); 0934 unused. No columns or stored row formats change. Roll forward to correct a routine; do not rewrite immutable snapshots or outcomes. Deployment order is migrations before application code. Existing pin/scanner holds and actual validation are recorded in `docs/verdicts/ENT-5b/BUILDER_RECEIPT.md`.
+
+
+## ENT-5 proceed statement ruling — 4 November 2026
+
+Ben instructed the router to decide and proceed ("Make all the decisions, say yes,
+and just get it coding"). The router's ruling in AGENT_CHOICES.md is that site
+staff may record "proceeding before approval", with a reason, as a fact only.
+This closes only the Q05 proceed hold; all other holds remain unchanged.
+
+`RecordExtraProceed` records one append-only operational statement, with the
+session-derived operative, server time, reason and exact priced request/revision.
+It uses the sibling reporting authority: a current operative with assigned job
+coverage and site-origin capture entitlement. The strict input accepts no actor,
+tenant, clock, amount, requirement or approval. Current authority is checked on
+replay too. Supervisors may read history through their existing covered-job grant.
+Only a current priced, undecided request accepts a new statement; stale/unpriced
+requests are refused. A retry is bound to its complete original input.
+
+The statement never approves, fills or skips a step, changes a requirement, or
+feeds pricing, billing or exports. The extra screen shows its immutable history.
+Where the bound snapshot explicitly requires client approval before work, the
+existing client breach projection includes this statement as a reported breach,
+including without a visit-derived time. It does not invent an exact work time.
+Later approval, a revision or a visit change cannot erase the earlier statement
+or breach. Held T/Y composition stays uncertain; no new requirement is inferred.
+
+Synthetic data only. Migration 0905 adds a side table without changing predecessor
+row shapes. Forward-fix only: preserve statements; disable the route if needed.
+No provider call, new alert or production release is introduced.

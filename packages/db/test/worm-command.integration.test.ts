@@ -18,8 +18,9 @@ import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from ".
 const tenant = randomUUID(), other = randomUUID(), job = randomUUID(), evidence = randomUUID();
 const actor = randomUUID(), second = randomUUID(), samePerson = randomUUID(), user = randomUUID();
 const context = testTenantContext(tenant);
+const sessionDigest = "a".repeat(64), secondDigest = "b".repeat(64);
 let upgradedRefusal: string;
-let pg: EmbeddedPostgres, admin: Pool, runtime: Pool, executor: Pool, operator: Pool, dir: string, repo: WormCommandRepository;
+let pg: EmbeddedPostgres, admin: Pool, runtime: Pool, executor: Pool, operator: Pool, dir: string, repo: WormCommandRepository, secondRepo: WormCommandRepository;
 let held = false;
 const storage = { retain: async () => undefined, hold: async (_v: unknown, value: boolean) => { held = value; },
   read: async () => ({ held, retainUntil: null }) };
@@ -35,6 +36,9 @@ beforeAll(async () => {
   await pg.initialise(); await pg.start();
   // Use the actual migration chain and the same non-owner runtime role as the application.
   const config = { host: "127.0.0.1", port, database: "postgres" };
+  const bootstrap = new Pool({ ...config, user: "postgres", password: "synthetic-only" });
+  await bootstrap.query("CREATE DATABASE jobguard_synthetic_demo"); await bootstrap.end();
+  config.database = "jobguard_synthetic_demo";
   admin = new Pool({ ...config, user: "postgres", password: "synthetic-only" });
   const own = MIGRATION_URLS.findIndex(url => url.pathname.endsWith("/0578_worm_operator_recovery.sql"));
   expect(own).toBeGreaterThan(0);
@@ -52,6 +56,11 @@ beforeAll(async () => {
   for (const [id, uid] of [[actor, user], [second, otherUser], [samePerson, user]]) {
     await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [id, tenant, account, uid]);
   }
+  for (const [uid, digest, member] of [[user, sessionDigest, actor], [otherUser, secondDigest, second]]) {
+    await admin.query("INSERT INTO identity.session(id,user_id,token_digest,csrf_token,expires_at,environment) VALUES($1,$2,$3,'synthetic-csrf',clock_timestamp()+interval '1 day','synthetic_demo')", [randomUUID(), uid, digest]);
+    await admin.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3)", [uid, tenant, member]);
+    await admin.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", [`worm-${uid}@fictional.invalid`, uid]);
+  }
   await importWatchdogFixtureJob(admin, tenant, job, "Synthetic retention");
   expect((await admin.query("SELECT id FROM app.job WHERE tenant_id=$1 AND id=$2", [tenant, job])).rows).toEqual([{ id: job }]);
   const key = `synthetic/tenants/${tenant}/manifest`;
@@ -67,7 +76,7 @@ beforeAll(async () => {
   await admin.query("GRANT jobguard_worm_executor TO worm_executor_login");
   executor = new Pool({ ...config, user: "worm_executor_login", password: "synthetic-executor" });
   // Upgrade a persisted predecessor attempt; repeat migrate must preserve rows and old routine bodies/ACLs.
-  const baseRepo = new WormCommandRepository(runtime, true, executor);
+  const baseRepo = new WormCommandRepository(runtime, true, executor, undefined, sessionDigest);
   const pending = command({ action: "request_anchor", subject: "manifest" });
   await baseRepo.submit(context, pending); await baseRepo.execute(context, pending.commandId, storage, tsa);
   const refused = command(); upgradedRefusal = refused.commandId;
@@ -84,10 +93,30 @@ beforeAll(async () => {
   await admin.query("CREATE ROLE worm_operator_login LOGIN PASSWORD 'synthetic-operator' NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOBYPASSRLS");
   await admin.query("GRANT jobguard_worm_operator TO worm_operator_login");
   operator = new Pool({ ...config, user: "worm_operator_login", password: "synthetic-operator" });
-  repo = new WormCommandRepository(runtime, true, executor, operator);
+  repo = new WormCommandRepository(runtime, true, executor, operator, sessionDigest);
+  secondRepo = new WormCommandRepository(runtime, true, executor, operator, secondDigest);
 }, 60000);
 afterAll(async () => { await closeTestPools(runtime, executor, operator, admin); await pg?.stop(); if (dir) await rm(dir, { recursive: true, force: true }); });
 describe("durable synthetic WORM SQL", () => {
+  it("binds the submitting owner to the session on first use and replay", async () => {
+    const c = command({ action: "request_anchor", subject: "manifest" });
+    const before = (await admin.query("SELECT to_jsonb(c) row FROM app.worm_command c ORDER BY id")).rows;
+    await expect(secondRepo.submit(context, c)).rejects.toThrow("WORM_REFUSED");
+    await expect(repo.submit(testTenantContext(other), c)).rejects.toThrow("WORM_REFUSED");
+    expect((await admin.query("SELECT to_jsonb(c) row FROM app.worm_command c ORDER BY id")).rows).toEqual(before);
+    const first = await repo.submit(context, c);
+    expect(await repo.submit(context, c)).toEqual(first);
+    await expect(secondRepo.submit(context, c)).rejects.toThrow("WORM_REFUSED");
+  });
+  it("refuses exact replay after the submitting session is revoked", async () => {
+    const digest = "c".repeat(64);
+    await admin.query("INSERT INTO identity.session(id,user_id,token_digest,csrf_token,expires_at,environment) VALUES($1,$2,$3,'synthetic-csrf',clock_timestamp()+interval '1 day','synthetic_demo')", [randomUUID(), user, digest]);
+    const bound = new WormCommandRepository(runtime, true, executor, operator, digest), c = command({ action: "request_anchor", subject: "manifest" });
+    const first = await bound.submit(context, c);
+    await admin.query("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE token_digest=$1", [digest]);
+    await expect(bound.submit(context, c)).rejects.toThrow("WORM_REFUSED");
+    expect((await admin.query("SELECT * FROM app.worm_command WHERE id=$1", [c.commandId])).rows).toEqual([first]);
+  });
   it("exposes an existing audited refusal after upgrade without rewriting it", async () => {
     const before = (await admin.query("SELECT * FROM app.worm_command WHERE id=$1", [upgradedRefusal])).rows;
     const alerts = await repo.operatorAlerts(context);
@@ -161,13 +190,17 @@ describe("durable synthetic WORM SQL", () => {
     await expect(repo.submit(context, { ...c, jobId: randomUUID() })).rejects.toThrow("WORM_REPLAY_CONFLICT");
     await expect(repo.submit(context, { ...c, commandId: randomUUID() })).rejects.toThrow("WORM_REPLAY_CONFLICT");
     await expect(repo.submit(context, { ...c, idempotencyKey: randomUUID() })).rejects.toThrow("WORM_REPLAY_CONFLICT");
-    await expect(repo.submit(context, command({ action: "release_hold", releaseOf: c.commandId, actorMembershipId: second }))).rejects.toThrow("WORM_REFUSED");
+    await expect(secondRepo.submit(context, command({ action: "release_hold", releaseOf: c.commandId, actorMembershipId: second }))).rejects.toThrow("WORM_REFUSED");
     await repo.execute(context, c.commandId, storage, tsa);
     await repo.execute(context, c.commandId, storage, tsa); expect(held).toBe(true);
     await expect(repo.submit(context, command({ action: "release_hold", releaseOf: c.commandId, actorMembershipId: samePerson }))).rejects.toThrow("WORM_REFUSED");
+    // Keep the independent two-person SQL control covered even though the
+    // repository now rejects this unbound membership before reaching it.
+    await expect(withTenant(runtime, context, db => db.$client.query("SELECT * FROM app.worm_submit($1::jsonb)",
+      [JSON.stringify(command({ action: "release_hold", releaseOf: c.commandId, actorMembershipId: samePerson }))]))).rejects.toThrow("WORM_REFUSED");
     const release = command({ action: "release_hold", releaseOf: c.commandId, actorMembershipId: second });
-    await repo.submit(context, release); await repo.execute(context, release.commandId, storage, tsa); expect(held).toBe(false);
-    await expect(repo.submit(context, command({ action: "release_hold", releaseOf: c.commandId, actorMembershipId: second }))).rejects.toThrow("WORM_REFUSED");
+    await secondRepo.submit(context, release); await repo.execute(context, release.commandId, storage, tsa); expect(held).toBe(false);
+    await expect(secondRepo.submit(context, command({ action: "release_hold", releaseOf: c.commandId, actorMembershipId: second }))).rejects.toThrow("WORM_REFUSED");
     const audit = await admin.query("SELECT payload FROM app.audit_event WHERE tenant_id=$1 AND event_type='worm.authorized' AND payload->'references'->>'command'=$2", [tenant, c.commandId]);
     expect(audit.rows).toHaveLength(1); expect(JSON.stringify(audit.rows)).not.toContain("synthetic/tenants");
   });
@@ -179,7 +212,7 @@ describe("durable synthetic WORM SQL", () => {
     let calls = 0;
     const refusing = { ...storage, hold: async () => { calls++; throw new WormBoundaryError("INVALID_INPUT"); } };
     expect((await repo.execute(context, c.commandId, refusing, tsa)).status).toBe("refused");
-    const fresh = new WormCommandRepository(runtime, true, executor);
+    const fresh = new WormCommandRepository(runtime, true, executor, undefined, sessionDigest);
     expect((await fresh.execute(context, c.commandId, refusing, tsa)).status).toBe("refused");
     expect(calls).toBe(1);
     expect((await admin.query("SELECT outcome FROM app.worm_attempt WHERE command_id=$1", [c.commandId])).rows).toEqual([{ outcome: "refused" }]);
@@ -225,7 +258,7 @@ describe("durable synthetic WORM SQL", () => {
       expect(target).toEqual({ tenantId: tenant, key: `synthetic/tenants/${tenant}/manifest`, versionId: "v1" });
       return storage.read();
     });
-    const fresh = new WormCommandRepository(runtime, true, executor, operator);
+    const fresh = new WormCommandRepository(runtime, true, executor, operator, sessionDigest);
     await expect(fresh.recover(testTenantContext(other), recovery, { read })).rejects.toThrow("WORM_REFUSED");
     await expect(withTenant(operator, testTenantContext(other), db => db.$client.query(
       "SELECT * FROM worm_control.worm_reconcile($1,1,true)", [c.commandId]))).rejects.toThrow("WORM_REFUSED");
@@ -254,7 +287,7 @@ describe("durable synthetic WORM SQL", () => {
     expect((await admin.query("SELECT outcome,attempt FROM app.worm_attempt WHERE command_id=$1", [c.commandId])).rows).toEqual([{ outcome: "applied", attempt: 1 }]);
     await expect(withTenant(operator, context, db => db.$client.query("SELECT * FROM app.worm_claim($1)", [c.commandId]))).rejects.toMatchObject({ code: "42501" });
     const release = command({ action: "release_hold", releaseOf: c.commandId, actorMembershipId: second });
-    await fresh.submit(context, release);
+    await secondRepo.submit(context, release);
     const releaseWrite = vi.fn(async (_target: unknown, value: boolean) => { held = value; throw new Error("synthetic release acknowledgement lost"); });
     expect((await fresh.execute(context, release.commandId, { ...storage, hold: releaseWrite }, tsa)).status).toBe("outcome_unknown");
     const releaseRecovery = { version: "worm.recovery.v1", commandId: release.commandId };
@@ -273,8 +306,8 @@ describe("durable synthetic WORM SQL", () => {
   });
   it("persists pending TSA attempts across repository instances and cancels revoked queued authority", async () => {
     const c = command({ action: "request_anchor", subject: "manifest", actorMembershipId: second });
-    await repo.submit(context, c); await repo.execute(context, c.commandId, storage, tsa);
-    const fresh = new WormCommandRepository(runtime, true, executor);
+    await secondRepo.submit(context, c); await repo.execute(context, c.commandId, storage, tsa);
+    const fresh = new WormCommandRepository(runtime, true, executor, undefined, sessionDigest);
     expect((await fresh.execute(context, c.commandId, storage, tsa)).status).toBe("pending");
     const noRead = { read: vi.fn(storage.read) };
     await expect(fresh.recover(context, { version: "worm.recovery.v1", commandId: c.commandId }, noRead)).rejects.toThrow("WORM_REFUSED");
@@ -288,7 +321,7 @@ describe("durable synthetic WORM SQL", () => {
     expect(saved.result).toMatchObject({ token: "AQI=", query: "Aw==", certificatePem: "synthetic-leaf" });
     expect((await admin.query("SELECT result FROM app.worm_command WHERE id=$1", [c.commandId])).rows[0]?.result).toEqual(saved.result);
     const pending = command({ action: "request_anchor", subject: "manifest", actorMembershipId: second });
-    await repo.submit(context, pending);
+    await secondRepo.submit(context, pending);
     await admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [tenant, second]);
     expect((await fresh.execute(context, pending.commandId, storage, tsa)).status).toBe("cancelled");
     await expect(fresh.submit(context, pending)).rejects.toThrow("WORM_REFUSED");
