@@ -1,6 +1,33 @@
 {
   "migration": "0840_duplicate_canonical_guard.sql",
   "lp0": [],
-  "upgrade": [],
+  "upgrade": [
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "xa_duplicate_canonical_guard",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": ["search_path=pg_catalog"]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "xa_active_canonical_withdraw_guard",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": ["search_path=pg_catalog"]
+      }
+    }
+  ],
   "tenancy": []
 }
