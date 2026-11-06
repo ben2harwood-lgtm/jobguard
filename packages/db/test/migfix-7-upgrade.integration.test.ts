@@ -46,14 +46,15 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   expect((await c.admin.query("SELECT to_regprocedure('app.complete_shadow_firing_post_lock(uuid,uuid,uuid,uuid,uuid,uuid,text,text,uuid,text,jsonb)') routine")).rows[0].routine).toBeNull();
   await migrate(c.admin); await migrate(c.admin);
   expect(await proofDifferences(c.admin, rows)).toEqual({ rows: [], types: [] });
-  // Only batch-41's two new routines are allowed after replay. Existing bodies and privileges stay exact.
-  const proofs = loadMigrationProofs().proofs.filter(p => ["0639_connector_promotion.sql", "0640_platform_invoice_read.sql"].includes(p.migration));
-  expect(proofs).toHaveLength(2);
+  // Pin MON-6's read and batch-41's two new routines after replay; existing bodies and privileges stay exact.
+  const proofs = loadMigrationProofs().proofs.filter(p => ["0633_customer_practice_pay_now_read.sql", "0639_connector_promotion.sql", "0640_platform_invoice_read.sql"].includes(p.migration));
+  expect(proofs).toHaveLength(3);
   const additions = proofs.flatMap(p => p.upgrade.filter(e => e.section === "routines").map(e => ({ migration: p.migration, row: e.after! })));
   const key = (r: { nspname: string; proname: string; args: string }) => `${r.nspname}.${r.proname}(${r.args})`;
   expect(additions.map(e => key(e.row as Parameters<typeof key>[0])).sort()).toEqual([
     "app.connector_promotion(p_session uuid, p_namespace text, p_event text, p_command uuid, p_result jsonb)",
     "app.platform_invoice_read(t uuid, digest text)",
+    "identity.customer_practice_pay_now(t uuid, j uuid, c uuid, digest text)",
   ]);
   const replayRoutines = await routines();
   for (const { migration, row } of additions) {
