@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-132": {
+      "branches": ["codex/sandbox/later-safety-132"],
+      "allow": [
+        "packages/db/migrations/0857_canonical_revise_duplicate_guard.sql",
+        "packages/db/test/migration-proofs/0857_canonical_revise_duplicate_guard.proof.json",
+        "packages/db/test/canonical-revise-duplicate-guard.integration.test.ts"
+      ]
+    }
+  }
+}
