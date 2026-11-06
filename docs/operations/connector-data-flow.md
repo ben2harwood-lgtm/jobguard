@@ -45,8 +45,23 @@ Merged ENT-6/ENT-7/ENT-8a foundations are not persisted connector functionality.
 | Region / subprocessors / retention | No new external processor. Event/database/log/backup locations and retention for real usage remain unapproved; no retention/deletion change |
 | Gate / owner | DARK, made-up data only. G5 and route-specific security/operational owner approvals remain outstanding; no production enablement path |
 | Evidence | `apps/api/src/connectors/inbound.test.ts` deterministic contract tests; `packages/db/test/connector-intake.integration.test.ts` real-PostgreSQL CI tests, not local execution or provider evidence |
+| Human fixture promotion (ENT-13a, dark) | A persisted human session selects staged fixture references; the fixed local generator feeds existing ENT-2/materials imports. The tenant-bound import, append-only promotion and audit commit together. Existing per-client work-order or materials owner/finance permission applies. Connector receipts remain staged with zero domain effects. No upload, real data, provider or delivery; billing composition, machine landing, SFTP and G5 remain held |
 
 No external alert service is introduced. Callers receive only `CONNECTOR_INPUT_REFUSED`;
 future composition must count refusals without raw bodies, headers, signatures or driver
 errors, and assign alert ownership before G5. Inbound source staging neither authorises
 commercial work nor implements outbound delivery/reconciliation for remaining slices.
+
+### 4 November 2026 — ENT-13a-machine, dark fictional persistence
+
+0940 stores only synthetic connection UUIDs, distinct machine actor UUID, separate
+owner sponsor reference, fixture client contract/namespace/key labels, token digest,
+capability revisions, validity/revocation times, nonce identities and command
+hash/receipt. No raw key, real credential, partner address or customer data is added.
+All five new connector tables are private FORCE-RLS control-plane exceptions reached
+only by migration-owned routines. Existing immutable source staging/audit is reused.
+No logging or external destinations are introduced; no production retention change
+or automatic deletion. Real storage, backups, provider residency and secret-store
+approval remain unverified G5 evidence. No registered route or activation switch;
+new machine controller and human management application remain uncomposed. See the
+4 November fictional rulings in the capability contract for transport and key rules.

@@ -135,6 +135,9 @@ export * from "./evidence-pack-v3-assembly.js";
 export * from "./meter-today.js";
 
 export * from "./small-builder-demo-lifecycle.js";
+
+export * from "./supplier-line-matching.js";
+export * from "./supplier-match-corrections.js";
 export * from "./managed-recovery.js";
 export * from "./platform-tax-invoice.js";
 export * from "./merchant-connectors.js";
@@ -182,6 +185,10 @@ export * from "./direct-debit-lifecycle.js";
 
 export * from "./extra-approval-inbox.js";
 export * from "./deepgram-transcript.js";
+export * from "./offline-reconciliation.js";
+export * from "./core-loop-views.js";
 
+export * from "./recurring-extras.js";
 export * from "./extra-proceed.js";
+export * from "./merchant-reliability.js";
 export * from "./rate-baseline.js";

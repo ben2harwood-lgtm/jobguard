@@ -90,7 +90,11 @@ const REVIEWED_PRACTICE_SOURCES: Readonly<Record<string, string>> = {
   "packages/db/src/practice-session.ts": "9b765f410777c28334f9f7d8388e0a3c6e30f52bb6d4b4070c9b69e4ecbf1b14",
   "packages/db/src/contractor-repository.ts": "56b95b80360434f0cf58376ef2ec44d0354b194e5080bcfd9414ac283971006c",
   "packages/db/src/contractor-party-repository.ts": "e5852288e5355b53f7548c4d5741aef54ee55a2b8a66dd56a54b08963cd1fdb0",
-  "packages/db/src/work-order-repository.ts": "6f769b3b5261219e8e277b3c8460b19b917fe93e66245d15285af5a04c098418",
+  // Renewed caller review 5 Nov 2026: Ben approved batch-41 ("Yes, all three") in the router chat.
+  // ~/.local/share/full-steam/coordinator/prechecks/batch-41.md: importCsvInTransaction makes no new context;
+  // its one new caller, ConnectorPromotionRepository.promote, takes context and principal from the same
+  // persisted session. The tenant lock and import permission check stay.
+  "packages/db/src/work-order-repository.ts": "51e64ceaa39564c8d1b083fbb6b24048143455dfe76080ff63309ce7d808dfb6",
   "packages/db/src/sor-repository.ts": "b66552d4d408c5e476ab9bff44324cf160b741561b5a03926c0697853e31514f",
   "packages/db/src/job-scheduling-repository.ts": "7517df3c6597af44f651c8b704c9bd91c4f40894ce5aa58e3b4fcea16cc9eb57",
   "packages/db/src/work-order-fixtures.ts": "703b2f726e9d4256cbd0a1908676f2cd401d64bad28741853f8131183cd0a0ea",

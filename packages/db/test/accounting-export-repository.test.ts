@@ -53,3 +53,24 @@ it.each(["routeChangePreview", "routeChangeConfirm"] as const)("%s uses the chec
  expect(query.mock.calls[2]?.[1]).toEqual([context.tenantId, "b".repeat(64), operation, scope.sourceId, JSON.stringify(input)]);
  expect(release).toHaveBeenCalledOnce();
 });
+it("read uses only the checked tenant/session read and validates its projection", async () => {
+ const context = testTenantContext(randomUUID());
+ const result = { version: 1, proposal: null, confirmed: null, history: [] };
+ const query = vi.fn(async (sql: string, _values?: unknown[]) => ({ rows: sql.includes("app.accounting_export_route_read(") ? [{ result }] : [] }));
+ const release = vi.fn();
+ const repo = new AccountingExportRepository({ connect: vi.fn(async () => ({ query, release })) } as never);
+ expect(await repo.routeChangeRead(context, "b".repeat(64), "demo-next")).toEqual(result);
+ expect(query.mock.calls[2]).toEqual(["SELECT app.accounting_export_route_read($1,$2,$3) result", [context.tenantId, "b".repeat(64), "demo-next"]]);
+ expect(query.mock.calls.at(-1)?.[0]).toBe("COMMIT");
+ await expect(repo.routeChangeRead(context, "invalid", "demo-next")).rejects.toThrow("EXPORT_INVALID_INPUT");
+});
+it("session-derived actor mismatch rolls back a confirmation before commit", async () => {
+ const context = testTenantContext(randomUUID());
+ const result = { version: 1, artifact: { ...request, entries: [] }, previewHash: confirmation.previewHash,
+  commandId: confirmation.commandId, decisionId: confirmation.decisionId, actorId: randomUUID(), revision: 1 };
+ const query = vi.fn(async (sql: string) => ({ rows: sql.includes("app.accounting_export_route(") ? [{ result }] : [] }));
+ const repo = new AccountingExportRepository({ connect: vi.fn(async () => ({ query, release: vi.fn() })) } as never);
+ await expect(repo.routeChangeConfirm(context, "b".repeat(64), scope.sourceId, confirmation, randomUUID())).rejects.toThrow("EXPORT_FORBIDDEN");
+ expect(query.mock.calls.at(-1)?.[0]).toBe("ROLLBACK");
+ expect(query.mock.calls.some(c=>c[0]==="COMMIT")).toBe(false);
+});
