@@ -8,13 +8,15 @@
       "allow": [
         "apps/api/src/fee-collection/executor.ts",
         "apps/api/src/fee-collection/postgres-reservation-store.ts",
-        "packages/db/migrations/0790_fee_result_forward_only.sql",
-        "packages/db/migration-notes/0790_fee_result_forward_only.md",
-        "packages/db/test/migration-proofs/0790_fee_result_forward_only.proof.json",
+        "packages/db/migrations/0652_fee_result_forward_only.sql",
+        "packages/db/migration-notes/0652_fee_result_forward_only.md",
+        "packages/db/test/migration-proofs/0652_fee_result_forward_only.proof.json",
         "packages/db/test/fee-reservation.integration.test.ts",
-        "packages/db/test/fee-reservation-archive-upgrade.integration.test.ts"
+        "packages/db/test/fee-reservation-archive-upgrade.integration.test.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts"
       ],
-      "note": "LATER-SAFETY-14 RED, stacked on fee-store-authority; NOPR. Router commits and pushes."
+      "note": "LATER-SAFETY-14 RED, caught up with origin/main; ready for router PR handoff after local checks. Router commits and pushes."
     }
   }
 }
