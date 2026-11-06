@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/batch-47"
       ],
-      "note": "M3-4 reconciliation, M3-6 shared core-loop contracts and M3-7 synthetic chaos groundwork. RED; NOPR. Native device proof and D08 remain outstanding. No migrations.",
+      "note": "M3-4 reconciliation, M3-6 shared core-loop contracts and M3-7 synthetic chaos groundwork. RED; ready for PR. Native device proof and D08 remain outstanding. No migrations.",
       "allow": [
         "apps/api/src/core-loop-shared.contract.test.ts",
         "apps/web/app/lib/contracts.ts",

@@ -251,3 +251,37 @@ including PostgreSQL/browser suites, remain required on the router's final head.
 Physical-device proof, D08 and G3 remain outstanding; no native task is declared
 finished. No git-writing command, commit, push, provider call or release occurred
 in this verification session.
+
+
+### Batch 47 PR handoff — 6 November 2026, current main catch-up
+
+READY for the router to commit, push and open the PR. The launcher completed
+its main merge at `1c4355a3febd0246e7f02354dba53f4245c71b4f`, with
+`origin/main` at `c7cf720a02aa9308fe2596c230439a88b9b265ac`. No unresolved
+index entries or code repairs remain. All main core exports are preserved.
+The lane covers all 13 non-lane changed paths and excludes itself; its historical
+NOPR label is updated for this handoff. No behavior or test expectation changed.
+
+Migration comparison: `git diff --name-only origin/main HEAD --
+packages/db/migrations` is empty. This branch adds/recreates no SQL routines,
+so there are no duplicate migrations or routine bodies to reconcile.
+
+Checks on this merged head, installed binaries only, at most two Vitest workers:
+
+- Core `vitest run --maxWorkers=2 src/core-loop-views.test.ts src/offline-reconciliation.test.ts src/offline-reconciliation.properties.test.ts`: 18 tests passed.
+- Core `vitest run --maxWorkers=2 src/native-chaos.test.ts src/offline-client-queue.test.ts`: 72 tests passed.
+- API `vitest run --maxWorkers=2 src/core-loop-shared.contract.test.ts src/offline-client-queue.compat.test.ts`: 3 tests passed.
+- Root `tsc -p packages/core/tsconfig.json --noEmit`, API equivalent, and web equivalent with `--incremental false`: passed.
+- `node tools/core-purity-lint.mjs`: passed, with 11 non-failing computed-import notices.
+- `node tools/agent-lane-boundary-lint.mjs`, exact lane path-set/main-export comparison and `git diff --check origin/main`: passed.
+- Source inspection confirms the changed web contract imports core, with no direct API source import. Cloudflare build was not run here.
+
+The initial pnpm version invocation stalled and was interrupted before tests;
+all successful runs used installed workspace binaries without downloads.
+Prior independent prechecks are retained; they do not establish review of this
+final head. RED review and green CI on the final committed head remain required,
+including full mandatory suites and real-PostgreSQL native-server-chaos/offline
+upload tests and browser job-list regression coverage. No database or browser
+suite ran here. Physical-device proof, D08 and G3 remain outstanding; this is
+synthetic groundwork, not completion of M3-4, M3-6 or M3-7 or a native release.
+No git-writing command, push, external provider action or release occurred.
