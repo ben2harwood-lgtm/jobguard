@@ -48,7 +48,8 @@ async function audit(db: TenantTransaction, c: WormReceipt, phase: string) {
  */
 export class WormCommandRepository {
   constructor(private readonly pool: Pool, private readonly enabled = false,
-    private readonly executorPool?: Pool, private readonly operatorPool?: Pool) {}
+    private readonly executorPool?: Pool, private readonly operatorPool?: Pool,
+    private readonly sessionDigest = "") {}
   private requireDark() { if (!this.enabled) throw new WormCommandError("DARK_ONLY"); }
 
   /** Runtime SELECT grants already cover these tenant-scoped synthetic projections.
@@ -105,7 +106,13 @@ export class WormCommandRepository {
     this.requireDark();
     const parsed = wormCommandV1.safeParse(input);
     if (!parsed.success) throw new WormCommandError("INVALID_INPUT");
+    if (!/^[a-f0-9]{64}$/u.test(this.sessionDigest)) throw new WormCommandError("WORM_REFUSED");
     return withTenant(this.pool, context, async db => {
+      // Reauthenticate before receipt lookup, including exact replay. The shared
+      // synthetic session gate binds the supplied owner to this tenant and session.
+      const session = (await db.$client.query<{ actor: string | null }>(
+        "SELECT app.mon9_session($1,$2) actor", [this.sessionDigest, parsed.data.actorMembershipId])).rows[0];
+      if (!session?.actor) throw new WormCommandError("WORM_REFUSED");
       await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`${context.tenantId}/worm`]);
       const existed = await db.$client.query("SELECT id FROM app.worm_command WHERE tenant_id=$1 AND (id=$2 OR idempotency_key=$3)",
         [context.tenantId, parsed.data.commandId, parsed.data.idempotencyKey]);

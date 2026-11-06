@@ -21,7 +21,7 @@ describe("S12 finalization rejection belongs to the pending version", () => {
     const started = new Promise<void>(resolve => { readStarted = resolve; });
     const reading = new Promise<never>((_resolve, reject) => { failRead = reject; });
     const query = async (sql: string, values: unknown[] = []) => {
-      if (sql.startsWith("SELECT job_id FROM app.evidence_upload")) return { rows: [{ job_id: job }] };
+      if (sql.startsWith("SELECT job_id,expected_content_type FROM app.evidence_upload")) return { rows: [{ job_id: job, expected_content_type: "image/png" }] };
       if (sql.startsWith("SELECT * FROM app.evidence_upload")) return { rows: [{ ...row }] };
       if (sql.includes("SET state='quarantined'")) { row.state = "quarantined"; row.object_version_id = values[2] as string; }
       if (sql.includes("SET state='rejected'")) {

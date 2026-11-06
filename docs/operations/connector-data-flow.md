@@ -51,3 +51,17 @@ No external alert service is introduced. Callers receive only `CONNECTOR_INPUT_R
 future composition must count refusals without raw bodies, headers, signatures or driver
 errors, and assign alert ownership before G5. Inbound source staging neither authorises
 commercial work nor implements outbound delivery/reconciliation for remaining slices.
+
+### 4 November 2026 — ENT-13a-machine, dark fictional persistence
+
+0940 stores only synthetic connection UUIDs, distinct machine actor UUID, separate
+owner sponsor reference, fixture client contract/namespace/key labels, token digest,
+capability revisions, validity/revocation times, nonce identities and command
+hash/receipt. No raw key, real credential, partner address or customer data is added.
+All five new connector tables are private FORCE-RLS control-plane exceptions reached
+only by migration-owned routines. Existing immutable source staging/audit is reused.
+No logging or external destinations are introduced; no production retention change
+or automatic deletion. Real storage, backups, provider residency and secret-store
+approval remain unverified G5 evidence. No registered route or activation switch;
+new machine controller and human management application remain uncomposed. See the
+4 November fictional rulings in the capability contract for transport and key rules.

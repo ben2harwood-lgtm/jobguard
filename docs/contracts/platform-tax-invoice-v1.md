@@ -20,12 +20,39 @@ reference/hash and approval reference/hash in the document come from these rows.
 Missing, foreign, mismatched or corrupted sources fail closed. No random source
 ID or supplied proof manifest can authorize invoice issuance.
 
-The base has no accepted persisted v3 small-builder fee statement adapter; its
-writer remains dependency-bound. This slice also has no complete contractor
-statement/proof reconstruction adapter. Both fee source kinds return
-`PLATFORM_INVOICE_SOURCE_UNAVAILABLE`; they cannot use a subscription source or
-fall back to supplied amounts, proof, approval or payment references. Their pure
-representation schemas remain for formatting/tests, not executable issuance.
+Success-fee sources are read from immutable `app.platform_fee_statement` rows. The
+adapter verifies the stored document with the existing statement schema and hash
+verifier, recomputes its source snapshot hash, and binds a current approved Decision
+and exact unrevoked authorization to the statement, hash, GBP document principal
+and `reference_fee_policy_v3`. Missing, foreign, unapproved, expired, superseded,
+wrong-job or corrupted sources return `PLATFORM_INVOICE_SOURCE_UNAVAILABLE`.
+The stored `documentPrincipal` is the statement writer's delta, distinct from
+`cumulativeFeePrincipal`; the issuer uses it exactly, without rounding or deriving
+a delta. Nonpositive correction statements cannot become positive invoice lines.
+They do not authorize a new credit amount: invoice credits still use the existing
+full remaining principal rule against an invoice and its revalidated source.
+
+This is **statement-level provenance**: one invoice line per stored statement,
+with its statement, approval, policy and whole strict `sourceSnapshot` (including
+all assessment/allocation IDs, hashes, derivations and adjustments). No per-proof
+split exists. Adding one needs its own approved contract. Existing pure per-proof
+representations remain compatible but cannot authorize stored-source issuance.
+Subscription and fee sources remain separate invoices; neither offsets the other.
+
+The trace reads only statement-linked M4-12-S attempts and all their ordered
+events, preserving collection/refund, pending, unknown, failed and settled states.
+An absence is labelled `none_recorded` (none recorded), never paid. The statement's
+`settlementHistory.integration_unavailable` marker is never a settlement. No bank
+details are included. This trace is frozen at issuance; replay and credits retain
+that original trace while revalidating the statement and approval. It is historical
+provenance, not a current balance or authority to collect.
+
+This remains an administrative synthetic adapter under existing privileges and
+RLS, requiring the existing persisted owner identity session. The separate practice
+statement writer's practice sessions are not accepted by that identity boundary;
+CI fixtures explicitly seed administrative synthetic stored rows, not a purported
+practice-writer-to-issuer journey. No session bridge, HTTP path or grant is added.
+Contractor sources remain `PLATFORM_INVOICE_SOURCE_UNAVAILABLE`.
 
 Issuer profiles are immutable fictional identities. An issuer row lock serializes
 its numbering, document history and credits. Invoices and credit notes share one
@@ -51,14 +78,20 @@ request. Rendering/downloads do not issue or collect; the account fixture only
 projects fictional net receipts and explicit refund due. Canonical JSON downloads
 retain a stable SHA-256.
 
-Remaining gates: stored fee adapters/proof and exact invoice Decision authority,
+LP-5 lifecycle dispatch remains held for this administrative fixture writer: it
+uses its existing issuer lock, request hash, immutable replay history and audit
+path, without a lifecycle claim or exact invoice Decision authorization. Source
+statement approval is not approval to issue an invoice. Production issuance
+remains disabled until those command-authority gates are satisfied.
+
+Remaining gates: contractor fee adapter/proof, practice/identity integration and exact invoice Decision authority,
 real issuer identity, approved D02 examples and rounding, production receipt/
 allocation/reversal readers, G4-S/G4-C, M4-12 collection/refund execution, complete
 CI and independent RED review. The pure kernel alone proves no source authority.
 
 Validation includes principal/provenance input rejection, stored subscription
 amount/hash/approval reconstruction, absent/foreign/corrupted source refusal,
-unsupported fee refusal, persisted actor binding, revocation, cross-issuer races
+unsupported contractor/invalid fee refusal, persisted actor binding, revocation, cross-issuer races
 and uniqueness even after credit. Real PostgreSQL checks run in CI; the sandbox
 cannot start PostgreSQL or bind localhost.
 
