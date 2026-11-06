@@ -25,7 +25,7 @@ sections are empty for that reason. No baseline pin/scanner changes are made.
 
 ## Named holds for landing
 
-- Migration ordering repaired: 0653 follows 0991_connector_machine on batch-35.
+- Migration ordering repaired: 0652 follows 0991_connector_machine on batch-35.
   Migration SQL is unchanged; only the complete filename stems and references were
   renumbered. The proof-loader suite now passes without weakening its guards.
 - No scanner/pin edit is currently justified. If CI requires one, its exact finding
@@ -94,7 +94,7 @@ READY for router staging and merge commit. Incoming main is
 is older and was not used as the comparison base. The contract conflict retains
 both the machine-refusal paragraph and main's machine-command lifecycle hold.
 Main already carries the parent batch, including machine creation renumbered to
-0621; none of that parent work remains in this group's diff. Migration 0653 is
+0621; none of that parent work remains in this group's diff. Migration 0652 is
 still unique and above main's latest 0640. No duplicate migration was found.
 
 Compared both replacement routines against main's latest definitions: intake
@@ -131,11 +131,11 @@ precheck and catch-up review evidence; neither is an exact-head review of this
 final renumbered change.
 
 Migrations against origin/main: **only
-0653_connector_intake_machine_refusal.sql**. Its stem is unique on main; no
+0652_connector_intake_machine_refusal.sql**. Its stem is unique on main; no
 migration repeats a merged migration. File, proof, note, test reference and lane
 paths were renumbered together. The SQL bytes are identical to the pre-renumber
 HEAD version. 0650 is reserved for #597 and 0651 for LP-6b under the issued order;
-this change uses only its assigned 0653.
+this change uses only its assigned 0652.
 
 Rechecked every main migration for definitions of the two replaced routines:
 connector.intake is latest in 0576_connector_materials_stage.sql;

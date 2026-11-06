@@ -1,5 +1,5 @@
 {
-  "migration": "0653_connector_intake_machine_refusal.sql",
+  "migration": "0652_connector_intake_machine_refusal.sql",
   "lp0": [
     {
       "section": "routines",

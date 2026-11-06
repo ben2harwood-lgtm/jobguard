@@ -58,7 +58,7 @@ describe("ENT-13a isolated connector proof", () => {
 
 
 describe("LATER-SAFETY-15 forward machine refusal migration", () => {
-  const sql = readFileSync(new URL("../migrations/0653_connector_intake_machine_refusal.sql", import.meta.url), "utf8");
+  const sql = readFileSync(new URL("../migrations/0652_connector_intake_machine_refusal.sql", import.meta.url), "utf8");
   const latest = readFileSync(new URL("../migrations/0576_connector_materials_stage.sql", import.meta.url), "utf8");
   it("preserves the entire latest legacy intake body except the machine binding refusal", () => {
     const body = latest.slice(latest.indexOf("CREATE OR REPLACE FUNCTION"), latest.indexOf("COMMIT;"));
