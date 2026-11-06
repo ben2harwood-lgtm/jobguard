@@ -147,7 +147,7 @@ journey exercises the actual synthetic route, replay, conflict and history after
 approval at both configured viewports (headless, at most two workers).
 
 Initial source review — LATER / SIMPLICITY: migration
-`1200_extra_proceed_statement.sql`, `app.lp5_command_result`: consider a separately
+`0633_extra_proceed_statement.sql`, `app.lp5_command_result`: consider a separately
 reviewed split into existing per-adapter result helpers, so future additions do not
 repeat the full dispatcher body and risk losing predecessor branches. This is not
 part of the proceed slice and does not block it.
@@ -185,11 +185,11 @@ This entry supersedes the earlier source-handoff numbering and inherited-lane ho
 The final migration/proof/notes references use filename stems only:
 - `0590_extra_duplicate_candidates` → `0590_extra_duplicate_candidates`.
 - `0591_contractor_job_evidence_read` → `0591_contractor_job_evidence_read`.
-- `0905_extra_proceed_statement` → `1200_extra_proceed_statement`.
-- `0930_extra_same_step` → `1201_extra_same_step`.
-- `0931_extra_withdraw_roles` → `1202_extra_withdraw_roles`.
-- `0932_extra_working_day_wait` → `1203_extra_working_day_wait`.
-- `0933_extra_rule_wait_schema` → `1204_extra_rule_wait_schema`.
+- `0905_extra_proceed_statement` → `0633_extra_proceed_statement`.
+- `0930_extra_same_step` → `0634_extra_same_step`.
+- `0931_extra_withdraw_roles` → `0635_extra_withdraw_roles`.
+- `0932_extra_working_day_wait` → `0636_extra_working_day_wait`.
+- `0933_extra_rule_wait_schema` → `0637_extra_rule_wait_schema`.
 
 Historical bare-number notes above are retained. The batch-34 lane replaces the three branch-added piece/batch lane files and lists exactly the 98 final non-lane paths changed from the existing `origin/main` snapshot (56b74eaec); local `main` is stale. The side-table list preserves both sides. No fingerprinted row shape or protected inventory/scanner was changed. The plan-entitlement upgrade assertion now binds seven exact predecessor routine identities to their replacement SQL bodies, retaining unchanged assertions for every other predecessor and the existing ACL proof checks. The LP-0 routine protection definitions are recorded facts, not compared definition pins; no baseline was rewritten. Real catalogue acceptance still requires CI.
 
@@ -235,11 +235,11 @@ write, database, browser, provider, deployment or release action was performed.
   neither needs another migration. The remaining inherited batch-15 source is
   also on main. Its mainline lane file is preserved.
 - Remaining branch migrations and proofs use filename stems only:
-  `0987_extra_proceed_statement` -> `1200_extra_proceed_statement`;
-  `0988_extra_same_step` -> `1201_extra_same_step`;
-  `0989_extra_withdraw_roles` -> `1202_extra_withdraw_roles`;
-  `0990_extra_working_day_wait` -> `1203_extra_working_day_wait`;
-  `0991_extra_rule_wait_schema` -> `1204_extra_rule_wait_schema`.
+  `0987_extra_proceed_statement` -> `0633_extra_proceed_statement`;
+  `0988_extra_same_step` -> `0634_extra_same_step`;
+  `0989_extra_withdraw_roles` -> `0635_extra_withdraw_roles`;
+  `0990_extra_working_day_wait` -> `0636_extra_working_day_wait`;
+  `0991_extra_rule_wait_schema` -> `0637_extra_rule_wait_schema`.
   No separate notes existed for these five; operational/forward-fix notes remain
   in this receipt. Renumber again in landing order, by full stems only.
 
@@ -260,7 +260,7 @@ Every re-created routine was diffed against its latest definition on main:
 | `app.valid_approval_rules` | 0054 | Validate optional working days and nullable backup role |
 
 The dispatcher regression test now compares against 0606, rather than 0573.
-The 1200 registry proof starts from 0606's exact registry, adds just
+The 0633 registry proof starts from 0606's exact registry, adds just
 `RecordExtraProceed`, and preserves PostgreSQL snapshot ordering by version,
 audit class and command type. The source tests assert exact predecessor retention
 and the complete current registry. The historical M2-1 proof test still asserts
@@ -309,7 +309,7 @@ used at most two workers and at most three named files. Final passing coverage:
   HEAD/index changes against the pre-merge base. Final working-file coverage,
   exact allow-list equality and migration ordering were checked independently;
   this is not an official lane PASS.
-- Provisional stems 1200–1204 must be reconciled with the actual landing order.
+- Provisional stems 0633–0637 must be reconciled with the actual landing order.
   Green required CI against current main and independent RED review at the exact
   final head remain required. This is builder source inspection and local test
   evidence, not independent review or permission to merge.
@@ -343,15 +343,15 @@ append-only proceed history. This is builder evidence, not independent review.
   parameterized test in `extra-approval-rules.integration.test.ts`.
 - Resolved the five union conflicts in working files, preserving main's rate
   export/registry, identity/CIS/rate empty-table entries and all branch entries.
-- 1200's registry proof now chains its exact `before` to 0609's `after`, including
+- 0633's registry proof now chains its exact `before` to 0609's `after`, including
   `rate.suggestion_accept`; only `RecordExtraProceed` is added. The historical
   0606 comparison excludes the later rate row, checks full membership and count,
   and separately asserts the exact 0609 predecessor record. The initial check
   caught a proof row-order mismatch; the exact predecessor replacement fixes it.
 - Compared against local `origin/main` d16ef1978eb44d7d9d33a77926fb179e794af196:
-  only migrations 1200–1204 are added, no main migration is changed/removed,
+  only migrations 0633–0637 are added, no main migration is changed/removed,
   no semantic migration filename repeats main, and all migration numbers are
-  unique. The dispatcher test proves 1200 preserves 0606 byte for byte except
+  unique. The dispatcher test proves 0633 preserves 0606 byte for byte except
   its new branch. Main's existing catalogue declarations and union entries survive.
 - Lane allow-list equals all 49 working files changed from main outside
   `config/lanes/`; it does not grant itself. Updated lane base note.
@@ -403,19 +403,19 @@ Base is the pending MERGE_HEAD / origin/main
 - Resolved all six working-file conflicts as unions: retain main's merchant
   reliability export, EndCheck registry row, contractor-job-finish and provider-key
   empty tables, all latest routine checks, and this group's ENT-5 additions.
-- Rechained 1200's exact registry `before` to 0620's `after`, including EndCheck.
+- Rechained 0633's exact registry `before` to 0620's `after`, including EndCheck.
   Its `after` preserves PostgreSQL jsonb-text snapshot order with only
   RecordExtraProceed inserted. A strengthened exact-order assertion covers this.
   Historical 0606 checks exclude the three subsequent registry additions and
   retain exact historical membership and count.
-- Compared every replacement routine in 1200–1204 with the latest matching body
+- Compared every replacement routine in 0633–0637 with the latest matching body
   across main's migrations, including infrastructure discovery. Differences are
   only the existing ENT-5 proceed adapter, repeat-slot rule, withdrawal roles,
   working-day wait consumers and rule validation. No newer main routine behavior
   is removed; the latest dispatcher remains 0606, permission/approval/withdrawal
   0522, requirement/escalation/queue 0158, discovery 0575 and validation 0054.
   No routine rewrite was needed beyond the already-correct group replacements.
-- Every main migration is byte-preserved. Only 1200–1204 are added; none duplicates
+- Every main migration is byte-preserved. Only 0633–0637 are added; none duplicates
   a main semantic filename or migration number, so none needs dropping.
 - Lane allow-list matches all 49 changed paths against this base outside
   config/lanes; it does not list itself. No new product behavior or weakened test.
@@ -467,17 +467,17 @@ Pending merge base: `919b7f3e60b82ef1ed1e32a6f259ba92246f6541` (origin/main; loc
 
 Resolved the six working-file conflicts by retaining both exact registry rows
 (ResolveDuplicateCandidates and RecordExtraProceed), every main empty-table
-entry, and both sets of exact routine-body assertions. Rebound 1200's registry
+entry, and both sets of exact routine-body assertions. Rebound 0633's registry
 proof to 0623's complete after snapshot, preserving its ordering and inserting
 only RecordExtraProceed. Historical 0606 assertions exclude both later commands
 while retaining exact membership and counts. No test weakened.
 
-Compared every replaced routine in 1200–1204 against its latest matching main
+Compared every replaced routine in 0633–0637 against its latest matching main
 migration definition, including infrastructure discovery. Latest main sources
 remain 0606 (dispatcher), 0522 (approval, withdrawal and permission), 0158
 (requirement, escalation and queue), 0575 (discovery) and 0054 (validator).
 Diffs contain only this group's existing ENT-5 changes; no routine rewrite was
-needed. All main migrations are unchanged; only 1200–1204 are added, with no
+needed. All main migrations are unchanged; only 0633–0637 are added, with no
 number or semantic-filename duplication. No new behavior.
 
 Local checks, installed binaries only; sequential Vitest runs, --maxWorkers=2,
@@ -502,3 +502,67 @@ index still records six unmerged entries: the router must stage the working-file
 resolutions and finish the merge. Required CI, PostgreSQL fresh/upgrade/catalog
 and browser suites, and independent RED review at the final exact head remain
 required. READY means router handoff, not merged or accepted.
+
+## PR landing handoff — batch-34, 6 November 2026
+
+READY for the router to commit, push and open the RED ENT-5 proceed / remaining
+approval-rules PR. Incoming HEAD ac1580bab already completed the main merge;
+origin/main is c219dda6e (top migration 0630). No unmerged entries remain.
+Ben's approved E5B-08 owner-refusal test is retained; restore-reconciliation's
+later registry retains both ResolveDuplicateCandidates and RecordExtraProceed.
+
+Landing migration list against main (0631–0632 reserved for #590):
+
+- 0633_extra_proceed_statement.sql (formerly provisional 1200).
+- 0634_extra_same_step.sql (formerly provisional 1201).
+- 0635_extra_withdraw_roles.sql (formerly provisional 1202).
+- 0636_extra_working_day_wait.sql (formerly provisional 1203).
+- 0637_extra_rule_wait_schema.sql (formerly provisional 1204).
+
+No semantic filename repeats main, so no migration/proof was dropped. Each SQL
+file is byte-identical to the incoming provisional file; each proof differs only
+in its migration filename. All main migrations are byte-preserved. Updated the
+full stems in fixtures, upgrade tests, source tests, proofs, notes and lane paths.
+The unrelated accounting-export 1200 stem is untouched. Original deleted paths
+remain lane-allowed for the unstaged rename check; config/lanes/batch-34.json does
+not grant itself. Added extra_proceed_statement to watchdog's existing mutation
+counts and RLS/ownership inventory, as required; no product behavior changed.
+
+Re-diffed every recreated routine against main's latest body, not just the prior
+catch-up base: lp5_command_result (0606), xa_approve / xa_withdraw /
+lp5b_contractor_permission (0522), xa_requirement / xa_escalate / xa_queue (0158),
+infrastructure.discover_extra_escalations (0575), valid_approval_rules (0054).
+Only the already prechecked ENT-5 adapter/rules/timing changes remain; no newer
+main logic is removed. New routines are xa_proceed_view, xa_proceed,
+xa_proceed_breaches and xa_wait_deadline. Source inspection confirms affected
+web routes use workspace exports, without direct apps/api source imports.
+Used the permitted source-inspection fallback for Cloudflare compatibility;
+the actual Cloudflare build remains for CI. No provider-register
+source or CI image was changed.
+
+Executed with installed binaries, no downloads, sequential Vitest runs, maximum
+two workers and at most three named files per invocation:
+
+- DB: extra-proceed-migration, migration-proof-loader, m2-1-migration-proof — 83 passed after renumbering.
+- DB: late-source-import-migration, extra-approval-timing, lp5-command-catalog — 28 passed.
+- Core: extra-approval, extra-proceed, watchdog — 24 passed.
+- API: contractor/extra-proceed.application — 1 passed.
+- Web: proceed route, northside chain-actions — 38 passed.
+- DB and web: node_modules/.bin/tsc -p tsconfig.json --noEmit — passed.
+- Root: node tools/agent-lane-boundary-lint.mjs --lane=batch-34 — passed.
+- Root: node tools/plpgsql-case-in-if-lint.mjs — passed, 300 migrations.
+- Root: git diff --check — passed.
+- Scripted comparison of every main migration and all five renamed SQL/proofs — passed.
+
+The first renumber helper ran from packages/db, found no root-relative migration
+paths and made no changes; corrected at the repository root. Its preceding 83
+passing tests are not counted as post-renumber evidence. The initial lane lint
+reported old committed paths because this sandbox cannot stage renames; the lane
+now covers both deleted and added paths, and lint passes. No tests weakened.
+
+Not run here: real PostgreSQL integration/fresh/upgrade/catalog suites (including
+the extended watchdog inventory and restore snapshot), browser journeys at both
+widths, Cloudflare build, full CI. They remain required after the router pushes;
+so does independent RED review bound to the final exact head. No real data,
+provider, release, Git write, database startup or localhost binding was used.
+READY is PR handoff readiness, not acceptance, merge or release.

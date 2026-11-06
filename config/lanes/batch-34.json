@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/batch-34"
       ],
-      "note": "ENT-5 proceed and remaining rules; RED synthetic no-PR main catch-up against 919b7f3e60b82ef1ed1e32a6f259ba92246f6541",
+      "note": "ENT-5 proceed and remaining rules; RED PR landing on main ac1580bab parent c219dda6e; 0633-0637. Original migration/proof paths cover renumber deletions before router staging.",
       "allow": [
         "BUILD_PLAN.md",
         "apps/api/src/contractor/extra-proceed.application.test.ts",
@@ -29,6 +29,11 @@
         "packages/core/src/extra-proceed.ts",
         "packages/core/src/index.ts",
         "packages/core/src/watchdog.ts",
+        "packages/db/migrations/0633_extra_proceed_statement.sql",
+        "packages/db/migrations/0634_extra_same_step.sql",
+        "packages/db/migrations/0635_extra_withdraw_roles.sql",
+        "packages/db/migrations/0636_extra_working_day_wait.sql",
+        "packages/db/migrations/0637_extra_rule_wait_schema.sql",
         "packages/db/migrations/1200_extra_proceed_statement.sql",
         "packages/db/migrations/1201_extra_same_step.sql",
         "packages/db/migrations/1202_extra_withdraw_roles.sql",
@@ -50,13 +55,19 @@
         "packages/db/test/later-empty-tables.ts",
         "packages/db/test/lp5-command-catalog.ts",
         "packages/db/test/m2-1-migration-proof.test.ts",
+        "packages/db/test/migration-proofs/0633_extra_proceed_statement.proof.json",
+        "packages/db/test/migration-proofs/0634_extra_same_step.proof.json",
+        "packages/db/test/migration-proofs/0635_extra_withdraw_roles.proof.json",
+        "packages/db/test/migration-proofs/0636_extra_working_day_wait.proof.json",
+        "packages/db/test/migration-proofs/0637_extra_rule_wait_schema.proof.json",
         "packages/db/test/migration-proofs/1200_extra_proceed_statement.proof.json",
         "packages/db/test/migration-proofs/1201_extra_same_step.proof.json",
         "packages/db/test/migration-proofs/1202_extra_withdraw_roles.proof.json",
         "packages/db/test/migration-proofs/1203_extra_working_day_wait.proof.json",
         "packages/db/test/migration-proofs/1204_extra_rule_wait_schema.proof.json",
         "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
-        "packages/db/test/restore-reconciliation-upgrade.integration.test.ts"
+        "packages/db/test/restore-reconciliation-upgrade.integration.test.ts",
+        "packages/db/test/watchdog.integration.test.ts"
       ]
     }
   }
