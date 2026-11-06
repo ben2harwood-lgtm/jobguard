@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-127": {
+      "branches": ["codex/sandbox/later-safety-127"],
+      "allow": [
+        "packages/db/migrations/0853_contractor_party_bind_work_order_only.sql",
+        "packages/db/test/migration-proofs/0853_contractor_party_bind_work_order_only.proof.json",
+        "packages/db/test/contractor-party-bind-work-order-only.integration.test.ts"
+      ]
+    }
+  }
+}
