@@ -80,6 +80,19 @@ export async function appendAuditBatch(database: TenantTransaction, inputs: read
   return result.rows;
 }
 
+// Exact legacy compatibility names; never promote their content to checked trust.
+const legacyLowerTrustEventTypes = new Set([
+  "command.succeeded",
+  "contractor.visit.completed",
+  "customer_credit_note.synthetic_approved",
+  "customer_invoice.synthetic_issued",
+  "customer_payment.recorded",
+  "customer_payment.synthetic_recorded",
+  "proof.completed",
+  "recovery.terms.approved",
+  "variation.approved",
+]);
+
 export function verifyAuditChain(events: readonly AuditEvent[], checkpoint?: AuditCheckpoint): void {
   let previous: string | null = null;
   let expectedSequence = 1;
@@ -93,14 +106,14 @@ export function verifyAuditChain(events: readonly AuditEvent[], checkpoint?: Aud
     auditActorAttribution(event);
     if (event.version === "audit.v3") {
       for (const section of [event.payload.references, event.payload.hashes, event.payload.classifications]) {
-        const reserved = ["actor", "tenant", "type", "payload", "payloadHash", "tenantId", "id", "version", "actorRef",
+        const reserved = ["actor", "tenant", "type", "tenantId", "id", "version", "actorRef",
           "eventType", "subjectType", "subjectRef", "sequence", "occurredAt", "previousHash", "eventHash"];
         if (section && (reserved.some(key => key in section) ||
             (section !== event.payload.references && ["auditTrust", "auditActorKind"].some(key => key in section)))) {
           throw new AuditVerificationError("Reserved audit payload field");
         }
       }
-      if (auditEventTrust(event) === "lower_trust" && /(^|[_.:/-])(command|success[a-z]*|succeeded|approv[a-z]*|payment[a-z]*|paid|settle[a-z]*|complet[a-z]*|accept[a-z]*|authoriz[a-z]*|issued|locked)([_.:/-]|$)/u.test(event.eventType.toLowerCase())) {
+      if (auditEventTrust(event) === "lower_trust" && !legacyLowerTrustEventTypes.has(event.eventType) && /(^|[_.:/-])(command|success[a-z]*|succeeded|approv[a-z]*|payment[a-z]*|paid|settle[a-z]*|complet[a-z]*|accept[a-z]*|authoriz[a-z]*|issued|locked)([_.:/-]|$)/u.test(event.eventType.toLowerCase())) {
         throw new AuditVerificationError("Unchecked authority event");
       }
     }

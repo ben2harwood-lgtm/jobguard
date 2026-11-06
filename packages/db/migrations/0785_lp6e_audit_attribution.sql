@@ -43,8 +43,18 @@ BEGIN
   IF (e->>'id') !~ '^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$'
    OR length(e->>'eventType')>100 OR length(e->>'subjectType')>100 THEN
    RAISE EXCEPTION 'AUDIT_INPUT_INVALID' USING ERRCODE='22023'; END IF;
-  -- Only checked domain operations may establish authority-bearing event names.
-  IF p_trust='lower_trust' AND lower(e->>'eventType') ~
+  -- Legacy names stay lower-trust pending LP-6e-LEGACY-WRITERS conversion.
+  -- All other authority-bearing names require a checked domain operation.
+  IF p_trust='lower_trust' AND (e->>'eventType') NOT IN (
+   'command.succeeded',
+   'contractor.visit.completed',
+   'customer_credit_note.synthetic_approved',
+   'customer_invoice.synthetic_issued',
+   'customer_payment.recorded',
+   'customer_payment.synthetic_recorded',
+   'proof.completed',
+   'recovery.terms.approved',
+   'variation.approved') AND lower(e->>'eventType') ~
    '(^|[_.:/-])(command|success[a-z]*|succeeded|approv[a-z]*|payment[a-z]*|paid|settle[a-z]*|complet[a-z]*|accept[a-z]*|authoriz[a-z]*|issued|locked)([_.:/-]|$)' THEN
    RAISE EXCEPTION 'AUDIT_CHECKED_OPERATION_REQUIRED' USING ERRCODE='42501'; END IF;
   payload:=e->'payload';
@@ -57,7 +67,7 @@ BEGIN
      RAISE EXCEPTION 'AUDIT_INPUT_INVALID' USING ERRCODE='22023'; END IF;
     FOR entry IN SELECT key,value FROM jsonb_each(payload->section) LOOP
      IF length(entry.key) NOT BETWEEN 1 AND 200 OR entry.key !~ '^[A-Za-z0-9_.:@/-]+$'
-      OR entry.key IN ('actor','tenant','type','payload','payloadHash','auditActorKind','auditTrust','tenantId','id','version','actorRef','eventType','subjectType','subjectRef','sequence','occurredAt','previousHash','eventHash')
+      OR entry.key IN ('actor','tenant','type','auditActorKind','auditTrust','tenantId','id','version','actorRef','eventType','subjectType','subjectRef','sequence','occurredAt','previousHash','eventHash')
       OR jsonb_typeof(entry.value) IS DISTINCT FROM 'string'
       OR length(entry.value #>> '{}') NOT BETWEEN 1 AND 200
       OR (entry.value #>> '{}') !~ '^[A-Za-z0-9_.:@/-]+$'

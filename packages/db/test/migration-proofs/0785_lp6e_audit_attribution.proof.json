@@ -2,6 +2,52 @@
   "migration": "0785_lp6e_audit_attribution.sql",
   "lp0": [
     {
+      "section": "authorityPaths",
+      "before": null,
+      "after": {
+        "id": "ap-lp6e-audit-attribution",
+        "title": "LP-6e bound audit attribution",
+        "description": "Owner-only actor and tenant lookups. Runtime cannot select checked trust. Protected sealer pin refresh remains held for its authorized owner.",
+        "cards": [
+          "LP-6e",
+          "LP-6d",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-6e": "Stamp protected session attribution in audit seals.",
+          "LP-6d": "Bind remaining checked callers before activation.",
+          "LP-12": "Review private audit owner custody."
+        },
+        "sources": [
+          "packages/db/migrations/0785_lp6e_audit_attribution.sql"
+        ],
+        "tests": [
+          "packages/db/src/lp6e-audit.test.ts",
+          "packages/db/test/lp6e-audit.integration.test.ts"
+        ],
+        "gaps": [
+          "Protected app.lp4_seal_audit definition pin and static-call inventory need Ben authorization; this proof deliberately does not replace them.",
+          "LP-6d chain present; PostgreSQL CI and independent RED security checks remain required."
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.current_actor()|jobguard_audit_writer|EXECUTE|-",
+        "group": "a-lp6e-audit-attribution"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.current_tenant()|jobguard_audit_writer|EXECUTE|-",
+        "group": "a-lp6e-audit-attribution"
+      }
+    },
+    {
       "section": "groups",
       "before": null,
       "after": {
@@ -39,14 +85,6 @@
       }
     },
     {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.current_actor()|jobguard_audit_writer|EXECUTE|-",
-        "group": "a-lp6e-audit-attribution"
-      }
-    },
-    {
       "section": "routines",
       "before": {
         "identity": "function:app.current_actor()",
@@ -91,14 +129,6 @@
       }
     },
     {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.current_tenant()|jobguard_audit_writer|EXECUTE|-",
-        "group": "a-lp6e-audit-attribution"
-      }
-    },
-    {
       "section": "routines",
       "before": {
         "identity": "function:app.current_tenant()",
@@ -139,36 +169,6 @@
         "staticWrites": [],
         "staticCalls": [
           "app.lp6_bound_request"
-        ]
-      }
-    },
-    {
-      "section": "authorityPaths",
-      "before": null,
-      "after": {
-        "id": "ap-lp6e-audit-attribution",
-        "title": "LP-6e bound audit attribution",
-        "description": "Owner-only actor and tenant lookups. Runtime cannot select checked trust. Protected sealer pin refresh remains held for its authorized owner.",
-        "cards": [
-          "LP-6e",
-          "LP-6d",
-          "LP-12"
-        ],
-        "responsibilities": {
-          "LP-6e": "Stamp protected session attribution in audit seals.",
-          "LP-6d": "Bind remaining checked callers before activation.",
-          "LP-12": "Review private audit owner custody."
-        },
-        "sources": [
-          "packages/db/migrations/0785_lp6e_audit_attribution.sql"
-        ],
-        "tests": [
-          "packages/db/src/lp6e-audit.test.ts",
-          "packages/db/test/lp6e-audit.integration.test.ts"
-        ],
-        "gaps": [
-          "Protected app.lp4_seal_audit definition pin and static-call inventory need Ben authorization; this proof deliberately does not replace them.",
-          "LP-6d chain present; PostgreSQL CI and independent RED security checks remain required."
         ]
       }
     }

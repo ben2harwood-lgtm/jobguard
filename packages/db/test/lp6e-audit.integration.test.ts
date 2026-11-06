@@ -1,6 +1,10 @@
-import { randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { afterAll, beforeAll, expect, it } from "vitest";
+import { EvidenceService, FinalAccountLockRepository, PracticeInvoiceRepository, ProofCommandService, verifiedTenantContextFromMembership, withTenant, type AuthenticatedMembership } from "../src/index.js";
+import { LOCK_OWNER, LOCK_USER, seedAccount, publishFixtureCompletion } from "./sv5pre-fixtures.js";
+import { installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
+import { MemoryStorage, pngBytes } from "./site-extra-evidence-fixtures.js";
 import { auditActorAttribution, verifyAuditChain, type AuditEvent } from "../src/audit.js";
 import { jobDoorsActor, jobDoorsDatabase, transaction, type JobDoorsDatabase } from "./lp-job-doors-fixtures.js";
 let db: JobDoorsDatabase;
@@ -18,8 +22,8 @@ const input = (extra = {}) => ({ id: randomUUID(), version: "audit.v1", actorRef
   eventType: "statement.recorded", subjectType: "job", subjectRef: randomUUID(), payload: {}, ...extra });
 const bind = (c: PoolClient, p: Awaited<ReturnType<typeof principal>>) => c.query("SELECT app.bind_request('real',$1,$2)", [p.credential,p.tenant]);
 const append = (c: PoolClient, events: unknown[]) => c.query("SELECT * FROM app.append_audit($1)", [JSON.stringify(events)]);
-async function chain(tenant: string): Promise<AuditEvent[]> {
-  return (await db.owner.query(`SELECT id,version,tenant_id AS "tenantId",sequence::int,actor_ref AS "actorRef",
+async function chain(tenant: string, owner = db.owner): Promise<AuditEvent[]> {
+  return (await owner.query(`SELECT id,version,tenant_id AS "tenantId",sequence::int,actor_ref AS "actorRef",
     event_type AS "eventType",subject_type AS "subjectType",subject_ref AS "subjectRef",payload,
     occurred_at AS "occurredAt",payload_hash AS "payloadHash",previous_hash AS "previousHash",event_hash AS "eventHash"
     FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence`, [tenant])).rows;
@@ -172,4 +176,63 @@ it("refuses a binding that expires while waiting for the audit head", async () =
     try { await outcome; } finally { await caller.query("ROLLBACK"); caller.release(); }
   }
   const events = await chain(p.tenant); expect(events).toHaveLength(1); verifyAuditChain(events);
+});
+
+
+it("keeps product invoice, payment and proof writes compatible after 0785", async () => {
+  const practice = await jobDoorsDatabase(true);
+  try {
+    expect((await practice.owner.query("SELECT 1 FROM public.jobguard_schema_migration WHERE migration_name='0785_lp6e_audit_attribution.sql'")).rowCount).toBe(1);
+    await installLegacySyntheticPartyFixtures(practice.owner);
+    const a = await seedAccount(practice.owner), credential = randomBytes(32).toString("hex");
+    await practice.owner.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", ["lp6e@fictional.invalid", LOCK_USER]);
+    await practice.owner.query("INSERT INTO identity.membership_locator VALUES($1,$2,$3)", [LOCK_USER,a.tenantId,LOCK_OWNER]);
+    await practice.owner.query(`INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at)
+      VALUES($1,$2,'synthetic_demo',$3,'fictional',clock_timestamp()+interval '1 hour')`, [randomUUID(),LOCK_USER,credential]);
+    const context = verifiedTenantContextFromMembership({ tenantId:a.tenantId, membershipId:LOCK_OWNER, identityUserId:LOCK_USER } as AuthenticatedMembership, { kind:"real",credential });
+    await transaction(practice.owner,a.tenantId,async c => {
+      await c.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','synthetic_demo','legacy_synthetic_live_fixture')",[a.tenantId,a.jobId]);
+      await c.query("INSERT INTO app.scope_progress(tenant_id,job_id,scope_item_id,stage) VALUES($1,$2,$3,'in_progress')",[a.tenantId,a.jobId,a.scopeItemId]);
+    });
+    const storage = new MemoryStorage(), bytes = pngBytes(6), evidence = new EvidenceService(practice.runtime,storage);
+    const upload = await evidence.beginUpload(context,{ jobId:a.jobId,scopeItemId:a.scopeItemId,
+      expectedSha256:createHash("sha256").update(bytes).digest("hex"),contentType:"image/png",maximumBytes:10000,
+      retentionClass:"standard_evidence",expiresAt:new Date(Date.now()+3600000) });
+    storage.put(upload.objectKey,"lp6e-v1",bytes);
+    await evidence.finalize(context,{uploadId:upload.id,objectVersionId:"lp6e-v1",evidenceType:"completion_photo"});
+    const proof = await new ProofCommandService(practice.runtime,storage).complete(context,{
+      version:"proof.complete.v1",commandId:randomUUID(),actorMembershipId:LOCK_OWNER,jobId:a.jobId,
+      scopeItemId:a.scopeItemId,stage:"completion",evidenceId:upload.id,requiredEvidenceType:"completion_photo" });
+    expect(proof.state).toBe("complete");
+    const locks = new FinalAccountLockRepository(practice.runtime);
+    await locks.acceptTerms(context,{actorMembershipId:LOCK_OWNER,commandId:randomUUID(),termsVersion:"synthetic_final_check_terms.v1"});
+    await locks.disposition(context,{jobId:a.jobId,actorMembershipId:LOCK_OWNER,commandId:randomUUID(),scopeItemId:a.scopeItemId,disposition:"done"});
+    await locks.lock(context,a.input);
+    // Only the synthetic detector result is fixture work; product writes use runtime.
+    await publishFixtureCompletion(practice.owner,practice.owner,a.tenantId,a.jobId);
+    const invoices = new PracticeInvoiceRepository(practice.runtime);
+    const invoice = await invoices.issue(context,{jobId:a.jobId,finalAccountRevisionId:a.revisionId,
+      actorMembershipId:LOCK_OWNER,commandId:randomUUID(),recipient:"practice-customer@example.invalid",issuedOn:"2026-11-06"});
+    const payment = await invoices.recordReceipt(context,{jobId:a.jobId,invoiceId:invoice.id,actorMembershipId:LOCK_OWNER,
+      commandId:randomUUID(),paidOn:"2026-11-06",amountPence:100,method:"bank_transfer",reference:"fictional"});
+    expect(payment.paymentId).toBeTruthy();
+    // Also exercise the formerly reserved hash names through the public SQL writer.
+    await withTenant(practice.runtime,context,async tx => {
+      await append(tx.$client,[input({payload:{hashes:{payloadHash:"a".repeat(64),payload:"b".repeat(64)}}})]);
+    });
+    const events = await chain(a.tenantId,practice.owner);
+    verifyAuditChain(events);
+    for (const eventType of ["customer_invoice.synthetic_issued","customer_payment.synthetic_recorded","proof.completed"]) {
+      const event = events.find(e => e.eventType === eventType);
+      expect(event).toMatchObject({version:"audit.v3",actorRef:`membership:${LOCK_OWNER}`,
+        payload:{references:{auditTrust:"lower_trust",auditActorKind:"bound_member"}}});
+    }
+  } finally { await practice.close(); }
+},300_000);
+
+it.each(["PROOF.COMPLETED", "proof.completed.forged", "customer_payment.recorded.forged"])("refuses a variant of a legacy name: %s", async eventType => {
+  const p = await principal();
+  await expect(transaction(db.runtime,p.tenant,async c => { await bind(c,p); await append(c,[input({eventType})]); }))
+    .rejects.toMatchObject({code:"42501",message:"AUDIT_CHECKED_OPERATION_REQUIRED"});
+  expect(await chain(p.tenant)).toEqual([]);
 });

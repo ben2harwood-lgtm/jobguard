@@ -103,8 +103,9 @@ explicit `system:database:<session_user>` actor and `auditActorKind=system`; sup
 human names never become authenticated attribution. These system stamps identify
 an execution principal, not the individual administrator controlling it.
 
-The generic append cannot emit authority-bearing approval, payment, acceptance,
-issuance, lock or command-completion names. Its error is
+Except for the exact legacy lower-trust names listed below, the generic append
+cannot emit authority-bearing approval, payment, acceptance, issuance, lock or
+command-completion names. Its error is
 `AUDIT_CHECKED_OPERATION_REQUIRED`; private checked domain operations must establish
 those facts. A bound identity alone never grants EXECUTE on the private sealer.
 Payload keys `actor`, `tenant`, `type` and `auditActorKind` join the existing reserved
@@ -144,3 +145,52 @@ LATER / SIMPLICITY (initial review): the authority-event classification in
 `0785_lp6e_audit_attribution.sql` and `packages/db/src/audit.ts` must agree.
 A future shared fixture table for event-name acceptance/refusal would make SQL and
 verifier drift easier to detect without changing their separate execution boundaries.
+
+
+LP-6e repair round 1 (6 November): compatibility is limited to these exact names:
+`command.succeeded`, `contractor.visit.completed`,
+`customer_credit_note.synthetic_approved`, `customer_invoice.synthetic_issued`,
+`customer_payment.recorded`, `customer_payment.synthetic_recorded`,
+`proof.completed`, `recovery.terms.approved`, `variation.approved`.
+They retain `lower_trust`, including in verification and exports; a bound actor
+establishes attribution only, never the truth or authorization of their content.
+Case variants, suffixes and all other authority names remain refused.
+Nested `payload` and `payloadHash` section keys are permitted data; they cannot
+replace the sealed payload or its hash. Actor/tenant/type and trust metadata
+remain reserved. No grants or private execution paths are widened by this repair.
+
+Named follow-up **LP-6e-LEGACY-WRITERS**: convert each listed repository writer to
+its private checked domain operation and remove that exact name from both legacy
+lists, with positive product and forgery-refusal tests. This compatibility repair
+does not claim that follow-up or authority-consumer closure is complete.
+
+Repair round 1 handoff — READY (6 November 2026)
+----------------------------------------------
+
+Applied only the first security pre-check's compatibility fix to 0785 and its
+verifier. The two nested data keys now have acceptance plus sealed-hash tampering
+coverage; all other reserved-field, actor-substitution, authority-name, direct
+private-execution, rollback, tenant-substitution and expiry refusals remain.
+New SQL integration coverage rejects near-miss legacy names and runs product proof
+completion, invoice issue and payment recording under a bound runtime. The
+synthetic detector completion alone is fixture setup, not a live provider claim.
+Proof deltas are sorted; no policy rows or additional grants are introduced.
+The lane contains exactly the non-lane files changed from LP-6d `cdd4e3282`.
+
+Local checks actually run using installed tools (no dependency install):
+- From `packages/db`: `./node_modules/.bin/vitest run --maxWorkers=2 src/lp6e-audit.test.ts src/lp4-audit.test.ts src/audit-fix-dbsrc-08.test.ts` — 53 passed, 3 files.
+- From `packages/db`: `./node_modules/.bin/tsc -p tsconfig.json --noEmit` — PASS; this is also the package lint command. A nullable test-reference error found on the first run was fixed before the passing rerun.
+- TypeScript compiler API with the package options and `noEmit`, rooted at `test/lp6e-audit.integration.test.ts` — PASS for the integration test and imported fixtures; syntax transpilation also passed. Neither executes PostgreSQL.
+- `LANE_BASE_REF=cdd4e3282 node tools/lint.mjs` — PASS. The initial default-main comparison failed on inherited LP-6b/c/d paths; no lane expansion was used. Existing computed-import notices are reported, not refused, by core-purity lint.
+- `git diff --check`, exact lane-path comparison and sorted proof-row check — PASS.
+
+CI must execute the new `test/lp6e-audit.integration.test.ts`, full database and
+migration suites (fresh/upgrade, RLS/privileges, actor binding, rollback/concurrency
+and owner writers), affected product regressions (supplier matching/documents,
+discrepancies, evidence, final accounts, invoice/payment and both demos), and all
+required type/lint/test/build/browser gates on the eventual pushed head. This Mac
+cannot start PostgreSQL or bind localhost, so none of those database/browser
+results is claimed. Protected sealer definition/static-call pin refresh remains
+with its authorized owner; catalogue CI stays held until supplied. NOPR serial
+landing remains after LP-6b/c/d, with an independent RED check at the exact head.
+No commit, push, PR, merge, release or deployment was performed here.

@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/lp-6e-audit-attribution"
       ],
-      "note": "LP-6e RED NOPR; LP-6d chain present; protected sealer pin refresh held for its authorized owner. Database/security checks pending.",
+      "note": "LP-6e RED NOPR; repair round 1 READY for router handoff. LP-6d predecessor base; PostgreSQL CI, exact-head independent review and authorized protected sealer pin refresh remain required.",
       "allow": [
         "apps/web/app/admin/contractor/audit-exports/page.tsx",
         "docs/contracts/audit-v1.md",

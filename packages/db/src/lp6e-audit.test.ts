@@ -47,7 +47,7 @@ it("refuses actor substitution, contradictory attribution and absent attribution
   expect(() => verifyAuditChain([sealed({ payload: { references: { auditTrust: "lower_trust" } } })])).toThrow("Invalid audit actor attribution");
 });
 
-it.each(["payload", "payloadHash", "id", "version", "subjectType", "subjectRef", "sequence", "occurredAt", "previousHash", "eventHash"])("refuses sealed metadata collision %s in every payload section", key => {
+it.each(["id", "version", "subjectType", "subjectRef", "sequence", "occurredAt", "previousHash", "eventHash"])("refuses sealed metadata collision %s in every payload section", key => {
   for (const [section, value] of [["references", "forged"], ["hashes", "a".repeat(64)], ["classifications", "security"]] as const) {
     expect(() => verifyAuditChain([sealed({ payload: {
       references: { auditActorKind: "bound_member", auditTrust: "lower_trust" }, [section]: {
@@ -75,4 +75,29 @@ it("extends the latest predecessor sealer and rechecks expiry after the final lo
   const recheck = sql.indexOf("IF app.current_actor() IS DISTINCT FROM bound_actor",lock);
   expect(lock).toBeGreaterThan(0); expect(recheck).toBeGreaterThan(lock);
   expect(recheck).toBeLessThan(sql.indexOf("seq:=seq+1"));
+});
+
+// Nested payload/hash names are data, not collisions with the sealed columns.
+it.each(["payload", "payloadHash"])("accepts nested %s while still checking the sealed hash", key => {
+  const event = sealed({ payload: { references: { auditActorKind: "bound_member", auditTrust: "lower_trust" }, hashes: { [key]: "a".repeat(64) } } });
+  verifyAuditChain([event]);
+  expect(() => verifyAuditChain([{ ...event, payloadHash: "b".repeat(64) }])).toThrow("Invalid audit chain");
+});
+it.each(["command.succeeded", "contractor.visit.completed", "customer_credit_note.synthetic_approved", "customer_invoice.synthetic_issued", "customer_payment.recorded", "customer_payment.synthetic_recorded", "proof.completed", "recovery.terms.approved", "variation.approved"])("keeps exact legacy %s lower trust with matching SQL policy", eventType => {
+  const sql = readFileSync(new URL("../migrations/0785_lp6e_audit_attribution.sql", import.meta.url), "utf8");
+  expect(sql).toContain(`'${eventType}'`);
+  const event = sealed({ eventType });
+  verifyAuditChain([event]);
+  expect(event.payload.references?.auditTrust).toBe("lower_trust");
+  for (const forged of [eventType.toUpperCase(), `${eventType}.forged`]) {
+    expect(() => verifyAuditChain([sealed({ eventType: forged })])).toThrow("Unchecked authority event");
+  }
+});
+
+it("uses exactly the same legacy exceptions in SQL and the verifier", () => {
+  const sql = readFileSync(new URL("../migrations/0785_lp6e_audit_attribution.sql", import.meta.url), "utf8");
+  const source = readFileSync(new URL("./audit.ts", import.meta.url), "utf8");
+  const sqlNames = [...sql.match(/eventType'\) NOT IN \(([\s\S]*?)\) AND lower/u)![1]!.matchAll(/'([^']+)'/gu)].map(match => match[1]);
+  const verifierNames = [...source.match(/legacyLowerTrustEventTypes = new Set\(\[([\s\S]*?)\]\)/u)![1]!.matchAll(/"([^"]+)"/gu)].map(match => match[1]);
+  expect(sqlNames).toEqual(verifierNames);
 });
