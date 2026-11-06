@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-126": {
+      "branches": [
+        "codex/sandbox/later-safety-126"
+      ],
+      "note": "LATER-SAFETY-126: RED practice credit-note session isolation; NOPR.",
+      "allow": [
+        "packages/db/migrations/0852_credit_note_practice_session_guard.sql",
+        "packages/db/test/migration-proofs/0852_credit_note_practice_session_guard.proof.json",
+        "packages/db/test/credit-note-practice-session.integration.test.ts"
+      ]
+    }
+  }
+}
