@@ -16,7 +16,7 @@ export function EmergencyNotice({tenantId,csrfToken}:{tenantId:string;csrfToken:
   }).catch(()=>{if(current)setNotices(null);});
   return()=>{current=false;};
  },[tenantId,csrfToken]);
- if(notices===null)return <p role="status">Emergency access notices are unavailable for this session. An owner must check the security audit.</p>;
+ if(notices===null)return <p role="alert">Emergency access notices are unavailable for this session. An owner must check the security audit.</p>;
  if(notices.length===0)return null;
  return <aside role="alert" aria-label="Emergency access activity"><h2>Emergency access activity</h2>
   <p>Emergency access requires two other owners. Access lasts one hour. Every action is recorded in the security audit.</p>

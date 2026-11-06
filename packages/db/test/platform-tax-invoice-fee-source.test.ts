@@ -81,3 +81,18 @@ it("refuses nonpositive statement corrections and bank metadata even with recomp
   t.command.lines[0]!.expectedSourceHash = t.source.document_hash;
   await expect(t.issue()).rejects.toThrow("PLATFORM_INVOICE_SOURCE_UNAVAILABLE");
 });
+
+it("requires a stored matching line before bypassing statement freshness", async () => {
+  const t = setup(), invoice = await t.issue();
+  const credit = { ...t.command, commandId: randomUUID(), kind: "credit_note", originalNumber: invoice.number };
+  await expect(t.issue({ ...credit, originalNumber: "SIM-PLATFORM-999999" })).rejects.toThrow("PLATFORM_INVOICE_FORBIDDEN");
+  await expect(t.issue({ ...credit, lines: [{ ...t.command.lines[0]!, id: randomUUID() }] })).rejects.toThrow("PLATFORM_INVOICE_FORBIDDEN");
+});
+it("still revalidates the original approval trace for credits", async () => {
+  for (const patch of [{ approval_id: randomUUID() }, { approval_hash: "c".repeat(64) }]) {
+    const t = setup(), invoice = await t.issue();
+    t.state.source = { ...t.source, ...patch };
+    await expect(t.issue({ ...t.command, commandId: randomUUID(), kind: "credit_note", originalNumber: invoice.number }))
+      .rejects.toThrow("PLATFORM_INVOICE_SOURCE_UNAVAILABLE");
+  }
+});
