@@ -21,10 +21,21 @@ export class IdentityApplication {
     const {version: _version,...input}=identityRequestV1.parse(raw);
     return {version:"identity-request-response.v1" as const,environment:"synthetic_demo" as const,...await this.provider.requestCode({...input,ip})};
   }
-  async verify(raw:unknown,origin:string|undefined) {
+  async verify(raw:unknown,origin:string|undefined,credentials:TenantRequestCredentials = {}) {
     this.requireOrigin(origin);
     const input=identityVerifyV1.parse(raw);
-    return this.provider.verifyCode(input.email,input.purpose,input.code,input.invitationId);
+    if(input.purpose === "invitation") await this.requireSessionCsrf(credentials);
+    return this.provider.verifyCode(input.email,input.purpose,input.code,input.invitationId,input.purpose === "invitation" ? credentials.sessionToken : undefined);
+  }
+  private async requireSessionCsrf(credentials:TenantRequestCredentials):Promise<void> {
+    const principal=credentials.sessionToken?await this.provider.authenticate(credentials.sessionToken):undefined;
+    if(principal && (!credentials.csrfToken || credentials.csrfToken!==principal.csrfToken))throw new AuthError("ORIGIN_FORBIDDEN");
+  }
+  async signout(credentials:TenantRequestCredentials) {
+    this.requireOrigin(credentials.origin);
+    await this.requireSessionCsrf(credentials);
+    if(credentials.sessionToken)await this.provider.revokeSession(credentials.sessionToken);
+    return {version:"identity-signed-out.v1" as const,environment:"synthetic_demo" as const};
   }
   async principal(token:string|undefined):Promise<AuthPrincipal> {
     const principal=token?await this.provider.authenticate(token):undefined;

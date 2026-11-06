@@ -1,3 +1,4 @@
+import type { PoolClient } from "pg";
 import { createHmac, randomBytes, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
 import { EnterpriseIdentityRepository, IdentityRepository } from "@jobguard/db";
 import { AuthError, roles, type ActiveMembership, type AuthPrincipal, type AuthProvider, type ChallengeRequest, type Role, type VerificationResult } from "./auth-provider.js";
@@ -46,7 +47,7 @@ export class PersistedAuthProvider implements AuthProvider {
     }
     return { accepted: true, ...(this.environment === "synthetic_demo" ? { fixtureCode: code } : {}) };
   }
-  async verifyCode(emailInput: string, purpose: ChallengeRequest["purpose"], code: string, invitationId?: string): Promise<VerificationResult> {
+  async verifyCode(emailInput: string, purpose: ChallengeRequest["purpose"], code: string, invitationId?: string, previousSessionToken?: string): Promise<VerificationResult> {
     const input = verifyCodeV1.parse({ email: emailInput, purpose, code, ...(invitationId ? { invitationId } : {}) });
     const email = input.email.trim().toLowerCase();
     this.assertRecipient(email);
@@ -76,6 +77,10 @@ export class PersistedAuthProvider implements AuthProvider {
         for (const connectionId of targets.length?targets:["identity"]) refusals.push({connectionId,code:"SSO_REQUIRED_CODE_SIGNIN"});
         return undefined;
       }
+      if (purpose === "invitation" && previousSessionToken) {
+        const previous = (await client.query<{user_id:string}>("SELECT user_id FROM identity.session WHERE token_digest=$1", [this.digest(`session:${previousSessionToken}`)])).rows[0];
+        if (previous && previous.user_id !== userId) await this.revokeSessionInTransaction(client, previousSessionToken);
+      }
       const sessionToken = randomBytes(32).toString("base64url"), csrfToken = randomBytes(24).toString("base64url"), sessionId=randomUUID();
       await client.query("INSERT INTO identity.session(id,user_id,token_digest,csrf_token,expires_at,environment) VALUES($1,$2,$3,$4,$5,$6)", [sessionId,userId,this.digest(`session:${sessionToken}`),csrfToken,new Date(this.now()+86_400_000),this.environment]);
       await client.query("INSERT INTO identity.security_event(id,event_type,subject_id) VALUES($1,'session.issued',$2)", [randomUUID(),sessionId]);
@@ -91,6 +96,15 @@ export class PersistedAuthProvider implements AuthProvider {
     }
     if (!result) throw invalidCode;
     return result;
+  }
+  private async revokeSessionInTransaction(client: PoolClient, sessionToken: string): Promise<void> {
+    const revoked = await client.query<{id:string}>("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE token_digest=$1 AND revoked_at IS NULL RETURNING id", [this.digest(`session:${sessionToken}`)]);
+    for (const row of revoked.rows) {
+      await client.query("INSERT INTO identity.security_event(id,event_type,subject_id) VALUES($1,'session.revoked',$2)", [randomUUID(),row.id]);
+    }
+  }
+  async revokeSession(sessionToken: string): Promise<void> {
+    await this.repository.transaction(client => this.revokeSessionInTransaction(client, sessionToken));
   }
   async authenticate(sessionToken: string): Promise<AuthPrincipal | undefined> {
     const row = (await this.repository.pool.query<{id:string;user_id:string;csrf_token:string}>("SELECT id,user_id,csrf_token FROM identity.session WHERE token_digest=$1 AND revoked_at IS NULL AND expires_at>$2 AND environment=$3", [this.digest(`session:${sessionToken}`),new Date(this.now()),this.environment])).rows[0];

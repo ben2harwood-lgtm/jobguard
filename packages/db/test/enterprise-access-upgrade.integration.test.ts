@@ -84,8 +84,16 @@ it('emergency_dual_owner/scim2_machine preserve populated identity state, instal
  const isLanding=(r:Relation)=>r.nspname==='app'&&r.relname==='landing_allocation';
  type Con={name:string;definition:string};
  expect((after.relations.find(isLanding)!.constraints as Con[]).filter(c=>c.name===added)).toEqual([{name:added,definition:'CHECK ((eligible_net_pence <= gross_pence))'}]);
- const afterRelations=after.relations.map((r:Relation)=>isLanding(r)?{...r,constraints:(r.constraints as Con[]).filter(c=>c.name!==added)}:r);
- expectRelationsUnchanged(catalogue.relations,afterRelations,laterAcl);
+ // LATER-SAFETY-66 replaces exactly one identity.security_event CHECK to add 'session.revoked'; nothing else on that table may change.
+ const kinds='security_event_event_type_check';
+ const isSecurityEvent=(r:Relation)=>r.nspname==='identity'&&r.relname==='security_event';
+ const kindsCheck=(list:string[])=>`CHECK (((event_type)::text = ANY ((ARRAY[${list.map(k=>`'${k}'::character varying`).join(', ')}])::text[])))`;
+ const oldKinds=['challenge.requested','session.issued','identity.verified','invitation.created'];
+ expect((catalogue.relations.find(isSecurityEvent)!.constraints as Con[]).filter(c=>c.name===kinds)).toEqual([{name:kinds,definition:kindsCheck(oldKinds)}]);
+ expect((after.relations.find(isSecurityEvent)!.constraints as Con[]).filter(c=>c.name===kinds)).toEqual([{name:kinds,definition:kindsCheck([...oldKinds,'session.revoked'])}]);
+ const withoutKinds=(r:Relation)=>isSecurityEvent(r)?{...r,constraints:(r.constraints as Con[]).filter(c=>c.name!==kinds)}:r;
+ const afterRelations=after.relations.map((r:Relation)=>isLanding(r)?{...r,constraints:(r.constraints as Con[]).filter(c=>c.name!==added)}:r).map(withoutKinds);
+ expectRelationsUnchanged(catalogue.relations.map(withoutKinds),afterRelations,laterAcl);
  for(const row of catalogue.routines){
   if(!later.has(`${row.nspname}.${row.proname}`)){expect(after.routines).toContainEqual(row);continue;}
   const {definition:_d,...kept}=row;
