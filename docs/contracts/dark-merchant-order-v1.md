@@ -8,6 +8,8 @@ prevention findings never qualify for a recovery fee.
 content, recipient, amount, revision, expiry and fake merchant outbox identity.
 The executor rechecks current order authority before claiming pending work.
 Manual placement is a separate owner assertion, never provider confirmation.
+Its actor comes only from the authenticated session digest, resolved in the
+database against current company owner membership; the DTO cannot select an actor.
 
 `purchase_order.attest_manual` remains outside the LP-5 lifecycle. Its production
 activation is held until it has a reviewed lifecycle adapter. The dark seam uses

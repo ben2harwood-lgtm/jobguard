@@ -1,0 +1,56 @@
+{
+  "migration": "0652_connector_intake_machine_refusal.sql",
+  "lp0": [
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:connector.machine_stage(uuid,text,jsonb,text,text,bigint,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_machine"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [
+          "connector.machine_nonce"
+        ],
+        "staticCalls": [
+          "connector.intake",
+          "connector.machine_authority"
+        ]
+      },
+      "after": {
+        "identity": "function:connector.machine_stage(uuid,text,jsonb,text,text,bigint,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_machine"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [
+          "connector.input_event",
+          "connector.machine_nonce"
+        ],
+        "staticCalls": [
+          "app.final_lock_hash",
+          "app.lp4_seal_audit",
+          "connector.machine_authority"
+        ]
+      }
+    }
+  ],
+  "upgrade": [],
+  "tenancy": []
+}

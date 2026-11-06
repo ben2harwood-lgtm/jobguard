@@ -28,6 +28,13 @@ it("0565_recovery_billability_integration upgrades populated previous schema wit
   expect(await proofDifferences(f.admin, before)).toEqual({ rows: [], types: [] }); expect(await keys()).toEqual(originalKeys);
   expect((await f.admin.query("SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid='app.recovery_billability_command'::regclass")).rows).toEqual([{ relrowsecurity: true, relforcerowsecurity: true }]);
   expect((await f.admin.query("SELECT has_table_privilege('jobguard_runtime','app.recovery_billability_command','SELECT,INSERT,UPDATE,DELETE') allowed")).rows).toEqual([{ allowed: false }]);
+  // 0642 changes only this registry row's permission; retain every other byte.
+  const successorProof = structuredClone(before);
+  const registry = successorProof["app.command_type_registry"]!;
+  const clientKey = Object.keys(registry.rows).find(key => JSON.parse(key).command_type === "IssueClientApproval")!;
+  const clientRow = JSON.parse(registry.rows[clientKey]!);
+  expect(clientRow.permission_rule).toBe("owner");
+  registry.rows[clientKey] = JSON.stringify({ ...clientRow, permission_rule: "contractor" });
   await migrate(f.admin); await migrate(f.admin);
-  expect(await proofDifferences(f.admin, before)).toEqual({ rows: [], types: [] });
+  expect(await proofDifferences(f.admin, successorProof)).toEqual({ rows: [], types: [] });
 });
