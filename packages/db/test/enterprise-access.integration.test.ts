@@ -204,7 +204,7 @@ describe('ENT-10 emergency action routes, real database',()=>{
  });
  it('expired approval window and capability session refuse without writes',async()=>{
   const f=await fixture(h),a=await owner(f),id=randomUUID(),tokenHash=hash('expired route token');
-  await h.admin.query("INSERT INTO identity.emergency_request VALUES($1,$2,$3,$4,clock_timestamp()-interval '16 minutes',clock_timestamp()-interval '1 minute')",[f.principal.tenantId,id,f.principal.membershipId,hash('expired window')]);
+  await h.admin.query("INSERT INTO identity.emergency_request VALUES($1,$2,$3,$4,transaction_timestamp()-interval '16 minutes',transaction_timestamp()-interval '1 minute')",[f.principal.tenantId,id,f.principal.membershipId,hash('expired window')]);
   await refusedPost(f,a.bound,request(id,'approve'));await refusedPost(f,f.bound!,request(id,'open',{tokenHash}));
   await h.admin.query("INSERT INTO identity.emergency_session VALUES($1,$2,$3,transaction_timestamp()-interval '61 minutes',transaction_timestamp()-interval '1 minute')",[f.principal.tenantId,id,tokenHash]);
   await refusedPost(f,f.bound!,request(id,'inspect',{tokenHash}));
