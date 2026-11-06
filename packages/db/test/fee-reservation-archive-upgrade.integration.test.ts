@@ -170,7 +170,7 @@ describe("FEE-STORE-AUTHORITY populated forward upgrade", () => {
 // committed statements, then replay the same attacks against the upgraded database.
 describe("LATER-SAFETY-14 populated forward upgrade", () => {
   it("closes signed-result replay and unsigned key insertion without changing history or ACLs", async () => {
-    const migration = "0652_fee_result_forward_only.sql";
+    const migration = "0651_fee_result_forward_only.sql";
     const db = await startBeforeMigration(migration);
     try {
       const f = fixture();

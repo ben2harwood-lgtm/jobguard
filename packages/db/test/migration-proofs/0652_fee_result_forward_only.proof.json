@@ -1,6 +1,0 @@
-{
-  "migration": "0652_fee_result_forward_only.sql",
-  "lp0": [],
-  "upgrade": [],
-  "tenancy": []
-}
