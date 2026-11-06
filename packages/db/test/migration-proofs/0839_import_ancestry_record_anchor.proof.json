@@ -1,0 +1,6 @@
+{
+  "migration": "0839_import_ancestry_record_anchor.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}

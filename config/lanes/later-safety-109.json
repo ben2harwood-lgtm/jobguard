@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-109": {
+      "branches": [
+        "codex/sandbox/later-safety-109"
+      ],
+      "allow": [
+        "packages/db/migrations/0839_import_ancestry_record_anchor.sql",
+        "packages/db/test/migration-proofs/0839_import_ancestry_record_anchor.proof.json",
+        "packages/db/test/import-ancestry-record-anchor.integration.test.ts"
+      ]
+    }
+  }
+}
