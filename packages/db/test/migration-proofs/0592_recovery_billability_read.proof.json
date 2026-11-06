@@ -1,0 +1,119 @@
+{
+  "migration": "0592_recovery_billability_read.sql",
+  "lp0": [
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "id": "a-billability-review-read",
+        "title": "Synthetic post-lock billability review read",
+        "cards": [
+          "LP-6c",
+          "LP-8b"
+        ],
+        "responsibilities": {
+          "LP-6c": "Bind the current owner identity and session to the tenant before post-lock reads",
+          "LP-8b": "Read immutable synthetic billability reviews only, without fee or write authority"
+        },
+        "sources": [
+          "packages/db/migrations/0592_recovery_billability_read.sql"
+        ],
+        "tests": [
+          "apps/web/app/api/jobs/[id]/recovery-cases/[caseId]/billability/database.test.ts"
+        ],
+        "gaps": [
+          "Independent RED review and CI PostgreSQL evidence required."
+        ],
+        "kind": "read_access",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "No fee authority; synthetic only"
+        },
+        "downstream": "Runtime role is checked first. The synthetic database, ownership and final-account lock share one refusal before source/review reads; Test Q compares the exact refusal logs. Post-lock immutable reviews only; no write or fee authority.",
+        "path": "ap-billability-review-read"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.read_recovery_billability(uuid,uuid,text)|jobguard_migration",
+        "group": "a-owner-routines"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.read_recovery_billability(uuid,uuid,text)|jobguard_runtime|EXECUTE|-",
+        "group": "a-billability-review-read"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.read_recovery_billability(uuid,uuid,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.authenticate_practice_session"
+        ]
+      }
+    },
+    {
+      "section": "authorityPaths",
+      "before": null,
+      "after": {
+        "id": "ap-billability-review-read",
+        "cards": [
+          "LP-6c",
+          "LP-8b"
+        ],
+        "responsibilities": {
+          "LP-6c": "Bind the current owner identity and session to the tenant before post-lock reads",
+          "LP-8b": "Read immutable synthetic billability reviews only, without fee or write authority"
+        },
+        "sources": [
+          "packages/db/migrations/0592_recovery_billability_read.sql"
+        ],
+        "tests": [
+          "apps/web/app/api/jobs/[id]/recovery-cases/[caseId]/billability/database.test.ts"
+        ],
+        "gaps": [
+          "Independent RED review and CI PostgreSQL evidence required."
+        ],
+        "title": "Post-lock synthetic billability reviews",
+        "description": "Runtime role first, then current unambiguous synthetic owner session or owning practice session. Database name, same-tenant job ownership and final-account lock are checked together before source/review reads, preserving identical Test Q refusal logs. Same case and synthetic source only; no fee authority."
+      }
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "read_recovery_billability",
+        "args": "j uuid, c uuid, digest text",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, app"
+        ]
+      }
+    }
+  ],
+  "tenancy": []
+}

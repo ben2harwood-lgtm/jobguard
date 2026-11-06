@@ -72,6 +72,7 @@ and no answer carries a money value (Q7). The rounding rule is the merged one (h
   orderLineScopeItemId }, priceSource:"server_sor" }`. `priceSource` is the label of where a price came from, not a value.
 - `GET /contractor/jobs/:id/sor-items?q=` → `site-sor-items.v1` (items of THIS job’s price list whose code or description contains the text, compared with `position()` so no pattern character has a meaning, in
   code order, at most 50, with `truncated`). The text is REQUIRED, 1 to 80 characters after trimming (Q10 struck the “recent items” list; a missing or empty text is `INVALID_COMMAND`, nothing is read).
+- ENT-3 recent-items addition (4 Nov 2026): `GET /contractor/jobs/:id/sor-items/recent` separately returns `site-sor-recent-items.v1`, up to five distinct codes from the signed-in membership’s priced extras, newest first, joined to this job’s current price list; no query keys are read, no prices or history identities are returned, and empty search text remains invalid on the search route.
 - `GET /contractor/jobs/:id/order-check?sorCode=&quantity=&orderLine=` → `site-order-check.v1` (all three outcomes, `already_on_order` included as a result).
 - Failure body `sor-site-extra-error.v1` = `{ version, code }`. Codes and statuses: `UNAUTHENTICATED` 401, `MODE_FORBIDDEN` 403, `ORIGIN_FORBIDDEN` 403, `TRACK_FORBIDDEN` 403, `EXTRA_FORBIDDEN` 403,
   `INVALID_COMMAND` 400, `INVALID_QUANTITY` 400, `NOT_FOUND` 404, `JOB_NOT_LIVE` 409, `IDEMPOTENCY_CONFLICT` 409, `SOR_ITEM_NOT_FOUND` 422, `ORDER_LINE_NOT_FOUND` 422, `ORDER_LINE_AMBIGUOUS` 422,

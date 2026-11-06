@@ -9,7 +9,10 @@ export function renderProviderRegister(directory = root) {
   const flows = readdirSync(operations).filter(name => name.endsWith("-data-flow.md")).sort();
   const rows = flows.map(name => {
     const bytes = readFileSync(resolve(operations, name));
-    return `| [${name}](${name}) | Local synthetic fixtures only; live region **not chosen** | ${createHash("sha256").update(bytes).digest("hex")} |`;
+    const boundary = name === "accounting-observation-data-flow.md"
+      ? "Local synthetic fixtures and PostgreSQL source receipts only; live region **not chosen**"
+      : "Local synthetic fixtures only; live region **not chosen**";
+    return `| [${name}](${name}) | ${boundary} | ${createHash("sha256").update(bytes).digest("hex")} |`;
   });
   return `# Provider and personal-data destination register
 

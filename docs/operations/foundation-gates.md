@@ -78,37 +78,68 @@ therefore fails at the commit checked by CI, rather than being accepted as a lin
 future work. The validator is offline only and is not imported by a runtime gate.
 No server authorization or deployment configuration is changed.
 
-Catch-up validation (3 November 2026): the launcher merged `origin/main`
-`111865cf65f5e68a28ce1891bd52aad0ac7a0f10` into this branch. The working tree
-had no unresolved conflicts. The diff against that main contains only this piece's
-five evidence/validator files and its own lane file; no earlier stacked piece,
-migration or database routine remains in the diff. Main's plan excerpts still match
-the checklist exactly. No implementation or test expectation needed changing.
+Catch-up validation (4 November 2026): the launcher merged `origin/main`
+`155a3eb0680e1e270bdf2ecfe1e381374b62c889` into this branch at
+`86fb99d991272dd060a842943d37f4646e6086ca`. The merge is complete, with no
+unresolved conflicts. Local `main` is stale; comparisons use the merged
+`origin/main` without fetching. The diff contains only this piece's five
+evidence/validator files and its own lane file. No other piece's lane file,
+migration, runtime code or database routine is added by this branch. The ten
+catch-up rules were inspected against that diff; none requires a code change.
+All evidence paths exist and the plan excerpts still match. No row status,
+approval, implementation or test expectation was changed.
 
-Local validation results: 77 tests passed across the foundation, release-inventory
-and enterprise-real-data Vitest files with `--maxWorkers=2`; all six root foundation
-and release-inventory tests passed. Package typecheck passed. `node tools/lint.mjs`
-passed, including the lane boundary against the merged main and the core purity,
-money, commercial, AI-provider and PL/pgSQL checks. Core purity reported ten existing
-computed-import warnings outside this piece. `git diff --check origin/main HEAD`
-passed. These are deterministic checks, not independent acceptance.
+Local validation results: 431 Vitest tests passed: 77 foundation/release-inventory/
+enterprise-real-data tests, 145 context-boundary tests, 7 identity tests, 126
+watchdog-registry tests and 76 migration-proof-loader tests. The root committed-pack
+check also passed: G0/G1 are `not_met`, all owner approvals are null and ENT-14
+signature rows remain blocked. Vitest is installed at 4.1.12; each run explicitly
+used `--maxWorkers=2` and at most three named files.
 
-Commands run from the repository root unless the package directory is specified:
+TypeScript checks passed across all seven workspace packages. The pnpm/Turbo
+wrapper stalled before running compilers and was interrupted; the installed
+TypeScript binaries completed directly. Initial API/database guard attempts
+could not resolve unbuilt workspace exports; compiling core, storage, db and AI
+locally resolved these setup failures, and the affected guards then passed.
+No packages were downloaded and no provider calls were made.
+
+Commands run (package-relative commands use the named package's working directory):
 
 ```sh
-# From packages/config:
+# packages/config:
 ./node_modules/.bin/vitest run --maxWorkers=2 src/foundation-gates.test.ts src/release-inventory.test.ts src/enterprise-real-data.test.ts
 ./node_modules/.bin/tsc -p tsconfig.json --noEmit
-# From the repository root:
-node --test tools/foundation-gates.test.mjs tools/release-inventory.test.mjs
+# packages/core, packages/storage, packages/db and packages/ai, each:
+./node_modules/.bin/tsc -p tsconfig.json
+# apps/api and apps/web, each:
+./node_modules/.bin/tsc -p tsconfig.json --noEmit
+# apps/api (watchdog-registry re-run after compiling AI):
+./node_modules/.bin/vitest run --maxWorkers=2 src/watchdog-registry.test.ts src/auth/context-boundary.test.ts src/auth/identity.test.ts
+./node_modules/.bin/vitest run --maxWorkers=2 src/watchdog-registry.test.ts
+# packages/db:
+./node_modules/.bin/vitest run --maxWorkers=2 test/migration-proof-loader.test.ts
+# repository root:
+node --test tools/foundation-gates.test.mjs
+node tools/agent-lane-boundary-lint.mjs
 node tools/lint.mjs
-git diff --check origin/main HEAD
+git diff --check origin/main
 ```
 
+The source lint passed, including lane, core purity, money, commercial, AI-provider
+and PL/pgSQL checks. Core purity reported ten existing computed-import warnings
+outside this piece. These are deterministic checks, not independent acceptance.
+
 PostgreSQL and browser suites did not run: this sandbox cannot start PostgreSQL or
-bind localhost. They must run through the router's normal CI path when this NOPR
-branch is admitted; no CI run or deployed acceptance is claimed here. There is no
-migration, provider call, model/prompt change, web workflow or new external action.
+bind localhost. CI must prove the full required typecheck, lint, test, build,
+PostgreSQL/migration and browser checks against the eventual landing head. No CI
+run or deployed acceptance is claimed here. NOPR=1 remains in force; the router
+commits and pushes, then opens a PR when the landing group's turn comes. There is
+no migration, model/prompt change, web workflow or new external action.
+
+LATER / SIMPLICITY — `docs/operations/foundation-gates.md`, checklist table: consider
+generating the display table from `config/foundation-gates.v1.json` in a separate
+change. This would avoid maintaining evidence paths and blocking reasons twice;
+keep the independent normative plan checks. This does not block landing.
 
 ## Still open for people
 

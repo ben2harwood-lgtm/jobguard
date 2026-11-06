@@ -1,0 +1,189 @@
+{
+  "migration": "0608_fee_reservation_book_guard.sql",
+  "lp0": [
+    {
+      "section": "entries",
+      "before": {
+        "key": "acl|col|app.fee_reservation_book.book|jobguard_runtime|UPDATE|-",
+        "group": "a-m4-12-reservations"
+      },
+      "after": null
+    },
+    {
+      "section": "policies",
+      "before": "app.fee_reservation_book|tenant_isolation|PERMISSIVE|ALL|jobguard_runtime|6fa387f2f629fba6",
+      "after": null
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.fee_reservation_book|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_runtime|6fa387f2f629fba6"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.fee_reservation_book|empty_book_insert|RESTRICTIVE|INSERT|jobguard_runtime|0896fd1c36d8c57c"
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.lock_fee_reservation_book(uuid)|jobguard_migration",
+        "group": "a-m4-12-reservations"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.lock_fee_reservation_book(uuid)|jobguard_runtime|EXECUTE|-",
+        "group": "a-m4-12-reservations"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lock_fee_reservation_book(uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.replace_fee_reservation_book(uuid,jsonb)|jobguard_migration",
+        "group": "a-m4-12-reservations"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.replace_fee_reservation_book(uuid,jsonb)|jobguard_runtime|EXECUTE|-",
+        "group": "a-m4-12-reservations"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.replace_fee_reservation_book(uuid,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.fee_reservation_book"
+        ],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.fee_reservation_archive|migration_tenant_select|PERMISSIVE|SELECT|jobguard_migration|ade3739356a579ac"
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "policies",
+      "before": {
+        "schemaname": "app",
+        "tablename": "fee_reservation_book",
+        "policyname": "tenant_isolation",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_runtime}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
+      },
+      "after": {
+        "schemaname": "app",
+        "tablename": "fee_reservation_book",
+        "policyname": "tenant_isolation",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration,jobguard_runtime}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "fee_reservation_book",
+        "policyname": "empty_book_insert",
+        "permissive": "RESTRICTIVE",
+        "roles": "{jobguard_runtime}",
+        "cmd": "INSERT",
+        "qual": null,
+        "with_check": "(book = '{\"audit\": [], \"events\": {}, \"version\": \"fee-reservation-book.v1\", \"attempts\": []}'::jsonb)"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lock_fee_reservation_book",
+        "args": "p_tenant uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, app"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "replace_fee_reservation_book",
+        "args": "p_tenant uuid, p_book jsonb",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, app"
+        ]
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "fee_reservation_archive",
+        "policyname": "migration_tenant_select",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "with_check": null
+      }
+    }
+  ],
+  "tenancy": []
+}
