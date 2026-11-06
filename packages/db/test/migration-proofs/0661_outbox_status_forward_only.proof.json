@@ -1,5 +1,5 @@
 {
-  "migration": "0662_outbox_status_forward_only.sql",
+  "migration": "0661_outbox_status_forward_only.sql",
   "lp0": [],
   "upgrade": [
     {

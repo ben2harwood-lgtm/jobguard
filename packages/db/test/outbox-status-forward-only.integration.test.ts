@@ -24,7 +24,7 @@ beforeAll(async () => {
   await postgres.initialise();
   await postgres.start();
   admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password: "test-only" });
-  // Fresh empty database applies the entire chain, including 0662.
+  // Fresh empty database applies the entire chain, including 0661.
   await migrate(admin);
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [tenant]);
   await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [user]);
