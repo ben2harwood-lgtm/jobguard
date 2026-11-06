@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-73": {
+      "branches": [
+        "codex/sandbox/later-safety-73"
+      ],
+      "allow": [
+        "packages/db/src/subscription-repository.ts",
+        "apps/api/src/subscription.authority.ts",
+        "packages/db/test/subscription-actions.integration.test.ts",
+        "apps/api/src/subscription.access.test.ts"
+      ]
+    }
+  }
+}
