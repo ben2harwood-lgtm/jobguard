@@ -11,7 +11,7 @@ export async function GET() {
     const context: VerifiedTenantContext = await demoContext(pool, sessionId);
     const run = await northsideRun(pool, member, context);
     const facts = role === "owner" ? await northsideFacts(pool, member, context) : null;
-    return json({ ...run, membershipId: member.membershipId, targetsToSwitch: run ? await northsideSwitchTargets(pool, member, context) : [],
+    return json({ ...run, membershipId: member.membershipId, targetsToSwitch: run?.testerMembershipId === member.membershipId ? await northsideSwitchTargets(pool, member, context) : [],
       recentActions: run ? await northsideOwnActions(pool, member, context) : [], version: "northside-summary.v1", environment: "synthetic_demo", realExternalActions: 0, role, seeded: !!run && (facts === null || facts.companyName !== null), targets: northsideTargets, facts });
   } catch (error) { return failure(error); }
 }

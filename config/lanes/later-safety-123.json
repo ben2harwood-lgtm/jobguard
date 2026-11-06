@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-123": {
+      "branches": ["codex/sandbox/later-safety-123"],
+      "allow": [
+        "apps/web/app/api/northside/route.ts",
+        "apps/web/app/api/northside/route.test.ts"
+      ]
+    }
+  }
+}
