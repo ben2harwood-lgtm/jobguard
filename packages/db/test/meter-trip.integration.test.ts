@@ -125,8 +125,16 @@ describe("MON1-T private trip foundation (source integration held MON1-I)", () =
         }));
         continue;
       }
-      const p = await priced(f,a,900000,"2026-10-02T12:00:00Z",false);
       const variations = new VariationRepository(f.runtime);
+      const proposal = {version:"variation-proposal.v1",id:randomUUID(),jobId:a.jobId,scopeItemId:randomUUID(),
+        existingScopeItemId:null,lineageParentScopeItemId:null,captureKind:"text",
+        captureText:"Fictional priced extra",description:"Fictional priced extra",suggestion:null};
+      await variations.logBuilderExtra(a.context,{version:"log-builder-extra.v1",proposal,actorMembershipId:a.actorId,
+        price:{quantity:"1",unit:"each",unitRatePence:900000,direction:"addition",confirmedByMembershipId:a.actorId,
+          rateProvenance:{kind:"human_entered",sourceRef:"fixture://mon1-t",sourceHash:CH4_HASH,rateVersion:"synthetic.v1"}},
+        deviceId:null,deviceCapturedAt:null});
+      const current=(await variations.read(a.context,a.jobId)).variations.find(v=>v.id===proposal.id)!;
+      const p={variation:current.id,revision:current.currentRevisionId!};
       if (state === "withdrawn") await variations.recordWithdrawal(a.context,{version:"variation-withdrawal.v1",id:randomUUID(),jobId:a.jobId,variationId:p.variation,actorMembershipId:a.actorId,reasonCode:"builder_withdrawn"});
       else if (state === "rejected") await variations.transact(a.context,db=>variations.reject(db,a.tenantId,{id:randomUUID(),variationId:p.variation,revisionId:p.revision,actorMembershipId:a.actorId}));
     }
