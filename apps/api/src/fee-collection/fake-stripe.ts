@@ -17,6 +17,11 @@ export class FakeStripeCardRail implements CollectionRail {
   crashAfterAcceptance = false;
   definiteFailure = false;
   constructor(private readonly testSigningSecret: string) {}
+  /** Signed synthetic store fixture, distinct from either provider's protocol. */
+  signStoreResult(tenantId: string, attempt: Readonly<Attempt>) {
+    const body = JSON.stringify({ version: "fake-fee-result.v1", environment: "synthetic_demo", tenantId, attempt });
+    return { body, signature: createHmac("sha256", this.testSigningSecret).update(body).digest("hex") };
+  }
   async submit(tenantId: string, attempt: Readonly<Attempt>) {
     const key = `${tenantId}:${attempt.commandId}`;
     const { state: _state, providerObjectId: _object, ...approved } = attempt;
