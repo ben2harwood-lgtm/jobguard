@@ -14,7 +14,7 @@ export async function POST(request: Request, context: { params: Promise<{ extraI
     const tenant: VerifiedTenantContext = await demoContext(pool, sessionId);
     const { extraId: rawExtra, action } = await context.params, extraId = uuid(rawExtra);
     const common = { version: z.literal("northside-command.v1"), jobId: z.guid({ error: "Invalid uuid" }), commandId: z.guid({ error: "Invalid uuid" }).optional() };
-    if (action === "send" && role !== "owner") throw new DemoError("PERMISSION_DENIED", 403);
+    if (action === "send" && role !== "surveyor" && role !== "commercial_manager") throw new DemoError("PERMISSION_DENIED", 403);
     const boundSchema = z.object({ ...common, requestId: z.guid({ error: "Invalid uuid" }), revisionHash: z.string().regex(/^[a-f0-9]{64}$/u), netPence: z.number().int().positive().max(1_000_000_000_000), stepIndex: z.number().int().nonnegative().optional() }).strict();
     const rejectSchema = boundSchema.extend({ stepIndex: z.number().int().min(0).max(20), reasonCode: z.string().regex(/^[a-z][a-z0-9_]{0,39}$/u) });
     const withdrawSchema = z.object({ ...common, reasonCode: z.enum(["not_done", "raised_in_error", "resident_cancelled", "already_on_order"]) }).strict();
@@ -99,7 +99,7 @@ export async function POST(request: Request, context: { params: Promise<{ extraI
       return json({ version: "northside-approved.v1", environment: "synthetic_demo", realExternalActions: 0, result: await repo.approveExtraStep(tenant, member, { ...binding, version: "approve-extra-step.v1", commandId, jobId }) });
     }
     if (action === "send") {
-      if (role !== "owner") throw new DemoError("PERMISSION_DENIED", 403);
+      if (role !== "surveyor" && role !== "commercial_manager") throw new DemoError("PERMISSION_DENIED", 403);
       // Owner only (the merged command refuses anyone else). Practice: the message is queued to the fake adapter at a .invalid address and nothing leaves; the owner is shown the link.
       const binding = parseDemoBody(boundSchema, body);
       const extra = await current();
@@ -111,10 +111,11 @@ export async function POST(request: Request, context: { params: Promise<{ extraI
       const issue = async (prior: Awaited<ReturnType<typeof recover>>) => {
         if (prior && (prior.jobId !== jobId || prior.extraId !== extraId || prior.artifact.requestId !== binding.requestId || prior.revisionHash !== binding.revisionHash || prior.artifact.netPence !== binding.netPence || prior.approverMembershipId !== extra.clientApproverMembershipId || prior.artifact.recipient !== extra.clientApproverEmail)) throw new DemoError("COMMAND_CONFLICT", 409);
         const token = prior?.artifact.token ?? randomBytes(32).toString("base64url");
-        const expiresAt = prior ? new Date(prior.artifact.expiresAt) : new Date(Date.now() + run.settings.linkLifetimeMinutes * 60_000);
-        const sent = await repo.issueClientApproval(tenant, member, { version: "issue-client-approval.v1", commandId, jobId, requestId: extra.requestId, approverMembershipId: extra.clientApproverMembershipId, recipient: extra.clientApproverEmail, linkToken: token, expiresAt });
+        const expiresAt = prior ? new Date(prior.artifact.expiresAt) : new Date(Date.now() + 7 * 24 * 60 * 60_000);
+        const sent = await repo.issueClientApproval(tenant, member, { version: "issue-client-approval.v1", commandId, jobId, requestId: extra.requestId, approverMembershipId: extra.clientApproverMembershipId, recipient: extra.clientApproverEmail, linkToken: token, signinDigest: identityApplication().provider.digest(`customer-link:${token}`), expiresAt });
         return { token, sent };
       };
+      const { identityApplication } = await import("../../../../../lib/identity-server.js");
       const prior = await recover();
       let issued;
       try { issued = await issue(prior); }
@@ -125,7 +126,7 @@ export async function POST(request: Request, context: { params: Promise<{ extraI
         issued = await issue(winner);
       }
       const { token, sent } = issued;
-      return json({ version: "northside-link.v1", environment: "synthetic_demo", realExternalActions: 0, recipient: extra.clientApproverEmail, path: `/extra-approval/${jobId}/${extra.requestId}#t=${token}`, result: sent });
+      return json({ version: "northside-link.v1", environment: "synthetic_demo", realExternalActions: 0, recipient: extra.clientApproverEmail, path: `/customer/sign-in#${tenant.tenantId}/${jobId}/${extra.clientApproverMembershipId}/${token}`, result: sent });
     }
     throw new DemoError("NOT_FOUND", 404);
   } catch (error) { return failure(error); }
