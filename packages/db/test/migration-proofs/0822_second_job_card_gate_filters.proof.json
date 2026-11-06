@@ -49,39 +49,6 @@
           "app.switch_job_live_v3"
         ]
       }
-    },
-    {
-      "section": "routines",
-      "before": {
-        "identity": "function:app.ch6_integrity_family(uuid,uuid)",
-        "owner": "jobguard_migration",
-        "securityDefiner": false,
-        "searchPath": "search_path=pg_catalog",
-        "returnsTrigger": false,
-        "extension": null,
-        "reachable": false,
-        "runtimeExecute": false,
-        "publicExecute": false,
-        "otherExecute": [],
-        "definitionSha256": null,
-        "staticWrites": [],
-        "staticCalls": []
-      },
-      "after": {
-        "identity": "function:app.ch6_integrity_family(uuid,uuid)",
-        "owner": "jobguard_migration",
-        "securityDefiner": false,
-        "searchPath": "search_path=pg_catalog",
-        "returnsTrigger": false,
-        "extension": null,
-        "reachable": false,
-        "runtimeExecute": false,
-        "publicExecute": false,
-        "otherExecute": [],
-        "definitionSha256": null,
-        "staticWrites": [],
-        "staticCalls": []
-      }
     }
   ],
   "upgrade": [],

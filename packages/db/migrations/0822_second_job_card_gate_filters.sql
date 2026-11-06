@@ -1,5 +1,5 @@
 BEGIN;
--- LATER-SAFETY-86: synthetic card provenance and fail-closed integrity family.
+-- LATER-SAFETY-86: synthetic card provenance for second-job activation.
 -- Replace latest bodies only; owner, ACLs and security settings are preserved.
 CREATE OR REPLACE FUNCTION app.mon3_activate(t uuid,digest text,command_id uuid,v jsonb) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE actor uuid; b app.trial_business_verification; card app.trial_card_result;
@@ -69,25 +69,4 @@ BEGIN
  RETURN jsonb_build_object('jobId',terms.job_id,'activationId',terms.activation_id,'termsId',terms.id,'snapshotId',snap,'state','live');
 END $$;
 
-CREATE OR REPLACE FUNCTION app.ch6_integrity_family(t uuid,j uuid) RETURNS text
-LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog AS $$
-DECLARE r record;policies text[];v1 boolean;v3 boolean;
-BEGIN
- SELECT x.saved_v1_sample,x.provenance,x.fee_policy_version job_policy,a.fee_policy_version activation_policy,
-  q.policy_version terms_policy,q.commercial_track terms_track,c.job_track,c.environment INTO r
- FROM app.job x LEFT JOIN app.job_activation a ON(a.tenant_id,a.job_id)=(x.tenant_id,x.id)
- LEFT JOIN app.job_activation_terms q ON(q.tenant_id,q.job_id)=(x.tenant_id,x.id)
- LEFT JOIN app.job_commercial_track c ON(c.tenant_id,c.job_id)=(x.tenant_id,x.id)
- WHERE x.tenant_id=t AND x.id=j;
- IF NOT FOUND THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='42501'; END IF;
- policies:=array_remove(ARRAY[r.job_policy,r.activation_policy,r.terms_policy],NULL);
- IF coalesce(r.environment,'')<>'synthetic_demo' OR
-  (r.terms_track IS NOT NULL AND r.terms_track<>'small_builder') OR (r.job_track IS NOT NULL AND r.job_track<>'small_builder') OR
-  EXISTS(SELECT 1 FROM unnest(policies) p WHERE p NOT IN ('reference_fee_policy_v1','reference_fee_policy_v3')) THEN RAISE EXCEPTION 'INTEGRITY_FAMILY_UNAVAILABLE'; END IF;
- v1:=r.saved_v1_sample OR 'reference_fee_policy_v1'=ANY(policies);v3:='reference_fee_policy_v3'=ANY(policies);
- IF v1 AND v3 THEN RAISE EXCEPTION 'INTEGRITY_FAMILY_UNAVAILABLE'; END IF;
- IF v1 THEN RETURN 'v1'; END IF;
- IF r.provenance<>'system_generated_quote' THEN RAISE EXCEPTION 'INTEGRITY_FAMILY_UNAVAILABLE'; END IF;
- RETURN 'v3';
-END $$;
 COMMIT;
