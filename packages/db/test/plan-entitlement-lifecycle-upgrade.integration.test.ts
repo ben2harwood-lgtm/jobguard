@@ -87,6 +87,16 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
       prior.args === "t uuid, j uuid, s uuid, actor uuid") {
       const sql = await readFile(new URL("../migrations/0616_payment_fee_current_review.sql", import.meta.url), "utf8");
       expect(current?.definition?.split("$function$")[1]).toEqual(sql.split("AS $$")[1]!.split("$$;")[0]);
+    } else if (prior.nspname === "app" && prior.proname === "adopt_invoiced_job_v3" &&
+      prior.args === "t uuid, source_job uuid, d text, cmd uuid, auth uuid, approved jsonb, request_hash text") {
+      const migration = await readFile(new URL("../migrations/0625_company_import_once.sql", import.meta.url), "utf8");
+      const body = migration.split("CREATE OR REPLACE FUNCTION app.adopt_invoiced_job_v3")[1]!.split("AS $$")[1]!.split("$$;")[0];
+      expect(current?.definition?.split("$function$")[1]).toEqual(body);
+    } else if (prior.nspname === "app" && prior.proname === "dunning_workbench" &&
+      prior.args === "t uuid, digest text, j uuid, operation text, v jsonb") {
+      const migration = await readFile(new URL("../migrations/0628_dunning_owner_approval.sql", import.meta.url), "utf8");
+      const body = migration.split("CREATE OR REPLACE FUNCTION app.dunning_workbench")[1]!.split("AS $$")[1]!.split("$$;")[0];
+      expect(current?.definition?.split("$function$")[1]).toEqual(body);
     } else if (prior.nspname === "app" && (
       prior.proname === "xa_latest_kind" && prior.args === "p_tenant uuid, p_job uuid, p_variation uuid" ||
       prior.proname === "xa_mark_duplicate" && prior.args === "p_job uuid, p_duplicate uuid, p_canonical uuid, p_command uuid, p_actor uuid, p_link uuid")) {
