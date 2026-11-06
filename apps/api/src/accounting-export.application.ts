@@ -2,12 +2,38 @@ import { StoredAccountingExportError, type AccountingExportRepository } from "@j
 import { identityStatus } from "./auth/identity-http.js";
 import type { IdentityApplication } from "./auth/identity.application.js";
 import { resolveVerifiedTenantContext, type TenantRequestCredentials } from "./auth/principal-bridge.js";
-import { exportApprovalV1, exportPreviewV1, exportStatusV1 } from "./accounting-export.preview-contracts.js";
+import { exportApprovalV1, exportPreviewV1, exportStatusV1, routeApprovalV1, routeReadV1, routeChangeV1 } from "./accounting-export.preview-contracts.js";
 
 /** Company sessions only, synthetic database only. This boundary cannot execute a push. */
 export class AccountingExportApplication {
   constructor(private readonly identity: IdentityApplication,
-    private readonly repository: Pick<AccountingExportRepository, "execute">) {}
+    private readonly repository: Pick<AccountingExportRepository, "execute"> & Partial<Pick<AccountingExportRepository, "routeChangeRead" | "routeChangeConfirm">>) {}
+  async routeChange(credentials: TenantRequestCredentials, sourceId: string, operation: "read" | "confirm", raw: unknown = {}) {
+    if (process.env.JOBGUARD_ENV !== "synthetic_demo") throw new StoredAccountingExportError("EXPORT_FORBIDDEN");
+    const context = await resolveVerifiedTenantContext(this.identity.provider, credentials, this.identity.allowedOrigin);
+    const principal = await this.identity.provider.authenticate(credentials.sessionToken!);
+    const actor = principal && await this.identity.provider.findMembership(principal, context.tenantId);
+    if (!actor || !["owner", "admin"].includes(actor.role)) throw new StoredAccountingExportError("EXPORT_FORBIDDEN");
+    const digest = this.identity.provider.digest(`session:${credentials.sessionToken}`);
+    if (!this.repository.routeChangeRead || !this.repository.routeChangeConfirm) throw new StoredAccountingExportError("EXPORT_UNAVAILABLE");
+    if (operation === "read") {
+      if (!raw || typeof raw !== "object" || Array.isArray(raw) || Object.keys(raw).length)
+        throw new StoredAccountingExportError("EXPORT_INVALID_INPUT");
+      return routeReadV1.parse(await this.repository.routeChangeRead(context, digest, sourceId));
+    }
+    const approval = routeApprovalV1.safeParse(raw);
+    if (!approval.success) throw new StoredAccountingExportError("EXPORT_INVALID_INPUT");
+    const current = routeReadV1.parse(await this.repository.routeChangeRead(context, digest, sourceId));
+    // A lost response may have committed. Replay the stored artifact, never a newly minted approval.
+    const replay = current.history.find(change => change.commandId === approval.data.commandId);
+    const preview = replay ?? current.proposal;
+    if (!preview || preview.previewHash !== approval.data.previewHash) throw new StoredAccountingExportError("EXPORT_APPROVAL_REQUIRED");
+    const { entries: _entries, ...request } = preview.artifact;
+    return routeChangeV1.parse(await this.repository.routeChangeConfirm(context, digest, sourceId, {
+      ...request, ...approval.data, action: "accounting_export.route", status: "approved",
+      tenantId: `demo-${context.tenantId}`,
+    }, actor.id));
+  }
   async execute(credentials: TenantRequestCredentials, sourceId: string, operation: "preview" | "approve" | "read", raw: unknown = {}) {
     if (process.env.JOBGUARD_ENV !== "synthetic_demo") throw new StoredAccountingExportError("EXPORT_FORBIDDEN");
     const context = await resolveVerifiedTenantContext(this.identity.provider, credentials, this.identity.allowedOrigin);

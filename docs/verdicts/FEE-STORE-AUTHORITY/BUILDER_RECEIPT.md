@@ -1,3 +1,87 @@
+# Current-main catch-up — READY for router commit (RED)
+
+Plan piece: fee-store-authority, existing PR #579, branch
+`codex/sandbox/fee-store-authority`. Catch-up against origin/main and MERGE_HEAD
+`68b104767b18fad6fc5b9676f95bcd7d68bcc19d` (#576, #577 and #580 merged).
+This section supersedes the earlier enterprise-test repair below.
+
+Resolved the sole textual conflict by restoring main's enterprise-access-upgrade
+integration test byte-for-byte, including #578/#580's authority assertions. Removed
+that test from this lane: it has no diff from main. No test expectation or product
+behavior was changed. The later-empty-tables registry is the exact union of both
+sides. All main migration files, including 0614–0618, remain byte-identical; the
+only migration added relative to main is reserved 0619, with no duplicate stem.
+
+Inspected every main migration for replacement fee-book definitions: 0608 remains
+the latest body, with no successor through 0618. Diffed the 0619 three-argument
+routine against that latest main body: all predecessor tenant, shape, duplicate,
+identity, transition, event and audit guards remain. The existing authority delta
+adds strict shapes, signed synthetic results and private archive/audit sealing;
+its only replaced persistence is database-owned compaction. The two-argument
+wrapper delegates to that guarded body with NULL result proof. The seal helper is
+new, with no main predecessor to overwrite. No stale routine body needed changing.
+
+Current local checks (installed binaries, no downloads):
+- apps/api: `./node_modules/.bin/vitest run src/fee-collection/postgres-reservation-store.test.ts src/fee-collection/executor.test.ts src/fee-collection/fake-gocardless.test.ts --maxWorkers=2` — 116 passed.
+- packages/db: `./node_modules/.bin/vitest run test/migration-proof-loader.test.ts test/lp-0-catalog.test.ts --maxWorkers=2` — 108 passed.
+- Root: `./node_modules/.bin/tsc -p apps/api/tsconfig.json --noEmit` and
+  `./node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit` — passed.
+- packages/db: `./node_modules/.bin/vitest list test/enterprise-access-upgrade.integration.test.ts test/fee-reservation.integration.test.ts test/fee-reservation-archive-upgrade.integration.test.ts --maxWorkers=2` — collected; no PostgreSQL execution.
+- Money arithmetic, commercial boundary and PL/pgSQL CASE-in-IF lints — passed.
+- Read-only assertions using the lane tool's exported helpers — exact 12-path
+  lane excluding config/lanes, no self-entry, migration order, main test bytes and
+  table-registry union passed. All main migration bytes matched.
+- `git diff --check` and `git diff origin/main --check` — passed.
+
+No git-writing commands ran. The read-only index still records the conflict;
+router must stage the resolved working file, finish the pending merge, commit
+and push this same branch to update #579. GitHub CI owns PostgreSQL, migration
+and browser suites; independent RED review must cover the resulting exact head.
+No new behavior, complexity, policy, provider access, production activation or
+release. Prior LATER / SIMPLICITY observation remains below; no new review finding.
+
+# CI repair try 1 — READY for router commit (RED)
+
+Plan piece: fee-store-authority, PR #579. Repair based on `cd5519caa`, which
+already merges current main (including #578). No application behavior or SQL
+migration was changed, and no migration renumber or policy decision is needed.
+
+Failed CI run: 42113294900 at e975ff02. The CLI could not reach api.github.com;
+read the actual job logs through the connected GitHub API instead.
+- core-db (2), job 127546217429: one failure, 199 files / 1447 tests passed.
+  `enterprise-access-upgrade.integration.test.ts` compared pre-0612 catalogue
+  authority against the entire later chain. Migration 0619 intentionally removes
+  runtime archive INSERT and adds the private seal writer. The expected old
+  `fee_reservation_archive` ACL therefore cannot equal the final ACL.
+- core, job 127560007494: aggregate failed only because core-db failed;
+  core-checks succeeded.
+- checks, job 127564365278: aggregate failed only because core failed;
+  web, secrets and dependency-review succeeded. No CI gate was edited.
+
+Repair: apply and register the two named enterprise migrations (0612 and 0613)
+using the existing harness's SQL/bookkeeping pattern, then compare every prior
+relation, routine (including exact body), and policy without successor exclusions.
+Next run the whole migration chain, snapshot its catalogue, replay it and assert
+exact catalogue equality. Populated identity data equality is checked both after
+the own upgrade and after full replay. Existing empty/default-OFF, RLS, ownership,
+runtime privilege and SCIM role assertions remain. This preserves main's intent
+that later replacements have their own proofs, while removing its routine-name
+regex carve-out and preventing unrelated later authority changes from invalidating
+the own-upgrade assertion. The lane adds only the failing test path.
+
+Validation, using installed binaries, no downloads:
+- packages/db: `./node_modules/.bin/vitest run test/migration-proof-loader.test.ts test/lp-0-catalog.test.ts --maxWorkers=2` — 108 passed.
+- Root: `./node_modules/.bin/tsc -p /tmp/fee-store-authority-repair-tsconfig.json` — passed. Temporary config extends the repository strict tsconfig, uses noEmit, and compiles the changed integration test and its imports.
+- packages/db: `./node_modules/.bin/vitest list test/enterprise-access-upgrade.integration.test.ts test/fee-reservation.integration.test.ts test/fee-reservation-archive-upgrade.integration.test.ts --maxWorkers=2` — 31 cases collected; collection only.
+- Root: `node tools/agent-lane-boundary-lint.mjs --lane=fee-store-authority` and `git diff --check` — passed.
+
+PostgreSQL/browser execution is prohibited in this sandbox. CI must execute the
+repaired integration test and mandatory database/migration suites after router
+commit/push; an independent RED review remains required at the resulting exact
+head. No git-writing commands ran. No new complexity or behavior was introduced.
+The initial LATER / SIMPLICITY observation remains in the earlier receipt below;
+this repair adds no second review finding.
+
 # READY — fee-store authority fix (RED)
 
 Plan piece: fee-store-authority; branch `codex/sandbox/fee-store-authority`.

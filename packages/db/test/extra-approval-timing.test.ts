@@ -50,3 +50,12 @@ describe("ENT-5 visit-derived approval timing", () => {
     expect(deriveVisitApprovalTiming(visit, [{ id: "first", preapproval_required: false, superseded_us: null }], [], "first", "finished").doneWithoutRequiredPreapproval).toBe(false);
   });
 });
+
+it("a proceed statement preserves its snapshot breach without inventing visit times, across later approval and revision", () => {
+ const historical = [{ ...requests[0]!, superseded_us: "1" }, { id: "later", preapproval_required: false, superseded_us: null }];
+ for (const source of [visit, undefined]) {
+  expect(deriveVisitApprovalTiming(source, historical, [fact("1793703600000002")], "later", "not_started", ["first"]).doneWithoutRequiredPreapproval).toBe(true);
+  expect(deriveVisitApprovalTiming(source, [{ ...requests[0]!, preapproval_required: false }], [], "first", undefined, ["first"]).doneWithoutRequiredPreapproval).toBe(source ? false : "not_derived");
+  expect(deriveVisitApprovalTiming(source, [{ ...requests[0]!, preapproval_required: null }], [], "first", undefined, ["first"]).doneWithoutRequiredPreapproval).toBe(source ? "uncertain" : "not_derived");
+ }
+});

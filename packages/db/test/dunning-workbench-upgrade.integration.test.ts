@@ -38,3 +38,26 @@ it("0564_dunning_workbench_preview preserves populated history, redrafts expired
   expect((await c.admin.query("SELECT status FROM app.dunning_reminder WHERE tenant_id=$1 AND decision_id=$2",[a.tenantId,did])).rows).toEqual([{status:"expired"}]);
   expect((await c.admin.query("SELECT count(*)::int n FROM app.dunning_reminder WHERE tenant_id=$1",[a.tenantId])).rows[0].n).toBe(2);
 }, 240000);
+
+it("0628 preserves populated receipts and approvals while removing admin approval authority", async () => {
+ const upgraded=await startBeforeMigration("0628_dunning_owner_approval.sql");
+ try {
+  const a=await meterCompany(upgraded as unknown as WorkFixture), invoiceId=randomUUID();
+  const projection={version:"dunning-invoice.v1",environment:"synthetic_demo",tenantId:a.tenantId,jobId:a.jobId,invoiceId,
+   revision:1,sourceRevision:1,sourceHash:"a".repeat(64),sourceState:"issued_invoice",finalAccountLockId:null,currency:"GBP",originalPence:10000,outstandingPence:10000,
+   dueTick:1,category:"customer",recipient:"fictional@example.invalid",pilotNoCharge:false,disputed:false,refundPending:false,reversed:false,cancelled:false,attemptState:"none"};
+  await upgraded.admin.query("INSERT INTO app.dunning_invoice(tenant_id,job_id,invoice_id,projection) VALUES($1,$2,$3,$4::jsonb)",[a.tenantId,a.jobId,invoiceId,JSON.stringify(projection)]);
+  const repo=new DunningRepository(upgraded.runtime),row=(await repo.read(a.context,a.digest,{jobId:a.jobId,nowTick:0})).invoices[0]!;
+  const input={version:"dunning-persist-command.v1",commandId:randomUUID(),invoiceId,snapshotHash:row.snapshotHash,nowTick:0};
+  const draft=await repo.command(a.context,a.digest,a.jobId,"request",input);
+  const approval={...input,commandId:randomUUID(),decisionId:draft.decisionId};
+  const first=await repo.command(a.context,a.digest,a.jobId,"approve",approval);
+  const before=await proofBefore(upgraded.admin,["app.dunning_invoice","app.dunning_reminder","app.decision","app.decision_resolution","app.command_receipt","app.audit_event"]);
+  await applyMigration(upgraded,"0628_dunning_owner_approval.sql");
+  expect(await proofDifferences(upgraded.admin,before)).toEqual({rows:[],types:[]});
+  expect(await repo.command(a.context,a.digest,a.jobId,"approve",approval)).toEqual(first);
+  await upgraded.admin.query("UPDATE app.membership SET role='admin' WHERE tenant_id=$1 AND id=$2",[a.tenantId,a.actorId]);
+  await expect(repo.command(a.context,a.digest,a.jobId,"approve",approval)).rejects.toMatchObject({code:"DUNNING_UNAVAILABLE",status:403});
+  expect((await repo.command(a.context,a.digest,a.jobId,"request",{...input,commandId:randomUUID()})).decisionId).toBe(first.decisionId);
+ } finally {await upgraded.close();}
+},240000);

@@ -179,3 +179,17 @@ it("stored pre-lock disclosure overrides the review request and remains non-bill
     throw new Error("ROLLBACK_DISCLOSURE_ATTACK");
   })).rejects.toThrow("ROLLBACK_DISCLOSURE_ATTACK");
 });
+
+it("one case/work/line accepts one approval across competing reviews and commands", async () => {
+  const { x, command } = await ready(), reviewer = await ownerSession(x);
+  const second = { ...command, commandId: randomUUID() };
+  await send(x, command); await send(x, second);
+  const approvals = [approval(command), approval(second)];
+  const results = await Promise.allSettled(approvals.map(p => send(x, p, reviewer.digest)));
+  expect(results.filter(r => r.status === "fulfilled")).toHaveLength(1);
+  expect((results.find(r => r.status === "rejected") as PromiseRejectedResult).reason).toMatchObject({ code: "23505", constraint: "billability_one_line_approval" });
+  const winner = results.findIndex(r => r.status === "fulfilled");
+  expect(await send(x, approvals[winner], reviewer.digest)).toEqual((results[winner] as PromiseFulfilledResult<unknown>).value);
+  await expect(send(x, { ...approvals[winner], commandId: randomUUID() }, reviewer.digest)).rejects.toMatchObject({ code: "23505" });
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.recovery_billability_command WHERE tenant_id=$1 AND job_id=$2 AND action='approve'", [x.context.tenantId,x.jobId])).rows[0].n).toBe(1);
+});
