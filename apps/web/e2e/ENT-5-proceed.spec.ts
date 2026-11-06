@@ -1,0 +1,50 @@
+import { expect, test, type Page } from "@playwright/test";
+import { installContractorAgreementFixture } from "./contractor-agreement-fixture.js";
+// Synthetic browser/DB journey for CI at mobile-360 and desktop. No live provider or data.
+test.use({ headless: true });
+test.setTimeout(600_000);
+const button = (page: Page, name: string) => page.getByRole("button", { name, exact: true });
+async function switchTo(page: Page, role: string) {
+ await page.goto("/northside");
+ await button(page, `Act as ${role}`).click();
+ await expect(page.getByTestId("actual-actor")).toContainText(`Acting as ${role}`);
+}
+test("operative records proceeding as a fact, and approval leaves its history intact", async ({ page }) => {
+ await installContractorAgreementFixture(page);
+ await page.goto("/northside"); await button(page, "Start Northside practice").click();
+ await expect(page.getByTestId("fact-orders")).toHaveText("2000", { timeout: 240_000 });
+ await switchTo(page, "operative"); await page.goto("/site/extra");
+ await expect(page.locator("main[data-site-extra-state]")).toHaveAttribute("data-site-extra-state", "ready", { timeout: 60_000 });
+ await button(page, "Not started").click();
+ await page.getByLabel("What is the extra work?").fill("Fictional proceed test extra");
+ await page.getByLabel("Note for the office").fill("Synthetic statement history test");
+ await button(page, "Attach practice photo").click(); await expect(page.getByTestId("photo-attached")).toBeVisible();
+ await page.getByLabel(/The resident has seen this/).check(); await button(page, "Log extra").click();
+ await expect(page.getByTestId("extra-logged")).toBeVisible();
+ await switchTo(page, "surveyor"); await page.goto("/approvals/extras");
+ await page.getByLabel("Rate card item", { exact: true }).selectOption("CLEAR-VOID");
+ await button(page, "Price this extra").click(); await expect(page.getByTestId("extra-state")).toHaveText("Priced - ready to submit");
+ await switchTo(page, "supervisor"); await page.goto("/approvals/extras"); await button(page, "Submit for approval").click();
+ await expect(button(page, "Approve as supervisor")).toBeVisible();
+ await switchTo(page, "operative"); await page.goto("/site/extra");
+ const extra = page.getByTestId("my-extra").filter({ hasText: "Fictional proceed test extra" });
+ await expect(extra.getByRole("button", { name: "Record proceed statement" })).toBeDisabled();
+ await extra.getByLabel("Reason", { exact: true }).fill("Fictional operative reports proceeding before approval");
+ const sent = page.waitForRequest(r => r.url().endsWith("/proceed") && r.method() === "POST");
+ await extra.getByRole("button", { name: "Record proceed statement" }).click();
+ const request = await sent, body = request.postDataJSON();
+ await expect(extra.getByText(/Proceeding before approval — statement by/)).toContainText(body.reason);
+ await expect(extra.getByTestId("my-extra-state")).toHaveText("Waiting for approval");
+ const replay = await page.request.post(request.url(), { headers: { origin: "http://127.0.0.1:3000" }, data: body });
+ expect(replay.status()).toBe(201); expect((await replay.json()).history).toHaveLength(1);
+ const conflict = await page.request.post(request.url(), { headers: { origin: "http://127.0.0.1:3000" }, data: { ...body, reason: "Changed" } });
+ expect((await conflict.json()).code).toBe("IDEMPOTENCY_CONFLICT");
+ const forged = await page.request.post(request.url(), { headers: { origin: "http://127.0.0.1:3000" }, data: { ...body, actorMembershipId: crypto.randomUUID() } });
+ expect(forged.status()).toBe(400);
+ await switchTo(page, "supervisor"); await page.goto("/approvals/extras"); await button(page, "Approve as supervisor").click();
+ await expect(page.getByTestId("extra-state")).toHaveText("Approved");
+ await switchTo(page, "operative"); await page.goto("/site/extra");
+ await expect(extra.getByText(/Proceeding before approval — statement by/)).toContainText(body.reason);
+ await expect(extra.getByRole("button", { name: "Record proceed statement" })).toHaveCount(0);
+ expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+});

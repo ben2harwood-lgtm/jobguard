@@ -8,7 +8,7 @@ Commands use billing-finalise.v1, billing-import-request.v1 (containing the pare
 
 Lock order: shared organisation fence (54), tenant billing fence (618), job/group advisory locks (417) in UUID order, corresponding job/extra rows in ID order, then actor membership. The full invoice job set includes previously stored composition and newly submitted matches. Same-tenant mixed-job lines are checked against the same client contract and every affected job must remain live. The extra/duplicate writer's existing 417 lock serializes with export. No existing lock implementation or observer is changed. Audit head is acquired last; no subsequent business lock is taken.
 
-Each immutable export batch covers one job and client contract. Unresolved deterministic candidates use same code/excess line and same visit/UTC server day, collapsed through active immutable duplicate links. There is no invented dismissal. Only the canonical latest revision with the complete stored approval requirement can export. Instruction links are excluded to avoid billing the order twice. A revision can appear in one batch only, and finalisation with no remaining eligible lines returns a durable zero-line result. The server renderer and the SQL guard independently bind stable line identity and exact CSV bytes to stored approved fields. Artifacts are capped at the existing outbox's 1,000,000-byte limit.
+Each immutable export batch covers one job and client contract. Unresolved deterministic candidates use same code/excess line and same visit/UTC server day, collapsed through active immutable duplicate links. The ENT-5 ruling of 4 November 2026 permits an exact-snapshot dismissal under the contract below. Only the canonical latest revision with the complete stored approval requirement can export. Instruction links are excluded to avoid billing the order twice. A revision can appear in one batch only, and finalisation with no remaining eligible lines returns a durable zero-line result. The server renderer and the SQL guard independently bind stable line identity and exact CSV bytes to stored approved fields. Artifacts are capped at the existing outbox's 1,000,000-byte limit.
 
 Imports preserve every normalized source event and its complete line composition in immutable JSON, including ordinary lines without export matches. billing_line_match binds extra lines to the exported revision, scope, job and contract. Raw transport hash belongs to the import; source-event identity binds normalized semantic content. Duplicate observations of an economic payment use reconciliationId or remain held. Conflicting observations under another source/invoice change the whole job's input identity and create a successor hold. Reuse of a reconciliation identity under another anchor job refuses; the invoice should be imported through its original anchor. Mixed-job invoice lines retain their actual line_job_id.
 
@@ -29,3 +29,16 @@ An upgrade proof proves ITS OWN migration only: install everything before N, sna
 Comparisons use canonical row_to_json text over the captured named columns, original primary-key identities and full format_type values. Rolled-back controls cover microsecond edits, type changes, nullable columns, replaced functions and later inserts. All compared tables require pre-existing rows. SQL and tests are authored but PostgreSQL has not run in the builder sandbox.
 
 UI, false-positive dismissal, post-closure money writes and production/G4-C/G5 activation remain held. Exact-commit independent verdict and separate acceptance remain required.
+
+## ENT-5 duplicate dismissal amendment — 4 November 2026
+
+BUILD_PLAN §9.1.6 and extra-unlink-v1.md now authorize a covering supervisor,
+surveyor or commercial_manager who neither reported nor priced a member to mark
+the exact candidate group not_duplicates, with a reason. app.cb_unresolved and
+the candidates list both use app.extra_duplicate_unresolved; it excludes only a
+snapshot whose latest immutable disposition is not_duplicates. New members or
+revisions raise the group again; a new reopen fact reverses dismissal. Other
+unresolved groups still refuse export. Dismissal never links extras, changes
+prices, supplies approval or alters origin. Every independent extra still needs
+its own complete revision-bound approval before export. Existing finance-only
+export authority, locks, idempotency, fee rules and synthetic fences stand.

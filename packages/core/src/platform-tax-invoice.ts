@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { simulationFeeSourceSnapshotV1 } from "./issued-simulation-fee-statement.js";
 import { MAX_MONEY_PENCE, moneyFromBigInt } from "./money.js";
 import { sha256 } from "./evidence-pack.js";
 
@@ -7,12 +8,24 @@ const hash = z.string().regex(/^[a-f0-9]{64}$/u);
 const pence = z.number().int().min(0).max(MAX_MONEY_PENCE);
 const ref = z.object({ tenantId: uuid, id: uuid, hash }).strict();
 const period = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/u);
-const provenance = z.discriminatedUnion("kind", [
+const provenance = z.union([
   z.object({ kind: z.literal("subscription"), statement: ref, approval: ref, period, policyVersion: z.literal("subscription_pricing_policy_v4") }).strict(),
   z.object({ kind: z.literal("success_fee"), statement: ref, derivation: ref, proof: ref, approval: ref,
     finalAccountLock: ref, policyVersion: z.literal("reference_fee_policy_v3"),
     proofState: z.literal("verified"), disclosedBeforeLock: z.literal(false), builderCaptured: z.literal(false),
     priorSettlements: z.array(ref).max(100) }).strict(),
+  z.object({ kind: z.literal("success_fee"), level: z.literal("statement"), jobId: uuid,
+    statement: ref, approval: ref, policyVersion: z.literal("reference_fee_policy_v3"),
+    sourceSnapshot: simulationFeeSourceSnapshotV1,
+    priorSettlements: z.discriminatedUnion("state", [
+      z.object({ state: z.literal("none_recorded") }).strict(),
+      z.object({ state: z.literal("recorded"), attempts: z.array(z.object({ id: uuid, authorizationId: uuid,
+        kind: z.enum(["collection", "refund"]), amountPence: pence,
+        events: z.array(z.object({ revision: z.number().int().positive(),
+          state: z.enum(["pending", "outcome_unknown", "settled", "definite_failure"]) }).strict()).min(1),
+      }).strict()).min(1) }).strict(),
+    ]),
+  }).strict(),
   z.object({ kind: z.literal("contractor_fee"), statement: ref, derivation: ref, origin: ref, approval: ref,
     customerInvoice: ref, payment: ref, policyVersion: z.literal("enterprise_site_capture_policy_v1"),
     originKind: z.enum(["site_user", "jobguard_confirmed"]), period }).strict(),

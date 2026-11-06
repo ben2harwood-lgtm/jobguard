@@ -80,6 +80,14 @@
       "types": "./src/accounting-export.preview-contracts.ts",
       "import": "./dist/accounting-export.preview-contracts.js"
     },
+    "./direct-debit-practice": {
+      "types": "./src/fee-collection/direct-debit-practice.application.ts",
+      "import": "./dist/fee-collection/direct-debit-practice.application.js"
+    },
+    "./direct-debit-practice-contracts": {
+      "types": "./src/fee-collection/direct-debit-practice.contracts.ts",
+      "import": "./dist/fee-collection/direct-debit-practice.contracts.js"
+    },
     "./merchant-order": {
       "types": "./src/merchant-order.application.ts",
       "import": "./dist/merchant-order.application.js"

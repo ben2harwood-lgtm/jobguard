@@ -1,0 +1,50 @@
+{
+  "version": 2,
+  "lanes": {
+    "batch-35": {
+      "branches": [
+        "codex/sandbox/batch-35"
+      ],
+      "note": "RED. ENT-8a job finish and dark ENT-13a machine connections; batch-35 PR.",
+      "allow": [
+        "apps/api/src/auth/application-auth.guard.ts",
+        "apps/api/src/auth/tenant-auth.guard.ts",
+        "apps/api/src/connectors/machine-management.ts",
+        "apps/api/src/connectors/machine.controller.ts",
+        "apps/api/src/connectors/machine.test.ts",
+        "apps/api/src/connectors/machine.ts",
+        "apps/web/app/api/contractor/jobs/[id]/finish/route.test.ts",
+        "apps/web/app/api/contractor/jobs/[id]/finish/route.ts",
+        "apps/web/app/contractor/jobs/[id]/possible-extras/job-finish.test.tsx",
+        "apps/web/app/contractor/jobs/[id]/possible-extras/job-finish.tsx",
+        "apps/web/app/contractor/jobs/[id]/possible-extras/page.tsx",
+        "apps/web/e2e/ENT-8a-job-finish.spec.ts",
+        "docs/contracts/connector-capabilities-v1.md",
+        "docs/contracts/enterprise-live-prompts-v1.md",
+        "docs/operations/connector-data-flow.md",
+        "docs/operations/provider-register.md",
+        "docs/verdicts/ENT-13A-P-A/BUILDER_RECEIPT.md",
+        "packages/core/src/enterprise-live-prompt-persistence.ts",
+        "packages/core/src/watchdog.ts",
+        "packages/db/migration-notes/0621_connector_machine.md",
+        "packages/db/migrations/0620_contractor_job_finish.sql",
+        "packages/db/migrations/0621_connector_machine.sql",
+        "packages/db/src/demo-bootstrap.ts",
+        "packages/db/src/enterprise-live-prompt-repository.ts",
+        "packages/db/test/connector-intake.integration.test.ts",
+        "packages/db/test/connector-machine.integration.test.ts",
+        "packages/db/test/contractor-job-finish.integration.test.ts",
+        "packages/db/test/demo-bootstrap.integration.test.ts",
+        "packages/db/test/enterprise-live-prompt-end-check.integration.test.ts",
+        "packages/db/test/late-source-import-migration.test.ts",
+        "packages/db/test/later-empty-tables.ts",
+        "packages/db/test/lp5-command-catalog.ts",
+        "packages/db/test/m2-1-migration-proof.test.ts",
+        "packages/db/test/migration-proofs/0620_contractor_job_finish.proof.json",
+        "packages/db/test/migration-proofs/0621_connector_machine.proof.json",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
+        "packages/db/test/restore-reconciliation-upgrade.integration.test.ts"
+      ]
+    }
+  }
+}

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { migrate, SupplierDocumentRepository, EvidencePackRepository, withTenant } from "../src/index.js";
+import { migrate, SupplierDocumentRepository, EvidencePackRepository, InboxRelevanceRepository, withTenant } from "../src/index.js";
 import { seedEvidencePackFixture } from "./evidence-pack-fixture.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { importWatchdogFixtureJob } from "./watchdog-fixtures.js";
@@ -120,4 +120,58 @@ it("retains the existing forced RLS, owner and append-only runtime privileges", 
   for (const table of ["supplier_document", "supplier_document_intake", "supplier_document_version"]) for (const privilege of ["UPDATE", "DELETE", "TRUNCATE"]) {
     expect((await admin.query("SELECT has_table_privilege('jobguard_runtime',$1,$2) allowed", [`app.${table}`, privilege])).rows[0].allowed).toBe(false);
   }
+});
+
+it("raises one mandatory review per held merchant document, without commercial effects or leaks", async () => {
+  const reviewJob = randomUUID();
+  await importWatchdogFixtureJob(admin, tenant, reviewJob);
+  const inbox = new InboxRelevanceRepository(runtime);
+  const membershipId = (await admin.query("SELECT id FROM app.membership WHERE tenant_id=$1 AND role='owner' LIMIT 1", [tenant])).rows[0].id;
+  const arrive = async (fixtureId: SupplierDocumentIntake["fixtureId"], commandId = randomUUID()) => {
+    const view = await repo().view(context, reviewJob);
+    const input: SupplierDocumentIntake = { version: "supplier-document-intake.v1", fixtureId,
+      channel: "fixture_portal", expectedRevision: view.intakeRevision, commandId };
+    return { result: await repo().intake(context, reviewJob, input), input };
+  };
+  await arrive("materials-B-invoice");
+  expect((await inbox.view(context, reviewJob, membershipId)).mandatory).toEqual([]);
+  await inbox.setBudget(context, reviewJob, { commandId: randomUUID(), advisoryBudget: 0 }, membershipId);
+  const before = await proofBefore(admin, ["app.supplier_fact_revision", "app.purchase_order_revision",
+    "app.goods_receipt", "app.job_party_binding", "app.account", "app.membership", "app.journal"]);
+  const documentIds: string[] = [];
+  for (const [fixtureId, reason] of [
+    ["merchant-changed-invoice", "Merchant review: changed_document"],
+    ["merchant-schema-drift", "Merchant review: schema_drift"],
+    ["merchant-identity-drift", "Merchant review: supplier_identity"],
+  ] as const) {
+    const { result, input } = await arrive(fixtureId);
+    expect(result.result).toBe("held"); documentIds.push(result.documentId);
+    expect(await repo().intake(context, reviewJob, input)).toEqual(result);
+    // A separate arrival of the same bytes must not duplicate the review either.
+    await arrive(fixtureId);
+    const document = (await repo().view(context, reviewJob)).documents.find(d => d.id === result.documentId)!;
+    expect(document).toMatchObject({ status: "held", hold_reason: reason, recognizedDebtPence: 0 });
+    const rows = (await withTenant(runtime, context, db => db.$client.query(
+      "SELECT * FROM app.inbox_finding_revision WHERE tenant_id=$1 AND job_id=$2 AND source_reference=$3",
+      [tenant, reviewJob, `supplier-document:${result.documentId}`]))).rows;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ lane: "mandatory", rule_id: "merchant-held-review", action_type: "review",
+      recipient_ref: null, amount_pence: null, source_revision: document.content_hash,
+      title: "Review held merchant document", explanation: reason });
+    const view = await inbox.view(context, reviewJob, membershipId);
+    expect(view.advisoryBudget).toBe(0); expect(view.advisory).toEqual([]);
+    expect(view.mandatory).toHaveLength(documentIds.length);
+    expect(view.mandatory.find((item: any) => item.sources.includes(`supplier-document:${result.documentId}`)))
+      .toMatchObject({ ruleId: "merchant-held-review", lane: "mandatory", amountPence: null,
+        title: "Review held merchant document", explanation: reason });
+  }
+  const counts = (await withTenant(runtime, context, db => db.$client.query(
+    "SELECT (SELECT count(*)::int FROM app.inbox_finding_revision WHERE tenant_id=$1 AND job_id=$2) findings, (SELECT count(*)::int FROM app.inbox_decision_revision WHERE tenant_id=$1 AND job_id=$2) decisions, (SELECT count(*)::int FROM app.inbox_outcome_event WHERE tenant_id=$1 AND job_id=$2 AND event_kind='created') outcomes",
+    [tenant, reviewJob]))).rows[0];
+  expect(counts).toEqual({ findings: 3, decisions: 3, outcomes: 3 });
+  expect((await inbox.view(context, sameTenantJob, membershipId)).mandatory).toEqual([]);
+  expect((await inbox.view(otherContext, reviewJob, membershipId)).mandatory).toEqual([]);
+  expect((await withTenant(runtime, otherContext, db => db.$client.query(
+    "SELECT id FROM app.inbox_finding_revision WHERE job_id=$1", [reviewJob]))).rows).toEqual([]);
+  expect(await proofBefore(admin, Object.keys(before))).toEqual(before);
 });

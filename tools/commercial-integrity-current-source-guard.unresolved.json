@@ -59,7 +59,7 @@
     "code": "UNRESOLVED_COVERED_EDGE",
     "file": "packages/db/src/extra-approval-chain-repository.ts",
     "line": 94,
-    "fingerprint": "afbffeb30d1a014e8ccd5823926378c931403a72313c2e51287461f81173cc8b",
+    "fingerprint": "f6acd21853c71f9acfd7374006bbff1e7d484d082b226253510b3c8950ee8bf1",
     "reason": "Generic local call helper receives runtime sql/args; all nine callers pass literal SELECT app.xa_* calls and none reads advisory results."
   }
 ]

@@ -178,3 +178,51 @@ it("0599_accounting_export_route_change upgrades without changing populated pred
   expect(await proofDifferences(u.admin, before)).toEqual({ rows: [], types: [] });
  } finally { await u.close(); }
 }, 240000);
+
+it("checked read returns a hash-bound proposal and reloadable immutable history without writes or cross-tenant disclosure", async () => {
+ const f = await setup();
+ const read = () => new AccountingExportRepository(c.runtime).routeChangeRead(f.a.context, f.a.digest, f.next.source.sourceId);
+ const historic = await f.call("read");
+ const auditCount = async () => (await c.admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1", [f.a.tenantId])).rows[0].n;
+ const before = await auditCount();
+ expect(await read()).toEqual({ version: 1, proposal: await f.preview(), confirmed: null, history: [] });
+ expect(await f.snapshot()).toEqual([]); expect(await auditCount()).toBe(before);
+ const confirmed = await f.confirm(await f.confirmation());
+ const after = await auditCount();
+ expect(await read()).toEqual({ version: 1, proposal: null, confirmed, history: [confirmed] });
+ expect(await auditCount()).toBe(after); expect(await f.call("read")).toEqual(historic);
+ const other = await meterCompany(c as unknown as WorkFixture);
+ await expect(f.repo.routeChangeRead(other.context, other.digest, f.next.source.sourceId)).rejects.toThrow("EXPORT_NOT_FOUND");
+ await expect(f.repo.routeChangeRead(other.context, f.a.digest, f.next.source.sourceId)).rejects.toThrow("EXPORT_FORBIDDEN");
+ await expect(c.runtime.query("SELECT app.accounting_export_route_read($1,$2,$3)", [f.a.tenantId, f.a.digest, f.next.source.sourceId])).rejects.toThrow();
+ expect((await c.admin.query("SELECT has_function_privilege('jobguard_runtime','app.accounting_export_route_read(uuid,text,text)','EXECUTE') allowed, has_table_privilege('jobguard_runtime','app.accounting_export_route_change','SELECT') tables")).rows[0]).toEqual({ allowed: true, tables: false });
+ await c.admin.query("UPDATE app.membership SET role='read_only' WHERE tenant_id=$1 AND id=$2", [f.a.tenantId, f.a.actorId]);
+ await expect(read()).rejects.toThrow("EXPORT_FORBIDDEN");
+ expect(await f.snapshot()).toHaveLength(1);
+});
+it("read refuses a pending/unknown historic export and revoked consent without storing a change", async () => {
+ const f = await setup();
+ const added = structuredClone(f.old);
+ added.scope.sourceId = added.source.sourceId = added.target.sourceId = "demo-read-held";
+ await c.admin.query("INSERT INTO app.accounting_export_fixture(tenant_id,source_id,artifact,consent_expires_at) VALUES($1,$2,$3,clock_timestamp()+interval '1 hour')", [f.a.tenantId, added.source.sourceId, added]);
+ await f.approve(added.source.sourceId);
+ for (let i = 0; i < 2; i++) {
+  await expect(f.repo.routeChangeRead(f.a.context, f.a.digest, f.next.source.sourceId)).rejects.toThrow("EXPORT_RECONCILE_REQUIRED");
+  if (!i) await f.call("claim", added.source.sourceId, { version: 1, attemptId: randomUUID() });
+ }
+ expect(await f.snapshot()).toEqual([]);
+ await c.admin.query("UPDATE app.accounting_export_fixture SET revoked=true WHERE tenant_id=$1 AND source_id=$2", [f.a.tenantId, f.next.source.sourceId]);
+ await expect(f.repo.routeChangeRead(f.a.context, f.a.digest, f.next.source.sourceId)).rejects.toThrow("EXPORT_CONSENT_EXPIRED");
+});
+it("0617_accounting_export_route_change_read adds only its read routine and preserves populated predecessors on upgrade", async () => {
+ const u = await startBeforeMigration("0617_accounting_export_route_change_read.sql");
+ try {
+  const f = await setup(u); await f.confirm(await f.confirmation());
+  const before = await proofBefore(u.admin, ["app.accounting_export_route_change", "app.accounting_export_ledger", "app.accounting_export_outbox", "app.audit_event"]);
+  const routines = (await u.admin.query("SELECT oid,pg_get_functiondef(oid) definition,proacl::text FROM pg_proc WHERE pronamespace IN('app'::regnamespace,'identity'::regnamespace) AND prokind='f' ORDER BY oid")).rows;
+  await applyMigration(u, "0617_accounting_export_route_change_read.sql");
+  expect(await proofDifferences(u.admin, before)).toEqual({ rows: [], types: [] });
+  expect((await u.admin.query("SELECT oid,pg_get_functiondef(oid) definition,proacl::text FROM pg_proc WHERE oid=ANY($1::oid[]) ORDER BY oid", [routines.map(r=>r.oid)])).rows).toEqual(routines);
+  expect(await f.repo.routeChangeRead(f.a.context, f.a.digest, f.next.source.sourceId)).toMatchObject({ proposal: null, history: [{ revision: 1 }] });
+ } finally { await u.close(); }
+}, 240000);

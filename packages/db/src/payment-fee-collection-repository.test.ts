@@ -24,7 +24,7 @@ function fixture(state = "approved") {
   const repo = new PaymentFeeCollectionRepository(pool);
   const run = () => repo.withReader(context, hash, read => read(id(2), id(3), hash));
   return { run, repo, query, release, document, approval, expireAfterLock: () => { expired = true; },
-    wrongActor: () => { actor = id(99); }, invalidateReview: () => { reviewError = new Error("PAYMENT_FEE_REVIEW_REQUIRED"); }, missing: () => { present = false; }, noApproval: () => { authorized = false; } };
+    wrongActor: () => { actor = id(99); }, invalidateReview: (message = "PAYMENT_FEE_REVIEW_REQUIRED") => { reviewError = new Error(message); }, missing: () => { present = false; }, noApproval: () => { authorized = false; } };
 }
 it("loads real MON-4A table/state/approval contracts under the tenant transaction, not the read view", async () => {
   const f = fixture(), result = await f.run();
@@ -81,4 +81,20 @@ it("refuses an approval bound to another actor", async () => {
   const f = fixture(); f.wrongActor();
   await expect(f.run()).rejects.toMatchObject({ reason: "AUTHORITY_STALE" });
   expect(f.query).toHaveBeenCalledWith("ROLLBACK", undefined);
+});
+
+it.each(["PAYMENT_FEE_SOURCE_REQUIRED", "PAYMENT_FEE_SOURCE_CHANGED", "PAYMENT_FEE_ATTRIBUTION_REQUIRED", "PAYMENT_FEE_REASSESSMENT_REQUIRED", "RECOVERY_ATTRIBUTION_SOURCE_REQUIRED", "RECOVERY_ATTRIBUTION_LINE_ALREADY_BOUND", "RECOVERY_ATTRIBUTION_LINE_CAP", "RECOVERY_ATTRIBUTION_MOVEMENT_JOB_REQUIRED", "STORED_RECEIPT_LINE_BINDING_REQUIRED", "FINAL_INVOICE_REVISION_MISMATCH", "INVOICE_SOURCE_CORRECTION_REQUIRED", "RECEIPT_LINE_CAPACITY_EXCEEDED"])("types source rebuild refusal %s and rolls back", async message => {
+  const f = fixture(); f.invalidateReview(message);
+  await expect(f.run()).rejects.toMatchObject({ reason: "AUTHORITY_STALE" });
+  expect(f.query).toHaveBeenCalledWith("ROLLBACK", undefined);
+});
+it("keeps genuine source rebuild outages as outages", async () => {
+  const f = fixture(); f.invalidateReview("connection lost");
+  await expect(f.run()).rejects.toThrow("connection lost");
+});
+
+it("types a disputed source rebuild without returning collection authority",async()=>{
+ const f=fixture();f.invalidateReview("PAYMENT_FEE_PAUSED");
+ await expect(f.run()).rejects.toMatchObject({reason:"AUTHORITY_DISPUTED"});
+ expect(f.query).toHaveBeenCalledWith("ROLLBACK",undefined);
 });

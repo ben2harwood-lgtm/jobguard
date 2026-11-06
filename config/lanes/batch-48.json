@@ -1,0 +1,31 @@
+{
+  "version": 2,
+  "lanes": {
+    "batch-48": {
+      "branches": [
+        "codex/sandbox/batch-48"
+      ],
+      "note": "Built-ahead recovery group; RED, synthetic data only, NOPR. No migrations.",
+      "allow": [
+        "apps/web/app/ui/job-value.tsx",
+        "apps/web/app/ui/practice-journey.tsx",
+        "apps/web/e2e/UIWIRE-15-READ-RECOVERY.spec.ts",
+        "apps/web/e2e/VALUE-1-READ-RECOVERY.spec.ts",
+        "docs/verdicts/CH6-J/BUILDER_RECEIPT.md",
+        "docs/verdicts/RECOVER-TESTS-CONFIG-1/BUILDER_RECEIPT.md",
+        "docs/verdicts/RECOVER-UIWIRE-15-READ-RECOVERY/BUILDER_RECEIPT.md",
+        "docs/verdicts/RECOVER-VALUE-1-READ-RECOVERY/BUILDER_RECEIPT.md",
+        "docs/verdicts/TESTS-CORE-2/BUILDER_RECEIPT.md",
+        "packages/config/src/api-environment.boundaries.test.ts",
+        "packages/config/src/identity-environment.database-boundary.test.ts",
+        "packages/config/src/identity-environment.required-settings.test.ts",
+        "packages/config/src/identity-environment.secret-boundary.test.ts",
+        "packages/core/src/allocation.refusals.test.ts",
+        "packages/core/src/customer-billing.history-boundaries.test.ts",
+        "packages/core/src/money.negative-limits.test.ts",
+        "packages/db/test/commercial-integrity-v3-published.integration.test.ts",
+        "packages/db/test/commercial-integrity-v3-review.integration.test.ts"
+      ]
+    }
+  }
+}

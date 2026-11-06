@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { siteExtraContentSha256V1 } from "@jobguard/core";
+import { northsideExtras } from "../src/northside-demo.js";
 import { SiteExtraRepository } from "../src/site-extra-repository.js";
 import { cluster, siteFixture, photo, pendingPhoto } from "./site-extra-evidence-fixtures.js";
 import { written, type Cluster } from "./site-extra-pricing-fixtures.js";
@@ -55,6 +56,11 @@ it("a committed priced log survives submission failure; concurrent submit replay
  expect((await c.admin.query("SELECT count(*)::int n FROM app.extra_approval_request WHERE tenant_id=$1 AND variation_id=$2", [f.p.tenantId, logged.variationId])).rows[0].n).toBe(0);
  const [first, second] = await Promise.all([chain.submitExtra(f.ctx, actor, submit), chain.submitExtra(f.ctx, actor, submit)]);
  expect(second).toEqual(first);
+ const source = (await c.admin.query("SELECT net_pence FROM app.extra_sor_revision WHERE tenant_id=$1 AND job_id=$2 AND variation_id=$3", [f.p.tenantId, f.jobId, logged.variationId])).rows[0]!;
+ const extras = await northsideExtras(c.runtime, actor, "operative", await f.ctx);
+ expect(extras.find(extra => extra.extraId === logged.variationId)).toMatchObject({ quotedPence: Number(source.net_pence), state: "awaiting_approval" });
+ expect(await northsideExtras(c.runtime, f.unassigned.member, "operative", await f.ctx)).toEqual([]);
+
  expect(await chain.submitExtra(f.ctx, actor, submit)).toEqual(first);
  expect((await c.admin.query("SELECT count(*)::int n FROM app.extra_approval_request WHERE tenant_id=$1 AND variation_id=$2", [f.p.tenantId, logged.variationId])).rows[0].n).toBe(1);
  expect((await c.admin.query("SELECT count(*)::int n FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2 AND command_type='SubmitExtra' AND status='succeeded'", [f.p.tenantId, submit.commandId])).rows[0].n).toBe(1);

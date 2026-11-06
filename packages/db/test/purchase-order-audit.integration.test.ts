@@ -159,6 +159,20 @@ describe("M2-1 dark approved merchant action on PostgreSQL", () => {
     expect((await admin.query("SELECT id FROM app.purchase_order_revision WHERE tenant_id=$1 AND id=$2",
       [DEMO_TENANT_ID, upgradeRevisionId])).rows).toEqual([{ id: upgradeRevisionId }]);
   });
+  it("keeps session-owned order material hidden from unscoped and other-session readers", async () => {
+    const f = await darkFixture();
+    const otherToken = await issuePracticeSession(runtime);
+    const other = await authenticatePracticeSession(runtime, otherToken);
+    const before = await effects();
+    for (const pool of [runtime, practiceMaterialPool(runtime, other.digest)]) {
+      const repo = new PurchaseOrderActionRepository(pool);
+      await expect(repo.preview(f.auth.context, f.scope)).rejects.toThrow("ORDER_AUTHORITY_STALE");
+      await expect(repo.approve(f.auth.context, f.scope, f.approved)).rejects.toThrow("ORDER_AUTHORITY_STALE");
+      await expect(repo.attestManual(f.auth.context, f.manual, f.auth.membershipId)).rejects.toThrow("ORDER_AUTHORITY_STALE");
+    }
+    expect(await effects()).toEqual(before);
+    expect((await f.repo.preview(f.auth.context, f.scope)).contentHash).toBe(f.preview.contentHash);
+  });
   it("concurrent confirmation and executor replay commit one effect and one fake merchant order", async () => {
     const f = await darkFixture();
     const [one, two] = await Promise.all([f.repo.approve(f.auth.context, f.scope, f.approved),

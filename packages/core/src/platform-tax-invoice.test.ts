@@ -59,11 +59,11 @@ describe("M4-10 dark platform invoices", () => {
     expect(() => issuePlatformInvoiceFixture({ ...profile, tenantId: id(88) }, request(), [])).toThrow("PLATFORM_INVOICE_FORBIDDEN");
     for (const key of ["proof", "finalAccountLock", "approval", "statement", "derivation"] as const) {
       const r = request(), trace = r.lines[0]!.provenance;
-      if (trace.kind === "success_fee") trace[key].tenantId = id(88);
+      if (trace.kind === "success_fee" && !("level" in trace)) trace[key].tenantId = id(88);
       expect(() => issuePlatformInvoiceFixture(profile, r, [])).toThrow("PLATFORM_INVOICE_FORBIDDEN");
     }
     const r = request(), trace = r.lines[0]!.provenance;
-    if (trace.kind === "success_fee") trace.priorSettlements[0]!.tenantId = id(88);
+    if (trace.kind === "success_fee" && !("level" in trace)) trace.priorSettlements[0]!.tenantId = id(88);
     expect(() => issuePlatformInvoiceFixture(profile, r, [])).toThrow("PLATFORM_INVOICE_FORBIDDEN");
     expect(() => issuePlatformInvoiceFixture(profile, request(), [{ ...invoice, issuer: { ...profile, tenantId: id(88) } }])).toThrow("PLATFORM_INVOICE_FORBIDDEN");
   });

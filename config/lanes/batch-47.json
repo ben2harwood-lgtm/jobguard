@@ -1,0 +1,26 @@
+{
+  "version": 2,
+  "lanes": {
+    "batch-47": {
+      "branches": [
+        "codex/sandbox/batch-47"
+      ],
+      "note": "M3-4 reconciliation, M3-6 shared core-loop contracts and M3-7 synthetic chaos groundwork. RED; ready for PR. Native device proof and D08 remain outstanding. No migrations.",
+      "allow": [
+        "apps/api/src/core-loop-shared.contract.test.ts",
+        "apps/web/app/lib/contracts.ts",
+        "docs/contracts/offline-contract-v1.md",
+        "docs/operations/native-device-matrix.md",
+        "packages/core/src/core-loop-views.test.ts",
+        "packages/core/src/core-loop-views.ts",
+        "packages/core/src/index.ts",
+        "packages/core/src/native-chaos.test.ts",
+        "packages/core/src/offline-client-queue.ts",
+        "packages/core/src/offline-reconciliation.properties.test.ts",
+        "packages/core/src/offline-reconciliation.test.ts",
+        "packages/core/src/offline-reconciliation.ts",
+        "packages/db/test/native-server-chaos.integration.test.ts"
+      ]
+    }
+  }
+}

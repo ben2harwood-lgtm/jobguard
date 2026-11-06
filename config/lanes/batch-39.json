@@ -1,0 +1,36 @@
+{
+  "version": 2,
+  "lanes": {
+    "batch-39": {
+      "branches": [
+        "codex/sandbox/batch-39"
+      ],
+      "note": "RED. ENT-3 priced journey and MON-6 customer practice display; PR landing. Stored attempt infrastructure already on main.",
+      "allow": [
+        "apps/api/src/pay-now-attempt.application.test.ts",
+        "apps/api/src/pay-now-attempt.application.ts",
+        "apps/web/app/api/customer-portal/practice-pay-now/route.test.ts",
+        "apps/web/app/api/customer-portal/practice-pay-now/route.ts",
+        "apps/web/app/customer/practice-pay-now/page.tsx",
+        "apps/web/app/customer/practice-pay-now/screen.test.tsx",
+        "apps/web/app/customer/practice-pay-now/screen.tsx",
+        "apps/web/e2e/ENT-3-priced-journey.spec.ts",
+        "apps/web/e2e/MON-6-customer-practice-pay-now.spec.ts",
+        "apps/web/proxy.test.ts",
+        "apps/web/proxy.ts",
+        "docs/contracts/pay-now-fake-attempts-dark-v1.md",
+        "packages/db/migration-notes/0633_customer_practice_pay_now_read.md",
+        "packages/db/migrations/0633_customer_practice_pay_now_read.sql",
+        "packages/db/src/northside-demo.ts",
+        "packages/db/test/customer-practice-pay-now-fixtures.test.ts",
+        "packages/db/test/customer-practice-pay-now-fixtures.ts",
+        "packages/db/test/customer-practice-pay-now.integration.test.ts",
+        "packages/db/test/final-check-fixture.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/0633_customer_practice_pay_now_read.proof.json",
+        "packages/db/test/northside-demo.integration.test.ts",
+        "packages/db/test/site-extra-priced-evidence.integration.test.ts"
+      ]
+    }
+  }
+}

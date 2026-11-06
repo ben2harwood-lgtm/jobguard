@@ -105,6 +105,10 @@ export class ManagedRecoveryRepository {
             AND f.state='settled' AND f.identity='identified'
             AND NOT EXISTS(SELECT 1 FROM app.evidence_invalidation i WHERE i.tenant_id=e.tenant_id AND i.evidence_id=e.id)
             AND NOT EXISTS(SELECT 1 FROM app.customer_payment_reversal r WHERE r.tenant_id=a.tenant_id AND r.payment_id=a.payment_id)
+            AND NOT EXISTS(SELECT 1 FROM app.customer_credit_note cn
+              WHERE cn.tenant_id=a.tenant_id AND cn.job_id=a.job_id AND cn.invoice_id=a.invoice_id
+                AND NOT EXISTS(SELECT 1 FROM app.recovery_case_allocation_reversal r
+                  WHERE r.tenant_id=a.tenant_id AND r.job_id=a.job_id AND r.allocation_id=a.id AND r.credit_note_id=cn.id))
             AND (SELECT er.status='approved' AND er.policy_version=a.policy_version FROM app.recovery_eligibility_revision er WHERE er.tenant_id=a.tenant_id AND er.case_id=a.case_id ORDER BY er.revision DESC LIMIT 1) IS TRUE
             AND NOT EXISTS(SELECT 1 FROM app.practice_feed_event u WHERE u.tenant_id=f.tenant_id AND u.account_id=f.account_id AND u.movement_key=f.movement_key AND u.identity='unidentified'
               AND NOT EXISTS(SELECT 1 FROM app.practice_feed_command k WHERE k.tenant_id=u.tenant_id AND k.account_id=u.account_id AND k.movement_key=u.movement_key AND k.action='reconcile_duplicate'))

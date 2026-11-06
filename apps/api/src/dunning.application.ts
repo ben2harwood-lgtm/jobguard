@@ -21,7 +21,7 @@ export class DunningApplication {
 }
 export function dunningFailure(error: unknown) {
   if (error instanceof DunningError) return { status: error.code === "INVALID_DUNNING_INPUT" ? 400
-    : error.code === "DUNNING_DARK" ? 403 : error.code === "DUNNING_CONFLICT" ? 409 : 503,
+    : error.code === "DUNNING_DARK" || ("status" in error && error.status === 403) ? 403 : error.code === "DUNNING_CONFLICT" ? 409 : 503,
     body: { version: "dunning-error.v1", code: error.code } };
   const auth = identityStatus(error);
   return { status: auth.status, body: { version: "dunning-error.v1",

@@ -180,3 +180,16 @@ it("the statement's shared SQL kernel rounds cumulative 1/10 once and subtracts 
  expect(await fee("5","1",0)).toBe(0);expect(await fee("10","1",0)).toBe(1);
  expect(await fee("1","3",0)).toBe(0);
 });
+
+it("current state and collection readers reject a revoked attribution review after statement approval",async()=>{
+ const x=await fixture(),s=await x.run(prepare(x.paymentId));await x.run(approve(s));
+ await rolledBack(f.admin,async db=>{
+  await db.query("SELECT set_config('app.tenant_id',$1,true)",[x.context.tenantId]);
+  await db.query("ALTER TABLE app.action_authorization DISABLE TRIGGER USER");
+  await db.query("UPDATE app.action_authorization SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND action_type='recovery.attribution_review'",[x.context.tenantId]);
+  await db.query("ALTER TABLE app.action_authorization ENABLE TRIGGER USER");
+  expect((await db.query("SELECT app.payment_fee_current($1,$2,$3,$4) state",[x.context.tenantId,x.jobId,s.statementId,x.actor.membershipId])).rows[0].state).toBe("source_changed");
+  // read_payment_fees, statement approval, standing authority and collection all use this kernel.
+ });
+ expect((await x.view()).statements[0]!.state).toBe("approved");
+});

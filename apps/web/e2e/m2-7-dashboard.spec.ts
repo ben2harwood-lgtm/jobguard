@@ -26,7 +26,7 @@ test("owner sees content-free outcomes, honest unknowns and uncapped mandatory b
   await expect(page.getByTestId("visible-advisory-count")).toHaveText("0");
 
   // Fixture setup goes through the existing durable metadata writer, never a new public write route.
-  const { authorizePracticeJob, InboxMetricsRepository } = await loadDb();
+  const { authorizePracticeJob, InboxMetricsRepository, withTenant } = await loadDb();
   const pool = new Pool({ connectionString: E2E_RUNTIME_URL, max: 1 });
   try {
     const token = (await page.context().cookies()).find(cookie => cookie.name === "jg_session")!.value;
@@ -34,16 +34,17 @@ test("owner sees content-free outcomes, honest unknowns and uncapped mandatory b
     const repo = new InboxMetricsRepository(pool);
     const event = { tenantId: owner.context.tenantId, jobId, ruleId: "supplier-check", ruleVersion: "v1", occurredAt: "2026-01-01T00:00:00Z" };
     const record = async (body: object) => {
-      const result = await repo.record(owner.context, { version: "inbox-metric-record.v1", environment: "synthetic_demo", jobId, receiptId: randomUUID(), event: { ...event, eventId: randomUUID(), commandId: randomUUID(), ...body } });
+      const result = await repo.record(owner.context, {membershipId:owner.membershipId,identityUserId:owner.identityUserId}, { version: "inbox-metric-record.v1", environment: "synthetic_demo", jobId, receiptId: randomUUID(), event: { ...event, eventId: randomUUID(), commandId: randomUUID(), ...body } });
       expect(result.status).toBe("accepted");
     };
-    const findingIds = [randomUUID(), randomUUID()], decisionId = randomUUID();
-    for (const findingId of findingIds) await record({ kind: "finding", findingId });
-    await record({ kind: "decision", findingIds, decisionId });
+    const findingIds = (await withTenant(pool,owner.context,db=>db.$client.query<{id:string}>("SELECT id FROM app.inbox_finding_revision WHERE tenant_id=$1 AND job_id=$2 ORDER BY (rule_id='supplier-check') DESC,id LIMIT 3",[owner.context.tenantId,jobId]))).rows.map(row=>row.id), decisionId = randomUUID();
+    expect(findingIds).toHaveLength(3);
+    for (const findingId of findingIds.slice(0,2)) await record({ kind: "finding", findingId });
+    await record({ kind: "decision", findingIds: findingIds.slice(0,2), decisionId });
     await record({ kind: "resolution", decisionId, resolution: "dismissed", reason: "duplicate", occurredAt: "2026-01-01T00:01:00Z" });
     await record({ kind: "later_outcome", decisionId, outcome: "useful" });
     await record({ kind: "later_outcome", decisionId, outcome: "reversed", occurredAt: "2026-01-02T00:00:00Z" });
-    await record({ kind: "finding", findingId: randomUUID(), ruleVersion: "v2" });
+    await record({ kind: "finding", findingId: findingIds[2], ruleVersion: "v2" });
   } finally { await pool.end(); }
 
   const response = await page.request.get(`${endpoint}?tenantId=33333333-3333-4333-8333-333333333333&advisoryBudget=0`, { headers: { "x-tenant-id": "33333333-3333-4333-8333-333333333333" } });

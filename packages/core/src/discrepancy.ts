@@ -62,3 +62,6 @@ export function evaluateComparableBill(input: ComparableDiscrepancyInput): Discr
   if (input.confirmed !== true || input.matched !== true || input.orderedQuantity === undefined || input.acceptedQuantity === undefined || input.billedQuantity === undefined || input.orderedUnitPricePence === undefined || input.billedUnitPricePence === undefined) return {kind:"insufficient"};
   return evaluateBillDiscrepancy(input as DiscrepancyInput);
 }
+
+export * from "./line-discrepancy.js";
+export * from "./discrepancy-evaluation.js";

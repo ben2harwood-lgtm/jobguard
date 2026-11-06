@@ -37,7 +37,7 @@ export function roleAllowedOnTrack(role: string, track: "contractor" | "small_bu
   return track === "contractor" ? (contractorRoles as readonly string[]).includes(role) : ["owner", "admin", "estimator", "foreman", "operative", "finance", "read_only"].includes(role);
 }
 const approver = z.enum(["supervisor", "surveyor", "commercial_manager"]);
-const step = z.object({ role: approver, timeLimitMinutes: z.number().int().min(1).max(525600), escalationRole: approver, alternateRoles: z.array(approver).max(3) }).strict();
+const step = z.object({ role: approver, timeLimitMinutes: z.number().int().min(1).max(525600), waitWorkingDays: z.number().int().min(1).max(260).nullable().optional(), escalationRole: approver.nullable(), alternateRoles: z.array(approver).max(3) }).strict();
 /** Schema only: evaluation and commercial authorization belong to ENT-5. */
 export const approvalRulesV1 = z.object({
   version: z.literal("approval-rules.v1"), proceedLimit: z.object({ pence, currency: z.literal("GBP") }).strict(),

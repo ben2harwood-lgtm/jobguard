@@ -2,8 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Pool } from "pg";
 import type { TenantTransaction, VerifiedTenantContext } from "@jobguard/db";
 import { ctx, fixture, id } from "./test-fixture.js";
-const mocks = vi.hoisted(() => ({ withTenant: vi.fn(), appendAuditBatch: vi.fn() }));
+const mocks = vi.hoisted(() => ({ withTenant: vi.fn() }));
 vi.mock("@jobguard/db", () => mocks);
+import type { CollectionBook } from "./contracts.js";
 import { DarkFeeCollectionExecutor } from "./executor.js";
 import { PostgresReservationStore } from "./postgres-reservation-store.js";
 
@@ -17,8 +18,22 @@ describe("PostgresReservationStore transaction adapter", () => {
     const query = vi.fn(async (sql: string, values?: unknown[]) => {
       if (sql.startsWith("SELECT app.lock_fee_reservation_book") || sql.startsWith("SELECT book")) return { rows: [{ book: structuredClone(persisted.book) }] };
       if (sql.startsWith("SELECT kind")) return { rows: structuredClone(persisted.archive) };
-      if (sql.startsWith("INSERT INTO app.fee_reservation_archive")) persisted.archive.push(...JSON.parse(values![1] as string));
-      if (sql.startsWith("SELECT app.replace_fee_reservation_book") || sql.startsWith("UPDATE app.fee_reservation_book")) persisted.book = JSON.parse(values![1] as string);
+      // Fake routine response for adapter contracts only. SQL authority, RLS,
+      // compaction and chained audit are independently exercised in PostgreSQL CI.
+      if (sql.startsWith("SELECT app.replace_fee_reservation_book")) {
+        const full = JSON.parse(values![1] as string) as CollectionBook;
+        for (const attempt of full.attempts.filter(a => a.state === "released")) {
+          const releases = persisted.archive.filter(r => r.kind === "attempt" && r.key.startsWith(`${attempt.commandId}:`));
+          if (JSON.stringify(releases.at(-1)?.payload) !== JSON.stringify(attempt))
+            persisted.archive.push({ kind: "attempt", key: `${attempt.commandId}:${releases.length}`, payload: structuredClone(attempt) });
+        }
+        for (const [key, payload] of Object.entries(full.events))
+          if (!persisted.archive.some(r => r.kind === "event" && r.key === key)) persisted.archive.push({ kind: "event", key, payload });
+        full.audit.forEach((payload, i) => {
+          if (!persisted.archive.some(r => r.kind === "audit" && r.key === String(i))) persisted.archive.push({ kind: "audit", key: String(i), payload });
+        });
+        persisted.book = { version: "fee-reservation-book.v1", attempts: full.attempts.filter(a => a.state !== "released"), events: {}, audit: [] };
+      }
       return { rows: [] };
     });
     const db = { $client: { query } } as unknown as TenantTransaction;
@@ -27,13 +42,13 @@ describe("PostgresReservationStore transaction adapter", () => {
     const sources = vi.fn(() => ({ collection: async () => fixture().source, credit: async () => fixture().credit }));
     return { persisted, query, db, context, sources, store: new PostgresReservationStore({} as Pool, context, sources) };
   }
-  it("binds current sources to the locked transaction and persists before the final audit lock", async () => {
+  it("binds current sources to the locked transaction and delegates persistence and the final audit lock to one routine", async () => {
     const f = setup();
     expect(await f.store.transaction(ctx.tenantId, async (_book, sources) => sources.collection(id(5), id(6)))).toMatchObject({ tenantId: ctx.tenantId });
     expect(f.sources).toHaveBeenCalledWith(f.db);
-    expect(f.query.mock.calls.map(([sql]) => sql.split(" ")[0])).toEqual(["INSERT", "SELECT", "SELECT", "SELECT", "SELECT"]);
+    expect(f.query.mock.calls.map(([sql]) => sql.split(" ")[0])).toEqual(["INSERT", "SELECT", "SELECT", "SELECT"]);
     expect(f.query.mock.calls[1]![0]).toContain("app.lock_fee_reservation_book");
-    expect(f.query.mock.invocationCallOrder.at(-1)!).toBeLessThan(mocks.appendAuditBatch.mock.invocationCallOrder[0]!);
+    expect(f.query.mock.calls.at(-1)![0]).toContain("$3::jsonb");
   });
   it("uses guarded routines instead of runtime row locks or raw updates", async () => {
     const f = setup();
@@ -53,7 +68,7 @@ describe("PostgresReservationStore transaction adapter", () => {
     const f = setup();
     await expect(f.store.transaction(ctx.tenantId, async () => { throw new Error("stale source"); })).rejects.toThrow("stale source");
     expect(f.query).toHaveBeenCalledTimes(3);
-    expect(mocks.appendAuditBatch).not.toHaveBeenCalled();
+    expect(f.query.mock.calls.some(([sql]) => sql.includes("append_audit") || sql.includes("INSERT INTO app.fee_reservation_archive"))).toBe(false);
   });
   it("refuses corrupt persisted state before invoking the callback", async () => {
     const f = setup(), work = vi.fn();
@@ -68,9 +83,9 @@ describe("PostgresReservationStore transaction adapter", () => {
       book.attempts.push(structuredClone(reserved));
       book.audit.push({ commandId: reserved.commandId, state: "reserved" });
     });
-    expect(mocks.appendAuditBatch.mock.calls[0]![1]).toEqual([expect.objectContaining({
-      actorRef: reserved.actorMembershipId, subjectRef: reserved.commandId, eventType: "fee.collection.reserved",
-    })]);
+    const saved = JSON.parse(f.query.mock.calls.at(-1)![1]![1] as string) as CollectionBook;
+    expect(saved.audit).toEqual([{ commandId: reserved.commandId, state: "reserved" }]);
+    expect(saved.attempts[0]).toMatchObject({ actorMembershipId: reserved.actorMembershipId, fingerprint: reserved.fingerprint });
     f.persisted.book = { version: "fee-reservation-book.v1", attempts: [reserved], events: {}, audit: [{ commandId: reserved.commandId, state: "reserved" }] };
     f.persisted.archive = [];
     await expect(f.store.transaction(ctx.tenantId, async book => { book.attempts[0]!.amountPence = 1; })).rejects.toMatchObject({ code: "IDEMPOTENCY_CONFLICT" });
@@ -80,7 +95,7 @@ describe("PostgresReservationStore transaction adapter", () => {
     const f = setup(), sample = fixture();
     const reserved = { ...await sample.executor.reserve(ctx, sample.intent),
       purpose: "receipt_success_fee" as const, authorizationId: id(80) };
-    await f.store.transaction(ctx.tenantId, async book => { book.attempts.push(reserved); });
+    await f.store.transaction(ctx.tenantId, async book => { book.attempts.push(reserved); book.audit.push({ commandId: reserved.commandId, state: "reserved" }); });
     expect(await f.store.transaction(ctx.tenantId, async book => book.attempts[0])).toEqual(reserved);
     for (const change of [{ purpose: undefined }, { authorizationId: id(81) }, { authorizationId: undefined }]) {
       await expect(f.store.transaction(ctx.tenantId, async book => {
@@ -99,19 +114,16 @@ describe("PostgresReservationStore transaction adapter", () => {
     const executor = new DarkFeeCollectionExecutor(f.store, [sample.rail], () => new Date("2026-10-29T00:00:00Z"), sample.sessions);
     return { ...sample, ...f, executor };
   }
-  it("allows a callback reporting a definite result for unknown and retains its audit", async () => {
+  it("forwards the verified fake result to the authority routine without raw archive or audit writes", async () => {
     const f = executorFixture();
     await f.executor.reserve(ctx, f.intent);
-    f.rail.crashAfterAcceptance = true;
-    await expect(f.executor.execute(ctx, id(10))).rejects.toThrow("FAKE_CRASH_AFTER_ACCEPTANCE");
-    // UNKNOWN-RESULT-AUTHORITY: the runtime login cannot prove a provider result.
-    await f.store.transaction(ctx.tenantId, async book => {
-      book.attempts[0]!.state = "released";
-      book.audit.push({ commandId: id(10), state: "released" });
-    });
-    const restored = await f.store.transaction(ctx.tenantId, async book => book);
-    expect(restored.attempts[0]?.state).toBe("released");
-    expect(restored.audit.at(-1)).toEqual({ commandId: id(10), state: "released" });
+    await f.executor.execute(ctx, id(10));
+    const call = f.query.mock.calls.filter(([sql]) => sql.startsWith("SELECT app.replace_fee_reservation_book")).at(-1)!;
+    const proof = JSON.parse(call[1]![2] as string) as { body: string; signature: string };
+    expect(JSON.parse(proof.body)).toMatchObject({ version: "fake-fee-result.v1", environment: "synthetic_demo", tenantId: ctx.tenantId,
+      attempt: { commandId: id(10), state: "provider_accepted" } });
+    expect(proof.signature).toBe(f.rail.sign(proof.body));
+    expect(f.query.mock.calls.some(([sql]) => sql.startsWith("INSERT INTO app.fee_reservation_archive") || sql.includes("append_audit"))).toBe(false);
   });
 
   it("archives repeated replacements without growing the active book or losing command replays", async () => {
@@ -179,7 +191,11 @@ describe("PostgresReservationStore transaction adapter", () => {
     const f = executorFixture(); f.rail.definiteFailure = true;
     await f.executor.reserve(ctx, f.intent); await f.executor.execute(ctx, id(10));
     const first = structuredClone(f.persisted.archive.find(r => r.kind === "attempt"));
-    await f.store.transaction(ctx.tenantId, async book => { book.attempts[0]!.paymentState = "cancelled"; });
+    let proof: ReturnType<typeof f.rail.signStoreResult> | undefined;
+    await f.store.transaction(ctx.tenantId, async book => {
+      book.attempts[0]!.paymentState = "cancelled";
+      proof = f.rail.signStoreResult(ctx.tenantId, book.attempts[0]!);
+    }, () => proof);
     const restored = await f.store.transaction(ctx.tenantId, async book => book);
     expect(restored.attempts[0]?.paymentState).toBe("cancelled");
     expect(f.persisted.archive.filter(r => r.kind === "attempt")).toHaveLength(2);

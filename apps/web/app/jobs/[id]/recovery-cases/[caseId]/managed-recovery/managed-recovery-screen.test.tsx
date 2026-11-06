@@ -25,8 +25,8 @@ it("sends the exact confirmed command on uncertain retries without calculating o
   fetch.mockRejectedValueOnce(new TypeError("lost response")).mockResolvedValueOnce(new Response("{}"));
   const command = { version: "managed-recovery-election-command.v1" as const, commandId: "original-id", caseId: "case",
     termsVersion: "server-terms", selection: { service: "drafted_for_you" as const, points: 5 as const } };
-  await expect(sendManagedRecoveryChoice("/api/choice", command)).rejects.toThrow("lost response");
-  await sendManagedRecoveryChoice("/api/choice", command);
+  await expect(sendManagedRecoveryChoice("/api/choice", command, "fictional-csrf")).rejects.toThrow("lost response");
+  await sendManagedRecoveryChoice("/api/choice", command, "fictional-csrf");
   expect(fetch.mock.calls[0]).toEqual(fetch.mock.calls[1]);
-  expect(fetch.mock.calls[1]?.[1]).toMatchObject({ cache: "no-store", credentials: "same-origin", body: JSON.stringify(command) });
+  expect(fetch.mock.calls[1]?.[1]).toMatchObject({ cache: "no-store", credentials: "same-origin", body: JSON.stringify(command), headers: {"Content-Type":"application/json", "x-csrf-token":"fictional-csrf"} });
 });

@@ -2089,3 +2089,250 @@ localhost binding or browser execution. Database/API HTTP integration and
 browser suites remain for GitHub CI after router push. Independent RED review
 must check the resulting committed head; no independent PASS is claimed here.
 Existing initial LATER / SIMPLICITY observation remains; no new review round.
+
+## 5 November 2026 — recover-ch6-gaps (RED, NOPR)
+
+READY for router commit and push; PostgreSQL behavior and independent review
+remain unverified. Plan piece CH-6 (§10, integrity signals for v3). Compared the
+branch-audit report on origin/codex/sandbox/branch-audit and the old ch6-gaps tip
+57b3105c4 against pinned origin/main / worktree HEAD
+62081c68933d0b953e7dd75a8cbd7b3a2fb4f304. Both requested gaps remain missing.
+The two current integration files match the old branch except for exactly the
+recovered assertions; no old migrations, catalog baselines or lane were copied.
+
+Recovered the supplementary invoice's exact command replay, original-lock and
+previous-revision lineage, and invoice-kind/lock/revision binding assertions.
+Recovered the reverse concurrency regression: a foreign tenant holds a job
+UPDATE open while the runtime review must finish under a 500 ms lock timeout,
+then replay identically through the repository. Existing assertions, including
+same-job lock protection and source freshness after contention, are unchanged.
+Current callers and latest routine body (0526_commercial_integrity_sources.sql)
+were source-inspected: tenant/job-qualified row locks already exist. No product
+fix is justified without a failing PostgreSQL result. No migration, authority,
+grant, financial policy or operational alert changed. Synthetic data only.
+
+Checks actually run with installed Node 24.17.0 / Vitest 4.1.12:
+- Root: `./node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit` — PASS;
+  this package's tsconfig includes source, not the integration test files.
+- TypeScript transpile diagnostics on both changed integration files — PASS
+  (syntax only).
+- Initial Vitest collection and input run failed to resolve @jobguard/core
+  because dist was absent. Built core and storage using the installed compiler:
+  `./node_modules/.bin/tsc -p packages/core/tsconfig.json` and
+  `./node_modules/.bin/tsc -p packages/storage/tsconfig.json` — PASS.
+- From packages/db: `./node_modules/.bin/vitest list --maxWorkers=1
+  test/commercial-integrity-v3-published.integration.test.ts
+  test/commercial-integrity-v3-review.integration.test.ts` — PASS, 18 tests
+  collected through the real runner; no database hooks executed.
+- From packages/db: `./node_modules/.bin/vitest run --maxWorkers=1
+  test/commercial-integrity-v3-input.test.ts` — PASS, 1 file / 9 tests.
+- `node tools/agent-lane-boundary-lint.mjs` refused the self-comparison range:
+  HEAD equals origin/main before router commit. Direct existing loadLanePolicy,
+  selectLane and lanePathAllowed checks and exact working-tree allowlist
+  comparison — PASS. The CLI must run again against the committed head.
+- `git diff --check` — PASS. Recovered test files equal the old branch bytes;
+  all changes are confined to the two test files, this existing receipt and the
+  recovery lane. No new reporting document or substantial complexity.
+
+Initial review: no worthwhile separate LATER / SIMPLICITY change identified;
+reused existing fixtures and retained their controls without unrelated refactoring.
+
+### Named holds for landing
+
+- PostgreSQL CI: execute both recovered integration files (at most 2 workers),
+  proving supplementary replay/lineage and foreign-tenant nonblocking review
+  alongside existing authorization, snapshot, receipt and audit regressions.
+  Collection and input unit tests are not PostgreSQL acceptance evidence.
+- Required green CI against current main, including source checks, full required
+  suites and the lane CLI after router commit. Database/migration and browser
+  suites were not run here; no localhost or PostgreSQL startup is allowed.
+- One independent RED review recorded against the exact resulting head before
+  merge. This builder's source inspection is not independent review.
+
+No fetch, Git metadata writes, commit, push, PR, merge, package download,
+provider action, deployment or real-data operation performed. Router owns the
+commit, push, queue/work-list handoff and subsequent CI/review routing.
+
+## 5 November 2026 — batch-48 landing preparation (RED, NOPR)
+
+The five recovery pieces are already merged in this worktree. Working tree was
+clean on entry; no unfinished merge, migrations, new tables, routines, routes,
+commands or server modules. Local main is stale; comparison uses stored
+origin/main 62081c68933d0b953e7dd75a8cbd7b3a2fb4f304 without fetching.
+No product behavior changed during this preparation. Kept the recovered core,
+configuration, CH-6, practice-progress and value-read regressions together.
+Removed the five added recovery lane files and added batch-48's exact 18-path
+allowlist. Scoped the new practice browser alert locators through main,
+including the proof alert; assertions and fixture behavior are preserved.
+Inspected browser helper imports: the value contract imports only Zod; neither
+new spec statically pulls in core/db. No native-import workaround is needed.
+No new substantial complexity or separate simplification review. Existing
+initial LATER / SIMPLICITY observations above and in the piece receipts stand.
+
+Local checks use installed binaries, at most two Vitest workers and at most
+three named files per run; no PostgreSQL/browser hooks executed:
+- Core allocation refusals, billing-history boundaries, negative money limits:
+  3 files / 20 tests PASS.
+- Config API ports, identity database and required settings: 3 / 23 PASS;
+  identity secret boundaries: 1 / 4 PASS.
+- Context boundary: 1 / 145 PASS. First API guard run could not collect watchdog
+  and identity because dependency dist files were absent. Local dependency
+  builds and subsequent guard results are recorded in the final handoff below.
+- Migration-proof loader and CH-6 input: 2 / 85 PASS.
+- git diff --check: PASS.
+- node tools/agent-lane-boundary-lint.mjs executed and rejected the five removed
+  lane paths: it unions committed additions with uncommitted removals. Those
+  files exist in neither origin/main nor the final working tree. The same
+  loadLanePolicy/selectLane/lanePathAllowed functions pass for the final file
+  set, with exact allowlist equality. Router MUST rerun the unchanged CLI after
+  committing the removals, when those transient paths disappear from its diff.
+- Initial pnpm attempts produced only a configuration warning and were
+  interrupted. No packages were downloaded; used installed Vitest/TypeScript.
+
+CI must execute both changed CH-6 PostgreSQL integration files, proving real
+supplementary replay, original-lock/descendant/invoice binding and foreign-tenant
+nonblocking concurrency alongside existing same-job protection. CI must execute
+UIWIRE-15-READ-RECOVERY and VALUE-1-READ-RECOVERY in mobile-360 and desktop, plus
+all required typecheck/lint/test/build and migration/upgrade regressions. No
+local collection or unit PASS establishes those database/browser results.
+One independent RED review against the resulting exact head remains required.
+Router owns commit, push and later PR admission; no Git writes, fetch, live
+services, customer data, deployment or launch occurred here.
+
+Final local evidence for batch-48:
+- Installed compiler: `./node_modules/.bin/tsc -p <package>/tsconfig.json
+  --noEmit` for packages/core, packages/config, packages/db, apps/api and
+  apps/web: all completed without diagnostics.
+- Built packages/core, config, storage, db and ai with the same installed
+  compiler to satisfy runtime package imports. No source/config changes.
+- Identity guard rerun: 1 file / 7 tests PASS. Watchdog's second collection
+  attempt identified missing ai/dist; final result follows below.
+- `vitest list --maxWorkers=2` for the two changed CH-6 integration files:
+  18 tests collected, no database execution.
+- TypeScript transpile diagnostics for both new browser specs and both changed
+  CH-6 integration files: PASS (syntax only, not behavioral verification).
+- Final watchdog-registry run after building ai/dist: 1 file / 126 tests PASS.
+  All requested local guards and changed unit tests total 410 passing tests.
+- READY for router commit as RED/NOPR; the unchanged lane CLI still reports
+  only the five transient lane additions/removals and must be rerun after
+  commit. Exact final-file lane coverage passed; no test was weakened.
+
+## 5 November 2026 — batch-48 current-main merge verification
+
+The launcher completed the merge at f1cfe3e06, incorporating stored origin/main
+d16ef1978. Entry was clean, with no unmerged paths. Compared the complete final
+diff against origin/main: no migrations, routines or exact database catalogs are
+changed, so no routine recreation or duplicate migration removal is applicable.
+Main's latest database bodies remain intact. No source repair or new behavior
+was needed. Existing assertions are preserved.
+
+Checks actually run on this merged tree, using installed binaries:
+- Core: `vitest run --maxWorkers=2 src/allocation.refusals.test.ts
+  src/customer-billing.history-boundaries.test.ts src/money.negative-limits.test.ts`
+  — 3 files / 20 tests PASS.
+- Config: `vitest run --maxWorkers=2 src/api-environment.boundaries.test.ts
+  src/identity-environment.database-boundary.test.ts
+  src/identity-environment.required-settings.test.ts` — 3 files / 23 tests PASS;
+  separate run of `src/identity-environment.secret-boundary.test.ts` — 4 PASS.
+- Web: Playwright `test --list --workers=2` for UIWIRE-15-READ-RECOVERY and
+  VALUE-1-READ-RECOVERY — 12 cases discovered; no browser execution.
+- DB: Vitest `list --maxWorkers=2` for commercial-integrity-v3-published and
+  commercial-integrity-v3-review integration files — 18 cases collected;
+  no PostgreSQL execution.
+- Standard `node tools/agent-lane-boundary-lint.mjs` — PASS against the merged
+  head. Exact allowlist comparison — PASS for all 18 non-lane paths; no lane
+  file lists itself. `git diff --check origin/main` — PASS.
+
+Database/browser execution and all required current-head CI, plus independent
+RED review at the resulting exact head, remain required before merge. No Git
+writes, download, provider action, deployment or launch was performed. This is
+landing preparation only; earlier initial simplicity observations stand.
+
+Web TypeScript completed successfully on the merged tree:
+`node node_modules/typescript/bin/tsc -p apps/web/tsconfig.json --noEmit
+--incremental false` — PASS. Final whitespace check passed.
+READY for router commit/push and subsequent PR admission, CI and RED review.
+
+
+## 6 November 2026 — batch-48 landing merge READY
+
+Entry HEAD 77357959f already completed the launcher merge of stored origin/main
+f5415ddb4 (batch-35, PR #581). Working tree was clean and no unmerged paths
+remained. Inspected the complete diff against that main: no migrations, SQL
+routines or exact database lists differ, so no migration removal, routine
+recreation or list reconciliation is needed. Main's database implementation is
+unchanged. No product code or test assertions changed during this verification.
+The existing lane lists exactly all 18 changed non-lane paths and excludes itself.
+
+Checks actually run, using installed binaries with at most two workers and no
+more than three named Vitest files per run:
+- From packages/core: `node node_modules/vitest/vitest.mjs run --maxWorkers=2
+  src/allocation.refusals.test.ts src/customer-billing.history-boundaries.test.ts
+  src/money.negative-limits.test.ts` — 3 files, 20 tests PASS.
+- From packages/config: same runner/options for
+  src/api-environment.boundaries.test.ts,
+  src/identity-environment.database-boundary.test.ts and
+  src/identity-environment.required-settings.test.ts — 3 files, 23 tests PASS;
+  separate run for src/identity-environment.secret-boundary.test.ts — 4 PASS.
+- `node node_modules/typescript/bin/tsc -p apps/web/tsconfig.json --noEmit
+  --incremental false` — PASS.
+- From apps/web: `node node_modules/@playwright/test/cli.js test --list
+  --workers=2 UIWIRE-15-READ-RECOVERY.spec.ts VALUE-1-READ-RECOVERY.spec.ts`
+  — 12 cases discovered, no browser execution.
+- From packages/db: `node node_modules/vitest/vitest.mjs list --maxWorkers=2
+  test/commercial-integrity-v3-published.integration.test.ts
+  test/commercial-integrity-v3-review.integration.test.ts` — 18 cases collected,
+  no PostgreSQL execution.
+- `node tools/agent-lane-boundary-lint.mjs` — PASS. Independent exact-path set
+  comparison — PASS, all 18 non-lane paths. Whitespace verification passed.
+
+READY for router commit/push and PR admission. RED: CH-6 / CH6-J, UIWIRE-15
+read recovery, VALUE-1 read recovery, TESTS-CORE-2 and RECOVER-TESTS-CONFIG-1.
+Required current-head CI, database/browser execution and independent RED review
+remain merge gates. No Git writes, package downloads, real data or deployment.
+Earlier initial LATER / SIMPLICITY observations stand; no new behavior or
+substantial complexity was introduced.
+
+
+## 6 November 2026 — batch-48 PR handoff at main c7cf720a0
+
+Entry HEAD 027f094bed71dcb9f3a7ee8565d1dad2dbc5233f already contains
+stored origin/main c7cf720a02aa9308fe2596c230439a88b9b265ac. Working tree
+was clean, with no unfinished merge or unmerged paths. All 13 product/test
+files are byte-identical to the latest independently prechecked batch head
+85f00fae40ec59deee0bfe8a608074972a84b610. Preserved the prechecked work;
+this handoff changes only this receipt. Earlier initial LATER / SIMPLICITY
+notes remain unchanged.
+
+Migration comparison against origin/main: **none** added, changed or removed.
+No SQL routines are re-created, so no latest-body reconciliation applies.
+No provider-register source changed. No new commands, tables or workers.
+The two changed web components use exported API contracts, with no direct
+apps/api source imports; Cloudflare build was checked by reading this boundary,
+not executed here.
+
+Checks actually run using installed Node v24.17.0 binaries, <=2 test workers,
+and <=3 named Vitest files per run:
+- packages/core Vitest: allocation.refusals, customer-billing.history-boundaries,
+  money.negative-limits — 3 files / 20 PASS.
+- packages/config Vitest: api-environment.boundaries, identity-environment.database-boundary,
+  identity-environment.required-settings — 3 files / 23 PASS; separate
+  identity-environment.secret-boundary run — 1 file / 4 PASS.
+- TypeScript noEmit: config, core and web PASS (web --incremental false).
+- Playwright --list for UIWIRE-15-READ-RECOVERY and VALUE-1-READ-RECOVERY:
+  12 cases discovered across phone/desktop; no browser executed.
+- DB Vitest list for commercial-integrity-v3-published.integration and
+  commercial-integrity-v3-review.integration: 18 cases collected; no DB executed.
+- Money arithmetic lint PASS. Commercial-integrity current-source and boundary
+  guards PASS, zero diagnostics, existing nine baselined sites unchanged.
+- Lane lint PASS and exact allowlist comparison PASS (18 non-lane paths,
+  no self entry). git diff --check PASS.
+- git show --remerge-diff could not run because its temporary Git object
+  directory is read-only; no automatic-merge tree proof is claimed here.
+
+READY for router commit, push and PR opening. RED: CH-6 / CH6-J,
+UIWIRE-15 read recovery, VALUE-1 read recovery, TESTS-CORE-2 and
+RECOVER-TESTS-CONFIG-1. Current-head CI must prove the required full checks,
+PostgreSQL integration/migrations and browser journeys; exact-head independent
+RED review remains required before merge. Earlier prechecks are historical
+passes, not review of this final head. Made-up data only; no release or deployment.

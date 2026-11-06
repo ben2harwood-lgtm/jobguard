@@ -23,6 +23,9 @@ export class DunningRepository {
   try { return await work(); } catch (error) {
    if (error instanceof DunningError) throw error;
    const message = error instanceof Error ? error.message : "";
+   if (message === "DUNNING_UNAVAILABLE" && (error as { code?: string }).code === "42501") {
+    throw Object.assign(new DunningError("DUNNING_UNAVAILABLE"), { status: 403 as const });
+   }
    if (["INVALID_DUNNING_INPUT", "DUNNING_UNAVAILABLE", "DUNNING_CONFLICT", "DUNNING_DARK"].includes(message)) {
     throw new DunningError(message as DunningError["code"]);
    }

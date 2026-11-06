@@ -95,6 +95,11 @@ export class FakeGoCardlessRail implements CollectionRail {
     if (mandate?.state === "active") return undefined;
     return mandate?.state === "cancelled" ? "MANDATE_REVOKED" : "MANDATE_NOT_ACTIVE";
   }
+  /** Signed synthetic store fixture, distinct from either provider's protocol. */
+  signStoreResult(tenantId: string, attempt: Readonly<Attempt>) {
+    const body = JSON.stringify({ version: "fake-fee-result.v1", environment: "synthetic_demo", tenantId, attempt });
+    return { body, signature: createHmac("sha256", this.testSigningSecret).update(body).digest("hex") };
+  }
   async submit(tenantId: string, attempt: Readonly<Attempt>) {
     if (attempt.rail !== this.name) throw new FeeCollectionError("COLLECTION_REFUSED");
     const { state: _state, providerObjectId: _object, paymentState: _payment, ...approved } = attempt;

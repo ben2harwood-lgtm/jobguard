@@ -10,6 +10,7 @@ export const privacyCommandV1 = z.discriminatedUnion("action", [
 /** v2 records an operator's identity, authority and retention/hold review before execution. */
 const expandedBase = { version: z.literal("privacy-command.v2"), commandId: z.string().uuid() };
 export const privacyCommandV2 = z.discriminatedUnion("action", [
+  z.object({ ...expandedBase, ...target, action: z.literal("verify"), kind: z.enum(["identity", "authority"]), evidenceHash: z.string().regex(/^[a-fA-F0-9]{64}$/u) }).strict(),
   z.object({ ...expandedBase, action: z.literal("open"), subjectId: z.string().uuid(), operation: z.enum(["access", "export", "delete", "offboard"]) }).strict(),
   z.object({ ...expandedBase, ...target, action: z.literal("instruct"), instructionRef: z.string().uuid(), instructionHash: z.string().regex(/^[a-f0-9]{64}$/u) }).strict(),
   z.object({ ...expandedBase, ...target, action: z.literal("review"), identityRef: z.string().uuid(), authorityRef: z.string().uuid(), retentionReviewRef: z.string().uuid(), reviewHash: z.string().regex(/^[a-f0-9]{64}$/u) }).strict(),

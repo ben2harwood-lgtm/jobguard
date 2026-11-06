@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import { downloadPlatformInvoice, issuePlatformInvoiceFixture, platformInvoiceCanonical, PlatformInvoiceError,
-  platformInvoiceProfileV1, platformInvoiceIssueCommandV1, type PlatformInvoiceRequest,
+  downloadIssuedSimulationFeeStatement, platformInvoiceProfileV1, platformInvoiceIssueCommandV1, type PlatformInvoiceRequest,
   type PlatformInvoiceIssueCommand, type PlatformInvoiceDocument } from "@jobguard/core";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 
@@ -29,6 +29,33 @@ const subscriptionSourceSql = `SELECT s.id,s.artifact_hash,s.amount_pence,p.prin
  AND a.environment='synthetic_demo' AND z.content_hash=a.content_hash AND z.policy_version=a.catalogue_version
  FOR SHARE OF s,p,a,z,r`;
 
+// Read only the statement's exact stored amount and its explicit approval. A newer statement
+// supersedes this one; the source hash also binds the entire persisted proof snapshot.
+const successFeeSourceSql = `SELECT s.*,z.id approval_id,z.content_hash approval_hash,
+ app.final_lock_hash(s.document) recomputed_hash,
+ app.final_lock_hash(s.document->'sourceSnapshot') snapshot_hash
+ FROM app.platform_fee_statement s
+ JOIN app.job j ON(j.tenant_id,j.id)=(s.tenant_id,s.job_id)
+ JOIN app.job_commercial_track track ON(track.tenant_id,track.job_id)=(s.tenant_id,s.job_id)
+ JOIN app.action_authorization z ON z.tenant_id=s.tenant_id AND z.recipient=s.id::text
+  AND z.content_hash=s.document_hash AND z.action_type='success_fee.statement_approve'
+ JOIN app.decision d ON(d.tenant_id,d.id)=(z.tenant_id,z.decision_id)
+  AND d.subject_type='simulation_fee_statement' AND d.subject_ref=s.id::text AND d.action_type=z.action_type
+ JOIN app.decision_resolution r ON(r.tenant_id,r.id)=(z.tenant_id,z.resolution_id)
+  AND r.decision_id=d.id AND r.resolution='approved' AND r.actor_membership_id=z.actor_membership_id
+ WHERE s.tenant_id=$1 AND s.id=$2 AND s.namespace='success_fee.synthetic.v1'
+  AND track.environment='synthetic_demo' AND track.job_track='small_builder'
+  AND z.policy_version='reference_fee_policy_v3' AND z.currency='GBP'
+  AND z.amount_pence::text=s.document->'documentPrincipal'->>'pence'
+  AND z.revoked_at IS NULL AND z.expires_at>clock_timestamp()
+  AND NOT EXISTS(SELECT 1 FROM app.platform_fee_statement newer
+    WHERE newer.tenant_id=s.tenant_id AND newer.job_id=s.job_id AND newer.sequence>s.sequence)
+ ORDER BY z.id LIMIT 1 FOR SHARE OF s,j,track,z,d,r`;
+const feeSettlementSql = `SELECT a.id,a.authorization_id,a.kind,a.amount_pence,
+ (SELECT jsonb_agg(jsonb_build_object('revision',e.revision,'state',e.state) ORDER BY e.revision)
+ FROM app.platform_fee_attempt_event e WHERE e.tenant_id=a.tenant_id AND e.job_id=a.job_id AND e.attempt_id=a.id) events
+ FROM app.platform_fee_attempt a WHERE a.tenant_id=$1 AND a.job_id=$2 AND a.statement_id=$3 ORDER BY a.id`;
+
 /** Administrative synthetic adapter only. Runtime has no SQL grants. No caller principal/proof is accepted. */
 export class PlatformTaxInvoiceFixtureRepository {
   constructor(private readonly pool: Pool) {}
@@ -40,6 +67,8 @@ export class PlatformTaxInvoiceFixtureRepository {
       const client = db.$client, profile = p.data, command = c.data;
       await client.query("SELECT 1 FROM app.platform_invoice_issuer LIMIT 0");
       await this.actor(client, context.tenantId, sessionDigest, command.actorMembershipId);
+      if (command.lines.some(line => line.sourceKind === "success_fee"))
+        await client.query("SELECT pg_advisory_xact_lock(hashtextextended('platform-fee-statement:'||$1::text,0))", [context.tenantId]);
       await client.query("INSERT INTO app.platform_invoice_issuer(tenant_id,id,profile) VALUES($1,$2,$3::jsonb) ON CONFLICT DO NOTHING", [context.tenantId, profile.issuerId, JSON.stringify(profile)]);
       const stored = await client.query("SELECT profile FROM app.platform_invoice_issuer WHERE tenant_id=$1 AND id=$2 FOR UPDATE", [context.tenantId, profile.issuerId]);
       if (platformInvoiceCanonical(stored.rows[0]?.profile) !== platformInvoiceCanonical(profile)) throw new PlatformInvoiceError("PLATFORM_INVOICE_CONFLICT");
@@ -68,6 +97,29 @@ export class PlatformTaxInvoiceFixtureRepository {
       return document;
     });
   }
+  private async successFeeSource(client: PoolClient, tenantId: string, line: PlatformInvoiceIssueCommand["lines"][number]) {
+    const unavailable = () => new PlatformInvoiceError("PLATFORM_INVOICE_SOURCE_UNAVAILABLE");
+    const s = (await client.query(successFeeSourceSql, [tenantId, line.sourceId])).rows[0];
+    if (!s || s.document_hash !== line.expectedSourceHash || s.document_hash !== s.recomputed_hash ||
+        s.source_hash !== s.snapshot_hash) throw unavailable();
+    let document;
+    try { document = downloadIssuedSimulationFeeStatement(s.document, s.document_hash).document; }
+    catch { throw unavailable(); }
+    if (document.statementId !== s.id || document.jobId !== s.job_id || document.documentPrincipal.pence <= 0)
+      throw unavailable();
+    const attempts = (await client.query(feeSettlementSql, [tenantId, s.job_id, s.id])).rows;
+    if (attempts.some(a => !a.events?.length)) throw unavailable();
+    const provenance = { kind: "success_fee" as const, level: "statement" as const, jobId: s.job_id as string,
+      statement: { tenantId, id: s.id as string, hash: s.document_hash as string },
+      approval: { tenantId, id: s.approval_id as string, hash: s.approval_hash as string },
+      policyVersion: document.policyVersion, sourceSnapshot: document.sourceSnapshot,
+      priorSettlements: attempts.length ? { state: "recorded" as const, attempts: attempts.map(a => ({
+        id: a.id as string, authorizationId: a.authorization_id as string, kind: a.kind as "collection" | "refund",
+        amountPence: Number(a.amount_pence), events: a.events as { revision: number; state: "pending" | "outcome_unknown" | "settled" | "definite_failure" }[],
+      })) } : { state: "none_recorded" as const },
+    };
+    return { amount: document.documentPrincipal.pence, provenance };
+  }
   private async actor(client: PoolClient, tenantId: string, digest: string, expected: string) {
     const session = await client.query("SELECT id FROM identity.session WHERE token_digest=$1 AND environment='synthetic_demo' AND revoked_at IS NULL AND expires_at>clock_timestamp() FOR SHARE", [digest]);
     if (!session.rowCount) throw new PlatformInvoiceError("PLATFORM_INVOICE_FORBIDDEN");
@@ -83,16 +135,34 @@ export class PlatformTaxInvoiceFixtureRepository {
   }
   private async source(client: PoolClient, tenantId: string, command: PlatformInvoiceIssueCommand,
     line: PlatformInvoiceIssueCommand["lines"][number], history: PlatformInvoiceDocument[], replay: boolean): Promise<PlatformInvoiceRequest["lines"][number]> {
-    // No accepted v3 success-fee statement adapter exists on this base. Contractor proof/approval
-    // reconstruction is not implemented here either. Neither may fall back to supplied manifests.
-    if (line.sourceKind !== "subscription") throw new PlatformInvoiceError("PLATFORM_INVOICE_SOURCE_UNAVAILABLE");
-    const s = (await client.query(subscriptionSourceSql, [tenantId, line.sourceId])).rows[0];
-    if (!s || s.artifact_hash !== line.expectedSourceHash || s.artifact_hash !== s.recomputed_hash ||
-      s.catalogue_version !== "subscription_pricing_policy_v4" || BigInt(s.amount_pence) !== BigInt(s.principal_pence) ||
-      s.line_total === null || BigInt(s.amount_pence) !== BigInt(s.line_total)) throw new PlatformInvoiceError("PLATFORM_INVOICE_FORBIDDEN");
-    const amount = Number(s.amount_pence);
-    const provenance = { kind: "subscription" as const, statement: { tenantId, id: s.id, hash: s.artifact_hash },
-      approval: { tenantId, id: s.approval_id, hash: s.approval_hash }, period: s.period, policyVersion: "subscription_pricing_policy_v4" as const };
+    if (line.sourceKind === "contractor_fee") throw new PlatformInvoiceError("PLATFORM_INVOICE_SOURCE_UNAVAILABLE");
+    let amount: number, provenance: PlatformInvoiceRequest["lines"][number]["provenance"];
+    if (line.sourceKind === "success_fee") {
+      const source = await this.successFeeSource(client, tenantId, line);
+      amount = source.amount; provenance = source.provenance;
+      // Settlements are a snapshot at first issuance. Replay and full credits retain the
+      // original immutable trace while rechecking the stored statement/approval above.
+      const original = history.find(d => replay ? d.request.commandId === command.commandId :
+        command.kind === "credit_note" && d.number === command.originalNumber);
+      const saved = original?.request.lines.find(l => l.id === line.id && l.provenance.statement.id === line.sourceId);
+      if (saved) {
+        const { priorSettlements: _current, ...current } = provenance;
+        const prior = saved.provenance;
+        if (prior.kind !== "success_fee" || !("level" in prior)) throw new PlatformInvoiceError("PLATFORM_INVOICE_SOURCE_UNAVAILABLE");
+        const { priorSettlements: _saved, ...stored } = prior;
+        if (platformInvoiceCanonical(current) !== platformInvoiceCanonical(stored) || saved.sourcePrincipalPence !== amount)
+          throw new PlatformInvoiceError("PLATFORM_INVOICE_SOURCE_UNAVAILABLE");
+        provenance = prior;
+      }
+    } else {
+      const s = (await client.query(subscriptionSourceSql, [tenantId, line.sourceId])).rows[0];
+      if (!s || s.artifact_hash !== line.expectedSourceHash || s.artifact_hash !== s.recomputed_hash ||
+        s.catalogue_version !== "subscription_pricing_policy_v4" || BigInt(s.amount_pence) !== BigInt(s.principal_pence) ||
+        s.line_total === null || BigInt(s.amount_pence) !== BigInt(s.line_total)) throw new PlatformInvoiceError("PLATFORM_INVOICE_FORBIDDEN");
+      amount = Number(s.amount_pence);
+      provenance = { kind: "subscription" as const, statement: { tenantId, id: s.id, hash: s.artifact_hash },
+        approval: { tenantId, id: s.approval_id, hash: s.approval_hash }, period: s.period, policyVersion: "subscription_pricing_policy_v4" as const };
+    }
     let principalPence = amount;
     if (command.kind === "credit_note") {
       const original = history.find(d => d.number === command.originalNumber && d.request.kind === "invoice");

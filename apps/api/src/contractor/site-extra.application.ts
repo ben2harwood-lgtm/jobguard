@@ -1,3 +1,5 @@
+import { extraProceed } from "@jobguard/db";
+import { recordExtraProceedV1 } from "@jobguard/core";
 import type { Pool } from "pg";
 import { z } from "zod";
 import { parseOfflineIntentV1, SiteExtraError, logSiteExtraV1, logSiteExtraV3, logSiteExtraV4, siteExtraLoggedV4, siteExtraLoggedV1, siteExtraLoggedV3, siteExtraFailureV1, siteExtraHttpStatus, siteExtraContentSha256V1 } from "@jobguard/core";
@@ -107,6 +109,17 @@ export class SiteExtraApplication {
    const answer = { version: "sor-site-extra-logged.v1", environment: "synthetic_demo", realExternalActions: 0, jobId: job.data, extraId: result.variationId, state: "logged", priceSource: result.priceSource,
     orderCheck: { outcome: result.coverage === "new" ? "new" : "more_than_ordered", sorCode: result.sorCode, unit: result.unit, claimedQuantity: result.claimedQuantity, instructedQuantity: result.instructedQuantity, extraQuantity: result.extraQuantity, orderLineScopeItemId: result.orderLineScopeItemId } };
    return submission ? sorSiteExtraSubmittedV2.parse({ ...answer, version: "sor-site-extra-submitted.v2", state: submission.state, requestId: submission.requestId }) : sorSiteExtraLoggedV1.parse(answer);
+  } catch (error) { throw this.sorError(error); }
+ }
+ async proceed(principal: unknown, jobId: string, extraId: string, raw?: unknown) {
+  const sessionId = this.sorEntry(principal);
+  try {
+   const member = await new ContractorRepository(this.pool).resolveSession(sessionId);
+   if (!z.guid().safeParse(jobId).success || !z.guid().safeParse(extraId).success) throw new SorSiteExtraError("NOT_FOUND");
+   if (raw !== undefined && !recordExtraProceedV1.safeParse(raw).success) throw new SorSiteExtraError("INVALID_COMMAND");
+   const context = await this.resolveContext(sessionId, member);
+   if (raw !== undefined) await this.requireSiteOrigin(sessionId);
+   return await extraProceed(this.pool, context, member, jobId, extraId, raw);
   } catch (error) { throw this.sorError(error); }
  }
  async supervisorQueries(principal: unknown, jobId: string, raw?: unknown) {

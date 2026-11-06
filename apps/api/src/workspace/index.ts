@@ -129,3 +129,4 @@ export { PayNowAttemptApplication, assertPayNowPreviewMode, payNowAttemptFailure
 export { NoticeFixtureApplication, assertNoticeFixtureMode, noticeFixtureFailure, noticeFixtureRealNoticeRefusal, type NoticeFixtureView } from "../notice-fixture.application.js";
 
 export { InterimDraftApplication, interimDraftFailure } from "../interim-draft.application.js";
+export { ConnectorPromotionApplication } from "../connectors/promotion.application.js";

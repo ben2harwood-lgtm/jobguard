@@ -1,3 +1,4 @@
+import { seedSyntheticPartyFixture } from "../src/synthetic-party-fixture.js";
 import { installAuditCommandWriterRoles } from "./pool-test-utils.js";
 import {createHash,randomUUID} from "node:crypto";
 import {mkdtemp} from "node:fs/promises";
@@ -37,7 +38,11 @@ export async function seedFinalCheckJob(f:FinalCheckFixture){
  await f.admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner') ON CONFLICT DO NOTHING",[FINAL_CHECK_ACTOR,tenantId,accountId,FINAL_CHECK_USER]);
  await f.admin.query("SELECT app.issue_practice_session($1)",[digest]);
  await finalCheckTenant(f.admin,tenantId,async db=>{
-  await db.query("INSERT INTO app.job(id,tenant_id,title,status,practice_session_digest,practice_scenario) VALUES($1,$2,'Fictional final check','live',$3,'capture')",[jobId,tenantId,digest]);
+  await db.query("INSERT INTO app.job(id,tenant_id,title,status,practice_session_digest,practice_scenario) VALUES($1,$2,'Fictional final check','draft',$3,'capture')",[jobId,tenantId,digest]);
+  // Explicit fixture setup also works in browser clusters without legacy hooks.
+  await seedSyntheticPartyFixture(db,tenantId,jobId);
+  await db.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','synthetic_demo','backfilled_synthetic_fixture') ON CONFLICT(tenant_id,job_id) DO NOTHING",[tenantId,jobId]);
+  await db.query("UPDATE app.job SET status='live' WHERE tenant_id=$1 AND id=$2",[tenantId,jobId]);
   await db.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')",[scopeItemId,tenantId,jobId]);
   await db.query("INSERT INTO app.quote_version(id,tenant_id,job_id,version,content_hash,net_value_pence,status) VALUES($1,$2,$3,1,$4,100000,'accepted')",[baselineId,tenantId,jobId,hash]);
   await db.query("INSERT INTO app.final_account_draft(id,tenant_id,job_id) VALUES($1,$2,$3)",[draftId,tenantId,jobId]);

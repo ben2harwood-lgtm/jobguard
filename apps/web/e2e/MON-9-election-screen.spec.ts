@@ -56,7 +56,7 @@ for (const service of ["drafted_for_you", "solicitor_letter"] as const) {
       command: { version: "managed-recovery-election-command.v1", caseId: id(3), termsVersion: core.MANAGED_RECOVERY_TERMS,
         selection: { service: option.shape.service.value, points: option.shape.points.value } },
     }));
-    const view = () => ({ version: "managed-recovery-screen.v1", choices, termsVersion: core.MANAGED_RECOVERY_TERMS,
+    const view = () => ({ version: "managed-recovery-screen.v1", csrfToken: "fictional-csrf", choices, termsVersion: core.MANAGED_RECOVERY_TERMS,
       successFeeLabel: "Unchanged 10% success fee", successFeeAmount: "£32.00",
       serviceChargeAmount: state.election ? (service === "drafted_for_you" ? "£16.00" : "£32.00") : null,
       preview: core.previewManagedRecoveryInvoice(state, { version: "managed-recovery-invoice-preview.v1", environment: "synthetic_demo",
@@ -65,6 +65,7 @@ for (const service of ["drafted_for_you", "solicitor_letter"] as const) {
     const bodies: unknown[] = [];
     await page.route(api, async route => {
       if (route.request().method() === "POST") {
+        expect(route.request().headers()["x-csrf-token"]).toBe("fictional-csrf");
         const command = route.request().postDataJSON(); bodies.push(command);
         state = core.electManagedRecovery(state, command, { environment: "synthetic_demo", tenantId: id(1), jobId: id(2), caseId: id(3),
           actorMembershipId: id(4), canApprove: true, now: "2026-11-04T09:00:00Z" });
@@ -102,7 +103,7 @@ test("pursuit refusal is plain and closes the form", async ({ page }) => {
   const state = { version: "managed-recovery-state.v1", environment: "synthetic_demo", tenantId: id(1), jobId: id(2), caseId: id(3), election: null, pursuitStartedAt: null };
   await page.route(api, route => route.fulfill({ status: route.request().method() === "POST" ? 409 : 200, contentType: "application/json",
     body: JSON.stringify(route.request().method() === "POST" ? { code: "PURSUIT_ALREADY_STARTED", message: "Pursuit has already started. You cannot choose a managed-recovery service for this case." } : {
-      version: "managed-recovery-screen.v1", preview: core.previewManagedRecoveryInvoice(state, { version: "managed-recovery-invoice-preview.v1", environment: "synthetic_demo", tenantId: id(1), jobId: id(2), caseId: id(3), cumulativeQualifyingPrincipal: { numerator: "0", denominator: "1" } }),
+      version: "managed-recovery-screen.v1", csrfToken: "fictional-csrf", preview: core.previewManagedRecoveryInvoice(state, { version: "managed-recovery-invoice-preview.v1", environment: "synthetic_demo", tenantId: id(1), jobId: id(2), caseId: id(3), cumulativeQualifyingPrincipal: { numerator: "0", denominator: "1" } }),
       termsVersion: core.MANAGED_RECOVERY_TERMS, successFeeLabel: "Unchanged 10% success fee", successFeeAmount: "£0.00", serviceChargeAmount: null, message: "Practice only",
       choices: [{ label: "+5 points: drafted for you", command: { version: "managed-recovery-election-command.v1", caseId: id(3), termsVersion: core.MANAGED_RECOVERY_TERMS, selection: { service: "drafted_for_you", points: 5 } } }],
     }) }));

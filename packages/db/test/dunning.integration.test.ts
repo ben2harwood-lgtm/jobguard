@@ -22,6 +22,27 @@ describe("M4-16 durable synthetic dunning",()=>{
  }
  const read=(a:Company)=>new DunningRepository(c.runtime).read(a.context,a.digest,{jobId:a.jobId,nowTick:3});
  const command=(row:{invoiceId:string;snapshotHash:string}, extra={})=>({version:"dunning-persist-command.v1",commandId:randomUUID(),invoiceId:row.invoiceId,snapshotHash:row.snapshotHash,nowTick:3,...extra});
+ it("lets admins request but only current owners approve, including concurrent replay and tenant isolation",async()=>{
+  const a=await company(), b=await company();await seed(a);
+  const repo=new DunningRepository(c.runtime),row=(await read(a)).invoices[0]!;
+  await c.admin.query("UPDATE app.membership SET role='admin' WHERE tenant_id=$1 AND id=$2",[a.tenantId,a.actorId]);
+  const draft=await repo.command(a.context,a.digest,a.jobId,"request",command(row));
+  const approval=command(row,{decisionId:draft.decisionId});
+  const sqlApprove=()=>workTenant(c.runtime,a.tenantId,db=>db.query("SELECT app.dunning_workbench($1,$2,$3,'approve',$4::jsonb)",[a.tenantId,a.digest,a.jobId,JSON.stringify(approval)]));
+  await expect(sqlApprove()).rejects.toMatchObject({message:"DUNNING_UNAVAILABLE",code:"42501"});
+  await expect(repo.command(a.context,a.digest,a.jobId,"approve",approval)).rejects.toMatchObject({code:"DUNNING_UNAVAILABLE",status:403});
+  expect((await c.admin.query("SELECT count(*)::int n FROM app.decision_resolution WHERE tenant_id=$1",[a.tenantId])).rows[0].n).toBe(0);
+  await c.admin.query("UPDATE app.membership SET role='owner' WHERE tenant_id=$1 AND id=$2",[a.tenantId,a.actorId]);
+  const [first,replay]=await Promise.all([repo.command(a.context,a.digest,a.jobId,"approve",approval),repo.command(a.context,a.digest,a.jobId,"approve",approval)]);
+  expect(first.status).toBe("approved");expect(replay).toEqual(first);
+  await expect(repo.read(a.context,a.digest,{jobId:b.jobId,nowTick:3})).rejects.toThrow("DUNNING_UNAVAILABLE");
+  for(const state of ["admin","expired","revoked"]){
+   await c.admin.query("UPDATE app.membership SET role=$3, expires_at=CASE WHEN $4='expired' THEN clock_timestamp()-interval '1 second' ELSE NULL END, revoked_at=CASE WHEN $4='revoked' THEN clock_timestamp() ELSE NULL END WHERE tenant_id=$1 AND id=$2",[a.tenantId,a.actorId,state==="admin"?"admin":"owner",state]);
+   await expect(repo.command(a.context,a.digest,a.jobId,"approve",approval)).rejects.toThrow("DUNNING_UNAVAILABLE");
+   await expect(sqlApprove()).rejects.toThrow();
+  }
+  expect((await c.admin.query("SELECT count(*)::int n FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2",[a.tenantId,approval.commandId])).rows[0].n).toBe(1);
+ });
  it("refuses client-forged future eligibility at the repository and direct SQL boundaries",async()=>{
   const a=await company();await seed(a,{dueTick:Date.now()+86400000});
   const repo=new DunningRepository(c.runtime), rows=await repo.read(a.context,a.digest,{jobId:a.jobId,nowTick:Number.MAX_SAFE_INTEGER});

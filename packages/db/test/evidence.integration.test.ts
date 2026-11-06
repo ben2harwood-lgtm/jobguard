@@ -1,3 +1,5 @@
+import { syntheticSpeechAudio } from "@jobguard/core";
+import { rolledBack } from "./upgrade-proof-utils.js";
 import { verifiedTenantContextFromMembership } from "../src/tenant-context.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { importWatchdogFixtureJob } from "./watchdog-fixtures.js";
@@ -126,4 +128,29 @@ describe("dark resumable evidence", () => {
   await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role,revoked_at) VALUES($1,$2,'76000000-0000-4000-8000-000000000001','75000000-0000-4000-8000-000000000001','owner',clock_timestamp())",[revoked,TENANT]);
   await expect(f.resumable.status(context,actor,{...f.input,actorMembershipId:revoked})).rejects.toMatchObject({code:"NOT_FOUND"});
  });
+});
+
+it("fixture WAV requires the current tenant's synthetic job at upload and finalization, even on replay",async()=>{
+ const bytes=syntheticSpeechAudio(),input={id:randomUUID(),jobId:JOB,contentType:"audio/wav",syntheticAudioFixture:true,expectedSha256:hash(bytes),maximumBytes:46,expiresAt:new Date("2099-01-01")};
+ const upload=await service.beginUpload(context,input);
+ storage.put(upload.objectKey,"fixture-v1",bytes,"audio/wav");
+ const final={uploadId:upload.id,objectVersionId:"fixture-v1",evidenceType:"synthetic_speech_audio"};
+ const object=await service.finalize(context,final);
+ expect(await service.finalize(context,final)).toEqual(object);
+ await expect(service.beginUpload(otherContext,input)).rejects.toMatchObject({code:"EVIDENCE_NOT_AUTHORIZED"});
+ await rolledBack(admin,async db=>{
+  await db.query("SELECT set_config('app.tenant_id',$1,true)",[TENANT]);
+  // Rollback-only negative control; never change a real job or relax a runtime grant.
+  await db.query("ALTER TABLE app.job_commercial_track DISABLE TRIGGER USER");
+  await db.query("UPDATE app.job_commercial_track SET environment='pilot_no_charge' WHERE tenant_id=$1 AND job_id=$2",[TENANT,JOB]);
+  await db.query("ALTER TABLE app.job_commercial_track ENABLE TRIGGER USER");
+  await db.query("SET LOCAL ROLE jobguard_runtime");
+  // Retain the outer rollback transaction while the service exercises real runtime SQL/RLS.
+  const pool={connect:async()=>({release(){},query:(sql:string,values?:unknown[])=>
+   ["BEGIN","COMMIT","ROLLBACK"].includes(sql)?Promise.resolve({rows:[]}):db.query(sql,values)})} as unknown as Pool;
+  const bound=new EvidenceService(pool,storage);
+  await expect(bound.beginUpload(context,input)).rejects.toMatchObject({code:"EVIDENCE_NOT_AUTHORIZED"});
+  await expect(bound.finalize(context,final)).rejects.toMatchObject({code:"EVIDENCE_NOT_AUTHORIZED"});
+ });
+ expect(await service.finalize(context,final)).toEqual(object);
 });

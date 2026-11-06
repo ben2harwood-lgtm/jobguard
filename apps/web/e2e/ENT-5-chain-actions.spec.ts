@@ -52,10 +52,26 @@ test("ENT-5 reject, revise, stale on screen, withdraw, replays and route race", 
   await expect(page.getByLabel("Rate card item", { exact: true })).toBeVisible({ timeout: 60_000 });
   await page.getByLabel("Rate card item", { exact: true }).selectOption("CLEAR-VOID");
   await button(page, "Price this extra").click(); await expect(page.getByTestId("extra-state")).toHaveText("Priced - ready to submit");
+  // Q16: real price and query routes leave the extra logged until a human submits it.
+  const priced = (await (await page.request.get("/api/northside/extras")).json()).extras[0];
+  expect(priced.state).toBe("logged"); expect(priced.requestId).toBeNull();
   await switchTo(page, "supervisor"); await page.goto("/approvals/extras"); await button(page, "Submit for approval").click();
   await expect(button(page, "Approve as supervisor")).toBeVisible();
   const extras = async () => (await (await page.request.get("/api/northside/extras")).json()).extras as Extra[];
   const old = (await extras())[0]!;
+  expect((await (await page.request.get("/api/northside/extras")).json()).queue.find((q: { request_id: string }) => q.request_id === old.requestId).overdue).toBe(false);
+  // Owner-only fictional clock fixture; the real read route and screen must expose the mandatory notice.
+  const timerDb = new Pool({ host: "127.0.0.1", port: 55432, user: "postgres", password: "sbox-e2e-owner", database: "jobguard_synthetic_demo", max: 1 });
+  try {
+    await timerDb.query("BEGIN");
+    await timerDb.query("ALTER TABLE app.extra_approval_request DISABLE TRIGGER immutable");
+    await timerDb.query("UPDATE app.extra_approval_request SET server_recorded_at=clock_timestamp()-interval '7 days' WHERE id=$1", [old.requestId]);
+    await timerDb.query("ALTER TABLE app.extra_approval_request ENABLE TRIGGER immutable");
+    await timerDb.query("COMMIT");
+  } catch (error) { await timerDb.query("ROLLBACK"); throw error; } finally { await timerDb.end(); }
+  await page.reload();
+  await expect(page.locator("main").getByRole("status")).toContainText("Mandatory approval overdue");
+
   const stalePage = await page.context().newPage(); await stalePage.goto("/approvals/extras"); await expect(button(stalePage, "Approve as supervisor")).toBeVisible();
   expect(await button(page, "Reject this extra").isDisabled()).toBe(true);
   await page.getByLabel("Reason for rejection").selectOption("not_agreed"); await controls(page);
@@ -69,20 +85,32 @@ test("ENT-5 reject, revise, stale on screen, withdraw, replays and route race", 
   const conflict = await post(page, old, "reject", { ...rejectedBody, reasonCode: "other_reason" }); expect((await conflict.json()).code).toBe("COMMAND_CONFLICT");
   expect((await post(page, old, "approve", bound(old))).ok()).toBe(false);
   await switchTo(page, "surveyor"); await page.goto("/approvals/extras");
-  expect((await post(page, old, "withdraw", { reasonCode: "not_done" })).status()).toBe(403);
+  expect((await post(page, old, "withdraw", { reasonCode: "not_done" })).ok()).toBe(false); // rejected is already final, even for a covered surveyor
   await expect(page.getByLabel("Revised quantity measured")).toBeVisible({ timeout: 60_000 });
   await page.getByLabel("Revised quantity measured").fill("2"); await controls(page);
   const revisedRequest = page.waitForRequest(r => r.url().endsWith("/revise") && r.method() === "POST");
   await button(page, "Revise this extra").click();
   const revisedBody = (await revisedRequest).postDataJSON();
   await expect(page.locator("main").getByRole("status")).toHaveText("Price revised. A new approval request was created.");
-  const revised = (await extras())[0]!; expect(revised.requestId).not.toBe(old.requestId);
+  let revised = (await extras())[0]!; expect(revised.requestId).not.toBe(old.requestId);
   const revisionReplay = await post(page, old, "revise", revisedBody); expect(revisionReplay.status()).toBe(200);
   expect((await revisionReplay.json()).result.requestId).toBe(revised.requestId);
   expect((await (await post(page, old, "revise", { ...revisedBody, quantity: 4 })).json()).code).toBe("COMMAND_CONFLICT");
   await switchTo(page, "supervisor");
   await button(stalePage, "Approve as supervisor").click();
   await expect(stalePage.locator("main").getByRole("alert")).toContainText("STALE_REVISION"); await stalePage.close();
+  // Q04: a fresh command ID for the same person/step returns the first answer.
+  const firstApproval = await post(page, revised, "approve", bound(revised)); expect(firstApproval.ok()).toBe(true);
+  const firstAnswer = await firstApproval.json();
+  expect(await (await post(page, revised, "approve", bound(revised))).json()).toEqual(firstAnswer);
+  expect((await post(page, revised, "approve", { ...bound(revised), netPence: revised.netPence + 1 })).ok()).toBe(false);
+  for (const field of ["actorMembershipId", "tenantId", "serverTime"]) {
+    expect((await post(page, revised, "approve", { ...bound(revised), [field]: command() })).status()).toBe(422);
+  }
+  await switchTo(page, "surveyor");
+  const next = await post(page, revised, "revise", { sorCode: "CLEAR-VOID", quantity: 2 }); expect(next.ok()).toBe(true);
+  revised = (await extras())[0]!;
+  await switchTo(page, "supervisor"); // same person may fill the same slot across request revisions
   // Both commands use the real action route. The small price has one company step and no client step.
   let withdrawalBody = { commandId: command(), reasonCode: "not_done" };
   const racing = await Promise.all([post(page, revised, "approve", bound(revised)), post(page, revised, "withdraw", withdrawalBody)]);
@@ -131,6 +159,23 @@ test("ENT-5 reject, revise, stale on screen, withdraw, replays and route race", 
   // Unknown job/extra identities cannot reach another tenant or an uncovered job.
   expect((await post(page, { ...old, jobId: command() }, "withdraw", { reasonCode: "not_done" })).ok()).toBe(false);
   expect((await post(page, { ...old, extraId: command() }, "withdraw", { reasonCode: "not_done" })).ok()).toBe(false);
+  // Revoking the member refuses a terminal receipt replay through the real route.
+  const actorCookies = (await page.context().cookies()).filter(cookie => cookie.name === "jg_session");
+  const ownerDb = new Pool({ host: "127.0.0.1", port: 55432, user: "postgres", password: "sbox-e2e-owner", database: "jobguard_synthetic_demo", max: 1 });
+  let membershipId: string;
+  try {
+    membershipId = (await ownerDb.query("SELECT actor_membership_id FROM app.command_receipt WHERE command_id=$1", [withdrawalBody.commandId])).rows[0].actor_membership_id;
+  } finally { await ownerDb.end(); }
+  await switchTo(page, "owner");
+  const principal = await (await page.request.get("/api/contractor")).json();
+  const revoke = await page.request.post("/api/contractor", { headers: { origin }, data: {
+    version: "contractor-command.v1", environment: "synthetic_demo", commandId: command(), id: command(),
+    expectedRevision: principal.revision, kind: "membership.revoke", membershipId,
+  } });
+  expect(revoke.ok()).toBe(true);
+  await page.context().addCookies(actorCookies);
+  expect((await post(page, old, "withdraw", withdrawalBody)).ok()).toBe(false);
+
 });
 
 // Rendering/transport fixture complements the real-PostgreSQL journey above, and always

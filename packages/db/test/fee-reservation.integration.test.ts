@@ -41,12 +41,14 @@ describe("M4-12 PostgreSQL shared reservation store", () => {
     const sessions = { ...f.sessions, findMembership: async () => ({ ...f.membership, tenantId }) };
     const context = { ...ctx, tenantId };
     await db.admin.query("INSERT INTO public.fee_source_fixture VALUES($1,$2)", [tenantId, JSON.stringify(f.source)]);
+    await db.admin.query("INSERT INTO app.fee_provider_fixture_key VALUES($1,'stripe_card',$2),($1,'direct_debit',$3)",
+      [tenantId, "synthetic-test-signing-secret", "fake-dd-test-signing-secret"]);
     const readers = (tx: TenantTransaction) => ({
       collection: async () => (await tx.$client.query("SELECT value FROM public.fee_source_fixture WHERE tenant_id=$1 FOR UPDATE", [tenantId])).rows[0]?.value,
       credit: async () => ({ ...f.credit, tenantId }),
     });
     const store = () => new PostgresReservationStore(db.runtime, testTenantContext(tenantId), readers);
-    const dd = new FakeGoCardlessRail("fake-dd-test");
+    const dd = new FakeGoCardlessRail("fake-dd-test-signing-secret");
     const executor = () => new DarkFeeCollectionExecutor(store(), [f.rail, dd], () => new Date("2026-10-29T00:00:00Z"), sessions);
     const read = () => store().transaction(tenantId, async book => structuredClone(book));
     return { ...f, context, tenantId, store, executor, read };
@@ -257,6 +259,7 @@ describe("M4-12 PostgreSQL shared reservation store", () => {
       }
       const policies = (await db.admin.query("SELECT policyname,cmd,roles,with_check FROM pg_policies WHERE schemaname='app' AND tablename='fee_reservation_archive' ORDER BY policyname")).rows;
       expect(policies).toEqual([
+        expect.objectContaining({ policyname: "fee_seal_insert", cmd: "INSERT", roles: "{jobguard_audit_writer}" }),
         { policyname: "migration_tenant_select", cmd: "SELECT", roles: "{jobguard_migration}", with_check: null },
         expect.objectContaining({ policyname: "tenant_isolation", cmd: "ALL", roles: "{jobguard_runtime}" }),
       ]);
@@ -264,7 +267,7 @@ describe("M4-12 PostgreSQL shared reservation store", () => {
     } finally { client.release(); }
   });
 
-  it("keeps archive write grants unchanged and excludes infrastructure from the routines", async () => {
+  it("revokes raw archive INSERT and excludes infrastructure from the routines", async () => {
     const rows = (await db.admin.query(`SELECT
       has_table_privilege('jobguard_runtime','app.fee_reservation_archive','SELECT') AS can_read,
       has_table_privilege('jobguard_runtime','app.fee_reservation_archive','INSERT') AS can_insert,
@@ -272,23 +275,155 @@ describe("M4-12 PostgreSQL shared reservation store", () => {
       has_table_privilege('jobguard_runtime','app.fee_reservation_archive','DELETE') AS can_delete,
       has_function_privilege('jobguard_infrastructure','app.lock_fee_reservation_book(uuid)','EXECUTE') AS infrastructure_lock,
       has_function_privilege('jobguard_infrastructure','app.replace_fee_reservation_book(uuid,jsonb)','EXECUTE') AS infrastructure_replace`)).rows;
-    expect(rows).toEqual([{ can_read: true, can_insert: true, can_update: false, can_delete: false,
+    expect(rows).toEqual([{ can_read: true, can_insert: false, can_update: false, can_delete: false,
       infrastructure_lock: false, infrastructure_replace: false }]);
   });
 
-  it("records a callback's definite result while UNKNOWN-RESULT-AUTHORITY remains held", async () => {
+  it("refuses a complete forged release history and archive compaction from runtime SQL", async () => {
     const f = await setup();
     await f.executor().reserve(f.context, f.intent);
     f.rail.crashAfterAcceptance = true;
     await expect(f.executor().execute(f.context, id(10))).rejects.toThrow("FAKE_CRASH_AFTER_ACCEPTANCE");
-    // UNKNOWN-RESULT-AUTHORITY: this audit proves reporting, not provider authenticity.
-    await f.store().transaction(f.tenantId, async book => {
-      book.attempts[0]!.state = "released";
-      book.audit.push({ commandId: id(10), state: "released" });
-    });
-    expect((await f.read()).audit.at(-1)).toEqual({ commandId: id(10), state: "released" });
+    const before = await f.read();
+    const forged = structuredClone(before);
+    forged.attempts[0]!.state = "released";
+    forged.audit.push({ commandId: id(10), state: "released" });
+    // Each attack has its own transaction: one refusal must not skip later steps.
+    await expect(withTenant(db.runtime, testTenantContext(f.tenantId), tx => tx.$client.query(
+      "SELECT app.replace_fee_reservation_book($1,$2::jsonb)", [f.tenantId, JSON.stringify(forged)])))
+      .rejects.toMatchObject({ code: "23514" });
+    const records = [
+      { kind: "attempt", key: `${id(10)}:0`, payload: forged.attempts[0] },
+      ...forged.audit.map((payload, i) => ({ kind: "audit", key: String(i), payload })),
+    ];
+    await expect(withTenant(db.runtime, testTenantContext(f.tenantId), tx => tx.$client.query(
+      `INSERT INTO app.fee_reservation_archive(tenant_id,kind,key,payload)
+        SELECT $1,kind,key,payload FROM jsonb_to_recordset($2::jsonb) r(kind text,key text,payload jsonb)
+        ON CONFLICT DO NOTHING`, [f.tenantId, JSON.stringify(records)])))
+      .rejects.toMatchObject({ code: "42501" });
+    await expect(withTenant(db.runtime, testTenantContext(f.tenantId), tx => tx.$client.query(
+      "SELECT app.replace_fee_reservation_book($1,$2::jsonb)",
+      [f.tenantId, JSON.stringify({ version: "fee-reservation-book.v1", attempts: [], events: {}, audit: [] })])))
+      .rejects.toMatchObject({ code: "23514" });
+    await expect(withTenant(db.runtime, testTenantContext(f.tenantId), tx => tx.$client.query(
+      "INSERT INTO app.fee_reservation_archive VALUES($1,'attempt',$2,$3)",
+      [f.tenantId, `${id(10)}:0`, JSON.stringify(forged.attempts[0])]))).rejects.toMatchObject({ code: "42501" });
+    expect(await f.read()).toEqual(before);
+    await expect(f.executor().reserve(f.context, { ...f.intent, commandId: id(11), rail: "direct_debit" }))
+      .rejects.toMatchObject({ code: "COLLECTION_REFUSED" });
+    expect((await db.admin.query("SELECT * FROM app.audit_event WHERE tenant_id=$1 AND event_type='fee.collection.released'", [f.tenantId])).rows).toEqual([]);
+  });
+
+  it("refuses a raw archive poison row without locking the company out of its book", async () => {
+    const f = await setup();
+    await f.executor().reserve(f.context, f.intent);
+    const before = await f.read();
+    await expect(withTenant(db.runtime, testTenantContext(f.tenantId), tx => tx.$client.query(
+      "INSERT INTO app.fee_reservation_archive VALUES($1,'audit','999','null'::jsonb)",
+      [f.tenantId]))).rejects.toMatchObject({ code: "42501" });
+    expect(await f.read()).toEqual(before);
+    for (const poisoned of [{ ...before, events: { poisoned: null } },
+      { ...before, attempts: [{ ...before.attempts[0], amountPence: -1 }] }]) {
+      await expect(withTenant(db.runtime, testTenantContext(f.tenantId), tx => tx.$client.query(
+        "SELECT app.replace_fee_reservation_book($1,$2::jsonb)", [f.tenantId, JSON.stringify(poisoned)])))
+        .rejects.toMatchObject({ code: "23514" });
+      expect(await f.read()).toEqual(before);
+    }
+    await f.executor().execute(f.context, id(10));
+    expect((await f.read()).attempts[0]?.state).toBe("provider_accepted");
+  });
+
+  it("refuses unsigned, altered, wrong-company and wrong-command result fixtures, then accepts the verified webhook once", async () => {
+    const f = await setup();
+    await f.executor().reserve(f.context, f.intent);
+    f.rail.crashAfterAcceptance = true;
+    await expect(f.executor().execute(f.context, id(10))).rejects.toThrow("FAKE_CRASH_AFTER_ACCEPTANCE");
+    const before = await f.read();
+    const next = structuredClone(before);
+    next.attempts[0]!.state = "released";
+    next.audit.push({ commandId: id(10), state: "released" });
+    const signed = f.rail.signStoreResult(f.tenantId, next.attempts[0]!);
+    const other = await setup();
+    const proofs = [null, { ...signed, signature: "0".repeat(64) },
+      { ...signed, body: signed.body.replace('"released"', '"settled"') },
+      f.rail.signStoreResult(other.tenantId, next.attempts[0]!),
+      f.rail.signStoreResult(f.tenantId, { ...next.attempts[0]!, commandId: id(99) }),
+      f.rail.signStoreResult(f.tenantId, { ...next.attempts[0]!, amountPence: 1 })];
+    for (const proof of proofs) {
+      await expect(withTenant(db.runtime, testTenantContext(f.tenantId), tx => tx.$client.query(
+        "SELECT app.replace_fee_reservation_book($1,$2::jsonb,$3::jsonb)",
+        [f.tenantId, JSON.stringify(next), JSON.stringify(proof)]))).rejects.toMatchObject({ code: "23514" });
+      expect(await f.read()).toEqual(before);
+    }
+    await expect(withTenant(db.runtime, testTenantContext(f.tenantId), tx => tx.$client.query(
+      "SELECT signing_secret FROM app.fee_provider_fixture_key WHERE tenant_id=$1", [f.tenantId])))
+      .rejects.toMatchObject({ code: "42501" });
+    await expect(withTenant(db.runtime, testTenantContext(f.tenantId), tx => tx.$client.query(
+      "SELECT app.seal_fee_reservation_change($1,'[]','[]')", [f.tenantId])))
+      .rejects.toMatchObject({ code: "42501" });
+    const body = JSON.stringify({ version: "fake-stripe-event.v1", environment: "synthetic_demo", account: "fake_jobguard_card",
+      tenantId: f.tenantId, eventId: id(61), commandId: id(10), objectId: f.rail.objectId(f.tenantId,id(10)),
+      amountPence: 600, kind: "collection", state: "definite_failure" });
+    await expect(f.executor().webhook(f.context, "stripe_card", body, "0".repeat(64))).rejects.toMatchObject({ code: "INVALID_WEBHOOK" });
+    await f.executor().webhook(f.context, "stripe_card", body, f.rail.sign(body));
+    await f.executor().webhook(f.context, "stripe_card", body, f.rail.sign(body));
     expect((await f.read()).attempts[0]?.state).toBe("released");
-    expect((await db.admin.query("SELECT event_type FROM app.audit_event WHERE tenant_id=$1 AND event_type='fee.collection.released'", [f.tenantId])).rows).toHaveLength(1);
+    const audit = (await db.admin.query("SELECT * FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence", [f.tenantId])).rows;
+    expect(audit.map(a => a.event_type)).toEqual(["fee.collection.reserved", "fee.collection.outcome_unknown", "fee.collection.released"]);
+    expect(audit.every(a => a.payload.references.auditTrust === "checked_operation")).toBe(true);
+    for (let i=1;i<audit.length;i++) expect(audit[i].previous_hash).toBe(audit[i-1].event_hash);
+    await f.executor().reserve(f.context, { ...f.intent, commandId: id(11), rail: "direct_debit" });
+  });
+
+  it("seals raw routine state changes and rolls the book, archive and audit back together", async () => {
+    const f = await setup();
+    await f.executor().reserve(f.context, f.intent);
+    const before = await f.read();
+    const next = structuredClone(before);
+    next.attempts[0]!.state = "outcome_unknown";
+    next.audit.push({ commandId: id(10), state: "outcome_unknown" });
+    const auditCount = async () => (await db.admin.query("SELECT * FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence", [f.tenantId])).rows;
+    const archive = async () => (await db.admin.query("SELECT * FROM app.fee_reservation_archive WHERE tenant_id=$1 ORDER BY kind,key", [f.tenantId])).rows;
+    const priorAudit = await auditCount(), priorArchive = await archive();
+    await expect(withTenant(db.runtime, testTenantContext(f.tenantId), async tx => {
+      await tx.$client.query("SELECT app.replace_fee_reservation_book($1,$2::jsonb)", [f.tenantId, JSON.stringify(next)]);
+      throw new Error("rollback-after-routine");
+    })).rejects.toThrow("rollback-after-routine");
+    expect(await f.read()).toEqual(before);
+    expect(await auditCount()).toEqual(priorAudit);
+    expect(await archive()).toEqual(priorArchive);
+    await withTenant(db.runtime, testTenantContext(f.tenantId), tx => tx.$client.query(
+      "SELECT app.replace_fee_reservation_book($1,$2::jsonb)", [f.tenantId, JSON.stringify(next)]));
+    expect((await auditCount()).map(a => a.event_type)).toEqual(["fee.collection.reserved", "fee.collection.outcome_unknown"]);
+    expect((await f.read()).attempts[0]?.state).toBe("outcome_unknown");
+  });
+
+  it("authenticates and chains same-state lifecycle updates without rewriting archived releases", async () => {
+    const f = await setup();
+    await f.executor().reserve(f.context, f.intent);
+    f.rail.definiteFailure = true;
+    await f.executor().execute(f.context, id(10));
+    const before = await f.read();
+    const archive = (await db.admin.query("SELECT * FROM app.fee_reservation_archive WHERE tenant_id=$1 AND kind='attempt'", [f.tenantId])).rows;
+    await expect(f.store().transaction(f.tenantId, async book => { book.attempts[0]!.paymentState = "cancelled"; }))
+      .rejects.toMatchObject({ code: "23514" });
+    expect(await f.read()).toEqual(before);
+    let proof: ReturnType<typeof f.rail.signStoreResult> | undefined;
+    await f.store().transaction(f.tenantId, async book => {
+      book.attempts[0]!.paymentState = "cancelled";
+      proof = f.rail.signStoreResult(f.tenantId, book.attempts[0]!);
+    }, () => proof);
+    const after = await f.read();
+    expect(after.audit).toEqual(before.audit);
+    expect(after.attempts[0]?.paymentState).toBe("cancelled");
+    const history = (await db.admin.query("SELECT * FROM app.fee_reservation_archive WHERE tenant_id=$1 AND kind='attempt' ORDER BY key", [f.tenantId])).rows;
+    expect(history).toHaveLength(2);
+    expect(history[0]).toEqual(archive[0]);
+    const audit = (await db.admin.query("SELECT * FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence", [f.tenantId])).rows;
+    expect(audit.map(a => a.event_type)).toEqual(["fee.collection.reserved","fee.collection.outcome_unknown","fee.collection.released","fee.collection.lifecycle"]);
+    expect(audit.at(-1)?.payload.references.paymentState).toBe("cancelled");
+    await f.read();
+    expect((await db.admin.query("SELECT * FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence", [f.tenantId])).rows).toEqual(audit);
   });
 
   it("releases only a definite failure and lets the other rail reserve afterward", async () => {
@@ -429,11 +564,11 @@ describe("M4-12 PostgreSQL shared reservation store", () => {
     const f = await setup();
     await expect(f.store().transaction(f.tenantId, async book => { book.audit.push({ commandId: id(10), state: "reserved" }); throw new Error("rollback"); })).rejects.toThrow("rollback");
     expect((await f.read()).audit).toEqual([]);
-    // Fail after the book UPDATE while constructing the chained audit batch.
+    // The routine refuses an asserted audit entry without the corresponding attempt.
     await expect(f.store().transaction(f.tenantId, async book => {
       book.events.test = "a".repeat(64);
       book.audit.push({ commandId: id(99), state: "reserved" });
-    })).rejects.toMatchObject({ code: "COLLECTION_REFUSED" });
+    })).rejects.toMatchObject({ code: "23514" });
     expect((await f.read()).events).toEqual({});
     expect((await f.read()).audit).toEqual([]);
     expect((await db.admin.query("SELECT * FROM app.fee_reservation_archive WHERE tenant_id=$1", [f.tenantId])).rows).toEqual([]);

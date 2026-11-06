@@ -67,3 +67,221 @@ tests, lost-device review, support ownership and G3 stay open for people. No per
 approval, date or result has been supplied here. See
 [native device lifecycle](native-device-lifecycle.md) for unresolved policy and
 [rollout/rollback](native-rollout-rollback.md) for the gated procedure.
+
+## M3-7-SUITE scripted matrix v1 (synthetic, device-free)
+
+`packages/core/src/native-chaos.test.ts` scripts unknown-outcome restart/replay,
+clock jumps with refusal/retry retention, incompatible saved versions, and a
+129-entry backlog with a poison job. It calls the existing queue/reconciliation
+reducers; response fixtures are not server proof or durable storage.
+
+`packages/db/test/native-server-chaos.integration.test.ts` joins these reducers to
+the real upload application and PostgreSQL services. Airplane mode cuts delivery
+before the command; app kill loses the acknowledgment after commit; duplicate
+replay submits concurrent copies. Each resumes a partial media upload with a fresh
+service, refuses incomplete/changed chunks, finalizes one evidence object, observes
+revision 1 with its audit reference, and refuses a new stale command without
+changing revision or audit. The backlog selects an unrelated job past a blocked
+job, then asserts that job's single effect and stale refusal. Existing schema,
+clock-skew and revocation scenarios now inspect persisted revisions and audit;
+revocation refuses both a previously committed replay and a never-submitted
+intent, retaining the refusal in reconciliation. These are in-process server
+calls, not a network outage, OS process kill, bearer-token or device test.
+
+“Full queue” here means a 129-entry fixture, not a product capacity policy. The
+pure queue defines no capacity limit. Disk-full rejection, durable enqueue and
+native retry scheduling remain device obligations; refused entries and their
+original bodies must be retained by the eventual encrypted store.
+
+## Physical-device checklist v1 — all unchecked, not executed
+
+Repeat each on supported physical iOS and Android development builds with only
+fictional data. Record exact build/OS/store schema, executor/date, command/job/scope
+IDs, server revision, receipt/audit references, refusal codes and evidence links in
+the execution record above. Keep secrets/media out of test logs.
+
+- [ ] Airplane mode mid-upload: capture voice/photo, interrupt after a partial
+  chunk, attempt proof while pending (refused), reconnect, resume original upload
+  offset/ID, verify one immutable original/hash and one intended command effect.
+  Retry changed chunk bytes and confirm refusal with unchanged server revision/audit.
+- [ ] Kill and restart: force-stop during upload and again after server commit
+  before acknowledgment is saved; reboot too. Recover encrypted media/body and the
+  same command/hash/revision, replay once, inspect one receipt/effect/audit event;
+  a new stale command is refused without new effects. Do not uninstall to repair.
+- [ ] Clock skew: move device time backward and forward, capture and reconnect.
+  Check labelled capture metadata, server receive/verify times and server expiry;
+  expired upload/approval is refused, with no revision/audit change from refusal.
+- [ ] Duplicate replay: reconnect two fictional crew devices and replay original
+  commands/chunks concurrently; expect one semantic effect. Change content under
+  the same ID and verify explicit conflict, unchanged audit and no outbound action.
+- [ ] Schema upgrade: save pending capture/intent, upgrade the encrypted local
+  schema/app, resync and restore. Preserve identities and unsynced work; unsupported
+  versions/cache corruption fail closed. Retry supported original format and
+  inspect server revision/audit; rehearse incompatible downgrade without data loss.
+- [ ] Membership revoked while offline: queue unsent work, revoke access online,
+  reconnect and replay committed and uncommitted IDs. Check upload refusal before
+  replay, separate download denial, local cleanup/lease policy and refusal UI;
+  no new command/evidence/audit effect. Offline instant erasure is not promised.
+- [ ] Full queue/low storage: fill the native queue to its approved capacity and
+  exhaust media storage. Explain refused capture, preserve all existing encrypted
+  work, restart, free space safely and drain safe jobs past a poison job. No lost
+  IDs or silent discard; server revision/audit increments only for accepted work,
+  stale/refused work has no effect. Record actual capacity, not this fixture size.
+- [ ] Run the complete field journey, wrong-tenant/account, stale approval,
+  multi-crew conflict, lost-device/logout and web-fallback/rollback rows above;
+  obtain encryption, independent sync authorization and support-owner evidence.
+
+## M3-7-SUITE builder handoff — READY (5 Nov 2026)
+
+READY for router commit on `codex/sandbox/m3-7-suite`, NOPR, RED: offline commands.
+This is additive device-free test groundwork on M3-4 reconciliation, not completion
+of M3-7. Only the new pure test, expanded server test, this matrix and the lane file
+were edited in this session. No runtime behavior, provider, dependency, database
+schema, grant, stored format or commercial policy was changed by this piece.
+
+Local evidence (installed workspace executables, no package downloads):
+
+- From `packages/core`: `./node_modules/.bin/vitest run --maxWorkers=2
+  src/native-chaos.test.ts src/offline-client-queue.test.ts
+  src/offline-reconciliation.test.ts` — 3 files, 78 tests passed.
+- From `packages/core`: `./node_modules/.bin/tsc -p tsconfig.json --noEmit` — passed.
+  Root TypeScript compiler API typechecked the expanded integration source and its
+  imports with root strict options and `noEmit: true` — zero diagnostics. This is
+  static source checking, not execution of any server assertion.
+- Direct `./node_modules/.bin/tsc -p packages/<name>/tsconfig.json` builds for core,
+  config, storage, db and ai passed. These generated ignored dist prerequisites;
+  the API guard initially could not resolve missing db/config, then ai exports.
+  No import guards were changed. A broad root typecheck was stopped without a
+  result; no full-workspace typecheck success is claimed.
+- From `apps/api`: context-boundary and identity tests passed, 152 tests total;
+  watchdog-registry passed on its final focused run, 126 tests. Initial guard runs
+  failed at import time before the missing dist prerequisites were built.
+- From `packages/db`: `./node_modules/.bin/vitest run --maxWorkers=1
+  test/migration-proof-loader.test.ts` — 76 tests passed. No PostgreSQL started.
+- `git diff --check` — passed. `LANE_BASE_REF=codex/sandbox/m3-4-reconcile node
+  tools/agent-lane-boundary-lint.mjs` — failed only on inherited other-lane files
+  named below; this is an open hold, not a lane PASS.
+- The installed global `pnpm --version` shim attempted pinned-version resolution
+  and failed offline signature/registry verification. Checks above used existing
+  workspace TypeScript/Vitest binaries instead; no package was installed.
+
+### Named holds for landing
+
+- **Inherited lane divergence:** current starting head `6cfc91196` already differs
+  from `codex/sandbox/m3-4-reconcile` at `94a30eeed` in unrelated merchant-order and
+  dashboard changes, including `config/lanes/batch-26.json` and
+  `config/lanes/ent-dashboard-slow.json`. The exact union of non-lane changed paths
+  is listed in `m3-7-suite.json`, as ordered. The boundary checker refuses these
+  two inherited lane edits. Router must reconcile the landing base/branch history
+  under existing lane ownership before landing; no broad lane exception was added.
+  Inherited migration 0606 is not introduced by M3-7-SUITE and remains subject to
+  the router's existing migration ordering at landing.
+- **PostgreSQL and CI:** no database or browser execution here. At the exact
+  committed candidate, CI must execute the expanded native-server-chaos suite,
+  offline-upload and evidence integration suites (the three-file command above),
+  and all mandatory DB/migration/RLS/privilege/audit/replay tests. It must prove
+  durable resumption, revision/audit immutability on refusals, unique effects and
+  membership checks using PostgreSQL, plus full typecheck/lint/build/tests and
+  existing web journeys against current main. Compilation is not database proof.
+- **Independent RED review:** arrange one different reviewer/session at the exact
+  committed head, using CI evidence and any uncovered focused checks. This builder
+  handoff is not independent review, acceptance, merge or release approval.
+- **Native acceptance:** actual encrypted store/queue durability, physical-device
+  checklist, M3-6/ENT-12 dependency acceptance, independent download/upload proof,
+  lease/revocation bounds, migration/restore safety, support ownership and rollout
+  rehearsal remain open. D08 is not approved and G3 stays closed. No real data,
+  live service, deployment or launch is authorized; M3-7 is unfinished.
+
+
+## Batch-47 landing catch-up — READY (5 Nov 2026)
+
+Reconciled the working tree with incoming main `d16ef1978` (PR #574).
+Kept main's rate-baseline export alongside this group's offline-reconciliation
+and core-loop-views exports. No migration, routine, migration-proof or exact
+catalog-list difference remains against that main; inherited batch-30 changes
+are already on main. The earlier inherited-lane divergence above is historical:
+`config/lanes/batch-47.json` now exactly lists the 13 non-lane paths in this
+group's working-tree diff against incoming main, without listing itself.
+No behavior was added by this catch-up and no test was weakened.
+
+Local checks using installed workspace binaries:
+
+- Root `./node_modules/.bin/tsc -p packages/core/tsconfig.json --noEmit` — passed.
+- From `packages/core`, `./node_modules/.bin/vitest run --maxWorkers=2
+  src/offline-reconciliation.test.ts src/offline-reconciliation.properties.test.ts
+  src/native-chaos.test.ts` — 3 files, 14 tests passed.
+- From `packages/core`, `./node_modules/.bin/vitest run --maxWorkers=2
+  src/core-loop-views.test.ts src/offline-client-queue.test.ts
+  src/rate-baseline.test.ts` — 3 files, 97 tests passed.
+- From `apps/api`, `./node_modules/.bin/vitest run --maxWorkers=2
+  src/core-loop-shared.contract.test.ts` — 1 file, 2 tests passed.
+- `git diff --check` — passed. Direct path-set comparison against `MERGE_HEAD`
+  verified exact lane coverage, no migration delta, no conflict markers in group
+  paths, and preservation of every main core export. This is a working-tree
+  check, not the post-commit CI lane result.
+
+RED. PostgreSQL/browser suites, full CI and independent review remain required
+at the committed head. Physical-device evidence, D08 and G3 remain outstanding.
+Git metadata is read-only here: the conflict content is resolved, but the router
+must stage it and complete the merge before pushing. No commit or push was made.
+
+### Batch 47 landing verification — 6 November 2026
+
+READY for router handoff. The launcher has already committed the incoming-main
+merge as `3d9e891125c01b9b6c72d828315d11dd273e75e0`, incorporating
+`origin/main` at `f5415ddb4c3a40796dd812e8b5946ba5094daa2b`. The preceding
+receipt's instruction to complete the merge is historical. No further code
+resolution was needed. Against this main, there are no migration or routine
+changes; main's integration assertions and core exports remain present. The
+lane covers exactly all 13 non-lane changed paths and excludes itself.
+
+Current local verification, using installed package-local binaries:
+
+- `packages/core`: `./node_modules/.bin/vitest run --maxWorkers=2 src/offline-reconciliation.test.ts src/offline-reconciliation.properties.test.ts src/native-chaos.test.ts` — 14 tests passed.
+- `packages/core`: `./node_modules/.bin/vitest run --maxWorkers=2 src/core-loop-views.test.ts src/offline-client-queue.test.ts` — 76 tests passed.
+- `apps/api`: `./node_modules/.bin/vitest run --maxWorkers=2 src/core-loop-shared.contract.test.ts src/offline-client-queue.compat.test.ts` — 3 tests passed.
+- Core and API: `./node_modules/.bin/tsc -p tsconfig.json --noEmit` from each package — passed.
+- Web: `./node_modules/.bin/tsc -p tsconfig.json --noEmit --incremental false` — passed.
+- `node tools/core-purity-lint.mjs`, `node tools/agent-lane-boundary-lint.mjs`, exact lane path-set comparison against `origin/main`, and `git diff --check origin/main` — passed. Core purity reports 11 computed-import notices without failing.
+
+The initial pnpm invocation stalled before Vitest started and was interrupted;
+the successful runs above used installed binaries without downloading packages.
+No tests were weakened and no behaviour was added. RED review and full CI,
+including PostgreSQL/browser suites, remain required on the router's final head.
+Physical-device proof, D08 and G3 remain outstanding; no native task is declared
+finished. No git-writing command, commit, push, provider call or release occurred
+in this verification session.
+
+
+### Batch 47 PR handoff — 6 November 2026, current main catch-up
+
+READY for the router to commit, push and open the PR. The launcher completed
+its main merge at `1c4355a3febd0246e7f02354dba53f4245c71b4f`, with
+`origin/main` at `c7cf720a02aa9308fe2596c230439a88b9b265ac`. No unresolved
+index entries or code repairs remain. All main core exports are preserved.
+The lane covers all 13 non-lane changed paths and excludes itself; its historical
+NOPR label is updated for this handoff. No behavior or test expectation changed.
+
+Migration comparison: `git diff --name-only origin/main HEAD --
+packages/db/migrations` is empty. This branch adds/recreates no SQL routines,
+so there are no duplicate migrations or routine bodies to reconcile.
+
+Checks on this merged head, installed binaries only, at most two Vitest workers:
+
+- Core `vitest run --maxWorkers=2 src/core-loop-views.test.ts src/offline-reconciliation.test.ts src/offline-reconciliation.properties.test.ts`: 18 tests passed.
+- Core `vitest run --maxWorkers=2 src/native-chaos.test.ts src/offline-client-queue.test.ts`: 72 tests passed.
+- API `vitest run --maxWorkers=2 src/core-loop-shared.contract.test.ts src/offline-client-queue.compat.test.ts`: 3 tests passed.
+- Root `tsc -p packages/core/tsconfig.json --noEmit`, API equivalent, and web equivalent with `--incremental false`: passed.
+- `node tools/core-purity-lint.mjs`: passed, with 11 non-failing computed-import notices.
+- `node tools/agent-lane-boundary-lint.mjs`, exact lane path-set/main-export comparison and `git diff --check origin/main`: passed.
+- Source inspection confirms the changed web contract imports core, with no direct API source import. Cloudflare build was not run here.
+
+The initial pnpm version invocation stalled and was interrupted before tests;
+all successful runs used installed workspace binaries without downloads.
+Prior independent prechecks are retained; they do not establish review of this
+final head. RED review and green CI on the final committed head remain required,
+including full mandatory suites and real-PostgreSQL native-server-chaos/offline
+upload tests and browser job-list regression coverage. No database or browser
+suite ran here. Physical-device proof, D08 and G3 remain outstanding; this is
+synthetic groundwork, not completion of M3-4, M3-6 or M3-7 or a native release.
+No git-writing command, push, external provider action or release occurred.

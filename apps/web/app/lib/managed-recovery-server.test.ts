@@ -30,7 +30,7 @@ beforeEach(() => {
   vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); vi.stubEnv("JOBGUARD_ALLOWED_ORIGINS", "https://practice.invalid");
   state = { version: "managed-recovery-state.v1", environment: "synthetic_demo", tenantId: id(1),
     jobId: params.id, caseId: params.caseId, election: null, pursuitStartedAt: null };
-  mocks.credentials.mockResolvedValue({ sessionToken: "signed-in", tenantHeader: id(99), csrfToken: "caller-supplied" });
+  mocks.credentials.mockResolvedValue({ sessionToken: "signed-in", tenantHeader: id(99), csrfToken: "caller-supplied", origin: "https://practice.invalid" });
   mocks.session.mockResolvedValue({ principal: { id: actor.identityUserId }, csrfToken: "session-csrf", memberships: [member] });
   mocks.resolve.mockResolvedValue({ tenantId: id(1) }); mocks.digest.mockReturnValue("a".repeat(64));
   // Real pure policy with an in-memory persistence double, not PostgreSQL evidence.
@@ -116,4 +116,17 @@ it("refuses malformed JSON and redacts unknown failures with no-store", async ()
   const response = await managedRecoveryRequest(request(), params);
   expect(response.status).toBe(503); expect(response.headers.get("Cache-Control")).toBe("no-store");
   expect(JSON.stringify(await response.json())).not.toContain("secret");
+});
+
+it("uses the actual browser origin and CSRF credentials on mutations",async()=>{
+ await managedRecoveryRequest(request(command),params,true);
+ expect(mocks.resolve).toHaveBeenCalledWith(expect.anything(),expect.objectContaining({csrfToken:"caller-supplied",origin:"https://practice.invalid"}),"https://practice.invalid");
+ mocks.resolve.mockImplementation(async (_provider,credentials)=>{
+  if(!credentials.csrfToken) throw {code:"ORIGIN_FORBIDDEN"};
+  return {tenantId:id(1)};
+ });
+ mocks.credentials.mockResolvedValue({sessionToken:"signed-in",origin:"https://practice.invalid"});
+ mocks.elect.mockClear();
+ expect((await managedRecoveryRequest(request(command),params,true)).status).toBe(403);
+ expect(mocks.elect).not.toHaveBeenCalled();
 });

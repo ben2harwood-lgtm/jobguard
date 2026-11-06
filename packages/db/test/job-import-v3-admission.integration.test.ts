@@ -85,6 +85,29 @@ describe("CH-5 part 2 company imports through real MON-1 admission", () => {
   await expect(repo().read(b.context, b.digest, String(results[0]!.jobId))).rejects.toMatchObject({ code: "FORBIDDEN" });
   await expect(repo().adopt(b.context, b.digest, a.jobId, a.input)).rejects.toMatchObject({ code: "FORBIDDEN" });
  });
+ it("a second company session cannot adopt the same source, including concurrent commands", async () => {
+  for (const concurrent of [false, true]) {
+   const a = await company(), digest = randomUUID().replaceAll("-", "").padEnd(64, "0");
+   await f.admin.query(`INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at)
+    SELECT $1,user_id,environment,$2,$3,expires_at FROM identity.session WHERE id=$4`,
+    [randomUUID(), digest, randomUUID(), a.sessionId]);
+   const second = { ...a.input, commandId: randomUUID() };
+   const again = () => repo().adopt(a.context, digest, a.jobId, second);
+   if (concurrent) {
+    const results = await Promise.allSettled([adopt(a), again()]);
+    expect(results.filter(r => r.status === "fulfilled")).toHaveLength(1);
+    const failure = results.find(r => r.status === "rejected") as PromiseRejectedResult;
+    expect(failure.reason).toMatchObject({ code: "IMPORT_ALREADY_ADOPTED" });
+    const winner = results[0]!.status === "fulfilled" ? () => adopt(a) : again;
+    expect(await winner()).toEqual((results.find(r => r.status === "fulfilled") as PromiseFulfilledResult<unknown>).value);
+   } else {
+    const first = await adopt(a);
+    await expect(again()).rejects.toMatchObject({ code: "IMPORT_ALREADY_ADOPTED" });
+    expect(await adopt(a)).toEqual(first);
+   }
+   expect((await f.admin.query("SELECT count(*)::int n FROM app.job_import_v3 WHERE tenant_id=$1 AND source_job_id=$2", [a.tenantId,a.jobId])).rows[0].n).toBe(1);
+  }
+ });
  it("closed imports release capacity; replay never reopens them and post-lock reopening allows no site work", async () => {
   const a = await company(), result = await adopt(a), jobId = String(result.jobId);
   const work = new JobWorkStateRepository(f.runtime);

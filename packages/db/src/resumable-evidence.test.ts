@@ -34,7 +34,7 @@ function fixture() {
       }
       return { rows: [row] };
     }
-    if (sql.startsWith("SELECT job_id FROM app.evidence_upload")) return {rows:[{job_id:input.jobId}]};
+    if (sql.startsWith("SELECT job_id,expected_content_type FROM app.evidence_upload")) return {rows:[{job_id:input.jobId,expected_content_type:row.expected_content_type}]};
     if (sql.startsWith("SELECT * FROM app.evidence_upload")) return {rows:[row]};
     if (sql.startsWith("SELECT * FROM app.evidence_object")) return {rows:original?[original]:[]};
     if (sql.includes("SET state='quarantined'")) { row.state="quarantined"; row.object_version_id=values[2] as string; }

@@ -2,11 +2,12 @@
 import { useCallback, useEffect, useState } from "react";
 import styles from "../../northside/northside.module.css";
 type Member = { extraId: string; canonicalId: string; description: string };
-type Candidates = { jobId: string; revision: number; groups: Array<{ id: string; extras: Member[] }>;
+type Candidates = { jobId: string; revision: number; groups: Array<{ id: string; fingerprint: string; extras: Member[] }>;
  activeLinks: Array<{ linkId: string; duplicateId: string; canonicalId: string; duplicateLabel: string; canonicalLabel: string }> };
 const target = { minHeight: 44, minWidth: 44, maxWidth: "100%" };
 export function DuplicateCandidates({ jobId, onChange }: { jobId: string; onChange: () => Promise<void> }) {
  const [data, setData] = useState<Candidates | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState(false);
+ const [dismissReason, setDismissReason] = useState<Record<string, string>>({});
  const [canonical, setCanonical] = useState<Record<string, string>>({}), [duplicate, setDuplicate] = useState<Record<string, string>>({}), [reason, setReason] = useState<Record<string, string>>({});
  const load = useCallback(async () => {
   const response = await fetch(`/api/contractor/jobs/${jobId}/duplicate-candidates`, { cache: "no-store" });
@@ -28,7 +29,7 @@ export function DuplicateCandidates({ jobId, onChange }: { jobId: string; onChan
   <h3 style={{ overflowWrap: "anywhere" }}>Job {jobId}</h3>
   {error && <p role="alert">{error}</p>}
   {!data ? (error ? null : <p role="status">Loading possible duplicates…</p>) : <>
-   {data.groups.length === 0 ? <p>No unresolved candidate groups.</p> : <p>These extras stop the billing export until they are linked.</p>}
+   {data.groups.length === 0 ? <p>No unresolved candidate groups.</p> : <p>These extras stop the billing export until they are linked or reviewed as not duplicates.</p>}
    {data.groups.map(group => {
     const roots = group.extras.filter(x => x.extraId === x.canonicalId);
     const keep = canonical[group.id] ?? roots[0]?.extraId ?? "";
@@ -42,6 +43,11 @@ export function DuplicateCandidates({ jobId, onChange }: { jobId: string; onChan
      <label htmlFor={`duplicate-${group.id}`}>Extra to link to canonical</label>
      <select id={`duplicate-${group.id}`} style={target} value={link} onChange={e => setDuplicate({ ...duplicate, [group.id]: e.target.value })}>{choices.map(x => <option key={x.extraId} value={x.extraId}>{x.description} ({x.extraId})</option>)}</select>
      <button style={target} disabled={busy || !keep || !link} onClick={() => void act("duplicate-candidates", { version: "mark-duplicate.v1", duplicateId: link, canonicalId: keep })}>Link duplicate</button>
+     <label htmlFor={`dismiss-${group.id}`}>Reason these are not duplicates (required)</label>
+     <select id={`dismiss-${group.id}`} style={target} required value={dismissReason[group.id] ?? ""} onChange={e => setDismissReason({ ...dismissReason, [group.id]: e.target.value })}>
+      <option value="">Choose a reason</option><option value="different_work">Different work</option><option value="different_location">Different location</option>
+     </select>
+     <button style={target} disabled={busy || !dismissReason[group.id]} onClick={() => void act("duplicate-dispositions", { version: "duplicate-disposition.v1", groupId: group.id, fingerprint: group.fingerprint, disposition: "not_duplicates", reasonCode: dismissReason[group.id] })}>Not duplicates</button>
     </fieldset>;
    })}
    {data.activeLinks.map(link => <fieldset key={link.linkId} disabled={busy} style={{ minWidth: 0 }}>

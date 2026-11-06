@@ -10,6 +10,7 @@ export class DeepgramFixtureCaptureService {
     private readonly audio: RegisteredSpeechAudioReader, private readonly repository: CaptureRepository) {}
 
   async capture(context: VerifiedTenantContext, raw: unknown) {
+    if (process.env.JOBGUARD_ENV !== "synthetic_demo") throw new Error("SPEECH_FIXTURE_DARK_ONLY");
     const result = await this.adapter.capture(context.tenantId, raw, this.audio);
     if (result.status !== "ready") return result;
     const captureId = z.object({ captureId: z.guid() }).parse(raw).captureId;

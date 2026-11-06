@@ -17,11 +17,19 @@ async function subject(a: Company, kind = "builder") {
       VALUES($1,$2,$3,$4,$5,'synthetic_reference_only',$6)`,[a.tenantId,id,randomUUID(),category,{ fictional: `${a.tenantId}:${category}` },randomUUID()]);
   }); return id;
 }
-const command = (a: Company, value: Record<string,unknown>) => repo.command(a.context,a.digest,{version:"privacy-command.v2",commandId:randomUUID(),...value});
+// Existing journeys count business steps; recorded check commands add two revisions.
+const checkRevisions = new Map<unknown, number>();
+const command = (a: Company, value: Record<string,unknown>) => repo.command(a.context,a.digest,{version:"privacy-command.v2",commandId:randomUUID(),...value,
+  ...(typeof value.expectedRevision === "number" ? {expectedRevision:value.expectedRevision+(checkRevisions.get(value.requestId) ?? 0)} : {})});
 const read = (a: Company, requestId: unknown) => repo.read(a.context,a.digest,{version:"privacy-query.v1",requestId});
 const open = (a: Company, subjectId: string, operation = "offboard") => command(a,{action:"open",subjectId,operation});
 const instruct = (a: Company, requestId: unknown) => command(a,{action:"instruct",requestId,expectedRevision:0,instructionRef:randomUUID(),instructionHash:"a".repeat(64)});
-const review = (a: Company, requestId: unknown, expectedRevision: number) => command(a,{action:"review",requestId,expectedRevision,identityRef:randomUUID(),authorityRef:randomUUID(),retentionReviewRef:randomUUID(),reviewHash:"b".repeat(64)});
+const review = async (a: Company, requestId: unknown, expectedRevision: number) => {
+  const identity = await command(a,{action:"verify",requestId,expectedRevision,kind:"identity",evidenceHash:"c".repeat(64)});
+  const authority = await command(a,{action:"verify",requestId,expectedRevision:expectedRevision+1,kind:"authority",evidenceHash:"d".repeat(64)});
+  checkRevisions.set(requestId,2);
+  return command(a,{action:"review",requestId,expectedRevision,identityRef:identity.factId,authorityRef:authority.factId,retentionReviewRef:randomUUID(),reviewHash:"b".repeat(64)});
+};
 const execute = (a: Company, requestId: unknown, expectedRevision: number) => command(a,{action:"execute",requestId,expectedRevision});
 const artifacts = async (a: Company) => (await f.admin.query("SELECT * FROM app.privacy_artifact WHERE tenant_id=$1 ORDER BY id",[a.tenantId])).rows;
 

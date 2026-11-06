@@ -4,12 +4,9 @@ export const tenantIdV1 = z.guid({ error: "Invalid uuid" });
 export const jobStatusV1 = z.enum(["draft", "quoting", "accepted", "live", "invoiced", "paid", "lost"]);
 export const deliveryStateV1 = z.enum(["not_sent", "queued", "outcome_unknown", "delivered", "unknown"]);
 export const paymentStateV1 = z.enum(["not_due", "due", "part_paid", "settled", "unknown"]);
-export const jobSummaryV1 = z.object({
-  id: z.guid({ error: "Invalid uuid" }), tenantId: tenantIdV1, title: z.string(), customerLabel: z.string(), siteLabel: z.string().prefault("Details needed"), status: jobStatusV1,
-  document: z.object({ kind: z.enum(["none", "quote", "invoice", "unknown"]), reference: z.string().nullable(), delivery: deliveryStateV1 }),
-  customerPayment: paymentStateV1, pilotNoCharge: z.boolean(), updatedLabel: z.string(),
-});
-export const jobsResponseV1 = z.object({ version: z.literal(1), tenantId: tenantIdV1, jobs: z.array(jobSummaryV1) });
+// Shared with the native groundwork; one job-list read contract.
+export { coreLoopJobSummaryV1 as jobSummaryV1, coreLoopJobsResponseV1 as jobsResponseV1 } from "@jobguard/core";
+import { coreLoopJobSummaryV1 as jobSummaryV1 } from "@jobguard/core";
 export const sessionResponseV1 = z.object({ version: z.literal(1), principal: z.object({ displayName: z.string() }), tenants: z.array(z.object({ id: tenantIdV1, name: z.string() })) });
 export type JobSummary = z.infer<typeof jobSummaryV1>;
 export type SessionView = z.infer<typeof sessionResponseV1>;

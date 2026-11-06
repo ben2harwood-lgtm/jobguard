@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DeepgramFixtureAdapter, DEEPGRAM_FIXTURE_ENDPOINT } from "@jobguard/ai";
 import { syntheticSpeechAudio } from "@jobguard/core";
 import { CaptureRepository, type VerifiedTenantContext } from "@jobguard/db";
@@ -20,7 +20,8 @@ function service(status="complete",read:()=>Promise<unknown>=async()=>record){
     {shelf:{contractVersion:"deepgram_fixture_response_v1",transcript:"Fit a fictional shelf",status}});
   return new DeepgramFixtureCaptureService(adapter,{read},new CaptureRepository({} as Pool));
 }
-afterEach(()=>vi.restoreAllMocks());
+beforeEach(()=>vi.stubEnv("JOBGUARD_ENV","synthetic_demo"));
+afterEach(()=>{vi.restoreAllMocks();vi.unstubAllEnvs();});
 describe("dark capture entry point (not registered as a route)",()=>{
   it("persists the labelled source and provenance for normal repository replay checks",async()=>{
     const persist=vi.spyOn(CaptureRepository.prototype,"persistSpeechFixtureSource").mockResolvedValue({jobId} as never);
@@ -46,4 +47,12 @@ describe("dark capture entry point (not registered as a route)",()=>{
     expect(await service("complete",async()=>audio).capture(context,raw)).toMatchObject({status:"recoverable",originalText:raw.originalText});
     expect(persist).not.toHaveBeenCalled();
   });
+});
+
+it.each(["production","pilot_no_charge","unconfigured",""])("refuses speech fixtures in %s before reading audio",async mode=>{
+  vi.stubEnv("JOBGUARD_ENV",mode);
+  const read=vi.fn(async()=>record);
+  const persist=vi.spyOn(CaptureRepository.prototype,"persistSpeechFixtureSource");
+  await expect(service("complete",read).capture(context,raw)).rejects.toThrow("SPEECH_FIXTURE_DARK_ONLY");
+  expect(read).not.toHaveBeenCalled(); expect(persist).not.toHaveBeenCalled();
 });

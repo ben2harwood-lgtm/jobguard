@@ -135,6 +135,7 @@ it("ACTION-ATTRIBUTION durably binds every journey command to the persisted test
   const originBefore = (await c.admin.query("SELECT row_to_json(o)::text bytes FROM app.extra_origin o WHERE tenant_id=$1 AND variation_id=$2", [f.p.tenantId, extra.extraId])).rows;
   const sv = await act(seed.surveyorMembershipId), priceId = randomUUID();
   await repo.priceExtra(await ctx(), sv, { version: "price-extra.v1", commandId: priceId, jobId: extra.jobId, extraId: extra.extraId, netPence: 108000 });
+  expect((await northsideExtras(c.runtime, sv, "surveyor", await ctx())).find(row => row.extraId === extra.extraId)).toMatchObject({ quotedPence: 108000, state: "logged" });
   const sup = await act(seed.supervisorMembershipId), submitId = randomUUID();
   const submitted = await repo.submitExtra(await ctx(), sup, { version: "submit-extra.v1", commandId: submitId, jobId: extra.jobId, extraId: extra.extraId });
   const approveId = randomUUID();

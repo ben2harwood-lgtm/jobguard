@@ -27,7 +27,7 @@ export const shadowPilotReportInputV1 = z.object({
 export class ShadowPilotReportError extends Error {
   readonly code = "INVALID_PILOT_REPORT";
   constructor(readonly financialSources: readonly unknown[] = []) {
-    super(financialSources.length ? `INVALID_PILOT_REPORT: fee rows ${JSON.stringify(financialSources)}` : "INVALID_PILOT_REPORT");
+    super("INVALID_PILOT_REPORT");
     this.name = "ShadowPilotReportError";
   }
 }

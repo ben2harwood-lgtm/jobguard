@@ -28,7 +28,7 @@ export async function managedRecoveryRequest(request: Request, params: { id: str
     if (!member || member.role !== "owner") throw notFound();
     const context = await resolveVerifiedTenantContext(identity.provider, {
       sessionToken: credentials.sessionToken, requestedTenantId: member.tenantId,
-      csrfToken: session.csrfToken, origin: identity.allowedOrigin,
+      csrfToken: mutation ? credentials.csrfToken : session.csrfToken, origin: mutation ? credentials.origin : identity.allowedOrigin,
     }, identity.allowedOrigin);
     const actor = { membershipId: member.id, identityUserId: session.principal.id };
     const repository = new ManagedRecoveryRepository(syntheticPool(), identity.provider.digest(`session:${credentials.sessionToken}`));
@@ -49,18 +49,19 @@ export async function managedRecoveryRequest(request: Request, params: { id: str
           termsVersion: MANAGED_RECOVERY_TERMS, selection },
       };
     });
-    return NextResponse.json({ version: "managed-recovery-screen.v1", preview, choices,
+    return NextResponse.json({ version: "managed-recovery-screen.v1", csrfToken: session.csrfToken, preview, choices,
       termsVersion: MANAGED_RECOVERY_TERMS, successFeeLabel: "Unchanged 10% success fee",
       successFeeAmount: pounds(preview.successFee.cumulativeFee.pence),
       serviceChargeAmount: preview.serviceChargeInvoice ? pounds(preview.serviceChargeInvoice.principal.pence) : null,
       message: mutation ? "Your practice choice is saved for this case. Nothing has been issued or charged." : "Choose only if you want to practise an optional service." }, { headers });
   } catch (error) {
     const code = (error as { code?: string })?.code;
-    const status = code === "MANAGED_RECOVERY_CONFLICT" || code === "PURSUIT_ALREADY_STARTED" ? 409
+    const status = code === "ORIGIN_FORBIDDEN" ? 403 : code === "MANAGED_RECOVERY_CONFLICT" || code === "PURSUIT_ALREADY_STARTED" ? 409
       : ["NOT_FOUND", "MANAGED_RECOVERY_FORBIDDEN", "UNAUTHENTICATED", "TENANT_FORBIDDEN", "42501"].includes(code ?? "") ? 404 : 503;
-    const publicCode = status === 404 ? "NOT_FOUND" : status === 503 ? "MANAGED_RECOVERY_UNAVAILABLE" : code;
+    const publicCode = status === 403 ? "ORIGIN_FORBIDDEN" : status === 404 ? "NOT_FOUND" : status === 503 ? "MANAGED_RECOVERY_UNAVAILABLE" : code;
     const message = publicCode === "PURSUIT_ALREADY_STARTED" ? "Pursuit has already started. You cannot choose a managed-recovery service for this case."
       : publicCode === "MANAGED_RECOVERY_CONFLICT" ? "A different choice is already recorded, or this command was changed. Refresh to see the saved choice."
+      : status === 403 ? "This request must come from the practice site."
       : status === 404 ? "This practice case is not available."
       : "The result is uncertain. Retry the same choice to check it safely.";
     return NextResponse.json({ code: publicCode, message }, { status, headers });
