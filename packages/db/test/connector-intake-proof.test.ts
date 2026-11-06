@@ -66,6 +66,18 @@ describe("LATER-SAFETY-15 forward machine refusal migration", () => {
     expect(sql.slice(sql.indexOf("CREATE OR REPLACE FUNCTION connector.intake"),sql.indexOf("CREATE OR REPLACE FUNCTION connector.machine_stage")).trim().replace(guard,""))
       .toBe(body.trim());
   });
+  it("preserves main's latest machine wrapper apart from the explicit guards and inlined intake", () => {
+    const machine = readFileSync(new URL("../migrations/0621_connector_machine.sql", import.meta.url), "utf8");
+    const start = "CREATE FUNCTION connector.machine_stage";
+    const previous = machine.slice(machine.indexOf(start), machine.indexOf("ALTER FUNCTION connector.machine_stage"))
+      .replace("CREATE FUNCTION", "CREATE OR REPLACE FUNCTION");
+    const stage = sql.slice(sql.indexOf("CREATE OR REPLACE FUNCTION connector.machine_stage"), sql.indexOf("COMMIT;"));
+    const restored = stage
+      .replace(" OR key_ref IS NULL OR key_ref=''\n  OR NOT", " OR NOT")
+      .replace("  OR input->>'kind' IS NULL OR input->>'kind'=''\n", "")
+      .replace(/ -- Inline the latest 0576 intake body[\s\S]*END verified_input;/u, " result:=connector.intake(c,token,input);\n RETURN result;");
+    expect(restored).toBe(previous);
+  });
   it("retains the complete staging body behind machine checks without a caller-set bypass or a grant change", () => {
     const body = latest.slice(latest.indexOf(" -- No caller"),latest.indexOf("END $$;")).replace("id=binding_id FOR SHARE","id=c FOR SHARE");
     const stage = sql.slice(sql.indexOf("CREATE OR REPLACE FUNCTION connector.machine_stage"));

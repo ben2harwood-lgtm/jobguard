@@ -142,7 +142,7 @@ RED. Built ahead, NOPR: ENT-13a-machine plus ENT-8a-job-finish. Comparison base 
 cached origin/main 56b74eaec205e86c9eaf7eee75d85ade2599a364 (the batch's mainline
 parent); local main is stale. No fetch or Git writes were run.
 
-Migrations are 0990_contractor_job_finish then 0991_connector_machine, with matching
+Migrations are 0620_contractor_job_finish then 0621_connector_machine, with matching
 proofs and stem references. Main migrations were not edited. The finish fact stays
 in its own immutable table, now listed in laterEmptyTables. EndCheck is classified
 in jobMutationRegistry and registered in SQL and currentCommandRegistryRows; the
@@ -208,12 +208,12 @@ While working, cached origin/main advanced to 199124c0885ca27558fbaf62a9a74dee7a
 (batch-28, migrations 0609/0610). Preserved those additional main changes in the
 working tree using read-only git show/diff and temporary three-way text merges;
 resolved their four list conflicts by retaining rateSuggestionRegistryRow and
-adding only this piece's contractorJobFinishRegistryRow. The 0990 proof now chains
+adding only this piece's contractorJobFinishRegistryRow. The 0620 proof now chains
 from 0609's exact after-state, adding EndCheck once. The 0606 dark-order row is
 retained throughout. The proof-loader test validates that chain.
 
 Migration inspection: all 275 migrations on that pinned main were byte-identical;
-0990 and 0991 are the only new migrations, with no repeated number. All five
+0620 and 0621 are the only new migrations, with no repeated number. All five
 replaced lp_* routines still derive from the latest predecessor, 0196, which is
 identical on branch and main. No main migration was edited. Final-tree comparison
 against pinned main found exactly 35 non-lane changed files; batch-35.json lists
@@ -272,8 +272,8 @@ Resolved all seven conflicted working files while preserving both branches:
 main's SCIM role, emergency/SCIM/CIS empty-table expectations and DB exports,
 plus this group's machine role, contractor finish fact and EndCheck registry row.
 No new product behaviour. Incoming main's 278 migration blobs remain identical;
-0990 and 0991 are the only added migrations and neither exists on incoming main.
-Compared all five 0990 replacement routines against the latest definitions across
+0620 and 0621 are the only added migrations and neither exists on incoming main.
+Compared all five 0620 replacement routines against the latest definitions across
 incoming main's migration tree (0196): only this group's existing finish/status/
 EndCheck changes remain. No mainline routine logic was removed. Exact lane
 comparison and the existing lane helpers pass for all 35 non-lane changed paths;
@@ -305,3 +305,182 @@ Type verification: `pnpm exec turbo run typecheck --filter=@jobguard/db
 also passed for the six changed DB test files and imported fixtures.
 
 READY for router staging and merge commit; no Git writes performed.
+
+## Batch-35 repair round 2 (last) — 5 November 2026
+
+RED; ENT-8a / ENT-13a, NOPR. Read the later-safety-15 precheck landing note.
+Root cause: 0620's recorded command_type_registry after-state appended EndCheck,
+whereas serious-b5-upgrade snapshots aggregate rows ORDER BY to_jsonb(t)::text.
+PostgreSQL JSONB puts the shortest key, version, first for these registry rows;
+end-check.v1 belongs between decision-resolution-command.v1 and
+rate-suggestion-accept.v1. The loader copies the recorded array exactly. This
+was an incorrectly ordered proof, not different registry contents on upgrade.
+Moved only the EndCheck row within 0620's after-state. Its before-state, all row
+values, migration SQL and the full serious-b5 snapshot comparison are unchanged.
+
+Added a regression in late-source-import-migration.test.ts: it verifies the exact
+0609-to-0620 chain, full expected row union at the sorted position, loader output
+and preserved baseline. Temporarily restoring the HEAD proof makes that test fail
+with the appended EndCheck diff; the corrected proof was restored in a finally
+block. No generic sort layer or comparison exemption was introduced.
+
+Local checks (installed executables, no downloads; Vitest maxWorkers=2):
+- packages/db: ./node_modules/.bin/vitest run --maxWorkers=2
+  test/migration-proof-loader.test.ts test/lp5-command-catalog.test.ts
+  test/late-source-import-migration.test.ts — PASS, 88 tests.
+- Original HEAD proof mutation: focused `0620 keeps` regression — FAIL as
+  expected (1 failed, 3 skipped); corrected proof restored.
+- packages/db: ./node_modules/.bin/tsc -p tsconfig.json --noEmit — PASS.
+- Root installed tsc -p /tmp/batch-35-r2-types.json --noEmit — PASS;
+  explicitly includes the changed regression test and its imports.
+- git diff --check — PASS. Exact lane comparison against the merge base with
+  cached origin/main, including working changes, using loadLanePolicy and
+  lanePathAllowed — PASS, 35 non-lane paths; no lane file is listed in allow.
+  The existing lane already contains all changed paths and needed no edit.
+
+Environment order prohibits PostgreSQL startup and localhost binding. Therefore
+serious-b5-upgrade was NOT executed locally; CI must run, from packages/db:
+  ./node_modules/.bin/vitest run --maxWorkers=2 test/serious-b5-upgrade.integration.test.ts
+The remaining required database/browser suites, full CI against current main,
+standard committed-head lane check and independent RED review remain required.
+No Git writes, push, PR, merge, provider, deployment or launch occurred.
+
+READY for router commit and NOPR push, subject to those CI/review gates.
+
+
+## Batch-35 PR landing preparation — 5 November 2026
+
+RED; ENT-8a job finish and dark ENT-13a machine connections. Preserved the
+prechecked fixes. Incoming main is 68b104767b18fad6fc5b9676f95bcd7d68bcc19d,
+whose migration top is 0618. Reserved 0619 belongs to #579. This branch adds only
+0620_contractor_job_finish.sql and 0621_connector_machine.sql, in that order.
+Neither repeats an incoming-main migration stem. Both SQL files remain byte-identical
+to this branch's prechecked versions; only filenames, proofs, notes and references
+were renumbered. No incoming-main migration or proof was changed.
+
+Compared each re-created routine against incoming main's latest definition:
+app.lp_command, app.lp_read, app.lp_finish, app.lp_require_audit and
+app.lp_receipt_immutable are last defined in 0196. The differences are solely this
+piece's prechecked EndCheck/status extensions; no main logic is removed. 0621's
+three routines are new. No function has a SET app.* clause. No worker task or CI
+image was introduced. The finish web route imports the exported API workspace
+entrypoint, not API source; inspected the changed route/page imports rather than
+running the Cloudflare build in this restricted environment.
+
+Resolved the single text conflict in plan-entitlement-lifecycle-upgrade as the
+exact assertion union: retain the five EndCheck body assertions and main's latest
+0615 success-fee and 0616 payment-fee exact-body assertions. No behavior or test
+assertion was weakened. Git index still reports this file unmerged because .git
+is read-only; the router must stage the resolution and complete the merge.
+
+Added the explicit contract hold for the dark machine command's separate receipt
+path, which is outside LP-5 dispatch. This does not claim lifecycle integration.
+Regenerated docs/operations/provider-register.md for the existing changed connector
+data-flow source. Lane allow lists exactly the 36 changed non-lane paths, excludes
+itself, and includes the generated register.
+
+Local executed checks, installed tools only, each Vitest run maxWorkers=2:
+- DB migration-proof-loader, lp5-command-catalog and late-source-import-migration:
+  PASS, 88 tests in three files.
+- API connectors/machine: PASS, 20 tests in one file.
+- Web finish route and JobFinish component: PASS, 20 tests in two files.
+- Installed TypeScript --noEmit for packages/db, apps/api and apps/web: PASS.
+- Supplemental TypeScript config covering the merged plan-entitlement upgrade
+  test and imports: PASS.
+- checkProviderRegister(): PASS; git diff --check: PASS.
+- Working-tree lane lint using loadLanePolicy, lanePathAllowed and
+  migrationOrderViolations against MERGE_HEAD: PASS, 37 paths, exact allow list.
+  The standard CLI was run but reports incoming-main staged paths and the old
+  renamed paths while the merge is unfinished; do not treat that as a PASS.
+  Router must rerun the standard committed-head lane check after completing it.
+
+The initial pnpm exec invocations stalled before Vitest startup and were cancelled;
+the installed workspace Vitest executables then ran successfully. A guessed
+provider-register.test.mjs does not exist; the actual exported register check passed.
+No PostgreSQL startup or localhost binding was attempted. CI must prove the real
+PostgreSQL connector-machine/intake, contractor-job-finish/end-check, bootstrap,
+plan-entitlement, restore-reconciliation and serious-b5 upgrades, grant/catalog
+checks, full required suites and ENT-8a browser journey on the final head. Prior
+precheck database evidence is historical, not execution at this handoff. Exact-head
+independent RED review and green CI remain merge gates.
+
+READY for router staging, merge completion, commit, push and PR opening. No Git
+write, provider call, deployment, launch or real customer data was used.
+
+
+## PR #581 M2-1 historical registry catch-up — 5 November 2026
+
+RED batch-35 (ENT-8a / dark ENT-13a), existing open-PR catch-up; no new
+behavior or repair round. Reproduced the reported M2-1 failure locally: 3 passed,
+1 failed. The 0606 proof correctly has no EndCheck row; currentCommandRegistryRows
+now includes EndCheck from 0620_contractor_job_finish.sql (formerly 0990).
+The historical comparison excluded only the later rate.suggestion_accept row.
+Excluded the exact later EndCheck identity too and documented its migration.
+Retained exact dark-command field comparison, complete historical registry
+membership and length checks, and exact before/after comparison removing only
+the dark command. No migration, proof, production code or runtime behavior changed.
+Added the changed test to the lane; exact comparison against cached origin/main
+merge-base changes plus working changes passes for all 37 non-lane paths.
+The lane does not list itself.
+
+Executed from packages/db using installed tools, no downloads:
+- ./node_modules/.bin/vitest run --maxWorkers=2 test/m2-1-migration-proof.test.ts
+  before correction: reproduced 1 failed, 3 passed.
+- ./node_modules/.bin/vitest run --maxWorkers=2 test/m2-1-migration-proof.test.ts
+  test/migration-proof-loader.test.ts after correction: PASS, 81 tests, 2 files.
+- git diff --check: PASS.
+
+The sandbox explicitly prohibits PostgreSQL startup and localhost binding, so
+serious-b5-upgrade was NOT run locally. Router/CI must run from packages/db:
+  ./node_modules/.bin/vitest run --maxWorkers=2 test/m2-1-migration-proof.test.ts test/serious-b5-upgrade.integration.test.ts
+Green required CI and exact-head independent RED review remain merge gates.
+No Git writes, commit, push, provider, deployment or launch occurred.
+
+READY for the router to commit and push to codex/sandbox/batch-35, PR #581.
+
+## PR #581 current-main union catch-up — 6 November 2026
+
+RED batch-35, ENT-8a job finish / dark ENT-13a machine connections. Incoming
+main is 1c2d1f2f75944ee31c7fec22e12e8b12860d2b83, including merged #579.
+Resolved later-empty-tables.ts as the exact set union: retain contractor_job_finish
+and fee_provider_fixture_key with every predecessor entry. Main's 0619 SQL and
+proof are byte-identical; they are inherited, not added again. Only this group's
+0620_contractor_job_finish.sql and 0621_connector_machine.sql are added to main.
+Kept the M2-1 historical EndCheck filter unchanged. No new behavior or test
+expectation changes in this catch-up.
+
+Compared all five replaced routines in 0620 against their latest definitions on
+incoming main (0196_enterprise_live_prompts.sql): lp_command, lp_read, lp_finish,
+lp_require_audit and lp_receipt_immutable. Checked all main migrations for later
+references/redefinitions. Each diff contains only the existing batch-35 EndCheck
+extension and CREATE OR REPLACE; no predecessor body/control is removed beyond
+the superseded EndCheck hold. The three 0621 machine routines are new identities.
+The current routine bodies already equal the required main-plus-batch union, so
+no SQL rewrite was needed. Main's fee-store source/tests are preserved unchanged.
+
+Executed installed tools without downloads, all Vitest runs maxWorkers=2 and at
+most three named files per run:
+- packages/db: ./node_modules/.bin/vitest run --maxWorkers=2
+  test/m2-1-migration-proof.test.ts test/migration-proof-loader.test.ts
+  test/late-source-import-migration.test.ts — PASS, 85 tests / 3 files.
+- apps/api: ./node_modules/.bin/vitest run --maxWorkers=2
+  src/connectors/machine.test.ts src/fee-collection/postgres-reservation-store.test.ts
+  — PASS, 35 tests / 2 files (unit doubles, not real PostgreSQL proof).
+- apps/web: ./node_modules/.bin/vitest run --maxWorkers=2
+  'app/api/contractor/jobs/[id]/finish/route.test.ts'
+  'app/contractor/jobs/[id]/possible-extras/job-finish.test.tsx'
+  — PASS, 20 tests / 2 files (unit tests, not browser proof).
+- packages/db: ./node_modules/.bin/tsc -p tsconfig.json --noEmit — PASS.
+- Exact lane comparison against MERGE_HEAD using loadLanePolicy/lanePathAllowed:
+  PASS, all 37 non-lane changed paths and no self-listing. Migration-order check:
+  PASS, only 0620–0621 above main's 0619. git diff --check and
+  git diff MERGE_HEAD --check — PASS. Conflict-marker scan: none.
+
+PostgreSQL/browser suites were not run: the sandbox prohibits PostgreSQL startup
+and localhost binding. Router must stage the resolved file (the read-only Git
+index still records it unmerged), finish the merge, commit and push the same
+codex/sandbox/batch-35 branch / PR #581. Required CI, PostgreSQL upgrade/preservation
+and browser checks, committed-head lane validation and independent exact-head RED
+review remain merge gates. No Git write, push, provider, deployment or launch.
+
+READY for router staging, merge completion, commit and push.

@@ -1,5 +1,5 @@
 BEGIN;
--- LATER-SAFETY-15 RED. Renumber AFTER 0991_connector_machine before execution.
+-- LATER-SAFETY-15 RED. Forward replacement after 0621_connector_machine.
 -- Preserve function identities/ACLs; no bypass setting or new entrypoint.
 CREATE OR REPLACE FUNCTION connector.intake(binding_id uuid, token text, input jsonb) RETURNS jsonb
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$

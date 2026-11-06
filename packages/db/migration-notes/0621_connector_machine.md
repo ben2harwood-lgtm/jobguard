@@ -1,6 +1,6 @@
 # ENT-13a machine connection (RED, dark)
 
-This batch reserves `0990_contractor_job_finish` then `0991_connector_machine`. Additive only; no fingerprinted
+This batch reserves `0620_contractor_job_finish` then `0621_connector_machine`. Additive only; no fingerprinted
 row changes, backfill, login, role membership, credential, endpoint or activation.
 New connector control-plane tables are private, FORCE RLS, migration-role-only;
 these are the same restricted identity lookup exception as connector.binding.

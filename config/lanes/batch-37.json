@@ -1,0 +1,43 @@
+{
+  "version": 2,
+  "lanes": {
+    "batch-37": {
+      "branches": [
+        "codex/sandbox/batch-37"
+      ],
+      "note": "Built-ahead union of ent-5-dismiss and xa-relink-fix. RED; NOPR.",
+      "allow": [
+        "BUILD_PLAN.md",
+        "apps/web/app/api/contractor/jobs/[id]/duplicate-candidates/route.test.ts",
+        "apps/web/app/api/contractor/jobs/[id]/duplicate-candidates/transport.test.ts",
+        "apps/web/app/api/contractor/jobs/[id]/duplicate-candidates/transport.ts",
+        "apps/web/app/api/contractor/jobs/[id]/duplicate-dispositions/route.ts",
+        "apps/web/app/approvals/extras/duplicate-candidates.tsx",
+        "apps/web/e2e/ENT-5-duplicate-candidates.spec.ts",
+        "docs/contracts/contractor-billing-persistence-v1.md",
+        "docs/contracts/extra-unlink-v1.md",
+        "docs/verdicts/ENT-5/BUILDER_RECEIPT.md",
+        "docs/verdicts/batch-15/REPAIR_RECEIPT.md",
+        "packages/core/src/watchdog.ts",
+        "packages/db/migration-notes/0622_extra_duplicate_relink.md",
+        "packages/db/migrations/0622_extra_duplicate_relink.sql",
+        "packages/db/migrations/0623_extra_duplicate_disposition.sql",
+        "packages/db/src/extra-duplicate-candidates.test.ts",
+        "packages/db/src/extra-duplicate-candidates.ts",
+        "packages/db/test/command-replay-contract.integration.test.ts",
+        "packages/db/test/extra-duplicate-candidates.integration.test.ts",
+        "packages/db/test/extra-relink-migration.test.ts",
+        "packages/db/test/extra-relink-upgrade.integration.test.ts",
+        "packages/db/test/late-source-import-migration.test.ts",
+        "packages/db/test/later-empty-tables.ts",
+        "packages/db/test/lp5-command-catalog.ts",
+        "packages/db/test/m2-1-migration-proof.test.ts",
+        "packages/db/test/migration-proofs/0622_extra_duplicate_relink.proof.json",
+        "packages/db/test/migration-proofs/0623_extra_duplicate_disposition.proof.json",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
+        "packages/db/test/restore-reconciliation-upgrade.integration.test.ts",
+        "packages/db/test/watchdog.integration.test.ts"
+      ]
+    }
+  }
+}

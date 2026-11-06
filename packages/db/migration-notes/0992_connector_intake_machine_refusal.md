@@ -86,3 +86,38 @@ Follow-up verification (5 November 2026, after renumbering):
 
 Handoff status: READY for router commit/push as NOPR. PostgreSQL CI and an
 independent RED review against the exact head remain required before landing.
+
+## Main reconciliation — 6 November 2026
+
+READY for router staging and merge commit. Incoming main is
+`9d4677cbd66051cf6e7f2abdea8823593050e72b` (MERGE_HEAD/origin/main); local main
+is older and was not used as the comparison base. The contract conflict retains
+both the machine-refusal paragraph and main's machine-command lifecycle hold.
+Main already carries the parent batch, including machine creation renumbered to
+0621; none of that parent work remains in this group's diff. Migration 0992 is
+still unique and above main's latest 0640. No duplicate migration was found.
+
+Compared both replacement routines against main's latest definitions: intake
+0576 retains its complete body except this piece's machine-binding refusal;
+machine_stage 0621 retains its complete wrapper except this piece's explicit
+NULL/empty guards and inlined intake body. A new deterministic regression checks
+that wrapper equivalence alongside the existing two body-preservation cases.
+No product behaviour, ACL, baseline allowance or existing test was weakened.
+
+Local checks from packages/db, installed binaries only:
+
+- `./node_modules/.bin/vitest run --maxWorkers=2 test/connector-intake-proof.test.ts test/migration-proof-loader.test.ts`:
+  PASS, 84 tests in two files. The new wrapper comparison initially failed on its
+  newline normalization; corrected the comparison, then all 84 passed.
+- `./node_modules/.bin/tsc -p tsconfig.json --noEmit`: PASS.
+- `node tools/plpgsql-case-in-if-lint.mjs` from repository root: PASS,
+  306 migrations, zero historical exceptions.
+- Exported lane-policy/migration-order checks against MERGE_HEAD: PASS;
+  exactly six non-lane changed files, no lane self-entry, seven paths total.
+- Main-content diff inspection: no lines removed from existing main files.
+  `git diff --check` and `git diff --check MERGE_HEAD`: PASS.
+
+No PostgreSQL/browser execution, independent review, git writes, commit, push or
+PR here. The read-only index still records the resolved documentation conflict;
+the router must stage the resolution and finish the existing merge. Required CI,
+real-PostgreSQL proof and independent RED review remain before landing.

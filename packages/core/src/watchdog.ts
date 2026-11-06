@@ -14,6 +14,8 @@ export type JobCommandPhase = "pre_live_allowed" | "watchdog_live_only" | "post_
 /** Exhaustive web mutation registry. Dynamic actions are classified below.
  * New site facts, documents, orders, proof and messages must be live-only. */
 export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
+  // Practice-only accounting route approval; checked export authority remains mandatory.
+  "/api/accounting-exports/[sourceId]/route-change": "post_live_billing",
   "/api/jobs/[id]/recovery-cases/[caseId]/billability": "post_live_billing",
   "/api/jobs/[id]/reconciliation/[runId]/adjustments": "post_live_billing",
   "/api/customer-portal/quote": "pre_live_allowed",
@@ -151,12 +153,14 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "/api/jobs/[id]/parties/import-v3": "pre_live_allowed",
   "/api/jobs/[id]/parties/import-v3/preview": "pre_live_allowed",
   // M4-7-S: the synthetic practice feed is session-owned practice data that no watchdog table records, usable at any job stage.
+  "/api/jobs/[id]/direct-debit-practice": "pre_live_allowed",
   "/api/jobs/[id]/practice-feed": "pre_live_allowed",
   "/api/jobs/[id]/practice-facts": "pre_live_allowed",
   "/api/jobs/[id]/prevention-checks/[action]": "pre_live_allowed",
   // Practice forecasts are operational inputs, available before the job goes live.
   "/api/jobs/[id]/exposure-schedule": "pre_live_allowed",
   "/api/jobs/[id]/proof": "watchdog_live_only",
+  "/api/jobs/[id]/purchase-orders/merchant-order": "watchdog_live_only",
   "/api/jobs/[id]/purchase-orders/placement": "watchdog_live_only",
   "/api/jobs/[id]/purchase-orders/revisions": "watchdog_live_only",
   "/api/jobs/[id]/quotes/acceptance/disposition": "pre_live_allowed",
@@ -189,6 +193,7 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "/api/jobs/capture": "pre_live_allowed",
   // ENT-2: the work-order import creates each job, binds its parties and enters live in one transaction; tenant administration and SoR imports are outside this registry.
   "/api/contractor/work-order-imports": "pre_live_allowed",
+  "/api/contractor/work-order-imports/connector-promotions": "pre_live_allowed",
   "/api/decisions#evaluate": "pre_live_allowed",
   "/api/decisions#resolve": "pre_live_allowed",
   "/api/recovery-cases/[id]/evidence-packs": "post_live_billing",
@@ -208,6 +213,7 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
 
   // Dark evidence controls preserve integrity at any job phase; they do not add site facts.
   "method:worm-command-repository.ts#submit": "pre_live_allowed",
+  "/api/jobs/[id]/evidence-holds": "pre_live_allowed",
   "method:worm-command-repository.ts#execute": "pre_live_allowed",
   "method:worm-command-repository.ts#recover": "pre_live_allowed",
   "method:inbox-relevance-repository.ts#setBudget": "pre_live_allowed",
@@ -238,8 +244,12 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "command:WithdrawExtra": "pre_live_allowed",
   "command:RevokeClientApproval": "pre_live_allowed",
   "command:ClientDecideExtra": "pre_live_allowed",
+  "/api/contractor/jobs/[id]/duplicate-dispositions": "pre_live_allowed",
+  "command:ResolveDuplicateCandidates": "pre_live_allowed",
   "command:MarkDuplicate": "pre_live_allowed",
   "command:LogSiteExtra": "pre_live_allowed",
+  "/api/contractor/jobs/[id]/site-extras/[extraId]/proceed": "pre_live_allowed",
+  "command:RecordExtraProceed": "pre_live_allowed",
   "command:RecordSiteSupervisorQuery": "pre_live_allowed",
   "command:RecordOfficeExtra": "pre_live_allowed",
   "command:RecordClientInstruction": "pre_live_allowed",
