@@ -4,7 +4,7 @@ import type { TenantTransaction, VerifiedTenantContext } from "@jobguard/db";
 import { ctx, fixture, id } from "./test-fixture.js";
 const mocks = vi.hoisted(() => ({ withTenant: vi.fn() }));
 vi.mock("@jobguard/db", () => mocks);
-import type { CollectionBook } from "./contracts.js";
+import { FeeCollectionError, type CollectionBook } from "./contracts.js";
 import { DarkFeeCollectionExecutor } from "./executor.js";
 import { PostgresReservationStore } from "./postgres-reservation-store.js";
 
@@ -124,6 +124,59 @@ describe("PostgresReservationStore transaction adapter", () => {
       attempt: { commandId: id(10), state: "provider_accepted" } });
     expect(proof.signature).toBe(f.rail.sign(proof.body));
     expect(f.query.mock.calls.some(([sql]) => sql.startsWith("INSERT INTO app.fee_reservation_archive") || sql.includes("append_audit"))).toBe(false);
+  });
+
+  it("maps a malformed-proof check refusal to FeeCollectionError without saving history", async () => {
+    const f = setup();
+    const before = structuredClone(f.persisted);
+    const query = f.query.getMockImplementation()!;
+    f.query.mockImplementation(async (sql, values) => {
+      if (sql.startsWith("SELECT app.replace_fee_reservation_book"))
+        throw Object.assign(new Error("authenticated fee result required"), { code: "23514" });
+      return query(sql, values);
+    });
+    const body = '{"version":';
+    const error = await f.store.transaction(ctx.tenantId, async () => undefined,
+      () => ({ body, signature: fixture().rail.sign(body) })).catch(error => error);
+    expect(error).toBeInstanceOf(FeeCollectionError);
+    expect(error).toMatchObject({ code: "COLLECTION_REFUSED" });
+    expect(f.persisted).toEqual(before);
+  });
+
+  it("continues a webhook batch after a malformed signed store result is refused", async () => {
+    const f = executorFixture();
+    await f.executor.reserve(ctx, f.intent);
+    await f.executor.execute(ctx, id(10));
+    const before = structuredClone(f.persisted);
+    const bad = f.event(id(10), "collection", id(61));
+    const good = f.event(id(10), "collection", id(62));
+    Object.assign(f.rail, { verifyWebhookBatch: () => [
+      f.rail.verifyWebhook(bad.body, bad.signature), f.rail.verifyWebhook(good.body, good.signature),
+    ] });
+    const sign = f.rail.signStoreResult.bind(f.rail);
+    const body = '{"version":';
+    vi.spyOn(f.rail, "signStoreResult").mockImplementationOnce(() => ({ body, signature: f.rail.sign(body) }))
+      .mockImplementation(sign);
+    const query = f.query.getMockImplementation()!;
+    f.query.mockImplementation(async (sql, values) => {
+      if (sql.startsWith("SELECT app.replace_fee_reservation_book")) {
+        const proof = JSON.parse(values![2] as string) as { body: string; signature: string } | null;
+        if (proof?.body === body) {
+          expect(proof.signature).toBe(f.rail.sign(body));
+          expect(f.persisted).toEqual(before);
+          // Deterministic routine contract; real SQLSTATE coverage is in PostgreSQL tests.
+          throw Object.assign(new Error("authenticated fee result required"), { code: "23514" });
+        }
+      }
+      return query(sql, values);
+    });
+    expect(await f.executor.webhook(ctx, "stripe_card", "synthetic batch", "synthetic signature"))
+      .toEqual([{ code: "COLLECTION_REFUSED" }, { code: "processed" }]);
+    const book = await f.store.transaction(ctx.tenantId, async book => structuredClone(book));
+    expect(book.attempts[0]?.state).toBe("settled");
+    expect(Object.keys(book.events)).toEqual([`stripe_card:${id(62)}`]);
+    expect(book.audit.map(a => a.state)).toEqual(["reserved", "outcome_unknown", "provider_accepted", "settled"]);
+    expect(f.rail.signStoreResult).toHaveBeenCalledTimes(2);
   });
 
   it("archives repeated replacements without growing the active book or losing command replays", async () => {

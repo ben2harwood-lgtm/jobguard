@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { z } from "zod";
 import { WalkIt } from "../../ui/jobguard-app";
+import { InstructionTour } from "./instruction-tour";
 import { WorkspaceShell } from "../../ui/workspace-shell";
 import { core1000Link, core1000Source } from "./journey-model";
 
@@ -15,7 +16,7 @@ export function Core1000Guide({ chooserHref = "/demo-s" }: { chooserHref?: strin
     <a href={chooserHref}>Practice chooser</a><h1>Core £1,000 job</h1>
     <p>Practice sandbox — synthetic data; nothing is sent or charged</p>
     <p>These are instructions and expected figures. The job screens below read saved facts; this guide does not mark steps complete.</p>
-    <ol>
+    <InstructionTour>
       <li>Make a fresh draft from the five supplied lines. Check each source excerpt, accept all five, answer the disposal question and save the fictional customer and site. Confirm scope.</li>
       <li>Price the work. Save quote revision 1 at £900 net. Change Clean site to £200 and save revision 2 at £1,000 net, £200 reference VAT, £1,200 gross.</li>
       <li>Preview the immutable quote, simulate sending, continue the fake worker, record practice acceptance and start this practice job. New work uses v3: no v1 cap or activation obligation.</li>
@@ -25,7 +26,7 @@ export function Core1000Guide({ chooserHref = "/demo-s" }: { chooserHref?: strin
       <li>Issue and simulate the £1,320 invoice. Record £500, then £820: expected balances £820 then £0. Reverse the second receipt with a reason: £820 becomes due again.</li>
       <li>Preview a £100 net credit note and approve that exact correction. The expected gross credit is £120 and remaining balance £700. The original £1,320 invoice and receipt history stay saved.</li>
       <li>Inspect job value and follow its source links. Manual practice receipts are not bank-confirmed settlement or fee-eligible recoveries.</li>
-    </ol>
+    </InstructionTour>
     <p>This practice exercise doesn't use the customer's secure link; the shadow-30000 journey shows customer approval through the customer portal. Acceptance here is builder-recorded practice acceptance, not an authenticated customer response.</p>
     <p>Independent RED verdict: missing. Non-technical builder observations: 0 of 2 recorded here. No release gate is passed by this exercise.</p>
   </section>;
