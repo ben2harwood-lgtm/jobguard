@@ -108,3 +108,15 @@ export async function addIntegrityLock(f:IntegrityFixture,x:Awaited<ReturnType<t
  });
  return id;
 }
+
+/** Real synthetic adoption through the product boundary; no owner-sealed audit event. */
+export async function importIntegrityJob(f: IntegrityFixture, sourceJobId: string) {
+ const { JobImportV3Repository } = await import("../src/job-import-v3-repository.js");
+ const { IMPORT_V3_FIXTURE_ID } = await import("../src/job-import-v3-fixtures.js");
+ const repo = new JobImportV3Repository(f.runtime);
+ const binding = (await f.admin.query("SELECT binding_id FROM app.job_party_current WHERE tenant_id=$1 AND job_id=$2", [tenant, sourceJobId])).rows[0].binding_id as string;
+ const request = { version: "job-import-preview.v3", expectedBindingId: binding, fixtureId: IMPORT_V3_FIXTURE_ID, lifecyclePoint: "invoiced" };
+ const preview = await repo.preview(f.auth.context, f.auth.digest, sourceJobId, request);
+ const result = await repo.adopt(f.auth.context, f.auth.digest, sourceJobId, { ...request, version: "job-parties-import.v3", commandId: randomUUID(), previewHash: preview.previewHash, attest: true });
+ return result.jobId as string;
+}

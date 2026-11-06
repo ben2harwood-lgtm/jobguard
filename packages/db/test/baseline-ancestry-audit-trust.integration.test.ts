@@ -3,25 +3,28 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { MIGRATION_URLS } from "../src/migrate.js";
-import { actor, member, tenant, createIntegrityFixture, seedIntegrityJob, reviewFor, transaction, type IntegrityFixture } from "./commercial-integrity-v3-fixtures.js";
+import { actor, member, tenant, importIntegrityJob, createIntegrityFixture, seedIntegrityJob, reviewFor, transaction, type IntegrityFixture } from "./commercial-integrity-v3-fixtures.js";
 
-const trust = " AND e.payload->'references'->>'auditTrust'='checked_operation'";
+const binding = " AND EXISTS(SELECT 1 FROM app.job_import_v3 iv WHERE iv.tenant_id=t AND iv.job_id=child.id AND iv.source_job_id=parent.id)";
+const bindings = [binding, binding,
+ " AND EXISTS(SELECT 1 FROM app.job_import_v3 iv WHERE iv.tenant_id=t AND iv.job_id=x.id AND iv.source_job_id=source.id)",
+ " AND EXISTS(SELECT 1 FROM app.job_import_v3 iv WHERE iv.tenant_id=t AND iv.job_id=next_job.id AND iv.source_job_id=source.id)"];
 const migration = MIGRATION_URLS.find(u => u.pathname.endsWith("_baseline_ancestry_audit_trust.sql"))!;
 const sql = readFileSync(migration, "utf8");
 const names = ["ch6_integrity_authority", "ch6_integrity_sources", "ch6_record_integrity_review", "decision_check_command"];
 
-it("copies every latest authority consumer with only the checked-operation predicate added", () => {
-  for (const name of names) {
+it("copies every latest authority consumer with only the trusted import-record binding added", () => {
+  for (const [index, name] of names.entries()) {
     const pattern = new RegExp(`CREATE (?:OR REPLACE )?FUNCTION app\\.${name}\\([\\s\\S]*?\\$\\$;`, "g");
     const previous = MIGRATION_URLS.filter(u => u.pathname < migration.pathname)
       .flatMap(u => [...readFileSync(u, "utf8").matchAll(pattern)].map(m => m[0])).at(-1)!;
     const replacement = [...sql.matchAll(pattern)][0]![0];
-    expect(replacement.split(trust)).toHaveLength(2);
-    expect(replacement.replace(trust, "")).toBe(previous.replace("CREATE FUNCTION", "CREATE OR REPLACE FUNCTION"));
+    expect(replacement.split(bindings[index]!)).toHaveLength(2);
+    expect(replacement.replace(bindings[index]!, "")).toBe(previous.replace("CREATE FUNCTION", "CREATE OR REPLACE FUNCTION"));
   }
 });
 
-describe("checked imported-baseline ancestry (real PostgreSQL)", () => {
+describe("trusted imported-baseline ancestry (real PostgreSQL)", () => {
   let f: IntegrityFixture;
   beforeAll(async () => { f = await createIntegrityFixture(); }, 300_000);
   afterAll(async () => { await f?.close(); });
@@ -38,18 +41,27 @@ describe("checked imported-baseline ancestry (real PostgreSQL)", () => {
     });
     return { root: root.job, child };
   }
-  async function attest(root: string, child: string, checked: boolean) {
+  async function attest(root: string, child: string) {
     const event = { id: randomUUID(), version: "audit.v1", actorRef: `membership:${member}`, eventType: "job.imported_baseline_attested", subjectType: "job", subjectRef: child,
       payload: { references: { sourceJobId: root } } };
-    // Runtime append seals lower_trust. Only the owner-side checked writer
-    // can seal a checked-operation control event.
-    const result = await transaction(checked ? f.admin : f.runtime, db => db.query(
-      checked ? "SELECT * FROM app.lp4_seal_audit($1,'checked_operation')" : "SELECT * FROM app.append_audit($1)", [JSON.stringify([event])]));
-    expect(result.rows[0].payload.references.auditTrust).toBe(checked ? "checked_operation" : "lower_trust");
+    const result = await transaction(f.runtime, db => db.query("SELECT * FROM app.append_audit($1)", [JSON.stringify([event])]));
+    expect(result.rows[0].payload.references.auditTrust).toBe("lower_trust");
+  }
+  async function adopted(root: string) {
+    const child = await importIntegrityJob(f, root);
+    const events = await f.admin.query("SELECT payload FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='job.imported_baseline_attested'", [tenant, child]);
+    expect(events.rows).toHaveLength(1);
+    expect(events.rows[0].payload.references.auditTrust).toBe("lower_trust");
+    return child;
   }
   async function decision(child: string) {
-    return transaction(f.runtime, db => db.query("SELECT app.decision_check_command($1,$2,'begin') result", [f.auth.digest,
-      JSON.stringify({ version: "finding-evaluation-command.v1", commandId: randomUUID(), tenantId: tenant, jobId: child })]));
+    const db = await f.runtime.connect();
+    try {
+      await db.query("BEGIN");
+      await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenant]);
+      return await db.query("SELECT app.decision_check_command($1,$2,'begin') result", [f.auth.digest,
+        JSON.stringify({ version: "finding-evaluation-command.v1", commandId: randomUUID(), tenantId: tenant, jobId: child })]);
+    } finally { await db.query("ROLLBACK"); db.release(); }
   }
   async function sourceAncestry(child: string) {
     return transaction(f.admin, async db => {
@@ -67,9 +79,10 @@ describe("checked imported-baseline ancestry (real PostgreSQL)", () => {
       return (await db.query("SELECT pg_temp.source_ancestry($1,$2,$3) ids", [tenant, child, f.auth.digest])).rows[0].ids as string[];
     });
   }
-  it("refuses lower-trust authority with NOT_FOUND, and accepts a checked event in both authority and decision routines", async () => {
-    const { root, child } = await family();
-    await attest(root, child, false);
+  it("refuses forged ancestry with NOT_FOUND, and accepts a real lower-trust import in both authority and decision routines", async () => {
+    const { root, child: orphan } = await family();
+    let child = orphan;
+    await attest(root, child);
     const authority = () => transaction(f.admin, db => db.query("SELECT app.ch6_integrity_authority($1,$2,$3) actor", [tenant, child, f.auth.digest]));
     await expect(authority()).rejects.toMatchObject({ code: "42501", message: "NOT_FOUND" });
     await expect(decision(child)).rejects.toMatchObject({ code: "42501", message: "NOT_FOUND" });
@@ -77,7 +90,7 @@ describe("checked imported-baseline ancestry (real PostgreSQL)", () => {
       .rejects.toMatchObject({ code: "42501", message: "NOT_FOUND" });
     await expect(transaction(f.runtime, db => db.query("SELECT app.ch6_record_integrity_review($1,$2,$3,$4,$5)", [tenant, child, f.auth.digest, "{}", "{}"])))
       .rejects.toMatchObject({ code: "42501", message: "NOT_FOUND" });
-    await attest(root, child, true);
+    child = await adopted(root);
     expect((await authority()).rows[0].actor).toBe(member);
     expect((await decision(child)).rows[0].result).toEqual({ replay: false });
     // Ownership now succeeds; the unchanged family policy still refuses CH-6
@@ -87,17 +100,26 @@ describe("checked imported-baseline ancestry (real PostgreSQL)", () => {
     await expect(transaction(f.runtime, db => db.query("SELECT app.ch6_record_integrity_review($1,$2,$3,$4,$5)", [tenant, child, f.auth.digest, "{}", "{}"])))
       .rejects.toThrow("INTEGRITY_FAMILY_UNAVAILABLE");
   });
-  it("the stored source-candidate walk filters lower-trust ancestry and retains checked ancestry", async () => {
+  it("the stored source-candidate walk filters forged ancestry and retains a real import", async () => {
     const { root, child } = await family();
-    await attest(root, child, false);
+    await attest(root, child);
     expect(await sourceAncestry(child)).not.toContain(child);
-    await attest(root, child, true);
-    expect(await sourceAncestry(child)).toContain(child);
+    const imported = await adopted(root);
+    expect(await sourceAncestry(imported)).toContain(imported);
   });
-  it("review locks only checked descendants, preserving the existing review result", async () => {
+  it("refuses a forged parent even when the child has a real import record", async () => {
+    const root = await seedIntegrityJob(f, false);
+    const foreignRoot = await seedIntegrityJob({ ...f, auth: f.other }, false);
+    const child = await adopted(root.job);
+    await attest(foreignRoot.job, child);
+    await expect(transaction(f.admin, db => db.query("SELECT app.ch6_integrity_authority($1,$2,$3)", [tenant, child, f.other.digest])))
+      .rejects.toMatchObject({ code: "42501", message: "NOT_FOUND" });
+    expect((await transaction(f.admin, db => db.query("SELECT app.ch6_integrity_authority($1,$2,$3) actor", [tenant, child, f.auth.digest]))).rows[0].actor).toBe(member);
+  });
+  it("review locks only adopted descendants, preserving the existing review result", async () => {
     const { root, child } = await family();
-    await attest(root, child, false);
-    async function reviewLocks(checked: boolean) {
+    await attest(root, child);
+    async function reviewLocks(child: string, imported: boolean) {
       const view = await f.repo.read(f.auth.context, actor, f.auth.digest, root);
       const body = await reviewFor(f, root);
       const finding = view.result.findings.find(x => x.key === body.findingKey)!;
@@ -108,24 +130,23 @@ describe("checked imported-baseline ancestry (real PostgreSQL)", () => {
         const result = await reviewer.query("SELECT app.ch6_record_integrity_review($1,$2,$3,$4,$5) result", [tenant, root, f.auth.digest, JSON.stringify(body), JSON.stringify(finding.sourceSnapshot)]);
         expect(result.rows[0].result.commandId).toBe(body.commandId);
         const competing = () => transaction(f.admin, db => db.query("SELECT 1 FROM app.job WHERE tenant_id=$1 AND id=$2 FOR UPDATE NOWAIT", [tenant, child]));
-        if (checked) await expect(competing()).rejects.toMatchObject({ code: "55P03" });
+        if (imported) await expect(competing()).rejects.toMatchObject({ code: "55P03" });
         else expect((await competing()).rowCount).toBe(1);
       } finally { await reviewer.query("ROLLBACK"); reviewer.release(); }
     }
-    await reviewLocks(false);
-    await attest(root, child, true);
-    await reviewLocks(true);
+    await reviewLocks(child, false);
+    await reviewLocks(await adopted(root), true);
   });
   it("kills a scratch mutation removing one authority predicate, then restores it by rollback", async () => {
     const { root, child } = await family();
-    await attest(root, child, false);
+    await attest(root, child);
     const db = await f.admin.connect();
     try {
       await db.query("BEGIN");
       await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenant]);
       const definition = (await db.query("SELECT pg_get_functiondef('app.ch6_integrity_authority(uuid,uuid,text)'::regprocedure) body")).rows[0].body as string;
-      expect(definition).toContain(trust);
-      await db.query(definition.replace(trust, ""));
+      expect(definition).toContain(binding);
+      await db.query(definition.replace(binding, ""));
       // This is the exact rejection assertion above with the guard removed:
       // it must fail because the forged event now authorizes the child.
       const granted = await db.query("SELECT app.ch6_integrity_authority($1,$2,$3) actor", [tenant, child, f.auth.digest]);

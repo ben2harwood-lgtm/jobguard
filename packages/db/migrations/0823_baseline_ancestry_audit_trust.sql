@@ -1,4 +1,4 @@
--- LATER-SAFETY-87: only checked operations establish imported-job ancestry.
+-- LATER-SAFETY-87: bind imported-job ancestry to the trusted adoption aggregate.
 -- Forward fix; no historical events, owners, privileges or audit writers change.
 BEGIN;
 
@@ -13,8 +13,8 @@ BEGIN
    SELECT id FROM app.job WHERE tenant_id=t AND id=j
    UNION SELECT parent.id FROM practice_owned_job source
    JOIN app.job child ON child.tenant_id=t AND child.id=source.id AND child.provenance='imported' AND child.practice_session_digest IS NULL
-   JOIN app.audit_event e ON e.tenant_id=t AND e.subject_type='job' AND e.event_type='job.imported_baseline_attested' AND e.payload->'references'->>'auditTrust'='checked_operation' AND e.subject_ref=child.id::text
-   JOIN app.job parent ON parent.tenant_id=t AND parent.id::text=e.payload->'references'->>'sourceJobId'
+   JOIN app.audit_event e ON e.tenant_id=t AND e.subject_type='job' AND e.event_type='job.imported_baseline_attested' AND e.subject_ref=child.id::text
+   JOIN app.job parent ON parent.tenant_id=t AND parent.id::text=e.payload->'references'->>'sourceJobId' AND EXISTS(SELECT 1 FROM app.job_import_v3 iv WHERE iv.tenant_id=t AND iv.job_id=child.id AND iv.source_job_id=parent.id)
   ) SELECT 1 FROM practice_owned_job source JOIN app.job root ON root.tenant_id=t AND root.id=source.id WHERE root.practice_session_digest=digest
  ) THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='42501'; END IF;
  RETURN actor;
@@ -44,8 +44,8 @@ BEGIN
   SELECT id AS candidate_id,id FROM candidates
   UNION SELECT source.candidate_id,parent.id FROM ancestry source
   JOIN app.job child ON child.tenant_id=t AND child.id=source.id AND child.provenance='imported' AND child.practice_session_digest IS NULL
-  JOIN app.audit_event e ON e.tenant_id=t AND e.subject_type='job' AND e.event_type='job.imported_baseline_attested' AND e.payload->'references'->>'auditTrust'='checked_operation' AND e.subject_ref=child.id::text
-  JOIN app.job parent ON parent.tenant_id=t AND parent.id::text=e.payload->'references'->>'sourceJobId'
+  JOIN app.audit_event e ON e.tenant_id=t AND e.subject_type='job' AND e.event_type='job.imported_baseline_attested' AND e.subject_ref=child.id::text
+  JOIN app.job parent ON parent.tenant_id=t AND parent.id::text=e.payload->'references'->>'sourceJobId' AND EXISTS(SELECT 1 FROM app.job_import_v3 iv WHERE iv.tenant_id=t AND iv.job_id=child.id AND iv.source_job_id=parent.id)
  ), owned AS (
   SELECT DISTINCT source.candidate_id AS id FROM ancestry source JOIN app.job root ON root.tenant_id=t AND root.id=source.id AND root.practice_session_digest=d
  )
@@ -136,8 +136,8 @@ BEGIN
  -- source rows in the order below, receipt, audit head. No later business locks.
  -- Related-quote facts also use owned jobs in this session, never another tenant.
  WITH RECURSIVE owned AS (SELECT id FROM app.job WHERE tenant_id=t AND practice_session_digest=digest
- UNION SELECT x.id FROM owned source JOIN app.audit_event e ON e.tenant_id=t AND e.subject_type='job' AND e.event_type='job.imported_baseline_attested' AND e.payload->'references'->>'auditTrust'='checked_operation' AND e.payload->'references'->>'sourceJobId'=source.id::text
- JOIN app.job x ON x.tenant_id=t AND x.id::text=e.subject_ref AND x.provenance='imported' AND x.practice_session_digest IS NULL)
+ UNION SELECT x.id FROM owned source JOIN app.audit_event e ON e.tenant_id=t AND e.subject_type='job' AND e.event_type='job.imported_baseline_attested' AND e.payload->'references'->>'sourceJobId'=source.id::text
+ JOIN app.job x ON x.tenant_id=t AND x.id::text=e.subject_ref AND x.provenance='imported' AND x.practice_session_digest IS NULL AND EXISTS(SELECT 1 FROM app.job_import_v3 iv WHERE iv.tenant_id=t AND iv.job_id=x.id AND iv.source_job_id=source.id))
  SELECT array_agg(id ORDER BY id) INTO owned_jobs FROM owned;
  PERFORM 1 FROM app.job WHERE tenant_id=t AND id=ANY(owned_jobs) ORDER BY id FOR SHARE;
  PERFORM 1 FROM app.job_activation WHERE tenant_id=t AND job_id=j ORDER BY id FOR SHARE;
@@ -210,9 +210,9 @@ BEGIN
    SELECT id FROM app.job WHERE tenant_id=t AND practice_session_digest=p_digest
    UNION
    SELECT next_job.id FROM owned_job source JOIN app.audit_event e ON e.tenant_id=t AND e.subject_type='job'
-     AND e.event_type='job.imported_baseline_attested' AND e.payload->'references'->>'auditTrust'='checked_operation' AND e.payload->'references'->>'sourceJobId'=source.id::text
+     AND e.event_type='job.imported_baseline_attested' AND e.payload->'references'->>'sourceJobId'=source.id::text
    JOIN app.job next_job ON next_job.tenant_id=e.tenant_id AND next_job.id::text=e.subject_ref
-     AND next_job.provenance='imported' AND next_job.practice_session_digest IS NULL
+     AND next_job.provenance='imported' AND next_job.practice_session_digest IS NULL AND EXISTS(SELECT 1 FROM app.job_import_v3 iv WHERE iv.tenant_id=t AND iv.job_id=next_job.id AND iv.source_job_id=source.id)
  ) SELECT EXISTS(SELECT 1 FROM owned_job WHERE id=j) INTO owned;
  IF NOT owned THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='42501'; END IF;
  -- Same lock order on all phases: authority -> job -> command -> receipt -> finding -> audit.
