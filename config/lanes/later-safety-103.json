@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-103": {
+      "branches": [
+        "codex/sandbox/later-safety-103"
+      ],
+      "allow": [
+        "packages/db/migrations/0834_manual_attestation_synthetic_gate.sql",
+        "packages/db/test/migration-proofs/0834_manual_attestation_synthetic_gate.proof.json",
+        "packages/db/test/purchase-order-audit.integration.test.ts"
+      ]
+    }
+  }
+}

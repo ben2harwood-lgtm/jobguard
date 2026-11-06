@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
-import { Pool } from "pg";
+import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { authenticatePracticeSession, DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID, DEMO_IDENTITY_USER_ID,
   issuePracticeSession, migrate, practiceMaterialPool } from "../src/index.js";
@@ -14,6 +14,7 @@ import { PurchaseOrderActionRepository } from "../src/purchase-order-action-repo
 import { FakeMerchantOrderPort } from "../src/purchase-order-action.js";
 import { ActionExecutor, operateOutbox } from "../src/outbox.js";
 import { withTenant } from "../src/tenant-context.js";
+import { rolledBack } from "./upgrade-proof-utils.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { meterCompany } from "./meter-persistence-fixtures.js";
 import type { WorkFixture } from "./job-work-state-fixtures.js";
@@ -37,7 +38,7 @@ beforeAll(async () => {
   // migration through the normal runner. Fresh install is covered by tenancy's runner.
   await migrate({ query: async (sql: string, values?: unknown[]) => {
     if (sql.startsWith("SELECT 1 FROM public.jobguard_schema_migration")
-      && ["_dark_merchant_order.sql", "_order_attestation_session.sql"].some(stem => String(values?.[0]).endsWith(stem))) return { rows: [{}], rowCount: 1 };
+      && ["_dark_merchant_order.sql", "_order_attestation_session.sql", "_manual_attestation_synthetic_gate.sql"].some(stem => String(values?.[0]).endsWith(stem))) return { rows: [{}], rowCount: 1 };
     return admin.query(sql, values);
   } } as Pick<Pool, "query">);
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [DEMO_TENANT_ID]);
@@ -474,4 +475,60 @@ describe("M2-1 dark approved merchant action on PostgreSQL", () => {
     await expect(operateOutbox(runtime, f.auth.context, queued.outboxActionId, "retry", true)).rejects.toThrow("UNSAFE_OUTBOX_COMMAND");
     expect(f.port.placedCount).toBe(0);
   });
+});
+
+// Use a template copy of fully migrated fictional data, as in the mandate gate
+// suite. The database name, rather than a caller-controlled mode, is the boundary.
+it("refuses direct manual attestations outside the demo database; dropping the gate admits the same insert", async () => {
+  const f = await darkFixture();
+  const id = randomUUID(), commandId = randomUUID();
+  const insert = async (db: Pick<PoolClient, "query">) => {
+    await db.query(`INSERT INTO app.watchdog_command_identity(tenant_id,command_id,job_id,command_type,request_hash)
+      VALUES($1,$2,$3,'purchase_order.attest_manual',$4)`, [f.auth.context.tenantId, commandId, f.job, "a".repeat(64)]);
+    return db.query(`INSERT INTO app.purchase_order_manual_attestation(id,tenant_id,job_id,draft_id,revision_id,
+      merchant_id,actor_membership_id,command_id,supplier_reference_hash) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+      [id, f.auth.context.tenantId, f.job, f.preview.order.draftId, f.revision.id,
+        f.preview.order.merchantId, f.auth.membershipId, commandId, "b".repeat(64)]);
+  };
+  const { host, port, password } = (admin as unknown as { options: { host: string; port: number; password: string } }).options;
+  const base = { host, port, password };
+  await closeTestPools(runtime, admin);
+  const control = new Pool({ ...base, user: "postgres", database: "postgres", max: 1 });
+  try { await control.query("CREATE DATABASE jobguard_order_attestation_outside TEMPLATE jobguard_synthetic_demo"); }
+  finally {
+    await control.end();
+    admin = new Pool({ ...base, user: "postgres", database: "jobguard_synthetic_demo" });
+    runtime = new Pool({ ...base, user: "jobguard_runtime", database: "jobguard_synthetic_demo", max: 5 });
+  }
+  const outside = new Pool({ ...base, user: "postgres", database: "jobguard_order_attestation_outside", max: 1 });
+  const outsideRuntime = new Pool({ ...base, user: "jobguard_runtime", database: "jobguard_order_attestation_outside", max: 1 });
+  const counts = async () => (await outside.query(`SELECT
+    (SELECT count(*) FROM app.purchase_order_manual_attestation)::int attestations,
+    (SELECT count(*) FROM app.watchdog_command_identity)::int commands`)).rows;
+  try {
+    expect((await outside.query("SELECT current_database() name")).rows[0].name).toBe("jobguard_order_attestation_outside");
+    const before = await counts();
+    await expect(withTenant(outsideRuntime, f.auth.context, db => insert(db.$client)))
+      .rejects.toMatchObject({ message: "MODE_FORBIDDEN", code: "42501" });
+    expect(await counts()).toEqual(before);
+    expect((await outside.query("SELECT id FROM app.purchase_order_manual_attestation WHERE id=$1", [id])).rows).toEqual([]);
+
+    // Scratch mutation: the exact insert succeeds without this trigger. Rollback
+    // restores both the trigger and every inserted row even if an assertion fails.
+    await rolledBack(outside, async db => {
+      await db.query("DROP TRIGGER a_manual_attestation_synthetic ON app.purchase_order_manual_attestation");
+      await db.query("SET LOCAL ROLE jobguard_runtime");
+      await db.query("SELECT set_config('app.tenant_id',$1,true)", [f.auth.context.tenantId]);
+      expect((await insert(db)).rows).toEqual([{ id }]);
+    });
+    expect(await counts()).toEqual(before);
+    await expect(withTenant(outsideRuntime, f.auth.context, db => insert(db.$client)))
+      .rejects.toMatchObject({ message: "MODE_FORBIDDEN", code: "42501" });
+    expect(await counts()).toEqual(before);
+  } finally { await closeTestPools(outsideRuntime, outside); }
+
+  // The normal session-bound repository still attests in the synthetic database.
+  const fact = await new PurchaseOrderActionRepository(runtime).attestManual(f.auth.context, f.manual, { sessionDigest: f.auth.digest });
+  expect((await admin.query("SELECT actor_membership_id FROM app.purchase_order_manual_attestation WHERE id=$1", [fact.attestationId])).rows)
+    .toEqual([{ actor_membership_id: f.auth.membershipId }]);
 });
