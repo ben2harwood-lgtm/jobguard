@@ -97,7 +97,7 @@ it("LATER-SAFETY-49 reuses a succeeded legacy command-id receipt only for its pe
       legacyJson: canonicalJson({ type: "ApproveExtraStep", actor: sup().membershipId, content: {
         jobId: s.jobId, requestId: s.requestId, stepIndex: 0, hash: s.hash, net: s.net, reasonCode: null,
       } }),
-    })).toEqual({ kind: "claim" });
+    })).toEqual({ kind: "claim", decisionId: null, resolutionId: null, authorizationId: null });
     await db.$client.query("SELECT app.xa_approve($1,$2,$3,$4,0,$5,$6,false,NULL)", [s.jobId, s.requestId, first.commandId, sup().membershipId, s.hash, s.net]);
     return completeRepositoryCommand(db, first.commandId);
   });
