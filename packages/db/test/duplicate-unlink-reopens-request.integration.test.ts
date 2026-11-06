@@ -22,7 +22,7 @@ async function linked(approved = false, net = 40000, partial = false) {
  });
  const unlink = { version: "extra-duplicate-unlink.v1", commandId: randomUUID(), jobId: s.jobId,
   actorMembershipId: actor.membershipId, linkId: String(link.linkId),
-  expectedRevision: (await extras.readDuplicateLinks(ctx, s.jobId)).revision, reasonCode: "different_work" };
+  expectedRevision: (await extras.readDuplicateLinks(ctx, s.jobId)).revision, reasonCode: "not_same_work" };
  return { s, ctx, actor, unlink };
 }
 async function requests(extra: string) {

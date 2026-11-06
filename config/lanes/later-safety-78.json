@@ -9,7 +9,8 @@
       "allow": [
         "packages/db/migrations/0814_duplicate_unlink_reopens_request.sql",
         "packages/db/test/migration-proofs/0814_duplicate_unlink_reopens_request.proof.json",
-        "packages/db/test/duplicate-unlink-reopens-request.integration.test.ts"
+        "packages/db/test/duplicate-unlink-reopens-request.integration.test.ts",
+        "packages/db/test/extra-duplicate-candidates.integration.test.ts"
       ]
     }
   }
