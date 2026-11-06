@@ -51,6 +51,7 @@
         "packages/db/test/extra-client-session.integration.test.ts",
         "packages/db/test/extra-evidence-packs.integration.test.ts",
         "packages/db/test/extra-proceed-migration.test.ts",
+        "packages/db/test/extra-proceed-upgrade.integration.test.ts",
         "packages/db/test/financial-reconciliation-queue-upgrade.integration.test.ts",
         "packages/db/test/late-source-import-migration.test.ts",
         "packages/db/test/later-empty-tables.ts",
