@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/later-safety-22"
       ],
-      "note": "LATER-SAFETY-22: shared dashboard deadlines and role-scoped proceed history. Current origin/main merged; no migration.",
+      "note": "LATER-SAFETY-22-CATCHUP: exact union with origin/main (6200e08ce); preserves shared dashboard deadlines and role-scoped proceed history. No new behaviour, test expectation change or migration.",
       "allow": [
         "apps/api/src/contractor/enterprise-dashboard.boundaries.test.ts",
         "apps/web/app/site/extra/site-extra.test.tsx",
