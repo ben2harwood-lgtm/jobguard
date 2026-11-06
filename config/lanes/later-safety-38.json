@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-38": {
+      "branches": [
+        "codex/sandbox/later-safety-38"
+      ],
+      "note": "LATER-SAFETY-38 RED: isolate synthetic reversal amount and allocation replay guard coverage; stacked on later-safety-30.",
+      "allow": [
+        "packages/db/test/recovery.integration.test.ts"
+      ]
+    }
+  }
+}
