@@ -23,7 +23,7 @@ it("0613 extends the exact successor registry without changing historical LP-5 e
  const seed=sql.split("INSERT INTO app.command_type_registry VALUES")[1]!.split(";")[0]!;
  const values=seed.match(/\(([^()]+)\)/)![1]!.split(",").map(value=>value.trim()==="NULL"?null:value.trim().slice(1,-1));
  expect(Object.fromEntries(Object.keys(lateSourceRegistryRow).map((key,index)=>[key,values[index]]))).toEqual(lateSourceRegistryRow);
- expect(currentCommandRegistryRows).toEqual([...lp5RegistryRows,lateSourceRegistryRow,managedRecoveryRegistryRow,siteSupervisorQueryRegistryRow,darkOrderRegistryRow,rateSuggestionRegistryRow,contractorJobFinishRegistryRow,duplicateDispositionRegistryRow,extraProceedRegistryRow]);
+ expect(currentCommandRegistryRows).toEqual([...lp5RegistryRows.map(row=>row.command_type==="IssueClientApproval"?{...row,permission_rule:"contractor"}:row),lateSourceRegistryRow,managedRecoveryRegistryRow,siteSupervisorQueryRegistryRow,darkOrderRegistryRow,rateSuggestionRegistryRow,contractorJobFinishRegistryRow,duplicateDispositionRegistryRow,extraProceedRegistryRow]);
  expect(currentCommandRegistryRows.filter(row=>row.command_type==="LateSource.import")).toHaveLength(1);
 });
 
