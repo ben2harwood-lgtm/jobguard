@@ -3389,14 +3389,11 @@
           }
         },
         "responses": {
-          "201": {
-            "description": "sso-emergency-response.v2; requiredAgainAt and windowMinutes; no session"
-          },
           "403": {
             "description": "SSO_EMERGENCY_REFUSED; identical for every cause; no session"
           }
         },
-        "summary": "Mailbox-proven company-owner emergency access with an immutable time limit",
+        "summary": "Retired one-owner emergency switch; always refused",
         "tags": [
           "sso-required"
         ]

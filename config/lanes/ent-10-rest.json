@@ -1,0 +1,28 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-10-rest": {
+      "branches": [
+        "codex/sandbox/ent-10-rest"
+      ],
+      "note": "RED ENT-10-rest emergency HTTP cutover and prescribed retired-handler regression repair. Synthetic only; no new migration.",
+      "allow": [
+        "apps/api/openapi.json",
+        "apps/api/src/auth/sso/enterprise-access.http.test.ts",
+        "apps/api/src/auth/sso/enterprise-access.http.ts",
+        "apps/api/src/auth/sso/sso-emergency-owner.test.ts",
+        "apps/api/src/auth/sso/sso-emergency.test.ts",
+        "apps/api/src/auth/sso/sso-required.controller.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/web/app/admin/contractor/identity/emergency-actions.tsx",
+        "apps/web/app/admin/contractor/identity/page.tsx",
+        "apps/web/app/api/auth/sso-required/emergency-actions/[operation]/route.ts",
+        "apps/web/app/api/auth/sso-required/emergency/route.ts",
+        "apps/web/e2e/ENT-10-emergency-cutover.spec.ts",
+        "docs/security/not-claimed-register.md",
+        "docs/verdicts/ENT-10-rest/BUILDER_RECEIPT.md",
+        "packages/db/test/enterprise-access.integration.test.ts"
+      ]
+    }
+  }
+}

@@ -28,9 +28,8 @@ export class SsoRequiredController {
   @ApiBody({schema:{type:"object",required:["version","requested_tenant_id","required","expectedRevision","reason"],additionalProperties:false,properties:{version:{type:"string",enum:["sso-required-command.v1"]},requested_tenant_id:tenant,required:{type:"boolean"},expectedRevision:{type:"integer",minimum:0,maximum:2147483646},reason}}})
   @ApiResponse({status:201,description:"Persisted switch and audit in one transaction; synthetic only"})
   command(@Body() raw:unknown,@Req() request:IdentityHttpRequest) {return this.run(()=>this.application().command(raw,this.credentials(request)));}
-  @Post("emergency") @Header("Cache-Control","no-store") @ApiOperation({summary:"Mailbox-proven company-owner emergency access with an immutable time limit"})
+  @Post("emergency") @Header("Cache-Control","no-store") @ApiOperation({summary:"Retired one-owner emergency switch; always refused"})
   @ApiBody({schema:{type:"object",required:["version","requested_tenant_id","commandId","email","code","reason"],additionalProperties:false,properties:{version:{type:"string",enum:["sso-emergency.v2"]},requested_tenant_id:tenant,commandId:tenant,email:{type:"string",format:"email",maxLength:320},code:{type:"string",pattern:"^\\d{8}$"},reason}}})
-  @ApiResponse({status:201,description:"sso-emergency-response.v2; requiredAgainAt and windowMinutes; no session"})
   @ApiResponse({status:403,description:"SSO_EMERGENCY_REFUSED; identical for every cause; no session"})
-  emergency(@Body() raw:unknown,@Req() request:IdentityHttpRequest) {return this.run(()=>this.application().emergency(raw,request.headers.origin));}
+  async emergency(@Body() _raw:unknown,@Req() _request:IdentityHttpRequest) {throw new HttpException({code:"SSO_EMERGENCY_REFUSED"},403);}
 }

@@ -1,3 +1,83 @@
+## READY — ent-10-rest repair round 2 (last) — 6 November 2026
+
+RED, ENT-10-rest, NOPR. Fixed finding 4 from `coordinator/prechecks/later-safety-43.md`: the emergency-cutover seed now calls `ContractorRepository.startPractice` for the initial owner grant and audited contractor-track assignment, then uses the existing `seedActiveContractorAgreement` fixture. It no longer inserts into `app.role_grant`. The requester uses the bootstrap's real user/membership; the other two emergency owners use owner memberships following `enterprise-access.integration.test.ts` (ordinary contractor commands intentionally refuse new owner grants). The non-owner revocation target remains read-only. All journey assertions remain byte-for-byte unchanged. No trigger, migration, production code or authorization check changed.
+
+Reused the existing browser specs' native ESM import pattern because Playwright loads specs as CommonJS. An initial direct source import failed test discovery with the core package's missing CommonJS export; the final native import passes discovery. No dependency downloads or package changes.
+
+Actual local checks (installed dependencies only):
+
+- From `apps/api`: `node_modules/.bin/vitest run --maxWorkers=2 src/auth/sso/sso-emergency-owner.test.ts src/auth/sso/sso-emergency.test.ts src/auth/sso/enterprise-access.http.test.ts` — **38/38 passed**, three files.
+- `node node_modules/typescript/bin/tsc -p apps/web/tsconfig.json --noEmit --incremental false` — **PASS**.
+- From `apps/web`: `node_modules/.bin/playwright test ENT-10-emergency-cutover.spec.ts --list --project=mobile-360 --project=desktop --workers=2` — **PASS**, two project cases discovered. Discovery only, not browser execution.
+
+The unchanged lane matches all 15 branch paths against the merge base with locally available `origin/main`, including this repair and excluding all `config/lanes/` paths, without listing itself. A direct two-dot comparison included newer unrelated mainline work; the merge-base comparison correctly checks this branch alone. The old local `main` branch predates current work; no fetch or Git write was performed. `git diff --check` passes. Read-only comparison verifies the complete test body and every assertion remain unchanged.
+
+Official `node tools/agent-lane-boundary-lint.mjs` was also run and **failed** on the pre-existing branch change to `config/lanes/batch-30.json`. This repair does not modify that file, and the ENT-10-rest lane must not grant another lane file. Router must reconcile that inherited lane change with main before CI can pass; no lint success is claimed.
+
+Router/CI must run the spec headless at both widths with at most two workers, the focused real PostgreSQL enterprise-access suites, required CI against current main, and independent RED review on the resulting exact head. Database/browser execution is explicitly deferred because the sandbox cannot start PostgreSQL or bind localhost. READY means ready for router commit/push and CI, not independently verified or merged. No commit, push, PR, deployment or release performed.
+
+---
+
+## READY — repair handoff — 6 November 2026
+
+RED, plan piece ENT-10-rest, NOPR. Resolved the launcher's working-tree merge conflicts in `apps/api/src/workspace/index.ts` and `docs/security/not-claimed-register.md`: retained every export from both parents, main's batch-30 evidence wording and this branch's HTTP-cutover facts. The Git index remains unmerged because `.git` is read-only; the router must stage the two resolutions and finish the merge.
+
+Applied the independent precheck's exact fix at `apps/api/src/auth/sso/sso-emergency-owner.test.ts:41`: retained all 403/body and EMERGENCY_NOT_OWNER refusal assertions, added the retired handler's zero-refusal-log assertion, then called `f.app.emergency` directly to exercise the application refusal. No other change in that test. Added `config/lanes/ent-10-rest.json` listing all 15 changed paths against local `origin/main`, excluding `config/lanes/` and itself.
+
+Actual local checks (installed dependencies; no downloads):
+
+- From `apps/api`: `node_modules/.bin/vitest run --maxWorkers=2 src/auth/sso/sso-emergency-owner.test.ts src/auth/sso/sso-emergency.test.ts src/auth/sso/enterprise-access.http.test.ts` — **38/38 passed**, three files, including all **15/15** owner-boundary cases. An initial invocation from the repository root was stopped before any test results; the package-directory invocation above completed.
+- `node node_modules/typescript/bin/tsc -p apps/api/tsconfig.json --noEmit` — **PASS**.
+- Existing `loadLanePolicy` helper accepted the lane; the allowlist equals the complete filesystem diff against local `origin/main` excluding lane files. Read-only comparison verified every workspace export from both merge parents survived. Both resolved files contain no conflict markers. `git diff --check` passed.
+
+Real PostgreSQL and browser execution remain for GitHub CI, followed by independent RED review on the resulting exact head. Existing named holds remain. No Git-writing command, push, PR, merge completion, database startup, localhost binding or release was performed.
+
+---
+
+# ENT-10-rest — second-run emergency HTTP cutover (dark, RED, NOPR)
+
+4 November 2026. Resumed existing branch `codex/sandbox/ent-10-rest` at `ae87a70e1bb0d40dc274abd082e4b071c967338c`. No merge/fetch, git write, push, PR, dependency download, database startup, browser run, real provider or release. Router owns commit/push. This section supersedes the first-run action-wiring and legacy-HTTP holds in the historical receipt below.
+
+## Scope built in this run
+
+- Added `POST /api/auth/sso-required/emergency-actions/{request|approve|open|inspect|revoke_member}` through one dynamic Next route and the shared `emergencyOwnerPost` transport. Strict `emergency-route.v1` envelope contains `requested_tenant_id` and the existing `emergency.v1` command. Operation must match the URL. Every response is no-store. The synthetic gate precedes parsing/authentication. The principal bridge proves the actual session, origin, CSRF and matching tenant selector; a read-only owner membership lookup avoids the ordinary provider's refusal-log write. Existing SQL rechecks live owner/session authority under lock before writing. No context is minted by the service. No new operation, sign-in method, role, grant or SQL migration.
+- Identity screen provides reason hashing, request ID sharing, separate-owner approval, one-time opening, inspection and non-owner revocation. The randomly generated capability hash stays only in component memory, bound to the selected tenant/session. Successful actions refresh the existing named-owner notice projection. The existing audit routine remains authoritative.
+- Both legacy HTTP handlers unconditionally return the existing 403 `SSO_EMERGENCY_REFUSED`, without parsing the Next body, constructing a service, proving a mailbox or invoking the repository. `SsoRequiredApplication.emergency`, its repository and `identity.sso_emergency_use` remain unchanged. Undoing the HTTP refusal requires changing both handlers.
+- Only the old HTTP-call portion of `sso-emergency.test.ts` changed: line 14 supplies the formerly successful repository result for the valid administrator; lines 18–19 now require zero mailbox/refusal/repository calls. The existing line 17 public refusal assertions remain. Application/repository/mailbox-proof tests and `sso-required.test.ts` are unchanged.
+- Package export registry `apps/api/src/workspace/index.ts` adds exactly the shared transport export needed by the Next adapter and its package/type boundary. No route scanner, protected pin or guard is edited. OpenAPI changes only remove the retired handler's success response and correct its summary; Next-only action routes are outside the Nest OpenAPI generator.
+- E-54 records the dark cutover and pending proof without claiming general emergency sign-in.
+
+## Evidence from this run
+
+- API and web installed TypeScript compilers (`node node_modules/typescript/bin/tsc -p <package>/tsconfig.json --noEmit`) — PASS. CI-only PostgreSQL tests plus the new browser spec compile through `/tmp/ent-10-rest-test-tsconfig.json` — PASS, with the API's existing decorator settings enabled in that temporary compile configuration.
+- API Vitest, maxWorkers=2: `src/watchdog-registry.test.ts src/auth/context-boundary.test.ts src/auth/identity.test.ts` — 278 PASS.
+- API Vitest, maxWorkers=2: `src/auth/sso/enterprise-access.http.test.ts src/auth/sso/sso-emergency.test.ts src/auth/sso/sso-required.test.ts` — 32 PASS. Covers strict authority, owner/session/CSRF/origin/tenant boundaries, dark-mode refusal and both retired handlers. The first route-unit invocation failed to resolve its cross-package dynamic import; corrected to an absolute module URL and this final run passed. The unchanged enterprise-access unit file also passed 19 tests in that initial invocation.
+- DB Vitest, maxWorkers=2: `test/migration-proof-loader.test.ts` — 76 PASS (unit guard only).
+- OpenAPI equality: `node --import tsx src/generate-openapi.ts --check` from apps/api — PASS. The initial tsx CLI could not create its IPC pipe under the sandbox; the direct loader completed without that CLI pipe.
+- `node tools/agent-lane-boundary-lint.mjs` — PASS after updating this lane's exact full diff from origin/main, excluding config/lanes. Initial run correctly refused the as-yet-unlisted new paths; no scanner was changed.
+- `git diff --check` — PASS. All Vitest runs named at most three files and at most two workers. No full-suite, build, clean-install, DB execution or browser pass is claimed.
+
+## What CI and independent review must prove
+
+1. Run the extended `packages/db/test/enterprise-access.integration.test.ts` on real PostgreSQL. Its POST tests call the exact shared transport used by Next: two distinct other owners; required SSO remains on; self/duplicate/one-owner/wrong-tenant refusal; removed membership; missing/wrong CSRF; expired login, approval and emergency windows; replayed opening; non-owner revocation and owner protection; named notices and audit-chain verification. Refusals compare unchanged emergency, membership, grant-revocation and audit rows. Retired Nest/Next calls leave the valid mailbox challenge unchanged and SSO required, without opening any legacy window.
+2. Run `apps/web/e2e/ENT-10-emergency-cutover.spec.ts` headless at mobile-360 and desktop, at most two workers. It seeds four fictional identities, uses three separate owner browser contexts and real action routes (no mocked authorization), checks visible notices, SQL revocation/audit presence and retired-route refusal. It is written and compiled, not executed here. Real PostgreSQL integration additionally verifies the chain itself.
+3. Keep all first-run DB fresh/upgrade/catalogue/RLS, SCIM, permission and SSO suites required. The 0950/0951 reservation and renumbering checks remain. No new 0774 migration was needed.
+4. Required green CI against the final head/current main, one independent RED review at that exact head, and router-controlled landing. No security/commercial approval is inferred.
+
+## Named holds for landing
+
+- Owners locked out with **no live session** cannot use this flow; router must rule before landing. No alternate sign-in path was designed.
+- Companies with **fewer than three distinct owners** cannot open this capability; router must rule before landing. No fallback or weaker approval was designed.
+- The grant on legacy `identity.sso_emergency_use` remains deliberately unchanged. HTTP refusal does not revoke SQL authority; grant cutover requires separate scope/review.
+- SCIM controller registration and machine logins stay dark. Native E-57, D04/G5 E-70, real identity providers and general emergency sign-in remain closed. No money, evidence, journal or tenant-wide sign-in-switch authority is added.
+- DB/browser execution, exact-head independent RED review, migration landing order and required CI remain outstanding. If a scanner or protected pin edit is demanded, its owner must resolve that separately; none was made here.
+
+**READY for router commit and dark NOPR handoff.** This is scoped implementation readiness, not ENT-10 completion, acceptance, merge or release. The router must record the routine choice in AGENT_CHOICES.md, which this sandbox cannot write.
+
+---
+
+# Historical first-run receipt (evidence retained; superseded holds are not current status)
+
 # ENT-10-rest — dark RED builder receipt
 
 4 November 2026. Base/main: `56b74eaec205e86c9eaf7eee75d85ade2599a364`. Branch: `codex/sandbox/ent-10-rest`. NOPR. Working tree only; router owns commit/push/PR. No git-writing command, package installation, PostgreSQL startup, localhost binding, real provider, real identity, live money or release was performed.
