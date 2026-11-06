@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-124": {
+      "branches": [
+        "codex/sandbox/later-safety-124"
+      ],
+      "allow": [
+        "packages/db/migrations/0850_final_account_draft_advance_guard.sql",
+        "packages/db/test/migration-proofs/0850_final_account_draft_advance_guard.proof.json",
+        "packages/db/test/final-account-draft-advance-guard.integration.test.ts"
+      ]
+    }
+  }
+}
