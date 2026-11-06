@@ -30,7 +30,8 @@ const subscriptionSourceSql = `SELECT s.id,s.artifact_hash,s.amount_pence,p.prin
  FOR SHARE OF s,p,a,z,r`;
 
 // Read only the statement's exact stored amount and its explicit approval. A newer statement
-// supersedes this one; the source hash also binds the entire persisted proof snapshot.
+// blocks new issuance from this one; stored replay/credit traces remain bound to the original.
+// The source hash also binds the entire persisted proof snapshot.
 const successFeeSourceSql = `SELECT s.*,z.id approval_id,z.content_hash approval_hash,
  app.final_lock_hash(s.document) recomputed_hash,
  app.final_lock_hash(s.document->'sourceSnapshot') snapshot_hash
@@ -48,8 +49,8 @@ const successFeeSourceSql = `SELECT s.*,z.id approval_id,z.content_hash approval
   AND z.policy_version='reference_fee_policy_v3' AND z.currency='GBP'
   AND z.amount_pence::text=s.document->'documentPrincipal'->>'pence'
   AND z.revoked_at IS NULL AND z.expires_at>clock_timestamp()
-  AND NOT EXISTS(SELECT 1 FROM app.platform_fee_statement newer
-    WHERE newer.tenant_id=s.tenant_id AND newer.job_id=s.job_id AND newer.sequence>s.sequence)
+  AND ($3::boolean OR NOT EXISTS(SELECT 1 FROM app.platform_fee_statement newer
+    WHERE newer.tenant_id=s.tenant_id AND newer.job_id=s.job_id AND newer.sequence>s.sequence))
  ORDER BY z.id LIMIT 1 FOR SHARE OF s,j,track,z,d,r`;
 const feeSettlementSql = `SELECT a.id,a.authorization_id,a.kind,a.amount_pence,
  (SELECT jsonb_agg(jsonb_build_object('revision',e.revision,'state',e.state) ORDER BY e.revision)
@@ -97,9 +98,9 @@ export class PlatformTaxInvoiceFixtureRepository {
       return document;
     });
   }
-  private async successFeeSource(client: PoolClient, tenantId: string, line: PlatformInvoiceIssueCommand["lines"][number]) {
+  private async successFeeSource(client: PoolClient, tenantId: string, line: PlatformInvoiceIssueCommand["lines"][number], storedSource: boolean) {
     const unavailable = () => new PlatformInvoiceError("PLATFORM_INVOICE_SOURCE_UNAVAILABLE");
-    const s = (await client.query(successFeeSourceSql, [tenantId, line.sourceId])).rows[0];
+    const s = (await client.query(successFeeSourceSql, [tenantId, line.sourceId, storedSource])).rows[0];
     if (!s || s.document_hash !== line.expectedSourceHash || s.document_hash !== s.recomputed_hash ||
         s.source_hash !== s.snapshot_hash) throw unavailable();
     let document;
@@ -138,13 +139,13 @@ export class PlatformTaxInvoiceFixtureRepository {
     if (line.sourceKind === "contractor_fee") throw new PlatformInvoiceError("PLATFORM_INVOICE_SOURCE_UNAVAILABLE");
     let amount: number, provenance: PlatformInvoiceRequest["lines"][number]["provenance"];
     if (line.sourceKind === "success_fee") {
-      const source = await this.successFeeSource(client, tenantId, line);
-      amount = source.amount; provenance = source.provenance;
       // Settlements are a snapshot at first issuance. Replay and full credits retain the
-      // original immutable trace while rechecking the stored statement/approval above.
+      // original immutable trace while rechecking the stored statement/approval.
       const original = history.find(d => replay ? d.request.commandId === command.commandId :
-        command.kind === "credit_note" && d.number === command.originalNumber);
+        command.kind === "credit_note" && d.request.kind === "invoice" && d.number === command.originalNumber);
       const saved = original?.request.lines.find(l => l.id === line.id && l.provenance.statement.id === line.sourceId);
+      const source = await this.successFeeSource(client, tenantId, line, Boolean(saved));
+      amount = source.amount; provenance = source.provenance;
       if (saved) {
         const { priorSettlements: _current, ...current } = provenance;
         const prior = saved.provenance;

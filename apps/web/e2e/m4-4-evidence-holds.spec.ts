@@ -89,13 +89,15 @@ test("owners request holds, see stored applied states, and a different person re
   } finally { await Promise.all([admin.end(), runtime.end(), executor?.end()]); }
 });
 
-for (const uncertainStatus of [403, 503]) test(`an uncertain ${uncertainStatus} response retains the exact command across reload and retries`, async ({ page }) => {
+test("an uncertain 503 response retains the exact command across reload and retries", async ({ page }) => {
   const job = randomUUID(), evidenceId = randomUUID();
   const requests: unknown[] = [];
   await page.route(`**/api/jobs/${job}/evidence-holds`, async route => {
     if (route.request().method() === "GET") return route.fulfill({ json: { items: [{ evidenceId, label: "manifest", held: false, canApply: true, canRelease: false, message: "No hold requested" }] } });
     requests.push(route.request().postDataJSON());
-    return route.fulfill({ status: requests.length === 1 ? uncertainStatus : 201, json: { message: requests.length === 1 ? "Retry the same request." : "Hold requested" } });
+    return route.fulfill({ status: requests.length === 1 ? 503 : 201, json: requests.length === 1
+      ? { code: "WORM_UNCONFIRMED", message: "Retry the same request." }
+      : { message: "Hold requested" } });
   });
   await page.goto(`/jobs/${job}/evidence-holds`);
   const main = page.getByRole("main");
@@ -107,4 +109,32 @@ for (const uncertainStatus of [403, 503]) test(`an uncertain ${uncertainStatus} 
   await expect(main.getByRole("status")).toHaveText("Hold requested");
   expect(requests).toHaveLength(2); expect(requests[1]).toEqual(requests[0]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+});
+
+test("a definite 403 refusal clears the pending command across reload", async ({ page }) => {
+  const job = randomUUID(), evidenceId = randomUUID();
+  const requests: unknown[] = [];
+  await page.route(`**/api/jobs/${job}/evidence-holds`, async route => {
+    if (route.request().method() === "GET") return route.fulfill({ json: { items: [{ evidenceId, label: "manifest", held: false, canApply: true, canRelease: false, message: "No hold requested" }] } });
+    requests.push(route.request().postDataJSON());
+    return route.fulfill({ status: requests.length === 1 ? 403 : 201, json: requests.length === 1
+      ? { code: "WORM_REFUSED", message: "Request refused." }
+      : { message: "Hold requested" } });
+  });
+  await page.goto(`/jobs/${job}/evidence-holds`);
+  const main = page.getByRole("main");
+  await main.getByLabel("Synthetic evidence").selectOption(evidenceId);
+  await main.getByRole("button", { name: "Request hold", exact: true }).click();
+  await expect(main.getByRole("status")).toHaveText("Request refused.");
+  await expect(main.getByRole("button", { name: "Retry same request" })).toHaveCount(0);
+  await expect(main.getByLabel("Synthetic evidence")).toBeEnabled();
+  expect(await page.evaluate(key => sessionStorage.getItem(key), `evidence-hold.v1:${job}`)).toBeNull();
+  await page.reload();
+  await main.getByLabel("Synthetic evidence").selectOption(evidenceId);
+  await expect(main.getByRole("button", { name: "Retry same request" })).toHaveCount(0);
+  await main.getByRole("button", { name: "Request hold", exact: true }).click();
+  await expect(main.getByRole("status")).toHaveText("Hold requested");
+  expect(requests).toHaveLength(2);
+  expect(requests[1]).not.toMatchObject({ commandId: (requests[0] as { commandId: string }).commandId });
+  expect(requests[1]).not.toMatchObject({ idempotencyKey: (requests[0] as { idempotencyKey: string }).idempotencyKey });
 });

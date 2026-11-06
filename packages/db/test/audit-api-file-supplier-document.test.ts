@@ -148,3 +148,18 @@ describe("supplier receipt exact decimals (repair r1)", () => {
     expect(db.calls).toHaveLength(0);
   });
 });
+
+describe("LATER-SAFETY-24 receipt delivery cap", () => {
+  it.each([["9", "2"], ["10", "0.000001"], ["10.000001", "0"]])("refuses accepted %s plus rejected %s beyond ordered", async (accepted, rejected) => {
+    const db = receiptSql("10"), repo = new SupplierDocumentRepository(db.pool());
+    await expect(repo.appendReceipt(context, job, { accepted, rejected, expectedRevision: 1 }))
+      .rejects.toMatchObject({ code: "ORDER_DELIVERY_EXCEEDS_ORDERED", message: "ORDER_DELIVERY_EXCEEDS_ORDERED" });
+    for (const table of ["goods_receipt", "audit_event", "watchdog_command_result"]) expect(db.inserts(table)).toHaveLength(0);
+    expect(db.calls.some(call => call.sql === "ROLLBACK")).toBe(true);
+  });
+  it.each([["9", "0", "9", "1"], ["9", "1", "10", "1"]])("allows the normal later receipt and exact cap: %s + %s", async (accepted, rejected, delivered, missing) => {
+    const db = receiptSql("10");
+    await expect(new SupplierDocumentRepository(db.pool()).appendReceipt(context, job, { accepted, rejected, expectedRevision: 1 })).resolves.toEqual({ revision: 2 });
+    expect(db.inserts("goods_receipt")[0]!.values.slice(6, 11)).toEqual(["10", delivered, accepted, rejected, missing]);
+  });
+});
