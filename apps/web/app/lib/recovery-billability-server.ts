@@ -14,6 +14,7 @@ export function billabilityFailure(error: unknown) {
   const code = error instanceof Error ? error.message : "";
   if (code === "ORIGIN_FORBIDDEN") return { status: 403, code, message: "This request is not authorised for this session." };
   if (code === "INVALID_BILLABILITY_INPUT") return { status: 400, code, message: "The request must contain only the review or approval fields, with a whole-pence amount and reasons." };
+  if (code === "BILLABILITY_LINE_ALREADY_APPROVED") return { status: 409, code, message: "This line is already approved. Reload to see the stored approval." };
   if (code === "BILLABILITY_STALE" || code === "BILLABILITY_REPLAY_CONFLICT") return { status: 409, code, message: "The case or request has changed. Reload and check the stored review before sending a new request." };
   if (code === "BILLABILITY_NOT_APPROVABLE" || code === "BILLABILITY_SOURCE_REQUIRED") return { status: 422, code: "BILLABILITY_NOT_APPROVABLE", message: "This recovery cannot be approved. Settled, allocated, verified recovery evidence and an eligible post-lock catch are required." };
   if (["BILLABILITY_NOT_FOUND", "BILLABILITY_FORBIDDEN", "UNAUTHENTICATED", "TENANT_FORBIDDEN", "FINAL_CHECK_FORBIDDEN"].includes(code)) return { status: 404, code: "BILLABILITY_NOT_FOUND", message: "This review is unavailable for this session." };

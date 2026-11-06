@@ -1,18 +1,21 @@
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
-import { parsePayNowInvoice, payNowOptions } from "@jobguard/core";
+import { MAX_MONEY_PENCE, money, parsePayNowInvoice, payNowOptions } from "@jobguard/core";
 import { PayNowAttemptError, PayNowAttemptRepository, PracticeInvoiceRepository, withTenant } from "@jobguard/db";
 import { resolveVerifiedTenantContext, type TenantRequestCredentials } from "./auth/principal-bridge.js";
 import { identityStatus } from "./auth/identity-http.js";
 import type { IdentityApplication } from "./auth/identity.application.js";
+
+import { CustomerRefused, customerToken } from "./auth/customer-signin.js";
+import type { IdentityHttpRequest } from "./auth/identity-http.js";
 
 const commandV1 = z.object({ commandId: z.guid(), rail: z.enum(["bank_transfer", "card", "pay_by_bank"]) }).strict();
 const locatorV1 = z.object({ jobId: z.guid(), invoiceId: z.guid() }).strict();
 export function assertPayNowPreviewMode() {
   if (process.env.JOBGUARD_ENV !== "synthetic_demo") throw new PayNowAttemptError("NOT_FOUND");
 }
-/** Builder-only synthetic observations. Prepare is read-only; only command stores an attempt. */
+/** Synthetic views; only the builder command stores a practice attempt. */
 export class PayNowAttemptApplication {
   constructor(private readonly identity: IdentityApplication, private readonly pool: Pool) {}
   async read(credentials: TenantRequestCredentials, jobId: string, invoiceId: string) {
@@ -41,6 +44,34 @@ export class PayNowAttemptApplication {
     const history = await new PayNowAttemptRepository(this.pool).read(context, jobId, invoiceId);
     return { version: "pay-now-preview.v1" as const, synthetic: true as const,
       balancePence: options[0]?.customerTotal.pence ?? 0, options, attempts: history.attempts };
+  }
+  /** Display only. Scope comes exclusively from the authenticated customer cookie. */
+  async customerPractice(request: IdentityHttpRequest) {
+    assertPayNowPreviewMode();
+    if (request.headers["x-tenant-id"]) throw new CustomerRefused();
+    const token = customerToken(request);
+    const credential = z.tuple([z.guid(), z.guid(), z.guid(), z.string().regex(/^[A-Za-z0-9_-]{43}$/u)]).safeParse(token?.split("."));
+    if (!credential.success) throw new CustomerRefused();
+    const [tenantId, jobId, customerId] = credential.data;
+    let raw: unknown;
+    try {
+      raw = (await this.identity.provider.repository.pool.query(
+        "SELECT identity.customer_practice_pay_now($1,$2,$3,$4) result",
+        [tenantId, jobId, customerId, this.identity.provider.digest(`customer-session:${token}`)],
+      )).rows[0]?.result;
+    } catch (error) {
+      if ((error as { code?: string }).code === "42501") throw new CustomerRefused();
+      throw error;
+    }
+    const source = z.object({ invoiceNumber: z.string().min(1).max(100), balancePence: z.number().int().min(0).max(MAX_MONEY_PENCE) }).strict().parse(raw);
+    // Identity-only fields are local placeholders for core's tariff projection;
+    // no invoice locator, catch provenance or stored attempt is read or exposed.
+    const options = source.balancePence === 0 ? [] : payNowOptions({
+      version: "pay-now.synthetic-invoice.v1", environment: "synthetic_demo",
+      tenantId, jobId, invoiceId: jobId, revision: 1, kind: "final", includesCatch: false,
+      builderAccount: `fake-builder-${tenantId}`, balancePence: source.balancePence, currency: "GBP",
+    }).map(({ rail, customerTotal }) => ({ rail, customerTotal }));
+    return { invoiceNumber: source.invoiceNumber, amountDue: money(source.balancePence), options };
   }
   async command(credentials: TenantRequestCredentials, jobId: string, invoiceId: string, raw: unknown) {
     assertPayNowPreviewMode();

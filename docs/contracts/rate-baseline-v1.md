@@ -55,6 +55,20 @@ the real M5-5 merchant adapter; any cross-tenant privacy/commercial decision and
 and activation of any live route. Synthetic passing tests do
 not close any of these requirements or mark full M5-6 complete.
 
+## Recurring extras: synthetic read only
+
+A separate session-only owner read and practice page now group this company's current
+approved variation revisions by exact description and unit (trim, lowercase, collapse
+spaces; no aliases or semantic matching). Withdrawals and unapproved revisions are excluded.
+At least three distinct jobs with approvals in the reference policy's 180-day server-clock
+window are required; sparse results say “not enough to say” and carry no rate. Each variation
+counts once; distinct jobs establish eligibility, while all qualifying variation observations
+contribute to the observed low/high and half-even median. Source variation, job, revision and
+observation IDs accompany the range, which is not a confidence interval. Existing runtime
+SELECT grants and tenant RLS apply; the transaction is read only. No request tenant, actor or
+cutoff, acceptance control, commercial write, migration or live capability is introduced.
+Real evaluation, human acceptance, dependencies and G0–G5 remain held; M5-6 stays open.
+
 ## Synthetic merchant delivery record (partial M5-6)
 
 A separate read-only practice projection now uses migration `0618_merchant_delivery_record_read`'s checked routine,

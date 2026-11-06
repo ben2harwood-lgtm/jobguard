@@ -33,7 +33,6 @@ function fixture(claimsEnabled = true) {
     if (sql === "BEGIN") { snapshot = structuredClone(state); active = true; return result(); }
     if (sql === "ROLLBACK") { state = snapshot; active = false; return result(); }
     if (sql === "COMMIT") { active = false; return result(); }
-    if (sql === "SELECT outbound_control.claims_enabled() AS enabled") return result([{ enabled: claimsEnabled }]);
     if (sql.startsWith("SAVEPOINT ") || sql.startsWith("RELEASE SAVEPOINT ") || sql.startsWith("ROLLBACK TO SAVEPOINT ")) return result();
     if (sql.includes("require_watchdog_live") && liveFailure) throw liveFailure;
     if (sql.startsWith("SELECT a.membership_id FROM app.authenticate_practice_session(")) return result([]);
@@ -41,6 +40,7 @@ function fixture(claimsEnabled = true) {
       if (!owner || ![actor.sessionDigest, "b".repeat(64), "d".repeat(64)].includes(values[1])) throw new Error("ORDER_ACTION_INVALID");
       return result([{ actor_id: values[1] === "b".repeat(64) ? otherMember : member }]);
     }
+    if (sql === "SELECT outbound_control.claims_enabled() AS enabled") return result([{ enabled: claimsEnabled }]);
     if (sql.includes("set_config") || sql.includes("pg_advisory_xact_lock") || sql.includes("require_watchdog_live")) return result();
     if (sql.startsWith("SELECT 1 FROM app.final_account_lock")) return result(locked ? [{}] : []);
     if (sql.startsWith("SELECT r.id,r.draft_id")) return result(current && values[0] === tenant && values[1] === job && values[2] === revision ? [{ ...orderRow }] : []);
@@ -339,14 +339,14 @@ describe("fake merchant boundary", () => {
 
 describe("LATER-SAFETY-10 migration source proof (not PostgreSQL evidence)", () => {
   it("adds a narrow session bridge with named LP-0 and upgrade records", () => {
-    const proof = proofSchema.parse(JSON.parse(readFileSync(new URL("./migration-proofs/1203_order_attestation_session.proof.json", import.meta.url), "utf8")));
+    const proof = proofSchema.parse(JSON.parse(readFileSync(new URL("./migration-proofs/0649_order_attestation_session.proof.json", import.meta.url), "utf8")));
     const baseline = parseInventory(JSON.parse(readFileSync(new URL("../../../docs/contracts/lp-0-effective-privileges-v1.json", import.meta.url), "utf8")));
     const inventory = parseInventory(combineLp0(baseline, [proof]));
     expect(inventory.recorded.routines.find(r => r.identity === "function:app.order_attestation_actor(uuid,text)"))
       .toMatchObject({ runtimeExecute: true, publicExecute: false, staticWrites: [], staticCalls: ["app.mon1_company_actor"] });
     expect(proof.upgrade).toEqual([expect.objectContaining({ section: "routines", before: null,
       after: expect.objectContaining({ proname: "order_attestation_actor", args: "t uuid, digest text" }) })]);
-    const sql = readFileSync(new URL("../migrations/1203_order_attestation_session.sql", import.meta.url), "utf8");
+    const sql = readFileSync(new URL("../migrations/0649_order_attestation_session.sql", import.meta.url), "utf8");
     expect(sql).toContain("actor:=app.mon1_company_actor(t,digest)");
     expect(sql).toContain("AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp())");
     expect(sql).toContain("AND role='owner'");

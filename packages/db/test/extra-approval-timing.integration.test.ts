@@ -26,7 +26,7 @@ it.each(["not_started", undefined, "under_way", "finished"] as const)("ENT-5 sha
   await approvals.approveExtraStep(context, w.members.supervisor.member, approveInput(s, 0));
   await approvals.approveExtraStep(context, w.supervisor2.member, approveInput(s, 1));
   const token = newToken(), email = await emailOf(c, w, w.members.client_approver.member.membershipId);
-  await approvals.issueClientApproval(context, w.members.owner.member, { version: "issue-client-approval.v1", commandId: randomUUID(), jobId, requestId: s.requestId,
+  await approvals.issueClientApproval(context, w.members.surveyor.member, { version: "issue-client-approval.v1", commandId: randomUUID(), jobId, requestId: s.requestId,
     approverMembershipId: w.members.client_approver.member.membershipId, recipient: email, linkToken: token, expiresAt: new Date(Date.now() + 3600_000) });
   const view = () => approvals.clientApprovalView(context, w.members.client_approver.member, { version: "client-approval-view.v1", jobId, requestId: s.requestId, linkToken: token, email });
   expect(await view()).toMatchObject({ doneWithoutRequiredPreapproval: "uncertain", workTiming: { source: "site_visit", visitId: visit.visitId, startedAt: visit.startedAt, finishedAt: null, uncertainty: "during_this_visit" },

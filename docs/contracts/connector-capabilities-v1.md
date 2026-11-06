@@ -142,6 +142,29 @@ Existing fake_sftp authorised export delivery and reconciliation are unchanged a
 covered by their existing contract tests. No domain promotion or real endpoint is
 released; Q2/H1, Q3, Q4, Q7 and G5 remain held. This does not close ENT-13a.
 
+## ENT-13a human fixture promotion (dark, NOPR, 4 November 2026)
+
+A persisted human contractor session may select a staged event at
+`/contractor/connector-promotions`. This adds no permission or machine authority.
+The existing fictional ENT-2 demo organisation must already exist. The fixed table
+is `fixture:demo-orders` revision 1 / `fixture:starter_orders`, revision 2 /
+`fixture:revised_orders`, and `fixture:demo-order-1` revision 1 /
+`fixture:door-materials` (two REPAIR-DOOR units, fixed fictional timestamp).
+Unknown labels, other subjects/revisions and raw/uploaded content refuse.
+Work orders use the generated ENT-2 file, ordinary per-client import permission,
+identity, revision and baseline pricing. Materials reuse the existing owner/finance
+session-bound import; import never confirms a prompt. The result and append-only
+promotion record commit with the import and audit, or all roll back. Source-derived
+command identity and tenant serialization return the first result on replay, after
+current permission checks. The connector receipt stays `staged`, `domainEffects: 0`.
+Billing status is held as `BILLING_COMPOSITION_REQUIRED`; machine landing, export
+delivery, SFTP, reconciliation authority and G5 remain closed. Independent RED review
+and PostgreSQL/browser CI are still required; this does not finish ENT-13a.
+
+Human promotion uses its own append-only receipt outside the LP-5 lifecycle dispatcher.
+LP-5 integration and dispatcher replay coverage remain held before composition or activation.
+The promotion integration suite proves only this separate dark path.
+
 ## ENT-13a machine connection — fictional rulings, 4 November 2026
 
 This section supersedes the historical Q2/H1, Q3/H2, Q4/H3 and Q7/H5 STOPs **only
@@ -189,6 +212,13 @@ secret resolver, endpoint or network action. Existing staging still returns only
 H4, billing/materials/export promotion dependencies and every real-endpoint gate
 remain open. CI PostgreSQL proof and exact-head independent RED review are required;
 local transport/guard tests alone do not close ENT-13a or G5.
+
+LATER-SAFETY-15 hardens this fictional boundary: legacy `connector.intake` refuses
+all bindings registered as machine connections, even with a correct token or an
+existing receipt. Machine input must use `machine_stage`, whose key reference and
+capability kind must be present, nonempty and currently authorised before consuming
+a nonce. Refusals use `CONNECTOR_INPUT_REFUSED`; existing non-machine intake and
+machine staging validation, deduplication and atomic audit remain required.
 
 ### Machine command lifecycle hold
 

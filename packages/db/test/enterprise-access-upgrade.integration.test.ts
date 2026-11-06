@@ -71,13 +71,21 @@ it('emergency_dual_owner/scim2_machine preserve populated identity state, instal
  const later=new Set<string>();
  for(const url of MIGRATION_URLS.slice(boundary+1))
   for(const m of (await readFile(url,'utf8')).matchAll(/CREATE OR REPLACE FUNCTION ([a-z_]+)\.([a-z0-9_]+)\(/gu))later.add(`${m[1]}.${m[2]}`);
+ // 0642 and 0644 re-create these exact bodies by text replacement; plan-entitlement-lifecycle-upgrade pins each body.
+ for(const name of ['app.xa_issue_link','app.lp5b_contractor_permission','app.northside_capture_action'])later.add(name);
  // A later GRANT/REVOKE on a predecessor table may change its ACL only; that migration's proof and LP-0 pin it.
  const laterAcl=new Set<string>();
  for(const url of MIGRATION_URLS.slice(boundary+1))
   for(const m of (await readFile(url,'utf8')).matchAll(/\b(?:GRANT|REVOKE)\b[^;]*?\bON\s+(?:TABLE\s+)?((?:[a-z_]+\.[a-z0-9_]+)(?:\s*,\s*[a-z_]+\.[a-z0-9_]+)*)\s+(?:TO|FROM)\b/gu))
    for(const name of m[1]!.split(','))laterAcl.add(name.trim());
  expectPoliciesUnchanged(catalogue.policies,after.policies);
- expectRelationsUnchanged(catalogue.relations,after.relations,laterAcl);
+ // 0631 (MIGFIX-6) adds exactly one validated CHECK to app.landing_allocation; nothing else on that table may change.
+ const added='landing_allocation_eligible_within_gross';
+ const isLanding=(r:Relation)=>r.nspname==='app'&&r.relname==='landing_allocation';
+ type Con={name:string;definition:string};
+ expect((after.relations.find(isLanding)!.constraints as Con[]).filter(c=>c.name===added)).toEqual([{name:added,definition:'CHECK ((eligible_net_pence <= gross_pence))'}]);
+ const afterRelations=after.relations.map((r:Relation)=>isLanding(r)?{...r,constraints:(r.constraints as Con[]).filter(c=>c.name!==added)}:r);
+ expectRelationsUnchanged(catalogue.relations,afterRelations,laterAcl);
  for(const row of catalogue.routines){
   if(!later.has(`${row.nspname}.${row.proname}`)){expect(after.routines).toContainEqual(row);continue;}
   const {definition:_d,...kept}=row;

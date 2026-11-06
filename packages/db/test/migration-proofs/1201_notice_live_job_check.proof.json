@@ -1,6 +1,0 @@
-{
-  "migration": "1201_notice_live_job_check.sql",
-  "lp0": [],
-  "upgrade": [],
-  "tenancy": []
-}

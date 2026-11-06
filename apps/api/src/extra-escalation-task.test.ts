@@ -1,3 +1,4 @@
+import { sourceFixtureUrl } from "./source-fixture-url.js";
 import { readFileSync } from "node:fs";
 import type { Task, TaskList } from "graphile-worker";
 import { describe, expect, it, vi } from "vitest";
@@ -23,7 +24,7 @@ describe("ENT-5 synthetic escalation scheduling", () => {
       const off = setup(environment); expect(off.tasks).toEqual({}); expect(off.crontab).toBe("");
     }
     expect(() => registerExtraEscalationTasks(s.tasks, "synthetic_demo", s.execute)).toThrow("EXTRA_ESCALATION_ALREADY_REGISTERED");
-    const worker = readFileSync(new URL("./worker.ts", import.meta.url), "utf8");
+    const worker = readFileSync(sourceFixtureUrl("./worker.ts", import.meta.url), "utf8");
     expect(worker).toContain("registerExtraEscalationTasks(tasks,finalCheckEnvironment");
     expect(worker).toContain("escalateOverdueExtrasTask(runtimePool,queueContext({tenantId:parsed.tenantId}))");
     expect(worker).toContain("practiceOnly?{...extraEscalationTasks,");

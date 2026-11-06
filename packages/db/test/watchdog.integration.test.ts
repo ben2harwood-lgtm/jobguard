@@ -27,7 +27,7 @@ const tables = ["purchase_order_manual_attestation", "purchase_order_draft", "pu
 // Still count them on every refusal and inspect their RLS/ownership below; their
 // insert/replay/audit controls are exercised in supplier-line-corrections.integration.test.ts.
 // Dispositions have no runtime table grants; their checked writer enforces access.
-const mutationTables = [...tables, "extra_duplicate_disposition", "supplier_line_match_snapshot", "supplier_line_match_correction"];
+const mutationTables = [...tables, "extra_duplicate_disposition", "supplier_line_match_snapshot", "supplier_line_match_correction", "privacy_review_fact", "extra_client_command_session", "extra_client_signin", "extra_client_session", "connector_promotion", "extra_proceed_statement"];
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, directory: string;
 const storage: PrivateVersionedStorage = {
   async createUploadUrl() { return "https://generated.invalid/upload"; },
