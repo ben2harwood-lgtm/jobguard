@@ -218,4 +218,5 @@ export { PlatformInvoiceReadRepository } from "./platform-invoice-read-repositor
 export { WormCommandRepository, WormCommandError, type WormReceipt } from "./worm-command-repository.js";
 export * from "./connector-promotion-repository.js";
 
+export * from "./recurring-extras-repository.js";
 export * from "./extra-proceed.js";
