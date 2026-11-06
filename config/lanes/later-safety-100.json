@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-100": {
+      "branches": [
+        "codex/sandbox/later-safety-100"
+      ],
+      "allow": [
+        "packages/db/migrations/0831_sync_checkpoint_synthetic_guard.sql",
+        "packages/db/test/migration-proofs/0831_sync_checkpoint_synthetic_guard.proof.json",
+        "packages/db/test/sync-snapshot.integration.test.ts"
+      ]
+    }
+  }
+}

@@ -13,7 +13,7 @@ import { SyntheticSyncDownloadApplication } from "../../../apps/api/src/sync/dow
 
 const id = (n: number) => `00000000-0000-4000-8000-${n.toString().padStart(12, "0")}`;
 const a = id(1), b = id(2), user = id(3), secondUser = id(4), hash = "a".repeat(64);
-let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, directory: string;
+let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, guardAdmin: Pool, guardRuntime: Pool, directory: string;
 beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), "jobguard-sync-checkpoint-"));
   const port = await freePort(55500, 400);
@@ -44,7 +44,7 @@ beforeAll(async () => {
   runtime = new Pool({ host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "sync_test_login", password: "synthetic-runtime", max: 2 });
 }, 120_000);
 afterAll(async () => {
-  await closeTestPools(runtime, admin); await postgres?.stop();
+  await closeTestPools(guardRuntime, guardAdmin, runtime, admin); await postgres?.stop();
   if (directory) await rm(directory, { recursive: true, force: true });
 });
 const advance = async (client: Pick<PoolClient, "query">, u = user, r = 1, s = 1, h = hash, environment = "synthetic_demo") =>
@@ -53,6 +53,24 @@ const scoped = (tenant: string, u = user, r = 1, s = 1, h = hash) =>
   withTenant(runtime, testTenantContext(tenant), db => advance(db.$client, u, r, s, h));
 
 describe("M3-3 durable checkpoint SQL", () => {
+  it("refuses synthetic checkpoint writes in a differently named database after a fresh migration", async () => {
+    const database = "jobguard_sync_checkpoint_guard";
+    await admin.query(`CREATE DATABASE ${database}`);
+    guardAdmin = new Pool({ ...admin.options, database });
+    await migrate(guardAdmin); // Fresh install of all migrations, including the new guard.
+    expect((await guardAdmin.query("SELECT current_database() AS name")).rows[0].name).toBe(database);
+    await guardAdmin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [a]);
+    await guardAdmin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [user]);
+    await guardAdmin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Synthetic guard fixture')", [id(20), a]);
+    await guardAdmin.query(`INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)
+      VALUES($1,$2,$3,$4,'owner')`, [id(22), a, id(20), user]);
+    guardRuntime = new Pool({ ...runtime.options, database });
+    // Valid tenant, active member and synthetic environment: only the database name differs.
+    await expect(withTenant(guardRuntime, testTenantContext(a), db => advance(db.$client)))
+      .rejects.toThrow("SYNC_CHECKPOINT_INVALID");
+    expect((await guardAdmin.query("SELECT * FROM app.sync_snapshot_checkpoint")).rows).toEqual([]);
+  });
+
   it.each(["absent", "foreign", "revoked", "expired"])("refuses a user with %s membership without inserting a checkpoint", async status => {
     const u = id(100 + ["absent", "foreign", "revoked", "expired"].indexOf(status));
     await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [u]);

@@ -1,0 +1,6 @@
+{
+  "migration": "0831_sync_checkpoint_synthetic_guard.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}
