@@ -397,3 +397,36 @@ CI and independent RED review must bind the resulting pushed head. Synthetic
 only; provider, real-money, deployment and launch gates remain unchanged.
 
 READY for router commit/push, NOPR, CI and independent RED review.
+
+
+### Batch-39 landing refresh — 6 November 2026
+
+READY. Launcher merge a7c155205 already contains incoming origin/main
+919b7f3e60b82ef1ed1e32a6f259ba92246f6541; there were no unmerged paths.
+No code changes were necessary. ENT-3 priced journey and MON-6 customer
+practice display remain the plan pieces; this group is RED.
+
+- All main migration files are byte-identical. The sole additional migration is
+  1200_customer_practice_pay_now_read.sql, creating a new routine; no existing
+  routine is replaced, so no latest-main routine body needs re-creation.
+- Main's stages and stage-acknowledge proxy routes and their coverage remain
+  beside practice-pay-now. The lane exactly covers all 22 non-lane paths changed
+  from origin/main and does not list itself. No test was weakened.
+- Installed web Vitest: --maxWorkers=2, route.test.ts, screen.test.tsx and
+  proxy.test.ts (full practice-pay-now paths above): 53 tests passed.
+- Installed API Vitest: --maxWorkers=2 src/pay-now-attempt.application.test.ts:
+  29 tests passed.
+- Installed DB Vitest: --maxWorkers=2 test/customer-practice-pay-now-fixtures.test.ts,
+  test/site-extra-priced-evidence.test.ts, test/migration-proof-loader.test.ts:
+  92 tests passed, without starting PostgreSQL.
+- Installed web tsc -p tsconfig.json --noEmit --incremental false passed.
+- node tools/lint.mjs passed, including lane, money and PL/pgSQL checks.
+- git diff --check origin/main passed. Static verification confirmed every main
+  migration is retained byte-for-byte and the lane has no missing/extra paths.
+
+The pnpm launcher emitted an ignored-overrides warning and did not reach Vitest;
+that invocation was interrupted, then the installed package binaries ran the
+checks above successfully. No package download was requested.
+PostgreSQL and browser execution remain for GitHub CI after router push;
+required CI and independent RED review must bind the resulting exact head.
+No commit, push, PR, provider action, deployment or release was performed here.
