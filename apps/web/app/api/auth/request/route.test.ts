@@ -30,7 +30,7 @@ it.each(["", "vercel"])("ignores even CF headers outside the Workers deployment 
   await request({ "cf-connecting-ip": "192.0.2.1", "x-forwarded-for": "192.0.2.2" });
   expect(stub.request).toHaveBeenCalledWith(body, "web-bootstrap", "https://jobguard.invalid");
 });
-it.each([undefined, "", "invented", "192.0.2.1, 192.0.2.2"])("keeps the shared fallback with missing/invalid trusted address %s", async address => {
+it.each([undefined, "", "invented", "192.0.2.1, 192.0.2.2", "192.0.2.256", "192.00.2.1", "127.1", "0x7f000001", "192.0.2.1:80", "2001:db8:::1", "[2001:db8::1]", "fe80::1%eth0", "2001:db8::1]/path", "user:pass@host"])("keeps the shared fallback with missing/invalid trusted address %s", async address => {
   vi.stubEnv("JOBGUARD_HOSTING", "cloudflare");
   await request({ ...(address === undefined ? {} : { "cf-connecting-ip": address }), "x-forwarded-for": "192.0.2.99" });
   expect(stub.request).toHaveBeenCalledWith(body, "web-bootstrap", "https://jobguard.invalid");

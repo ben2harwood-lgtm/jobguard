@@ -63,3 +63,43 @@ Initial self-check LATER / SIMPLICITY:
 measured optimization could combine the IP/global window counts into one aggregate
 query, keeping their time predicate in one place and reducing query maintenance.
 Non-blocking; no unrelated refactor included.
+
+## Repair round 1 — READY: PROPOSAL, NEEDS BEN
+
+Read the independent precheck for head `9c0db12002f3323304c9a52574ee4f236663eeb5`.
+Removed `node:net` from `apps/web/app/lib/identity-server.ts` (the actual Next
+helper path). Validate strict decimal IPv4 octets locally; validate and canonicalize
+IPv6 with the existing web URL parser after restricting literal characters.
+Invalid addresses retain the shared fallback. Added malformed-address regressions;
+the deployment gate, spoofed-header handling and rate-limit policy are unchanged.
+`action-paths.test.ts` remains unchanged, including its import allow-list.
+The SSO-required fixture now answers count queries with `{rows:[{count:0}]}`
+before its generic challenge response. No S1 assertion was changed.
+Expanded the lane to all nine non-lane files in the branch diff from the
+origin/main merge base; the lane does not grant itself.
+
+Checks actually run with installed binaries, no downloads, at most two workers
+and no more than three named Vitest files per run:
+
+- API: `./node_modules/.bin/vitest run --maxWorkers=2 src/auth/sso/action-paths.test.ts src/auth/sso/sso-required-paths.test.ts src/auth/identity-rate-limit.test.ts`
+  — after building the missing local AI package output, 35 passed and two
+  transport tests failed with `listen EPERM` because this sandbox cannot bind
+  sockets. The previously failing Next composition and SSO-required tests passed.
+- API: `./node_modules/.bin/vitest run --maxWorkers=2 src/auth/sso/action-paths.test.ts -t 'shared Nest and Next factory composition'`
+  — PASS, one passed and 17 unselected. No test source or assertion was weakened.
+- API: `./node_modules/.bin/vitest run --maxWorkers=2 src/auth/identity.test.ts`
+  — PASS, seven tests.
+- Web: `./node_modules/.bin/vitest run --maxWorkers=2 app/api/auth/request/route.test.ts app/lib/cloudflare-pools.test.ts`
+  — PASS, 26 tests, including invalid IPv4/IPv6 and URL-injection fallbacks.
+- Root: `./node_modules/.bin/tsc -p apps/api/tsconfig.json --noEmit` and
+  `./node_modules/.bin/tsc -p apps/web/tsconfig.json --noEmit` — PASS.
+- Root: `./node_modules/.bin/tsc -p packages/ai/tsconfig.json` — PASS;
+  only ignored prerequisite build output. The first API attempt could not load
+  `@jobguard/ai` until this output was built (the other two files passed).
+- Read-only comparison of the lane allow-list with the branch diff plus repair
+  files — PASS, exactly nine non-lane files. `git diff --check` — PASS.
+
+No PostgreSQL or browser suite was run here. Full socket-capable CI, database and
+browser checks, Workers runtime proof, exact-head RED review and Ben's typed
+proposal approval remain outstanding. READY means ready for router commit and
+handoff only; no commit, push, PR, merge, deployment or approval is claimed.

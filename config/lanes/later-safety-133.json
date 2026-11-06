@@ -9,6 +9,7 @@
       "allow": [
         "apps/api/src/auth/identity-rate-limit.test.ts",
         "apps/api/src/auth/persisted-auth-provider.ts",
+        "apps/api/src/auth/sso/sso-required-paths.test.ts",
         "apps/web/app/api/auth/request/route.test.ts",
         "apps/web/app/api/auth/request/route.ts",
         "apps/web/app/lib/identity-server.ts",
