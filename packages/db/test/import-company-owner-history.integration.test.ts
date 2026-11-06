@@ -33,7 +33,7 @@ it("LATER-SAFETY-118 company history follows current owners across sign-in, with
 
   // Scratch database definition: reverting only the company branch must reject S2.
   // Transaction rollback restores the real routine even when an assertion fails.
-  const sql = readFileSync(new URL("../migrations/0846_import_company_owner_history.sql", import.meta.url), "utf8");
+  const sql = readFileSync(new URL("../migrations/0668_import_company_owner_history.sql", import.meta.url), "utf8");
   const companyBranch = "(t<>'11111111-1111-4111-8111-111111111111'::uuid OR i.session_digest=d)";
   expect(sql).toContain(companyBranch);
   const scratch = await f.admin.connect();
