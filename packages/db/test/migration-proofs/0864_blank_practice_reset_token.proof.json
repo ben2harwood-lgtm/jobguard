@@ -1,0 +1,139 @@
+{
+  "migration": "0864_blank_practice_reset_token.sql",
+  "lp0": [
+    {
+      "section": "entries",
+      "before": {
+        "key": "acl|routine|function:app.start_blank_practice_company(text,text)|jobguard_runtime|EXECUTE|-",
+        "group": "a-blank-practice-company"
+      },
+      "after": null
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.start_blank_practice_company(text,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "control_plane.blank_practice_session",
+          "control_plane.practice_session"
+        ],
+        "staticCalls": [
+          "app.is_blank_practice_company"
+        ]
+      },
+      "after": {
+        "identity": "function:app.start_blank_practice_company(text,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "control_plane.blank_practice_session",
+          "control_plane.practice_session"
+        ],
+        "staticCalls": [
+          "app.is_blank_practice_company"
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.start_blank_practice_company_v2(text,text)|jobguard_runtime|EXECUTE|-",
+        "group": "a-blank-practice-company"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.start_blank_practice_company_v2(text,text)|jobguard_migration",
+        "group": "a-blank-practice-company"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.start_blank_practice_company_v2(text,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "control_plane.blank_practice_session",
+          "control_plane.practice_session"
+        ],
+        "staticCalls": [
+          "app.is_blank_practice_company"
+        ]
+      }
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "routines",
+      "before": {
+        "nspname": "app",
+        "proname": "start_blank_practice_company",
+        "args": "digest text, previous_digest text",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      },
+      "after": {
+        "nspname": "app",
+        "proname": "start_blank_practice_company",
+        "args": "digest text, previous_digest text",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "start_blank_practice_company_v2",
+        "args": "new_token text, previous_token text",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    }
+  ],
+  "tenancy": []
+}

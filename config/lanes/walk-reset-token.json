@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "walk-reset-token": {
+      "branches": [
+        "codex/sandbox/walk-reset-token"
+      ],
+      "allow": [
+        "packages/db/migrations/0864_blank_practice_reset_token.sql",
+        "packages/db/test/migration-proofs/0864_blank_practice_reset_token.proof.json",
+        "packages/db/src/blank-practice-company.ts",
+        "packages/db/src/blank-practice-company.test.ts",
+        "packages/db/test/blank-practice-company.integration.test.ts",
+        "docs/contracts/blank-practice-reset-token-v1.md"
+      ]
+    }
+  }
+}
