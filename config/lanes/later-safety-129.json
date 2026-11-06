@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-129": {
+      "branches": ["codex/sandbox/later-safety-129"],
+      "allow": [
+        "packages/db/test/audit-event-migration-read-tenant.integration.test.ts"
+      ]
+    }
+  }
+}
