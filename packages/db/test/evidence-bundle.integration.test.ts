@@ -101,3 +101,71 @@ it.each(['bundle', 'Northside'] as const)('LATER-SAFETY-47 %s follows exact dupl
   expect(lines).toHaveLength(1);
   expect(lines[0]).toMatchObject({ extraId: s.extraId, approvedNet: { pence: s.net, currency: 'GBP' } });
 }, 180_000);
+
+
+// The importer records allocation runs; lifecycle-event guard cases use the existing
+// owner fixture to append states without inventing an import-side event writer.
+async function appendBillingLifecycle(f: Awaited<ReturnType<typeof import('./contractor-billing-fixtures.js').world>>, kind: string) {
+  const { ownerTx, receipt, terminalizeFixtureReceipt } = await import('./extra-fixtures.js');
+  await ownerTx(c, f.w.p.tenantId, async tx => {
+    const commandId = randomUUID(), actor = f.w.members.finance.member.membershipId;
+    await receipt(tx, f.w.p.tenantId, f.s.jobId, f.s.extraId, actor, 'ImportBillingStatus', commandId,
+      { semanticKey: `later-safety-89:${commandId}` });
+    await tx.$client.query(`INSERT INTO app.extra_event(tenant_id,id,job_id,variation_id,kind,command_id,actor_membership_id)
+      VALUES($1,$2,$3,$4,$5,$6,$7)`, [f.w.p.tenantId, randomUUID(), f.s.jobId, f.s.extraId, kind, commandId, actor]);
+    await terminalizeFixtureReceipt(tx, f.w.p.tenantId, commandId, { kind });
+  });
+}
+
+it('LATER-SAFETY-89 preserves an intact bundle through real export, billed and paid imports and post-approval lifecycle states', async () => {
+  const { world } = await import('./contractor-billing-fixtures.js');
+  const { ContractorBundleCheckApplication } = await import('../../../apps/api/src/evidence-bundle.application.js');
+  const f = await world(c), actor = f.w.members.surveyor.member;
+  const query = { version: 'contractor-bundle-query.v1', jobId: f.s.jobId, extraId: f.s.extraId, requestId: f.s.requestId };
+  const app = new ContractorBundleCheckApplication(c.runtime, storage);
+  const check = async (present: string[]) => {
+    const loaded = await withEvidencePackV3Snapshot(c.runtime, f.ctx, tx => loadContractorBundleSources(tx, actor, query));
+    expect(loaded.sources.map(source => source.kind)).toEqual(expect.arrayContaining(present));
+    const result = await app.check(f.ctx, actor, query);
+    expect(result.reason).toBeNull();
+    expect(result.report).toMatchObject({ content: 'intact' });
+    for (const name of present) expect(result.sections).toContainEqual({ name, state: 'present' });
+  };
+  const invoice = await f.invoice(); // Full approval chain in world(), then the real export command.
+  expect((await c.admin.query('SELECT kind FROM app.extra_event WHERE tenant_id=$1 AND variation_id=$2 ORDER BY sequence DESC LIMIT 1',
+    [f.w.p.tenantId, f.s.extraId])).rows[0].kind).toBe('exported');
+  await check(['export']);
+  await f.repo.import(f.ctx, f.session, f.s.jobId, f.importInput([invoice]));
+  await check(['export', 'invoice', 'payment']);
+  await appendBillingLifecycle(f, 'billed');
+  await check(['export', 'invoice', 'payment']);
+  await f.repo.import(f.ctx, f.session, f.s.jobId, f.importInput([f.event('paid', {
+    effectiveAt: '2026-10-03T12:00:00Z', reconciliationId: 'later-safety-89-part',
+    amount: { netPence: 62000, vatPence: 12400, grossPence: 74400 },
+  })]));
+  await appendBillingLifecycle(f, 'part_paid');
+  await check(['export', 'invoice', 'payment']);
+  await f.repo.import(f.ctx, f.session, f.s.jobId, f.importInput([f.event('paid', {
+    effectiveAt: '2026-10-04T12:00:00Z', reconciliationId: 'later-safety-89-rest',
+    amount: { netPence: 62000, vatPence: 12400, grossPence: 74400 },
+  })]));
+  await appendBillingLifecycle(f, 'paid');
+  await check(['export', 'invoice', 'payment']);
+  const view = await f.repo.read(f.ctx, f.session, f.s.jobId);
+  expect(view.invoices[0]!.projection.totals.paidNet).toEqual({ numerator: '124000', denominator: '1' });
+}, 180_000);
+
+it.each(['credited', 'billing_rejected'])('LATER-SAFETY-89 refuses latest %s even with immutable approval and export facts', async kind => {
+  const { world } = await import('./contractor-billing-fixtures.js');
+  const { ContractorBundleCheckApplication } = await import('../../../apps/api/src/evidence-bundle.application.js');
+  const f = await world(c), actor = f.w.members.surveyor.member;
+  const invoice = await f.invoice();
+  await f.repo.import(f.ctx, f.session, f.s.jobId, f.importInput([invoice]));
+  await appendBillingLifecycle(f, kind);
+  const query = { version: 'contractor-bundle-query.v1', jobId: f.s.jobId, extraId: f.s.extraId, requestId: f.s.requestId };
+  await expect(withEvidencePackV3Snapshot(c.runtime, f.ctx, tx => loadContractorBundleSources(tx, actor, query)))
+    .rejects.toMatchObject({ constructor: EvidenceBundleError, code: 'EVIDENCE_BUNDLE_INVALID' });
+  const result = await new ContractorBundleCheckApplication(c.runtime, storage).check(f.ctx, actor, query);
+  expect(result).toMatchObject({ reason: 'APPROVAL_OR_SCOPE_INVALID', report: null, manifestDigest: null });
+  expect(result.sections.every(section => section.state === 'not_checked')).toBe(true);
+}, 180_000);
