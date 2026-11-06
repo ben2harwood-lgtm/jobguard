@@ -229,13 +229,31 @@ async function darkFixture() {
   return { ...f, revision, repo, scope, preview, approved, port, executor, manual };
 }
 
+// Main's practice-session dark fixture (pre-catch-up darkFixture), kept for the session-owned hiding check.
+async function practiceDarkFixture() {
+  const f = await fixture(), revision = await f.orders.revise(f.job, f.input);
+  const scoped = practiceMaterialPool(runtime, f.auth.digest);
+  const repo = new PurchaseOrderActionRepository(scoped);
+  const scope = { version: "merchant-order-scope.v1", jobId: f.job, revisionId: revision.id };
+  const preview = await repo.preview(f.auth.context, scope);
+  const approved = { version: "command.v1", commandId: randomUUID(), commandType: "purchase_order.send.dark",
+    semanticKey: `merchant-order:${f.job}:${revision.id}`, actorMembershipId: f.auth.membershipId,
+    subjectType: "purchase_order", subjectRef: revision.id,
+    action: { actionType: "purchase_order.send.dark", recipient: preview.order.recipient, contentHash: preview.contentHash,
+      aggregateRevision: revision.revision, amountPence: preview.amountPence, currency: "GBP", policyVersion: "dark-merchant-order.v1",
+      expiresAt: "2099-01-01T00:00:00Z" } };
+  const manual = { version: "manual-order-attestation.v1", jobId: f.job, revisionId: revision.id,
+    commandId: randomUUID(), supplierReference: `synthetic-${randomUUID()}` };
+  return { ...f, revision, repo, scope, preview, approved, manual };
+}
+
 describe("M2-1 dark approved merchant action on PostgreSQL", () => {
   it("upgrades main with a pre-existing order intact and needs no backfill", async () => {
     expect((await admin.query("SELECT id FROM app.purchase_order_revision WHERE tenant_id=$1 AND id=$2",
       [DEMO_TENANT_ID, upgradeRevisionId])).rows).toEqual([{ id: upgradeRevisionId }]);
   });
   it("keeps session-owned order material hidden from unscoped and other-session readers", async () => {
-    const f = await darkFixture();
+    const f = await practiceDarkFixture();
     const otherToken = await issuePracticeSession(runtime);
     const other = await authenticatePracticeSession(runtime, otherToken);
     const before = await effects();
@@ -243,7 +261,7 @@ describe("M2-1 dark approved merchant action on PostgreSQL", () => {
       const repo = new PurchaseOrderActionRepository(pool);
       await expect(repo.preview(f.auth.context, f.scope)).rejects.toThrow("ORDER_AUTHORITY_STALE");
       await expect(repo.approve(f.auth.context, f.scope, f.approved)).rejects.toThrow("ORDER_AUTHORITY_STALE");
-      await expect(repo.attestManual(f.auth.context, f.manual, f.auth.membershipId)).rejects.toThrow("ORDER_AUTHORITY_STALE");
+      await expect(repo.attestManual(f.auth.context, f.manual, { sessionDigest: f.auth.digest })).rejects.toThrow("ORDER_AUTHORITY_STALE");
     }
     expect(await effects()).toEqual(before);
     expect((await f.repo.preview(f.auth.context, f.scope)).contentHash).toBe(f.preview.contentHash);
