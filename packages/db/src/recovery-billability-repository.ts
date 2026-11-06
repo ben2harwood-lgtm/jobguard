@@ -45,6 +45,13 @@ export class RecoveryBillabilityRepository {
         ? reviewBillability(prepared.command, prepared.snapshot, prepared.authority)
         : approveBillability(prepared.command, prepared.review, prepared.snapshot, prepared.authority);
       return (await invoke(result)).replay!;
+    }).catch((error: unknown) => {
+      if (typeof error === "object" && error !== null &&
+          "code" in error && error.code === "23505" &&
+          "constraint" in error && error.constraint === "billability_one_line_approval") {
+        throw new Error("BILLABILITY_LINE_ALREADY_APPROVED");
+      }
+      throw error;
     });
   }
 }
