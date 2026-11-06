@@ -307,3 +307,49 @@ checks and journeys at the final head. No PostgreSQL or browser suite ran here;
 this sandbox cannot start PostgreSQL or bind localhost. Independent RED review
 must bind the final head. Held-out corpus, live providers, G2 and release gates
 remain closed. Earlier independent-check LATER notes remain unchanged.
+
+
+## Batch-38 catch-up after #582 — 6 November 2026
+
+RED; M2-2 through M2-5 synthetic seams, PR #584. This catch-up supersedes
+previous base/migration inventory statements above. Incoming main is
+`46f0be7ea6758835db8797aa4bccdd9193fcbe63` (`MERGE_HEAD` and `origin/main`);
+the local `main` ref is stale. Batch-37 migrations 0622 and 0623 are now merged.
+
+Resolved both fixture-list conflicts as an exact union. `laterEmptyTables`
+retains main's `app.extra_duplicate_disposition` and adds the two supplier-line
+tables. Watchdog `tables` remains exactly main's live-guard list (renamed from
+`liveGuardTables`); `mutationTables` contains that list, main's disposition table
+and both supplier tables. Counts and catalogue assertions use `mutationTables`;
+direct-insert and trigger assertions use `tables`. No other test expectation
+or product behaviour changes in this catch-up.
+
+All inherited migration SQL and proof files are byte-identical to incoming main,
+including 0622/0623. Only 0624 and its proof are added by this branch; no duplicate
+main migration remains. The 0624 SQL hash remains
+`4d8b129f60489377865da77073fdd15303c17c2c4080cdda4bac674a682002a3`.
+Its sole defined routine, `app.supplier_line_match_audit_guard`, is new: every
+incoming-main migration was checked for a prior definition and none exists.
+There are no replaced routines to recreate or diff against main's latest body.
+The existing lane lists exactly all 29 changed non-lane paths and does not list
+itself. Existing lane parser, path authorization and migration-order checks pass.
+
+Local verification using installed package binaries (at most two workers per
+Vitest invocation, at most three named files):
+- core `vitest run --maxWorkers=2 src/line-discrepancy.test.ts src/discrepancy-evaluation.test.ts src/supplier-line-matching.test.ts`: 49 passed.
+- core `vitest run --maxWorkers=1 src/supplier-match-corrections.test.ts`: 5 passed.
+- ai `vitest run --maxWorkers=1 src/merchant-extraction.test.ts`: 33 passed.
+- db `vitest run --maxWorkers=2 test/supplier-line-migration-proofs.test.ts test/m2-1-migration-proof.test.ts test/late-source-import-migration.test.ts`: 9 passed.
+- db `vitest run --maxWorkers=2 test/merchant-intake-port.test.ts test/purchase-order-action.test.ts`: 61 passed; protocol doubles, not PostgreSQL evidence.
+- db `tsc -p tsconfig.json --noEmit`: passed. Both resolved fixture files also
+  pass TypeScript transpilation diagnostics (tests are outside db's tsconfig).
+- `node tools/plpgsql-case-in-if-lint.mjs` and `git diff --check origin/main`: passed.
+- `pnpm --version` could not complete its signed-version registry check in this
+  network-restricted sandbox; no packages were installed, and checks above used
+  the already installed package-local executables.
+
+READY for the router to stage the two resolved conflict files, commit and push
+the same branch. The Git index remains unmerged because this sandbox prohibits
+Git writes. Required GitHub CI, real PostgreSQL/browser suites, commit-bound
+lane validation and independent RED review at the final head remain landing
+gates. No suite or review is claimed from this handoff beyond the checks above.
