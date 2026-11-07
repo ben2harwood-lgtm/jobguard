@@ -7,10 +7,11 @@
       ],
       "allow": [
         "apps/web/e2e/MON-6-stored-pay-now-preview.spec.ts",
-        "packages/db/migration-notes/0660_final_account_draft_advance_guard.md",
-        "packages/db/migrations/0660_final_account_draft_advance_guard.sql",
+        "packages/db/migration-notes/0677_final_account_draft_advance_guard.md",
+        "packages/db/migrations/0677_final_account_draft_advance_guard.sql",
         "packages/db/test/final-account-draft-advance-guard.integration.test.ts",
-        "packages/db/test/migration-proofs/0660_final_account_draft_advance_guard.proof.json"
+        "packages/db/test/migration-proofs/0677_final_account_draft_advance_guard.proof.json",
+        "packages/db/test/recovery-line-allocation.integration.test.ts"
       ]
     }
   }
