@@ -17,7 +17,7 @@ const storedV1 = z.object({ commandId: id, actorId: id, revision: z.number().int
 }).strict();
 const hash = (value: unknown) => sha256Hex(canonicalJson(value));
 export class InterimDraftRepositoryError extends Error {
-  constructor(public readonly code: "INVALID_INPUT" | "NOT_FOUND" | "CONFLICT" | "UNAVAILABLE" | "DARK") {
+  constructor(public readonly code: "INVALID_INPUT" | "NOT_FOUND" | "CONFLICT" | "UNAVAILABLE" | "DARK" | "FORBIDDEN") {
     super(`INTERIM_DRAFT_${code}`); this.name = "InterimDraftRepositoryError";
   }
 }
@@ -31,13 +31,14 @@ export class InterimDraftRepository {
     try { return await work(); } catch (error) {
       if (error instanceof InterimApplicationError || error instanceof InterimDraftRepositoryError) throw error;
       const message = error instanceof Error ? error.message : "";
+      if (message === "METER_FORBIDDEN") throw new InterimDraftRepositoryError("FORBIDDEN");
       for (const code of ["INVALID_INPUT", "NOT_FOUND", "CONFLICT", "DARK"] as const) {
         if (message === `INTERIM_DRAFT_${code}`) throw new InterimDraftRepositoryError(code);
       }
       throw new InterimDraftRepositoryError("UNAVAILABLE");
     }
   }
-  private async load(db: TenantTransaction, context: VerifiedTenantContext, jobId: string, actor: string | null) {
+  private async load(db: TenantTransaction, context: VerifiedTenantContext, jobId: string, actor: string) {
     const result: unknown = (await db.$client.query(
       "SELECT app.interim_draft_records($1,$2,$3,'read',$4::jsonb) result",
       [context.tenantId, actor, jobId, "{}"])).rows[0]?.result;
@@ -50,9 +51,9 @@ export class InterimDraftRepository {
     return { watermark: INTERIM_APPLICATION_WATERMARK, lineage: "fixture_lineage_not_authority" as const,
       rows, book, reconciliation: reconcileInterimDraftBook(book) };
   }
-  async read(context: VerifiedTenantContext, jobId: string) {
-    const parsed = id.safeParse(jobId); if (!parsed.success) invalid();
-    return this.guarded(() => withTenant(this.pool, context, db => this.load(db, context, parsed.data, null)));
+  async read(context: VerifiedTenantContext, jobId: string, actor: string) {
+    const parsed = id.safeParse(jobId); if (!parsed.success || !/^[a-f0-9]{64}$/u.test(actor)) invalid();
+    return this.guarded(() => withTenant(this.pool, context, db => this.load(db, context, parsed.data, actor)));
   }
   async command(context: VerifiedTenantContext, actor: string, raw: unknown) {
     const parsed = commandV1.safeParse(raw);
