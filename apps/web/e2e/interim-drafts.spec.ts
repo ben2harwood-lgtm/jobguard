@@ -75,7 +75,7 @@ test("stored kinds survive reload, uncertain retry is unique, duplicate billing 
     await page.reload(); await expect(alert).toHaveText("Stored draft book loaded.");
     await expect(main.getByRole("region",{name:"Synthetic receipt",exact:true}).locator("pre")).toHaveCount(1);
     await expect(main.getByRole("region",{name:"Synthetic receipt",exact:true})).toContainText(receipt.id);
-    const saved = await repository.read(verified,jobId); expect(saved.book.records).toHaveLength(5);
+    const saved = await repository.read(verified,jobId,digest); expect(saved.book.records).toHaveLength(5);
     expect(saved.reconciliation.lines[0]).toMatchObject({applied:{pence:8000},certified:{pence:6000},invoiced:{pence:4000}});
     expect(saved.reconciliation.grossReceived.pence).toBe(2000);
     await expect(main.getByRole("region",{name:"Application",exact:true})).toContainText("8000");
@@ -85,7 +85,7 @@ test("stored kinds survive reload, uncertain retry is unique, duplicate billing 
     await main.getByLabel("Record JSON",{exact:false}).fill(JSON.stringify({...invoice,id:randomUUID()}));
     await main.getByRole("button",{name:"Add record",exact:true}).click();
     await expect(alert).toHaveText("The same completed value cannot be invoiced twice");
-    expect((await repository.read(verified,jobId)).book.records).toHaveLength(5);
+    expect((await repository.read(verified,jobId,digest)).book.records).toHaveLength(5);
     await main.getByRole("button",{name:"Reload stored book"}).click();
     await expect(alert).toHaveText("Stored draft book loaded.");
     const post = (body: unknown) => page.request.post(endpoint, { headers: { Origin: baseURL!, "x-csrf-token": session.csrfToken }, data: body });
@@ -94,7 +94,7 @@ test("stored kinds survive reload, uncertain retry is unique, duplicate billing 
     const conflict = await post({...replay,record:{...receipt,amountPence:2001}});
     expect(conflict.status()).toBe(409); expect(await conflict.json()).toMatchObject({code:"INTERIM_DRAFT_CONFLICT"});
     for (const forged of [{tenantId:randomUUID()},{actor:digest},{enabled:true}]) expect((await post({...replay,...forged})).status()).toBe(400);
-    expect((await repository.read(verified,jobId)).book.records).toHaveLength(5);
+    expect((await repository.read(verified,jobId,digest)).book.records).toHaveLength(5);
     for (const target of await main.locator("button, textarea").all()) {
       const box = await target.boundingBox(); expect(box!.height).toBeGreaterThanOrEqual(44);
     }
