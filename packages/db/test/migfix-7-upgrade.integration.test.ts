@@ -80,15 +80,6 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   // Exact existing replacements only; all their privileges and unrelated definitions remain frozen.
   const fullBodies = new Map<string, string>();
   for (const [identity, migration] of [
-    ["app.ch6_integrity_authority(t uuid, j uuid, digest text)", "0823_baseline_ancestry_audit_trust.sql"],
-    ["app.ch6_integrity_sources(t uuid, j uuid, d text)", "0823_baseline_ancestry_audit_trust.sql"],
-    ["app.ch6_record_integrity_review(t uuid, j uuid, digest text, review jsonb, source_snapshot jsonb)", "0823_baseline_ancestry_audit_trust.sql"],
-    ["app.decision_check_command(p_digest text, p_command jsonb, p_phase text, p_data jsonb)", "0823_baseline_ancestry_audit_trust.sql"],
-    ["app.replace_fee_reservation_book(p_tenant uuid, p_book jsonb, p_result jsonb)", "0651_fee_result_forward_only.sql"],
-    ["app.demo_issue_customer_link(t uuid, j uuid, c uuid, session_digest text, link_digest text, content text)", "0650_demo_customer_link_reference.sql"],
-    ["app.retention_records(t uuid, digest text, j uuid, cid uuid, v jsonb, expected text)", "0646_retention_timer_runtime_rules.sql"],
-    ["app.notice_fixture_records(j uuid, n uuid, digest text, operation text, v jsonb)", "0647_notice_live_job_check.sql"],
-    ["app.pay_now_fake_attempt(t uuid, digest text, j uuid, operation text, v jsonb)", "0648_pay_now_catch_statement.sql"],
     ["app.lp5_command_result(p_command_id uuid, p_outcome jsonb)", "0634_extra_proceed_statement.sql"],
     ["app.xa_approve(p_job uuid, p_request uuid, p_command uuid, p_actor uuid, p_step integer, p_hash text, p_net bigint, p_reject boolean, p_reason text)", "0635_extra_same_step.sql"],
     ["app.xa_withdraw(p_job uuid, p_variation uuid, p_command uuid, p_actor uuid, p_reason text)", "0636_extra_withdraw_roles.sql"],
@@ -106,6 +97,10 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["identity.dark_emergency(s text, csrf text, t uuid, p jsonb)", "0655_emergency_token_minted.sql"],
     ["app.replace_fee_reservation_book(p_tenant uuid, p_book jsonb, p_result jsonb)", "0656_fee_result_malformed_proof.sql"],
     ["app.lp6_session_authority(p_kind text, p_credential text, p_tenant uuid)", "0658_lp6b_effective_session_actor.sql"],
+    ["app.ch6_integrity_authority(t uuid, j uuid, digest text)", "0677_baseline_ancestry_audit_trust.sql"],
+    ["app.ch6_integrity_sources(t uuid, j uuid, d text)", "0677_baseline_ancestry_audit_trust.sql"],
+    ["app.ch6_record_integrity_review(t uuid, j uuid, digest text, review jsonb, source_snapshot jsonb)", "0677_baseline_ancestry_audit_trust.sql"],
+    ["app.decision_check_command(p_digest text, p_command jsonb, p_phase text, p_data jsonb)", "0677_baseline_ancestry_audit_trust.sql"],
   ]) {
     const source = await readFile(new URL(`../migrations/${migration}`, import.meta.url), "utf8");
     if (identity!.startsWith("app.decision_check_command(")) {

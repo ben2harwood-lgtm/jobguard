@@ -1,5 +1,5 @@
 {
-  "migration": "0823_baseline_ancestry_audit_trust.sql",
+  "migration": "0677_baseline_ancestry_audit_trust.sql",
   "lp0": [
     {
       "section": "routines",

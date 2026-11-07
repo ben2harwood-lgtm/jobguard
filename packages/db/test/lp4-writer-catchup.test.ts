@@ -13,7 +13,7 @@ const recreatedWriters: { name: string; file: string; sql: string }[] = [];
 for (const file of readdirSync(directory).filter(f => /^\d{4}.*\.sql$/.test(f)).sort()) {
   for (const fn of functions(readFileSync(new URL(file, directory), "utf8"))) {
     final.set(fn.name, fn.sql);
-    if (file !== sealingMigration && !(file === "0823_baseline_ancestry_audit_trust.sql" && fn.name === "app.decision_check_command")) main.set(fn.name, { file, sql: fn.sql });
+    if (file !== sealingMigration && !(file === "0677_baseline_ancestry_audit_trust.sql" && fn.name === "app.decision_check_command")) main.set(fn.name, { file, sql: fn.sql });
     if (file > sealingMigration && replacements.has(fn.name)) recreatedWriters.push({ ...fn, file });
   }
 }
@@ -53,7 +53,7 @@ describe("LP-4 catch-up preserves latest main routine behaviour", () => {
     expect(replacement).not.toContain("app.lock_audit_head()");
   });
   it("LATER-SAFETY-87 pins the complete successor decision writer", () => {
-    const successor = functions(readFileSync(new URL("0823_baseline_ancestry_audit_trust.sql", directory), "utf8"))
+    const successor = functions(readFileSync(new URL("0677_baseline_ancestry_audit_trust.sql", directory), "utf8"))
       .filter(fn => fn.name === "app.decision_check_command");
     expect(successor).toHaveLength(1);
     expect(final.get("app.decision_check_command")).toBe(successor[0]!.sql);
