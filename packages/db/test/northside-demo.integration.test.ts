@@ -87,7 +87,7 @@ it("FLAKE-DIAG-1 measures legacy/new reads and preserves allowed AND denied seed
       expect(authorityLoops[1]).toBeLessThan(authorityLoops[0]!);
       const legacy = (await db.$client.query(legacyAssignedJobsQuery, args)).rows;
       const optimized = (await db.$client.query(assignedJobsQuery, args)).rows;
-      expect(optimized).toEqual(legacy); // includes order, all fields and caller's visit
+      expect(optimized).toEqual(legacy.map(row => ({ ...row, last_completed_visit: null }))); // includes order, all fields and caller's visit; no visit is completed yet
       const decisions = (await db.$client.query(`SELECT w.job_id,a.decision,a.reason_code
         FROM app.work_order w CROSS JOIN LATERAL app.ent3b_visit_authority($2,w.job_id) a
         WHERE w.tenant_id=$1 ORDER BY w.job_id`, args)).rows;
@@ -103,7 +103,7 @@ it("FLAKE-DIAG-1 measures legacy/new reads and preserves allowed AND denied seed
       return legacy;
     });
     const actual = await new SiteVisitRepository(c.runtime).assignedJobs(context, actor);
-    expect(actual).toEqual({ truncated: false, jobs: expected.map(row => ({ jobId: row.job_id, workOrderId: row.work_order_id, reference: row.reference, priority: row.priority, issuedOn: row.issued_on, dueOn: row.due_on, openVisitId: row.open_visit })) });
+    expect(actual).toEqual({ truncated: false, jobs: expected.map(row => ({ jobId: row.job_id, workOrderId: row.work_order_id, reference: row.reference, priority: row.priority, issuedOn: row.issued_on, dueOn: row.due_on, openVisitId: row.open_visit, lastCompletedVisit: null })) });
   } finally {
     await switches.switchOff(await requestContext(c, session), session.p, session.session, { version: "practice-worker-switch-off.v1", commandId: randomUUID() });
   }

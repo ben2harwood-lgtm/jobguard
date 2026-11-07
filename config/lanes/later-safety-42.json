@@ -13,6 +13,9 @@
         "packages/core/src/site-visit.test.ts",
         "packages/core/src/site-visit.ts",
         "packages/db/src/site-visit-repository.ts",
+        "packages/db/src/site-jobs-scope.test.ts",
+        "packages/db/test/site-jobs-scope.integration.test.ts",
+        "packages/db/test/northside-demo.integration.test.ts",
         "packages/db/test/site-visit.integration.test.ts"
       ]
     }

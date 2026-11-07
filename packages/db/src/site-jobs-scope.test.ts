@@ -7,7 +7,7 @@ import { verifiedTenantContextFromMembership, type AuthenticatedMembership } fro
 it.each([0, 200, 201])("the request uses the scope query and preserves projection and truncation for %i rows", async count => {
  const actor = { tenantId: randomUUID(), membershipId: randomUUID(), identityUserId: randomUUID() } as AuthenticatedMembership;
  const context = verifiedTenantContextFromMembership(actor);
- const rows = Array.from({ length: count }, (_, i) => ({ job_id: randomUUID(), work_order_id: randomUUID(), reference: `FICTIONAL-${i}`, priority: "routine", issued_on: "2026-10-01", due_on: null, open_visit: i === 0 ? randomUUID() : null }));
+ const rows = Array.from({ length: count }, (_, i) => ({ job_id: randomUUID(), work_order_id: randomUUID(), reference: `FICTIONAL-${i}`, priority: "routine", issued_on: "2026-10-01", due_on: null, open_visit: i === 0 ? randomUUID() : null, last_completed_visit: i === 1 ? { visitId: randomUUID(), closeoutAnswer: "yes" as const } : null }));
  const query = vi.fn(async (sql: string, values?: unknown[]) => {
   if (sql === assignedJobsByScopeQuery) {
    expect(values).toEqual([actor.tenantId, actor.membershipId]);
@@ -28,5 +28,5 @@ it.each([0, 200, 201])("the request uses the scope query and preserves projectio
  const pool = { connect: async () => ({ query, release: () => undefined }) } as unknown as Pool;
  const actual = await new SiteVisitRepository(pool).assignedJobs(context, actor);
  expect(query.mock.calls.filter(([sql]) => sql === assignedJobsByScopeQuery)).toHaveLength(1);
- expect(actual).toEqual({ jobs: rows.slice(0, 200).map(r => ({ jobId: r.job_id, workOrderId: r.work_order_id, reference: r.reference, priority: r.priority, issuedOn: r.issued_on, dueOn: r.due_on, openVisitId: r.open_visit })), truncated: count > 200 });
+ expect(actual).toEqual({ jobs: rows.slice(0, 200).map(r => ({ jobId: r.job_id, workOrderId: r.work_order_id, reference: r.reference, priority: r.priority, issuedOn: r.issued_on, dueOn: r.due_on, openVisitId: r.open_visit, lastCompletedVisit: r.last_completed_visit })), truncated: count > 200 });
 });
