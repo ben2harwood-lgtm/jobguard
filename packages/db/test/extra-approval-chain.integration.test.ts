@@ -1,3 +1,4 @@
+import { testActorContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { evaluateExtraApprovalRequirement } from "@jobguard/core";
@@ -14,14 +15,14 @@ const outcome = async (request: string) => (await sql("SELECT kind,actor_kind,by
 const lastEvent = async (extra: string) => (await sql("SELECT kind FROM app.extra_event WHERE variation_id=$1 ORDER BY sequence DESC LIMIT 1", [extra]))[0]?.kind as string;
 const issue = (s: { jobId: string; requestId: string }, over: Record<string, unknown> = {}) => {
   const token = newToken();
-  return emailOf(c, w, client().membershipId).then(async recipient => ({ token, recipient, run: () => repo.issueClientApproval(ctx, surveyor(), { version: "issue-client-approval.v1", commandId: randomUUID(), jobId: s.jobId, requestId: s.requestId, approverMembershipId: client().membershipId, recipient, linkToken: token, expiresAt: new Date(Date.now() + 3600_000), ...over }) }));
+  return emailOf(c, w, client().membershipId).then(async recipient => ({ token, recipient, run: async () => repo.issueClientApproval(await testActorContext(c.admin, ctx, surveyor()), surveyor(), { version: "issue-client-approval.v1", commandId: randomUUID(), jobId: s.jobId, requestId: s.requestId, approverMembershipId: client().membershipId, recipient, linkToken: token, expiresAt: new Date(Date.now() + 3600_000), ...over }) }));
 };
-const decide = (s: { jobId: string; requestId: string; hash: string; net: number }, token: string, email: string, over: Record<string, unknown> = {}, by = client()) =>
-  repo.decideClientApproval(ctx, by, { version: "decide-client-approval.v1", commandId: randomUUID(), jobId: s.jobId, requestId: s.requestId, linkToken: token, email, revisionHash: s.hash, netPence: s.net, decision: "approve", fictionalRoleName: "Fictional Housing Approver", actualTesterReference: "tester:practice-ben", ...over });
+const decide = async (s: { jobId: string; requestId: string; hash: string; net: number }, token: string, email: string, over: Record<string, unknown> = {}, by = client()) =>
+  repo.decideClientApproval(await testActorContext(c.admin, ctx, by), by, { version: "decide-client-approval.v1", commandId: randomUUID(), jobId: s.jobId, requestId: s.requestId, linkToken: token, email, revisionHash: s.hash, netPence: s.net, decision: "approve", fictionalRoleName: "Fictional Housing Approver", actualTesterReference: "tester:practice-ben", ...over });
 /** An extra whose company steps are done so the client step is next (net 150000: supervisor, supervisor, client). */
 async function atClientStep() {
   const s = await submitted(c, w, 150000);
-  await repo.approveExtraStep(ctx, sup(), approveInput(s, 0)); await repo.approveExtraStep(ctx, sup2(), approveInput(s, 1));
+  await repo.approveExtraStep(await testActorContext(c.admin, ctx, sup()), sup(), approveInput(s, 0)); await repo.approveExtraStep(await testActorContext(c.admin, ctx, sup2()), sup2(), approveInput(s, 1));
   return s;
 }
 beforeAll(async () => {
@@ -37,15 +38,15 @@ it("E5B-01 journey: price, submit, grant-filtered queue, company steps, owner-ap
   expect(mine).toHaveLength(1); expect(mine[0]).toMatchObject({ lane: "mandatory", step_index: 0, step_role: "supervisor", escalated: false });
   expect((await repo.queue(ctx, surveyor().membershipId)).filter(x => x.request_id === s.requestId)).toEqual([]);
   expect((await repo.queue(ctx, w.otherSupervisor.member.membershipId)).filter(x => x.request_id === s.requestId)).toEqual([]);
-  await repo.approveExtraStep(ctx, sup(), approveInput(s, 0));
-  expect(await code(repo.approveExtraStep(ctx, sup(), approveInput(s, 1)))).toBe("REUSED_APPROVER");
-  await repo.approveExtraStep(ctx, sup2(), approveInput(s, 1));
-  expect(await code(repo.approveExtraStep(ctx, cm(), approveInput(s, 2)))).toBe("CLIENT_STEP_REQUIRES_CLIENT");
+  await repo.approveExtraStep(await testActorContext(c.admin, ctx, sup()), sup(), approveInput(s, 0));
+  expect(await code(repo.approveExtraStep(await testActorContext(c.admin, ctx, sup()), sup(), approveInput(s, 1)))).toBe("REUSED_APPROVER");
+  await repo.approveExtraStep(await testActorContext(c.admin, ctx, sup2()), sup2(), approveInput(s, 1));
+  expect(await code(repo.approveExtraStep(await testActorContext(c.admin, ctx, cm()), cm(), approveInput(s, 2)))).toBe("CLIENT_STEP_REQUIRES_CLIENT");
   expect(await outcome(s.requestId)).toEqual([]);
   const i = await issue(s), sent = await i.run();
   const box = (await sql("SELECT status,adapter,recipient,action_type FROM app.action_outbox WHERE id=$1", [sent.outboxActionId]))[0];
   expect(box).toMatchObject({ status: "pending", adapter: "fake_email", action_type: "extra.client_approval_request.send" }); expect(box.recipient).toMatch(/\.invalid$/u);
-  const view = await repo.clientApprovalView(ctx, client(), { version: "client-approval-view.v1", jobId: s.jobId, requestId: s.requestId, linkToken: i.token, email: i.recipient });
+  const view = await repo.clientApprovalView(await testActorContext(c.admin, ctx, client()), client(), { version: "client-approval-view.v1", jobId: s.jobId, requestId: s.requestId, linkToken: i.token, email: i.recipient });
   expect(view).toMatchObject({ netPence: 150000, revisionHash: s.hash, doneWithoutRequiredPreapproval: "not_derived" }); expect((view.companyApprovals as unknown[]).length).toBe(2);
   const cmd = randomUUID(), done = await decide(s, i.token, i.recipient, { commandId: cmd });
   expect(done).toMatchObject({ state: "approved", stepIndex: 2 });
@@ -63,24 +64,24 @@ it("E5B-01 journey: price, submit, grant-filtered queue, company steps, owner-ap
 
 it("E5B-02 stale revision, wrong hash/net, unpriced and replay semantics", async () => {
   const s = await submitted(c, w, 40000);
-  expect(await code(repo.approveExtraStep(ctx, sup(), approveInput(s, 0, { revisionHash: "a".repeat(64) })))).toBe("HASH_MISMATCH");
-  expect(await code(repo.approveExtraStep(ctx, sup(), approveInput(s, 0, { netPence: 40001 })))).toBe("HASH_MISMATCH");
-  expect(await code(repo.approveExtraStep(ctx, sup(), approveInput(s, 0)))).toBe("ok"); // approved at 40000 by the supervisor
+  expect(await code(repo.approveExtraStep(await testActorContext(c.admin, ctx, sup()), sup(), approveInput(s, 0, { revisionHash: "a".repeat(64) })))).toBe("HASH_MISMATCH");
+  expect(await code(repo.approveExtraStep(await testActorContext(c.admin, ctx, sup()), sup(), approveInput(s, 0, { netPence: 40001 })))).toBe("HASH_MISMATCH");
+  expect(await code(repo.approveExtraStep(await testActorContext(c.admin, ctx, sup()), sup(), approveInput(s, 0)))).toBe("ok"); // approved at 40000 by the supervisor
   const revise = { version: "revise-extra.v1", commandId: randomUUID(), jobId: s.jobId, extraId: s.extraId, netPence: 60000 };
-  const second = await repo.reviseExtra(ctx, surveyor(), revise);
+  const second = await repo.reviseExtra(await testActorContext(c.admin, ctx, surveyor()), surveyor(), revise);
   expect(second).toMatchObject({ state: "awaiting_approval", requestRevision: 2, stepCount: 2 });
-  expect(await repo.reviseExtra(ctx, surveyor(), revise)).toEqual(second); // replay returns the first answer
-  expect(await code(repo.reviseExtra(ctx, surveyor(), { ...revise, netPence: 60001 }))).toBe("COMMAND_CONFLICT"); // same command id, different content
-  expect(await code(repo.approveExtraStep(ctx, sup2(), approveInput(s, 0)))).toBe("STALE_REVISION"); // revision 1 after 2 exists (even though it was decided)
+  expect(await repo.reviseExtra(await testActorContext(c.admin, ctx, surveyor()), surveyor(), revise)).toEqual(second); // replay returns the first answer
+  expect(await code(repo.reviseExtra(await testActorContext(c.admin, ctx, surveyor()), surveyor(), { ...revise, netPence: 60001 }))).toBe("COMMAND_CONFLICT"); // same command id, different content
+  expect(await code(repo.approveExtraStep(await testActorContext(c.admin, ctx, sup2()), sup2(), approveInput(s, 0)))).toBe("STALE_REVISION"); // revision 1 after 2 exists (even though it was decided)
   const s2 = { ...s, requestId: second.requestId as string, hash: second.revisionHash as string, net: 60000 };
-  expect(await code(repo.approveExtraStep(ctx, sup(), approveInput(s2, 0)))).toBe("ok"); // Q04: same person can occupy the same slot on a new request revision
-  expect(await code(repo.approveExtraStep(ctx, sup2(), approveInput(s2, 0)))).toBe("STEP_OUT_OF_ORDER");
-  expect(await code(repo.approveExtraStep(ctx, sup(), approveInput(s2, 1)))).toBe("REUSED_APPROVER"); // approved step 0 of the first version, may not fill step 1 of the next
+  expect(await code(repo.approveExtraStep(await testActorContext(c.admin, ctx, sup()), sup(), approveInput(s2, 0)))).toBe("ok"); // Q04: same person can occupy the same slot on a new request revision
+  expect(await code(repo.approveExtraStep(await testActorContext(c.admin, ctx, sup2()), sup2(), approveInput(s2, 0)))).toBe("STEP_OUT_OF_ORDER");
+  expect(await code(repo.approveExtraStep(await testActorContext(c.admin, ctx, sup()), sup(), approveInput(s2, 1)))).toBe("REUSED_APPROVER"); // approved step 0 of the first version, may not fill step 1 of the next
   const bindings = await sql("SELECT logical_revision,source_kind FROM app.extra_approval_revision_binding WHERE variation_id=$1 ORDER BY logical_revision", [s.extraId]);
   expect(bindings).toEqual([{ logical_revision: 1, source_kind: "ordinary" }, { logical_revision: 2, source_kind: "ordinary" }]);
   const un = await submitted(c, w, null);
   expect(un.result).toMatchObject({ netPence: null, stepCount: 3 });
-  expect(await code(repo.approveExtraStep(ctx, sup(), { ...approveInput({ ...un, net: 1 }, 0), netPence: 1 }))).toBe("HASH_MISMATCH");
+  expect(await code(repo.approveExtraStep(await testActorContext(c.admin, ctx, sup()), sup(), { ...approveInput({ ...un, net: 1 }, 0), netPence: 1 }))).toBe("HASH_MISMATCH");
   const row = (await sql("SELECT requirement,comparisons,net_pence FROM app.extra_approval_request WHERE id=$1", [un.requestId]))[0];
   expect(row.net_pence).toBeNull(); expect(row.requirement.clientRequired).toBe(true); expect(row.comparisons).toMatchObject({ withinProceedLimit: false, aboveClientThreshold: true, aboveClientBeforeWorkThreshold: true });
   expect(await sql("SELECT 1 FROM app.extra_approval_step_fact WHERE request_id=$1", [un.requestId])).toEqual([]);
@@ -103,28 +104,28 @@ it("E5B-03 thresholds exact at pence equality, SQL snapshot equals the pure eval
 
 it("E5B-04 refused approvers: self, wrong role, grant not covering the job, revoked member, out of order", async () => {
   const mine = await submitted(c, w, 40000, "supervisor"); // the supervisor raised it
-  expect(await code(repo.approveExtraStep(ctx, sup(), approveInput(mine, 0)))).toBe("SELF_APPROVAL");
+  expect(await code(repo.approveExtraStep(await testActorContext(c.admin, ctx, sup()), sup(), approveInput(mine, 0)))).toBe("SELF_APPROVAL");
   const s = await submitted(c, w, 150000);
-  expect(await code(repo.approveExtraStep(ctx, sup(), approveInput(s, 1)))).toBe("STEP_OUT_OF_ORDER");
-  expect(await code(repo.approveExtraStep(ctx, surveyor(), approveInput(s, 0)))).toBe("PERMISSION_DENIED"); // not the step's role, no escalation
-  expect(await code(repo.approveExtraStep(ctx, w.otherSupervisor.member, approveInput(s, 0)))).toBe("PERMISSION_DENIED"); // grant is on another team
-  expect(await code(repo.approveExtraStep(ctx, w.members.operative.member, approveInput(s, 0)))).toBe("PERMISSION_DENIED");
+  expect(await code(repo.approveExtraStep(await testActorContext(c.admin, ctx, sup()), sup(), approveInput(s, 1)))).toBe("STEP_OUT_OF_ORDER");
+  expect(await code(repo.approveExtraStep(await testActorContext(c.admin, ctx, surveyor()), surveyor(), approveInput(s, 0)))).toBe("PERMISSION_DENIED"); // not the step's role, no escalation
+  expect(await code(repo.approveExtraStep(await testActorContext(c.admin, ctx, w.otherSupervisor.member), w.otherSupervisor.member, approveInput(s, 0)))).toBe("PERMISSION_DENIED"); // grant is on another team
+  expect(await code(repo.approveExtraStep(await testActorContext(c.admin, ctx, w.members.operative.member), w.members.operative.member, approveInput(s, 0)))).toBe("PERMISSION_DENIED");
   const gone = await (async () => { const a = (await import("./site-extra-fixtures.js")).invite; return a(c, w, "supervisor", { kind: "team", id: w.demo.teamId }); })();
   await command(c, w, { kind: "grant.revoke", grantId: gone.grant });
-  expect(await code(repo.approveExtraStep(ctx, gone.member, approveInput(s, 0)))).toBe("PERMISSION_DENIED"); // revoked
+  expect(await code(repo.approveExtraStep(await testActorContext(c.admin, ctx, gone.member), gone.member, approveInput(s, 0)))).toBe("PERMISSION_DENIED"); // revoked
   expect(await sql("SELECT 1 FROM app.extra_approval_step_fact WHERE request_id=$1", [s.requestId])).toEqual([]);
   expect(await code(repo.approveExtraStep({ tenantId: randomUUID() } as VerifiedTenantContext, sup(), approveInput(s, 0)))).not.toBe("ok");
 });
 
 it("E5B-05 races: approve vs withdraw gives one effect; two approvers on one step give one fact", async () => {
   const a = await submitted(c, w, 40000);
-  const raceA = await Promise.allSettled([repo.approveExtraStep(ctx, sup(), approveInput(a, 0)), repo.withdrawExtra(ctx, sup2(), { version: "withdraw-extra.v1", commandId: randomUUID(), jobId: a.jobId, extraId: a.extraId, reasonCode: "not_done" })]);
+  const raceA = await Promise.allSettled([repo.approveExtraStep(await testActorContext(c.admin, ctx, sup()), sup(), approveInput(a, 0)), repo.withdrawExtra(await testActorContext(c.admin, ctx, sup2()), sup2(), { version: "withdraw-extra.v1", commandId: randomUUID(), jobId: a.jobId, extraId: a.extraId, reasonCode: "not_done" })]);
   expect(raceA.filter(r => r.status === "fulfilled")).toHaveLength(1);
   expect((raceA.find(r => r.status === "rejected") as PromiseRejectedResult).reason.code).toBe("ALREADY_DECIDED");
   expect(await outcome(a.requestId)).toHaveLength(1);
   const events = (await sql("SELECT kind FROM app.extra_event WHERE variation_id=$1 AND kind IN('approved','withdrawn')", [a.extraId])).length; expect(events).toBe(1);
   const b = await submitted(c, w, 40000);
-  const raceB = await Promise.allSettled([repo.approveExtraStep(ctx, sup(), approveInput(b, 0)), repo.approveExtraStep(ctx, sup2(), approveInput(b, 0))]);
+  const raceB = await Promise.allSettled([repo.approveExtraStep(await testActorContext(c.admin, ctx, sup()), sup(), approveInput(b, 0)), repo.approveExtraStep(await testActorContext(c.admin, ctx, sup2()), sup2(), approveInput(b, 0))]);
   expect(raceB.filter(r => r.status === "fulfilled")).toHaveLength(1);
   expect((raceB.find(r => r.status === "rejected") as PromiseRejectedResult).reason.code).toBe("ALREADY_DECIDED");
   expect(await sql("SELECT 1 FROM app.extra_approval_step_fact WHERE request_id=$1 AND step_index=0", [b.requestId])).toHaveLength(1);
@@ -142,7 +143,7 @@ it("E5B-06 client approval refusals: forged, expired, revoked, replaced, other e
   expect(await code(decide(s, i.token, i.recipient))).toBe("ok");
   expect(await code(decide(s, i.token, i.recipient))).toBe("LINK_REPLAYED"); // new command id, same link
   const r = await atClientStep(), j = await issue(r), sent = await j.run();
-  await repo.revokeClientApproval(ctx, owner(), { version: "revoke-client-approval.v1", commandId: randomUUID(), jobId: r.jobId, linkId: sent.linkId });
+  await repo.revokeClientApproval(await testActorContext(c.admin, ctx, owner()), owner(), { version: "revoke-client-approval.v1", commandId: randomUUID(), jobId: r.jobId, linkId: sent.linkId });
   expect(await code(decide(r, j.token, j.recipient))).toBe("LINK_REVOKED");
   expect((await sql("SELECT status FROM app.action_outbox WHERE id=$1", [sent.outboxActionId]))[0].status).toBe("cancelled");
   const q = await atClientStep(), first = await (await issue(q)).run(), again = await issue(q), second = await again.run();
@@ -152,18 +153,18 @@ it("E5B-06 client approval refusals: forged, expired, revoked, replaced, other e
   expect(await code(decide(q, again.token, again.recipient))).toBe("ok");
   const e = await atClientStep(), soon = await issue(e, { expiresAt: new Date(Date.now() + 1500) }); await soon.run(); await sleep(1700);
   expect(await code(decide(e, soon.token, soon.recipient))).toBe("LINK_EXPIRED");
-  expect(await code(repo.clientApprovalView(ctx, client(), { version: "client-approval-view.v1", jobId: e.jobId, requestId: e.requestId, linkToken: soon.token, email: soon.recipient }))).toBe("LINK_EXPIRED");
+  expect(await code(repo.clientApprovalView(await testActorContext(c.admin, ctx, client()), client(), { version: "client-approval-view.v1", jobId: e.jobId, requestId: e.requestId, linkToken: soon.token, email: soon.recipient }))).toBe("LINK_EXPIRED");
   const k = await atClientStep(), live = await issue(k); await live.run();
   await command(c, w, { kind: "grant.revoke", grantId: w.members.client_approver.grant });
   expect(await code(decide(k, live.token, live.recipient))).toBe("PERMISSION_DENIED");
   // A revoked client can no longer read the description, price or approval history through the still-open link.
-  expect(await code(repo.clientApprovalView(ctx, client(), { version: "client-approval-view.v1", jobId: k.jobId, requestId: k.requestId, linkToken: live.token, email: live.recipient }))).toBe("PERMISSION_DENIED");
+  expect(await code(repo.clientApprovalView(await testActorContext(c.admin, ctx, client()), client(), { version: "client-approval-view.v1", jobId: k.jobId, requestId: k.requestId, linkToken: live.token, email: live.recipient }))).toBe("PERMISSION_DENIED");
   expect(await sql("SELECT 1 FROM app.extra_approval_outcome WHERE request_id=$1", [k.requestId])).toEqual([]);
 });
 
 it("E5B-07 the send is owner-only and exact", async () => {
   const s = await atClientStep();
-  const notOwner = await issue(s); expect(await code(repo.issueClientApproval(ctx, sup(), { version: "issue-client-approval.v1", commandId: randomUUID(), jobId: s.jobId, requestId: s.requestId, approverMembershipId: client().membershipId, recipient: notOwner.recipient, linkToken: notOwner.token, expiresAt: new Date(Date.now() + 3600_000) }))).toBe("PERMISSION_DENIED");
+  const notOwner = await issue(s); expect(await code(repo.issueClientApproval(await testActorContext(c.admin, ctx, sup()), sup(), { version: "issue-client-approval.v1", commandId: randomUUID(), jobId: s.jobId, requestId: s.requestId, approverMembershipId: client().membershipId, recipient: notOwner.recipient, linkToken: notOwner.token, expiresAt: new Date(Date.now() + 3600_000) }))).toBe("PERMISSION_DENIED");
   expect(await code((await issue(s, { recipient: "real.person@example.com" })).run())).toBe("INVALID_COMMAND"); // practice recipients are .invalid only
   expect(await code((await issue(s, { approverMembershipId: w.client2.member.membershipId })).run())).toBe("PERMISSION_DENIED"); // approver's stored email is not the recipient
   const early = await submitted(c, w, 150000);
@@ -174,23 +175,23 @@ it("E5B-07 the send is owner-only and exact", async () => {
 
 it("E5B-08 withdraw (covered supervisory roles), reject, and duplicate", async () => {
   const s = await submitted(c, w, 40000), w2 = { version: "withdraw-extra.v1", commandId: randomUUID(), jobId: s.jobId, extraId: s.extraId, reasonCode: "not_done" };
-  expect(await code(repo.withdrawExtra(ctx, w.members.operative.member, w2))).toBe("PERMISSION_DENIED");
-  expect(await code(repo.withdrawExtra(ctx, w.members.owner.member, { ...w2, commandId: randomUUID() }))).toBe("PERMISSION_DENIED"); // Q11: owner is not a covered withdrawer
-  expect(await code(repo.withdrawExtra(ctx, sup(), w2))).toBe("ok");
+  expect(await code(repo.withdrawExtra(await testActorContext(c.admin, ctx, w.members.operative.member), w.members.operative.member, w2))).toBe("PERMISSION_DENIED");
+  expect(await code(repo.withdrawExtra(await testActorContext(c.admin, ctx, w.members.owner.member), w.members.owner.member, { ...w2, commandId: randomUUID() }))).toBe("PERMISSION_DENIED"); // Q11: owner is not a covered withdrawer
+  expect(await code(repo.withdrawExtra(await testActorContext(c.admin, ctx, sup()), sup(), w2))).toBe("ok");
   expect(await outcome(s.requestId)).toEqual([{ kind: "withdrawn", actor_kind: "member", by_rule: false }]);
-  expect(await code(repo.withdrawExtra(ctx, sup(), { ...w2, commandId: randomUUID() }))).toBe("ALREADY_DECIDED");
+  expect(await code(repo.withdrawExtra(await testActorContext(c.admin, ctx, sup()), sup(), { ...w2, commandId: randomUUID() }))).toBe("ALREADY_DECIDED");
   const d1 = await submitted(c, w, 40000), d2 = await submitted(c, w, 40000);
   const mark = { version: "mark-duplicate.v1", commandId: randomUUID(), jobId: d1.jobId, duplicateId: d1.extraId, canonicalId: d1.extraId };
-  expect(await code(repo.markDuplicate(ctx, sup(), mark))).toBe("NOT_FOUND"); // itself
+  expect(await code(repo.markDuplicate(await testActorContext(c.admin, ctx, sup()), sup(), mark))).toBe("NOT_FOUND"); // itself
   const other = await raiseOn(c, w, d1.jobId, "operative");
-  expect(await code(repo.markDuplicate(ctx, w.members.operative.member, { ...mark, commandId: randomUUID(), canonicalId: other }))).toBe("PERMISSION_DENIED");
-  expect(await code(repo.markDuplicate(ctx, sup(), { ...mark, commandId: randomUUID(), canonicalId: other }))).toBe("ok");
+  expect(await code(repo.markDuplicate(await testActorContext(c.admin, ctx, w.members.operative.member), w.members.operative.member, { ...mark, commandId: randomUUID(), canonicalId: other }))).toBe("PERMISSION_DENIED");
+  expect(await code(repo.markDuplicate(await testActorContext(c.admin, ctx, sup()), sup(), { ...mark, commandId: randomUUID(), canonicalId: other }))).toBe("ok");
   expect(await lastEvent(d1.extraId)).toBe("duplicate"); expect(await outcome(d1.requestId)).toEqual([{ kind: "duplicate", actor_kind: "member", by_rule: false }]);
   expect(await sql("SELECT kind FROM app.extra_duplicate_link WHERE duplicate_id=$1", [d1.extraId])).toEqual([{ kind: "link" }]);
-  expect(await code(repo.markDuplicate(ctx, sup(), { ...mark, commandId: randomUUID(), jobId: d2.jobId, duplicateId: d2.extraId, canonicalId: d1.extraId }))).toBe("NOT_FOUND"); // different job
+  expect(await code(repo.markDuplicate(await testActorContext(c.admin, ctx, sup()), sup(), { ...mark, commandId: randomUUID(), jobId: d2.jobId, duplicateId: d2.extraId, canonicalId: d1.extraId }))).toBe("NOT_FOUND"); // different job
   const rej = await submitted(c, w, 40000);
-  expect(await code(repo.rejectExtra(ctx, sup(), { ...approveInput(rej, 0), version: "reject-extra.v1", reasonCode: "Not Valid" }))).toBe("INVALID_COMMAND");
-  await repo.rejectExtra(ctx, sup(), { ...approveInput(rej, 0), version: "reject-extra.v1", reasonCode: "price_not_agreed" });
+  expect(await code(repo.rejectExtra(await testActorContext(c.admin, ctx, sup()), sup(), { ...approveInput(rej, 0), version: "reject-extra.v1", reasonCode: "Not Valid" }))).toBe("INVALID_COMMAND");
+  await repo.rejectExtra(await testActorContext(c.admin, ctx, sup()), sup(), { ...approveInput(rej, 0), version: "reject-extra.v1", reasonCode: "price_not_agreed" });
   expect(await lastEvent(rej.extraId)).toBe("rejected");
   expect(await chain(c, w)).toBeTruthy();
 });
@@ -225,14 +226,14 @@ it("E5B-10 a later rule version leaves an existing snapshot unchanged (runs last
   const before = (await sql("SELECT rule_version_id,rule_document_hash,requirement::text r,comparisons::text x FROM app.extra_approval_request WHERE id=$1", [s.requestId]))[0];
   await reviseRules(c, w, { ...demoRules, proceedLimit: { pence: 99, currency: "GBP" }, bands: [{ upToPence: null, steps: [{ role: "surveyor", timeLimitMinutes: 5, escalationRole: "surveyor", alternateRoles: [] }] }] });
   expect((await sql("SELECT rule_version_id,rule_document_hash,requirement::text r,comparisons::text x FROM app.extra_approval_request WHERE id=$1", [s.requestId]))[0]).toEqual(before);
-  expect(await code(repo.approveExtraStep(ctx, sup(), approveInput(s, 0)))).toBe("ok"); // still judged by its own snapshot (supervisor), not the new surveyor-only rule
+  expect(await code(repo.approveExtraStep(await testActorContext(c.admin, ctx, sup()), sup(), approveInput(s, 0)))).toBe("ok"); // still judged by its own snapshot (supervisor), not the new surveyor-only rule
   const fresh = await submitted(c, w, 40000);
   expect((await sql("SELECT requirement->'steps'->0->>'role' role FROM app.extra_approval_request WHERE id=$1", [fresh.requestId]))[0].role).toBe("surveyor");
 });
 
 it("E5B-11 escalation fires once, only listed alternates gain authority, original approvers keep it", async () => {
   const wait = 61_000 - (Date.now() - tSlow); if (wait > 0) await sleep(wait + 500);
-  expect(await code(repo.approveExtraStep(ctx, surveyor(), approveInput(slow, 0)))).toBe("PERMISSION_DENIED"); // before any escalation
+  expect(await code(repo.approveExtraStep(await testActorContext(c.admin, ctx, surveyor()), surveyor(), approveInput(slow, 0)))).toBe("PERMISSION_DENIED"); // before any escalation
   const first = (await repo.escalateOverdue(ctx)).filter(x => x.request_id === slow.requestId);
   expect(first).toHaveLength(1); expect(first[0]!.eligible_roles).toEqual(["commercial_manager", "surveyor"]);
   const restarted = new ExtraApprovalRepository(c.runtime); // a restarted worker
@@ -242,15 +243,15 @@ it("E5B-11 escalation fires once, only listed alternates gain authority, origina
   expect(q).toHaveLength(1); expect(q[0]).toMatchObject({ lane: "mandatory", escalated: true, overdue: true });
   expect((await repo.queue(ctx, sup().membershipId)).filter(x => x.request_id === slow.requestId)).toHaveLength(1); // original approver still eligible
   expect((await repo.queue(ctx, w.members.finance.member.membershipId)).filter(x => x.request_id === slow.requestId)).toEqual([]);
-  expect(await code(repo.approveExtraStep(ctx, w.members.finance.member, approveInput(slow, 0)))).toBe("PERMISSION_DENIED");
-  expect(await code(repo.approveExtraStep(ctx, surveyor(), approveInput(slow, 0)))).toBe("ok"); // an agreed backup, after the wait
+  expect(await code(repo.approveExtraStep(await testActorContext(c.admin, ctx, w.members.finance.member), w.members.finance.member, approveInput(slow, 0)))).toBe("PERMISSION_DENIED");
+  expect(await code(repo.approveExtraStep(await testActorContext(c.admin, ctx, surveyor()), surveyor(), approveInput(slow, 0)))).toBe("ok"); // an agreed backup, after the wait
   expect(await chain(c, w)).toBeTruthy();
 }, 180_000);
 
 it("E5B-11 an unpriced submitted extra can be priced once, by a surveyor, and then approved", async () => {
   await reviseRules(c, w, demoRules); // an earlier test leaves a single surveyor step in force; this one needs the demo bands
   const u = await submitted(c, w, null);
-  const price = (by: ReturnType<typeof surveyor>, net: number, commandId = randomUUID()) => repo.priceExtra(ctx, by, { version: "price-extra.v1", commandId, jobId: u.jobId, extraId: u.extraId, netPence: net });
+  const price = async (by: ReturnType<typeof surveyor>, net: number, commandId = randomUUID()) => repo.priceExtra(await testActorContext(c.admin, ctx, by), by, { version: "price-extra.v1", commandId, jobId: u.jobId, extraId: u.extraId, netPence: net });
   expect(await code(price(sup(), 60000))).toBe("PERMISSION_DENIED"); // only surveyors price
   expect(await code(price(surveyor(), 0))).toBe("INVALID_COMMAND");
   expect(await code(price(surveyor(), 600.5))).toBe("INVALID_COMMAND"); // whole pence only
@@ -263,12 +264,12 @@ it("E5B-11 an unpriced submitted extra can be priced once, by a surveyor, and th
   expect(req.net).toBe(60000); expect(req.binding_id).not.toBeNull(); expect(req.steps).toHaveLength(2); // the priced requirement replaces the unpriced one (which assumed every step)
   expect(await sql("SELECT 1 FROM app.extra_approval_outcome WHERE request_id=$1", [u.requestId])).toEqual([]); // superseded, not decided
   expect(await sql("SELECT d.id FROM app.decision d LEFT JOIN app.decision_resolution r ON(r.tenant_id,r.decision_id)=(d.tenant_id,d.id) WHERE d.subject_ref LIKE $1 AND r.id IS NULL", [`${u.requestId}:%`])).toEqual([]);
-  expect(await code(repo.approveExtraStep(ctx, sup(), { ...approveInput({ ...u, net: 60000 }, 0) }))).toBe("STALE_REVISION"); // the unpriced snapshot is no longer approvable
+  expect(await code(repo.approveExtraStep(await testActorContext(c.admin, ctx, sup()), sup(), { ...approveInput({ ...u, net: 60000 }, 0) }))).toBe("STALE_REVISION"); // the unpriced snapshot is no longer approvable
   const p = { ...u, requestId: priced.requestId as string, hash: priced.revisionHash as string, net: 60000 };
-  expect(await code(repo.approveExtraStep(ctx, sup(), approveInput(p, 0, { revisionHash: u.hash })))).toBe("HASH_MISMATCH");
-  expect(await code(repo.approveExtraStep(ctx, sup(), approveInput(p, 0, { netPence: 60001 })))).toBe("HASH_MISMATCH");
-  expect(await code(repo.approveExtraStep(ctx, sup(), approveInput(p, 0)))).toBe("ok");
-  expect(await code(repo.approveExtraStep(ctx, sup2(), approveInput(p, 1)))).toBe("ok");
+  expect(await code(repo.approveExtraStep(await testActorContext(c.admin, ctx, sup()), sup(), approveInput(p, 0, { revisionHash: u.hash })))).toBe("HASH_MISMATCH");
+  expect(await code(repo.approveExtraStep(await testActorContext(c.admin, ctx, sup()), sup(), approveInput(p, 0, { netPence: 60001 })))).toBe("HASH_MISMATCH");
+  expect(await code(repo.approveExtraStep(await testActorContext(c.admin, ctx, sup()), sup(), approveInput(p, 0)))).toBe("ok");
+  expect(await code(repo.approveExtraStep(await testActorContext(c.admin, ctx, sup2()), sup2(), approveInput(p, 1)))).toBe("ok");
   expect((await outcome(p.requestId))[0]).toMatchObject({ kind: "approved" });
   expect(await lastEvent(u.extraId)).toBe("approved");
   expect(await code(price(surveyor(), 80000))).toBe("INVALID_TRANSITION"); // decided: only ReviseExtra
@@ -278,10 +279,10 @@ it("E5B-11 an unpriced submitted extra can be priced once, by a surveyor, and th
 it("MON-8 a queued approval message is cancelled after agreement loss without an adapter call", async () => {
   const other=await chainWorld(c), context=await other.ctx, repository=new ExtraApprovalRepository(c.runtime);
   const s=await submitted(c,other,150000);
-  await repository.approveExtraStep(context,other.members.supervisor.member,approveInput(s,0));
-  await repository.approveExtraStep(context,other.supervisor2.member,approveInput(s,1));
+  await repository.approveExtraStep(await testActorContext(c.admin, context, other.members.supervisor.member),other.members.supervisor.member,approveInput(s,0));
+  await repository.approveExtraStep(await testActorContext(c.admin, context, other.supervisor2.member),other.supervisor2.member,approveInput(s,1));
   const token=newToken(),recipient=await emailOf(c,other,other.members.client_approver.member.membershipId);
-  const sent=await repository.issueClientApproval(context,other.members.surveyor.member,{version:"issue-client-approval.v1",commandId:randomUUID(),jobId:s.jobId,requestId:s.requestId,
+  const sent=await repository.issueClientApproval(await testActorContext(c.admin, context, other.members.surveyor.member),other.members.surveyor.member,{version:"issue-client-approval.v1",commandId:randomUUID(),jobId:s.jobId,requestId:s.requestId,
     approverMembershipId:other.members.client_approver.member.membershipId,recipient,linkToken:token,expiresAt:new Date(Date.now()+3600_000)});
   await c.admin.query(`INSERT INTO app.contractor_agreement_status_revision
     SELECT tenant_id,$2,assignment_id,revision+1,'suspended',schema_version,environment,clock_timestamp(),$3
@@ -294,5 +295,5 @@ it("MON-8 a queued approval message is cancelled after agreement loss without an
   expect((await sql("SELECT status FROM app.action_outbox WHERE id=$1",[sent.outboxActionId]))[0].status).toBe("cancelled");
   expect(await sql("SELECT 1 FROM app.action_attempt WHERE action_id=$1",[sent.outboxActionId])).toEqual([]);
   // Security revocation remains available even while new approval work is refused.
-  await repository.revokeClientApproval(context,other.members.owner.member,{version:"revoke-client-approval.v1",commandId:randomUUID(),jobId:s.jobId,linkId:sent.linkId});
+  await repository.revokeClientApproval(await testActorContext(c.admin, context, other.members.owner.member),other.members.owner.member,{version:"revoke-client-approval.v1",commandId:randomUUID(),jobId:s.jobId,linkId:sent.linkId});
 });

@@ -1,3 +1,4 @@
+import { testActorContext } from "./tenant-context-test-utils.js";
 // Two-connection PostgreSQL races; NOT RUN in the builder sandbox.
 import { randomUUID } from "node:crypto";
 import { afterAll,beforeAll,describe,expect,it } from "vitest";
@@ -15,9 +16,9 @@ function noDeadlock(results:PromiseSettledResult<unknown>[]){for(const r of resu
 describe("ENT-8A-P command races",()=>{
  it("b2: first completion holds key 417 before the live lock; replay holds only authority and never locks the baseline",async()=>{
   const f=await promptFixture(c), actor=f.members.operative.member, visits=new SiteVisitRepository(c.runtime);
-  const open=await visits.startVisit(f.ctx,actor,startInput(f)), input=completeInput(f,open.visitId,"yes");
+  const open=await visits.startVisit(await testActorContext(c.admin, f.ctx, actor),actor,startInput(f)), input=completeInput(f,open.visitId,"yes");
   const observed=new ObservedPool(c.runtime,c.admin), watched=new SiteVisitRepository(observed.pool);
-  const first=await observed.record(()=>watched.completeVisit(f.ctx,actor,input));
+  const first=await observed.record(async ()=>watched.completeVisit(await testActorContext(c.admin, f.ctx, actor),actor,input));
   const tx=first.transactions.find(t=>t.statements.some(s=>s.sql.includes("app.lp_visit_evaluate")))!;
   expect(tx.outcome).toBe("commit");
   const keyIndex=tx.statements.findIndex(s=>s.sql.includes(",417)"));
@@ -32,7 +33,7 @@ describe("ENT-8A-P command races",()=>{
   for(const s of tx.statements.slice(keyIndex)) expect(s.footprint.advisory.has(keys[0]!)).toBe(true);
   const evaluated=tx.statements.find(s=>s.sql.includes("app.lp_visit_evaluate"))!;
   expect([...evaluated.footprint.rows].some(([row,strength])=>row.startsWith("app.work_order_current#")&&strength>=2)).toBe(true);
-  const replay=await observed.record(()=>watched.completeVisit(f.ctx,actor,input));
+  const replay=await observed.record(async ()=>watched.completeVisit(await testActorContext(c.admin, f.ctx, actor),actor,input));
   expect(replay.value).toEqual(first.value);
   const replayTx=replay.transactions.find(t=>t.statements.some(s=>/(?:SELECT request_hash,status,result FROM app.command_receipt|SELECT app\.begin_command\()/.test(s.sql)))!;
   expect(replayTx.outcome).toBe("commit");
@@ -46,8 +47,8 @@ describe("ENT-8A-P command races",()=>{
  });
  it("b2: concurrent duplicate completions return one result and one closeout answer",async()=>{
   const f=await promptFixture(c), actor=f.members.operative.member, visits=new SiteVisitRepository(c.runtime);
-  const open=await visits.startVisit(f.ctx,actor,startInput(f)), input=completeInput(f,open.visitId,"yes");
-  const results=await Promise.all([visits.completeVisit(f.ctx,actor,input),visits.completeVisit(f.ctx,actor,input)]);
+  const open=await visits.startVisit(await testActorContext(c.admin, f.ctx, actor),actor,startInput(f)), input=completeInput(f,open.visitId,"yes");
+  const results=await Promise.all([visits.completeVisit(await testActorContext(c.admin, f.ctx, actor),actor,input),visits.completeVisit(await testActorContext(c.admin, f.ctx, actor),actor,input)]);
   expect(results[0]).toEqual(results[1]);
   expect((await c.admin.query("SELECT count(*)::int n FROM app.closeout_answer WHERE tenant_id=$1 AND command_id=$2",[f.p.tenantId,input.commandId])).rows).toEqual([{n:1}]);
  });

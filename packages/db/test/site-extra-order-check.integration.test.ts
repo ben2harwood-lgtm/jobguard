@@ -1,3 +1,4 @@
+import { testActorContext } from "./tenant-context-test-utils.js";
 // ENT-3c: the order check and the two site reads, against real PostgreSQL. Written before the repository methods it proves.
 import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -13,8 +14,8 @@ afterAll(async () => { await c?.close(); });
 afterEach(() => vi.restoreAllMocks());
 
 type Member = SiteFixture["p"];
-const items = (f: SiteFixture, member: Member, jobId: string, q: unknown) => repo.sorItems(f.ctx, member, jobId, { q });
-const check = (f: SiteFixture, member: Member, jobId: string, fields: Record<string, unknown>) => repo.orderCheck(f.ctx, member, jobId, fields);
+const items = async (f: SiteFixture, member: Member, jobId: string, q: unknown) => repo.sorItems(await testActorContext(c.admin, f.ctx, member), member, jobId, { q });
+const check = async (f: SiteFixture, member: Member, jobId: string, fields: Record<string, unknown>) => repo.orderCheck(await testActorContext(c.admin, f.ctx, member), member, jobId, fields);
 const auditTotal = async (f: SiteFixture) => (await c.admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1", [f.p.tenantId])).rows[0]!.n as number;
 const keysOf = (value: unknown): string[] => value && typeof value === "object" ? Object.entries(value).flatMap(([key, child]) => [key, ...keysOf(child)]) : [];
 const noMoney = (value: unknown) => { for (const key of keysOf(JSON.parse(JSON.stringify(value)))) expect(key, key).not.toMatch(/pence|rate|net|price|amount|resident|contact|address/iu); };
@@ -35,10 +36,10 @@ describe("ENT-3c order check read", () => {
       expect(await written(c, f.p.tenantId)).toEqual(before); expect(await chainHead(c, f.p.tenantId)).toBe(head); expect(await auditTotal(f)).toBe(audits);
       noMoney(result);
       // The command acts on exactly this outcome. (An excess of 0.000001 of a 10000p item prices to 0p, which the command refuses on its own rule, EXTRA_NOT_POSITIVE; the read does not price.)
-      if (expected.outcome === "already_on_order") await expect(repo.logSorSiteExtra(f.ctx, who.member, sorInput(order.jobId, { sorCode, quantity, ...(orderLine ? { orderLineScopeItemId: orderLine } : {}) }))).rejects.toMatchObject({ code: "ALREADY_ON_ORDER" });
-      else if (quantity === "3.000001") await expect(repo.logSorSiteExtra(f.ctx, who.member, sorInput(order.jobId, { sorCode, quantity }))).rejects.toMatchObject({ code: "EXTRA_NOT_POSITIVE" });
+      if (expected.outcome === "already_on_order") await expect(repo.logSorSiteExtra(await testActorContext(c.admin, f.ctx, who.member), who.member, sorInput(order.jobId, { sorCode, quantity, ...(orderLine ? { orderLineScopeItemId: orderLine } : {}) }))).rejects.toMatchObject({ code: "ALREADY_ON_ORDER" });
+      else if (quantity === "3.000001") await expect(repo.logSorSiteExtra(await testActorContext(c.admin, f.ctx, who.member), who.member, sorInput(order.jobId, { sorCode, quantity }))).rejects.toMatchObject({ code: "EXTRA_NOT_POSITIVE" });
       else {
-        const logged = await repo.logSorSiteExtra(f.ctx, who.member, sorInput(order.jobId, { sorCode, quantity, ...(orderLine ? { orderLineScopeItemId: orderLine } : {}) }));
+        const logged = await repo.logSorSiteExtra(await testActorContext(c.admin, f.ctx, who.member), who.member, sorInput(order.jobId, { sorCode, quantity, ...(orderLine ? { orderLineScopeItemId: orderLine } : {}) }));
         expect(logged).toMatchObject({ coverage: expected.outcome === "new" ? "new" : "excess", extraQuantity: expected.extraQuantity });
       }
     }
@@ -92,14 +93,14 @@ describe("ENT-3c search of the job's price list", () => {
     const f = await siteFixture(c), order = await newOrder(c, f, [["L1", "FIT-LOCK", "2"]]); await leaveLive(c, f, order.jobId);
     expect((await items(f, f.members.supervisor.member, order.jobId, "lock")).items.map(i => i.code)).toEqual(["FIT-LOCK"]);
     expect(await check(f, f.members.supervisor.member, order.jobId, { sorCode: "FIT-LOCK", quantity: "5" })).toMatchObject({ outcome: "more_than_ordered", extraQuantity: "3" });
-    await expect(repo.logSorSiteExtra(f.ctx, f.members.supervisor.member, sorInput(order.jobId, { sorCode: "CLEAR-GUTTER" }))).rejects.toMatchObject({ code: "JOB_NOT_LIVE" });
+    await expect(repo.logSorSiteExtra(await testActorContext(c.admin, f.ctx, f.members.supervisor.member), f.members.supervisor.member, sorInput(order.jobId, { sorCode: "CLEAR-GUTTER" }))).rejects.toMatchObject({ code: "JOB_NOT_LIVE" });
   });
 });
 
 describe("ENT-3c the reads obey the same access rule as the command", () => {
   const readers = {
-    sorItems: (f: SiteFixture, member: Member, jobId: string) => repo.sorItems(f.ctx, member, jobId, { q: "no-such-text-at-all" }),
-    orderCheck: (f: SiteFixture, member: Member, jobId: string) => repo.orderCheck(f.ctx, member, jobId, { sorCode: "NO-SUCH-CODE", quantity: "999", orderLine: randomUUID() }),
+    sorItems: async (f: SiteFixture, member: Member, jobId: string) => repo.sorItems(await testActorContext(c.admin, f.ctx, member), member, jobId, { q: "no-such-text-at-all" }),
+    orderCheck: async (f: SiteFixture, member: Member, jobId: string) => repo.orderCheck(await testActorContext(c.admin, f.ctx, member), member, jobId, { sorCode: "NO-SUCH-CODE", quantity: "999", orderLine: randomUUID() }),
   } as const;
   async function refusedRead(f: SiteFixture, read: (f: SiteFixture, member: Member, jobId: string) => Promise<unknown>, member: Member, jobId: string, code: string) {
     const before = await written(c, f.p.tenantId), head = await chainHead(c, f.p.tenantId), audits = await auditTotal(f);

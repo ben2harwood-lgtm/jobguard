@@ -1,3 +1,4 @@
+import { testActorContext } from "./tenant-context-test-utils.js";
 // PostgreSQL execution NOT RUN in the socket-restricted builder; CI must execute these assertions.
 import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, expect, it, vi } from "vitest";
@@ -16,14 +17,14 @@ it("M31-S09 minimal authorized repository read", async () => {
  const supervisor = await invite(c, f, "supervisor", { kind: "team", id: f.demo.teamId });
  await revise(c, f, [f.members.operative.member.membershipId, supervisor.member.membershipId]);
  for (const actor of [f.members.operative, supervisor]) {
-  const read = await repo.assignedJobs(f.ctx, actor.member);
+  const read = await repo.assignedJobs(await testActorContext(c.admin, f.ctx, actor.member), actor.member);
   expect(read.jobs.map(j => j.jobId)).toEqual([f.jobId]); expect(read.truncated).toBe(false);
   expect(read.jobs.map(j => j.jobId)).not.toContain(f.otherJob); expect(read.jobs.map(j => j.jobId)).not.toContain(foreign.jobId);
   const parsed = siteAssignedJobsV1.parse({ version: "site-assigned-jobs.v1", environment: "synthetic_demo", realExternalActions: 0, ...read });
   expect(Object.keys(parsed.jobs[0]!).sort()).toEqual(["jobId", "workOrderId", "reference", "priority", "issuedOn", "dueOn", "openVisitId"].sort());
  }
- expect(await repo.assignedJobs(f.ctx, f.unassigned.member)).toEqual({ jobs: [], truncated: false });
- for (const role of ["owner", "admin", "surveyor", "commercial_manager", "finance", "read_only", "client_approver"] as const) await expect(repo.assignedJobs(f.ctx, f.members[role].member)).rejects.toMatchObject({ code: "VISIT_FORBIDDEN" });
+ expect(await repo.assignedJobs(await testActorContext(c.admin, f.ctx, f.unassigned.member), f.unassigned.member)).toEqual({ jobs: [], truncated: false });
+ for (const role of ["owner", "admin", "surveyor", "commercial_manager", "finance", "read_only", "client_approver"] as const) await expect(repo.assignedJobs(await testActorContext(c.admin, f.ctx, f.members[role].member), f.members[role].member)).rejects.toMatchObject({ code: "VISIT_FORBIDDEN" });
 });
 it("M31-S10 queued intent commits existing facts", async () => {
  const f = await siteFixture(c), actor = f.members.operative.member, raw = intent(f.jobId, 1), before = await counts(c, f);
@@ -93,7 +94,7 @@ it("M31-S17 compatibility", async () => {
  const changedMetadata = { ...raw, clientMetadata: { capturedAt: "2099-01-01T00:00:00Z", hlc: { wallTimeMs: Number.MAX_SAFE_INTEGER, logical: 5, nodeId: "different" } } };
  expect(await submit(c.runtime, f, actor, changedMetadata)).toEqual(first);
  // Direct old body has no transport metadata; it reads the same receipt and request hash.
- expect(await new SiteExtraRepository(c.runtime).logSiteExtra(f.ctx, actor, { commandId: raw.body.commandId, jobId: raw.jobId, note: raw.body.note, description: raw.body.description })).toEqual(first);
+ expect(await new SiteExtraRepository(c.runtime).logSiteExtra(await testActorContext(c.admin, f.ctx, actor), actor, { commandId: raw.body.commandId, jobId: raw.jobId, note: raw.body.note, description: raw.body.description })).toEqual(first);
  expect((await c.admin.query("SELECT request_hash,result::text FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [f.p.tenantId, raw.body.commandId])).rows).toEqual(receipt);
  await committed(c, f, actor, raw, first);
 });

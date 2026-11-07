@@ -1,3 +1,4 @@
+import { testActorContext } from "./tenant-context-test-utils.js";
 // Real PostgreSQL only. NOT RUN in the builder sandbox: it cannot start PostgreSQL.
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
@@ -126,7 +127,7 @@ it("[LOCK-ORDER-1(c)] 50 same-instant captures and baseline revisions use separa
     for (let round = 0; round < 50; round++) {
       const before = await revisionState(f), input = request(f);
       const results = await together([
-        () => new SiteExtraRepository(capturePool!).logSiteExtra(context, operative.member, input),
+        async () => new SiteExtraRepository(capturePool!).logSiteExtra(await testActorContext(c.admin, context, operative.member), operative.member, input),
         () => revise(revisionPool!, f, before.revision),
       ]);
       const applied = revised(results[1]!); successes += applied;
@@ -151,7 +152,7 @@ it("[LOCK-ORDER-1(d)] M31-S15 same-instant capture, revoke and revise have expli
     const before = await revisionState(f);
     await connections(async ([capturePool, revisionPool, revokePool]) => {
       const operations = [
-        () => new SiteExtraRepository(capturePool!).logSiteExtra(context, operative.member, input),
+        async () => new SiteExtraRepository(capturePool!).logSiteExtra(await testActorContext(c.admin, context, operative.member), operative.member, input),
         () => command({ ...c, runtime: revokePool! }, f, { kind: "grant.revoke", grantId: operative.grant }),
         () => revise(revisionPool!, f, before.revision),
       ];
@@ -165,7 +166,7 @@ it("[LOCK-ORDER-1(d)] M31-S15 same-instant capture, revoke and revise have expli
       expect(after.revision).toBe(2); expect(after.total).toBe(2); expect(after.id).not.toBe(before.id);
       await consistentCapture(f, input, results[0]!, [before.id, after.id]);
       for (const replay of [input, request(f)]) {
-        await expect(new SiteExtraRepository(capturePool!).logSiteExtra(context, operative.member, replay)).rejects.toMatchObject({ code: "NOT_FOUND" });
+        await expect(new SiteExtraRepository(capturePool!).logSiteExtra(await testActorContext(c.admin, context, operative.member), operative.member, replay)).rejects.toMatchObject({ code: "NOT_FOUND" });
       }
       await chain(c, f);
     });

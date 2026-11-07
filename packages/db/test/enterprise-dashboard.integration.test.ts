@@ -1,3 +1,4 @@
+import { testActorContext } from "./tenant-context-test-utils.js";
 // Real PostgreSQL acceptance. NOT RUN in the builder sandbox: localhost/PostgreSQL unavailable.
 import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -128,9 +129,9 @@ describe("ENT-9B scoped persisted reads", () => {
   });
   it("[E9-02] counts command-created active duplicate groups once and restores two captures after an authorized unlink", async () => {
     const w = await chainWorld(c), s = await session(w), repo = new ExtraRepository(c.runtime);
-    const a = await repo.raiseExtra(w.ctx, direct(w, w.members.operative)), b = await repo.raiseExtra(w.ctx, direct(w, w.members.operative));
+    const a = await repo.raiseExtra(await testActorContext(c.admin, w.ctx, w.members.operative.member), direct(w, w.members.operative)), b = await repo.raiseExtra(await testActorContext(c.admin, w.ctx, w.members.operative.member), direct(w, w.members.operative));
     expect((await read(s)).report.totals.captured.count).toBe(2);
-    const link = await new ExtraApprovalRepository(c.runtime).markDuplicate(w.ctx, w.members.supervisor.member, { version: "mark-duplicate.v1", commandId: randomUUID(), jobId: w.jobId, duplicateId: b.variationId, canonicalId: a.variationId });
+    const link = await new ExtraApprovalRepository(c.runtime).markDuplicate(await testActorContext(c.admin, w.ctx, w.members.supervisor.member), w.members.supervisor.member, { version: "mark-duplicate.v1", commandId: randomUUID(), jobId: w.jobId, duplicateId: b.variationId, canonicalId: a.variationId });
     const grouped = await read(s);
     expect(grouped.report.totals.captured.count).toBe(1);
     expect(grouped.report.contributions.find(c => c.stage === "captured")?.extraIds.slice().sort()).toEqual([a.variationId, b.variationId].sort());
@@ -142,7 +143,7 @@ describe("ENT-9B scoped persisted reads", () => {
     const before = await read(s);
     expect(before.report.totals.captured.count).toBeGreaterThan(0);
     expect(before.report.totals.backlog.count).toBeGreaterThan(0);
-    await new ExtraApprovalRepository(c.runtime).approveExtraStep(w.ctx, w.members.supervisor.member, approveInput(pending, 0));
+    await new ExtraApprovalRepository(c.runtime).approveExtraStep(await testActorContext(c.admin, w.ctx, w.members.supervisor.member), w.members.supervisor.member, approveInput(pending, 0));
     const after = await read(s);
     expect(after.report.totals.approved.known.pence).toBe(10000);
     expect(after.report.contributions.some(row => row.extraIds.includes(pending.extraId) && row.stage === "approved")).toBe(true);
@@ -151,8 +152,8 @@ describe("ENT-9B scoped persisted reads", () => {
   });
   it("[E9-09 E9-10 E9-11 E9-13] applies covering dashboard grants and tenant scope before all output", async () => {
     const a = await chainWorld(c), b = await chainWorld(c);
-    const ae = await new ExtraRepository(c.runtime).raiseExtra(a.ctx, direct(a, a.members.operative));
-    const be = await new ExtraRepository(c.runtime).raiseExtra(b.ctx, direct(b, b.members.operative));
+    const ae = await new ExtraRepository(c.runtime).raiseExtra(await testActorContext(c.admin, a.ctx, a.members.operative.member), direct(a, a.members.operative));
+    const be = await new ExtraRepository(c.runtime).raiseExtra(await testActorContext(c.admin, b.ctx, b.members.operative.member), direct(b, b.members.operative));
     const sa = await session(a), sb = await session(b);
     const [ar, br] = await Promise.all([read(sa), read(sb)]);
     expect(JSON.stringify(ar)).toContain(ae.variationId);
@@ -175,7 +176,7 @@ describe("ENT-9B scoped persisted reads", () => {
   });
   it("[E9-10 E9-12] a reassigned operative disappears even while the old job remains in scope; unrelated grants cannot supply scope", async () => {
     const w = await chainWorld(c), s = await session(w);
-    const extra = await new ExtraRepository(c.runtime).raiseExtra(w.ctx, direct(w, w.members.operative));
+    const extra = await new ExtraRepository(c.runtime).raiseExtra(await testActorContext(c.admin, w.ctx, w.members.operative.member), direct(w, w.members.operative));
     expect(JSON.stringify(await read(s))).toContain(extra.variationId);
     await command(c, w, { kind: "team.move", membershipId: w.members.operative.member.membershipId, fromTeamId: w.demo.teamId, toTeamId: w.otherDemo.teamId });
     expect(JSON.stringify(await read(s))).not.toContain(extra.variationId);
@@ -184,9 +185,9 @@ describe("ENT-9B scoped persisted reads", () => {
   });
   it("[E9-08] derives close-out answers from visit commands and does not change job state", async () => {
     const w = await chainWorld(c), s = await session(w), visits = new SiteVisitRepository(c.runtime), actor = w.members.operative.member;
-    const started = await visits.startVisit(w.ctx, actor, { commandId: randomUUID(), jobId: w.jobId });
+    const started = await visits.startVisit(await testActorContext(c.admin, w.ctx, actor), actor, { commandId: randomUUID(), jobId: w.jobId });
     const before = (await c.admin.query("SELECT status FROM app.job WHERE tenant_id=$1 AND id=$2", [w.p.tenantId, w.jobId])).rows;
-    await visits.completeVisit(w.ctx, actor, { commandId: randomUUID(), jobId: w.jobId, visitId: started.visitId, closeoutAnswer: "yes" });
+    await visits.completeVisit(await testActorContext(c.admin, w.ctx, actor), actor, { commandId: randomUUID(), jobId: w.jobId, visitId: started.visitId, closeoutAnswer: "yes" });
     expect((await read(s)).report.closeoutRate).toMatchObject({ status: "computed", numerator: 1, denominator: 1 });
     expect((await c.admin.query("SELECT status FROM app.job WHERE tenant_id=$1 AND id=$2", [w.p.tenantId, w.jobId])).rows).toEqual(before);
   });
@@ -194,8 +195,8 @@ describe("ENT-9B scoped persisted reads", () => {
     const w = await chainWorld(c), other = await chainWorld(c), s = await session(w), visits = new SiteVisitRepository(c.runtime);
     for (const subject of [w, other]) for (let i = 0; i < 5; i++) {
       const actor = subject.members.operative.member;
-      const started = await visits.startVisit(subject.ctx, actor, { commandId: randomUUID(), jobId: subject.jobId });
-      await visits.completeVisit(subject.ctx, actor, { commandId: randomUUID(), jobId: subject.jobId, visitId: started.visitId, closeoutAnswer: "no" });
+      const started = await visits.startVisit(await testActorContext(c.admin, subject.ctx, actor), actor, { commandId: randomUUID(), jobId: subject.jobId });
+      await visits.completeVisit(await testActorContext(c.admin, subject.ctx, actor), actor, { commandId: randomUUID(), jobId: subject.jobId, visitId: started.visitId, closeoutAnswer: "no" });
     }
     const first = (await read(s)).signals;
     expect(first.observations.filter(o => o.kind === "no_closeout_observation")).toHaveLength(1);
@@ -211,7 +212,7 @@ describe("ENT-9B scoped persisted reads", () => {
   });
   it("[E9-14 E9-26 E9-28 E9-31] reads and observations preserve canonical business rows and give runtime no new privilege", async () => {
     const w = await chainWorld(c), s = await session(w);
-    await new SiteExtraRepository(c.runtime).logSorSiteExtra(w.ctx, w.members.operative.member, { commandId: randomUUID(), jobId: w.jobId, sorCode: "REPAIR-DOOR", quantity: "3", note: "Fictional ENT3A note canary" });
+    await new SiteExtraRepository(c.runtime).logSorSiteExtra(await testActorContext(c.admin, w.ctx, w.members.operative.member), w.members.operative.member, { commandId: randomUUID(), jobId: w.jobId, sorCode: "REPAIR-DOOR", quantity: "3", note: "Fictional ENT3A note canary" });
     const snapshot = async () => {
       const out: Record<string, unknown> = {};
       const tables = (await c.admin.query<{ table_name: string }>(`SELECT p.tablename table_name FROM pg_tables p JOIN information_schema.columns c

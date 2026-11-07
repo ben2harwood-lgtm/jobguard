@@ -1,3 +1,4 @@
+import { testActorContext } from "./tenant-context-test-utils.js";
 // Synthetic PostgreSQL regressions; authored for CI, not run in the restricted builder sandbox.
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
@@ -15,22 +16,22 @@ it("Q01 only a surveyor can price; re-pricing requires ReviseExtra and preserves
   const jobId = await newJob(c, w), extraId = await raiseOn(c, w, jobId), ctx = await w.ctx;
   const price = (netPence: number) => ({ version: "price-extra.v1", commandId: randomUUID(), jobId, extraId, netPence });
   for (const role of ["owner", "admin", "operative", "supervisor", "commercial_manager", "finance", "read_only", "client_approver"] as const) {
-    await expect(repo.priceExtra(ctx, w.members[role].member, price(100))).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
+    await expect(repo.priceExtra(await testActorContext(c.admin, ctx, w.members[role].member), w.members[role].member, price(100))).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
   }
   for (const net of [0, -1, 1.5, 1_000_000_000_001]) {
-    await expect(repo.priceExtra(ctx, w.members.surveyor.member, price(net))).rejects.toMatchObject({ code: "INVALID_COMMAND" });
+    await expect(repo.priceExtra(await testActorContext(c.admin, ctx, w.members.surveyor.member), w.members.surveyor.member, price(net))).rejects.toMatchObject({ code: "INVALID_COMMAND" });
   }
-  await repo.priceExtra(ctx, w.members.surveyor.member, price(25000));
-  const first = await repo.submitExtra(ctx, w.members.supervisor.member, { version: "submit-extra.v1", commandId: randomUUID(), jobId, extraId });
+  await repo.priceExtra(await testActorContext(c.admin, ctx, w.members.surveyor.member), w.members.surveyor.member, price(25000));
+  const first = await repo.submitExtra(await testActorContext(c.admin, ctx, w.members.supervisor.member), w.members.supervisor.member, { version: "submit-extra.v1", commandId: randomUUID(), jobId, extraId });
   const snapshot = async () => (await c.admin.query("SELECT * FROM app.extra_approval_request WHERE id=$1", [first.requestId])).rows[0];
   const source = async () => (await c.admin.query(`SELECT b.*,r.signed_delta_pence,r.content_hash FROM app.extra_approval_revision_binding b
     JOIN app.variation_revision r ON (r.tenant_id,r.id)=(b.tenant_id,b.source_revision_id)
     WHERE b.variation_id=$1 AND b.logical_revision=1`, [extraId])).rows[0];
   const before = await snapshot(), original = await source();
   expect(before.comparisons).toMatchObject({ withinProceedLimit: true, aboveClientThreshold: false, aboveClientBeforeWorkThreshold: false });
-  await repo.approveExtraStep(ctx, w.members.supervisor.member, approveInput({ jobId, requestId: String(first.requestId), hash: String(first.revisionHash), net: 25000 }, 0));
-  await expect(repo.priceExtra(ctx, w.members.surveyor.member, price(25001))).rejects.toMatchObject({ code: "INVALID_TRANSITION" });
-  const revised = await repo.reviseExtra(ctx, w.members.surveyor.member, { ...price(25001), version: "revise-extra.v1" });
+  await repo.approveExtraStep(await testActorContext(c.admin, ctx, w.members.supervisor.member), w.members.supervisor.member, approveInput({ jobId, requestId: String(first.requestId), hash: String(first.revisionHash), net: 25000 }, 0));
+  await expect(repo.priceExtra(await testActorContext(c.admin, ctx, w.members.surveyor.member), w.members.surveyor.member, price(25001))).rejects.toMatchObject({ code: "INVALID_TRANSITION" });
+  const revised = await repo.reviseExtra(await testActorContext(c.admin, ctx, w.members.surveyor.member), w.members.surveyor.member, { ...price(25001), version: "revise-extra.v1" });
   expect(revised.requestRevision).toBe(2); expect(revised.requestId).not.toBe(first.requestId);
   expect(await snapshot()).toEqual(before); expect(await source()).toEqual(original);
 });

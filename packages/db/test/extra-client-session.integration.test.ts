@@ -1,3 +1,4 @@
+import { testActorContext } from "./tenant-context-test-utils.js";
 import { Pool, type PoolClient } from "pg";
 import { randomUUID } from "node:crypto";
 import { beforeAll, afterAll, expect, it } from "vitest";
@@ -17,11 +18,11 @@ afterAll(async()=>{await identity?.end();await c?.close();});
 const d="d".repeat(64),session="e".repeat(64);
 async function fixture() {
  const repo=new ExtraApprovalRepository(c.runtime),ctx=await w.ctx,s=await submitted(c,w,150000);
- await repo.approveExtraStep(ctx,w.members.supervisor.member,approveInput(s,0));await repo.approveExtraStep(ctx,w.supervisor2.member,approveInput(s,1));
+ await repo.approveExtraStep(await testActorContext(c.admin, ctx, w.members.supervisor.member),w.members.supervisor.member,approveInput(s,0));await repo.approveExtraStep(await testActorContext(c.admin, ctx, w.supervisor2.member),w.supervisor2.member,approveInput(s,1));
  const token=newToken(),signinDigest=randomUUID().replaceAll("-","").repeat(2),sd=randomUUID().replaceAll("-","").repeat(2),actor=w.members.client_approver.member.membershipId;
  const raw={version:"issue-client-approval.v1",commandId:randomUUID(),jobId:s.jobId,requestId:s.requestId,approverMembershipId:actor,recipient:await emailOf(c,w,actor),linkToken:token,signinDigest,expiresAt:new Date(Date.now()+7*86400000)};
- await expect(repo.issueClientApproval(ctx,w.members.owner.member,raw)).rejects.toMatchObject({code:"PERMISSION_DENIED"});
- const sent=await repo.issueClientApproval(ctx,w.members.surveyor.member,raw);
+ await expect(repo.issueClientApproval(await testActorContext(c.admin, ctx, w.members.owner.member),w.members.owner.member,raw)).rejects.toMatchObject({code:"PERMISSION_DENIED"});
+ const sent=await repo.issueClientApproval(await testActorContext(c.admin, ctx, w.members.surveyor.member),w.members.surveyor.member,raw);
  expect((await c.admin.query("SELECT adapter,recipient,status FROM app.action_outbox WHERE id=$1",[sent.outboxActionId])).rows).toEqual([{adapter:"fake_email",recipient:raw.recipient,status:"pending"}]);
  expect((await c.admin.query("SELECT 1 FROM app.action_attempt WHERE action_id=$1",[sent.outboxActionId])).rows).toEqual([]);
  const use=(digest:string,operation="resolve",who=actor,job=s.jobId,tenant=w.p.tenantId)=>identity.query("SELECT identity.extra_customer_use($1,$2,$3,$4,$5,$6) result",[tenant,job,who,digest,operation==="redeem"?sd:null,operation]).then(r=>r.rows[0].result);
@@ -66,7 +67,7 @@ it.each(["approve","reject"])("ENT-5 real identity %s commits while unrelated ch
 });
 it("ENT-5 replaced, expired, foreign-job and revoked grants refuse",async()=>{
  const f=await fixture();await expect(f.use(f.signinDigest,"redeem",f.actor,randomUUID())).rejects.toMatchObject({code:"42501"});
- await f.repo.issueClientApproval(f.ctx,w.members.commercial_manager.member,{...f.raw,commandId:randomUUID(),linkToken:newToken(),signinDigest:session});
+ await f.repo.issueClientApproval(await testActorContext(c.admin, f.ctx, w.members.commercial_manager.member),w.members.commercial_manager.member,{...f.raw,commandId:randomUUID(),linkToken:newToken(),signinDigest:session});
  await expect(f.use(f.signinDigest,"redeem")).rejects.toMatchObject({code:"42501"});
  const expiredLink=await fixture();
  const owner=await c.admin.connect();
@@ -86,7 +87,7 @@ it("ENT-5 replaced, expired, foreign-job and revoked grants refuse",async()=>{
 it("ENT-5 client approve racing withdraw commits exactly one outcome",async()=>{
  // Independent world because the preceding refusal test revokes its client grant.
  w=await chainWorld(c);const f=await fixture();await f.use(f.signinDigest,"redeem");
- const results=await Promise.allSettled([f.run(),f.repo.withdrawExtra(f.ctx,w.members.supervisor.member,{version:"withdraw-extra.v1",commandId:randomUUID(),jobId:f.s.jobId,extraId:f.s.extraId,reasonCode:"not_done"})]);
+ const results=await Promise.allSettled([f.run(),f.repo.withdrawExtra(await testActorContext(c.admin, f.ctx, w.members.supervisor.member),w.members.supervisor.member,{version:"withdraw-extra.v1",commandId:randomUUID(),jobId:f.s.jobId,extraId:f.s.extraId,reasonCode:"not_done"})]);
  expect(results.filter(r=>r.status==="fulfilled")).toHaveLength(1);
  expect((await c.admin.query("SELECT kind FROM app.extra_approval_outcome WHERE request_id=$1",[f.s.requestId])).rows).toHaveLength(1);
 });

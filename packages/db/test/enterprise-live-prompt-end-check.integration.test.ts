@@ -1,3 +1,4 @@
+import { testActorContext } from "./tenant-context-test-utils.js";
 // ENT-8a: caller-supplied completion events remain invalid; only the owner finish command creates completion.
 // NOT RUN locally: PostgreSQL execution belongs to CI.
 import { randomUUID } from "node:crypto";
@@ -19,8 +20,8 @@ describe('caller completion event rejection',()=>{
  });
  it('a completed visit cannot substitute for authoritative job completion',async()=>{
   const f=await promptFixture(c),visits=new SiteVisitRepository(c.runtime),actor=f.members.operative.member;
-  const start=await visits.startVisit(f.ctx,actor,startInput(f));
-  await visits.completeVisit(f.ctx,actor,completeInput(f,start.visitId,'no'));
+  const start=await visits.startVisit(await testActorContext(c.admin, f.ctx, actor),actor,startInput(f));
+  await visits.completeVisit(await testActorContext(c.admin, f.ctx, actor),actor,completeInput(f,start.visitId,'no'));
   await expect(repo.endCheck(f.sessions.owner!,{version:'end-check.v1',commandId:randomUUID(),jobId:f.jobId,agreementVersionId:randomUUID(),completionEventId:start.visitId})).rejects.toMatchObject({code:'INVALID_PROMPT_COMMAND'});
   expect((await c.admin.query("SELECT status FROM app.job WHERE tenant_id=$1 AND id=$2",[f.p.tenantId,f.jobId])).rows[0]!.status).toBe('live');
  });

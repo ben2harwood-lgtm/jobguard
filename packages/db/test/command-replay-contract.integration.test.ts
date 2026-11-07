@@ -221,7 +221,7 @@ it("ResolveDuplicateCandidates replays one stored result and refuses changed int
     for (let i = 0; i < 2; i++) await extras.raiseExtra(await testActorContext(c.admin, w.ctx, w.w.members.operative.member), direct(w.w, w.w.members.operative, {
       jobId: w.s.jobId, sorItem: { versionId: w.w.demo.sorVersionId, code: "CLEAR-GUTTER" },
     }));
-    const group = (await readExtraDuplicateCandidates(c.runtime, w.ctx, actor, w.s.jobId)).groups[0]!;
+    const group = (await readExtraDuplicateCandidates(c.runtime, await testActorContext(c.admin, w.ctx, actor), actor, w.s.jobId)).groups[0]!;
     expect(group).toBeDefined();
     const session = randomUUID();
     await c.admin.query(`INSERT INTO control_plane.contractor_practice_session
