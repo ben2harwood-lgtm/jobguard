@@ -68,6 +68,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     ["decision_check_command", "p_digest text, p_command jsonb, p_phase text, p_data jsonb", "0660_baseline_ancestry_audit_trust.sql"],
     ["interim_draft_records", "t uuid, digest text, j uuid, operation text, v jsonb", "0665_interim_read_authority.sql"],
     ["ch5_history_actor", "t uuid, j uuid, d text", "0668_import_company_owner_history.sql"],
+    ["apply_recovery_timeline_signal", "p_tenant uuid, p_signal jsonb", "0694_recovery_timeline_import_anchor.sql"],
   ].map(async ([name, args, migration]) => {
     const sql = await readFile(new URL(`../migrations/${migration}`, import.meta.url), "utf8");
     if (name === "decision_check_command") expect(sql).toContain("rv.result->>'sourceJobId'=source.id::text");

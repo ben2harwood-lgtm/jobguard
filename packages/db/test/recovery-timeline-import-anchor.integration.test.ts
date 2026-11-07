@@ -8,7 +8,7 @@ import {
   type IntegrityFixture,
 } from "./commercial-integrity-v3-fixtures.js";
 
-const migration = new URL("../migrations/0955_recovery_timeline_import_anchor.sql", import.meta.url);
+const migration = new URL("../migrations/0694_recovery_timeline_import_anchor.sql", import.meta.url);
 const sql = readFileSync(migration, "utf8");
 const reference = readFileSync(new URL("../migrations/0660_baseline_ancestry_audit_trust.sql", import.meta.url), "utf8");
 // Copy the reviewed predicate, changing only the local tenant/child/parent aliases.

@@ -6,10 +6,12 @@
         "codex/sandbox/later-safety-137"
       ],
       "allow": [
-        "packages/db/migrations/0955_recovery_timeline_import_anchor.sql",
-        "packages/db/test/migration-proofs/0955_recovery_timeline_import_anchor.proof.json",
-        "packages/db/test/recovery-timeline-import-anchor.integration.test.ts",
-        "packages/db/migration-notes/0955_recovery_timeline_import_anchor.md"
+        "packages/db/migration-notes/0694_recovery_timeline_import_anchor.md",
+        "packages/db/migrations/0694_recovery_timeline_import_anchor.sql",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/0694_recovery_timeline_import_anchor.proof.json",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
+        "packages/db/test/recovery-timeline-import-anchor.integration.test.ts"
       ]
     }
   }
