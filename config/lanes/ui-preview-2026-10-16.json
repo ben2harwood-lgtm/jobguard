@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "ui-preview-2026-10-16": {
+      "branches": ["codex/sandbox/ui-preview-2026-10-16"],
+      "receipt": "docs/verdicts/UI-PREVIEW-2026-10-16/BUILDER_RECEIPT.md",
+      "note": "Ben requested reusable premium screens in the existing web codebase and a separate preview deployment on 16 October 2026. Additive /preview route; shared presentational components; explicit design-preview vs existing synthetic-service boundary. No main merge, production release, migrations, permission changes, new providers, real sends or charging. Independent review and separate acceptance remain required. Browser coverage: apps/web/e2e/UI-PREVIEW.spec.ts.",
+      "allow": [
+        "apps/web/app/preview/**",
+        "apps/web/app/ui/premium/**",
+        "apps/web/public/ui-preview/**",
+        "apps/web/e2e/UI-PREVIEW.spec.ts",
+        "docs/ui/UI_PREVIEW_2026-10-16.md",
+        "docs/verdicts/UI-PREVIEW-2026-10-16/**"
+      ]
+    }
+  }
+}
