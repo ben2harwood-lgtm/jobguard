@@ -142,7 +142,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
       }
       expect(row.definition).toBe(definition);
     } else {
-      // Metadata equality above binds the exact overload; each new body's source is unique.
+      // Metadata equality above binds the exact overload; pin its latest successor body, including 0681.
       const source = successors.findLast(p => p.upgrade.some(change => change.section === "routines" && change.after?.nspname === row.nspname && change.after.proname === row.proname && change.after.args === row.args));
       expect(source).toBeDefined();
       const sql = await readFile(new URL(`../migrations/${source!.migration}`, import.meta.url), "utf8");
