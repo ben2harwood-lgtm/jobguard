@@ -120,6 +120,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     "connector_promotion", "order_attestation_actor", "platform_invoice_read",
     "retention_timer", "retention_timer_book", "xa_proceed", "xa_proceed_breaches",
     "xa_proceed_view", "xa_wait_deadline", "customer_practice_pay_now", "store_extra_pack_artifact",
+    "guard_variation_final_account_lock",
   ];
   for (const name of namedAdditions) {
     expect(replayRoutines.filter(row => row.proname === name)).toHaveLength(1);

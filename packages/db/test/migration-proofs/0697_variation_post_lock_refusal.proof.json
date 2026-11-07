@@ -1,5 +1,5 @@
 {
-  "migration": "0828_variation_post_lock_refusal.sql",
+  "migration": "0697_variation_post_lock_refusal.sql",
   "lp0": [
     {
       "section": "routines",
