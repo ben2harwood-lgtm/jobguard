@@ -173,7 +173,9 @@ describe("M4-7 DARK AIS PostgreSQL boundary", () => {
   const liveAdmin = new Pool({ ...f.admin.options, password: f.admin.options.password, database: "postgres" });
   try {
    await migrate(liveAdmin);
-   await expect(new DarkAisRepository(liveName, s.adapter, s.vault, "synthetic_demo").read(s.a.context, s.a.digest, s.id)).rejects.toThrow("AIS_DARK_ONLY");
+   // AIS_DATABASE_DARK: bind a real fixture from this database before testing its name guard.
+   const liveActor = await meterCompany({ ...f, admin: liveAdmin, runtime: liveName });
+   await expect(new DarkAisRepository(liveName, s.adapter, s.vault, "synthetic_demo").read(liveActor.context, liveActor.digest, s.id)).rejects.toThrow("AIS_DARK_ONLY");
   } finally { await liveName.end(); await liveAdmin.end(); }
  });
 });

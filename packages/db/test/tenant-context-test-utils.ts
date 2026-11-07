@@ -23,3 +23,11 @@ export async function testBoundTenantContext(owner: Pool, tenantId: string, memb
     [randomUUID(), member.identity_user_id, credential]);
   return verifiedTenantContextFromMembership({ identityUserId: member.identity_user_id, tenantId, membershipId } as Parameters<typeof verifiedTenantContextFromMembership>[0], { kind: "real", credential });
 }
+
+/** Bind each synthetic actor independently; old-schema fixtures retain their old context.
+ * A foreign actor keeps the caller's tenant context so isolation attacks stay attacks. */
+export async function testActorContext(owner: Pool, context: ReturnType<typeof testTenantContext>, actor: { tenantId: string; membershipId: string }) {
+  if (actor.tenantId !== context.tenantId) return context;
+  const installed = (await owner.query("SELECT to_regprocedure('app.bind_request(text,text,uuid)') installed")).rows[0].installed;
+  return installed ? testBoundTenantContext(owner, context.tenantId, actor.membershipId) : context;
+}

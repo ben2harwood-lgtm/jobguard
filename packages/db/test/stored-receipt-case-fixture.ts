@@ -15,6 +15,7 @@ import {PracticeInvoiceRepository} from "../src/practice-invoice-repository.js";
 import {RecoveryCaseRepository} from "../src/recovery-case-repository.js";
 import {RecoveryLineAllocationRepository} from "../src/receipt-line-allocation-repository.js";
 import {withTenant} from "../src/tenant-context.js";
+import { verifiedTenantContextForQueuedJob } from "../src/tenant-context.js";
 import {testTenantContext} from "./tenant-context-test-utils.js";
 import {finalCheckTenant,type FinalCheckFixture} from "./final-check-fixture.js";
 import {pngBytes} from "./site-extra-evidence-fixtures.js";
@@ -92,13 +93,14 @@ export async function realReceiptFixture(f:FinalCheckFixture,kind:"F5"|"F7"="F7"
  });
  if(beforeLock)await beforeLock({context,jobId,signalId:signal,digest:auth.digest});
  const lock=await locks.lock(context,{jobId,actorMembershipId:actor.membershipId,commandId:randomUUID(),finalAccountRevisionId:drafted.id,expectedRevision:drafted.revision,declarationVersion:"final_account_declaration.v1"});
- const worker=new FinalCheckRepository(f.shadow),manifest=await worker.begin(context,jobId);
- for(const s of manifest.sources){if(s.sourceKind==="builder_capture_not_scanned"&&!s.processable)continue;await worker.record(context,jobId,manifest.id,s.id,randomUUID(),{version:"final-check.source-result.v1",inputHash:s.inputHash,status:kind==="F7"&&s.evidenceId===evidence?"detected":"zero_result",failureCode:null,signalIds:kind==="F7"&&s.evidenceId===evidence?signals:[]});}
+ const workerContext=verifiedTenantContextForQueuedJob(context.tenantId);
+ const worker=new FinalCheckRepository(f.shadow),manifest=await worker.begin(workerContext,jobId);
+ for(const s of manifest.sources){if(s.sourceKind==="builder_capture_not_scanned"&&!s.processable)continue;await worker.record(workerContext,jobId,manifest.id,s.id,randomUUID(),{version:"final-check.source-result.v1",inputHash:s.inputHash,status:kind==="F7"&&s.evidenceId===evidence?"detected":"zero_result",failureCode:null,signalIds:kind==="F7"&&s.evidenceId===evidence?signals:[]});}
  const signalRevisions=beforeLock?new Map((await f.admin.query("SELECT id,revision FROM app.shadow_commercial_signal WHERE tenant_id=$1 AND job_id=$2",[DEMO_TENANT_ID,jobId])).rows.map(row=>[row.id,row.revision as number])):null;
  const classifications:FinalCheckClassification[]=kind==="F7"?signals.map(signalId=>({signalId,expectedRevision:signalRevisions?.get(signalId)??0,outcome:signalId===hiddenSignal?"not_enough_evidence" as const:"reveal" as const,references:[],comparisons:{baselineItemIds:[scope],captureIds:[],lockedLineIds:manifest.comparisons.lines.map(l=>l.id)}})):[];
- const run=await worker.reconcile(context,jobId,manifest.id,classifications) as {runId:string;lockId:string};
+ const run=await worker.reconcile(workerContext,jobId,manifest.id,classifications) as {runId:string;lockId:string};
  // Reconciliation makes the result available; publication authorizes invoicing.
- await new FinalCheckCompletionRepository(f.shadow).publish(context,{version:"final-check-publication.v1",jobId,runId:run.runId,checkId:randomUUID()});
+ await new FinalCheckCompletionRepository(f.shadow).publish(workerContext,{version:"final-check-publication.v1",jobId,runId:run.runId,checkId:randomUUID()});
  const issue=async(invoiceKind:"final"|"supplementary")=>locks.issueInvoice(context,{jobId,actorMembershipId:actor.membershipId,commandId:randomUUID(),finalAccountRevisionId:drafted.id,expectedSourceHash:drafted.sourceHash,invoiceKind,recipient:"practice-customer@example.invalid",issuedOn:"2026-10-28"});
  let main=sv6?.combined?null:await issue("final");let invoiceId=main?.invoiceId??"";
  if(kind==="F7"){
@@ -138,5 +140,5 @@ export async function realReceiptFixture(f:FinalCheckFixture,kind:"F5"|"F7"="F7"
  if(kind==="F7")caseId=(await f.admin.query("SELECT id FROM app.recovery_case WHERE tenant_id=$1 AND job_id=$2 AND case_type='missed_variation_final_account' AND source_refs ? $3",[DEMO_TENANT_ID,jobId,'variation:'+variationId])).rows[0].id;
  else caseId=(await new RecoveryCaseRepository(scoped).command(context,jobId,{version:"recovery-case-command.v1",action:"open",commandId:randomUUID(),caseType:"withheld_customer_payment",expectedRevision:0,counterparty:"Fictional payer",book:"builder_customer",sourceType:"customer_invoice",sourceRefs:[invoiceId],claimedNetPence:80000,reviewerRef:`membership:${actor.membershipId}`},actor)).id;
  const snapshot=await producer.readCurrent(context,actor,auth.digest,{jobId}),fact=snapshot.rows.find(r=>r.paymentId===paymentId&&r.lineId===line)!;
- return {f,context,actor,auth,session,jobId,scope,evidence,lock,main:main!,invoiceId,line,caseId,workId,producer,produced,paymentId,deposit,scoped,invoices,receipt,produce,fact,signal,hiddenSignal,otherCatchSignal,run};
+ return {f,context,workerContext,actor,auth,session,jobId,scope,evidence,lock,main:main!,invoiceId,line,caseId,workId,producer,produced,paymentId,deposit,scoped,invoices,receipt,produce,fact,signal,hiddenSignal,otherCatchSignal,run};
 }

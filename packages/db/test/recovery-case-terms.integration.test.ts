@@ -115,7 +115,9 @@ it.each(["admin","estimator","foreman","operative","finance","read_only","superv
 });
 it.each(["revoked","expired"])("[T2] dispatcher refuses %s owner with zero writes",async state=>{const who=await member("owner",state),id=await newCase(),before=await counts();await expect(new RecoveryCaseTermsRepository(runtime).approve(context,job,command(id),who)).rejects.toMatchObject({code:"RECOVERY_TERMS_FORBIDDEN"});expect(await counts()).toEqual(before);});
 it.each([["member","active"],["owner","revoked"],["owner","expired"]])("[T2] direct runtime forged exact inputs refuse %s/%s and roll back everything",async(role,state)=>{
- const who=await member(role,state),id=await newCase(),before=await counts();const bound=await testBoundTenantContext(admin,T,who.membershipId);await expect(withTenant(admin,bound,async db=>{const inputs=await handMade(db.$client,id,who.membershipId);return direct(db.$client,id,who.membershipId,inputs);})).rejects.toMatchObject({code:"42501",message:"RECOVERY_TERMS_AUTHORIZATION_INVALID"});expect(await counts()).toEqual(before);
+ const who=await member(role,state),id=await newCase(),before=await counts();const credential=randomUUID().replaceAll("-","").repeat(2);await testBoundTenantContext(admin,T,who.membershipId,credential);
+ // TERMS_RAW_OWNER: forged exact-input member, revoked owner and expired owner are raw SQL attacks.
+ await expect(withTenant(admin,testTenantContext(T),async db=>{await db.$client.query("SELECT app.bind_request('real',$1,$2)",[credential,T]);const inputs=await handMade(db.$client,id,who.membershipId);return direct(db.$client,id,who.membershipId,inputs);})).rejects.toMatchObject({code:"42501",message:state==="active"?"RECOVERY_TERMS_AUTHORIZATION_INVALID":"REQUEST_BINDING_REFUSED"});expect(await counts()).toEqual(before);
 });
 it("[T2] direct active-owner positive control accepts the same hand-made inputs; runtime cannot INSERT",async()=>{
  const id=await newCase();const result=await withTenant(admin,context,async db=>direct(db.$client,id,M,await handMade(db.$client,id,M)));expect(result.rows[0].case_id).toBe(id);

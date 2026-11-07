@@ -170,6 +170,8 @@ describe("CH-2 actual PostgreSQL enforcement", () => {
   it("round 16: live party corrections preserve the imported binding and allow watchdog inputs before and after", async () => {
     const jobId = randomUUID(); await importWatchdogFixtureJob(admin, tenant, jobId);
     const baseline = (await admin.query("SELECT party_binding_id,attested_by_membership_id FROM app.imported_job_baseline WHERE tenant_id=$1 AND job_id=$2", [tenant, jobId])).rows[0];
+    // WATCHDOG_PARTY_ACTOR: bind the imported baseline's real attesting member for its checked correction.
+    const context = await testBoundTenantContext(admin, tenant, baseline.attested_by_membership_id);
     const parties = new JobPartiesRepository(runtime), readiness = new ReadinessRepository(runtime);
     const before = await parties.view(context, baseline.attested_by_membership_id, jobId);
     expect(before).toMatchObject({ status: "live", jobRevision: 1, currentIds: { bindingId: baseline.party_binding_id } });

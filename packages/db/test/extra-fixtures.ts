@@ -57,7 +57,10 @@ export async function fixture(c: Cluster, n = 1) {
 export type Fixture = Awaited<ReturnType<typeof fixture>>;
 export const raise = <T extends Record<string, unknown> = Record<string, never>>(f: Fixture, fields: T = {} as T) => ({ version: "raise-extra.v1", commandId: randomUUID(), commandType: "LogSiteExtra", jobId: f.jobId, actorMembershipId: f.p.membershipId, grantId: f.grantId, note: noteCanary, description: descriptionCanary, ...fields });
 export async function ownerTx<T>(c: Cluster, tenantId: string, work: (db: TenantTransaction) => Promise<T>) {
- return withTenant(c.admin, testTenantContext(tenantId), async db => { await db.$client.query("SET LOCAL ROLE jobguard_migration"); return work(db); });
+ const owner = (await c.admin.query("SELECT id FROM app.membership WHERE tenant_id=$1 AND role='owner' AND revoked_at IS NULL ORDER BY id LIMIT 1", [tenantId])).rows[0];
+ const installed = (await c.admin.query("SELECT to_regprocedure('app.bind_request(text,text,uuid)') installed")).rows[0].installed;
+ const context = installed && owner ? await testBoundTenantContext(c.admin, tenantId, owner.id) : testTenantContext(tenantId);
+ return withTenant(c.admin, context, async db => { await db.$client.query("SET LOCAL ROLE jobguard_migration"); return work(db); });
 }
 export async function receipt(db: TenantTransaction, tenantId: string, jobId: string, variationId: string, actor: string, type = "LogSiteExtra", commandId = randomUUID(), fields: { status?: string; semanticKey?: string } = {}) {
  await db.$client.query("INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id,result,completed_at) VALUES($1,$2,$3,$4,$5,$6::text,$7,CASE WHEN $6::text='succeeded' THEN '{}'::jsonb ELSE NULL END,CASE WHEN $6::text='succeeded' THEN clock_timestamp() ELSE NULL END)", [tenantId, commandId, type, fields.semanticKey ?? `extra-origin:${jobId}:${variationId}`, "a".repeat(64), fields.status ?? "processing", actor]); return commandId;

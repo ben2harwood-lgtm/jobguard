@@ -9,6 +9,7 @@ import {Pool,type PoolClient} from "pg";
 import {migrate} from "../src/migrate.js";
 import {FinalAccountLockRepository} from "../src/final-account-lock-repository.js";
 import {FinalCheckRepository,type FinalCheckClassification} from "../src/final-check-repository.js";
+import { verifiedTenantContextForQueuedJob } from "../src/tenant-context.js";
 import {testTenantContext,testBoundTenantContext} from "./tenant-context-test-utils.js";
 import {freePort,closeTestDatabase,installLegacySyntheticPartyFixtures} from "./pool-test-utils.js";
 export const FINAL_CHECK_TENANT="11111111-1111-4111-8111-111111111111",FINAL_CHECK_ACTOR="d1500000-0000-4000-8000-000000000003",FINAL_CHECK_USER="d1500000-0000-4000-8000-000000000001";
@@ -53,7 +54,7 @@ export async function seedFinalCheckJob(f:FinalCheckFixture){
  const context=(await f.admin.query("SELECT to_regprocedure('app.bind_request(text,text,uuid)') installed")).rows[0].installed ? await testBoundTenantContext(f.admin,tenantId,FINAL_CHECK_ACTOR) : testTenantContext(tenantId),locks=new FinalAccountLockRepository(f.runtime);
  if(!(await f.admin.query("SELECT 1 FROM app.final_check_terms_acceptance WHERE tenant_id=$1",[tenantId])).rowCount)await locks.acceptTerms(context,{actorMembershipId:FINAL_CHECK_ACTOR,commandId:randomUUID(),termsVersion:"synthetic_final_check_terms.v1"});
  await locks.disposition(context,{jobId,actorMembershipId:FINAL_CHECK_ACTOR,commandId:randomUUID(),scopeItemId,disposition:"done"});
- return {tenantId,jobId,scopeItemId,baselineId,revisionId,lineId,context,digest,sessionId,lock:()=>locks.lock(context,{jobId,actorMembershipId:FINAL_CHECK_ACTOR,commandId:randomUUID(),finalAccountRevisionId:revisionId,expectedRevision:1,declarationVersion:"final_account_declaration.v1"})};
+ return {tenantId,jobId,scopeItemId,baselineId,revisionId,lineId,context,workerContext:verifiedTenantContextForQueuedJob(tenantId),digest,sessionId,lock:()=>locks.lock(context,{jobId,actorMembershipId:FINAL_CHECK_ACTOR,commandId:randomUUID(),finalAccountRevisionId:revisionId,expectedRevision:1,declarationVersion:"final_account_declaration.v1"})};
 }
 export type FinalCheckJob=Awaited<ReturnType<typeof seedFinalCheckJob>>;
 export async function insertFinalCheckEvidence(f:FinalCheckFixture,a:FinalCheckJob,evidenceType="completion_photo",contentType="image/png",byteLength=0){const evidence=randomUUID(),upload=randomUUID(),hash="a".repeat(64),objectVersion=randomUUID();await finalCheckTenant(f.admin,a.tenantId,async db=>{
@@ -66,9 +67,9 @@ export async function finalCheckProposal(f:FinalCheckFixture,a:FinalCheckJob,evi
  const row=(await f.admin.query("SELECT id,object_version_id,sha256,server_received_at::text received FROM app.evidence_object WHERE tenant_id=$1 AND job_id=$2 AND id=$3",[a.tenantId,a.jobId,evidence])).rows[0];
  await db.query("INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at) VALUES($2,$3,$1,$4,$5,$6,$7::timestamptz)",[signalId,a.tenantId,a.jobId,row.id,row.object_version_id,row.sha256,row.received]);});return signalId;}
 export async function availableFinalCheck(f:FinalCheckFixture,a:FinalCheckJob,outcome:FinalCheckClassification['outcome']='reveal'){
- const evidence=await insertFinalCheckEvidence(f,a),signalId=await finalCheckProposal(f,a,evidence,outcome==='already_in_original_scope'?a.scopeItemId:null);await a.lock();const repo=new FinalCheckRepository(f.shadow),m=await repo.begin(a.context,a.jobId),s=m.sources[0]!;
- await repo.record(a.context,a.jobId,m.id,s.id,randomUUID(),{version:"final-check.source-result.v1",inputHash:s.inputHash,status:"detected",failureCode:null,signalIds:[signalId]});
+ const evidence=await insertFinalCheckEvidence(f,a),signalId=await finalCheckProposal(f,a,evidence,outcome==='already_in_original_scope'?a.scopeItemId:null);await a.lock();const repo=new FinalCheckRepository(f.shadow),m=await repo.begin(a.workerContext,a.jobId),s=m.sources[0]!;
+ await repo.record(a.workerContext,a.jobId,m.id,s.id,randomUUID(),{version:"final-check.source-result.v1",inputHash:s.inputHash,status:"detected",failureCode:null,signalIds:[signalId]});
  const p:FinalCheckClassification={signalId,expectedRevision:0,outcome,references:outcome==='already_in_original_scope'?[a.scopeItemId]:[],comparisons:{baselineItemIds:[a.scopeItemId],captureIds:[],lockedLineIds:[a.lineId]}};
- const result=await repo.reconcile(a.context,a.jobId,m.id,[p]) as {runId:string;lockId:string};
+ const result=await repo.reconcile(a.workerContext,a.jobId,m.id,[p]) as {runId:string;lockId:string};
  return {...result,signalId,manifest:m,classification:p,body:{version:"final-check.disposition.v1" as const,commandId:randomUUID(),lockId:result.lockId,runId:result.runId,signalId,expectedSignalRevision:1,answer:"not_completed" as const,referenceId:null}};
 }

@@ -1,3 +1,4 @@
+import { testActorContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, expect, it, vi } from 'vitest';
 import { ExtraApprovalRepository } from '../src/extra-approval-chain-repository.js';
@@ -6,7 +7,7 @@ import { loadContractorBundleSources, hydrateContractorBundleSources, loadRecove
 import { assembleEvidenceBundle, verifyEvidenceBundle } from '../src/evidence-bundle.js';
 import { chainWorld, cluster, submitted, approveInput, type Cluster } from './extra-approval-chain-fixtures.js';
 import { seedEvidencePackFixture } from './evidence-pack-fixture.js';
-import { testTenantContext } from './tenant-context-test-utils.js';
+import { testTenantContext, testBoundTenantContext } from './tenant-context-test-utils.js';
 import { storage } from './site-extra-evidence-fixtures.js';
 let c: Cluster;
 beforeAll(async () => { vi.stubEnv('JOBGUARD_ENV', 'synthetic_demo'); c = await cluster(); }, 180_000);
@@ -18,7 +19,7 @@ it('joins actual immutable origin, revision, requirement and approval facts; rep
   const read = (actor = w.members.surveyor.member, input = q) => withEvidencePackV3Snapshot(c.runtime, ctx, tx => loadContractorBundleSources(tx, actor, input));
   // No positive assertion is derived from a submission, a missing step or a non-approved outcome.
   await expect(read()).rejects.toBeDefined();
-  await repo.approveExtraStep(ctx, w.members.supervisor.member, approveInput(s, 0));
+  await repo.approveExtraStep(await testActorContext(c.admin, ctx, w.members.supervisor.member), w.members.supervisor.member, approveInput(s, 0));
   const loaded = await read(), sources = await hydrateContractorBundleSources(loaded, storage);
   const build = (records = sources) => assembleEvidenceBundle({ version: 'evidence-bundle-input.v1', subject: { kind: 'extra', ...loaded.owner }, lifecycle: { state: 'ordinary' },
     recipients: [w.members.supervisor.member.membershipId], checkpoint: null, sources: records,
@@ -32,13 +33,14 @@ it('joins actual immutable origin, revision, requirement and approval facts; rep
   await expect(read({ ...w.members.surveyor.member, tenantId: randomUUID() })).rejects.toBeDefined();
   await expect(read(w.members.surveyor.member, { ...q, jobId: randomUUID() })).rejects.toBeDefined();
   await expect(read(w.members.surveyor.member, { ...q, extraId: randomUUID() })).rejects.toBeDefined();
-  await repo.reviseExtra(ctx, w.members.surveyor.member, { version: 'revise-extra.v1', commandId: randomUUID(), jobId: s.jobId, extraId: s.extraId, netPence: 40001 });
+  await repo.reviseExtra(await testActorContext(c.admin, ctx, w.members.surveyor.member), w.members.surveyor.member, { version: 'revise-extra.v1', commandId: randomUUID(), jobId: s.jobId, extraId: s.extraId, netPence: 40001 });
   await expect(read()).rejects.toBeDefined();
 });
 
 it('reuses real quote/acceptance, variation, proof, supplier and case joins, refusing foreign and same-tenant wrong-job references', async () => {
   const f = await seedEvidencePackFixture(c.admin, { withVariation: true });
-  const read = (caseId = f.caseId, tenantId = f.tenantId) => withEvidencePackV3Snapshot(c.runtime, testTenantContext(tenantId), tx => loadRecoveryBundleSources(tx, tenantId, caseId, []));
+  const context = await testBoundTenantContext(c.admin, f.tenantId, f.memberId);
+  const read = (caseId = f.caseId, tenantId = f.tenantId) => withEvidencePackV3Snapshot(c.runtime, tenantId === f.tenantId ? context : testTenantContext(tenantId), tx => loadRecoveryBundleSources(tx, tenantId, caseId, []));
   const loaded = await read();
   expect(loaded.sources.map(s => s.kind)).toEqual(expect.arrayContaining(['accepted_quote', 'approval', 'variation', 'proof', 'order', 'delivery', 'invoice', 'case_history']));
   expect(loaded.sources.every(s => s.tenantId === f.tenantId && s.jobId === f.jobId && s.subjectId === f.caseId)).toBe(true);

@@ -14,6 +14,7 @@ import { PurchaseOrderActionRepository } from "../src/purchase-order-action-repo
 import { FakeMerchantOrderPort } from "../src/purchase-order-action.js";
 import { ActionExecutor, operateOutbox } from "../src/outbox.js";
 import { withTenant } from "../src/tenant-context.js";
+import { verifiedTenantContextFromMembership, type AuthenticatedMembership } from "../src/tenant-context.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { meterCompany } from "./meter-persistence-fixtures.js";
 import type { WorkFixture } from "./job-work-state-fixtures.js";
@@ -331,7 +332,7 @@ describe("M2-1 dark approved merchant action on PostgreSQL", () => {
     await admin.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", [`${user}@fictional.invalid`,user]);
     await admin.query(`INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at)
       VALUES($1,$2,'synthetic_demo',$3,$4,clock_timestamp()+interval '1 hour')`, [randomUUID(),user,digest,randomUUID()]);
-    return { actor, digest };
+    return { actor, digest, context: verifiedTenantContextFromMembership({ tenantId, membershipId: actor, identityUserId: user } as AuthenticatedMembership, { kind: "real", credential: digest }) };
   }
   it("the session alone supplies the recorded actor, including another owner's session and replay conflicts", async () => {
     const f = await darkFixture(), other = await sessionFor(f);
@@ -339,13 +340,14 @@ describe("M2-1 dark approved merchant action on PostgreSQL", () => {
     await expect(f.repo.attestManual(f.auth.context, f.manual,
       { sessionDigest: f.auth.digest, actorMembershipId: other.actor })).rejects.toThrow();
     expect(await effects(f.auth.context.tenantId)).toEqual(before);
-    const fact = await f.repo.attestManual(f.auth.context, f.manual, { sessionDigest: other.digest });
+    // ORDER_OTHER_OWNER_BINDING: bind the very session whose actor must be recorded.
+    const fact = await f.repo.attestManual(other.context, f.manual, { sessionDigest: other.digest });
     expect((await admin.query("SELECT actor_membership_id FROM app.purchase_order_manual_attestation WHERE id=$1", [fact.attestationId])).rows)
       .toEqual([{ actor_membership_id: other.actor }]);
     expect((await admin.query("SELECT actor_ref FROM app.audit_event WHERE tenant_id=$1 AND event_type='purchase_order.manual_attested'", [f.auth.context.tenantId])).rows)
       .toEqual([{ actor_ref: `membership:${other.actor}` }]);
     await expect(f.repo.attestManual(f.auth.context, f.manual, { sessionDigest: f.auth.digest })).rejects.toThrow("IDEMPOTENCY_CONFLICT");
-    expect(await f.repo.attestManual(f.auth.context, f.manual, { sessionDigest: other.digest })).toEqual(fact);
+    expect(await f.repo.attestManual(other.context, f.manual, { sessionDigest: other.digest })).toEqual(fact);
   });
 
   it.each(["revoked", "expired", "forged"])("%s practice digest refuses with no attestation or audit", async boundary => {

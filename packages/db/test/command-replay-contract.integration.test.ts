@@ -1,3 +1,4 @@
+import { testActorContext } from "./tenant-context-test-utils.js";
 import { createHash, randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { ExtraApprovalRepository } from "../src/extra-approval-chain-repository.js";
@@ -176,10 +177,10 @@ it(`${clientReplayCase.key}: client decision replays the first result and confli
     const actor = w.members.client_approver.member.membershipId;
     async function client() {
       const s = await submitted(c, w, 150000);
-      await repo.approveExtraStep(ctx, w.members.supervisor.member, approveInput(s, 0));
-      await repo.approveExtraStep(ctx, w.supervisor2.member, approveInput(s, 1));
+      await repo.approveExtraStep(await testActorContext(c.admin, ctx, w.members.supervisor.member), w.members.supervisor.member, approveInput(s, 0));
+      await repo.approveExtraStep(await testActorContext(c.admin, ctx, w.supervisor2.member), w.supervisor2.member, approveInput(s, 1));
       const signin = randomUUID().replaceAll("-", "").repeat(2), digest = randomUUID().replaceAll("-", "").repeat(2);
-      await repo.issueClientApproval(ctx, w.members.surveyor.member, {
+      await repo.issueClientApproval(await testActorContext(c.admin, ctx, w.members.surveyor.member), w.members.surveyor.member, {
         version: "issue-client-approval.v1", commandId: randomUUID(), jobId: s.jobId, requestId: s.requestId,
         approverMembershipId: actor, recipient: await emailOf(c, w, actor), linkToken: newToken(),
         signinDigest: signin, expiresAt: new Date(Date.now() + 7 * 86400000),
@@ -199,10 +200,10 @@ it(`${clientReplayCase.key}: client decision replays the first result and confli
     await expect(b.run({ ...b.input, commandId: a.input.commandId })).rejects.toThrow(CONFLICT);
     // Both directions share tenant-wide command identity with a real other command kind.
     const other = await submitted(c, w, 150000);
-    await expect(repo.approveExtraStep(ctx, w.members.supervisor.member,
+    await expect(repo.approveExtraStep(await testActorContext(c.admin, ctx, w.members.supervisor.member), w.members.supervisor.member,
       approveInput(other, 0, { commandId: a.input.commandId }))).rejects.toThrow(CONFLICT);
     const otherId = randomUUID();
-    await repo.approveExtraStep(ctx, w.members.supervisor.member, approveInput(other, 0, { commandId: otherId }));
+    await repo.approveExtraStep(await testActorContext(c.admin, ctx, w.members.supervisor.member), w.members.supervisor.member, approveInput(other, 0, { commandId: otherId }));
     await expect(b.run({ ...b.input, commandId: otherId })).rejects.toThrow(CONFLICT);
     expect(await a.run()).toEqual(first);
     expect((await c.admin.query("SELECT count(*)::int n FROM app.extra_approval_step_fact WHERE tenant_id=$1 AND request_id=$2 AND actor_kind='client_approver'",
@@ -217,7 +218,7 @@ it("ResolveDuplicateCandidates replays one stored result and refuses changed int
   try {
     const w = await world(c), actor = w.w.members.supervisor.member;
     const extras = new ExtraRepository(c.runtime);
-    for (let i = 0; i < 2; i++) await extras.raiseExtra(w.ctx, direct(w.w, w.w.members.operative, {
+    for (let i = 0; i < 2; i++) await extras.raiseExtra(await testActorContext(c.admin, w.ctx, w.w.members.operative.member), direct(w.w, w.w.members.operative, {
       jobId: w.s.jobId, sorItem: { versionId: w.w.demo.sorVersionId, code: "CLEAR-GUTTER" },
     }));
     const group = (await readExtraDuplicateCandidates(c.runtime, w.ctx, actor, w.s.jobId)).groups[0]!;
@@ -229,7 +230,7 @@ it("ResolveDuplicateCandidates replays one stored result and refuses changed int
     [session, actor.tenantId, actor.membershipId, actor.identityUserId, digestOf(session)]);
     const input = { version: "duplicate-disposition.v1", commandId: randomUUID(), groupId: group.id,
       fingerprint: group.fingerprint, disposition: "not_duplicates", reasonCode: "different_work" };
-    const run = (raw: unknown) => resolveExtraDuplicateCandidates(c.runtime, w.ctx, session, w.s.jobId, raw);
+    const run = async (raw: unknown) => resolveExtraDuplicateCandidates(c.runtime, await testActorContext(c.admin, w.ctx, actor), session, w.s.jobId, raw);
     const results = await Promise.all([run(input), run(input)]);
     expect(results[1]).toEqual(results[0]);
     const counts = async () => (await c.admin.query(`SELECT

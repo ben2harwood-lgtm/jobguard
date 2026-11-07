@@ -472,12 +472,14 @@ it("DW3: evidenced amount below the claim prevents both repository and direct Po
 it("persisted owner authorization is checked again before every approval and replay", async () => {
   const f = await fixture(), command = await reviewed(f), before = await countRows(f);
   await admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, actor.membershipId]);
-  try { await expect(run(f, command)).rejects.toMatchObject({ code: "ALLOCATION_FORBIDDEN" }); }
+  // ALLOCATION_REVOKED_EXPIRED_REPOSITORY: initial binding keeps its public FORBIDDEN code.
+  try { await expect(run(f, command)).rejects.toMatchObject({ code: "FORBIDDEN" }); }
   finally { await admin.query("UPDATE app.membership SET revoked_at=NULL WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, actor.membershipId]); }
   expect(await countRows(f)).toEqual(before);
   await run(f, command); const saved = await countRows(f);
   await admin.query("UPDATE app.membership SET expires_at=clock_timestamp()-interval '1 second' WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, actor.membershipId]);
-  try { await expect(run(f, command)).rejects.toMatchObject({ code: "ALLOCATION_FORBIDDEN" }); }
+  // ALLOCATION_REVOKED_EXPIRED_REPOSITORY: initial binding keeps its public FORBIDDEN code.
+  try { await expect(run(f, command)).rejects.toMatchObject({ code: "FORBIDDEN" }); }
   finally { await admin.query("UPDATE app.membership SET expires_at=NULL WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, actor.membershipId]); }
   expect(await countRows(f)).toEqual(saved);
 });

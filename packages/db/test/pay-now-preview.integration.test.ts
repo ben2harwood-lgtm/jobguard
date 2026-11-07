@@ -77,11 +77,13 @@ describe("MON-6 stored preview boundaries",()=>{
    expect(original.synthetic).toBe(true);
    await c.admin.query(mutation,[mutation.includes("membership")?a.actorId:a.sessionId]);
    const membership=mutation.includes("membership");
-   await expect(repo.command(a.context,a.actor,a.input)).rejects.toThrow(membership?"FORBIDDEN":"UNAUTHENTICATED");
+   // PAY_NOW_AUTH_SPLIT: raw meter binding refuses revoked membership; revoked/expired sessions retain the SQL session refusal.
+   // Repository calls retain the built public UNAUTHENTICATED code for an initial binding refusal.
+   await expect(repo.command(a.context,a.actor,a.input)).rejects.toThrow("UNAUTHENTICATED");
    await expect(workTenant(c.runtime,a.tenantId,db=>db.query(
     "SELECT app.pay_now_fake_attempt($1,$2,$3,'prepare',$4::jsonb)",
     [a.tenantId,a.digest,a.jobId,JSON.stringify(a.input)],
-   ))).rejects.toMatchObject({message:membership?"METER_FORBIDDEN":"PAY_NOW_UNAUTHENTICATED",code:membership?"42501":"28000"});
+   ))).rejects.toMatchObject({message:membership?"REQUEST_BINDING_REFUSED":"PAY_NOW_UNAUTHENTICATED",code:membership?"42501":"28000"});
   }
  });
  it("refuses an unknown session as unauthenticated",async()=>{

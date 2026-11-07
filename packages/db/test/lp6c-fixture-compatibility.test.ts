@@ -77,3 +77,31 @@ it.each([new RequestBindingRefusedError(), Object.assign(new Error("REQUEST_BIND
     expect(PayNowAttemptError.fromDatabase(error).code).toBe(error instanceof RequestBindingRefusedError ? "UNAUTHENTICATED" : "FORBIDDEN");
   },
 );
+
+it("extra fixture actors bind their own persisted credential rather than the fixture owner's identity", async () => {
+  const { testActorContext, testTenantContext } = await import("./tenant-context-test-utils.js");
+  const { withTenant } = await import("../src/tenant-context.js");
+  const tenantId = randomUUID(), membershipId = randomUUID(), identityUserId = randomUUID();
+  let credential: unknown;
+  const query = vi.fn(async (sql: string, values?: unknown[]) => {
+    if (sql.includes("to_regprocedure")) return { rows: [{ installed: "app.bind_request(text,text,uuid)" }] };
+    if (sql.startsWith("SELECT identity_user_id")) return { rows: [{ identity_user_id: identityUserId }] };
+    if (sql.startsWith("INSERT INTO identity.session")) credential = values?.[2];
+    if (sql.includes("app.current_actor()")) return { rows: [{ actor: membershipId, tenant: tenantId }] };
+    return { rows: [] };
+  });
+  const pool = { query, connect: async () => ({ query, release: vi.fn() }) } as unknown as Pool;
+  const context = await testActorContext(pool, testTenantContext(tenantId), { tenantId, membershipId });
+  await withTenant(pool, context, async () => undefined);
+  expect(query).toHaveBeenCalledWith("SELECT app.bind_request($1, $2, $3)", ["real", credential, tenantId]);
+  expect(query).toHaveBeenCalledWith(expect.stringContaining("identity.membership_locator"), [identityUserId, tenantId, membershipId]);
+});
+it("extra fixtures preserve historical contexts and foreign-actor isolation attacks", async () => {
+  const { testActorContext, testTenantContext } = await import("./tenant-context-test-utils.js");
+  const context = testTenantContext(randomUUID());
+  const query = vi.fn(async () => ({ rows: [{ installed: null }] })), pool = { query } as unknown as Pool;
+  expect(await testActorContext(pool, context, { tenantId: randomUUID(), membershipId: randomUUID() })).toBe(context);
+  expect(query).not.toHaveBeenCalled();
+  expect(await testActorContext(pool, context, { tenantId: context.tenantId, membershipId: randomUUID() })).toBe(context);
+  expect(query).toHaveBeenCalledOnce();
+});

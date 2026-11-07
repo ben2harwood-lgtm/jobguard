@@ -67,6 +67,10 @@ it("screen commands persist only draft records and refuse forged authority, repl
   await expect(repo.command(a.context,a.digest,first)).rejects.toMatchObject({code:"UNAVAILABLE"});
   await c.admin.query("UPDATE identity.session SET expires_at=clock_timestamp()+interval '1 hour', revoked_at=clock_timestamp() WHERE id=$1",[a.sessionId]);
   await expect(repo.command(a.context,a.digest,first)).rejects.toMatchObject({code:"UNAVAILABLE"});
+  await expect(repo.read(a.context,a.jobId)).rejects.toMatchObject({code:"UNAVAILABLE"});
+  // INTERIM_READ_AFTER_REVOCATION: the repository read binds too; restore the synthetic
+  // session after both refusal assertions so this still verifies byte-identical stored facts.
+  await c.admin.query("UPDATE identity.session SET revoked_at=NULL WHERE id=$1",[a.sessionId]);
   expect(await repo.read(a.context,a.jobId)).toEqual(stored);
   expect(await financialSnapshot()).toEqual(before);
 });
