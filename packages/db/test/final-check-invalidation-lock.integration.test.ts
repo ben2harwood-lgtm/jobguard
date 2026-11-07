@@ -40,7 +40,7 @@ async function completedJob() {
   return { a, evidenceId };
 }
 
-it("refuses locked manifest evidence after completion without stranding final invoice issue", async () => {
+it("refuses locked manifest evidence after completion until the final invoice is issued, then allows it (C135)", async () => {
   const { a, evidenceId } = await completedJob();
   await expectLocked(a, evidenceId);
   const invoices = new FinalAccountLockRepository(practiceMaterialPool(f.runtime, a.digest));
@@ -52,6 +52,8 @@ it("refuses locked manifest evidence after completion without stranding final in
   expect(issued).toMatchObject({ invoiceKind: "final", netPence: 100000, totalPence: 120000 });
   expect((await f.admin.query(`SELECT id FROM app.customer_invoice
     WHERE tenant_id=$1 AND job_id=$2 AND id=$3`, [a.tenantId, a.jobId, issued.invoiceId])).rowCount).toBe(1);
+  // C135: once the final invoice is issued, recovery flows may withdraw the same proof.
+  expect((await finalCheckTenant(f.runtime, a.tenantId, db => invalidate(db, a, evidenceId))).rowCount).toBe(1);
 });
 
 it("keeps invalidation of the same kind of evidence before lock unchanged", async () => {

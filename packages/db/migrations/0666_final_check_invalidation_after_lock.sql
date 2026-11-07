@@ -30,6 +30,12 @@ BEGIN
    AND (s.evidence_id IS NULL OR
     (e.id,e.object_version_id,e.sha256,e.server_received_at)=
     (s.evidence_id,s.object_version_id,s.sha256,s.evidence_received_at))
+   -- Only until the final invoice is issued (the issue functions' own final-invoice rule).
+   -- After that, a withdrawal no longer strands final invoice issue, and C135 recovery
+   -- flows (evidence packs, pursuit, allocations) depend on post-lock withdrawal.
+   AND NOT EXISTS(SELECT 1 FROM app.customer_invoice i LEFT JOIN app.final_account_invoice_binding b
+    ON (b.tenant_id,b.job_id,b.invoice_id)=(i.tenant_id,i.job_id,i.id)
+    WHERE i.tenant_id=l.tenant_id AND i.job_id=l.job_id AND coalesce(b.invoice_kind,'final')='final')
  ) THEN
   RAISE EXCEPTION 'FINAL_CHECK_VERIFIED_SOURCE_LOCKED' USING ERRCODE='55000';
  END IF;

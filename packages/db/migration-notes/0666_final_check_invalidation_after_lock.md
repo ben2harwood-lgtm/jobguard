@@ -10,6 +10,7 @@ and `b_final_check_locked_invalidation` BEFORE INSERT trigger. The existing
 manifest cannot be invalidated; pre-lock and unrelated evidence retain their
 existing behavior. No existing routine is replaced, no historical rows are
 rewritten, and main's LP-6b definitions remain unchanged.
+The refusal ends when the final invoice is issued, allowing C135 recovery flows to withdraw the same evidence afterward.
 
 The launcher merge already contains current origin/main. This catch-up retains
 its exact union and all existing test expectations; only the migration identity
