@@ -46,3 +46,11 @@ it.each([undefined, "wrong"])("refuses missing or wrong CSRF %s before acceptanc
   expect(response.status).toBe(403);
   expect(state.accept).not.toHaveBeenCalled();
 });
+it("maps a malformed CSRF header (schema refusal) to 403, not 400", async () => {
+  vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
+  const { z } = await import("zod");
+  state.resolve.mockImplementationOnce(async () => { z.string().min(24).parse("wrong"); });
+  const response = await POST(new Request(path, { method: "POST", headers: { origin: "http://localhost", "x-csrf-token": "wrong" }, body: "{}" }), params);
+  expect(response.status).toBe(403);
+  expect(state.accept).not.toHaveBeenCalled();
+});

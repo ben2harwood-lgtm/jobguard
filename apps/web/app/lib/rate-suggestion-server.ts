@@ -23,11 +23,16 @@ export async function rateSession(request?: Request) {
     const session = await identity.session(token);
     if (session.memberships.length !== 1 || session.memberships[0]?.role !== "owner") throw new Error("FORBIDDEN");
     // Match the mandate boundary: a mutation uses browser-supplied CSRF and origin.
-    const context = await resolveVerifiedTenantContext(identity.provider, {
-      sessionToken: token, requestedTenantId: session.memberships[0].tenantId,
-      origin: request.headers.get("origin") ?? undefined,
-      csrfToken: request.headers.get("x-csrf-token") ?? undefined,
-    }, identity.allowedOrigin);
+    // A malformed CSRF or origin header is a refused mutation (403), not a bad acceptance body (400).
+    try {
+      await resolveVerifiedTenantContext(identity.provider, {
+        sessionToken: token, requestedTenantId: session.memberships[0].tenantId,
+        origin: request.headers.get("origin") ?? undefined,
+        csrfToken: request.headers.get("x-csrf-token") ?? undefined,
+      }, identity.allowedOrigin);
+    } catch (error) {
+      throw (error as { name?: string } | null)?.name === "ZodError" ? new Error("ORIGIN_FORBIDDEN") : error;
+    }
   }
   const application = new RateSuggestionApplication(identity, new RateSuggestionRepository(syntheticPool()));
   return { token, application };
