@@ -11,8 +11,11 @@ const proofViewV1 = z.object({ version: z.literal("practice-proof-view.v1"), job
   completion: z.object({ id: uuid, reviewRequired: z.boolean() }).nullable() });
 const deliveryViewV1 = z.object({ status: z.string() }).nullable();
 
-async function read<T>(jobId: string, path: string, schema: z.ZodType<T>): Promise<T> {
+async function read<T>(jobId: string, path: string, schema: z.ZodType<T>): Promise<T>;
+async function read<T>(jobId: string, path: string, schema: z.ZodType<T>, notYet: number[]): Promise<T | null>;
+async function read<T>(jobId: string, path: string, schema: z.ZodType<T>, notYet: number[] = []): Promise<T | null> {
   const response = await fetch(`/api/jobs/${jobId}/${path}`, { cache: "no-store" });
+  if (notYet.includes(response.status)) return null;
   if (!response.ok) throw new Error("Your saved walkthrough could not load. Reload to try again; nothing was changed.");
   const value = schema.parse(await response.json());
   if (value && typeof value === "object" && "jobId" in value && value.jobId !== jobId) throw new Error("The saved job did not match this walkthrough.");
@@ -44,8 +47,9 @@ export async function resumeWalkthrough(params: URLSearchParams) {
       const extras = await read(prepared, "variations", variationWorkspaceResponseV1);
       if (extras.approvedAdditionsPence === 12500) {
         index = 6;
-        const check = await read(prepared, "final-check", finalCheckReadV1);
-        if (check.state === "completed" && check.items.length === 0) {
+        // Before the lock and Final Check run, the read is refused (403): that is "not done", not a failure.
+        const check = await read(prepared, "final-check", finalCheckReadV1, [403, 404]);
+        if (check?.state === "completed" && check.items.length === 0) {
           index = 7;
           const invoices = await read(prepared, "customer-invoices", practiceInvoiceResponseV1);
           if (invoices.invoices.some(invoice => invoice.balancePence === 0)) index = 8;

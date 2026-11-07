@@ -113,7 +113,10 @@ export function VoiceJourney() {
       async (_, signal) => { await click("Record practice acceptance", signal); await click("Start this practice job", signal); },
       async (_, signal) => {
         await until(() => !!text("proof-state"), signal);
-        if (text("proof-state") === "Not attached") await click("Attach generated practice image", signal);
+        if (text("proof-state") === "Not attached") {
+          await click("Attach generated practice image", signal);
+          await until(() => text("proof-state") !== "Not attached", signal);
+        }
         if (text("proof-state") === "Uploading") await click("Check file integrity", signal);
         await click("Complete this stage", signal);
       },
