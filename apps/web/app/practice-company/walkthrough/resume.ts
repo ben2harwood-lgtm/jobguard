@@ -42,7 +42,7 @@ export async function resumeWalkthrough(params: URLSearchParams) {
   if (hasStartedWork(example.status)) {
     index = 4;
     const proof = await read(prepared, "proof", proofViewV1);
-    if (proof.completion) {
+    if (proof.completion && !proof.completion.reviewRequired) {
       index = 5;
       const extras = await read(prepared, "variations", variationWorkspaceResponseV1);
       if (extras.approvedAdditionsPence === 12500) {
