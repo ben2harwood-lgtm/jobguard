@@ -58,7 +58,7 @@ stay open.
 
 ### Named holds for landing
 
-- Migration 0950 re-creates `app.connector_promotion(uuid,text,text,uuid,jsonb)`
+- Migration 0691 re-creates `app.connector_promotion(uuid,text,text,uuid,jsonb)`
   statement for statement from 0689, changing only the status allowlist (which
   otherwise rejects billed/reversed before matching) and the fixed fact-pair
   comparison. Owner, search_path, signature and grants are identical.

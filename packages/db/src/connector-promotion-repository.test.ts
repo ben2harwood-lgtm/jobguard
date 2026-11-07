@@ -79,10 +79,10 @@ it("preserves the latest promotion body outside the billing link branch and keep
   expect(proof.lp0[0].after.staticCalls).toEqual([...proof.lp0[0].before.staticCalls,"app.cb_authority"].sort());
   expect(proof.upgrade).toEqual([]); expect(proof.tenancy).toEqual([]);
 });
-it("0950 preserves the latest routine except its status guard and explicit human fact pairs", async () => {
+it("0691 preserves the latest routine except its status guard and explicit human fact pairs", async () => {
   const { readFile } = await import("node:fs/promises");
   const previous = await readFile(new URL("../migrations/0689_connector_billing_status_promotion.sql",import.meta.url),"utf8");
-  const current = await readFile(new URL("../migrations/0950_connector_billing_kind_link.sql",import.meta.url),"utf8");
+  const current = await readFile(new URL("../migrations/0691_connector_billing_kind_link.sql",import.meta.url),"utf8");
   const pairs = "((e.payload->>'status'='paid' AND f.payload->>'factType'='paid')\n" +
     "         OR (e.payload->>'status'='billed' AND f.payload->>'factType'='invoiced')\n" +
     "         OR (e.payload->>'status'='reversed' AND f.payload->>'factType' IN('payment_reversed','credited')))";
@@ -91,9 +91,9 @@ it("0950 preserves the latest routine except its status guard and explicit human
   const restored = current.replace(pairs,"f.payload->>'factType'=e.payload->>'status'")
     .replace("e.payload->>'status' NOT IN('billed','paid','reversed')","e.payload->>'status' NOT IN('invoiced','credited','paid','payment_reversed','rejected')");
   expect(restored.slice(restored.indexOf("CREATE OR REPLACE FUNCTION"))).toBe(previous.slice(previous.indexOf("CREATE OR REPLACE FUNCTION")));
-  const proof = JSON.parse(await readFile(new URL("../test/migration-proofs/0950_connector_billing_kind_link.proof.json",import.meta.url),"utf8"));
+  const proof = JSON.parse(await readFile(new URL("../test/migration-proofs/0691_connector_billing_kind_link.proof.json",import.meta.url),"utf8"));
   const parentProof = JSON.parse(await readFile(new URL("../test/migration-proofs/0689_connector_billing_status_promotion.proof.json",import.meta.url),"utf8"));
-  expect(proof.migration).toBe("0950_connector_billing_kind_link.sql");
+  expect(proof.migration).toBe("0691_connector_billing_kind_link.sql");
   expect(proof.lp0).toEqual([{section:"routines",before:parentProof.lp0[0].after,after:parentProof.lp0[0].after}]);
   expect(proof.upgrade).toEqual([]); expect(proof.tenancy).toEqual([]);
 });

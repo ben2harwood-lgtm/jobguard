@@ -1,5 +1,5 @@
 {
-  "migration": "0950_connector_billing_kind_link.sql",
+  "migration": "0691_connector_billing_kind_link.sql",
   "lp0": [
     {
       "section": "routines",

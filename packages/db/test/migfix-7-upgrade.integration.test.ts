@@ -137,7 +137,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
       const source = successors.find(p => p.upgrade.some(change => change.section === "routines" && change.after?.nspname === row.nspname && change.after.proname === row.proname && change.after.args === row.args));
       expect(source).toBeDefined();
       // Later re-creates of an added routine: compare with its newest body.
-      const latest = new Map([["app.connector_promotion", "0689_connector_billing_status_promotion.sql"]]).get(`${row.nspname}.${row.proname}`) ?? source!.migration;
+      const latest = new Map([["app.connector_promotion", "0691_connector_billing_kind_link.sql"]]).get(`${row.nspname}.${row.proname}`) ?? source!.migration;
       const sql = await readFile(new URL(`../migrations/${latest}`, import.meta.url), "utf8");
       const body = sql.split(`FUNCTION ${row.nspname}.${row.proname}(`)[1]!.split("AS $$")[1]!.split("$$;")[0];
       expect(row.definition.split("$function$")[1]).toBe(body);

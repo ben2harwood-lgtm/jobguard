@@ -160,7 +160,7 @@ it("negative control: restoring the original refusal makes a valid link fail (tr
 
 it.each(addedPairs)("negative control: equality refuses %s -> %s and rollback restores the pair", async (status, factType) => {
  const w = await world(c), e = await stage(w,status), {importId} = await imported(w,e.selection.eventId,factType);
- const latest = await readFile(new URL("../migrations/0950_connector_billing_kind_link.sql",import.meta.url),"utf8");
+ const latest = await readFile(new URL("../migrations/0691_connector_billing_kind_link.sql",import.meta.url),"utf8");
  const start = latest.indexOf("((e.payload->>'status'='paid'"), end = latest.indexOf("))\n    THEN",start);
  expect(start).toBeGreaterThan(0); expect(end).toBeGreaterThan(start);
  // Scratch routine exists only in this transaction; both success cases below exercise real PostgreSQL.

@@ -6,11 +6,15 @@
         "codex/sandbox/ent-13a-billing-reversed"
       ],
       "allow": [
-        "packages/db/migrations/0950_connector_billing_kind_link.sql",
-        "packages/db/test/connector-billing-status-promotion.integration.test.ts",
-        "packages/db/test/migration-proofs/0950_connector_billing_kind_link.proof.json",
         "docs/contracts/connector-billing-status-v1.md",
-        "packages/db/src/connector-promotion-repository.test.ts"
+        "packages/db/migrations/0689_connector_billing_status_promotion.sql",
+        "packages/db/migrations/0691_connector_billing_kind_link.sql",
+        "packages/db/src/connector-promotion-repository.test.ts",
+        "packages/db/src/connector-promotion-repository.ts",
+        "packages/db/test/connector-billing-status-promotion.integration.test.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/0689_connector_billing_status_promotion.proof.json",
+        "packages/db/test/migration-proofs/0691_connector_billing_kind_link.proof.json"
       ]
     }
   }
