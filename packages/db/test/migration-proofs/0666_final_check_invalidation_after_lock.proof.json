@@ -1,6 +1,31 @@
 {
   "migration": "0666_final_check_invalidation_after_lock.sql",
-  "lp0": [],
+  "lp0": [
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.refuse_final_check_locked_invalidation()",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.evidence_invalidation|b_final_check_locked_invalidation|app.refuse_final_check_locked_invalidation|BEFORE INSERT|O"
+    }
+  ],
   "upgrade": [
     {
       "section": "routines",
