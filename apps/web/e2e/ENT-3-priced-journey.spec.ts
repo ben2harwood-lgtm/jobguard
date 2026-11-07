@@ -177,10 +177,36 @@ test("ENT-3 priced capture, order coverage and close-out persist in PostgreSQL a
     expect(answered).toHaveLength(1);
     expect(answered[0]).toMatchObject({ answer: "yes", membership_id: operative, job_id: job });
     await page.reload(); await ready();
+    await expect(visit.getByTestId("saved-closeout-answer")).toHaveText("Did the resident ask for anything extra? Saved answer: Yes.");
     expect(await storedAnswer()).toEqual(answered);
     expect(await pricedRows()).toEqual(all);
     await expect(page.getByTestId("my-extra")).toHaveCount(2);
     await expect(reloadedExtra).toContainText("resident confirmed");
     await noSideScroll(page);
   } finally { await db.end(); }
+});
+
+
+test("ENT-3 saved close-out answer survives a desktop reload", async ({ page }, info) => {
+  test.skip(info.project.name !== "desktop", "reload-only desktop proof");
+  await page.goto("/northside");
+  await page.getByRole("button", { name: "Start Northside practice", exact: true }).click();
+  await expect(page.getByTestId("fact-orders")).toHaveText("2000", { timeout: 240_000 });
+  await page.getByRole("button", { name: "Act as operative", exact: true }).click();
+  await expect(page.getByTestId("actual-actor")).toContainText("Acting as operative");
+  await page.goto("/site/extra");
+  const ready = async () => expect(page.locator("main[data-site-extra-state]")).toHaveAttribute("data-site-extra-state", "ready", { timeout: 60_000 });
+  await ready();
+  const job = page.getByLabel("Job", { exact: true });
+  await expect(job).not.toHaveValue("");
+  const selectedJob = await job.inputValue();
+  const visit = page.getByRole("region", { name: "Site visit", exact: true });
+  await visit.getByRole("button", { name: "Start visit", exact: true }).click();
+  await page.getByLabel("Did the resident ask for anything extra?", { exact: true }).selectOption("no");
+  await visit.getByRole("button", { name: "Complete visit", exact: true }).click();
+  await expect(visit.getByRole("status")).toHaveText("Visit completed. Your answer has been recorded.");
+  await page.reload(); await ready();
+  await job.selectOption(selectedJob);
+  await expect(visit.getByTestId("saved-closeout-answer")).toHaveText("Did the resident ask for anything extra? Saved answer: No.");
+  await expect(visit.getByLabel("Did the resident ask for anything extra?", { exact: true })).toHaveCount(0);
 });

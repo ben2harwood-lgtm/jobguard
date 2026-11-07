@@ -62,6 +62,7 @@ describe("ENT-3b service: authority comes only from the persisted session", () =
   expect(observe).toHaveBeenCalledTimes(4); for (const call of observe.mock.calls) expect(call).toEqual([pool, sessionId]);
   expect(lookup.mock.calls).toEqual(Array(8).fill([sessionId]));
   for (const spy of [startSpy, completeSpy, jobsSpy, linesSpy]) expect(spy).toHaveBeenCalledOnce();
+  expect(jobsSpy.mock.calls[0]![2]).toEqual({ includeLastCompletedVisit: true });
   expect(startSpy.mock.calls[0]![2]).toEqual({ commandId: expect.any(String), jobId });
   expect(completeSpy.mock.calls[0]![2]).toEqual({ commandId: expect.any(String), jobId, visitId, closeoutAnswer: "yes" });
   await pool.end();
