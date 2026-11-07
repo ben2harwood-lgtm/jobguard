@@ -18,7 +18,7 @@ export function RateSuggestionScreenView({ screen }: { screen: RateSuggestionScr
     sessionStorage.setItem(key, body); setPending(body); setBusy(true); setReason("");
     try {
       const response = await fetch(`/api/jobs/${screen.jobId}/rate-suggestions`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body, cache: "no-store",
+        method: "POST", headers: { "Content-Type": "application/json", "x-csrf-token": screen.csrfToken }, body, cache: "no-store",
       });
       if (!response.ok) {
         const failure = await response.json() as { reason: string };
