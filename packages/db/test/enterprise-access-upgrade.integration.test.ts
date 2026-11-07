@@ -86,9 +86,24 @@ it('emergency_dual_owner/scim2_machine preserve populated identity state, instal
  const isLanding=(r:Relation)=>r.nspname==='app'&&r.relname==='landing_allocation';
  type Con={name:string;definition:string};
  expect((after.relations.find(isLanding)!.constraints as Con[]).filter(c=>c.name===added)).toEqual([{name:added,definition:'CHECK ((eligible_net_pence <= gross_pence))'}]);
- const afterRelations=after.relations.map((r:Relation)=>isLanding(r)?{...r,constraints:(r.constraints as Con[]).filter(c=>c.name!==added)}:r);
+ // 0669 (LATER-SAFETY-119) only adds 'paid' to job_baseline_shape's imported v3 status list; nothing else on app.job may change.
+ const isJob=(r:Relation)=>r.nspname==='app'&&r.relname==='job',shape='job_baseline_shape';
+ const priorShape=(catalogue.relations.find(isJob)!.constraints as Con[]).find(c=>c.name===shape)!;
+ const nextShape=(after.relations.find(isJob)!.constraints as Con[]).find(c=>c.name===shape)!;
+ expect(nextShape.definition).not.toBe(priorShape.definition);
+ expect(nextShape.definition.replace(/, 'paid'::[a-z ]+(?=\])/,'')).toBe(priorShape.definition);
+ const afterRelations=after.relations.map((r:Relation)=>isLanding(r)?{...r,constraints:(r.constraints as Con[]).filter(c=>c.name!==added)}
+  :isJob(r)?{...r,constraints:(r.constraints as Con[]).map(c=>c.name===shape?priorShape:c)}:r);
  expectRelationsUnchanged(catalogue.relations,afterRelations,laterAcl);
+ // 0672 lets its migration-owned pack writer read the sealed request binding; only that ACL entry is added.
+ const bindingReaders=new Set(['app.current_actor','app.current_tenant']);
  for(const row of catalogue.routines){
+  if(bindingReaders.has(`${row.nspname}.${row.proname}`)){
+   const added=after.routines.find((r:typeof row)=>r.nspname===row.nspname&&r.proname===row.proname&&r.args===row.args);
+   expect({...added,proacl:row.proacl}).toEqual(row);
+   expect(added.proacl).toBe(row.proacl.replace(/\}$/u,',jobguard_migration=X/jobguard_binding_owner}'));
+   continue;
+  }
   if(!later.has(`${row.nspname}.${row.proname}`)){expect(after.routines).toContainEqual(row);continue;}
   const {definition:_d,...kept}=row;
   expect(after.routines.map(({definition:_x,...r}:typeof row)=>r)).toContainEqual(kept);
