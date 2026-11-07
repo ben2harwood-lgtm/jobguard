@@ -124,6 +124,8 @@ Authority: Ben's 4 November instruction, “Make all the decisions, say yes, and
 
 Q01 (pricing), Q03 (applicable contract), Q14 (exports/authority-loss behavior) and Q15 (live scheduling/execution) remain held. Other unresolved invitation, identity and proceed questions are unchanged. No ENT-5-wide completion or production approval is claimed.
 
+Q01/Q03 landing amendment: pricing and applicable-contract rules are now enforced for synthetic construction; see [extra-price-rules-v1.md](extra-price-rules-v1.md).
+
 Migrations reserved here: 0930 (cross-revision separation), 0931 (withdrawal and replay authority), 0932 (new snapshot wait terms and existing timer consumers); 0933 (expand-compatible rule validation); 0934 unused. No columns or stored row formats change. Roll forward to correct a routine; do not rewrite immutable snapshots or outcomes. Deployment order is migrations before application code. Existing pin/scanner holds and actual validation are recorded in `docs/verdicts/ENT-5b/BUILDER_RECEIPT.md`.
 
 
