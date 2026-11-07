@@ -96,3 +96,13 @@ it("takes its origin gate from trusted origins even when AUTH_ALLOWED_ORIGIN dif
  await recoveryBillabilityRequest(request(),id(9),id(2));
  expect(f.command).toHaveBeenCalledOnce();
 });
+
+it("returns a reload conflict for an already-approved line", async () => {
+ f.command.mockRejectedValue(new Error("BILLABILITY_LINE_ALREADY_APPROVED"));
+ const error = await recoveryBillabilityRequest(request(), id(9), id(2)).catch(e => e);
+ expect(billabilityFailure(error)).toEqual({status:409,code:"BILLABILITY_LINE_ALREADY_APPROVED",message:"This line is already approved. Reload to see the stored approval."});
+});
+it("keeps unrelated database errors retryable without exposing details", () => {
+ const error = Object.assign(new Error("private database detail"), {code:"23505",constraint:"another_unique_index"});
+ expect(billabilityFailure(error)).toEqual({status:503,code:"BILLABILITY_UNAVAILABLE",message:"The server could not confirm the result. Retry the same request."});
+});
