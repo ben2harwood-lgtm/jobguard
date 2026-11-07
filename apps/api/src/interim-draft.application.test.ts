@@ -14,6 +14,7 @@ function fixture() {
     lineage: "fixture_lineage_not_authority" as const, reconciliation: reconcileInterimDraftBook(book) };
   const repository = { read: vi.fn().mockResolvedValue(result), command: vi.fn().mockResolvedValue(result) };
   const principal = { identityUserId: randomUUID(), sessionId: randomUUID(), csrfToken: "c".repeat(24) };
+  Object.defineProperty(principal, "sessionCredential", { value: "a".repeat(64), enumerable: false });
   const provider = { authenticate: vi.fn().mockResolvedValue(principal),
     findMembership: vi.fn().mockResolvedValue({ id: randomUUID(), tenantId, identityUserId: principal.identityUserId }),
     digest: vi.fn().mockReturnValue("a".repeat(64)) };
@@ -32,7 +33,7 @@ it("binds the session company directly and uses the digest, ignoring untrusted t
   expect(view?.issueRefusal).toContain("D06/D02");
   expect(view?.issueBlockerMessages).toContain("Interim issue is disabled. Nothing can be issued, sent or posted.");
   await f.app.read({ sessionToken: "s".repeat(32) }, jobId);
-  expect(f.repository.read).toHaveBeenCalledWith(expect.objectContaining({ tenantId }), jobId);
+  expect(f.repository.read).toHaveBeenCalledWith(expect.objectContaining({ tenantId }), jobId, "a".repeat(64));
 });
 it.each([undefined, "https://evil.invalid"])("refuses missing/foreign browser origin %s before persistence", async origin => {
   const f = fixture();

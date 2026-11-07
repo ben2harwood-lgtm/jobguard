@@ -11,7 +11,7 @@ export class WorkOrderController {
   private async call(work: () => Promise<unknown>) {
     try { return await work(); } catch (error) { const failure = workOrderHttpFailure(error); throw new HttpException(failure.body, failure.status); }
   }
-  private origin(origin?: string) { if (origin !== "http://localhost:3000") throw new HttpException({ version: "work-order-error.v1", code: "NOT_FOUND", recoverable: false }, 404); }
+  private origin(origin?: string) { const allowed = (process.env.JOBGUARD_ALLOWED_ORIGINS ?? "http://localhost:3000").split(",").map(v => v.trim()); if (!origin || !allowed.includes(origin)) throw new HttpException({ version: "work-order-error.v1", code: "NOT_FOUND", recoverable: false }, 404); }
   @Get("work-order-imports") @Header("Cache-Control", "no-store") @ApiOperation({ summary: "Office register of work-order import batches and orders, with the selectable generated files; organisation.manage or data.import required" })
   overview(@Headers("cookie") cookie?: string) { return this.call(() => this.application.overview(principal(cookie))); }
   @Post("work-order-imports") @ApiOperation({ summary: "Import a generated synthetic work-order file (work-order-import.v1); organisation.manage or data.import required, no arbitrary upload" })

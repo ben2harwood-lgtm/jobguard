@@ -29,7 +29,7 @@ const request = (value?: string) => new Request(`${origin}/api/meter/jobs/${tena
 });
 beforeEach(() => {
   vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
-  state.authenticate.mockResolvedValue({ identityUserId: tenant, sessionId: tenant, csrfToken: "c".repeat(24) });
+  state.authenticate.mockResolvedValue({ identityUserId: tenant, sessionId: tenant, sessionCredential: "a".repeat(64), csrfToken: "c".repeat(24) });
   state.findMembership.mockResolvedValue({ id: tenant, identityUserId: tenant, tenantId: tenant, role: "owner" });
   state.command.mockResolvedValue({ saved: true });
 });
