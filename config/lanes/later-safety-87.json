@@ -6,7 +6,7 @@
         "codex/sandbox/later-safety-87"
       ],
       "allow": [
-        "packages/db/migrations/0677_baseline_ancestry_audit_trust.sql",
+        "packages/db/migrations/0660_baseline_ancestry_audit_trust.sql",
         "packages/db/test/baseline-ancestry-audit-trust.integration.test.ts",
         "packages/db/test/commercial-integrity-v3-fixtures.ts",
         "packages/db/test/commercial-integrity-v3-sources.integration.test.ts",
@@ -14,7 +14,7 @@
         "packages/db/test/lp4-audit.integration.test.ts",
         "packages/db/test/lp4-writer-catchup.test.ts",
         "packages/db/test/migfix-7-upgrade.integration.test.ts",
-        "packages/db/test/migration-proofs/0677_baseline_ancestry_audit_trust.proof.json",
+        "packages/db/test/migration-proofs/0660_baseline_ancestry_audit_trust.proof.json",
         "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts"
       ]
     }

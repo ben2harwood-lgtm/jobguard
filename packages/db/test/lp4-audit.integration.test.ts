@@ -50,8 +50,8 @@ describe("LP-4 actual runtime audit boundary (PostgreSQL)", () => {
     expect(rows).toHaveLength(1);
     if (name === "app.decision_check_command") {
       // Preserve all security pins; bind the successor's entire source instead
-      // of the predecessor LP-0 digest (the body changed only in 0677).
-      const successor = readFileSync(new URL("../migrations/0677_baseline_ancestry_audit_trust.sql", import.meta.url), "utf8");
+      // of the predecessor LP-0 digest (the body changed only in 0660).
+      const successor = readFileSync(new URL("../migrations/0660_baseline_ancestry_audit_trust.sql", import.meta.url), "utf8");
       const body = successor.split("FUNCTION app.decision_check_command(")[1]!.split("AS $$")[1]!.split("$$;")[0];
       expect(rows[0].source).toBe(body);
       expect(body).toContain("rv.command_type='job.adopt_in_flight' AND rv.status='succeeded'");
