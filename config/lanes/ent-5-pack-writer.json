@@ -15,6 +15,7 @@
         "packages/db/test/extra-evidence-pack-writer.integration.test.ts",
         "packages/db/test/extra-proceed-upgrade.integration.test.ts",
         "packages/db/test/later-empty-tables.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
         "packages/db/test/migration-proofs/0672_extra_pack_artifact_store.proof.json"
       ]
     }
