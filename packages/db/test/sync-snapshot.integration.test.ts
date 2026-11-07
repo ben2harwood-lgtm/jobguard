@@ -1,3 +1,4 @@
+import { randomBytes, randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -49,8 +50,26 @@ afterAll(async () => {
 });
 const advance = async (client: Pick<PoolClient, "query">, u = user, r = 1, s = 1, h = hash, environment = "synthetic_demo") =>
   Number((await client.query("SELECT app.sync_snapshot_generation($1::uuid,$2::bigint,$3::bigint,$4::text,$5::text) AS g", [u, r, s, h, environment])).rows[0].g);
+// Owner-created credentials exercise the real binding; membership IDs deliberately differ from user IDs.
+const credentials = new Map<string, string>();
+async function bind(client: Pick<PoolClient, "query">, tenant: string, u = user) {
+  let credential = credentials.get(u);
+  if (!credential) {
+    credential = randomBytes(32).toString("hex");
+    await admin.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", [`${u}@fictional.invalid`, u]);
+    await admin.query(`INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id)
+      SELECT identity_user_id,tenant_id,id FROM app.membership WHERE identity_user_id=$1`, [u]);
+    await admin.query(`INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at)
+      VALUES($1,$2,'synthetic_demo',$3,'fictional',clock_timestamp()+interval '1 hour')`, [randomUUID(), u, credential]);
+    credentials.set(u, credential);
+  }
+  await client.query("SELECT app.bind_request('real',$1,$2)", [credential, tenant]);
+}
 const scoped = (tenant: string, u = user, r = 1, s = 1, h = hash) =>
-  withTenant(runtime, testTenantContext(tenant), db => advance(db.$client, u, r, s, h));
+  withTenant(runtime, testTenantContext(tenant), async db => {
+    await bind(db.$client, tenant, u);
+    return advance(db.$client, u, r, s, h);
+  });
 
 describe("M3-3 durable checkpoint SQL", () => {
   it("refuses synthetic checkpoint writes in a differently named database after a fresh migration", async () => {
@@ -80,7 +99,10 @@ describe("M3-3 durable checkpoint SQL", () => {
         VALUES($1,$2,$3,$1,'owner',$4,$5)`, [u, status === "foreign" ? b : a, status === "foreign" ? id(21) : id(20),
         status === "revoked" ? "2020-01-01T00:00:00Z" : null, status === "expired" ? "2020-01-01T00:00:00Z" : null]);
     }
-    await expect(scoped(a, u)).rejects.toThrow("SYNC_CHECKPOINT_INVALID");
+    await expect(withTenant(runtime, testTenantContext(a), async db => {
+      await bind(db.$client, a);
+      return advance(db.$client, u);
+    })).rejects.toThrow("SYNC_AUTHORITY_REQUIRED");
     expect((await admin.query("SELECT * FROM app.sync_snapshot_checkpoint WHERE user_id=$1", [u])).rows).toEqual([]);
   });
 
@@ -90,8 +112,11 @@ describe("M3-3 durable checkpoint SQL", () => {
     await admin.query(`INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)
       VALUES($1,$2,$3,$1,'owner')`, [u, a, id(20)]);
     expect(await scoped(a, u)).toBe(1);
-    await admin.query(`UPDATE app.membership SET ${column}='2020-01-01T00:00:00Z' WHERE tenant_id=$1 AND id=$2`, [a, u]);
-    await expect(scoped(a, u, 2)).rejects.toThrow("SYNC_CHECKPOINT_INVALID");
+    await expect(withTenant(runtime, testTenantContext(a), async db => {
+      await bind(db.$client, a, u);
+      await admin.query(`UPDATE app.membership SET ${column}='2020-01-01T00:00:00Z' WHERE tenant_id=$1 AND id=$2`, [a, u]);
+      return advance(db.$client, u, 2);
+    })).rejects.toThrow("SYNC_AUTHORITY_REQUIRED");
     expect((await admin.query("SELECT authority_revision,generation FROM app.sync_snapshot_checkpoint WHERE tenant_id=$1 AND user_id=$2", [a, u])).rows)
       .toEqual([{ authority_revision: "1", generation: "1" }]);
   });
@@ -100,8 +125,11 @@ describe("M3-3 durable checkpoint SQL", () => {
     expect(await scoped(a)).toBe(1); expect(await scoped(b)).toBe(1);
     const before = (await admin.query("SELECT * FROM app.sync_snapshot_checkpoint ORDER BY tenant_id,user_id")).rows;
     const provider: SyntheticSnapshotProvider = { withCurrentSession: async (_session, read) =>
-      withTenant(runtime, testTenantContext(b), db => read({ version: "sync-provider-snapshot.v1", environment: "synthetic_demo",
-        sessionId: id(30), userId: user, activeTenantId: a, authorityRevision: 99, authority: null, source: [] }, db.$client)) };
+      withTenant(runtime, testTenantContext(b), async db => {
+        await bind(db.$client, b);
+        return read({ version: "sync-provider-snapshot.v1", environment: "synthetic_demo",
+        sessionId: id(30), userId: user, activeTenantId: a, authorityRevision: 99, authority: null, source: [] }, db.$client);
+      }) };
     const store = new SyntheticSyncSnapshotAdapter(provider, { environment: "synthetic_demo", enabled: true, schemaVersion: 1 });
     await expect(store.readCurrentSession("synthetic-session")).rejects.toMatchObject({ code: "SYNC_AUTHORITY_REQUIRED" });
     expect((await admin.query("SELECT * FROM app.sync_snapshot_checkpoint ORDER BY tenant_id,user_id")).rows).toEqual(before);
@@ -113,8 +141,55 @@ describe("M3-3 durable checkpoint SQL", () => {
     await admin.query(`INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)
       VALUES($1,$2,$3,$1,'owner')`, [u, a, id(20)]);
     await admin.query("INSERT INTO app.contractor_member(tenant_id,membership_id,email) VALUES($1,$2,'revoked@example.invalid')", [a, u]);
-    await admin.query("INSERT INTO app.contractor_membership_revocation(tenant_id,id,membership_id) VALUES($1,$2,$2)", [a, u]);
-    await expect(scoped(a, u)).rejects.toThrow("SYNC_CHECKPOINT_INVALID");
+    await expect(withTenant(runtime, testTenantContext(a), async db => {
+      await bind(db.$client, a, u);
+      await admin.query("INSERT INTO app.contractor_membership_revocation(tenant_id,id,membership_id) VALUES($1,$2,$2)", [a, u]);
+      return advance(db.$client, u);
+    })).rejects.toThrow("SYNC_AUTHORITY_REQUIRED");
+    expect((await admin.query("SELECT * FROM app.sync_snapshot_checkpoint WHERE user_id=$1", [u])).rows).toEqual([]);
+  });
+
+  it("binds the owner membership ID to its identity user and refuses another active user without writes", async () => {
+    const before = (await admin.query("SELECT * FROM app.sync_snapshot_checkpoint ORDER BY tenant_id,user_id")).rows;
+    await expect(withTenant(runtime, testTenantContext(a), async db => {
+      await bind(db.$client, a);
+      expect((await db.$client.query("SELECT app.current_actor() actor")).rows[0].actor).toBe(id(22));
+      return advance(db.$client, secondUser, 99);
+    })).rejects.toThrow("SYNC_AUTHORITY_REQUIRED");
+    expect((await admin.query("SELECT * FROM app.sync_snapshot_checkpoint ORDER BY tenant_id,user_id")).rows).toEqual(before);
+    expect(await scoped(a)).toBe(1);
+  });
+
+  it("refuses a tenant-only unbound transaction without writing even with forged actor settings", async () => {
+    const before = (await admin.query("SELECT * FROM app.sync_snapshot_checkpoint ORDER BY tenant_id,user_id")).rows;
+    await expect(withTenant(runtime, testTenantContext(a), async db => {
+      await db.$client.query("SELECT set_config('app.actor_id',$1,true)", [id(22)]);
+      return advance(db.$client, user, 99);
+    })).rejects.toThrow("SYNC_AUTHORITY_REQUIRED");
+    expect((await admin.query("SELECT * FROM app.sync_snapshot_checkpoint ORDER BY tenant_id,user_id")).rows).toEqual(before);
+  });
+
+  it("refuses a tenant setting different from the binding without changing either checkpoint", async () => {
+    const before = (await admin.query("SELECT * FROM app.sync_snapshot_checkpoint ORDER BY tenant_id,user_id")).rows;
+    await expect(withTenant(runtime, testTenantContext(a), async db => {
+      await bind(db.$client, a);
+      await db.$client.query("SELECT set_config('app.tenant_id',$1,true)", [b]);
+      return advance(db.$client, user, 99);
+    })).rejects.toThrow("SYNC_AUTHORITY_REQUIRED");
+    expect((await admin.query("SELECT * FROM app.sync_snapshot_checkpoint ORDER BY tenant_id,user_id")).rows).toEqual(before);
+  });
+
+  it("refuses a bound membership removed before advancement without inserting a checkpoint", async () => {
+    const u = id(113), membership = id(114);
+    await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [u]);
+    await admin.query(`INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)
+      VALUES($1,$2,$3,$4,'owner')`, [membership, a, id(20), u]);
+    await expect(withTenant(runtime, testTenantContext(a), async db => {
+      await bind(db.$client, a, u);
+      await admin.query("DELETE FROM identity.membership_locator WHERE user_id=$1", [u]);
+      await admin.query("DELETE FROM app.membership WHERE tenant_id=$1 AND id=$2", [a, membership]);
+      return advance(db.$client, u);
+    })).rejects.toThrow("SYNC_AUTHORITY_REQUIRED");
     expect((await admin.query("SELECT * FROM app.sync_snapshot_checkpoint WHERE user_id=$1", [u])).rows).toEqual([]);
   });
 
@@ -128,7 +203,7 @@ describe("M3-3 durable checkpoint SQL", () => {
     // A new physical connection reads the persisted generation, not process state.
     const client = await runtime.connect();
     try {
-      await client.query("BEGIN"); await client.query("SELECT set_config('app.tenant_id',$1,true)", [a]);
+      await client.query("BEGIN"); await client.query("SELECT set_config('app.tenant_id',$1,true)", [a]); await bind(client, a);
       expect(await advance(client, user, 2, 2)).toBe(3); await client.query("COMMIT");
     } finally { client.release(); }
   });
@@ -144,6 +219,7 @@ describe("M3-3 durable checkpoint SQL", () => {
   it("isolates tenant/user checkpoints and rolls failed transactions back", async () => {
     expect(await scoped(b)).toBe(1); expect(await scoped(a, secondUser)).toBe(1);
     await expect(withTenant(runtime, testTenantContext(b), async db => {
+      await bind(db.$client, b);
       expect(await advance(db.$client, user, 2)).toBe(2); throw Error("synthetic rollback");
     })).rejects.toThrow("synthetic rollback");
     expect(await scoped(b)).toBe(1);
@@ -155,10 +231,13 @@ describe("M3-3 durable checkpoint SQL", () => {
   });
 
   it("fails closed without context, live environment, valid bounds, or controlled write permission", async () => {
-    await expect(advance(runtime)).rejects.toThrow("SYNC_CHECKPOINT_INVALID");
+    await expect(advance(runtime)).rejects.toThrow("SYNC_AUTHORITY_REQUIRED");
     for (const [r, s, h, e] of [[-1, 1, hash, "synthetic_demo"], [1, 0, hash, "synthetic_demo"],
       [1, 1, "bad", "synthetic_demo"], [1, 1, hash, "production"], [9007199254740992, 1, hash, "synthetic_demo"]] as const) {
-      await expect(withTenant(runtime, testTenantContext(b), db => advance(db.$client, user, r, s, h, e))).rejects.toThrow("SYNC_CHECKPOINT_INVALID");
+      await expect(withTenant(runtime, testTenantContext(b), async db => {
+        await bind(db.$client, b);
+        return advance(db.$client, user, r, s, h, e);
+      })).rejects.toThrow("SYNC_CHECKPOINT_INVALID");
     }
     for (const statement of ["UPDATE app.sync_snapshot_checkpoint SET generation=1", "DELETE FROM app.sync_snapshot_checkpoint", "TRUNCATE app.sync_snapshot_checkpoint"]) {
       await expect(withTenant(runtime, testTenantContext(b), db => db.$client.query(statement))).rejects.toThrow("permission denied");
@@ -182,7 +261,10 @@ describe("M3-3 durable checkpoint SQL", () => {
       activeTenantId: a, authorityRevision: 1, authority: { userId: principal, tenantId: a, membershipId: id(14),
         role: "operative", status: "active", assignedJobIds: [job] }, source: [row(job), row(otherJob), row(job, b)] };
     const provider: SyntheticSnapshotProvider = { withCurrentSession: async (session, read) => session === "synthetic-session"
-      ? withTenant(runtime, testTenantContext(a), db => read(structuredClone(facts), db.$client)) : null };
+      ? withTenant(runtime, testTenantContext(a), async db => {
+        await bind(db.$client, a, principal);
+        return read(structuredClone(facts), db.$client);
+      }) : null };
     const app = (schemaVersion = 1) => new SyntheticSyncDownloadApplication(new SyntheticSyncSnapshotAdapter(provider,
       { environment: "synthetic_demo", enabled: true, schemaVersion }), { environment: "synthetic_demo", enabled: true }, () => 1000);
     const request = { version: "sync-subscription-request.v1", requestedTenantId: a, profile: "contractor_assigned_jobs.v1" };
