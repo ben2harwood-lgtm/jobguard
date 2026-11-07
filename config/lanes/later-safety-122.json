@@ -8,7 +8,9 @@
       "allow": [
         "packages/db/migrations/0670_recovery_demo_replay_job.sql",
         "packages/db/test/migration-proofs/0670_recovery_demo_replay_job.proof.json",
-        "packages/db/test/recovery-demo-replay-job.integration.test.ts"
+        "packages/db/test/recovery-demo-replay-job.integration.test.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts"
       ]
     }
   }
