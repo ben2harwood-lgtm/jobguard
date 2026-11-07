@@ -2,7 +2,7 @@
 import { randomUUID,createHash } from "node:crypto";
 import { afterAll,beforeAll,expect,it } from "vitest";
 import { canonicalCommercialIntegritySnapshot } from "@jobguard/core";
-import { actor,tenant,member,createIntegrityFixture,seedIntegrityJob,transaction,protectedFacts,type IntegrityFixture } from "./commercial-integrity-v3-fixtures.js";
+import { actor,tenant,member,createIntegrityFixture,seedIntegrityJob,importIntegrityJob,transaction,protectedFacts,type IntegrityFixture } from "./commercial-integrity-v3-fixtures.js";
 let f:IntegrityFixture;
 beforeAll(async()=>{f=await createIntegrityFixture();},120000);
 afterAll(async()=>{await f?.close();});
@@ -97,11 +97,13 @@ it("CH-6 persisted user/phone/card assertions are opaque, immutable, session sco
 });
 
 it("CH-6 bounded ownership retains nested imported jobs and refuses another session",async()=>{
- const root=await seedIntegrityJob(f,false),middle=await seedIntegrityJob(f,false),related=await seedIntegrityJob(f,false);
+ const root=await seedIntegrityJob(f,false),otherRoot=await seedIntegrityJob(f,false);
+ const middle={job:await importIntegrityJob(f,root.job)},related={job:await importIntegrityJob(f,otherRoot.job)};
  await transaction(f.admin,async db=>{
-  // Model immutable imported ancestry in this isolated synthetic projection fixture.
+  // Product adoption refuses chaining. Model only the nested historical shape
+  // here, retaining a real adoption aggregate and lower-trust attestation.
   await db.query("SET LOCAL session_replication_role='replica'");
-  await db.query("UPDATE app.job SET provenance='imported',practice_session_digest=NULL,practice_scenario=NULL,accepted_quote_version_id=NULL WHERE tenant_id=$1 AND id=ANY($2::uuid[])",[tenant,[middle.job,related.job]]);
+  await db.query("UPDATE app.job_import_v3 SET source_job_id=$1 WHERE tenant_id=$2 AND job_id=$3",[middle.job,tenant,related.job]);
   await db.query("SET LOCAL session_replication_role='origin'");
  });
  const {withTenant}=await import("../src/tenant-context.js"),{appendAuditBatch}=await import("../src/audit.js");
