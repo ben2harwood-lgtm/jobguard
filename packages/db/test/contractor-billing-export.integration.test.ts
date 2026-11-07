@@ -44,7 +44,14 @@ it("LATER-SAFETY-16 reconciliation restores an approved unlinked extra until its
  const expected=[{extraId:own.s.extraId,net:{numerator:"338",denominator:"1"}}];
  const read=()=>own.repo.read(own.ctx,own.session,own.s.jobId);
  expect((await read()).reconciliation.approvedNotExported).toEqual(expected);
+ const {approveInput}=await import("./extra-approval-chain-fixtures.js");
+ await approvals.priceExtra(own.ctx,own.w.members.surveyor.member,{version:"price-extra.v1",commandId:randomUUID(),jobId:own.s.jobId,extraId:canonical.variationId,netPence:338});
+ const request=await approvals.submitExtra(own.ctx,actor,{version:"submit-extra.v1",commandId:randomUUID(),jobId:own.s.jobId,extraId:canonical.variationId});
+ await approvals.approveExtraStep(own.ctx,actor,approveInput({jobId:own.s.jobId,requestId:String(request.requestId),hash:String(request.revisionHash),net:338},0));
  const linked=await approvals.markDuplicate(own.ctx,actor,{version:"mark-duplicate.v1",commandId:randomUUID(),jobId:own.s.jobId,duplicateId:own.s.extraId,canonicalId:canonical.variationId});
+ // Link approved work only to an approved canonical. Reopen its price for review
+ // so this scenario still isolates restoration/export of the unlinked extra.
+ await approvals.reviseExtra(own.ctx,own.w.members.surveyor.member,{version:"revise-extra.v1",commandId:randomUUID(),jobId:own.s.jobId,extraId:canonical.variationId,netPence:339});
  expect((await read()).reconciliation.approvedNotExported).toEqual([]);
  expect((await own.exported()).lineCount).toBe(0);
  const state=await readExtraDuplicateCandidates(c.runtime,own.ctx,actor,own.s.jobId);

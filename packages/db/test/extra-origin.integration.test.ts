@@ -251,9 +251,11 @@ describe("ENT-4b origin persistence", () => {
  });
  it("[S9] scanner and seven pinned bridges stay byte-identical", async () => {
   const hashes = {
+   // renewed caller review 28 Oct (jg-checks, ch9-p2 review)
+   // renewed caller review 4 Nov 2026 (Ben: 'Yes, update S9')
    // Renewed caller source review 6 Nov 2026, later-safety-108 repair 4: v1 ownership now requires the succeeded import receipt.
-  // Persisted-session authentication, synthetic-only gate and the sole context constructor are unchanged; RED review remains required.
-   "packages/db/src/practice-session.ts": "95f236bc922a5cb3c0be9d4fd53cdb5730fe829cf1b33629bad36fc0f1af7281",
+   // Persisted-session authentication, synthetic-only gate and the sole context constructor are unchanged; RED review remains required.
+   "packages/db/src/practice-session.ts": "49c6c2dadcaa0412208dbce6585c0e30a283b4d4c3b98b50179eec3bad054729",
    "packages/db/src/contractor-repository.ts": "56b95b80360434f0cf58376ef2ec44d0354b194e5080bcfd9414ac283971006c",
    "packages/db/src/contractor-party-repository.ts": "e5852288e5355b53f7548c4d5741aef54ee55a2b8a66dd56a54b08963cd1fdb0",
    // Renewed caller review 5 Nov 2026: Ben approved batch-41 ("Yes, all three") in the router chat.
@@ -263,9 +265,11 @@ describe("ENT-4b origin persistence", () => {
    "packages/db/src/sor-repository.ts": "b66552d4d408c5e476ab9bff44324cf160b741561b5a03926c0697853e31514f",
    "packages/db/src/job-scheduling-repository.ts": "7517df3c6597af44f651c8b704c9bd91c4f40894ce5aa58e3b4fcea16cc9eb57",
    "packages/db/src/work-order-fixtures.ts": "703b2f726e9d4256cbd0a1908676f2cd401d64bad28741853f8131183cd0a0ea",
+   // Ben 6 Nov router-chat "yes": exactly the emergency-notice and retention-timer constructor sites.
+   // Hold: break-glass identity design goes to Ben before real data.
    // Scanner bytes change only for the renewed caller review citation above.
-   "apps/api/src/auth/context-boundary.test.ts": "aa3ac305f6b033d6520b2c3f139359100b7e6174c557125bf929aa32254c7402"
-};
+   "apps/api/src/auth/context-boundary.test.ts": "b9b8b46c72fd0d572ec338cd8ee37f6e0886eca728c8ea06eb2f3a1f284bb926"
+  };
   for (const [file, hash] of Object.entries(hashes)) expect(sha256Hex(await readFile(new URL(`../../../${file}`, import.meta.url), "utf8")), file).toBe(hash);
  });
  it("[C3] all fixtures are synthetic_demo and every raised identity is a new scope item", async () => {

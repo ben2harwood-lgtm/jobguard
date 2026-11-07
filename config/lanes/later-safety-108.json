@@ -7,12 +7,12 @@
       ],
       "note": "LATER-SAFETY-108: RED practice-session ownership anchored to the trusted v3 import source. No migration.",
       "allow": [
+        "apps/api/src/auth/context-boundary.test.ts",
         "packages/db/src/practice-session.ts",
-        "packages/db/test/practice-owned-jobs-anchor.integration.test.ts",
+        "packages/db/test/extra-origin.integration.test.ts",
         "packages/db/test/imported-baseline-sources.integration.test.ts",
         "packages/db/test/imported-observation-reader.integration.test.ts",
-        "apps/api/src/auth/context-boundary.test.ts",
-        "packages/db/test/extra-origin.integration.test.ts",
+        "packages/db/test/practice-owned-jobs-anchor.integration.test.ts",
         "tools/commercial-integrity-current-source-guard.unresolved.json"
       ]
     }
