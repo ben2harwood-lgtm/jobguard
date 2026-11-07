@@ -1,5 +1,5 @@
 {
-  "migration": "0834_manual_attestation_synthetic_gate.sql",
+  "migration": "0678_manual_attestation_synthetic_gate.sql",
   "lp0": [
     {
       "section": "routines",
