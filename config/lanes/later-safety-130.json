@@ -6,12 +6,27 @@
         "codex/sandbox/later-safety-130"
       ],
       "allow": [
+        "packages/db/migrations/0669_imported_job_paid_shape.sql",
+        "packages/db/migrations/0670_recovery_demo_replay_job.sql",
+        "packages/db/migrations/0671_contractor_party_bind_work_order_only.sql",
+        "packages/db/migrations/0673_duplicate_unlink_command_binding.sql",
         "packages/db/migrations/0675_work_order_team_scope.sql",
         "packages/db/migrations/0676_work_order_expected_revision.sql",
+        "packages/db/test/contractor-parties.integration.test.ts",
+        "packages/db/test/contractor-party-bind-work-order-only.integration.test.ts",
+        "packages/db/test/duplicate-unlink-command-binding.integration.test.ts",
+        "packages/db/test/enterprise-access-upgrade.integration.test.ts",
+        "packages/db/test/extra-links.integration.test.ts",
+        "packages/db/test/imported-job-paid-shape.integration.test.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/0669_imported_job_paid_shape.proof.json",
+        "packages/db/test/migration-proofs/0670_recovery_demo_replay_job.proof.json",
+        "packages/db/test/migration-proofs/0671_contractor_party_bind_work_order_only.proof.json",
+        "packages/db/test/migration-proofs/0673_duplicate_unlink_command_binding.proof.json",
         "packages/db/test/migration-proofs/0675_work_order_team_scope.proof.json",
         "packages/db/test/migration-proofs/0676_work_order_expected_revision.proof.json",
-        "packages/db/test/migfix-7-upgrade.integration.test.ts",
         "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
+        "packages/db/test/recovery-demo-replay-job.integration.test.ts",
         "packages/db/test/work-order-import.integration.test.ts"
       ]
     }

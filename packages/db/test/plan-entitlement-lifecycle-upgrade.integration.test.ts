@@ -203,6 +203,11 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
       prior.proname === "xa_latest_kind" && prior.args === "p_tenant uuid, p_job uuid, p_variation uuid" ||
       prior.proname === "xa_mark_duplicate" && prior.args === "p_job uuid, p_duplicate uuid, p_canonical uuid, p_command uuid, p_actor uuid, p_link uuid")) {
       expect(current?.definition?.split("$function$")[1]).toEqual(relinkBodies[prior.proname]);
+    } else if (prior.nspname === "app" && prior.proname === "ent4b_fact_guard" && prior.args === "") {
+      // 0673 adds only the unlink receipt binding; pin its complete reviewed body.
+      const source = await readFile(new URL("../migrations/0673_duplicate_unlink_command_binding.sql", import.meta.url), "utf8");
+      const body = source.split("CREATE OR REPLACE FUNCTION app.ent4b_fact_guard()")[1]!.split("AS $$")[1]!.split("$$;")[0];
+      expect(current?.definition?.split("$function$")[1]).toEqual(body);
     } else if (prior.nspname === "app" && prior.proname === "work_order_commit" && prior.args === "actor uuid, payload jsonb") {
       // 0675 and 0676 change only the work-order commit body; bind the final body to 0676.
       const source = await readFile(new URL("../migrations/0676_work_order_expected_revision.sql", import.meta.url), "utf8");
