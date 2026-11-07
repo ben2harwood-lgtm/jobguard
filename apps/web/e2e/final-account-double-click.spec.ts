@@ -66,6 +66,8 @@ for (const code of ["STALE_FINAL_ACCOUNT_REVISION", "STALE_APPROVED_SOURCES"]) {
     await expect(build).toHaveAttribute("aria-busy", "false");
     await page.reload();
     const price = page.getByRole("button", { name: "Price the work", exact: true });
+    // Wait for the reloaded workspace before choosing a path.
+    await expect(price.or(build)).toBeVisible();
     if (await price.isVisible()) await price.click();
     await build.click();
     await expect(page.getByRole("button", { name: "Rebuild from approved sources", exact: true })).toBeEnabled();
