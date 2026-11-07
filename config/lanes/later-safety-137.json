@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-137": {
+      "branches": [
+        "codex/sandbox/later-safety-137"
+      ],
+      "allow": [
+        "packages/db/migrations/0955_recovery_timeline_import_anchor.sql",
+        "packages/db/test/migration-proofs/0955_recovery_timeline_import_anchor.proof.json",
+        "packages/db/test/recovery-timeline-import-anchor.integration.test.ts",
+        "packages/db/migration-notes/0955_recovery_timeline_import_anchor.md"
+      ]
+    }
+  }
+}
