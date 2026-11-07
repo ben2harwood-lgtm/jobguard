@@ -59,8 +59,8 @@ it("an issued final invoice permits exactly one later receipt allocation after w
   const paymentId = await x.receipt(48000, "receipt-480-b");
 
   // Scratch mutation: restore the former call in this transaction only and
-  // prove that the same newly settled receipt fails. ROLLBACK restores 0953.
-  const migration = await readFile(new URL("../migrations/0953_final_check_post_invoice_receipt_gate.sql", import.meta.url), "utf8");
+  // prove that the same newly settled receipt fails. ROLLBACK restores 0692.
+  const migration = await readFile(new URL("../migrations/0692_final_check_post_invoice_receipt_gate.sql", import.meta.url), "utf8");
   const start = migration.indexOf("CREATE OR REPLACE FUNCTION app.receipt_fact_proposal(");
   const end = migration.indexOf("END $$;", start) + "END $$;".length;
   expect(start).toBeGreaterThan(0);

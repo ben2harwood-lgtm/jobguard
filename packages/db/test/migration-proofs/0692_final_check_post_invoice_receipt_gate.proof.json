@@ -1,5 +1,5 @@
 {
-  "migration": "0953_final_check_post_invoice_receipt_gate.sql",
+  "migration": "0692_final_check_post_invoice_receipt_gate.sql",
   "lp0": [
     {
       "section": "routines",
