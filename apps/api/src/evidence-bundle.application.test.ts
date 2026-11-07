@@ -20,7 +20,9 @@ function fixture(): db.ContractorBundleSources {
     sources: (['origin', 'approval'] as const).map(kind => ({ ...owner, kind, sourceId: kind, sourceVersion: '1',
       objectVersion: '1', sha256: db.bundleHash('PRIVATE SOURCE'), content: 'PRIVATE SOURCE', links: [] })),
     ordinary: { jobId: id(2), extraId: id(3), omissions: [],
-      sources: [{ jobId: id(2), sourceId: 'proof', kind: 'proof', version: 1, label: 'Private label', content: 'PRIVATE RECORD' }],
+      sources: [{ jobId: id(2), sourceId: 'proof', kind: 'proof', version: 1, label: 'Private label', content: 'PRIVATE RECORD' },
+        { jobId: id(2), sourceId: `extra_approval_timing:${id(3)}`, kind: 'approval', version: 2, label: 'Server timing',
+          content: JSON.stringify({ version: 'extra-pack-timing.v1', workTiming: null, doneWithoutRequiredPreapproval: 'not_derived', approvalTimings: [] }) }],
       originalObjects: [{ sourceId: 'proof', key: 'PRIVATE_KEY', versionId: 'v1', sha256: db.bundleHash(bytes), byteLength: bytes.length, contentType: 'image/png' }] },
   };
 }
