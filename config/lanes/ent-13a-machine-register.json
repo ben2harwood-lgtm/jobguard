@@ -11,6 +11,7 @@
         "apps/api/src/connectors/fake-secret-store.ts",
         "apps/api/src/connectors/fake-secret-store.test.ts",
         "apps/api/src/app.module.ts",
+        "apps/api/src/auth/identity.test.ts",
         "packages/config/src/connector-environment.ts",
         "packages/config/src/connector-environment.test.ts",
         "docs/contracts/connector-machine-registration-v1.md"

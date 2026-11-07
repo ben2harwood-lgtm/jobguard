@@ -9,7 +9,7 @@ const application = new CisFixtureApplication({ allowedOrigin: credentials.origi
   provider: { authenticate, findMembership } } as never, { read, command }, starter);
 beforeEach(() => {
   vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
-  authenticate.mockResolvedValue({ identityUserId: id, sessionId: id, csrfToken: credentials.csrfToken });
+  authenticate.mockResolvedValue({ identityUserId: id, sessionId: id, sessionCredential: "d".repeat(64), csrfToken: credentials.csrfToken });
   findMembership.mockResolvedValue({ id, identityUserId: id, tenantId: id, role: "owner" });
   read.mockRejectedValue(new CisFixturePersistenceError("NOT_FOUND"));
 });
