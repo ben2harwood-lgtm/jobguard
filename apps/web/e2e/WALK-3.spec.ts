@@ -134,12 +134,13 @@ test("WALK-3 verifies saved progress after reload and refuses unavailable saved 
   });
   await page.route(`**/api${href}/quotes`, route => route.fulfill({ status: 503, body: '{}' }));
   await page.reload();
-  await expect(page.getByRole("alert")).toContainText("Your saved walkthrough could not load");
+  const savedReadError = page.getByRole("alert").filter({ hasText: "Your saved walkthrough could not load" });
+  await expect(savedReadError).toContainText("Your saved walkthrough could not load");
   await expect(tour).toHaveCount(0);
   expect(new URL(page.url()).searchParams.get("walkJob")).toBe(href!.split("/").at(-1));
   await page.route(`**/api${href}/proposal`, route => route.fulfill({ status: 404, body: '{}' }));
   await page.reload();
-  await expect(page.getByRole("alert")).toContainText("Your saved walkthrough could not load");
+  await expect(savedReadError).toContainText("Your saved walkthrough could not load");
   await expect(tour).toHaveCount(0);
   expect(new URL(page.url()).searchParams.get("walkJob")).toBe(href!.split("/").at(-1));
   expect(captures).toEqual([]);
@@ -160,8 +161,13 @@ test("WALK-3 accepts a manually approved £150 extra", async ({ page }) => {
   await page.getByRole("button", { name: "Approve exact revision", exact: true }).click();
   await expect(page.getByTestId("approved-additions")).toHaveText("£150.00");
   await page.reload();
-  // Lifecycle verification resumes at evidence; saved proof and additions are
-  // read again rather than trusting local completion flags.
+  // Server-verified proof resumes at extras. Revisit evidence to check that
+  // replaying its completed step preserves the saved proof and manual price.
+  await expect(tour).toContainText("Step 6 of 9");
+  await expect(page.getByTestId("stage-status")).toHaveText("Complete");
+  await expect(page.getByTestId("proof-state")).toHaveText("File integrity checked · synthetic example");
+  await expect(page.getByTestId("approved-additions")).toHaveText("£150.00");
+  await tour.getByRole("button", { name: "Back", exact: true }).click();
   await expect(tour).toContainText("Step 5 of 9");
   await tour.getByRole("button", { name: "Show me", exact: true }).click();
   await expect(tour).toContainText("Step 6 of 9");
