@@ -1,6 +1,26 @@
 {
   "migration": "0667_final_check_practice_owner_check.sql",
-  "lp0": [],
+  "lp0": [
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.final_check_practice_owns_job(uuid,uuid,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": []
+      }
+    }
+  ],
   "upgrade": [
     {
       "section": "routines",
