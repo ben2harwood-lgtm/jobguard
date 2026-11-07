@@ -4,19 +4,9 @@
     "later-safety-125": {
       "branches": ["codex/sandbox/later-safety-125"],
       "allow": [
-        "apps/api/src/contractor/contractor-parties.controller.test.ts",
-        "apps/api/src/contractor/contractor-parties.controller.ts",
-        "apps/api/src/contractor/contractor.controller.test.ts",
-        "apps/api/src/contractor/contractor.controller.ts",
-        "apps/api/src/contractor/work-order.controller.test.ts",
-        "apps/api/src/contractor/work-order.controller.ts",
         "packages/db/migrations/0661_outbox_status_forward_only.sql",
-        "packages/db/src/demo-bootstrap.ts",
-        "packages/db/test/demo-bootstrap.integration.test.ts",
         "packages/db/test/migration-proofs/0661_outbox_status_forward_only.proof.json",
-        "packages/db/test/outbox-status-forward-only.integration.test.ts",
-        "tools/money-check.mjs",
-        "tools/money-check.test.mjs"
+        "packages/db/test/outbox-status-forward-only.integration.test.ts"
       ]
     }
   }

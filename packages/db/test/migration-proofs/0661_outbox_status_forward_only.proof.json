@@ -1,6 +1,31 @@
 {
   "migration": "0661_outbox_status_forward_only.sql",
-  "lp0": [],
+  "lp0": [
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.outbox_status_forward_only()",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.action_outbox|action_outbox_status_forward_only|app.outbox_status_forward_only|BEFORE UPDATE|O"
+    }
+  ],
   "upgrade": [
     {
       "section": "routines",
