@@ -1,5 +1,5 @@
 {
-  "migration": "0857_canonical_revise_duplicate_guard.sql",
+  "migration": "0674_canonical_revise_duplicate_guard.sql",
   "lp0": [
     {
       "section": "routines",

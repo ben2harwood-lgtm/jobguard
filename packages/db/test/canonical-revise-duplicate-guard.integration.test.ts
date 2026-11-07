@@ -74,7 +74,7 @@ it("does not treat a duplicate-dismissed pending request as an approved duplicat
 
 it("negative control: removing the check in a scratch SQL copy breaks the refusal assertion and reproduces the silent drop", async () => {
   const { w, linkId } = await linkedPair();
-  const sql = await readFile(new URL("../migrations/0857_canonical_revise_duplicate_guard.sql", import.meta.url), "utf8");
+  const sql = await readFile(new URL("../migrations/0674_canonical_revise_duplicate_guard.sql", import.meta.url), "utf8");
   const functionSql = sql.slice(sql.indexOf("CREATE FUNCTION"), sql.indexOf("ALTER FUNCTION"))
     .replace("CREATE FUNCTION", "CREATE OR REPLACE FUNCTION");
   const scratch = functionSql.replace(" IF EXISTS (", " IF false AND EXISTS (");
