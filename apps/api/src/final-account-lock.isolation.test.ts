@@ -11,6 +11,7 @@ function database(signalCount:number,locked:boolean){
  const query=async(sql:string)=>{
   statements.push(sql);
   if(/shadow_(?:commercial_signal|signal_|reconciliation_run)/u.test(sql))throw new Error(`unexpected hidden read ${heldSignals.length}`);
+  if(sql==="SELECT app.current_actor() actor, app.current_tenant() tenant")return {rows:[{actor:DEMO_MEMBERSHIP_ID,tenant:DEMO_TENANT_ID}]};
   if(sql.includes("authenticate_practice_session"))return {rows:[{tenant_id:DEMO_TENANT_ID,membership_id:DEMO_MEMBERSHIP_ID,identity_user_id:DEMO_IDENTITY_USER_ID}]};
   if(sql.startsWith(practiceOwnedJobsSql()))return {rows:[{id:job}]};
   if(sql.includes("terms_accepted"))return {rows:[{lock:locked?{id:job,tenant_id:DEMO_TENANT_ID,job_id:job,final_account_revision_id:job,baseline_quote_version_id:job,capture_register_hash:"a".repeat(64),line_set_hash:"a".repeat(64),scope_disposition_hash:"a".repeat(64),snapshot_digest:"a".repeat(64),locked_source_hash:"a".repeat(64),locked_at_text:"2026-10-12T12:00:00.000001Z",command_id:job,audit_event_id:job,snapshot:{}}:null,terms_accepted:true,dispositions:[],check:null}]};
