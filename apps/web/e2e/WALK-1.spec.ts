@@ -20,6 +20,25 @@ test.describe("WALK-1 core instruction tour (job actions are wired by WALK-3)", 
     await page.getByRole("button", { name: "Tour the core guide instructions" }).click();
     await expect(card.getByRole("button", { name: "Next", exact: true })).toBeDisabled();
   });
+  test("Escape in native and ARIA dialogs leaves the tour open", async ({ page }) => {
+    const tour = page.getByRole("region", { name: "Guided walkthrough" });
+    await page.evaluate(() => {
+      const dialog = document.createElement("dialog");
+      dialog.id = "escape-test"; dialog.innerHTML = '<button>Dialog action</button>';
+      document.body.append(dialog); dialog.showModal();
+    });
+    await page.keyboard.press("Escape");
+    await expect(page.locator("#escape-test")).not.toBeVisible();
+    await expect(tour).toBeVisible();
+    await page.evaluate(() => {
+      const dialog = document.createElement("div"); dialog.setAttribute("role", "dialog");
+      dialog.innerHTML = '<button>ARIA dialog action</button>'; document.body.append(dialog);
+      dialog.querySelector("button")!.focus();
+    });
+    await page.keyboard.press("Escape"); await expect(tour).toBeVisible();
+    await page.getByRole("button", { name: "ARIA dialog action" }).evaluate(element => element.parentElement!.remove());
+    await tour.focus(); await page.keyboard.press("Escape"); await expect(tour).toHaveCount(0);
+  });
   test("all nine real targets are visible and keyboard operation reaches the end", async ({ page }) => {
     const card = page.getByRole("region", { name: "Guided walkthrough" });
     for (let index = 0; index < 9; index++) {

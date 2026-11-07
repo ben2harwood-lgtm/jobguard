@@ -30,8 +30,8 @@ export function visibleTarget(selector: string): HTMLElement | null {
   return element;
 }
 
-export function Walkthrough({ steps, onClose }: { steps: readonly WalkthroughStep[]; onClose: () => void }) {
-  const [index, setIndex] = useState(0), [playing, setPlaying] = useState(false);
+export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: readonly WalkthroughStep[]; onClose: () => void; initialIndex?: number }) {
+  const [index, setIndex] = useState(initialIndex), [playing, setPlaying] = useState(false);
   const [busy, setBusy] = useState(false), [done, setDone] = useState(false), [error, setError] = useState("");
   const [box, setBox] = useState<Box | null>(null), [finished, setFinished] = useState(false), [waiting, setWaiting] = useState(false);
   const card = useRef<HTMLElement>(null), action = useRef<AbortController | null>(null), running = useRef(false);
@@ -45,6 +45,7 @@ export function Walkthrough({ steps, onClose }: { steps: readonly WalkthroughSte
   }, []);
   useEffect(() => {
     if (!step || finished) return;
+    document.querySelectorAll("[data-walk-action]").forEach(element => element.removeAttribute("data-walk-action"));
     setDone(false); setError(""); setBox(null);
     card.current?.focus({ preventScroll: true });
     let highlighted: HTMLElement | null = null;
@@ -99,7 +100,9 @@ export function Walkthrough({ steps, onClose }: { steps: readonly WalkthroughSte
   useEffect(() => { if (waiting && done && !busy) advance(); }, [waiting, done, busy]);
   useEffect(() => { if (playing && !busy && !finished) void show(); }, [playing, busy, index, finished]); // one action at a time
   useEffect(() => {
-    function escape(event: KeyboardEvent) { if (event.key === "Escape" && !event.defaultPrevented) { action.current?.abort(); setPlaying(false); onClose(); } }
+    function escape(event: KeyboardEvent) {
+      if (event.target instanceof Element && event.target.closest('dialog[open], [role=dialog], [role=alertdialog], [aria-modal=true]') || document.querySelector("dialog:modal")) return;
+      if (event.key === "Escape" && !event.defaultPrevented) { action.current?.abort(); setPlaying(false); onClose(); } }
     window.addEventListener("keydown", escape); return () => window.removeEventListener("keydown", escape);
   }, [onClose]);
   if (!step) return null;

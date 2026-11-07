@@ -1,4 +1,7 @@
 "use client";
+import { captureWorkspaceResponseV1 } from "@jobguard/api/capture-contracts";
+import { quoteWorkspaceResponseV1 } from "@jobguard/api/quote-contracts";
+import { z } from "zod";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { sessionResponseV1 } from "../../lib/contracts";
 import { WalkIt } from "../../ui/jobguard-app";
@@ -12,7 +15,7 @@ import styles from "./voice-journey.module.css";
 import { click, fill, reviewAndPrice, screen, text, until } from "./screen-actions";
 
 export const stages = [
-  ["Record a quote", "Talk through a made-up job using on-device voice, or type. No real names or addresses. Show me uses labelled sample text; it does not record your microphone."],
+  ["Record a quote", "Talk through a made-up job using on-device voice. Type it in, or press Show me to see a sample. No real names or addresses. Show me uses labelled sample text; it does not record your microphone."],
   ["Check the quote lines", "Check the source excerpts and fix a line. Accept the lines, answer the questions, confirm scope and save a priced draft. Show me changes one description before saving."],
   ["Send the quote", "This part uses a prepared example job. Your own draft stays saved. Customer invitation before final-account lock is a prerequisite still to build. This example simulates delivery; nothing is sent."],
   ["Customer says yes", "This part uses a prepared example job. The existing control records builder-attested practice acceptance, not an authenticated customer response. Record it and start the practice job."],
@@ -23,12 +26,75 @@ export const stages = [
   ["Read the end report", "Open the report in pounds and follow its saved source links. These are the prepared job's figures, not savings on your own draft. The report does not guess money protected."],
 ] as const;
 
+const progressSchema = z.object({ jobId: z.uuid(), prepared: z.union([z.uuid(), z.literal("")]), priced: z.boolean() });
+export const progressKey = (tenantId: string) => `walk-3.progress:${tenantId}`;
+// Storage carries navigation hints only. Server reads establish capture and quote progress.
+export async function restoreProgress(raw: string | null) {
+  try {
+    const saved = progressSchema.parse(JSON.parse(raw ?? "null"));
+    async function proposal(id: string) {
+      const response = await fetch(`/api/jobs/${id}/proposal`, { cache: "no-store" });
+      if (!response.ok) throw new Error("Unavailable saved job");
+      const snapshot = captureWorkspaceResponseV1.parse(await response.json());
+      if (snapshot.jobId !== id) throw new Error("Wrong saved job");
+      return snapshot;
+    }
+    const capture = await proposal(saved.jobId);
+    let priced = false, prepared = "", initialStep = 1;
+    if (saved.priced) {
+      try {
+        const response = await fetch(`/api/jobs/${saved.jobId}/quotes`, { cache: "no-store" });
+        if (response.ok) {
+          const quote = quoteWorkspaceResponseV1.parse(await response.json());
+          priced = quote.jobId === saved.jobId && quote.revisions.some(revision => revision.revision > 0);
+        }
+      } catch { /* An unverified flag is dropped, never assumed complete. */ }
+    }
+    if (priced) initialStep = 2;
+    if (saved.prepared && priced) {
+      try {
+        const example = await proposal(saved.prepared);
+        prepared = saved.prepared;
+        if (["live", "invoiced", "paid"].includes(example.status)) initialStep = 4;
+        else if (example.status === "accepted") initialStep = 3;
+      } catch { /* Drop inaccessible examples. */ }
+    }
+    return { capture, priced, prepared, initialStep };
+  } catch { return null; }
+}
+
+export function approvedExtraDone() {
+  const amount = text("approved-additions");
+  return /^£[\d,]+\.\d{2}$/.test(amount) && amount !== "£0.00";
+}
+export const evidenceDone = () => text("stage-status") === "Complete" &&
+  text("proof-state") === "File integrity checked · synthetic example" && !text("stage-review");
+
+export async function addOnSiteEvidence(_: HTMLElement, signal: AbortSignal) {
+  // The saved proof read can arrive after Show me starts on a resumed job.
+  // Wait for that read, then use only the controls the saved state still needs.
+  await until(() => evidenceDone() || !!screen()?.querySelector(
+    '.proof-actions button:not(:disabled)',
+  ), signal);
+  if (evidenceDone()) return;
+  if (text("proof-state") === "Not attached") {
+    await click("Attach generated practice image", signal);
+    await until(() => text("proof-state") !== "Not attached", signal);
+  }
+  if (text("proof-state") === "Uploading") await click("Check file integrity", signal);
+  await until(() => text("proof-state") === "File integrity checked · synthetic example", signal);
+  if (!evidenceDone()) await click("Complete this stage", signal);
+}
+
+export const finalCheckDone = () => text("final-check-status").startsWith("JobGuard's final check found");
+
 export function VoiceJourney() {
   const [tenantId, setTenantId] = useState(""), [capture, setCapture] = useState<ReviewCaptureResult | null>(null);
   const [screenVersion, setScreenVersion] = useState(0);
+  const [initialStep, setInitialStep] = useState(0);
   const [prepared, setPrepared] = useState(""), [report, setReport] = useState(false), [tour, setTour] = useState(true);
   const [error, setError] = useState(""), [preparing, setPreparing] = useState(false);
-  const current = useRef({ capture, prepared, report }); current.current = { capture, prepared, report };
+  const current = useRef({ capture, prepared, report, tenantId }); current.current = { capture, prepared, report, tenantId };
   const ownPriced = useRef(false), preparingRef = useRef(false);
   useEffect(() => {
     // WALK-2 owns creation and privacy. Reading this route alone never creates example jobs.
@@ -38,9 +104,26 @@ export function VoiceJourney() {
       const response = await fetch("/api/session", { cache: "no-store" });
       if (!response.ok) throw new Error("The practice session could not load.");
       const session = sessionResponseV1.parse(await response.json());
-      setTenantId(session.tenants[0]!.id);
+      const tenant = session.tenants[0]!.id;
+      let restored = null;
+      try { restored = await restoreProgress(sessionStorage.getItem(progressKey(tenant))); } catch { /* Storage may be unavailable. */ }
+      if (restored) {
+        setCapture(restored.capture); setPrepared(restored.prepared); ownPriced.current = restored.priced;
+        setInitialStep(restored.initialStep);
+        if (restored.prepared) history.replaceState(null, "", `${location.pathname}${location.search}${restored.initialStep >= 4 ? "#work-proof" : "#quote"}`);
+      } else {
+        try { sessionStorage.removeItem(progressKey(tenant)); } catch { /* Storage may be unavailable. */ }
+      }
+      // Evidence and later steps are re-read from the prepared screen, never restored as completed flags.
+      setTenantId(tenant);
     })().catch(reason => setError((reason as Error).message));
   }, []);
+  function remember(priced = ownPriced.current) {
+    const { capture, prepared } = current.current;
+    if (!capture) return;
+    try { sessionStorage.setItem(progressKey(current.current.tenantId), JSON.stringify({ jobId: capture.jobId, prepared, priced })); } catch { /* The journey also works without storage. */ }
+  }
+  useEffect(() => { if (tenantId) remember(); }, [tenantId, capture, prepared]);
   async function prepare() {
     if (preparingRef.current || current.current.prepared) return;
     preparingRef.current = true; setPreparing(true); setError("");
@@ -56,12 +139,12 @@ export function VoiceJourney() {
   const steps = useMemo<WalkthroughStep[]>(() => {
     const done = [
       () => !!current.current.capture,
-      () => { if (!current.current.prepared && Number(text("quote-revision")) > 0) ownPriced.current = true; return ownPriced.current; },
+      () => { if (!ownPriced.current && !current.current.prepared && Number(text("quote-revision")) > 0) { ownPriced.current = true; remember(true); } return ownPriced.current; },
       () => !!current.current.prepared && text("quote-delivery") === "Simulated delivery — nothing sent",
       () => !!screen()?.querySelector('[data-testid="activation-policy"]'),
-      () => text("stage-status") === "Complete",
-      () => text("approved-additions") === "£125.00",
-      () => text("final-check-status") === "JobGuard's final check found nothing missing from your bill.",
+      evidenceDone,
+      approvedExtraDone,
+      finalCheckDone,
       () => !!text("invoice-gross") && text("invoice-balance") === "GBP 0.00",
       () => current.current.report && !!text("value-invoiced-gross") && text("value-invoiced-gross") !== "No recorded outcome yet",
     ];
@@ -72,6 +155,12 @@ export function VoiceJourney() {
       },
       async (_, signal) => {
         const input = screen().querySelector<HTMLInputElement>('.review-line input[aria-label^="Description "]');
+        if (!input && current.current.capture?.status !== "draft") {
+          if (!screen().querySelector(".quote-editor")) await click("Price the work", signal);
+          await until(() => screen().querySelector(".quote-editor")?.getAttribute("data-quote-ready") === "true", signal);
+          await click("Save draft revision", signal);
+          return;
+        }
         if (!input) throw new Error("Check the captured lines first.");
         await fill(`[aria-label=${JSON.stringify(input.getAttribute("aria-label"))}]`, `${input.value} carefully`);
         await reviewAndPrice(signal);
@@ -93,7 +182,7 @@ export function VoiceJourney() {
         await click("Continue fake worker", signal);
       },
       async (_, signal) => { await click("Record practice acceptance", signal); await click("Start this practice job", signal); },
-      async (_, signal) => { await click("Attach generated practice image", signal); await click("Check file integrity", signal); await click("Complete this stage", signal); },
+      addOnSiteEvidence,
       async (_, signal) => {
         if (!screen().querySelector(".variation-list article")) {
           await fill('.variation-entry input:not([aria-label])', "Extra preparation");
@@ -141,7 +230,7 @@ export function VoiceJourney() {
       },
       () => { document.getElementById("walk-report")?.click(); },
     ];
-    return stages.map(([title, words], index) => ({ id: `walk-${index + 1}`, title, words, target: "#walk-screen", spotlightTarget: () => screen()?.querySelector<HTMLElement>("[data-walk-action]") ?? null, isDone: done[index]!, autoAction: actions[index]!, timeoutMs: index === 6 ? 240_000 : 30_000 }));
+    return stages.map(([title, words], index) => ({ id: `walk-${index + 1}`, title, words, target: index === 2 ? "#walk-prepare, #walk-screen" : "#walk-screen", spotlightTarget: () => screen()?.querySelector<HTMLElement>("[data-walk-action]") ?? (index === 2 ? document.getElementById("walk-prepare") : null), isDone: done[index]!, autoAction: actions[index]!, timeoutMs: index === 6 ? 240_000 : 30_000 }));
   }, []);
   return <>
     <header className="workspace-page"><a href="/practice-company">Back to your practice firm and reset</a><h1>Walk your first practice job</h1>
@@ -156,6 +245,6 @@ export function VoiceJourney() {
     <div id="walk-screen" className={styles.screen} tabIndex={-1}>
       {!tenantId ? <p role="status">Loading your private practice firm…</p> : prepared ? report ? <ValuePage jobId={prepared} /> : <WorkspaceShell key={`${prepared}:${screenVersion}`} jobId={prepared} /> : capture ? <ReviewProposal result={capture} back={() => location.assign("/practice-company")} /> : <WalkIt tenantId={tenantId} initialText="" close={() => location.assign("/practice-company")} onCaptured={setCapture} />}
     </div>
-    {tenantId && tour && <Walkthrough steps={steps} onClose={() => setTour(false)} />}
+    {tenantId && tour && <Walkthrough initialIndex={initialStep} steps={steps} onClose={() => setTour(false)} />}
   </>;
 }
