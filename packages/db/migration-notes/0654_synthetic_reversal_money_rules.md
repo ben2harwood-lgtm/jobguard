@@ -1,13 +1,14 @@
-# LATER-SAFETY-17 — synthetic v1 reversal money rules (RED, NOPR)
+# LATER-SAFETY-17 — synthetic v1 reversal money rules (RED)
 
-Landing base: `9d4677cbd66051cf6e7f2abdea8823593050e72b` (`origin/main`),
-merged by the launcher at `1ba1e49652e2306555ddb254861dbe4d156d1480`.
-The local `main` branch is stale and is not the comparison base.
+Landing base: `b0ae55c4686861e61af7b6b2b759ecdcb425205e` (`origin/main`),
+merged cleanly by the launcher at `da175cc55`. Main's highest migration is
+0652; this piece is renumbered by stem from 0793 to 0654 with SQL unchanged.
+The local `main` branch is not the comparison base.
 Main already contains 0631's cumulative reversal fix and settled-plan credit
-check. 0793 remains necessary for reversal replay and policy-specific cap
+check. 0654 remains necessary for reversal replay and policy-specific cap
 selection; no migration added by this group is already on main.
 
-0793 recreates only main's latest reversal body from
+0654 recreates only main's latest reversal body from
 `0631_legacy_recovery_money_integrity.sql`, preserving signature, owner,
 search path, grants, database-mode refusal, tenant check, allocation checks,
 review insertion, cumulative reversal calculation, settled-plan credit and
@@ -62,11 +63,16 @@ required CI checks. Exact-head independent RED review remains required.
 
 The exact reversal signature in
 `plan-entitlement-lifecycle-upgrade.integration.test.ts` now binds its body to
-0793; the approval signature remains bound to 0631. Full body comparisons,
+0654; the approval signature remains bound to 0631. Full body comparisons,
 owner/ACL comparisons and every other mainline exception remain intact.
 No new table or registry rows are introduced, so no row lists change.
+MIGFIX-7 now pins the exact reversal identity and full 0654 body in its
+successor replay, preserving all metadata and unrelated-body comparisons.
+MIGFIX-6 continues to bind its own 0631 step and then exercises reversals
+after replaying all successors. No snapshot check is removed or weakened.
 The lane includes every changed path against origin/main except lane files,
-and does not list itself. Git metadata is read-only; the router commits and
+and does not list itself. It also permits removal of the three old 0793
+paths because local lint inspects these tracked removals before commit. Git metadata is read-only; the router commits and
 pushes this handoff, then CI and exact-head RED review gate landing.
 
 Forward-only upgrade; no data backfill or columns. Do not roll back financial

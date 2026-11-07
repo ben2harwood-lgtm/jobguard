@@ -142,3 +142,10 @@ a full external accessibility audit. No database or browser was run in this
 sandbox. CI must prove fresh/upgrade/catalog/tenancy checks, the real PostgreSQL
 route journey and rendered browser behavior. Independent RED review, D01–D03/D13
 owner/adviser evidence, G4-S and all live gates remain outstanding.
+
+LATER-SAFETY-18: the repository translates only PostgreSQL `23505` on
+`billability_one_line_approval` into `BILLABILITY_LINE_ALREADY_APPROVED`; the
+web adapter returns 409 with a reload message. Other database errors keep their
+existing mapping, and identical authenticated commands return their stored result.
+Named holds for landing: stale approval after evidence changes still blocks
+re-approval of that line; a supersession design is required before live use.

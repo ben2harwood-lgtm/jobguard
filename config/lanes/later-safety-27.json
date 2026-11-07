@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-27": {
+      "branches": [
+        "codex/sandbox/later-safety-27"
+      ],
+      "note": "RED; NOPR; stored fee invoice credits and exact replay after correction.",
+      "allow": [
+        "docs/contracts/platform-tax-invoice-v1.md",
+        "packages/db/src/platform-tax-invoice-fixture-repository.ts",
+        "packages/db/test/platform-tax-invoice-fee-source.integration.test.ts",
+        "packages/db/test/platform-tax-invoice-fee-source.test.ts"
+      ]
+    }
+  }
+}
