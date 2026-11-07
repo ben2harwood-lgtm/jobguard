@@ -129,3 +129,10 @@ it("projects real requested/applied/released commands, races, permissions and id
   const wormPayloads = events.filter(e => e.eventType.startsWith("worm.")).map(e => e.payload);
   expect(JSON.stringify(wormPayloads)).not.toMatch(/synthetic\/tenants|identity_user|email|object_key|object_version|Synthetic fixture/);
 });
+
+it("LATER-SAFETY-26 refused apply and release store neither command identity", async () => {
+  for (const c of [command({ evidenceId: unregistered }), command({ action: "release_hold", releaseOf: randomUUID() })]) {
+    await expect(repo.submit(context, c)).rejects.toMatchObject({ code: "WORM_REFUSED", message: "WORM_REFUSED" });
+    expect((await admin.query("SELECT id FROM app.worm_command WHERE id=$1 OR idempotency_key=$2", [c.commandId, c.idempotencyKey])).rows).toEqual([]);
+  }
+});

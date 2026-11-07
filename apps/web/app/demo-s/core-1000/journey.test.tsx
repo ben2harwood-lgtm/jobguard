@@ -12,9 +12,10 @@ describe("DEMO-J1 core-1000 guided entry", () => {
     expect(core1000Source.match(/^ITEM:/gm)).toHaveLength(5);
     expect(core1000Source).not.toContain("Replace shelves");
     const html = renderToStaticMarkup(<Core1000Guide />);
-    for (const text of ["£1,320", "£820", "£700", "£120", "no v1 cap or activation obligation", "This practice exercise doesn&#x27;t use the customer&#x27;s secure link; the shadow-30000 journey shows customer approval through the customer portal.", "Independent RED verdict: missing", "0 of 2"]) expect(html).toContain(text);
+    for (const text of ["£1,320", "£820", "£700", "£120", "no fee limit", "starting it creates no amount to pay", "you record acceptance yourself for practice", "customer approving work through their secure link"]) expect(html).toContain(text);
     expect(html).toContain("does not mark steps complete");
     expect(html).not.toContain("You finished");
+    expect(html).not.toMatch(/immutable quote|continue the fake worker|baseline dispositions|v3.*v1 cap|\bRED\b|verdict|observations|0 of 2/i);
   });
   it("does not create a session, capture or show saved facts during initial render", () => {
     const fetch = vi.fn(); vi.stubGlobal("fetch", fetch);
@@ -28,7 +29,7 @@ describe("DEMO-J1 core-1000 guided entry", () => {
     const html = renderToStaticMarkup(<Core1000Journey requestedJobId={requestedJobId} />);
     expect(html).toContain("Invalid saved job reference");
     expect(html).not.toContain("Loading your job");
-    expect(html).not.toContain("Start core-1000 practice session");
+    expect(html).not.toContain("Start the £1,000 practice job");
   });
   it("resume links carry only a locator; no completion, prices, lock or allocation authority", () => {
     const id = "11111111-1111-4111-8111-111111111111";

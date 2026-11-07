@@ -105,12 +105,23 @@ it.each(methods)("$name refuses missing, invented and stranger sessions before b
  vi.stubEnv("JOBGUARD_ENV","synthetic_demo");
  for(const scenario of ["missing","invented",...(["CaptureApplication.capture","MaterialApplication.addRate","FeeIllustrationApplication.whatIf"].includes(entry.name)?[]:["stranger"])]){
   const session=scenario==="missing"?undefined:"18000000-0000-4000-8000-000000000001";
-  const query=vi.fn(async(sql:string, _values?: unknown[])=>({rows:scenario==="stranger"&&sql.includes("authenticate_practice_session")?[{tenant_id:body.tenantId,membership_id:"d1500000-0000-4000-8000-000000000003",identity_user_id:"d1500000-0000-4000-8000-000000000001"}]:[]}));
+  const query=vi.fn(async(sql:string, _values?: unknown[])=>({rows:
+   scenario==="stranger"&&sql.includes("authenticate_practice_session")?[{tenant_id:body.tenantId,membership_id:"d1500000-0000-4000-8000-000000000003",identity_user_id:"d1500000-0000-4000-8000-000000000001"}]
+   :sql==="SELECT app.current_actor() actor, app.current_tenant() tenant"?[{actor:"d1500000-0000-4000-8000-000000000003",tenant:body.tenantId}]:[]}));
   const connect=vi.fn(async()=>({query,release:vi.fn()}));
   const app=new (entry.ctor as any)({query,connect},session);
   await expect(Promise.resolve().then(()=>entry.invoke(app,session))).rejects.toThrow(scenario==="stranger"?"NOT_FOUND":"UNAUTHENTICATED");
   if(scenario!=="stranger")expect(connect).not.toHaveBeenCalled();
-  for(const [sql] of query.mock.calls)expect(sql).toMatch(/authenticate_practice_session|^(BEGIN|COMMIT|ROLLBACK)$|set_config|practice_session_digest/);
+  for(const [sql] of query.mock.calls)expect(sql).toMatch(/authenticate_practice_session|^(BEGIN|COMMIT|ROLLBACK|SELECT app\.bind_request\(\$1, \$2, \$3\)|SELECT app\.current_actor\(\) actor, app\.current_tenant\(\) tenant)$|set_config|practice_session_digest/);
+  if(scenario==="stranger"){
+   const calls=query.mock.calls as [string,unknown[]?][];
+   const bind=calls.findIndex(([sql])=>sql==="SELECT app.bind_request($1, $2, $3)");
+   expect(bind).toBeGreaterThan(0);
+   expect(calls[bind]?.[1]).toEqual(["practice",createHash("sha256").update(session!).digest("hex"),body.tenantId]);
+   expect(calls[bind-1]?.[0]).toBe("BEGIN");
+   expect(calls[bind+1]?.[0]).toBe("SELECT app.current_actor() actor, app.current_tenant() tenant");
+   expect(calls.slice(bind+2).find(([sql])=>sql==="COMMIT"||sql==="ROLLBACK")?.[0]).toBe("COMMIT");
+  }
  }
 });
 
@@ -131,6 +142,7 @@ it("material calls install only the authenticated digest inside each repository 
  const digest=createHash("sha256").update(token).digest("hex");
  const query=vi.fn(async (sql:string) => ({rows:
   sql.includes("authenticate_practice_session") ? [{tenant_id:body.tenantId,membership_id:"d1500000-0000-4000-8000-000000000003",identity_user_id:"d1500000-0000-4000-8000-000000000001"}] :
+  sql==="SELECT app.current_actor() actor, app.current_tenant() tenant" ? [{actor:"d1500000-0000-4000-8000-000000000003",tenant:body.tenantId}] :
   sql.includes("practice_session_digest=$3") ? [{id:job}] :
   sql.includes("max(revision)") ? [{revision:0}] : []
  }));
@@ -145,7 +157,8 @@ it("material calls install only the authenticated digest inside each repository 
  expect(scoped).toHaveLength(3);
  for(const call of scoped){
   expect(call).toEqual(["SELECT set_config('app.practice_material_digest', $1, true)",[digest]]);
-  expect(calls[calls.indexOf(call)-1]).toEqual(["BEGIN",undefined]);
+  expect(calls[calls.indexOf(call)-1]?.[0]).toBe("SELECT app.current_actor() actor, app.current_tenant() tenant");
+  expect(calls[calls.indexOf(call)-2]?.[0]).toBe("SELECT app.bind_request($1, $2, $3)");
  }
  expect(calls.flatMap(([,values])=>values??[])).not.toContain(token);
  expect(release).toHaveBeenCalledTimes(5); // Two ownership checks plus three material operations.

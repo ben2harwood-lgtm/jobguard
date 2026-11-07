@@ -32,7 +32,7 @@ export class InterimDraftApplication {
       sessionToken: credentials.sessionToken, requestedTenantId: session.memberships[0]?.tenantId,
       csrfToken: session.csrfToken, origin: credentials.origin ?? this.identity.allowedOrigin,
     }, this.identity.allowedOrigin);
-    return this.view(await this.repository.read(context, jobId), "Stored draft book loaded.");
+    return this.view(await this.repository.read(context, jobId, this.identity.provider.digest(`session:${credentials.sessionToken}`)), "Stored draft book loaded.");
   }
   async command(credentials: TenantRequestCredentials, jobId: string, raw: unknown) {
     this.assertSynthetic();
@@ -52,10 +52,10 @@ export function interimDraftFailure(error: unknown) {
   let status: number, code: string, message: string;
   if (error instanceof InterimDraftRepositoryError) {
     code = `INTERIM_DRAFT_${error.code}`;
-    status = { INVALID_INPUT: 400, NOT_FOUND: 404, CONFLICT: 409, UNAVAILABLE: 503, DARK: 404 }[error.code];
+    status = { INVALID_INPUT: 400, NOT_FOUND: 404, CONFLICT: 409, UNAVAILABLE: 503, DARK: 404, FORBIDDEN: 403 }[error.code];
     message = { INVALID_INPUT: "Check the draft record and job. Tenant, actor and enable flags are not accepted.",
       NOT_FOUND: "Draft book not found.", CONFLICT: "This command or record was already used with different content. Nothing was added.",
-      UNAVAILABLE: "Drafts are unavailable. Retry the same command to check its outcome.", DARK: "Not found." }[error.code];
+      UNAVAILABLE: "Drafts are unavailable. Retry the same command to check its outcome.", DARK: "Not found.", FORBIDDEN: "An active company owner or admin session is required." }[error.code];
   } else if (error instanceof InterimApplicationError) {
     code = error.code; status = error.code === "INVALID_INPUT" ? 400 : 409; message = error.message;
   } else {
