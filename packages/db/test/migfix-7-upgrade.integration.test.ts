@@ -93,7 +93,6 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.xa_escalate()", "0637_extra_working_day_wait.sql"],
     ["app.xa_queue(p_member uuid)", "0637_extra_working_day_wait.sql"],
     ["app.valid_approval_rules(d jsonb)", "0638_extra_rule_wait_schema.sql"],
-    ["app.interim_draft_records(t uuid, digest text, j uuid, operation text, v jsonb)", "0665_interim_read_authority.sql"],
     ["app.retention_records(t uuid, digest text, j uuid, cid uuid, v jsonb, expected text)", "0646_retention_timer_runtime_rules.sql"],
     ["app.notice_fixture_records(j uuid, n uuid, digest text, operation text, v jsonb)", "0647_notice_live_job_check.sql"],
     ["app.pay_now_fake_attempt(t uuid, digest text, j uuid, operation text, v jsonb)", "0648_pay_now_catch_statement.sql"],
@@ -107,6 +106,8 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.ch6_integrity_sources(t uuid, j uuid, d text)", "0660_baseline_ancestry_audit_trust.sql"],
     ["app.ch6_record_integrity_review(t uuid, j uuid, digest text, review jsonb, source_snapshot jsonb)", "0660_baseline_ancestry_audit_trust.sql"],
     ["app.decision_check_command(p_digest text, p_command jsonb, p_phase text, p_data jsonb)", "0660_baseline_ancestry_audit_trust.sql"],
+    ["app.interim_draft_records(t uuid, digest text, j uuid, operation text, v jsonb)", "0665_interim_read_authority.sql"],
+    ["app.ch5_history_actor(t uuid, j uuid, d text)", "0668_import_company_owner_history.sql"],
   ]) {
     const source = await readFile(new URL(`../migrations/${migration}`, import.meta.url), "utf8");
     if (identity!.startsWith("app.decision_check_command(")) {
