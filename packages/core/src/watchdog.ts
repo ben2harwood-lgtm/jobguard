@@ -34,6 +34,7 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "nest:/customer-portal/variation-approvals": "pre_live_allowed",
   "/api/customer-portal/issue": "pre_live_allowed",
   "/api/customer-portal/revoke": "pre_live_allowed",
+  "/api/customer-portal/extra-approvals": "watchdog_live_only",
   "/api/customer-portal/signin": "pre_live_allowed",
   "/api/customer-portal/signout": "pre_live_allowed",
   "/api/customer-portal/messages": "watchdog_live_only",
@@ -153,6 +154,7 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "/api/jobs/[id]/parties/import-v3": "pre_live_allowed",
   "/api/jobs/[id]/parties/import-v3/preview": "pre_live_allowed",
   // M4-7-S: the synthetic practice feed is session-owned practice data that no watchdog table records, usable at any job stage.
+  "/api/jobs/[id]/direct-debit-practice": "pre_live_allowed",
   "/api/jobs/[id]/practice-feed": "pre_live_allowed",
   "/api/jobs/[id]/practice-facts": "pre_live_allowed",
   "/api/jobs/[id]/prevention-checks/[action]": "pre_live_allowed",
@@ -192,6 +194,7 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "/api/jobs/capture": "pre_live_allowed",
   // ENT-2: the work-order import creates each job, binds its parties and enters live in one transaction; tenant administration and SoR imports are outside this registry.
   "/api/contractor/work-order-imports": "pre_live_allowed",
+  "/api/contractor/work-order-imports/connector-promotions": "pre_live_allowed",
   "/api/decisions#evaluate": "pre_live_allowed",
   "/api/decisions#resolve": "pre_live_allowed",
   "/api/recovery-cases/[id]/evidence-packs": "post_live_billing",
@@ -211,6 +214,7 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
 
   // Dark evidence controls preserve integrity at any job phase; they do not add site facts.
   "method:worm-command-repository.ts#submit": "pre_live_allowed",
+  "/api/jobs/[id]/evidence-holds": "pre_live_allowed",
   "method:worm-command-repository.ts#execute": "pre_live_allowed",
   "method:worm-command-repository.ts#recover": "pre_live_allowed",
   "method:inbox-relevance-repository.ts#setBudget": "pre_live_allowed",
@@ -245,6 +249,8 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "command:ResolveDuplicateCandidates": "pre_live_allowed",
   "command:MarkDuplicate": "pre_live_allowed",
   "command:LogSiteExtra": "pre_live_allowed",
+  "/api/contractor/jobs/[id]/site-extras/[extraId]/proceed": "pre_live_allowed",
+  "command:RecordExtraProceed": "pre_live_allowed",
   "command:RecordSiteSupervisorQuery": "pre_live_allowed",
   "command:RecordOfficeExtra": "pre_live_allowed",
   "command:RecordClientInstruction": "pre_live_allowed",

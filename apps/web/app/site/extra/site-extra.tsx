@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { siteOrderCheckV1, siteSupervisorQueryV1, siteSupervisorQueriesV1, sorSiteExtraSubmittedV2, siteExtraLoggedV4, siteExtraContentSha256V1, type SiteOrderCheck } from "@jobguard/core";
 import { LocalDictation } from "../../ui/local-dictation";
+import { ExtraProceed } from "./extra-proceed";
 import { SiteVisit } from "./site-visit";
 import { NorthsidePractice } from "../../northside/northside-practice";
 import { pounds } from "../../lib/pounds";
@@ -22,6 +23,7 @@ export function SiteExtra() {
   const attempt = useRef<string | null>(null), pending = useRef(false);
   const [sorCode, setSorCode] = useState(""), [quantity, setQuantity] = useState("1"), [visitId, setVisitId] = useState<string | null>(null);
   const [check, setCheck] = useState<SiteOrderCheck["orderCheck"] | null>(null);
+  const [operative, setOperative] = useState(false);
   const [supervisor, setSupervisor] = useState(false), [queries, setQueries] = useState<Array<ReturnType<typeof siteSupervisorQueryV1.parse>>>([]), [queryReadError, setQueryReadError] = useState("");
   const [workStatus, setWorkStatus] = useState<"" | keyof typeof workLabels>("");
   const [workStatements, setWorkStatements] = useState<NonNullable<ReturnType<typeof siteSupervisorQueriesV1.parse>["workStatuses"]>>([]);
@@ -46,7 +48,7 @@ export function SiteExtra() {
       if (!j.ok || !e.ok) throw new Error(`Jobs and extras could not load (jobs: ${j.status}; extras: ${e.status}).`);
       const jobsBody = await j.json(), extrasBody = await e.json();
       if (!Array.isArray(jobsBody.jobs) || !Array.isArray(extrasBody.extras)) throw new Error("Jobs and extras returned an unreadable response.");
-      setSupervisor(extrasBody.role === "supervisor");
+      setSupervisor(extrasBody.role === "supervisor"); setOperative(extrasBody.role === "operative");
       setJobs(jobsBody.jobs.map((x: Job) => ({ jobId: x.jobId, reference: x.reference, openVisitId: x.openVisitId }))); setExtras(extrasBody.extras); setLoadState("ready");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Jobs and extras could not load."); setLoadState("failed");
@@ -127,7 +129,7 @@ export function SiteExtra() {
           <div className={styles.actions}><button disabled={busy || !confirmed || !workStatus} onClick={() => void log()}>Log extra</button></div></>}
     </section>}
     <section className={styles.card} aria-label="My extras"><h2>My extras</h2>
-      {loadState !== "ready" ? <p>{loadState === "loading" ? "Loading extras…" : "Extras are unavailable."}</p> : extras.length === 0 ? <p>None yet.</p> : <ul>{extras.map(x => <li key={x.extraId} data-testid="my-extra"><strong>{x.orderReference}</strong>: {x.description} <span className={styles.pill} data-testid="my-extra-state">{x.outcome ? labels[x.outcome] ?? x.outcome : labels[x.state] ?? x.state}</span>{x.quotedPence !== null && <> · price {pounds(x.quotedPence)}</>}{x.hasPhoto && " · photo"}{x.residentConfirmed && " · resident confirmed"}{supervisor && workStatements.filter(statement => statement.extraId === x.extraId).map(statement => <p key={statement.extraId}>Operative statement: {workLabels[statement.workStatus]} · operative {statement.operativeMembershipId} · recorded {statement.recordedAt}. Work timing and any preapproval breach remain separate; later approval does not erase a breach.</p>)}</li>)}</ul>}
+      {loadState !== "ready" ? <p>{loadState === "loading" ? "Loading extras…" : "Extras are unavailable."}</p> : extras.length === 0 ? <p>None yet.</p> : <ul>{extras.map(x => <li key={x.extraId} data-testid="my-extra"><strong>{x.orderReference}</strong>: {x.description} <span className={styles.pill} data-testid="my-extra-state">{x.outcome ? labels[x.outcome] ?? x.outcome : labels[x.state] ?? x.state}</span>{x.quotedPence !== null && <> · price {pounds(x.quotedPence)}</>}{x.hasPhoto && " · photo"}{x.residentConfirmed && " · resident confirmed"}{supervisor && workStatements.filter(statement => statement.extraId === x.extraId).map(statement => <p key={statement.extraId}>Operative statement: {workLabels[statement.workStatus]} · operative {statement.operativeMembershipId} · recorded {statement.recordedAt}. Work timing and any preapproval breach remain separate; later approval does not erase a breach.</p>)}{(operative || supervisor) && <ExtraProceed jobId={x.jobId} extraId={x.extraId} canRecord={operative} />}</li>)}</ul>}
     </section>
     {supervisor && <section className={styles.card} aria-label="Supervisor questions"><h2>Questions on this job</h2>
       <p>These are within the order. No extra or price was created. Resolving questions is not available yet.</p>

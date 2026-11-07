@@ -46,6 +46,7 @@ An absence is labelled `none_recorded` (none recorded), never paid. The statemen
 details are included. This trace is frozen at issuance; replay and credits retain
 that original trace while revalidating the statement and approval. It is historical
 provenance, not a current balance or authority to collect.
+Only new invoice issuance requires the latest statement; exact stored-document replays and credits against a stored invoice revalidate its original statement and approval even after a newer statement exists.
 
 This remains an administrative synthetic adapter under existing privileges and
 RLS, requiring the existing persisted owner identity session. The separate practice
@@ -94,3 +95,5 @@ amount/hash/approval reconstruction, absent/foreign/corrupted source refusal,
 unsupported contractor/invalid fee refusal, persisted actor binding, revocation, cross-issuer races
 and uniqueness even after credit. Real PostgreSQL checks run in CI; the sandbox
 cannot start PostgreSQL or bind localhost.
+
+M4-10 now has a read-only owner route, `GET /api/plans/platform-documents`, and a dark synthetic page at `/plans/platform-documents`. A current company owner session reads only its stored simulation documents and linked credits; account figures use the existing fixture projection with zero linked payments. Issuing still has no route. Approved D02 examples, live issuing and payment linking remain closed.

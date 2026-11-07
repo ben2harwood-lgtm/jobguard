@@ -92,7 +92,7 @@ describe("DEMO-I strict request boundary", () => {
 
 function lifecycleFixture(environment="synthetic_demo") {
  const credentials={sessionToken:"s".repeat(32),requestedTenantId:id,csrfToken:"c".repeat(24),origin:"https://jobguard.invalid"};
- const provider={authenticate:vi.fn().mockResolvedValue({identityUserId:id,sessionId:id,csrfToken:credentials.csrfToken}),findMembership:vi.fn().mockResolvedValue({id,identityUserId:id,tenantId:id,role:"owner",email:"owner@fictional.invalid"})};
+ const provider={authenticate:vi.fn().mockResolvedValue({identityUserId:id,sessionId:id,csrfToken:credentials.csrfToken,sessionCredential:"a".repeat(64)}),findMembership:vi.fn().mockResolvedValue({id,identityUserId:id,tenantId:id,role:"owner",email:"owner@fictional.invalid"})};
  const authority={provider,allowedOrigin:credentials.origin,environment:()=>environment,resolve:vi.fn().mockResolvedValue({credentials,digest:"a".repeat(64)})};
  const repository={execute:vi.fn().mockResolvedValue({status:"blocked"})};
  return {authority,repository,app:new SmallBuilderDemoApplication(authority as never,repository)};
@@ -105,7 +105,7 @@ describe("DEMO-I company authority",()=>{
   const {credentials}=await original.value;
   const freshCredentials={...credentials,sessionToken:"t".repeat(32),csrfToken:"d".repeat(24)};
   f.authority.resolve.mockResolvedValue({credentials:freshCredentials,digest:"b".repeat(64)});
-  f.authority.provider.authenticate.mockResolvedValue({identityUserId:id,sessionId:"d1500000-0000-4000-8000-000000000002",csrfToken:freshCredentials.csrfToken});
+  f.authority.provider.authenticate.mockResolvedValue({identityUserId:id,sessionId:"d1500000-0000-4000-8000-000000000002",csrfToken:freshCredentials.csrfToken,sessionCredential:"b".repeat(64)});
   await f.app.execute("fresh-login","read",id,{});
   expect(f.authority.provider.authenticate).toHaveBeenCalledTimes(2);
   expect(f.authority.provider.findMembership).toHaveBeenCalledTimes(2);

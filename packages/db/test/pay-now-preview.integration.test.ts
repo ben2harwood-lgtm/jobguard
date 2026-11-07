@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { beforeAll, afterAll, describe, it, expect, vi } from "vitest";
 import { cluster, type Cluster } from "./extra-fixtures.js";
 import { meterCompany } from "./meter-persistence-fixtures.js";
-import { type WorkFixture } from "./job-work-state-fixtures.js";
+import { workTenant, type WorkFixture } from "./job-work-state-fixtures.js";
 import { prepareInvoicePrerequisites } from "./sv5pre-fixtures.js";
 import { PayNowAttemptRepository } from "../src/pay-now-attempt-repository.js";
 import { PracticeInvoiceRepository } from "../src/practice-invoice-repository.js";
@@ -65,12 +65,28 @@ describe("MON-6 stored preview boundaries",()=>{
   const repo=new PayNowAttemptRepository(c.runtime);
   for(const role of ["estimator","foreman","finance","read_only"]){
    const a=await fixture();await c.admin.query("UPDATE app.membership SET role=$1 WHERE id=$2",[role,a.actorId]);
-   await expect(repo.command(a.context,a.actor,a.input)).rejects.toThrow("UNAVAILABLE");
+   await expect(repo.command(a.context,a.actor,a.input)).rejects.toThrow("FORBIDDEN");
+   await expect(workTenant(c.runtime,a.tenantId,db=>db.query(
+    "SELECT app.pay_now_fake_attempt($1,$2,$3,'prepare',$4::jsonb)",
+    [a.tenantId,a.digest,a.jobId,JSON.stringify(a.input)],
+   ))).rejects.toMatchObject({message:"METER_FORBIDDEN",code:"42501"});
   }
   for(const mutation of ["UPDATE app.membership SET revoked_at=clock_timestamp() WHERE id=$1","UPDATE identity.session SET revoked_at=clock_timestamp() WHERE id=$1","UPDATE identity.session SET expires_at=clock_timestamp()-interval '1 second' WHERE id=$1"]){
-   const a=await fixture();await c.admin.query(mutation,[mutation.includes("membership")?a.actorId:a.sessionId]);
-   await expect(repo.command(a.context,a.actor,a.input)).rejects.toThrow("UNAVAILABLE");
+   const a=await fixture();
+   const original=await repo.command(a.context,a.actor,a.input);
+   expect(original.synthetic).toBe(true);
+   await c.admin.query(mutation,[mutation.includes("membership")?a.actorId:a.sessionId]);
+   const membership=mutation.includes("membership");
+   await expect(repo.command(a.context,a.actor,a.input)).rejects.toThrow(membership?"FORBIDDEN":"UNAUTHENTICATED");
+   await expect(workTenant(c.runtime,a.tenantId,db=>db.query(
+    "SELECT app.pay_now_fake_attempt($1,$2,$3,'prepare',$4::jsonb)",
+    [a.tenantId,a.digest,a.jobId,JSON.stringify(a.input)],
+   ))).rejects.toMatchObject({message:membership?"METER_FORBIDDEN":"PAY_NOW_UNAUTHENTICATED",code:membership?"42501":"28000"});
   }
+ });
+ it("refuses an unknown session as unauthenticated",async()=>{
+  const a=await fixture(),repo=new PayNowAttemptRepository(c.runtime);
+  await expect(repo.command(a.context,{...a.actor,sessionDigest:"f".repeat(64)},a.input)).rejects.toMatchObject({code:"UNAUTHENTICATED"});
  });
  it("reloads stored credit/receipt balances and hides foreign and missing invoices",async()=>{
   const a=await fixture(),b=await fixture(),provider=new PersistedAuthProvider(new IdentityRepository(c.admin),"synthetic-fixture-only-secret-32-characters");

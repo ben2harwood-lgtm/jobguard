@@ -35,3 +35,57 @@ it("E6-05 E6-27 unresolved candidates block both racing exports, MarkDuplicate t
  const races=await Promise.allSettled([marking,own.exported(),own.exported()]);expect(races[0]!.status).toBe("fulfilled");
  await own.exported();expect((await own.repo.read(own.ctx,own.session,own.s.jobId)).exports.flatMap(b=>b.artifact.lines)).toHaveLength(1);
 });
+
+it("LATER-SAFETY-16 reconciliation restores an approved unlinked extra until its export", async () => {
+ const own=await world(c,338),{ExtraRepository,ExtraApprovalRepository,readExtraDuplicateCandidates}=await import("../src/index.js"),{direct}=await import("./site-extra-fixtures.js");
+ const extras=new ExtraRepository(c.runtime),approvals=new ExtraApprovalRepository(c.runtime),actor=own.w.members.supervisor.member;
+ // A distinct free-text capture avoids unresolved same-code candidates after unlinking.
+ const canonical=await extras.raiseExtra(own.ctx,direct(own.w,own.w.members.operative,{jobId:own.s.jobId}));
+ const expected=[{extraId:own.s.extraId,net:{numerator:"338",denominator:"1"}}];
+ const read=()=>own.repo.read(own.ctx,own.session,own.s.jobId);
+ expect((await read()).reconciliation.approvedNotExported).toEqual(expected);
+ const {approveInput}=await import("./extra-approval-chain-fixtures.js");
+ await approvals.priceExtra(own.ctx,own.w.members.surveyor.member,{version:"price-extra.v1",commandId:randomUUID(),jobId:own.s.jobId,extraId:canonical.variationId,netPence:338});
+ const request=await approvals.submitExtra(own.ctx,actor,{version:"submit-extra.v1",commandId:randomUUID(),jobId:own.s.jobId,extraId:canonical.variationId});
+ await approvals.approveExtraStep(own.ctx,actor,approveInput({jobId:own.s.jobId,requestId:String(request.requestId),hash:String(request.revisionHash),net:338},0));
+ const linked=await approvals.markDuplicate(own.ctx,actor,{version:"mark-duplicate.v1",commandId:randomUUID(),jobId:own.s.jobId,duplicateId:own.s.extraId,canonicalId:canonical.variationId});
+ // Link approved work only to an approved canonical. Reopen its price for review
+ // so this scenario still isolates restoration/export of the unlinked extra.
+ await approvals.reviseExtra(own.ctx,own.w.members.surveyor.member,{version:"revise-extra.v1",commandId:randomUUID(),jobId:own.s.jobId,extraId:canonical.variationId,netPence:339});
+ expect((await read()).reconciliation.approvedNotExported).toEqual([]);
+ expect((await own.exported()).lineCount).toBe(0);
+ const state=await readExtraDuplicateCandidates(c.runtime,own.ctx,actor,own.s.jobId);
+ await extras.unlinkDuplicate(own.ctx,{version:"extra-duplicate-unlink.v1",commandId:randomUUID(),jobId:own.s.jobId,actorMembershipId:actor.membershipId,linkId:String(linked.linkId),expectedRevision:state.revision,reasonCode:"linked_in_error"});
+ const restored=await read();
+ expect(restored.reconciliation.approvedNotExported).toEqual(expected);
+ expect(restored.reconciliation.totals.approvedNotExported).toEqual({numerator:"338",denominator:"1"});
+ expect((await read()).reconciliation.approvedNotExported).toEqual(expected);
+ expect((await own.exported()).lineCount).toBe(1);
+ const exported=await read();
+ expect(exported.exports.flatMap(batch=>batch.artifact.lines).map(line=>line.extraId)).toEqual([own.s.extraId]);
+ expect(exported.reconciliation.approvedNotExported).toEqual([]);
+ expect(exported.reconciliation.totals.approvedNotExported).toEqual({numerator:"0",denominator:"1"});
+});
+it("LATER-SAFETY-16 reconciliation and export exclude withdrawn and rejected extras", async () => {
+ const {ExtraApprovalRepository}=await import("../src/index.js"),{submitted,approveInput}=await import("./extra-approval-chain-fixtures.js");
+ const own=await world(c,338),approvals=new ExtraApprovalRepository(c.runtime),actor=own.w.members.supervisor.member;
+ // An approved extra cannot be withdrawn (ALREADY_DECIDED); withdraw a submitted one instead.
+ const withdrawn=await submitted(c,own.w,338);
+ await approvals.withdrawExtra(own.ctx,actor,{version:"withdraw-extra.v1",commandId:randomUUID(),jobId:withdrawn.jobId,extraId:withdrawn.extraId,reasonCode:"not_done"});
+ expect((await own.repo.read(own.ctx,own.session,withdrawn.jobId)).reconciliation.approvedNotExported).toEqual([]);
+ expect((await own.repo.finalise(own.ctx,own.session,withdrawn.jobId,own.exportInput())).lineCount).toBe(0);
+ const rejected=await submitted(c,own.w,338);
+ await approvals.rejectExtra(own.ctx,actor,{...approveInput(rejected,0),version:"reject-extra.v1",reasonCode:"price_not_agreed"});
+ expect((await own.repo.read(own.ctx,own.session,rejected.jobId)).reconciliation.approvedNotExported).toEqual([]);
+ expect((await own.repo.finalise(own.ctx,own.session,rejected.jobId,own.exportInput())).lineCount).toBe(0);
+});
+
+it("LATER-SAFETY-16 the effective-state read routine enforces tenant, session and job authority", async () => {
+ const own=await world(c,338),foreign=await world(c),{withTenant}=await import("../src/index.js");
+ const sql="SELECT * FROM app.contractor_approved_not_exported($1,$2)";
+ await expect(c.runtime.query(sql,[own.session,own.s.jobId])).rejects.toMatchObject({code:"42501"});
+ await expect(withTenant(c.runtime,own.ctx,db=>db.$client.query(sql,[foreign.session,own.s.jobId]))).rejects.toMatchObject({code:"42501"});
+ await expect(withTenant(c.runtime,foreign.ctx,db=>db.$client.query(sql,[foreign.session,own.s.jobId]))).rejects.toMatchObject({code:"P0002"});
+ const rows=await withTenant(c.runtime,own.ctx,async db=>(await db.$client.query(sql,[own.session,own.s.jobId])).rows);
+ expect(rows).toEqual([{extra_id:own.s.extraId,net_pence:"338"}]);
+});
