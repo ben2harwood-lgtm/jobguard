@@ -10,7 +10,7 @@ const tenant=randomUUID(),origin='https://jobguard.invalid',csrf='c'.repeat(32),
 const command={version:'emergency.v1',operation:'request',requestId:randomUUID(),reasonHash:'a'.repeat(64)};
 function fixture() {
  const base=new PersistedAuthProvider(new IdentityRepository({} as Pool),'fictional-secret-longer-than-thirty-two');
- const authenticate=vi.spyOn(base,'authenticate').mockResolvedValue({identityUserId:randomUUID(),sessionId:randomUUID(),csrfToken:csrf});
+ const authenticate=vi.spyOn(base,'authenticate').mockResolvedValue({identityUserId:randomUUID(),sessionId:randomUUID(),csrfToken:csrf,sessionCredential:'d'.repeat(64)});
  const memberships=vi.spyOn(base,'memberships').mockResolvedValue([{id:randomUUID(),identityUserId:randomUUID(),tenantId:tenant,role:'owner',email:'owner@fixture.invalid',name:'Fictional'}]);
  const emergency=vi.spyOn(EnterpriseAccessRepository.prototype,'emergency').mockResolvedValue({operation:'request'});
  const credentials={sessionToken:token,csrfToken:csrf,origin,tenantHeader:tenant};
