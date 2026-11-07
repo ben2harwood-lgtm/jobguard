@@ -348,6 +348,34 @@ describe("M2-1 dark approved merchant action on PostgreSQL", () => {
     await expect(f.repo.attestManual(f.auth.context, f.manual, { sessionDigest: f.auth.digest })).rejects.toThrow("IDEMPOTENCY_CONFLICT");
     expect(await f.repo.attestManual(f.auth.context, f.manual, { sessionDigest: other.digest })).toEqual(fact);
   });
+
+  it.each(["revoked", "expired", "forged"])("%s practice digest refuses with no attestation or audit", async boundary => {
+    const f = await fixture(), revision = await f.orders.revise(f.job, f.input);
+    // Keep the real material scope, so RLS cannot mask a missing actor digest check.
+    const pool = practiceMaterialPool(runtime, f.auth.digest), repo = new PurchaseOrderActionRepository(pool);
+    const manual = { version: "manual-order-attestation.v1", jobId: f.job, revisionId: revision.id,
+      commandId: randomUUID(), supplierReference: `synthetic-${randomUUID()}` };
+    expect((await repo.preview(f.auth.context, { version: "merchant-order-scope.v1", jobId: f.job, revisionId: revision.id })).order.revisionId)
+      .toBe(revision.id);
+    const token = boundary === "forged" ? randomUUID() : f.token;
+    const digest = createHash("sha256").update(token).digest("hex");
+    if (boundary === "revoked") await admin.query("UPDATE control_plane.practice_session SET revoked_at=clock_timestamp() WHERE token_digest=$1", [digest]);
+    if (boundary === "expired") await admin.query("UPDATE control_plane.practice_session SET expires_at=clock_timestamp()-interval '1 second' WHERE token_digest=$1", [digest]);
+    const before = await effects();
+    await expect(repo.attestManual(f.auth.context, manual, { sessionDigest: digest })).rejects.toThrow("ORDER_ACTION_INVALID");
+    expect(await effects()).toEqual(before);
+    // Bypass TypeScript validation too: the practice bridge must not resolve an actor. Since LP-6b a revoked or
+    // expired session is already refused when the request is bound, before the bridge runs.
+    const bridge = withTenant(pool, f.auth.context, db => db.$client.query(
+      "SELECT * FROM app.authenticate_practice_session($1,$2)", [digest, f.auth.context.tenantId]));
+    if (boundary === "forged") expect((await bridge).rows).toEqual([]);
+    else await expect(bridge).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(await effects()).toEqual(before);
+    const { jobId: _jobId, ...request } = manual;
+    await expect(new MerchantOrderApplication(runtime, token).execute(f.job,
+      { ...request, version: "merchant-order-screen.v1", kind: "manual" })).rejects.toThrow("UNAUTHENTICATED");
+    expect(await effects()).toEqual(before);
+  });
   it.each(["revoked_session", "expired_session", "revoked_owner", "expired_owner", "admin", "finance", "foreign", "missing", "malformed"])("%s refuses with no attestation or audit", async boundary => {
     const f = await darkFixture(), other = await sessionFor(f, ["admin","finance"].includes(boundary) ? boundary : "owner");
     let digest: string | undefined = other.digest;
