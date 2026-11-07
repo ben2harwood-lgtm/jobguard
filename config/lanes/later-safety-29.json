@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/later-safety-29"
       ],
-      "note": "LATER-SAFETY-29 landing group, including batch-44 and LATER-SAFETY-20; exact working-tree diff from origin/main, excluding config/lanes/. RED: tenant-bound discovery routine; independent check required.",
+      "note": "LATER-SAFETY-29-CATCHUP landing group, including batch-44 and LATER-SAFETY-20; exact working-tree diff from origin/main, excluding config/lanes/. Main successor rows and 0683-0685 are retained through ordered migration proof discovery; 0665-0677 do not replace discover_readiness_plans. RED: tenant-bound discovery routine; independent check required.",
       "allow": [
         "apps/api/src/readiness-scheduler.test.ts",
         "apps/api/src/readiness-scheduler.ts",
