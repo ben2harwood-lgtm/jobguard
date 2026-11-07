@@ -36,7 +36,7 @@ it("session application reads timer review, resolves as session person, refuses 
   const append = (record: unknown, id = randomUUID()) => a.app.command(a.credentials, a.jobId, input(record, id));
   const read = () => a.app.read(a.credentials, a.jobId);
   const before = await financialSnapshot();
-  await append(profile, pid); await new RetentionRecordRepository(infrastructure).raiseTimerReviews(a.context);
+  await append(profile, pid); await new RetentionRecordRepository(f.runtime).raiseTimerReviews(a.context);
   const review = (await read()).book.records[1]!;
   expect(review).toMatchObject({ version: "retention.review.v1", trigger: "timer" });
   expect((await read()).reconciliation).toMatchObject({ pendingReviewIds: [review.id], released: { netPence: 0, taxPence: 0 } });
@@ -53,7 +53,7 @@ it("session application reads timer review, resolves as session person, refuses 
   await append({ version: "retention.receipt.v1", releaseId, grossPence: 4800 }, receiptId);
   await append({ version: "retention.reversal.v1", receiptId, grossPence: 1200 });
   await append({ ...profile, revision: 2, previousProfileId: pid, conditions: profile.conditions.map(c => ({ ...c, dueDate: "2001-01-01" })) });
-  await new RetentionRecordRepository(infrastructure).raiseTimerReviews(a.context);
+  await new RetentionRecordRepository(f.runtime).raiseTimerReviews(a.context);
   const nextReview = (await read()).book.records.at(-1)!;
   const finalResolution = randomUUID();
   await append({ ...resolution, reviewId: nextReview.id, amount: { netPence: 6000, taxPence: 1200 } }, finalResolution);
@@ -64,7 +64,7 @@ it("session application reads timer review, resolves as session person, refuses 
   const afterRevision = await read();
   await expect(append({ version: "retention.release.v1", resolutionId: finalResolution })).rejects.toMatchObject({ code: "STALE_PROFILE" });
   expect(await read()).toEqual(afterRevision);
-  await new RetentionRecordRepository(infrastructure).raiseTimerReviews(a.context);
+  await new RetentionRecordRepository(f.runtime).raiseTimerReviews(a.context);
   const finalReview = (await read()).book.records.at(-1)!, finalId = randomUUID();
   await append({ ...resolution, reviewId: finalReview.id, amount: { netPence: 6000, taxPence: 1200 } }, finalId);
   await append({ version: "retention.release.v1", resolutionId: finalId });
@@ -80,8 +80,10 @@ it("session application reads timer review, resolves as session person, refuses 
   for (const role of ["estimator", "foreman", "finance", "read_only"]) {
     await f.admin.query("UPDATE app.membership SET role=$1 WHERE tenant_id=$2 AND id=$3", [role, a.tenantId, a.actorId]);
     await expect(append(release)).rejects.toThrow();
-    expect(await read()).toEqual(beforeRefusals);
+    await expect(read()).rejects.toThrow("RETENTION_FORBIDDEN");
   }
+  await f.admin.query("UPDATE app.membership SET role='owner' WHERE tenant_id=$1 AND id=$2", [a.tenantId,a.actorId]);
+  expect(await read()).toEqual(beforeRefusals);
   await f.admin.query("UPDATE identity.session SET expires_at=clock_timestamp()-interval '1 second' WHERE id=$1", [a.sessionId]);
   await expect(read()).rejects.toThrow("UNAUTHENTICATED");
   await f.admin.query("UPDATE identity.session SET expires_at=clock_timestamp()+interval '1 hour',revoked_at=clock_timestamp() WHERE id=$1", [b.sessionId]);

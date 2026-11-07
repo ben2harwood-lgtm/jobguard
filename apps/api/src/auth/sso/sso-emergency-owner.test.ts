@@ -38,6 +38,8 @@ describe("ENT-10e owner emergency boundary",()=>{
  it.each(["admin","operative","supervisor","surveyor","commercial_manager","finance","read_only","client_approver"])("[E1] %s receives the identical refusal for database non-owner facts",async()=>{
   const f=fixture(60),http=await f.controller.emergency(input(),{headers:{origin}}).catch(e=>e);
   expect(http.getStatus()).toBe(403);expect(http.getResponse()).toEqual({code:"SSO_EMERGENCY_REFUSED"});
+  expect(f.refusal).not.toHaveBeenCalled(); // retired handler: no application call
+  await expect(f.app.emergency(input(),origin)).rejects.toMatchObject({code:"SSO_EMERGENCY_REFUSED"});
   expect(f.refusal).toHaveBeenCalledExactlyOnceWith("emergency","EMERGENCY_NOT_OWNER");
  });
  it("[E3] owner success returns the recorded closing time and minutes without a session",async()=>{

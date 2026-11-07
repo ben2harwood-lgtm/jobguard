@@ -79,7 +79,7 @@ test("[B] [S1] [S3] SSO requirement persists, emailed-code session is refused an
  expect(await on.evaluate(e=>getComputedStyle(e).outlineStyle!=="none"||getComputedStyle(e).boxShadow!=="none")).toBe(true);
  const box=await on.boundingBox();expect(box!.height).toBeGreaterThanOrEqual(44);expect(box!.width).toBeGreaterThanOrEqual(44);await on.press("Enter");
  await expect(page.getByTestId("sso-required-state")).toHaveText("On");await expect(page.getByTestId("sso-required-revision")).toHaveText("1");
- await expect(page.getByText("Emergency access: not available — no approver has been set",{exact:true})).toBeVisible();
+ await expect(page.getByText("Restricted emergency access requires a current owner session and two other owners.",{exact:true})).toBeVisible();
  await page.reload();await expect(page.getByTestId("sso-required-state")).toHaveText("On");
  const second=await browser.newContext({storageState:await page.context().storageState()});try {const tab=await second.newPage();await tab.goto("/admin/contractor/identity");await expect(tab.getByTestId("sso-required-state")).toHaveText("On");}finally{await second.close();}
  // Fresh browser and direct verification show the same code, body, status and absence of cookies for both addresses.

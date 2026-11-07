@@ -41,13 +41,13 @@ beforeAll(async () => {
   expect(position).toBeGreaterThan(0);
   directory = await mkdtemp(join(tmpdir(), "jg-pursuit-upgrade-")); const port = await freePort(62400, 100);
   postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password, persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
-  await postgres.initialise(); await postgres.start(); admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password, database: "postgres" });
+  await postgres.initialise(); await postgres.start(); await postgres.createDatabase("jobguard_synthetic_demo"); admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password, database: "jobguard_synthetic_demo" });
   await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
   for (const url of MIGRATION_URLS.slice(0, position)) { await admin.query(await readFile(url, "utf8")); await admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)", [basename(fileURLToPath(url))]); }
   await applyOutboundPause(admin);
   await installLegacySyntheticPartyFixtures(admin);
   await admin.query(`CREATE ROLE pursuit_upgrade_login LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_runtime TO pursuit_upgrade_login`);
-  runtime = new Pool({ host: "127.0.0.1", port, user: "pursuit_upgrade_login", password, database: "postgres", max: 4 });
+  runtime = new Pool({ host: "127.0.0.1", port, user: "pursuit_upgrade_login", password, database: "jobguard_synthetic_demo", max: 4 });
   for (const policy of [null, "reference_fee_policy_v1"]) {
     const f = await seedEvidencePackFixture(admin);
     if (policy === null) { // Negative historical fixture before N; not a policy conversion path.

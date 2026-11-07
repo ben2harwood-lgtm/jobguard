@@ -1,3 +1,4 @@
+import { RequestBindingRefusedError } from "./request-binding-error.js";
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
@@ -86,17 +87,20 @@ export class PurchaseOrderActionRepository {
     });
   }
 
-  /** Records the owner's assertion. The authenticated caller supplies context and actor,
-   * as for the command dispatcher; the request DTO cannot select its actor. No provider confirmation. */
-  async attestManual(context: VerifiedTenantContext, raw: unknown, actorMembershipId: string) {
+  /** Records the owner resolved from the authenticated session, never from the DTO. No provider confirmation. */
+  async attestManual(context: VerifiedTenantContext, raw: unknown, actor: { sessionDigest: string }) {
     requireSyntheticOrders(); const input = attestationV1.parse(raw);
-    // The authenticated application supplies the actor separately from the untrusted DTO.
-    if (!uuid.safeParse(actorMembershipId).success) throw new InvalidTenantContextError();
+    const session = z.object({ sessionDigest: z.string().regex(/^[a-f0-9]{64}$/u) }).strict().safeParse(actor);
+    if (!session.success) throw new InvalidTenantContextError();
     try { return await withTenant(this.pool, context, async db => {
       await lockOrder(db, context.tenantId, input.jobId);
-      const member = await db.$client.query(`SELECT 1 FROM app.membership WHERE tenant_id=$1 AND id=$2 AND role='owner'
-        AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp())`, [context.tenantId, actorMembershipId]);
-      if (!member.rowCount) throw new PurchaseOrderActionError("ORDER_ACTION_INVALID");
+      // A practice session resolves its fixed owner membership through the existing practice bridge; a company session uses 1203.
+      const practice = (await db.$client.query(`SELECT a.membership_id FROM app.authenticate_practice_session($1,$2) a JOIN app.membership m ON (m.tenant_id,m.id)=($2,a.membership_id)
+        WHERE m.role='owner' AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp())`, [session.data.sessionDigest, context.tenantId])).rows[0]?.membership_id;
+      const resolved = practice ?? (await db.$client.query("SELECT app.order_attestation_actor($1,$2) AS actor_id",
+        [context.tenantId, session.data.sessionDigest])).rows[0]?.actor_id;
+      if (!uuid.safeParse(resolved).success) throw new PurchaseOrderActionError("ORDER_ACTION_INVALID");
+      const actorMembershipId = resolved as string;
       return runStoredCommand(db, { tenantId: context.tenantId, jobId: input.jobId, kind: "purchase_order.attest_manual",
         commandId: input.commandId, request: { ...input, actorMembershipId } }, { work: async () => {
         const order = await readMerchantOrder(db, context.tenantId, input.jobId, input.revisionId);
@@ -113,6 +117,7 @@ export class PurchaseOrderActionRepository {
         return { attestationId: id, fact: "owner_attestation", providerConfirmed: false, realExternalActions: 0 };
       } });
     }); } catch (error) {
+      if (error instanceof RequestBindingRefusedError) throw new PurchaseOrderActionError("ORDER_ACTION_INVALID");
       if ((error as { code?: string }).code === "23505") throw new PurchaseOrderActionError("ORDER_ALREADY_COMMITTED");
       throw error;
     }

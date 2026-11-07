@@ -11,13 +11,12 @@ describe("ENT-10d emergency access",()=>{
   const auth=new PersistedAuthProvider(new IdentityRepository({} as Pool),"fixture-secret-longer-than-thirty-two");
   const mailbox=vi.spyOn(auth,"proveEmergencyMailbox").mockResolvedValue(["no code","invalid code","unknown address"].includes(kind)?undefined:user);
   const repo=new SsoRequiredRepository(auth.repository.pool),refusal=vi.spyOn(repo,"refusal").mockResolvedValue(undefined);
-  const use=vi.spyOn(repo,"emergency").mockResolvedValue({used:false,cause:kind==="valid administrator"?"EMERGENCY_APPROVER_RULE_UNSET":"EMERGENCY_REFUSED"});
+  const use=vi.spyOn(repo,"emergency").mockResolvedValue({used:kind==="valid administrator",cause:kind==="valid administrator"?"EMERGENCY_APPROVER_RULE_UNSET":"EMERGENCY_REFUSED"});
   const app=new SsoRequiredApplication(auth,repo,origin,"synthetic_demo"),controller=new SsoRequiredController(()=>app);
   const failure=await controller.emergency(kind==="no code"?{...input,code:undefined}:input,{headers:{origin}}).catch(e=>e);
   expect(failure.getStatus()).toBe(403);expect(failure.getResponse()).toEqual({code:"SSO_EMERGENCY_REFUSED"});
-  if(kind!=="no code")expect(mailbox).toHaveBeenCalledWith(input.email,input.code);
-  expect(refusal).toHaveBeenCalledWith("emergency",kind==="no code"?"EMERGENCY_INPUT_INVALID":["invalid code","unknown address"].includes(kind)?"EMERGENCY_MAILBOX_REFUSED":kind==="valid administrator"?"EMERGENCY_APPROVER_RULE_UNSET":"EMERGENCY_REFUSED");
-  if(["no code","invalid code","unknown address"].includes(kind))expect(use).not.toHaveBeenCalled();else expect(use).toHaveBeenCalledWith(user,input);
+  expect(mailbox).not.toHaveBeenCalled();
+  expect(refusal).not.toHaveBeenCalled();expect(use).not.toHaveBeenCalled();
  });
  it("[S10a] mailbox proof uses latest signin challenge limits and consumes only once without provisioning or verified latch",async()=>{
   const statements:string[]=[],id="80000000-0000-4000-8000-000000000008";

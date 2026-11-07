@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { prepareEvidencePackV3Sources, withEvidencePackV3Snapshot } from "../src/evidence-pack-v3-sources.js";
+import { verifiedTenantContextForQueuedJob } from "../src/tenant-context.js";
 import { asFixtureTenant } from "./recovery-attribution-fixture.js";
 import { createEvidencePackV3Fixture, closeEvidencePackV3Fixture, readOrdinary, recordingPool, type V3Fixture } from "./evidence-pack-v3-fixture.js";
 let f: V3Fixture;
@@ -13,8 +14,11 @@ it("establishes read-only repeatable-read before tenant setup in PostgreSQL", as
     expect((await tx.$client.query("SHOW transaction_read_only")).rows[0].transaction_read_only).toBe("on");
     expect((await tx.$client.query("SELECT current_setting('app.tenant_id') tenant_id")).rows[0].tenant_id).toBe(f.source.tenantId);
   });
-  expect(statements.slice(0, 2)).toEqual([
-    { sql: "BEGIN ISOLATION LEVEL REPEATABLE READ, READ ONLY", values: undefined },
+  expect(statements.slice(0, 5)).toEqual([
+    { sql: "BEGIN ISOLATION LEVEL REPEATABLE READ", values: undefined },
+    { sql: "SELECT app.bind_request($1, $2, $3)", values: ["practice", f.auth.digest, f.source.tenantId] },
+    { sql: "SELECT app.current_actor() actor, app.current_tenant() tenant", values: undefined },
+    { sql: "SET TRANSACTION READ ONLY", values: undefined },
     { sql: "SELECT set_config('app.tenant_id', $1, true)", values: [f.source.tenantId] },
   ]);
   expect(statements.at(-1)?.sql).toBe("COMMIT");
@@ -53,7 +57,7 @@ it("SB-02 activation: completed pre-lock artifacts, source revision and runtime 
     statements.length = 0;
     const before = await runtime.read(f.auth.context, caseId, f.auth.digest), commandId = randomUUID();
     await runtime.request(f.auth.context, caseId, f.auth.digest, { version: "evidence-pack-command.v3", commandId, format: "TEXT", expectedVisibleSourceRevision: before.visibleSourceRevision });
-    await executeEvidencePackV3(f.auth.context, { version: "evidence-pack-task.v3", tenantId: f.source.tenantId, commandId }, worker, async jobId => {
+    await executeEvidencePackV3(verifiedTenantContextForQueuedJob(f.source.tenantId), { version: "evidence-pack-task.v3", tenantId: f.source.tenantId, commandId }, worker, async jobId => {
       const { observations, captures } = await reader.read(f.auth.context, { version: "shadow-observation-read.v1", jobId });
       await detector.persist(f.auth.context, { version: "shadow-detection-batch.v1", jobId, observations, captures, proposals: detectShadowObservations(observations, captures, new Date().toISOString()) });
     }, "synthetic_demo");
