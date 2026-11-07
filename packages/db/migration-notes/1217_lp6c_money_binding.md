@@ -67,3 +67,37 @@ All full PostgreSQL/catalog/fresh-and-upgrade suites and affected browser journe
 Final checks: another collection-only group (final-account-lock-invoice, lp5-commands, proof-replay) loaded with 39 tests excluded; no PostgreSQL was started. Syntax transpilation passed for all 32 changed TypeScript files. SQL SHA-256 remains e0ec950aa4e49c9c079e4303098c1bb0d20c7053a20cf7f62c21275695d10708; all 329 origin/main migration files are byte-identical. The lane lists the exact 36 non-lane paths changed against origin/main, including the three moved artifacts. `git diff --check` passed. `LANE_BASE_REF=origin/main node tools/lint.mjs` passed core purity but failed lane validation because the read-only Git index still includes the pre-merge LP-6c deletions and inherited main changes; router staging/merge completion and rerunning lint are required. The lane is deliberately not expanded to inherited main paths.
 
 LATER / SIMPLICITY: packages/db/test/meter-persistence-fixtures.ts and job-work-state-fixtures.ts could share one session issuance call for the meter fixture; that would remove duplicate credential setup and reduce uniqueness maintenance. Deferred to keep this repair focused.
+
+7 Nov coordinator FIX follow-up at b9b7aca8
+
+READY for router assessment with the following named holds. The commit-message file says do not commit while these remain unresolved.
+
+Fixture repairs now bind persisted LP-6b credentials for customer quote setup, serious quote fixtures, raw recovery-allocation acceptance, recovery allocation races, final-check/catch fixtures, contractor evidence fixtures, historical LP-5/reacceptance/terms contexts after upgrade, watchdog negative-path owners and direct positive final-lock calls. Historical schemas retain sessionless contexts until the binding foundation exists. The CH-1 0108 upgrade fixture uses its own historical context because that database has no bind_request function. Raw binding calls added here use text/text/uuid casts.
+
+Work-state fixtures bind the exact practice membership through a separate real identity credential. This additional credential lets the existing practice-session revocation races revoke the practice credential while a command waits on its job lock. Binding the practice credential itself there would hold its session row FOR SHARE and obstruct the revocation being tested. Direct command/link/invoice race paths use the same real credential. The assertions are retained.
+
+The lock observer excludes only credential/request-binding row locks acquired by the bind_request statement when finding the first business lock. Advisory locks, app business rows, later credential lock upgrades and strong table locks remain visible. Source inspection of 0562, identity.sso_session_memberships and authenticate_practice_session found credential/session locking and request-binding insertion, with no business-row lock on the real-session path used by this harness. Regression tests exercise both allowed setup locks and forbidden business/advisory/post-audit locks.
+
+Repository adapters recognize the exact SQLSTATE 42501 / REQUEST_BINDING_REFUSED pair and the sanitized LP-6b wrapper. Accounting export, platform invoice, VAT, notice, manual order, final lock, receipt and recovery terms retain their specific refusal surfaces. Pay-now and retention distinguish a sanitized initial binding failure from a raw later meter binding refusal. Interim draft already preserves its existing UNAVAILABLE refusal. AIS already defaults binding refusals to AIS_FORBIDDEN. Neither existing default resolves the database/environment distinction described below.
+
+Actual local results
+
+- node packages/db/node_modules/vitest/vitest.mjs run --root packages/db --maxWorkers=2 test/lp6c-fixture-compatibility.test.ts test/lp6c-money-routines.test.ts src/platform-invoice-read-repository.test.ts passed 16 tests.
+- The separate run of lp6b-deferred-binding, lp6b-withtenant and migration-proof-loader passed 94 tests with two workers.
+- The separate run of lp6c-fixture-compatibility, platform-invoice-read-repository and customer-practice-pay-now-fixtures passed 12 tests with two workers.
+- lp6b-caller-compatibility alone has 5 passed and 1 failed. The failed assertion is unchanged and is named below.
+- node node_modules/typescript/bin/tsc -p packages/db/tsconfig.json --noEmit passed. Syntax transpilation checked all 30 changed TypeScript files with zero errors.
+- Collection-only runs loaded the three work-state command suites with 50 tests excluded and recovery-allocation, recovery-case-terms-upgrade and job-activation-terms with 33 tests excluded. These are import checks.
+- LANE_BASE_REF=origin/main node tools/lint.mjs passed, including core purity, lane boundary, money, commercial, AI-provider and PL/pgSQL checks. git diff --check passed.
+- The pnpm launcher failed its version-signature verification after registry fetch failures. Installed Node/TypeScript/Vitest entry points supplied the results above.
+
+Named holds
+
+- LOCAL_RETENTION_COMPAT is an executed failure at test/lp6b-caller-compatibility.test.ts line 58. It expects RETENTION_UNAVAILABLE for an initial binding refusal. The requested retention mapping returns RETENTION_UNAUTHENTICATED. Its expectation has been preserved.
+- PAY_NOW_AUTH_SPLIT is source-inspected. A revoked membership and an expired identity session both produce the same sanitized initial binding exception, so pay-now cannot recover their previous distinct FORBIDDEN/UNAUTHENTICATED codes from that exception alone. The unchanged raw-SQL revoked-membership assertion additionally expects METER_FORBIDDEN, while 1217 propagates REQUEST_BINDING_REFUSED before an adapter can map it. No PostgreSQL result is claimed for this hold.
+- AIS_DATABASE_DARK is source-inspected. A session-bearing context against the alternate postgres database fails binding before dark_ais can return AIS_DARK_ONLY, leaving AIS_FORBIDDEN. Repository refusal mapping alone cannot infer that database distinction from the shared binding exception.
+- LP3_SQL_ACTOR is source-inspected. The unchanged direct settlement actor attack expects FORBIDDEN, while the immutable 1217 identity guard raises SQLSTATE 42501 / REQUEST_BINDING_REFUSED. This is a raw SQL assertion.
+- TERMS_RAW_OWNER is source-inspected. The unchanged direct forged-exact-input revoked/expired-owner cases fail the binding before their older RECOVERY_TERMS_AUTHORIZATION_INVALID check. The repository terms adapter does not intercept those direct SQL calls.
+- POSTGRES_BROWSER_PROOF remains pending. The checker's 38 failing database files, all cascades, fresh/populated upgrades, catalog/grant checks and browser journeys require execution in GitHub CI with at most two workers. Current-head independent RED/security checks remain required.
+
+Migration 1217 SHA-256 is e0ec950aa4e49c9c079e4303098c1bb0d20c7053a20cf7f62c21275695d10708, matching the accepted SQL. The lane records all 69 non-lane differences against the current local origin/main c2c00dd32fa6b7832a34d77dc0f7c8c67ce5d5a0, including inherited branch differences and the new focused regression test. Existing assertions and migration bodies are preserved. Local passing runs do not clear the named holds.

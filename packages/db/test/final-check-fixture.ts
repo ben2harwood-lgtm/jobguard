@@ -9,7 +9,7 @@ import {Pool,type PoolClient} from "pg";
 import {migrate} from "../src/migrate.js";
 import {FinalAccountLockRepository} from "../src/final-account-lock-repository.js";
 import {FinalCheckRepository,type FinalCheckClassification} from "../src/final-check-repository.js";
-import {testTenantContext} from "./tenant-context-test-utils.js";
+import {testTenantContext,testBoundTenantContext} from "./tenant-context-test-utils.js";
 import {freePort,closeTestDatabase,installLegacySyntheticPartyFixtures} from "./pool-test-utils.js";
 export const FINAL_CHECK_TENANT="11111111-1111-4111-8111-111111111111",FINAL_CHECK_ACTOR="d1500000-0000-4000-8000-000000000003",FINAL_CHECK_USER="d1500000-0000-4000-8000-000000000001";
 export type FinalCheckFixture={postgres:EmbeddedPostgres;admin:Pool;runtime:Pool;shadow:Pool;directory:string;logs:string[]};
@@ -50,7 +50,7 @@ export async function seedFinalCheckJob(f:FinalCheckFixture){
   await db.query("INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,description,net_pence,ordinal) VALUES($1,$2,$3,$4,'baseline',$5,$6,$5,'Fictional kitchen work',100000,1)",[lineId,tenantId,jobId,revisionId,baselineId,scopeItemId]);
   await db.query("UPDATE app.final_account_draft SET current_revision_id=$1,revision=1 WHERE tenant_id=$2 AND id=$3",[revisionId,tenantId,draftId]);
  });
- const context=testTenantContext(tenantId),locks=new FinalAccountLockRepository(f.runtime);
+ const context=(await f.admin.query("SELECT to_regprocedure('app.bind_request(text,text,uuid)') installed")).rows[0].installed ? await testBoundTenantContext(f.admin,tenantId,FINAL_CHECK_ACTOR) : testTenantContext(tenantId),locks=new FinalAccountLockRepository(f.runtime);
  if(!(await f.admin.query("SELECT 1 FROM app.final_check_terms_acceptance WHERE tenant_id=$1",[tenantId])).rowCount)await locks.acceptTerms(context,{actorMembershipId:FINAL_CHECK_ACTOR,commandId:randomUUID(),termsVersion:"synthetic_final_check_terms.v1"});
  await locks.disposition(context,{jobId,actorMembershipId:FINAL_CHECK_ACTOR,commandId:randomUUID(),scopeItemId,disposition:"done"});
  return {tenantId,jobId,scopeItemId,baselineId,revisionId,lineId,context,digest,sessionId,lock:()=>locks.lock(context,{jobId,actorMembershipId:FINAL_CHECK_ACTOR,commandId:randomUUID(),finalAccountRevisionId:revisionId,expectedRevision:1,declarationVersion:"final_account_declaration.v1"})};

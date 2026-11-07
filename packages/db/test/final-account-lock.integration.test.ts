@@ -8,6 +8,7 @@ import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createLockSnapshot, hashLockCaptureRegister, hashLockLineSet, hashLockScopeDispositions, verifyFinalAccountLockSnapshot, captureRegisterNetPence, candidateM1TaxPolicy, money, addMoney } from "@jobguard/core";
 import { migrate } from "../src/migrate.js";
+import { withTenant } from "../src/tenant-context.js";
 import { FinalAccountLockRepository } from "../src/final-account-lock-repository.js";
 import { approvePricedVariation, VariationRepository } from "../src/variation-repository.js";
 import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
@@ -183,13 +184,13 @@ if (expect.getState().testPath === fileURLToPath(import.meta.url)) describe("SV-
  });
  it("DW2 refuses missing dispositions and terms through repository and runtime routine without side effects", async () => {
   const a = await seedAccount(f.admin), repo = new FinalAccountLockRepository(f.runtime);
-  const direct = () => asFixtureTenant(f.runtime, a.tenantId, db => db.query("SELECT * FROM app.lock_final_account($1,$2,$3,$4,$5,$6,$7)", [a.tenantId, a.jobId, LOCK_OWNER, a.input.commandId, a.revisionId, 1, a.input.declarationVersion]));
+  const direct = () => withTenant(f.runtime, a.context, db => db.$client.query("SELECT * FROM app.lock_final_account($1,$2,$3,$4,$5,$6,$7)", [a.tenantId, a.jobId, LOCK_OWNER, a.input.commandId, a.revisionId, 1, a.input.declarationVersion]));
   await repo.acceptTerms(a.context, { actorMembershipId: LOCK_OWNER, commandId: randomUUID(), termsVersion: "synthetic_final_check_terms.v1" });
   await expect(repo.lock(a.context, a.input)).rejects.toMatchObject({ code: "SCOPE_DISPOSITION_MISSING" });
   await expect(direct()).rejects.toThrow("SCOPE_DISPOSITION_MISSING");
   const b = await seedAccount(f.admin); await repo.disposition(b.context, { jobId: b.jobId, actorMembershipId: LOCK_OWNER, commandId: randomUUID(), scopeItemId: b.scopeItemId, disposition: "done" });
   await expect(repo.lock(b.context, b.input)).rejects.toMatchObject({ code: "DISCLOSURE_TERMS_NOT_ACCEPTED" });
-  await expect(asFixtureTenant(f.runtime, b.tenantId, db => db.query("SELECT * FROM app.lock_final_account($1,$2,$3,$4,$5,$6,$7)", [b.tenantId, b.jobId, LOCK_OWNER, b.input.commandId, b.revisionId, 1, b.input.declarationVersion]))).rejects.toThrow("DISCLOSURE_TERMS_NOT_ACCEPTED");
+  await expect(withTenant(f.runtime, b.context, db => db.$client.query("SELECT * FROM app.lock_final_account($1,$2,$3,$4,$5,$6,$7)", [b.tenantId, b.jobId, LOCK_OWNER, b.input.commandId, b.revisionId, 1, b.input.declarationVersion]))).rejects.toThrow("DISCLOSURE_TERMS_NOT_ACCEPTED");
   expect((await f.admin.query("SELECT count(*)::int n FROM app.final_account_lock WHERE tenant_id=ANY($1)", [[a.tenantId,b.tenantId]])).rows[0].n).toBe(0);
   expect((await f.admin.query("SELECT count(*)::int n FROM app.command_receipt WHERE command_id=ANY($1)", [[a.input.commandId,b.input.commandId]])).rows[0].n).toBe(0);
  });

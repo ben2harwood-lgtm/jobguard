@@ -1,4 +1,4 @@
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { readFile, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -19,7 +19,7 @@ import { importWatchdogFixtureJob } from "./watchdog-fixtures.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
 
 const tenant = randomUUID(), otherTenant = randomUUID(), member = randomUUID();
-const context = testTenantContext(tenant);
+let context = testTenantContext(tenant);
 const states = ["draft", "quoting", "accepted", "invoiced", "paid", "lost"];
 const legacy = Object.fromEntries(states.map(status => [status, { jobId: randomUUID(), uploadId: randomUUID() }]));
 const tables = ["purchase_order_manual_attestation", "purchase_order_draft", "purchase_order_revision", "purchase_order_placement", "supplier_document", "supplier_document_version", "supplier_document_intake", "goods_receipt", "supplier_fact_proposal", "supplier_fact_revision", "supplier_match_proposal", "supplier_match_revision", "supplier_match_allocation", "discrepancy_finding_revision", "discrepancy_review_outcome", "supplier_bill_supersession", "planned_work_revision", "readiness_snapshot", "readiness_decision", "inbox_finding_revision", "inbox_decision_revision", "inbox_outcome_event", "evidence_upload", "evidence_object", "evidence_link", "synthetic_evidence_original", "stage_completion", "watchdog_command_identity"];
@@ -60,6 +60,7 @@ beforeAll(async () => {
     await admin.query("INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at)VALUES($1,$2,$3,$4,repeat('a',64),'image/png',100,'standard_evidence','2099-01-01')", [ids.uploadId, tenant, ids.jobId, `legacy/${ids.uploadId}`]);
   }
   await migrate(admin); await migrate(admin);
+  context = await testBoundTenantContext(admin,tenant,member);
   // These predecessor jobs use the same active owner and an explicit synthetic
   // small-builder binding; finish/cancel must reach the live guard, not fail auth.
   for (const { jobId } of Object.values(legacy)) await admin.query(

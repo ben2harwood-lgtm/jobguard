@@ -2,7 +2,7 @@ import { JobWorkStateRepository } from "../src/job-work-state-repository.js";
 import { randomUUID } from "node:crypto";
 import { afterAll,beforeAll,describe,expect,it } from "vitest";
 import { closeWorkFixture,createWorkFixture,type WorkFixture } from "./job-work-state-fixtures.js";
-import { seedWorkPractice,commandCounts,commandOn,runWorkCommand,waitForJobLock,workCommand,importWorkJob } from "./job-work-state-command-fixtures.js";
+import { seedWorkPractice,commandCounts,commandOn,bindWorkRequest,runWorkCommand,waitForJobLock,workCommand,importWorkJob } from "./job-work-state-command-fixtures.js";
 describe("CH-4-C real database races and rollback",()=>{
  let f:WorkFixture;beforeAll(async()=>{f=await createWorkFixture()},120000);afterAll(async()=>closeWorkFixture(f));
  it.each(["direct","imported"] as const)("%s job revocation while waiting is rechecked before command and replay",async ownership=>{
@@ -11,7 +11,7 @@ describe("CH-4-C real database races and rollback",()=>{
    const before=await commandCounts(f,p),blocker=await f.admin.connect(),runner=await f.runtime.connect();
    try{
     await blocker.query("BEGIN");await blocker.query("SELECT 1 FROM app.job WHERE tenant_id=$1 AND id=$2 FOR UPDATE",[p.auth.context.tenantId,p.jobId]);
-    await runner.query("BEGIN");await runner.query("SELECT set_config('app.tenant_id',$1,true)",[p.auth.context.tenantId]);
+    await runner.query("BEGIN");await bindWorkRequest(runner,p);await runner.query("SELECT set_config('app.tenant_id',$1,true)",[p.auth.context.tenantId]);
     const pid=(await runner.query("SELECT pg_backend_pid() pid")).rows[0].pid as number;
     const pending=commandOn(runner,p,input).then(value=>({value,error:null}),error=>({value:null,error: error as Error}));
     await waitForJobLock(f,pid);await f.admin.query("UPDATE control_plane.practice_session SET revoked_at=clock_timestamp() WHERE token_digest=$1",[p.auth.digest]);
@@ -30,7 +30,7 @@ describe("CH-4-C real database races and rollback",()=>{
     if(phase==="identity")await blocker.query("SELECT pg_advisory_xact_lock(hashtextextended('watchdog-command-id:'||$1::text||':'||$2::text,0))",[p.auth.context.tenantId,input.commandId]);
     else if(phase==="audit")await blocker.query("SELECT 1 FROM audit_control.audit_head WHERE tenant_id=$1 FOR UPDATE",[p.auth.context.tenantId]);
     else await blocker.query("SELECT 1 FROM app.job WHERE tenant_id=$1 AND id=$2 FOR UPDATE",[p.auth.context.tenantId,phase==="successor"?successor:p.jobId]);
-    await runner.query("BEGIN");await runner.query("SELECT set_config('app.tenant_id',$1,true)",[p.auth.context.tenantId]);
+    await runner.query("BEGIN");await bindWorkRequest(runner,p);await runner.query("SELECT set_config('app.tenant_id',$1,true)",[p.auth.context.tenantId]);
     const pid=(await runner.query("SELECT pg_backend_pid() pid")).rows[0].pid as number;
     const pending=runner.query("SELECT app.ch4_link_post_lock_job($1,$2,$3,$4::jsonb)",[p.auth.context.tenantId,p.jobId,p.auth.digest,JSON.stringify(input)]).then(()=>null,error=>error as Error);
     await waitForJobLock(f,pid);
@@ -61,7 +61,7 @@ describe("CH-4-C real database races and rollback",()=>{
    try{
     await blocker.query("BEGIN");await blocker.query("SELECT set_config('app.tenant_id',$1,true)",[p.auth.context.tenantId]);
     await commandOn(blocker,p,workCommand("close",{reason:"other",note:"Fictional close race"}));
-    await runner.query("BEGIN");await runner.query("SELECT set_config('app.tenant_id',$1,true)",[p.auth.context.tenantId]);
+    await runner.query("BEGIN");await bindWorkRequest(runner,p);await runner.query("SELECT set_config('app.tenant_id',$1,true)",[p.auth.context.tenantId]);
     const pid=(await runner.query("SELECT pg_backend_pid() pid")).rows[0].pid as number;
     const request=operation==="complete" ? runner.query("INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,lock_id,evidence_cutoff_at,status) VALUES($1,$2,$3,$4,clock_timestamp(),'completed')",[p.auth.context.tenantId,p.jobId,randomUUID(),randomUUID()])
      : operation==="reveal" ? runner.query("SELECT * FROM app.reveal_shadow_signals($1,$2)",[p.auth.context.tenantId,p.jobId])

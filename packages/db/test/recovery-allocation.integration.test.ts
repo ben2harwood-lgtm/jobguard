@@ -77,7 +77,9 @@ async function fixture({ claim1 = 32_000, claim2 = 250_000, settle = true }: { c
   const scoped = practiceMaterialPool(runtime, digest), invoices = new PracticeInvoiceRepository(scoped);
   const db = await admin.connect();
   try {
-    await db.query("BEGIN"); await db.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
+    await db.query("BEGIN");
+    await db.query("SELECT app.bind_request($1::text,$2::text,$3::uuid)", ["practice", digest, DEMO_TENANT_ID]);
+    await db.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
     await permitPracticeHomeJob(db, { tenantId: DEMO_TENANT_ID, jobId, title: "Recovery £18,800 allocation fixture", practiceSessionDigest: digest, actorMembershipId: DEMO_MEMBERSHIP_ID });
     await db.query("INSERT INTO app.job(id,tenant_id,title,practice_session_digest,practice_scenario) VALUES($1,$2,'Recovery £18,800 allocation fixture',$3,'home')", [jobId, DEMO_TENANT_ID, digest]);
     await db.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')", [scopeId, DEMO_TENANT_ID, jobId]);

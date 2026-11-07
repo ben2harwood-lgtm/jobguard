@@ -14,7 +14,11 @@ export async function seedWorkPractice(f: WorkFixture) {
 }
 export type WorkPractice = Awaited<ReturnType<typeof seedWorkPractice>>;
 export const workCommand = (action = "finish", extra: Record<string, unknown> = {}) => ({version:"job-work-state-command.v1",commandId:randomUUID(),expectedRevision:0,action,...extra});
+export async function bindWorkRequest(db: Pick<PoolClient,"query">, p: WorkPractice) {
+ await db.query("SELECT app.bind_request($1::text,$2::text,$3::uuid)",["real",p.bindingCredential,p.auth.context.tenantId]);
+}
 export async function commandOn(db: Pick<PoolClient,"query">, p: WorkPractice, input: unknown, jobId = p.jobId, digest = p.auth.digest) {
+ await bindWorkRequest(db,p);
  const result = await db.query("SELECT app.ch4_record_work_state($1,$2,$3,$4::jsonb) result",[p.auth.context.tenantId,jobId,digest,JSON.stringify(input)]);
  return jobWorkStateReadV1.parse(result.rows[0].result);
 }
@@ -56,7 +60,14 @@ export async function linkPair(f:WorkFixture,preLive=false,successorOwner?:WorkP
  const input={version:"job-link-command.v1",action:"link",commandId:randomUUID(),expectedRevision:0,successorJobId:successor,predecessorBindingId:source.id as string,successorBindingId:binding};
  return {p,successor,input};
 }
-export async function runLink(pool:Pool,p:WorkPractice,input:unknown,jobId=p.jobId){return workTenant(pool,p.auth.context.tenantId,async db=>jobWorkStateReadV1.parse((await db.query("SELECT app.ch4_link_post_lock_job($1,$2,$3,$4::jsonb) result",[p.auth.context.tenantId,jobId,p.auth.digest,JSON.stringify(input)])).rows[0].result))}
+export async function runLink(pool: Pool, p: WorkPractice, input: unknown, jobId = p.jobId) {
+ return workTenant(pool,p.auth.context.tenantId,async db=>{
+  await bindWorkRequest(db,p);
+  const result=await db.query("SELECT app.ch4_link_post_lock_job($1,$2,$3,$4::jsonb) result",
+   [p.auth.context.tenantId,jobId,p.auth.digest,JSON.stringify(input)]);
+  return jobWorkStateReadV1.parse(result.rows[0].result);
+ });
+}
 
 /** Real synthetic adoption command; source lineage is the existing immutable audit contract. */
 export async function importWorkJob(f:WorkFixture,p:WorkPractice,sourceJobId=p.jobId){

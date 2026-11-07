@@ -1,6 +1,6 @@
 import { applyRequestBindingFoundation } from "./request-binding-fixture.js";
 import { installAuditCommandWriterRoles } from "./pool-test-utils.js";
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { proofEvidenceTypeSchema } from "../../core/src/proof.js";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -126,7 +126,10 @@ export async function seedWorkPractice(f:WorkFixture) {
   await db.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional CH-4 practice') ON CONFLICT DO NOTHING",[DEMO_ACCOUNT_ID,DEMO_TENANT_ID]);
   await db.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner') ON CONFLICT DO NOTHING",[DEMO_MEMBERSHIP_ID,DEMO_TENANT_ID,DEMO_ACCOUNT_ID,DEMO_IDENTITY_USER_ID]);
  });
- const sessionId=await issuePracticeSession(f.runtime),auth=await authenticatePracticeSession(f.runtime,sessionId);
+ const sessionId=await issuePracticeSession(f.runtime),principal=await authenticatePracticeSession(f.runtime,sessionId);
+ // A separate identity credential leaves the practice session free for revocation races.
+ const bindingCredential=randomBytes(32).toString("hex");
+ const auth={...principal,context:await testBoundTenantContext(f.admin,principal.context.tenantId,principal.membershipId,bindingCredential)};
  const jobId=(await f.admin.query("SELECT id FROM app.job WHERE tenant_id=$1 AND practice_session_digest=$2 AND status='live' AND practice_scenario='home'",[DEMO_TENANT_ID,auth.digest])).rows[0].id as string;
- return {sessionId,jobId,auth};
+ return {sessionId,jobId,auth,bindingCredential};
 }
