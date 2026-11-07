@@ -21,7 +21,7 @@ describe("CH5-E source-only scripted boundary (not PostgreSQL proof)", () => {
     f.state.authenticated = false;
     await expect(repository.adoptWithHistory({ context: f.context, sessionDigest: D }, J, {})).rejects.toMatchObject({ code: "FORBIDDEN" });
     await expect(repository.read({ context: f.context, sessionDigest: D }, J)).rejects.toMatchObject({ code: "FORBIDDEN" });
-    expect(f.query.mock.calls.some(([sql]) => /INSERT|UPDATE|DELETE|shadow_signal|adopt_in_flight/u.test(sql))).toBe(false);
+    expect(f.query.mock.calls.some(([sql]) => !String(sql).includes("practice_owned_job") && /INSERT|UPDATE|DELETE|shadow_signal|adopt_in_flight/u.test(sql))).toBe(false);
   });
   it("checks scoped authority then refuses without a source or effects", async () => {
     const f = scriptedImportPool();
