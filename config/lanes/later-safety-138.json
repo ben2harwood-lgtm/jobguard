@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-138": {
+      "branches": ["codex/sandbox/later-safety-138"],
+      "allow": [
+        "packages/db/src/material-repository.ts",
+        "packages/db/test/materials.integration.test.ts"
+      ]
+    }
+  }
+}
