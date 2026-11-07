@@ -1,3 +1,4 @@
+import { sourceFixtureUrl } from "./source-fixture-url.js";
 import "reflect-metadata";
 import { readFile } from "node:fs/promises";
 import { Test } from "@nestjs/testing";
@@ -33,10 +34,10 @@ it("real Nest module registers all three additive handlers (no socket; scripted 
 });
 it("builder boundary has no hidden reads, money/meter/command/provider consumer or evaluator",async()=>{
  for(const path of ["commercial-integrity-v3.application.ts","commercial-integrity-v3.controller.ts"]){
-  const source=await readFile(new URL(path,import.meta.url),"utf8");
+  const source=await readFile(sourceFixtureUrl(path, import.meta.url),"utf8");
   expect(source).not.toMatch(/shadow_signal|shadow_candidate|evaluateCommercial|fee-repository|meter-|CommandDispatcher|fetch\(|stripe|gocardless|acceptedCap|planCredit/u);
  }
- const source=await readFile(new URL("commercial-integrity-v3.application.ts",import.meta.url),"utf8");
+ const source=await readFile(sourceFixtureUrl("commercial-integrity-v3.application.ts", import.meta.url),"utf8");
  expect(source).toContain("r.read(");expect(source).toContain("r.review(");expect(source).toContain("r.readFamily(");
 });
 

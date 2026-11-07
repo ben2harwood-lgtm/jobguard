@@ -1,4 +1,5 @@
-import { randomUUID } from "node:crypto";
+import { createHmac, randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PostgresReservationStore } from "../../../apps/api/src/fee-collection/postgres-reservation-store.js";
 import { DarkFeeCollectionExecutor } from "../../../apps/api/src/fee-collection/executor.js";
@@ -331,6 +332,53 @@ describe("M4-12 PostgreSQL shared reservation store", () => {
     }
     await f.executor().execute(f.context, id(10));
     expect((await f.read()).attempts[0]?.state).toBe("provider_accepted");
+  });
+
+  it.each(["attempt result", "event-only result"])("refuses malformed signed JSON for the %s without changing financial history", async path => {
+    const f = await setup();
+    await f.executor().reserve(f.context, f.intent);
+    f.rail.crashAfterAcceptance = true;
+    await expect(f.executor().execute(f.context, id(10))).rejects.toThrow("FAKE_CRASH_AFTER_ACCEPTANCE");
+    const before = await f.read();
+    const snapshot = async () => ({
+      book: (await db.admin.query("SELECT book FROM app.fee_reservation_book WHERE tenant_id=$1", [f.tenantId])).rows,
+      archive: (await db.admin.query("SELECT kind,key,payload FROM app.fee_reservation_archive WHERE tenant_id=$1 ORDER BY kind,key", [f.tenantId])).rows,
+      audit: (await db.admin.query("SELECT * FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence", [f.tenantId])).rows,
+    });
+    const unchanged = await snapshot();
+    const next = structuredClone(before);
+    if (path === "attempt result") {
+      next.attempts[0]!.state = "released";
+      next.audit.push({ commandId: id(10), state: "released" });
+    } else {
+      // Unchanged attempt bypasses the first cast and reaches the event-only cast.
+      next.events[`stripe_card:${id(62)}`] = "a".repeat(64);
+    }
+    const body = '{"version":';
+    const proof = { body, signature: createHmac("sha256", "synthetic-test-signing-secret").update(body).digest("hex") };
+    const values = [f.tenantId, JSON.stringify({ version: "fee-reservation-book.v1", ...next }), JSON.stringify(proof)];
+    // Reproduce the predecessor defect in a rolled-back DDL transaction. The
+    // installed forward migration remains authoritative for the runtime check below.
+    const predecessor = readFileSync(new URL("../migrations/0651_fee_result_forward_only.sql", import.meta.url), "utf8")
+      .replace(/^BEGIN;$/m, "").replace(/^COMMIT;$/m, "");
+    const client = await db.admin.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(predecessor);
+      await client.query("SET LOCAL ROLE jobguard_runtime");
+      await client.query("SELECT set_config('app.tenant_id',$1,true)", [f.tenantId]);
+      await expect(client.query("SELECT app.replace_fee_reservation_book($1,$2::jsonb,$3::jsonb)", values))
+        .rejects.toMatchObject({ code: "22P02" });
+    } finally {
+      await client.query("ROLLBACK");
+      client.release();
+    }
+    expect(await snapshot()).toEqual(unchanged);
+    await expect(withTenant(db.runtime, testTenantContext(f.tenantId), tx => tx.$client.query(
+      "SELECT app.replace_fee_reservation_book($1,$2::jsonb,$3::jsonb)", values)))
+      .rejects.toMatchObject({ code: "23514", message: path === "attempt result" ? "authenticated fee result required" : "authenticated fee event required" });
+    expect(await snapshot()).toEqual(unchanged);
+    expect(await f.read()).toEqual(before);
   });
 
   it("refuses unsigned, altered, wrong-company and wrong-command result fixtures, then accepts the verified webhook once", async () => {
