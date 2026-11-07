@@ -7,6 +7,8 @@
       ],
       "note": "ENT-5 Q01/Q03 synthetic regression coverage; RED; NOPR. Migration 0859 unused.",
       "allow": [
+        "docs/contracts/extra-approval-chain-v1.md",
+        "docs/contracts/extra-approval-v1.md",
         "docs/contracts/extra-price-rules-v1.md",
         "packages/core/src/extra-approval.test.ts",
         "packages/db/src/extra-approval-chain-repository.test.ts",
