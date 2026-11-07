@@ -49,24 +49,34 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   const paymentFeeWriterOid = (await c.admin.query("SELECT 'app.write_payment_fee(uuid,text,jsonb)'::regprocedure::oid oid")).rows[0].oid;
   const collectRecheck = await readFile(new URL("../migrations/0587_payment_fee_collect_recheck.sql", import.meta.url), "utf8");
   const paymentFeeWriterBody = collectRecheck.split("CREATE OR REPLACE FUNCTION app.write_payment_fee")[1]!.split("AS $$")[1]!.split("$$;")[0];
+  // Ben's router ruling: the 0584 effective-session successor was renumbered to 0658 by stem only.
+  // Only this exact routine may take its reviewed successor body; its complete definition header stays exact.
+  const effectiveSessionOid = (await c.admin.query("SELECT 'app.lp6_session_authority(text,text,uuid)'::regprocedure::oid oid")).rows[0].oid;
+  const effectiveSessionMigration = await readFile(new URL("../migrations/0658_lp6b_effective_session_actor.sql", import.meta.url), "utf8");
+  const effectiveSessionBody = effectiveSessionMigration.split("AS $$")[1]!.split("$$;")[0];
   // 0567 changes only the checked settlement overload's expected approval hash.
   const settlementOid = (await c.admin.query("SELECT 'app.record_simulated_settlement(uuid,uuid,uuid,character varying,bigint,timestamp with time zone,uuid,uuid,uuid)'::regprocedure::oid oid")).rows[0].oid;
   const selfComparison = "(SELECT content_hash FROM app.action_authorization WHERE tenant_id=p_tenant AND id=p_authorization)";
   // This batch replaces only these exact routine identities; compare their complete bodies.
   const batchBodies = await Promise.all([
-    ["guard_practice_material_requirement", "", "0839_import_ancestry_record_anchor.sql"],
-    ["ch4_read_work_facts", "t uuid, j uuid, digest text", "0839_import_ancestry_record_anchor.sql"],
-    ["read_job_sources", "t uuid, j uuid, digest text, source text", "0839_import_ancestry_record_anchor.sql"],
-    ["ch4_require_command_owner", "t uuid, j uuid, digest text", "0839_import_ancestry_record_anchor.sql"],
-    ["final_check_builder", "t uuid, j uuid, d text, locking boolean", "0839_import_ancestry_record_anchor.sql"],
-    ["evidence_pack_v3_owner", "t uuid, c uuid, d text", "0839_import_ancestry_record_anchor.sql"],
-    ["adopt_invoiced_job_v3", "t uuid, source_job uuid, d text, cmd uuid, auth uuid, approved jsonb, request_hash text", "0839_import_ancestry_record_anchor.sql"],
-    ["apply_recovery_timeline_signal", "p_tenant uuid, p_signal jsonb", "0839_import_ancestry_record_anchor.sql"],
     ["retention_records", "t uuid, digest text, j uuid, cid uuid, v jsonb, expected text", "0646_retention_timer_runtime_rules.sql"],
     ["notice_fixture_records", "j uuid, n uuid, digest text, operation text, v jsonb", "0647_notice_live_job_check.sql"],
     ["pay_now_fake_attempt", "t uuid, digest text, j uuid, operation text, v jsonb", "0648_pay_now_catch_statement.sql"],
+    ["ch6_integrity_authority", "t uuid, j uuid, digest text", "0660_baseline_ancestry_audit_trust.sql"],
+    ["ch6_integrity_sources", "t uuid, j uuid, d text", "0660_baseline_ancestry_audit_trust.sql"],
+    ["ch6_record_integrity_review", "t uuid, j uuid, digest text, review jsonb, source_snapshot jsonb", "0660_baseline_ancestry_audit_trust.sql"],
+    ["decision_check_command", "p_digest text, p_command jsonb, p_phase text, p_data jsonb", "0660_baseline_ancestry_audit_trust.sql"],
+    ["guard_practice_material_requirement", "", "0690_import_ancestry_record_anchor.sql"],
+    ["ch4_read_work_facts", "t uuid, j uuid, digest text", "0690_import_ancestry_record_anchor.sql"],
+    ["read_job_sources", "t uuid, j uuid, digest text, source text", "0690_import_ancestry_record_anchor.sql"],
+    ["ch4_require_command_owner", "t uuid, j uuid, digest text", "0690_import_ancestry_record_anchor.sql"],
+    ["final_check_builder", "t uuid, j uuid, d text, locking boolean", "0690_import_ancestry_record_anchor.sql"],
+    ["evidence_pack_v3_owner", "t uuid, c uuid, d text", "0690_import_ancestry_record_anchor.sql"],
+    ["adopt_invoiced_job_v3", "t uuid, source_job uuid, d text, cmd uuid, auth uuid, approved jsonb, request_hash text", "0690_import_ancestry_record_anchor.sql"],
+    ["apply_recovery_timeline_signal", "p_tenant uuid, p_signal jsonb", "0690_import_ancestry_record_anchor.sql"],
   ].map(async ([name, args, migration]) => {
     const sql = await readFile(new URL(`../migrations/${migration}`, import.meta.url), "utf8");
+    if (name === "decision_check_command") expect(sql).toContain("rv.result->>'sourceJobId'=source.id::text");
     return { name, args, body: sql.split(`CREATE OR REPLACE FUNCTION app.${name}`)[1]!.split("AS $$")[1]!.split("$$;")[0] };
   }));
   // ENT-5 changes only these exact routine bodies; preserve every predecessor check.
@@ -167,6 +177,15 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
       prior.args === "t uuid, j uuid, s uuid, actor uuid") {
       const sql = await readFile(new URL("../migrations/0616_payment_fee_current_review.sql", import.meta.url), "utf8");
       expect(current?.definition?.split("$function$")[1]).toEqual(sql.split("AS $$")[1]!.split("$$;")[0]);
+    } else if (prior.oid === effectiveSessionOid) {
+      const predecessorParts = prior.definition.split("$function$");
+      expect(predecessorParts).toHaveLength(3);
+      expect(current?.definition).toEqual(`${predecessorParts[0]}$function$${effectiveSessionBody}$function$${predecessorParts[2]}`);
+    } else if (prior.nspname === "app" && prior.proname === "adopt_invoiced_job_v3" &&
+      prior.args === "t uuid, source_job uuid, d text, cmd uuid, auth uuid, approved jsonb, request_hash text") {
+      const migration = await readFile(new URL("../migrations/0625_company_import_once.sql", import.meta.url), "utf8");
+      const body = migration.split("CREATE OR REPLACE FUNCTION app.adopt_invoiced_job_v3")[1]!.split("AS $$")[1]!.split("$$;")[0];
+      expect(current?.definition?.split("$function$")[1]).toEqual(body);
     } else if (prior.nspname === "app" && prior.proname === "dunning_workbench" &&
       prior.args === "t uuid, digest text, j uuid, operation text, v jsonb") {
       const migration = await readFile(new URL("../migrations/0628_dunning_owner_approval.sql", import.meta.url), "utf8");
@@ -207,6 +226,38 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   const ownerOids = Object.fromEntries((await c.admin.query("SELECT rolname,oid FROM pg_roles")).rows.map(row => [row.rolname,row.oid]));
   const successors = loadMigrationProofs().proofs.filter(proof => proof.migration > "0556_mon8_job_track_and_trial.sql")
     .map(proof => ({ ...proof, upgrade: proof.upgrade.filter(change => change.section === "routines") }));
-  const expected = applyUpgradeProofs({ rows: {}, routines: privileges(security), relations: [], policies: [] }, successors, ownerOids);
+  // The historical fixture staged 0562 early. Strictly undo only that reviewed
+  // fixture metadata, then replay EVERY successor below; no proof is skipped.
+  // The inverse checks exact reviewed after-values before restoring before-values.
+  const foundation = successors.find(proof => proof.migration === "0562_lp6a_request_binding.sql");
+  expect(foundation).toBeDefined();
+  expect(foundation!.upgrade).toHaveLength(6);
+  expect(foundation!.upgrade.map(change => {
+    if (change.section !== "routines" || change.after === null) throw new Error("Unexpected 0562 routine normalization record");
+    return change.after.nspname + "." + change.after.proname + "(" + change.after.args + ")";
+  }).sort()).toEqual([
+    "app.bind_request(p_kind text, p_credential text, p_tenant uuid)",
+    "app.current_actor()",
+    "app.current_tenant()",
+    "app.lp6_bound_request()",
+    "app.lp6_session_authority(p_kind text, p_credential text, p_tenant uuid)",
+    "identity.sso_session_memberships(u uuid, s uuid)",
+  ].sort());
+  const inverseFoundation = { ...foundation!, lp0: [], tenancy: [],
+    upgrade: [...foundation!.upgrade].reverse().map(change => ({ ...change, before: change.after, after: change.before })) };
+  const stagedBaseline = { rows: {}, routines: privileges(security), relations: [], policies: [] };
+  // A changed security attribute in ANY staged routine must fail before normalization.
+  for (const change of foundation!.upgrade) {
+    if (change.section !== "routines" || change.after === null) throw new Error("Unexpected 0562 routine normalization record");
+    const identity = change.after;
+    const matches = (row: typeof stagedBaseline.routines[number]) => row.nspname === identity.nspname &&
+      row.proname === identity.proname && row.args === identity.args;
+    expect(stagedBaseline.routines.filter(matches)).toHaveLength(1);
+    const tampered = { ...stagedBaseline, routines: stagedBaseline.routines.map(row =>
+      matches(row) ? { ...row, prosecdef: !row.prosecdef } : row) };
+    expect(() => applyUpgradeProofs(tampered, [inverseFoundation], ownerOids)).toThrow("before allowance mismatch");
+  }
+  const logicalPreFoundation = applyUpgradeProofs(stagedBaseline, [inverseFoundation], ownerOids);
+  const expected = applyUpgradeProofs(logicalPreFoundation, successors, ownerOids);
   expect(privileges(live)).toEqual(privileges(expected.routines as typeof security));
 }, 120000);

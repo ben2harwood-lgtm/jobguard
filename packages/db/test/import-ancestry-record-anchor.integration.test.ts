@@ -8,7 +8,7 @@ import { closeWorkFixture, createImportFixture, freshIntent, type ImportFixture 
 import { importWorkJob } from "./job-work-state-command-fixtures.js";
 import { seedWorkPractice, workTenant } from "./job-work-state-fixtures.js";
 
-const migration = readFileSync(new URL("../migrations/0839_import_ancestry_record_anchor.sql", import.meta.url), "utf8");
+const migration = readFileSync(new URL("../migrations/0690_import_ancestry_record_anchor.sql", import.meta.url), "utf8");
 const sources = {
   guard_practice_material_requirement: "0171_evidence_proof_rework.sql",
   ch4_read_work_facts: "0523_ch4_company_workspace_read.sql",
@@ -48,7 +48,7 @@ describe("LATER-SAFETY-109 import ancestry — real PostgreSQL", () => {
   const forgedJob = randomUUID(), unownedJob = randomUUID(), sku = randomUUID();
   const facts = new Map<string, { caseId: string; runId: string; followUpId: string }>();
   beforeAll(async () => {
-    // This fixture migrates from empty, including 0839. The positive edge is written
+    // This fixture migrates from empty, including 0690. The positive edge is written
     // by the real product command, not by labelling a hand-written event trusted.
     f = await createImportFixture();
     const { auth } = f.practice, repo = new JobImportV3Repository(f.runtime);

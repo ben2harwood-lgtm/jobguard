@@ -162,10 +162,10 @@ function authorizeBySession() {
 }
 // Each stubbed repository method opens one transaction on the pool it was built with, exactly as withTenant does.
 function openOneTransaction(affected: string) {
- const open = async (repository: unknown) => { const client = await (repository as { pool: Pool }).pool.connect(); await client.query("BEGIN"); await client.query("COMMIT"); client.release(); };
- vi.spyOn(RecoveryCaseRepository.prototype, "command").mockImplementation(async function (this: unknown) { await open(this); return { id: affected } as never; });
- vi.spyOn(RecoveryCaseRepository.prototype, "eligibilityCommand").mockImplementation(async function (this: unknown) { await open(this); return { id: affected } as never; });
- vi.spyOn(RecoveryCaseRepository.prototype, "listForMember").mockImplementation(async function (this: unknown) { await open(this); return [{ id: affected }] as never; });
+ const open = async (repository: unknown, context: { tenantId: string }) => { const client = await (repository as { pool: Pool }).pool.connect(); await client.query("BEGIN"); await client.query("SELECT set_config('app.tenant_id', $1, true)", [context.tenantId]); await client.query("COMMIT"); client.release(); };
+ vi.spyOn(RecoveryCaseRepository.prototype, "command").mockImplementation(async function (this: unknown, context) { await open(this, context); return { id: affected } as never; });
+ vi.spyOn(RecoveryCaseRepository.prototype, "eligibilityCommand").mockImplementation(async function (this: unknown, context) { await open(this, context); return { id: affected } as never; });
+ vi.spyOn(RecoveryCaseRepository.prototype, "listForMember").mockImplementation(async function (this: unknown, context) { await open(this, context); return [{ id: affected }] as never; });
 }
 const openBody = () => ({ version: "recovery-case-command.v1", action: "open", commandId: randomUUID(), caseType: "merchant_overcharge", claimedNetPence: 32000, counterparty: "Fictional merchant", book: "supplier_cost", sourceType: "supplier_documents", sourceRefs: [randomUUID()], expectedRevision: 0 });
 
