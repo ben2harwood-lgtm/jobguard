@@ -13,7 +13,7 @@ export async function fixture(c: Cluster) {
  await c.admin.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", [`mon9-${user}@fictional.invalid`,user]);
  const sessionDigest = randomUUID().replaceAll('-', '') + randomUUID().replaceAll('-', '');
  await c.admin.query("INSERT INTO identity.session(id,user_id,token_digest,csrf_token,expires_at,environment) VALUES($1,$2,$3,'synthetic-csrf',clock_timestamp()+interval '1 day','synthetic_demo')", [randomUUID(),user,sessionDigest]);
- const context = testTenantContext(tenant);
+ const context = testTenantContext(tenant, { membershipId: membershipId });
  await withTenant(c.admin, context, async db => {
   await db.$client.query("INSERT INTO app.account(tenant_id,id,name) VALUES($1,$2,'Fictional MON-9')", [tenant,account]);
   await db.$client.query("INSERT INTO app.membership(tenant_id,id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [tenant,membershipId,account,user]);

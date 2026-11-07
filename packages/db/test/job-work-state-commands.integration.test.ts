@@ -153,7 +153,7 @@ describe("CH-4-C persisted owner commands (real PostgreSQL)",()=>{
   const run=(actor=job.actorId,body=input)=>workTenant(f.runtime,job.tenantId,async db=>{
    await db.query("SELECT app.bind_request('real',$1,$2)",[credential,job.tenantId]);
    return (await db.query("SELECT app.ch4_record_work_state($1,$2,$3,$4::jsonb) result",[job.tenantId,job.jobId,actor,JSON.stringify(body)])).rows[0].result;
-  });
+  }, { membershipId: actor, bindRequest: false });
   const first=await run();expect(first.events.at(-1).kind).toBe("finished_on_site");expect(await run()).toEqual(first);
   const {JobWorkStateRepository}=await import("../src/job-work-state-repository.js");
   expect(await new JobWorkStateRepository(f.runtime).command(job.context,job.jobId,job.actorId,input)).toEqual(first);

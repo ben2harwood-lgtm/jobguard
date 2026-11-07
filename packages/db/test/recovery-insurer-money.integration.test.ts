@@ -89,7 +89,7 @@ class PreviousRecoveryEligibilityV3Repository {
  }
 }
 
-const ctx=testTenantContext(T), actor={membershipId:M,identityUserId:U};
+const ctx=testTenantContext(T, { membershipId: M }), actor={membershipId:M,identityUserId:U};
 let postgres:EmbeddedPostgres,admin:Pool,runtime:Pool;
 const originalEnvironment=process.env.JOBGUARD_ENV;
 const accessValue=["syn","thetic"].join("");

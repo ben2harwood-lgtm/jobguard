@@ -10,7 +10,7 @@ describe("M4-13 PostgreSQL mandate persistence", () => {
   beforeAll(async () => { f = await createWorkFixture(); repo = new SubscriptionMandateRepository(f.runtime); }, 120000);
   afterAll(async () => closeWorkFixture(f));
   const prepare = async () => {
-    const a = await meterCompany(f), context = testTenantContext(a.tenantId);
+    const a = await meterCompany(f), context = testTenantContext(a.tenantId, { membershipId: a.actorId });
     const selection = { version: "subscription-agreement-selection.v1", termsVersion: "synthetic_subscription_success_terms.v1",
       catalogueVersion: "subscription_pricing_policy_v4", tenantId: a.tenantId, agreementId: randomUUID(), revision: 1,
       plan: "Solo", cadence: "monthly", anchorDay: 1, recipientRef: randomUUID(),
@@ -76,12 +76,12 @@ describe("M4-13 PostgreSQL mandate persistence", () => {
     await expect(other.command(other.approve)).rejects.toThrow("MANDATE_FORBIDDEN");
     for (const table of ["subscription_terms_version", "subscription_mandate_event"]) {
       expect((await f.admin.query("SELECT has_table_privilege('jobguard_runtime',$1,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE') allowed", [`app.${table}`])).rows[0].allowed).toBe(false);
-      await expect(workTenant(f.runtime, p.a.tenantId, db => db.query(`SELECT * FROM app.${table}`))).rejects.toMatchObject({ code: "42501" });
-      await expect(workTenant(f.admin, p.a.tenantId, db => db.query(`UPDATE app.${table} SET tenant_id=tenant_id WHERE tenant_id=$1`, [p.a.tenantId]))).rejects.toThrow();
+      await expect(workTenant(f.runtime, p.a.tenantId, db => db.query(`SELECT * FROM app.${table}`), { membershipId: p.a.actorId })).rejects.toMatchObject({ code: "42501" });
+      await expect(workTenant(f.admin, p.a.tenantId, db => db.query(`UPDATE app.${table} SET tenant_id=tenant_id WHERE tenant_id=$1`, [p.a.tenantId]), { membershipId: p.a.actorId })).rejects.toThrow();
       expect((await workTenant(f.admin, other.a.tenantId, async db => {
         await db.query("SET LOCAL ROLE jobguard_migration");
         return db.query(`SELECT * FROM app.${table} WHERE tenant_id=$1`, [p.a.tenantId]);
-      })).rows).toEqual([]);
+      }, { membershipId: other.a.actorId })).rows).toEqual([]);
     }
   });
   it("raw SQL cannot smuggle another tenant, hidden fields or malformed identifiers", async () => {
@@ -91,7 +91,7 @@ describe("M4-13 PostgreSQL mandate persistence", () => {
       { version: "subscription-mandate-command.v1", kind: "cancelled", expectedSequence: 0, shadowSignals: [] },
     ]) await expect(workTenant(f.runtime, p.a.tenantId, db => db.query(
       "SELECT app.m413_command($1,$2,$3,$4::jsonb)", [p.a.tenantId, p.a.digest, randomUUID(), JSON.stringify(value)],
-    ))).rejects.toThrow(/^MANDATE_INVALID$/u);
+    ), { membershipId: p.a.actorId })).rejects.toThrow(/^MANDATE_INVALID$/u);
   });
   it("rolls back terms, approval, receipt and history if audit fails", async () => {
     const p = await prepare();

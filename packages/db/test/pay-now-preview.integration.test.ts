@@ -69,7 +69,7 @@ describe("MON-6 stored preview boundaries",()=>{
    await expect(workTenant(c.runtime,a.tenantId,db=>db.query(
     "SELECT app.pay_now_fake_attempt($1,$2,$3,'prepare',$4::jsonb)",
     [a.tenantId,a.digest,a.jobId,JSON.stringify(a.input)],
-   ))).rejects.toMatchObject({message:"METER_FORBIDDEN",code:"42501"});
+   ), { membershipId: a.actorId })).rejects.toMatchObject({message:"METER_FORBIDDEN",code:"42501"});
   }
   for(const mutation of ["UPDATE app.membership SET revoked_at=clock_timestamp() WHERE id=$1","UPDATE identity.session SET revoked_at=clock_timestamp() WHERE id=$1","UPDATE identity.session SET expires_at=clock_timestamp()-interval '1 second' WHERE id=$1"]){
    const a=await fixture();
@@ -83,7 +83,7 @@ describe("MON-6 stored preview boundaries",()=>{
    await expect(workTenant(c.runtime,a.tenantId,db=>db.query(
     "SELECT app.pay_now_fake_attempt($1,$2,$3,'prepare',$4::jsonb)",
     [a.tenantId,a.digest,a.jobId,JSON.stringify(a.input)],
-   ))).rejects.toMatchObject({message:membership?"REQUEST_BINDING_REFUSED":"PAY_NOW_UNAUTHENTICATED",code:membership?"42501":"28000"});
+   ), { membershipId: a.actorId, bindRequest: false })).rejects.toMatchObject({message:membership?"REQUEST_BINDING_REFUSED":"PAY_NOW_UNAUTHENTICATED",code:membership?"42501":"28000"});
   }
  });
  it("refuses an unknown session as unauthenticated",async()=>{

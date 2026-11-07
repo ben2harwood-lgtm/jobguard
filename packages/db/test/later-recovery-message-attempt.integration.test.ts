@@ -146,7 +146,7 @@ async function makeMember(role: string, revoked: boolean): Promise<RecoveryMessa
 async function inIsolatedWorld<T>(run: () => Promise<T>): Promise<T> {
   const saved = { fixture, context, actor };
   fixture = await seedPursuitFixture();
-  context = testTenantContext(fixture.tenantId);
+  context = testTenantContext(fixture.tenantId, { membershipId: fixture.memberId });
   actor = { membershipId: fixture.memberId, actorRef: `membership:${fixture.memberId}` };
   try { return await run(); } finally { ({ fixture, context, actor } = saved); }
 }
@@ -206,8 +206,8 @@ beforeAll(async () => {
   await migrate(admin); await installLegacySyntheticPartyFixtures(admin); fixture = await seedPursuitFixture();
   await admin.query("CREATE ROLE message_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_runtime TO message_login");
   runtime = new Pool({ host: '127.0.0.1', port, user: 'message_login', password: 'synthetic', database: 'postgres', max: 12 });
-  context = testTenantContext(fixture.tenantId);
-  otherContext = testTenantContext(fixture.otherTenantId);
+  context = testTenantContext(fixture.tenantId, { membershipId: fixture.memberId });
+  otherContext = testTenantContext(fixture.otherTenantId, { membershipId: fixture.memberId });
   repo = new RecoveryMessageRepository(runtime); packs = new EvidencePackRepository(runtime); cases = new RecoveryCaseRepository(runtime);
   actor = { membershipId: fixture.memberId, actorRef: `membership:${fixture.memberId}` };
   // A non-owner member and a revoked owner in the same tenant, for authority checks.

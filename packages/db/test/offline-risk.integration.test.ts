@@ -63,7 +63,7 @@ it("M31-S13 tenant actor and resource boundaries", async () => {
  await expect(submit(c.runtime, f, f.members.supervisor.member, raw)).rejects.toMatchObject({ code: "COMMAND_CONFLICT" });
  await expect(submit(c.runtime, f, foreign.members.operative.member, raw)).rejects.toMatchObject({ code: "EXTRA_FORBIDDEN" });
  const repo = new SiteExtraRepository(c.runtime), body = { commandId: raw.body.commandId, jobId: raw.jobId, note: raw.body.note, description: raw.body.description };
- await expect(repo.logSiteExtra(testTenantContext(foreign.p.tenantId), actor, body)).rejects.toMatchObject({ code: "EXTRA_FORBIDDEN" });
+ await expect(repo.logSiteExtra(testTenantContext(foreign.p.tenantId, { membershipId: foreign.p.membershipId }), actor, body)).rejects.toMatchObject({ code: "EXTRA_FORBIDDEN" });
  for (const invalid of [undefined, { tenantId: f.p.tenantId }]) {
   // Deliberately invalid values test the real stamp check; no alternative context constructor.
   await expect(withTenant(c.runtime, invalid as never, async () => undefined)).rejects.toMatchObject({ code: "INVALID_TENANT_CONTEXT" });

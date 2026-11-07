@@ -6,13 +6,13 @@ describe("CH-4 post-lock database boundary",()=>{
  it("CH4-A13 new site work is refused after lock before source effects (raw progress photo and supplier invoice)",async()=>{
   const a=await seedWorkJob(f);await boundaryLock(f,a);const before=await workEvents(f,a);
   await expect(insertPhoto(f,a)).rejects.toThrow("POST_LOCK_WORK_REQUIRES_LINKED_JOB");
-  await expect(workTenant(f.runtime,a.tenantId,db=>db.query("INSERT INTO app.supplier_document(id,tenant_id,job_id,supplier_context,document_type,content_hash,status) VALUES($1,$2,$3,'fictional','invoice',$4,'ready')",[randomUUID(),a.tenantId,a.jobId,CH4_HASH]))).rejects.toThrow("POST_LOCK_WORK_REQUIRES_LINKED_JOB");
+  await expect(workTenant(f.runtime,a.tenantId,db=>db.query("INSERT INTO app.supplier_document(id,tenant_id,job_id,supplier_context,document_type,content_hash,status) VALUES($1,$2,$3,'fictional','invoice',$4,'ready')",[randomUUID(),a.tenantId,a.jobId,CH4_HASH]), { membershipId: a.actorId })).rejects.toThrow("POST_LOCK_WORK_REQUIRES_LINKED_JOB");
   expect(await workEvents(f,a)).toEqual(before);expect((await f.admin.query("SELECT count(*)::int n FROM app.evidence_upload WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows[0].n).toBe(0);
  });
  it("CH4-A08 closed jobs refuse final-check admission (fixture close, new insert only)",async()=>{
   const a=await seedWorkJob(f);await fixtureLifecycle(f,a,"closed");
   // New admission is refused before validating unrelated FK parents, with no effect.
-  await expect(workTenant(f.admin,a.tenantId,db=>db.query(`INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,lock_id,evidence_cutoff_at,status) VALUES($1,$2,$3,$4,clock_timestamp(),'pending')`,[a.tenantId,a.jobId,randomUUID(),randomUUID()]))).rejects.toThrow("JOB_WORK_CLOSED");
+  await expect(workTenant(f.admin,a.tenantId,db=>db.query(`INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,lock_id,evidence_cutoff_at,status) VALUES($1,$2,$3,$4,clock_timestamp(),'pending')`,[a.tenantId,a.jobId,randomUUID(),randomUUID()]), { membershipId: a.actorId })).rejects.toThrow("JOB_WORK_CLOSED");
  });
  it("CH4-A14 billing boundary classes are excluded structurally (new snagging admission held)",async()=>{
   const a=await seedWorkJob(f);await boundaryLock(f,a);
@@ -34,7 +34,7 @@ describe("CH-4 existing source replay after lock",()=>{
   expect(await workEvents(f,a)).toEqual(events);
  });
  it("CH4-A13 locked invoiced job receives the linked refusal through an existing supplier repository",async()=>{
-  const a=await seedWorkJob(f);await boundaryLock(f,a);await workTenant(f.admin,a.tenantId,async db=>{await db.query("SET LOCAL session_replication_role='replica'");await db.query("UPDATE app.job SET status='invoiced' WHERE tenant_id=$1 AND id=$2",[a.tenantId,a.jobId])});
+  const a=await seedWorkJob(f);await boundaryLock(f,a);await workTenant(f.admin,a.tenantId,async db=>{await db.query("SET LOCAL session_replication_role='replica'");await db.query("UPDATE app.job SET status='invoiced' WHERE tenant_id=$1 AND id=$2",[a.tenantId,a.jobId])}, { membershipId: a.actorId });
   const {SupplierDocumentRepository}=await import("../src/supplier-document-repository.js");
   await expect(new SupplierDocumentRepository(f.runtime).intake(a.context,a.jobId,{version:"supplier-document-intake.v1",fixtureId:"materials-B-invoice",channel:"picker",expectedRevision:0})).rejects.toThrow("POST_LOCK_WORK_REQUIRES_LINKED_JOB");
   expect(await workEvents(f,a)).toEqual([]);
@@ -53,7 +53,7 @@ describe("CH-4 excluded billing evidence lock boundary",()=>{
     // Labelled stored-fact boundary only: it is never qualifying settlement proof.
     await db.query("INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at,state,object_version_id,server_verified_at) VALUES($1,$2,$3,$4,$5,'application/pdf',100,'standard_evidence',clock_timestamp()+interval '1 day','verified','boundary-v1',clock_timestamp())",[id,a.tenantId,a.jobId,key,CH4_HASH]);
     await db.query("INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) VALUES($1,$2,$1,$3,'original','synthetic_bank_receipt',$4,'boundary-v1',$5,1,'application/pdf','standard_evidence',clock_timestamp(),clock_timestamp())",[id,a.tenantId,a.jobId,key,CH4_HASH]);
-   });expect(await workEvents(f,a)).toEqual([]);
+   }, { membershipId: a.actorId });expect(await workEvents(f,a)).toEqual([]);
   }finally{await f.admin.query(original)}
  });
 });
@@ -77,14 +77,14 @@ describe("CH-4 raw new-work guard matrix",()=>{
  let f:WorkFixture;beforeAll(async()=>{f=await createWorkFixture()},60000);afterAll(async()=>closeWorkFixture(f));
  it("CH4-A13 every raw new-work family is refused before its row constraints or effects",async()=>{
   const a=await seedWorkJob(f);
-  await workTenant(f.admin,a.tenantId,db=>db.query("INSERT INTO app.scope_progress(tenant_id,job_id,scope_item_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING",[a.tenantId,a.jobId,a.scopeId]));
+  await workTenant(f.admin,a.tenantId,db=>db.query("INSERT INTO app.scope_progress(tenant_id,job_id,scope_item_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING",[a.tenantId,a.jobId,a.scopeId]), { membershipId: a.actorId });
   await boundaryLock(f,a);
   // Skeletal rows deliberately test guard priority before missing required commercial/source fields.
   for(const table of ["purchase_order_draft","purchase_order_revision","purchase_order_placement","stage_completion","evidence_link","variation"]){
-   await expect(workTenant(f.runtime,a.tenantId,db=>db.query(`INSERT INTO app.${table}(id,tenant_id,job_id) VALUES($1,$2,$3)`,[randomUUID(),a.tenantId,a.jobId]))).rejects.toThrow("POST_LOCK_WORK_REQUIRES_LINKED_JOB");
+   await expect(workTenant(f.runtime,a.tenantId,db=>db.query(`INSERT INTO app.${table}(id,tenant_id,job_id) VALUES($1,$2,$3)`,[randomUUID(),a.tenantId,a.jobId]), { membershipId: a.actorId })).rejects.toThrow("POST_LOCK_WORK_REQUIRES_LINKED_JOB");
    expect((await f.admin.query(`SELECT count(*)::int n FROM app.${table} WHERE tenant_id=$1 AND job_id=$2`,[a.tenantId,a.jobId])).rows[0].n).toBe(0);
   }
-  await expect(workTenant(f.runtime,a.tenantId,db=>db.query("SELECT app.transition_scope_progress($1,$2,$3,0,'in_progress','start')",[a.tenantId,a.jobId,a.scopeId]))).rejects.toThrow("POST_LOCK_WORK_REQUIRES_LINKED_JOB");
+  await expect(workTenant(f.runtime,a.tenantId,db=>db.query("SELECT app.transition_scope_progress($1,$2,$3,0,'in_progress','start')",[a.tenantId,a.jobId,a.scopeId]), { membershipId: a.actorId })).rejects.toThrow("POST_LOCK_WORK_REQUIRES_LINKED_JOB");
   expect((await f.admin.query("SELECT stage FROM app.scope_progress WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows[0].stage).toBe("not_started");
  });
  it("r8 a successful pre-lock PO semantic no-op keeps its own replay identity after lock",async()=>{

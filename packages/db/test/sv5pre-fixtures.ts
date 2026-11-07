@@ -55,7 +55,7 @@ export async function seedAccount(admin: Pool, tenantId = randomUUID(), net = 33
    VALUES($1,$2,$3,$4,'baseline',$5,$6,$5,'Fictional baseline',$7,1)`, [lineId, tenantId, jobId, revisionId, baselineId, scopeItemId, net]);
   await db.query("UPDATE app.final_account_draft SET current_revision_id=$1,revision=1 WHERE tenant_id=$2 AND id=$3", [revisionId, tenantId, draftId]);
  });
- return { tenantId, jobId, scopeItemId, baselineId, draftId, revisionId, lineId, context: (await admin.query("SELECT to_regprocedure('app.bind_request(text,text,uuid)') installed")).rows[0].installed ? await testBoundTenantContext(admin, tenantId, LOCK_OWNER) : testTenantContext(tenantId), input: { jobId, actorMembershipId: LOCK_OWNER, commandId: randomUUID(), finalAccountRevisionId: revisionId, expectedRevision: 1, declarationVersion: "final_account_declaration.v1" as const } };
+ return { tenantId, jobId, scopeItemId, baselineId, draftId, revisionId, lineId, context: (await admin.query("SELECT to_regprocedure('app.bind_request(text,text,uuid)') installed")).rows[0].installed ? await testBoundTenantContext(admin, tenantId, LOCK_OWNER) : testTenantContext(tenantId, { membershipId: LOCK_OWNER }), input: { jobId, actorMembershipId: LOCK_OWNER, commandId: randomUUID(), finalAccountRevisionId: revisionId, expectedRevision: 1, declarationVersion: "final_account_declaration.v1" as const } };
 }
 export async function prepareLock(f: LockFixture, a: Awaited<ReturnType<typeof seedAccount>>) {
  const repo = new FinalAccountLockRepository(f.runtime);

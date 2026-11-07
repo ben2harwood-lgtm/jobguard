@@ -133,7 +133,7 @@ async function inIsolatedWorld<T>(run: () => Promise<T>, world: 'current_pursuit
   const saved = { fixture, context, actor };
   // The v1 landing protocol needs its own v1 activation/cap; only the six legacy supplier tests opt in.
   fixture = world === 'legacy_supplier_landing' ? await seedEvidencePackFixture(admin) : await seedPursuitFixture();
-  context = testTenantContext(fixture.tenantId);
+  context = testTenantContext(fixture.tenantId, { membershipId: fixture.memberId });
   actor = { membershipId: fixture.memberId, actorRef: `membership:${fixture.memberId}` };
   try { return await run(); } finally { ({ fixture, context, actor } = saved); }
 }
@@ -193,8 +193,8 @@ beforeAll(async () => {
   await migrate(admin); await installLegacySyntheticPartyFixtures(admin); fixture = await seedPursuitFixture();
   await admin.query("CREATE ROLE message_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_runtime TO message_login");
   runtime = new Pool({ host: '127.0.0.1', port, user: 'message_login', password: 'synthetic', database: 'jobguard_synthetic_demo', max: 12 });
-  context = testTenantContext(fixture.tenantId);
-  otherContext = testTenantContext(fixture.otherTenantId);
+  context = testTenantContext(fixture.tenantId, { membershipId: fixture.memberId });
+  otherContext = testTenantContext(fixture.otherTenantId, { membershipId: fixture.memberId });
   repo = new RecoveryMessageRepository(runtime); packs = new EvidencePackRepository(runtime); cases = new RecoveryCaseRepository(runtime);
   actor = { membershipId: fixture.memberId, actorRef: `membership:${fixture.memberId}` };
   // A non-owner member and a revoked owner in the same tenant, for authority checks.

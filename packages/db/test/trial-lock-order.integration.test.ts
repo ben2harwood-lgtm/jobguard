@@ -46,7 +46,7 @@ describe("lock-order-418 trial versus MON-1 admission (real PostgreSQL)", () => 
    EXISTS(SELECT 1 FROM aclexplode(p.proacl) a WHERE a.grantee=0 AND a.privilege_type='EXECUTE') public
    FROM pg_proc p WHERE p.oid='app.mon3_lock_activation(uuid,text,uuid)'::regprocedure`)).rows;
   expect(grants).toEqual([{job_update:false,owner:'jobguard_migration',prosecdef:true,proconfig:['search_path=pg_catalog'],runtime:true,infrastructure:false,public:false}]);
-  await expect(workTenant(f.runtime, a.tenantId, db => db.query("SELECT id FROM app.job WHERE tenant_id=$1 AND id=$2 FOR UPDATE", [a.tenantId,a.jobId])))
+  await expect(workTenant(f.runtime, a.tenantId, db => db.query("SELECT id FROM app.job WHERE tenant_id=$1 AND id=$2 FOR UPDATE", [a.tenantId,a.jobId]), { membershipId: a.actorId }))
    .rejects.toMatchObject({code:'42501'});
   const repo = new FreeFirstJobLifecycleRepository(f.runtime), view = await repo.read(a.context,a.digest,a.jobId);
   expect(await repo.activate(a.context,a.digest,a.actorId,{version:'trial-switch-live.v1',commandId:randomUUID(),jobId:a.jobId,...view.target})).toMatchObject({jobId:a.jobId,state:'live'});
@@ -67,7 +67,7 @@ describe("lock-order-418 trial versus MON-1 admission (real PostgreSQL)", () => 
     if (entry === "dispatcher") await new FreeFirstJobLifecycleRepository(f.runtime).activate(a.context, a.digest, a.actorId, input);
     else await workTenant(f.runtime, a.tenantId, db => db.query("SELECT app.mon3_activate($1,$2,$3,$4::jsonb)",
      [a.tenantId, a.digest, input.commandId, JSON.stringify({ ...input, version: "trial-admission.v1", commandId: undefined,
-      activationId: randomUUID(), termsId: randomUUID(), authorizationId: randomUUID() })]));
+      activationId: randomUUID(), termsId: randomUUID(), authorizationId: randomUUID() })]), { membershipId: a.actorId });
     return "unexpected success";
    } catch (error) { return (error as Error).message; }
   };
@@ -95,7 +95,7 @@ describe("lock-order-418 trial versus MON-1 admission (real PostgreSQL)", () => 
    await meter.query("COMMIT");
    expect(await pending).toBe("TRIAL_LEGACY_POLICY_CONVERSION_FORBIDDEN");
    const replay = await workTenant(f.runtime, a.tenantId, async db => (await db.query("SELECT app.ch4_record_work_state($1,$2,$3,$4::jsonb) result",
-    [a.tenantId, a.jobId, a.actorId, JSON.stringify(command)])).rows[0].result);
+    [a.tenantId, a.jobId, a.actorId, JSON.stringify(command)])).rows[0].result, { membershipId: a.actorId });
    expect(replay).toEqual(result);
    expect((await f.admin.query("SELECT count(*)::int n FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [a.tenantId, input.commandId])).rows[0].n).toBe(0);
   } finally {
@@ -114,7 +114,7 @@ describe("lock-order-418 trial versus MON-1 admission (real PostgreSQL)", () => 
   const activate = (input: Awaited<ReturnType<typeof prepare>>) => repo.activate(a.context, a.digest, a.actorId, input);
   await activate(await prepare(a.jobId));
   const card = randomUUID(); await requestCard(f, a, card);
-  await workTenant(f.runtime, a.tenantId, db => db.query("SELECT app.mon3_simulate_card($1,$2,$3,'{\"version\":\"trial-card-simulate.v1\"}')", [a.tenantId, a.digest, card]));
+  await workTenant(f.runtime, a.tenantId, db => db.query("SELECT app.mon3_simulate_card($1,$2,$3,'{\"version\":\"trial-card-simulate.v1\"}')", [a.tenantId, a.digest, card]), { membershipId: a.actorId });
   for (let n = 0; n < 4; n++) {
    const job = await seedWorkJob(f, a.tenantId); await activate(await prepare(job.jobId));
   }

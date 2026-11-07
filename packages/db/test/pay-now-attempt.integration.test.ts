@@ -128,7 +128,7 @@ describe("MON-6 durable fake attempts on real PostgreSQL",()=>{
  it("enforces FORCE RLS, private grants, immutable rows and restores caller settings",async()=>{
   const a=await fixture(),repo=new PayNowAttemptRepository(c.runtime);await repo.command(a.context,a.actor,a.input);
   for(const sql of ["SELECT * FROM app.pay_now_fake_attempt","UPDATE app.pay_now_fake_attempt SET record='{}'","DELETE FROM app.pay_now_fake_attempt"]){
-   await expect(workTenant(c.runtime,a.tenantId,db=>db.query(sql))).rejects.toMatchObject({code:"42501"});
+   await expect(workTenant(c.runtime,a.tenantId,db=>db.query(sql), { membershipId: a.actorId })).rejects.toMatchObject({code:"42501"});
   }
   for(const sql of ["UPDATE app.pay_now_fake_attempt SET record=record WHERE tenant_id=$1","DELETE FROM app.pay_now_fake_attempt WHERE tenant_id=$1"]){
    await expect(c.admin.query(sql,[a.tenantId])).rejects.toMatchObject({code:"55000"});
@@ -137,6 +137,6 @@ describe("MON-6 durable fake attempts on real PostgreSQL",()=>{
   await workTenant(c.runtime,a.tenantId,async db=>{
    await db.query("SELECT app.pay_now_fake_attempt($1,$2,$3,'prepare',$4::jsonb)",[a.tenantId,a.digest,a.jobId,JSON.stringify(a.input)]);
    expect((await db.query("SELECT current_setting('app.tenant_id') t")).rows[0].t).toBe(a.tenantId);
-  });
+  }, { membershipId: a.actorId });
  });
 });

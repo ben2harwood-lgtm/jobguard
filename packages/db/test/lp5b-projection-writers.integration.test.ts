@@ -13,7 +13,7 @@ const previous=process.env.JOBGUARD_ENV;
 beforeAll(async()=>{process.env.JOBGUARD_ENV="synthetic_demo";db=await jobDoorsDatabase(true);},300_000);
 afterAll(async()=>{await db?.close();if(previous===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=previous;});
 async function fixture(status:"quoting"|"live"="quoting"){
- const actor=await jobDoorsActor(db.owner),context=testTenantContext(actor.tenant),job=randomUUID();
+ const actor=await jobDoorsActor(db.owner),context=testTenantContext(actor.tenant, { membershipId: actor.member }),job=randomUUID();
  if(status==="live")await importWatchdogFixtureJob(db.owner,actor.tenant,job,"Fictional LP5b projection job");
  else await db.owner.query("INSERT INTO app.job(tenant_id,id,title,status) VALUES($1,$2,'Fictional LP5b projection job','quoting')",[actor.tenant,job]);
  return {actor,context,job};

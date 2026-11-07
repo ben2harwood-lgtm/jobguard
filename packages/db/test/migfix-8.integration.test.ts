@@ -100,7 +100,7 @@ async function seedDemoFixture(db: Pool, sessionDigest: string) {
 async function fixture(deliver = true) {
   const session = await issuePracticeSession(runtime);
   const f = await seedDemoFixture(admin, hash(session));
-  const ctx = testTenantContext(f.tenantId), actor = { membershipId: f.memberId, actorRef: `membership:${f.memberId}` };
+  const ctx = testTenantContext(f.tenantId, { membershipId: f.memberId }), actor = { membershipId: f.memberId, actorRef: `membership:${f.memberId}` };
   const caseId = randomUUID();
   await admin.query("INSERT INTO app.recovery_case(id,tenant_id,job_id,claim_pence,currency,state,revision,synthetic,case_type,counterparty,book,source_type,source_refs) VALUES($1,$2,$3,32000,'GBP','identified',0,true,'withheld_customer_payment','Fictional counterparty','builder_customer','customer_invoice',$4)", [caseId, f.tenantId, f.jobId, JSON.stringify([f.invoiceId])]);
   await admin.query("INSERT INTO app.recovery_claim_revision(id,tenant_id,job_id,case_id,revision,claimed_net_pence,currency,reviewer_ref,subject_hash) VALUES($1,$2,$3,$4,1,32000,'GBP','fixture-owner',$5)", [randomUUID(), f.tenantId, f.jobId, caseId, hash(caseId)]);

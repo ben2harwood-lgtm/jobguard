@@ -17,7 +17,7 @@ let pg: EmbeddedPostgres, directory: string, admin: Pool, runtime: Pool, repo: S
 const tenant = randomUUID(), other = randomUUID(), job = randomUUID(), wrongJob = randomUUID(), otherJob = randomUUID();
 const actor = { membershipId: randomUUID(), identityUserId: randomUUID() };
 const otherActor = { membershipId: randomUUID(), identityUserId: randomUUID() };
-const ctx = testTenantContext(tenant), otherCtx = testTenantContext(other);
+const ctx = testTenantContext(tenant, { membershipId: actor.membershipId }), otherCtx = testTenantContext(other, { membershipId: otherActor.membershipId });
 beforeAll(async () => {
   vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
   directory = await mkdtemp(join(tmpdir(), "jg-line-corrections-"));

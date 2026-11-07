@@ -290,7 +290,7 @@ describe("ENT-4b origin persistence", () => {
   return refusal;
  }
  it("[S4] a stamped context with an UPPER-CASE tenant id commits a valid extra", async () => {
-  const f = await fixture(c), upper = testTenantContext(f.p.tenantId.toUpperCase());
+  const f = await fixture(c), upper = testTenantContext(f.p.tenantId.toUpperCase(), { membershipId: f.p.membershipId });
   expect(upper.tenantId).not.toBe(f.p.tenantId); expect(upper.tenantId.toLowerCase()).toBe(f.p.tenantId);
   const input = raise(f), e = await repo.raiseExtra(upper, input);
   expect(await countRows(f, e.variationId, input.commandId)).toEqual({ command_receipt: 1, variation: 1, extra_origin: 1, extra_event: 1, audit_event: 1 });
@@ -298,7 +298,7 @@ describe("ENT-4b origin persistence", () => {
   await checkChain(f);
  });
  it("[S4] both spellings of one tenant identify one extra for one client capture ID", async () => {
-  const f = await fixture(c), upper = testTenantContext(f.p.tenantId.toUpperCase()), original = raise(f, { clientCaptureId: randomUUID() });
+  const f = await fixture(c), upper = testTenantContext(f.p.tenantId.toUpperCase(), { membershipId: f.p.membershipId }), original = raise(f, { clientCaptureId: randomUUID() });
   const a = await repo.raiseExtra(upper, original), retry = { ...original, commandId: randomUUID() };
   expect(await repo.raiseExtra(f.ctx, retry)).toEqual(a);
   expect(await repo.raiseExtra(upper, { ...original, commandId: randomUUID() })).toEqual(a);

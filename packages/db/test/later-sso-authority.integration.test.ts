@@ -24,7 +24,7 @@ async function approvedAction(f: ScimFixture) {
   const expiresAt = new Date(Date.now() + 600_000);
   await h.admin.query("INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,recipient,content_hash,aggregate_revision,policy_version,expires_at) VALUES($1,$2,$3,$4,$5,'send_quote','customer@fixture.invalid',$6,1,'synthetic.v1',$7)", [authorizationId, tenantId, decisionId, resolutionId, memberId, contentHash, expiresAt]);
   const action: OutboundAction = { version: "outbound-action.v1", id: randomUUID(), authorizationId, adapter: "fake_capture", providerEffectKey: randomUUID(), actionType: "send_quote", recipient: "customer@fixture.invalid", contentHash, immutableContent: content, aggregateRevision: 1, amountPence: null, currency: null, policyVersion: "synthetic.v1", authorizationExpiresAt: expiresAt };
-  const context = testTenantContext(tenantId);
+  const context = testTenantContext(tenantId, { membershipId: memberId });
   await withTenant(h.runtime, context, db => appendOutboundAction(db, tenantId, action));
   const deliver = vi.fn(async () => ({ kind: "succeeded" as const, providerReference: `synthetic:${randomUUID()}` }));
   const adapter: OutboundAdapter = { name: "fake_capture", supportsProviderDeduplication: false, deliver, reconcile: async () => "unknown" };
@@ -91,7 +91,7 @@ describe("LATER-B28 actual PostgreSQL boundaries", () => {
   });
   it("M5-7 SSO owner cannot broaden an exact Decision's recipient, document, revision, amount or policy", async () => {
     const f = await fixture(h), queued = await approvedAction(f);
-    const context = testTenantContext(f.principal.tenantId);
+    const context = testTenantContext(f.principal.tenantId, { membershipId: f.principal.membershipId });
     const deliver = vi.fn(async () => ({ kind: "succeeded" as const, providerReference: "synthetic:unexpected" }));
     const adapter: OutboundAdapter = { name: "fake_capture", supportsProviderDeduplication: false, deliver, reconcile: async () => "unknown" };
     const executor = new ActionExecutor(h.runtime, new Map([[adapter.name, adapter]]), { emit: () => undefined });

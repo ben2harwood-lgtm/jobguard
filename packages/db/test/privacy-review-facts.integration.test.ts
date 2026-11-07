@@ -14,7 +14,7 @@ const command = (a: Company, value: Record<string, unknown>) => repo.command(a.c
 async function open(a: Company, kind = "builder") {
   const subjectId = randomUUID();
   await workTenant(f.admin, a.tenantId, db => db.query(
-    "INSERT INTO app.privacy_subject(tenant_id,id,kind) VALUES($1,$2,$3)", [a.tenantId, subjectId, kind]));
+    "INSERT INTO app.privacy_subject(tenant_id,id,kind) VALUES($1,$2,$3)", [a.tenantId, subjectId, kind]), { membershipId: a.actorId });
   return command(a, { action: "open", subjectId, operation: "export" });
 }
 const verify = (a: Company, requestId: unknown, expectedRevision: number, kind = "identity") =>
@@ -83,7 +83,7 @@ describe("M5-11 recorded identity and authority checks (synthetic only)", () => 
     await expect(verify(a, req.requestId, 4)).rejects.toMatchObject({ code: "PRIVACY_INVALID" });
     await workTenant(f.admin, a.tenantId, db => db.query(`INSERT INTO app.privacy_artifact(tenant_id,id,subject_id,category,payload)
       SELECT tenant_id,$1,subject_id,'source','{"fictional":"changed inventory"}'::jsonb FROM app.privacy_request WHERE tenant_id=$2 AND id=$3`,
-    [randomUUID(), a.tenantId, req.requestId]));
+    [randomUUID(), a.tenantId, req.requestId]), { membershipId: a.actorId });
     await expect(command(a, { action: "execute", requestId: req.requestId, expectedRevision: 4 }))
       .rejects.toMatchObject({ code: "PRIVACY_CONFLICT" });
   });
@@ -95,7 +95,7 @@ describe("M5-11 recorded identity and authority checks (synthetic only)", () => 
     for (const patch of [{ version: "privacy-command.v1" }, { kind: "retention" },
       { evidenceHash: "g".repeat(64) }, { evidenceHash: null }, { method: "synthetic_fixture" }, { verifiedBy: a.actorId }]) {
       await expect(workTenant(f.runtime, a.tenantId, db => db.query(
-        "SELECT app.privacy_command($1,$2,$3::jsonb)", [a.tenantId, a.digest, JSON.stringify({ ...value, ...patch })])))
+        "SELECT app.privacy_command($1,$2,$3::jsonb)", [a.tenantId, a.digest, JSON.stringify({ ...value, ...patch })]), { membershipId: a.actorId }))
         .rejects.toMatchObject({ code: "22023", message: "PRIVACY_INVALID" });
     }
     expect(await facts(a)).toEqual([]);
@@ -108,7 +108,7 @@ describe("M5-11 recorded identity and authority checks (synthetic only)", () => 
     const invisible = await workTenant(f.admin, b.tenantId, async db => {
       await db.query("SET LOCAL ROLE jobguard_migration");
       return (await db.query("SELECT * FROM app.privacy_review_fact")).rows;
-    });
+    }, { membershipId: b.actorId });
     expect(invisible).toEqual([]);
     for (const sql of ["UPDATE app.privacy_review_fact SET evidence_hash=repeat('b',64)",
       "DELETE FROM app.privacy_review_fact", "TRUNCATE app.privacy_review_fact"]) {
@@ -120,7 +120,7 @@ describe("M5-11 recorded identity and authority checks (synthetic only)", () => 
       return db.query(
         "INSERT INTO app.privacy_review_fact(tenant_id,id,request_id,kind,method,evidence_hash,verified_by) VALUES($1,$2,$3,'identity',$4,$5,$6)",
         [a.tenantId, randomUUID(), requestId, method, "a".repeat(64), actor]);
-    });
+    }, { membershipId: a.actorId });
     await expect(insert(req.requestId, a.actorId, "real_person")).rejects.toMatchObject({ code: "23514" });
     await expect(insert(foreign.requestId, a.actorId, "synthetic_fixture")).rejects.toMatchObject({ code: "23503" });
     await expect(insert(req.requestId, b.actorId, "synthetic_fixture")).rejects.toMatchObject({ code: "23503" });
@@ -128,7 +128,7 @@ describe("M5-11 recorded identity and authority checks (synthetic only)", () => 
       has_table_privilege('jobguard_runtime',oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE') allowed
       FROM pg_class WHERE oid='app.privacy_review_fact'::regclass`)).rows)
       .toEqual([{ relrowsecurity: true, relforcerowsecurity: true, allowed: false }]);
-    await expect(workTenant(f.runtime, a.tenantId, db => db.query("SELECT * FROM app.privacy_review_fact")))
+    await expect(workTenant(f.runtime, a.tenantId, db => db.query("SELECT * FROM app.privacy_review_fact"), { membershipId: a.actorId }))
       .rejects.toMatchObject({ code: "42501" });
     expect(await facts(a)).toEqual(before);
   });
@@ -145,7 +145,7 @@ describe("M5-11 recorded identity and authority checks (synthetic only)", () => 
         await db.query("INSERT INTO app.privacy_subject(tenant_id,id,kind) VALUES($1,$2,'builder')", [a.tenantId, subjectId]);
         await db.query(`INSERT INTO app.privacy_request(tenant_id,id,subject_id,operation,controller,state,opened_by,expanded,review_record)
           VALUES($1,$2,$3,'export','jobguard','ready',$4,true,$5)`, [a.tenantId, requestId, subjectId, a.actorId, originalReview]);
-      });
+      }, { membershipId: a.actorId });
       const rows = async () => (await upgrade.admin.query("SELECT to_jsonb(r) row FROM app.privacy_request r ORDER BY tenant_id,id")).rows;
       const routines = async () => (await upgrade.admin.query(`SELECT p.oid,pg_get_functiondef(p.oid) definition,proacl,proowner,proconfig
         FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname IN('app','identity','control_plane')

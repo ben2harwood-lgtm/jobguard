@@ -81,7 +81,7 @@ describe("CH-4-C real database races and rollback",()=>{
  });
  it("finish versus later activity preserves marker and appends cancellation",async()=>{
   const {practiceWorkJob}=await import("./job-work-state-command-fixtures.js"),{insertPhoto,workTenant}=await import("./job-work-state-fixtures.js"),p=await seedWorkPractice(f),a=await practiceWorkJob(f,p);
-  await workTenant(f.admin,a.tenantId,db=>db.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed') ON CONFLICT DO NOTHING",[a.scopeId,a.tenantId,a.jobId]));
+  await workTenant(f.admin,a.tenantId,db=>db.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed') ON CONFLICT DO NOTHING",[a.scopeId,a.tenantId,a.jobId]), { membershipId: a.actorId });
   const blocker=await f.runtime.connect();try{
    await blocker.query("BEGIN");await blocker.query("SELECT set_config('app.tenant_id',$1,true)",[a.tenantId]);
    const finished=await commandOn(blocker,p,workCommand());

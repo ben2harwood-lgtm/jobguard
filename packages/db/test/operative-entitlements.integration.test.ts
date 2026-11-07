@@ -63,7 +63,7 @@ it("site-origin guard refuses agreement loss, preserves historical rows, and ref
 });
 it("cross-tenant context cannot borrow an active contractor agreement",async()=>{
  const a=await startSession(c),b=await startSession(c);await status(c,b,"active");await track(a,"small_builder");
- await unchanged(c,()=>expect(withTenant(c.runtime,testTenantContext(a.p.tenantId),db=>db.$client.query("INSERT INTO app.extra_origin(tenant_id,kind,job_track) VALUES($1,'site_user','contractor')",[b.p.tenantId]))).rejects.toMatchObject({code:"42501"}));
+ await unchanged(c,()=>expect(withTenant(c.runtime,testTenantContext(a.p.tenantId, { membershipId: a.p.membershipId }),db=>db.$client.query("INSERT INTO app.extra_origin(tenant_id,kind,job_track) VALUES($1,'site_user','contractor')",[b.p.tenantId]))).rejects.toMatchObject({code:"42501"}));
 });
 it("new guards grant no callable agreement-write bypass",async()=>{
  for(const name of ["mon8_require_operative_agreement(uuid)","mon8_operative_write_guard()"]){

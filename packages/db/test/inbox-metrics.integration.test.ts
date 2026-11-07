@@ -12,7 +12,8 @@ import { installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 
 let db: Lp0Database, runtime: Pool;
 const tenant = randomUUID(), other = randomUUID(), job = randomUUID(), otherJob = randomUUID();
-const context = testTenantContext(tenant), foreign = testTenantContext(other);
+let context: ReturnType<typeof testTenantContext>;
+const foreign = testTenantContext(other);
 const connect = () => new Pool({ host: "127.0.0.1", port: db.port, database: db.databaseName,
   user: "jobguard_runtime", password: RUNTIME_TEST_PASSWORD, max: 2 });
 let actor: { membershipId: string; identityUserId: string };
@@ -41,6 +42,7 @@ beforeAll(async () => {
   await importWatchdogFixtureJob(db.admin, tenant, otherJob);
   const member = (await db.admin.query("SELECT id,identity_user_id FROM app.membership WHERE tenant_id=$1 AND role='owner' LIMIT 1",[tenant])).rows[0]!;
   actor={membershipId:member.id,identityUserId:member.identity_user_id};
+  context=testTenantContext(tenant, { membershipId: actor.membershipId });
   await db.bootstrapRuntimeLogin(); runtime = connect();
 }, 120000);
 afterAll(async () => { await runtime?.end(); await db?.stop(); });

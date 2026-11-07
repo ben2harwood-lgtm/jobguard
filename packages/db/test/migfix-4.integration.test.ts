@@ -19,7 +19,7 @@ async function issued() {
   await c.admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [user]);
   await c.admin.query("INSERT INTO app.account(tenant_id,id,name) VALUES($1,$2,'Fictional MIGFIX builder')", [tenant, account]);
   await c.admin.query("INSERT INTO app.membership(tenant_id,id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [tenant, member, account, user]);
-  const context = testTenantContext(tenant);
+  const context = testTenantContext(tenant, { membershipId: member });
   await withTenant(c.admin, context, async db => {
     await db.$client.query("INSERT INTO app.job(tenant_id,id,title,status) VALUES($1,$2,'Fictional quote','quoting')", [tenant, job]);
   });

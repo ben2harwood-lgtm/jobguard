@@ -33,7 +33,7 @@ describe("MON-2A-P PostgreSQL atomic replay", () => {
   await expect(workTenant(f.runtime, a.tenantId, async db => {
    await db.query("SELECT app.mon2_command($1,$2,$3,$4::jsonb)", [a.tenantId, a.digest, id, JSON.stringify(terms(a))]);
    throw new Error("injected rollback after command");
-  })).rejects.toThrow("injected rollback");
+  }, { membershipId: a.actorId })).rejects.toThrow("injected rollback");
   expect(await readSubscription(f, a)).toEqual(before);
   expect(await count(f, a, "action_authorization")).toBe(authorizationsBefore); expect(await count(f, a, "audit_event")).toBe(auditsBefore);
   expect((await f.admin.query("SELECT count(*)::int n FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [a.tenantId, id])).rows[0].n).toBe(0);

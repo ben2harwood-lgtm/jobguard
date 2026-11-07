@@ -105,3 +105,45 @@ it("extra fixtures preserve historical contexts and foreign-actor isolation atta
   expect(await testActorContext(pool, context, { tenantId: context.tenantId, membershipId: randomUUID() })).toBe(context);
   expect(query).toHaveBeenCalledOnce();
 });
+
+it("binds only the context's named live member, even when another owner exists", async () => {
+  const { bindTestTenantContext, testTenantContext } = await import("./tenant-context-test-utils.js");
+  const tenant = randomUUID(), member = randomUUID(), user = randomUUID();
+  const query = vi.fn(async (sql: string, values?: unknown[]) => {
+    if (sql.includes("to_regprocedure")) return { rows: [{ installed: "app.bind_request(text,text,uuid)" }] };
+    if (sql.startsWith("SELECT id FROM app.membership")) {
+      expect(values).toEqual([tenant, member]);
+      expect(sql).toContain("id=$2 AND revoked_at IS NULL");
+      expect(sql).toContain("expires_at>clock_timestamp()");
+      expect(sql).not.toContain("ORDER BY");
+      return { rows: [{ id: member }] };
+    }
+    if (sql.startsWith("SELECT identity_user_id")) return { rows: [{ identity_user_id: user }] };
+    // An existing revoked/expired session must never be replaced or refreshed.
+    if (sql.startsWith("SELECT 1 FROM identity.session")) return { rows: [{ exists: 1 }] };
+    throw new Error(`Unexpected fixture write: ${sql}`);
+  });
+  const pool = { query } as unknown as Pool;
+  const context = testTenantContext(tenant, { membershipId: member });
+  expect(await bindTestTenantContext(pool, context)).not.toBe(context);
+  expect(query.mock.calls.some(([sql]) => /INSERT|UPDATE/u.test(sql))).toBe(false);
+});
+it("leaves a missing, foreign or inactive named member unbound instead of selecting an owner", async () => {
+  const { bindTestTenantContext, testTenantContext } = await import("./tenant-context-test-utils.js");
+  const tenant = randomUUID();
+  const query = vi.fn(async (sql: string, values?: unknown[]) => {
+    if (sql.includes("to_regprocedure")) return { rows: [{ installed: "app.bind_request(text,text,uuid)" }] };
+    expect(sql).toContain("tenant_id=$1 AND id=$2 AND revoked_at IS NULL");
+    expect(values).toEqual([tenant, "40000000-0000-4000-8000-000000000004"]);
+    return { rows: [] };
+  });
+  const pool = { query } as unknown as Pool, context = testTenantContext(tenant);
+  expect(await bindTestTenantContext(pool, context)).toBe(context);
+  expect(query).toHaveBeenCalledTimes(2);
+  for (const options of [{ bindRequest: false }, { bound: false }]) {
+    query.mockClear();
+    const unbound = testTenantContext(tenant, options);
+    expect(await bindTestTenantContext(pool, unbound)).toBe(unbound);
+    expect(query).not.toHaveBeenCalled();
+  }
+});

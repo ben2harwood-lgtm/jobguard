@@ -19,7 +19,7 @@ describe("MON-1 company stored-day reader (real PostgreSQL, CI)", () => {
     try { await finalizeMeterLifecycleOwnership(admin); } finally { admin.release(); }
   }, 60000);
   afterAll(async () => closeWorkFixture(f));
-  const read = (a: Awaited<ReturnType<typeof meterCompany>>, digest = a.digest) => workTenant(f.runtime, a.tenantId, async db => meterTodayReadV1.parse((await db.query("SELECT app.mon1_fresh_counted_meter_today($1,$2) result", [a.tenantId,digest])).rows[0].result));
+  const read = (a: Awaited<ReturnType<typeof meterCompany>>, digest = a.digest) => workTenant(f.runtime, a.tenantId, async db => meterTodayReadV1.parse((await db.query("SELECT app.mon1_fresh_counted_meter_today($1,$2) result", [a.tenantId,digest])).rows[0].result), { membershipId: a.actorId });
   async function stored(a: Awaited<ReturnType<typeof meterCompany>>, count: number, revision = 1, scope = randomUUID(), counted = true) {
     const source = randomUUID(), computation = randomUUID();
     await workTenant(f.admin, a.tenantId, async db => {
@@ -39,13 +39,13 @@ describe("MON-1 company stored-day reader (real PostgreSQL, CI)", () => {
           'places',(SELECT coalesce(jsonb_agg(jsonb_build_object('syntheticPlace',i)),'[]'::jsonb) FROM generate_series(1,$3::integer) i),
           'rawPlaces',$3::integer,'freeSmallPlaces',0,'countedPlaces',$3::integer)
         FROM app.meter_lifecycle_source WHERE id=$1`, [source, computation, count]);
-    });
+    }, { membershipId: a.actorId });
     return { scope, source, computation };
   }
   it("returns only its own stored numbers, rechecking persisted session and membership", async () => {
     const a = await meterCompany(f), b = await meterCompany(f);
     await stored(a, 5); await stored(b, 2);
-    await expect(workTenant(f.runtime, a.tenantId, db => db.query("SELECT app.mon1_counted_meter_today($1,$2)", [a.tenantId, a.digest]))).rejects.toMatchObject({ code: "42501" });
+    await expect(workTenant(f.runtime, a.tenantId, db => db.query("SELECT app.mon1_counted_meter_today($1,$2)", [a.tenantId, a.digest]), { membershipId: a.actorId })).rejects.toMatchObject({ code: "42501" });
     expect(await read(a)).toMatchObject({ version: "meter-today-read.v1", hypothetical: true, plan: "Builder", countedPlaces: 5 });
     expect(await read(b)).toMatchObject({ countedPlaces: 2 });
     await expect(read(b, a.digest)).rejects.toThrow("METER_FORBIDDEN");
@@ -71,7 +71,7 @@ describe("MON-1 company stored-day reader (real PostgreSQL, CI)", () => {
   it("fresh-source entrypoint preserves admin reads without granting capture authority", async () => {
     const a=await meterCompany(f), first=await stored(a,3);
     await f.admin.query("UPDATE app.membership SET role='admin' WHERE tenant_id=$1 AND id=$2",[a.tenantId,a.actorId]);
-    const readAdmin=()=>workTenant(f.runtime,a.tenantId,async db=>(await db.query("SELECT app.mon1_today_source($1,$2) result",[a.tenantId,a.digest])).rows[0].result);
+    const readAdmin=()=>workTenant(f.runtime,a.tenantId,async db=>(await db.query("SELECT app.mon1_today_source($1,$2) result",[a.tenantId,a.digest])).rows[0].result, { membershipId: a.actorId });
     expect(await readAdmin()).toMatchObject({view:{countedPlaces:3,plan:"Builder"}});
     await stored(a,4,2,first.scope,false);
     await expect(readAdmin()).rejects.toThrow("METER_UNAVAILABLE");
@@ -79,7 +79,7 @@ describe("MON-1 company stored-day reader (real PostgreSQL, CI)", () => {
   it("keeps forced RLS and table grants; the narrow routine cannot be used without tenant context", async () => {
     const a = await meterCompany(f); await stored(a, 3);
     await expect(f.runtime.query("SELECT app.mon1_fresh_counted_meter_today($1,$2)", [a.tenantId, a.digest])).rejects.toThrow("METER_FORBIDDEN");
-    await expect(workTenant(f.runtime, a.tenantId, db => db.query("SELECT * FROM app.meter_lifecycle_day_ledger"))).rejects.toThrow("permission denied");
+    await expect(workTenant(f.runtime, a.tenantId, db => db.query("SELECT * FROM app.meter_lifecycle_day_ledger"), { membershipId: a.actorId })).rejects.toThrow("permission denied");
     const posture = (await f.admin.query(`SELECT relrowsecurity,relforcerowsecurity,
       has_table_privilege('jobguard_runtime',oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE') runtime
       FROM pg_class WHERE oid='app.meter_lifecycle_day_ledger'::regclass`)).rows[0];

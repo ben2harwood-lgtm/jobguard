@@ -11,7 +11,7 @@ describe("MON3 B AUTH-01 REPLAY-01 current persisted authority",()=>{
   await f.admin.query("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE id=$1",[a.sessionId]);
   await expect(requestCard(f,a,id)).rejects.toThrow('METER_FORBIDDEN');await expect(denyAdmission(f,a)).rejects.toThrow('METER_FORBIDDEN');
   const b=await meterCompany(f);await verifyBusiness(f,b);const second=randomUUID();await requestCard(f,b,second);
-  await workTenant(f.admin,b.tenantId,db=>db.query("UPDATE app.membership SET role='admin' WHERE tenant_id=$1 AND id=$2",[b.tenantId,b.actorId]));
+  await workTenant(f.admin,b.tenantId,db=>db.query("UPDATE app.membership SET role='admin' WHERE tenant_id=$1 AND id=$2",[b.tenantId,b.actorId]), { membershipId: b.actorId });
   await expect(requestCard(f,b,second)).rejects.toThrow('FREE_FIRST_JOB_ACCESS_DENIED');
  });
  it("cross-tenant session and browser completion refuse",async()=>{

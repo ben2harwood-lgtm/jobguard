@@ -15,7 +15,7 @@ import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from ".
 
 const tenant = randomUUID(), other = randomUUID(), job = randomUUID(), evidence = randomUUID();
 const actor = randomUUID(), second = randomUUID(), samePerson = randomUUID(), user = randomUUID();
-const context = testTenantContext(tenant);
+const context = testTenantContext(tenant, { membershipId: actor });
 const sessionDigest = "a".repeat(64), secondDigest = "b".repeat(64);
 const unregistered = randomUUID(), foreignJob = randomUUID(), foreignEvidence = randomUUID();
 let pg: EmbeddedPostgres, admin: Pool, runtime: Pool, executor: Pool, dir: string, repo: WormCommandRepository, secondRepo: WormCommandRepository;
@@ -83,7 +83,7 @@ it("projects real requested/applied/released commands, races, permissions and id
   for (const evidenceId of [unregistered, foreignEvidence]) {
     await expect(repo.submit(context, command({ evidenceId }))).rejects.toThrow("WORM_REFUSED");
   }
-  await expect(repo.listHolds(testTenantContext(other), actor, job)).rejects.toThrow("WORM_REFUSED");
+  await expect(repo.listHolds(testTenantContext(other, { membershipId: actor }), actor, job)).rejects.toThrow("WORM_REFUSED");
   await expect(repo.listHolds(context, randomUUID(), job)).rejects.toThrow("WORM_REFUSED");
   const c = command();
   const replay = await Promise.all([repo.submit(context, c), repo.submit(context, c)]);

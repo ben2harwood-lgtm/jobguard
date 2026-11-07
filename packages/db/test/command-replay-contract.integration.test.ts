@@ -148,7 +148,7 @@ it("rate acceptance replays the stored result after new evidence and rejects cha
         await db.query(`INSERT INTO app.rate_book_observation(tenant_id,job_id,scope_item_id,id,source_scope_revision_id,unit,rate_principal_pence,currency,tax_basis,category,region,effective_at,provenance)
           VALUES($1,$2,$3,$4,$5,'each',100,'GBP','standard_rate_20','paint','london','2026-10-30','entered')`,
         [a.tenantId,a.jobId,scope,randomUUID(),revision]);
-      });
+      }, { membershipId: a.actorId });
       return { scope, revision };
     }
     const target = await sample(); await sample(); await sample();

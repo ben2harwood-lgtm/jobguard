@@ -14,7 +14,7 @@ import { recoveryCaseTermsHash } from "@jobguard/core";
 import { DEMO_TENANT_ID as T, DEMO_MEMBERSHIP_ID as M, DEMO_IDENTITY_USER_ID as U, RecoveryCaseTermsRepository, RecoveryCaseRepository, RecoveryMessageRepository, EvidencePackRepository, PracticeActivationRepository, PracticeInvoiceRepository, FinalAccountCommandService, prepareActivationFixtureV3, migrate, withTenant, verifyAuditChain, executeAuthorizedCommercialAction } from "../src/index.js";
 import { freePort, closeTestPools } from "./pool-test-utils.js";
 import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
-let context=testTenantContext(T);
+let context=testTenantContext(T, { membershipId: M });
 const actor={membershipId:M,identityUserId:U},messageActor={membershipId:M,actorRef:`membership:${M}`};
 let pg:EmbeddedPostgres,admin:Pool,runtime:Pool,dir:string,port:number,job:string,unbound:string,invoice:string,unboundInvoice:string,supplierRefs:string[];
 const original=process.env.JOBGUARD_ENV;
@@ -117,7 +117,7 @@ it.each(["revoked","expired"])("[T2] dispatcher refuses %s owner with zero write
 it.each([["member","active"],["owner","revoked"],["owner","expired"]])("[T2] direct runtime forged exact inputs refuse %s/%s and roll back everything",async(role,state)=>{
  const who=await member(role,state),id=await newCase(),before=await counts();const credential=randomUUID().replaceAll("-","").repeat(2);await testBoundTenantContext(admin,T,who.membershipId,credential);
  // TERMS_RAW_OWNER: forged exact-input member, revoked owner and expired owner are raw SQL attacks.
- await expect(withTenant(admin,testTenantContext(T),async db=>{await db.$client.query("SELECT app.bind_request('real',$1,$2)",[credential,T]);const inputs=await handMade(db.$client,id,who.membershipId);return direct(db.$client,id,who.membershipId,inputs);})).rejects.toMatchObject({code:"42501",message:state==="active"?"RECOVERY_TERMS_AUTHORIZATION_INVALID":"REQUEST_BINDING_REFUSED"});expect(await counts()).toEqual(before);
+ await expect(withTenant(admin,testTenantContext(T, { membershipId: who.membershipId, bindRequest: false }),async db=>{await db.$client.query("SELECT app.bind_request('real',$1,$2)",[credential,T]);const inputs=await handMade(db.$client,id,who.membershipId);return direct(db.$client,id,who.membershipId,inputs);})).rejects.toMatchObject({code:"42501",message:state==="active"?"RECOVERY_TERMS_AUTHORIZATION_INVALID":"REQUEST_BINDING_REFUSED"});expect(await counts()).toEqual(before);
 });
 it("[T2] direct active-owner positive control accepts the same hand-made inputs; runtime cannot INSERT",async()=>{
  const id=await newCase();const result=await withTenant(admin,context,async db=>direct(db.$client,id,M,await handMade(db.$client,id,M)));expect(result.rows[0].case_id).toBe(id);

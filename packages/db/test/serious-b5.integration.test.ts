@@ -22,7 +22,7 @@ afterAll(async () => {
  if (f) await closeLockFixture(f);
 });
 async function approve(tenantId: string, variationId: string, actor = LOCK_OWNER, pool = f.runtime) {
- return withTenant(pool, testTenantContext(tenantId), async db => {
+ return withTenant(pool, testTenantContext(tenantId, { membershipId: actor }), async db => {
   const row = (await db.$client.query("SELECT r.* FROM app.variation v JOIN app.variation_revision r ON(r.tenant_id,r.id)=(v.tenant_id,v.current_revision_id) WHERE v.tenant_id=$1 AND v.id=$2", [tenantId, variationId])).rows[0];
   const approval = { id: randomUUID(), revisionId: row.id, revision: row.revision, contentHash: row.content_hash,
    signedDeltaPence: Number(row.signed_delta_pence), method: "builder_attestation" as const, actorMembershipId: actor, evidenceId: null, approvedAt: new Date() };
@@ -32,7 +32,7 @@ async function approve(tenantId: string, variationId: string, actor = LOCK_OWNER
 }
 async function reprice(tenantId: string, variation: any, pence: number) {
  const id = randomUUID();
- await withTenant(f.runtime, testTenantContext(tenantId), db => insertPricedVariation(db, tenantId, {
+ await withTenant(f.runtime, testTenantContext(tenantId, { membershipId: variation.confirmed_by_membership_id }), db => insertPricedVariation(db, tenantId, {
   id, variationId: variation.variation_id, revision: variation.revision + 1, previousRevisionId: variation.id,
   scopeItemId: variation.scope_item_id, description: "Fictional repriced extra", quantity: "1", unit: "item",
   unitRatePence: Math.abs(pence), signedDeltaPence: pence, contentHash: "b".repeat(64), confirmedByMembershipId: variation.confirmed_by_membership_id,
@@ -76,7 +76,7 @@ describe("SERIOUS-B5 final accounts and invoice artifacts", () => {
   await seedAccount(f.admin, DEMO_TENANT_ID, 10000);
   await f.admin.query("INSERT INTO identity.identity_user(id) VALUES($1) ON CONFLICT DO NOTHING", [DEMO_IDENTITY_USER_ID]);
   await f.admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) SELECT $1,tenant_id,account_id,$2,'owner' FROM app.membership WHERE tenant_id=$3 AND id=$4 ON CONFLICT DO NOTHING", [DEMO_MEMBERSHIP_ID, DEMO_IDENTITY_USER_ID, DEMO_TENANT_ID, LOCK_OWNER]);
-  const context = testTenantContext(DEMO_TENANT_ID), service = new FinalAccountCommandService(f.runtime);
+  const context = testTenantContext(DEMO_TENANT_ID, { membershipId: DEMO_MEMBERSHIP_ID }), service = new FinalAccountCommandService(f.runtime);
   const jobId = await prepareActivationFixtureV3(f.admin, context, "Fictional B5 baseline", 10000, f.runtime);
   await new PracticeActivationRepository(f.runtime).start(context, jobId, { commandId: randomUUID(), scenario: "no_charge" });
   const variationId = randomUUID();

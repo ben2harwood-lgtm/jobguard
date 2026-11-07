@@ -930,7 +930,7 @@ BEGIN
  IF NOT FOUND THEN RAISE EXCEPTION 'RECOVERY_JOB_NOT_FOUND' USING ERRCODE='42501'; END IF;
 END $$;
 
--- Latest predecessor: 0237_final_check_prerequisites.sql.
+-- Latest predecessor: 0667_final_check_practice_owner_check.sql.
 CREATE OR REPLACE FUNCTION app.final_check_require_invoice_actor(p_tenant uuid,p_job uuid,p_actor uuid) RETURNS void LANGUAGE plpgsql SET search_path=pg_catalog,app AS $$
 DECLARE scoped_digest text; supplied_digest text:=nullif(current_setting('app.practice_material_digest',true),''); session_actor uuid;
 BEGIN
@@ -946,7 +946,9 @@ BEGIN
  END IF;
  SELECT practice_session_digest INTO scoped_digest FROM app.job WHERE tenant_id=p_tenant AND id=p_job;
  IF NOT FOUND THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
- IF scoped_digest IS NOT NULL AND scoped_digest IS DISTINCT FROM supplied_digest THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
+ IF supplied_digest IS NOT NULL THEN
+  IF NOT app.final_check_practice_owns_job(p_tenant,p_job,supplied_digest) THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
+ ELSIF scoped_digest IS NOT NULL THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
 END $$;
 
 -- Latest predecessor: 0258_receipt_line_source_bridge.sql.

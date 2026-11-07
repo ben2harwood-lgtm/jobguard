@@ -18,7 +18,7 @@ const T = randomUUID(), O = randomUUID(), M = randomUUID(), U = randomUUID(), L 
 const at = "2026-10-01T00:00:00Z", credential = randomUUID();
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, shadow: Pool, emergency: Pool, directory: string, port: number;
 const pool = (user: string) => new Pool({ host: "127.0.0.1", port, database: "postgres", user, password: credential, max: 4 });
-const ctx = (tenant = T) => testTenantContext(tenant);
+const ctx = (tenant = T) => testTenantContext(tenant, { membershipId: M });
 async function tenantTx<R>(p: Pool, tenant: string, work: (db: PoolClient) => Promise<R>) {
   const db = await p.connect();
   try { await db.query("BEGIN"); await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenant]); const r = await work(db); await db.query("COMMIT"); return r; }

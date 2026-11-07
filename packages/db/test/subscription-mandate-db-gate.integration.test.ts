@@ -30,8 +30,8 @@ beforeAll(async () => {
   approvalId = randomUUID(); approval = input(approved); freshApproval = input(fresh);
   // Prove these credentials and exact commands work before copying to another database.
   await workTenant(f.runtime, approved.tenantId, db => db.query("SELECT app.m413_command($1,$2,$3,$4::jsonb)",
-    [approved.tenantId, approved.digest, approvalId, JSON.stringify(approval)]));
-  expect((await new SubscriptionMandateRepository(f.runtime).read(testTenantContext(approved.tenantId), approved.digest)).record?.state).toBe("active");
+    [approved.tenantId, approved.digest, approvalId, JSON.stringify(approval)]), { membershipId: approved.actorId });
+  expect((await new SubscriptionMandateRepository(f.runtime).read(testTenantContext(approved.tenantId, { membershipId: approved.actorId }), approved.digest)).record?.state).toBe("active");
   const user = (await f.runtime.query("SELECT current_user u")).rows[0].u as string;
   const { host, port, password } = (f.admin as unknown as { options: { host: string; port: number; password: string } }).options;
   const base = { host, port, password };
@@ -57,7 +57,7 @@ it("refuses reads, fresh approvals, exact replays and lifecycle commands outside
   ];
   for (const [a, id, value] of commands) {
     await expect(workTenant(f.runtime, a.tenantId, db => db.query("SELECT app.m413_command($1,$2,$3,$4::jsonb)",
-      [a.tenantId, a.digest, id, JSON.stringify(value)]))).rejects.toMatchObject(refused);
+      [a.tenantId, a.digest, id, JSON.stringify(value)]), { membershipId: a.actorId })).rejects.toMatchObject(refused);
   }
   // Read refuses even for valid active authority, a new tenant, or another tenant's session.
   for (const [tenant, digest] of [[approved.tenantId, approved.digest], [fresh.tenantId, fresh.digest],
@@ -66,6 +66,6 @@ it("refuses reads, fresh approvals, exact replays and lifecycle commands outside
       .rejects.toMatchObject(refused);
   }
   await expect(workTenant(f.runtime, fresh.tenantId, db => db.query("SELECT app.m413_command($1,$2,$3,$4::jsonb)",
-    [fresh.tenantId, "0".repeat(64), randomUUID(), "{}"]))).rejects.toMatchObject(refused);
+    [fresh.tenantId, "0".repeat(64), randomUUID(), "{}"]), { membershipId: fresh.actorId })).rejects.toMatchObject(refused);
   expect(await counts()).toEqual(before);
 });

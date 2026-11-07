@@ -190,7 +190,7 @@ beforeAll(async () => {
   await installLegacySyntheticPartyFixtures(admin);
   token = await issuePracticeSession(runtime); digest = hash(token);
   fixture = await seedDemoFixture(admin, digest);
-  ctx = testTenantContext(DEMO_TENANT_ID);
+  ctx = testTenantContext(DEMO_TENANT_ID, { membershipId: DEMO_MEMBERSHIP_ID });
   messages = new RecoveryMessageRepository(runtime); packs = new EvidencePackRepository(runtime); cases = new RecoveryCaseRepository(runtime);
   repo = new RecoveryFollowUpRepository(runtime, messages); sandbox = new SandboxRepository(runtime);
 }, 180_000);

@@ -14,8 +14,8 @@ import { closeTestPools, freePort } from "./pool-test-utils.js";
 // this deliberately frozen 0095 schema; fully migrated fixtures stay sealed.
 const tenant = randomUUID(), foreignTenant = randomUUID(), member = randomUUID();
 const migrationURL=MIGRATION_URLS.find(url=>url.pathname.endsWith("0095_job_parties.sql"))!;
-const context = testTenantContext(tenant);
-const foreignContext = testTenantContext(foreignTenant);
+const context = testTenantContext(tenant, { membershipId: member });
+const foreignContext = testTenantContext(foreignTenant, { membershipId: member });
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, repository: JobPartiesRepository, dir: string;
 let legacyInvoice: Record<string,unknown>;
 const legacyJobs: string[] = [], legacySnapshot = JSON.stringify({ name: "Earlier synthetic customer", address: ["Earlier address"] });
@@ -678,7 +678,7 @@ describe("CH-3a round 13 generated practice entry", () => {
   async function session() {
     const digest = createHash("sha256").update(randomUUID()).digest("hex");
     await runtime.query("SELECT app.issue_practice_session($1)", [digest]);
-    return { digest, context: testTenantContext(DEMO_TENANT_ID) };
+    return { digest, context: testTenantContext(DEMO_TENANT_ID, { membershipId: DEMO_MEMBERSHIP_ID }) };
   }
   it("issues the three home scenarios and saved v1 sample with a bound live example, empty quoting suggestions and isolated reusable identities", async () => {
     const owner = await session(), stranger = await session();

@@ -126,7 +126,7 @@ it("binds actor to the persisted session and refuses runtime/foreign/revoked acc
   await expect(t.issue({ ...t.request(), actorMembershipId: other.actorId })).rejects.toThrow("PLATFORM_INVOICE_FORBIDDEN");
   await expect(t.repo.issue(t.a.context, "0".repeat(64), t.profile, t.request())).rejects.toThrow();
   for (const table of ["platform_invoice_issuer", "platform_invoice_document", "platform_invoice_source"]) {
-    await expect(workTenant(f.runtime, t.a.tenantId, db => db.query(`SELECT * FROM app.${table}`))).rejects.toThrow();
+    await expect(workTenant(f.runtime, t.a.tenantId, db => db.query(`SELECT * FROM app.${table}`), { membershipId: t.a.actorId })).rejects.toThrow();
     expect((await f.admin.query("SELECT has_table_privilege('jobguard_runtime',$1,'INSERT,UPDATE,DELETE,TRUNCATE') allowed", [`app.${table}`])).rows[0].allowed).toBe(false);
   }
   await f.admin.query("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE token_digest=$1", [t.a.digest]);

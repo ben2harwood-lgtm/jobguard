@@ -9,7 +9,7 @@ import { meterCompany, verifyBusiness } from "./free-first-job-admission-fixture
 import { exactTarget } from "./free-first-job-lifecycle-fixtures.js";
 import { seedWorkJob } from "./job-work-state-fixtures.js";
 async function closeSource(f:WorkFixture,a:Awaited<ReturnType<typeof firstTrialFixture>>,date:string){
- return workTenant(f.admin,a.tenantId,async db=>{await db.query("SET LOCAL ROLE jobguard_migration");await db.query("INSERT INTO app.trial_end_source(tenant_id,trial_id,source_id,job_id,kind,effective_at,recorded_at) VALUES($1,$2,$3,$4,'close',$5::timestamptz,clock_timestamp())",[a.tenantId,a.trialId,randomUUID(),a.jobId,date]);});
+ return workTenant(f.admin,a.tenantId,async db=>{await db.query("SET LOCAL ROLE jobguard_migration");await db.query("INSERT INTO app.trial_end_source(tenant_id,trial_id,source_id,job_id,kind,effective_at,recorded_at) VALUES($1,$2,$3,$4,'close',$5::timestamptz,clock_timestamp())",[a.tenantId,a.trialId,randomUUID(),a.jobId,date]);}, { membershipId: a.actorId });
 }
 describe("MON-3 authoritative billing source and unchanged issued documents",()=>{
  let f:WorkFixture;beforeAll(async()=>{f=await createWorkFixture();},60000);afterAll(async()=>closeWorkFixture(f));
@@ -26,7 +26,7 @@ describe("MON-3 authoritative billing source and unchanged issued documents",()=
     await db.query("SET LOCAL session_replication_role='replica'");
     await db.query("UPDATE app.job_activation SET activated_at=$3::timestamptz WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId,startedAt]);
     await db.query("UPDATE app.trial_start SET started_at=$3::timestamptz,deadline_at=((($3::timestamptz AT TIME ZONE 'Europe/London')::date+90)::timestamp AT TIME ZONE 'Europe/London') WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId,startedAt]);
-   });
+   }, { membershipId: a.actorId });
    const view=await repo.read(a.context,a.digest,a.jobId);
    expect(view.start).toMatchObject({startedAt,deadlineAt});
    expect(view.timeline).toMatchObject({active:false,endedAt:deadlineAt,deadlineReachedAtEnd:true,sourceIds:[]});
@@ -35,7 +35,7 @@ describe("MON-3 authoritative billing source and unchanged issued documents",()=
    const boundary=await workTenant(f.admin,a.tenantId,async db=>{
     await db.query("SET LOCAL ROLE jobguard_migration");
     return (await db.query("SELECT app.mon3_trial_date($1,'2026-09-10T22:59:59.999999Z')::text before_deadline,app.mon3_trial_date($1,$2::timestamptz)::text at_deadline",[a.tenantId,deadlineAt])).rows[0];
-   });
+   }, { membershipId: a.actorId });
    expect(boundary).toEqual({before_deadline:null,at_deadline:'2026-09-11'});
    await historicalAgreement(f,a,'Solo');const source=await storeMeter(f,a,meterInput(a.tenantId,1));
    const issueCommand=randomUUID(),issued=await issue(f,a,'2026-09-01',1,issueCommand);
@@ -93,7 +93,7 @@ describe("MON-3 authoritative billing source and unchanged issued documents",()=
   const pinned=(await f.admin.query("SELECT input,source_id FROM app.trial_subscription_source WHERE tenant_id=$1",[a.tenantId])).rows[0];
   const [downgrade,read]=await Promise.all([
    command(f,a,{...terms(a,'Solo',2),kind:'change'}),
-   workTenant(f.runtime,a.tenantId,async db=>(await db.query("SELECT app.mon2_source($1,$2,$3) input",[a.tenantId,a.digest,pinned.source_id])).rows[0].input),
+   workTenant(f.runtime,a.tenantId,async db=>(await db.query("SELECT app.mon2_source($1,$2,$3) input",[a.tenantId,a.digest,pinned.source_id])).rows[0].input, { membershipId: a.actorId }),
   ]);
   expect(downgrade.status).toBe('pending');expect(read).toEqual(pinned.input);
   expect((await f.admin.query("SELECT plan FROM app.subscription_agreement_revision WHERE tenant_id=$1 ORDER BY revision DESC LIMIT 1",[a.tenantId])).rows[0].plan).toBe('Builder');

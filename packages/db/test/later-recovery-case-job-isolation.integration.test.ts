@@ -10,8 +10,9 @@ import { migrate, RecoveryCaseRepository } from "../src/index.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 
-const tenantId = randomUUID(), context = testTenantContext(tenantId);
+const tenantId = randomUUID();
 const actor = { membershipId: randomUUID(), identityUserId: randomUUID() };
+const context = testTenantContext(tenantId, { membershipId: actor.membershipId });
 let postgres: EmbeddedPostgres | undefined, admin: Pool, runtime: Pool;
 let port: number;
 const connection = (user: string) => ({ host: "127.0.0.1", port, database: "postgres", user, password: "synthetic" });

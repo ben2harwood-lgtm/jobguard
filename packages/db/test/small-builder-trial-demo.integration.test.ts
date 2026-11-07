@@ -74,7 +74,7 @@ it("cannot charge without accepted effective terms or accept caller clock/backda
 it("binding is FORCE RLS, tenant-FK-bound, private and immutable",async()=>{
  const s=await setup();await s.call(s.bind);
  expect((await f.admin.query("SELECT relrowsecurity,relforcerowsecurity,has_table_privilege('jobguard_runtime',oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE') allowed FROM pg_class WHERE oid='app.demo_trial_binding'::regclass")).rows[0]).toEqual({relrowsecurity:true,relforcerowsecurity:true,allowed:false});
- for(const sql of ["SELECT * FROM app.demo_trial_binding","UPDATE app.demo_trial_binding SET run_id=gen_random_uuid()","DELETE FROM app.demo_trial_binding","TRUNCATE app.demo_trial_binding"])await expect(workTenant(f.runtime,s.a.tenantId,db=>db.query(sql))).rejects.toThrow();
+ for(const sql of ["SELECT * FROM app.demo_trial_binding","UPDATE app.demo_trial_binding SET run_id=gen_random_uuid()","DELETE FROM app.demo_trial_binding","TRUNCATE app.demo_trial_binding"])await expect(workTenant(f.runtime,s.a.tenantId,db=>db.query(sql), { membershipId: s.a.actorId })).rejects.toThrow();
  await expect(f.admin.query("UPDATE app.demo_trial_binding SET second_job_id=first_job_id WHERE tenant_id=$1",[s.a.tenantId])).rejects.toThrow("DEMO_IMMUTABLE");
 });
 

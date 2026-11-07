@@ -149,7 +149,7 @@ describe("ENT-10d emergency PostgreSQL boundary",()=>{
  it("[S11] refused and owner-fixture uses preserve journal, evidence, earlier audit and every identity authority row byte-for-byte",async()=>{
   const f=await fixture();await f.enable();
   // Nonempty immutable records are created through merged posting/evidence services before comparison.
-  const context=testTenantContext(f.principal.tenantId),book=randomUUID(),receivable=randomUUID(),deferred=randomUUID(),authorization=randomUUID(),journal=randomUUID(),hash="a".repeat(64);
+  const context=testTenantContext(f.principal.tenantId, { membershipId: f.principal.membershipId }),book=randomUUID(),receivable=randomUUID(),deferred=randomUUID(),authorization=randomUUID(),journal=randomUUID(),hash="a".repeat(64);
   await admin.query("INSERT INTO app.ledger_book(id,tenant_id,code,currency,chart_status) VALUES($1,$2,$3,'GBP','synthetic')",[book,f.principal.tenantId,`fixture:${book}`]);
   for(const [id,code,kind] of [[receivable,"AR","receivable"],[deferred,"DEF","deferred_income"]])await admin.query("INSERT INTO app.ledger_account(id,tenant_id,book_id,currency,code,class,mapping_status) VALUES($1,$2,$3,'GBP',$4,$5,'synthetic')",[id,f.principal.tenantId,book,code,kind]);
   await admin.query("INSERT INTO app.financial_authorization(id,tenant_id,membership_id,purpose,amount_pence,currency,artifact_hash,status) VALUES($1,$2,$3,'plan_obligation',1000,'GBP',$4,'approved')",[authorization,f.principal.tenantId,f.principal.membershipId,hash]);

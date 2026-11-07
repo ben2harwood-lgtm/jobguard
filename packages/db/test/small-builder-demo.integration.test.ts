@@ -152,14 +152,14 @@ describe("DEMO-I PostgreSQL lifecycle and adversaries",()=>{
   for(const name of ["run","receipt","report"]){
    const table=`app.small_builder_demo_${name}`;
    expect((await c.admin.query("SELECT relrowsecurity,relforcerowsecurity,has_table_privilege('jobguard_runtime',oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE') allowed FROM pg_class WHERE oid=$1::regclass",[table])).rows[0]).toEqual({relrowsecurity:true,relforcerowsecurity:true,allowed:false});
-   await expect(workTenant(c.runtime,a.tenantId,db=>db.query(`SELECT * FROM ${table}`))).rejects.toMatchObject({code:"42501"});
+   await expect(workTenant(c.runtime,a.tenantId,db=>db.query(`SELECT * FROM ${table}`), { membershipId: a.actorId })).rejects.toMatchObject({code:"42501"});
   }
   await expect(c.runtime.query("SELECT app.small_builder_demo($1,$2,'create',NULL,$3::jsonb)",[a.tenantId,a.digest,JSON.stringify(create())])).rejects.toThrow();
   expect((await c.runtime.query("SELECT nullif(current_setting('app.tenant_id',true),'') tenant")).rows[0].tenant).toBeNull();
  });
  it("SQL rejects injected business facts and keeps report history immutable",async()=>{
   const a=await company(),run=await call(a,"create",null,create()),id=runId(run);
-  for(const extra of [{tenantId:a.tenantId},{facts:[]},{completed:true},{releaseTrialKey:true}]) await expect(workTenant(c.runtime,a.tenantId,db=>db.query("SELECT app.small_builder_demo($1,$2,'reset',$3,$4::jsonb)",[a.tenantId,a.digest,id,JSON.stringify({...reset(),...extra})]))).rejects.toThrow("INVALID_DEMO_INPUT");
+  for(const extra of [{tenantId:a.tenantId},{facts:[]},{completed:true},{releaseTrialKey:true}]) await expect(workTenant(c.runtime,a.tenantId,db=>db.query("SELECT app.small_builder_demo($1,$2,'reset',$3,$4::jsonb)",[a.tenantId,a.digest,id,JSON.stringify({...reset(),...extra})]), { membershipId: a.actorId })).rejects.toThrow("INVALID_DEMO_INPUT");
   await call(a,"snapshot",id,snapshot());
   await expect(c.admin.query("UPDATE app.small_builder_demo_report SET facts='{}' WHERE tenant_id=$1",[a.tenantId])).rejects.toThrow("DEMO_IMMUTABLE");
   const before=(await c.admin.query("SELECT to_jsonb(r) v FROM app.small_builder_demo_report r WHERE tenant_id=$1",[a.tenantId])).rows;

@@ -16,7 +16,7 @@ import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from ".
 describe("LP-1 row-lock compatibility", () => {
   const phrase = randomUUID(), tenant = randomUUID(), foreign = randomUUID();
   const person = randomUUID(), account = randomUUID(), membership = randomUUID(), foreignAccount = randomUUID(), foreignMember = randomUUID(), job = randomUUID();
-  const actor = { membershipId: membership, identityUserId: person, actorRef: `membership:${membership}` }, ctx = testTenantContext(tenant);
+  const actor = { membershipId: membership, identityUserId: person, actorRef: `membership:${membership}` }, ctx = testTenantContext(tenant, { membershipId: membership });
   const caseId = randomUUID();
   let postgres: EmbeddedPostgres, owner: Pool, runtime: Pool;
   beforeAll(async () => {

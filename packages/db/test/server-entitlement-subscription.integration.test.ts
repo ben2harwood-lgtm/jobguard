@@ -9,7 +9,7 @@ afterAll(async () => { await c?.close(); });
 // cluster deliberately names the database jobguard_synthetic_demo, as MON-8 requires.
 const pools = () => c as unknown as WorkFixture;
 const read = (a: Awaited<ReturnType<typeof meterCompany>>, feature = "invoices") => workTenant(c.runtime, a.tenantId,
-  async db => (await db.query("SELECT app.mon8_company_feature($1,$2,NULL) decision", [a.digest, feature])).rows[0].decision);
+  async db => (await db.query("SELECT app.mon8_company_feature($1,$2,NULL) decision", [a.digest, feature])).rows[0].decision, { membershipId: a.actorId });
 it("MON-8 missing persisted trial authority refuses; an effective signed subscription supplies the plan", async () => {
   const a = await meterCompany(pools());
   expect(await read(a)).toMatchObject({ entitlement: "held", executable: false });
@@ -34,12 +34,12 @@ it("MON-8 effective-date boundary excludes a future-only agreement and includes 
   await workTenant(c.admin, a.tenantId, async db => {
     await db.query("SET LOCAL session_replication_role='replica'");
     await db.query("UPDATE app.subscription_agreement_revision SET effective_date=(clock_timestamp() AT TIME ZONE 'Europe/London')::date+1 WHERE tenant_id=$1", [a.tenantId]);
-  });
+  }, { membershipId: a.actorId });
   expect(await read(a)).toMatchObject({ executable: false });
   await workTenant(c.admin, a.tenantId, async db => {
     await db.query("SET LOCAL session_replication_role='replica'");
     await db.query("UPDATE app.subscription_agreement_revision SET effective_date=(clock_timestamp() AT TIME ZONE 'Europe/London')::date WHERE tenant_id=$1", [a.tenantId]);
-  });
+  }, { membershipId: a.actorId });
   expect(await read(a)).toMatchObject({ executable: true });
 });
 it("MON-8 foreign, revoked and stale sessions cannot reuse a previous result", async () => {

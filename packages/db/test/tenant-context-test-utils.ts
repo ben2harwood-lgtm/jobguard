@@ -4,21 +4,24 @@ import { verifiedTenantContextFromMembership } from "../src/tenant-context.js";
 
 // Only these explicitly synthetic contexts are upgraded by the integration setup.
 // Production constructors, queued jobs and direct-SQL attack clients are untouched.
-const syntheticContexts = new WeakMap<object, { membershipId?: string }>();
+const syntheticContexts = new WeakMap<object, { membershipId: string }>();
 const resolvedContexts = new WeakMap<object, WeakMap<object, ReturnType<typeof testTenantContext>>>();
-export function testTenantContext(tenantId: string, options: { membershipId?: string; bindRequest?: boolean } = {}) {
+export function testTenantContext(tenantId: string, options: { membershipId?: string; bindRequest?: boolean; bound?: boolean } = {}) {
+  // Production contexts expose only tenantId; retain the exact constructor
+  // membership in this test-only recipe rather than discovering an actor later.
+  const membershipId = options.membershipId ?? "40000000-0000-4000-8000-000000000004";
   const context = verifiedTenantContextFromMembership({
     identityUserId: "30000000-0000-4000-8000-000000000003",
-    membershipId: options.membershipId ?? "40000000-0000-4000-8000-000000000004",
+    membershipId,
     tenantId,
   } as Parameters<typeof verifiedTenantContextFromMembership>[0]);
-  if (options.bindRequest !== false) syntheticContexts.set(context, options.membershipId ? { membershipId: options.membershipId } : {});
+  if (options.bindRequest !== false && options.bound !== false) syntheticContexts.set(context, { membershipId });
   return context;
 }
 
 export function needsTestRequestBinding(context: object) { return syntheticContexts.has(context); }
 
-/** Resolve the legacy tenant-only recipe to its persisted fixture membership.
+/** Bind only the membership named when the synthetic context was constructed.
  * No member (including a deliberately foreign tenant) stays unbound and fails
  * through the original routine. Never replace an explicit credential/context. */
 export async function bindTestTenantContext(owner: Pool, context: ReturnType<typeof testTenantContext>, databaseScope: object = owner) {
@@ -29,8 +32,8 @@ export async function bindTestTenantContext(owner: Pool, context: ReturnType<typ
   const installed = (await owner.query("SELECT to_regprocedure('app.bind_request(text,text,uuid)') installed")).rows[0].installed;
   if (!installed) return context;
   const member = (await owner.query<{ id: string }>(`SELECT id FROM app.membership
-    WHERE tenant_id=$1 AND ($2::uuid IS NULL OR id=$2)
-    ORDER BY (role='owner') DESC, id LIMIT 1`, [context.tenantId, recipe.membershipId ?? null])).rows[0];
+    WHERE tenant_id=$1 AND id=$2 AND revoked_at IS NULL
+      AND (expires_at IS NULL OR expires_at>clock_timestamp())`, [context.tenantId, recipe.membershipId])).rows[0];
   if (!member) return context;
   const bound = await testBoundTenantContext(owner, context.tenantId, member.id);
   const scopes = resolvedContexts.get(context) ?? new WeakMap();

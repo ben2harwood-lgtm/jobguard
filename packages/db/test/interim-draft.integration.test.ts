@@ -63,7 +63,7 @@ describe("M4-18 PostgreSQL synthetic draft books",()=>{
       await db.query(`INSERT INTO app.variation_revision(tenant_id,job_id,id,variation_id,scope_item_id,revision,description,quantity_decimal,unit,unit_rate_pence,signed_delta_pence,content_hash,confirmed_by_membership_id,rate_provenance_kind,rate_source_ref,rate_source_hash,rate_version)
         VALUES($1,$2,$3,$4,$5,1,'Fictional omission','1','item',5000,-5000,$6,$7,'human_entered','fixture',$6,'fixture.v1')`,
         [f.a.tenantId,f.a.jobId,variationRevision,variation,f.a.scopeId,"a".repeat(64),f.a.actorId]);
-    });
+    }, { membershipId: f.a.actorId });
     const nextSchedule={...f.schedule,id:randomUUID(),revision:2,previousScheduleId:f.schedule.id,
       lines:[...f.schedule.lines,{id:randomUUID(),scopeItemId:f.a.scopeId,commercialRevisionId:variationRevision,
         sourceDocumentId:variation,kind:"approved_variation",approvalDecisionId:randomUUID(),netPence:-5000}]};
@@ -80,8 +80,8 @@ describe("M4-18 PostgreSQL synthetic draft books",()=>{
     await expect(f.append({...credit,id:randomUUID(),lines:f.values(6000)})).rejects.toMatchObject({code:"VALUE_LIMIT"});
     expect(INTERIM_APPLICATIONS_ENABLED).toBe(false);expect(()=>assertInterimDocumentIssueAllowed()).toThrow();
     for(const sql of ["UPDATE app.interim_draft_record SET record=record WHERE tenant_id=$1", "DELETE FROM app.interim_draft_record WHERE tenant_id=$1"]) {
-      await expect(workTenant(c.admin,f.a.tenantId,async db=>{await db.query("SET LOCAL ROLE jobguard_migration");return db.query(sql,[f.a.tenantId]);})).rejects.toThrow();
-      await expect(workTenant(c.runtime,f.a.tenantId,db=>db.query(sql,[f.a.tenantId]))).rejects.toMatchObject({code:"42501"});
+      await expect(workTenant(c.admin,f.a.tenantId,async db=>{await db.query("SET LOCAL ROLE jobguard_migration");return db.query(sql,[f.a.tenantId]);}, { membershipId: f.a.actorId })).rejects.toThrow();
+      await expect(workTenant(c.runtime,f.a.tenantId,db=>db.query(sql,[f.a.tenantId]), { membershipId: f.a.actorId })).rejects.toMatchObject({code:"42501"});
     }
     expect(await f.repo.read(f.a.context,f.a.jobId,f.a.digest)).toEqual(result);
   });
@@ -108,7 +108,7 @@ describe("M4-18 PostgreSQL synthetic draft books",()=>{
     await workTenant(c.runtime,f.a.tenantId,async db=>{
       await db.query("SELECT app.interim_draft_records($1,$2,$3,'read','{}'::jsonb)",[f.a.tenantId,f.a.digest,f.a.jobId]);
       expect((await db.query("SELECT current_setting('app.tenant_id') t")).rows[0].t).toBe(f.a.tenantId);
-    });
+    }, { membershipId: f.a.actorId });
     await expect(c.runtime.query("SELECT * FROM app.interim_draft_record")).rejects.toMatchObject({code:"42501"});
     await expect(c.runtime.query("INSERT INTO app.interim_draft_record SELECT * FROM app.interim_draft_record")).rejects.toMatchObject({code:"42501"});
   });

@@ -43,7 +43,7 @@ it("real site evidence and work commands refresh the screen; replay and foreign 
   await db.query(`UPDATE app.job_activation SET activated_at=clock_timestamp()-interval '8 days' WHERE tenant_id=$1 AND job_id=$2`,[a.tenantId,a.jobId]);
   // Preserve first-evidence-before-finish ordering when relocating these fictional facts.
   await db.query(`UPDATE app.job_work_state_event SET fact_at=(((clock_timestamp() AT TIME ZONE 'Europe/London')::date-7+time '12:00') AT TIME ZONE 'Europe/London')+sequence*interval '1 microsecond',recorded_at=(((clock_timestamp() AT TIME ZONE 'Europe/London')::date-7+time '12:00') AT TIME ZONE 'Europe/London')+sequence*interval '1 microsecond' WHERE tenant_id=$1 AND job_id=$2`,[a.tenantId,a.jobId]);
- });
+ }, { membershipId: a.actorId });
  expect((await read()).countedPlaces).toBe(0);
  await commands.command(a.context,a.jobId,a.actorId,{version:"job-work-state-command.v1",commandId:randomUUID(),expectedRevision:2,action:"resume"});
  expect((await read()).countedPlaces).toBe(1);
@@ -57,7 +57,7 @@ it("fresh capture is a finalized narrow entrypoint, with no direct runtime table
  expect((await f.admin.query(`SELECT pg_get_userbyid(proowner) owner,prosecdef,proconfig,
   has_function_privilege('jobguard_runtime',oid,'EXECUTE') executable FROM pg_proc
   WHERE oid='app.mon1_today_source(uuid,text)'::regprocedure`)).rows[0]).toEqual({owner:"jobguard_meter_owner",prosecdef:true,proconfig:["search_path=pg_catalog"],executable:true});
- await expect(workTenant(f.runtime,a.tenantId,db=>db.query("SELECT * FROM app.meter_lifecycle_source"))).rejects.toThrow("permission denied");
+ await expect(workTenant(f.runtime,a.tenantId,db=>db.query("SELECT * FROM app.meter_lifecycle_source"), { membershipId: a.actorId })).rejects.toThrow("permission denied");
  expect((await f.admin.query(`SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
   WHERE n.nspname='app' AND c.relkind IN ('r','p','v','m') AND c.relname LIKE 'shadow%'
   AND has_table_privilege('jobguard_meter_owner',c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE')`)).rows).toEqual([]);
@@ -82,7 +82,7 @@ it("MON1-J drill-down stays company-scoped and signals change neither its rows n
  await workTenant(f.admin, a.tenantId, db => db.query(`INSERT INTO app.shadow_commercial_signal
   (tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state)
   VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic.v1',clock_timestamp(),'Fictional hidden extra','low','held_for_final_check')`,
-  [a.tenantId, a.jobId, randomUUID(), randomUUID()]));
+  [a.tenantId, a.jobId, randomUUID(), randomUUID()]), { membershipId: a.actorId });
  expect(await reader.readJobs(a.context, a.digest)).toEqual(before);
  expect((await readMeter(f, a, await refreshMeter(f, a))).result).toEqual(bill);
  await expect(reader.readJobs(b.context, a.digest)).rejects.toThrow("METER_FORBIDDEN");
@@ -95,7 +95,7 @@ it("MON1-J drill-down stays company-scoped and signals change neither its rows n
 
 it("drill-down grants only checked execution; its only business input is the meter work ledger", async () => {
  const empty = await meterCompany(f);
- await expect(workTenant(f.runtime, empty.tenantId, db => db.query("SELECT app.mon1_today_jobs($1,$2)", [empty.tenantId, empty.digest]))).rejects.toThrow("METER_UNAVAILABLE");
+ await expect(workTenant(f.runtime, empty.tenantId, db => db.query("SELECT app.mon1_today_jobs($1,$2)", [empty.tenantId, empty.digest]), { membershipId: empty.actorId })).rejects.toThrow("METER_UNAVAILABLE");
  const row = (await f.admin.query(`SELECT pg_get_functiondef(oid) definition,prosecdef,proconfig,
   pg_get_userbyid(proowner) owner,has_function_privilege('jobguard_runtime',oid,'EXECUTE') runtime,
   has_function_privilege('jobguard_infrastructure',oid,'EXECUTE') infrastructure,

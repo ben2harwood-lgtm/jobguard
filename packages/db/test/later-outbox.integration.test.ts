@@ -30,7 +30,7 @@ const TENANT = "91000000-0000-4000-8000-000000000001";
 const ACCOUNT = "92000000-0000-4000-8000-000000000001";
 const USER = "93000000-0000-4000-8000-000000000001";
 const MEMBER = "94000000-0000-4000-8000-000000000001";
-const context = testTenantContext(TENANT);
+const context = testTenantContext(TENANT, { membershipId: MEMBER });
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 
 let postgres: EmbeddedPostgres;
@@ -196,7 +196,7 @@ describe("LATER-B9 PostgreSQL outcome guarantees", () => {
   it("ruling 112 owner retry delivers once after definite failure while automatic execution honours back-off", async () => {
     await installLegacySyntheticPartyFixtures(admin);
     const fixture = await seedPursuitFixture();
-    const ctx = testTenantContext(fixture.tenantId);
+    const ctx = testTenantContext(fixture.tenantId, { membershipId: fixture.memberId });
     const actor = { membershipId: fixture.memberId, actorRef: `membership:${fixture.memberId}` };
     const caseId = fixture.customerCaseId;
     await admin.query("INSERT INTO app.recovery_case_event(id,tenant_id,job_id,case_id,sequence,event_type,from_state,to_state,reviewer_ref,command_id,payload_hash) VALUES($1,$2,$3,$4,1,'opened',NULL,'identified','fixture-owner',$5,$6)",

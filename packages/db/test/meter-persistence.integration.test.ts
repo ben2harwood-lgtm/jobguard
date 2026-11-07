@@ -102,8 +102,8 @@ describe("MON-1B real PostgreSQL synthetic persistence",()=>{
   await f.admin.query("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE id=$1",[a.sessionId]);
   await expect(refreshMeter(f,a)).rejects.toThrow("METER_FORBIDDEN");await expect(readMeter(f,a,id)).rejects.toThrow("METER_FORBIDDEN");
   for(const table of ["meter_input_event","meter_computation","meter_day_ledger","meter_correction","meter_projection_alert"]){
-   expect((await workTenant(f.runtime,a.tenantId,db=>db.query(`SELECT * FROM app.${table}`))).rows).toEqual([]);
-   await expect(workTenant(f.runtime,a.tenantId,db=>db.query(`DELETE FROM app.${table}`))).rejects.toMatchObject({code:"42501"});
+   expect((await workTenant(f.runtime,a.tenantId,db=>db.query(`SELECT * FROM app.${table}`), { membershipId: a.actorId })).rows).toEqual([]);
+   await expect(workTenant(f.runtime,a.tenantId,db=>db.query(`DELETE FROM app.${table}`), { membershipId: a.actorId })).rejects.toMatchObject({code:"42501"});
   }
  });
  it("MON1-A28 MON1-A29 meter roles retain safe posture and cannot access shadow data; runtime cannot assume them or load fixture facts",async()=>{

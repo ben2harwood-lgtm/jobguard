@@ -15,7 +15,7 @@ import { testTenantContext } from "./tenant-context-test-utils.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, directory: string;
-const context = testTenantContext(T), previousEnvironment = process.env.JOBGUARD_ENV;
+const context = testTenantContext(T, { membershipId: M }), previousEnvironment = process.env.JOBGUARD_ENV;
 const deferred = () => { let resolve!: () => void; const promise = new Promise<void>(done => { resolve = done; }); return { promise, resolve }; };
 const command = (jobId: string, expectedRevision: number) => ({ version: "final-account.assemble.v1", commandId: randomUUID(), actorMembershipId: M, jobId, expectedRevision });
 beforeAll(async () => {

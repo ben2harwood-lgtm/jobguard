@@ -8,7 +8,7 @@ import { verifiedTenantContextForQueuedJob } from "../src/tenant-context.js";
 import { createWorkFixture, closeWorkFixture, meterCompany, verifyBusiness, requestCard, recordCard, resultFixture, ownCounts, denyAdmission, workTenant, type WorkFixture, type TrialCompany } from "./free-first-job-admission-fixtures.js";
 
 const read = (f: WorkFixture, a: TrialCompany, job: string = a.jobId, digest: string = a.digest) => workTenant(f.runtime, a.tenantId, async db =>
- (await db.query("SELECT app.mon3_read_eligibility($1,$2,$3) result", [a.tenantId, digest, job])).rows[0].result);
+ (await db.query("SELECT app.mon3_read_eligibility($1,$2,$3) result", [a.tenantId, digest, job])).rows[0].result, { membershipId: a.actorId });
 
 import { exactTarget } from "./free-first-job-lifecycle-fixtures.js";
 
@@ -123,7 +123,7 @@ describe("MON-3C ELIG private advisory PostgreSQL foundation", () => {
    await db.query("SET LOCAL session_replication_role='replica'");
    await db.query("INSERT INTO app.job_party_current(tenant_id,job_id,binding_id) VALUES($1,$2,$3)",[a.tenantId,a.jobId,first.sources.partyBindingId]);
    await db.query("UPDATE app.quote_version SET content_hash=$3 WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId,'b'.repeat(64)]);
-  });
+  }, { membershipId: a.actorId });
   const staleQuote=await read(f,a);expect(staleQuote.reasons).toContain('STALE_QUOTE_OR_PARTIES');expect(staleQuote.offerSkip).toBe(false);
  });
  it("ELIG-02 imported, pilot, historical activation and reopened histories cannot become first targets", async () => {
@@ -135,7 +135,7 @@ describe("MON-3C ELIG private advisory PostgreSQL foundation", () => {
     if(change==='pilot')await db.query("UPDATE app.job_commercial_track SET environment='pilot_no_charge' WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId]);
     if(change==='activated')await db.query("INSERT INTO app.job_activation(id,tenant_id,job_id,accepted_document_id,accepted_document_version,accepted_document_hash,mode,activation_terms_version,fee_policy_version,actor_membership_id,activated_at) SELECT $3,$1,$2,accepted_quote_version_id,1,$4,'synthetic_demo','synthetic_demo_activation.v3','reference_fee_policy_v3',$5,clock_timestamp() FROM app.job WHERE tenant_id=$1 AND id=$2",[a.tenantId,a.jobId,randomUUID(),'a'.repeat(64),a.actorId]);
     if(change==='reopened')await db.query("INSERT INTO app.job_work_state_event(tenant_id,job_id,id,sequence,kind,fact_at,actor_membership_id,command_id,predecessor_id,request_hash,audit_event_id) VALUES($1,$2,$3,1,'reopened',clock_timestamp(),$4,$5,$6,$7,$8)",[a.tenantId,a.jobId,randomUUID(),a.actorId,randomUUID(),randomUUID(),'a'.repeat(64),randomUUID()]);
-   });
+   }, { membershipId: a.actorId });
    const value=await read(f,a); expect(value.targetStatus).toBe('ineligible'); expect(value.offerSkip).toBe(false);
    expect(value.reasons).toContain(change==='imported'?'IMPORTED_TARGET':change==='pilot'?'SUPPORTED_TRACK_UNAVAILABLE':'HISTORICAL_TARGET');
   }

@@ -15,7 +15,7 @@ export function meterInput(tenantId:string, places=8, month="2026-09",length=30)
  return {version:"meter-persisted-fixture.v1",environment:"synthetic_demo",startDate:`${month}-01`,endDateExclusive:month==="2026-09"?"2026-10-01":"2026-11-01",days:Array.from({length},(_,i)=>({date:`${month}-${String(i+1).padStart(2,"0")}`,plan:"Builder",annualPrepaid:false,trial:false,jobs:jobs.map(job=>({...job}))}))};
 }
 export async function storeMeter(f:WorkFixture,a:Awaited<ReturnType<typeof meterCompany>>,input:unknown,id=randomUUID()) {
- await workTenant(f.admin,a.tenantId,db=>db.query("SELECT app.mon1_store_fixture($1,$2,$3,$4::jsonb)",[a.tenantId,a.digest,id,JSON.stringify(input)]));return id;
+ await workTenant(f.admin,a.tenantId,db=>db.query("SELECT app.mon1_store_fixture($1,$2,$3,$4::jsonb)",[a.tenantId,a.digest,id,JSON.stringify(input)]), { membershipId: a.actorId });return id;
 }
-export const refreshMeter=(f:WorkFixture,a:Awaited<ReturnType<typeof meterCompany>>,date="2026-09-01")=>workTenant(f.runtime,a.tenantId,async db=>(await db.query("SELECT app.mon1_rebuild($1,$2,$3::date) id",[a.tenantId,a.digest,date])).rows[0].id as string);
-export const readMeter=(f:WorkFixture,a:Awaited<ReturnType<typeof meterCompany>>,id:string)=>workTenant(f.runtime,a.tenantId,async db=>(await db.query("SELECT app.mon1_read($1,$2,$3) result",[a.tenantId,a.digest,id])).rows[0].result);
+export const refreshMeter=(f:WorkFixture,a:Awaited<ReturnType<typeof meterCompany>>,date="2026-09-01")=>workTenant(f.runtime,a.tenantId,async db=>(await db.query("SELECT app.mon1_rebuild($1,$2,$3::date) id",[a.tenantId,a.digest,date])).rows[0].id as string, { membershipId: a.actorId });
+export const readMeter=(f:WorkFixture,a:Awaited<ReturnType<typeof meterCompany>>,id:string)=>workTenant(f.runtime,a.tenantId,async db=>(await db.query("SELECT app.mon1_read($1,$2,$3) result",[a.tenantId,a.digest,id])).rows[0].result, { membershipId: a.actorId });

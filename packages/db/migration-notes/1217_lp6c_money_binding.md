@@ -119,3 +119,90 @@ Actual local verification:
 - `LANE_BASE_REF=origin/main node tools/lint.mjs`: passed, including lane, core purity, money, commercial, provider and PL/pgSQL checks. `git diff --check`: passed.
 
 1217 remains byte-identical to f8777e74 with SHA-256 e0ec950aa4e49c9c079e4303098c1bb0d20c7053a20cf7f62c21275695d10708. The lane contains all non-lane differences against the observed origin/main 1718270296ff6f54f9a9da8b7f2ce0970aaf1e11 (105 paths, including inherited differences), excludes config/lanes paths and does not list itself. No Git write, database startup, localhost bind, package download, provider or real-data action occurred. READY is a commit/CI handoff only: the router must run real PostgreSQL/fresh-and-upgrade/browser suites with at most two workers, obtain green current-head CI and independent exact-head RED review before landing. Earlier local or coordinator results are not claimed for this repair's uncommitted head.
+
+7 Nov repair 5 — security body correction and scoped fixture repair (RED)
+
+1217 now copies `final_check_require_invoice_actor(uuid,uuid,uuid)` from
+0667_final_check_practice_owner_check.sql statement for statement, inserting only
+its existing LP-6c identity block immediately after BEGIN. The import-edge-aware
+`final_check_practice_owns_job` check, owner, signature and REVOKE are preserved.
+All other 1217 bytes are unchanged apart from this routine's predecessor comment.
+SHA-256: be4153ae2e5af0bed809bdb5c0e4d7def322c8b398e23472256d7e330b0b80f5.
+
+Latest-body audit against origin/main 4d563c5d860a6130c2b82546343c9641cffd844b:
+all 28 recreated routines were searched past their named predecessors. Only the
+invoice-actor helper had fallen behind its latest same-signature body (0667).
+Later definitions of builder acceptance and quote disposition (0519), switch-live
+(0519), and simulated settlement (0519/0567) are separate overloads already copied
+separately in 1217. No other same-signature body needs replacement. The unchanged
+source-preservation regression confirms all 27 guarded copied bodies match their
+latest predecessor after removing only the LP-6c blocks; the meter bridge retains
+its separately tested credential-binding change. The supplied routine list's
+bind_request/current_actor references are grants/calls, not recreated bodies.
+The proof records the additional ownership-helper call before and after 1217;
+its predecessor pg_get_functiondef hash is null pending real PostgreSQL capture,
+rather than retaining the obsolete pre-0667 hash. No ACL or grant changed.
+
+The router had already started the requested main merge before this session.
+The one textual conflict in migfix-7-upgrade keeps main's 0665/0668 entries and
+all LP-6c entries and tuple typing. Git's index remains unmerged until the router
+stages this resolution; this sandbox performed no Git writes.
+
+The synthetic context helper records exactly the membership passed to its
+constructor (including its existing default id). Binding queries only that id
+in the context's tenant, with live-membership predicates. Missing/foreign/dead
+members remain unbound. The owner-role fallback is removed. Session reuse and
+explicit bound:false / bindRequest:false opt-outs remain. The setup wrapper now
+handles connect-only race/loss facades through their actual client and reuses
+that client for withTenant, preserving connection barriers and release ownership.
+Owner-only setup still follows its existing path.
+
+The mechanical sweep adds named actors to 217 type-inspected calls plus the
+explicit recovery/invoice/migration/helper fixture contexts. It changes no
+expectation. Step 4 is not complete: additional explicit-actor repository calls
+still pass an owner fixture context (for example contractor-billing-allocation's
+supervisor approval and site-extra-authority's role matrix). They need individual
+actor contexts while preserving any intentionally revoked/expired credentials.
+No blanket actor substitution or new test bypass was added.
+
+There is also a concrete scope conflict with the required unchanged
+final-check-practice-owner.integration.test.ts: its scoped() helper issues BEGIN
+and tenant configuration directly through practiceMaterialPool without calling
+withTenant or bind_request. Its mutation proof also sets tenant/digest directly
+after SET LOCAL ROLE, then expects an invoice write with only the ownership guard
+removed. The surviving LP-6c actor guard still refuses that unbound write. Keeping
+the test byte-identical, keeping the production pool/binding code unchanged, and
+requiring this test to pass cannot all be established by steps 1-4. This repair
+preserves both the guard and every test assertion. Real PostgreSQL execution is
+still required; this is a source-inspected conflict, not a reported database run.
+
+Actual repair-5 local verification:
+- Installed Vitest, 2 workers, three named files: lp6c-fixture-compatibility,
+  lp6c-money-routines and lp6b-caller-compatibility: 23 passed. This includes new
+  exact-member/no-owner-fallback and existing-session/no-refresh fixture checks.
+- 34 collection-only invocations loaded 100 selected suites with zero failures
+  (1,225 excluded tests), at most three named files and two workers per invocation.
+  The three named raw-SQL suites were loaded again after their binding opt-outs
+  were made explicit (79 exclusions). The final setup wrapper was loaded through
+  audit-fix-dbsrc-08, practice-invoice-audit and unchanged practice-owner (16
+  exclusions). These are import/collection checks, never PostgreSQL passes.
+- Installed TypeScript package typecheck passed. A test-file changed-line semantic
+  scan reported zero diagnostics across 107 files. git diff --check passed.
+- Core purity, money arithmetic, commercial boundary, AI-provider boundary and
+  PL/pgSQL CASE-in-IF checks passed (334 migrations). Full tools/lint.mjs stopped
+  at the lane gate: the pre-existing, unfinished main merge leaves staged main
+  paths visible as local changes, including other lanes' registration files.
+  The lane was not granted those unrelated paths or lane-registration authority.
+- Every existing expectation is unchanged, including the named direct-SQL cases.
+  PAY_NOW_AUTH_SPLIT, TERMS_RAW_OWNER and WORK_STATE_NORMAL_OWNER_SQL explicitly
+  retain unbound setup before their own binding/guard calls; their comments and
+  nothing-written checks remain. No test was deleted, weakened or skipped in code.
+
+NOT READY / do not commit the complete repair. Step 4 remains incomplete, the
+unchanged raw-SQL practice-owner test needs a scoped resolution, and the router
+must finish/stage its merge before the lane gate can be assessed on the final
+commit. The security correction is separately identifiable in the 1217 diff for
+priority handling. PostgreSQL, fresh/upgrade/catalog/migration suites, whole-db
+comparison with main, pg_dump restore proof, browsers, CI and independent exact-
+head RED review were not run here. No packages were downloaded, no database or
+browser was started, no provider was used and no Git write occurred.

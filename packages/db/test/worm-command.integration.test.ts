@@ -17,7 +17,7 @@ import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from ".
 
 const tenant = randomUUID(), other = randomUUID(), job = randomUUID(), evidence = randomUUID();
 const actor = randomUUID(), second = randomUUID(), samePerson = randomUUID(), user = randomUUID();
-const context = testTenantContext(tenant);
+const context = testTenantContext(tenant, { membershipId: actor });
 const sessionDigest = "a".repeat(64), secondDigest = "b".repeat(64);
 let upgradedRefusal: string;
 let pg: EmbeddedPostgres, admin: Pool, runtime: Pool, executor: Pool, operator: Pool, dir: string, repo: WormCommandRepository, secondRepo: WormCommandRepository;
@@ -102,7 +102,7 @@ describe("durable synthetic WORM SQL", () => {
     const c = command({ action: "request_anchor", subject: "manifest" });
     const before = (await admin.query("SELECT to_jsonb(c) row FROM app.worm_command c ORDER BY id")).rows;
     await expect(secondRepo.submit(context, c)).rejects.toThrow("WORM_REFUSED");
-    await expect(repo.submit(testTenantContext(other), c)).rejects.toThrow("WORM_REFUSED");
+    await expect(repo.submit(testTenantContext(other, { membershipId: actor }), c)).rejects.toThrow("WORM_REFUSED");
     expect((await admin.query("SELECT to_jsonb(c) row FROM app.worm_command c ORDER BY id")).rows).toEqual(before);
     const first = await repo.submit(context, c);
     expect(await repo.submit(context, c)).toEqual(first);
@@ -176,7 +176,7 @@ describe("durable synthetic WORM SQL", () => {
   });
   it("rejects wrong-job/cross-tenant references and unadmitted evidence", async () => {
     await expect(repo.submit(context, command({ jobId: randomUUID() }))).rejects.toThrow("WORM_REFUSED");
-    await expect(repo.submit(testTenantContext(other), command())).rejects.toThrow("WORM_REFUSED");
+    await expect(repo.submit(testTenantContext(other, { membershipId: actor }), command())).rejects.toThrow("WORM_REFUSED");
     await expect(repo.submit(context, command({ evidenceId: randomUUID() }))).rejects.toThrow("WORM_REFUSED");
     await expect(repo.submit(context, command({ action: "release_hold", releaseOf: randomUUID() }))).rejects.toThrow("WORM_REFUSED");
   });
@@ -253,8 +253,8 @@ describe("durable synthetic WORM SQL", () => {
     const alert = (await repo.operatorAlerts(context)).filter(a => a.command_id === c.commandId);
     expect(alert).toEqual([{ command_id: c.commandId, evidence_id: evidence, action: "apply_hold",
       code: "WORM_STORAGE_REFUSED", severity: "critical", occurred_at: expect.any(Date) }]);
-    expect(await repo.operatorAlerts(testTenantContext(other))).toEqual([]);
-    await expect(repo.execute(testTenantContext(other), c.commandId, refusing, tsa)).rejects.toThrow("WORM_REFUSED");
+    expect(await repo.operatorAlerts(testTenantContext(other, { membershipId: actor }))).toEqual([]);
+    await expect(repo.execute(testTenantContext(other, { membershipId: actor }), c.commandId, refusing, tsa)).rejects.toThrow("WORM_REFUSED");
     expect(calls).toBe(1);
     for (const credentials of [runtime, executor]) {
       await expect(withTenant(credentials, context, db => db.$client.query("SELECT * FROM worm_control.worm_operator_alerts()"))).rejects.toMatchObject({ code: "42501" });
@@ -292,8 +292,8 @@ describe("durable synthetic WORM SQL", () => {
       return storage.read();
     });
     const fresh = new WormCommandRepository(runtime, true, executor, operator, sessionDigest);
-    await expect(fresh.recover(testTenantContext(other), recovery, { read })).rejects.toThrow("WORM_REFUSED");
-    await expect(withTenant(operator, testTenantContext(other), db => db.$client.query(
+    await expect(fresh.recover(testTenantContext(other, { membershipId: actor }), recovery, { read })).rejects.toThrow("WORM_REFUSED");
+    await expect(withTenant(operator, testTenantContext(other, { membershipId: actor }), db => db.$client.query(
       "SELECT * FROM worm_control.worm_reconcile($1,1,true)", [c.commandId]))).rejects.toThrow("WORM_REFUSED");
     expect(read).not.toHaveBeenCalled();
     for (const credentials of [runtime, executor]) {
@@ -391,7 +391,7 @@ describe("durable synthetic WORM SQL", () => {
     expect((await admin.query("SELECT status FROM app.worm_command WHERE id=$1", [c.commandId])).rows[0].status).toBe("outcome_unknown");
     expect((await repo.recover(context, recovery, { read: async () => ({ held: true, retainUntil: null }) })).status).toBe("applied");
     for (const name of ["worm_command", "worm_attempt", "worm_synthetic_version"]) {
-      expect((await withTenant(executor, testTenantContext(other), db => db.$client.query(`SELECT * FROM app.${name}`))).rows).toEqual([]);
+      expect((await withTenant(executor, testTenantContext(other, { membershipId: actor }), db => db.$client.query(`SELECT * FROM app.${name}`))).rows).toEqual([]);
       await expect(withTenant(executor, context, db => db.$client.query(`UPDATE app.${name} SET tenant_id=$1`, [other]))).rejects.toMatchObject({ code: "42501" });
     }
   });
@@ -399,7 +399,7 @@ describe("durable synthetic WORM SQL", () => {
     for (const name of ["worm_command", "worm_attempt", "worm_synthetic_version"]) {
       const catalog = (await admin.query("SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=$1::regclass", [`app.${name}`])).rows[0];
       expect(catalog).toEqual({ relrowsecurity: true, relforcerowsecurity: true });
-      expect((await withTenant(runtime, testTenantContext(other), db => db.$client.query(`SELECT * FROM app.${name}`))).rows).toEqual([]);
+      expect((await withTenant(runtime, testTenantContext(other, { membershipId: actor }), db => db.$client.query(`SELECT * FROM app.${name}`))).rows).toEqual([]);
       await expect(withTenant(runtime, context, db => db.$client.query(`DELETE FROM app.${name}`))).rejects.toMatchObject({ code: "42501" });
     }
     await expect(withTenant(runtime, context, db => db.$client.query("UPDATE app.worm_command SET status='applied'"))).rejects.toMatchObject({ code: "42501" });

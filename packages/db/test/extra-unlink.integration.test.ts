@@ -363,7 +363,7 @@ describe("ENT-4c un-link command", () => {
    for (const table of ["extra_duplicate_link", "command_receipt"]) expect((await db.$client.query(`SELECT * FROM app.${table} WHERE tenant_id=$1`, [f.p.tenantId])).rows).toEqual([]);
   });
   const raw = input(f, l.linkId), upper = { ...raw, commandId: raw.commandId.toUpperCase(), jobId: raw.jobId.toUpperCase(), actorMembershipId: raw.actorMembershipId.toUpperCase(), linkId: raw.linkId.toUpperCase() };
-  const result = await repo.unlinkDuplicate(testTenantContext(f.p.tenantId.toUpperCase()), upper), before = await snapshot(f);
+  const result = await repo.unlinkDuplicate(testTenantContext(f.p.tenantId.toUpperCase(), { membershipId: f.p.membershipId }), upper), before = await snapshot(f);
   expect(await repo.unlinkDuplicate(f.ctx, raw)).toEqual(result); expect(await snapshot(f)).toEqual(before);
  }, 60_000);
 

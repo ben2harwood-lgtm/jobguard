@@ -8,10 +8,12 @@ import { beginRepositoryCommand, completeRepositoryCommand } from "../src/reposi
 import { DEMO_ACCOUNT_ID, DEMO_IDENTITY_USER_ID, DEMO_JOB_ID, DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID, seedDemo, type DemoSeedCommand } from "../src/demo-seed.js";
 import { withTenant } from "../src/tenant-context.js";
 let db:JobDoorsDatabase,actor:Awaited<ReturnType<typeof jobDoorsActor>>;
-const priorEnvironment=process.env.JOBGUARD_ENV,context=testTenantContext(DEMO_TENANT_ID);
+const priorEnvironment=process.env.JOBGUARD_ENV;
+let context: ReturnType<typeof testTenantContext>;
 beforeAll(async()=>{
  process.env.JOBGUARD_ENV="synthetic_demo";db=await jobDoorsDatabase(true);
  actor=await jobDoorsActor(db.owner,DEMO_TENANT_ID);
+ context=testTenantContext(DEMO_TENANT_ID, { membershipId: actor.member });
  // Session issuance requires the fixed synthetic principal. The separate owner
  // above remains this suite's actor, including the revoked-replay assertions.
  await db.owner.query("INSERT INTO identity.identity_user(id) VALUES($1) ON CONFLICT DO NOTHING",[DEMO_IDENTITY_USER_ID]);

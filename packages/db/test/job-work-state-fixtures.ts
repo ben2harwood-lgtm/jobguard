@@ -64,7 +64,7 @@ export async function seedWorkJob(f: WorkFixture, tenantId: string = randomUUID(
   await db.query("UPDATE app.job SET status='live' WHERE tenant_id=$1 AND id=$2", [tenantId, jobId]);
   await db.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')", [scopeId, tenantId, jobId]);
  });
- return { tenantId, actorId, jobId, scopeId, context: (await f.admin.query("SELECT to_regprocedure('app.bind_request(text,text,uuid)') installed")).rows[0].installed ? await testBoundTenantContext(f.admin, tenantId, actorId) : testTenantContext(tenantId) };
+ return { tenantId, actorId, jobId, scopeId, context: (await f.admin.query("SELECT to_regprocedure('app.bind_request(text,text,uuid)') installed")).rows[0].installed ? await testBoundTenantContext(f.admin, tenantId, actorId) : testTenantContext(tenantId, { membershipId: actorId }) };
 }
 export type WorkJob = Awaited<ReturnType<typeof seedWorkJob>>;
 export async function insertPhoto(f: WorkFixture, a: WorkJob, receivedAt = "2026-10-13T10:00:00.000001Z", type: string = proofEvidenceTypeSchema.enum.pre_cover_photo, capturedAt: string | null = null, historicalImportFixture = false) {
@@ -76,10 +76,10 @@ export async function insertPhoto(f: WorkFixture, a: WorkJob, receivedAt = "2026
    VALUES($1,$2,$3,$4,$5,$6,'image/png',100,'standard_evidence',clock_timestamp()+interval '1 day','verified',$7,$8,clock_timestamp(),$9)`, [id,a.tenantId,a.jobId,a.scopeId,`synthetic/ch4/${id}`,CH4_HASH,version,receivedAt,capturedAt]);
   await db.query(`INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at,device_captured_at)
    VALUES($1,$2,$1,$3,$4,'original',$5,$6,$7,$8,80,'image/png','standard_evidence',$9,clock_timestamp(),$10)`,[id,a.tenantId,a.jobId,a.scopeId,type,`synthetic/ch4/${id}`,version,CH4_HASH,receivedAt,capturedAt]);
- }); return id;
+ }, { membershipId: a.actorId }); return id;
 }
 export async function workEvents(f: WorkFixture, a: WorkJob) {
- return workTenant(f.runtime,a.tenantId, async db => (await db.query(`SELECT id,kind,source_receipt_id,sequence::text,to_char(fact_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') fact_at FROM app.job_work_state_event WHERE tenant_id=$1 AND job_id=$2 ORDER BY sequence`, [a.tenantId,a.jobId])).rows);
+ return workTenant(f.runtime,a.tenantId, async db => (await db.query(`SELECT id,kind,source_receipt_id,sequence::text,to_char(fact_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') fact_at FROM app.job_work_state_event WHERE tenant_id=$1 AND job_id=$2 ORDER BY sequence`, [a.tenantId,a.jobId])).rows, { membershipId: a.actorId });
 }
 /** Explicit held lifecycle storage only: no runtime command or permission is inferred. */
 export async function fixtureLifecycle(f: WorkFixture,a: WorkJob,kind: string, predecessor: string | null = null) {
@@ -89,7 +89,7 @@ export async function fixtureLifecycle(f: WorkFixture,a: WorkJob,kind: string, p
   await db.query(`INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id,result,completed_at) VALUES($1,$2,'ch4.fixture',$2::uuid::text,$3,'succeeded',$4,'{}',clock_timestamp())`,[a.tenantId,id,CH4_HASH,a.actorId]);
   await db.query(`INSERT INTO app.job_work_state_event(tenant_id,job_id,id,sequence,kind,fact_at,actor_membership_id,command_id,predecessor_id,close_reason,close_note,request_hash,audit_event_id)
    SELECT $1::uuid,$2::uuid,$3::uuid,coalesce(max(sequence),0)+1,$4::text,clock_timestamp(),$5::uuid,$3::uuid,$6::uuid,CASE WHEN $4='closed' THEN 'other' END,CASE WHEN $4='closed' THEN 'Fictional customer stopped work' END,$7,$3 FROM app.job_work_state_event WHERE tenant_id=$1 AND job_id=$2`,[a.tenantId,a.jobId,id,kind,a.actorId,predecessor,CH4_HASH]);
- });return id;
+ }, { membershipId: a.actorId });return id;
 }
 
 export async function boundaryLock(f:WorkFixture,a:Awaited<ReturnType<typeof seedWorkJob>>) {
@@ -97,7 +97,7 @@ export async function boundaryLock(f:WorkFixture,a:Awaited<ReturnType<typeof see
  await workTenant(f.admin,a.tenantId,async db=>{
   await db.query("SET LOCAL session_replication_role='replica'");
   await db.query(`INSERT INTO app.final_account_lock(tenant_id,job_id,id,final_account_revision_id,baseline_quote_version_id,capture_register_hash,line_set_hash,scope_disposition_hash,snapshot_digest,snapshot,declaration,declaration_version,onboarding_terms_version,locking_membership_id,locked_at,command_id,audit_event_id) VALUES($1,$2,$3,$4,$5,$6,$6,$6,$6,'{}','I''ve reviewed the work and extras on this job and this is my complete final account.','final_account_declaration.v1','synthetic_final_check_terms.v1',$7,clock_timestamp(),$8,$9)`,[a.tenantId,a.jobId,randomUUID(),randomUUID(),randomUUID(),CH4_HASH,a.actorId,randomUUID(),randomUUID()]);
- });
+ }, { membershipId: a.actorId });
 }
 
 export async function prepareWorkAccount(f:WorkFixture,a:WorkJob) {
@@ -109,7 +109,7 @@ export async function prepareWorkAccount(f:WorkFixture,a:WorkJob) {
    VALUES($1,$2,$3,$4,1,$5,$6,'GBP','candidate_m1_standard_v1',1000,200,1200,false,'[]')`,[revisionId,a.tenantId,a.jobId,draftId,CH4_HASH,baselineId]);
   await db.query("INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,description,net_pence,ordinal) VALUES($1,$2,$3,$4,'baseline',$5,$6,$5,'Fictional baseline',1000,1)",[lineId,a.tenantId,a.jobId,revisionId,baselineId,a.scopeId]);
   await db.query("UPDATE app.final_account_draft SET current_revision_id=$1,revision=1 WHERE tenant_id=$2 AND id=$3",[revisionId,a.tenantId,draftId]);
- });
+ }, { membershipId: a.actorId });
  return {baselineId,draftId,revisionId,lineId};
 }
 

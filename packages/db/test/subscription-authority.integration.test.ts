@@ -38,7 +38,7 @@ describe("MON-2A-P PostgreSQL authority", () => {
  it("missing foreign and pooled contexts fail closed", async () => {
   const a = await meterCompany(f), b = await meterCompany(f);
   await expect(f.runtime.query("SELECT app.mon2_read($1,$2)", [a.tenantId, a.digest])).rejects.toThrow();
-  await expect(workTenant(f.runtime, b.tenantId, db => db.query("SELECT app.mon2_read($1,$2)", [a.tenantId, a.digest]))).rejects.toThrow();
+  await expect(workTenant(f.runtime, b.tenantId, db => db.query("SELECT app.mon2_read($1,$2)", [a.tenantId, a.digest]), { membershipId: b.actorId })).rejects.toThrow();
   await expect(workTenant(f.runtime, "invalid", db => db.query("SELECT app.mon2_read($1,$2)", [a.tenantId, a.digest]))).rejects.toThrow();
   await readSubscription(f, a);
   expect((await f.runtime.query("SELECT nullif(current_setting('app.tenant_id',true),'') tenant")).rows[0].tenant).toBeNull();
@@ -61,7 +61,7 @@ describe("MON-2A-P PostgreSQL authority", () => {
  it("runtime has no direct subscription-table reads", async () => {
   const a = await meterCompany(f); await command(f, a, terms(a));
   for (const table of ["subscription_agreement_revision", "subscription_period", "platform_statement", "subscription_simulated_work"]) {
-   await expect(workTenant(f.runtime, a.tenantId, db => db.query(`SELECT * FROM app.${table}`))).rejects.toMatchObject({ code: "42501" });
+   await expect(workTenant(f.runtime, a.tenantId, db => db.query(`SELECT * FROM app.${table}`), { membershipId: a.actorId })).rejects.toMatchObject({ code: "42501" });
   }
   expect((await readSubscription(f, a)).agreements).toHaveLength(1);
  });

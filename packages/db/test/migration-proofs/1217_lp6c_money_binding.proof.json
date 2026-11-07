@@ -475,10 +475,11 @@
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "986095160668b8e0826428a715fbc71dd9eb2b3e2fda8cbda63c5b692efff564",
+        "definitionSha256": null,
         "staticWrites": [],
         "staticCalls": [
           "app.authenticate_practice_session",
+          "app.final_check_practice_owns_job",
           "app.final_lock_require_owner"
         ]
       },
@@ -499,6 +500,7 @@
           "app.authenticate_practice_session",
           "app.current_actor",
           "app.current_tenant",
+          "app.final_check_practice_owns_job",
           "app.final_lock_require_owner"
         ]
       }
