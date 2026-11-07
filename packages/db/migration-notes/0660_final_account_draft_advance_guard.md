@@ -27,3 +27,25 @@ passed. The pnpm launcher stalled before executing checks and was stopped;
 installed binaries were used without downloading packages. Database and browser
 suites were not run because this sandbox cannot start PostgreSQL or bind
 localhost. GitHub CI and exact-head independent RED review remain landing gates.
+
+Final CI repair round 2 (PR #627): the launcher's current-main merge at
+`d0adb6465` is already complete. This repair preserves main's product code and
+this branch's migration, proof and seven guard regressions unchanged.
+Source inspection traced MON-6's seed failure to its direct
+`UPDATE app.final_account_draft SET revision=2,current_revision_id=...`:
+the inserted revision 2 omitted `previous_revision_id`, leaving NULL while
+the draft's current head was revision 1. The seed, unlike product assembly,
+therefore attempted a non-descendant advance. The seed now inserts the link to
+`account.revisionId` and calls `app.advance_final_account_draft` within the same
+tenant-scoped transaction as the revision and lines. No trigger is relaxed,
+and every existing browser assertion is retained.
+
+This round's local checks: installed web `tsc -p tsconfig.json --noEmit
+--incremental false` passed; installed DB Vitest with `--maxWorkers=2` passed
+all 84 tests in `migration-proof-loader.test.ts`, `upgrade-proof-utils.test.ts`
+and `audit-api-file-final-account.test.ts`. Node's module syntax check passed
+for the extracted embedded seed script. Read-only checks confirmed the browser
+test body is identical to main and lane coverage exactly matches changed paths
+outside `config/lanes/`. `git diff --check` passed. PostgreSQL guard tests and
+MON-6 at both widths still require GitHub CI; exact-head independent RED review
+remains required before merge.
