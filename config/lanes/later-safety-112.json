@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-112": {
+      "branches": ["codex/sandbox/later-safety-112"],
+      "allow": [
+        "packages/db/migrations/0664_final_check_request_column_grant.sql",
+        "packages/db/test/migration-proofs/0664_final_check_request_column_grant.proof.json",
+        "packages/db/test/final-check-request-grant.integration.test.ts"
+      ]
+    }
+  }
+}

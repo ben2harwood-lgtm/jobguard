@@ -9,7 +9,7 @@ export async function until(check: () => boolean, signal: AbortSignal) {
   signal.throwIfAborted();
 }
 async function point(element: HTMLElement, signal?: AbortSignal) {
-  screen().querySelector("[data-walk-action]")?.removeAttribute("data-walk-action");
+  document.querySelectorAll("[data-walk-action]").forEach(element => element.removeAttribute("data-walk-action"));
   element.setAttribute("data-walk-action", "true");
   element.scrollIntoView({ block: "center" });
   if (typeof matchMedia === "function" && !matchMedia("(prefers-reduced-motion: reduce)").matches) await new Promise(resolve => setTimeout(resolve, 450));

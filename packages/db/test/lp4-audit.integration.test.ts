@@ -48,8 +48,20 @@ describe("LP-4 actual runtime audit boundary (PostgreSQL)", () => {
       p.prosrc source FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
       WHERE n.nspname||'.'||p.proname=$1`, [name])).rows;
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ owner: expected[0].owner, security: expected[0].securityDefiner,
-      config: [expected[0].searchPath], digest: expected[0].definitionSha256, runtime: expected[0].runtimeExecute });
+    if (name === "app.decision_check_command") {
+      // Preserve all security pins; bind the successor's entire source instead
+      // of the predecessor LP-0 digest (the body changed only in 0660).
+      const successor = readFileSync(new URL("../migrations/0660_baseline_ancestry_audit_trust.sql", import.meta.url), "utf8");
+      const body = successor.split("FUNCTION app.decision_check_command(")[1]!.split("AS $$")[1]!.split("$$;")[0];
+      expect(rows[0].source).toBe(body);
+      expect(body).toContain("rv.command_type='job.adopt_in_flight' AND rv.status='succeeded'");
+      expect(body).toContain("rv.semantic_key='import:'||next_job.id::text AND rv.result->>'jobId'=next_job.id::text AND rv.result->>'sourceJobId'=source.id::text");
+      expect(rows[0]).toMatchObject({ owner: expected[0].owner, security: expected[0].securityDefiner,
+        config: [expected[0].searchPath], runtime: expected[0].runtimeExecute });
+    } else {
+      expect(rows[0]).toMatchObject({ owner: expected[0].owner, security: expected[0].securityDefiner,
+        config: [expected[0].searchPath], digest: expected[0].definitionSha256, runtime: expected[0].runtimeExecute });
+    }
     expect(rows[0].source).toContain("app.lp4_seal_audit(");
     expect(rows[0].source).not.toMatch(/INSERT\s+INTO\s+app\.audit_event/i);
   });
