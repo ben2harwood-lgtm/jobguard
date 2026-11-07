@@ -1,7 +1,7 @@
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { approvedExtraDone, finalCheckDone, restoreProgress, stages, VoiceJourney } from "./voice-journey";
+import { addOnSiteEvidence, evidenceDone, approvedExtraDone, finalCheckDone, restoreProgress, stages, VoiceJourney } from "./voice-journey";
 const memo = vi.hoisted(() => ({ steps: [] as import("../../ui/walkthrough/walkthrough").WalkthroughStep[] }));
 vi.mock("react", async original => ({ ...await original<typeof React>(), useMemo: (factory: () => unknown) => {
   const result = factory();
@@ -93,4 +93,50 @@ it("step 3 lights the prepared handover control before screen actions begin", ()
 it.each([["accepted", 3], ["live", 4], ["invoiced", 4], ["paid", 4]])("resumes %s examples only as far as their verified lifecycle allows", async (status, initialStep) => {
   vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(response(capture())).mockResolvedValueOnce(response(quote())).mockResolvedValueOnce(response({ ...capture(preparedId), status })));
   expect((await restoreProgress(saved()))?.initialStep).toBe(initialStep);
+});
+
+
+describe("step 5 saved evidence", () => {
+  function proofScreen(initial: number) {
+    let state = initial;
+    const names = ["Attach generated practice image", "Check file integrity", "Complete this stage"];
+    const clicks: string[] = [];
+    const buttons = names.map((textContent, index) => ({
+      textContent, get disabled() { return state !== index; }, closest: () => null,
+      getClientRects: () => [{}], setAttribute: vi.fn(), scrollIntoView: vi.fn(),
+      click: () => { clicks.push(textContent); state = index + 1; },
+    }));
+    const root = {
+      querySelectorAll: () => buttons,
+      querySelector: (selector: string) => selector === '.proof-actions button:not(:disabled)'
+        ? buttons.find(button => !button.disabled) ?? null
+        : { textContent: selector.includes('stage-status') ? state === 3 ? "Complete" : "In progress"
+          : selector.includes('stage-review') ? ""
+          : ["Not attached", "Uploading", "File integrity checked · synthetic example", "File integrity checked · synthetic example"][state] ?? "" },
+    };
+    vi.stubGlobal("document", { getElementById: () => root, querySelectorAll: () => [] });
+    return { clicks, load: (next: number) => { state = next; } };
+  }
+  it.each([0, 1, 2, 3])("uses only remaining proof controls from saved state %s", async state => {
+    const proof = proofScreen(state);
+    await addOnSiteEvidence({} as HTMLElement, new AbortController().signal);
+    expect(proof.clicks).toEqual(["Attach generated practice image", "Check file integrity", "Complete this stage"].slice(state));
+    expect(evidenceDone()).toBe(true);
+  });
+  it.each([1, 2, 3])("observes saved state %s arriving after Show me starts", async state => {
+    const proof = proofScreen(-1);
+    const action = addOnSiteEvidence({} as HTMLElement, new AbortController().signal);
+    proof.load(state);
+    await action;
+    expect(proof.clicks).toEqual(["Attach generated practice image", "Check file integrity", "Complete this stage"].slice(state));
+    expect(evidenceDone()).toBe(true);
+  });
+  it.each(["In progress", "Complete"]) ("does not accept %s without checked proof", status => {
+    vi.stubGlobal("document", { getElementById: () => ({ querySelector: (selector: string) => ({ textContent: selector.includes('stage-status') ? status : "Uploading" }) }) });
+    expect(evidenceDone()).toBe(false);
+  });
+  it("does not accept completed history whose proof needs review", () => {
+    vi.stubGlobal("document", { getElementById: () => ({ querySelector: (selector: string) => ({ textContent: selector.includes('stage-status') ? "Complete" : selector.includes('stage-review') ? "Proof needs review" : "File integrity checked · synthetic example" }) }) });
+    expect(evidenceDone()).toBe(false);
+  });
 });

@@ -67,6 +67,25 @@ export function approvedExtraDone() {
   const amount = text("approved-additions");
   return /^£[\d,]+\.\d{2}$/.test(amount) && amount !== "£0.00";
 }
+export const evidenceDone = () => text("stage-status") === "Complete" &&
+  text("proof-state") === "File integrity checked · synthetic example" && !text("stage-review");
+
+export async function addOnSiteEvidence(_: HTMLElement, signal: AbortSignal) {
+  // The saved proof read can arrive after Show me starts on a resumed job.
+  // Wait for that read, then use only the controls the saved state still needs.
+  await until(() => evidenceDone() || !!screen()?.querySelector(
+    '.proof-actions button:not(:disabled)',
+  ), signal);
+  if (evidenceDone()) return;
+  if (text("proof-state") === "Not attached") {
+    await click("Attach generated practice image", signal);
+    await until(() => text("proof-state") !== "Not attached", signal);
+  }
+  if (text("proof-state") === "Uploading") await click("Check file integrity", signal);
+  await until(() => text("proof-state") === "File integrity checked · synthetic example", signal);
+  if (!evidenceDone()) await click("Complete this stage", signal);
+}
+
 export const finalCheckDone = () => text("final-check-status").startsWith("JobGuard's final check found");
 
 export function VoiceJourney() {
@@ -123,7 +142,7 @@ export function VoiceJourney() {
       () => { if (!ownPriced.current && !current.current.prepared && Number(text("quote-revision")) > 0) { ownPriced.current = true; remember(true); } return ownPriced.current; },
       () => !!current.current.prepared && text("quote-delivery") === "Simulated delivery — nothing sent",
       () => !!screen()?.querySelector('[data-testid="activation-policy"]'),
-      () => text("stage-status") === "Complete",
+      evidenceDone,
       approvedExtraDone,
       finalCheckDone,
       () => !!text("invoice-gross") && text("invoice-balance") === "GBP 0.00",
@@ -163,7 +182,7 @@ export function VoiceJourney() {
         await click("Continue fake worker", signal);
       },
       async (_, signal) => { await click("Record practice acceptance", signal); await click("Start this practice job", signal); },
-      async (_, signal) => { await click("Attach generated practice image", signal); await click("Check file integrity", signal); await click("Complete this stage", signal); },
+      addOnSiteEvidence,
       async (_, signal) => {
         if (!screen().querySelector(".variation-list article")) {
           await fill('.variation-entry input:not([aria-label])', "Extra preparation");
