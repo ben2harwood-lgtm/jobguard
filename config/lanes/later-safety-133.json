@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/later-safety-133"
       ],
-      "note": "RED sign-in. READY prepared PROPOSAL, NEEDS BEN typed approval before landing. NOPR.",
+      "note": "RED sign-in. READY for router handoff; Ben approved landing on 7 Nov 2026 (\"Yes, land both\"). Catch-up preserves both merge parents without new behaviour.",
       "allow": [
         "apps/api/src/auth/identity-rate-limit.test.ts",
         "apps/api/src/auth/persisted-auth-provider.ts",

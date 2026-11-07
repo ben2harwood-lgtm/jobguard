@@ -1,8 +1,12 @@
-# LATER-SAFETY-133 — READY: PROPOSAL, NEEDS BEN
+# LATER-SAFETY-133 — READY for router handoff
 
-RED (sign-in). Prepared proposal only; NOPR. Ben's typed approval is required
-before landing, followed by the existing independent RED review and green CI.
-No approval, independent verification, commit, push, PR, merge or deployment is claimed.
+RED (sign-in). Ben approved landing in the router chat on 7 Nov 2026
+("Yes, land both"), as supplied in this catch-up order. The order records r1 PASS
+at `5ef46376`. Current-head CI and the applicable independent RED check remain
+router gates. No commit, push, PR, merge to main or deployment is claimed.
+
+The earlier build and repair evidence below is historical; the catch-up section
+records the current approval and verification state.
 
 Baseline inspected: HEAD and origin/main were both
 `cc7e1cc891edf80d8dbfce8d7560607c497f00d4`; branch
@@ -64,7 +68,7 @@ measured optimization could combine the IP/global window counts into one aggrega
 query, keeping their time predicate in one place and reducing query maintenance.
 Non-blocking; no unrelated refactor included.
 
-## Repair round 1 — READY: PROPOSAL, NEEDS BEN
+## Repair round 1 — historical proposal handoff
 
 Read the independent precheck for head `9c0db12002f3323304c9a52574ee4f236663eeb5`.
 Removed `node:net` from `apps/web/app/lib/identity-server.ts` (the actual Next
@@ -103,3 +107,52 @@ No PostgreSQL or browser suite was run here. Full socket-capable CI, database an
 browser checks, Workers runtime proof, exact-head RED review and Ben's typed
 proposal approval remain outstanding. READY means ready for router commit and
 handoff only; no commit, push, PR, merge, deployment or approval is claimed.
+
+
+## LATER-SAFETY-133-CATCHUP — READY (7 Nov 2026)
+
+Ben's landing approval ("Yes, land both") and r1 PASS at `5ef46376` were
+supplied in the catch-up order. Removed the superseded proposal/approval hold
+from the current contract, lane note and receipt status. Historical runs above
+retain their original context; their pending-approval statements are superseded.
+
+The launcher merged `origin/main` (`4a6cd93e6`) into the reviewed branch at
+`7e21ce0ba`. Main contributes 242 commits since the reviewed head. A read-only
+three-way comparison against the common ancestor confirmed every piece file is
+an exact union of the reviewed branch and main. In particular, request throttling
+coexists with main's non-enumerable session credential. No runtime source or test
+was changed during this catch-up; no new behaviour, migration or dependency.
+The lane allow-list exactly matches all nine files changed from main outside
+`config/lanes/`; it excludes itself.
+
+Checks actually run with installed binaries (Node v24.17.0, TypeScript v5.8.3,
+Vitest v4.1.12), at most two workers and three named files per Vitest run:
+
+- API: `./node_modules/.bin/vitest run --maxWorkers=2 src/auth/auth.test.ts src/auth/identity.test.ts src/auth/identity-rate-limit.test.ts`
+  — PASS, 28 tests after rebuilding stale ignored workspace outputs.
+- API: `./node_modules/.bin/vitest run --maxWorkers=2 src/auth/context-boundary.test.ts src/auth/sso/sso-required-paths.test.ts src/auth/credential-serialization.test.ts`
+  — PASS, 162 tests, including the unchanged context-boundary protections.
+- Web: `./node_modules/.bin/vitest run --maxWorkers=2 app/api/auth/request/route.test.ts app/lib/cloudflare-pools.test.ts`
+  — PASS, 26 tests.
+- Root: `./node_modules/.bin/tsc -p apps/api/tsconfig.json --noEmit` and
+  `./node_modules/.bin/tsc -p apps/web/tsconfig.json --noEmit` — PASS.
+- Root: installed `tsc -p packages/<package>/tsconfig.json` for config, core,
+  storage, db and ai — PASS; generated ignored prerequisite outputs only.
+- Read-only three-way union and exact lane-set comparisons — PASS.
+  `git diff --check` — PASS.
+
+The first API run failed two tests because stale package outputs omitted current
+main's `app.bind_request` binding and `machineRegistrationEnabled` export. After
+rebuilding the existing package outputs, the same three-file run passed unchanged.
+No package download, test weakening or source repair was needed.
+
+Residual: about ten IPv4 addresses, or distinct IPv6 addresses within one /64,
+can still exhaust the site-wide 100-request ceiling per rolling ten minutes.
+IPv6 canonicalization does not aggregate a /64. This is the existing accepted
+backstop tradeoff; this union catch-up does not change it.
+
+No PostgreSQL or browser suite ran: this sandbox cannot start PostgreSQL or bind
+localhost. The router must push and obtain the required CI, including database
+and browser suites, and apply the current-head RED review gate. The supplied r1
+PASS is evidence for `5ef46376`, not a new independent review of this catch-up.
+READY means ready for router commit/push/PR handling, not merged or released.

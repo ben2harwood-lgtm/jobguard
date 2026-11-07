@@ -110,10 +110,10 @@ non-practice repository callers and cannot be claimed by a practice session.
 As with tenant RLS, a compromised runtime credential able to select a false
 session setting lies outside this application authentication guarantee.
 
-### LATER-SAFETY-133 — prepared rate-limit proposal (NEEDS BEN)
+### LATER-SAFETY-133 — request rate limits
 
-RED, synthetic only. This proposal requires Ben's typed approval before landing;
-it is not an approved change to sign-in identity or a release authorization.
+RED, synthetic only. Ben approved landing on 7 Nov 2026 ("Yes, land both").
+That approval does not authorize release or live use.
 
 The Next code-request adapter uses `CF-Connecting-IP` only when the server-selected
 `JOBGUARD_HOSTING=cloudflare` identifies the Workers deployment (as configured in
@@ -122,7 +122,7 @@ The Next code-request adapter uses `CF-Connecting-IP` only when the server-selec
 caller sends CF headers. `X-Forwarded-For` is never used. IPv6 spellings are
 canonicalized before choosing the bucket.
 
-Proposed persisted limits are ten accepted requests per client bucket and ten per
+Persisted limits are ten accepted requests per client bucket and ten per
 normalized email across all purposes per rolling ten minutes, plus a higher ceiling
 of 100 accepted requests across the identity service per ten minutes. The existing
 sixty-second email/purpose cooldown remains. Refused requests roll back without
@@ -137,5 +137,5 @@ address. Deployment configuration is trusted operator authority, never a request
 field. The Workers route must stay behind Cloudflare ingress; same-zone Worker
 scripts that can rewrite client headers are part of that trusted deployment.
 See [Cloudflare's header semantics](https://developers.cloudflare.com/fundamentals/reference/http-headers/),
-including its Worker-subrequest qualifications. This proposal does not verify a
+including its Worker-subrequest qualifications. This change does not verify a
 live deployment's ingress configuration.
