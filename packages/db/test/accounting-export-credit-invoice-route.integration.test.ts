@@ -131,7 +131,7 @@ it("exports a matching invoice, credit and receipt once and replays the accepted
 it("the route regression detects removal of the three conditions in a rolled-back scratch routine", async () => {
  const { f, credit } = await switchedCredit(false);
  await f.refuse(credit);
- const sql = readFileSync(new URL("../migrations/0954_accounting_export_credit_invoice_route.sql", import.meta.url), "utf8");
+ const sql = readFileSync(new URL("../migrations/0693_accounting_export_credit_invoice_route.sql", import.meta.url), "utf8");
  const additions = `   OR invoice #> '{scope,companyId}' IS DISTINCT FROM f.artifact #> '{scope,companyId}'
    OR invoice #> '{scope,mapping,customerId}' IS DISTINCT FROM f.artifact #> '{scope,mapping,customerId}'
    OR EXISTS(SELECT 1 FROM app.accounting_export_ledger WHERE tenant_id=t
