@@ -1,0 +1,6 @@
+{
+  "migration": "0696_readiness_discovery_guard.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}
