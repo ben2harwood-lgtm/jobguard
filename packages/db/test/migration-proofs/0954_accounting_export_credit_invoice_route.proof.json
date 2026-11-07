@@ -1,0 +1,6 @@
+{
+  "migration": "0954_accounting_export_credit_invoice_route.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}

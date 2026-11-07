@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-136": {
+      "branches": [
+        "codex/sandbox/later-safety-136"
+      ],
+      "allow": [
+        "packages/db/migrations/0954_accounting_export_credit_invoice_route.sql",
+        "packages/db/test/migration-proofs/0954_accounting_export_credit_invoice_route.proof.json",
+        "packages/db/test/accounting-export-credit-invoice-route.integration.test.ts",
+        "packages/db/migration-notes/0954_accounting_export_credit_invoice_route.md"
+      ]
+    }
+  }
+}
