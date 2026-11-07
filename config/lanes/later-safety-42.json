@@ -16,6 +16,8 @@
         "packages/db/src/site-jobs-scope.test.ts",
         "packages/db/test/site-jobs-scope.integration.test.ts",
         "packages/db/test/northside-demo.integration.test.ts",
+        "packages/db/test/offline-risk.integration.test.ts",
+        "packages/db/test/operative-offline.integration.test.ts",
         "packages/db/test/site-visit.integration.test.ts"
       ]
     }

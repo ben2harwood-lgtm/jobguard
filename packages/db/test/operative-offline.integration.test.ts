@@ -16,7 +16,8 @@ it("ENT12 downloads filter assigned jobs without RLS and expose no resident or s
  const repo = new SiteVisitRepository(c.admin);
  const result = await repo.assignedJobs(f.ctx, f.members.operative.member);
  expect(result.jobs.map(job => job.jobId)).toEqual([f.jobId]);
- expect(Object.keys(result.jobs[0]!).sort()).toEqual(["jobId", "workOrderId", "reference", "priority", "issuedOn", "dueOn", "openVisitId"].sort());
+ expect(Object.keys(result.jobs[0]!).sort()).toEqual(["jobId", "workOrderId", "reference", "priority", "issuedOn", "dueOn", "openVisitId", "lastCompletedVisit"].sort());
+ expect(result.jobs[0]!.lastCompletedVisit).toBeNull();
  expect(await repo.assignedJobs(f.ctx, f.unassigned.member)).toEqual({ jobs: [], truncated: false });
  await revise(c, f, [f.unassigned.member.membershipId]);
  expect(await repo.assignedJobs(f.ctx, f.members.operative.member)).toEqual({ jobs: [], truncated: false });
