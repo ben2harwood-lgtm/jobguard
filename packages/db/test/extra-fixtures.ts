@@ -57,9 +57,9 @@ export async function fixture(c: Cluster, n = 1) {
 export type Fixture = Awaited<ReturnType<typeof fixture>>;
 export const raise = <T extends Record<string, unknown> = Record<string, never>>(f: Fixture, fields: T = {} as T) => ({ version: "raise-extra.v1", commandId: randomUUID(), commandType: "LogSiteExtra", jobId: f.jobId, actorMembershipId: f.p.membershipId, grantId: f.grantId, note: noteCanary, description: descriptionCanary, ...fields });
 export async function ownerTx<T>(c: Cluster, tenantId: string, work: (db: TenantTransaction) => Promise<T>) {
- const owner = (await c.admin.query("SELECT id FROM app.membership WHERE tenant_id=$1 AND role='owner' AND revoked_at IS NULL ORDER BY id LIMIT 1", [tenantId])).rows[0];
- const installed = (await c.admin.query("SELECT to_regprocedure('app.bind_request(text,text,uuid)') installed")).rows[0].installed;
- const context = installed && owner ? await testBoundTenantContext(c.admin, tenantId, owner.id) : testTenantContext(tenantId);
+ // Owner-only setup must not create sign-in rows: practice marker tests
+ // deliberately attach those rows themselves, and assert their absence first.
+ const context = testTenantContext(tenantId, { bindRequest: false });
  return withTenant(c.admin, context, async db => { await db.$client.query("SET LOCAL ROLE jobguard_migration"); return work(db); });
 }
 export async function receipt(db: TenantTransaction, tenantId: string, jobId: string, variationId: string, actor: string, type = "LogSiteExtra", commandId = randomUUID(), fields: { status?: string; semanticKey?: string } = {}) {

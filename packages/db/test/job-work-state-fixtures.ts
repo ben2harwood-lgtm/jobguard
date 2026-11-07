@@ -9,6 +9,7 @@ import EmbeddedPostgres from "embedded-postgres";
 import { Pool, type PoolClient } from "pg";
 import { seedSyntheticPartyFixture } from "../src/synthetic-party-fixture.js";
 import { freePort, closeTestDatabase, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
+import { withTenant } from "../src/tenant-context.js";
 import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 
 export const CH4_HASH = "a".repeat(64);
@@ -44,10 +45,8 @@ export async function closeWorkFixture(f?: WorkFixture) {
   await f.postgres.stop();
  } }, f.directory, f.runtime, f.admin);
 }
-export async function workTenant<T>(pool: Pool, tenantId: string, work: (db: PoolClient) => Promise<T>) {
- const db = await pool.connect();
- try { await db.query("BEGIN"); await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenantId]); const result = await work(db); await db.query("COMMIT"); return result; }
- catch (error) { await db.query("ROLLBACK"); throw error; } finally { db.release(); }
+export async function workTenant<T>(pool: Pool, tenantId: string, work: (db: PoolClient) => Promise<T>, options: { membershipId?: string; bindRequest?: boolean } = {}) {
+ return withTenant(pool, testTenantContext(tenantId, options), db => work(db.$client));
 }
 export async function seedWorkJob(f: WorkFixture, tenantId: string = randomUUID()) {
  const userId = randomUUID(), actorId = randomUUID(), accountId = randomUUID(), jobId = randomUUID(), scopeId = randomUUID();

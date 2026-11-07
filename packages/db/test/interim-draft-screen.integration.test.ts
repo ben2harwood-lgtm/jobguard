@@ -40,7 +40,7 @@ it("screen commands persist only draft records and refuse forged authority, repl
   await repo.command(a.context,a.digest,first); await repo.command(a.context,a.digest,first);
   await expect(repo.command(a.context,a.digest,{...first,record:{...schedule,arrangement:"changed"}})).rejects.toMatchObject({code:"CONFLICT"});
   for (const record of [application, certification, invoice, receipt]) await repo.command(a.context,a.digest,command(record));
-  const stored = await repo.read(a.context,a.jobId);
+  const stored = await repo.read(a.context,a.jobId,a.digest);
   expect(stored.book.records).toHaveLength(5);
   expect(stored.reconciliation).toMatchObject({netInvoiced:{pence:6000},grossReceived:{pence:2000}});
   expect(stored.reconciliation.issueBlockers).toContain("UNSUPPORTED_ARRANGEMENT");
@@ -51,7 +51,7 @@ it("screen commands persist only draft records and refuse forged authority, repl
     await expect(repo.command(a.context,a.digest,command({...receipt,...fields}))).rejects.toMatchObject({code:"INVALID_INPUT"});
   }
   for (const jobId of [b.jobId,randomUUID()]) {
-    await expect(repo.read(a.context,jobId)).rejects.toMatchObject({code:"NOT_FOUND"});
+    await expect(repo.read(a.context,jobId,a.digest)).rejects.toMatchObject({code:"NOT_FOUND"});
     await expect(repo.command(a.context,a.digest,{...command(schedule),jobId})).rejects.toMatchObject({code:"NOT_FOUND"});
   }
   // Operative membership requires a contractor agreement, outside this fixture.
@@ -59,18 +59,30 @@ it("screen commands persist only draft records and refuse forged authority, repl
     await c.admin.query("UPDATE app.membership SET role=$2 WHERE id=$1",[a.actorId,role]);
     // Keep precisely the repository's refusal for roles that its owner boundary rejects.
     const result = await repo.command(a.context,a.digest,first).catch(error => error);
-    if (role === "admin") expect(result.book.records).toHaveLength(5);
-    else expect(result).toMatchObject({code:"UNAVAILABLE"});
+    if (role === "admin") {
+      expect(result.book.records).toHaveLength(5);
+      expect(await repo.read(a.context,a.jobId,a.digest)).toEqual(stored);
+    } else {
+      expect(result).toMatchObject({code:"FORBIDDEN"});
+      await expect(repo.read(a.context,a.jobId,a.digest)).rejects.toMatchObject({code:"FORBIDDEN"});
+    }
   }
   await c.admin.query("UPDATE app.membership SET role='owner' WHERE id=$1",[a.actorId]);
   await c.admin.query("UPDATE identity.session SET expires_at=clock_timestamp()-interval '1 second' WHERE id=$1",[a.sessionId]);
-  await expect(repo.command(a.context,a.digest,first)).rejects.toMatchObject({code:"UNAVAILABLE"});
+  await expect(repo.command(a.context,a.digest,first)).rejects.toMatchObject({code:"FORBIDDEN"});
+  await expect(repo.read(a.context,a.jobId,a.digest)).rejects.toMatchObject({code:"FORBIDDEN"});
   await c.admin.query("UPDATE identity.session SET expires_at=clock_timestamp()+interval '1 hour', revoked_at=clock_timestamp() WHERE id=$1",[a.sessionId]);
-  await expect(repo.command(a.context,a.digest,first)).rejects.toMatchObject({code:"UNAVAILABLE"});
-  await expect(repo.read(a.context,a.jobId)).rejects.toMatchObject({code:"UNAVAILABLE"});
-  // INTERIM_READ_AFTER_REVOCATION: the repository read binds too; restore the synthetic
-  // session after both refusal assertions so this still verifies byte-identical stored facts.
+  await expect(repo.command(a.context,a.digest,first)).rejects.toMatchObject({code:"FORBIDDEN"});
+  await expect(repo.read(a.context,a.jobId,a.digest)).rejects.toMatchObject({code:"FORBIDDEN"});
   await c.admin.query("UPDATE identity.session SET revoked_at=NULL WHERE id=$1",[a.sessionId]);
-  expect(await repo.read(a.context,a.jobId)).toEqual(stored);
+  expect(await repo.read(a.context,a.jobId,a.digest)).toEqual(stored);
+  // A verified tenant alone is no longer enough, even for direct SQL callers.
+  const client = await c.runtime.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT set_config('app.tenant_id',$1,true)",[a.tenantId]);
+    await expect(client.query("SELECT app.interim_draft_records($1,NULL,$2,'read','{}'::jsonb)",[a.tenantId,a.jobId])).rejects.toThrow("METER_FORBIDDEN");
+  } finally { await client.query("ROLLBACK"); client.release(); }
+
   expect(await financialSnapshot()).toEqual(before);
 });

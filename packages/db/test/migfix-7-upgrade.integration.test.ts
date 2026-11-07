@@ -72,14 +72,19 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     .map(match => [match[1]!.replaceAll("''", "'"), match[2]!.replaceAll("''", "'")] as const);
   const authorityChanges = replacements(authority), attributionChanges = replacements(attribution);
   expect(authorityChanges).toHaveLength(3); expect(attributionChanges).toHaveLength(1);
+  const practiceOwner = await readFile(new URL("../migrations/0667_final_check_practice_owner_check.sql", import.meta.url), "utf8");
+  const lockAnchor = "BEGIN\n PERFORM app.final_lock_require_owner(p_tenant,p_actor);", lockGuard = "\n" + practiceOwner.split("$guard$")[1]!;
   const patches = new Map([
     ["app.xa_issue_link(p_job uuid, p_request uuid, p_command uuid, p_actor uuid, p_link uuid, p_approver uuid, p_recipient text, p_token_hash text, p_expires_at timestamp with time zone, p_authorization uuid, p_outbox uuid)", authorityChanges.slice(0, 2)],
     ["app.lp5b_contractor_permission(p_type text, p_actor uuid, p_job uuid, p_input jsonb)", authorityChanges.slice(2)],
     ["app.northside_capture_action()", attributionChanges],
+    // 0667 inserts only the practice-owner guard after lock_final_account's first owner check.
+    ["app.lock_final_account(p_tenant uuid, p_job uuid, p_actor uuid, p_command uuid, p_revision uuid, p_expected integer, p_declaration text)", [[lockAnchor, lockAnchor + lockGuard] as const]],
   ]);
   // Exact existing replacements only; all their privileges and unrelated definitions remain frozen.
   const fullBodies = new Map<string, string>();
   for (const [identity, migration, overload = 0] of [
+    ["app.final_check_require_invoice_actor(p_tenant uuid, p_job uuid, p_actor uuid)", "0667_final_check_practice_owner_check.sql"],
     ["app.lp5_command_result(p_command_id uuid, p_outcome jsonb)", "0634_extra_proceed_statement.sql"],
     ["app.xa_approve(p_job uuid, p_request uuid, p_command uuid, p_actor uuid, p_step integer, p_hash text, p_net bigint, p_reject boolean, p_reason text)", "0635_extra_same_step.sql"],
     ["app.xa_withdraw(p_job uuid, p_variation uuid, p_command uuid, p_actor uuid, p_reason text)", "0636_extra_withdraw_roles.sql"],
@@ -88,6 +93,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.xa_escalate()", "0637_extra_working_day_wait.sql"],
     ["app.xa_queue(p_member uuid)", "0637_extra_working_day_wait.sql"],
     ["app.valid_approval_rules(d jsonb)", "0638_extra_rule_wait_schema.sql"],
+    ["app.interim_draft_records(t uuid, digest text, j uuid, operation text, v jsonb)", "0665_interim_read_authority.sql"],
     ["app.retention_records(t uuid, digest text, j uuid, cid uuid, v jsonb, expected text)", "0646_retention_timer_runtime_rules.sql"],
     ["app.notice_fixture_records(j uuid, n uuid, digest text, operation text, v jsonb)", "0647_notice_live_job_check.sql"],
     ["app.pay_now_fake_attempt(t uuid, digest text, j uuid, operation text, v jsonb)", "0648_pay_now_catch_statement.sql"],

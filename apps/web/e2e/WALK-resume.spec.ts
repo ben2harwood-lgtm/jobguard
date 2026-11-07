@@ -42,3 +42,28 @@ test("WALK refresh resumes steps 2, 5 and 8 on the same saved jobs", async ({ pa
   await expect(tour).toContainText("Step 9 of 9");
   expect(captures).toBe(2);
 });
+
+test("WALK refresh stays on step 5 after completed proof is invalidated", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/practice-company/walkthrough");
+  const tour = page.getByRole("region", { name: "Guided walkthrough" });
+  for (let step = 1; step <= 5; step++) {
+    await expect(tour).toContainText(`Step ${step} of 9`, { timeout: 60_000 });
+    await tour.getByRole("button", { name: "Show me", exact: true }).click();
+  }
+  await expect(tour).toContainText("Step 6 of 9");
+  await tour.getByRole("button", { name: "Back", exact: true }).click();
+  await expect(tour).toContainText("Step 5 of 9");
+  await page.getByRole("button", { name: "Simulate proof invalidation", exact: true }).click();
+  await expect(page.getByTestId("stage-review")).toHaveText("Proof needs review");
+  const exampleJob = new URL(page.url()).searchParams.get("walkExample");
+  expect(exampleJob).toBeTruthy();
+
+  await page.reload();
+
+  await expect(tour).toContainText("Step 5 of 9");
+  await expect(page.getByTestId("workspace-job-id")).toHaveAttribute("data-job-id", exampleJob!);
+  await expect(page.getByTestId("stage-status")).toHaveText("Complete");
+  await expect(page.getByTestId("stage-review")).toHaveText("Proof needs review");
+  await expect(tour.getByRole("button", { name: "Next", exact: true })).toBeDisabled();
+});
