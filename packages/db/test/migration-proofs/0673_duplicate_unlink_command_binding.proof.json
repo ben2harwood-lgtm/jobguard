@@ -1,5 +1,5 @@
 {
-  "migration": "0856_duplicate_unlink_command_binding.sql",
+  "migration": "0673_duplicate_unlink_command_binding.sql",
   "lp0": [
     {
       "section": "routines",

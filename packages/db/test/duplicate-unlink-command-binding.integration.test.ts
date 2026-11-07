@@ -6,7 +6,7 @@ import { cluster, fixture, linkInput, raise, type Cluster, type Fixture } from "
 
 const oldMigration = readFileSync(new URL("../migrations/0322_enterprise_duplicate_reconciliation.sql", import.meta.url), "utf8");
 const oldGuard = oldMigration.slice(oldMigration.indexOf("CREATE OR REPLACE FUNCTION app.ent4b_fact_guard()"), oldMigration.indexOf("END $$;", oldMigration.indexOf("CREATE OR REPLACE FUNCTION app.ent4b_fact_guard()")) + "END $$;".length);
-const migration = readFileSync(new URL("../migrations/0856_duplicate_unlink_command_binding.sql", import.meta.url), "utf8");
+const migration = readFileSync(new URL("../migrations/0673_duplicate_unlink_command_binding.sql", import.meta.url), "utf8");
 const binding = "   IF command.command_type IS DISTINCT FROM 'UnlinkDuplicate' OR command.semantic_key IS DISTINCT FROM ('extra-duplicate-unlink:'||NEW.job_id::text||':'||NEW.reverses_link_id::text||':'||NEW.command_id::text) THEN RAISE EXCEPTION 'DUPLICATE_LINK_REFUSED' USING ERRCODE='23514'; END IF;\n";
 
 it("copies the latest guard verbatim except the unlink receipt binding", () => {
