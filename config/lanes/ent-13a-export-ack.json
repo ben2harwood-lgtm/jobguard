@@ -7,9 +7,9 @@
       ],
       "note": "ENT-13A-EXPORT-ACK RED synthetic inbound export acknowledgement staging only; NOPR.",
       "allow": [
-        "packages/db/migrations/0862_connector_export_delivery_staging.sql",
+        "packages/db/migrations/0688_connector_export_delivery_staging.sql",
         "packages/db/test/connector-export-delivery-staging.integration.test.ts",
-        "packages/db/test/migration-proofs/0862_connector_export_delivery_staging.proof.json",
+        "packages/db/test/migration-proofs/0688_connector_export_delivery_staging.proof.json",
         "apps/api/src/connectors/inbound.ts",
         "apps/api/src/connectors/inbound.test.ts",
         "apps/api/src/connectors/conformance-kit.ts",

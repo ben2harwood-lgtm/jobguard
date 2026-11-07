@@ -53,8 +53,8 @@ H4 and G5 remain open. No real endpoint, real data or release is enabled.
 - `connector.intake(uuid,text,jsonb)` is recreated from the latest `0652` body,
   preserving the machine-binding refusal, owner, `search_path=pg_catalog` and ACLs.
   This base renumbered the brief's `0761` materials migration to `0576`; only its
-  staging kind constraint and the latest intake routine are widened in `0862`.
-- Migration number `0862` is reserved by the router; reconcile contiguous migration
+  staging kind constraint and the latest intake routine are widened in `0688`.
+- Migration number `0688` is reserved by the router; reconcile contiguous migration
   numbering with current main before landing. Earlier migrations are unchanged.
 - Any scanner/fingerprint/pin update identified by CI belongs to the router; none
   is changed here. The proof adds no privilege, routine-call or table allowances.

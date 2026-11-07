@@ -1,6 +1,0 @@
-{
-  "migration": "0862_connector_export_delivery_staging.sql",
-  "lp0": [],
-  "upgrade": [],
-  "tenancy": []
-}

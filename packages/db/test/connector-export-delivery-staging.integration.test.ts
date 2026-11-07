@@ -8,7 +8,7 @@ import { MIGRATION_URLS } from "../src/migrate.js";
 import { cluster, world } from "./contractor-billing-fixtures.js";
 import { closeWorkFixture, createWorkFixture } from "./job-work-state-fixtures.js";
 
-const own = "0862_connector_export_delivery_staging.sql";
+const own = "0688_connector_export_delivery_staging.sql";
 const token = "fictional-export-ack-database-token-0001";
 const tokenHash = createHash("sha256").update(token).digest("hex");
 const input = { version: "connector-input.v1", eventId: "fixture:export_received", kind: "export_delivery",
