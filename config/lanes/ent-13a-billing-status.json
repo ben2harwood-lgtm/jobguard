@@ -7,12 +7,13 @@
       ],
       "note": "ENT-13A-BILLING-STATUS r1; RED; synthetic human linkage only; NOPR.",
       "allow": [
-        "packages/db/migrations/0861_connector_billing_status_promotion.sql",
-        "packages/db/test/connector-billing-status-promotion.integration.test.ts",
-        "packages/db/test/migration-proofs/0861_connector_billing_status_promotion.proof.json",
-        "packages/db/src/connector-promotion-repository.ts",
+        "docs/contracts/connector-billing-status-v1.md",
+        "packages/db/migrations/0689_connector_billing_status_promotion.sql",
         "packages/db/src/connector-promotion-repository.test.ts",
-        "docs/contracts/connector-billing-status-v1.md"
+        "packages/db/src/connector-promotion-repository.ts",
+        "packages/db/test/connector-billing-status-promotion.integration.test.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/0689_connector_billing_status_promotion.proof.json"
       ]
     }
   }

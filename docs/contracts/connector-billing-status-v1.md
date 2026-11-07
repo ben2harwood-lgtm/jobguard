@@ -37,7 +37,7 @@ settlement, reversal or ledger row. The connector receipt remains `staged` with
 
 ## Named holds for landing
 
-- Migration 0861 re-creates `app.connector_promotion(uuid,text,text,uuid,jsonb)`
+- Migration 0689 re-creates `app.connector_promotion(uuid,text,text,uuid,jsonb)`
   from its latest body in 0639, replacing only its billing_status refusal branch.
   Owner, search_path, signature and grants remain identical. Roll forward by
   restoring that branch's refusal; preserve historical links and audit records.

@@ -1,5 +1,5 @@
 {
-  "migration": "0861_connector_billing_status_promotion.sql",
+  "migration": "0689_connector_billing_status_promotion.sql",
   "lp0": [
     {
       "section": "routines",

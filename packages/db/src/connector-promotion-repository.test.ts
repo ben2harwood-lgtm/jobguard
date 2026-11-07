@@ -64,7 +64,7 @@ it("keeps the missing-import refusal and rejects imports supplied for other even
 it("preserves the latest promotion body outside the billing link branch and keeps its authority proof", async () => {
   const { readFile } = await import("node:fs/promises");
   const previous = await readFile(new URL("../migrations/0639_connector_promotion.sql",import.meta.url),"utf8");
-  const current = await readFile(new URL("../migrations/0861_connector_billing_status_promotion.sql",import.meta.url),"utf8");
+  const current = await readFile(new URL("../migrations/0689_connector_billing_status_promotion.sql",import.meta.url),"utf8");
   const refusal = "   IF e.kind='billing_status' THEN RAISE EXCEPTION 'BILLING_COMPOSITION_REQUIRED'; END IF;";
   const start = current.indexOf("   IF e.kind='billing_status' THEN\n"), end = current.indexOf("    RETURN p_result;\n   END IF;",start) + "    RETURN p_result;\n   END IF;".length;
   expect(start).toBeGreaterThan(0); expect(end).toBeGreaterThan(start);
@@ -75,7 +75,7 @@ it("preserves the latest promotion body outside the billing link branch and keep
   const restored = current.slice(current.indexOf("CREATE OR REPLACE FUNCTION"),start) + refusal + current.slice(end,current.indexOf("COMMIT;"));
   const original = previous.slice(previous.indexOf("CREATE FUNCTION app.connector_promotion("),previous.indexOf("-- Forward fix:")).replace("CREATE FUNCTION","CREATE OR REPLACE FUNCTION");
   expect(restored).toBe(original);
-  const proof = JSON.parse(await readFile(new URL("../test/migration-proofs/0861_connector_billing_status_promotion.proof.json",import.meta.url),"utf8"));
+  const proof = JSON.parse(await readFile(new URL("../test/migration-proofs/0689_connector_billing_status_promotion.proof.json",import.meta.url),"utf8"));
   expect(proof.lp0[0].after.staticCalls).toEqual([...proof.lp0[0].before.staticCalls,"app.cb_authority"].sort());
   expect(proof.upgrade).toEqual([]); expect(proof.tenancy).toEqual([]);
 });
