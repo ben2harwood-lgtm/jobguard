@@ -111,3 +111,68 @@ test("WALK-3 on-device words reach the real capture contract without uploading a
   await expect(tour).toContainText("Step 2 of 9");
   await expect(page.getByTestId("capture-method")).toHaveText("On-device dictation · checked by you");
 });
+
+// Authored for mobile-360 and desktop; run headless with --workers=2.
+test("WALK-3 verifies saved progress after reload and refuses unavailable saved reads", async ({ page }) => {
+  await page.goto("/practice-company/walkthrough");
+  const tour = page.getByRole("region", { name: "Guided walkthrough" });
+  await tour.getByRole("button", { name: "Show me", exact: true }).click();
+  await expect(tour).toContainText("Step 2 of 9");
+  await tour.getByRole("button", { name: "Show me", exact: true }).click();
+  await expect(tour).toContainText("Step 3 of 9");
+  const link = page.getByRole("link", { name: "Open your saved job", exact: true });
+  const href = await link.getAttribute("href");
+  await page.reload();
+  await expect(tour).toContainText("Step 3 of 9");
+  await expect(link).toHaveAttribute("href", href!);
+  const stored = await page.evaluate(() => Object.entries(sessionStorage).filter(([key]) => key.startsWith("walk-3.progress:")));
+  expect(stored).toHaveLength(1);
+  expect(Object.keys(JSON.parse(stored[0]![1])).sort()).toEqual(["jobId", "prepared", "priced"]);
+  const captures: string[] = [];
+  page.on("request", request => {
+    if (request.method() === "POST" && request.url().endsWith("/api/jobs/capture")) captures.push(request.url());
+  });
+  await page.route(`**/api${href}/quotes`, route => route.fulfill({ status: 503, body: '{}' }));
+  await page.reload();
+  const savedReadError = page.getByRole("alert").filter({ hasText: "Your saved walkthrough could not load" });
+  await expect(savedReadError).toContainText("Your saved walkthrough could not load");
+  await expect(tour).toHaveCount(0);
+  expect(new URL(page.url()).searchParams.get("walkJob")).toBe(href!.split("/").at(-1));
+  await page.route(`**/api${href}/proposal`, route => route.fulfill({ status: 404, body: '{}' }));
+  await page.reload();
+  await expect(savedReadError).toContainText("Your saved walkthrough could not load");
+  await expect(tour).toHaveCount(0);
+  expect(new URL(page.url()).searchParams.get("walkJob")).toBe(href!.split("/").at(-1));
+  expect(captures).toEqual([]);
+});
+
+test("WALK-3 accepts a manually approved £150 extra", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/practice-company/walkthrough");
+  const tour = page.getByRole("region", { name: "Guided walkthrough" });
+  for (let step = 1; step <= 5; step++) {
+    await expect(tour).toContainText(`Step ${step} of 9`, { timeout: 60_000 });
+    await tour.getByRole("button", { name: "Show me", exact: true }).click();
+  }
+  await expect(tour).toContainText("Step 6 of 9");
+  await page.locator('.variation-entry input:not([aria-label])').fill("Fictional extra preparation");
+  await page.getByLabel("Variation price (£, optional)").fill("150.00");
+  await page.getByRole("button", { name: "Add proposed variation", exact: true }).click();
+  await page.getByRole("button", { name: "Approve exact revision", exact: true }).click();
+  await expect(page.getByTestId("approved-additions")).toHaveText("£150.00");
+  await page.reload();
+  // Server-verified proof resumes at extras. Revisit evidence to check that
+  // replaying its completed step preserves the saved proof and manual price.
+  await expect(tour).toContainText("Step 6 of 9");
+  await expect(page.getByTestId("stage-status")).toHaveText("Complete");
+  await expect(page.getByTestId("proof-state")).toHaveText("File integrity checked · synthetic example");
+  await expect(page.getByTestId("approved-additions")).toHaveText("£150.00");
+  await tour.getByRole("button", { name: "Back", exact: true }).click();
+  await expect(tour).toContainText("Step 5 of 9");
+  await tour.getByRole("button", { name: "Show me", exact: true }).click();
+  await expect(tour).toContainText("Step 6 of 9");
+  await expect(page.getByTestId("approved-additions")).toHaveText("£150.00");
+  await expect(tour.getByRole("button", { name: "Next", exact: true })).toBeEnabled();
+  await tour.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(tour).toContainText("Step 7 of 9");
+});
