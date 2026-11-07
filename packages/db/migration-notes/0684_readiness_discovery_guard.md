@@ -1,6 +1,6 @@
-# 1051 readiness discovery guard — LATER-SAFETY-20 (RED)
+# 0684 readiness discovery guard — LATER-SAFETY-20 (RED)
 
-Must run after 1050_readiness_plan_discovery. Replaces its discovery routine with
+Must run after 0683_readiness_plan_discovery. Replaces its discovery routine with
 an explicit synthetic-database guard and a filter excluding past confirmed plans
 in each plan's time zone. Keeps identifier-only output, the 100-row cap, owner,
 EXECUTE grants and tenant-context restoration. No new tables or backfill.

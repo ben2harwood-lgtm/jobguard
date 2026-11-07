@@ -1,5 +1,5 @@
 {
-  "migration": "1052_readiness_bad_timezone.sql",
+  "migration": "0655_emergency_token_minted.sql",
   "lp0": [],
   "upgrade": [],
   "tenancy": []

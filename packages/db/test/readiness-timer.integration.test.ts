@@ -156,7 +156,7 @@ it("rejects infrastructure discovery in a non-synthetic database", async () => {
   await nonSynthetic.query("CREATE SCHEMA infrastructure");
   await nonSynthetic.query("GRANT USAGE ON SCHEMA infrastructure TO jobguard_infrastructure");
   // The guard runs before table access in this second database.
-  await nonSynthetic.query(await readFile(new URL("../migrations/1051_readiness_discovery_guard.sql", import.meta.url), "utf8"));
+  await nonSynthetic.query(await readFile(new URL("../migrations/0684_readiness_discovery_guard.sql", import.meta.url), "utf8"));
   await expect(worker.query("SELECT * FROM infrastructure.discover_readiness_plans()"))
    .rejects.toMatchObject({ code: "42501", message: "MODE_FORBIDDEN" });
  } finally { await closeTestPools(worker, nonSynthetic); }
@@ -219,11 +219,11 @@ it("skips unknown PostgreSQL time zones without blocking another tenant's due pl
  // Failing-first proof on real PostgreSQL, then restore the new routine even if
  // the assertion fails. The six existing timer tests keep their assertions.
  try {
-  await admin.query(await readFile(new URL("../migrations/1051_readiness_discovery_guard.sql", import.meta.url), "utf8"));
+  await admin.query(await readFile(new URL("../migrations/0684_readiness_discovery_guard.sql", import.meta.url), "utf8"));
   await expect(infrastructure.query("SELECT * FROM infrastructure.discover_readiness_plans()"))
    .rejects.toMatchObject({ code: "22023" });
  } finally {
-  await admin.query(await readFile(new URL("../migrations/1052_readiness_bad_timezone.sql", import.meta.url), "utf8"));
+  await admin.query(await readFile(new URL("../migrations/0685_readiness_bad_timezone.sql", import.meta.url), "utf8"));
  }
  const rows = (await infrastructure.query("SELECT * FROM infrastructure.discover_readiness_plans()")).rows;
  expect(rows).toContainEqual({ tenant_id: goodTenant, job_id: goodJob, task_id: goodScope.taskId });

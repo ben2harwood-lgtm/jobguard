@@ -1,4 +1,4 @@
-# 1050 readiness plan discovery — M2-6, RED, synthetic only
+# 0683 readiness plan discovery — M2-6, RED, synthetic only
 
 Adds only `infrastructure.discover_readiness_plans()` and its EXECUTE grant to
 `jobguard_infrastructure`. It emits at most 100 tenant/job/task identifier triples

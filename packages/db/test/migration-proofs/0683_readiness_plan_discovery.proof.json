@@ -1,5 +1,5 @@
 {
-  "migration": "1050_readiness_plan_discovery.sql",
+  "migration": "0683_readiness_plan_discovery.sql",
   "lp0": [
     {
       "section": "entries",

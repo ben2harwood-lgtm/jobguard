@@ -18,10 +18,10 @@
         "apps/api/src/worker.ts",
         "packages/core/src/readiness.test.ts",
         "packages/core/src/readiness.ts",
-        "packages/db/migration-notes/1050_readiness_plan_discovery.md",
-        "packages/db/migrations/1050_readiness_plan_discovery.sql",
+        "packages/db/migration-notes/0683_readiness_plan_discovery.md",
+        "packages/db/migrations/0683_readiness_plan_discovery.sql",
         "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
-        "packages/db/test/migration-proofs/1050_readiness_plan_discovery.proof.json",
+        "packages/db/test/migration-proofs/0683_readiness_plan_discovery.proof.json",
         "packages/db/test/readiness-store.integration.test.ts",
         "packages/db/test/readiness-timer.integration.test.ts"
       ]
