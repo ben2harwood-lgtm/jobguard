@@ -104,8 +104,14 @@ export class PostgresReservationStore implements ReservationStore {
           || JSON.stringify(next.audit.slice(0, original.audit.length)) !== JSON.stringify(original.audit))
           throw new FeeCollectionError("IDEMPOTENCY_CONFLICT");
         // The routine authenticates lifecycle results, archives and seals audit atomically.
-        await db.$client.query(`SELECT app.replace_fee_reservation_book($1,$2::jsonb,$3::jsonb)`,
-          [tenantId, JSON.stringify(next), JSON.stringify(providerResult?.() ?? null)]);
+        try {
+          await db.$client.query(`SELECT app.replace_fee_reservation_book($1,$2::jsonb,$3::jsonb)`,
+            [tenantId, JSON.stringify(next), JSON.stringify(providerResult?.() ?? null)]);
+        } catch (error) {
+          if (error instanceof Error && "code" in error && error.code === "23514")
+            throw new FeeCollectionError("COLLECTION_REFUSED");
+          throw error;
+        }
         return result;
       });
     };

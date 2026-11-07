@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-23": {
+      "branches": [
+        "codex/sandbox/later-safety-23"
+      ],
+      "note": "LATER-SAFETY-23: per-row connector promotion validation. Catch-up keeps main LS-26 evidence-hold tests, including definitive 403 refusal clearing the retry. No migration.",
+      "allow": [
+        "packages/db/src/connector-promotion-repository.test.ts",
+        "packages/db/src/connector-promotion-repository.ts"
+      ]
+    }
+  }
+}

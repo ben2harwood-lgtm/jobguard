@@ -46,6 +46,11 @@ export function PayNowAttemptScreen({ jobId, invoiceId }: { jobId: string; invoi
   const key = `pay-now-preview:${jobId}:${invoiceId}`;
   async function load() {
     const response = await fetch(url, { cache: "no-store", credentials: "same-origin", headers: await companyHeaders() });
+    if (response.status === 401 || response.status === 403) {
+      setPending(null);
+      try { sessionStorage.removeItem(key); } catch { /* Definite server refusal. */ }
+      throw new Error(`Practice preview refused (${response.status}).`);
+    }
     if (!response.ok) throw new Error("Practice preview unavailable. Sign in and refresh.");
     return response.json() as Promise<View>;
   }
@@ -55,13 +60,13 @@ export function PayNowAttemptScreen({ jobId, invoiceId }: { jobId: string; invoi
       const saved = JSON.parse(sessionStorage.getItem(key) ?? "null") as Pending | null;
       if (saved && /^[a-f0-9-]{36}$/iu.test(saved.commandId) && ["bank_transfer", "card", "pay_by_bank"].includes(saved.rail)) setPending(saved);
     } catch { /* Storage unavailable: keep the in-memory command for this visit. */ }
-    void load().then(value => { if (active) setView(value); }).catch(() => { if (active) setError("Practice preview unavailable. Sign in and refresh."); });
+    void load().then(value => { if (active) setView(value); }).catch(reason => { if (active) setError(reason instanceof Error ? reason.message : "Practice preview unavailable. Sign in and refresh."); });
     return () => { active = false; };
   }, [url]); // The keyed page gives each invoice its own state.
   async function refresh() {
     if (inFlight.current) return;
     setBusy(true); setError("");
-    try { setView(await load()); } catch { setView(null); setError("Practice preview unavailable. Sign in and refresh."); }
+    try { setView(await load()); } catch (reason) { setView(null); setError(reason instanceof Error ? reason.message : "Practice preview unavailable. Sign in and refresh."); }
     finally { setBusy(false); }
   }
   async function simulate(rail: PayNowRail) {

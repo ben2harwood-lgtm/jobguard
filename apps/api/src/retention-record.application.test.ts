@@ -11,7 +11,7 @@ const app = new RetentionRecordApplication(identity, { read, command });
 beforeEach(() => {
   vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
   session.mockResolvedValue({ memberships: [{ tenantId: tenant }] });
-  authenticate.mockResolvedValue({ identityUserId: tenant, sessionId: tenant, csrfToken: credentials.csrfToken });
+  authenticate.mockResolvedValue(Object.defineProperty({ identityUserId: tenant, sessionId: tenant, csrfToken: credentials.csrfToken }, "sessionCredential", { value: "a".repeat(64), enumerable: false }));
   findMembership.mockResolvedValue({ id: tenant, identityUserId: tenant, tenantId: tenant, role: "owner", email: "fictional@company.invalid" });
   read.mockResolvedValue({}); command.mockResolvedValue({});
 });
@@ -20,7 +20,7 @@ it("binds verified context directly, ignores tenant headers and passes the sessi
   const raw = { jobId: job, version: "retention-record-command.v1" };
   await app.command(credentials, job, raw); await app.read(credentials, job);
   expect(command).toHaveBeenCalledWith(expect.objectContaining({ tenantId: tenant }), { sessionDigest: "a".repeat(64) }, raw);
-  expect(read).toHaveBeenCalledWith(expect.objectContaining({ tenantId: tenant }), job);
+  expect(read).toHaveBeenCalledWith(expect.objectContaining({ tenantId: tenant }), { sessionDigest: "a".repeat(64) }, job);
   expect(findMembership).toHaveBeenCalledWith(expect.anything(), tenant);
   await expect(app.command(credentials, tenant, raw)).rejects.toThrow("INVALID_RETENTION_INPUT");
   expect(command).toHaveBeenCalledTimes(1);
@@ -31,7 +31,7 @@ it("rechecks authentication, membership, origin and CSRF before repository acces
   }
   authenticate.mockResolvedValue(undefined);
   await expect(app.read(credentials, job)).rejects.toThrow("UNAUTHENTICATED");
-  authenticate.mockResolvedValue({ csrfToken: credentials.csrfToken }); findMembership.mockResolvedValue(undefined);
+  authenticate.mockResolvedValue(Object.defineProperty({ identityUserId: tenant, sessionId: tenant, csrfToken: credentials.csrfToken }, "sessionCredential", { value: "a".repeat(64), enumerable: false })); findMembership.mockResolvedValue(undefined);
   await expect(app.read(credentials, job)).rejects.toThrow("TENANT_FORBIDDEN");
   expect(read).not.toHaveBeenCalled(); expect(command).not.toHaveBeenCalled();
 });
@@ -46,4 +46,15 @@ it("maps repository refusals and conflicts without leaking database details", ()
   expect(retentionRecordFailure(new RetentionError("REPLAY_CONFLICT", "private")).status).toBe(409);
   expect(retentionRecordFailure(new RetentionRecordRepositoryError("RETENTION_NOT_FOUND")).status).toBe(404);
   expect(JSON.stringify(retentionRecordFailure(new Error("private database detail")))).not.toContain("private");
+});
+
+it("refuses ambiguous company sessions before repository access", async () => {
+ session.mockResolvedValue({ memberships: [{ tenantId: tenant }, { tenantId: job }] });
+ await expect(app.read(credentials, job)).rejects.toThrow("TENANT_FORBIDDEN");
+ expect(read).not.toHaveBeenCalled();
+ await expect(app.command(credentials, job, { jobId: job })).rejects.toThrow("TENANT_FORBIDDEN");
+ expect(command).not.toHaveBeenCalled();
+});
+it.each([["RETENTION_FORBIDDEN", 403], ["RETENTION_UNAUTHENTICATED", 401]] as const)("maps %s without uncertain retry messaging", (code, status) => {
+ expect(retentionRecordFailure(new RetentionRecordRepositoryError(code))).toMatchObject({ status, body: { code, message: status === 403 ? "You don't have permission." : "Sign in with an authorised company session." } });
 });
