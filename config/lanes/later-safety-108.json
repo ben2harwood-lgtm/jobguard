@@ -9,13 +9,16 @@
       "allow": [
         "apps/api/src/auth/context-boundary.test.ts",
         "packages/db/src/practice-session.ts",
+        "packages/db/src/decision-adoption.test.ts",
         "packages/db/test/extra-origin.integration.test.ts",
         "packages/db/test/imported-baseline-sources.integration.test.ts",
         "packages/db/test/imported-observation-reader.integration.test.ts",
         "packages/db/test/job-import-v3.integration.test.ts",
         "packages/db/test/job-parties.integration.test.ts",
+        "packages/db/test/job-work-state-command-fixtures.ts",
         "packages/db/test/practice-owned-jobs-anchor.integration.test.ts",
-        "tools/commercial-integrity-current-source-guard.unresolved.json"
+        "tools/commercial-integrity-current-source-guard.unresolved.json",
+        "tools/commercial-integrity-boundary.unresolved.json"
       ]
     }
   }
