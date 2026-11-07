@@ -1,5 +1,5 @@
 {
-  "migration": "0858_extra_client_authority_loss.sql",
+  "migration": "0686_extra_client_authority_loss.sql",
   "lp0": [
     {
       "section": "routines",

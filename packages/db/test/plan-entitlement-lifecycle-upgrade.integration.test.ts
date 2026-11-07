@@ -89,9 +89,9 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     ["app.xa_escalate()", "0637_extra_working_day_wait.sql"],
     ["app.xa_queue(p_member uuid)", "0637_extra_working_day_wait.sql"],
     ["app.valid_approval_rules(d jsonb)", "0638_extra_rule_wait_schema.sql"],
-    ["app.xa_client_view_authority(p_job uuid,p_request uuid,p_actor uuid,p_email text)", "0858_extra_client_authority_loss.sql"],
-    ["app.xa_client_decide(p_job uuid,p_request uuid,p_command uuid,p_actor uuid,p_token_hash text,p_email text,p_hash text,p_net bigint,p_reject boolean,p_reason text,p_role_name text,p_tester text)", "0858_extra_client_authority_loss.sql"],
-    ["identity.extra_customer_use(t uuid,j uuid,c uuid,digest text,session_digest text,operation text)", "0858_extra_client_authority_loss.sql"],
+    ["app.xa_client_view_authority(p_job uuid,p_request uuid,p_actor uuid,p_email text)", "0686_extra_client_authority_loss.sql"],
+    ["app.xa_client_decide(p_job uuid,p_request uuid,p_command uuid,p_actor uuid,p_token_hash text,p_email text,p_hash text,p_net bigint,p_reject boolean,p_reason text,p_role_name text,p_tester text)", "0686_extra_client_authority_loss.sql"],
+    ["identity.extra_customer_use(t uuid,j uuid,c uuid,digest text,session_digest text,operation text)", "0686_extra_client_authority_loss.sql"],
   ] as const;
   for (const [identity, file] of ent5Replacements) {
     const sql = await readFile(new URL(`../migrations/${file}`, import.meta.url), "utf8");
