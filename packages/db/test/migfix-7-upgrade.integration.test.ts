@@ -84,7 +84,6 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   // Exact existing replacements only; all their privileges and unrelated definitions remain frozen.
   const fullBodies = new Map<string, string>();
   for (const [identity, migration, overload = 0] of [
-    ["app.final_check_require_invoice_actor(p_tenant uuid, p_job uuid, p_actor uuid)", "0667_final_check_practice_owner_check.sql"],
     ["app.lp5_command_result(p_command_id uuid, p_outcome jsonb)", "0634_extra_proceed_statement.sql"],
     ["app.xa_approve(p_job uuid, p_request uuid, p_command uuid, p_actor uuid, p_step integer, p_hash text, p_net bigint, p_reject boolean, p_reason text)", "0635_extra_same_step.sql"],
     ["app.xa_withdraw(p_job uuid, p_variation uuid, p_command uuid, p_actor uuid, p_reason text)", "0636_extra_withdraw_roles.sql"],
@@ -97,11 +96,19 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.notice_fixture_records(j uuid, n uuid, digest text, operation text, v jsonb)", "0647_notice_live_job_check.sql"],
     ["app.pay_now_fake_attempt(t uuid, digest text, j uuid, operation text, v jsonb)", "0648_pay_now_catch_statement.sql"],
     ["app.demo_issue_customer_link(t uuid, j uuid, c uuid, session_digest text, link_digest text, content text)", "0650_demo_customer_link_reference.sql"],
-    ["app.replace_fee_reservation_book(p_tenant uuid, p_book jsonb, p_result jsonb)", "0651_fee_result_forward_only.sql"],
     ["app.reverse_synthetic_landing(p_tenant uuid, p_reversal uuid, p_derivation uuid, p_journal uuid, p_allocation uuid, p_amount bigint, p_reason character varying)", "0654_synthetic_reversal_money_rules.sql"],
     ["identity.dark_emergency(s text, csrf text, t uuid, p jsonb)", "0655_emergency_token_minted.sql"],
     ["app.replace_fee_reservation_book(p_tenant uuid, p_book jsonb, p_result jsonb)", "0656_fee_result_malformed_proof.sql"],
     ["app.lp6_session_authority(p_kind text, p_credential text, p_tenant uuid)", "0658_lp6b_effective_session_actor.sql"],
+    ["app.ch6_integrity_authority(t uuid, j uuid, digest text)", "0660_baseline_ancestry_audit_trust.sql"],
+    ["app.ch6_integrity_sources(t uuid, j uuid, d text)", "0660_baseline_ancestry_audit_trust.sql"],
+    ["app.ch6_record_integrity_review(t uuid, j uuid, digest text, review jsonb, source_snapshot jsonb)", "0660_baseline_ancestry_audit_trust.sql"],
+    ["app.decision_check_command(p_digest text, p_command jsonb, p_phase text, p_data jsonb)", "0660_baseline_ancestry_audit_trust.sql"],
+    ["app.interim_draft_records(t uuid, digest text, j uuid, operation text, v jsonb)", "0665_interim_read_authority.sql"],
+    ["app.ch5_history_actor(t uuid, j uuid, d text)", "0668_import_company_owner_history.sql"],
+    ["app.configure_recovery_demo(p_job uuid, p_command uuid, p_scenario character varying)", "0670_recovery_demo_replay_job.sql"],
+    ["app.ent4b_fact_guard()", "0673_duplicate_unlink_command_binding.sql"],
+    ["app.final_check_require_invoice_actor(p_tenant uuid, p_job uuid, p_actor uuid)", "1217_lp6c_money_binding.sql"],
     ["app.assert_financial_authorization(t uuid, a uuid, p character varying, n bigint, c character, h character)", "1217_lp6c_money_binding.sql"],
     ["app.post_plan_obligation(j uuid, b uuid, r uuid, i uuid, n bigint, c character, s character varying, pk character varying, pr character varying, h character, a uuid, au uuid)", "1217_lp6c_money_binding.sql"],
     ["app.post_plan_settlement(j uuid, b uuid, o uuid, cl uuid, r uuid, n bigint, c character, s character varying, pr character varying, h character, a uuid, au uuid)", "1217_lp6c_money_binding.sql"],
@@ -118,7 +125,6 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.approve_recovery_case_terms(p_tenant uuid, p_id uuid, p_job uuid, p_case uuid, p_actor uuid, p_command uuid, p_authorization uuid)", "1217_lp6c_money_binding.sql"],
     ["app.write_recovery_allocation(p_tenant uuid, p_job uuid, p_session text, p_command jsonb, p_artifact jsonb)", "1217_lp6c_money_binding.sql"],
     ["app.lock_recovery_payer_job(p_tenant uuid, p_job uuid, p_actor uuid)", "1217_lp6c_money_binding.sql"],
-    ["app.final_check_require_invoice_actor(p_tenant uuid, p_job uuid, p_actor uuid)", "1217_lp6c_money_binding.sql"],
     ["app.assert_receipt_fact_scope(p_tenant uuid, p_job uuid, p_session_digest text)", "1217_lp6c_money_binding.sql"],
     ["app.write_receipt_allocation_facts(p_tenant uuid, p_job uuid, p_session_digest text, p_command jsonb, p_artifact jsonb)", "1217_lp6c_money_binding.sql"],
     ["app.lp3_authorize(p_tenant uuid, p_actor uuid, p_command uuid, p_authorization uuid, p_command_type text, p_action text, p_subject_type text, p_subject text, p_hash text, p_version integer, p_amount bigint, p_currency text, p_recipient text, p_policy text, p_payload text, p_job uuid, p_expected integer)", "1217_lp6c_money_binding.sql"],
@@ -130,13 +136,8 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.begin_command(p_version text, p_command_id uuid, p_command_type text, p_semantic_key text, p_resource jsonb, p_expected_revisions jsonb, p_significant_input jsonb)", "1217_lp6c_money_binding.sql"],
     ["app.complete_command(p_command_id uuid, p_outcome jsonb)", "1217_lp6c_money_binding.sql"],
     ["app.mon1_company_actor(t uuid, digest text)", "1217_lp6c_money_binding.sql"],
-    ["app.ch6_integrity_authority(t uuid, j uuid, digest text)", "0660_baseline_ancestry_audit_trust.sql"],
-    ["app.ch6_integrity_sources(t uuid, j uuid, d text)", "0660_baseline_ancestry_audit_trust.sql"],
-    ["app.ch6_record_integrity_review(t uuid, j uuid, digest text, review jsonb, source_snapshot jsonb)", "0660_baseline_ancestry_audit_trust.sql"],
-    ["app.decision_check_command(p_digest text, p_command jsonb, p_phase text, p_data jsonb)", "0660_baseline_ancestry_audit_trust.sql"],
-    ["app.interim_draft_records(t uuid, digest text, j uuid, operation text, v jsonb)", "0665_interim_read_authority.sql"],
-    ["app.ch5_history_actor(t uuid, j uuid, d text)", "0668_import_company_owner_history.sql"],
   ] as readonly (readonly [string, string, number?])[]) {
+
     const source = await readFile(new URL(`../migrations/${migration}`, import.meta.url), "utf8");
     if (identity!.startsWith("app.decision_check_command(")) {
       expect(source).toContain("rv.semantic_key='import:'||next_job.id::text AND rv.result->>'jobId'=next_job.id::text AND rv.result->>'sourceJobId'=source.id::text");
@@ -146,7 +147,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   const namedAdditions = [
     "connector_promotion", "order_attestation_actor", "platform_invoice_read",
     "retention_timer", "retention_timer_book", "xa_proceed", "xa_proceed_breaches",
-    "xa_proceed_view", "xa_wait_deadline", "customer_practice_pay_now",
+    "xa_proceed_view", "xa_wait_deadline", "customer_practice_pay_now", "store_extra_pack_artifact",
   ];
   for (const name of namedAdditions) {
     expect(replayRoutines.filter(row => row.proname === name)).toHaveLength(1);
