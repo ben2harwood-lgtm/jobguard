@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-13a-billing-reversed": {
+      "branches": [
+        "codex/sandbox/ent-13a-billing-reversed"
+      ],
+      "allow": [
+        "packages/db/migrations/0950_connector_billing_kind_link.sql",
+        "packages/db/test/connector-billing-status-promotion.integration.test.ts",
+        "packages/db/test/migration-proofs/0950_connector_billing_kind_link.proof.json",
+        "docs/contracts/connector-billing-status-v1.md",
+        "packages/db/src/connector-promotion-repository.test.ts"
+      ]
+    }
+  }
+}
