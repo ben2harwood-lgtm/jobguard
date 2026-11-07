@@ -1,5 +1,5 @@
 {
-  "migration": "0864_blank_practice_reset_token.sql",
+  "migration": "0687_blank_practice_reset_token.sql",
   "lp0": [
     {
       "section": "entries",

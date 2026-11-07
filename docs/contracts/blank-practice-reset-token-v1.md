@@ -1,7 +1,7 @@
 # Blank practice reset token v1
 
 WALK-RESET-TOKEN, RED: amendment to WALK-2's synthetic practice session
-boundary. Migration 0864 leaves 0657 and its routine definition unchanged.
+boundary. Migration 0687 leaves 0657 and its routine definition unchanged.
 
 `app.start_blank_practice_company_v2(new_token text, previous_token text DEFAULT
 NULL)` accepts raw tokens matching the existing `practiceSessionV1` UUID format,

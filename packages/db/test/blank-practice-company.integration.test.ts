@@ -82,7 +82,7 @@ it("upgrades legacy sessions without changing their jobs or credentials and refu
     expect((await prior.admin.query("SELECT row_to_json(j) value FROM app.job j WHERE practice_session_digest=$1 ORDER BY id", [digestOf(token)])).rows).toEqual(before.rows);
     const oldBlank = randomUUID();
     await prior.runtime.query("SELECT app.start_blank_practice_company($1,NULL)", [digestOf(oldBlank)]);
-    await applyMigration(prior, "0864_blank_practice_reset_token.sql");
+    await applyMigration(prior, "0687_blank_practice_reset_token.sql");
     expect(await authenticatePracticeSession(prior.runtime, oldBlank)).toBeDefined();
     const replacement = await startBlankPracticeCompany(prior.runtime, reset, oldBlank);
     expect(await authenticatePracticeSession(prior.runtime, replacement)).toBeDefined();
