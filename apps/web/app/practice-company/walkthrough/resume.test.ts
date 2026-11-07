@@ -23,10 +23,10 @@ describe("WALK server-backed resume", () => {
     const saved = await resumeWalkthrough(new URLSearchParams({ walkJob: own, step: "8" }));
     expect(saved.index).toBe(1); expect(saved.capture?.jobId).toBe(own);
   });
-  it("resumes a live job at step 5 until proof completion is saved", async () => {
+  it.each([null, { id: own, reviewRequired: true }])("resumes a live job at step 5 when proof is incomplete or needs review (%j)", async completion => {
     server({ [`/api/jobs/${own}/proposal`]: capture(), [`/api/jobs/${example}/proposal`]: capture(example, "live"),
       [`/api/jobs/${example}/quotes/delivery`]: { status: "simulated_delivery" },
-      [`/api/jobs/${example}/proof`]: { version: "practice-proof-view.v1", jobId: example, completion: null } });
+      [`/api/jobs/${example}/proof`]: { version: "practice-proof-view.v1", jobId: example, completion } });
     expect(await resumeWalkthrough(params())).toMatchObject({ prepared: example, index: 4 });
     expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes("final-check"))).toBe(false);
   });
