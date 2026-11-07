@@ -7,20 +7,15 @@
       ],
       "note": "ENT-5-PACK-WRITER; RED; NOPR synthetic snapshots.",
       "allow": [
-        "docs/contracts/extra-evidence-pack-timing-v1.md",
         "docs/contracts/extra-evidence-pack-writer-v1.md",
-        "packages/core/src/extra-evidence-pack.test.ts",
-        "packages/core/src/extra-evidence-pack.ts",
-        "packages/db/migrations/0863_extra_pack_artifact_store.sql",
-        "packages/db/src/extra-evidence-pack-sources.ts",
+        "packages/db/migrations/0672_extra_pack_artifact_store.sql",
         "packages/db/src/extra-evidence-pack-writer.ts",
         "packages/db/src/index.ts",
         "packages/db/test/enterprise-access-upgrade.integration.test.ts",
-        "packages/db/test/extra-evidence-pack-timing.integration.test.ts",
         "packages/db/test/extra-evidence-pack-writer.integration.test.ts",
         "packages/db/test/extra-proceed-upgrade.integration.test.ts",
         "packages/db/test/later-empty-tables.ts",
-        "packages/db/test/migration-proofs/0863_extra_pack_artifact_store.proof.json"
+        "packages/db/test/migration-proofs/0672_extra_pack_artifact_store.proof.json"
       ]
     }
   }

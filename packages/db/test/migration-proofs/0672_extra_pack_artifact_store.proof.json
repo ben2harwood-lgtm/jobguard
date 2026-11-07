@@ -1,5 +1,5 @@
 {
-  "migration": "0863_extra_pack_artifact_store.sql",
+  "migration": "0672_extra_pack_artifact_store.sql",
   "lp0": [
     {
       "section": "groups",
@@ -16,7 +16,7 @@
           "LP-12": "SELECT only runtime table access; narrow writer routine; forced RLS and immutable snapshots."
         },
         "sources": [
-          "packages/db/migrations/0863_extra_pack_artifact_store.sql",
+          "packages/db/migrations/0672_extra_pack_artifact_store.sql",
           "packages/db/src/extra-evidence-pack-writer.ts"
         ],
         "tests": [
@@ -50,7 +50,7 @@
           "LP-12": "SELECT only runtime table access; narrow writer routine; forced RLS and immutable snapshots."
         },
         "sources": [
-          "packages/db/migrations/0863_extra_pack_artifact_store.sql",
+          "packages/db/migrations/0672_extra_pack_artifact_store.sql",
           "packages/db/src/extra-evidence-pack-writer.ts"
         ],
         "tests": [

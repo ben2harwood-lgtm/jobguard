@@ -86,7 +86,7 @@ it('emergency_dual_owner/scim2_machine preserve populated identity state, instal
  expect((after.relations.find(isLanding)!.constraints as Con[]).filter(c=>c.name===added)).toEqual([{name:added,definition:'CHECK ((eligible_net_pence <= gross_pence))'}]);
  const afterRelations=after.relations.map((r:Relation)=>isLanding(r)?{...r,constraints:(r.constraints as Con[]).filter(c=>c.name!==added)}:r);
  expectRelationsUnchanged(catalogue.relations,afterRelations,laterAcl);
- // 0863 lets its migration-owned pack writer read the sealed request binding; only that ACL entry is added.
+ // 0672 lets its migration-owned pack writer read the sealed request binding; only that ACL entry is added.
  const bindingReaders=new Set(['app.current_actor','app.current_tenant']);
  for(const row of catalogue.routines){
   if(bindingReaders.has(`${row.nspname}.${row.proname}`)){
