@@ -87,3 +87,63 @@ it("refuses revoked and expired statement authority even when replaying an issue
     await expect(t.issue()).rejects.toThrow("PLATFORM_INVOICE_SOURCE_UNAVAILABLE");
   }
 });
+
+it("credits and exactly replays an issued invoice after correction while new issuance needs the latest statement", async () => {
+  const t = await setup(), invoice = await t.issue();
+  const next = feeSourceFixture(t.a.jobId, 2, 1000); await t.insert(next, true);
+  const credit = { ...t.command, commandId: randomUUID(), kind: "credit_note", originalNumber: invoice.number };
+  const note = await t.issue(credit);
+  expect(note.principalPence).toBe(invoice.principalPence);
+  expect(note.request.lines[0]!.provenance).toEqual(invoice.request.lines[0]!.provenance);
+  expect(await t.issue()).toEqual(invoice);
+  expect(await t.issue(credit)).toEqual(note);
+  await expect(t.issue({ ...t.command, commandId: randomUUID() })).rejects.toThrow("PLATFORM_INVOICE_SOURCE_UNAVAILABLE");
+  await expect(t.issue({ ...credit, commandId: randomUUID() })).rejects.toThrow("PLATFORM_INVOICE_LIMIT");
+  const corrected = await t.issue({ ...t.command, commandId: randomUUID(),
+    lines: [{ ...t.command.lines[0]!, sourceId: next.id, expectedSourceHash: next.document_hash }] });
+  expect(corrected.principalPence).toBe(1000);
+  expect(corrected.request.lines[0]!.provenance.statement.id).toBe(next.id);
+});
+it("does not credit another tenant's or job's invoice after correction", async () => {
+  const t = await setup(), invoice = await t.issue(), foreign = await setup();
+  const foreignInvoice = await foreign.issue();
+  await t.insert(feeSourceFixture(t.a.jobId, 2, 1000), true);
+  const credit = { ...t.command, commandId: randomUUID(), kind: "credit_note", originalNumber: invoice.number };
+  await expect(foreign.issue({ ...credit, issuerId: foreign.profile.issuerId, actorMembershipId: foreign.a.actorId }))
+    .rejects.toThrow("PLATFORM_INVOICE_SOURCE_UNAVAILABLE");
+  // Even colliding issuer numbers in another tenant cannot import that tenant's source.
+  await expect(t.issue({ ...credit, originalNumber: foreignInvoice.number, lines: foreign.command.lines }))
+    .rejects.toThrow("PLATFORM_INVOICE_SOURCE_UNAVAILABLE");
+  const otherJob = await seedWorkJob(f, t.a.tenantId);
+  const jobSource = feeSourceFixture(otherJob.jobId, 3);
+  await workTenant(f.admin, t.a.tenantId, async db => {
+    const resolution = randomUUID();
+    await db.query("INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES($1,$2,'simulation_fee_statement',$3,'success_fee.statement_approve')", [jobSource.decisionId, t.a.tenantId, jobSource.id]);
+    await db.query(`INSERT INTO app.platform_fee_statement(tenant_id,job_id,id,sequence,namespace,source_hash,document,document_hash,decision_id)
+      VALUES($1,$2,$3,3,'success_fee.synthetic.v1',$4,$5::jsonb,$6,$7)`, [t.a.tenantId, otherJob.jobId, jobSource.id,
+      jobSource.source_hash, JSON.stringify(jobSource.document), jobSource.document_hash, jobSource.decisionId]);
+    await db.query("INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'approved',$4)", [resolution, t.a.tenantId, jobSource.decisionId, t.a.actorId]);
+    await db.query(`INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,recipient,content_hash,amount_pence,currency,aggregate_revision,policy_version,expires_at)
+      VALUES($1,$2,$3,$4,$5,'success_fee.statement_approve',$6,$7,$8,'GBP',1,'reference_fee_policy_v3',clock_timestamp()+interval '1 hour')`,
+      [jobSource.approval_id, t.a.tenantId, jobSource.decisionId, resolution, t.a.actorId, jobSource.id, jobSource.document_hash, jobSource.document.documentPrincipal.pence]);
+  });
+  const jobLines = [{ ...t.command.lines[0]!, sourceId: jobSource.id, expectedSourceHash: jobSource.document_hash }];
+  const otherInvoice = await t.issue({ ...t.command, commandId: randomUUID(), lines: jobLines });
+  await expect(t.issue({ ...credit, originalNumber: otherInvoice.number })).rejects.toThrow("PLATFORM_INVOICE_SOURCE_UNAVAILABLE");
+  await expect(t.issue({ ...credit, lines: jobLines })).rejects.toThrow("PLATFORM_INVOICE_FORBIDDEN");
+});
+
+it("keeps expiry and revocation gates for original traces after correction", async () => {
+  for (const column of ["revoked_at", "expires_at"]) {
+    const t = await setup(), invoice = await t.issue();
+    await t.insert(feeSourceFixture(t.a.jobId, 2, 1000), true);
+    await workTenant(f.admin, t.a.tenantId, async db => {
+      await db.query("ALTER TABLE app.action_authorization DISABLE TRIGGER USER");
+      await db.query(`UPDATE app.action_authorization SET ${column}=clock_timestamp()-interval '1 second' WHERE tenant_id=$1 AND id=$2`, [t.a.tenantId, t.source.approval_id]);
+      await db.query("ALTER TABLE app.action_authorization ENABLE TRIGGER USER");
+    });
+    await expect(t.issue()).rejects.toThrow("PLATFORM_INVOICE_SOURCE_UNAVAILABLE");
+    await expect(t.issue({ ...t.command, commandId: randomUUID(), kind: "credit_note", originalNumber: invoice.number }))
+      .rejects.toThrow("PLATFORM_INVOICE_SOURCE_UNAVAILABLE");
+  }
+});
