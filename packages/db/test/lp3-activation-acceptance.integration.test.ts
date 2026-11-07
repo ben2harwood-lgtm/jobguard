@@ -6,9 +6,10 @@ import { UserCommandDispatcher, type ConsequentialCommand } from "../src/command
 import { lp3MutationHash } from "../src/lp3-operation.js";
 import { prepareActivationFixtureV3, DEMO_TENANT_ID as T, DEMO_MEMBERSHIP_ID as M, DEMO_ACCOUNT_ID as A, DEMO_IDENTITY_USER_ID as U } from "../src/demo-seed.js";
 import { jobDoorsDatabase, transaction } from "./lp-job-doors-fixtures.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 
-const context=testTenantContext(T), at=new Date("2026-10-01T12:00:00.123Z");
+let context=testTenantContext(T);
+const at=new Date("2026-10-01T12:00:00.123Z");
 let db:Awaited<ReturnType<typeof jobDoorsDatabase>>;
 const originalEnvironment=process.env.JOBGUARD_ENV;
 beforeAll(async()=>{
@@ -18,6 +19,7 @@ beforeAll(async()=>{
   await db.owner.query("INSERT INTO identity.identity_user(id) VALUES($1)",[U]);
   await db.owner.query("INSERT INTO app.account(tenant_id,id,name) VALUES($1,$2,'Fictional LP3 builder')",[T,A]);
   await db.owner.query("INSERT INTO app.membership(tenant_id,id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')",[T,M,A,U]);
+ context=await testBoundTenantContext(db.owner,T,M);
 },300_000);
 afterAll(async()=>{await db?.close();if(originalEnvironment===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=originalEnvironment;});
 async function fixture(){

@@ -55,6 +55,30 @@ it('ACL comparison permits only named-table permissions and rejects column chang
  expect(()=>expectRelationsUnchanged(before,[{...tightened,columns:[...named.columns,{attname:'stray'}]},unnamed],laterAcl)).toThrow();
  expect(()=>expectRelationsUnchanged(before,[tightened,{...unnamed,relacl:['runtime=arw']}],laterAcl)).toThrow();
 });
+type RoutineAcl = { nspname: string; proname: string; args: string; proacl: string | null };
+function lp6cRoutineAcl(row: RoutineAcl) {
+ const identity=`${row.nspname}.${row.proname}(${row.args})`;
+ const grants = identity==='app.bind_request(p_kind text, p_credential text, p_tenant uuid)'
+   ? ['jobguard_migration']
+   : ['app.current_actor()', 'app.current_tenant()'].includes(identity)
+     ? ['jobguard_migration', 'jobguard_command_writer'] : [];
+ if (!grants.length) return row.proacl;
+ if (row.proacl===null) throw new Error('LP-6c predecessor must have an explicit ACL');
+ const entries = row.proacl.slice(1,-1).split(',');
+ for(const role of grants) {
+  const entry=`${role}=X/jobguard_binding_owner`;
+  if(!entries.includes(entry)) entries.push(entry);
+ }
+ return `{${entries.join(',')}}`;
+}
+it('1217 LP-6c permits only its exact three named function grants',()=>{
+ const base={nspname:'app',proname:'current_actor',args:'',proacl:'{jobguard_binding_owner=X/jobguard_binding_owner,jobguard_runtime=X/jobguard_binding_owner}'};
+ expect(lp6cRoutineAcl(base)).toBe('{jobguard_binding_owner=X/jobguard_binding_owner,jobguard_runtime=X/jobguard_binding_owner,jobguard_migration=X/jobguard_binding_owner,jobguard_command_writer=X/jobguard_binding_owner}');
+ expect(lp6cRoutineAcl({...base,proname:'current_tenant'})).toBe(lp6cRoutineAcl(base));
+ expect(lp6cRoutineAcl({...base,proname:'bind_request',args:'p_kind text, p_credential text, p_tenant uuid'})).toBe('{jobguard_binding_owner=X/jobguard_binding_owner,jobguard_runtime=X/jobguard_binding_owner,jobguard_migration=X/jobguard_binding_owner}');
+ for(const other of [{proname:'other'}, {nspname:'identity'}, {args:'unexpected uuid'}])
+  expect(lp6cRoutineAcl({...base,...other})).toBe(base.proacl);
+});
 let h:ScimHarness|undefined;
 afterAll(async()=>{await h?.close();});
 it('emergency_dual_owner/scim2_machine preserve populated identity state, installed routines and old ACLs; new capabilities start empty and default OFF',async()=>{
@@ -87,8 +111,9 @@ it('emergency_dual_owner/scim2_machine preserve populated identity state, instal
  const afterRelations=after.relations.map((r:Relation)=>isLanding(r)?{...r,constraints:(r.constraints as Con[]).filter(c=>c.name!==added)}:r);
  expectRelationsUnchanged(catalogue.relations,afterRelations,laterAcl);
  for(const row of catalogue.routines){
-  if(!later.has(`${row.nspname}.${row.proname}`)){expect(after.routines).toContainEqual(row);continue;}
-  const {definition:_d,...kept}=row;
+  const expected={...row,proacl:lp6cRoutineAcl(row)};
+  if(!later.has(`${row.nspname}.${row.proname}`)){expect(after.routines).toContainEqual(expected);continue;}
+  const {definition:_d,...kept}=expected;
   expect(after.routines.map(({definition:_x,...r}:typeof row)=>r)).toContainEqual(kept);
  }
  for(const table of ['emergency_request','emergency_approval','emergency_session','emergency_action','scim2_binding','scim2_resource','scim2_receipt']) {

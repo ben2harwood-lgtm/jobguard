@@ -177,6 +177,11 @@ async function seedDatabase(client: PoolClient) {
     await client.query("INSERT INTO identity.identity_user(id) VALUES($1) ON CONFLICT DO NOTHING", [DEMO_IDENTITY_USER_ID]);
     await client.query("SET LOCAL ROLE jobguard_migration");
     await client.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'JobGuard synthetic demo') ON CONFLICT DO NOTHING", [DEMO_ACCOUNT_ID, DEMO_TENANT_ID]);
+    // app.account's key is id alone, so a demo account left by an older demo tenant (before 15 Sep 2026 the demo
+    // tenant was d1500000-...-0015) makes the insert above a silent no-op. Refuse clearly instead of failing on the FK.
+    if (!(await client.query("SELECT 1 FROM app.account WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, DEMO_ACCOUNT_ID])).rowCount) {
+      throw new DemoBootstrapSafetyError("The demo account id already belongs to an older demo tenant in this database. It is not the database the current demo was set up on; use that database's address instead.");
+    }
     await client.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner') ON CONFLICT DO NOTHING", [DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID, DEMO_ACCOUNT_ID, DEMO_IDENTITY_USER_ID]);
     await client.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_EMPTY_TENANT_ID]);
     await client.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Empty Workshop') ON CONFLICT DO NOTHING", [DEMO_EMPTY_ACCOUNT_ID, DEMO_EMPTY_TENANT_ID]);

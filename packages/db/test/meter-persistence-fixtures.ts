@@ -1,13 +1,14 @@
+import { verifiedTenantContextFromMembership } from "../src/tenant-context.js";
 import { createHash, randomUUID } from "node:crypto";
 import type { WorkFixture } from "./job-work-state-fixtures.js";
 import { seedWorkJob, workTenant } from "./job-work-state-fixtures.js";
 export async function meterCompany(f: WorkFixture, tenantId?: string) {
  const company=await seedWorkJob(f,tenantId), digest=createHash("sha256").update(randomUUID()).digest("hex"), sessionId=randomUUID();
  const user=(await f.admin.query("SELECT identity_user_id FROM app.membership WHERE id=$1",[company.actorId])).rows[0].identity_user_id;
- await f.admin.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", [`${randomUUID()}@meter.invalid`,user]);
- await f.admin.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3)",[user,company.tenantId,company.actorId]);
+ await f.admin.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2) ON CONFLICT DO NOTHING", [`${randomUUID()}@meter.invalid`,user]);
+ await f.admin.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3) ON CONFLICT(user_id,tenant_id) DO UPDATE SET membership_id=excluded.membership_id",[user,company.tenantId,company.actorId]);
  await f.admin.query("INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at) VALUES($1,$2,'synthetic_demo',$3,$4,clock_timestamp()+interval '1 hour')",[sessionId,user,digest,randomUUID()]);
- return {...company,digest,sessionId};
+ return {...company,context: verifiedTenantContextFromMembership({identityUserId:user,tenantId:company.tenantId,membershipId:company.actorId} as Parameters<typeof verifiedTenantContextFromMembership>[0], {kind:"real",credential:digest}),digest,sessionId};
 }
 export function meterInput(tenantId:string, places=8, month="2026-09",length=30) {
  const jobs=Array.from({length:places},()=>({tenantId,jobId:randomUUID(),customerId:randomUUID(),siteId:randomUUID(),small:false}));

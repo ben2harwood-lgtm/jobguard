@@ -18,7 +18,7 @@ import { ObservedPool } from "./lock-observer.js";
 // One table of the 17 watchdog_live_only commands, built from the real repositories over a real PostgreSQL 16 and the real runtime
 // role. Several suites are driven by it (replay contract, lock order, legacy command ids), so a command added to or missing from
 // the registry fails each of them, not just one.
-export function createWatchdogHarness(label: string, portBase: number) {
+export function createWatchdogHarness(label: string, portBase: number, credential?: string) {
 const tenant = randomUUID(), member = randomUUID(), otherMember = randomUUID();
 let ctx = testTenantContext(tenant), otherCtx = testTenantContext(tenant);
 const RULE = "supplier-overcharge.v1", DAY = "2026-03-27T09:00:00.000Z", NEXT = "2026-03-30T08:00:00.000Z";
@@ -220,7 +220,7 @@ async function boot() {
   await admin.query("INSERT INTO identity.identity_user(id)VALUES($1),($2)", [user, otherUser]);
   await admin.query("INSERT INTO app.account(id,tenant_id,name)VALUES($1,$2,'Fictional builder')", [account, tenant]);
   for (const id of [member, otherMember]) await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)VALUES($1,$2,$3,$4,'owner')", [id, tenant, account, id === member ? user : otherUser]);
-  ctx = await testBoundTenantContext(admin, tenant, member);
+  ctx = await testBoundTenantContext(admin, tenant, member, credential);
   otherCtx = await testBoundTenantContext(admin, tenant, otherMember);
   await admin.query("CREATE ROLE replay_contract_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;GRANT jobguard_runtime TO replay_contract_login");
   runtime = new Pool({ host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "replay_contract_login", password: "synthetic", max: 8 });

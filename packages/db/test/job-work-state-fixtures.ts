@@ -9,7 +9,7 @@ import EmbeddedPostgres from "embedded-postgres";
 import { Pool, type PoolClient } from "pg";
 import { seedSyntheticPartyFixture } from "../src/synthetic-party-fixture.js";
 import { freePort, closeTestDatabase, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 
 export const CH4_HASH = "a".repeat(64);
 // Ruling 103 (Q4): suites that issue a practice session need the trusted practice database; every other caller keeps the default.
@@ -65,7 +65,7 @@ export async function seedWorkJob(f: WorkFixture, tenantId: string = randomUUID(
   await db.query("UPDATE app.job SET status='live' WHERE tenant_id=$1 AND id=$2", [tenantId, jobId]);
   await db.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')", [scopeId, tenantId, jobId]);
  });
- return { tenantId, actorId, jobId, scopeId, context: testTenantContext(tenantId) };
+ return { tenantId, actorId, jobId, scopeId, context: (await f.admin.query("SELECT to_regprocedure('app.bind_request(text,text,uuid)') installed")).rows[0].installed ? await testBoundTenantContext(f.admin, tenantId, actorId) : testTenantContext(tenantId) };
 }
 export type WorkJob = Awaited<ReturnType<typeof seedWorkJob>>;
 export async function insertPhoto(f: WorkFixture, a: WorkJob, receivedAt = "2026-10-13T10:00:00.000001Z", type: string = proofEvidenceTypeSchema.enum.pre_cover_photo, capturedAt: string | null = null, historicalImportFixture = false) {

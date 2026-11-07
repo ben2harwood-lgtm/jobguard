@@ -10,12 +10,11 @@ export const testTenantContext = (tenantId: string) => verifiedTenantContextFrom
 } as Parameters<typeof verifiedTenantContextFromMembership>[0]);
 
 /** Real persisted credential and membership bridge for synthetic command fixtures. */
-export async function testBoundTenantContext(owner: Pool, tenantId: string, membershipId: string) {
+export async function testBoundTenantContext(owner: Pool, tenantId: string, membershipId: string, credential = randomBytes(32).toString("hex")) {
   const member = (await owner.query<{ identity_user_id: string }>(
     "SELECT identity_user_id FROM app.membership WHERE tenant_id=$1 AND id=$2", [tenantId, membershipId],
   )).rows[0];
   if (!member) throw new Error("Synthetic fixture membership missing");
-  const credential = randomBytes(32).toString("hex");
   await owner.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2) ON CONFLICT DO NOTHING",
     [`${member.identity_user_id}@fictional.invalid`, member.identity_user_id]);
   await owner.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3) ON CONFLICT(user_id,tenant_id) DO UPDATE SET membership_id=excluded.membership_id",

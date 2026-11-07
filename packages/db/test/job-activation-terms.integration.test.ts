@@ -11,8 +11,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { migrate, MIGRATION_URLS, SwitchJobLiveMutation, withTenant, DEMO_TENANT_ID as T, DEMO_MEMBERSHIP_ID as M, PracticeActivationRepository, FinalAccountCommandService, QuoteRepository, insertVariationProposal, UserCommandDispatcher, SwitchJobLiveV3Mutation, prepareActivationFixtureV3, seedActivationFixturesV3, issuePracticeSession, authenticatePracticeSession, authorizePracticeJob } from "../src/index.js";
 import { freePort, closeTestPools } from "./pool-test-utils.js";
 import { proofBefore, proofColumns, proofDifferences, rolledBack, scratchReplaceFunction } from "./upgrade-proof-utils.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
-const context=testTenantContext(T);
+import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
+let context=testTenantContext(T);
 const originalEnvironment=process.env.JOBGUARD_ENV;
 let pg:EmbeddedPostgres,admin:Pool,runtime:Pool,dir:string,pgPort:number;
 beforeAll(async()=>{
@@ -22,6 +22,7 @@ beforeAll(async()=>{
  admin = await syntheticOwnerPool({host:"127.0.0.1",port,user:"postgres",password:"synthetic"});await migrate(admin);
  await admin.query(`INSERT INTO control_plane.tenant(id)VALUES('${T}');INSERT INTO identity.identity_user(id)VALUES('d1500000-0000-4000-8000-000000000001');INSERT INTO app.account(id,tenant_id,name)VALUES('d1500000-0000-4000-8000-000000000002','${T}','Synthetic');INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)VALUES('${M}','${T}','d1500000-0000-4000-8000-000000000002','d1500000-0000-4000-8000-000000000001','owner');CREATE ROLE ch1_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOBYPASSRLS;GRANT jobguard_runtime TO ch1_login;`);
  runtime=new Pool({host:"127.0.0.1",port,database:"jobguard_synthetic_demo",user:"ch1_login",password:"synthetic",max:4});
+ context=await testBoundTenantContext(admin,T,M);
 },60000);
 afterAll(async()=>{await closeTestPools(runtime,admin);await pg?.stop();await rm(dir,{recursive:true,force:true});if(originalEnvironment===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=originalEnvironment;});
 const counts=async(jobId:string)=>(await admin.query(`SELECT (SELECT count(*)::int FROM app.job_activation WHERE job_id=$1) activations,(SELECT count(*)::int FROM app.job_activation_terms WHERE job_id=$1) terms,(SELECT count(*)::int FROM app.cap_snapshot WHERE job_id=$1) caps,(SELECT count(*)::int FROM app.synthetic_obligation WHERE job_id=$1) obligations,(SELECT count(*)::int FROM app.journal WHERE tenant_id=$2) journals`,[jobId,T])).rows[0];
