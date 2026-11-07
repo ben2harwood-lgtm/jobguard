@@ -32,6 +32,8 @@ const { allocateReceiptToLines } = await import('../packages/core/src/receipt-al
 const { calculateCumulativeFee } = await import('../packages/core/src/cumulative-fee.ts');
 const { calculateNetLine, parseQuantity } = await import('../packages/core/src/quantity.ts');
 const { money } = await import('../packages/core/src/money.ts');
+const { multiplyRatio } = await import('../packages/core/src/rational.ts');
+const { calculateReferenceFee } = await import('../packages/core/src/fee.ts');
 const { computeSuppliedMeterPeriod, syntheticMeterPolicyV1 } = await import('../packages/core/src/jobs-on-the-go.ts');
 const { trialPeriodAuthority } = await import('../packages/core/src/free-first-job-conversion.ts');
 const { trialDeadlineV1, approvedTrialClockV1 } = await import('../packages/core/src/free-first-job-calendar.ts');
@@ -84,7 +86,57 @@ function allocate(net, gross, receipt, direction = 'receipt', rule = 'separate_i
     lines: [{ id: 'line', invoiceId: 'invoice', existedAt: at, outstandingGross: exact(gross), netPence: net, grossPence: gross }] })[0];
 }
 
-test('MONEY-CHECK core-1000: five-line quote, approved-only extras, VAT, part-payment, reversal and correction', () => {
+// BUILD_PLAN §3.2: candidate VAT half-up; §10.3: cumulative fees half-even.
+// Expected pennies are hand-worked literals, independent of all product calculations.
+test('MONEY-CHECK odd-penny VAT: candidate 20% rounds above and below the midpoint', () => {
+  comparePennies('odd-penny VAT', {
+    above: quote([12343]).tax.pence,
+    below: quote([12342]).tax.pence,
+  }, { 'odd-penny VAT': {
+    above: 2469, // 12343 / 5 = 2468.6p -> 2469p, half-up.
+    below: 2468, // 12342 / 5 = 2468.4p -> 2468p, half-up.
+  } });
+});
+
+test('MONEY-CHECK arithmetic sanity: VAT half-up kernel at a half-penny tie', () => {
+  // Integer-penny net / 5 can never end in .5, so this is NOT a candidate VAT invoice.
+  // Exact hypothetical net 24685/2 pence × 1/5 = 2468.5p; exercise the shared kernel only.
+  comparePennies('VAT kernel tie', {
+    positive: Number(multiplyRatio(24685n, 1n, 10n, 'half_up')),
+    correction: Number(multiplyRatio(-24685n, 1n, 10n, 'half_up')),
+  }, { 'VAT kernel tie': {
+    positive: 2469, // 2468.5p -> 2469p, half-up (half-even would give 2468p).
+    correction: -2469, // -2468.5p -> -2469p, sign-symmetric correction.
+  } });
+});
+
+test('MONEY-CHECK cumulative 10% fee: half-even ties round down to even and up to even', () => {
+  comparePennies('fee ties', {
+    evenBelow: fee(12345).cumulativeFee.pence,
+    evenAbove: fee(12355).cumulativeFee.pence,
+  }, { 'fee ties': {
+    evenBelow: 1234, // 12345 / 10 = 1234.5p -> 1234p, half-even.
+    evenAbove: 1236, // 12355 / 10 = 1235.5p -> 1236p, half-even.
+  } });
+});
+
+test('MONEY-CHECK historic v1 recovery: binding cap and settled base-plan credit', () => {
+  // BUILD_PLAN Appendix B.1 mandatory £10,000 / £2,820 row. Not the uncapped v3 policy.
+  const result = calculateReferenceFee({ acceptedNet: money(1000000), cumulativeEligibleLanded: money(282000),
+    settledPlanPrincipal: money(7900), priorPostedRecoveryPrincipal: money(0) });
+  comparePennies('binding v1 cap', {
+    cap: result.cap.pence, cappedFee: result.cappedFee.pence, creditUsed: result.creditUsed.pence,
+    additionalLiability: result.additionalLiability.pence, postingDelta: result.postingDelta.pence,
+  }, { 'binding v1 cap': {
+    cap: 15000, // 1000000 × 15 / 1000 = 15000p.
+    cappedFee: 15000, // Uncapped 282000 / 10 = 28200p > cap 15000p; F = 15000p.
+    creditUsed: 7900, // P = 7900p; K = min(7900, 15000) = 7900p.
+    additionalLiability: 7100, // R = 15000 - 7900 = 7100p.
+    postingDelta: 7100, // R - prior posted 0 = 7100p.
+  } });
+});
+
+test('MONEY-CHECK core-1000: five-line quote, approved-only extras, VAT, part-payment and correction (arithmetic sanity: paidOutstanding, reversedOutstanding)', () => {
   // core-1000/journey-model.ts source and DEMO-J1-core-1000.spec.ts command inputs.
   const v1 = quote([20000, 20000, 20000, 20000, 10000]);
   const v2 = quote([20000, 20000, 20000, 20000, 20000]);
@@ -105,7 +157,7 @@ test('MONEY-CHECK core-1000: five-line quote, approved-only extras, VAT, part-pa
   });
 });
 
-test('MONEY-CHECK recovery-18800: separate settled receipts, cumulative v3 statement and reversal refund', () => {
+test('MONEY-CHECK recovery-18800: separate settled receipts, cumulative v3 statement and reversal refund (arithmetic sanity: yours, differences, realActions)', () => {
   const q = quote([1880000]);
   // BUILD_PLAN F10 / DEMO-S: two separate remitted receipts, not the invoice gross as a fee base.
   const first = allocate(32000, 38400, 38400, 'receipt', 'explicit'), second = allocate(250000, 300000, 300000);
@@ -124,7 +176,7 @@ test('MONEY-CHECK recovery-18800: separate settled receipts, cumulative v3 state
     differences: compensation.cumulativeFee.pence - (combined.cumulativeFee.pence - refund), realActions: 0 });
 });
 
-test('MONEY-CHECK shadow-30000: captures are fee-free, both catches share the paid blended invoice', () => {
+test('MONEY-CHECK shadow-30000: captures are fee-free, both catches share the paid blended invoice (arithmetic sanity: yours)', () => {
   const base = [600000, 600000, 600000, 600000, 600000], q = quote(base);
   const captures = [{ net: 320000, approved: true }, { net: 40000, approved: true }];
   const locked = finalAccount(base, captures);
