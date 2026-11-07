@@ -18,7 +18,7 @@ type Reason = "track_not_contractor" | "member_inactive" | "role_not_permitted" 
 type Refusal = { code: "TRACK_FORBIDDEN" | "VISIT_FORBIDDEN" | "NOT_FOUND"; reason: Reason };
 export type StartedVisit = { visitId: string; startedAt: string };
 export type CompletedVisit = { visitId: string; completedAt: string; closeoutAnswer: CloseoutAnswer };
-export type AssignedJob = { jobId: string; workOrderId: string; reference: string; priority: "routine" | "urgent" | "emergency"; issuedOn: string; dueOn: string | null; openVisitId: string | null };
+export type AssignedJob = { jobId: string; workOrderId: string; reference: string; priority: "routine" | "urgent" | "emergency"; issuedOn: string; dueOn: string | null; openVisitId: string | null; lastCompletedVisit?: Pick<CompletedVisit, "visitId" | "closeoutAnswer"> | null };
 export type AssignedJobs = { jobs: AssignedJob[]; truncated: boolean };
 export type OrderLines = { jobId: string; workOrderId: string; revision: number; lines: Array<{ position: number; scopeItemId: string; clientLineReference: string | null; sorCode: string; description: string; unit: string; quantity: string }> };
 const answerV1 = z.object({ decision: z.enum(["allowed", "forbidden", "not_found"]), reason_code: z.enum(["allowed", "member_inactive", "role_not_permitted", "job_out_of_scope"]) }).strict();
@@ -204,9 +204,9 @@ export class SiteVisitRepository {
  /** The caller's assigned jobs: every work-order job for which the visit rule answers allowed, with the caller's own open visit. No money, no resident, no address. */
  async assignedJobs(context: VerifiedTenantContext, actor: AuthenticatedMembership): Promise<AssignedJobs> {
   return this.read(context, actor, null, async db => {
-   const rows = (await db.$client.query<{ job_id: string; work_order_id: string; reference: string; priority: AssignedJob["priority"]; issued_on: string; due_on: string | null; open_visit: string | null }>(
+   const rows = (await db.$client.query<{ job_id: string; work_order_id: string; reference: string; priority: AssignedJob["priority"]; issued_on: string; due_on: string | null; open_visit: string | null; last_completed_visit: AssignedJob["lastCompletedVisit"] }>(
     assignedJobsByScopeQuery, [actor.tenantId, actor.membershipId])).rows;
-   return { jobs: rows.slice(0, 200).map(row => ({ jobId: row.job_id, workOrderId: row.work_order_id, reference: row.reference, priority: row.priority, issuedOn: row.issued_on, dueOn: row.due_on, openVisitId: row.open_visit })), truncated: rows.length > 200 };
+   return { jobs: rows.slice(0, 200).map(row => ({ jobId: row.job_id, workOrderId: row.work_order_id, reference: row.reference, priority: row.priority, issuedOn: row.issued_on, dueOn: row.due_on, openVisitId: row.open_visit, lastCompletedVisit: row.last_completed_visit ?? null })), truncated: rows.length > 200 };
   });
  }
  /** The lines of the order's CURRENT revision, by position, with the schedule-of-rates description. */
@@ -259,7 +259,12 @@ export const assignedJobsQuery = `WITH assigned_orders AS MATERIALIZED (
       )
      )
      SELECT w.job_id,w.id work_order_id,w.reference,r.priority,to_char(r.issued_on,'YYYY-MM-DD') issued_on,to_char(r.due_on,'YYYY-MM-DD') due_on,
-      (SELECT v.id FROM app.site_visit v WHERE v.tenant_id=w.tenant_id AND v.job_id=w.job_id AND v.membership_id=$2 AND v.completed_at IS NULL ORDER BY v.started_at,v.id LIMIT 1) open_visit
+      (SELECT v.id FROM app.site_visit v WHERE v.tenant_id=w.tenant_id AND v.job_id=w.job_id AND v.membership_id=$2 AND v.completed_at IS NULL ORDER BY v.started_at,v.id LIMIT 1) open_visit,
+      (SELECT json_build_object('visitId',v.id,'closeoutAnswer',a.answer)
+       FROM app.site_visit v JOIN app.closeout_answer a
+        ON (a.tenant_id,a.job_id,a.site_visit_id,a.membership_id)=(v.tenant_id,v.job_id,v.id,v.membership_id)
+       WHERE v.tenant_id=w.tenant_id AND v.job_id=w.job_id AND v.membership_id=$2 AND v.completed_at IS NOT NULL
+       ORDER BY v.completed_at DESC,v.id DESC LIMIT 1) last_completed_visit
      FROM assigned_orders w
      JOIN app.job j ON(j.tenant_id,j.id)=(w.tenant_id,w.job_id)
      JOIN app.work_order_revision r ON(r.tenant_id,r.work_order_id,r.id)=(w.tenant_id,w.id,w.revision_id)
@@ -292,7 +297,12 @@ export const assignedJobsByScopeQuery = `WITH assigned_orders AS MATERIALIZED (
       WHERE (SELECT a.decision FROM app.ent3b_visit_authority($2,s.job_id) a)='allowed'
      )
      SELECT w.job_id,w.id work_order_id,w.reference,r.priority,to_char(r.issued_on,'YYYY-MM-DD') issued_on,to_char(r.due_on,'YYYY-MM-DD') due_on,
-      (SELECT v.id FROM app.site_visit v WHERE v.tenant_id=w.tenant_id AND v.job_id=w.job_id AND v.membership_id=$2 AND v.completed_at IS NULL ORDER BY v.started_at,v.id LIMIT 1) open_visit
+      (SELECT v.id FROM app.site_visit v WHERE v.tenant_id=w.tenant_id AND v.job_id=w.job_id AND v.membership_id=$2 AND v.completed_at IS NULL ORDER BY v.started_at,v.id LIMIT 1) open_visit,
+      (SELECT json_build_object('visitId',v.id,'closeoutAnswer',a.answer)
+       FROM app.site_visit v JOIN app.closeout_answer a
+        ON (a.tenant_id,a.job_id,a.site_visit_id,a.membership_id)=(v.tenant_id,v.job_id,v.id,v.membership_id)
+       WHERE v.tenant_id=w.tenant_id AND v.job_id=w.job_id AND v.membership_id=$2 AND v.completed_at IS NOT NULL
+       ORDER BY v.completed_at DESC,v.id DESC LIMIT 1) last_completed_visit
      FROM assigned_orders w
      JOIN app.work_order_revision r ON(r.tenant_id,r.work_order_id,r.id)=(w.tenant_id,w.id,w.revision_id)
      WHERE EXISTS (SELECT 1 FROM allowed_scopes s WHERE s.team_id=w.team_id)
