@@ -1,9 +1,8 @@
 # LATER-SAFETY-30 — synthetic reversal replay payload binding (RED, NOPR)
 
-Source inspection confirms the fault in 0793: a repeated reversal identity checks
+Source inspection confirms the fault in 0654: a repeated reversal identity checks
 allocation and amount but silently accepts changed reason, derivation and journal
-identities. 0793 is the latest routine body in this worktree (predecessor
-ae998706, caught up from main's 0631 body). 0800 copies that body, preserving
+identities. 0654 is the latest routine body on current origin/main (including LP-6b). 0682 copies that body, preserving
 its settled-plan credit check and cumulative reversal calculation, and changes only the replay guard:
 stored reason and derivation identity must match; any compensation journal for
 that derivation must have the requested journal identity. Missing derivation or
@@ -30,25 +29,23 @@ PostgreSQL execution, including failing-first evidence, is deferred to CI becaus
 this sandbox cannot start a database or bind localhost. Local checks and their
 results are recorded in the router commit message. The catch-up adds a source
 comparison in migfix-6.test.ts: removing exactly the reason, derivation and
-compensation-journal replay guards must reproduce 0793's routine byte for byte.
-It failed against the old 0800 monetary calculation before the repair.
+compensation-journal replay guards must reproduce 0654's routine byte for byte.
+It failed against the old 0682 monetary calculation before the repair.
 
 ## Named holds for landing
 
-- The existing plan-entitlement-lifecycle-upgrade integration test compares the
-  predecessor reversal body unchanged across all successors. Its exact named
-  exception must bind only `app.reverse_synthetic_landing(uuid,uuid,uuid,uuid,uuid,bigint,varchar)`
-  to 0800's full body, retaining ACL/owner and all other routine checks. This
-  scanner/pin edit is outside this piece's allowed files and is not made here;
-  it supersedes the same named hold in 0793's notes.
+- Landing catch-up applies the supplied precheck patch: migfix-6 compares against
+  0654; plan-entitlement-lifecycle-upgrade pins the exact reversal body to 0682;
+  migfix-7-upgrade adds that same exact body after its 0658 entry. Every other
+  routine, ACL and owner assertion is retained. Migration SQL is byte-identical
+  to the built branch; only its stem, proof, note and references move to 0682.
 - CI must run migfix-6.integration.test.ts (including "partial reversal preserves
   liability without settled plan credit"), migfix-6-upgrade.integration.test.ts,
   recovery.integration.test.ts (including LATER-SAFETY-30's replay cases), the PostgreSQL migration/catalog and
   upgrade suites, and required repository checks; exact-head independent RED
   review is still required before merge. No database pass is claimed locally.
-- The lane lists exactly this piece's changes over later-safety-17 (excluding
-  config/lanes/). Use that caught-up base to check the lane; do not widen it to
-  absorb predecessor or unrelated changes.
+- The lane lists every changed file against current origin/main, excluding
+  config/lanes/. No predecessor or unrelated change is included.
 
 Forward-only function replacement; no financial history rollback. Any correction
 requires a reviewed forward migration, with linked compensations if applicable.

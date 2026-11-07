@@ -1,6 +1,0 @@
-{
-  "migration": "0800_synthetic_reversal_replay_match.sql",
-  "lp0": [],
-  "upgrade": [],
-  "tenancy": []
-}
