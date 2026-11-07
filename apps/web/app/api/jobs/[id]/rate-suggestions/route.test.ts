@@ -7,6 +7,7 @@ vi.mock("@jobguard/api/identity", () => ({ resolveVerifiedTenantContext: state.r
 vi.mock("../../../../lib/identity-server", () => ({ identityApplication: () => ({ session: async () => ({ csrfToken: "csrf", memberships: [{ tenantId: "company", role: "owner" }] }), provider: {}, allowedOrigin: "http://localhost" }) }));
 vi.mock("../../../../lib/synthetic-server", () => ({ syntheticPool: () => ({}) }));
 import { GET, POST } from "./route";
+import { rateSession } from "../../../../lib/rate-suggestion-server";
 const path = "http://localhost/api/jobs/00000000-0000-4000-8000-000000000001/rate-suggestions";
 const params = { params: Promise.resolve({ id: "00000000-0000-4000-8000-000000000001" }) };
 afterEach(() => { vi.resetAllMocks(); vi.unstubAllEnvs(); });
@@ -52,5 +53,11 @@ it("maps a malformed CSRF header (schema refusal) to 403, not 400", async () => 
   state.resolve.mockImplementationOnce(async () => { z.string().min(24).parse("wrong"); });
   const response = await POST(new Request(path, { method: "POST", headers: { origin: "http://localhost", "x-csrf-token": "wrong" }, body: "{}" }), params);
   expect(response.status).toBe(403);
+  expect(state.accept).not.toHaveBeenCalled();
+});
+it.each([new Error("UNAUTHENTICATED"), new Error("FORBIDDEN"), new Error("provider unavailable"), null])("rethrows other context failures unchanged: %s", async error => {
+  vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
+  state.resolve.mockRejectedValueOnce(error);
+  await expect(rateSession(new Request(path))).rejects.toBe(error);
   expect(state.accept).not.toHaveBeenCalled();
 });

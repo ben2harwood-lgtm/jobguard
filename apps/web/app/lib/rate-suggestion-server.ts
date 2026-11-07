@@ -25,7 +25,7 @@ export async function rateSession(request?: Request) {
     // Match the mandate boundary: a mutation uses browser-supplied CSRF and origin.
     // A malformed CSRF or origin header is a refused mutation (403), not a bad acceptance body (400).
     try {
-      await resolveVerifiedTenantContext(identity.provider, {
+      const context = await resolveVerifiedTenantContext(identity.provider, {
         sessionToken: token, requestedTenantId: session.memberships[0].tenantId,
         origin: request.headers.get("origin") ?? undefined,
         csrfToken: request.headers.get("x-csrf-token") ?? undefined,
