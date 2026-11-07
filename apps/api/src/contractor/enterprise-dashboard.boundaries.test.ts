@@ -61,5 +61,5 @@ it("[E9-14 E9-26 E9-27 E9-31] the sole source statement is SELECT-only and calls
   expect(stripped).not.toMatch(/\b(?:INSERT|UPDATE|DELETE|MERGE|TRUNCATE|CREATE|ALTER|DROP|GRANT|REVOKE|COPY|CALL|DO|EXECUTE|INTO|FOR\s+UPDATE)\b/iu);
   expect(stripped).not.toContain(";");
   const calls = [...stripped.matchAll(/app\.([a-z_]+)\s*\(/gu)].map(m => m[1]);
-  expect([...new Set(calls)].sort()).toEqual(["contractor_job_allowed", "contractor_job_team", "contractor_member_active", "contractor_role_permits", "contractor_session", "xa_decision_id"].sort());
+  expect([...new Set(calls)].sort()).toEqual(["contractor_job_allowed", "contractor_job_team", "contractor_member_active", "contractor_role_permits", "contractor_session", "xa_decision_id", "xa_wait_deadline"].sort());
 });

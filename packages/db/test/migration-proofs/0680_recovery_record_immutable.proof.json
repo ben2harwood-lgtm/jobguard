@@ -1,5 +1,5 @@
 {
-  "migration": "0835_recovery_record_immutable.sql",
+  "migration": "0680_recovery_record_immutable.sql",
   "lp0": [
     {
       "section": "triggers",
