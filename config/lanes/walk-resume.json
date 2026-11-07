@@ -6,14 +6,15 @@
         "codex/sandbox/walk-resume"
       ],
       "allow": [
-        "apps/web/app/practice-company/walkthrough/resume.ts",
         "apps/web/app/practice-company/walkthrough/resume.test.ts",
+        "apps/web/app/practice-company/walkthrough/resume.ts",
         "apps/web/app/practice-company/walkthrough/voice-journey.tsx",
-        "apps/web/app/ui/walkthrough/walkthrough.tsx",
+        "apps/web/app/ui/walkthrough/walkthrough.test.tsx",
+        "apps/web/e2e/WALK-3.spec.ts",
         "apps/web/e2e/WALK-resume.spec.ts",
-        "apps/web/app/ui/walkthrough/walkthrough.test.tsx"
+        "apps/web/e2e/WALK-stress.spec.ts"
       ],
-      "note": "walk-resume: server-backed refresh recovery; no migrations. RED: saved Final Check/invoice resume. NOPR; browser/database CI and independent exact-head review remain gates."
+      "note": "walk-resume: server-backed refresh recovery; no migrations. RED: saved Final Check/invoice resume. PR #632 catch-up; browser/database CI and independent exact-head review remain gates."
     }
   }
 }

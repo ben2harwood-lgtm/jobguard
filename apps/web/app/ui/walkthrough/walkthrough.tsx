@@ -45,6 +45,7 @@ export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: reado
   }, []);
   useEffect(() => {
     if (!step || finished) return;
+    document.querySelectorAll("[data-walk-action]").forEach(element => element.removeAttribute("data-walk-action"));
     setDone(false); setError(""); setBox(null);
     card.current?.focus({ preventScroll: true });
     let highlighted: HTMLElement | null = null;
@@ -99,7 +100,9 @@ export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: reado
   useEffect(() => { if (waiting && done && !busy) advance(); }, [waiting, done, busy]);
   useEffect(() => { if (playing && !busy && !finished) void show(); }, [playing, busy, index, finished]); // one action at a time
   useEffect(() => {
-    function escape(event: KeyboardEvent) { if (event.key === "Escape" && !event.defaultPrevented) { action.current?.abort(); setPlaying(false); onClose(); } }
+    function escape(event: KeyboardEvent) {
+      if (event.target instanceof Element && event.target.closest('dialog[open], [role=dialog], [role=alertdialog], [aria-modal=true]') || document.querySelector("dialog:modal")) return;
+      if (event.key === "Escape" && !event.defaultPrevented) { action.current?.abort(); setPlaying(false); onClose(); } }
     window.addEventListener("keydown", escape); return () => window.removeEventListener("keydown", escape);
   }, [onClose]);
   if (!step) return null;
