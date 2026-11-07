@@ -1,3 +1,4 @@
+import { mapRequestBindingRefusal } from "./request-binding-error.js";
 import type { Pool } from "pg";
 import { z } from "zod";
 import { parseRecoveryAttributionCommand, attributionReviewResultV1, recoveryAttributionRevisionV1, type RecoveryAttributionRevisionV1 } from "@jobguard/core";
@@ -10,7 +11,7 @@ export class RecoveryAttributionRepository {
   async assess(context: VerifiedTenantContext, jobId: string, sessionDigest: string, raw: unknown): Promise<RecoveryAttributionRevisionV1> {
     const command = parseRecoveryAttributionCommand(raw);
     const job = z.string().uuid().parse(jobId);
-    return withTenant(this.pool, context, async db => {
+    return mapRequestBindingRefusal(withTenant(this.pool, context, async db => {
       const row = (await db.$client.query<{ result: unknown }>(
         "SELECT app.assess_recovery_attribution($1,$2,$3::jsonb) result", [job, sessionDigest, command],
       )).rows[0];
@@ -19,14 +20,14 @@ export class RecoveryAttributionRepository {
         || result.workId!==command.workId || result.lineId!==command.lineId || result.lockId!==command.lockId)
         throw new PracticeAccessError("NOT_FOUND");
       return result;
-    });
+    }), () => new PracticeAccessError("NOT_FOUND"));
   }
   /** Records one exact review; its receipt is historical, never fee/collection permission. */
   async approveReview(context: VerifiedTenantContext, jobId: string, sessionDigest: string, raw: unknown) {
     const command = parseRecoveryAttributionCommand(raw);
     if (command.action !== "approve_review") throw new Error("INVALID_RECOVERY_ATTRIBUTION_COMMAND");
     const job = z.string().uuid().parse(jobId);
-    return withTenant(this.pool, context, async db => {
+    return mapRequestBindingRefusal(withTenant(this.pool, context, async db => {
       const row = (await db.$client.query<{ result: unknown }>(
         "SELECT app.assess_recovery_attribution($1,$2,$3::jsonb) result", [job, sessionDigest, command],
       )).rows[0];
@@ -35,12 +36,12 @@ export class RecoveryAttributionRepository {
         || result.sourceHash !== command.expectedSourceHash || result.reviewArtifactHash !== command.reviewArtifactHash
         || result.assessmentRevision !== command.expectedAttributionRevision) throw new PracticeAccessError("NOT_FOUND");
       return result;
-    });
+    }), () => new PracticeAccessError("NOT_FOUND"));
   }
   /** No hidden-table access; RLS requires the current authenticated owner and locked practice job. */
   async history(context: VerifiedTenantContext, jobId: string, sessionDigest: string): Promise<readonly RecoveryAttributionRevisionV1[]> {
     const job = z.string().uuid().parse(jobId);
-    return withTenant(this.pool, context, async db => {
+    return mapRequestBindingRefusal(withTenant(this.pool, context, async db => {
       // Reauthenticate inside the read transaction. No attribution/shadow table is
       // touched until the current session owns this job and its lock exists.
       const gate = (await db.$client.query<{ locked: boolean }>(`
@@ -62,6 +63,6 @@ export class RecoveryAttributionRepository {
         if (document.tenantId !== context.tenantId || document.jobId !== job) throw new PracticeAccessError("NOT_FOUND");
         return document;
       });
-    });
+    }), () => new PracticeAccessError("NOT_FOUND"));
   }
 }

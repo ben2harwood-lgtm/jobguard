@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-110": {
+      "branches": ["codex/sandbox/later-safety-110"],
+      "allow": [
+        "apps/web/app/api/quotes/preview/route.ts",
+        "apps/web/app/api/quotes/preview/route.test.ts"
+      ]
+    }
+  }
+}

@@ -13,7 +13,7 @@ export default async function JobPage({ params, searchParams }: {
   searchParams: Promise<{ company?: string }>;
 }) {
   const { id } = await params, { company } = await searchParams;
-  if (!company) return <><WorkspaceShell jobId={id}/><MerchantOrder key={id} jobId={id}/></>;
+  if (!company) return <><WorkspaceShell jobId={id}/>{process.env.JOBGUARD_ENV === "synthetic_demo" && <MerchantOrder key={id} jobId={id}/>}</>;
   // A tenant selection is never authority. Reauthenticate the company session,
   // then let the same CH-4 owner/job/track boundary authorize this saved job.
   // A server component has its own copy of these modules, so it must not create or reuse
