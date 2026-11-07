@@ -11,7 +11,7 @@ function fixture() {
     callback: vi.fn(async () => { current = { connectionId: current!.connectionId, status: "linked" }; return {} as never; }),
     pull: vi.fn(), stop: vi.fn(async (_c, _d, id) => { current = { connectionId: id, status: "token_revoked" }; return {} as never; }) };
   const identity = { allowedOrigin: credentials.origin, provider: { digest: () => "a".repeat(64),
-    authenticate: vi.fn(async (token: string) => token === credentials.sessionToken ? { identityUserId: tenant, sessionId: tenant, csrfToken: credentials.csrfToken } : undefined),
+    authenticate: vi.fn(async (token: string) => token === credentials.sessionToken ? Object.defineProperty({ identityUserId: tenant, sessionId: tenant, csrfToken: credentials.csrfToken }, "sessionCredential", { value: "a".repeat(64), enumerable: false }) : undefined),
     findMembership: vi.fn(async (_p, id: string) => id === tenant ? { id: tenant, tenantId: tenant, identityUserId: tenant, role: "owner", email: "fictional@company.invalid" } : undefined) } };
   const memory = { pending: new Map(), adapter: new FakeTrueLayerAisAdapter(), vault: new SyntheticAisTokenVault(), pages: new Map() };
   const app = new PracticeBankApplication(identity as never, repository, memory);
@@ -88,7 +88,11 @@ it("keeps production dark and redacts arbitrary exceptions", async () => {
 function linkedFixture(role = "owner") {
   const s = fixture(); let status = "linked";
   const operations: string[] = [];
+  let bound: unknown;
   const client = { release: vi.fn(), query: vi.fn(async (sql: string, values: unknown[] = []) => {
+    // LP-6b binds every session-bearing request; answer the bind check for the bound tenant's owner.
+    if (sql.startsWith("SELECT app.bind_request")) { bound = values[2]; return { rows: [] }; }
+    if (sql.includes("app.current_actor()")) return { rows: [{ actor: bound, tenant: bound }] };
     if (sql.includes("ais_movement_read")) return { rows: [{ result: { version: "ais-practice-view.v1", connection: values[0] === tenant ? { connectionId, status } : null, movements: [] } }] };
     if (!sql.includes("app.dark_ais")) return { rows: [] };
     if (values[0] !== tenant || values[2] !== connectionId) throw new Error("AIS_NOT_FOUND");
@@ -128,7 +132,7 @@ it("repository authority rejects a wrong role or another connection before token
 
 it("passes another company's verified session to its own empty view and cannot stop this connection", async () => {
   const s = linkedFixture(), other = "00000000-0000-4000-8000-000000000003";
-  s.identity.provider.authenticate.mockResolvedValue({ identityUserId: other, sessionId: other, csrfToken: credentials.csrfToken });
+  s.identity.provider.authenticate.mockResolvedValue(Object.defineProperty({ identityUserId: other, sessionId: other, csrfToken: credentials.csrfToken }, "sessionCredential", { value: "b".repeat(64), enumerable: false }));
   s.identity.provider.findMembership.mockResolvedValue({ id: other, tenantId: other, identityUserId: other, role: "owner", email: "other@company.invalid" });
   const request = { ...credentials, sessionToken: "o".repeat(32), tenantHeader: other };
   expect(await s.app.read(request)).toEqual({ version: "ais-practice-view.v1", connection: null, movements: [], credentialsUnavailable: false });
