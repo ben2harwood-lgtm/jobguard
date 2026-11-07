@@ -41,10 +41,10 @@ it("SV5-B3 a signal supported only by post-lock evidence is not offered that evi
  expect(done.runId).toBeTruthy();
  expect((await f.admin.query("SELECT state FROM app.shadow_commercial_signal WHERE tenant_id=$1 AND job_id=$2 AND id=$3",[a.tenantId,a.jobId,signalId])).rows[0].state).not.toBe('revealed');void randomUUID;
 });
-it("SV5-25 invalidated evidence cannot remain available as successfully checked proof",async()=>{
+it("SV5-25 refuses post-lock evidence invalidation and keeps the check complete",async()=>{
  const {availableFinalCheck,finalCheckTenant,FINAL_CHECK_ACTOR}=await import('./final-check-fixture.js');const a=await seedFinalCheckJob(f),r=await availableFinalCheck(f,a),e=r.manifest.sources[0]!.evidenceId;
- await finalCheckTenant(f.admin,a.tenantId,db=>db.query("INSERT INTO app.evidence_invalidation(id,tenant_id,evidence_id,actor_membership_id,reason_code) VALUES($1,$2,$3,$4,'verification_invalid')",[randomUUID(),a.tenantId,e,FINAL_CHECK_ACTOR]));
- expect((await new FinalCheckRepository(f.runtime).read(a.context,a.jobId,a.digest)).state).toBe('failed');
+ await expect(finalCheckTenant(f.admin,a.tenantId,db=>db.query("INSERT INTO app.evidence_invalidation(id,tenant_id,evidence_id,actor_membership_id,reason_code) VALUES($1,$2,$3,$4,'verification_invalid')",[randomUUID(),a.tenantId,e,FINAL_CHECK_ACTOR]))).rejects.toMatchObject({code:'55000',message:'FINAL_CHECK_VERIFIED_SOURCE_LOCKED'});
+ expect((await new FinalCheckRepository(f.runtime).read(a.context,a.jobId,a.digest)).state).toBe('completed');
 });
 it("SV5-01 SV5-03 unlinked supplier versions are inventoried as unsupported rather than silently skipped",async()=>{
  const {finalCheckTenant}=await import('./final-check-fixture.js'),a=await seedFinalCheckJob(f),documentId=randomUUID(),versionId=randomUUID();
