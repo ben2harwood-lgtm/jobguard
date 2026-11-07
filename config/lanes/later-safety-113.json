@@ -9,7 +9,8 @@
         "packages/db/migration-notes/0666_final_check_invalidation_after_lock.md",
         "packages/db/test/migration-proofs/0666_final_check_invalidation_after_lock.proof.json",
         "packages/db/test/final-check-invalidation-lock.integration.test.ts",
-        "packages/db/test/final-check-manifest.integration.test.ts"
+        "packages/db/test/final-check-manifest.integration.test.ts",
+        "packages/db/test/sv5pre-completion.integration.test.ts"
       ]
     }
   }
