@@ -48,7 +48,7 @@ describe("practice ownership uses the trusted import source — PostgreSQL", () 
     expect((await authorizePracticeJob(f.runtime, owner.sessionId, jobId)).digest).toBe(auth.digest);
   });
 
-  it("keeps a real v1 parties import owned through its original adoption event", async () => {
+  it("keeps a real v1 parties import owned through its succeeded command receipt", async () => {
     const { JobPartiesApplication } = await import("../../../apps/api/src/job-parties.application.js");
     const owner = await seedWorkPractice(f), stranger = await seedWorkPractice(f);
     const binding = (await f.admin.query("SELECT binding_id FROM app.job_party_current WHERE tenant_id=$1 AND job_id=$2",
@@ -64,7 +64,42 @@ describe("practice ownership uses the trusted import source — PostgreSQL", () 
     await expect(authorizePracticeJob(f.runtime, stranger.sessionId, result.jobId)).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
-  it("preserves legacy v1 arbitrary hashes and rejects later forged source attestations", async () => {
+  it("ignores a stranger's pre-planted v1 attestation and keeps the owner's import", async () => {
+    const { JobPartiesApplication } = await import("../../../apps/api/src/job-parties.application.js");
+    const owner = await seedWorkPractice(f), stranger = await seedWorkPractice(f);
+    const tenantId = owner.auth.context.tenantId, commandId = randomUUID();
+    const binding = (await f.admin.query("SELECT binding_id FROM app.job_party_current WHERE tenant_id=$1 AND job_id=$2",
+      [tenantId, owner.jobId])).rows[0].binding_id as string;
+    // Match the public API's deterministic IDs so the forged event arrives before the real adoption.
+    const deterministicId = (kind: string) => {
+      const h = createHash("sha256").update(`${tenantId}|${commandId}|${kind}`).digest("hex");
+      return `${h.slice(0,8)}-${h.slice(8,12)}-4${h.slice(13,16)}-8${h.slice(17,20)}-${h.slice(20,32)}`;
+    };
+    const jobId = deterministicId("job"), baselineId = deterministicId("baseline");
+    const baselineHash = createHash("sha256").update(JSON.stringify({
+      sourceJobId: owner.jobId, bindingId: binding,
+      baselineDescription: "Supplied fictional decorating job already under way — synthetic builder attestation only",
+      netPence: 100000,
+    })).digest("hex");
+    await withTenant(f.runtime, stranger.auth.context, db => appendAuditBatch(db, [{
+      id: randomUUID(), version: "audit.v1", actorRef: `membership:${stranger.auth.membershipId}`,
+      eventType: "job.imported_baseline_attested", subjectType: "job", subjectRef: jobId,
+      payload: { references: { sourceJobId: stranger.jobId, baselineId }, hashes: { baselineHash } },
+    }]));
+    const result = await new JobPartiesApplication(f.runtime).adopt({ sessionId: owner.sessionId }, owner.jobId,
+      { version: "job-parties-import.v1", commandId, expectedBindingId: binding });
+    expect(result.jobId).toBe(jobId);
+    expect((await f.admin.query(`SELECT payload FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2
+      AND event_type='job.imported_baseline_attested' ORDER BY sequence LIMIT 1`, [tenantId, jobId])).rows[0].payload)
+      .toMatchObject({ references: { sourceJobId: stranger.jobId, baselineId }, hashes: { baselineHash } });
+    expect((await f.admin.query(`SELECT status, result->>'sourceJobId' AS source FROM app.command_receipt
+      WHERE tenant_id=$1 AND command_id=$2`, [tenantId, commandId])).rows[0])
+      .toEqual({ status: "succeeded", source: owner.jobId });
+    expect((await authorizePracticeJob(f.runtime, owner.sessionId, jobId)).digest).toBe(owner.auth.digest);
+    await expect(authorizePracticeJob(f.runtime, stranger.sessionId, jobId)).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("refuses legacy v1 event-only ownership claims with arbitrary hashes", async () => {
     const owner = await seedWorkPractice(f), stranger = await seedWorkPractice(f);
     const tenantId = owner.auth.context.tenantId, jobId = randomUUID(), baselineId = randomUUID();
     const parties = (await f.admin.query(`SELECT customer_revision_id AS "customerRevisionId",
@@ -90,14 +125,14 @@ describe("practice ownership uses the trusted import source — PostgreSQL", () 
     }, { mutate: mutation.mutate.bind(mutation), auditEvents: (result, command) => mutation.auditEvents(result, command).map(event => ({
       ...event, payload: { ...event.payload, references: { ...event.payload.references, sourceJobId: owner.jobId } },
     })) });
-    expect((await authorizePracticeJob(f.runtime, owner.sessionId, jobId)).digest).toBe(owner.auth.digest);
+    await expect(authorizePracticeJob(f.runtime, owner.sessionId, jobId)).rejects.toMatchObject({ code: "NOT_FOUND" });
     await withTenant(f.runtime, stranger.auth.context, db => appendAuditBatch(db, [{
       id: randomUUID(), version: "audit.v1", actorRef: `membership:${stranger.auth.membershipId}`,
       eventType: "job.imported_baseline_attested", subjectType: "job", subjectRef: jobId,
       payload: { references: { sourceJobId: stranger.jobId, baselineId }, hashes: { baselineHash } },
     }]));
     await expect(authorizePracticeJob(f.runtime, stranger.sessionId, jobId)).rejects.toMatchObject({ code: "NOT_FOUND" });
-    expect((await authorizePracticeJob(f.runtime, owner.sessionId, jobId)).digest).toBe(owner.auth.digest);
+    await expect(authorizePracticeJob(f.runtime, owner.sessionId, jobId)).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
 });

@@ -15,6 +15,13 @@
   },
   {
     "file": "packages/db/src/practice-session.ts",
+    "line": 63,
+    "fingerprint": "7434fab88cb7931a712118d00d3a37661a257a7ae683c0cd16bcd57098802b2d",
+    "reason": "v1 adoption receipt read inside the recursive ownership CTE; non-advisory, definer-written command receipt required by the ACCEPT-V1-RECEIPT ruling; Ben approved 7 Nov",
+    "code": "UNRESOLVED_COVERED_EDGE"
+  },
+  {
+    "file": "packages/db/src/practice-session.ts",
     "line": 73,
     "fingerprint": "ad3ac47cb73083599ccbd5fd355eb9f2f313b9af4ceca2115da91270658d50ca",
     "reason": "Generic local query helper receives runtime sql/values parameters; callers are not specialized by runtime data flow.",

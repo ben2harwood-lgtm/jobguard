@@ -251,9 +251,9 @@ describe("ENT-4b origin persistence", () => {
  });
  it("[S9] scanner and seven pinned bridges stay byte-identical", async () => {
   const hashes = {
-   // Renewed caller source review 6 Nov 2026, later-safety-108 CI repair: only ownership traversal changes.
+   // Renewed caller source review 6 Nov 2026, later-safety-108 repair 4: v1 ownership now requires the succeeded import receipt.
   // Persisted-session authentication, synthetic-only gate and the sole context constructor are unchanged; RED review remains required.
-   "packages/db/src/practice-session.ts": "f7f5dcfff5d08482bccd7c1a19c22fd864eb398ddcc55f7ee4ab54108dc6c84d",
+   "packages/db/src/practice-session.ts": "95f236bc922a5cb3c0be9d4fd53cdb5730fe829cf1b33629bad36fc0f1af7281",
    "packages/db/src/contractor-repository.ts": "56b95b80360434f0cf58376ef2ec44d0354b194e5080bcfd9414ac283971006c",
    "packages/db/src/contractor-party-repository.ts": "e5852288e5355b53f7548c4d5741aef54ee55a2b8a66dd56a54b08963cd1fdb0",
    // Renewed caller review 5 Nov 2026: Ben approved batch-41 ("Yes, all three") in the router chat.
@@ -264,7 +264,7 @@ describe("ENT-4b origin persistence", () => {
    "packages/db/src/job-scheduling-repository.ts": "7517df3c6597af44f651c8b704c9bd91c4f40894ce5aa58e3b4fcea16cc9eb57",
    "packages/db/src/work-order-fixtures.ts": "703b2f726e9d4256cbd0a1908676f2cd401d64bad28741853f8131183cd0a0ea",
    // Scanner bytes change only for the renewed caller review citation above.
-   "apps/api/src/auth/context-boundary.test.ts": "465c7ce12fe9bb5c65bc45ed5ad3ccbd1155f6047f6d7a03e9ba59fe4b28aebd"
+   "apps/api/src/auth/context-boundary.test.ts": "aa3ac305f6b033d6520b2c3f139359100b7e6174c557125bf929aa32254c7402"
 };
   for (const [file, hash] of Object.entries(hashes)) expect(sha256Hex(await readFile(new URL(`../../../${file}`, import.meta.url), "utf8")), file).toBe(hash);
  });

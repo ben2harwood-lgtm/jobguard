@@ -27,7 +27,7 @@ export async function authenticatePracticeSession(pool: Pool, token: string | un
 /**
  * Controlled adoption routines create an unowned imported job; 0094
  * prohibits assigning ownership later. An adopted job inherits its source's owner via
- * the immutable v3 import record, or v1's original adoption event and frozen parties.
+ * the immutable v3 import record, or v1's succeeded command receipt and frozen parties.
  * No first-touch claim or mutation of job ownership is permitted. UNION handles
  * repeated imports without duplicating identities or following cycles forever.
  */
@@ -45,14 +45,12 @@ export function practiceOwnedJobsSql(digestParameter: "$2" | "$3" = "$3") {
    JOIN app.job_party_binding origin ON origin.tenant_id=b.tenant_id AND origin.job_id=source.id
     AND origin.customer_revision_id=imported.customer_revision_id
     AND origin.site_revision_id=imported.site_revision_id AND origin.paying_party_revision_id=imported.paying_party_revision_id
-   JOIN LATERAL (SELECT e.payload FROM app.audit_event e
-    WHERE e.tenant_id=b.tenant_id AND e.subject_type='job' AND e.subject_ref=b.job_id::text
-     AND e.event_type='job.imported_baseline_attested' ORDER BY e.sequence LIMIT 1) adoption ON true
    WHERE b.tenant_id=$1 AND b.job_id=j.id
     AND NOT EXISTS (SELECT 1 FROM app.job_import_v3 iv WHERE iv.tenant_id=b.tenant_id AND iv.job_id=b.job_id)
-    AND adoption.payload->'references'->>'sourceJobId'=source.id::text
-    AND adoption.payload->'references'->>'baselineId'=b.id::text
-    AND adoption.payload->'hashes'->>'baselineHash'=b.baseline_hash)
+    AND EXISTS (SELECT 1 FROM app.command_receipt rv
+     WHERE rv.tenant_id=$1 AND rv.command_type='job.adopt_in_flight' AND rv.status='succeeded'
+      AND rv.semantic_key='import:'||j.id::text AND rv.result->>'jobId'=j.id::text
+      AND rv.result->>'sourceJobId'=source.id::text))
  )`;
 }
 /** Immutable job ownership is checked before any projection, command or replay. */

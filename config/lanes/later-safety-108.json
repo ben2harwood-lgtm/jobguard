@@ -12,7 +12,8 @@
         "packages/db/test/imported-baseline-sources.integration.test.ts",
         "packages/db/test/imported-observation-reader.integration.test.ts",
         "apps/api/src/auth/context-boundary.test.ts",
-        "packages/db/test/extra-origin.integration.test.ts"
+        "packages/db/test/extra-origin.integration.test.ts",
+        "tools/commercial-integrity-current-source-guard.unresolved.json"
       ]
     }
   }
