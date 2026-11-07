@@ -7,6 +7,7 @@
       ],
       "note": "ENT-5-PACK-TIMING: server projection timing content; RED, synthetic only; migration 0860 unused.",
       "allow": [
+        "apps/api/src/evidence-bundle.application.test.ts",
         "packages/core/src/extra-evidence-pack.ts",
         "packages/core/src/extra-evidence-pack.test.ts",
         "packages/db/src/extra-evidence-pack-sources.ts",

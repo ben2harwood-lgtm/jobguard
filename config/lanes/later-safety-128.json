@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-128": {
+      "branches": ["codex/sandbox/later-safety-128"],
+      "note": "LATER-SAFETY-128: RED payment reversal through the existing invoice-bound routine; no migration.",
+      "allow": [
+        "packages/db/src/customer-billing-repository.ts",
+        "packages/db/test/audit-dbsrc-03.integration.test.ts"
+      ]
+    }
+  }
+}

@@ -48,7 +48,7 @@ const photoRefusal: EvidenceRefusal = { code: "PHOTO_NOT_ACCEPTED", reason: "pho
 type Gate = { raise: { evidenceId?: string; residentConfirmationEvidenceId?: string }; evidence?: EvidenceFacts };
 export class SiteExtraRepository {
  constructor(private readonly pool: Pool) {}
- private async precheck(context: VerifiedTenantContext, actor: AuthenticatedMembership, jobId: string, siteVisitId?: string, retained = false): Promise<Authority> {
+ private async precheck(context: VerifiedTenantContext, actor: AuthenticatedMembership, jobId: string, siteVisitId?: string, retained = false, replayCommandId?: string): Promise<Authority> {
   return withTenant(this.pool, context, async db => {
    try { await assertContractorGate(db, actor, retained ? "retained_member" : "member", "site_origin_capture"); } catch (error) {
     if (error instanceof WorkOrderError && error.code === "TRACK_FORBIDDEN") return { code: "TRACK_FORBIDDEN", reason: "track_not_contractor" };
@@ -59,7 +59,9 @@ export class SiteExtraRepository {
    const answer = answerV1.safeParse(rows.length === 1 ? rows[0] : undefined);
    if (!answer.success) return { code: "NOT_FOUND", reason: "job_out_of_scope" };
    if (answer.data.decision === "allowed") {
-    await requireLiveJob(db, jobId);
+    // Let the owning command verify the request hash and return its stored success, even after invoicing.
+    const replay = replayCommandId && (await db.$client.query("SELECT 1 FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2 AND command_type=$3 AND actor_membership_id=$4 AND status='succeeded'", [context.tenantId, replayCommandId, commandType, actor.membershipId])).rowCount;
+    if (!replay) await requireLiveJob(db, jobId);
     // A visit reference is checked only after the caller is known to be allowed: it must be the caller's own open visit on this job.
     if (siteVisitId && !(await db.$client.query("SELECT 1 FROM app.site_visit WHERE tenant_id=$1 AND id=$2 AND job_id=$3 AND membership_id=$4 AND completed_at IS NULL", [actor.tenantId, siteVisitId, jobId, actor.membershipId])).rowCount) return { code: "NOT_FOUND", reason: "visit_out_of_scope" };
     return { grant: answer.data.raising_grant };
@@ -163,7 +165,7 @@ export class SiteExtraRepository {
    if (!context || typeof context.tenantId !== "string") throw new InvalidTenantContextError();
    if (actor.tenantId.toLowerCase() !== context.tenantId.toLowerCase()) refusal = { code: "EXTRA_FORBIDDEN", reason: "member_inactive" };
    else {
-    const authority = await this.precheck(context, actor, input.jobId, input.siteVisitId);
+    const authority = await this.precheck(context, actor, input.jobId, input.siteVisitId, false, input.commandId);
     if ("code" in authority) refusal = authority;
     else {
      const gate = await this.evidenceGate(context, actor, input);
