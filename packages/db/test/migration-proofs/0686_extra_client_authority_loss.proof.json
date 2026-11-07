@@ -24,14 +24,6 @@
       }
     },
     {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "owner|routine|function:app.xc_link_current(uuid)|jobguard_migration",
-        "group": "a-owner-routines"
-      }
-    },
-    {
       "section": "routines",
       "before": null,
       "after": {
