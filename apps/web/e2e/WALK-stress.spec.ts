@@ -329,11 +329,8 @@ test("step 2: expired session refuses save and retains entered prices and the ea
   expect(await read(page, path)).toEqual(before);
 });
 
-// Source-confirmed bug: VoiceJourney stores capture/prepared/report only in React
-// state and Walkthrough starts at index 0 on each mount. Keep the desired recovery
-// contract executable here for the follow-up repair; no product changes in this lane.
+// WALK-resume restores the saved job and step from authorized server reads.
 test("saved walkthrough resumes or explains its saved step after refresh", async ({ page }) => {
-  test.fixme(true, "Refreshing WALK forgets the saved job and step, then silently restarts at step 1.");
   await open(page);
   await showUntil(page, 3);
   const id = await ownJob(page);

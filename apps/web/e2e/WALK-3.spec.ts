@@ -113,7 +113,7 @@ test("WALK-3 on-device words reach the real capture contract without uploading a
 });
 
 // Authored for mobile-360 and desktop; run headless with --workers=2.
-test("WALK-3 verifies saved progress after reload and drops an unavailable quote flag", async ({ page }) => {
+test("WALK-3 verifies saved progress after reload and refuses unavailable saved reads", async ({ page }) => {
   await page.goto("/practice-company/walkthrough");
   const tour = page.getByRole("region", { name: "Guided walkthrough" });
   await tour.getByRole("button", { name: "Show me", exact: true }).click();
@@ -128,15 +128,22 @@ test("WALK-3 verifies saved progress after reload and drops an unavailable quote
   const stored = await page.evaluate(() => Object.entries(sessionStorage).filter(([key]) => key.startsWith("walk-3.progress:")));
   expect(stored).toHaveLength(1);
   expect(Object.keys(JSON.parse(stored[0]![1])).sort()).toEqual(["jobId", "prepared", "priced"]);
+  const captures: string[] = [];
+  page.on("request", request => {
+    if (request.method() === "POST" && request.url().endsWith("/api/jobs/capture")) captures.push(request.url());
+  });
   await page.route(`**/api${href}/quotes`, route => route.fulfill({ status: 503, body: '{}' }));
   await page.reload();
-  await expect(tour).toContainText("Step 2 of 9");
-  await expect(tour.getByRole("button", { name: "Next", exact: true })).toBeDisabled();
-  await expect(link).toHaveAttribute("href", href!);
+  const savedReadError = page.getByRole("alert").filter({ hasText: "Your saved walkthrough could not load" });
+  await expect(savedReadError).toContainText("Your saved walkthrough could not load");
+  await expect(tour).toHaveCount(0);
+  expect(new URL(page.url()).searchParams.get("walkJob")).toBe(href!.split("/").at(-1));
   await page.route(`**/api${href}/proposal`, route => route.fulfill({ status: 404, body: '{}' }));
   await page.reload();
-  await expect(tour).toContainText("Step 1 of 9");
-  await expect(link).toHaveCount(0);
+  await expect(savedReadError).toContainText("Your saved walkthrough could not load");
+  await expect(tour).toHaveCount(0);
+  expect(new URL(page.url()).searchParams.get("walkJob")).toBe(href!.split("/").at(-1));
+  expect(captures).toEqual([]);
 });
 
 test("WALK-3 accepts a manually approved £150 extra", async ({ page }) => {
@@ -154,8 +161,13 @@ test("WALK-3 accepts a manually approved £150 extra", async ({ page }) => {
   await page.getByRole("button", { name: "Approve exact revision", exact: true }).click();
   await expect(page.getByTestId("approved-additions")).toHaveText("£150.00");
   await page.reload();
-  // Lifecycle verification resumes at evidence; saved proof and additions are
-  // read again rather than trusting local completion flags.
+  // Server-verified proof resumes at extras. Revisit evidence to check that
+  // replaying its completed step preserves the saved proof and manual price.
+  await expect(tour).toContainText("Step 6 of 9");
+  await expect(page.getByTestId("stage-status")).toHaveText("Complete");
+  await expect(page.getByTestId("proof-state")).toHaveText("File integrity checked · synthetic example");
+  await expect(page.getByTestId("approved-additions")).toHaveText("£150.00");
+  await tour.getByRole("button", { name: "Back", exact: true }).click();
   await expect(tour).toContainText("Step 5 of 9");
   await tour.getByRole("button", { name: "Show me", exact: true }).click();
   await expect(tour).toContainText("Step 6 of 9");
