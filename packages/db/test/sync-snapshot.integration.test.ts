@@ -50,6 +50,14 @@ afterAll(async () => {
 });
 const advance = async (client: Pick<PoolClient, "query">, u = user, r = 1, s = 1, h = hash, environment = "synthetic_demo") =>
   Number((await client.query("SELECT app.sync_snapshot_generation($1::uuid,$2::bigint,$3::bigint,$4::text,$5::text) AS g", [u, r, s, h, environment])).rows[0].g);
+// Exercise the adapter authority boundary using the provider's actual PostgreSQL transaction.
+const adapterAdvance = (client: Pick<PoolClient, "query">, u = user, tenant = a, r = 99) => {
+  const provider: SyntheticSnapshotProvider = { withCurrentSession: async (_session, read) =>
+    read({ version: "sync-provider-snapshot.v1", environment: "synthetic_demo", sessionId: id(30),
+      userId: u, activeTenantId: tenant, authorityRevision: r, authority: null, source: [] }, client) };
+  return new SyntheticSyncSnapshotAdapter(provider, { environment: "synthetic_demo", enabled: true, schemaVersion: 1 })
+    .readCurrentSession("synthetic-session");
+};
 // Owner-created credentials exercise the real binding; membership IDs deliberately differ from user IDs.
 const credentials = new Map<string, string>();
 async function bind(client: Pick<PoolClient, "query">, tenant: string, u = user) {
@@ -101,7 +109,7 @@ describe("M3-3 durable checkpoint SQL", () => {
     }
     await expect(withTenant(runtime, testTenantContext(a), async db => {
       await bind(db.$client, a);
-      return advance(db.$client, u);
+      return adapterAdvance(db.$client, u);
     })).rejects.toThrow("SYNC_AUTHORITY_REQUIRED");
     expect((await admin.query("SELECT * FROM app.sync_snapshot_checkpoint WHERE user_id=$1", [u])).rows).toEqual([]);
   });
@@ -115,7 +123,7 @@ describe("M3-3 durable checkpoint SQL", () => {
     await expect(withTenant(runtime, testTenantContext(a), async db => {
       await bind(db.$client, a, u);
       await admin.query(`UPDATE app.membership SET ${column}='2020-01-01T00:00:00Z' WHERE tenant_id=$1 AND id=$2`, [a, u]);
-      return advance(db.$client, u, 2);
+      return adapterAdvance(db.$client, u, a, 2);
     })).rejects.toThrow("SYNC_AUTHORITY_REQUIRED");
     expect((await admin.query("SELECT authority_revision,generation FROM app.sync_snapshot_checkpoint WHERE tenant_id=$1 AND user_id=$2", [a, u])).rows)
       .toEqual([{ authority_revision: "1", generation: "1" }]);
@@ -144,9 +152,24 @@ describe("M3-3 durable checkpoint SQL", () => {
     await expect(withTenant(runtime, testTenantContext(a), async db => {
       await bind(db.$client, a, u);
       await admin.query("INSERT INTO app.contractor_membership_revocation(tenant_id,id,membership_id) VALUES($1,$2,$2)", [a, u]);
-      return advance(db.$client, u);
+      return adapterAdvance(db.$client, u);
     })).rejects.toThrow("SYNC_AUTHORITY_REQUIRED");
     expect((await admin.query("SELECT * FROM app.sync_snapshot_checkpoint WHERE user_id=$1", [u])).rows).toEqual([]);
+  });
+
+  it("allows the bound owner through the adapter and persists its checkpoint", async () => {
+    const u = id(115), membership = id(116);
+    await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [u]);
+    await admin.query(`INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)
+      VALUES($1,$2,$3,$4,'owner')`, [membership, a, id(20), u]);
+    const result = await withTenant(runtime, testTenantContext(a), async db => {
+      await bind(db.$client, a, u);
+      expect((await db.$client.query("SELECT app.current_actor() actor")).rows[0].actor).toBe(membership);
+      return adapterAdvance(db.$client, u, a, 1);
+    });
+    expect(result).toMatchObject({ userId: u, activeTenantId: a, generation: 1 });
+    expect((await admin.query("SELECT authority_revision,generation FROM app.sync_snapshot_checkpoint WHERE tenant_id=$1 AND user_id=$2", [a, u])).rows)
+      .toEqual([{ authority_revision: "1", generation: "1" }]);
   });
 
   it("binds the owner membership ID to its identity user and refuses another active user without writes", async () => {
@@ -154,7 +177,7 @@ describe("M3-3 durable checkpoint SQL", () => {
     await expect(withTenant(runtime, testTenantContext(a), async db => {
       await bind(db.$client, a);
       expect((await db.$client.query("SELECT app.current_actor() actor")).rows[0].actor).toBe(id(22));
-      return advance(db.$client, secondUser, 99);
+      return adapterAdvance(db.$client, secondUser);
     })).rejects.toThrow("SYNC_AUTHORITY_REQUIRED");
     expect((await admin.query("SELECT * FROM app.sync_snapshot_checkpoint ORDER BY tenant_id,user_id")).rows).toEqual(before);
     expect(await scoped(a)).toBe(1);
@@ -164,7 +187,7 @@ describe("M3-3 durable checkpoint SQL", () => {
     const before = (await admin.query("SELECT * FROM app.sync_snapshot_checkpoint ORDER BY tenant_id,user_id")).rows;
     await expect(withTenant(runtime, testTenantContext(a), async db => {
       await db.$client.query("SELECT set_config('app.actor_id',$1,true)", [id(22)]);
-      return advance(db.$client, user, 99);
+      return adapterAdvance(db.$client);
     })).rejects.toThrow("SYNC_AUTHORITY_REQUIRED");
     expect((await admin.query("SELECT * FROM app.sync_snapshot_checkpoint ORDER BY tenant_id,user_id")).rows).toEqual(before);
   });
@@ -174,7 +197,7 @@ describe("M3-3 durable checkpoint SQL", () => {
     await expect(withTenant(runtime, testTenantContext(a), async db => {
       await bind(db.$client, a);
       await db.$client.query("SELECT set_config('app.tenant_id',$1,true)", [b]);
-      return advance(db.$client, user, 99);
+      return adapterAdvance(db.$client);
     })).rejects.toThrow("SYNC_AUTHORITY_REQUIRED");
     expect((await admin.query("SELECT * FROM app.sync_snapshot_checkpoint ORDER BY tenant_id,user_id")).rows).toEqual(before);
   });
@@ -188,7 +211,7 @@ describe("M3-3 durable checkpoint SQL", () => {
       await bind(db.$client, a, u);
       await admin.query("DELETE FROM identity.membership_locator WHERE user_id=$1", [u]);
       await admin.query("DELETE FROM app.membership WHERE tenant_id=$1 AND id=$2", [a, membership]);
-      return advance(db.$client, u);
+      return adapterAdvance(db.$client, u);
     })).rejects.toThrow("SYNC_AUTHORITY_REQUIRED");
     expect((await admin.query("SELECT * FROM app.sync_snapshot_checkpoint WHERE user_id=$1", [u])).rows).toEqual([]);
   });
@@ -231,7 +254,7 @@ describe("M3-3 durable checkpoint SQL", () => {
   });
 
   it("fails closed without context, live environment, valid bounds, or controlled write permission", async () => {
-    await expect(advance(runtime)).rejects.toThrow("SYNC_AUTHORITY_REQUIRED");
+    await expect(advance(runtime)).rejects.toThrow("SYNC_CHECKPOINT_INVALID");
     for (const [r, s, h, e] of [[-1, 1, hash, "synthetic_demo"], [1, 0, hash, "synthetic_demo"],
       [1, 1, "bad", "synthetic_demo"], [1, 1, hash, "production"], [9007199254740992, 1, hash, "synthetic_demo"]] as const) {
       await expect(withTenant(runtime, testTenantContext(b), async db => {

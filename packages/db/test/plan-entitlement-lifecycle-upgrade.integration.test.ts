@@ -124,13 +124,6 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
       expect(current?.definition?.split("$function$")[1]).toBe(sql.split("FUNCTION app.demo_issue_customer_link(")[1]!.split("AS $$")[1]!.split("$$;")[0]);
       continue;
     }
-    // 0800 binds the synthetic checkpoint writer to its authenticated user; keep its metadata exact.
-    if (prior.nspname === "app" && prior.proname === "sync_snapshot_generation" && prior.args === "u uuid, r bigint, s bigint, h text, e text") {
-      expect({ ...current, definition: prior.definition }).toEqual(prior);
-      const sql = await readFile(new URL("../migrations/0800_sync_checkpoint_bound_user.sql", import.meta.url), "utf8");
-      expect(current?.definition?.split("$function$")[1]).toBe(sql.split("FUNCTION app.sync_snapshot_generation(")[1]!.split("AS $$")[1]!.split("$$;")[0]);
-      continue;
-    }
     const batchReplacement = batchBodies.find(row => prior.nspname === "app" && prior.proname === row.name && prior.args === row.args);
     if (batchReplacement) {
       expect(current?.definition?.split("$function$")[1]).toEqual(batchReplacement.body);
