@@ -95,7 +95,15 @@ it('emergency_dual_owner/scim2_machine preserve populated identity state, instal
  const afterRelations=after.relations.map((r:Relation)=>isLanding(r)?{...r,constraints:(r.constraints as Con[]).filter(c=>c.name!==added)}
   :isJob(r)?{...r,constraints:(r.constraints as Con[]).map(c=>c.name===shape?priorShape:c)}:r);
  expectRelationsUnchanged(catalogue.relations,afterRelations,laterAcl);
+ // 0672 lets its migration-owned pack writer read the sealed request binding; only that ACL entry is added.
+ const bindingReaders=new Set(['app.current_actor','app.current_tenant']);
  for(const row of catalogue.routines){
+  if(bindingReaders.has(`${row.nspname}.${row.proname}`)){
+   const added=after.routines.find((r:typeof row)=>r.nspname===row.nspname&&r.proname===row.proname&&r.args===row.args);
+   expect({...added,proacl:row.proacl}).toEqual(row);
+   expect(added.proacl).toBe(row.proacl.replace(/\}$/u,',jobguard_migration=X/jobguard_binding_owner}'));
+   continue;
+  }
   if(!later.has(`${row.nspname}.${row.proname}`)){expect(after.routines).toContainEqual(row);continue;}
   const {definition:_d,...kept}=row;
   expect(after.routines.map(({definition:_x,...r}:typeof row)=>r)).toContainEqual(kept);

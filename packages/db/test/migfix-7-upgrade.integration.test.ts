@@ -108,6 +108,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.final_check_require_invoice_actor(p_tenant uuid, p_job uuid, p_actor uuid)", "0667_final_check_practice_owner_check.sql"],
     ["app.ch5_history_actor(t uuid, j uuid, d text)", "0668_import_company_owner_history.sql"],
     ["app.configure_recovery_demo(p_job uuid, p_command uuid, p_scenario character varying)", "0670_recovery_demo_replay_job.sql"],
+    ["app.ent4b_fact_guard()", "0673_duplicate_unlink_command_binding.sql"],
   ]) {
     const source = await readFile(new URL(`../migrations/${migration}`, import.meta.url), "utf8");
     if (identity!.startsWith("app.decision_check_command(")) {
@@ -118,7 +119,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   const namedAdditions = [
     "connector_promotion", "order_attestation_actor", "platform_invoice_read",
     "retention_timer", "retention_timer_book", "xa_proceed", "xa_proceed_breaches",
-    "xa_proceed_view", "xa_wait_deadline", "customer_practice_pay_now",
+    "xa_proceed_view", "xa_wait_deadline", "customer_practice_pay_now", "store_extra_pack_artifact",
   ];
   for (const name of namedAdditions) {
     expect(replayRoutines.filter(row => row.proname === name)).toHaveLength(1);
