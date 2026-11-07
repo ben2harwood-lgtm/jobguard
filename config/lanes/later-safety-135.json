@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-135": {
+      "branches": [
+        "codex/sandbox/later-safety-135"
+      ],
+      "note": "LATER-SAFETY-135 RED: preserve issued-final-invoice receipt authority after proof withdrawal; NOPR.",
+      "allow": [
+        "packages/db/migrations/0953_final_check_post_invoice_receipt_gate.sql",
+        "packages/db/test/migration-proofs/0953_final_check_post_invoice_receipt_gate.proof.json",
+        "packages/db/test/final-check-post-invoice-receipt.integration.test.ts",
+        "packages/db/migration-notes/0953_final_check_post_invoice_receipt_gate.md"
+      ]
+    }
+  }
+}
