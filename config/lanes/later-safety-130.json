@@ -6,8 +6,12 @@
         "codex/sandbox/later-safety-130"
       ],
       "allow": [
-        "packages/db/migrations/0855_work_order_expected_revision.sql",
-        "packages/db/test/migration-proofs/0855_work_order_expected_revision.proof.json",
+        "packages/db/migrations/0675_work_order_team_scope.sql",
+        "packages/db/migrations/0676_work_order_expected_revision.sql",
+        "packages/db/test/migration-proofs/0675_work_order_team_scope.proof.json",
+        "packages/db/test/migration-proofs/0676_work_order_expected_revision.proof.json",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
         "packages/db/test/work-order-import.integration.test.ts"
       ]
     }

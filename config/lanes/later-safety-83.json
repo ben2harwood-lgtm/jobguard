@@ -6,8 +6,8 @@
         "codex/sandbox/later-safety-83"
       ],
       "allow": [
-        "packages/db/migrations/0819_work_order_team_scope.sql",
-        "packages/db/test/migration-proofs/0819_work_order_team_scope.proof.json",
+        "packages/db/migrations/0675_work_order_team_scope.sql",
+        "packages/db/test/migration-proofs/0675_work_order_team_scope.proof.json",
         "packages/db/test/work-order-import.integration.test.ts"
       ]
     }

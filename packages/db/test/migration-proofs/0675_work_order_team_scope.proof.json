@@ -1,5 +1,5 @@
 {
-  "migration": "0855_work_order_expected_revision.sql",
+  "migration": "0675_work_order_team_scope.sql",
   "lp0": [
     {
       "section": "routines",
@@ -14,7 +14,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "ce92d62ad90b21252e7a0995be6cb92f6ce17dc039a6a79977a5261f42096049",
         "staticWrites": [
           "app.job",
           "app.job_assignment",
@@ -25,9 +25,7 @@
           "app.work_order_revision"
         ],
         "staticCalls": [
-          "app.contractor_allowed",
           "app.contractor_member_active",
-          "app.mon8_require_feature",
           "app.work_order_client_permitted",
           "app.work_order_import_permitted"
         ]
