@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "demo-guide-plain-words": {
+      "branches": [
+        "codex/sandbox/demo-guide-plain-words"
+      ],
+      "note": "DEMO-GUIDE-PLAIN-WORDS: plain-English practice guides; wording only, no migrations.",
+      "allow": [
+        "apps/web/app/demo-s/core-1000/journey.test.tsx",
+        "apps/web/app/demo-s/core-1000/journey.tsx",
+        "apps/web/app/demo-s/shadow-30000/journey.test.tsx",
+        "apps/web/app/demo-s/shadow-30000/journey.tsx"
+      ]
+    }
+  }
+}

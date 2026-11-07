@@ -36,7 +36,9 @@ It failed against the old 0682 monetary calculation before the repair.
 
 - Landing catch-up applies the supplied precheck patch: migfix-6 compares against
   0654; plan-entitlement-lifecycle-upgrade pins the exact reversal body to 0682;
-  migfix-7-upgrade adds that same exact body after its 0658 entry. Every other
+  migfix-7-upgrade pins that identity once, after main's 0676 entry. Source
+  inspection confirms 0665–0677 do not recreate reverse_synthetic_landing, so
+  0654 remains its latest predecessor and 0682 SQL is unchanged. Every other
   routine, ACL and owner assertion is retained. Migration SQL is byte-identical
   to the built branch; only its stem, proof, note and references move to 0682.
 - CI must run migfix-6.integration.test.ts (including "partial reversal preserves

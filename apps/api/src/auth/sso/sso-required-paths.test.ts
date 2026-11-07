@@ -34,6 +34,7 @@ function fixture(two=false) {
   if(sql.includes("sso_invitation_accept_allowed"))return {rows:[{allowed:false,connection_id:c}]};
   if(sql.includes("provision_verified_challenge"))return {rows:[{user_id:u}]};
   if(sql.includes("request_window"))return {rows:[{count:0}]};
+  if(sql.includes("count(*)"))return {rows:[{count:0}]};
   if(sql.includes("identity.session")||sql.includes("identity.challenge")||sql.includes("security_event")||sql.includes("sso_refusal_event")||sql.includes("pg_advisory"))return {rows:[]};
   throw new Error("Unexpected SQL: "+sql);
  };

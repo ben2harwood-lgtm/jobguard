@@ -20,7 +20,7 @@ it("passes the session credentials and untouched command with no-store", async (
   expect(get.status).toBe(200); expect(get.headers.get("cache-control")).toBe("no-store");
 });
 it("keeps typed conflicts, missing/foreign jobs and dark composition no-store", async () => {
-  for (const [code, status] of [["CONFLICT",409],["NOT_FOUND",404],["DARK",404]] as const) {
+  for (const [code, status] of [["CONFLICT",409],["NOT_FOUND",404],["DARK",404],["FORBIDDEN",403]] as const) {
     mocks.create.mockImplementation(() => { throw new InterimDraftRepositoryError(code); });
     for (const handler of [GET, POST]) {
       const result = await handler(new Request("https://practice.invalid"), { params: Promise.resolve({ id: "job" }) });
