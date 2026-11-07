@@ -4,7 +4,7 @@ import { expect, it, vi } from "vitest";
 import { SiteVisitRepository, assignedJobsByScopeQuery } from "./site-visit-repository.js";
 import { verifiedTenantContextFromMembership, type AuthenticatedMembership } from "./tenant-context.js";
 
-it.each([0, 200, 201])("the request uses the scope query and preserves projection and truncation for %i rows", async count => {
+it.each([false, true].flatMap(includeLastCompletedVisit => [0, 200, 201].map(count => ({ includeLastCompletedVisit, count }))))("the request uses the scope query and preserves projection and truncation for $count rows (completed visits: $includeLastCompletedVisit)", async ({ count, includeLastCompletedVisit }) => {
  const actor = { tenantId: randomUUID(), membershipId: randomUUID(), identityUserId: randomUUID() } as AuthenticatedMembership;
  const context = verifiedTenantContextFromMembership(actor);
  const rows = Array.from({ length: count }, (_, i) => ({ job_id: randomUUID(), work_order_id: randomUUID(), reference: `FICTIONAL-${i}`, priority: "routine", issued_on: "2026-10-01", due_on: null, open_visit: i === 0 ? randomUUID() : null, last_completed_visit: i === 1 ? { visitId: randomUUID(), closeoutAnswer: "yes" as const } : null }));
@@ -26,7 +26,7 @@ it.each([0, 200, 201])("the request uses the scope query and preserves projectio
   throw new Error(`Unexpected SQL: ${sql}`);
  });
  const pool = { connect: async () => ({ query, release: () => undefined }) } as unknown as Pool;
- const actual = await new SiteVisitRepository(pool).assignedJobs(context, actor);
+ const actual = await new SiteVisitRepository(pool).assignedJobs(context, actor, includeLastCompletedVisit ? { includeLastCompletedVisit: true } : undefined);
  expect(query.mock.calls.filter(([sql]) => sql === assignedJobsByScopeQuery)).toHaveLength(1);
- expect(actual).toEqual({ jobs: rows.slice(0, 200).map(r => ({ jobId: r.job_id, workOrderId: r.work_order_id, reference: r.reference, priority: r.priority, issuedOn: r.issued_on, dueOn: r.due_on, openVisitId: r.open_visit, lastCompletedVisit: r.last_completed_visit })), truncated: count > 200 });
+ expect(actual).toEqual({ jobs: rows.slice(0, 200).map(r => ({ jobId: r.job_id, workOrderId: r.work_order_id, reference: r.reference, priority: r.priority, issuedOn: r.issued_on, dueOn: r.due_on, openVisitId: r.open_visit, ...(includeLastCompletedVisit ? { lastCompletedVisit: r.last_completed_visit } : {}) })), truncated: count > 200 });
 });

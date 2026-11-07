@@ -102,7 +102,7 @@ it("FLAKE-DIAG-1 measures legacy/new reads and preserves allowed AND denied seed
       }
       return legacy;
     });
-    const actual = await new SiteVisitRepository(c.runtime).assignedJobs(context, actor);
+    const actual = await new SiteVisitRepository(c.runtime).assignedJobs(context, actor, { includeLastCompletedVisit: true });
     expect(actual).toEqual({ truncated: false, jobs: expected.map(row => ({ jobId: row.job_id, workOrderId: row.work_order_id, reference: row.reference, priority: row.priority, issuedOn: row.issued_on, dueOn: row.due_on, openVisitId: row.open_visit, lastCompletedVisit: null })) });
   } finally {
     await switches.switchOff(await requestContext(c, session), session.p, session.session, { version: "practice-worker-switch-off.v1", commandId: randomUUID() });

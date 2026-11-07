@@ -20,8 +20,7 @@ it("M31-S09 minimal authorized repository read", async () => {
   expect(read.jobs.map(j => j.jobId)).toEqual([f.jobId]); expect(read.truncated).toBe(false);
   expect(read.jobs.map(j => j.jobId)).not.toContain(f.otherJob); expect(read.jobs.map(j => j.jobId)).not.toContain(foreign.jobId);
   const parsed = siteAssignedJobsV1.parse({ version: "site-assigned-jobs.v1", environment: "synthetic_demo", realExternalActions: 0, ...read });
-  expect(Object.keys(parsed.jobs[0]!).sort()).toEqual(["jobId", "workOrderId", "reference", "priority", "issuedOn", "dueOn", "openVisitId", "lastCompletedVisit"].sort());
-  expect(parsed.jobs[0]!.lastCompletedVisit).toBeNull();
+  expect(Object.keys(parsed.jobs[0]!).sort()).toEqual(["jobId", "workOrderId", "reference", "priority", "issuedOn", "dueOn", "openVisitId"].sort());
  }
  expect(await repo.assignedJobs(f.ctx, f.unassigned.member)).toEqual({ jobs: [], truncated: false });
  for (const role of ["owner", "admin", "surveyor", "commercial_manager", "finance", "read_only", "client_approver"] as const) await expect(repo.assignedJobs(f.ctx, f.members[role].member)).rejects.toMatchObject({ code: "VISIT_FORBIDDEN" });

@@ -660,7 +660,7 @@ describe("ENT-3b the site worker's reads", () => {
  it("returns only the latest completed answer for this tenant, job and operative", async () => {
   const f = await visitFixture(c), foreign = await visitFixture(c), a = f.members.operative;
   const other = await secondJob(c, f);
-  expect((await repo.assignedJobs(f.ctx, a.member)).jobs.every(j => j.lastCompletedVisit === null)).toBe(true);
+  expect((await repo.assignedJobs(f.ctx, a.member, { includeLastCompletedVisit: true })).jobs.every(j => j.lastCompletedVisit === null)).toBe(true);
   const first = await start(f, a); await complete(f, a, first.visitId, "no");
   const latest = await start(f, a); await complete(f, a, latest.visitId, "yes");
   const otherVisit = await start({ ...f, jobId: other.jobId }, a);
@@ -668,14 +668,14 @@ describe("ENT-3b the site worker's reads", () => {
   const colleague = await start(f, f.named); await complete(f, f.named, colleague.visitId, "no");
   const foreignVisit = await start(foreign, foreign.members.operative);
   await complete(foreign, foreign.members.operative, foreignVisit.visitId, "no");
-  const jobs = (await repo.assignedJobs(f.ctx, a.member)).jobs;
+  const jobs = (await repo.assignedJobs(f.ctx, a.member, { includeLastCompletedVisit: true })).jobs;
   expect(jobs.find(j => j.jobId === f.jobId)?.lastCompletedVisit).toEqual({ visitId: latest.visitId, closeoutAnswer: "yes" });
   expect(jobs.find(j => j.jobId === other.jobId)?.lastCompletedVisit).toEqual({ visitId: otherVisit.visitId, closeoutAnswer: "no" });
   expect(jobs.some(j => j.jobId === foreign.jobId)).toBe(false);
-  expect((await repo.assignedJobs(f.ctx, f.named.member)).jobs.find(j => j.jobId === f.jobId)?.lastCompletedVisit).toEqual({ visitId: colleague.visitId, closeoutAnswer: "no" });
-  await expect(repo.assignedJobs(foreign.ctx, a.member)).rejects.toMatchObject({ code: "VISIT_FORBIDDEN" });
+  expect((await repo.assignedJobs(f.ctx, f.named.member, { includeLastCompletedVisit: true })).jobs.find(j => j.jobId === f.jobId)?.lastCompletedVisit).toEqual({ visitId: colleague.visitId, closeoutAnswer: "no" });
+  await expect(repo.assignedJobs(foreign.ctx, a.member, { includeLastCompletedVisit: true })).rejects.toMatchObject({ code: "VISIT_FORBIDDEN" });
   const open = await start(f, a);
-  expect((await repo.assignedJobs(f.ctx, a.member)).jobs.find(j => j.jobId === f.jobId)).toMatchObject({ openVisitId: open.visitId, lastCompletedVisit: { visitId: latest.visitId, closeoutAnswer: "yes" } });
+  expect((await repo.assignedJobs(f.ctx, a.member, { includeLastCompletedVisit: true })).jobs.find(j => j.jobId === f.jobId)).toMatchObject({ openVisitId: open.visitId, lastCompletedVisit: { visitId: latest.visitId, closeoutAnswer: "yes" } });
  });
  it("[B15] order lines: the current revision's lines in position order, only the new revision's after a revised import, and every refusal applies", async () => {
   const f = await visitFixture(c), foreign = await fixture(c), a = f.members.operative;

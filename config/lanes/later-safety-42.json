@@ -6,18 +6,18 @@
         "codex/sandbox/later-safety-42"
       ],
       "allow": [
+        "apps/api/src/contractor/site-extra.application.ts",
+        "apps/api/src/contractor/site-visit.application.test.ts",
         "apps/web/app/site/extra/site-extra.tsx",
         "apps/web/app/site/extra/site-visit.test.tsx",
         "apps/web/app/site/extra/site-visit.tsx",
         "apps/web/e2e/ENT-3-priced-journey.spec.ts",
         "packages/core/src/site-visit.test.ts",
         "packages/core/src/site-visit.ts",
-        "packages/db/src/site-visit-repository.ts",
         "packages/db/src/site-jobs-scope.test.ts",
-        "packages/db/test/site-jobs-scope.integration.test.ts",
+        "packages/db/src/site-visit-repository.ts",
         "packages/db/test/northside-demo.integration.test.ts",
-        "packages/db/test/offline-risk.integration.test.ts",
-        "packages/db/test/operative-offline.integration.test.ts",
+        "packages/db/test/site-jobs-scope.integration.test.ts",
         "packages/db/test/site-visit.integration.test.ts"
       ]
     }

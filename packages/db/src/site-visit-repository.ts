@@ -202,11 +202,11 @@ export class SiteVisitRepository {
   return this.executeVisit(context, actor, "complete", parsed.data, storedComplete);
  }
  /** The caller's assigned jobs: every work-order job for which the visit rule answers allowed, with the caller's own open visit. No money, no resident, no address. */
- async assignedJobs(context: VerifiedTenantContext, actor: AuthenticatedMembership): Promise<AssignedJobs> {
+ async assignedJobs(context: VerifiedTenantContext, actor: AuthenticatedMembership, options: { includeLastCompletedVisit?: boolean } = {}): Promise<AssignedJobs> {
   return this.read(context, actor, null, async db => {
    const rows = (await db.$client.query<{ job_id: string; work_order_id: string; reference: string; priority: AssignedJob["priority"]; issued_on: string; due_on: string | null; open_visit: string | null; last_completed_visit: AssignedJob["lastCompletedVisit"] }>(
     assignedJobsByScopeQuery, [actor.tenantId, actor.membershipId])).rows;
-   return { jobs: rows.slice(0, 200).map(row => ({ jobId: row.job_id, workOrderId: row.work_order_id, reference: row.reference, priority: row.priority, issuedOn: row.issued_on, dueOn: row.due_on, openVisitId: row.open_visit, lastCompletedVisit: row.last_completed_visit ?? null })), truncated: rows.length > 200 };
+   return { jobs: rows.slice(0, 200).map(row => ({ jobId: row.job_id, workOrderId: row.work_order_id, reference: row.reference, priority: row.priority, issuedOn: row.issued_on, dueOn: row.due_on, openVisitId: row.open_visit, ...(options.includeLastCompletedVisit ? { lastCompletedVisit: row.last_completed_visit ?? null } : {}) })), truncated: rows.length > 200 };
   });
  }
  /** The lines of the order's CURRENT revision, by position, with the schedule-of-rates description. */
