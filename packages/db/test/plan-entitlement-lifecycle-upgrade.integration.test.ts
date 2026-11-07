@@ -173,17 +173,21 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     }
     // 0667 inserts only the practice-owner guard into lock_final_account and replaces the invoice actor check's end.
     if (prior.nspname === "app" && prior.proname === "lock_final_account" && prior.args === "p_tenant uuid, p_job uuid, p_actor uuid, p_command uuid, p_revision uuid, p_expected integer, p_declaration text") {
-      expect({ ...current, definition: prior.definition }).toEqual(prior);
+      expect({ ...current, definition: prior.definition, source: prior.source }).toEqual(prior);
       const owner = await readFile(new URL("../migrations/0667_final_check_practice_owner_check.sql", import.meta.url), "utf8");
       const anchor = "BEGIN\n PERFORM app.final_lock_require_owner(p_tenant,p_actor);";
       expect(prior.definition?.split(anchor)).toHaveLength(2);
-      expect(current?.definition).toBe(prior.definition?.replace(anchor, anchor + "\n" + owner.split("$guard$")[1]!));
+      const expectedDefinition=prior.definition?.replace(anchor, anchor + "\n" + owner.split("$guard$")[1]!);
+      expect(current?.definition).toBe(expectedDefinition);
+      expect(current?.source).toBe(expectedDefinition?.split("$function$")[1]);
       continue;
     }
     if (prior.nspname === "app" && prior.proname === "final_check_require_invoice_actor" && prior.args === "p_tenant uuid, p_job uuid, p_actor uuid") {
-      expect({ ...current, definition: prior.definition }).toEqual(prior);
-      const owner = await readFile(new URL("../migrations/0667_final_check_practice_owner_check.sql", import.meta.url), "utf8");
-      expect(current?.definition?.split("$function$")[1]).toBe(owner.split("FUNCTION app.final_check_require_invoice_actor(")[1]!.split("AS $$")[1]!.split("$$;")[0]);
+      expect({ ...current, definition: prior.definition, source: prior.source }).toEqual(prior);
+      const owner = await readFile(new URL("../migrations/1217_lp6c_money_binding.sql", import.meta.url), "utf8");
+      const body=owner.split("FUNCTION app.final_check_require_invoice_actor(")[1]!.split("AS $$")[1]!.split(/\$\$\s*;/u)[0];
+      expect(current?.definition?.split("$function$")[1]).toBe(body);
+      expect(current?.source).toBe(body);
       continue;
     }
     const batchReplacement = batchBodies.find(row => prior.nspname === "app" && prior.proname === row.name && prior.args === row.args);

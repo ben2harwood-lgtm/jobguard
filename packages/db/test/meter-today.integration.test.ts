@@ -19,7 +19,7 @@ describe("MON-1 company stored-day reader (real PostgreSQL, CI)", () => {
     try { await finalizeMeterLifecycleOwnership(admin); } finally { admin.release(); }
   }, 60000);
   afterAll(async () => closeWorkFixture(f));
-  const read = (a: Awaited<ReturnType<typeof meterCompany>>, digest = a.digest) => workTenant(f.runtime, a.tenantId, async db => meterTodayReadV1.parse((await db.query("SELECT app.mon1_fresh_counted_meter_today($1,$2) result", [a.tenantId,digest])).rows[0].result), { membershipId: a.actorId });
+  const read = (a: Awaited<ReturnType<typeof meterCompany>>, digest = a.digest) => workTenant(f.runtime, a.tenantId, async db => meterTodayReadV1.parse((await db.query("SELECT app.mon1_fresh_counted_meter_today($1,$2) result", [a.tenantId,digest])).rows[0].result), { membershipId: a.actorId, bindRequest: false });
   async function stored(a: Awaited<ReturnType<typeof meterCompany>>, count: number, revision = 1, scope = randomUUID(), counted = true) {
     const source = randomUUID(), computation = randomUUID();
     await workTenant(f.admin, a.tenantId, async db => {
@@ -48,11 +48,18 @@ describe("MON-1 company stored-day reader (real PostgreSQL, CI)", () => {
     await expect(workTenant(f.runtime, a.tenantId, db => db.query("SELECT app.mon1_counted_meter_today($1,$2)", [a.tenantId, a.digest]), { membershipId: a.actorId })).rejects.toMatchObject({ code: "42501" });
     expect(await read(a)).toMatchObject({ version: "meter-today-read.v1", hypothetical: true, plan: "Builder", countedPlaces: 5 });
     expect(await read(b)).toMatchObject({ countedPlaces: 2 });
-    await expect(read(b, a.digest)).rejects.toThrow("METER_FORBIDDEN");
+    const unchanged = async () => Promise.all(["meter_lifecycle_source","meter_lifecycle_computation","meter_lifecycle_day_ledger","audit_event"].map(async table =>
+      (await f.admin.query(`SELECT to_jsonb(r) row FROM app.${table} r WHERE tenant_id=ANY($1::uuid[]) ORDER BY to_jsonb(r)::text`,[[a.tenantId,b.tenantId]])).rows));
+    const beforeForeignRead = await unchanged();
+    // Direct SQL binds its credential before the tenant and membership domain guard.
+    await expect(read(b, a.digest)).rejects.toMatchObject({code:"42501",message:"REQUEST_BINDING_REFUSED"});
+    expect(await unchanged()).toEqual(beforeForeignRead);
     await f.admin.query("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE id=$1", [a.sessionId]);
     await expect(read(a)).rejects.toThrow("METER_FORBIDDEN");
     await f.admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [b.tenantId, b.actorId]);
-    await expect(read(b)).rejects.toThrow("METER_FORBIDDEN");
+    const beforeRevokedRead = await unchanged();
+    await expect(read(b)).rejects.toMatchObject({code:"42501",message:"REQUEST_BINDING_REFUSED"});
+    expect(await unchanged()).toEqual(beforeRevokedRead);
   });
   it("does not replace missing ledger data with zero or fall back to an older revision", async () => {
     const a = await meterCompany(f);
@@ -71,7 +78,7 @@ describe("MON-1 company stored-day reader (real PostgreSQL, CI)", () => {
   it("fresh-source entrypoint preserves admin reads without granting capture authority", async () => {
     const a=await meterCompany(f), first=await stored(a,3);
     await f.admin.query("UPDATE app.membership SET role='admin' WHERE tenant_id=$1 AND id=$2",[a.tenantId,a.actorId]);
-    const readAdmin=()=>workTenant(f.runtime,a.tenantId,async db=>(await db.query("SELECT app.mon1_today_source($1,$2) result",[a.tenantId,a.digest])).rows[0].result, { membershipId: a.actorId });
+    const readAdmin=()=>workTenant(f.runtime,a.tenantId,async db=>(await db.query("SELECT app.mon1_today_source($1,$2) result",[a.tenantId,a.digest])).rows[0].result, { membershipId: a.actorId, bindRequest: false });
     expect(await readAdmin()).toMatchObject({view:{countedPlaces:3,plan:"Builder"}});
     await stored(a,4,2,first.scope,false);
     await expect(readAdmin()).rejects.toThrow("METER_UNAVAILABLE");

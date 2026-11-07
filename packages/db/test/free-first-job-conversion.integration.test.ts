@@ -93,7 +93,7 @@ describe("MON-3 authoritative billing source and unchanged issued documents",()=
   const pinned=(await f.admin.query("SELECT input,source_id FROM app.trial_subscription_source WHERE tenant_id=$1",[a.tenantId])).rows[0];
   const [downgrade,read]=await Promise.all([
    command(f,a,{...terms(a,'Solo',2),kind:'change'}),
-   workTenant(f.runtime,a.tenantId,async db=>(await db.query("SELECT app.mon2_source($1,$2,$3) input",[a.tenantId,a.digest,pinned.source_id])).rows[0].input, { membershipId: a.actorId }),
+   workTenant(f.runtime,a.tenantId,async db=>(await db.query("SELECT app.mon2_source($1,$2,$3) input",[a.tenantId,a.digest,pinned.source_id])).rows[0].input, { membershipId: a.actorId, bindRequest: false }),
   ]);
   expect(downgrade.status).toBe('pending');expect(read).toEqual(pinned.input);
   expect((await f.admin.query("SELECT plan FROM app.subscription_agreement_revision WHERE tenant_id=$1 ORDER BY revision DESC LIMIT 1",[a.tenantId])).rows[0].plan).toBe('Builder');

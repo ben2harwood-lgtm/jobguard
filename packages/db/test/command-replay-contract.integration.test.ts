@@ -1,3 +1,5 @@
+import { withTenant } from "../src/tenant-context.js";
+import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { testActorContext } from "./tenant-context-test-utils.js";
 import { createHash, randomUUID } from "node:crypto";
 import { Pool } from "pg";
@@ -188,8 +190,11 @@ it(`${clientReplayCase.key}: client decision replays the first result and confli
       await identity!.query("SELECT identity.extra_customer_use($1,$2,$3,$4,$5,'redeem')", [w.p.tenantId, s.jobId, actor, signin, digest]);
       const input = { version: "extra-customer.v1", action: "decide", jobId: s.jobId, requestId: s.requestId,
         commandId: randomUUID(), revisionHash: s.hash, netPence: s.net, decision: "approve" };
-      const run = (command = input) => identity!.query("SELECT identity.extra_customer_approval($1,$2,$3,$4,$5::jsonb) result",
-        [w.p.tenantId, s.jobId, actor, digest, command]).then(r => r.rows[0].result);
+      const clientContext=await testBoundTenantContext(c.admin,w.p.tenantId,actor);
+      const run = (command = input) => withTenant(c.admin,clientContext,async db=>{
+        await db.$client.query("SET LOCAL ROLE jobguard_identity");
+        return (await db.$client.query("SELECT identity.extra_customer_approval($1,$2,$3,$4,$5::jsonb) result",[w.p.tenantId,s.jobId,actor,digest,command])).rows[0].result;
+      });
       return { s, input, run };
     }
     const a = await client(), b = await client(), first = await a.run();

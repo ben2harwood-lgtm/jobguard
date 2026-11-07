@@ -8,11 +8,11 @@ import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { migrate, RecoveryCaseRepository } from "../src/index.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 
 const tenantId = randomUUID();
 const actor = { membershipId: randomUUID(), identityUserId: randomUUID() };
-const context = testTenantContext(tenantId, { membershipId: actor.membershipId });
+let context: ReturnType<typeof testTenantContext>;
 let postgres: EmbeddedPostgres | undefined, admin: Pool, runtime: Pool;
 let port: number;
 const connection = (user: string) => ({ host: "127.0.0.1", port, database: "postgres", user, password: "synthetic" });
@@ -35,6 +35,7 @@ beforeAll(async () => {
   await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$1,'LATER-B21 synthetic account')", [tenantId]);
   await admin.query(`INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)
     VALUES($1,$2,$2,$3,'owner')`, [actor.membershipId, tenantId, actor.identityUserId]);
+  context = await testBoundTenantContext(admin, tenantId, actor.membershipId);
   await admin.query(`CREATE ROLE later_b21_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
     GRANT jobguard_runtime TO later_b21_login`);
   runtime = new Pool(connection("later_b21_login"));

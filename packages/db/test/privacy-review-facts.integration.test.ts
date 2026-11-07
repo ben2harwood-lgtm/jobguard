@@ -95,7 +95,7 @@ describe("M5-11 recorded identity and authority checks (synthetic only)", () => 
     for (const patch of [{ version: "privacy-command.v1" }, { kind: "retention" },
       { evidenceHash: "g".repeat(64) }, { evidenceHash: null }, { method: "synthetic_fixture" }, { verifiedBy: a.actorId }]) {
       await expect(workTenant(f.runtime, a.tenantId, db => db.query(
-        "SELECT app.privacy_command($1,$2,$3::jsonb)", [a.tenantId, a.digest, JSON.stringify({ ...value, ...patch })]), { membershipId: a.actorId }))
+        "SELECT app.privacy_command($1,$2,$3::jsonb)", [a.tenantId, a.digest, JSON.stringify({ ...value, ...patch })]), { membershipId: a.actorId, bindRequest: false }))
         .rejects.toMatchObject({ code: "22023", message: "PRIVACY_INVALID" });
     }
     expect(await facts(a)).toEqual([]);

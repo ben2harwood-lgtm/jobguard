@@ -96,7 +96,7 @@ it("rejects wrong tenant/company, broader scope, actor injection, stale revision
  }
  // SQL entry point also refuses supplied actor, without relying on TypeScript validation.
  await expect(workTenant(c.runtime, f.a.tenantId, db => db.query("SELECT app.accounting_export_route($1,$2,'routeChangeConfirm',$3,$4)",
-  [f.a.tenantId, f.a.digest, f.next.source.sourceId, { ...approval, actorId: randomUUID() }]), { membershipId: f.a.actorId })).rejects.toThrow("EXPORT_INVALID_INPUT");
+  [f.a.tenantId, f.a.digest, f.next.source.sourceId, { ...approval, actorId: randomUUID() }]), { membershipId: f.a.actorId, bindRequest: false })).rejects.toThrow("EXPORT_INVALID_INPUT");
  expect(await f.snapshot()).toEqual([]);
  const exportDecision = (await c.admin.query("SELECT id FROM app.accounting_export_decision WHERE tenant_id=$1", [f.a.tenantId])).rows[0].id;
  await expect(f.confirm({ ...approval, decisionId: exportDecision })).rejects.toThrow("EXPORT_REPLAY_CONFLICT");

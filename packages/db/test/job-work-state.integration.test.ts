@@ -43,7 +43,7 @@ describe("CH-4 persisted authenticated read",()=>{
  let f:WorkFixture;beforeAll(async()=>{f=await createWorkFixture(true,"jobguard_synthetic_demo")},60000);afterAll(async()=>closeWorkFixture(f));
  it("CH4-A20 CH4-A23 CH4-A27 fresh repositories read the same synthetic history through persisted session authority",async()=>{
   const {seedWorkPractice}=await import("./job-work-state-fixtures.js"),{JobWorkStateRepository}=await import("../src/job-work-state-repository.js");
-  const {authorizePracticeJob}=await import("../src/practice-session.js"),p=await seedWorkPractice(f),auth=await authorizePracticeJob(f.runtime,p.sessionId,p.jobId);
+  const {authorizePracticeJob}=await import("../src/practice-session.js"),p=await seedWorkPractice(f),auth={...await authorizePracticeJob(f.runtime,p.sessionId,p.jobId),context:p.auth.context};
   const a=await new JobWorkStateRepository(f.runtime).read(auth.context,p.jobId,auth.digest),b=await new JobWorkStateRepository(f.runtime).read(auth.context,p.jobId,auth.digest);
   expect(a).toEqual(b);expect(a.environment).toBe("synthetic_demo");expect(a.realExternalActions).toBe(0);
   const {randomUUID}=await import("node:crypto");await expect(new JobWorkStateRepository(f.runtime).read(auth.context,randomUUID(),auth.digest)).rejects.toThrow("WORK_STATE_FORBIDDEN");

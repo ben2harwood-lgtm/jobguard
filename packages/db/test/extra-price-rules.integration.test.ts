@@ -65,7 +65,7 @@ it("Q03 freezes the bound contract and rules even when newer versions exist befo
     JOIN app.client_contract_version c ON(c.tenant_id,c.id)=(w.tenant_id,w.contract_version_id) WHERE w.job_id=$1`, [jobId])).rows[0];
   const rules = (await c.admin.query("SELECT document FROM app.approval_rule_version WHERE id=$1", [bound.rule_version_id])).rows[0].document;
   await reviseRules(c, w, { ...rules, proceedLimit: { pence: 1, currency: "GBP" } });
-  const result = await repo.submitExtra(await w.ctx, w.members.supervisor.member, { version: "submit-extra.v1", commandId: randomUUID(), jobId, extraId });
+  const result = await repo.submitExtra(await testActorContext(c.admin, await w.ctx, w.members.supervisor.member), w.members.supervisor.member, { version: "submit-extra.v1", commandId: randomUUID(), jobId, extraId });
   const request = (await c.admin.query("SELECT contract_version_id,rule_version_id FROM app.extra_approval_request WHERE id=$1", [result.requestId])).rows[0];
   expect(request).toEqual(bound);
   const fresh = await submitted(c, w, 1);

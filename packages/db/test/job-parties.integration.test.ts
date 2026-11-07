@@ -1,5 +1,5 @@
 import type { TenantTransaction } from "../src/tenant-context.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -367,14 +367,22 @@ describe("CH-3a adoption authorization boundary (round 2)",()=>{
     return id;
   }
   // Everything the dispatcher does in one transaction: the routine, the audit events and the receipt completion.
-  const executeDirect=(a:{job:string;hash:string;customer:string;site:string;command:string;authorization:string},steps:{audit?:boolean;receipt?:boolean;auditedAuthorization?:string}={})=>withTenant(admin,context,async db=>{
+  const executeDirect=async(a:{job:string;hash:string;customer:string;site:string;command:string;authorization:string},steps:{audit?:boolean;receipt?:boolean;auditedAuthorization?:string}={})=>withTenant(admin,await testBoundTenantContext(admin,tenant,member),async db=>{
     await materializeAuthority(db,a.command,a.authorization);
+    // The direct owner fixture names the same actor in the lifecycle claim as
+    // the bound request, while retaining each deliberately missing audit/result.
+    const significant = { ...commandFor(a.job,a.hash), commandId: a.command };
+    await db.$client.query(`INSERT INTO app.command_lifecycle_claim(tenant_id,command_id,actor_membership_id,version,resource,expected_revisions,significant_input,authorization_id)
+      VALUES($1,$2,$3,'command.v1',$4,$5,$6,$7)`,[tenant,a.command,member,{tenantId:tenant,actorMembershipId:member,subjectType:'job',subjectRef:a.job},{aggregateRevision:0},significant,a.authorization]);
     const baseline=randomUUID();
     await db.$client.query(`SELECT app.adopt_in_flight_job($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,[tenant,a.job,baseline,"Fictional import","live",a.hash,"Fictional baseline",100000,1500,"reference_fee_policy_v1",OWNER_POLICY,member,new Date(0),a.customer,a.site,null,a.command,a.authorization]);
-    if(steps.audit!==false)await appendAuditBatch(db,[
+    if(steps.audit!==false)await db.$client.query("SELECT app.lp4_seal_audit($1::jsonb,'checked_operation')",[JSON.stringify([
       {id:randomUUID(),version:"audit.v1",actorRef:`membership:${member}`,eventType:"job.imported_baseline_attested",subjectType:"job",subjectRef:a.job,payload:{references:{baselineId:baseline,attestedByMembershipId:member},classifications:{action:"commercial"}}},
-      {id:randomUUID(),version:"audit.v1",actorRef:`membership:${member}`,eventType:"command.succeeded",subjectType:"job",subjectRef:a.job,payload:{references:{commandId:a.command,authorizationId:steps.auditedAuthorization??a.authorization},classifications:{action:"commercial"}}}]);
-    if(steps.receipt!==false)await db.$client.query(`UPDATE app.command_receipt SET status='succeeded',result='{"ok":true}'::jsonb,completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2`,[tenant,a.command]);
+      {id:randomUUID(),version:"audit.v1",actorRef:`membership:${member}`,eventType:"command.succeeded",subjectType:"job",subjectRef:a.job,payload:{references:{commandId:a.command,authorizationId:steps.auditedAuthorization??a.authorization},classifications:{action:"commercial"}}}])]);
+    if(steps.receipt!==false){
+      await db.$client.query("UPDATE app.command_lifecycle_claim SET outcome='{}'::jsonb WHERE tenant_id=$1 AND command_id=$2",[tenant,a.command]);
+      await db.$client.query(`UPDATE app.command_receipt r SET status='succeeded',result=app.lp5_command_result(c.command_id,c.outcome),completed_at=clock_timestamp() FROM app.command_lifecycle_claim c WHERE r.tenant_id=$1 AND r.command_id=$2 AND (c.tenant_id,c.command_id)=(r.tenant_id,r.command_id)`,[tenant,a.command]);
+    }
   });
   const exists=async(job:string)=>(await admin.query(`SELECT 1 FROM app.job WHERE tenant_id=$1 AND id=$2`,[tenant,job])).rowCount===1;
   const revisions=async()=>{const {c,s}=await saveParties(await createJob());return{customer:c.revisionId as string,site:s.revisionId as string};};

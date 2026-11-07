@@ -8,7 +8,7 @@ import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { ContractorRepository, EnterpriseIdentityRepository, IdentityRepository, SsoRequiredRepository, MIGRATION_URLS, migrate, verifyAuditChain, withTenant, type AuditEvent } from "../src/index.js";
+import { ContractorRepository, EnterpriseIdentityRepository, IdentityRepository, SsoRequiredRepository, MIGRATION_URLS, migrate, verifyAuditChain, withTenant, verifiedTenantContextFromMembership, type AuditEvent } from "../src/index.js";
 import { IdentityApplication } from "../../../apps/api/src/auth/identity.application.js";
 import { PersistedAuthProvider } from "../../../apps/api/src/auth/persisted-auth-provider.js";
 import { SsoApplication } from "../../../apps/api/src/auth/sso/sso.application.js";
@@ -149,12 +149,12 @@ describe("ENT-10d emergency PostgreSQL boundary",()=>{
  it("[S11] refused and owner-fixture uses preserve journal, evidence, earlier audit and every identity authority row byte-for-byte",async()=>{
   const f=await fixture();await f.enable();
   // Nonempty immutable records are created through merged posting/evidence services before comparison.
-  const context=testTenantContext(f.principal.tenantId, { membershipId: f.principal.membershipId }),book=randomUUID(),receivable=randomUUID(),deferred=randomUUID(),authorization=randomUUID(),journal=randomUUID(),hash="a".repeat(64);
+  const context=verifiedTenantContextFromMembership(f.principal,{kind:"real",credential:f.provider.digest(`session:${f.bound!.sessionToken}`)}),book=randomUUID(),receivable=randomUUID(),deferred=randomUUID(),authorization=randomUUID(),journal=randomUUID(),hash="a".repeat(64);
   await admin.query("INSERT INTO app.ledger_book(id,tenant_id,code,currency,chart_status) VALUES($1,$2,$3,'GBP','synthetic')",[book,f.principal.tenantId,`fixture:${book}`]);
   for(const [id,code,kind] of [[receivable,"AR","receivable"],[deferred,"DEF","deferred_income"]])await admin.query("INSERT INTO app.ledger_account(id,tenant_id,book_id,currency,code,class,mapping_status) VALUES($1,$2,$3,'GBP',$4,$5,'synthetic')",[id,f.principal.tenantId,book,code,kind]);
   await admin.query("INSERT INTO app.financial_authorization(id,tenant_id,membership_id,purpose,amount_pence,currency,artifact_hash,status) VALUES($1,$2,$3,'plan_obligation',1000,'GBP',$4,'approved')",[authorization,f.principal.tenantId,f.principal.membershipId,hash]);
   await new LedgerRepository(runtime).postPlanObligation(context,{authorizationId:authorization,actorRef:"member:synthetic",permission:"finance:approve"},{schemaVersion:1,journalId:journal,bookId:book,amountPence:1000,currency:"GBP",sourceEventId:`fixture:${journal}`,provenanceRef:"synthetic:ENT-10d",artifactHash:hash,authorizationId:authorization,actorRef:"member:synthetic",receivableAccountId:receivable,deferredIncomeAccountId:deferred,provenanceKind:"synthetic_authorized_plan"});
-  await installLegacySyntheticPartyFixtures(admin);const job=randomUUID();await importWatchdogFixtureJob(admin,f.principal.tenantId,job);
+  await installLegacySyntheticPartyFixtures(admin);const job=randomUUID();await importWatchdogFixtureJob(admin,f.principal.tenantId,job,"Fictional watchdog job","live",{db:await import("../src/index.js"),context});
   const bytes=validPng();
   // The storage adapter is the only external effect fake; upload and verified evidence are real PostgreSQL rows.
   let key="";

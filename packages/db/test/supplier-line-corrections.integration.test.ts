@@ -132,7 +132,7 @@ describe("M2-4 durable audited reviewer corrections (PostgreSQL)", () => {
     await expect(repo.correct(ctx, otherActor, job, f.command)).rejects.toThrow("MATCH_FORBIDDEN");
     await expect(repo.read(ctx, { ...actor, identityUserId: randomUUID() }, f.read)).rejects.toThrow("MATCH_FORBIDDEN");
     await admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [tenant, actor.membershipId]);
-    try { await expect(repo.create(ctx, actor, f.input)).rejects.toThrow("MATCH_FORBIDDEN"); }
+    try { await expect(repo.create(testTenantContext(tenant, { membershipId: actor.membershipId, bindRequest: false }), actor, f.input)).rejects.toThrow("MATCH_FORBIDDEN"); }
     finally { await admin.query("UPDATE app.membership SET revoked_at=NULL WHERE tenant_id=$1 AND id=$2", [tenant, actor.membershipId]); }
     vi.stubEnv("JOBGUARD_ENV", "pilot_no_charge");
     try { await expect(repo.read(ctx, actor, f.read)).rejects.toThrow("SYNTHETIC_MODE_REQUIRED"); }

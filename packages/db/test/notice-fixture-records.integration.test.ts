@@ -70,7 +70,7 @@ describe("M4-19 append-only durable synthetic notice book (real PostgreSQL)", ()
         const result = await workTenant(f.runtime, x.a.tenantId, async db => (await db.query(
           "SELECT app.notice_fixture_records($1,$2,$3,$4,$5::jsonb) result",
           [x.a.jobId, x.n, x.a.digest, operation, JSON.stringify(value)],
-        )).rows[0].result, { membershipId: x.a.actorId });
+        )).rows[0].result, { membershipId: x.a.actorId, bindRequest: false });
         expect(operation === "prepare" ? result.replay : result).toEqual(first);
       }
       await expect(x.repo.command(y.a.context, y.actor, rev)).rejects.toMatchObject({ code: "NOT_FOUND", message: "NOT_FOUND" });

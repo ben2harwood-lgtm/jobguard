@@ -1,4 +1,4 @@
-import { testActorContext } from "./tenant-context-test-utils.js";
+import { testActorContext, testTenantContext } from "./tenant-context-test-utils.js";
 // ENT-3c: the order check and the two site reads, against real PostgreSQL. Written before the repository methods it proves.
 import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -14,8 +14,12 @@ afterAll(async () => { await c?.close(); });
 afterEach(() => vi.restoreAllMocks());
 
 type Member = SiteFixture["p"];
-const items = async (f: SiteFixture, member: Member, jobId: string, q: unknown) => repo.sorItems(await testActorContext(c.admin, f.ctx, member), member, jobId, { q });
-const check = async (f: SiteFixture, member: Member, jobId: string, fields: Record<string, unknown>) => repo.orderCheck(await testActorContext(c.admin, f.ctx, member), member, jobId, fields);
+// The revoked-member cases exercise the read guard below session authentication.
+const revokedReadMembers=new WeakSet<object>();
+const readContext=(f:SiteFixture,member:Member)=>revokedReadMembers.has(member)
+ ? testTenantContext(f.p.tenantId,{membershipId:member.membershipId,bindRequest:false}) : testActorContext(c.admin,f.ctx,member);
+const items = async (f: SiteFixture, member: Member, jobId: string, q: unknown) => repo.sorItems(await readContext(f,member), member, jobId, { q });
+const check = async (f: SiteFixture, member: Member, jobId: string, fields: Record<string, unknown>) => repo.orderCheck(await readContext(f,member), member, jobId, fields);
 const auditTotal = async (f: SiteFixture) => (await c.admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1", [f.p.tenantId])).rows[0]!.n as number;
 const keysOf = (value: unknown): string[] => value && typeof value === "object" ? Object.entries(value).flatMap(([key, child]) => [key, ...keysOf(child)]) : [];
 const noMoney = (value: unknown) => { for (const key of keysOf(JSON.parse(JSON.stringify(value)))) expect(key, key).not.toMatch(/pence|rate|net|price|amount|resident|contact|address/iu); };
@@ -99,8 +103,8 @@ describe("ENT-3c search of the job's price list", () => {
 
 describe("ENT-3c the reads obey the same access rule as the command", () => {
   const readers = {
-    sorItems: async (f: SiteFixture, member: Member, jobId: string) => repo.sorItems(await testActorContext(c.admin, f.ctx, member), member, jobId, { q: "no-such-text-at-all" }),
-    orderCheck: async (f: SiteFixture, member: Member, jobId: string) => repo.orderCheck(await testActorContext(c.admin, f.ctx, member), member, jobId, { sorCode: "NO-SUCH-CODE", quantity: "999", orderLine: randomUUID() }),
+    sorItems: async (f: SiteFixture, member: Member, jobId: string) => repo.sorItems(await readContext(f,member), member, jobId, { q: "no-such-text-at-all" }),
+    orderCheck: async (f: SiteFixture, member: Member, jobId: string) => repo.orderCheck(await readContext(f,member), member, jobId, { sorCode: "NO-SUCH-CODE", quantity: "999", orderLine: randomUUID() }),
   } as const;
   async function refusedRead(f: SiteFixture, read: (f: SiteFixture, member: Member, jobId: string) => Promise<unknown>, member: Member, jobId: string, code: string) {
     const before = await written(c, f.p.tenantId), head = await chainHead(c, f.p.tenantId), audits = await auditTotal(f);
@@ -130,6 +134,7 @@ describe("ENT-3c the reads obey the same access rule as the command", () => {
       await cancel(c, f); errors.push(await refusedRead(f, read, f.members.supervisor.member, f.jobId, "NOT_FOUND"));
       for (const error of errors) expect(error).toEqual(errors[0]);
       await command(c, f, { kind: "membership.revoke", membershipId: f.members.surveyor.member.membershipId });
+      revokedReadMembers.add(f.members.surveyor.member);
       await refusedRead(f, read, f.members.surveyor.member, f.otherJob, "EXTRA_FORBIDDEN");
     }, 90_000);
   }

@@ -8,7 +8,7 @@ import {
   withTenant, type ConsequentialCommand,
 } from "../src/index.js";
 import { clusterBefore } from "./site-extra-pricing-fixtures.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testActorContext, testTenantContext } from "./tenant-context-test-utils.js";
 
 const own = "0153_quote_supersession_guard.sql";
 let c: Awaited<ReturnType<typeof clusterBefore>>;
@@ -80,7 +80,7 @@ async function state(f: Fixture) {
     FROM app.job WHERE tenant_id=$1 AND id=$2`, [f.tenant, f.job])).rows[0]!;
 }
 async function execute(f: Fixture, action: ReturnType<typeof acceptance> | ReturnType<typeof disposition>) {
-  return f.dispatcher.dispatch(f.context, action.command, action.mutation);
+  return f.dispatcher.dispatch(await testActorContext(c.admin, f.context, { tenantId: f.tenant, membershipId: f.member }), action.command, action.mutation);
 }
 
 import { proofBefore, proofColumns, proofDifferences, rolledBack, scratchReplaceFunction } from "./upgrade-proof-utils.js";

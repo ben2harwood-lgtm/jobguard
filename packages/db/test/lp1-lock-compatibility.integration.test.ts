@@ -161,8 +161,9 @@ describe("LP-1 row-lock compatibility", () => {
       } finally { await ownerLock.query("ROLLBACK"); await call?.catch(() => undefined); ownerLock.release(); }
     }
     // A committed revocation must be visible to a new runtime transaction.
+    // Keep this lock-guard probe independent of authentication of the revoked member.
     await owner.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [tenant, membership]);
-    await expect(cases.listForMember(ctx, job, actor)).rejects.toMatchObject({ code: "MEMBERSHIP_FORBIDDEN" });
+    await expect(cases.listForMember(testTenantContext(tenant, { membershipId: membership, bindRequest: false }), job, actor)).rejects.toMatchObject({ code: "MEMBERSHIP_FORBIDDEN" });
     // Complete positive-case business/audit-last and practice/eligibility trigger proofs remain
     // the unchanged named regression suites; this refusal-path test is preparatory coverage only.
   });

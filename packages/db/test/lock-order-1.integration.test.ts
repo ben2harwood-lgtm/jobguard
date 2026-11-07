@@ -114,7 +114,7 @@ it("[LOCK-ORDER-1(a)] holds the shared tenant administration lock before the ori
     }) as typeof client.query;
   });
   try {
-    await new SiteExtraRepository(pool).logSiteExtra(verifiedTenantContextFromMembership(operative.member), operative.member, request(f));
+    await new SiteExtraRepository(pool).logSiteExtra(await testActorContext(c.admin, verifiedTenantContextFromMembership(operative.member), operative.member), operative.member, request(f));
     expect(observed).toEqual([true]);
   } finally { await pool.end(); }
 });

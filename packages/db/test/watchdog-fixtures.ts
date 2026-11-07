@@ -1,4 +1,4 @@
-import { testBoundTenantContext } from "./tenant-context-test-utils.js";
+import { testBoundTenantContext, testTenantContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import type { VerifiedTenantContext } from "../src/index.js";
@@ -12,7 +12,8 @@ export async function importWatchdogFixtureJob(admin: Pool, tenantId: string, jo
   await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [userId]);
   await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Synthetic watchdog fixture')", [accountId, tenantId]);
   await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [membershipId, tenantId, accountId, userId]);
-  const context = loaded?.context ?? await testBoundTenantContext(admin, tenantId, membershipId);
+  const bindingInstalled=(await admin.query("SELECT to_regprocedure('app.bind_request(text,text,uuid)') IS NOT NULL installed")).rows[0].installed;
+  const context = loaded?.context ?? (bindingInstalled ? await testBoundTenantContext(admin, tenantId, membershipId) : testTenantContext(tenantId,{membershipId}));
   const actorMembershipId = loaded
     ? (await withTenant(admin, context, db => db.$client.query("SELECT app.current_actor() actor"))).rows[0].actor as string
     : membershipId;

@@ -64,8 +64,9 @@ it("refuses wrong tenant/job/extra, unassigned or office actors, revoked members
  const breach = await withTenant(c.runtime, ctx, async db => (await db.$client.query("SELECT app.xa_proceed_breaches($1,$2) ids", [s.jobId, s.extraId])).rows[0].ids);
  expect(breach).toEqual([s.requestId]);
  await command(c, w, { kind: "membership.revoke", membershipId: actor.membershipId });
- await expect(extraProceed(c.runtime, await testActorContext(c.admin, ctx, actor), actor, s.jobId, s.extraId, body)).rejects.toMatchObject({ code: "NOT_FOUND" });
- await expect(extraProceed(c.runtime, await testActorContext(c.admin, ctx, actor), actor, s.jobId, s.extraId, { ...body, commandId: randomUUID() })).rejects.toMatchObject({ code: "NOT_FOUND" });
+ // Exercise the repository revocation guard without trying to authenticate the revoked member.
+ await expect(extraProceed(c.runtime, testTenantContext(ctx.tenantId, { membershipId: actor.membershipId, bindRequest: false }), actor, s.jobId, s.extraId, body)).rejects.toMatchObject({ code: "NOT_FOUND" });
+ await expect(extraProceed(c.runtime, testTenantContext(ctx.tenantId, { membershipId: actor.membershipId, bindRequest: false }), actor, s.jobId, s.extraId, { ...body, commandId: randomUUID() })).rejects.toMatchObject({ code: "NOT_FOUND" });
  expect((await c.admin.query("SELECT count(*)::int n FROM app.extra_proceed_statement WHERE tenant_id=$1 AND id=$2", [ctx.tenantId, saved.history[0]!.statementId])).rows[0].n).toBe(1);
 });
 

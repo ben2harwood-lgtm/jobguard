@@ -1,12 +1,13 @@
 // Written before product code; NOT RUN (sandbox cannot start PostgreSQL / a browser).
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import type { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { contractorRoles, ExtraPersistenceError } from "@jobguard/core";
 import {
  ContractorRepository, ExtraRepository, WorkOrderRepository, demoFile, demoRow, withTenant,
  InvalidTenantContextError, verifyAuditChain, type AuditEvent, type ExtraTransactionSeam,
 } from "../src/index.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 import {
  cluster, fixture, raise, linkInput, orderInput, laterRevision, ownerTx, receipt, terminalizeFixtureReceipt,
  noteCanary, descriptionCanary, type Cluster, type Fixture,
@@ -106,12 +107,15 @@ async function madeUpJobs(f: Fixture) {
 }
 async function spyQueries<T>(rewrite: (sql: string, result: any) => any, work: () => Promise<T>) {
  const connect = c.runtime.connect.bind(c.runtime), clients = new WeakSet<object>();
- vi.spyOn(c.runtime, "connect").mockImplementation((async () => {
+ vi.spyOn(c.runtime, "connect").mockImplementation((async (callback?: Parameters<Pool["connect"]>[0]) => {
+  if (typeof callback === "function") return connect(callback);
   const client = await connect();
   if (clients.has(client)) return client;
   clients.add(client);
   const query = client.query.bind(client);
-  vi.spyOn(client, "query").mockImplementation((async (sql: any, params?: any) => {
+  vi.spyOn(client, "query").mockImplementation((async (sql: any, params?: any, callback?: any) => {
+   if (typeof params === "function") return query(sql, params);
+   if (typeof callback === "function") return query(sql, params, callback);
    if (sql === "COMMIT") { await query("SET CONSTRAINTS ALL IMMEDIATE"); const replacement = rewrite("COMMIT", undefined); if (replacement !== undefined) return replacement; }
    const result = await query(sql, params); return rewrite(String(sql), result) ?? result;
   }) as any); return client;
@@ -137,7 +141,7 @@ async function allowedRefusals(f: Fixture, startingRevision = 0, orderRevision?:
   ["COMMAND_CONFLICT", { ...prior, reasonCode: "wrong_pair" }], ["COMMAND_CONFLICT", { ...prior, actorMembershipId: admin.id }],
   ["COMMAND_CONFLICT", { ...good, commandId: first.commandId }], ["INVALID_COMMAND", { ...good, tenantId: f.p.tenantId }],
  ];
- for (const [code, raw] of cases) await refused(f, () => repo.unlinkDuplicate(f.ctx, raw), code, foreign);
+ for (const [code, raw] of cases) await refused(f, () => repo.unlinkDuplicate(testTenantContext(f.ctx.tenantId, { membershipId: (raw as { actorMembershipId: string }).actorMembershipId }), raw), code, foreign);
  await refused(f, () => repo.unlinkDuplicate({ tenantId: f.p.tenantId } as any, good), "INVALID_TENANT_CONTEXT");
  await linked(f);
  await refused(f, () => repo.unlinkDuplicate(testTenantContext(f.ctx.tenantId, { membershipId: good.actorMembershipId }), good), "STALE_REVISION");
@@ -363,7 +367,21 @@ describe("ENT-4c un-link command", () => {
    for (const table of ["extra_duplicate_link", "command_receipt"]) expect((await db.$client.query(`SELECT * FROM app.${table} WHERE tenant_id=$1`, [f.p.tenantId])).rows).toEqual([]);
   });
   const raw = input(f, l.linkId), upper = { ...raw, commandId: raw.commandId.toUpperCase(), jobId: raw.jobId.toUpperCase(), actorMembershipId: raw.actorMembershipId.toUpperCase(), linkId: raw.linkId.toUpperCase() };
-  const result = await repo.unlinkDuplicate(testTenantContext(f.p.tenantId.toUpperCase(), { membershipId: f.p.membershipId }), upper), before = await snapshot(f);
+  // Bind the real actor in the transport while retaining the upper-case context under test.
+  const credential = createHash("sha256").update(`lp6-test:${f.p.tenantId}:${f.p.membershipId}`).digest("hex");
+  await testBoundTenantContext(c.admin, f.p.tenantId, f.p.membershipId, credential);
+  const pool = new Proxy(c.runtime, { get(target, key) {
+   if (key === "connect") return async () => {
+    const client = await target.connect();
+    return { release: () => client.release(), query: async (sql: string, values?: unknown[]) => {
+     const result = await client.query(sql, values);
+     if (sql === "BEGIN") await client.query("SELECT app.bind_request('real',$1,$2)", [credential, f.p.tenantId]);
+     return result;
+    } };
+   };
+   const value = Reflect.get(target, key); return typeof value === "function" ? value.bind(target) : value;
+  } });
+  const result = await new ExtraRepository(pool).unlinkDuplicate(testTenantContext(f.p.tenantId.toUpperCase(), { membershipId: f.p.membershipId, bindRequest: false }), upper), before = await snapshot(f);
   expect(await repo.unlinkDuplicate(testTenantContext(f.ctx.tenantId, { membershipId: raw.actorMembershipId }), raw)).toEqual(result); expect(await snapshot(f)).toEqual(before);
  }, 60_000);
 

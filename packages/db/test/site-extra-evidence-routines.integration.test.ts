@@ -185,7 +185,7 @@ describe("ENT-3d upgrade proof (rule 9)", () => {
     expect(Number(saved.byte_length)).toBe(bytes.length);
     return { id, sha256, objectKey };
    });
-   await extras.raiseExtra(await testActorContext(c.admin, x.ctx, x.members.supervisor.member), direct(x, x.members.supervisor)); await extras.raiseExtra(await testActorContext(c.admin, x.ctx, x.members.supervisor.member), direct(x, x.members.supervisor, { evidenceId: p.id }));
+   await extras.raiseExtra(await testActorContext(up.admin, x.ctx, x.members.supervisor.member), direct(x, x.members.supervisor)); await extras.raiseExtra(await testActorContext(up.admin, x.ctx, x.members.supervisor.member), direct(x, x.members.supervisor, { evidenceId: p.id }));
    const run: Run = (sql, values) => up.admin.query(sql, values);
    const preColumns: Record<string, string[]> = {}, preKeys: Record<string, string[]> = {};
    for (const t of tables) {

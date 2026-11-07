@@ -193,9 +193,11 @@ it("[A4 DB12] refuses stale, repeated state, missing/foreign evidence and non-in
 });
 it("[A4 A5 DB12] definer entry points refuse missing, mismatched and malformed tenant context",async()=>{
  const f=await fixture();
- await expect(runtime.query("SELECT app.lock_recovery_payer_job($1,$2,$3)",[T,f.jobId,M])).rejects.toThrow("PAYER_MARK_FORBIDDEN");
+ const before=await proofBefore(admin,["app.job","app.recovery_payment_payer_mark","app.recovery_eligibility_v3_review","app.recovery_claim_line","app.command_receipt","app.command_lifecycle_claim","app.action_authorization","app.audit_event"]);
+ await expect(runtime.query("SELECT app.lock_recovery_payer_job($1,$2,$3)",[T,f.jobId,M])).rejects.toMatchObject({code:"42501",message:"REQUEST_BINDING_REFUSED"});
  for(const value of [randomUUID(),"malformed"]){
-  const client=await runtime.connect();try{await client.query("BEGIN");await client.query("SELECT set_config('app.tenant_id',$1,true),set_config('app.practice_material_digest',$2,true),set_config('app.recovery_eligibility_environment','synthetic_demo',true)",[value,f.auth.digest]);await expect(client.query("SELECT app.lock_recovery_payer_job($1,$2,$3)",[T,f.jobId,M])).rejects.toThrow("PAYER_MARK_FORBIDDEN");}finally{await client.query("ROLLBACK");client.release();}
+  const client=await runtime.connect();try{await client.query("BEGIN");await client.query("SELECT set_config('app.tenant_id',$1,true),set_config('app.practice_material_digest',$2,true),set_config('app.recovery_eligibility_environment','synthetic_demo',true)",[value,f.auth.digest]);await expect(client.query("SELECT app.lock_recovery_payer_job($1,$2,$3)",[T,f.jobId,M])).rejects.toMatchObject({code:"42501",message:"REQUEST_BINDING_REFUSED"});}finally{await client.query("ROLLBACK");client.release();}
+  expect(await proofDifferences(admin,before)).toEqual({rows:[],types:[]});
  }
 });
 it("[A3 A4 DB13 DB17] catalogs enforce standard F, RLS, owner and fixed search paths",async()=>{
@@ -261,7 +263,7 @@ it("[A4 DB12] owner role, revocation, other-session digest, other job and case t
   try{await expect(f.marks.command(ctx,f.jobId,input,actor,f.auth.digest)).rejects.toThrow("PAYER_MARK_FORBIDDEN");}finally{await admin.query("UPDATE app.membership SET role='owner' WHERE tenant_id=$1 AND id=$2",[T,M]);}
  }
  await admin.query("UPDATE app.membership SET revoked_at=now() WHERE tenant_id=$1 AND id=$2",[T,M]);
- try{await expect(f.marks.command(ctx,f.jobId,input,actor,f.auth.digest)).rejects.toThrow("PAYER_MARK_FORBIDDEN");}finally{await admin.query("UPDATE app.membership SET revoked_at=NULL WHERE tenant_id=$1 AND id=$2",[T,M]);}
+ try{await expect(f.marks.command(testTenantContext(T,{membershipId:M,bindRequest:false}),f.jobId,input,actor,f.auth.digest)).rejects.toThrow("PAYER_MARK_FORBIDDEN");}finally{await admin.query("UPDATE app.membership SET revoked_at=NULL WHERE tenant_id=$1 AND id=$2",[T,M]);}
  await expect(f.marks.command(ctx,f.jobId,input,actor,g.auth.digest)).rejects.toThrow("RECOVERY_JOB_NOT_FOUND");
  await expect(f.marks.command(ctx,f.jobId,{...input,sourceEventId:(await markInput(g)).sourceEventId},actor,f.auth.digest)).rejects.toThrow("PAYER_MARK_SOURCE_REQUIRED");
  await expect(g.marks.command(ctx,g.jobId,await markInput(g),actor,g.auth.digest)).rejects.toThrow("RECOVERY_CASE_NOT_FOUND");
@@ -293,6 +295,7 @@ it("[B1 B2 DB16] independent F19 wording preserves Q and compensation header",as
 it("[A4 DB12] preview evidence, no binding and another tenant refuse with exact codes",async()=>{
  const f=await fixture();await f.advance("receipt-3000");const input=await markInput(f),preview=randomUUID();
  await rolledBack(admin,async client=>{
+  await client.query("SELECT app.bind_request('practice',$1,$2)",[f.auth.digest,T]);
   await client.query("SET LOCAL ROLE jobguard_migration");await client.query("SELECT set_config('app.tenant_id',$1,true),set_config('app.practice_material_digest',$2,true)",[T,f.auth.digest]);
   await client.query("INSERT INTO app.evidence_object(id,tenant_id,job_id,kind,original_evidence_id,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)SELECT $2,tenant_id,job_id,'preview',id,evidence_type,object_key||'/preview','preview-version',sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at FROM app.evidence_object WHERE id=$1",[f.evidence,preview]);
   // The uncommitted preview is intentionally tested through the same migration transaction,
@@ -314,12 +317,14 @@ it("[A7 DB14] changed job replay conflicts when both jobs belong to the authoriz
 it("[A3 A4 DB13] trigger pins supplied time and rejects changed stored evidence bytes",async()=>{
  const f=await fixture();await f.advance("receipt-3000");const input=await markInput(f);const saved=await f.marks.command(ctx,f.jobId,input,actor,f.auth.digest);
  await rolledBack(admin,async client=>{
+  await client.query("SELECT app.bind_request('practice',$1,$2)",[f.auth.digest,T]);
   await client.query("SET LOCAL ROLE jobguard_migration");await client.query("SELECT set_config('app.tenant_id',$1,true),set_config('app.practice_material_digest',$2,true),set_config('app.recovery_eligibility_environment','synthetic_demo',true)",[T,f.auth.digest]);
   const pinned=await client.query("INSERT INTO app.recovery_payment_payer_mark(id,tenant_id,job_id,source_event_id,revision,state,party_binding_id,actor_membership_id,command_id,payload_hash,created_at)SELECT gen_random_uuid(),tenant_id,job_id,source_event_id,2,'withdrawn',party_binding_id,actor_membership_id,gen_random_uuid(),payload_hash,'2000-01-01'::timestamptz FROM app.recovery_payment_payer_mark WHERE id=$1 RETURNING created_at=transaction_timestamp() pinned",[saved.id]);
   expect(pinned.rows).toEqual([{pinned:true}]);
  });
  await f.advance("receipt-384");const other=await markInput(f,"receipt-384");
  await rolledBack(admin,async client=>{
+  await client.query("SELECT app.bind_request('practice',$1,$2)",[f.auth.digest,T]);
   await client.query("SET LOCAL ROLE jobguard_migration");await client.query("SELECT set_config('app.tenant_id',$1,true),set_config('app.practice_material_digest',$2,true),set_config('app.recovery_eligibility_environment','synthetic_demo',true)",[T,f.auth.digest]);
   await expect(client.query("INSERT INTO app.recovery_payment_payer_mark(id,tenant_id,job_id,source_event_id,revision,state,evidence_id,evidence_object_version_id,evidence_sha256,evidence_received_at,party_binding_id,actor_membership_id,command_id,payload_hash)SELECT gen_random_uuid(),tenant_id,job_id,$2,1,'customer_own',evidence_id,evidence_object_version_id,$3,evidence_received_at,party_binding_id,actor_membership_id,gen_random_uuid(),payload_hash FROM app.recovery_payment_payer_mark WHERE id=$1",[saved.id,other.sourceEventId,"b".repeat(64)])).rejects.toThrow("PAYER_MARK_EVIDENCE_REQUIRED");
  });

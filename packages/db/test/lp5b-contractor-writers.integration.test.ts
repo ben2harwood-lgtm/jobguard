@@ -1,4 +1,4 @@
-import { testActorContext } from "./tenant-context-test-utils.js";
+import { testActorContext, testTenantContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { ExtraRepository } from "../src/extra-repository.js";
@@ -26,7 +26,7 @@ it("LP-5b primitive capture first/replay/conflict and duplicate client captures 
  await expect(repo.raiseExtra(f.ctx,{...retry,note:"Different fictional capture"})).rejects.toMatchObject({code:"COMMAND_CONFLICT"});
  expect((await db.admin.query("SELECT count(*)::int n FROM app.extra_origin WHERE tenant_id=$1 AND client_capture_id=$2",[f.p.tenantId,input.clientCaptureId])).rows[0].n).toBe(1);
  await db.admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2",[f.p.tenantId,f.p.membershipId]);
- await expect(repo.raiseExtra(f.ctx,retry)).rejects.toMatchObject({code:"NOT_FOUND"});
+ await expect(repo.raiseExtra(testTenantContext(f.p.tenantId,{membershipId:f.p.membershipId,bindRequest:false}),retry)).rejects.toMatchObject({code:"NOT_FOUND"});
 });
 
 it("LP-5b approval replay checks the original step's current grant and cannot repeat the effect", async () => {
@@ -49,8 +49,8 @@ it("LP-5b visits preserve microsecond result DTOs, conflicts and current members
  expect(result).toEqual({visitId:first.visitId,completedAt:expect.stringMatching(/\.\d{6}Z$/),closeoutAnswer:"yes"});
  await expect(repo.completeVisit(await testActorContext(db.admin, f.ctx, actor),actor,{...complete,closeoutAnswer:"no"})).rejects.toMatchObject({code:"IDEMPOTENCY_CONFLICT"});
  await db.admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2",[f.p.tenantId,actor.membershipId]);
- await expect(repo.startVisit(await testActorContext(db.admin, f.ctx, actor),actor,start)).rejects.toMatchObject({code:"VISIT_FORBIDDEN"});
- await expect(repo.completeVisit(await testActorContext(db.admin, f.ctx, actor),actor,complete)).rejects.toMatchObject({code:"VISIT_FORBIDDEN"});
+ await expect(repo.startVisit(testTenantContext(f.p.tenantId,{membershipId:actor.membershipId,bindRequest:false}),actor,start)).rejects.toMatchObject({code:"VISIT_FORBIDDEN"});
+ await expect(repo.completeVisit(testTenantContext(f.p.tenantId,{membershipId:actor.membershipId,bindRequest:false}),actor,complete)).rejects.toMatchObject({code:"VISIT_FORBIDDEN"});
 });
 
 it("LP-5b unknown types and completion without each contractor effect are refused and rolled back", async () => {
@@ -62,7 +62,7 @@ it("LP-5b unknown types and completion without each contractor effect are refuse
  ] as const){
   for(const commandType of [type,"unknown.contractor.command"]){
    const commandId=randomUUID();
-   await expect(withTenant(db.runtime,context,async tx=>{
+   await expect(withTenant(db.runtime,testTenantContext(context.tenantId,{membershipId:actor}),async tx=>{
     await beginRepositoryCommand(tx,{tenantId:context.tenantId,actorMembershipId:actor,commandId,commandType,
      semanticKey:commandId,jobId:job,legacyJson:canonicalJson(input)});
     await completeRepositoryCommand(tx,commandId);

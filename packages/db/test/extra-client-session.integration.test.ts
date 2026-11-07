@@ -1,6 +1,6 @@
-import { testActorContext } from "./tenant-context-test-utils.js";
+import { testActorContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { Pool, type PoolClient } from "pg";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { beforeAll, afterAll, expect, it } from "vitest";
 import { ExtraApprovalRepository } from "../src/index.js";
 import { cluster, chainWorld, submitted, approveInput, emailOf, newToken, type Cluster, type ChainWorld } from "./extra-approval-chain-fixtures.js";
@@ -27,8 +27,20 @@ async function fixture() {
  expect((await c.admin.query("SELECT 1 FROM app.action_attempt WHERE action_id=$1",[sent.outboxActionId])).rows).toEqual([]);
  const use=(digest:string,operation="resolve",who=actor,job=s.jobId,tenant=w.p.tenantId)=>identity.query("SELECT identity.extra_customer_use($1,$2,$3,$4,$5,$6) result",[tenant,job,who,digest,operation==="redeem"?sd:null,operation]).then(r=>r.rows[0].result);
  const command={version:"extra-customer.v1",action:"decide",jobId:s.jobId,requestId:s.requestId,commandId:randomUUID(),revisionHash:s.hash,netPence:s.net,decision:"approve"};
- const run=(input:unknown=command,digest=sd,db:Pool|PoolClient=identity)=>db.query("SELECT identity.extra_customer_approval($1,$2,$3,$4,$5::jsonb) result",[w.p.tenantId,s.jobId,actor,digest,input]).then(r=>r.rows[0].result);
- return {repo,ctx,s,sent,raw,actor,signinDigest,sd,use,command,run};
+ const credential=createHash("sha256").update(`lp6-test:${w.p.tenantId}:${actor}`).digest("hex");
+ await testBoundTenantContext(c.admin,w.p.tenantId,actor,credential);
+ const bindIdentity=async(db:PoolClient)=>{
+  await db.query("SELECT app.bind_request('real',$1,$2)",[credential,w.p.tenantId]);
+  await db.query("SET LOCAL ROLE jobguard_identity");
+  expect((await db.query("SELECT current_user")).rows[0].current_user).toBe("jobguard_identity");
+ };
+ const run=async(input:unknown=command,digest=sd,db:Pool|PoolClient=identity):Promise<any>=>{
+  if(db!==identity)return (await db.query("SELECT identity.extra_customer_approval($1,$2,$3,$4,$5::jsonb) result",[w.p.tenantId,s.jobId,actor,digest,input])).rows[0].result;
+  const client=await c.admin.connect();
+  try{await client.query("BEGIN");await bindIdentity(client);const result=await run(input,digest,client);await client.query("COMMIT");return result;}
+  catch(error){await client.query("ROLLBACK");throw error;}finally{client.release();}
+ };
+ return {repo,ctx,s,sent,raw,actor,signinDigest,sd,use,command,run,bindIdentity};
 }
 it("ENT-5 sign-in requires a fresh link and current scoped named grant; replay is one effect",async()=>{
  const f=await fixture();await expect(f.run(f.command,d)).rejects.toMatchObject({code:"42501"});
@@ -48,9 +60,9 @@ it("ENT-5 sign-in requires a fresh link and current scoped named grant; replay i
 });
 it.each(["approve","reject"])("ENT-5 real identity %s commits while unrelated checks remain deferred",async decision=>{
  const f=await fixture();await f.use(f.signinDigest,"redeem");
- const db=await identity.connect();
+ const db=await c.admin.connect();
  try {
-  await db.query("BEGIN");
+  await db.query("BEGIN");await f.bindIdentity(db);
   // A real unrelated deferred FK must survive both the approval call and later statements.
   // SET CONSTRAINTS ALL IMMEDIATE would reject the first child inside that call.
   await db.query("CREATE TEMP TABLE approval_deferred_parent(id integer PRIMARY KEY) ON COMMIT DROP");

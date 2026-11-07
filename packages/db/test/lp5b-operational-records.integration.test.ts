@@ -45,13 +45,14 @@ const restore=()=>db.owner.query("UPDATE app.membership SET revoked_at=NULL WHER
 describe("LP-5b feedback and demo checkpoint business records",()=>{
  it("feedback keeps its complete result, exact replay and conflict, and refuses revoked replay",async()=>{
   const f=await feedbackFixture(),repo=new CommercialIntegrityApplicationRepository(db.runtime);
-  const run=(changed=false)=>repo.review(context,actor.member,f.jobId,changed?{...f.input,explanation:"Changed fictional explanation"}:f.input,f.digest);
+  let revokedFeedback=false;
+  const run=(changed=false)=>repo.review(testTenantContext(context.tenantId,{membershipId:actor.member,bindRequest:!revokedFeedback}),actor.member,f.jobId,changed?{...f.input,explanation:"Changed fictional explanation"}:f.input,f.digest);
   const first=await run();
   expect(first).toEqual({...f.input,jobId:f.jobId,recordedAt:expect.stringMatching(/\.\d{3}Z$/)});
   expect(await receipt(f.input.commandId)).toEqual([{status:"succeeded",result:first}]);
   expect(await effects(f.input.commandId)).toEqual([{record_kind:"feedback",result:first}]);
   expect(await run()).toEqual(first);await expect(run(true)).rejects.toMatchObject({message:"IDEMPOTENCY_CONFLICT"});
-  await revoke();try{await expect(run()).rejects.toMatchObject({code:"NOT_FOUND"});expect(await effects(f.input.commandId)).toEqual([{record_kind:"feedback",result:first}]);}finally{await restore();}
+  await revoke();revokedFeedback=true;try{await expect(run()).rejects.toMatchObject({code:"NOT_FOUND"});expect(await effects(f.input.commandId)).toEqual([{record_kind:"feedback",result:first}]);}finally{await restore();}
  });
  it("demo seed distinguishes created/replayed and keeps one result; changed reuse and revoked replay fail",async()=>{
   const input=await demoInput(),first=await executeCheckpoint(input);

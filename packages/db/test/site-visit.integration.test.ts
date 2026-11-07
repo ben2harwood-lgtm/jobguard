@@ -1,4 +1,4 @@
-import { testActorContext } from "./tenant-context-test-utils.js";
+import { testActorContext, testTenantContext } from "./tenant-context-test-utils.js";
 // Written before the repository. Real PostgreSQL (embedded) through merged cluster(); the runtime role is the application login.
 import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -116,12 +116,13 @@ describe("ENT-3b refusals by role and by job", () => {
   expect(plain(await refused(cancelled, () => start(cancelled, cancelled.named), "NOT_FOUND"))).toEqual(plain(revoked));
   expect(plain(await refused(cancelled, () => complete(cancelled, cancelled.named, visit.visitId), "NOT_FOUND"))).toEqual(plain(revoked));
  });
+ // Exercise the repository membership guard directly: a revoked member cannot obtain a session binding.
  it("[B4] after membership.revoke both commands answer VISIT_FORBIDDEN", async () => {
   const f = await visitFixture(c), extra = await invite(c, f, "supervisor", { kind: "team", id: f.demo.teamId });
   await command(c, f, { kind: "membership.revoke", membershipId: f.members.operative.member.membershipId });
   const open = await ownerVisit(c, f, extra.member.membershipId);
-  await refused(f, () => start(f, f.members.operative), "VISIT_FORBIDDEN");
-  await refused(f, () => complete(f, f.members.operative, open), "VISIT_FORBIDDEN");
+  await refused(f, () => repo.startVisit(testTenantContext(f.p.tenantId,{membershipId:f.members.operative.member.membershipId,bindRequest:false}),f.members.operative.member,startInput(f)), "VISIT_FORBIDDEN");
+  await refused(f, () => repo.completeVisit(testTenantContext(f.p.tenantId,{membershipId:f.members.operative.member.membershipId,bindRequest:false}),f.members.operative.member,completeInput(f,open,"yes")), "VISIT_FORBIDDEN");
  });
  it("[B5] another tenant: tenant A's member with tenant B's job or visit, a mismatched actor, an unstamped context, a small-builder tenant", async () => {
   const a = await visitFixture(c), b = await visitFixture(c);
@@ -232,7 +233,7 @@ describe("ENT-3b replay, conflict, one open visit", () => {
   const again = startInput(g), stored = await repo.startVisit(await testActorContext(c.admin, g.ctx, g.members.operative.member), g.members.operative.member, again);
   expect(stored.visitId).toBeTruthy(); expect(first.visitId).toBeTruthy();
   await command(c, g, { kind: "membership.revoke", membershipId: g.members.operative.member.membershipId });
-  expect((await errorOf(async () => repo.startVisit(await testActorContext(c.admin, g.ctx, g.members.operative.member), g.members.operative.member, again))).code).toBe("VISIT_FORBIDDEN");
+  expect((await errorOf(async () => repo.startVisit(testTenantContext(g.p.tenantId,{membershipId:g.members.operative.member.membershipId,bindRequest:false}), g.members.operative.member, again))).code).toBe("VISIT_FORBIDDEN");
  });
  it("[B10] one open visit per member per job; a new start works after completion; two named members may each hold one", async () => {
   const f = await visitFixture(c), a = f.members.operative;
@@ -343,8 +344,11 @@ describe("ENT-3b repair round 2 authority races (real PostgreSQL)", () => {
    const f = await visitFixture(c), a = f.members.operative;
    const open = kind === "complete" ? await start(f, a) : undefined;
    const raw = kind === "start" ? startInput(f) : completeInput(f, open!.visitId, "yes");
-   const run = async () => kind === "start" ? repo.startVisit(await testActorContext(c.admin, f.ctx, a.member), a.member, raw) : repo.completeVisit(await testActorContext(c.admin, f.ctx, a.member), a.member, raw);
+   let exerciseRevocation = false;
+   const actingContext = () => exerciseRevocation && change === "membership-revocation" ? testTenantContext(f.p.tenantId,{membershipId:a.member.membershipId,bindRequest:false}) : testActorContext(c.admin,f.ctx,a.member);
+   const run = async () => kind === "start" ? repo.startVisit(await actingContext(), a.member, raw) : repo.completeVisit(await actingContext(), a.member, raw);
    const first = path === "replay" ? await run() : undefined;
+   exerciseRevocation = true;
    if (path === "live-guard") await moveOffLive(c, f);
    const original = (repo as any).precheck.bind(repo);
    let reached = 0, before: Awaited<ReturnType<typeof snapshot>> | undefined;
@@ -403,7 +407,7 @@ describe("ENT-3b repair round 2 authority races (real PostgreSQL)", () => {
    return authority;
   });
   let error: SiteVisitError;
-  try { error = await errorOf(async () => kind === "start" ? repo.startVisit(await testActorContext(c.admin, f.ctx, a.member), a.member, raw) : repo.completeVisit(await testActorContext(c.admin, f.ctx, a.member), a.member, raw)); } finally { spy.mockRestore(); }
+  try { error = await errorOf(async () => kind === "start" ? repo.startVisit(testTenantContext(f.p.tenantId,{membershipId:a.member.membershipId,bindRequest:false}), a.member, raw) : repo.completeVisit(testTenantContext(f.p.tenantId,{membershipId:a.member.membershipId,bindRequest:false}), a.member, raw)); } finally { spy.mockRestore(); }
   expect(checks).toBe(2); expect(before).toBeDefined();
   expect(plain(error)).toEqual({ name: "SiteVisitError", message: "VISIT_FORBIDDEN", code: "VISIT_FORBIDDEN" });
   expect({ status: siteVisitHttpStatus(error.code), body: siteVisitFailureV1.parse({ version: "site-visit-error.v1", code: error.code }) }).toEqual({ status: 403, body: { version: "site-visit-error.v1", code: "VISIT_FORBIDDEN" } });
@@ -574,7 +578,7 @@ describe("ENT-3b the refusal record", () => {
   ];
   for (const [reason, fx, who, job, code] of cases) {
    const raw = startInput(fx, { jobId: job });
-   for (let attempt = 0; attempt < 3; attempt++) expect((await errorOf(async () => repo.startVisit(await testActorContext(c.admin, fx.ctx, who.member), who.member, raw))).code).toBe(code);
+   for (let attempt = 0; attempt < 3; attempt++) expect((await errorOf(async () => repo.startVisit(reason === "member_inactive" ? testTenantContext(fx.p.tenantId,{membershipId:who.member.membershipId,bindRequest:false}) : await testActorContext(c.admin, fx.ctx, who.member), who.member, raw))).code).toBe(code);
    const events = await refusalEvents(c, fx.p.tenantId), mine = events.filter(e => e.subject_ref === raw.commandId);
    expect(mine, reason).toHaveLength(1);
    expect(mine[0]).toMatchObject({ id: derivedUuid(`visit-refusal:${fx.p.tenantId}:${raw.commandId}:${reason}`), actor_ref: `membership:${who.member.membershipId}`, subject_type: "visit-command" });

@@ -83,7 +83,7 @@ describe("M4-7 DARK AIS PostgreSQL boundary", () => {
  });
  it("backfill and relinking preserve cash identity; issued cursors stay window-bound and cyclic pages fail", async () => {
   const s = await linked();
-  const raw = (p: AisPage, w: unknown = window) => workTenant(f.runtime, s.a.tenantId, db => db.query("SELECT app.dark_ais($1,$2,$3,'page',$4::jsonb)", [s.a.tenantId, s.a.digest, s.id, JSON.stringify({ window: w, page: p })]), { membershipId: s.a.actorId });
+  const raw = (p: AisPage, w: unknown = window) => workTenant(f.runtime, s.a.tenantId, db => db.query("SELECT app.dark_ais($1,$2,$3,'page',$4::jsonb)", [s.a.tenantId, s.a.digest, s.id, JSON.stringify({ window: w, page: p })]), { membershipId: s.a.actorId, bindRequest: false });
   await raw(page([obs()], "fake_a"));
   await raw(page([], "fake_b"), { ...window, cursor: "fake_a" });
   await expect(raw(page([], "fake_a"), { ...window, cursor: "fake_b" })).rejects.toThrow("AIS_CURSOR_INVALID");
@@ -97,7 +97,7 @@ describe("M4-7 DARK AIS PostgreSQL boundary", () => {
  it("rejects conflicting replays, ambiguous IDs, swapped account refs and invalid cursors atomically", async () => {
   const s = await linked(); await s.repository.pull(s.a.context, s.a.digest, s.id, window);
   const before = await counts(s.a.tenantId);
-  const raw = (p: unknown, w: unknown = window) => workTenant(f.runtime, s.a.tenantId, db => db.query("SELECT app.dark_ais($1,$2,$3,'page',$4::jsonb)", [s.a.tenantId, s.a.digest, s.id, JSON.stringify({ window: w, page: p })]), { membershipId: s.a.actorId });
+  const raw = (p: unknown, w: unknown = window) => workTenant(f.runtime, s.a.tenantId, db => db.query("SELECT app.dark_ais($1,$2,$3,'page',$4::jsonb)", [s.a.tenantId, s.a.digest, s.id, JSON.stringify({ window: w, page: p })]), { membershipId: s.a.actorId, bindRequest: false });
   await expect(raw(page([obs(1, "pending", { amount: { pence: 32001, currency: "GBP" } })]))).rejects.toThrow("AIS_CONFLICT");
   await expect(raw(page([obs(2, "settled", { movementRef: "fake_other", providerRef: "fake_provider_1" })]))).rejects.toThrow("AIS_IDENTITY_AMBIGUOUS");
   await expect(raw(page([obs(2, "settled", { accountRef: "fake_swapped" })]))).rejects.toThrow("AIS_INVALID");
@@ -110,7 +110,7 @@ describe("M4-7 DARK AIS PostgreSQL boundary", () => {
  });
  it("append-only reversal survives stale updates; settlement regression/reopening needs reconciliation", async () => {
   const s = await linked();
-  const raw = (o: AisObservation) => workTenant(f.runtime, s.a.tenantId, db => db.query("SELECT app.dark_ais($1,$2,$3,'page',$4::jsonb)", [s.a.tenantId, s.a.digest, s.id, JSON.stringify({ window, page: page([o]) })]), { membershipId: s.a.actorId });
+  const raw = (o: AisObservation) => workTenant(f.runtime, s.a.tenantId, db => db.query("SELECT app.dark_ais($1,$2,$3,'page',$4::jsonb)", [s.a.tenantId, s.a.digest, s.id, JSON.stringify({ window, page: page([o]) })]), { membershipId: s.a.actorId, bindRequest: false });
   await raw(obs(2, "settled")); await raw(obs(3, "reversed")); await raw(obs(1));
   await expect(raw(obs(4, "settled"))).rejects.toThrow("AIS_RECONCILIATION_REQUIRED");
   await expect(raw(obs(4, "pending"))).rejects.toThrow("AIS_RECONCILIATION_REQUIRED");
@@ -161,9 +161,9 @@ describe("M4-7 DARK AIS PostgreSQL boundary", () => {
    expect(cat).toEqual({ relrowsecurity: true, relforcerowsecurity: true, owner: "jobguard_migration" });
    const grants = (await f.admin.query("SELECT has_table_privilege('jobguard_runtime',$1,'INSERT,UPDATE,DELETE,TRUNCATE') writes,has_table_privilege('jobguard_runtime',$1,'SELECT') reads", [`app.${table}`])).rows[0];
    expect(grants).toEqual({ writes: false, reads: false });
-   await expect(workTenant(f.runtime, s.a.tenantId, db => db.query(`DELETE FROM app.${table} WHERE tenant_id=$1`, [s.a.tenantId]), { membershipId: s.a.actorId })).rejects.toThrow();
-   await expect(workTenant(f.runtime, s.a.tenantId, db => db.query(`INSERT INTO app.${table} DEFAULT VALUES`), { membershipId: s.a.actorId })).rejects.toThrow(/permission denied/u);
-   await expect(workTenant(f.runtime, other.tenantId, db => db.query(`SELECT * FROM app.${table} WHERE tenant_id=$1`, [s.a.tenantId]), { membershipId: other.actorId })).rejects.toMatchObject({ code: "42501" });
+   await expect(workTenant(f.runtime, s.a.tenantId, db => db.query(`DELETE FROM app.${table} WHERE tenant_id=$1`, [s.a.tenantId]), { membershipId: s.a.actorId, bindRequest: false })).rejects.toThrow();
+   await expect(workTenant(f.runtime, s.a.tenantId, db => db.query(`INSERT INTO app.${table} DEFAULT VALUES`), { membershipId: s.a.actorId, bindRequest: false })).rejects.toThrow(/permission denied/u);
+   await expect(workTenant(f.runtime, other.tenantId, db => db.query(`SELECT * FROM app.${table} WHERE tenant_id=$1`, [s.a.tenantId]), { membershipId: other.actorId, bindRequest: false })).rejects.toMatchObject({ code: "42501" });
    await expect(f.runtime.query(`SELECT * FROM app.${table}`)).rejects.toMatchObject({ code: "42501" });
   }
   await expect(f.admin.query("DELETE FROM app.ais_connection WHERE tenant_id=$1", [s.a.tenantId])).rejects.toThrow("AIS_IMMUTABLE");
@@ -184,7 +184,7 @@ it("runtime cannot read any raw AIS table, even within the owner's tenant", asyn
  const s = await linked(); await s.repository.pull(s.a.context,s.a.digest,s.id,window);
  for (const table of ["ais_connection","ais_lifecycle","ais_observation","ais_page"]) {
   expect((await f.admin.query("SELECT has_table_privilege('jobguard_runtime',$1,'SELECT') allowed", [`app.${table}`])).rows[0].allowed).toBe(false);
-  await expect(workTenant(f.runtime,s.a.tenantId,db=>db.query(`SELECT * FROM app.${table}`), { membershipId: s.a.actorId })).rejects.toMatchObject({code:"42501"});
+  await expect(workTenant(f.runtime,s.a.tenantId,db=>db.query(`SELECT * FROM app.${table}`), { membershipId: s.a.actorId, bindRequest: false })).rejects.toMatchObject({code:"42501"});
  }
  expect((await s.repository.read(s.a.context,s.a.digest,s.id)).status).toBe("linked");
 });

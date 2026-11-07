@@ -52,23 +52,7 @@
       "section": "entries",
       "before": null,
       "after": {
-        "key": "acl|routine|function:app.current_actor()|jobguard_migration|EXECUTE|-",
-        "group": "a-lp6c-money-binding"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
         "key": "acl|routine|function:app.current_tenant()|jobguard_command_writer|EXECUTE|-",
-        "group": "a-lp6c-money-binding"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.current_tenant()|jobguard_migration|EXECUTE|-",
         "group": "a-lp6c-money-binding"
       }
     },
@@ -394,7 +378,9 @@
         "reachable": true,
         "runtimeExecute": true,
         "publicExecute": false,
-        "otherExecute": [],
+        "otherExecute": [
+          "jobguard_migration"
+        ],
         "definitionSha256": null,
         "staticWrites": [],
         "staticCalls": [
@@ -434,7 +420,9 @@
         "reachable": true,
         "runtimeExecute": true,
         "publicExecute": false,
-        "otherExecute": [],
+        "otherExecute": [
+          "jobguard_migration"
+        ],
         "definitionSha256": null,
         "staticWrites": [],
         "staticCalls": [
@@ -475,7 +463,7 @@
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "52b03a8fc58910f4765007f574a8c435f3528421e77dce9acf99cf565598f7c3",
         "staticWrites": [],
         "staticCalls": [
           "app.authenticate_practice_session",
@@ -1586,7 +1574,7 @@
         "proname": "current_actor",
         "args": "",
         "proowner": "jobguard_binding_owner",
-        "proacl": "{jobguard_binding_owner=X/jobguard_binding_owner,jobguard_runtime=X/jobguard_binding_owner}",
+        "proacl": "{jobguard_binding_owner=X/jobguard_binding_owner,jobguard_runtime=X/jobguard_binding_owner,jobguard_migration=X/jobguard_binding_owner}",
         "prosecdef": true,
         "proconfig": [
           "search_path=pg_catalog, pg_temp"
@@ -1611,7 +1599,7 @@
         "proname": "current_tenant",
         "args": "",
         "proowner": "jobguard_binding_owner",
-        "proacl": "{jobguard_binding_owner=X/jobguard_binding_owner,jobguard_runtime=X/jobguard_binding_owner}",
+        "proacl": "{jobguard_binding_owner=X/jobguard_binding_owner,jobguard_runtime=X/jobguard_binding_owner,jobguard_migration=X/jobguard_binding_owner}",
         "prosecdef": true,
         "proconfig": [
           "search_path=pg_catalog, pg_temp"

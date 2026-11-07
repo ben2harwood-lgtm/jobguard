@@ -137,6 +137,6 @@ describe("MON-6 durable fake attempts on real PostgreSQL",()=>{
   await workTenant(c.runtime,a.tenantId,async db=>{
    await db.query("SELECT app.pay_now_fake_attempt($1,$2,$3,'prepare',$4::jsonb)",[a.tenantId,a.digest,a.jobId,JSON.stringify(a.input)]);
    expect((await db.query("SELECT current_setting('app.tenant_id') t")).rows[0].t).toBe(a.tenantId);
-  }, { membershipId: a.actorId });
+  }, { membershipId: a.actorId, bindRequest: false });
  });
 });

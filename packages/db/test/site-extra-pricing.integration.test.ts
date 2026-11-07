@@ -1,4 +1,4 @@
-import { testActorContext } from "./tenant-context-test-utils.js";
+import { testActorContext, testTenantContext } from "./tenant-context-test-utils.js";
 // ENT-3c: the priced log (LogSiteExtra with a schedule item), against real PostgreSQL. Written before the repository methods it proves.
 import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -19,7 +19,7 @@ const log = async (f: SiteFixture, who: { member: SiteFixture["p"] }, jobId: str
 /** A refusal: the typed SorSiteExtraError, nothing written (the three access refusals may add ENT-3a's own refusal audit event only), chain still valid. */
 async function refused(f: SiteFixture, member: SiteFixture["p"], raw: Record<string, unknown>, code: string, context: VerifiedTenantContext = f.ctx) {
   const before = await written(c, f.p.tenantId);
-  const error = await repo.logSorSiteExtra(await testActorContext(c.admin, context, member), member, raw).then(() => { throw new Error("unexpected success"); }, e => e as SorSiteExtraError);
+  const error = await repo.logSorSiteExtra(context === f.ctx ? await testActorContext(c.admin, context, member) : context, member, raw).then(() => { throw new Error("unexpected success"); }, e => e as SorSiteExtraError);
   expect(error).toBeInstanceOf(SorSiteExtraError); expect(error.code).toBe(code); expect(error.message).toBe(code);
   expect(JSON.stringify(error)).not.toContain(noteText);
   expect(await written(c, f.p.tenantId)).toEqual(before); await chainHead(c, f.p.tenantId); return error;
@@ -237,7 +237,7 @@ describe("ENT-3c access: the same refusals as every command, decided by the data
     await cancel(c, f); errors.push(await refused(f, f.members.supervisor.member, probe(f.jobId), "NOT_FOUND"));
     for (const error of errors) expect(error).toEqual(errors[0]);
     await command(c, f, { kind: "membership.revoke", membershipId: f.members.surveyor.member.membershipId });
-    await refused(f, f.members.surveyor.member, probe(f.otherJob), "EXTRA_FORBIDDEN");
+    await refused(f, f.members.surveyor.member, probe(f.otherJob), "EXTRA_FORBIDDEN", testTenantContext(f.p.tenantId,{membershipId:f.members.surveyor.member.membershipId,bindRequest:false}));
   }, 60_000);
 
   it("[C11] another tenant: nothing crosses, nothing of tenant B is read, searched, priced or written", async () => {

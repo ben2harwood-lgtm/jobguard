@@ -37,7 +37,7 @@ describe("MON-1 immediate grace and track Decisions (RED)", () => {
     await db.query("SET LOCAL session_replication_role='replica'");
     await db.query("SET LOCAL ROLE jobguard_migration");
     await db.query(staged.sql, staged.values);
-   }, { membershipId: a.actorId });
+   }, { membershipId: a.actorId, bindRequest: false });
   } finally { await f.admin.query("ALTER TABLE app.job_activation_terms ENABLE TRIGGER mon1_live_admission"); }
  }
  it("13 is grace; 14 immediately raises one track Decision, 15–17 remain admitted and capped", async () => {
@@ -45,7 +45,7 @@ describe("MON-1 immediate grace and track Decisions (RED)", () => {
   expect(await decisions(a)).toEqual([]);
   await admitActivation(a);
   expect((await decisions(a)).map(d => d.action_type)).toEqual(["subscription.upgrade"]);
-  const savedDecision = () => workTenant(f.runtime, a.tenantId, async db => (await db.query("SELECT app.mon1_track_review_decision($1,$2) id", [a.tenantId, a.digest])).rows[0].id, { membershipId: a.actorId });
+  const savedDecision = () => workTenant(f.runtime, a.tenantId, async db => (await db.query("SELECT app.mon1_track_review_decision($1,$2) id", [a.tenantId, a.digest])).rows[0].id, { membershipId: a.actorId, bindRequest: false });
   expect(await savedDecision()).toBeNull();
   const crossing = await seedWorkJob(f, a.tenantId);
   await admitActivation(crossing);
@@ -53,7 +53,9 @@ describe("MON-1 immediate grace and track Decisions (RED)", () => {
   expect(first.map(d => d.action_type)).toEqual(["subscription.track_review", "subscription.upgrade"]);
   expect(await savedDecision()).toBe(first.find(d => d.action_type === "subscription.track_review")!.id);
   const stranger = await meterCompany(f);
-  await expect(workTenant(f.runtime, a.tenantId, db => db.query("SELECT app.mon1_track_review_decision($1,$2)", [a.tenantId, stranger.digest]), { membershipId: a.actorId })).rejects.toThrow("METER_FORBIDDEN");
+  const refusedMoney=await money(a),refusedDecisions=await decisions(a);
+  await expect(workTenant(f.runtime, a.tenantId, db => db.query("SELECT app.mon1_track_review_decision($1,$2)", [a.tenantId, stranger.digest]), { membershipId: a.actorId, bindRequest: false })).rejects.toMatchObject({code:"42501",message:"REQUEST_BINDING_REFUSED"});
+  expect(await money(a)).toEqual(refusedMoney);expect(await decisions(a)).toEqual(refusedDecisions);
   for (const d of first) expect(d.id).toMatch(/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-8[a-f0-9]{3}-[a-f0-9]{12}$/u);
   expect(first.every(d => d.subject_type === "subscription" && d.subject_ref === a.tenantId)).toBe(true);
   const before = await money(a), id = randomUUID();
@@ -86,7 +88,7 @@ describe("MON-1 immediate grace and track Decisions (RED)", () => {
    await db.query("SET LOCAL ROLE jobguard_migration");
    await db.query("SELECT app.ch4_admit_place($1,$2,'reopen')", [a.tenantId, a.jobId]);
    throw new Error("Fictional transaction failure");
-  }, { membershipId: a.actorId })).rejects.toThrow("Fictional transaction failure");
+  }, { membershipId: a.actorId, bindRequest: false })).rejects.toThrow("Fictional transaction failure");
   expect(await decisions(a)).toEqual([]);
   const id = randomUUID(), extra = { closeEventId: closed.events[0]!.id };
   await Promise.all([work(a, "reopen", 1, extra, id), work(a, "reopen", 1, extra, id)]);

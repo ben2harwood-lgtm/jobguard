@@ -32,7 +32,7 @@ it.each(["not_started", undefined, "under_way", "finished"] as const)("ENT-5 sha
   const view = async () => approvals.clientApprovalView(await testActorContext(c.admin, context, w.members.client_approver.member), w.members.client_approver.member, { version: "client-approval-view.v1", jobId, requestId: s.requestId, linkToken: token, email });
   expect(await view()).toMatchObject({ doneWithoutRequiredPreapproval: "uncertain", workTiming: { source: "site_visit", visitId: visit.visitId, startedAt: visit.startedAt, finishedAt: null, uncertainty: "during_this_visit" },
     approvalTimings: [{ stepIndex: 0, timing: "uncertain" }, { stepIndex: 1, timing: "uncertain" }] });
-  const foreign = await chainWorld(c), foreignVisit = await visits.startVisit(await foreign.ctx, foreign.members.operative.member, { commandId: randomUUID(), jobId: foreign.jobId });
+  const foreign = await chainWorld(c), foreignVisit = await visits.startVisit(await testActorContext(c.admin, await foreign.ctx, foreign.members.operative.member), foreign.members.operative.member, { commandId: randomUUID(), jobId: foreign.jobId });
   const anotherJob = await newJob(c, w), siteExtras = new SiteExtraRepository(c.runtime);
   for (const [attackJob, siteVisitId] of [[anotherJob, visit.visitId], [jobId, foreignVisit.visitId]]) {
     await expect(siteExtras.logSiteExtra(await testActorContext(c.admin, context, operative), operative, { commandId: randomUUID(), jobId: attackJob, siteVisitId, note: "Fictional timing refusal", description: "Fictional extra" })).rejects.toMatchObject({ code: "NOT_FOUND" });

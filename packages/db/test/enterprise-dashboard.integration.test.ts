@@ -135,7 +135,7 @@ describe("ENT-9B scoped persisted reads", () => {
     const grouped = await read(s);
     expect(grouped.report.totals.captured.count).toBe(1);
     expect(grouped.report.contributions.find(c => c.stage === "captured")?.extraIds.slice().sort()).toEqual([a.variationId, b.variationId].sort());
-    await repo.unlinkDuplicate(w.ctx, { version: "extra-duplicate-unlink.v1", commandId: randomUUID(), jobId: w.jobId, actorMembershipId: w.members.supervisor.member.membershipId, linkId: link.linkId, expectedRevision: 1, reasonCode: "linked_in_error" });
+    await repo.unlinkDuplicate(await testActorContext(c.admin,w.ctx,w.members.supervisor.member), { version: "extra-duplicate-unlink.v1", commandId: randomUUID(), jobId: w.jobId, actorMembershipId: w.members.supervisor.member.membershipId, linkId: link.linkId, expectedRevision: 1, reasonCode: "linked_in_error" });
     expect((await read(s)).report.totals.captured.count).toBe(2);
   });
   it("[E9-01 E9-03 E9-07] reads command-created captures, current approvals and immutable deadlines; billing stays held", async () => {

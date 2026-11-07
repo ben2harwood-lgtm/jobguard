@@ -135,11 +135,11 @@ it("[T4] identical, semantic and uppercase replays return the same approval; cha
  for(const raw of [input,{...input,commandId:randomUUID()},{...input,commandId:input.commandId.toUpperCase(),caseId:id.toUpperCase()}])expect(await repo.approve(context,job.toUpperCase(),raw,actor)).toEqual(view);
  await expect(repo.approve(context,unbound,input,actor)).rejects.toMatchObject({code:"RECOVERY_TERMS_CASE_NOT_FOUND"});expect(await counts()).toEqual(before);
  const otherCase=await newCase(),afterSetup=await counts();await expect(repo.approve(context,job,command(otherCase,input.commandId),actor)).rejects.toMatchObject({code:"RECOVERY_TERMS_COMMAND_CONFLICT"});expect(await counts()).toEqual(afterSetup);
- const second=await member("owner");await expect(repo.approve(context,job,command(id),second)).rejects.toMatchObject({code:"RECOVERY_TERMS_COMMAND_CONFLICT"});expect(await counts()).toEqual(afterSetup);
+ const second=await member("owner");await expect(repo.approve(await testBoundTenantContext(admin,T,second.membershipId),job,command(id),second)).rejects.toMatchObject({code:"RECOVERY_TERMS_COMMAND_CONFLICT"});expect(await counts()).toEqual(afterSetup);
  await expect(withTenant(admin,context,async db=>direct(db.$client,id,M,await handMade(db.$client,id,M)))).rejects.toMatchObject({message:"RECOVERY_TERMS_ALREADY_APPROVED"});expect(before.recovery_case_terms_approval).toBe(afterSetup.recovery_case_terms_approval);
 });
 it("[T4] two different active owners racing leave one approval and a typed conflict",async()=>{
- const id=await newCase(),other=await member("owner"),repo=new RecoveryCaseTermsRepository(runtime);const results=await Promise.allSettled([repo.approve(context,job,command(id),actor),repo.approve(context,job,command(id),other)]);
+ const id=await newCase(),other=await member("owner"),repo=new RecoveryCaseTermsRepository(runtime);const results=await Promise.allSettled([repo.approve(context,job,command(id),actor),repo.approve(await testBoundTenantContext(admin,T,other.membershipId),job,command(id),other)]);
  expect(results.filter(r=>r.status==="fulfilled")).toHaveLength(1);expect(results.find(r=>r.status==="rejected")).toMatchObject({reason:{code:"RECOVERY_TERMS_COMMAND_CONFLICT"}});expect((await admin.query("SELECT count(*)::int n FROM app.recovery_case_terms_approval WHERE tenant_id=$1 AND case_id=$2",[T,id])).rows[0].n).toBe(1);
 });
 it("V3ApprovedTermsStillWork: preview refusal writes nothing, approval then preview/approve/deliver succeeds unchanged",async()=>{

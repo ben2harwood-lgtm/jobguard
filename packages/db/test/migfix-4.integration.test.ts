@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   QuoteRepository, QuoteDocumentRepository, IssueQuoteMutation,
@@ -6,8 +6,8 @@ import {
   withTenant, type ConsequentialCommand, type CommandMutation, type TenantTransaction,
 } from "../src/index.js";
 import { clusterBefore } from "./site-extra-pricing-fixtures.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
-import { rolledBack } from "./upgrade-proof-utils.js";
+import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
+import { rolledBack, proofBefore, proofDifferences } from "./upgrade-proof-utils.js";
 
 const own = "0153_quote_supersession_guard.sql";
 let c: Awaited<ReturnType<typeof clusterBefore>>;
@@ -175,7 +175,10 @@ describe("MIGFIX-4 exact quote acceptance", () => {
       }, new RecordBuilderAcceptanceMutation(f.tenant, input))).rejects.toMatchObject({ code: "22023" });
     }
     // A document with no matching send must also fail even when its identity and exact terms match.
+    const credential=createHash('sha256').update(randomUUID()).digest('hex');
+    await testBoundTenantContext(c.admin,f.tenant,f.member,credential);
     await rolledBack(c.admin, async db => {
+      await db.query("SELECT app.bind_request('real',$1,$2)",[credential,f.tenant]);
       await db.query("SELECT set_config('app.tenant_id',$1,true)", [f.tenant]);
       await db.query("SET LOCAL session_replication_role=replica");
       await db.query("UPDATE app.quote_send SET content_hash=$2 WHERE tenant_id=$1", [f.tenant, "b".repeat(64)]);
@@ -201,15 +204,17 @@ describe("MIGFIX-4 exact quote acceptance", () => {
     await c.admin.query("INSERT INTO app.job(tenant_id,id,title,status) VALUES($1,$2,'Fictional accepted control','accepted'),($1,$3,'Fictional live control','live')", [f.tenant, acceptedJob, liveJob]);
     for (const actor of [randomUUID(), f.member]) {
       if (actor === f.member) await c.admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [f.tenant, f.member]);
+      const before=await proofBefore(c.admin,["app.job","app.quote_acceptance","app.acceptance_event","app.quote_version","app.quote_acceptance_sequence","app.command_receipt","app.command_lifecycle_claim","app.action_authorization","app.audit_event"]);
       for (const job of [randomUUID(), foreign.job, f.job, acceptedJob, liveJob]) {
-        await expect(withTenant(c.runtime, f.context, db => db.$client.query(
+        await expect(withTenant(c.runtime, testTenantContext(f.tenant,{membershipId:f.member,bindRequest:actor !== f.member}), db => db.$client.query(
           "SELECT * FROM app.record_builder_attested_acceptance($1,$2,$3,$4,$5,1,$6,12000,0,$7,'Fictional customer','email',clock_timestamp(),NULL,$8,$9)",
           [f.tenant, randomUUID(), randomUUID(), job, f.document, f.hash, actor, randomUUID(), randomUUID()],
-        ))).rejects.toMatchObject({ code: "42501", message: "FORBIDDEN" });
-        await expect(withTenant(c.runtime, f.context, db => db.$client.query(
+        ))).rejects.toMatchObject({ code: "42501", message: "REQUEST_BINDING_REFUSED" });
+        await expect(withTenant(c.runtime, testTenantContext(f.tenant,{membershipId:f.member,bindRequest:actor !== f.member}), db => db.$client.query(
           "SELECT * FROM app.record_quote_disposition($1,$2,$3,$4,1,$5,0,$6,'superseded',clock_timestamp(),$7,$8)",
           [f.tenant, randomUUID(), job, f.document, f.hash, actor, randomUUID(), randomUUID()],
-        ))).rejects.toMatchObject({ code: "42501", message: "FORBIDDEN" });
+        ))).rejects.toMatchObject({ code: "42501", message: "REQUEST_BINDING_REFUSED" });
+        expect(await proofDifferences(c.admin,before)).toEqual({rows:[],types:[]});
       }
     }
   });

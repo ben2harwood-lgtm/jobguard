@@ -91,7 +91,7 @@ describe("M0-13c synthetic PostgreSQL privacy rehearsal", () => {
       await expect(f.runtime.query(`SELECT * FROM app.${table}`)).rejects.toMatchObject({code:"42501"});
       expect((await f.admin.query("SELECT has_table_privilege('jobguard_runtime',$1,'INSERT,UPDATE,DELETE,TRUNCATE') allowed", [`app.${table}`])).rows[0].allowed).toBe(false);
     }
-    await expect(workTenant(f.runtime,a.tenantId, db => db.query("SELECT app.privacy_command($1,$2,$3)",[a.tenantId,a.digest,{version:"privacy-command.v1",commandId:randomUUID(),action:"open",subjectId:id,operation:"export",approved:true}]), { membershipId: a.actorId })).rejects.toMatchObject({code:"22023"});
+    await expect(workTenant(f.runtime,a.tenantId, db => db.query("SELECT app.privacy_command($1,$2,$3)",[a.tenantId,a.digest,{version:"privacy-command.v1",commandId:randomUUID(),action:"open",subjectId:id,operation:"export",approved:true}]), { membershipId: a.actorId, bindRequest: false })).rejects.toMatchObject({code:"22023"});
     const req = await open(a,id); await f.admin.query("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE id=$1",[a.sessionId]);
     await expect(read(a,req.requestId)).rejects.toMatchObject({code:"PRIVACY_FORBIDDEN"});
     await workTenant(f.admin,b.tenantId,db=>db.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE id=$1",[b.actorId]), { membershipId: b.actorId });

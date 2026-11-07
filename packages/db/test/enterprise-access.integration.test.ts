@@ -10,7 +10,7 @@ import { testTenantContext } from './tenant-context-test-utils.js';
 let h:ScimHarness,machine:Pool,repo:EnterpriseAccessRepository,app:EnterpriseAccessApplication;
 const hash=(s:string)=>createHash('sha256').update(s).digest('hex');
 const actor=(token:string,csrfToken:string)=>({sessionDigest:h.provider.digest(`session:${token}`),csrfToken});
-const emergency=(f:ScimFixture,proof:ReturnType<typeof actor>,input:unknown)=>app.emergency(testTenantContext(f.principal.tenantId, { membershipId: f.principal.membershipId }),proof,input);
+const emergency=(f:ScimFixture,proof:ReturnType<typeof actor>,input:unknown)=>app.emergency(testTenantContext(f.principal.tenantId, { membershipId: f.principal.membershipId, bindRequest: false }),proof,input);
 const request=(requestId:string,operation:string,extra={})=>({version:'emergency.v1',operation,requestId,...extra});
 beforeAll(async()=>{
  h=await createScimHarness('ent10-rest-');
@@ -28,7 +28,7 @@ async function owner(f:ScimFixture) {
 }
 async function machineFixture() {
  const f=await fixture(h),bindingId=randomUUID(),token=randomBytes(32).toString('base64url');
- await app.configure(testTenantContext(f.principal.tenantId, { membershipId: f.principal.membershipId }),actor(f.ordinary.sessionToken,f.ordinary.csrfToken),
+ await app.configure(testTenantContext(f.principal.tenantId, { membershipId: f.principal.membershipId, bindRequest: false }),actor(f.ordinary.sessionToken,f.ordinary.csrfToken),
   {version:'scim2-config.v1',bindingId,connectionId:f.connectionId,enabled:true,tokenHash:hash(token)});
  const call=(input:Record<string,unknown>)=>app.scim(`Bearer ${token}`,{version:'scim2-request.v1',bindingId,...input});
  const create=(eventId=randomUUID())=>call({method:'POST',kind:'Users',eventId,body:{schemas:['urn:ietf:params:scim:schemas:core:2.0:User'],externalId:eventId,userName:`${eventId}@${f.domain}`,active:true}});
@@ -55,12 +55,12 @@ describe('ENT-10-rest dual-owner emergency capability',()=>{
   await emergency(f,requester,request(id,'inspect',{token}));
   await expect(emergency(f,requester,request(id,'revoke_member',{token,targetMembershipId:f.principal.membershipId}))).rejects.toHaveProperty('code','ACCESS_REFUSED');
   const identity=new EnterpriseIdentityRepository(h.identity);
-  const before=await identity.view(testTenantContext(f.principal.tenantId, { membershipId: f.principal.membershipId }),requester.sessionDigest);
+  const before=await identity.view(testTenantContext(f.principal.tenantId, { membershipId: f.principal.membershipId, bindRequest: false }),requester.sessionDigest);
   expect(before.events.map(e=>e.event_type)).toContain('sso.emergency.request');
   for(const proof of [requester,a.proof,b.proof]) {
    const notices=await emergency(f,proof,{version:'emergency.v1',operation:'notices'}) as {notices:unknown[]};
    expect(notices.notices).toHaveLength(5);
-   const after=await identity.view(testTenantContext(f.principal.tenantId, { membershipId: f.principal.membershipId }),requester.sessionDigest);
+   const after=await identity.view(testTenantContext(f.principal.tenantId, { membershipId: f.principal.membershipId, bindRequest: false }),requester.sessionDigest);
    expect(after.events).toEqual(before.events);
    expect(after.events.some(e=>e.event_type==='sso.emergency.notices')).toBe(false);
   }

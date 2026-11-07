@@ -1,3 +1,4 @@
+import { testTenantContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { INTERIM_APPLICATIONS_ENABLED, assertInterimDocumentIssueAllowed } from "@jobguard/core";
@@ -39,12 +40,14 @@ describe("M4-18 PostgreSQL synthetic draft books",()=>{
     expect(results[0]).toEqual(results[1]);expect(results[0]?.rows).toHaveLength(1);
     await expect(f.repo.command(f.a.context,f.a.digest,{...command,record:{...f.schedule,jurisdiction:"changed"}})).rejects.toMatchObject({code:"CONFLICT"});
     await f.append(f.application);await f.append(f.certification);
-    const competing=await Promise.allSettled([f.append(f.invoice),f.append({...f.invoice,id:randomUUID()})]);
+    const alternateInvoice={...f.invoice,id:randomUUID()};
+    const competing=await Promise.allSettled([f.append(f.invoice),f.append(alternateInvoice)]);
     expect(competing.filter(r=>r.status==="fulfilled")).toHaveLength(1);
     expect(competing.find(r=>r.status==="rejected")).toMatchObject({reason:{code:"VALUE_LIMIT"}});
     const stored=await new InterimDraftRepository(c.runtime).read(f.a.context,f.a.jobId,f.a.digest);
     expect(stored.book.records).toHaveLength(4);expect(stored.reconciliation.netInvoiced.pence).toBe(6000);
-    await expect(f.append({...f.invoice,taxPence:0})).rejects.toMatchObject({code:"REPLAY_CONFLICT"});
+    const committedInvoice=competing[0]!.status==="fulfilled"?f.invoice:alternateInvoice;
+    await expect(f.append({...committedInvoice,taxPence:0})).rejects.toMatchObject({code:"REPLAY_CONFLICT"});
     for(const row of stored.rows)expect(row.watermark).toBe("SYNTHETIC DRAFT - NOT FOR ISSUE");
   });
   it("reconciles immutable applications, omissions, variations, credits and part receipts from storage",async()=>{
@@ -101,14 +104,14 @@ describe("M4-18 PostgreSQL synthetic draft books",()=>{
     expect((await f.repo.read(f.a.context,f.a.jobId,f.a.digest)).rows).toEqual([]);
     await expect(f.repo.command(f.a.context,other.a.digest,f.input(f.schedule))).rejects.toMatchObject({code:"FORBIDDEN"});
     await c.admin.query("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE id=$1",[f.a.sessionId]);
-    await expect(f.append(f.schedule)).rejects.toMatchObject({code:"FORBIDDEN"});
+    await expect(f.repo.command(testTenantContext(f.a.tenantId,{membershipId:f.a.actorId,bindRequest:false}),f.a.digest,f.input(f.schedule))).rejects.toMatchObject({code:"FORBIDDEN"});
   });
   it("restores the caller tenant setting and restricts raw runtime access",async()=>{
     const f=await fixture();await f.append(f.schedule);
     await workTenant(c.runtime,f.a.tenantId,async db=>{
       await db.query("SELECT app.interim_draft_records($1,$2,$3,'read','{}'::jsonb)",[f.a.tenantId,f.a.digest,f.a.jobId]);
       expect((await db.query("SELECT current_setting('app.tenant_id') t")).rows[0].t).toBe(f.a.tenantId);
-    }, { membershipId: f.a.actorId });
+    }, { membershipId: f.a.actorId, bindRequest: false });
     await expect(c.runtime.query("SELECT * FROM app.interim_draft_record")).rejects.toMatchObject({code:"42501"});
     await expect(c.runtime.query("INSERT INTO app.interim_draft_record SELECT * FROM app.interim_draft_record")).rejects.toMatchObject({code:"42501"});
   });

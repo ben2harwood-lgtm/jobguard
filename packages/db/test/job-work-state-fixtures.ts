@@ -84,12 +84,13 @@ export async function workEvents(f: WorkFixture, a: WorkJob) {
 /** Explicit held lifecycle storage only: no runtime command or permission is inferred. */
 export async function fixtureLifecycle(f: WorkFixture,a: WorkJob,kind: string, predecessor: string | null = null) {
  const id=randomUUID();
- await workTenant(f.admin,a.tenantId,async db=> {
+ await withTenant(f.admin,a.context,async transaction=> {
+  const db=transaction.$client;
   // Constraint-valid references use a pre-existing receipt/audit from an explicitly labelled fixture.
   await db.query(`INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id,result,completed_at) VALUES($1,$2,'ch4.fixture',$2::uuid::text,$3,'succeeded',$4,'{}',clock_timestamp())`,[a.tenantId,id,CH4_HASH,a.actorId]);
   await db.query(`INSERT INTO app.job_work_state_event(tenant_id,job_id,id,sequence,kind,fact_at,actor_membership_id,command_id,predecessor_id,close_reason,close_note,request_hash,audit_event_id)
    SELECT $1::uuid,$2::uuid,$3::uuid,coalesce(max(sequence),0)+1,$4::text,clock_timestamp(),$5::uuid,$3::uuid,$6::uuid,CASE WHEN $4='closed' THEN 'other' END,CASE WHEN $4='closed' THEN 'Fictional customer stopped work' END,$7,$3 FROM app.job_work_state_event WHERE tenant_id=$1 AND job_id=$2`,[a.tenantId,a.jobId,id,kind,a.actorId,predecessor,CH4_HASH]);
- }, { membershipId: a.actorId });return id;
+ });return id;
 }
 
 export async function boundaryLock(f:WorkFixture,a:Awaited<ReturnType<typeof seedWorkJob>>) {

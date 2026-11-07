@@ -1,3 +1,4 @@
+import { testTenantContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { beforeAll,afterAll,expect,it } from "vitest";
 import { createWorkFixture,closeWorkFixture,meterCompany,workTenant,type WorkFixture } from "./free-first-job-admission-fixtures.js";
@@ -19,7 +20,7 @@ async function setup(existing=false){
  const lifecycle=new SmallBuilderDemoRepository(f.runtime),repo=new SmallBuilderTrialDemoRepository(f.runtime);
  const run=await lifecycle.execute(a.context,a.digest,"create",null,create());if(!("runId" in run))throw new Error("run");
  const bind={version:"trial-demo-command.v1",action:"bind",commandId:randomUUID(),runId:run.runId,firstJobId:a.jobId,secondJobId:other.jobId};
- const call=(raw:unknown)=>repo.execute(a.context,a.digest,raw);return {a,other,run,bind,call,repo,lifecycle};
+ const call=(raw:unknown)=>repo.execute(testTenantContext(a.tenantId,{membershipId:a.actorId,bindRequest:false}),a.digest,raw);return {a,other,run,bind,call,repo,lifecycle};
 }
 it("binds and resumes real sources, exact duplicate commands have one immutable effect",async()=>{
  const s=await setup(),before=(await f.admin.query("SELECT count(*)::int n FROM app.job_activation WHERE tenant_id=$1",[s.a.tenantId])).rows[0].n;

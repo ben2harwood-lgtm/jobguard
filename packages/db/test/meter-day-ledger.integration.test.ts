@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { persistMeterDayLedger } from "../src/meter-day-ledger.js";
-import { withTenant } from "../src/tenant-context.js";
+import { verifiedTenantContextForQueuedJob, withTenant } from "../src/tenant-context.js";
 import { closeWorkFixture, createWorkFixture, seedWorkJob, workTenant, type WorkFixture } from "./job-work-state-fixtures.js";
 
 describe("MON-1 part 2: immutable counted day ledger (real PostgreSQL, CI)", () => {
@@ -15,7 +15,7 @@ describe("MON-1 part 2: immutable counted day ledger (real PostgreSQL, CI)", () 
   }, 60000);
   afterAll(async () => { await meter?.end(); await closeWorkFixture(f); });
   const write = (a: Awaited<ReturnType<typeof seedWorkJob>>, sourceId: string) =>
-    withTenant(meter, a.context, tx => persistMeterDayLedger(tx, { version: "meter-day-ledger-write.v1", sourceId }));
+    withTenant(meter, verifiedTenantContextForQueuedJob(a.tenantId), tx => persistMeterDayLedger(tx, { version: "meter-day-ledger-write.v1", sourceId }));
   async function source(a: Awaited<ReturnType<typeof seedWorkJob>>, revision = 1, previousScope?: string) {
     const scope = previousScope ?? randomUUID(), id = randomUUID();
     const job = {
@@ -43,7 +43,7 @@ describe("MON-1 part 2: immutable counted day ledger (real PostgreSQL, CI)", () 
     return { id, scope };
   }
   const days = (a: Awaited<ReturnType<typeof seedWorkJob>>, id: string) => workTenant(meter, a.tenantId,
-    async db => (await db.query("SELECT date::text,result FROM app.meter_lifecycle_day_ledger WHERE computation_id=$1 ORDER BY date", [id])).rows, { membershipId: a.actorId });
+    async db => (await db.query("SELECT date::text,result FROM app.meter_lifecycle_day_ledger WHERE computation_id=$1 ORDER BY date", [id])).rows, { membershipId: a.actorId, bindRequest: false });
 
   it("concurrent identical writes return one computation, with London midnight exclusive stop and zero days", async () => {
     const a = await seedWorkJob(f), s = await source(a);
@@ -72,7 +72,7 @@ describe("MON-1 part 2: immutable counted day ledger (real PostgreSQL, CI)", () 
     expect(nextId).not.toBe(id);
     expect(await days(a, id)).toEqual(before);
     expect((await days(a, nextId))[2]!.result.countedPlaces).toBe(1);
-    await expect(workTenant(meter, a.tenantId, db => db.query("UPDATE app.meter_lifecycle_day_ledger SET status='held' WHERE computation_id=$1", [id]), { membershipId: a.actorId })).rejects.toThrow();
+    await expect(workTenant(meter, a.tenantId, db => db.query("UPDATE app.meter_lifecycle_day_ledger SET status='held' WHERE computation_id=$1", [id]), { membershipId: a.actorId, bindRequest: false })).rejects.toThrow();
     // Privileged corruption probe: an internally consistent wrong value still refuses.
     await f.admin.query("ALTER TABLE app.meter_lifecycle_day_ledger DISABLE TRIGGER immutable");
     try {
@@ -91,7 +91,7 @@ describe("MON-1 part 2: immutable counted day ledger (real PostgreSQL, CI)", () 
     expect(await days(b, id)).toEqual([]);
     await expect(write(b, s.id)).rejects.toThrow("METER_FORBIDDEN");
     await expect(workTenant(meter, b.tenantId, db => db.query(`INSERT INTO app.meter_lifecycle_day_ledger(tenant_id,scope_id,computation_id,date,source_hash,status)
-      VALUES($1,$2,$3,'2026-07-05',$4,'held')`, [a.tenantId, s.scope, id, "a".repeat(64)]), { membershipId: b.actorId })).rejects.toThrow("row-level security");
+      VALUES($1,$2,$3,'2026-07-05',$4,'held')`, [a.tenantId, s.scope, id, "a".repeat(64)]), { membershipId: b.actorId, bindRequest: false })).rejects.toThrow("row-level security");
     expect((await meter.query("SELECT * FROM app.meter_lifecycle_day_ledger")).rows).toEqual([]);
     await expect(workTenant(f.runtime, a.tenantId, db => db.query("SELECT * FROM app.meter_lifecycle_day_ledger"), { membershipId: a.actorId })).rejects.toThrow("permission denied");
     const posture = (await f.admin.query(`SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid='app.meter_lifecycle_day_ledger'::regclass`)).rows[0];

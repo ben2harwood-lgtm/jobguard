@@ -50,12 +50,12 @@ it("checks recorded owner membership, identity, tenant and expiry before any eli
  await expect(repo.eligibilityCommand(testTenantContext(other, { membershipId: reviewer.membershipId }),job,approve,reviewer)).rejects.toThrow("ELIGIBILITY_REVIEWER_FORBIDDEN");
  for(const change of ["role='viewer'","revoked_at=now()","expires_at=now()-interval '1 second'"]){
   await admin.query(`UPDATE app.membership SET ${change} WHERE tenant_id=$1 AND id=$2`,[tenant,reviewer.membershipId]);
-  try{await expect(repo.eligibilityCommand(ctx,job,approve,reviewer)).rejects.toThrow("ELIGIBILITY_REVIEWER_FORBIDDEN");}
+  try{await expect(repo.eligibilityCommand(testTenantContext(tenant,{membershipId:reviewer.membershipId,bindRequest:false}),job,approve,reviewer)).rejects.toThrow("ELIGIBILITY_REVIEWER_FORBIDDEN");}
   finally{await admin.query("UPDATE app.membership SET role='owner',revoked_at=NULL,expires_at=NULL WHERE tenant_id=$1 AND id=$2",[tenant,reviewer.membershipId]);}
  }
  const approved=await repo.eligibilityCommand(ctx,job,approve,reviewer);
  await admin.query("UPDATE app.membership SET revoked_at=now() WHERE tenant_id=$1 AND id=$2",[tenant,reviewer.membershipId]);
- try{await expect(repo.eligibilityCommand(ctx,job,approve,reviewer)).rejects.toThrow("ELIGIBILITY_REVIEWER_FORBIDDEN");}
+ try{await expect(repo.eligibilityCommand(testTenantContext(tenant,{membershipId:reviewer.membershipId,bindRequest:false}),job,approve,reviewer)).rejects.toThrow("ELIGIBILITY_REVIEWER_FORBIDDEN");}
  finally{await admin.query("UPDATE app.membership SET revoked_at=NULL WHERE tenant_id=$1 AND id=$2",[tenant,reviewer.membershipId]);}
  expect((await repo.list(ctx,job)).find(c=>c.id===x.id)!.eligibility).toEqual(approved.eligibility);
 });

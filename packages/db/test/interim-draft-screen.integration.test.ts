@@ -1,3 +1,4 @@
+import { testTenantContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { InterimDraftRepository } from "../src/interim-draft-repository.js";
@@ -68,12 +69,13 @@ it("screen commands persist only draft records and refuse forged authority, repl
     }
   }
   await c.admin.query("UPDATE app.membership SET role='owner' WHERE id=$1",[a.actorId]);
+  const removedAuthorityContext=testTenantContext(a.tenantId,{membershipId:a.actorId,bindRequest:false});
   await c.admin.query("UPDATE identity.session SET expires_at=clock_timestamp()-interval '1 second' WHERE id=$1",[a.sessionId]);
-  await expect(repo.command(a.context,a.digest,first)).rejects.toMatchObject({code:"FORBIDDEN"});
-  await expect(repo.read(a.context,a.jobId,a.digest)).rejects.toMatchObject({code:"FORBIDDEN"});
+  await expect(repo.command(removedAuthorityContext,a.digest,first)).rejects.toMatchObject({code:"FORBIDDEN"});
+  await expect(repo.read(removedAuthorityContext,a.jobId,a.digest)).rejects.toMatchObject({code:"FORBIDDEN"});
   await c.admin.query("UPDATE identity.session SET expires_at=clock_timestamp()+interval '1 hour', revoked_at=clock_timestamp() WHERE id=$1",[a.sessionId]);
-  await expect(repo.command(a.context,a.digest,first)).rejects.toMatchObject({code:"FORBIDDEN"});
-  await expect(repo.read(a.context,a.jobId,a.digest)).rejects.toMatchObject({code:"FORBIDDEN"});
+  await expect(repo.command(removedAuthorityContext,a.digest,first)).rejects.toMatchObject({code:"FORBIDDEN"});
+  await expect(repo.read(removedAuthorityContext,a.jobId,a.digest)).rejects.toMatchObject({code:"FORBIDDEN"});
   await c.admin.query("UPDATE identity.session SET revoked_at=NULL WHERE id=$1",[a.sessionId]);
   expect(await repo.read(a.context,a.jobId,a.digest)).toEqual(stored);
   // A verified tenant alone is no longer enough, even for direct SQL callers.

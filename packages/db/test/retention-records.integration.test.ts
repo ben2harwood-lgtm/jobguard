@@ -114,7 +114,7 @@ describe("M4-20 durable synthetic retention books (PostgreSQL)", () => {
   await workTenant(f.runtime,a.tenantId,async db=>{
    await db.query("SELECT app.retention_records($1,$2,$3,NULL,NULL,NULL)",[a.tenantId,a.digest,a.jobId]);
    expect((await db.query("SELECT current_setting('app.tenant_id') t")).rows[0].t).toBe(a.tenantId);
-  }, { membershipId: a.actorId });
+  }, { membershipId: a.actorId, bindRequest: false });
   await workTenant(f.runtime,a.tenantId,async db=>{
    const prepared=(await db.query("SELECT app.retention_records($1,$2,$3,NULL,NULL,NULL) result",[a.tenantId,a.digest,a.jobId])).rows[0].result;
    await db.query("SAVEPOINT attack");
@@ -122,7 +122,7 @@ describe("M4-20 durable synthetic retention books (PostgreSQL)", () => {
    await expect(db.query("SELECT app.retention_records($1,$2,$3,$4,$5::jsonb,$6)",[a.tenantId,a.digest,a.jobId,forged.id,JSON.stringify(forged),prepared.bookHash])).rejects.toThrow("RETENTION_CONFLICT");
    await db.query("ROLLBACK TO SAVEPOINT attack");
    expect((await db.query("SELECT current_setting('app.tenant_id') t")).rows[0].t).toBe(a.tenantId);
-  }, { membershipId: a.actorId });
+  }, { membershipId: a.actorId, bindRequest: false });
   expect((await read(a)).book.records).toHaveLength(1);
  });
  it("requires live owner/admin sessions for SQL and repository reads, refuses timer forgery and stamps human dates", async () => {
@@ -135,19 +135,19 @@ describe("M4-20 durable synthetic retention books (PostgreSQL)", () => {
    await db.query("SAVEPOINT forgery");
    await expect(db.query("SELECT app.retention_records($1,$2,$3,$4,$5::jsonb,$6)",[a.tenantId,a.digest,a.jobId,cid,JSON.stringify(forged),stored.bookHash])).rejects.toThrow("RETENTION_CONFLICT");
    await db.query("ROLLBACK TO SAVEPOINT forgery");
-  }, { membershipId: a.actorId });
+  }, { membershipId: a.actorId, bindRequest: false });
   await append(a,r,cid);
   const today = (await f.admin.query("SELECT to_char(CURRENT_DATE,'YYYY-MM-DD') today")).rows[0].today;
   expect((await read(a)).book.records[1]).toMatchObject({raisedOn:today,trigger:"human"});
   await append(a,r,cid); expect((await read(a)).book.records).toHaveLength(2);
   for (const role of ["read_only","finance","foreman","estimator","admin","owner"]) {
    await f.admin.query("UPDATE app.membership SET role=$1 WHERE tenant_id=$2 AND id=$3",[role,a.tenantId,a.actorId]);
-   const sqlRead = () => workTenant(f.runtime,a.tenantId,db => db.query("SELECT app.retention_records($1,$2,$3,NULL,NULL,NULL)",[a.tenantId,a.digest,a.jobId]), { membershipId: a.actorId });
+   const sqlRead = () => workTenant(f.runtime,a.tenantId,db => db.query("SELECT app.retention_records($1,$2,$3,NULL,NULL,NULL)",[a.tenantId,a.digest,a.jobId]), { membershipId: a.actorId, bindRequest: false });
    if (["owner","admin"].includes(role)) { await sqlRead(); expect((await read(a)).book.records).toHaveLength(2); }
    else { await expect(sqlRead()).rejects.toThrow("METER_FORBIDDEN"); await expect(read(a)).rejects.toThrow("RETENTION_FORBIDDEN"); }
   }
   for (const digest of [null,"invalid","f".repeat(64)]) {
-   await expect(workTenant(f.runtime,a.tenantId,db => db.query("SELECT app.retention_records($1,$2,$3,NULL,NULL,NULL)",[a.tenantId,digest,a.jobId]), { membershipId: a.actorId })).rejects.toThrow("RETENTION_UNAUTHENTICATED");
+   await expect(workTenant(f.runtime,a.tenantId,db => db.query("SELECT app.retention_records($1,$2,$3,NULL,NULL,NULL)",[a.tenantId,digest,a.jobId]), { membershipId: a.actorId, bindRequest: false })).rejects.toThrow("RETENTION_UNAUTHENTICATED");
   }
  });
 
@@ -160,7 +160,7 @@ describe("M4-20 durable synthetic retention books (PostgreSQL)", () => {
    const invoke = (hash:string) => db.query("SELECT app.retention_records($1,$2,$3,$4,$5::jsonb,$6) result",[a.tenantId,a.digest,a.jobId,cid,JSON.stringify(record),hash]);
    const written = (await invoke(prepared.bookHash)).rows[0].result;
    expect((await invoke(written.bookHash)).rows[0].result).toEqual(written);
-  }, { membershipId: a.actorId });
+  }, { membershipId: a.actorId, bindRequest: false });
   const today = (await f.admin.query("SELECT to_char(CURRENT_DATE,'YYYY-MM-DD') today")).rows[0].today;
   expect((await read(a)).book.records[1]).toMatchObject({trigger:"human",raisedOn:today});
   expect((await read(a)).reconciliation).toMatchObject({released:amount(0)});

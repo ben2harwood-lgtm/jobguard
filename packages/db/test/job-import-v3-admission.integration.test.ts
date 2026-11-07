@@ -1,3 +1,4 @@
+import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { JobImportV3Repository } from "../src/job-import-v3-repository.js";
@@ -92,7 +93,8 @@ describe("CH-5 part 2 company imports through real MON-1 admission", () => {
     SELECT $1,user_id,environment,$2,$3,expires_at FROM identity.session WHERE id=$4`,
     [randomUUID(), digest, randomUUID(), a.sessionId]);
    const second = { ...a.input, commandId: randomUUID() };
-   const again = () => repo().adopt(a.context, digest, a.jobId, second);
+   const secondContext = await testBoundTenantContext(f.admin, a.tenantId, a.actorId, digest);
+   const again = () => repo().adopt(secondContext, digest, a.jobId, second);
    if (concurrent) {
     const results = await Promise.allSettled([adopt(a), again()]);
     expect(results.filter(r => r.status === "fulfilled")).toHaveLength(1);

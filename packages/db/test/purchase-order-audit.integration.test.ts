@@ -15,7 +15,7 @@ import { FakeMerchantOrderPort } from "../src/purchase-order-action.js";
 import { ActionExecutor, operateOutbox } from "../src/outbox.js";
 import { withTenant } from "../src/tenant-context.js";
 import { verifiedTenantContextFromMembership, type AuthenticatedMembership } from "../src/tenant-context.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { meterCompany } from "./meter-persistence-fixtures.js";
 import type { WorkFixture } from "./job-work-state-fixtures.js";
 import { MaterialRepository } from "../src/material-repository.js";
@@ -468,7 +468,7 @@ describe("M2-1 dark approved merchant action on PostgreSQL", () => {
     await admin.query(`INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at)
       SELECT $1,user_id,'synthetic_demo',$2,$3,clock_timestamp()+interval '1 hour'
       FROM identity.session WHERE token_digest=$4`, [randomUUID(),nextDigest,randomUUID(),f.auth.digest]);
-    expect(await f.repo.attestManual(f.auth.context, f.manual, { sessionDigest: nextDigest })).toEqual(fact);
+    expect(await f.repo.attestManual(await testBoundTenantContext(admin,f.auth.context.tenantId,f.auth.membershipId,nextDigest), f.manual, { sessionDigest: nextDigest })).toEqual(fact);
     expect((await effects(f.auth.context.tenantId)).purchase_order_manual_attestation).toBe(before.purchase_order_manual_attestation! + 1);
     expect((await effects(f.auth.context.tenantId)).audit_event).toBe(before.audit_event! + 1);
     expect(await f.repo.attestManual(f.auth.context, f.manual, { sessionDigest: f.auth.digest })).toEqual(fact);

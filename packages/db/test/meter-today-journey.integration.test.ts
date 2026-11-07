@@ -1,3 +1,4 @@
+import { testTenantContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { finalizeMeterLifecycleOwnership } from "../src/demo-bootstrap.js";
@@ -48,7 +49,7 @@ it("real site evidence and work commands refresh the screen; replay and foreign 
  await commands.command(a.context,a.jobId,a.actorId,{version:"job-work-state-command.v1",commandId:randomUUID(),expectedRevision:2,action:"resume"});
  expect((await read()).countedPlaces).toBe(1);
  await f.admin.query("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE id=$1",[a.sessionId]);
- await expect(read()).rejects.toThrow("METER_FORBIDDEN");
+ await expect(reader.read(testTenantContext(a.tenantId, { membershipId: a.actorId, bindRequest: false }), a.digest)).rejects.toThrow("METER_FORBIDDEN");
 });
 
 it("fresh capture is a finalized narrow entrypoint, with no direct runtime table access", async () => {
@@ -88,14 +89,14 @@ it("MON1-J drill-down stays company-scoped and signals change neither its rows n
  await expect(reader.readJobs(b.context, a.digest)).rejects.toThrow("METER_FORBIDDEN");
  await expect(f.runtime.query("SELECT app.mon1_today_jobs($1,$2)", [a.tenantId, a.digest])).rejects.toThrow("METER_FORBIDDEN");
  await f.admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [a.tenantId, a.actorId]);
- await expect(reader.readJobs(a.context, a.digest)).rejects.toThrow("METER_FORBIDDEN");
+ await expect(reader.readJobs(testTenantContext(a.tenantId, { membershipId: a.actorId, bindRequest: false }), a.digest)).rejects.toThrow("METER_FORBIDDEN");
  await f.admin.query("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE id=$1", [b.sessionId]);
- await expect(reader.readJobs(b.context, b.digest)).rejects.toThrow("METER_FORBIDDEN");
+ await expect(reader.readJobs(testTenantContext(b.tenantId, { membershipId: b.actorId, bindRequest: false }), b.digest)).rejects.toThrow("METER_FORBIDDEN");
 });
 
 it("drill-down grants only checked execution; its only business input is the meter work ledger", async () => {
  const empty = await meterCompany(f);
- await expect(workTenant(f.runtime, empty.tenantId, db => db.query("SELECT app.mon1_today_jobs($1,$2)", [empty.tenantId, empty.digest]), { membershipId: empty.actorId })).rejects.toThrow("METER_UNAVAILABLE");
+ await expect(workTenant(f.runtime, empty.tenantId, db => db.query("SELECT app.mon1_today_jobs($1,$2)", [empty.tenantId, empty.digest]), { membershipId: empty.actorId, bindRequest: false })).rejects.toThrow("METER_UNAVAILABLE");
  const row = (await f.admin.query(`SELECT pg_get_functiondef(oid) definition,prosecdef,proconfig,
   pg_get_userbyid(proowner) owner,has_function_privilege('jobguard_runtime',oid,'EXECUTE') runtime,
   has_function_privilege('jobguard_infrastructure',oid,'EXECUTE') infrastructure,

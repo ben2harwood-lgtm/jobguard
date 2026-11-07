@@ -30,7 +30,7 @@ it("keeps explicit unbound direct-SQL attacks unbound and provisions no sign-in 
   const actor = await jobDoorsActor(db.owner);
   const context = testTenantContext(actor.tenant, { bindRequest: false });
   await expect(withTenant(db.runtime, context, tx => tx.$client.query(
-    "SELECT app.final_check_require_invoice_actor($1,$2,$3)", [actor.tenant, actor.tenant, actor.member],
+    "SELECT * FROM app.issue_practice_customer_invoice($1,$2,$2,$3,$2,'fixture@example.invalid',CURRENT_DATE)", [actor.tenant, actor.tenant, actor.member],
   ))).rejects.toMatchObject({ code: "42501", message: "REQUEST_BINDING_REFUSED" });
   expect((await db.owner.query("SELECT count(*)::int n FROM identity.session WHERE user_id=$1", [actor.person])).rows[0].n).toBe(0);
 });

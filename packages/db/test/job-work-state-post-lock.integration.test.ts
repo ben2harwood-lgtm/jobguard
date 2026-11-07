@@ -127,6 +127,7 @@ describe("r10 scripted source projections",()=>{
   const client={release(){},async query(sql:string,values:unknown[]=[]){
    calls.push(sql);valuesSeen.push(values);
    const rows=(items:unknown[]=[])=>({rows:items,rowCount:items.length});
+   if(sql.startsWith("SELECT current_database() AS database, inet_server_port() AS port,"))return rows([{database:"unit",port:0,administrative:true}]);
    if((sql.startsWith("SELECT role FROM app.membership") || sql.startsWith("SELECT 1 FROM app.membership")))return rows([{role:"owner"}]);
    if(sql.includes("require_watchdog_live")&&notLive)throw new Error("JOB_NOT_LIVE");
    if (sql === "SELECT name FROM unnest(ARRAY['app.job_diary_entry','app.customer_message_source']) AS source(name) WHERE pg_catalog.to_regclass(name) IS NOT NULL") return rows([{ name: "app.job_diary_entry" }, { name: "app.customer_message_source" }]);
@@ -148,7 +149,7 @@ describe("r10 scripted source projections",()=>{
  function setup(){
   const tenantId=randomUUID(),jobId=randomUUID(),actor=randomUUID();
   const offer={version:"job-linked-offer.v1",code:"POST_LOCK_WORK_REQUIRES_LINKED_JOB",message:"Start a linked job for this customer and site",jobId,customerId:randomUUID(),siteId:randomUUID()};
-  return{tenantId,jobId,actor,offer,context:testTenantContext(tenantId)};
+  return{tenantId,jobId,actor,offer,context:testTenantContext(tenantId,{membershipId:actor})};
  }
  it("refuses a fresh PO identity before a semantic receipt or authorization can be reused",async()=>{
   const {PurchaseOrderRepository}=await import("../src/purchase-order-repository.js"),f=setup(),db=script(f.jobId,f.tenantId,f.offer);

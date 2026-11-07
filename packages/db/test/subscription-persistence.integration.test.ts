@@ -73,8 +73,8 @@ describe("MON-2A-P persisted subscription", () => {
   const digest = createHash("sha256").update(randomUUID()).digest("hex");
   await workTenant(f.admin, a.tenantId, async db => {
    const user = (await db.query("UPDATE app.membership SET role='admin' WHERE tenant_id=$1 AND id=$2 RETURNING identity_user_id", [a.tenantId, executor.actorId])).rows[0].identity_user_id;
-   await db.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", [`${randomUUID()}@meter.invalid`, user]);
-   await db.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3)", [user, a.tenantId, executor.actorId]);
+   await db.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2) ON CONFLICT DO NOTHING", [`${randomUUID()}@meter.invalid`, user]);
+   await db.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING", [user, a.tenantId, executor.actorId]);
    await db.query("INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at) VALUES($1,$2,'synthetic_demo',$3,$4,clock_timestamp()+interval '1 hour')", [sessionId, user, digest, randomUUID()]);
    if (invalidated === "expired session") await db.query("UPDATE identity.session SET expires_at=clock_timestamp()-interval '1 second' WHERE id=$1", [a.sessionId]);
    else if (invalidated === "revoked session") await db.query("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE id=$1", [a.sessionId]);

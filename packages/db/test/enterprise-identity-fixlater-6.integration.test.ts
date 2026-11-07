@@ -167,13 +167,13 @@ describe("FIXLATER-6 exact existing refusals", () => {
       const bound = await f.signin(email, subject, false, ["finance"]);
       const principal = (await h.provider.authenticate(bound.sessionToken))!;
       const member = (await h.provider.findMembership(principal, f.principal.tenantId))!;
-      let context = testTenantContext(f.principal.tenantId, { membershipId: f.principal.membershipId });
+      let context = testTenantContext(f.principal.tenantId, { membershipId: f.principal.membershipId, bindRequest: false });
       const payload = { version: "sso-worker-action.v1", connectionId: f.connectionId,
         sessionId: principal.sessionId, membershipId: member.id, permission: "statement.read", scopeId: f.principal.tenantId };
       await expect(f.app.checkWorkerAction(context, payload)).resolves.toBeUndefined();
       if (scenario === "wrong tenant" || scenario === "wrong connection") {
         const other = await fixture(h, true, false);
-        if (scenario === "wrong tenant") context = testTenantContext(other.principal.tenantId, { membershipId: other.principal.membershipId });
+        if (scenario === "wrong tenant") context = testTenantContext(other.principal.tenantId, { membershipId: other.principal.membershipId, bindRequest: false });
         else payload.connectionId = other.connectionId;
         await refused(scenario === "wrong connection" ? other : f, () => f.app.checkWorkerAction(context, payload), "SSO_FORBIDDEN");
         return;
@@ -247,7 +247,7 @@ describe("FIXLATER-6 exact existing refusals", () => {
       has_table_privilege('jobguard_runtime','app.job_commercial_track','DELETE') AS del,
       has_table_privilege('jobguard_runtime','app.job_commercial_track','TRUNCATE') AS trunc`)).rows;
     expect(privileges).toEqual([{ readable: true, ins: false, upd: false, del: false, trunc: false }]);
-    const context = testTenantContext(f.principal.tenantId, { membershipId: f.principal.membershipId });
+    const context = testTenantContext(f.principal.tenantId, { membershipId: f.principal.membershipId, bindRequest: false });
     const tracks = await withTenant(h.runtime, context, db => db.$client.query("SELECT tenant_id FROM app.job_commercial_track"));
     expect(tracks.rows.length).toBeGreaterThan(0);
     expect(tracks.rows.every(row => row.tenant_id === f.principal.tenantId)).toBe(true);

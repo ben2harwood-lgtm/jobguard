@@ -31,7 +31,7 @@ export class InterimDraftRepository {
     try { return await work(); } catch (error) {
       if (error instanceof InterimApplicationError || error instanceof InterimDraftRepositoryError) throw error;
       const message = error instanceof Error ? error.message : "";
-      if (message === "METER_FORBIDDEN") throw new InterimDraftRepositoryError("FORBIDDEN");
+      if (message === "METER_FORBIDDEN" || (error instanceof Error && "code" in error && error.code === "42501" && message === "REQUEST_BINDING_REFUSED")) throw new InterimDraftRepositoryError("FORBIDDEN");
       for (const code of ["INVALID_INPUT", "NOT_FOUND", "CONFLICT", "DARK"] as const) {
         if (message === `INTERIM_DRAFT_${code}`) throw new InterimDraftRepositoryError(code);
       }

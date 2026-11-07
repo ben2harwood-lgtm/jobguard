@@ -11,11 +11,12 @@ import { generatePracticePng } from "../../../apps/api/src/proof/proof.applicati
 import { DEMO_TENANT_ID as T, DEMO_ACCOUNT_ID as A, DEMO_IDENTITY_USER_ID as U, DEMO_MEMBERSHIP_ID as M,
   FinalAccountCommandService, EvidenceService, ProofCommandService, PracticeActivationRepository,
   VariationRepository, approvePricedVariation, migrate, prepareActivationFixtureV3, withTenant } from "../src/index.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, directory: string;
-const context = testTenantContext(T, { membershipId: M }), previousEnvironment = process.env.JOBGUARD_ENV;
+let context: ReturnType<typeof testTenantContext>;
+const previousEnvironment = process.env.JOBGUARD_ENV;
 const deferred = () => { let resolve!: () => void; const promise = new Promise<void>(done => { resolve = done; }); return { promise, resolve }; };
 const command = (jobId: string, expectedRevision: number) => ({ version: "final-account.assemble.v1", commandId: randomUUID(), actorMembershipId: M, jobId, expectedRevision });
 beforeAll(async () => {
@@ -31,6 +32,7 @@ beforeAll(async () => {
   await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [U]);
   await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional audit builder')", [A, T]);
   await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [M, T, A, U]);
+  context = await testBoundTenantContext(admin, T, M);
   // Existing role, no new grant. This checks effective runtime SQL permissions and physical locks;
   // the superuser session can assume roles, so this is not proof of a least-privilege login boundary.
   runtime = new Pool({ ...connection, options: "-c role=jobguard_runtime", max: 4 });

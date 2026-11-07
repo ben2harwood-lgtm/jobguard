@@ -1,3 +1,4 @@
+import { testTenantContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createWatchdogHarness } from "./watchdog-command-harness.js";
@@ -59,7 +60,7 @@ const callers: Caller[] = [captureCaller(false), captureCaller(true), {
       requiredEvidenceType: "electrical_certificate", decisionId: null };
     return { jobId, commandId, actor: h.otherMember, legacy: input,
       expected: { evidenceId: input.evidenceId, state: "complete", decisionId: null },
-      run: (changed = false) => h.repos.proof.complete(h.ctx, changed ? { ...input, stage: "changed-stage" } : input) };
+      run: (changed = false) => h.repos.proof.complete(testTenantContext(h.tenant, { membershipId: h.otherMember }), changed ? { ...input, stage: "changed-stage" } : input) };
   },
 }];
 

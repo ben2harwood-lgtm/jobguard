@@ -1,3 +1,4 @@
+import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { beforeAll, afterAll, describe, it, expect, vi } from "vitest";
 import { cluster, type Cluster } from "./extra-fixtures.js";
@@ -69,7 +70,7 @@ describe("MON-6 stored preview boundaries",()=>{
    await expect(workTenant(c.runtime,a.tenantId,db=>db.query(
     "SELECT app.pay_now_fake_attempt($1,$2,$3,'prepare',$4::jsonb)",
     [a.tenantId,a.digest,a.jobId,JSON.stringify(a.input)],
-   ), { membershipId: a.actorId })).rejects.toMatchObject({message:"METER_FORBIDDEN",code:"42501"});
+   ), { membershipId: a.actorId, bindRequest: false })).rejects.toMatchObject({message:"METER_FORBIDDEN",code:"42501"});
   }
   for(const mutation of ["UPDATE app.membership SET revoked_at=clock_timestamp() WHERE id=$1","UPDATE identity.session SET revoked_at=clock_timestamp() WHERE id=$1","UPDATE identity.session SET expires_at=clock_timestamp()-interval '1 second' WHERE id=$1"]){
    const a=await fixture();
@@ -94,6 +95,7 @@ describe("MON-6 stored preview boundaries",()=>{
   const a=await fixture(),b=await fixture(),provider=new PersistedAuthProvider(new IdentityRepository(c.admin),"synthetic-fixture-only-secret-32-characters");
   const token=randomUUID(),csrf=randomUUID(),origin="https://preview.invalid";
   await c.admin.query("UPDATE identity.session SET token_digest=$1,csrf_token=$2 WHERE id=$3",[provider.digest(`session:${token}`),csrf,a.sessionId]);
+  a.context=await testBoundTenantContext(c.admin,a.tenantId,a.actorId,provider.digest(`session:${token}`));
   const app=new PayNowAttemptApplication(new IdentityApplication(provider,origin),c.runtime);
   const credentials={sessionToken:token,csrfToken:csrf,tenantHeader:a.tenantId,origin};
   expect((await app.read(credentials,a.jobId,a.invoice.id)).balancePence).toBe(12000);

@@ -24,7 +24,7 @@ it("effective MON-2A upgrade alone supplies terms; replay is harmless and confli
   expect(await command(f, a, upgrade, id)).toEqual(applied);
   await expect(command(f, a, { ...upgrade, plan: "Solo" }, id)).rejects.toThrow();
   expect((await rows(f, a, "subscription_agreement_revision")).find(row => row.revision === 2)).toMatchObject({ plan: "Builder" });
-  const effectivePlan = () => workTenant(f.admin, a.tenantId, async db => (await db.query("SELECT plan FROM app.subscription_agreement_revision WHERE tenant_id=$1 AND effective_date<=(clock_timestamp() AT TIME ZONE 'Europe/London')::date ORDER BY effective_date DESC,revision DESC LIMIT 1", [a.tenantId])).rows[0].plan, { membershipId: a.actorId });
+  const effectivePlan = () => workTenant(f.admin, a.tenantId, async db => (await db.query("SELECT plan FROM app.subscription_agreement_revision WHERE tenant_id=$1 AND effective_date<=(clock_timestamp() AT TIME ZONE 'Europe/London')::date ORDER BY effective_date DESC,revision DESC LIMIT 1", [a.tenantId])).rows[0].plan, { membershipId: a.actorId, bindRequest: false });
   expect(await effectivePlan()).toBe("Builder");
   const downgrade = await command(f, a, { ...terms(a, "Solo", 2), kind: "change" });
   expect((await rows(f, a, "subscription_agreement_revision"))).toHaveLength(2);
@@ -36,7 +36,7 @@ it("effective MON-2A upgrade alone supplies terms; replay is harmless and confli
     await db.query("SET LOCAL session_replication_role='replica'");
     await db.query("UPDATE app.subscription_plan_change SET effective_date='2026-09-01' WHERE tenant_id=$1", [a.tenantId]);
     await db.query("UPDATE app.subscription_agreement_revision SET effective_date='2026-09-01' WHERE tenant_id=$1", [a.tenantId]);
-  }, { membershipId: a.actorId });
+  }, { membershipId: a.actorId, bindRequest: false });
   const sourceId = await storeMeter(f, a, calendarInput(a.tenantId, 4, 9));
   const apply = { version: "subscription-command.v1", kind: "apply_change", changeId: downgrade.changeId, sourceId, expectedRevision: 2 }, applyId = randomUUID();
   expect(await command(f, a, apply, applyId)).toMatchObject({ outcome: "applied" });
@@ -53,7 +53,7 @@ it("a future-only agreement cannot grant job access until its effective date", a
   const date = async (offset: number) => workTenant(f.admin, a.tenantId, async db => {
     await db.query("SET LOCAL session_replication_role='replica'");
     await db.query("UPDATE app.subscription_agreement_revision SET effective_date=(clock_timestamp() AT TIME ZONE 'Europe/London')::date+$2::int WHERE tenant_id=$1", [a.tenantId, offset]);
-  }, { membershipId: a.actorId });
+  }, { membershipId: a.actorId, bindRequest: false });
   await date(1); expect(await app.check(request("invoices", a.jobId))).toMatchObject({ executable: false });
   await date(0); expect(await app.require(request("invoices", a.jobId))).toMatchObject({ executable: true });
 });
@@ -146,7 +146,7 @@ it("job track survives company move and reversal; a job never widens contractor 
   await workTenant(f.admin, a.tenantId, async db => {
     await db.query("SET LOCAL session_replication_role='replica'");
     await db.query("UPDATE app.job_commercial_track SET job_track='contractor' WHERE tenant_id=$1 AND job_id=$2", [a.tenantId, contractor.jobId]);
-  }, { membershipId: a.actorId });
+  }, { membershipId: a.actorId, bindRequest: false });
   const exports = await retainedExport(f, a), before = await retained(f, a, exports);
   for (const [index, track] of ["small_builder", "contractor", "small_builder"].entries()) {
     if (index) await changeTrack(f, a, track, index - 1);
@@ -164,7 +164,7 @@ it("job track survives company move and reversal; a job never widens contractor 
       // Owner-only active agreement status fixture, per the 29 October ruling.
       await workTenant(f.admin, a.tenantId, db => db.query(`INSERT INTO app.contractor_agreement_status_revision(tenant_id,id,assignment_id,revision,status,schema_version,environment,fictional_source)
         SELECT tenant_id,$2,id,1,'active','contractor-agreement-status.v1','synthetic_demo','fictional-fixture:'||gen_random_uuid()
-        FROM app.commercial_track_assignment WHERE tenant_id=$1 ORDER BY revision DESC LIMIT 1`, [a.tenantId, randomUUID()]), { membershipId: a.actorId });
+        FROM app.commercial_track_assignment WHERE tenant_id=$1 ORDER BY revision DESC LIMIT 1`, [a.tenantId, randomUUID()]), { membershipId: a.actorId, bindRequest: false });
       expect(await app.require(request("work_orders", contractor.jobId))).toMatchObject({ executable: true });
       expect(await app.check(request("work_orders", a.jobId))).toMatchObject({ executable: false, reason: "track_forbidden" });
     }
@@ -177,10 +177,10 @@ it("missing, foreign and untracked jobs refuse without a decision; forged author
   await workTenant(f.admin, a.tenantId, async db => {
     await db.query("SET LOCAL session_replication_role='replica'");
     await db.query("DELETE FROM app.job_commercial_track WHERE tenant_id=$1 AND job_id=$2", [a.tenantId, untracked.jobId]);
-  }, { membershipId: a.actorId });
+  }, { membershipId: a.actorId, bindRequest: false });
   for (const job of [randomUUID(), b.jobId, untracked.jobId]) {
     await expect(app.check(request("invoices", job))).rejects.toMatchObject({ code: "ENTITLEMENT_UNAVAILABLE" });
-    await expect(workTenant(f.runtime, a.tenantId, db => db.query("SELECT app.mon8_company_feature($1,'invoices',$2)", [a.digest, job]), { membershipId: a.actorId })).rejects.toThrow("FORBIDDEN");
+    await expect(workTenant(f.runtime, a.tenantId, db => db.query("SELECT app.mon8_company_feature($1,'invoices',$2)", [a.digest, job]), { membershipId: a.actorId, bindRequest: false })).rejects.toThrow("FORBIDDEN");
   }
   for (const feature of ["watchdog", "final_check", "invoices", "recovery_cases", "pay_now", "accounting_export", "operative_roles", "site_origin_capture", "approval_chains", "work_orders", "sso"]) {
     for (const field of ["plan", "track", "trial", "payment"]) await expect(app.check({ ...request(feature, a.jobId), [field]: true })).rejects.toMatchObject({ code: "INVALID_ENTITLEMENT_INPUT" });

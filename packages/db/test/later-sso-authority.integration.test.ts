@@ -1,3 +1,4 @@
+import { verifiedTenantContextForQueuedJob } from "../src/tenant-context.js";
 /** LATER-B28 PostgreSQL proofs. NOT RUN here: dispatcher forbids sockets/PostgreSQL in this sandbox. */
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
@@ -28,7 +29,7 @@ async function approvedAction(f: ScimFixture) {
   await withTenant(h.runtime, context, db => appendOutboundAction(db, tenantId, action));
   const deliver = vi.fn(async () => ({ kind: "succeeded" as const, providerReference: `synthetic:${randomUUID()}` }));
   const adapter: OutboundAdapter = { name: "fake_capture", supportsProviderDeduplication: false, deliver, reconcile: async () => "unknown" };
-  const execute = () => new ActionExecutor(h.runtime, new Map([[adapter.name, adapter]]), { emit: () => undefined }).execute(context, action.id);
+  const execute = () => new ActionExecutor(h.runtime, new Map([[adapter.name, adapter]]), { emit: () => undefined }).execute(verifiedTenantContextForQueuedJob(context.tenantId), action.id);
   const attempts = async () => (await h.admin.query<{ n: number }>("SELECT count(*)::integer n FROM app.action_attempt WHERE tenant_id=$1 AND action_id=$2", [tenantId, action.id])).rows[0]!.n;
   return { action, deliver, execute, attempts };
 }
@@ -107,7 +108,7 @@ describe("LATER-B28 actual PostgreSQL boundaries", () => {
     for (const patch of patches) {
       const action = { ...queued.action, ...patch, id: randomUUID(), providerEffectKey: randomUUID() };
       await withTenant(h.runtime, context, db => appendOutboundAction(db, f.principal.tenantId, action));
-      await executor.execute(context, action.id);
+      await executor.execute(verifiedTenantContextForQueuedJob(context.tenantId), action.id);
       expect(deliver).not.toHaveBeenCalled();
       expect((await h.admin.query("SELECT count(*)::int n FROM app.action_attempt WHERE tenant_id=$1 AND action_id=$2", [f.principal.tenantId, action.id])).rows[0].n).toBe(0);
     }

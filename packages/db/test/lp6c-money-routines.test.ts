@@ -59,9 +59,15 @@ it("guards command claim actors before effect updates and completion/replay use"
 it("declares exactly the five owner-only binding grants and exact identity-form proof arguments", () => {
   const proof = JSON.parse(readFileSync(new URL("./migration-proofs/1217_lp6c_money_binding.proof.json", import.meta.url), "utf8"));
   expect(proof.migration).toBe(migration);
+  const predecessor=JSON.parse(readFileSync(new URL("./migration-proofs/0672_extra_pack_artifact_store.proof.json",import.meta.url),"utf8"));
+  const existing=predecessor.lp0.filter((c:{section:string;after?:{key?:string}})=>c.section==='entries' && /^acl\|routine\|function:app\.current_(?:actor|tenant)\(\)\|jobguard_migration\|EXECUTE\|-$/u.test(c.after?.key??''))
+    .map((c:{after:{key:string}})=>c.after.key);
+  expect(existing).toHaveLength(2);
   const grants = proof.lp0.filter((c: { section: string }) => c.section === "entries")
     .map((c: { after: { key: string } }) => c.after.key);
-  expect(grants.sort()).toEqual([
+  expect(grants).toHaveLength(3);
+  expect(new Set([...existing,...grants]).size).toBe(5);
+  expect([...existing,...grants].sort()).toEqual([
     "acl|routine|function:app.bind_request(text,text,uuid)|jobguard_migration|EXECUTE|-",
     ...["current_actor", "current_tenant"].flatMap(name => ["jobguard_command_writer", "jobguard_migration"]
       .map(role => `acl|routine|function:app.${name}()|${role}|EXECUTE|-`)),

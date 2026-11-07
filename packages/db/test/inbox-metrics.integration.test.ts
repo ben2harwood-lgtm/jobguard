@@ -153,5 +153,5 @@ it("refuses hidden or absent finding identifiers without receipts, plus invalid 
  for(const patch of [{identityUserId:randomUUID()},{membershipId:randomUUID()}])
   await expect(repo().record(context,{...actor,...patch},input)).rejects.toThrow("INVALID_METRICS_INPUT");
  await db.admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2",[tenant,actor.membershipId]);
- await expect(repo().record(context,actor,input)).rejects.toThrow("INVALID_METRICS_INPUT");
+ await expect(repo().record(testTenantContext(tenant, { membershipId: actor.membershipId, bindRequest: false }),actor,input)).rejects.toThrow("INVALID_METRICS_INPUT");
 });

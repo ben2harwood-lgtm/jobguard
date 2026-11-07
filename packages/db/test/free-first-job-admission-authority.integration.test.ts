@@ -1,7 +1,7 @@
 import {assertLp4SealedEvents} from "./lp4-writer-catchup-fixture.js";
 import { randomUUID } from "node:crypto";
 import { afterAll,beforeAll,describe,expect,it } from "vitest";
-import {createWorkFixture,closeWorkFixture,meterCompany,verifyBusiness,requestCard,denyAdmission,workTenant,recordCard,resultFixture,type WorkFixture} from "./free-first-job-admission-fixtures.js";
+import {createWorkFixture,closeWorkFixture,meterCompany,verifyBusiness,requestCard,denyAdmission,workTenant,recordCard,resultFixture,ownCounts,type WorkFixture} from "./free-first-job-admission-fixtures.js";
 describe("MON3 B AUTH-01 REPLAY-01 current persisted authority",()=>{
  let f:WorkFixture;beforeAll(async()=>{f=await createWorkFixture();},60000);afterAll(async()=>closeWorkFixture(f));
  it("exact replay rechecks session revocation and current owner",async()=>{
@@ -16,7 +16,10 @@ describe("MON3 B AUTH-01 REPLAY-01 current persisted authority",()=>{
  });
  it("cross-tenant session and browser completion refuse",async()=>{
   const a=await meterCompany(f),b=await meterCompany(f);await verifyBusiness(f,a);
-  await expect(requestCard(f,{...a,digest:b.digest})).rejects.toThrow('METER_FORBIDDEN');
+  const before = await ownCounts(f,a), foreignBefore = await ownCounts(f,b);
+  // This helper directly invokes SQL, whose credential binding rejects the foreign session first.
+  await expect(requestCard(f,{...a,digest:b.digest})).rejects.toMatchObject({code:'42501',message:'REQUEST_BINDING_REFUSED'});
+  expect(await ownCounts(f,a)).toEqual(before); expect(await ownCounts(f,b)).toEqual(foreignBefore);
   await expect(requestCard(f,a,randomUUID(),{version:'trial-card-request.v1',outcome:'completed'})).rejects.toThrow('INVALID_FREE_FIRST_JOB_INPUT');
  });
  it("expired session refuses request replay and migration-owned result replay",async()=>{
