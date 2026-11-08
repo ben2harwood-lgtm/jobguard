@@ -9,7 +9,6 @@ import {Pool,type PoolClient} from "pg";
 import {migrate} from "../src/migrate.js";
 import {FinalAccountLockRepository} from "../src/final-account-lock-repository.js";
 import {FinalCheckRepository,type FinalCheckClassification} from "../src/final-check-repository.js";
-import { verifiedTenantContextForQueuedJob } from "../src/tenant-context.js";
 import {testTenantContext,testBoundTenantContext} from "./tenant-context-test-utils.js";
 import {freePort,closeTestDatabase,installLegacySyntheticPartyFixtures} from "./pool-test-utils.js";
 export const FINAL_CHECK_TENANT="11111111-1111-4111-8111-111111111111",FINAL_CHECK_ACTOR="d1500000-0000-4000-8000-000000000003",FINAL_CHECK_USER="d1500000-0000-4000-8000-000000000001";
@@ -54,7 +53,9 @@ export async function seedFinalCheckJob(f:FinalCheckFixture){
  const context=(await f.admin.query("SELECT to_regprocedure('app.bind_request(text,text,uuid)') installed")).rows[0].installed ? await testBoundTenantContext(f.admin,tenantId,FINAL_CHECK_ACTOR) : testTenantContext(tenantId, { membershipId: FINAL_CHECK_ACTOR }),locks=new FinalAccountLockRepository(f.runtime);
  if(!(await f.admin.query("SELECT 1 FROM app.final_check_terms_acceptance WHERE tenant_id=$1",[tenantId])).rowCount)await locks.acceptTerms(context,{actorMembershipId:FINAL_CHECK_ACTOR,commandId:randomUUID(),termsVersion:"synthetic_final_check_terms.v1"});
  await locks.disposition(context,{jobId,actorMembershipId:FINAL_CHECK_ACTOR,commandId:randomUUID(),scopeItemId,disposition:"done"});
- return {tenantId,jobId,scopeItemId,baselineId,revisionId,lineId,context,workerContext:verifiedTenantContextForQueuedJob(tenantId),digest,sessionId,lock:()=>locks.lock(context,{jobId,actorMembershipId:FINAL_CHECK_ACTOR,commandId:randomUUID(),finalAccountRevisionId:revisionId,expectedRevision:1,declarationVersion:"final_account_declaration.v1"})};
+ // Test-only queued shadow work has no member session; use the synthetic helper,
+ // leaving the production queued-context constructor confined to its allowlist.
+ return {tenantId,jobId,scopeItemId,baselineId,revisionId,lineId,context,workerContext:testTenantContext(tenantId, { bound: false }),digest,sessionId,lock:()=>locks.lock(context,{jobId,actorMembershipId:FINAL_CHECK_ACTOR,commandId:randomUUID(),finalAccountRevisionId:revisionId,expectedRevision:1,declarationVersion:"final_account_declaration.v1"})};
 }
 export type FinalCheckJob=Awaited<ReturnType<typeof seedFinalCheckJob>>;
 export async function insertFinalCheckEvidence(f:FinalCheckFixture,a:FinalCheckJob,evidenceType="completion_photo",contentType="image/png",byteLength=0){const evidence=randomUUID(),upload=randomUUID(),hash="a".repeat(64),objectVersion=randomUUID();await finalCheckTenant(f.admin,a.tenantId,async db=>{

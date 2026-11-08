@@ -15,7 +15,6 @@ import {PracticeInvoiceRepository} from "../src/practice-invoice-repository.js";
 import {RecoveryCaseRepository} from "../src/recovery-case-repository.js";
 import {RecoveryLineAllocationRepository} from "../src/receipt-line-allocation-repository.js";
 import {withTenant} from "../src/tenant-context.js";
-import { verifiedTenantContextForQueuedJob } from "../src/tenant-context.js";
 import {testTenantContext} from "./tenant-context-test-utils.js";
 import {finalCheckTenant,type FinalCheckFixture} from "./final-check-fixture.js";
 import {pngBytes} from "./site-extra-evidence-fixtures.js";
@@ -93,7 +92,9 @@ export async function realReceiptFixture(f:FinalCheckFixture,kind:"F5"|"F7"="F7"
  });
  if(beforeLock)await beforeLock({context,jobId,signalId:signal,digest:auth.digest});
  const lock=await locks.lock(context,{jobId,actorMembershipId:actor.membershipId,commandId:randomUUID(),finalAccountRevisionId:drafted.id,expectedRevision:drafted.revision,declarationVersion:"final_account_declaration.v1"});
- const workerContext=verifiedTenantContextForQueuedJob(context.tenantId);
+ // Test-only queued shadow work has no member session; use the synthetic helper,
+ // leaving the production queued-context constructor confined to its allowlist.
+ const workerContext=testTenantContext(context.tenantId, { bound: false });
  const worker=new FinalCheckRepository(f.shadow),manifest=await worker.begin(workerContext,jobId);
  for(const s of manifest.sources){if(s.sourceKind==="builder_capture_not_scanned"&&!s.processable)continue;await worker.record(workerContext,jobId,manifest.id,s.id,randomUUID(),{version:"final-check.source-result.v1",inputHash:s.inputHash,status:kind==="F7"&&s.evidenceId===evidence?"detected":"zero_result",failureCode:null,signalIds:kind==="F7"&&s.evidenceId===evidence?signals:[]});}
  const signalRevisions=beforeLock?new Map((await f.admin.query("SELECT id,revision FROM app.shadow_commercial_signal WHERE tenant_id=$1 AND job_id=$2",[DEMO_TENANT_ID,jobId])).rows.map(row=>[row.id,row.revision as number])):null;
