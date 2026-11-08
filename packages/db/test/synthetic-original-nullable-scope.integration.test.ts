@@ -3,7 +3,7 @@ import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { ContractorBundleCheckApplication } from "../../../apps/api/src/evidence-bundle.application.js";
 import { EvidenceService, ExtraApprovalRepository, SiteExtraRepository, withTenant } from "../src/index.js";
 import { NorthsidePhotoStorage } from "../src/northside-photo-storage.js";
-import { chainWorld, cluster, approveInput, type Cluster } from "./extra-approval-chain-fixtures.js";
+import { chainWorld, cluster, approveInput, newJob, type Cluster } from "./extra-approval-chain-fixtures.js";
 import { pngBytes, v3 } from "./site-extra-evidence-fixtures.js";
 
 let c: Cluster;
@@ -22,10 +22,10 @@ async function attach(w: World, scopeItemId: string | null = null) {
 }
 
 it("a job-level Northside photo survives a fresh store and yields an intact approved-extra bundle; other tenants/jobs/versions cannot read it", async () => {
-  const w = await chainWorld(c), p = await attach(w);
+  const w0 = await chainWorld(c), w = { ...w0, jobId: await newJob(c, w0) }, p = await attach(w);
   const original = (await c.admin.query("SELECT scope_item_id FROM app.synthetic_evidence_original WHERE tenant_id=$1 AND upload_id=$2", [p.context.tenantId, p.upload.id])).rows[0];
   expect(original).toEqual({ scope_item_id: null });
-  const raised = await new SiteExtraRepository(c.runtime).logSiteExtra(p.context, w.members.supervisor.member, v3(w, { photoEvidenceId: p.upload.id }));
+  const raised = await new SiteExtraRepository(c.runtime).logSiteExtra(p.context, w.members.operative.member, v3(w, { photoEvidenceId: p.upload.id }));
   const approvals = new ExtraApprovalRepository(c.runtime), extraId = raised.variationId;
   await approvals.priceExtra(p.context, w.members.surveyor.member, { version: "price-extra.v1", commandId: randomUUID(), jobId: w.jobId, extraId, netPence: 40000 });
   const request = await approvals.submitExtra(p.context, w.members.supervisor.member, { version: "submit-extra.v1", commandId: randomUUID(), jobId: w.jobId, extraId });
