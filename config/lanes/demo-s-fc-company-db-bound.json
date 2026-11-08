@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "lanes": {
+    "demo-s-fc-company-db-bound": {
+      "branches": [
+        "codex/sandbox/demo-s-fc-company-db-bound"
+      ],
+      "note": "DEMO-S / MON-3 dark company Final Check database subset; RED plus second security check. NOPR.",
+      "allow": [
+        "packages/db/migrations/0951_company_final_check.sql",
+        "packages/db/src/company-final-check-repository.ts",
+        "packages/db/src/company-final-check-repository.test.ts",
+        "packages/db/src/index.ts",
+        "packages/db/test/company-final-check-authority.integration.test.ts",
+        "packages/db/test/company-final-check-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/0951_company_final_check.proof.json",
+        "docs/contracts/company-final-check-db-v1.md"
+      ]
+    }
+  }
+}
