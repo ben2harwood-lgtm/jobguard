@@ -55,7 +55,7 @@ export class FictionalMachineConnection {
       const signature = createHmac("sha256", key).update(machineSigningBytes(h, body)).digest();
       if (!timingSafeEqual(signature, Buffer.from(h.signature, "hex")) || !fresh()) throw new ConnectorInputError();
       const input = connectorInputV1.parse(JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(body)));
-      if (!authority.capabilities.includes(input.kind)) throw new ConnectorInputError();
+      if (input.kind === "export_delivery" || !authority.capabilities.includes(input.kind)) throw new ConnectorInputError();
       return await this.store.stage(h.connectionId, token, authority, h, input);
     } catch { throw new ConnectorInputError(); }
   }

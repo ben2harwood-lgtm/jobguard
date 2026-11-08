@@ -42,7 +42,7 @@ describe("M4-18 PostgreSQL synthetic draft books",()=>{
     const competing=await Promise.allSettled([f.append(f.invoice),f.append({...f.invoice,id:randomUUID()})]);
     expect(competing.filter(r=>r.status==="fulfilled")).toHaveLength(1);
     expect(competing.find(r=>r.status==="rejected")).toMatchObject({reason:{code:"VALUE_LIMIT"}});
-    const stored=await new InterimDraftRepository(c.runtime).read(f.a.context,f.a.jobId);
+    const stored=await new InterimDraftRepository(c.runtime).read(f.a.context,f.a.jobId,f.a.digest);
     expect(stored.book.records).toHaveLength(4);expect(stored.reconciliation.netInvoiced.pence).toBe(6000);
     await expect(f.append({...f.invoice,taxPence:0})).rejects.toMatchObject({code:"REPLAY_CONFLICT"});
     for(const row of stored.rows)expect(row.watermark).toBe("SYNTHETIC DRAFT - NOT FOR ISSUE");
@@ -50,9 +50,9 @@ describe("M4-18 PostgreSQL synthetic draft books",()=>{
   it("reconciles immutable applications, omissions, variations, credits and part receipts from storage",async()=>{
     const f=await fixture();
     for(const r of [f.schedule,f.application,f.certification,f.invoice])await f.append(r);
-    const before=await f.repo.read(f.a.context,f.a.jobId);
+    const before=await f.repo.read(f.a.context,f.a.jobId,f.a.digest);
     await f.append({id:randomUUID(),version:"interim.synthetic-receipt.v1",invoiceId:f.invoice.id,amountPence:2000});
-    const paid=await f.repo.read(f.a.context,f.a.jobId);
+    const paid=await f.repo.read(f.a.context,f.a.jobId,f.a.digest);
     expect(paid.reconciliation.lines[0]?.certified.pence).toBe(6000);
     expect(paid.reconciliation.grossReceived.pence).toBe(2000);
     // An omission is a new stored variation revision, never a rewritten baseline.
@@ -73,7 +73,7 @@ describe("M4-18 PostgreSQL synthetic draft books",()=>{
     await f.append({...f.certification,id:randomUUID(),applicationRevisionId:final.id,certificateReference:randomUUID(),cumulativeValues:f.values(5000)});
     const credit={id:randomUUID(),version:"interim.credit-draft.v1",invoiceId:f.invoice.id,lines:f.values(1000),taxPence:200};
     await f.append(credit);
-    const result=await new InterimDraftRepository(c.runtime).read(f.a.context,f.a.jobId);
+    const result=await new InterimDraftRepository(c.runtime).read(f.a.context,f.a.jobId,f.a.digest);
     expect(result.book.records.slice(0,4)).toEqual(before.book.records);
     expect(result.reconciliation).toMatchObject({netInvoiced:{pence:5000},grossReceived:{pence:2000},grossOutstanding:{pence:4000},
       priorApplicationRevisionIds:[f.application.id,final.id],lines:[{scheduled:{pence:5000},certified:{pence:5000},invoiceable:{pence:0}}]});
@@ -83,12 +83,12 @@ describe("M4-18 PostgreSQL synthetic draft books",()=>{
       await expect(workTenant(c.admin,f.a.tenantId,async db=>{await db.query("SET LOCAL ROLE jobguard_migration");return db.query(sql,[f.a.tenantId]);})).rejects.toThrow();
       await expect(workTenant(c.runtime,f.a.tenantId,db=>db.query(sql,[f.a.tenantId]))).rejects.toMatchObject({code:"42501"});
     }
-    expect(await f.repo.read(f.a.context,f.a.jobId)).toEqual(result);
+    expect(await f.repo.read(f.a.context,f.a.jobId,f.a.digest)).toEqual(result);
   });
   it("refuses foreign jobs and sources identically to missing ones without appending",async()=>{
     const f=await fixture(),other=await fixture();
     for(const jobId of [other.a.jobId,randomUUID()]) {
-      await expect(f.repo.read(f.a.context,jobId)).rejects.toMatchObject({code:"NOT_FOUND"});
+      await expect(f.repo.read(f.a.context,jobId,f.a.digest)).rejects.toMatchObject({code:"NOT_FOUND"});
       await expect(f.repo.command(f.a.context,f.a.digest,{...f.input(f.schedule),jobId})).rejects.toMatchObject({code:"NOT_FOUND"});
     }
     const sameTenant=await meterCompany(c as unknown as WorkFixture,f.a.tenantId);
@@ -98,10 +98,10 @@ describe("M4-18 PostgreSQL synthetic draft books",()=>{
       {...f.schedule,lines:[{...f.schedule.lines[0],scopeItemId:sameTenant.scopeId}]},
       {...f.schedule,lines:[{...f.schedule.lines[0],commercialRevisionId:other.schedule.lines[0]?.commercialRevisionId}]},
     ])await expect(f.append(schedule)).rejects.toMatchObject({code:"NOT_FOUND"});
-    expect((await f.repo.read(f.a.context,f.a.jobId)).rows).toEqual([]);
-    await expect(f.repo.command(f.a.context,other.a.digest,f.input(f.schedule))).rejects.toMatchObject({code:"UNAVAILABLE"});
+    expect((await f.repo.read(f.a.context,f.a.jobId,f.a.digest)).rows).toEqual([]);
+    await expect(f.repo.command(f.a.context,other.a.digest,f.input(f.schedule))).rejects.toMatchObject({code:"FORBIDDEN"});
     await c.admin.query("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE id=$1",[f.a.sessionId]);
-    await expect(f.append(f.schedule)).rejects.toMatchObject({code:"UNAVAILABLE"});
+    await expect(f.append(f.schedule)).rejects.toMatchObject({code:"FORBIDDEN"});
   });
   it("restores the caller tenant setting and restricts raw runtime access",async()=>{
     const f=await fixture();await f.append(f.schedule);
