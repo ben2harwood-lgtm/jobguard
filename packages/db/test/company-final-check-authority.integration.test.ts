@@ -4,7 +4,7 @@ import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { CompanyFinalCheckRepository } from "../src/company-final-check-repository.js";
 import { FinalAccountCommandService } from "../src/final-account-repository.js";
 import { verifiedTenantContextFromMembership, type AuthenticatedMembership } from "../src/tenant-context.js";
-import { workTenant, type WorkFixture } from "./job-work-state-fixtures.js";
+import { seedWorkPractice, workTenant, type WorkFixture } from "./job-work-state-fixtures.js";
 import { createFinalCheckFixture, closeFinalCheckFixture, type FinalCheckFixture } from "./final-check-fixture.js";
 import { FinalCheckRepository } from "../src/final-check-repository.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
@@ -151,13 +151,8 @@ it.each(["revoked", "expired"])("rechecks %s membership after waiting for the jo
   } finally { await holder.query("ROLLBACK"); await waiting.query("ROLLBACK"); holder.release(); waiting.release(); }
 });
 it("refuses practice-owned jobs and imported descendants, including company-session access", async () => {
-  const a = await company(false), parent = randomUUID(), child = randomUUID();
-  const practiceTenant = "11111111-1111-4111-8111-111111111111", digest = "e".repeat(64);
-  await f.admin.query("INSERT INTO control_plane.tenant(id) VALUES($1) ON CONFLICT DO NOTHING", [practiceTenant]);
-  await f.admin.query("SELECT app.issue_practice_session($1)", [digest]);
-  await workTenant(f.admin, practiceTenant, async client => {
-    await client.query("INSERT INTO app.job(tenant_id,id,title,practice_session_digest,practice_scenario) VALUES($1,$2,'Fictional practice parent',$3,'capture')", [practiceTenant, parent, digest]);
-  });
+  const a = await company(false), child = randomUUID();
+  const practice = await seedWorkPractice(f), parent = practice.jobId;
   await workTenant(f.admin, a.tenantId, async client => {
     await client.query("INSERT INTO app.job(tenant_id,id,title,provenance) VALUES($1,$2,'Fictional imported child','imported')", [a.tenantId, child]);
     await client.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','synthetic_demo','backfilled_synthetic_fixture')", [a.tenantId, child]);
