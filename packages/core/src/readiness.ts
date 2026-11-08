@@ -60,3 +60,50 @@ export function dueAtLocalTime(date:string,time:string,timeZone:string):string {
  if(candidates.size===0)throw new Error("NONEXISTENT_LOCAL_TIME");
  return new Date(Math.min(...candidates)).toISOString();
 }
+
+
+export type ResequencePlan = Readonly<{
+  scope: Readonly<{ tenantId: string; jobId: string; taskId: string }>;
+  status: "confirmed" | "cancelled"; plannedDate: string;
+  predecessors: readonly Readonly<{ taskId: string; complete: Truth }>[];
+  edges: readonly Readonly<{ taskId: string; dependsOnTaskId: string }>[];
+  material: Readonly<{ requiredUnits: number; landedUnits: number }>;
+  access: Truth; crew: Truth;
+}>;
+export type ResequenceCandidate = Readonly<{ taskId: string; fromDate: string; toDate: string }>;
+
+/** Prevention proposals only. No dates or facts are changed. Unknown is never ready. */
+export function proposeResequence(blocked: ResequencePlan, others: readonly ResequencePlan[]): readonly ResequenceCandidate[] {
+  if (blocked.crew !== true) return [];
+  const plans = [blocked, ...others.filter(plan => plan.scope.tenantId === blocked.scope.tenantId
+    && plan.scope.jobId === blocked.scope.jobId && plan.scope.taskId !== blocked.scope.taskId)];
+  const edges = plans.flatMap(plan => [
+    ...plan.edges,
+    ...plan.predecessors.map(fact => ({ taskId: plan.scope.taskId, dependsOnTaskId: fact.taskId })),
+  ]);
+  try { assertAcyclicDependencies(edges); } catch { return []; }
+  const graph = new Map<string, Set<string>>();
+  for (const edge of edges) {
+    const dependencies = graph.get(edge.taskId) ?? new Set<string>();
+    dependencies.add(edge.dependsOnTaskId); graph.set(edge.taskId, dependencies);
+  }
+  const dependsOnBlocked = (taskId: string): boolean => {
+    const pending = [taskId], seen = new Set<string>();
+    while (pending.length) {
+      const id = pending.pop()!;
+      if (id === blocked.scope.taskId) return true;
+      if (seen.has(id)) continue;
+      seen.add(id); pending.push(...graph.get(id) ?? []);
+    }
+    return false;
+  };
+  return plans.filter(plan => plan.scope.taskId !== blocked.scope.taskId && plan.status === "confirmed"
+    && plan.plannedDate > blocked.plannedDate && plan.access === true && plan.crew === true
+    && finiteNonNegative(plan.material.requiredUnits) && finiteNonNegative(plan.material.landedUnits)
+    && plan.material.landedUnits >= plan.material.requiredUnits
+    && plan.predecessors.every(fact => fact.complete === true)
+    && [...graph.get(plan.scope.taskId) ?? []].every(id => plan.predecessors.some(fact => fact.taskId === id && fact.complete === true))
+    && !dependsOnBlocked(plan.scope.taskId))
+    .sort((a, b) => a.plannedDate.localeCompare(b.plannedDate) || a.scope.taskId.localeCompare(b.scope.taskId))
+    .slice(0, 3).map(plan => ({ taskId: plan.scope.taskId, fromDate: plan.plannedDate, toDate: blocked.plannedDate }));
+}

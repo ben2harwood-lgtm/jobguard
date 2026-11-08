@@ -5,7 +5,7 @@ import { FixtureReadinessAdapters, readHolidays, readWeather, refusedLiveReadine
 
 const scope = { tenantId: "10000000-0000-4000-8000-000000000001", jobId: "10000000-0000-4000-8000-000000000002", taskId: "10000000-0000-4000-8000-000000000003" };
 const other = "10000000-0000-4000-8000-000000000004";
-const now = "2026-08-28T12:00:00.000Z", due = "2026-09-01T08:00:00.000Z";
+const now = "2026-08-28T07:00:00.000Z", due = "2026-08-28T08:00:00.000Z";
 const provenance = { synthetic: true as const, revision: "fixture.v1", observedAt: "2026-08-28T00:00:00.000Z", expiresAt: "2026-09-02T00:00:00.000Z" };
 const holidays: HolidayReading[] = ["england-and-wales", "scotland", "northern-ireland"].map(region => ({
   version: "readiness-holidays.v1", ...provenance, jurisdiction: region as HolidayReading["jurisdiction"],
@@ -17,13 +17,15 @@ const plan: ScheduledPlan = { version: "readiness-scheduled-plan.v1", synthetic:
 function harness(overrides: Partial<ScheduledPlan> = {}, adapters?: ReadinessAdapters, mode = "synthetic_demo") {
   let current: unknown = { ...plan, ...overrides };
   const records = new Map<string, ReadinessProposal>();
+  let jobPlans: unknown[] = [];
+  const loadJobPlans = vi.fn(async () => structuredClone(jobPlans));
   const load = vi.fn(async () => structuredClone(current));
   const recordProposal = vi.fn(async (proposal: ReadinessProposal) => { if (!records.has(proposal.key)) records.set(proposal.key, structuredClone(proposal)); });
-  const scheduler = new DarkReadinessScheduler(adapters ?? new FixtureReadinessAdapters({ weather: [weather], holidays }), { load, recordProposal }, mode);
+  const scheduler = new DarkReadinessScheduler(adapters ?? new FixtureReadinessAdapters({ weather: [weather], holidays }), { load, loadJobPlans, recordProposal }, mode);
   const addJob = vi.fn(async (..._args: unknown[]) => ({}));
   const queue = { addJob } as unknown as Pick<JobHelpers, "addJob">;
   const task = () => addJob.mock.calls.at(-1)![1];
-  return { scheduler, load, recordProposal, records, addJob, queue, task, change: (value: unknown) => { current = value; } };
+  return { scheduler, loadJobPlans, setPlans: (plans: unknown[]) => { jobPlans = plans; }, load, recordProposal, records, addJob, queue, task, change: (value: unknown) => { current = value; } };
 }
 
 describe("M2-6 dark factual adapter seams", () => {
@@ -116,14 +118,14 @@ describe("M2-6 Graphile scheduled prevention", () => {
   });
   it("covers calendar differences, weekends, local midnight and both DST changes", async () => {
     const cases = [
-      { at: now, region: "scotland", day: "2026-08-31", runAt: "2026-08-31T08:00:00.000Z" },
+      { at: now, region: "scotland", day: "2026-08-31", runAt: "2026-08-28T08:00:00.000Z" },
       { at: now, region: "northern-ireland", day: "2026-09-01", runAt: due },
-      { at: "2026-07-10T12:00:00.000Z", region: "northern-ireland", day: "2026-07-14", runAt: "2026-07-14T08:00:00.000Z" },
-      { at: "2026-07-10T12:00:00.000Z", region: "england-and-wales", day: "2026-07-13", runAt: "2026-07-13T08:00:00.000Z" },
-      { at: "2026-01-01T12:00:00.000Z", region: "scotland", day: "2026-01-05", runAt: "2026-01-05T09:00:00.000Z" },
-      { at: "2026-01-01T12:00:00.000Z", region: "england-and-wales", day: "2026-01-02", runAt: "2026-01-02T09:00:00.000Z" },
-      { at: "2026-03-27T12:00:00.000Z", region: "england-and-wales", day: "2026-03-30", runAt: "2026-03-30T08:00:00.000Z" },
-      { at: "2026-10-23T12:00:00.000Z", region: "scotland", day: "2026-10-26", runAt: "2026-10-26T09:00:00.000Z" },
+      { at: "2026-07-10T12:00:00.000Z", region: "northern-ireland", day: "2026-07-14", runAt: "2026-07-10T08:00:00.000Z" },
+      { at: "2026-07-10T12:00:00.000Z", region: "england-and-wales", day: "2026-07-13", runAt: "2026-07-10T08:00:00.000Z" },
+      { at: "2026-01-01T12:00:00.000Z", region: "scotland", day: "2026-01-05", runAt: "2026-01-01T09:00:00.000Z" },
+      { at: "2026-01-01T12:00:00.000Z", region: "england-and-wales", day: "2026-01-02", runAt: "2026-01-01T09:00:00.000Z" },
+      { at: "2026-03-27T12:00:00.000Z", region: "england-and-wales", day: "2026-03-30", runAt: "2026-03-27T09:00:00.000Z" },
+      { at: "2026-10-23T12:00:00.000Z", region: "scotland", day: "2026-10-26", runAt: "2026-10-23T08:00:00.000Z" },
       { at: "2026-08-30T23:30:00.000Z", region: "england-and-wales", day: "2026-09-01", runAt: due },
     ];
     for (const c of cases) {
@@ -140,6 +142,14 @@ describe("M2-6 Graphile scheduled prevention", () => {
     }
     const h = harness({ plannedDate: "2026-08-31" });
     expect(await h.scheduler.schedule(scope, now, h.queue)).toBe("not_next_workday");
+  });
+  it("rejects forged due dates on the planned day, a holiday, a weekend or an earlier workday", async () => {
+    const h = harness();
+    await h.scheduler.schedule(scope, now, h.queue);
+    for (const dueAt of ["2026-09-01T08:00:00.000Z", "2026-08-31T08:00:00.000Z", "2026-08-29T08:00:00.000Z", "2026-08-27T08:00:00.000Z"]) {
+      await expect(h.scheduler.execute({ ...(h.task() as object), dueAt }, "2026-09-01T08:00:00.000Z")).rejects.toThrow("INVALID_READINESS_TASK");
+    }
+    expect(h.recordProposal).not.toHaveBeenCalled();
   });
   it("evaluates provider outage and stale weather as unknown risk without leaking provider errors", async () => {
     let failed = false;
@@ -214,5 +224,45 @@ describe("M2-6 Graphile scheduled prevention", () => {
       const h = harness({ access: false, labourRatePence, uncertainDurationHours: 1 }); await h.scheduler.schedule(scope, now, h.queue); await h.scheduler.execute(h.task(), due);
       expect([...h.records.values()][0]).toMatchObject({ recoveryFeePence: 0, feeEligible: false });
     }
+  });
+});
+
+
+describe("scheduled exposure and resequence", () => {
+  it("records labour exposure and proposals only for blocked work, deduping replays", async () => {
+    const h = harness({ access: false, labourRatePence: 999_999_999_999, uncertainDurationHours: 1 });
+    h.setPlans([{ ...plan, scope: { ...scope, taskId: other }, plannedDate: "2026-09-02" }]);
+    await h.scheduler.schedule(scope, now, h.queue);
+    await h.scheduler.execute(h.task(), due); await h.scheduler.execute(h.task(), due);
+    expect(h.records.size).toBe(1);
+    expect([...h.records.values()][0]).toMatchObject({ labourExposurePence: 999_999_999_999,
+      resequence: [{ taskId: other, fromDate: "2026-09-02", toDate: plan.plannedDate }],
+      status: "proposal", programmeChanged: false, classification: "prevention", feeEligible: false, recoveryFeePence: 0 });
+    expect(h.loadJobPlans).toHaveBeenCalledWith(scope);
+    h.setPlans([{ ...plan, scope: { ...scope, taskId: other }, factRevision: 2, plannedDate: "2026-09-03" }]);
+    await h.scheduler.execute(h.task(), due);
+    expect(h.records.size).toBe(2);
+  });
+  it("keeps missing labour inputs unknown and omits risk fields on ready work", async () => {
+    for (const patch of [{}, { labourRatePence: 100 }, { uncertainDurationHours: 8 }]) {
+      const h = harness({ access: false, ...patch });
+      await h.scheduler.schedule(scope, now, h.queue); await h.scheduler.execute(h.task(), due);
+      expect([...h.records.values()][0]).toMatchObject({ labourExposurePence: null, resequence: [] });
+    }
+    const h = harness({ labourRatePence: 100, uncertainDurationHours: 8 });
+    await h.scheduler.schedule(scope, now, h.queue); await h.scheduler.execute(h.task(), due);
+    expect([...h.records.values()][0]).not.toHaveProperty("labourExposurePence");
+    expect([...h.records.values()][0]).not.toHaveProperty("resequence");
+    expect(h.loadJobPlans).not.toHaveBeenCalled();
+  });
+  it("does not offer foreign or cancelled tasks from a port", async () => {
+    const h = harness({ access: false });
+    h.setPlans([
+      { ...plan, plannedDate: "2026-09-02", scope: { ...scope, taskId: other, tenantId: other } },
+      { ...plan, plannedDate: "2026-09-02", scope: { ...scope, taskId: other, jobId: other } },
+      { ...plan, plannedDate: "2026-09-02", scope: { ...scope, taskId: other }, status: "cancelled" },
+    ]);
+    await h.scheduler.schedule(scope, now, h.queue); await h.scheduler.execute(h.task(), due);
+    expect([...h.records.values()][0]).toMatchObject({ resequence: [] });
   });
 });

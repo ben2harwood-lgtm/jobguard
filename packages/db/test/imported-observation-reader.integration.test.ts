@@ -2,11 +2,14 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { readImportedObservationBundle } from "../src/imported-observation-reader.js";
 import { ImportedEvidenceProvenanceRepository } from "../src/imported-evidence-provenance-repository.js";
+import { practiceOwnedJobsSql } from "../src/practice-session.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { D, J, T, scriptedImportPool, createImportFixture, closeWorkFixture, importState, type ImportFixture } from "./job-import-v3-fixtures.js";
 import { seedWorkPractice } from "./job-work-state-fixtures.js";
 
 describe("CH5-E source-only scripted boundary (not PostgreSQL proof)", () => {
+  const violatesSourceBoundary = (sql: string) => !sql.startsWith(practiceOwnedJobsSql())
+    && /INSERT|UPDATE|DELETE|shadow_signal|job_party_current|imported_job_baseline/u.test(sql);
   const previous = process.env.JOBGUARD_ENV;
   beforeAll(() => { process.env.JOBGUARD_ENV = "synthetic_demo"; });
   afterAll(() => { if (previous === undefined) delete process.env.JOBGUARD_ENV; else process.env.JOBGUARD_ENV = previous; });
@@ -18,16 +21,22 @@ describe("CH5-E source-only scripted boundary (not PostgreSQL proof)", () => {
     f.state.authenticated = false;
     await expect(repository.adoptWithHistory({ context: f.context, sessionDigest: D }, J, {})).rejects.toMatchObject({ code: "FORBIDDEN" });
     await expect(repository.read({ context: f.context, sessionDigest: D }, J)).rejects.toMatchObject({ code: "FORBIDDEN" });
-    expect(f.query.mock.calls.some(([sql]) => /INSERT|UPDATE|DELETE|shadow_signal|adopt_in_flight/u.test(sql))).toBe(false);
+    expect(f.query.mock.calls.some(([sql]) => !String(sql).includes("practice_owned_job") && /INSERT|UPDATE|DELETE|shadow_signal|adopt_in_flight/u.test(sql))).toBe(false);
   });
   it("checks scoped authority then refuses without a source or effects", async () => {
     const f = scriptedImportPool();
     await expect(readImportedObservationBundle(f.pool, { context: f.context, sessionDigest: D }, J.toUpperCase())).rejects.toMatchObject({ code: "IMPORTED_BASELINE_SOURCE_HANDOFF_HELD" });
     expect(f.query.mock.calls.find(([sql]) => sql.includes("authenticate_practice_session"))?.[1]).toEqual([D, T]);
     expect(f.query.mock.calls.find(([sql]) => sql.includes("FROM practice_owned_job WHERE"))?.[1]).toEqual([T, J, D]);
-    expect(f.query.mock.calls.some(([sql]) => /INSERT|UPDATE|DELETE|shadow_signal|job_party_current|imported_job_baseline/u.test(sql))).toBe(false);
+    expect(f.query.mock.calls.some(([sql]) => violatesSourceBoundary(sql))).toBe(false);
     expect(f.query.mock.calls.some(([sql]) => sql === "ROLLBACK")).toBe(true);
     expect(f.release).toHaveBeenCalledOnce();
+  });
+  it("still detects a baseline read outside the shared ownership statement", () => {
+    const ownershipSql = practiceOwnedJobsSql() + " SELECT id FROM practice_owned_job WHERE id=$2";
+    const baselineRead = "SELECT * FROM app.imported_job_baseline WHERE tenant_id=$1 AND job_id=$2";
+    expect(violatesSourceBoundary(ownershipSql)).toBe(false);
+    expect([ownershipSql, baselineRead].some(violatesSourceBoundary)).toBe(true);
   });
   it.each(["authenticated", "owns"] as const)("refuses missing %s before reporting capability", async flag => {
     const f = scriptedImportPool(); f.state[flag] = false;
