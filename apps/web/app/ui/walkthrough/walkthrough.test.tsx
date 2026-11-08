@@ -18,6 +18,12 @@ describe("WALK-1 walkthrough boundary", () => {
     expect(html).toContain("Waiting for this step");
     expect(step.autoAction).not.toHaveBeenCalled(); expect(step.isDone).not.toHaveBeenCalled();
   });
+  it("starts at the server-derived resume index without replaying earlier actions", () => {
+    const html = renderToStaticMarkup(<Walkthrough steps={[step, { ...step, id: "two", title: "Saved quote" }]} initialIndex={1} onClose={() => {}} />);
+    expect(html).toContain("Step 2 of 2");
+    expect(html).toContain("Saved quote");
+    expect(step.autoAction).not.toHaveBeenCalled();
+  });
   it("does not render an empty journey", () => {
     expect(renderToStaticMarkup(<Walkthrough steps={[]} onClose={() => {}} />)).toBe("");
   });
