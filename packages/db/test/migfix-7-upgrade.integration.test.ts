@@ -115,7 +115,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.xa_client_view_authority(p_job uuid, p_request uuid, p_actor uuid, p_email text)", "0686_extra_client_authority_loss.sql"],
     ["app.xa_client_decide(p_job uuid, p_request uuid, p_command uuid, p_actor uuid, p_token_hash text, p_email text, p_hash text, p_net bigint, p_reject boolean, p_reason text, p_role_name text, p_tester text)", "0686_extra_client_authority_loss.sql"],
     ["identity.extra_customer_use(t uuid, j uuid, c uuid, digest text, session_digest text, operation text)", "0686_extra_client_authority_loss.sql"],
-    ["app.connector_promotion(p_session uuid, p_namespace text, p_event text, p_command uuid, p_result jsonb)", "0689_connector_billing_status_promotion.sql"],
+    ["app.connector_promotion(p_session uuid, p_namespace text, p_event text, p_command uuid, p_result jsonb)", "0691_connector_billing_kind_link.sql"],
     ["app.guard_practice_material_requirement()", "0690_import_ancestry_record_anchor.sql"],
     ["app.ch4_read_work_facts(t uuid, j uuid, digest text)", "0690_import_ancestry_record_anchor.sql"],
     ["app.read_job_sources(t uuid, j uuid, digest text, source text)", "0690_import_ancestry_record_anchor.sql"],
