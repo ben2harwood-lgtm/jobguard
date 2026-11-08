@@ -50,6 +50,10 @@ it("reads exactly each bound pair through a migration-owned definer and isolates
     await bind(b, second);
     expect(await read(a)).toEqual({ actor_id: first.member, tenant_id: first.tenant });
     expect(await read(b)).toEqual({ actor_id: second.member, tenant_id: second.tenant });
+    // Even another live request's exact pair in caller-controlled settings
+    // cannot redirect the lookup away from this transaction's binding.
+    await a.query("SELECT set_config('app.actor_id',$1,true),set_config('app.tenant_id',$2,true)", [second.member, second.tenant]);
+    expect(await read(a)).toEqual({ actor_id: first.member, tenant_id: first.tenant });
     await refused(a, "SELECT app.bound_context_reader()");
     await refused(a, "SELECT app.bind_request('real',$1,$2)", [second.credential, second.tenant]);
     expect(await read(a)).toEqual({ actor_id: first.member, tenant_id: first.tenant });
