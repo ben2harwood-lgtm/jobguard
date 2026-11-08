@@ -1,0 +1,6 @@
+{
+  "migration": "0958_sync_checkpoint_bound_reader.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}
