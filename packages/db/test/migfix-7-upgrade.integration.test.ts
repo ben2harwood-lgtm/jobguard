@@ -110,6 +110,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.configure_recovery_demo(p_job uuid, p_command uuid, p_scenario character varying)", "0670_recovery_demo_replay_job.sql"],
     ["app.ent4b_fact_guard()", "0673_duplicate_unlink_command_binding.sql"],
     ["app.work_order_commit(actor uuid, payload jsonb)", "0676_work_order_expected_revision.sql"],
+    ["app.sync_snapshot_generation(u uuid, r bigint, s bigint, h text, e text)", "0679_sync_checkpoint_synthetic_guard.sql"],
   ]) {
     const source = await readFile(new URL(`../migrations/${migration}`, import.meta.url), "utf8");
     if (identity!.startsWith("app.decision_check_command(")) {
