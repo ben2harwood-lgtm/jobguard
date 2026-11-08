@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-143": {
+      "branches": [
+        "codex/sandbox/later-safety-143"
+      ],
+      "allow": [
+        "packages/db/migrations/0960_final_check_owner_v1_adoption_edge.sql",
+        "packages/db/test/migration-proofs/0960_final_check_owner_v1_adoption_edge.proof.json",
+        "packages/db/test/final-check-practice-owner.integration.test.ts"
+      ]
+    }
+  }
+}
