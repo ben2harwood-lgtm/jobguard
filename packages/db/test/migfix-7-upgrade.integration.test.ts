@@ -115,6 +115,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.xa_client_view_authority(p_job uuid, p_request uuid, p_actor uuid, p_email text)", "0686_extra_client_authority_loss.sql"],
     ["app.xa_client_decide(p_job uuid, p_request uuid, p_command uuid, p_actor uuid, p_token_hash text, p_email text, p_hash text, p_net bigint, p_reject boolean, p_reason text, p_role_name text, p_tester text)", "0686_extra_client_authority_loss.sql"],
     ["identity.extra_customer_use(t uuid, j uuid, c uuid, digest text, session_digest text, operation text)", "0686_extra_client_authority_loss.sql"],
+    ["app.connector_promotion(p_session uuid, p_namespace text, p_event text, p_command uuid, p_result jsonb)", "0689_connector_billing_status_promotion.sql"],
   ]) {
     const source = await readFile(new URL(`../migrations/${migration}`, import.meta.url), "utf8");
     if (identity!.startsWith("app.decision_check_command(")) {
