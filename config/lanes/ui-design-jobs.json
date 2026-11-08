@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "ui-design-jobs": {
+      "branches": [
+        "codex/sandbox/ui-design-jobs"
+      ],
+      "note": "UI-DESIGN-JOBS: approved clickable design brought into apps/web for the Jobs list and one job overview, on existing routes with synthetic data; no backend routes, no migrations.",
+      "allow": [
+        "apps/web/app/(designed)/**",
+        "apps/web/public/design/**"
+      ]
+    }
+  }
+}

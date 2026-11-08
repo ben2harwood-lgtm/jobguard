@@ -1,0 +1,4 @@
+/* Hand-written: fits the generated reference design under the app's practice-sandbox banner,
+   which every page keeps. The banner stays pinned so the fixed side rail never slides under it. */
+body:has(.jgd) .sandbox-banner{position:sticky;top:0}
+@media (min-width:761px){.jgd .rr-rail{top:44px}}
