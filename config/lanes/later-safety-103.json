@@ -8,7 +8,8 @@
       "allow": [
         "packages/db/migrations/0678_manual_attestation_synthetic_gate.sql",
         "packages/db/test/migration-proofs/0678_manual_attestation_synthetic_gate.proof.json",
-        "packages/db/test/purchase-order-audit.integration.test.ts"
+        "packages/db/test/purchase-order-audit.integration.test.ts",
+        "packages/db/test/watchdog.integration.test.ts"
       ]
     }
   }
