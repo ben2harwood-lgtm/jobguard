@@ -53,7 +53,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   expect(live.find(row => row.nspname === "app" && row.proname === "replace_fee_reservation_book"
     && row.args === "p_tenant uuid, p_book jsonb, p_result jsonb")?.definition?.split("$function$")[1]).toEqual(feeResultBody);
   // 0697 adds only this owner-only trigger routine; pin its exact identity and complete body.
-  const variationLock = await readFile(new URL("../migrations/0697_variation_post_lock_refusal.sql", import.meta.url), "utf8");
+  const variationLock = await readFile(new URL("../migrations/0694_variation_post_lock_refusal.sql", import.meta.url), "utf8");
   const variationLockBody = variationLock.split("FUNCTION app.guard_variation_final_account_lock()")[1]!.split("AS $$")[1]!.split("$$;")[0];
   const variationLockRoutines = live.filter(row => row.nspname === "app" && row.proname === "guard_variation_final_account_lock" && row.args === "");
   expect(variationLockRoutines).toHaveLength(1);
