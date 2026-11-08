@@ -24,3 +24,11 @@ Forward fix only. Preserve existing immutable revisions and approvals. A genuine
 PostgreSQL and browser execution are unavailable in this sandbox. CI must execute LP0-17, grant-freeze, variation-post-lock, MIGFIX-7 and plan-entitlement upgrade, fresh/upgrade migrations and all required checks. The historical delta PASS at 6e739cba does not establish an independent review of this catch-up head. The router stages the renames and changes, commits, pushes and opens the PR.
 
 Inspected origin/main was `7ea067babed06040e1335bb0d2185ef80eacf1bd`.
+
+## CI repair try 1 — 8 November 2026
+
+Read CI run 42522021490 at a8b10b6821d34d2c6571da1fc1fd6bf35d7e5b45 through the GitHub connector after `gh` could not connect. Shard 1 failed two MIGFIX-5 tests; shard 3 failed the meter lock-first race. All three fixtures tried to approve an ordinary variation after final-account lock and received the intended `42501 / VARIATION_LOCKED_BY_FINAL_ACCOUNT`. `core` and `checks` failed as dependent gates; core-checks, browser shards, secrets and dependency review passed.
+
+The race tests now require the named refusal, no approval row, and the unchanged locked line set or meter observations. The meter still separately asserts its own `INVALID_SMALL_TRIP_SOURCE` refusals for both a missing source and an existing approval dated beyond the lock cutoff. The supplementary billing regression now confirms a genuine Final Check catch through the existing fixture and repository paths, then prices and approves it through the existing variation writers. Its final-invoice refusal, exact 120,000p plus 12,000p invoices, and 132,000p aggregate assertions remain. No product code or migration changed, and no migration renumber or policy decision is needed.
+
+Local checks: 108 migration-proof/catalogue tests and 14 customer-variation tests passed with maxWorkers=2. Database source TypeScript and a temporary TypeScript configuration covering both changed integration files and their imports passed. Vitest collected the two repaired suites plus variation-post-lock (14 tests) with maxWorkers=2. Collection is not execution; the three integration suites require PostgreSQL execution in CI after router push. Exact-head RED review and green CI remain required.

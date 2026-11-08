@@ -1,10 +1,15 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { approveVariation, priceVariation } from "@jobguard/core";
 import { FinalAccountLockRepository } from "../src/final-account-lock-repository.js";
 import { PracticeInvoiceRepository } from "../src/practice-invoice-repository.js";
 import { createLockFixture, closeLockFixture, seedAccount, prepareLock, addFixtureCapture, asFixtureTenant, LOCK_OWNER, LOCK_HASH, type LockFixture } from "./final-account-lock.integration.test.js";
 import { publishFixtureCompletion } from "./sv5pre-fixtures.js";
+import { availableFinalCheck, seedFinalCheckJob, FINAL_CHECK_ACTOR } from "./final-check-fixture.js";
+import { FinalCheckRepository } from "../src/final-check-repository.js";
+import { approvePricedVariation, insertPricedVariation } from "../src/variation-repository.js";
+import { withTenant } from "../src/tenant-context.js";
 
 // MIGFIX-5 (0166): the lock refuses an account assembled before the latest approved variation, and partial
 // credit notes conserve the ORIGINAL invoice net and VAT. The legacy-issuer guard and real PDF bytes are held
@@ -18,7 +23,7 @@ async function appendCheck(f: LockFixture, a: Account, status: "pending" | "fail
   const row = (await f.admin.query("SELECT id,locked_at::text cutoff FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2", [a.tenantId, a.jobId])).rows[0];
   await asFixtureTenant(f.shadow, a.tenantId, db => db.query("INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,lock_id,evidence_cutoff_at,status) VALUES($1,$2,$3,$4,$5::timestamptz,$6)", [a.tenantId, a.jobId, randomUUID(), row.id, row.cutoff, status]));
 }
-const invoiceInput = (a: Account, revisionId: string, hash: string, invoiceKind: "final" | "supplementary" = "final") =>
+const invoiceInput = (a: { jobId: string }, revisionId: string, hash: string, invoiceKind: "final" | "supplementary" = "final") =>
   ({ jobId: a.jobId, actorMembershipId: LOCK_OWNER, commandId: randomUUID(), finalAccountRevisionId: revisionId, expectedSourceHash: hash, invoiceKind, recipient: "practice-customer@example.invalid", issuedOn: "2026-10-12" });
 const lockSql = (f: LockFixture, a: Account, revisionId: string, expected: number) => (db: PoolClient) =>
   db.query("SELECT app.lock_final_account($1,$2,$3,$4,$5,$6,'final_account_declaration.v1')", [a.tenantId, a.jobId, LOCK_OWNER, randomUUID(), revisionId, expected]);
@@ -38,7 +43,7 @@ async function approveOn(db: PoolClient, a: Account, variationId: string) {
   await db.query("UPDATE app.variation SET state='approved' WHERE tenant_id=$1 AND id=$2", [a.tenantId, variationId]);
 }
 /** A second account revision: the baseline lines plus one variation line whose source IS the variation's current revision. */
-async function reassemble(f: LockFixture, a: Account, variationId: string, extraNet: number, net: number, tax: number) {
+async function reassemble(f: LockFixture, a: { tenantId: string; jobId: string; revisionId: string; draftId: string }, variationId: string, extraNet: number, net: number, tax: number) {
   const info = (await f.admin.query("SELECT v.current_revision_id,v.scope_item_id FROM app.variation v WHERE v.tenant_id=$1 AND v.id=$2", [a.tenantId, variationId])).rows[0];
   const revision = randomUUID();
   await asFixtureTenant(f.admin, a.tenantId, async db => {
@@ -108,18 +113,21 @@ describe("MIGFIX-5 customer billing integrity", () => {
     } finally { await approval.query("ROLLBACK").catch(() => undefined); approval.release(); }
     expect((await f.admin.query("SELECT count(*)::int n FROM app.final_account_lock WHERE tenant_id=$1", [a.tenantId])).rows[0].n).toBe(0);
 
-    // Lock first (uncommitted) then approval: the approval waits, so it is a post-lock source, and the locked set is exactly the account's own lines.
+    // Lock first (uncommitted) then approval: approval waits and is refused after commit; the locked lines stay unchanged.
     const b = await seedAccount(f.admin); await prepareLock(f, b);
     const v2 = await addFixtureCapture(f, b, 80000);
     const locking = await f.runtime.connect(); let approvalDone = false;
     try {
       await locking.query("BEGIN"); await locking.query("SELECT set_config('app.tenant_id',$1,true)", [b.tenantId]); await lockSql(f, b, b.revisionId, 1)(locking);
-      const late = asFixtureTenant(f.admin, b.tenantId, db => approveOn(db, b, v2)).then(() => { approvalDone = true; });
-      await blocked(); expect(approvalDone).toBe(false); await locking.query("COMMIT"); await late;
+      const late = asFixtureTenant(f.admin, b.tenantId, db => approveOn(db, b, v2))
+        .then(() => { approvalDone = true; return null; }, error => error);
+      await blocked(); expect(approvalDone).toBe(false); await locking.query("COMMIT");
+      expect(await late).toMatchObject({ code: "42501", message: "VARIATION_LOCKED_BY_FINAL_ACCOUNT" });
     } finally { await locking.query("ROLLBACK").catch(() => undefined); locking.release(); }
     const lock = (await f.admin.query("SELECT snapshot FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2", [b.tenantId, b.jobId])).rows[0];
     expect(lock.snapshot.lines.map((l: { id: string }) => l.id)).toEqual([b.lineId]);
-    expect((await f.admin.query("SELECT state FROM app.variation WHERE tenant_id=$1 AND id=$2", [b.tenantId, v2])).rows[0].state).toBe("approved");
+    expect((await f.admin.query("SELECT state FROM app.variation WHERE tenant_id=$1 AND id=$2", [b.tenantId, v2])).rows[0].state).toBe("priced");
+    expect((await f.admin.query("SELECT id FROM app.variation_approval WHERE tenant_id=$1 AND variation_id=$2", [b.tenantId, v2])).rows).toEqual([]);
   }, 90000);
 
   it("conserves invoice net and VAT across partial credits (10,003 / 2,001 / 12,004)", async () => {
@@ -165,16 +173,34 @@ describe("MIGFIX-5 customer billing integrity", () => {
   }, 90000);
 
   it("regression: a revised account cannot rebill invoiced scope; the supplementary path bills only the added line (132,000p aggregate)", async () => {
-    // The extra is captured (priced) before the lock, as post-lock capture is closed; it is approved after the first invoice.
-    const a = await seedAccount(f.admin, randomUUID(), 100000), repo = await prepareLock(f, a);
-    const variation = await addFixtureCapture(f, a, 10000);
-    await repo.lock(a.context, a.input); await appendCheck(f, a, "completed");
-    await repo.issueInvoice(a.context, invoiceInput(a, a.revisionId, LOCK_HASH));
+    // Only a genuine Final Check catch may gain its first price/approval after lock.
+    const checkFixture = { ...f, logs: [] }, job = await seedFinalCheckJob(checkFixture);
+    const a = { ...job,
+      draftId: (await f.admin.query("SELECT final_account_draft_id FROM app.final_account_revision WHERE tenant_id=$1 AND id=$2", [job.tenantId, job.revisionId])).rows[0].final_account_draft_id as string,
+    };
+    const revealed = await availableFinalCheck(checkFixture, job), repo = new FinalAccountLockRepository(f.runtime);
+    const input = (revision: string, hash: string, kind: "final" | "supplementary" = "final") => ({ ...invoiceInput(a, revision, hash, kind), actorMembershipId: FINAL_CHECK_ACTOR });
+    await repo.issueInvoice(a.context, input(a.revisionId, LOCK_HASH));
     expect((await f.admin.query("SELECT total_pence FROM app.customer_invoice WHERE tenant_id=$1 AND job_id=$2", [a.tenantId, a.jobId])).rows.map(r => Number(r.total_pence))).toEqual([120000]);
-    await approveCapture(f, a, variation);
+    const { variationId: variation } = await new FinalCheckRepository(f.runtime).confirmCatch(a.context, a.jobId, job.digest, {
+      version: "final-check.catch.v1", commandId: randomUUID(), lockId: revealed.lockId,
+      runId: revealed.runId, signalId: revealed.signalId, expectedSignalRevision: 1,
+    }) as { variationId: string };
+    const row = (await f.admin.query("SELECT scope_item_id,description FROM app.variation WHERE tenant_id=$1 AND id=$2", [a.tenantId, variation])).rows[0];
+    const proposal = { version: "variation-proposal.v1" as const, id: variation, jobId: a.jobId, scopeItemId: row.scope_item_id as string,
+      existingScopeItemId: null, lineageParentScopeItemId: null, captureKind: "text" as const, captureText: row.description as string, description: row.description as string, suggestion: null };
+    const revision = priceVariation({ id: randomUUID(), variationId: variation, previous: null, proposal, description: proposal.description, contentHash: LOCK_HASH,
+      confirmed: { quantity: "1", unit: "item", unitRatePence: 10000, direction: "addition", confirmedByMembershipId: FINAL_CHECK_ACTOR,
+        rateProvenance: { kind: "human_entered", sourceRef: "synthetic://migfix-5", sourceHash: LOCK_HASH, rateVersion: "synthetic.v1" } } });
+    const approved = approveVariation(revision, { id: randomUUID(), revisionId: revision.id, revision: revision.revision, contentHash: revision.contentHash,
+      signedDeltaPence: revision.signedDeltaPence, method: "builder_attestation", actorMembershipId: FINAL_CHECK_ACTOR, evidenceId: null, approvedAt: new Date() });
+    await withTenant(f.runtime, a.context, async db => {
+      await insertPricedVariation(db, a.tenantId, revision);
+      await approvePricedVariation(db, a.tenantId, variation, approved);
+    });
     const revision2 = await reassemble(f, a, variation, 10000, 110000, 22000);
-    await expect(repo.issueInvoice(a.context, invoiceInput(a, revision2, REV2_HASH, "final"))).rejects.toMatchObject({ code: expect.stringMatching(/FINAL_INVOICE_(REVISION_MISMATCH|ALREADY_ISSUED)/) });
-    await repo.issueInvoice(a.context, invoiceInput(a, revision2, REV2_HASH, "supplementary"));
+    await expect(repo.issueInvoice(a.context, input(revision2, REV2_HASH, "final"))).rejects.toMatchObject({ code: expect.stringMatching(/FINAL_INVOICE_(REVISION_MISMATCH|ALREADY_ISSUED)/) });
+    await repo.issueInvoice(a.context, input(revision2, REV2_HASH, "supplementary"));
     const all = (await f.admin.query("SELECT net_pence,total_pence FROM app.customer_invoice WHERE tenant_id=$1 AND job_id=$2 ORDER BY created_at,id", [a.tenantId, a.jobId])).rows;
     expect(all.map(r => Number(r.total_pence))).toEqual([120000, 12000]);
     expect(all.reduce((s, r) => s + Number(r.total_pence), 0)).toBe(132000);
