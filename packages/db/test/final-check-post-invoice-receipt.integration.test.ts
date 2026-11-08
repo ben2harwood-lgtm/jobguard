@@ -92,15 +92,17 @@ it("an issued final invoice permits exactly one later receipt allocation after w
   ))).rejects.toMatchObject({ code: "42501" });
 });
 
-it("without an issued final invoice the receipt gate still rejects withdrawn manifest proof", async () => {
+it("without an issued final invoice locked manifest proof cannot be withdrawn, so the receipt gate keeps its proof", async () => {
   const a = await seedFinalCheckJob(f), checked = await availableFinalCheck(f, a);
   await new FinalCheckCompletionRepository(f.shadow).publish(a.context, {
     version: "final-check-publication.v1", jobId: a.jobId, runId: checked.runId, checkId: randomUUID(),
   });
   await receiptGate(a.tenantId, a.jobId);
-  await withdraw(a.tenantId, checked.manifest.sources[0]!.evidenceId!, FINAL_CHECK_ACTOR);
+  // 0666 refuses a pre-invoice withdrawal of locked manifest proof; 0692's relaxation applies only after final invoice issue.
+  await expect(withdraw(a.tenantId, checked.manifest.sources[0]!.evidenceId!, FINAL_CHECK_ACTOR)).rejects.toThrow("FINAL_CHECK_VERIFIED_SOURCE_LOCKED");
   expect((await f.admin.query("SELECT count(*)::int n FROM app.customer_invoice WHERE tenant_id=$1 AND job_id=$2", [a.tenantId, a.jobId])).rows).toEqual([{ n: 0 }]);
-  await expect(receiptGate(a.tenantId, a.jobId)).rejects.toThrow("FINAL_CHECK_NOT_COMPLETE");
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.evidence_invalidation WHERE tenant_id=$1 AND evidence_id=$2", [a.tenantId, checked.manifest.sources[0]!.evidenceId!])).rows).toEqual([{ n: 0 }]);
+  await receiptGate(a.tenantId, a.jobId);
 });
 
 it("without a lock the receipt gate still requires FINAL_ACCOUNT_LOCK_REQUIRED", async () => {
