@@ -5,10 +5,11 @@
       "branches": [
         "codex/sandbox/ui-design-jobs"
       ],
-      "note": "UI-DESIGN-JOBS: approved clickable design brought into apps/web for the Jobs list and one job overview, on existing routes with synthetic data; no backend routes, no migrations.",
+      "note": "UI-DESIGN-JOBS: approved clickable design brought into apps/web (Today, Jobs, To check, Money, More, new job and the job's Overview/Work/Money/Records tabs), on existing routes with synthetic data, hosting the existing working tools; no backend routes, no migrations.",
       "allow": [
         "apps/web/app/(designed)/**",
-        "apps/web/public/design/**"
+        "apps/web/public/design/**",
+        "apps/web/e2e/UI-DESIGN-JOBS.spec.ts"
       ]
     }
   }

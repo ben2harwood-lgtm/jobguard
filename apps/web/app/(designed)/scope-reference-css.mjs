@@ -15,7 +15,15 @@ function evalCompound(c) { let rest = c, ok = true; while (rest.length) {
   if ((m = rest.match(/^\[[^\]]+\]/))) { const t = attrTrue(m[0]); if (t === null) return null; ok = ok && t; rest = rest.slice(m[0].length); continue; }
   if ((m = rest.match(/^:(is|where|not)\(/))) { let d = 1, i = m[0].length; while (d && i < rest.length) { if (rest[i] === "(") d++; if (rest[i] === ")") d--; i++; } const inner = rest.slice(m[0].length, i - 1); const vals = splitTop(inner).map(evalCompound); if (vals.some(v => v === null)) return null; const any = vals.some(Boolean); ok = ok && (m[1] === "not" ? !any : any); rest = rest.slice(i); continue; }
   return null; } return ok; }
-function scope(sel) {
+// Existing working tools hosted inside a designed screen sit in .jgd-legacy and keep the app's own styles.
+const LEGACY = ":not(.jgd-legacy *)";
+function outsideLegacy(sel) {
+  if (sel === W || sel.startsWith(W + ":")) return sel;
+  const m = sel.match(/((?:::?(?:before|after|placeholder|selection|marker|backdrop|file-selector-button|-webkit-[a-z-]+))+)$/u);
+  return m ? sel.slice(0, -m[1].length) + LEGACY + m[1] : sel + LEGACY;
+}
+function scope(sel) { const r = scopeOnly(sel); return r === null ? null : outsideLegacy(r); }
+function scopeOnly(sel) {
   let s = sel.trim(), head = null, m;
   if ((m = s.match(/^(html|:root)((?:\[[^\]]+\]|:(?:is|where|not)\((?:[^()]|\([^()]*\))*\))*)/))) { const v = m[2] ? evalCompound(m[2]) : true; if (v === null) return s.startsWith(":root") ? null : null; if (!v) return null; head = W; s = s.slice(m[0].length); }
   else if ((m = s.match(/^((?:\[data-(?:reference|skin|density|imagery|glow|background|lab-open|lab-panel)[^\]]*\]|:(?:is|where|not)\((?:[^()]|\([^()]*\))*\))+)/))) { const v = evalCompound(m[1]); if (v === false) return null; if (v === true) { head = W; s = s.slice(m[0].length); } }
@@ -31,6 +39,6 @@ for (const f of ["styles.css", "themes.css", "reference.css", "finish.css", "bac
   root.walkDecls(d => { d.value = d.value.replace(/url\((['"]?)\.\/assets\//g, "url($1/design/assets/"); });
   css += `/* from ${f} */\n` + root.toString() + "\n";
 }
-const reset = "/* Undo the app's global element and class rules inside the designed screens; the reference rules below then apply. */\n.jgd :where(:not(svg,svg *)){all:revert}\n";
+const reset = "/* Undo the app's global element and class rules inside the designed screens; the reference rules below then apply. */\n.jgd :where(:not(svg,svg *,.jgd-legacy,.jgd-legacy *)){all:revert}\n";
 writeFileSync(outFile, "/* Generated from the approved JobGuard reference design (site/*.css, 19 Oct 2026), scoped under .jgd. */\n" + reset + css);
 console.log(outFile, css.length);
