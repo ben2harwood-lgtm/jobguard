@@ -42,7 +42,7 @@ const lp6cSignatures = [
   "app.complete_command(uuid,jsonb)",
   "app.mon1_company_actor(uuid,text)",
 ] as const;
-const lp6cBodies = [...readFileSync(new URL("../migrations/1217_lp6c_money_binding.sql", import.meta.url), "utf8")
+const lp6cBodies = [...readFileSync(new URL("../migrations/0686_lp6c_money_binding.sql", import.meta.url), "utf8")
   .matchAll(/CREATE OR REPLACE FUNCTION app\.(\w+)\((.*?)\)\s*RETURNS\b.*?\bAS\s+(\$\w*\$)(.*?)\3\s*;/gis)];
 let c: Cluster | undefined;
 afterAll(async () => { await c?.close(); });
@@ -184,7 +184,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     }
     if (prior.nspname === "app" && prior.proname === "final_check_require_invoice_actor" && prior.args === "p_tenant uuid, p_job uuid, p_actor uuid") {
       expect({ ...current, definition: prior.definition, source: prior.source }).toEqual(prior);
-      const owner = await readFile(new URL("../migrations/1217_lp6c_money_binding.sql", import.meta.url), "utf8");
+      const owner = await readFile(new URL("../migrations/0686_lp6c_money_binding.sql", import.meta.url), "utf8");
       const body=owner.split("FUNCTION app.final_check_require_invoice_actor(")[1]!.split("AS $$")[1]!.split(/\$\$\s*;/u)[0];
       expect(current?.definition?.split("$function$")[1]).toBe(body);
       expect(current?.source).toBe(body);

@@ -1,5 +1,5 @@
 {
-  "migration": "1217_lp6c_money_binding.sql",
+  "migration": "0686_lp6c_money_binding.sql",
   "lp0": [
     {
       "section": "authorityPaths",
@@ -21,7 +21,7 @@
           "LP-12": "Review existing money/command definer owner custody."
         },
         "sources": [
-          "packages/db/migrations/1217_lp6c_money_binding.sql"
+          "packages/db/migrations/0686_lp6c_money_binding.sql"
         ],
         "tests": [
           "packages/db/test/lp6c-money-routines.test.ts",
@@ -82,7 +82,7 @@
         },
         "downstream": "Five owner-only EXECUTE grants let existing migration and command-writer definers read the protected actor/tenant; the migration-owned meter credential bridge uses bind_request. Runtime gets no additional grants. Permission, exact approval, replay, resource and CH-7-TERMS clock checks remain separate.",
         "sources": [
-          "packages/db/migrations/1217_lp6c_money_binding.sql"
+          "packages/db/migrations/0686_lp6c_money_binding.sql"
         ],
         "tests": [
           "packages/db/test/lp6c-money-routines.test.ts",

@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { expect, it } from "vitest";
 
 const directory = new URL("../migrations/", import.meta.url);
-const migration = "1217_lp6c_money_binding.sql";
+const migration = "0686_lp6c_money_binding.sql";
 // This is a regression contract for copied bodies, not a permission scanner or source pin.
 const functions = (sql: string) => [...sql.matchAll(/CREATE (?:OR REPLACE )?FUNCTION\s+app\.(\w+)\s*\((.*?)\)\s*RETURNS\b(.*?)\bAS\s+(\$\w*\$)(.*?)\4\s*;/gis)];
 const key = (m: RegExpMatchArray) => m[1]! + m[2]!.replace(/\s+|\(\d+(?:,\d+)?\)/gu, "").toLowerCase();
@@ -57,7 +57,7 @@ it("guards command claim actors before effect updates and completion/replay use"
 });
 
 it("declares exactly the five owner-only binding grants and exact identity-form proof arguments", () => {
-  const proof = JSON.parse(readFileSync(new URL("./migration-proofs/1217_lp6c_money_binding.proof.json", import.meta.url), "utf8"));
+  const proof = JSON.parse(readFileSync(new URL("./migration-proofs/0686_lp6c_money_binding.proof.json", import.meta.url), "utf8"));
   expect(proof.migration).toBe(migration);
   const predecessor=JSON.parse(readFileSync(new URL("./migration-proofs/0672_extra_pack_artifact_store.proof.json",import.meta.url),"utf8"));
   const existing=predecessor.lp0.filter((c:{section:string;after?:{key?:string}})=>c.section==='entries' && /^acl\|routine\|function:app\.current_(?:actor|tenant)\(\)\|jobguard_migration\|EXECUTE\|-$/u.test(c.after?.key??''))
