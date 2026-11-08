@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { siteOrderCheckV1, siteSupervisorQueryV1, siteSupervisorQueriesV1, sorSiteExtraSubmittedV2, siteExtraLoggedV4, siteExtraContentSha256V1, type SiteOrderCheck } from "@jobguard/core";
+import { siteOrderCheckV1, siteSupervisorQueryV1, siteSupervisorQueriesV1, sorSiteExtraSubmittedV2, siteExtraLoggedV4, siteExtraContentSha256V1, type CloseoutAnswer, type SiteOrderCheck } from "@jobguard/core";
 import { LocalDictation } from "../../ui/local-dictation";
 import { ExtraProceed } from "./extra-proceed";
 import { SiteVisit } from "./site-visit";
@@ -9,7 +9,7 @@ import { NorthsidePractice } from "../../northside/northside-practice";
 import { pounds } from "../../lib/pounds";
 import styles from "../../northside/northside.module.css";
 
-type Job = { jobId: string; reference: string; openVisitId: string | null };
+type Job = { jobId: string; reference: string; openVisitId: string | null; lastCompletedVisit?: { visitId: string; closeoutAnswer: CloseoutAnswer } | null };
 type Photo = { photoEvidenceId: string; photoSha256: string; shownContentSha256: string };
 type Extra = { extraId: string; jobId: string; orderReference: string; description: string; state: string; hasPhoto: boolean; residentConfirmed: boolean; quotedPence: number | null; outcome: string | null };
 const workLabels = { not_started: "Not started", under_way: "Under way", finished: "Finished" } as const;
@@ -49,7 +49,7 @@ export function SiteExtra() {
       const jobsBody = await j.json(), extrasBody = await e.json();
       if (!Array.isArray(jobsBody.jobs) || !Array.isArray(extrasBody.extras)) throw new Error("Jobs and extras returned an unreadable response.");
       setSupervisor(extrasBody.role === "supervisor"); setOperative(extrasBody.role === "operative");
-      setJobs(jobsBody.jobs.map((x: Job) => ({ jobId: x.jobId, reference: x.reference, openVisitId: x.openVisitId }))); setExtras(extrasBody.extras); setLoadState("ready");
+      setJobs(jobsBody.jobs.map((x: Job) => ({ jobId: x.jobId, reference: x.reference, openVisitId: x.openVisitId, lastCompletedVisit: x.lastCompletedVisit ?? null }))); setExtras(extrasBody.extras); setLoadState("ready");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Jobs and extras could not load."); setLoadState("failed");
     }
@@ -115,7 +115,7 @@ export function SiteExtra() {
     {done && <p role="status" className={styles.ok} data-testid="extra-logged">{done}</p>}
     {loadState === "loading" ? <p role="status">Loading…</p> : loadState === "failed" ? <button onClick={() => void load()}>Reload jobs and extras</button> : jobs?.length === 0 ? <p>No jobs are assigned to you.</p> : <section className={styles.card}>
       <div className={styles.row}><label htmlFor="job">Job</label><select id="job" value={jobId} disabled={locked} onChange={e => chooseJob(e.target.value)}>{jobs?.map(j => <option key={j.jobId} value={j.jobId}>{j.reference}</option>)}</select></div>
-      <SiteVisit key={jobId} jobId={jobId} openVisitId={jobs?.find(job => job.jobId === jobId)?.openVisitId ?? null} locked={locked} onVisitChange={setVisitId} onSelect={item => { if (item.code !== sorCode || quantity !== "1") setCheck(null); setSorCode(item.code); setDescription(item.description); setNote(item.description); setQuantity("1"); }} />
+      <SiteVisit key={jobId} jobId={jobId} openVisitId={jobs?.find(job => job.jobId === jobId)?.openVisitId ?? null} lastCompletedVisit={jobs?.find(job => job.jobId === jobId)?.lastCompletedVisit ?? null} locked={locked} onVisitChange={setVisitId} onSelect={item => { if (item.code !== sorCode || quantity !== "1") setCheck(null); setSorCode(item.code); setDescription(item.description); setNote(item.description); setQuantity("1"); }} />
       {sorCode && <><p>Schedule item: {sorCode}</p><label htmlFor="quantity">Total quantity</label><input className={styles.quantity} id="quantity" inputMode="decimal" value={quantity} disabled={locked} onChange={e => { setQuantity(e.target.value); setCheck(null); }} />
         <p role="status">{!check ? "Checking order…" : check.outcome === "already_on_order" ? "Already on the order. Record a question for your supervisor; this is not an extra." : check.outcome === "new" ? "New extra" : `${check.extraQuantity} ${check.unit} more than ordered`}</p>{check?.outcome === "already_on_order" && <div className={styles.actions}><button disabled={busy || !check.orderRevisionId} onClick={() => void askSupervisor()}>Ask supervisor</button></div>}</>}
       <p data-testid="proceed-comparison">Proceed limit comparison: {sorCode ? check?.proceedComparison === "within" ? "within the limit" : check?.proceedComparison === "above" ? "above the limit" : "unavailable" : "above the limit (unpriced)"}. This is a comparison and does not grant permission to proceed.</p>

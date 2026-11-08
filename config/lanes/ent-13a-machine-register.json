@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-13a-machine-register": {
+      "branches": [
+        "codex/sandbox/ent-13a-machine-register"
+      ],
+      "allow": [
+        "apps/api/src/connectors/machine.module.ts",
+        "apps/api/src/connectors/machine.module.test.ts",
+        "apps/api/src/connectors/fake-secret-store.ts",
+        "apps/api/src/connectors/fake-secret-store.test.ts",
+        "apps/api/src/app.module.ts",
+        "apps/api/src/auth/identity.test.ts",
+        "packages/config/src/connector-environment.ts",
+        "packages/config/src/connector-environment.test.ts",
+        "docs/contracts/connector-machine-registration-v1.md"
+      ]
+    }
+  }
+}
