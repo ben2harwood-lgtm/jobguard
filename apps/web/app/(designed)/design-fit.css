@@ -8,7 +8,7 @@ body:has(.jgd) .sandbox-banner{position:sticky;top:0}
 .jgd .jgd-legacy.jgd-legacy{display:block;padding:4px 20px 20px;background:#fff;color:var(--ink,#17201c);font:15px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;overflow-wrap:anywhere}
 .jgd .jgd-legacy.jgd-legacy .workspace-page{width:100%;padding:12px 0}
 /* The hosted job workspace's own "← Jobs" link: the design's rail and tabs replace it. */
-.jgd .jgd-legacy.jgd-legacy .workspace-page>a[href="/"]:first-child{display:none}
+.jgd .jgd-legacy.jgd-legacy .workspace-page>a[href="/classic"]:first-child{display:none}
 @media (max-width:760px){.jgd .jgd-legacy.jgd-legacy{padding:4px 12px 16px}}
 /* Hosted tools that print their own copy of the sandbox banner: the page already shows it once. */
 .jgd .jgd-legacy.jgd-legacy .sandbox-banner{display:none}

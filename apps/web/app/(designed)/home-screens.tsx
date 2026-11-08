@@ -153,7 +153,7 @@ const BENEFITS: [string, string, string][] = [
   ["07", "Follow the bill to payment", "Keep approval, invoice and recorded payments separate, right to the end."],
 ];
 const TOOLS = { proof: "Add a photo", extra: "Add extra work", final: "Prepare the final bill", fee: "See the fee example" } as const;
-const LINKS: [string, string][] = [["/demo-s", "Small-builder practice chooser"], ["/practice-company", "Practice company"], ["/practice-bank", "Practice bank"], ["/value", "Business value"], ["/plans", "Plans"], ["/meter", "Jobs on the go"], ["/things-to-check-report", "Things-to-check report"], ["/admin/contractor", "Contractor organisation practice"], ["/contractor/work-orders", "Contractor work orders"], ["/contractor/dashboard", "Contractor dashboard"], ["/", "The original home screen and guided tour"]];
+const LINKS: [string, string][] = [["/demo-s", "Small-builder practice chooser"], ["/practice-company", "Practice company"], ["/practice-bank", "Practice bank"], ["/value", "Business value"], ["/plans", "Plans"], ["/meter", "Jobs on the go"], ["/things-to-check-report", "Things-to-check report"], ["/admin/contractor", "Contractor organisation practice"], ["/contractor/work-orders", "Contractor work orders"], ["/contractor/dashboard", "Contractor dashboard"], ["/classic", "The original home screen and guided tour"]];
 
 function More({ workspace }: { workspace: Workspace }) {
   const router = useRouter();

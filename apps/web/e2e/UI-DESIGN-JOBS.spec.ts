@@ -13,7 +13,7 @@ test("UI-DESIGN-JOBS main screens and job tabs open in the design", async ({ pag
   const errors: string[] = [];
   page.on("pageerror", error => errors.push(String(error)));
   const job = await signIn(page);
-  for (const [path, testId] of [["/today", "designed-today"], ["/jobs", "designed-jobs-list"], ["/check", "designed-check"], ["/money", "designed-money"], ["/more", "designed-more"],
+  for (const [path, testId] of [["/", "designed-today"], ["/today", "designed-today"], ["/jobs", "designed-jobs-list"], ["/check", "designed-check"], ["/money", "designed-money"], ["/more", "designed-more"],
     [`/jobs/${job.id}/overview`, "designed-job-overview"], [`/jobs/${job.id}/work`, "designed-job-work"], [`/jobs/${job.id}/money`, "designed-job-money"], [`/jobs/${job.id}/records`, "designed-job-records"]] as const) {
     await page.goto(path);
     await expect(page.getByTestId(testId)).toBeVisible({ timeout: 30_000 });

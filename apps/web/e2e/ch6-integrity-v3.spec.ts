@@ -63,7 +63,7 @@ test("CH-6 fresh v3 shows saved advisory sources without v1 pricing or pre-lock 
  // A separate practice session cannot read the first customer's job or advisory output.
  const unrelated = await browser.newContext({ ...(baseURL ? { baseURL } : {}) });
  try {
-  const other = await unrelated.newPage(); await other.goto("/");
+  const other = await unrelated.newPage(); await other.goto("/classic");
   await other.getByRole("main").getByRole("button", { name: "Start the demo", exact: true }).click();
   await other.getByRole("button", { name: "Skip tour", exact: true }).click();
   const denied = await other.request.get(`/api/jobs/${jobId}/commercial-integrity/v3`);

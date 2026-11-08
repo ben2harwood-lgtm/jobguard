@@ -5,7 +5,7 @@ const BANNER="Practice sandbox — synthetic data; nothing is sent or charged";
 // C7 asks to "open the job from Jobs". Captured practice jobs are by design NOT listed on the Jobs home (DB test "reads a captured job
 // directly without broadening the filtered home list"), so there is no card to click. This is the closest available path: go to Jobs,
 // then open the saved job on a fresh navigation (session cookie only) and read the persisted workspace.
-async function reopenSavedJob(page:any,jobId:string){await page.goto("/");await expect(page.getByRole("heading",{name:"Jobs",exact:true})).toBeVisible();await page.goto(`/jobs/${jobId}#recovery-cases`);await expect(page.locator("#captured-job-workspace")).toHaveAttribute("data-job-id",jobId);await expect(page.locator("#recovery-cases")).toBeVisible()}
+async function reopenSavedJob(page:any,jobId:string){await page.goto("/classic");await expect(page.getByRole("heading",{name:"Jobs",exact:true})).toBeVisible();await page.goto(`/jobs/${jobId}#recovery-cases`);await expect(page.locator("#captured-job-workspace")).toHaveAttribute("data-job-id",jobId);await expect(page.locator("#recovery-cases")).toBeVisible()}
 // C7: sandbox banner shown once, and no horizontal page overflow.
 async function banner(page:any){await expect(page.getByText(BANNER,{exact:true})).toHaveCount(1);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true)}
 // C7: a primary action is at least 44x44 CSS px.
