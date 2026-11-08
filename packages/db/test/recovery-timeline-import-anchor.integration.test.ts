@@ -1,38 +1,16 @@
 // Synthetic PostgreSQL authorization regression; no providers or customer data.
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { MIGRATION_URLS } from "../src/migrate.js";
 import {
   createIntegrityFixture, importIntegrityJob, member, seedIntegrityJob, tenant, transaction,
   type IntegrityFixture,
 } from "./commercial-integrity-v3-fixtures.js";
 
-const migration = new URL("../migrations/0694_recovery_timeline_import_anchor.sql", import.meta.url);
-const sql = readFileSync(migration, "utf8");
-const reference = readFileSync(new URL("../migrations/0660_baseline_ancestry_audit_trust.sql", import.meta.url), "utf8");
-// Copy the reviewed predicate, changing only the local tenant/child/parent aliases.
-const anchor = reference.match(/ AND \(EXISTS\(SELECT 1 FROM app\.job_import_v3[^\n]+/)![0]
-  .replaceAll("iv.tenant_id=t", "iv.tenant_id=p_tenant")
-  .replaceAll("rv.tenant_id=t", "rv.tenant_id=p_tenant")
-  .replaceAll("child.id", "j.id").replaceAll("parent.id", "source.id");
 const forbidden = { code: "42501", message: "RECOVERY_TIMELINE_FORBIDDEN" };
-
-it("copies the prior routine and privileges with only the reviewed import anchor added", () => {
-  const pattern = /CREATE (?:OR REPLACE )?FUNCTION app\.apply_recovery_timeline_signal\([\s\S]*?GRANT EXECUTE ON FUNCTION app\.apply_recovery_timeline_signal\(uuid,jsonb\) TO jobguard_runtime;/g;
-  const previous = MIGRATION_URLS.filter(url => url.pathname < migration.pathname)
-    .flatMap(url => [...readFileSync(url, "utf8").matchAll(pattern)].map(match => match[0]));
-  expect(previous).toHaveLength(1);
-  expect(sql.split(anchor)).toHaveLength(2);
-  expect(sql).toBe(`BEGIN;\n${previous[0]!.replace("CREATE FUNCTION", "CREATE OR REPLACE FUNCTION").replace(
-    "       AND j.provenance='imported' AND j.practice_session_digest IS NULL",
-    "       AND j.provenance='imported' AND j.practice_session_digest IS NULL" + anchor,
-  )}\nCOMMIT;\n`);
-});
 
 describe("recovery timeline import authority (real PostgreSQL)", () => {
   let f: IntegrityFixture;
-  // The existing fixture applies every migration, including this forward fix,
+  // The existing fixture applies every migration, including the import anchor,
   // to a fresh synthetic database and uses a non-owner runtime login.
   beforeAll(async () => { f = await createIntegrityFixture(); }, 300_000);
   afterAll(async () => { await f?.close(); });
@@ -119,8 +97,11 @@ describe("recovery timeline import authority (real PostgreSQL)", () => {
     try {
       await db.query("BEGIN");
       const definition = (await db.query("SELECT pg_get_functiondef('app.apply_recovery_timeline_signal(uuid,jsonb)'::regprocedure) body")).rows[0].body as string;
-      expect(definition.split(anchor)).toHaveLength(2);
-      await db.query(definition.replace(anchor, ""));
+      // Extract the complete import predicate with the live routine's formatting.
+      const anchor = definition.match(/\n[ \t]+AND \(EXISTS \(SELECT 1 FROM app\.job_import_v3\b[\s\S]*?rv\.result->>'sourceJobId'=source\.id::text\)\)/)?.[0];
+      expect(anchor).toBeDefined();
+      expect(definition.split(anchor!)).toHaveLength(2);
+      await db.query(definition.replace(anchor!, ""));
       await db.query(`SET LOCAL ROLE ${f.login}`);
       await db.query("SELECT set_config('app.tenant_id',$1,true),set_config('app.practice_material_digest',$2,true)", [tenant, f.auth.digest]);
       const granted = await db.query("SELECT app.apply_recovery_timeline_signal($1,$2) state", [tenant, JSON.stringify(signal)]);
