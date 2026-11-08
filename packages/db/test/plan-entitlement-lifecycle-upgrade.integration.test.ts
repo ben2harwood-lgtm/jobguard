@@ -66,6 +66,8 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     ["ch6_integrity_sources", "t uuid, j uuid, d text", "0660_baseline_ancestry_audit_trust.sql"],
     ["ch6_record_integrity_review", "t uuid, j uuid, digest text, review jsonb, source_snapshot jsonb", "0660_baseline_ancestry_audit_trust.sql"],
     ["decision_check_command", "p_digest text, p_command jsonb, p_phase text, p_data jsonb", "0660_baseline_ancestry_audit_trust.sql"],
+    ["interim_draft_records", "t uuid, digest text, j uuid, operation text, v jsonb", "0665_interim_read_authority.sql"],
+    ["ch5_history_actor", "t uuid, j uuid, d text", "0668_import_company_owner_history.sql"],
   ].map(async ([name, args, migration]) => {
     const sql = await readFile(new URL(`../migrations/${migration}`, import.meta.url), "utf8");
     if (name === "decision_check_command") expect(sql).toContain("rv.result->>'sourceJobId'=source.id::text");
@@ -127,6 +129,28 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
       expect(current?.definition?.split("$function$")[1]).toBe(sql.split("FUNCTION app.demo_issue_customer_link(")[1]!.split("AS $$")[1]!.split("$$;")[0]);
       continue;
     }
+    // 0667 inserts only the practice-owner guard into lock_final_account and replaces the invoice actor check's end.
+    if (prior.nspname === "app" && prior.proname === "lock_final_account" && prior.args === "p_tenant uuid, p_job uuid, p_actor uuid, p_command uuid, p_revision uuid, p_expected integer, p_declaration text") {
+      expect({ ...current, definition: prior.definition }).toEqual(prior);
+      const owner = await readFile(new URL("../migrations/0667_final_check_practice_owner_check.sql", import.meta.url), "utf8");
+      const anchor = "BEGIN\n PERFORM app.final_lock_require_owner(p_tenant,p_actor);";
+      expect(prior.definition?.split(anchor)).toHaveLength(2);
+      expect(current?.definition).toBe(prior.definition?.replace(anchor, anchor + "\n" + owner.split("$guard$")[1]!));
+      continue;
+    }
+    if (prior.nspname === "app" && prior.proname === "final_check_require_invoice_actor" && prior.args === "p_tenant uuid, p_job uuid, p_actor uuid") {
+      expect({ ...current, definition: prior.definition }).toEqual(prior);
+      const owner = await readFile(new URL("../migrations/0667_final_check_practice_owner_check.sql", import.meta.url), "utf8");
+      expect(current?.definition?.split("$function$")[1]).toBe(owner.split("FUNCTION app.final_check_require_invoice_actor(")[1]!.split("AS $$")[1]!.split("$$;")[0]);
+      continue;
+    }
+    // 0679 adds only the synthetic-database check to the sync checkpoint writer; keep its metadata exact.
+    if (prior.nspname === "app" && prior.proname === "sync_snapshot_generation" && prior.args === "u uuid, r bigint, s bigint, h text, e text") {
+      expect({ ...current, definition: prior.definition }).toEqual(prior);
+      const sql = await readFile(new URL("../migrations/0679_sync_checkpoint_synthetic_guard.sql", import.meta.url), "utf8");
+      expect(current?.definition?.split("$function$")[1]).toBe(sql.split("FUNCTION app.sync_snapshot_generation(")[1]!.split("AS $$")[1]!.split("$$;")[0]);
+      continue;
+    }
     const batchReplacement = batchBodies.find(row => prior.nspname === "app" && prior.proname === row.name && prior.args === row.args);
     if (batchReplacement) {
       expect(current?.definition?.split("$function$")[1]).toEqual(batchReplacement.body);
@@ -143,11 +167,11 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     }
     // 0566, 0573 and 0606 extend exactly this dispatcher for managed recovery, supervisor queries and dark orders.
     if (prior.nspname === "app" && prior.proname === "lp5_command_result" && prior.args === "p_command_id uuid, p_outcome jsonb") continue;
-    // 0631 replaces the legacy v1 landing bodies; 0654 extends only the reversal replay/policy checks.
+    // 0631 replaces the legacy v1 landing bodies; 0654 extends only the reversal replay/policy checks; 0682 binds replays to the stored payload.
     if (prior.nspname === "app" && (
       (prior.proname === "approve_synthetic_landing" && prior.args === "p jsonb") ||
       (prior.proname === "reverse_synthetic_landing" && prior.args === "p_tenant uuid, p_reversal uuid, p_derivation uuid, p_journal uuid, p_allocation uuid, p_amount bigint, p_reason character varying"))) {
-      const migration = prior.proname === "reverse_synthetic_landing" ? "0654_synthetic_reversal_money_rules.sql" : "0631_legacy_recovery_money_integrity.sql";
+      const migration = prior.proname === "reverse_synthetic_landing" ? "0682_synthetic_reversal_replay_match.sql" : "0631_legacy_recovery_money_integrity.sql";
       const sql = await readFile(new URL(`../migrations/${migration}`, import.meta.url), "utf8");
       const body = sql.split(`CREATE OR REPLACE FUNCTION app.${prior.proname}(`)[1]!.split("AS $$")[1]!.split("$$;")[0];
       expect(current?.definition?.split("$function$")[1]).toEqual(body);
@@ -189,6 +213,21 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
       prior.proname === "xa_latest_kind" && prior.args === "p_tenant uuid, p_job uuid, p_variation uuid" ||
       prior.proname === "xa_mark_duplicate" && prior.args === "p_job uuid, p_duplicate uuid, p_canonical uuid, p_command uuid, p_actor uuid, p_link uuid")) {
       expect(current?.definition?.split("$function$")[1]).toEqual(relinkBodies[prior.proname]);
+    } else if (prior.nspname === "app" && prior.proname === "configure_recovery_demo" &&
+      prior.args === "p_job uuid, p_command uuid, p_scenario character varying") {
+      const source = await readFile(new URL("../migrations/0670_recovery_demo_replay_job.sql", import.meta.url), "utf8");
+      const body = source.split("CREATE OR REPLACE FUNCTION app.configure_recovery_demo")[1]!.split("AS $$")[1]!.split("$$;")[0];
+      expect(current?.definition?.split("$function$")[1]).toEqual(body);
+    } else if (prior.nspname === "app" && prior.proname === "ent4b_fact_guard" && prior.args === "") {
+      // 0673 adds only the unlink receipt binding; pin its complete reviewed body.
+      const source = await readFile(new URL("../migrations/0673_duplicate_unlink_command_binding.sql", import.meta.url), "utf8");
+      const body = source.split("CREATE OR REPLACE FUNCTION app.ent4b_fact_guard()")[1]!.split("AS $$")[1]!.split("$$;")[0];
+      expect(current?.definition?.split("$function$")[1]).toEqual(body);
+    } else if (prior.nspname === "app" && prior.proname === "work_order_commit" && prior.args === "actor uuid, payload jsonb") {
+      // 0675 and 0676 change only the work-order commit body; bind the final body to 0676.
+      const source = await readFile(new URL("../migrations/0676_work_order_expected_revision.sql", import.meta.url), "utf8");
+      const body = source.split("CREATE OR REPLACE FUNCTION app.work_order_commit(")[1]!.split("AS $$")[1]!.split("$$;")[0];
+      expect(current?.definition?.split("$function$")[1]).toEqual(body);
     } else if (prior.nspname === "app" && prior.proname === "cb_unresolved" && prior.args === "p_tenant uuid, p_job uuid") {
       const source = await readFile(new URL("../migrations/0623_extra_duplicate_disposition.sql", import.meta.url), "utf8");
       const body = source.split("CREATE OR REPLACE FUNCTION app.cb_unresolved")[1]!.split("AS $$")[1]!.split("$$;")[0];

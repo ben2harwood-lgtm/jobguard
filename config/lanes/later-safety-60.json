@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-60": {
+      "branches": [
+        "codex/sandbox/later-safety-60"
+      ],
+      "note": "LATER-SAFETY-60: preserve existing proceed-breach facts in customer timing; NOPR, independent check before landing.",
+      "allow": [
+        "apps/api/src/auth/extra-customer.test.ts",
+        "apps/api/src/auth/extra-customer.ts",
+        "packages/db/migrations/0681_extra_client_timing_proceed.sql",
+        "packages/db/test/extra-client-session.integration.test.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/0681_extra_client_timing_proceed.proof.json"
+      ]
+    }
+  }
+}

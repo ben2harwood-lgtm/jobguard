@@ -13,7 +13,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const selectors=new URL(request.url).searchParams;
   const query=Object.fromEntries([...new Set(selectors.keys())].map(key=>
    [key,selectors.getAll(key).length===1?selectors.get(key):selectors.getAll(key)]));
-  const company=request.headers.get("cookie")?.split(";").some(v=>v.trim().startsWith("jobguard_session="));
+  const cookies = request.headers.get("cookie")?.split(";").map(value => value.trim()) ?? [];
+  const company = cookies.some(value => value.startsWith("jobguard_session="))
+   && !cookies.some(value => value.startsWith("jg_session="));
   const jobId=(await params).id;
   const result=company?await new CompanyValueApplication(subscriptionAuthority(identityApplication()),new ValueBusinessReader(syntheticPool())).readJob(
    {...await identityCredentials(request),origin:request.headers.get("origin")??identityApplication().allowedOrigin},jobId,query)

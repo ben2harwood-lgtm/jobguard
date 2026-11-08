@@ -104,3 +104,27 @@ it("Q08 new proposal steps default to two working days; versioned overrides and 
     expect(approvalRulesV1.safeParse({ ...document, bands: [{ upToPence: null, steps: [{ ...document.bands[1]!.steps[0], waitWorkingDays }] }] }).success).toBe(false);
   }
 });
+
+
+describe("ENT-5 Q01/Q03 price and contract rulings", () => {
+  it.each(["adjustment", "discount", "markup", "vat", "quantity", "rounding"])("refuses an extra %s field at every pricing boundary", field => {
+    const input = proposal(100);
+    for (const raw of [
+      { ...input, [field]: 1 },
+      { ...input, revision: { ...input.revision, [field]: 1 } },
+      { ...input, revision: { ...input.revision, net: { ...input.revision.net, [field]: 1 } } },
+    ]) expect(() => evaluateExtraApprovalRequirement(raw)).toThrowError(expect.objectContaining({ code: "INVALID_EXTRA_APPROVAL_INPUT" }));
+  });
+  it("requires exactly one explicit contract identity and its rules, without a fallback", () => {
+    for (const clientContractVersionId of [undefined, null, [], [id(2), id(4)]]) {
+      expect(() => evaluateExtraApprovalRequirement({ ...proposal(100), clientContractVersionId })).toThrowError(expect.objectContaining({ code: "INVALID_EXTRA_APPROVAL_INPUT" }));
+    }
+    for (const rules of [undefined, null, {}]) {
+      expect(() => evaluateExtraApprovalRequirement({ ...proposal(100), rules })).toThrowError(expect.objectContaining({ code: "INVALID_EXTRA_APPROVAL_INPUT" }));
+    }
+  });
+  it("accepts the upper money bound and GBP only", () => {
+    expect(evaluateExtraApprovalRequirement(proposal(1_000_000_000_000)).revision.net?.pence).toBe(1_000_000_000_000);
+    expect(() => evaluateExtraApprovalRequirement({ ...proposal(100), revision: { ...proposal(100).revision, net: { pence: 100, currency: "EUR" } } })).toThrow();
+  });
+});

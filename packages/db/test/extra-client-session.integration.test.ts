@@ -90,3 +90,38 @@ it("ENT-5 client approve racing withdraw commits exactly one outcome",async()=>{
  expect(results.filter(r=>r.status==="fulfilled")).toHaveLength(1);
  expect((await c.admin.query("SELECT kind FROM app.extra_approval_outcome WHERE request_id=$1",[f.s.requestId])).rows).toHaveLength(1);
 });
+
+it.each([true,false])("LATER-SAFETY-60 customer timing matches contractor timing with proceed=%s",async proceeded=>{
+ // Independent world: earlier refusal coverage deliberately revokes its client grant.
+ w=await chainWorld(c);const f=await fixture();
+ const {extraProceed}=await import("../src/extra-proceed.js");
+ const {withTenant}=await import("../src/tenant-context.js");
+ const {deriveVisitApprovalTiming,readExtraApprovalTiming}=await import("../src/extra-approval-timing.js");
+ if(proceeded) await extraProceed(c.runtime,f.ctx,w.members.operative.member,f.s.jobId,f.s.extraId,
+  {version:"record-extra-proceed.v1",commandId:randomUUID(),requestId:f.s.requestId,reason:"Fictional work proceeded before client approval"});
+ await f.use(f.signinDigest,"redeem");
+ type TimingInputs={visit:Parameters<typeof deriveVisitApprovalTiming>[0]|null;requests:Parameters<typeof deriveVisitApprovalTiming>[1];
+  facts:Parameters<typeof deriveVisitApprovalTiming>[2];workStatus:Parameters<typeof deriveVisitApprovalTiming>[4]|null;proceedIds?:string[]};
+ const project=(timing:TimingInputs)=>deriveVisitApprovalTiming(timing.visit??undefined,timing.requests,timing.facts,f.s.requestId,timing.workStatus??undefined,timing.proceedIds??[]);
+ const expected=proceeded?true:"not_derived";
+ const contractor=await withTenant(c.runtime,f.ctx,db=>readExtraApprovalTiming(db,w.p.tenantId,f.s.jobId,f.s.extraId,f.s.requestId));
+ expect(contractor.doneWithoutRequiredPreapproval).toBe(expected);
+ for(const action of ["view","queue"]) {
+  const response=await f.run({version:"extra-customer.v1",action,jobId:f.s.jobId,...(action==="view"?{requestId:f.s.requestId}:{})});
+  const item=action==="queue"?response.items[0]:response;
+  expect(item.requestId).toBe(f.s.requestId);
+  expect(item.timingInputs.proceedIds).toEqual(proceeded?[f.s.requestId]:[]);
+  expect(project(item.timingInputs).doneWithoutRequiredPreapproval).toBe(expected);
+  expect(project(item.timingInputs)).toEqual(contractor);
+ }
+ // Real customer approval consumes the invitation. It cannot erase the proceed fact
+ // in the same customer timing seam, nor reopen the consumed customer view/queue.
+ await f.run();
+ expect(await f.run({version:"extra-customer.v1",action:"queue",jobId:f.s.jobId})).toEqual({items:[]});
+ await expect(f.run({version:"extra-customer.v1",action:"view",jobId:f.s.jobId,requestId:f.s.requestId})).rejects.toMatchObject({message:"LINK_REPLAYED"});
+ const after=await withTenant(c.runtime,f.ctx,async db=>(await db.$client.query<{timing:TimingInputs}>(
+  "SELECT app.xc_timing($1,$2,$3,$4) timing",[w.p.tenantId,f.s.jobId,f.s.extraId,f.s.requestId])).rows[0]!.timing);
+ expect(after.facts.some(fact=>fact.step_role==="client_approver")).toBe(true);
+ expect(project(after).doneWithoutRequiredPreapproval).toBe(expected);
+ expect(project(after)).toEqual(await withTenant(c.runtime,f.ctx,db=>readExtraApprovalTiming(db,w.p.tenantId,f.s.jobId,f.s.extraId,f.s.requestId)));
+});

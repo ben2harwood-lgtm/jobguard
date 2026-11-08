@@ -78,6 +78,32 @@ describe("M0-6L persisted identity / actual PostgreSQL roles",()=>{
   const ip=randomUUID();await Promise.all(Array.from({length:10},()=>fixture().requestCode({email:email(),purpose:"signup",ip})));
   await expect(p.requestCode({email:email(),purpose:"signup",ip})).rejects.toMatchObject({code:"RATE_LIMITED"});
  });
+ it("isolates client floods, keeps the fallback shared and enforces destination/global ceilings across replicas",async()=>{
+  now+=600001; // Isolate this ten-minute window from other identity scenarios.
+  const send=(ip:string,address=email(),purpose:"signup"|"signin"|"invitation"="signin")=>fixture().requestCode({email:address,purpose,ip});
+  try {
+   await Promise.all(Array.from({length:10},()=>send("192.0.2.1")));
+   await expect(send("192.0.2.1")).rejects.toMatchObject({code:"RATE_LIMITED"});
+   await expect(send("192.0.2.2")).resolves.toMatchObject({accepted:true});
+   await Promise.all(Array.from({length:10},()=>send("web-bootstrap")));
+   await expect(send("web-bootstrap")).rejects.toMatchObject({code:"RATE_LIMITED"});
+   const destination=email();
+   // Changing client or purpose cannot bypass the normalized-email ceiling.
+   for(let n=0;n<10;n++) {
+    await send(`email-client-${n}`,n%2?destination.toUpperCase():destination,n%2?"signup":"signin");
+    if(n<9)now+=60001;
+   }
+   await expect(send("new-client",destination,"invitation")).rejects.toMatchObject({code:"RATE_LIMITED"});
+   await expect(send("new-client")).resolves.toMatchObject({accepted:true});
+   now+=600001;
+   const results=await Promise.allSettled(Array.from({length:105},(_,n)=>send(`global-client-${n}`)));
+   expect(results.filter(result=>result.status==="fulfilled")).toHaveLength(100);
+   for(const result of results.filter(result=>result.status==="rejected"))expect(result.reason).toMatchObject({code:"RATE_LIMITED"});
+   await expect(send("another-client")).rejects.toMatchObject({code:"RATE_LIMITED"});
+   now+=600001;
+   await expect(send("another-client")).resolves.toMatchObject({accepted:true});
+  } finally { now+=600001; }
+ },30000);
  it("acknowledges existing/unknown signins equally and stores no raw codes or tokens",async()=>{
   const owner=await signup();const unknown=email();
   for(const address of [owner.address,unknown])expect(await fixture().requestCode({email:address,purpose:"signin",ip:randomUUID()})).toEqual({accepted:true,fixtureCode:"12345678"});

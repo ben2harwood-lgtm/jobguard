@@ -32,7 +32,7 @@ export class RateSuggestionApplication {
       const { tenantId: _queryTenant, ...query } = storedQuery;
       return { ...result, query };
     })();
-    return { version: "rate-screen.v1" as const, environment: "synthetic_demo" as const, jobId, asOf: new Date().toISOString(), acceptances, suggestion };
+    return { version: "rate-screen.v1" as const, environment: "synthetic_demo" as const, jobId, asOf: new Date().toISOString(), csrfToken: credentials.csrfToken, acceptances, suggestion };
   }
   async accept(token: string | undefined, rawJob: unknown, raw: unknown) {
     const jobId = job.parse(rawJob);

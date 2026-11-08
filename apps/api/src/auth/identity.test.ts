@@ -36,7 +36,7 @@ describe("M0-6L route, cookie and server composition boundaries",()=>{
   expect(identityStatus(new Error("a sensitive provider response"))).toEqual({code:"IDENTITY_UNAVAILABLE",status:503});
  });
  it("registers the Nest guard and refuses synthetic cookies in every other mode",async()=>{
-  const module=await readFile(sourceFixtureUrl("../app.module.ts", import.meta.url),"utf8");expect(module).toContain("provide:APP_GUARD,useClass:ApplicationAuthGuard");
+  const module=await readFile(sourceFixtureUrl("../app.module.ts", import.meta.url),"utf8");expect(module).toContain("{provide:APP_GUARD,useClass:machineRegistrationEnabled(process.env)?MachineApplicationAuthGuard:ApplicationAuthGuard}");
   const guard=new ApplicationAuthGuard(()=>{throw new Error("identity configuration unavailable");});
   const request={path:"/jobs/capture",headers:{cookie:"jg_session=b690f3c7-0d23-4c83-bca2-5f60ce9a0f19"}};
   const context={switchToHttp:()=>({getRequest:()=>request})} as ExecutionContext;
@@ -48,6 +48,16 @@ describe("M0-6L route, cookie and server composition boundaries",()=>{
    process.env.JOBGUARD_ENV="synthetic_demo";expect(await guard.canActivate(context)).toBe(true);
    request.headers.cookie="";await expect(guard.canActivate(context)).rejects.toMatchObject({status:401});
   }finally{if(saved===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=saved;}
+ });
+ it("registers ApplicationAuthGuard when machine registration is not enabled",async()=>{
+  const saved=process.env.JOBGUARD_CONNECTOR_MACHINE;
+  delete process.env.JOBGUARD_CONNECTOR_MACHINE;
+  try {
+   const {APP_GUARD}=await import("@nestjs/core");
+   const {AppModule}=await import("../app.module.js");
+   const providers=Reflect.getMetadata("providers",AppModule) as Array<{provide?:unknown;useClass?:unknown}>;
+   expect(providers.filter(provider=>provider.provide===APP_GUARD)).toEqual([{provide:APP_GUARD,useClass:ApplicationAuthGuard}]);
+  }finally{if(saved===undefined)delete process.env.JOBGUARD_CONNECTOR_MACHINE;else process.env.JOBGUARD_CONNECTOR_MACHINE=saved;}
  });
  it("keeps practice mode guards ahead of cookies, pools and authenticated workspace work",async()=>{
   const {runInNewContext}=await import("node:vm");
