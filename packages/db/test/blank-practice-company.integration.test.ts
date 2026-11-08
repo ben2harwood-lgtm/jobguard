@@ -54,10 +54,8 @@ it("starts empty, isolates testers, retains history and rejects old credentials 
   expect((await c.admin.query("SELECT s.revoked_at,b.replaced_by FROM control_plane.practice_session s JOIN control_plane.blank_practice_session b USING(token_digest) WHERE s.token_digest=$1", [a.digest])).rows[0]).toEqual({ revoked_at: expect.any(Date), replaced_by: current.digest });
 });
 it("serializes competing resets, rejects nonblank/expired sessions and grants no table access", async () => {
-  const token = await startBlankPracticeCompany(c.runtime, start);
-  const outcomes = await Promise.allSettled([startBlankPracticeCompany(c.runtime, reset, token), startBlankPracticeCompany(c.runtime, reset, token)]);
-  expect(outcomes.filter(result => result.status === "fulfilled")).toHaveLength(1);
-  expect(outcomes.filter(result => result.status === "rejected")).toHaveLength(1);
+  const outcome = await competingResets();
+  expect(outcome).toMatchObject({ status: "rejected", reason: { message: "UNAUTHENTICATED" } });
   const legacy = await issuePracticeSession(c.runtime);
   await expect(startBlankPracticeCompany(c.runtime, reset, legacy)).rejects.toThrow("UNAUTHENTICATED");
   expect(await authenticatePracticeSession(c.runtime, legacy)).toBeDefined();
@@ -69,7 +67,7 @@ it("serializes competing resets, rejects nonblank/expired sessions and grants no
   await c.admin.query("UPDATE control_plane.practice_session SET expires_at=clock_timestamp()-interval '1 second' WHERE token_digest=$1", [digestOf(expired)]);
   await expect(startBlankPracticeCompany(c.runtime, reset, expired)).rejects.toThrow("UNAUTHENTICATED");
   await expect(c.runtime.query("SELECT * FROM control_plane.practice_session")).rejects.toThrow(/permission denied/u);
-  await expect(c.runtime.query("SELECT app.start_blank_practice_company(NULL,NULL)")).rejects.toThrow("UNAUTHENTICATED");
+  await expect(c.runtime.query("SELECT app.start_blank_practice_company_v2(NULL,NULL)")).rejects.toThrow("UNAUTHENTICATED");
 });
 
 it("upgrades legacy sessions without changing their jobs or credentials and refuses a non-demo database", async () => {
@@ -82,6 +80,13 @@ it("upgrades legacy sessions without changing their jobs or credentials and refu
     expect(await authenticatePracticeSession(prior.runtime, token)).toBeDefined();
     expect(await isBlankPracticeCompany(prior.runtime, digestOf(token))).toBe(false);
     expect((await prior.admin.query("SELECT row_to_json(j) value FROM app.job j WHERE practice_session_digest=$1 ORDER BY id", [digestOf(token)])).rows).toEqual(before.rows);
+    const oldBlank = randomUUID();
+    await prior.runtime.query("SELECT app.start_blank_practice_company($1,NULL)", [digestOf(oldBlank)]);
+    await applyMigration(prior, "0687_blank_practice_reset_token.sql");
+    expect(await authenticatePracticeSession(prior.runtime, oldBlank)).toBeDefined();
+    const replacement = await startBlankPracticeCompany(prior.runtime, reset, oldBlank);
+    expect(await authenticatePracticeSession(prior.runtime, replacement)).toBeDefined();
+    await expect(authenticatePracticeSession(prior.runtime, oldBlank)).rejects.toThrow("UNAUTHENTICATED");
     const fresh = await startBlankPracticeCompany(prior.runtime, start);
     expect((await prior.admin.query("SELECT count(*)::int n FROM app.job WHERE practice_session_digest=$1", [digestOf(fresh)])).rows[0].n).toBe(0);
   } finally { await prior.close(); }
@@ -92,3 +97,91 @@ it("upgrades legacy sessions without changing their jobs or credentials and refu
     await expect(startBlankPracticeCompany(foreign.runtime, start)).rejects.toThrow("SYNTHETIC_MODE_REQUIRED");
   } finally { await foreign.close(); }
 }, 240_000);
+
+// Hold a completed reset uncommitted. The competing statement must actually
+// wait for that transaction, then recheck authentication after it commits.
+async function competingResets() {
+  const token = await startBlankPracticeCompany(c.runtime, start);
+  const first = await c.runtime.connect(), second = await c.runtime.connect();
+  let pending: Promise<PromiseSettledResult<unknown>> | undefined;
+  try {
+    await first.query("BEGIN");
+    await first.query("SELECT app.start_blank_practice_company_v2($1,$2)", [randomUUID(), token]);
+    await second.query("SET statement_timeout='10s'");
+    const pid = (await second.query("SELECT pg_backend_pid() pid")).rows[0].pid;
+    pending = second.query("SELECT app.start_blank_practice_company_v2($1,$2)", [randomUUID(), token])
+      .then(value => ({ status: "fulfilled" as const, value }), reason => ({ status: "rejected" as const, reason }));
+    const deadline = Date.now() + 5_000;
+    let blocked = false;
+    while (Date.now() < deadline) {
+      const row = (await c.admin.query("SELECT wait_event_type FROM pg_stat_activity WHERE pid=$1", [pid])).rows[0];
+      if (row?.wait_event_type === "Lock") { blocked = true; break; }
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    expect(blocked, "second reset must overlap the uncommitted first reset").toBe(true);
+    await first.query("COMMIT");
+    const outcome = await pending;
+    await expect(authenticatePracticeSession(c.runtime, token)).rejects.toThrow("UNAUTHENTICATED");
+    return outcome;
+  } finally {
+    await first.query("ROLLBACK");
+    await pending;
+    await second.query("RESET statement_timeout");
+    first.release(); second.release();
+  }
+}
+
+it("detects removal of the reset lock in a scratch routine definition and restores it", async () => {
+  const original = (await c.admin.query("SELECT pg_get_functiondef('app.start_blank_practice_company_v2(text,text)'::regprocedure) definition")).rows[0].definition as string;
+  const lock = "PERFORM 1 FROM control_plane.practice_session s WHERE s.token_digest=previous_digest FOR UPDATE;";
+  expect(original).toContain(lock);
+  try {
+    await c.admin.query(original.replace(lock, "NULL; -- scratch mutation: omit serialization"));
+    // Without the lock both checks see the old committed session as live. The
+    // UPDATE waits, but it is too late: both replacements are then accepted.
+    expect(await competingResets()).toMatchObject({ status: "fulfilled" });
+  } finally {
+    await c.admin.query(original);
+  }
+  expect((await c.admin.query("SELECT pg_get_functiondef('app.start_blank_practice_company_v2(text,text)'::regprocedure) definition")).rows[0].definition).toBe(original);
+});
+
+it("refuses digest-only reset authority and the legacy entry point without changing sessions", async () => {
+  const token = await startBlankPracticeCompany(c.runtime, start);
+  const job = randomUUID();
+  const auth = await authenticatePracticeSession(c.runtime, token);
+  const client = await c.runtime.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT set_config('app.tenant_id',$1,true)", [auth.context.tenantId]);
+    await client.query("SELECT app.create_practice_sandbox_job($1,$2,$3,$4)", [auth.context.tenantId, job, auth.membershipId, auth.digest]);
+    await client.query("COMMIT");
+    // The attacker can read this digest through the shared synthetic tenant.
+    await client.query("BEGIN");
+    await client.query("SELECT set_config('app.tenant_id',$1,true)", [auth.context.tenantId]);
+    const digest = (await client.query("SELECT practice_session_digest FROM app.job WHERE id=$1", [job])).rows[0].practice_session_digest;
+    await client.query("COMMIT");
+    const before = (await c.admin.query("SELECT row_to_json(s) value FROM control_plane.practice_session s ORDER BY token_digest")).rows;
+    await expect(c.runtime.query("SELECT app.start_blank_practice_company_v2($1,$2)", [randomUUID(), digest])).rejects.toThrow("UNAUTHENTICATED");
+    await expect(c.runtime.query("SELECT app.start_blank_practice_company($1,$2)", [digestOf(randomUUID()), digest])).rejects.toThrow(/permission denied/u);
+    for (const [next, previous] of [[null, null], ["bad", null], [digest, null], [randomUUID(), ""], [randomUUID(), randomUUID()], [token, token]]) {
+      await expect(c.runtime.query("SELECT app.start_blank_practice_company_v2($1,$2)", [next, previous])).rejects.toThrow("UNAUTHENTICATED");
+    }
+    expect((await c.admin.query("SELECT row_to_json(s) value FROM control_plane.practice_session s ORDER BY token_digest")).rows).toEqual(before);
+    expect(await authenticatePracticeSession(c.runtime, token)).toBeDefined();
+    expect(await authorizePracticeJob(c.runtime, token, job)).toBeDefined();
+  } finally { await client.query("ROLLBACK"); client.release(); }
+});
+
+it("pins the new routine owner, security and ACL and withdraws the old runtime grant", async () => {
+  const rows = (await c.admin.query(`SELECT proname, pg_get_userbyid(proowner) owner, prosecdef, proconfig,
+    proacl::text acl, has_function_privilege('jobguard_runtime',oid,'EXECUTE') runtime_execute
+    FROM pg_proc WHERE oid IN ('app.start_blank_practice_company(text,text)'::regprocedure,
+      'app.start_blank_practice_company_v2(text,text)'::regprocedure) ORDER BY proname`)).rows;
+  expect(rows).toEqual([
+    { proname: "start_blank_practice_company", owner: "jobguard_migration", prosecdef: true,
+      proconfig: ["search_path=pg_catalog"], acl: "{jobguard_migration=X/jobguard_migration}", runtime_execute: false },
+    { proname: "start_blank_practice_company_v2", owner: "jobguard_migration", prosecdef: true,
+      proconfig: ["search_path=pg_catalog"], acl: "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}", runtime_execute: true },
+  ]);
+});
