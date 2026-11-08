@@ -8,6 +8,7 @@ import { seedWorkPractice, workTenant, type WorkFixture } from "./job-work-state
 import { createFinalCheckFixture, closeFinalCheckFixture, type FinalCheckFixture } from "./final-check-fixture.js";
 import { FinalCheckRepository } from "../src/final-check-repository.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
+import { permitImportedJob } from "./lp-practice-home-job-fixture.js";
 import { preparedTrialFixture } from "./free-first-job-lifecycle-fixtures.js";
 
 let f: WorkFixture;
@@ -154,7 +155,9 @@ it("refuses practice-owned jobs and imported descendants, including company-sess
   const a = await company(false), child = randomUUID();
   const practice = await seedWorkPractice(f), parent = practice.jobId;
   await workTenant(f.admin, a.tenantId, async client => {
-    await client.query("INSERT INTO app.job(tenant_id,id,title,provenance) VALUES($1,$2,'Fictional imported child','imported')", [a.tenantId, child]);
+    await permitImportedJob(client, { tenantId: a.tenantId, jobId: child, actorMembershipId: a.actorId,
+      title: "Fictional imported child", feePolicyVersion: "reference_fee_policy_v3", netPence: 100000, capPence: 1500 });
+    await client.query("INSERT INTO app.job(tenant_id,id,title,provenance,accepted_net_value_pence,fee_policy_version,recovery_cap_pence) VALUES($1,$2,'Fictional imported child','imported',100000,'reference_fee_policy_v3',1500)", [a.tenantId, child]);
     await client.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','synthetic_demo','backfilled_synthetic_fixture')", [a.tenantId, child]);
     // An external parent must fail closed without reading the other tenant's job.
     await client.query("SELECT app.append_final_check_audit($1,$2,$3,'job.imported_baseline_attested',$4::jsonb)",

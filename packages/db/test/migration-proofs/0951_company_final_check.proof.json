@@ -65,14 +65,6 @@
       }
     },
     {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "owner|routine|function:app.company_final_check_authority(uuid,jsonb)|jobguard_migration",
-        "group": "a-company-final-check-db"
-      }
-    },
-    {
       "section": "routines",
       "before": null,
       "after": {
