@@ -60,11 +60,18 @@ for (const kind of ["job", "business"] as const) {
    if (url === "/api/session") return new Response("{}", { status: 401 });
    if (failure === "network") throw new Error("Unavailable");
    return Response.json({ ...(failure !== "missing-token" ? { csrfToken: "token" } : {}),
-    memberships: failure === "missing-tenant" ? [] : [{ tenantId: "tenant" }] }, { status: failure === "refused" ? 401 : 200 });
+    memberships: failure === "missing-tenant" ? [] : [{ tenantId: "tenant" }] }, { status: failure === "refused" ? 503 : 200 });
   });
   vi.stubGlobal("fetch", fetch); mount();
   await vi.waitFor(() => expect(f.set).toHaveBeenCalledWith(expect.stringContaining("unavailable")));
   expect(fetch.mock.calls.map(call => call[0])).toEqual(["/api/session", "/api/auth/session"]);
+ });
+ it(`${kind} signed-out visitors read without company headers so the server answers UNAUTHENTICATED`, async () => {
+  const fetch = vi.fn(async (url: string, _init?: RequestInit) => url === "/api/session" || url === "/api/auth/session"
+   ? new Response("{}", { status: 401 }) : Response.json({ state: "unavailable", code: "UNAUTHENTICATED" }, { status: 401 }));
+  vi.stubGlobal("fetch", fetch); mount();
+  await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(3));
+  expect(fetch.mock.calls[2]).toEqual([kind === "job" ? `/api/jobs/${id}/value/v3` : "/api/value", expect.objectContaining({ headers: {} })]);
  });
  it(`${kind} practice reads retain their own authority`, async () => {
   const fetch = vi.fn(async (_url: string, _init?: RequestInit) => Response.json({ state: "unavailable" }));

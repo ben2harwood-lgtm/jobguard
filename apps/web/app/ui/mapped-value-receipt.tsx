@@ -33,10 +33,13 @@ export function JobMappedValue({jobId}:{jobId:string}){
   if (!practice.ok) {
    if (practice.status !== 401) throw new Error();
    const response = await fetch("/api/auth/session", { cache: "no-store", credentials: "same-origin", signal: abort.signal });
-   const session = await response.json() as { csrfToken?: string; memberships?: { tenantId: string }[] };
-   const tenant = session.memberships?.[0]?.tenantId;
-   if (!response.ok || !session.csrfToken || !tenant) throw new Error();
-   headers = { "x-csrf-token": session.csrfToken, "x-tenant-id": tenant };
+   // 401 means no company session either: read as before so the server answers UNAUTHENTICATED.
+   if (response.status !== 401) {
+    const session = await response.json() as { csrfToken?: string; memberships?: { tenantId: string }[] };
+    const tenant = session.memberships?.[0]?.tenantId;
+    if (!response.ok || !session.csrfToken || !tenant) throw new Error();
+    headers = { "x-csrf-token": session.csrfToken, "x-tenant-id": tenant };
+   }
   }
   if (abort.signal.aborted) return;
   const response=await fetch(`/api/jobs/${jobId}/value/v3${window.location.search}`,{cache:"no-store",credentials:"same-origin",headers,signal:abort.signal});
