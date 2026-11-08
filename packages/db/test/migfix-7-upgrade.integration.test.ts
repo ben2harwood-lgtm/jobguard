@@ -109,6 +109,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.configure_recovery_demo(p_job uuid, p_command uuid, p_scenario character varying)", "0670_recovery_demo_replay_job.sql"],
     ["app.ent4b_fact_guard()", "0673_duplicate_unlink_command_binding.sql"],
     ["app.work_order_commit(actor uuid, payload jsonb)", "0676_work_order_expected_revision.sql"],
+    ["app.sync_snapshot_generation(u uuid, r bigint, s bigint, h text, e text)", "0679_sync_checkpoint_synthetic_guard.sql"],
     ["app.reverse_synthetic_landing(p_tenant uuid, p_reversal uuid, p_derivation uuid, p_journal uuid, p_allocation uuid, p_amount bigint, p_reason character varying)", "0682_synthetic_reversal_replay_match.sql"],
   ]) {
     const source = await readFile(new URL(`../migrations/${migration}`, import.meta.url), "utf8");
@@ -142,8 +143,8 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
       }
       expect(row.definition).toBe(definition);
     } else {
-      // Metadata equality above binds the exact overload; each new body's source is unique.
-      const source = successors.find(p => p.upgrade.some(change => change.section === "routines" && change.after?.nspname === row.nspname && change.after.proname === row.proname && change.after.args === row.args));
+      // Metadata equality above binds the exact overload; pin its latest successor body, including 0681.
+      const source = successors.findLast(p => p.upgrade.some(change => change.section === "routines" && change.after?.nspname === row.nspname && change.after.proname === row.proname && change.after.args === row.args));
       expect(source).toBeDefined();
       const sql = await readFile(new URL(`../migrations/${source!.migration}`, import.meta.url), "utf8");
       const body = sql.split(`FUNCTION ${row.nspname}.${row.proname}(`)[1]!.split("AS $$")[1]!.split("$$;")[0];
