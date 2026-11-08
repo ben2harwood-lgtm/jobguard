@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-140": {
+      "branches": [
+        "codex/sandbox/later-safety-140"
+      ],
+      "allow": [
+        "apps/web/app/api/jobs/[id]/value/v3/route.ts",
+        "apps/web/app/api/value/route.ts",
+        "apps/web/app/api/value/route.test.ts",
+        "apps/web/app/api/jobs/[id]/value/v3/route.test.ts",
+        "apps/web/app/ui/mapped-value-receipt.tsx",
+        "apps/web/app/ui/business-value-v3.tsx",
+        "apps/web/app/api/value-session-regression.test.ts",
+        "apps/web/e2e/later-safety-140.spec.ts"
+      ]
+    }
+  }
+}
