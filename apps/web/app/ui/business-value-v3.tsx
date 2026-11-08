@@ -17,8 +17,23 @@ export function BusinessValueV3() {
   setState("Loading current availability…");
   void (async () => {
    try {
+    // Practice authority is checked by its own endpoint; company-only reads need CSRF and tenant headers.
+    const practice = await fetch("/api/session", { cache: "no-store", credentials: "same-origin", signal: abort.signal });
+    let headers: Record<string, string> = {};
+    if (!practice.ok) {
+     if (practice.status !== 401) throw new Error();
+     const response = await fetch("/api/auth/session", { cache: "no-store", credentials: "same-origin", signal: abort.signal });
+     // 401 means no company session either: read as before so the server answers UNAUTHENTICATED.
+     if (response.status !== 401) {
+      const session = await response.json() as { csrfToken?: string; memberships?: { tenantId: string }[] };
+      const tenant = session.memberships?.[0]?.tenantId;
+      if (!response.ok || !session.csrfToken || !tenant) throw new Error();
+      headers = { "x-csrf-token": session.csrfToken, "x-tenant-id": tenant };
+     }
+    }
+    if (abort.signal.aborted) return;
     // Selection is checked by the server; never turn browser values into amounts.
-    const response = await fetch(`/api/value${window.location.search}`, { cache: "no-store", signal: abort.signal });
+    const response = await fetch(`/api/value${window.location.search}`, { cache: "no-store", credentials: "same-origin", headers, signal: abort.signal });
     const parsed = resultV1.safeParse(await response.json());
     if (abort.signal.aborted) return;
     if (!parsed.success) { setState("Value is unavailable. Refresh to try again."); return; }
