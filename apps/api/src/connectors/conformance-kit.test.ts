@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { renderBillingExport } from "@jobguard/core";
 import type { OutboundAction } from "@jobguard/db";
 import { createInMemorySftpServer } from "./sftp.synthetic.js";
-import { capabilityReport, connectorCapabilities, conformanceChecks, runConnectorConformance } from "./conformance-kit.js";
+import { stagedInputCapabilityReport, capabilityReport, connectorCapabilities, conformanceChecks, runConnectorConformance } from "./conformance-kit.js";
 import type { ConnectorUnderTest } from "./conformance-kit.js";
 import { createBadConnectorFixture } from "./conformance-kit.bad-fixture.js";
 
@@ -48,6 +48,11 @@ describe("ENT-13b shared synthetic conformance (no provider or release evidence)
   });
   it("fails every named check for the deliberately bad connector", async () => {
     expect(await runConnectorConformance(bad)).toEqual(conformanceChecks.map(check => ({ check, passed: false })));
+  });
+  it("reports export acknowledgements as synthetic staging with live gates unavailable", () => {
+    expect(stagedInputCapabilityReport()).toEqual({ work_orders: "synthetic_only", billing_status: "synthetic_only",
+      materials_issues: "synthetic_only", export_delivery: "synthetic_only", durable_restart: "unavailable",
+      partner_conformance: "unavailable", data_flow_approval: "unavailable", g5: "unavailable" });
   });
   it("records every missing capability as unavailable", () => {
     expect(Object.values(capabilityReport({}))).toEqual(connectorCapabilities.map(() => "unavailable"));
