@@ -1,0 +1,33 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-12": {
+      "branches": [
+        "codex/sandbox/later-safety-12"
+      ],
+      "note": "LATER-SAFETY-12 RED authority repair; catch-up preserves items 1, 3 and 4. Item 2 already closed on main by 0646; dropped. Migration 0665 (1131 renumbered by stem only). Item 5 unchanged.",
+      "allow": [
+        "apps/api/src/interim-draft.application.test.ts",
+        "apps/api/src/interim-draft.application.ts",
+        "apps/api/src/rate-suggestion.application.test.ts",
+        "apps/api/src/rate-suggestion.application.ts",
+        "apps/web/app/api/jobs/[id]/interim-drafts/route.test.ts",
+        "apps/web/app/api/jobs/[id]/rate-suggestions/route.test.ts",
+        "apps/web/app/api/jobs/[id]/rate-suggestions/route.ts",
+        "apps/web/app/jobs/[id]/rate-suggestions/rate-suggestion-screen.tsx",
+        "apps/web/app/lib/rate-suggestion-server.ts",
+        "apps/web/e2e/M5-6-rate-suggestions.spec.ts",
+        "apps/web/e2e/interim-drafts.spec.ts",
+        "packages/db/migration-notes/0665_interim_read_authority.md",
+        "packages/db/migrations/0665_interim_read_authority.sql",
+        "packages/db/src/interim-draft-repository.ts",
+        "packages/db/test/interim-draft-repository.test.ts",
+        "packages/db/test/interim-draft-screen.integration.test.ts",
+        "packages/db/test/interim-draft.integration.test.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/0665_interim_read_authority.proof.json",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts"
+      ]
+    }
+  }
+}

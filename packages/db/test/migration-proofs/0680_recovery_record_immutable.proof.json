@@ -1,0 +1,57 @@
+{
+  "migration": "0680_recovery_record_immutable.sql",
+  "lp0": [
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.recovery_message|recovery_record_immutable|app.reject_immutable_authorization_record|BEFORE DELETE/UPDATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.recovery_message_approval|recovery_record_immutable|app.reject_immutable_authorization_record|BEFORE DELETE/UPDATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.recovery_message_event|recovery_record_immutable|app.reject_immutable_authorization_record|BEFORE DELETE/UPDATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.recovery_message_sink|recovery_record_immutable|app.reject_immutable_authorization_record|BEFORE DELETE/UPDATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.recovery_follow_up|recovery_record_immutable|app.reject_immutable_authorization_record|BEFORE DELETE/UPDATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.recovery_follow_up_owner|recovery_record_immutable|app.reject_immutable_authorization_record|BEFORE DELETE/UPDATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.recovery_follow_up_event|recovery_record_immutable|app.reject_immutable_authorization_record|BEFORE DELETE/UPDATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.recovery_follow_up_due|recovery_record_immutable|app.reject_immutable_authorization_record|BEFORE DELETE/UPDATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.recovery_follow_up_reminder|recovery_record_immutable|app.reject_immutable_authorization_record|BEFORE DELETE/UPDATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.recovery_follow_up_advance|recovery_record_immutable|app.reject_immutable_authorization_record|BEFORE DELETE/UPDATE|O"
+    }
+  ],
+  "upgrade": [],
+  "tenancy": []
+}
