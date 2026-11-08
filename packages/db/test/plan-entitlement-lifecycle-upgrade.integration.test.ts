@@ -141,6 +141,13 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
       expect(current?.definition?.split("$function$")[1]).toBe(owner.split("FUNCTION app.final_check_require_invoice_actor(")[1]!.split("AS $$")[1]!.split("$$;")[0]);
       continue;
     }
+    // 0679 adds only the synthetic-database check to the sync checkpoint writer; keep its metadata exact.
+    if (prior.nspname === "app" && prior.proname === "sync_snapshot_generation" && prior.args === "u uuid, r bigint, s bigint, h text, e text") {
+      expect({ ...current, definition: prior.definition }).toEqual(prior);
+      const sql = await readFile(new URL("../migrations/0679_sync_checkpoint_synthetic_guard.sql", import.meta.url), "utf8");
+      expect(current?.definition?.split("$function$")[1]).toBe(sql.split("FUNCTION app.sync_snapshot_generation(")[1]!.split("AS $$")[1]!.split("$$;")[0]);
+      continue;
+    }
     const batchReplacement = batchBodies.find(row => prior.nspname === "app" && prior.proname === row.name && prior.args === row.args);
     if (batchReplacement) {
       expect(current?.definition?.split("$function$")[1]).toEqual(batchReplacement.body);
@@ -157,11 +164,11 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     }
     // 0566, 0573 and 0606 extend exactly this dispatcher for managed recovery, supervisor queries and dark orders.
     if (prior.nspname === "app" && prior.proname === "lp5_command_result" && prior.args === "p_command_id uuid, p_outcome jsonb") continue;
-    // 0631 replaces the legacy v1 landing bodies; 0654 extends only the reversal replay/policy checks.
+    // 0631 replaces the legacy v1 landing bodies; 0654 extends only the reversal replay/policy checks; 0682 binds replays to the stored payload.
     if (prior.nspname === "app" && (
       (prior.proname === "approve_synthetic_landing" && prior.args === "p jsonb") ||
       (prior.proname === "reverse_synthetic_landing" && prior.args === "p_tenant uuid, p_reversal uuid, p_derivation uuid, p_journal uuid, p_allocation uuid, p_amount bigint, p_reason character varying"))) {
-      const migration = prior.proname === "reverse_synthetic_landing" ? "0654_synthetic_reversal_money_rules.sql" : "0631_legacy_recovery_money_integrity.sql";
+      const migration = prior.proname === "reverse_synthetic_landing" ? "0682_synthetic_reversal_replay_match.sql" : "0631_legacy_recovery_money_integrity.sql";
       const sql = await readFile(new URL(`../migrations/${migration}`, import.meta.url), "utf8");
       const body = sql.split(`CREATE OR REPLACE FUNCTION app.${prior.proname}(`)[1]!.split("AS $$")[1]!.split("$$;")[0];
       expect(current?.definition?.split("$function$")[1]).toEqual(body);
