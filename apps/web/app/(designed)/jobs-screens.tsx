@@ -47,9 +47,8 @@ export function DesignedNewJob() {
 function NewJob({ workspace }: { workspace: Workspace }) {
   const router = useRouter();
   return <Shell workspace={workspace} title="Start a new job." subtitle="Describe the work in your own words. JobGuard makes a draft for you to check — nothing is sent yet." active="jobs">
-    <Card title="Describe the work" sub="Type or paste what you plan to do. You can check and change everything before a quote.">
-      <Legacy label="Start a new job"><WalkIt tenantId={workspace.tenantId} close={() => router.push("/jobs")} reviewHref={id => `/jobs/${id}/work`}/></Legacy>
-    </Card>
+    <Head kicker="NEW JOB" title="Describe the work" text="Type or paste what you plan to do. You can check and change everything before a quote."/>
+    <Legacy label="Start a new job" cards><WalkIt tenantId={workspace.tenantId} close={() => router.push("/jobs")} reviewHref={id => `/jobs/${id}/work`}/></Legacy>
   </Shell>;
 }
 
@@ -175,7 +174,7 @@ function MoneyTab({ value, children }: { value: JobValue | null; children?: Reac
       <MoneyBlocks value={value}/>
       <div style={{ marginTop: 16 }}><Note>An extra being approved does not mean it has been invoiced. An invoice being issued does not mean the customer has paid. A manually entered receipt does not prove bank settlement.</Note></div>
     </div></Card>
-    <div style={{ marginTop: 19 }}><Card title="The money trail" sub="How each amount was worked out, from this job’s records."><Legacy label="Job money trail">{children}</Legacy></Card></div>
+    <div style={{ marginTop: 19 }}><Legacy label="Job money trail" cards>{children}</Legacy></div>
   </>;
 }
 
@@ -199,7 +198,7 @@ function RecordsTab({ jobId, children }: { jobId: string; children?: ReactNode }
         </div></Card>
         <div style={{ marginTop: 18 }}><Card title="Kept records"><div className="work-list">{links.map(([path, title, text]) => <div className="work-item" key={path}><div className="work-item-icon"><Icon name="file"/></div><div className="work-text"><strong>{title}</strong><small>{text}</small></div><a className="btn small" href={`/jobs/${jobId}/${path}`}>Open →</a></div>)}</div></Card></div>
       </div>
-      <div><Card title="Job diary and customer messages" sub="Practice records only — nothing here was sent to a real person."><Legacy label="Job diary and messages">{children}</Legacy></Card></div>
+      <div><Legacy label="Job diary and messages" cards>{children}</Legacy></div>
     </div>
   </>;
 }

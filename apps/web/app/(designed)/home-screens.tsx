@@ -94,10 +94,8 @@ function Check({ workspace }: { workspace: Workspace }) {
   const router = useRouter();
   const [counts, setCounts] = useState(workspace.decisions?.counts ?? null);
   return <Shell workspace={{ ...workspace, pending: counts?.pending ?? workspace.pending }} title="The things that need you." subtitle={INNER_SUBTITLE} active="check">
-    <Head kicker="THE JOBGUARD WATCHDOG" title="Only what needs attention." text="Every item says what we noticed, why it matters and what to do."/>
-    <Card title="Things to check" sub="No AI makes approvals, sends claims or spends money in this practice." action={counts && <Tag tone={counts.pending ? "amber" : "green"}>{counts.pending ? `${counts.pending} to decide` : "All clear"}</Tag>}>
-      <div data-testid="designed-check"><Legacy label="Decision inbox"><DecisionInbox tenantId={workspace.tenantId} close={() => router.push("/today")} onCounts={setCounts}/></Legacy></div>
-    </Card>
+    <Head kicker="THE JOBGUARD WATCHDOG" title="Only what needs attention." text="Every item says what we noticed, why it matters and what to do. No AI makes approvals, sends claims or spends money in this practice." action={counts && <Tag tone={counts.pending ? "amber" : "green"}>{counts.pending ? `${counts.pending} to decide` : "All clear"}</Tag>}/>
+    <div data-testid="designed-check"><Legacy label="Decision inbox" cards><DecisionInbox tenantId={workspace.tenantId} close={() => router.push("/today")} onCounts={setCounts}/></Legacy></div>
   </Shell>;
 }
 
@@ -167,8 +165,9 @@ function More({ workspace }: { workspace: Workspace }) {
     <div className="benefit-layout" data-testid="designed-more">{BENEFITS.map(([n, title, text]) => <article className="benefit" key={n}><span>{n} / PROFIT PROTECTION</span><h3>{title}</h3><p>{text}</p><button type="button" className="btn small" onClick={() => router.push("/jobs")}>Find this in a job →</button></article>)}</div>
     <div style={{ marginTop: 20 }}><Card title="Practice tools" sub="Quick ways in for a job already under way. Everything here is practice only.">
       <div className="card-body"><div className="head-buttons">{(Object.keys(TOOLS) as (keyof typeof TOOLS)[]).map(key => <button key={key} type="button" className={`btn small ${tool === key ? "primary" : ""}`} aria-pressed={tool === key} onClick={() => setTool(key)}>{TOOLS[key]}</button>)}</div></div>
-      {tool && <Legacy label={TOOLS[tool]}>{tool === "proof" ? <ProofCapture close={close}/> : tool === "extra" ? <VariationFlow close={close}/> : tool === "final" ? <FinalAccount close={close}/> : <FeeStatement jobId={jobs?.[0]?.id ?? ""}/>}</Legacy>}
+      {tool === "fee" && <div className="card-body" style={{ paddingTop: 0 }}><Note>The fee example needs a job whose quote has been accepted and started. If nothing appears below, no practice job has reached that step yet.</Note></div>}
     </Card></div>
+    {tool && <div style={{ marginTop: 18 }}><Legacy label={TOOLS[tool]} cards>{tool === "proof" ? <ProofCapture close={close}/> : tool === "extra" ? <VariationFlow close={close}/> : tool === "final" ? <FinalAccount close={close}/> : <FeeStatement jobId={jobs?.[0]?.id ?? ""}/>}</Legacy></div>}
     <div style={{ marginTop: 20 }}><Card title="Other practice views"><div className="work-list">{LINKS.map(([href, label]) => <div className="work-item" key={href}><div className="work-text"><strong>{label}</strong></div><a className="btn small" href={href}>Open →</a></div>)}</div>
       <div className="card-body"><Note>This is a practice workspace with made-up records. Nothing here sends a real message, takes a payment or creates a JobGuard fee.</Note></div>
     </Card></div>
