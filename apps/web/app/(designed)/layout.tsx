@@ -1,5 +1,6 @@
 import "./design.css";
 import "./design-fit.css";
+import "./design-tools.css";
 
 // Screens rebuilt from the approved clickable design. The stylesheet is scoped under
 // .jgd, so it only styles pages in this route group.

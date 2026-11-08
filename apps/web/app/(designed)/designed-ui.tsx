@@ -51,9 +51,10 @@ export function Note({ tone = "", children }: { tone?: string; children: ReactNo
 export function Head({ kicker, title, text, action }: { kicker: string; title: string; text: string; action?: ReactNode }) {
   return <div className="page-head"><div><div className="kicker">{kicker}</div><h2 tabIndex={-1}>{title}</h2><p>{text}</p></div>{action && <div className="head-buttons">{action}</div>}</div>;
 }
-/** An existing working tool shown inside a designed screen, keeping the app's own styles and behaviour. */
-export function Legacy({ children, label }: { children: ReactNode; label: string }) {
-  return <section className="jgd-legacy" aria-label={label}>{children}</section>;
+/** An existing working tool shown inside a designed screen, keeping its behaviour. With `cards`, its
+ * panels are restyled as design cards (design-tools.css); otherwise it keeps the app's own look. */
+export function Legacy({ children, label, cards = false }: { children: ReactNode; label: string; cards?: boolean }) {
+  return <section className={cards ? "jgd-legacy jgd-tools" : "jgd-legacy"} aria-label={label}>{children}</section>;
 }
 
 export const known = (value: string) => value && value !== UNKNOWN ? value : "";

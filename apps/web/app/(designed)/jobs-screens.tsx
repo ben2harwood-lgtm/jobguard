@@ -164,7 +164,7 @@ function Overview({ detail, site }: { detail: Detail; site: string }) {
 function WorkTab({ children }: { children?: ReactNode }) {
   return <>
     <Head kicker="WORK / ONE CONNECTED JOB" title="Keep the work ready." text="The quote, materials, proof and extras belong to this job. A change here updates what JobGuard flags."/>
-    <Card title="The job, step by step" sub="Quote, work, proof, extras and the final bill — all the working tools for this job."><Legacy label="Job workspace">{children}</Legacy></Card>
+    <Legacy label="Job workspace" cards>{children}</Legacy>
   </>;
 }
 
