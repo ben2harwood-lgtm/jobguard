@@ -68,6 +68,14 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     ["decision_check_command", "p_digest text, p_command jsonb, p_phase text, p_data jsonb", "0660_baseline_ancestry_audit_trust.sql"],
     ["interim_draft_records", "t uuid, digest text, j uuid, operation text, v jsonb", "0665_interim_read_authority.sql"],
     ["ch5_history_actor", "t uuid, j uuid, d text", "0668_import_company_owner_history.sql"],
+    ["guard_practice_material_requirement", "", "0690_import_ancestry_record_anchor.sql"],
+    ["ch4_read_work_facts", "t uuid, j uuid, digest text", "0690_import_ancestry_record_anchor.sql"],
+    ["read_job_sources", "t uuid, j uuid, digest text, source text", "0690_import_ancestry_record_anchor.sql"],
+    ["ch4_require_command_owner", "t uuid, j uuid, digest text", "0690_import_ancestry_record_anchor.sql"],
+    ["final_check_builder", "t uuid, j uuid, d text, locking boolean", "0690_import_ancestry_record_anchor.sql"],
+    ["evidence_pack_v3_owner", "t uuid, c uuid, d text", "0690_import_ancestry_record_anchor.sql"],
+    ["adopt_invoiced_job_v3", "t uuid, source_job uuid, d text, cmd uuid, auth uuid, approved jsonb, request_hash text", "0690_import_ancestry_record_anchor.sql"],
+    ["apply_recovery_timeline_signal", "p_tenant uuid, p_signal jsonb", "0690_import_ancestry_record_anchor.sql"],
   ].map(async ([name, args, migration]) => {
     const sql = await readFile(new URL(`../migrations/${migration}`, import.meta.url), "utf8");
     if (name === "decision_check_command") expect(sql).toContain("rv.result->>'sourceJobId'=source.id::text");
@@ -153,6 +161,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     }
     const batchReplacement = batchBodies.find(row => prior.nspname === "app" && prior.proname === row.name && prior.args === row.args);
     if (batchReplacement) {
+      expect({ ...current, definition: prior.definition }).toEqual(prior);
       expect(current?.definition?.split("$function$")[1]).toEqual(batchReplacement.body);
       continue;
     }
