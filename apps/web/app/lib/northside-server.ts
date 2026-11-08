@@ -7,6 +7,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { ContractorError } from "@jobguard/core";
 import { ContractorRepository, EvidenceService, ExtraApprovalError, WatchdogError, contractorSessionContext, northsideRole, type AuthenticatedMembership, type VerifiedTenantContext } from "@jobguard/db";
+import { NorthsidePhotoStorage } from "../../../../packages/db/src/northside-photo-storage";
 import { syntheticPool } from "./synthetic-server";
 import { isTrustedBrowserOrigin } from "../api/contractor/origin";
 
@@ -54,19 +55,9 @@ export function failure(error: unknown) {
   return json({ code: "DEMO_UNAVAILABLE" }, 503);
 }
 
-/** Practice-only photo store: bytes live in this server process, keyed by object, and are never sent anywhere. */
-type StoredObject = { key: string; versionId: string; bytes: Uint8Array; byteLength: number; contentType: string };
-class PracticeStorage {
-  versions = new Map<string, StoredObject>();
-  put(key: string, versionId: string, bytes: Uint8Array, contentType = "image/png") { this.versions.set(`${key}:${versionId}`, { key, versionId, bytes, byteLength: bytes.length, contentType }); }
-  async createUploadUrl({ key, expiresInSeconds }: { key: string; contentType: string; expiresInSeconds: number }) { return `memory://put/${key}?expires=${expiresInSeconds}`; }
-  async createDownloadUrl({ key, versionId, expiresInSeconds }: { key: string; versionId: string; expiresInSeconds: number }) { return `memory://get/${key}?version=${versionId}&expires=${expiresInSeconds}`; }
-  async readExactVersion(key: string, versionId: string) { const value = this.versions.get(`${key}:${versionId}`); if (!value) throw new Error("not found"); return value; }
-  async deleteExactVersion(key: string, versionId: string) { this.versions.delete(`${key}:${versionId}`); }
-}
-const registry = globalThis as typeof globalThis & { __northsidePhotos?: PracticeStorage };
-export const practiceStorage = () => (registry.__northsidePhotos ??= new PracticeStorage());
-export const evidenceService = () => new EvidenceService(syntheticPool(), practiceStorage());
+/** Persistent generated originals shared by capture and bundle checks. */
+export const practiceStorage = (context: VerifiedTenantContext, jobId: string, pool = syntheticPool()) => new NorthsidePhotoStorage(pool, context, jobId);
+export const evidenceService = (context: VerifiedTenantContext, jobId: string, pool = syntheticPool()) => new EvidenceService(pool, practiceStorage(context, jobId, pool));
 /** A complete 1x1 PNG whose pixel bytes depend on the seed, so each practice photo has its own SHA-256. */
 export function practicePng(): { bytes: Uint8Array; sha256: string } {
   const seed = randomInt(0, 65536);

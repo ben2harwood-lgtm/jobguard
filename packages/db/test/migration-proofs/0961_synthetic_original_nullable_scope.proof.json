@@ -1,0 +1,6 @@
+{
+  "migration": "0961_synthetic_original_nullable_scope.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}

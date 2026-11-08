@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-139": {
+      "branches": [
+        "codex/sandbox/later-safety-139"
+      ],
+      "allow": [
+        "apps/web/app/api/northside/photo/route.ts",
+        "apps/web/app/api/northside/routes.test.ts",
+        "apps/web/app/lib/evidence-bundle-server.ts",
+        "apps/web/app/lib/northside-server.ts",
+        "packages/db/migrations/0961_synthetic_original_nullable_scope.sql",
+        "packages/db/src/northside-photo-storage.ts",
+        "packages/db/test/migration-proofs/0961_synthetic_original_nullable_scope.proof.json",
+        "packages/db/test/synthetic-original-nullable-scope.integration.test.ts"
+      ]
+    }
+  }
+}
