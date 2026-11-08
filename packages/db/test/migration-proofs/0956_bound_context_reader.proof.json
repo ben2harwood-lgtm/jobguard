@@ -1,0 +1,121 @@
+{
+  "migration": "0956_bound_context_reader.sql",
+  "lp0": [
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "id": "a-bound-context-reader",
+        "title": "Private bound actor and tenant reader",
+        "kind": "identity",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Proposal only. Landing requires Ben typed yes, real PostgreSQL CI and independent RED review."
+        },
+        "cards": [
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-12": "Propose a read-only current-transaction pair for migration-owned definer callers, subject to Ben typed yes and exact-head RED review."
+        },
+        "downstream": "Reads only the current transaction binding through its existing owner-only accessor. No credentials, binding mutation or business caller conversion.",
+        "sources": [
+          "packages/db/migrations/0956_bound_context_reader.sql",
+          "docs/contracts/bound-context-reader-v1.md"
+        ],
+        "tests": [
+          "packages/db/test/bound-context-reader.integration.test.ts",
+          "packages/db/test/bound-context-reader.test.ts"
+        ],
+        "gaps": [
+          "PROPOSAL, NEEDS BEN. PostgreSQL execution and independent review pending."
+        ],
+        "path": "ap-bound-context-reader"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.bound_context_reader()|jobguard_migration|EXECUTE|-",
+        "group": "a-bound-context-reader"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.bound_context_reader()|jobguard_binding_owner",
+        "group": "a-bound-context-reader"
+      }
+    },
+    {
+      "section": "authorityPaths",
+      "before": null,
+      "after": {
+        "id": "ap-bound-context-reader",
+        "title": "Private bound actor and tenant reader",
+        "description": "Reads only the current transaction binding through its existing owner-only accessor. No credentials, binding mutation or business caller conversion.",
+        "cards": [
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-12": "Propose a read-only current-transaction pair for migration-owned definer callers, subject to Ben typed yes and exact-head RED review."
+        },
+        "sources": [
+          "packages/db/migrations/0956_bound_context_reader.sql",
+          "docs/contracts/bound-context-reader-v1.md"
+        ],
+        "tests": [
+          "packages/db/test/bound-context-reader.integration.test.ts",
+          "packages/db/test/bound-context-reader.test.ts"
+        ],
+        "gaps": [
+          "PROPOSAL, NEEDS BEN. PostgreSQL execution and independent review pending."
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.bound_context_reader()",
+        "owner": "jobguard_binding_owner",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_migration"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.lp6_bound_request"
+        ]
+      }
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "bound_context_reader",
+        "args": "",
+        "proowner": "jobguard_binding_owner",
+        "proacl": "{jobguard_binding_owner=X/jobguard_binding_owner,jobguard_migration=X/jobguard_binding_owner}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    }
+  ],
+  "tenancy": []
+}
