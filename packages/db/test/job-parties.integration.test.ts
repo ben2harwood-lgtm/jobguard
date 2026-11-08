@@ -9,6 +9,7 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AdoptInFlightJobMutation, appendAuditBatch, authenticatePracticeSession, authorizePracticeJob, issuePracticeSession, DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID, DEMO_IDENTITY_USER_ID, MIGRATION_URLS, migrate, JobPartiesRepository, UserCommandDispatcher, withTenant } from "../src/index.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
+import { JobPartiesApplication } from "../../../apps/api/src/job-parties.application.js";
 
 // The shared integration setup selects the actual pre-LP4 audit client for
 // this deliberately frozen 0095 schema; fully migrated fixtures stay sealed.
@@ -643,23 +644,10 @@ describe("CH-3a SBOX-SESSION-1 registry ownership on real PostgreSQL", () => {
       expect(await repository.view(stranger.context, stranger.membershipId, strangerJob, stranger.digest)).toEqual(strangerBefore);
       expect((await repository.view(owner.context, owner.membershipId, ownedJob, owner.digest)).current?.customer.name).toBe(customer.name);
 
-      // Exercise the unchanged controlled routine/dispatcher and immutable source audit reference.
-      const imported = randomUUID(), baseline = randomUUID();
-      const baselineHash = createHash("sha256").update("Fictional inherited ownership").digest("hex");
-      const mutation = new AdoptInFlightJobMutation(DEMO_TENANT_ID, "synthetic_candidate", {
-        version: "adopt-job.v1", jobId: imported, baselineId: baseline, title: "Fictional owned import", lifecyclePoint: "live",
-        provenance: "imported", lineageStrength: "builder_attested_weaker", baselineHash, baselineDescription: "Fictional baseline",
-        acceptedNetValuePence: 100000, recoveryCapPence: 1500, acceptedValueSource: "builder_attestation", attestedByMembershipId: DEMO_MEMBERSHIP_ID,
-        attestedAt: new Date(0), importTermsVersion: "synthetic_import_terms_candidate.v1", feePolicyVersion: "reference_fee_policy_v1", mode: "synthetic_candidate", parties,
+      // The real import binds source ownership in the durable command receipt.
+      const { jobId: imported } = await new JobPartiesApplication(runtime).adopt({ sessionId: ownerToken }, ownedJob, {
+        version: "job-parties-import.v1", commandId: randomUUID(), expectedBindingId: saved.id,
       });
-      await new UserCommandDispatcher(runtime).dispatch(owner.context, {
-        version: "command.v1", commandId: randomUUID(), commandType: "job.adopt_in_flight", semanticKey: `import:${imported}`,
-        actorMembershipId: owner.membershipId, subjectType: "job", subjectRef: imported,
-        action: { actionType: "job.adopt_in_flight", recipient: null, contentHash: baselineHash, aggregateRevision: 0, amountPence: 100000,
-          currency: "GBP", policyVersion: "synthetic_import_terms_candidate.v1", expiresAt: new Date(Date.now() + 300000) },
-      }, { mutate: mutation.mutate.bind(mutation), auditEvents: (result, cmd) => mutation.auditEvents(result, cmd).map(event => ({
-        ...event, payload: { ...event.payload, references: { ...event.payload.references, sourceJobId: ownedJob } },
-      })) });
       expect((await authorizePracticeJob(runtime, ownerToken, imported)).digest).toBe(owner.digest);
       await expect(authorizePracticeJob(runtime, strangerToken, imported)).rejects.toThrow("NOT_FOUND");
       await expect(authorizePracticeJob(runtime, undefined, imported)).rejects.toThrow("UNAUTHENTICATED");

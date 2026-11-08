@@ -92,21 +92,23 @@ async function fixture({ claim1 = 3_440_000, claim2 = 250_000, settle = true, co
       VALUES($1,$2,$3,$4,1,$5,4128000,'GBP','builder_attestation',$6,'Fictional customer','verbal',clock_timestamp())`, [randomUUID(), DEMO_TENANT_ID, jobId, quoteId, hash(quoteId), actor.membershipId]);
     await db.query("SELECT app.transition_job($1,$2,2,'live','switch_live',$3,3440000,'reference_fee_policy_v1',28200)", [DEMO_TENANT_ID, jobId, quoteId]);
     await db.query("INSERT INTO app.final_account_draft(id,tenant_id,job_id) VALUES($1,$2,$3)", [draftId, DEMO_TENANT_ID, jobId]);
+    let earlierRevision: string | null = null;
     if (lateCatch) {
-      const earlierRevision = randomUUID();
+      earlierRevision = randomUUID();
       await db.query(`INSERT INTO app.final_account_revision(id,tenant_id,job_id,final_account_draft_id,revision,source_hash,baseline_quote_version_id,currency,tax_policy_version,net_pence,tax_pence,total_pence,issue_blocked,findings,created_at)
         VALUES($1,$2,$3,$4,1,$5,$6,'GBP','candidate_m1_standard_v1',3360000,672000,4032000,false,'[]',clock_timestamp()-interval '1 day')`, [earlierRevision, DEMO_TENANT_ID, jobId, draftId, hash(earlierRevision), quoteId]);
       await db.query(`INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,description,net_pence,ordinal)
         VALUES($1,$2,$3,$4,'baseline',$5,$5,$6,'Fictional baseline before catch',3360000,1)`, [randomUUID(), DEMO_TENANT_ID, jobId, earlierRevision, scopeId, quoteRevisionId]);
     }
-    await db.query(`INSERT INTO app.final_account_revision(id,tenant_id,job_id,final_account_draft_id,revision,source_hash,baseline_quote_version_id,currency,tax_policy_version,net_pence,tax_pence,total_pence,issue_blocked,findings,created_at)
-      VALUES($1,$2,$3,$4,CASE WHEN $7 THEN 2 ELSE 1 END,$5,$6,'GBP','candidate_m1_standard_v1',3440000,688000,4128000,false,'[]',clock_timestamp()+CASE WHEN $7 THEN interval '1 day' ELSE interval '0 seconds' END)`, [revisionId, DEMO_TENANT_ID, jobId, draftId, hash(revisionId), quoteId, lateCatch]);
+    await db.query(`INSERT INTO app.final_account_revision(id,tenant_id,job_id,final_account_draft_id,revision,previous_revision_id,source_hash,baseline_quote_version_id,currency,tax_policy_version,net_pence,tax_pence,total_pence,issue_blocked,findings,created_at)
+      VALUES($1,$2,$3,$4,CASE WHEN $7 THEN 2 ELSE 1 END,$8,$5,$6,'GBP','candidate_m1_standard_v1',3440000,688000,4128000,false,'[]',clock_timestamp()+CASE WHEN $7 THEN interval '1 day' ELSE interval '0 seconds' END)`, [revisionId, DEMO_TENANT_ID, jobId, draftId, hash(revisionId), quoteId, lateCatch, earlierRevision]);
     await db.query(`INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,description,net_pence,ordinal)
       VALUES($1,$2,$3,$4,'baseline',$5,$5,$6,'Fictional baseline',3360000,1)`, [lineId, DEMO_TENANT_ID, jobId, revisionId, scopeId, quoteRevisionId]);
     const catchScope = randomUUID();
     await db.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')", [catchScope, DEMO_TENANT_ID, jobId]);
     await db.query(`INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,description,net_pence,ordinal)
       VALUES($1,$2,$3,$4,'baseline',$5,$5,$6,'Synthetic catch line',80000,2)`, [catchLineId, DEMO_TENANT_ID, jobId, revisionId, catchScope, quoteRevisionId]);
+    if (earlierRevision) await db.query("UPDATE app.final_account_draft SET revision=1,current_revision_id=$3 WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, draftId, earlierRevision]);
     await db.query("UPDATE app.final_account_draft SET revision=CASE WHEN $4 THEN 2 ELSE 1 END,current_revision_id=$3 WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, draftId, revisionId, lateCatch]);
     await db.query("COMMIT");
   } catch (error) { await db.query("ROLLBACK"); throw error; } finally { db.release(); }
