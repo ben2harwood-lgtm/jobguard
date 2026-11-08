@@ -92,8 +92,34 @@ it('emergency_dual_owner/scim2_machine preserve populated identity state, instal
  const nextShape=(after.relations.find(isJob)!.constraints as Con[]).find(c=>c.name===shape)!;
  expect(nextShape.definition).not.toBe(priorShape.definition);
  expect(nextShape.definition.replace(/, 'paid'::[a-z ]+(?=\])/,'')).toBe(priorShape.definition);
+ // 0957 adds only the append-only attempt identity, its predecessor snapshot and the replacement unique key.
+ const isManifest=(r:Relation)=>r.nspname==='app'&&r.relname==='final_check_manifest';
+ const oldManifest=catalogue.relations.find(isManifest)!,newManifest=after.relations.find(isManifest)!;
+ const attemptColumns=['attempt','predecessor_manifest_id','withdrawn_predecessor_source_ids'];
+ expect((await h.admin.query(`SELECT a.attname name,format_type(a.atttypid,a.atttypmod) type,a.attnotnull not_null,
+  pg_get_expr(d.adbin,d.adrelid) default_expr FROM pg_attribute a LEFT JOIN pg_attrdef d ON(d.adrelid,d.adnum)=(a.attrelid,a.attnum)
+  WHERE a.attrelid='app.final_check_manifest'::regclass AND a.attname=ANY($1) ORDER BY a.attnum`,[attemptColumns])).rows).toEqual([
+  {name:'attempt',type:'integer',not_null:true,default_expr:'1'},
+  {name:'predecessor_manifest_id',type:'uuid',not_null:false,default_expr:null},
+  {name:'withdrawn_predecessor_source_ids',type:'uuid[]',not_null:true,default_expr:"'{}'::uuid[]"},
+ ]);
+ const attemptConstraints=[
+  {name:'final_check_attempt_chain',definition:'CHECK ((((attempt = 1) AND (predecessor_manifest_id IS NULL) AND (cardinality(withdrawn_predecessor_source_ids) = 0)) OR ((attempt > 1) AND (predecessor_manifest_id IS NOT NULL) AND (cardinality(withdrawn_predecessor_source_ids) > 0))))'},
+  {name:'final_check_attempt_predecessor',definition:'FOREIGN KEY (tenant_id, job_id, predecessor_manifest_id) REFERENCES app.final_check_manifest(tenant_id, job_id, id)'},
+  {name:'final_check_manifest_attempt_check',definition:'CHECK ((attempt > 0))'},
+  {name:'final_check_manifest_lock_attempt',definition:'UNIQUE (tenant_id, job_id, lock_id, attempt)'},
+ ];
+ const attemptNames=new Set(attemptConstraints.map(c=>c.name));
+ expect((newManifest.constraints as Con[]).filter(c=>attemptNames.has(c.name))).toEqual(attemptConstraints);
+ const oldLockKey=(oldManifest.constraints as Con[]).find(c=>c.name==='final_check_manifest_tenant_id_job_id_lock_id_key')!;
+ expect(oldLockKey).toBeDefined();
+ expect((newManifest.constraints as Con[]).some(c=>c.name===oldLockKey.name)).toBe(false);
+ const normalizedManifest={...newManifest,
+  columns:(newManifest.columns as {attname:string}[]).filter(c=>!attemptColumns.includes(c.attname)),
+  constraints:[...(newManifest.constraints as Con[]).filter(c=>!attemptNames.has(c.name)),oldLockKey].sort((a,b)=>a.name<b.name?-1:a.name>b.name?1:0),
+ };
  const afterRelations=after.relations.map((r:Relation)=>isLanding(r)?{...r,constraints:(r.constraints as Con[]).filter(c=>c.name!==added)}
-  :isJob(r)?{...r,constraints:(r.constraints as Con[]).map(c=>c.name===shape?priorShape:c)}:r);
+  :isJob(r)?{...r,constraints:(r.constraints as Con[]).map(c=>c.name===shape?priorShape:c)}:isManifest(r)?normalizedManifest:r);
  expectRelationsUnchanged(catalogue.relations,afterRelations,laterAcl);
  // 0672 lets its migration-owned pack writer read the sealed request binding; only that ACL entry is added.
  const bindingReaders=new Set(['app.current_actor','app.current_tenant']);

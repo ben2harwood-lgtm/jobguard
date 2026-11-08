@@ -59,6 +59,16 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   const selfComparison = "(SELECT content_hash FROM app.action_authorization WHERE tenant_id=p_tenant AND id=p_authorization)";
   // This batch replaces only these exact routine identities; compare their complete bodies.
   const batchBodies = await Promise.all([
+    ["read_final_check_manifest", "t uuid, j uuid, m uuid", "0957_final_check_post_invoice_rerun.sql"],
+    ["evidence_pack_v3_material", "t uuid, c uuid, ordinary_only boolean", "0957_final_check_post_invoice_rerun.sql"],
+    ["begin_final_check", "t uuid, j uuid, detector text, policy text", "0957_final_check_post_invoice_rerun.sql"],
+    ["complete_final_check", "t uuid, j uuid, m uuid, p jsonb", "0957_final_check_post_invoice_rerun.sql"],
+    ["guard_final_check_manifest", "", "0957_final_check_post_invoice_rerun.sql"],
+    ["read_final_check_reveal", "t uuid, j uuid, d text", "0957_final_check_post_invoice_rerun.sql"],
+    ["read_value_job", "j uuid, digest text", "0957_final_check_post_invoice_rerun.sql"],
+    ["request_final_check_run", "t uuid, j uuid, d text", "0957_final_check_post_invoice_rerun.sql"],
+    ["request_practice_final_check_on_lock", "", "0957_final_check_post_invoice_rerun.sql"],
+    ["verify_final_check_run", "p_tenant uuid, p_job uuid, p_run uuid, p_lock uuid, p_cutoff timestamp with time zone", "0957_final_check_post_invoice_rerun.sql"],
     ["retention_records", "t uuid, digest text, j uuid, cid uuid, v jsonb, expected text", "0646_retention_timer_runtime_rules.sql"],
     ["notice_fixture_records", "j uuid, n uuid, digest text, operation text, v jsonb", "0647_notice_live_job_check.sql"],
     ["pay_now_fake_attempt", "t uuid, digest text, j uuid, operation text, v jsonb", "0648_pay_now_catch_statement.sql"],

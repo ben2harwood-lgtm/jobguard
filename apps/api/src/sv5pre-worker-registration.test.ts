@@ -34,6 +34,7 @@ describe("SV5PRE final-check registration", () => {
   it("PRE-Q6-01 actual worker composition installs the strict task before the Graphile runner", async () => {
     const registered = vi.fn(async (..._args: unknown[]) => ({ stop: vi.fn() }));
     const queries = vi.fn(async () => ({ rows: [{ safe: true }] }));
+    const begin = vi.fn(async (..._args: unknown[]) => { throw new Error("FINAL_CHECK_FORBIDDEN"); });
     vi.doMock("pg", () => ({ Pool: class { query = queries; end = async () => undefined; } }));
     vi.doMock("graphile-worker", async () => ({ ...await vi.importActual<Record<string, unknown>>("graphile-worker"), run: registered }));
     vi.doMock("@jobguard/db", async () => ({
@@ -41,7 +42,7 @@ describe("SV5PRE final-check registration", () => {
       ActionExecutor: class { execute = async () => undefined; },
       ShadowObservationReader: class { assertTermsRelation = async () => undefined; },
       ShadowDetectionRepository: class {}, FixtureObservationSources: class {},
-      FinalCheckRepository: class { manifest = unavailablePorts.read; },
+      FinalCheckRepository: class { manifest = unavailablePorts.read; begin = begin; },
     }));
     const listeners = vi.spyOn(process, "once").mockReturnValue(process);
     for (const name of ["GRAPHILE_DATABASE_URL", "RUNTIME_DATABASE_URL", "SHADOW_DATABASE_URL"]) vi.stubEnv(name, "postgresql://localhost/sv5pre");
@@ -54,11 +55,19 @@ describe("SV5PRE final-check registration", () => {
       const handler = options.taskList.final_check!, helpers = {} as Parameters<typeof handler>[1];
       await expect(handler({ ...task, completed: true }, helpers)).rejects.toMatchObject({ code: "INVALID_FINAL_CHECK_TASK" });
       await expect(handler(task, helpers)).rejects.toThrow("FINAL_CHECK_FORBIDDEN");
+      const practice=options.taskList.final_check_practice_run!;
+      const original={version:"final-check-practice-run.v1",tenantId:task.tenantId,jobId:task.jobId,lockId:task.lockId};
+      await expect(practice(original,helpers)).rejects.toThrow("FINAL_CHECK_FORBIDDEN");
+      expect(begin.mock.calls.at(-1)?.slice(1)).toEqual([task.jobId,"shadow-detection.v1",undefined,1,task.lockId]);
+      await expect(practice({...original,manifestId:task.manifestId,attempt:2},helpers)).rejects.toThrow("FINAL_CHECK_FORBIDDEN");
+      expect(begin.mock.calls.at(-1)?.slice(1)).toEqual([task.jobId,"shadow-detection.v1",task.manifestId,2,task.lockId]);
+      await expect(practice({...original,attempt:2},helpers)).rejects.toThrow();
+      expect(begin).toHaveBeenCalledTimes(2);
       const discovery=options.taskList.discover_final_check_requests!;
-      const request={lock_id:task.lockId,tenant_id:task.tenantId,job_id:task.jobId};
+      const request={lock_id:task.lockId,tenant_id:task.tenantId,job_id:task.jobId,manifest_id:task.manifestId,attempt:2};
       for(const fail of [false,true]){
         const statements:string[]=[];
-        const query=vi.fn(async(sql:string)=>{
+        const query=vi.fn(async(sql:string,_values?:unknown[])=>{
           statements.push(sql);
           if(sql.startsWith("SELECT lock_id"))return {rows:[request]};
           if(fail&&sql.includes("graphile_worker.add_job"))throw new Error("QUEUE_UNAVAILABLE");
@@ -66,7 +75,7 @@ describe("SV5PRE final-check registration", () => {
         });
         const discoveryHelpers={withPgClient:async(fn:(client:unknown)=>Promise<unknown>)=>fn({query})} as unknown as Parameters<typeof discovery>[1];
         if(fail){await expect(discovery({},discoveryHelpers)).rejects.toThrow("QUEUE_UNAVAILABLE");expect(statements.at(-1)).toBe("ROLLBACK");expect(statements.some(sql=>sql.startsWith("UPDATE"))).toBe(false);}
-        else{await discovery({},discoveryHelpers);expect(statements[0]).toBe("BEGIN");expect(statements.at(-1)).toBe("COMMIT");expect(statements[2]).toContain("graphile_worker.add_job");expect(statements[3]).toContain("UPDATE infrastructure.final_check_request");}
+        else{await discovery({},discoveryHelpers);expect(statements[0]).toBe("BEGIN");expect(statements.at(-1)).toBe("COMMIT");expect(statements[2]).toContain("graphile_worker.add_job");expect(statements[3]).toContain("UPDATE infrastructure.final_check_request");expect(query.mock.calls[2]?.[1]).toEqual([JSON.stringify({version:"final-check-practice-run.v1",tenantId:task.tenantId,jobId:task.jobId,lockId:task.lockId,manifestId:task.manifestId,attempt:2}),`final-check-practice:${task.manifestId}`]);expect(query.mock.calls[3]?.[1]).toEqual([task.lockId,2,task.manifestId]);}
       }
     } finally {
       listeners.mockRestore(); vi.unstubAllEnvs(); vi.doUnmock("pg"); vi.doUnmock("graphile-worker"); vi.doUnmock("@jobguard/db"); vi.resetModules();

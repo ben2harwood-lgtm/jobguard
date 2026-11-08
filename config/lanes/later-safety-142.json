@@ -1,0 +1,56 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-142": {
+      "branches": [
+        "codex/sandbox/later-safety-142"
+      ],
+      "note": "LATER-SAFETY-142: append-only Final Check attempts after post-final-invoice withdrawal; RED money, NOPR. The lane register implicitly permits its own file; receipt.changedFiles includes it.",
+      "allow": [
+        "apps/api/src/final-check.application.test.ts",
+        "apps/api/src/final-check.application.ts",
+        "apps/api/src/sv5pre-worker-registration.test.ts",
+        "apps/api/src/worker.ts",
+        "packages/core/src/final-check.ts",
+        "packages/db/migration-notes/0957_final_check_post_invoice_rerun.md",
+        "packages/db/migrations/0957_final_check_post_invoice_rerun.sql",
+        "packages/db/src/final-check-repository.ts",
+        "packages/db/test/enterprise-access-upgrade.integration.test.ts",
+        "packages/db/test/final-check-access.integration.test.ts",
+        "packages/db/test/final-check-rerun-upgrade.integration.test.ts",
+        "packages/db/test/final-check-rerun.integration.test.ts",
+        "packages/db/test/j3-landing-allocation.integration.test.ts",
+        "packages/db/test/lp4-audit.integration.test.ts",
+        "packages/db/test/lp4-writer-catchup.test.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/0957_final_check_post_invoice_rerun.proof.json",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
+        "packages/db/test/shadow-catalog.integration.test.ts"
+      ],
+      "receipt": {
+        "changedFiles": [
+          "apps/api/src/final-check.application.test.ts",
+          "apps/api/src/final-check.application.ts",
+          "apps/api/src/sv5pre-worker-registration.test.ts",
+          "apps/api/src/worker.ts",
+          "config/lanes/later-safety-142.json",
+          "packages/core/src/final-check.ts",
+          "packages/db/migration-notes/0957_final_check_post_invoice_rerun.md",
+          "packages/db/migrations/0957_final_check_post_invoice_rerun.sql",
+          "packages/db/src/final-check-repository.ts",
+          "packages/db/test/enterprise-access-upgrade.integration.test.ts",
+          "packages/db/test/final-check-access.integration.test.ts",
+          "packages/db/test/final-check-rerun-upgrade.integration.test.ts",
+          "packages/db/test/final-check-rerun.integration.test.ts",
+          "packages/db/test/j3-landing-allocation.integration.test.ts",
+          "packages/db/test/lp4-audit.integration.test.ts",
+          "packages/db/test/lp4-writer-catchup.test.ts",
+          "packages/db/test/migfix-7-upgrade.integration.test.ts",
+          "packages/db/test/migration-proofs/0957_final_check_post_invoice_rerun.proof.json",
+          "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
+          "packages/db/test/shadow-catalog.integration.test.ts"
+        ]
+      }
+    }
+  }
+}
