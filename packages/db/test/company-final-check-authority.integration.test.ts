@@ -3,6 +3,7 @@ import type { PoolClient } from "pg";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { CompanyFinalCheckRepository } from "../src/company-final-check-repository.js";
 import { FinalAccountCommandService } from "../src/final-account-repository.js";
+import { FinalAccountLockRepository } from "../src/final-account-lock-repository.js";
 import { verifiedTenantContextFromMembership, type AuthenticatedMembership } from "../src/tenant-context.js";
 import { seedWorkPractice, workTenant, type WorkFixture } from "./job-work-state-fixtures.js";
 import { createFinalCheckFixture, closeFinalCheckFixture, type FinalCheckFixture } from "./final-check-fixture.js";
@@ -238,7 +239,12 @@ it("uses LS-142 request identities and reveals the latest completed attempt on t
   await expect(repository.requestRun(a.context, job(a))).rejects.toThrow("FINAL_CHECK_SOURCE_CHANGED");
   const source = first.sources.find(source => source.evidenceId !== null)!;
   expect(source).toBeDefined();
-  await workTenant(f.admin, a.tenantId, db => db.query(`INSERT INTO app.evidence_invalidation
+  await new FinalAccountLockRepository(f.runtime).issueInvoice(a.context, {
+    jobId: a.jobId, actorMembershipId: a.actorId, commandId: randomUUID(),
+    finalAccountRevisionId: a.draft!.id, expectedSourceHash: a.draft!.sourceHash,
+    invoiceKind: "final", recipient: "fictional@example.invalid", issuedOn: "2026-11-08",
+  });
+  await workTenant(f.runtime, a.tenantId, db => db.query(`INSERT INTO app.evidence_invalidation
     (id,tenant_id,evidence_id,actor_membership_id,reason_code) VALUES($1,$2,$3,$4,'verification_invalid')`,
     [randomUUID(), a.tenantId, source.evidenceId, a.actorId]));
   const secondRequest = await repository.requestRun(a.context, job(a));
