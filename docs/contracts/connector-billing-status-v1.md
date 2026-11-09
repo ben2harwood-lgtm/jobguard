@@ -13,15 +13,12 @@ The latest ENT-6 `cb_authority(session, job, true)` (0549) rechecks finance role
 grants, membership, feature decisions, tenant and live contractor job on every
 link and replay. The import must have a succeeded `ImportBillingStatus` receipt
 whose result names that import, and an immutable fact from that import must match
-the staged event ID and status exactly. Other organisations' imports are hidden.
+the staged event ID and an allowed status/fact-type pair (see Billed and reversed). Other organisations' imports are hidden.
 A completed import may include quarantined facts: linkage does not resolve their
 quarantine or assert that their money was applied.
 
 No import, incomplete import, wrong source event or fact type fails closed.
-Statuses outside ENT-6's five fact types keep `BILLING_COMPOSITION_REQUIRED`.
-Current intake admits `billed`, `paid`, `reversed`; only `paid` overlaps exactly.
-There is no inferred translation from billed to invoiced or reversed to
-payment_reversed. The repository preserves its existing `INVALID_COMMAND` for a
+Unsupported status/fact-type pairs keep `BILLING_COMPOSITION_REQUIRED`. The repository preserves its existing `INVALID_COMMAND` for a
 missing billingImport; direct SQL retains `BILLING_COMPOSITION_REQUIRED`.
 
 One import can be linked to one connector event only, serialized by the existing
@@ -47,3 +44,26 @@ settlement, reversal or ledger row. The connector receipt remains `staged` with
 - Any scanner/pin or authority-map update is for landing, outside this piece's
   allowed files. The proof records the new call to the existing cb_authority.
 - Export delivery promotion, SFTP, machine landing, H4 and G5 stay open.
+
+## Billed and reversed
+
+The fixed allowed pairs are `paid` → `paid`, `billed` → `invoiced`, and
+`reversed` → `payment_reversed` or `credited`. Every other pair refuses, including
+any `rejected` fact. The human ENT-6 import chooses the fact type and amounts;
+the connector only links that completed import and still carries no money.
+No connector field chooses between a payment reversal and an invoice credit.
+All existing authority, source-event, receipt, exclusive-link and replay checks
+remain in force. Export delivery promotion, SFTP, machine landing, H4 and G5
+stay open.
+
+### Named holds for landing
+
+- Migration 0691 re-creates `app.connector_promotion(uuid,text,text,uuid,jsonb)`
+  statement for statement from 0689, changing only the status allowlist (which
+  otherwise rejects billed/reversed before matching) and the fixed fact-pair
+  comparison. Owner, search_path, signature and grants are identical.
+  Roll forward by restoring 0689's two predicates, preserving links and audit.
+- Any required scanner/pin update (including migfix-7 upgrade pins) remains a
+  landing task outside this piece. PostgreSQL suites, the transactional equality
+  negative control, migration proof execution, green CI and independent RED
+  review remain required before merge.

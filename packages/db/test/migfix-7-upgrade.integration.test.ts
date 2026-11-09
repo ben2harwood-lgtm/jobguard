@@ -65,7 +65,12 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   expect(relationMetadata(replayCatalog)).toEqual(expected.relations);
   expect(await policies()).toEqual(expected.policies);
   // Preserve all raw predecessor catalogue fields, including policy identities.
-  for (const row of beforeCatalog) expect(replayCatalog).toContainEqual(row);
+  for (const row of beforeCatalog) {
+    if(row.nspname==='app' && row.relname==='final_check_manifest_tenant_id_job_id_lock_id_key') {
+      // 0698 replaces only this index's lock identity with lock+attempt; its relation metadata is in the proof.
+      expect(replayCatalog.some(r=>r.nspname===row.nspname && r.relname===row.relname)).toBe(false);
+    } else expect(replayCatalog).toContainEqual(row);
+  }
   const authority = await readFile(new URL("../migrations/0642_extra_client_send_authority.sql", import.meta.url), "utf8");
   const attribution = await readFile(new URL("../migrations/0644_extra_customer_approval.sql", import.meta.url), "utf8");
   const replacements = (source: string) => [...source.matchAll(/changed:=replace\((?:original|changed),'((?:[^']|'')*)',\s*'((?:[^']|'')*)'\);/g)]
@@ -84,6 +89,18 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   // Exact existing replacements only; all their privileges and unrelated definitions remain frozen.
   const fullBodies = new Map<string, string>();
   for (const [identity, migration] of [
+    ["app.receipt_fact_proposal(t uuid, j uuid, p jsonb)", "0692_final_check_post_invoice_receipt_gate.sql"],
+    ["app.contractor_admin_command(actor uuid, payload jsonb, request_hash text)", "0696_contractor_admin_expected_revision.sql"],
+    ["app.read_final_check_manifest(t uuid, j uuid, m uuid)", "0698_final_check_post_invoice_rerun.sql"],
+    ["app.evidence_pack_v3_material(t uuid, c uuid, ordinary_only boolean)", "0698_final_check_post_invoice_rerun.sql"],
+    ["app.begin_final_check(t uuid, j uuid, detector text, policy text)", "0698_final_check_post_invoice_rerun.sql"],
+    ["app.complete_final_check(t uuid, j uuid, m uuid, p jsonb)", "0698_final_check_post_invoice_rerun.sql"],
+    ["app.guard_final_check_manifest()", "0698_final_check_post_invoice_rerun.sql"],
+    ["app.read_final_check_reveal(t uuid, j uuid, d text)", "0698_final_check_post_invoice_rerun.sql"],
+    ["app.read_value_job(j uuid, digest text)", "0698_final_check_post_invoice_rerun.sql"],
+    ["app.request_final_check_run(t uuid, j uuid, d text)", "0698_final_check_post_invoice_rerun.sql"],
+    ["app.request_practice_final_check_on_lock()", "0698_final_check_post_invoice_rerun.sql"],
+    ["app.verify_final_check_run(p_tenant uuid, p_job uuid, p_run uuid, p_lock uuid, p_cutoff timestamp with time zone)", "0698_final_check_post_invoice_rerun.sql"],
     ["app.lp5_command_result(p_command_id uuid, p_outcome jsonb)", "0634_extra_proceed_statement.sql"],
     ["app.xa_approve(p_job uuid, p_request uuid, p_command uuid, p_actor uuid, p_step integer, p_hash text, p_net bigint, p_reject boolean, p_reason text)", "0635_extra_same_step.sql"],
     ["app.xa_withdraw(p_job uuid, p_variation uuid, p_command uuid, p_actor uuid, p_reason text)", "0636_extra_withdraw_roles.sql"],
@@ -107,15 +124,16 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.interim_draft_records(t uuid, digest text, j uuid, operation text, v jsonb)", "0665_interim_read_authority.sql"],
     ["app.final_check_require_invoice_actor(p_tenant uuid, p_job uuid, p_actor uuid)", "0667_final_check_practice_owner_check.sql"],
     ["app.ch5_history_actor(t uuid, j uuid, d text)", "0668_import_company_owner_history.sql"],
+    ["app.accounting_export(t uuid, digest text, operation text, source text, v jsonb)", "0693_accounting_export_credit_invoice_route.sql"],
     ["app.configure_recovery_demo(p_job uuid, p_command uuid, p_scenario character varying)", "0670_recovery_demo_replay_job.sql"],
     ["app.ent4b_fact_guard()", "0673_duplicate_unlink_command_binding.sql"],
     ["app.work_order_commit(actor uuid, payload jsonb)", "0676_work_order_expected_revision.sql"],
-    ["app.sync_snapshot_generation(u uuid, r bigint, s bigint, h text, e text)", "0679_sync_checkpoint_synthetic_guard.sql"],
+    ["app.sync_snapshot_generation(u uuid, r bigint, s bigint, h text, e text)", "0699_sync_checkpoint_bound_reader.sql"],
     ["app.reverse_synthetic_landing(p_tenant uuid, p_reversal uuid, p_derivation uuid, p_journal uuid, p_allocation uuid, p_amount bigint, p_reason character varying)", "0682_synthetic_reversal_replay_match.sql"],
     ["app.xa_client_view_authority(p_job uuid, p_request uuid, p_actor uuid, p_email text)", "0686_extra_client_authority_loss.sql"],
     ["app.xa_client_decide(p_job uuid, p_request uuid, p_command uuid, p_actor uuid, p_token_hash text, p_email text, p_hash text, p_net bigint, p_reject boolean, p_reason text, p_role_name text, p_tester text)", "0686_extra_client_authority_loss.sql"],
     ["identity.extra_customer_use(t uuid, j uuid, c uuid, digest text, session_digest text, operation text)", "0686_extra_client_authority_loss.sql"],
-    ["app.connector_promotion(p_session uuid, p_namespace text, p_event text, p_command uuid, p_result jsonb)", "0689_connector_billing_status_promotion.sql"],
+    ["app.connector_promotion(p_session uuid, p_namespace text, p_event text, p_command uuid, p_result jsonb)", "0691_connector_billing_kind_link.sql"],
     ["app.guard_practice_material_requirement()", "0690_import_ancestry_record_anchor.sql"],
     ["app.ch4_read_work_facts(t uuid, j uuid, digest text)", "0690_import_ancestry_record_anchor.sql"],
     ["app.read_job_sources(t uuid, j uuid, digest text, source text)", "0690_import_ancestry_record_anchor.sql"],
@@ -132,9 +150,12 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     fullBodies.set(identity!, source.split(`FUNCTION ${identity!.split("(")[0]}(`)[1]!.split("AS $$")[1]!.split("$$;")[0]!);
   }
   const namedAdditions = [
-    "connector_promotion", "order_attestation_actor", "platform_invoice_read",
+    "require_receipt_final_check", "connector_promotion", "order_attestation_actor", "platform_invoice_read",
     "retention_timer", "retention_timer_book", "xa_proceed", "xa_proceed_breaches",
     "xa_proceed_view", "xa_wait_deadline", "customer_practice_pay_now", "store_extra_pack_artifact",
+    "guard_variation_final_account_lock",
+    "company_final_check_authority", "company_final_check_read", "company_final_check_terms",
+    "company_final_check_disposition", "company_final_check_lock", "company_final_check_request_run", "company_final_check_reveal",
   ];
   for (const name of namedAdditions) {
     expect(replayRoutines.filter(row => row.proname === name)).toHaveLength(1);

@@ -14,7 +14,7 @@ test("CH-1 new job persists v3 terms across reload, Jobs and a second context",a
  const view=await(await page.request.get(path)).json();expect(view.terms).toMatchObject({acceptedNetPence:100000,smallJob:true,trialPlanContext:"none_recorded_pre_mon2a"});expect(view.effects).toMatchObject({activations:1,termsRows:1,capSnapshots:0,simulatedObligations:0,settlements:0,platformJournals:0});
  for(const extra of[{smallJob:false},{policyVersion:"reference_fee_policy_v1"},{commercialTrack:"contractor"},{terms:{smallJob:false}}])expect((await page.request.post(path,{data:{version:"practice-activation-command.v1",commandId:crypto.randomUUID(),scenario:"no_charge",...extra}})).status()).toBe(400);
  await page.reload();await click(page,"Price the work");await audit(page);
- await page.goto("/");await page.locator(`a[href="/jobs/${jobId}"]`).click();await click(page,"Price the work");await audit(page);
+ await page.goto("/classic");await page.locator(`a[href="/jobs/${jobId}"]`).click();await click(page,"Price the work");await audit(page);
  const other=await browser.newContext({storageState:await page.context().storageState()});try{const second=await other.newPage();await second.goto(url);await click(second,"Price the work");await audit(second);expect((await(await second.request.get(path)).json()).terms).toEqual(view.terms);}finally{await other.close();}
  await page.screenshot({path:`test-results/CH-1-${test.info().project.name}.png`,fullPage:true});
 });

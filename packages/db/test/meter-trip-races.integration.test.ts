@@ -95,6 +95,9 @@ describe("MON1-T private seam race and transactional guarantees", () => {
 
   it.each(["lock_first","approval_first"])("M1T-07 tenant-first serialized %s foundation transactions", async order => {
     const a = await activated(f), p = await priced(f,a,300001,"2026-10-02T12:00:00Z",false);
+    // Preserve the meter's independent cutoff check with an existing approval
+    // dated beyond the lock; the new trigger refuses any actual post-lock insert.
+    const beyondCutoff = order === "lock_first" ? await priced(f,a,300001,"2099-01-01T00:00:00Z") : null;
     const first = await f.admin.connect(), second = await f.admin.connect();
     async function fixtureLock(db: PoolClient) {
       // Existing SV-4 lock command authority is held. This is its storage boundary.
@@ -114,9 +117,14 @@ describe("MON1-T private seam race and transactional guarantees", () => {
       const waiting = second.query("SELECT pg_advisory_xact_lock(hashtextextended($1::text,184))",[a.tenantId]);
       await first.query("COMMIT"); await waiting;
       if (order === "lock_first") {
-        await approveSource(second,a,p,300001,(await second.query("SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') at")).rows[0]!.at as string);
-        await expect(capture(second,a,p.approval)).rejects.toThrow("INVALID_SMALL_TRIP_SOURCE");
+        const at = (await second.query("SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') at")).rows[0]!.at as string;
+        await expect(approveSource(second,a,p,300001,at)).rejects.toMatchObject({ code: "42501", message: "VARIATION_LOCKED_BY_FINAL_ACCOUNT" });
         await second.query("ROLLBACK");
+        expect(await observations(f,a)).toEqual([]);
+        expect((await f.admin.query("SELECT id FROM app.variation_approval WHERE tenant_id=$1 AND id=$2",[a.tenantId,p.approval])).rows).toEqual([]);
+        // The meter's own guard still rejects a missing/refused source in a fresh transaction.
+        await expect(trip(f,a,p.approval)).rejects.toThrow("INVALID_SMALL_TRIP_SOURCE");
+        await expect(trip(f,a,beyondCutoff!.approval)).rejects.toThrow("INVALID_SMALL_TRIP_SOURCE");
         expect(await observations(f,a)).toEqual([]);
       } else {
         await fixtureLock(second); await second.query("COMMIT");
