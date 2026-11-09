@@ -1,6 +1,0 @@
-{
-  "migration": "0811_invitation_issuer_recheck.sql",
-  "lp0": [],
-  "upgrade": [],
-  "tenancy": []
-}
