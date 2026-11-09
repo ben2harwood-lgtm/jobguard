@@ -5,7 +5,7 @@ import {FinalCheckRepository} from '../src/final-check-repository.js';
 import {FinalCheckCompletionRepository} from '../src/shadow-detection-repository.js';
 import {createFinalCheckFixture,closeFinalCheckFixture,seedFinalCheckJob,insertFinalCheckEvidence,type FinalCheckFixture} from './final-check-fixture.js';
 import {installLegacySyntheticPartyFixtures} from './pool-test-utils.js';
-const own='0957_final_check_post_invoice_rerun.sql';let f:FinalCheckFixture;
+const own='0698_final_check_post_invoice_rerun.sql';let f:FinalCheckFixture;
 beforeAll(async()=>{vi.stubEnv('JOBGUARD_ENV','synthetic_demo');f=await createFinalCheckFixture(false);
  await f.admin.query('CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())');
  // Install the exact predecessor schema with the ordinary migration runner.

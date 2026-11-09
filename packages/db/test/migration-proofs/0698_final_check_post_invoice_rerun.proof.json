@@ -1,5 +1,5 @@
 {
-  "migration": "0957_final_check_post_invoice_rerun.sql",
+  "migration": "0698_final_check_post_invoice_rerun.sql",
   "upgrade": [
     {
       "section": "routines",

@@ -87,7 +87,7 @@ describe("SV-2 catalog and actual role isolation (DW1, DW2, DW3, DW4)",()=>{
   // Catalog scan catches a newly added callable helper reaching any shadow table.
   const helpers=(await admin.query(`SELECT p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname NOT IN ('pg_catalog','information_schema') AND has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') AND p.proname<>'reveal_shadow_signals' AND p.oid<>ALL($2::text[]::regprocedure[]::oid[]) AND (p.prosrc ~ 'shadow_(commercial_signal|signal_|reconciliation_run|disclosure_event|break_glass_access)' OR EXISTS(SELECT 1 FROM pg_depend d JOIN pg_class c ON c.oid=d.refobjid WHERE d.objid=p.oid AND d.classid='pg_proc'::regclass AND c.relname=ANY($1)))`,[tables,finalCheckRuntime])).rows;
   expect(helpers).toEqual([]);
-  // 0957 adds an explicit completed-run predicate to this existing locked-job reader, without changing its ACL.
+  // 0698 adds an explicit completed-run predicate to this existing locked-job reader, without changing its ACL.
   // Its sole exact signature is exempted above only with the complete reviewed definition and privileges pinned here.
   const {inventory}=await loadReviewedInventory(),recorded=inventory.recorded.routines.find(r=>r.identity==='function:app.read_value_job(uuid,text)')!;
   expect(recorded.definitionSha256).toMatch(/^[a-f0-9]{64}$/u);

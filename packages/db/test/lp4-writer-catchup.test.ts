@@ -13,7 +13,7 @@ const recreatedWriters: { name: string; file: string; sql: string }[] = [];
 for (const file of readdirSync(directory).filter(f => /^\d{4}.*\.sql$/.test(f)).sort()) {
   for (const fn of functions(readFileSync(new URL(file, directory), "utf8"))) {
     final.set(fn.name, fn.sql);
-    if (file !== sealingMigration && !(file === "0660_baseline_ancestry_audit_trust.sql" && fn.name === "app.decision_check_command") && !(file === "0957_final_check_post_invoice_rerun.sql" && fn.name === "app.guard_final_check_manifest")) main.set(fn.name, { file, sql: fn.sql });
+    if (file !== sealingMigration && !(file === "0660_baseline_ancestry_audit_trust.sql" && fn.name === "app.decision_check_command") && !(file === "0698_final_check_post_invoice_rerun.sql" && fn.name === "app.guard_final_check_manifest")) main.set(fn.name, { file, sql: fn.sql });
     if (file > sealingMigration && replacements.has(fn.name)) recreatedWriters.push({ ...fn, file });
   }
 }
@@ -62,7 +62,7 @@ describe("LP-4 catch-up preserves latest main routine behaviour", () => {
     expect(successor[0]!.sql).toContain("rv.semantic_key='import:'||next_job.id::text AND rv.result->>'jobId'=next_job.id::text AND rv.result->>'sourceJobId'=source.id::text");
   });
   it("LATER-SAFETY-142 pins the complete append-only manifest guard successor", () => {
-    const successor=functions(readFileSync(new URL("0957_final_check_post_invoice_rerun.sql",directory),"utf8"))
+    const successor=functions(readFileSync(new URL("0698_final_check_post_invoice_rerun.sql",directory),"utf8"))
       .filter(fn=>fn.name==="app.guard_final_check_manifest");
     expect(successor).toHaveLength(1);
     expect(final.get("app.guard_final_check_manifest")).toBe(successor[0]!.sql);

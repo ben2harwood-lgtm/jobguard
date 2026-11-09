@@ -92,7 +92,7 @@ it('emergency_dual_owner/scim2_machine preserve populated identity state, instal
  const nextShape=(after.relations.find(isJob)!.constraints as Con[]).find(c=>c.name===shape)!;
  expect(nextShape.definition).not.toBe(priorShape.definition);
  expect(nextShape.definition.replace(/, 'paid'::[a-z ]+(?=\])/,'')).toBe(priorShape.definition);
- // 0957 adds only the append-only attempt identity, its predecessor snapshot and the replacement unique key.
+ // 0698 adds only the append-only attempt identity, its predecessor snapshot and the replacement unique key.
  const isManifest=(r:Relation)=>r.nspname==='app'&&r.relname==='final_check_manifest';
  const oldManifest=catalogue.relations.find(isManifest)!,newManifest=after.relations.find(isManifest)!;
  const attemptColumns=['attempt','predecessor_manifest_id','withdrawn_predecessor_source_ids'];
