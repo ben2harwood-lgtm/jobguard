@@ -1,5 +1,5 @@
 {
-  "migration": "0958_sync_checkpoint_bound_reader.sql",
+  "migration": "0699_sync_checkpoint_bound_reader.sql",
   "lp0": [
     {
       "section": "routines",
