@@ -3,7 +3,8 @@
   "lanes": {
     "demo-voice-phone": {
       "branches": [
-        "codex/sandbox/demo-voice-phone"
+        "codex/sandbox/demo-voice-phone",
+        "codex/sandbox/demo-voice-phone-v2"
       ],
       "note": "Self-hosted worker dictation; Ben's 9 November instruction authorizes binary static recognizer/model assets and branch-only push. Physical iPhone pass held for Ben.",
       "allow": [
