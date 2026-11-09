@@ -1,3 +1,4 @@
+import { loadReviewedInventory } from "./lp-0-catalog.js";
 import { applyOutboundPause } from "./outbound-pause-fixture.js";
 // CI: real PostgreSQL, genuine writers; only evidence/classifier inputs are fixtures.
 import {beforeAll,afterAll,expect,it} from "vitest";
@@ -208,8 +209,7 @@ it("combined J3 value retains £3,600 captures and £800/£80/£720 recovery, re
  }
 });
 it("combined value reader preserves authority and matches its LP-0 definition hash",async()=>{
- const {readFile}=await import("node:fs/promises");
- const inventory=JSON.parse(await readFile(new URL("../../../docs/contracts/lp-0-effective-privileges-v1.json",import.meta.url),"utf8")) as {recorded:{routines:{identity:string;definitionSha256:string|null}[]}};
+ const {inventory}=await loadReviewedInventory();
  const routine=inventory.recorded.routines.find(row=>row.identity==="function:app.read_value_job(uuid,text)")!;
  expect(routine.definitionSha256).toMatch(/^[a-f0-9]{64}$/u);
  const row=(await f.admin.query(`SELECT pg_get_userbyid(proowner) owner,prosecdef security_definer,proconfig settings,

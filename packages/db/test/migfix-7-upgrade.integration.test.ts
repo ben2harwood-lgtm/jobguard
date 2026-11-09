@@ -65,7 +65,12 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   expect(relationMetadata(replayCatalog)).toEqual(expected.relations);
   expect(await policies()).toEqual(expected.policies);
   // Preserve all raw predecessor catalogue fields, including policy identities.
-  for (const row of beforeCatalog) expect(replayCatalog).toContainEqual(row);
+  for (const row of beforeCatalog) {
+    if(row.nspname==='app' && row.relname==='final_check_manifest_tenant_id_job_id_lock_id_key') {
+      // 0698 replaces only this index's lock identity with lock+attempt; its relation metadata is in the proof.
+      expect(replayCatalog.some(r=>r.nspname===row.nspname && r.relname===row.relname)).toBe(false);
+    } else expect(replayCatalog).toContainEqual(row);
+  }
   const authority = await readFile(new URL("../migrations/0642_extra_client_send_authority.sql", import.meta.url), "utf8");
   const attribution = await readFile(new URL("../migrations/0644_extra_customer_approval.sql", import.meta.url), "utf8");
   const replacements = (source: string) => [...source.matchAll(/changed:=replace\((?:original|changed),'((?:[^']|'')*)',\s*'((?:[^']|'')*)'\);/g)]
@@ -86,6 +91,16 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   for (const [identity, migration] of [
     ["app.receipt_fact_proposal(t uuid, j uuid, p jsonb)", "0692_final_check_post_invoice_receipt_gate.sql"],
     ["app.contractor_admin_command(actor uuid, payload jsonb, request_hash text)", "0696_contractor_admin_expected_revision.sql"],
+    ["app.read_final_check_manifest(t uuid, j uuid, m uuid)", "0698_final_check_post_invoice_rerun.sql"],
+    ["app.evidence_pack_v3_material(t uuid, c uuid, ordinary_only boolean)", "0698_final_check_post_invoice_rerun.sql"],
+    ["app.begin_final_check(t uuid, j uuid, detector text, policy text)", "0698_final_check_post_invoice_rerun.sql"],
+    ["app.complete_final_check(t uuid, j uuid, m uuid, p jsonb)", "0698_final_check_post_invoice_rerun.sql"],
+    ["app.guard_final_check_manifest()", "0698_final_check_post_invoice_rerun.sql"],
+    ["app.read_final_check_reveal(t uuid, j uuid, d text)", "0698_final_check_post_invoice_rerun.sql"],
+    ["app.read_value_job(j uuid, digest text)", "0698_final_check_post_invoice_rerun.sql"],
+    ["app.request_final_check_run(t uuid, j uuid, d text)", "0698_final_check_post_invoice_rerun.sql"],
+    ["app.request_practice_final_check_on_lock()", "0698_final_check_post_invoice_rerun.sql"],
+    ["app.verify_final_check_run(p_tenant uuid, p_job uuid, p_run uuid, p_lock uuid, p_cutoff timestamp with time zone)", "0698_final_check_post_invoice_rerun.sql"],
     ["app.lp5_command_result(p_command_id uuid, p_outcome jsonb)", "0634_extra_proceed_statement.sql"],
     ["app.xa_approve(p_job uuid, p_request uuid, p_command uuid, p_actor uuid, p_step integer, p_hash text, p_net bigint, p_reject boolean, p_reason text)", "0635_extra_same_step.sql"],
     ["app.xa_withdraw(p_job uuid, p_variation uuid, p_command uuid, p_actor uuid, p_reason text)", "0636_extra_withdraw_roles.sql"],

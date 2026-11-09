@@ -17,5 +17,5 @@ export class FinalCheckApplication{
 /** One HTTP mapping for Nest and Next: forbidden 403, conflicts 409, everything else typed 400. */
 export function finalCheckFailure(error:unknown):{status:number;body:{code:string}}|null{
  if(!(error instanceof FinalCheckError))return null;
- return {status:error.code==="FINAL_CHECK_FORBIDDEN"?403:/CONFLICT|STALE/u.test(error.code)?409:400,body:{code:error.code}};
+ return {status:error.code==="FINAL_CHECK_FORBIDDEN"?403:/CONFLICT|STALE|JOB_WORK_CLOSED/u.test(error.code)?409:400,body:{code:error.code}};
 }
