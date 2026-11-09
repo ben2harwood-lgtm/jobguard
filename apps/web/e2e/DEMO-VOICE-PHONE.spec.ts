@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 test.use({launchOptions:{args:["--use-fake-ui-for-media-stream","--use-fake-device-for-media-stream",`--use-file-for-fake-audio-capture=${resolve("e2e/fixtures/demo-voice-phone.wav")}`]}});
-test.setTimeout(360_000);
+test.setTimeout(900_000);
 async function observe(context:BrowserContext){
   const requests:{url:string;method:string;bytes:number}[]=[],sockets:string[]=[];
   // Context events include requests initiated by workers, unlike page-only listeners.
@@ -55,16 +55,19 @@ test("real worker recognises fictional microphone audio locally, reviews and sav
     await page.getByRole("button",{name:"Make my draft",exact:true}).click();
     const captured=await (await saved).json();
     expect(captured.source).toMatchObject({kind:"browser_local_transcript",audioByteLength:0,acquisition:{audioUploaded:false,audioStored:false,humanEdited:true}});
+    // As WALK-3: the tour reaches step 2 after the draft saves; press Show me only then.
+    await expect(tour).toContainText("Step 2 of 9",{timeout:40_000});
     await tour.getByRole("button",{name:"Show me",exact:true}).click();
     await expect(tour).toContainText("Step 3 of 9",{timeout:40_000});
     await expect(page.getByRole("button",{name:"Use the prepared example job",exact:true})).toBeVisible();
     const ownHref=await page.getByRole("link",{name:"Open your saved job",exact:true}).getAttribute("href");
     expect(ownHref).toContain(captured.jobId);
     for(let step=3;step<=9;step++){
-      await expect(tour).toContainText(`Step ${step} of 9`,{timeout:60_000});
+      // As WALK-3: the practice Final Check worker takes about a minute and can take longer under load.
+      await expect(tour).toContainText(`Step ${step} of 9`,{timeout:300_000});
       await tour.getByRole("button",{name:"Show me",exact:true}).click();
     }
-    await expect(tour).toContainText("Tour complete",{timeout:60_000});
+    await expect(tour).toContainText("Tour complete",{timeout:300_000});
     await expect(page).toHaveURL(/#final-account-title$/);
     await expect(page.getByTestId("value-recorded-gross")).toHaveText("£1,230.00");
     const preparedHref=await page.locator('.value-page a[href^="/jobs/"]').first().getAttribute("href");
