@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-79-auth": {
+      "branches": [
+        "codex/sandbox/later-safety-79-auth"
+      ],
+      "allow": [
+        "packages/db/migrations/0960_abandoned_visit_authority.sql",
+        "packages/db/test/site-visit-abandoned.integration.test.ts",
+        "packages/db/test/migration-proofs/0960_abandoned_visit_authority.proof.json"
+      ]
+    }
+  }
+}
