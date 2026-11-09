@@ -1,6 +1,6 @@
 # 1053 readiness timezone case — LATER-SAFETY-32
 
-Forward migration after 1052_readiness_bad_timezone, copied from that complete
+Forward migration after 0685_readiness_bad_timezone, copied from that complete
 latest routine. The only SQL change is the EXISTS predicate:
 `lower(zone.name)=lower(latest.payload->>'timeZone')`. Confirmed plans with
 case variants accepted by the existing validator and PostgreSQL are discoverable.

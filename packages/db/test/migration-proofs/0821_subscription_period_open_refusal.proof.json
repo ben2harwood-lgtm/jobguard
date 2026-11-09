@@ -1,6 +1,0 @@
-{
-  "migration": "0821_subscription_period_open_refusal.sql",
-  "lp0": [],
-  "upgrade": [],
-  "tenancy": []
-}

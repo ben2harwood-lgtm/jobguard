@@ -246,18 +246,18 @@ it.each(["europe/london", "EUROPE/LONDON", "utc"])("discovers a confirmed due pl
  // Prove the old routine silently excludes the confirmed plan, then restore
  // 1053 even if the failing-first assertion fails.
  try {
-  await admin.query(await readFile(new URL("../migrations/1052_readiness_bad_timezone.sql", import.meta.url), "utf8"));
+  await admin.query(await readFile(new URL("../migrations/0685_readiness_bad_timezone.sql", import.meta.url), "utf8"));
   const before = (await infrastructure.query("SELECT * FROM infrastructure.discover_readiness_plans()")).rows;
   expect(before).not.toContainEqual(expected);
  } finally {
-  await admin.query(await readFile(new URL("../migrations/1053_readiness_timezone_case.sql", import.meta.url), "utf8"));
+  await admin.query(await readFile(new URL("../migrations/0720_readiness_timezone_case.sql", import.meta.url), "utf8"));
  }
  const after = (await infrastructure.query("SELECT * FROM infrastructure.discover_readiness_plans()")).rows;
  expect(after).toContainEqual(expected);
 });
 
 it("skips an unknown zone while discovering a valid due plan in the same tenant", async () => {
- await admin.query(await readFile(new URL("../migrations/1053_readiness_timezone_case.sql", import.meta.url), "utf8"));
+ await admin.query(await readFile(new URL("../migrations/0720_readiness_timezone_case.sql", import.meta.url), "utf8"));
  const mixedTenant = randomUUID(), mixedJob = randomUUID();
  await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [mixedTenant]);
  await importWatchdogFixtureJob(admin, mixedTenant, mixedJob);

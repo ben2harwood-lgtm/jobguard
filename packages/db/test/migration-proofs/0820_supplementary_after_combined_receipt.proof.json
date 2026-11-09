@@ -1,6 +1,0 @@
-{
-  "migration": "0820_supplementary_after_combined_receipt.sql",
-  "lp0": [],
-  "upgrade": [],
-  "tenancy": []
-}

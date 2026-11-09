@@ -1,5 +1,5 @@
 {
-  "migration": "0806_duplicate_disposition_no_truncate.sql",
+  "migration": "0712_duplicate_disposition_no_truncate.sql",
   "lp0": [
     {
       "section": "triggers",

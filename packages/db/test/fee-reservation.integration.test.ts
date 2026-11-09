@@ -408,7 +408,7 @@ describe("M4-12 PostgreSQL shared reservation store", () => {
     }
     const proof = { body, signature: createHmac("sha256", "synthetic-test-signing-secret").update(body).digest("hex") };
     const values = [f.tenantId, JSON.stringify({ version: "fee-reservation-book.v1", ...next }), JSON.stringify(proof)];
-    const predecessor = readFileSync(new URL("../migrations/0799_fee_result_malformed_proof.sql", import.meta.url), "utf8")
+    const predecessor = readFileSync(new URL("../migrations/0656_fee_result_malformed_proof.sql", import.meta.url), "utf8")
       .replace(/^BEGIN;$/m, "").replace(/^COMMIT;$/m, "");
     const client = await db.admin.connect();
     let predecessorError: unknown;

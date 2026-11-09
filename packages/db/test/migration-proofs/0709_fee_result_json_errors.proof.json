@@ -1,5 +1,5 @@
 {
-  "migration": "0808_end_check_rule_a_rerun.sql",
+  "migration": "0709_fee_result_json_errors.sql",
   "lp0": [],
   "upgrade": [],
   "tenancy": []

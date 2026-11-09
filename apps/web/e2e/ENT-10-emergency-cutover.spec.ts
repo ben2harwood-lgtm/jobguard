@@ -41,7 +41,7 @@ async function signIn(context:BrowserContext,token:string) {
 }
 async function screen(page:Page) {
  await page.goto('/admin/contractor/identity');
- return page.getByRole('region',{name:'Restricted emergency access'});
+ return page.getByRole('main').getByRole('region',{name:'Restricted emergency access'});
 }
 test('dual-owner request to revocation, notices and retired-route refusal',async({browser,page})=>{
  const f=await seed(),[requester,a,b,target]=f.actors;
