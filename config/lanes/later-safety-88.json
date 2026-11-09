@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-88": {
+      "branches": ["codex/sandbox/later-safety-88"],
+      "allow": [
+        "apps/web/app/api/northside/extras/[extraId]/[action]/route.ts",
+        "apps/web/app/api/northside/extras/[extraId]/[action]/send-expiry.test.ts"
+      ]
+    }
+  }
+}
