@@ -11,6 +11,17 @@ DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid;
  v jsonb:=(CASE WHEN (p_input ? 'content') THEN (p_input->'content') ELSE p_input END);
  role_name text; allowed boolean; roles text[]; step jsonb; req app.extra_approval_request;
 BEGIN
+ IF p_type='CloseAbandonedSiteVisit' THEN
+  IF current_database()<>'jobguard_synthetic_demo' OR p_actor IS DISTINCT FROM app.current_actor()
+   OR t IS DISTINCT FROM app.current_tenant() OR role_name NOT IN('owner','admin')
+   OR NOT coalesce(app.contractor_allowed(p_actor,'organisation.manage',app.contractor_job_team(p_job)),false) THEN
+   RAISE EXCEPTION 'PERMISSION_DENIED' USING ERRCODE='42501'; END IF;
+  RETURN;
+ END IF;
+ IF p_type='IssueClientApproval' THEN
+ IF app.xc_send_authority(p_actor,p_job) IS NOT TRUE THEN RAISE EXCEPTION 'PERMISSION_DENIED' USING ERRCODE='42501'; END IF;
+ RETURN;
+ END IF;
  IF NOT coalesce(app.contractor_member_active(p_actor),false) THEN
   RAISE EXCEPTION 'PERMISSION_DENIED' USING ERRCODE='42501'; END IF;
  SELECT role INTO role_name FROM app.membership WHERE tenant_id=t AND id=p_actor;
@@ -19,13 +30,6 @@ BEGIN
   OR ((p_input ? 'actorMembershipId') AND (p_input->>'actorMembershipId')::uuid IS DISTINCT FROM p_actor)
   OR ((p_input ? 'membershipId') AND (p_input->>'membershipId')::uuid IS DISTINCT FROM p_actor) THEN
   RAISE EXCEPTION 'COMMAND_CONFLICT' USING ERRCODE='23505'; END IF;
- IF p_type='CloseAbandonedSiteVisit' THEN
-  IF current_database()<>'jobguard_synthetic_demo' OR p_actor IS DISTINCT FROM app.current_actor()
-   OR t IS DISTINCT FROM app.current_tenant() OR role_name NOT IN('owner','admin')
-   OR NOT coalesce(app.contractor_allowed(p_actor,'organisation.manage',app.contractor_job_team(p_job)),false) THEN
-   RAISE EXCEPTION 'PERMISSION_DENIED' USING ERRCODE='42501'; END IF;
-  RETURN;
- END IF;
  IF p_type IN('StartSiteVisit','CompleteSiteVisit') THEN
   SELECT count(*)=1 AND bool_and(decision='allowed' AND reason_code='allowed') INTO allowed
    FROM app.ent3b_visit_authority(p_actor,p_job);
@@ -70,7 +74,7 @@ BEGIN
     WHERE o.tenant_id=t AND o.job_id=p_job AND o.variation_id=(v->>'extraId')::uuid AND o.raising_membership_id=p_actor)
     AND coalesce(app.contractor_job_allowed(p_actor,'extra.log',p_job),false));
  WHEN 'PriceExtra','ReviseExtra' THEN allowed:=app.xa_covers(p_actor,ARRAY['surveyor'],p_job,'extra.price') IS NOT NULL;
- WHEN 'WithdrawExtra' THEN allowed:=app.xa_covers(p_actor,ARRAY['supervisor'],p_job,'job.read') IS NOT NULL;
+ WHEN 'WithdrawExtra' THEN allowed:=app.xa_covers(p_actor,ARRAY['supervisor','surveyor','commercial_manager'],p_job,'job.read') IS NOT NULL;
  WHEN 'MarkDuplicate' THEN allowed:=app.xa_covers(p_actor,ARRAY['supervisor','surveyor','commercial_manager'],p_job,'job.read') IS NOT NULL;
  WHEN 'RevokeClientApproval' THEN allowed:=role_name='owner';
  WHEN 'ApproveExtraStep','RejectExtra' THEN
