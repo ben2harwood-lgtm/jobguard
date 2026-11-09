@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { coreLoopActionsV1, captureRequestV1 } from "@jobguard/core";
 import { reviewSaveCommandV1, reviewConfirmCommandV1 } from "./capture/contracts.js";
@@ -35,6 +35,7 @@ describe("M3-6 shared views use the existing web command contracts", () => {
     for (const entry of Object.values(coreLoopActionsV1)) {
       const route = fileURLToPath(new URL(`../../web/app${entry.path}/route.ts`, import.meta.url));
       expect(existsSync(route), entry.path).toBe(true);
+      expect(readFileSync(route, "utf8"), entry.path).toMatch(/\bexport\s+async\s+function\s+POST\s*\(/u);
     }
   });
 });
