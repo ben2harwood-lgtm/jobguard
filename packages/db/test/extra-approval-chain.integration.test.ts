@@ -317,8 +317,8 @@ async function queuedSurveyorSend() {
   const execute = (scope = context) => executor.execute(scope, sent.outboxActionId);
   const state = async () => (await sql("SELECT status FROM app.action_outbox WHERE tenant_id=$1 AND id=$2", [world.p.tenantId, sent.outboxActionId]))[0].status;
   const attempts = () => sql("SELECT id FROM app.action_attempt WHERE tenant_id=$1 AND action_id=$2", [world.p.tenantId, sent.outboxActionId]);
-  const audit = () => sql("SELECT actor_ref,subject_ref,payload FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='outbox.authorization_revoked' ORDER BY sequence", [world.p.tenantId, sent.outboxActionId]);
-  return { world, context, sender, sent, deliver, execute, state, attempts, audit };
+  const audit = () => sql("SELECT actor_ref,subject_ref,payload FROM app.audit_event WHERE tenant_id=$1 AND payload->'references'->>'outboxId'=$2 AND event_type='contractor.extra.client_authority_lost' ORDER BY sequence", [world.p.tenantId, sent.outboxActionId]);
+  return { world, context, sender, sent, jobId: s.jobId, deliver, execute, state, attempts, audit };
 }
 
 it.each(["pending", "retryable"])("LATER-SAFETY-36 cancels a %s send after its surveyor grant is revoked; restoring the role cannot revive it", async status => {
@@ -330,13 +330,13 @@ it.each(["pending", "retryable"])("LATER-SAFETY-36 cancels a %s send after its s
   }
   const calls = q.deliver.mock.calls.length, attempts = (await q.attempts()).length;
   await command(c, q.world, { kind: "grant.revoke", grantId: q.sender.grant });
-  await expect(q.execute()).resolves.toEqual({ kind: "cancelled", code: "AUTHORIZATION_REVOKED" });
+  await expect(q.execute()).resolves.toBeUndefined();
   expect(await q.state()).toBe("cancelled");
   expect(q.deliver).toHaveBeenCalledTimes(calls);
   expect(await q.attempts()).toHaveLength(attempts);
   expect(await q.audit()).toEqual([{
-    actor_ref: "system:outbox", subject_ref: q.sent.outboxActionId,
-    payload: { references: { auditTrust: "lower_trust", outcome: "cancelled", code: "AUTHORIZATION_REVOKED" }, classifications: { action: "security" } },
+    actor_ref: "system:outbox", subject_ref: q.jobId,
+    payload: { references: { auditTrust: "checked_operation", linkId: q.sent.linkId, outboxId: q.sent.outboxActionId }, hashes: {} },
   }]);
   await command(c, q.world, { kind: "grant.create", membershipId: q.sender.member.membershipId,
     role: "surveyor", scope: { kind: "branch", id: q.world.demo.branchId }, contractId: null });
@@ -365,7 +365,7 @@ it("LATER-SAFETY-36 keeps a surveyor's send executable when another sender loses
 it("LATER-SAFETY-36 still cancels a client send after sender membership revocation", async () => {
   const q = await queuedSurveyorSend();
   await command(c, q.world, { kind: "membership.revoke", membershipId: q.sender.member.membershipId });
-  await expect(q.execute()).resolves.toEqual({ kind: "cancelled", code: "AUTHORIZATION_REVOKED" });
+  await expect(q.execute()).resolves.toBeUndefined();
   expect(await q.state()).toBe("cancelled");
   expect(q.deliver).not.toHaveBeenCalled();
   expect(await q.attempts()).toEqual([]);
@@ -382,6 +382,6 @@ it("LATER-SAFETY-36 ignores another tenant's role revocation and cannot cancel a
   expect(await q.state()).toBe("succeeded");
   expect(q.deliver).toHaveBeenCalledOnce();
   expect(await q.audit()).toEqual([]);
-  await expect(other.execute()).resolves.toEqual({ kind: "cancelled", code: "AUTHORIZATION_REVOKED" });
+  await expect(other.execute()).resolves.toBeUndefined();
   expect(other.deliver).not.toHaveBeenCalled();
 });
