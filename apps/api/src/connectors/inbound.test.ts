@@ -11,6 +11,8 @@ const now = 1_798_000_000_000;
 const work: ConnectorInput = { version: "connector-input.v1", eventId: "fixture:event", kind: "work_order", subject: "fixture:order", revision: 1, document: "fixture:order_document" };
 const materials: ConnectorInput = { ...work, kind: "materials_issue", eventId: "fixture:materials" };
 const bill: ConnectorInput = { version: "connector-input.v1", eventId: "fixture:bill", kind: "billing_status", subject: "fixture:invoice", revision: 1, status: "paid" };
+const delivery: ConnectorInput = { version: "connector-input.v1", eventId: "fixture:delivery", kind: "export_delivery",
+  subject: "fixture:export_batch", revision: 1, outcome: "received" };
 const bindingId = "10000000-0000-4000-8000-000000000001";
 const key = Buffer.alloc(32, 42), nextKey = Buffer.alloc(32, 43);
 const encode = (input: unknown) => Buffer.from(JSON.stringify(input));
@@ -35,6 +37,35 @@ function fixture() {
 }
 const refused = expect.objectContaining({ code: "CONNECTOR_INPUT_REFUSED" });
 describe("ENT-13a dark inbound transport contracts", () => {
+  it.each(["webhook", "api_push"] as const)("stages strict export acknowledgements on %s and preserves retry identity", async channel => {
+    const f = fixture(), bytes = encode(delivery);
+    const first = await f.inbound.receive(channel, sign(bytes, channel), bytes);
+    expect(first).toEqual({ version: "connector-receipt.v1", eventId: delivery.eventId, state: "staged", domainEffects: 0 });
+    const reordered = encode(Object.fromEntries(Object.entries(delivery).reverse()));
+    expect(await f.inbound.receive(channel, sign(reordered, channel), reordered)).toEqual(first);
+    const changed = encode({ ...delivery, outcome: "rejected" });
+    await expect(f.inbound.receive(channel, sign(changed, channel), changed)).rejects.toMatchObject(refused);
+    const rejected = encode({ ...delivery, eventId: "fixture:rejected", revision: 2, outcome: "rejected" });
+    expect(await f.inbound.receive(channel, sign(rejected, channel), rejected)).toMatchObject({ state: "staged", domainEffects: 0 });
+    expect(f.rows.size).toBe(2);
+  });
+  it("refuses malformed, oversized and authority-bearing export acknowledgements before intake", async () => {
+    const f = fixture();
+    for (const patch of [{ outcome: "unknown" }, { outcome: null }, { outcome: 1 }, { outcome: undefined },
+      { revision: 0 }, { revision: -1 }, { revision: 1.5 }, { revision: "1" }, { revision: 2147483648 },
+      { subject: "fixture:x\n" }, { subject: "https://example.invalid" }, { subject: "fixture:" + "x".repeat(113) },
+      { eventId: null }, { version: "connector-input.v2" }, { rawContent: "x" }, { unexpected: true },
+      { document: "fixture:content" }, { status: "paid" }, { money: { pence: 1, currency: "GBP" } },
+      { amountPence: 1 }, { price: 1 }, { allocation: [] }, { tenant: "fixture:other" }, { job: "fixture:job" },
+      { bill: "fixture:bill" }, { statement: "fixture:statement" }, { origin: "site" }, { approval: true }]) {
+      const bytes = encode({ ...delivery, ...patch });
+      await expect(f.inbound.receive("webhook", sign(bytes), bytes)).rejects.toMatchObject(refused);
+    }
+    for (const bytes of [encode({ ...delivery, outcome: "x".repeat(17000) }), Buffer.from("{"), Buffer.from([255])]) {
+      await expect(f.inbound.receive("webhook", sign(bytes), bytes)).rejects.toMatchObject(refused);
+    }
+    expect(f.stage).not.toHaveBeenCalled();
+  });
   it.each(["webhook", "api_push"] as const)("stages a signed %s work order and billing source fact, without domain effects", async channel => {
     const f = fixture();
     for (const input of [work, bill, materials]) {

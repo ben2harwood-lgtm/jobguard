@@ -452,12 +452,19 @@ describe("SV5PRE authoritative completion", () => {
   }
  });
 
- it("PRE-Q5-05 invalidation after successful completion refuses issue and publication",async()=>{
+ it("PRE-Q5-05 invalidation after successful completion is refused until the final invoice, then refuses publication",async()=>{
   const x=await sourceFixture(),evidence=await finalize(x);await runWithZero(x);await attempt(x,evidence,'detection');await attempt(x,evidence,'reconciliation');await x.repo.publish(x.a.context,{version:'final-check-publication.v1',jobId:x.a.jobId,runId:x.runId,checkId:randomUUID()});
-  await asFixtureTenant(f.admin,x.a.tenantId,db=>db.query("INSERT INTO app.evidence_invalidation(id,tenant_id,evidence_id,actor_membership_id,reason_code) VALUES($1,$2,$3,$4,'verification_invalid')",[randomUUID(),x.a.tenantId,evidence,x.a.input.actorMembershipId]));
+  const invalidate=()=>asFixtureTenant(f.admin,x.a.tenantId,db=>db.query("INSERT INTO app.evidence_invalidation(id,tenant_id,evidence_id,actor_membership_id,reason_code) VALUES($1,$2,$3,$4,'verification_invalid')",[randomUUID(),x.a.tenantId,evidence,x.a.input.actorMembershipId]));
+  const issue=()=>asFixtureTenant(f.runtime,x.a.tenantId,db=>db.query("SELECT * FROM app.issue_practice_customer_invoice($1,$2,$3,$4,$5,'practice-customer@example.invalid','2026-10-13'::date)",[x.a.tenantId,x.a.jobId,x.a.revisionId,x.a.input.actorMembershipId,randomUUID()]));
+  // LS-113 (0666): until the final invoice is issued, a checked source cannot be withdrawn, so issue is never stranded.
+  await expect(invalidate()).rejects.toMatchObject({code:'55000',message:'FINAL_CHECK_VERIFIED_SOURCE_LOCKED'});
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.evidence_invalidation WHERE tenant_id=$1",[x.a.tenantId])).rows[0].n).toBe(0);
+  await issue();
+  // After issue the withdrawal is allowed (C135) and still makes the check unpublishable.
+  await invalidate();
   await expect(x.repo.publish(x.a.context,{version:'final-check-publication.v1',jobId:x.a.jobId,runId:x.runId,checkId:randomUUID()})).rejects.toThrow('FINAL_CHECK_INPUT_UNAVAILABLE');
-  await expect(asFixtureTenant(f.runtime,x.a.tenantId,db=>db.query("SELECT * FROM app.issue_practice_customer_invoice($1,$2,$3,$4,$5,'practice-customer@example.invalid','2026-10-13'::date)",[x.a.tenantId,x.a.jobId,x.a.revisionId,x.a.input.actorMembershipId,randomUUID()]))).rejects.toThrow('FINAL_CHECK_NOT_COMPLETE');
-  expect((await f.admin.query("SELECT count(*)::int n FROM app.customer_invoice WHERE tenant_id=$1",[x.a.tenantId])).rows[0].n).toBe(0);
+  await expect(issue()).rejects.toThrow('FINAL_INVOICE_ALREADY_ISSUED');
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.customer_invoice WHERE tenant_id=$1",[x.a.tenantId])).rows[0].n).toBe(1);
  });
 
  it.each(['', randomUUID()])("r10 privileged invalidation preserves prior context %s while runtime isolation and invoice refusal hold", async prior => {
@@ -471,6 +478,9 @@ describe("SV5PRE authoritative completion", () => {
   await expect(f.runtime.query(insert, args)).rejects.toThrow('FORBIDDEN');
   await expect(asFixtureTenant(f.runtime, randomUUID(), db => db.query(insert, args))).rejects.toThrow('FORBIDDEN');
   expect((await f.admin.query("SELECT count(*)::int n FROM app.evidence_invalidation WHERE tenant_id=$1", [x.a.tenantId])).rows[0].n).toBe(0);
+  // LS-113 (0666): before the final invoice even the privileged path is refused; issue it, then withdraw.
+  await expect(asFixtureTenant(f.admin, x.a.tenantId, db => db.query(insert, args))).rejects.toMatchObject({ code: '55000', message: 'FINAL_CHECK_VERIFIED_SOURCE_LOCKED' });
+  await asFixtureTenant(f.runtime, x.a.tenantId, db => db.query("SELECT * FROM app.issue_practice_customer_invoice($1,$2,$3,$4,$5,'practice-customer@example.invalid','2026-10-13'::date)", [x.a.tenantId, x.a.jobId, x.a.revisionId, x.a.input.actorMembershipId, randomUUID()]));
   const admin = await f.admin.connect();
   try {
    await admin.query('BEGIN');
@@ -487,8 +497,8 @@ describe("SV5PRE authoritative completion", () => {
    [x.a.tenantId,x.a.jobId,x.a.revisionId,x.a.input.actorMembershipId,randomUUID(),kind,'a'.repeat(64)]))).rejects.toThrow('FINAL_CHECK_NOT_COMPLETE');
   await expect(asFixtureTenant(f.runtime, x.a.tenantId, db => db.query(
    "SELECT * FROM app.issue_practice_customer_invoice($1,$2,$3,$4,$5,'practice-customer@example.invalid','2026-10-13'::date)",
-   [x.a.tenantId,x.a.jobId,x.a.revisionId,x.a.input.actorMembershipId,randomUUID()]))).rejects.toThrow('FINAL_CHECK_NOT_COMPLETE');
-  expect((await f.admin.query("SELECT count(*)::int n FROM app.customer_invoice WHERE tenant_id=$1", [x.a.tenantId])).rows[0].n).toBe(0);
+   [x.a.tenantId,x.a.jobId,x.a.revisionId,x.a.input.actorMembershipId,randomUUID()]))).rejects.toThrow('FINAL_INVOICE_ALREADY_ISSUED');
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.customer_invoice WHERE tenant_id=$1", [x.a.tenantId])).rows[0].n).toBe(1);
  });
 
  it("PRE-Q5-09 a pre-lock signal missing its classification prevents a zero result",async()=>{

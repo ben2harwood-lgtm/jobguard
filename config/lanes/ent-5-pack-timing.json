@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-5-pack-timing": {
+      "branches": [
+        "codex/sandbox/ent-5-pack-timing"
+      ],
+      "note": "ENT-5-PACK-TIMING: server projection timing content; RED, synthetic only; migration 0860 unused.",
+      "allow": [
+        "apps/api/src/evidence-bundle.application.test.ts",
+        "packages/core/src/extra-evidence-pack.ts",
+        "packages/core/src/extra-evidence-pack.test.ts",
+        "packages/db/src/extra-evidence-pack-sources.ts",
+        "packages/db/test/extra-evidence-pack-timing.integration.test.ts",
+        "docs/contracts/extra-evidence-pack-timing-v1.md"
+      ]
+    }
+  }
+}

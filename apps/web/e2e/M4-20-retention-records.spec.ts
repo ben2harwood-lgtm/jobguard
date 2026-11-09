@@ -20,6 +20,7 @@ test("M4-20 timer review, session resolution, uncertain retry and reconciled fin
     const session = await provider.verifyCode(email, "signup", challenge.fixtureCode!);
     const membership = (await identity.session(session.sessionToken)).memberships[0]!;
     const verified = await identity.context({ ...session, tenantHeader: membership.tenantId, origin: identity.allowedOrigin });
+    const timerContext = db.verifiedTenantContextForQueuedJob(membership.tenantId);
     const captureId = crypto.randomUUID(), text = "Fictional retention job";
     const provenance = { kind: "extracted" as const, span: { sourceId: captureId, sourceVersion: 1 as const, start: 0, end: text.length } };
     const capture = await new db.CaptureRepository(runtime).persist(verified, { captureId, text, promptVersion: "fictional.v1", schemaVersion: "fictional.v1", model: "fixture-only",
@@ -54,7 +55,7 @@ test("M4-20 timer review, session resolution, uncertain retry and reconciled fin
         { id: crypto.randomUUID(), milestone: "completion", description: "Fictional completion", source, dateSource: source, dueDate: "2000-01-01", cumulativeLimit: { netPence: 5000, taxPence: 1000 } },
         { id: crypto.randomUUID(), milestone: "defects", description: "Fictional defects", source, dateSource: source, dueDate: "2001-01-01", cumulativeLimit: { netPence: 10000, taxPence: 2000 } },
       ] };
-    await append(profile, pid); await new db.RetentionRecordRepository(runtime).raiseTimerReviews(verified);
+    await append(profile, pid); await new db.RetentionRecordRepository(runtime).raiseTimerReviews(timerContext);
     const firstReview = (await read()).book.records.find(r => r.version === "retention.review.v1")!;
     await context.addCookies([{ name: "jobguard_session", value: session.sessionToken, url: identity.allowedOrigin }]);
     const path = `/api/jobs/${jobId}/retention-records`;
@@ -94,7 +95,7 @@ test("M4-20 timer review, session resolution, uncertain retry and reconciled fin
     await append({ version: "retention.reversal.v1", receiptId, grossPence: 1200 });
     const changedId = crypto.randomUUID();
     await append({ ...profile, revision: 2, previousProfileId: pid, conditions: profile.conditions.map(c => ({ ...c, dueDate: "2002-01-01" })) }, changedId);
-    await new db.RetentionRecordRepository(runtime).raiseTimerReviews(verified);
+    await new db.RetentionRecordRepository(runtime).raiseTimerReviews(timerContext);
     await main.getByRole("button", { name: "Refresh stored records" }).click();
     await expect(main.getByText("Received after reversals: £36.00", { exact: true })).toBeVisible();
     // The old approval now fails as stale and appends nothing.

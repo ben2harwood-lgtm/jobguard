@@ -27,7 +27,7 @@ function fixture(kind: "subscription" | "success_fee" = "subscription") {
 beforeEach(() => {
   vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); s.token = "s".repeat(32);
   s.session.mockResolvedValue({ memberships: [membership], csrfToken: "c".repeat(24) });
-  s.authenticate.mockResolvedValue({ identityUserId: id(3), sessionId: id(10), csrfToken: "c".repeat(24) });
+  s.authenticate.mockResolvedValue({ identityUserId: id(3), sessionId: id(10), sessionCredential: "a".repeat(64), csrfToken: "c".repeat(24) });
   s.findMembership.mockResolvedValue(membership); s.read.mockResolvedValue([]);
 });
 afterEach(() => { vi.resetAllMocks(); vi.unstubAllEnvs(); });
