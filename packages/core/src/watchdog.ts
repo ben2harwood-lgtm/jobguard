@@ -187,7 +187,7 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "/api/jobs/[id]/supplier-documents/facts/confirm": "watchdog_live_only",
   "/api/jobs/[id]/supplier-documents/intake": "watchdog_live_only",
   "/api/jobs/[id]/supplier-documents/receipts": "watchdog_live_only",
-  "/api/jobs/[id]/supplier-lines": "watchdog_live_only",
+  "/api/jobs/[id]/supplier-lines": "pre_live_allowed",
   "/api/jobs/[id]/supplier-matches/corrections": "watchdog_live_only",
   "/api/jobs/[id]/supplier-matches": "watchdog_live_only",
   "/api/jobs/[id]/things-to-check/[action]": "watchdog_live_only",
