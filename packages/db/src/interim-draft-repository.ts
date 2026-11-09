@@ -6,6 +6,7 @@ import {
 } from "@jobguard/core";
 import { canonicalJson, sha256Hex } from "./work-order-repository.js";
 import { withTenant, type VerifiedTenantContext, type TenantTransaction } from "./tenant-context.js";
+import { RequestBindingRefusedError } from "./request-binding-error.js";
 
 const id = z.guid().transform(value => value.toLowerCase());
 const commandV1 = z.object({ version: z.literal("interim.persist-command.v1"), commandId: id,
@@ -30,6 +31,8 @@ export class InterimDraftRepository {
   private async guarded<T>(work: () => Promise<T>): Promise<T> {
     try { return await work(); } catch (error) {
       if (error instanceof InterimApplicationError || error instanceof InterimDraftRepositoryError) throw error;
+      // A revoked or mismatched bound session is a permission refusal, never a retryable outage.
+      if (error instanceof RequestBindingRefusedError) throw new InterimDraftRepositoryError("FORBIDDEN");
       const message = error instanceof Error ? error.message : "";
       if (message === "METER_FORBIDDEN") throw new InterimDraftRepositoryError("FORBIDDEN");
       if (message === "JOB_NOT_LIVE") throw new InterimDraftRepositoryError("JOB_NOT_LIVE");

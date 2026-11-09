@@ -104,7 +104,7 @@ it("routes recheck PostgreSQL authority and return 403, 404 and the live-job cod
   };
   const application = new InterimDraftApplication(identity as unknown as ConstructorParameters<typeof InterimDraftApplication>[0], new InterimDraftRepository(c.runtime));
   vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
-  vi.doMock("../../../apps/web/app/lib/identity-server", () => ({ identityCredentials: async () => ({ sessionToken: "fixture", origin, csrfToken }) }));
+  vi.doMock("../../../apps/web/app/lib/identity-server", () => ({ identityCredentials: async () => ({ sessionToken: "f".repeat(32), origin, csrfToken }) }));
   vi.doMock("../../../apps/web/app/lib/interim-draft-server", () => ({ interimDraftApplication: () => application }));
   vi.doMock("@jobguard/api/workspace", () => ({ interimDraftFailure }));
   try {
