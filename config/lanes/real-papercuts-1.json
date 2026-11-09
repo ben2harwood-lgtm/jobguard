@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-papercuts-1": {
+      "branches": [
+        "codex/sandbox/real-papercuts-1"
+      ],
+      "allow": [
+        "apps/web/app/ui/job-parties.test.tsx",
+        "apps/web/app/ui/job-parties.tsx",
+        "apps/web/app/ui/payment-fee-statements.test.ts",
+        "apps/web/app/ui/payment-fee-statements.tsx",
+        "apps/web/app/ui/proof-stage.test.tsx",
+        "apps/web/app/ui/proof-stage.tsx"
+      ]
+    }
+  }
+}
