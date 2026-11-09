@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-77": {
+      "branches": [
+        "codex/sandbox/later-safety-77"
+      ],
+      "allow": [
+        "packages/db/migrations/0813_catch_reprice_refusal.sql",
+        "packages/db/test/migration-proofs/0813_catch_reprice_refusal.proof.json",
+        "packages/db/test/final-check-catch-confirm.integration.test.ts",
+        "packages/db/test/final-check-catch-journey.integration.test.ts",
+        "packages/db/src/variation-repository.ts"
+      ]
+    }
+  }
+}
