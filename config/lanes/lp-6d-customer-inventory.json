@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "lanes": {
+    "lp-6d-customer-inventory": {
+      "branches": ["codex/sandbox/lp-6d-customer-inventory"],
+      "note": "Test-only RED inventory; build ahead of LP-6c, do not merge until LP-6c lands. No web workflow.",
+      "allow": ["packages/db/test/lp6d-customer-inventory.integration.test.ts"]
+    }
+  }
+}
