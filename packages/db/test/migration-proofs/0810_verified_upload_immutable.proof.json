@@ -1,0 +1,6 @@
+{
+  "migration": "0810_verified_upload_immutable.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}

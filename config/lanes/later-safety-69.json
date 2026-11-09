@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-69": {
+      "branches": [
+        "codex/sandbox/later-safety-69"
+      ],
+      "allow": [
+        "packages/db/migrations/0810_verified_upload_immutable.sql",
+        "packages/db/test/migration-proofs/0810_verified_upload_immutable.proof.json",
+        "packages/db/test/evidence.integration.test.ts"
+      ]
+    }
+  }
+}
