@@ -17,6 +17,10 @@ async function linked(approved = false, net = 40000, partial = false) {
  const s = await submitted(c, w, net), ctx = await w.ctx, actor = w.members.supervisor.member;
  if (approved || partial) await approvals.approveExtraStep(ctx, actor, approveInput(s, 0));
  const canonicalId = await raiseOn(c, w, s.jobId);
+ // An approved duplicate must point at an approved canonical extra (LS-111).
+ await approvals.priceExtra(ctx, w.members.surveyor.member, { version: "price-extra.v1", commandId: randomUUID(), jobId: s.jobId, extraId: canonicalId, netPence: 40000 });
+ const canonical = await approvals.submitExtra(ctx, actor, { version: "submit-extra.v1", commandId: randomUUID(), jobId: s.jobId, extraId: canonicalId });
+ await approvals.approveExtraStep(ctx, actor, approveInput({ jobId: s.jobId, requestId: String(canonical.requestId), hash: String(canonical.revisionHash), net: 40000 }, 0));
  const link = await approvals.markDuplicate(ctx, actor, {
   version: "mark-duplicate.v1", commandId: randomUUID(), jobId: s.jobId, duplicateId: s.extraId, canonicalId,
  });

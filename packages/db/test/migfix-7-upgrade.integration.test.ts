@@ -128,7 +128,10 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.configure_recovery_demo(p_job uuid, p_command uuid, p_scenario character varying)", "0670_recovery_demo_replay_job.sql"],
     ["app.ent4b_fact_guard()", "0673_duplicate_unlink_command_binding.sql"],
     ["app.work_order_commit(actor uuid, payload jsonb)", "0676_work_order_expected_revision.sql"],
-    ["app.sync_snapshot_generation(u uuid, r bigint, s bigint, h text, e text)", "0679_sync_checkpoint_synthetic_guard.sql"],
+    ["app.sync_snapshot_generation(u uuid, r bigint, s bigint, h text, e text)", "0699_sync_checkpoint_bound_reader.sql"],
+    ["identity.provision_verified_challenge(challenge_id uuid)", "0703_invitation_issuer_recheck.sql"],
+    ["app.ef_prepare_statement(p_session uuid, p_command uuid, p_period text)", "0704_enterprise_fee_period_order.sql"],
+    ["app.ef_post_statement(p_session uuid, p_command uuid, p_statement uuid, p_authorization uuid)", "0704_enterprise_fee_period_order.sql"],
     ["app.reverse_synthetic_landing(p_tenant uuid, p_reversal uuid, p_derivation uuid, p_journal uuid, p_allocation uuid, p_amount bigint, p_reason character varying)", "0682_synthetic_reversal_replay_match.sql"],
     ["app.xa_client_view_authority(p_job uuid, p_request uuid, p_actor uuid, p_email text)", "0686_extra_client_authority_loss.sql"],
     ["app.xa_client_decide(p_job uuid, p_request uuid, p_command uuid, p_actor uuid, p_token_hash text, p_email text, p_hash text, p_net bigint, p_reject boolean, p_reason text, p_role_name text, p_tester text)", "0686_extra_client_authority_loss.sql"],
@@ -154,6 +157,8 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     "retention_timer", "retention_timer_book", "xa_proceed", "xa_proceed_breaches",
     "xa_proceed_view", "xa_wait_deadline", "customer_practice_pay_now", "store_extra_pack_artifact",
     "guard_variation_final_account_lock",
+    "company_final_check_authority", "company_final_check_read", "company_final_check_terms",
+    "company_final_check_disposition", "company_final_check_lock", "company_final_check_request_run", "company_final_check_reveal",
   ];
   for (const name of namedAdditions) {
     expect(replayRoutines.filter(row => row.proname === name)).toHaveLength(1);
