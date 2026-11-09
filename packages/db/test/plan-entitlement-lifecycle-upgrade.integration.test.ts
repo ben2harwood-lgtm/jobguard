@@ -90,6 +90,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     ["ch6_integrity_sources", "t uuid, j uuid, d text", "0660_baseline_ancestry_audit_trust.sql"],
     ["ch6_record_integrity_review", "t uuid, j uuid, digest text, review jsonb, source_snapshot jsonb", "0660_baseline_ancestry_audit_trust.sql"],
     ["decision_check_command", "p_digest text, p_command jsonb, p_phase text, p_data jsonb", "0660_baseline_ancestry_audit_trust.sql"],
+    ["interim_draft_records", "t uuid, digest text, j uuid, operation text, v jsonb", "0781_interim_draft_rules.sql"],
     ["interim_draft_records", "t uuid, digest text, j uuid, operation text, v jsonb", "0665_interim_read_authority.sql"],
     ["ch5_history_actor", "t uuid, j uuid, d text", "0668_import_company_owner_history.sql"],
     ["guard_practice_material_requirement", "", "0690_import_ancestry_record_anchor.sql"],
