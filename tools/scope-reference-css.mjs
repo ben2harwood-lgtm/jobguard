@@ -1,4 +1,4 @@
-// Usage: node scope-reference-css.mjs <apps/web dir> <reference site dir> <output design.css>
+// Usage: node tools/scope-reference-css.mjs <apps/web dir> <reference site dir> <output design.css>
 // Scope the approved reference CSS under one wrapper class, fixing the mockup's chosen look
 // (hybrid skin, focused density, immersive imagery, restrained glow, original background).
 import { createRequire } from "node:module"; import { readFileSync, writeFileSync } from "node:fs"; import { resolve } from "node:path";

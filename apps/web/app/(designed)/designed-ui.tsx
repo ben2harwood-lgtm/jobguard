@@ -3,7 +3,7 @@
 // Shared frame for the screens rebuilt from the approved clickable design (JobGuard reference
 // implementation, 19 Oct 2026). Screens read only the app's existing routes and show only facts
 // those routes return; anything else says it is not recorded yet. Existing working tools are
-// hosted inside <Legacy>, which keeps the app's own styles (see scope-reference-css.mjs).
+// hosted inside <Legacy>, which keeps the app's own styles (see tools/scope-reference-css.mjs).
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { z } from "zod";

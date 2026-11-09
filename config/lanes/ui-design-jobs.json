@@ -8,8 +8,6 @@
       "note": "UI-DESIGN-JOBS: approved clickable design brought into apps/web (Today, Jobs, To check, Money, More, new job and the job's Overview/Work/Money/Records tabs), on existing routes with synthetic data, hosting the existing working tools; no backend routes, no migrations. The home page / opens the designed Today; the previous home moves to /classic, and links and browser tests that used / point at /classic.",
       "allow": [
         "apps/web/app/(designed)/**",
-        "apps/web/public/design/**",
-        "apps/web/e2e/UI-DESIGN-JOBS.spec.ts",
         "apps/web/app/admin/contractor/audit-exports/page.tsx",
         "apps/web/app/admin/contractor/contractor-admin.tsx",
         "apps/web/app/classic/page.test.tsx",
@@ -18,6 +16,8 @@
         "apps/web/app/demo-s/shadow-30000/journey.tsx",
         "apps/web/app/jobs/[id]/signal-to-noise/page.tsx",
         "apps/web/app/northside/northside-hub.tsx",
+        "apps/web/app/page.test.tsx",
+        "apps/web/app/page.tsx",
         "apps/web/app/sign-in/sign-in.tsx",
         "apps/web/app/ui/business-value-v3.tsx",
         "apps/web/app/ui/job-work-state.tsx",
@@ -48,6 +48,7 @@
         "apps/web/e2e/SV-3.spec.ts",
         "apps/web/e2e/SV-4.spec.ts",
         "apps/web/e2e/SV-5.spec.ts",
+        "apps/web/e2e/UI-DESIGN-JOBS.spec.ts",
         "apps/web/e2e/UIWIRE-1.spec.ts",
         "apps/web/e2e/UIWIRE-15-READ-RECOVERY.spec.ts",
         "apps/web/e2e/UIWIRE-6.spec.ts",
@@ -63,8 +64,8 @@
         "apps/web/e2e/proof-capture.spec.ts",
         "apps/web/e2e/shell.spec.ts",
         "apps/web/e2e/variations.spec.ts",
-        "apps/web/app/page.tsx",
-        "apps/web/app/page.test.tsx"
+        "apps/web/public/design/**",
+        "tools/scope-reference-css.mjs"
       ]
     }
   }
