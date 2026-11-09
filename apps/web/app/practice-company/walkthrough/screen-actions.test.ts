@@ -31,3 +31,16 @@ it("clears the previous pointer marker before pointing at the next real control"
   expect(removeAttribute).toHaveBeenCalledWith("data-walk-action");
   expect(button.setAttribute).toHaveBeenCalledWith("data-walk-action", "true");
 });
+
+it.each([false, true])("holds each automatic click still for 1.2 seconds (reduced motion: %s)", async reduced => {
+  vi.useFakeTimers();
+  try {
+    const button = { textContent: "Save", disabled: false, closest: () => null, getClientRects: () => [{}], setAttribute: vi.fn(), click: vi.fn(), scrollIntoView: vi.fn() };
+    vi.stubGlobal("matchMedia", () => ({ matches: reduced }));
+    vi.stubGlobal("document", { querySelectorAll: () => [], getElementById: () => ({ querySelectorAll: () => [button] }) });
+    const action = click("Save", new AbortController().signal);
+    await vi.advanceTimersByTimeAsync(1199); expect(button.click).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(2); await action; expect(button.click).toHaveBeenCalledOnce();
+    expect(button.scrollIntoView).toHaveBeenCalledWith({ block: "center", behavior: "instant" });
+  } finally { vi.useRealTimers(); }
+});

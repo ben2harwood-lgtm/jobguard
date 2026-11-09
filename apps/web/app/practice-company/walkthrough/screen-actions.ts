@@ -11,8 +11,12 @@ export async function until(check: () => boolean, signal: AbortSignal) {
 async function point(element: HTMLElement, signal?: AbortSignal) {
   document.querySelectorAll("[data-walk-action]").forEach(element => element.removeAttribute("data-walk-action"));
   element.setAttribute("data-walk-action", "true");
-  element.scrollIntoView({ block: "center" });
-  if (typeof matchMedia === "function" && !matchMedia("(prefers-reduced-motion: reduce)").matches) await new Promise(resolve => setTimeout(resolve, 450));
+  element.scrollIntoView({ block: "center", behavior: "instant" });
+  await new Promise<void>(resolve => {
+    const finish = () => { clearTimeout(timer); signal?.removeEventListener("abort", finish); resolve(); };
+    const timer = setTimeout(finish, 1200);
+    signal?.addEventListener("abort", finish, { once: true });
+  });
   signal?.throwIfAborted();
 }
 export async function click(name: string, signal: AbortSignal) {
