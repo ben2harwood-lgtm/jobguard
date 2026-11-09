@@ -32,11 +32,16 @@ async function cancelRevokedAction(db: TenantTransaction, id: string, adapters: 
   const cancelled = await db.$client.query<{ id: string }>(`UPDATE app.action_outbox o SET status='cancelled',updated_at=clock_timestamp()
     FROM app.action_authorization a
     JOIN app.membership m ON m.tenant_id=a.tenant_id AND m.id=a.actor_membership_id
-    JOIN app.contractor_membership_revocation revoked
+    LEFT JOIN app.contractor_membership_revocation revoked
       ON revoked.tenant_id=m.tenant_id AND revoked.membership_id=m.id
     WHERE o.id=$1 AND o.adapter=ANY($2::text[]) AND o.status IN ('pending','retryable')
       AND a.tenant_id=o.tenant_id AND a.id=o.authorization_id
-      AND revoked.membership_id IS NOT NULL
+      AND (revoked.membership_id IS NOT NULL OR (
+        o.action_type='extra.client_approval_request.send' AND o.adapter='fake_email'
+        AND EXISTS(SELECT 1 FROM app.extra_client_link k
+          WHERE k.tenant_id=o.tenant_id AND k.outbox_action_id=o.id
+            AND NOT app.xc_send_authority(m.id,k.variation_id))
+      ))
     RETURNING o.id`, [id, adapters]);
   if (!cancelled.rows.length) return;
   await appendAuditBatch(db, [{

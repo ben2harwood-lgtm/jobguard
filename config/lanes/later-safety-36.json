@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-36": {
+      "branches": [
+        "codex/sandbox/later-safety-36"
+      ],
+      "note": "LATER-SAFETY-36 RED; depends on batch-42. Lists every non-lane path changed from branch base 1c2d1f2f7; prerequisite merge remains with the router.",
+      "allow": [
+        "packages/db/src/outbox.ts",
+        "packages/db/test/extra-approval-chain.integration.test.ts"
+      ]
+    }
+  }
+}
