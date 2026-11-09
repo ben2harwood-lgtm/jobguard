@@ -85,7 +85,10 @@ describe("ordinary variation prices and approvals stop at the immutable final-ac
   await expect(repo.transact(a.context, db => approvePricedVariation(db, a.tenantId, variationId, approval(revised))))
    .rejects.toMatchObject({ name: "VariationRevisionConflict", code: lockedCode });
   expect(await facts()).toEqual(before);
-
+  // An unlocked-era revision with no approval cannot gain its first approval either.
+  await expect(repo.transact(a.context, db => approvePricedVariation(db, a.tenantId, pendingId, approval(pending))))
+   .rejects.toMatchObject({ name: "VariationRevisionConflict", code: lockedCode });
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.variation_approval WHERE tenant_id=$1 AND revision_id=$2", [a.tenantId, pending.id])).rows[0].n).toBe(0);
   // Raw SQL callers cannot bypass either trigger or hide behind ON CONFLICT.
   await expect(asFixtureTenant(f.admin, a.tenantId, db => db.query(`INSERT INTO app.variation_revision
    SELECT (jsonb_populate_record(NULL::app.variation_revision,to_jsonb(r)||jsonb_build_object('id',$3::text,'revision',3,'previous_revision_id',r.id))).*
@@ -101,20 +104,6 @@ describe("ordinary variation prices and approvals stop at the immutable final-ac
   await expect(repo.transact(a.context, db => approvePricedVariation(db, a.tenantId, variationId, approved)))
    .resolves.toMatchObject({ id: approved.id });
   expect(await facts()).toEqual(before);
-  // A pre-lock priced extra with no approval may still gain its FIRST approval: a post-lock
-  // source for the supplementary invoice (MIGFIX-5), outside the locked line set.
-  const pendingApproval = approval(pending);
-  await expect(repo.transact(a.context, db => approvePricedVariation(db, a.tenantId, pendingId, pendingApproval)))
-   .resolves.toMatchObject({ id: pendingApproval.id });
-  expect((await f.admin.query("SELECT count(*)::int n FROM app.variation_approval WHERE tenant_id=$1 AND revision_id=$2", [a.tenantId, pending.id])).rows[0].n).toBe(1);
-  const lockedLines = (await f.admin.query("SELECT snapshot FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2", [a.tenantId, a.jobId])).rows[0].snapshot.lines as { source_id?: string; sourceId?: string }[];
-  expect(JSON.stringify(lockedLines)).not.toContain(pending.id);
-  // ...but once approved it is locked like any other: a second approval is refused.
-  await expect(asFixtureTenant(f.admin, a.tenantId, db => db.query(`INSERT INTO app.variation_approval
-   SELECT (jsonb_populate_record(NULL::app.variation_approval,to_jsonb(x)||jsonb_build_object('id',$3::text))).*
-   FROM app.variation_approval x WHERE x.tenant_id=$1 AND x.revision_id=$2
-   ON CONFLICT(tenant_id,revision_id) DO NOTHING`, [a.tenantId, pending.id, randomUUID()])))
-   .rejects.toMatchObject({ code: "42501", message: lockedCode });
  });
 });
 
