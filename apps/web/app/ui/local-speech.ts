@@ -1,6 +1,6 @@
 import type { LocalSpeechAdapter, LocalSpeechSession } from "./local-dictation";
 
-export const LOCAL_SPEECH_DOWNLOAD_MIB = "43.4";
+export const LOCAL_SPEECH_DOWNLOAD_MIB = "42.4";
 type Callbacks = Parameters<LocalSpeechAdapter["start"]>[0];
 
 // Constructed only by a user gesture. Neither native speech nor remote providers are used.

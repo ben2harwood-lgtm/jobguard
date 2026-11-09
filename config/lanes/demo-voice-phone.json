@@ -19,7 +19,8 @@
         "apps/web/public/local-speech/NOTICE",
         "docs/verdicts/DEMO-VOICE-PHONE/READY.md",
         "tools/prepare-local-speech.mjs",
-        "apps/web/e2e/fixtures/demo-voice-phone.wav"
+        "apps/web/e2e/fixtures/demo-voice-phone.wav",
+        "apps/web/public/local-speech/vosk.wasm"
       ]
     }
   }

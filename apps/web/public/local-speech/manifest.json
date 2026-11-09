@@ -5,8 +5,15 @@
     "licence": "Apache-2.0",
     "upstreamSha256": "29504515526e974f4cb053cf08811c4de5fb2a74007c0a5a957db50eaa8d5d0c",
     "file": "vosk-worker.js",
-    "bytes": 4330572,
-    "sha256": "afbc53cb3f6942f99f913dd18ae5c1c7b4792f433a45613935d03feddd0610bb"
+    "bytes": 167398,
+    "sha256": "30d5725b11558ec365395f8f3e7cae14cb64a2cf5380e8a80251f03243fe1f35"
+  },
+  "wasm": {
+    "file": "vosk.wasm",
+    "runtimeVersion": "0.0.8",
+    "licence": "Apache-2.0",
+    "bytes": 3122379,
+    "sha256": "0f13920e74cb122d3f879b9bbfc9ad36b5f3d979a5f0510b7e2622767300a4ef"
   },
   "model": {
     "name": "vosk-model-small-en-us",

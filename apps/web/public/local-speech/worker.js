@@ -2,13 +2,13 @@
 'use strict';
 const originalFetch = self.fetch.bind(self);
 const send = self.postMessage.bind(self);
-let modelURL, runtimeURL, booted = false;
+let modelURL, runtimeURL, verifiedWasm, booted = false, staticAssetsOpen = true;
 const digest = async bytes => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), b => b.toString(16).padStart(2, '0')).join('');
 // The only network operation permitted is a bodyless GET for named static assets.
 self.fetch = async (input, options) => {
   const url = new URL(String(input), self.location.href);
   if (url.href === modelURL && !options?.body) return originalFetch(url);
-  if (url.origin !== self.location.origin || !/^\/local-speech\/(manifest\.json|vosk-worker\.js|model\.part-[01])$/.test(url.pathname) || url.search || (options?.method && options.method !== 'GET') || options?.body) throw Error('Speech network request refused');
+  if (!staticAssetsOpen || url.origin !== self.location.origin || !/^\/local-speech\/(manifest\.json|vosk-worker\.js|vosk\.wasm|model\.part-[01])$/.test(url.pathname) || url.search || (options?.method && options.method !== 'GET') || options?.body) throw Error('Speech network request refused');
   return originalFetch(url, {method:'GET', credentials:'omit', redirect:'error'});
 };
 self.XMLHttpRequest = class { constructor() { throw Error('Speech XHR refused'); } };
@@ -30,10 +30,20 @@ self.onmessage = async event => {
     const response = await self.fetch('/local-speech/manifest.json');
     if (!response.ok) throw Error('Manifest unavailable');
     const manifest = await response.json();
-    // Pinned independently of the downloaded manifest (not trust-on-first-use).
-    if (manifest.runtime.sha256 !== 'afbc53cb3f6942f99f913dd18ae5c1c7b4792f433a45613935d03feddd0610bb' || manifest.model.sha256 !== 'f0b24bb92a48ca575b6a96500d6b543f0f079c573dfe85bbe16001fc0404e1d8') throw Error('Manifest changed');
-    if (manifest.runtime.bytes !== 4330572 || manifest.model.bytes !== 41184862 || manifest.model.parts?.length !== 2 || manifest.model.parts.some((part,index) => part.file !== `model.part-${index}` || part.bytes !== [25165824,16019038][index])) throw Error('Invalid asset layout');
-    const total = manifest.runtime.bytes + manifest.model.bytes;
+    // Independent name/size/hash pins; the fetched manifest cannot substitute an asset.
+    const pinned = {
+      'vosk-worker.js': {bytes:167398, sha256:'30d5725b11558ec365395f8f3e7cae14cb64a2cf5380e8a80251f03243fe1f35'},
+      'vosk.wasm': {bytes:3122379, sha256:'0f13920e74cb122d3f879b9bbfc9ad36b5f3d979a5f0510b7e2622767300a4ef'},
+      'model.part-0': {bytes:25165824, sha256:'badc817d9ae2a963674d774ceb4ec476da783d9fb91e5759d187e85538bc4d36'},
+      'model.part-1': {bytes:16019038, sha256:'00ebe6ebb3189ee71567b02095d50216ac3946078e5c3c7015358dc74a056620'},
+    };
+    if (manifest.model.sha256 !== 'f0b24bb92a48ca575b6a96500d6b543f0f079c573dfe85bbe16001fc0404e1d8' || manifest.model.bytes !== 41184862 || manifest.model.parts?.length !== 2) throw Error('Manifest changed');
+    const listed = [manifest.runtime, manifest.wasm, ...manifest.model.parts];
+    for (const [index,file] of Object.keys(pinned).entries()) {
+      const entry = listed[index], expected = pinned[file];
+      if (entry?.file !== file || entry.bytes !== expected.bytes || entry.sha256 !== expected.sha256) throw Error('Invalid asset layout');
+    }
+    const total = Object.values(pinned).reduce((sum, entry) => sum + entry.bytes, 0);
     let loaded = 0;
     async function asset(file, expected) {
       const response = await self.fetch('/local-speech/' + file);
@@ -49,7 +59,8 @@ self.onmessage = async event => {
       if (length !== expected.bytes || await digest(bytes) !== expected.sha256) throw Error('Asset integrity failure');
       return bytes;
     }
-    const runtime = await asset('vosk-worker.js', manifest.runtime);
+    const runtime = await asset('vosk-worker.js', pinned['vosk-worker.js']);
+    verifiedWasm = await asset('vosk.wasm', pinned['vosk.wasm']);
     const parts = [];
     for (const part of manifest.model.parts) parts.push(await asset(part.file, part));
     const model = new Uint8Array(manifest.model.bytes); let offset = 0;
@@ -57,6 +68,7 @@ self.onmessage = async event => {
     if (offset !== model.length || await digest(model) !== manifest.model.sha256) throw Error('Model integrity failure');
     modelURL = URL.createObjectURL(new Blob([model]));
     runtimeURL = URL.createObjectURL(new Blob([runtime], {type:'application/javascript'}));
+    staticAssetsOpen = false; // Instantiation can use only the verified binary, never a fallback fetch.
     importScripts(runtimeURL);
     self.dispatchEvent(new MessageEvent('message',{data:{action:'set',key:'logLevel',value:-1}}));
     self.dispatchEvent(new MessageEvent('message',{data:{action:'load',modelUrl:modelURL}}));

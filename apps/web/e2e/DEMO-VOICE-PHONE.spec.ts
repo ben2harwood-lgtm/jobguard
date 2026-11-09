@@ -39,6 +39,7 @@ test("real worker recognises fictional microphone audio locally, reviews and sav
     await expect(page.getByRole("button",{name:"Stop listening",exact:true})).toHaveCount(0);
     await page.waitForTimeout(1000);await sample();clearInterval(sampling);
     const dictating=observed.requests.slice(startIndex);
+    expect(dictating.some(r=>r.url.endsWith("/vosk.wasm"))).toBe(true);
     expect(dictating.some(r=>r.url.endsWith("/model.part-0"))).toBe(true);
     expect(dictating.some(r=>r.url.endsWith("/model.part-1"))).toBe(true);
     for(const request of dictating){expect(new URL(request.url).origin).toBe("http://127.0.0.1:3000");expect(request.bytes).toBe(0);expect(request.method).toBe("GET")}
@@ -104,4 +105,19 @@ test("a model download failure preserves typed work",async({page})=>{
   await page.getByRole("button",{name:button,exact:true}).click();
   await expect(page.getByText("Microphone unavailable. You can type instead.",{exact:true})).toBeVisible({timeout:60_000});
   await expect(page.getByLabel("Work details")).toHaveValue("Fictional typed draft");
+});
+
+test("a same-size WASM hash mismatch preserves typing before any model download",async({page,context})=>{
+  // Static-asset fault injection: retain the exact length so SHA-256 must reject it.
+  const corrupt=readFileSync(resolve("public/local-speech/vosk.wasm"));
+  corrupt[8]=(corrupt[8]??0)^1;
+  await page.route("**/local-speech/vosk.wasm",route=>route.fulfill({status:200,contentType:"application/wasm",body:corrupt}));
+  const observed=await observe(context);
+  await page.goto("/practice-company/walkthrough");
+  await page.getByRole("region",{name:"Guided walkthrough"}).getByRole("button",{name:"I'll do it",exact:true}).click();
+  await page.getByLabel("Work details").fill("Fictional typed work survives a corrupt download");
+  await page.getByRole("button",{name:button,exact:true}).click();
+  await expect(page.getByText("Microphone unavailable. You can type instead.",{exact:true})).toBeVisible({timeout:60_000});
+  await expect(page.getByLabel("Work details")).toHaveValue("Fictional typed work survives a corrupt download");
+  expect(observed.requests.filter(r=>/\/model\.part-/u.test(r.url))).toEqual([]);
 });

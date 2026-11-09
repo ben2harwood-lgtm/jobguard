@@ -270,3 +270,9 @@ IN THE SOFTWARE.
 JobGuard modifications, 9 November 2026: extracted bundled worker from
 vosk-browser 0.0.8; replaced persistent model filesystem mount/sync with MEMFS.
 Bootstrap verifies local assets and restricts network to bodyless local static GETs.
+
+PR #682 repair, 9 November 2026: extracted the unchanged embedded WASM bytes
+into vosk.wasm. The runtime receives SHA-256-verified bytes from the same-origin
+bootstrap before instantiation; no base64 WASM payload remains in shipped text.
+All static speech fetches close before instantiation; the verified in-memory
+model Blob is the only remaining fetch until model readiness closes fetch fully.
