@@ -15,8 +15,6 @@
         "packages/db/migrations/0697_variation_post_lock_refusal.sql",
         "packages/db/src/variation-repository.ts",
         "packages/db/test/migfix-7-upgrade.integration.test.ts",
-        "packages/db/test/migfix-5.integration.test.ts",
-        "packages/db/test/meter-trip-races.integration.test.ts",
         "packages/db/test/migration-proofs/0694_variation_post_lock_refusal.proof.json",
         "packages/db/test/migration-proofs/0697_variation_post_lock_refusal.proof.json",
         "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
