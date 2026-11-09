@@ -39,6 +39,17 @@ describe("ENT-13a machine transport attacks",()=>{
     await expect(f.service.receive(method,path,f.h,bytes)).rejects.toMatchObject({code:"CONNECTOR_INPUT_REFUSED"});
     expect(f.store.stage).not.toHaveBeenCalled();
   });
+  it.each(["received", "rejected"])("refuses signed export_delivery %s before staging", async outcome => {
+    const f = fixture();
+    f.authority.capabilities = ["work_order", "billing_status", "materials_issue"];
+    const bytes = Buffer.from(JSON.stringify({
+      version: "connector-input.v1", eventId: "fixture:export_ack", subject: "fixture:export_batch",
+      revision: 1, kind: "export_delivery", outcome,
+    }));
+    await expect(f.service.receive("POST", MACHINE_PATH, f.sign(bytes), bytes))
+      .rejects.toMatchObject({ code: "CONNECTOR_INPUT_REFUSED" });
+    expect(f.store.stage).not.toHaveBeenCalled();
+  });
   it.each([-300,300])("accepts inclusive clock boundary %s",async offset=>{
     const f=fixture();f.h.timestamp=String(now/1000+offset);
     await expect(f.service.receive("POST",MACHINE_PATH,f.sign(),body)).resolves.toMatchObject({state:"staged"});

@@ -1,0 +1,6 @@
+{
+  "migration": "0696_contractor_admin_expected_revision.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}

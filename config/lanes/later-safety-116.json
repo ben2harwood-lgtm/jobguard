@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-116": {
+      "branches": [
+        "codex/sandbox/later-safety-116"
+      ],
+      "allow": [
+        "packages/db/migrations/0695_contractor_admin_owner_guard.sql",
+        "packages/db/migrations/0696_contractor_admin_expected_revision.sql",
+        "packages/db/migrations/0816_contractor_admin_owner_guard.sql",
+        "packages/db/migrations/0845_contractor_admin_expected_revision.sql",
+        "packages/db/test/contractor-admin-expected-revision.integration.test.ts",
+        "packages/db/test/contractor-admin-owner-guard.integration.test.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/0695_contractor_admin_owner_guard.proof.json",
+        "packages/db/test/migration-proofs/0696_contractor_admin_expected_revision.proof.json",
+        "packages/db/test/migration-proofs/0816_contractor_admin_owner_guard.proof.json",
+        "packages/db/test/migration-proofs/0845_contractor_admin_expected_revision.proof.json",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts"
+      ]
+    }
+  }
+}

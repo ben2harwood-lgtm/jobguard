@@ -11,13 +11,13 @@ const state = vi.hoisted(() => ({
 vi.mock("next/headers", () => ({ cookies: async () => ({
   get: (name: string) => state.cookies[name] === undefined ? undefined : { value: state.cookies[name] },
 }) }));
-vi.mock("./ui/jobguard-app", () => ({ JobGuardApp: () => null }));
+vi.mock("../ui/jobguard-app", () => ({ JobGuardApp: () => null }));
 vi.mock("react", async original => ({
   ...await original<typeof import("react")>(),
   useEffect: (effect: () => void | (() => void)) => { state.effects.push(effect); },
 }));
 import Home from "./page";
-import { JobsOnTheGoLine } from "./meter/meter-screen";
+import { JobsOnTheGoLine } from "../meter/meter-screen";
 
 afterEach(() => {
   state.effects = [];
