@@ -76,6 +76,19 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     expect(signature.split("(")[0]).toBe(`app.${body[1]}`);
     lp6cReplacements.set(oid, body[4]!);
   }
+  // Only these six exact identities receive their latest 0687 bodies. Their
+  // owners, ACLs and all other metadata remain checked by successor proofs.
+  const delegationSql = await readFile(new URL("../migrations/0687_lp6c_customer_portal_delegation.sql", import.meta.url), "utf8");
+  const delegationBodies = [...delegationSql.matchAll(/CREATE OR REPLACE FUNCTION ([\w.]+)\((.*?)\)\s*RETURNS\b.*?\bAS\s+(\$\w*\$)(.*?)\3\s*;/gis)];
+  const delegationSignatures = ["app.current_actor()", "app.current_tenant()", "identity.customer_portal_message(uuid,uuid,uuid,text,jsonb)",
+    "app.begin_command(text,uuid,text,text,jsonb,jsonb,jsonb)", "app.lp5_bind_effect(uuid,uuid,text,jsonb)", "app.complete_command(uuid,jsonb)"];
+  expect(delegationBodies).toHaveLength(delegationSignatures.length);
+  for (const signature of delegationSignatures) {
+    const body = delegationBodies.find(match => match[1] === signature.split("(")[0]);
+    expect(body, signature).toBeDefined();
+    const oid = (await c.admin.query("SELECT $1::regprocedure::oid oid", [signature])).rows[0].oid;
+    lp6cReplacements.set(oid, body![4]!);
+  }
   // 0655 replaces only the emergency capability body; pin the complete reviewed replacement.
   const emergency = await readFile(new URL("../migrations/0655_emergency_token_minted.sql", import.meta.url), "utf8");
   const emergencyBody = emergency.split("FUNCTION identity.dark_emergency(")[1]!.split("AS $$")[1]!.split("$$;")[0];

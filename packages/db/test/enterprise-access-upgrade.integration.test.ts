@@ -89,6 +89,24 @@ it('emergency_dual_owner/scim2_machine preserve populated identity state, instal
  await migrate(h.admin);await migrate(h.admin);
  expect(await Promise.all(tables.map(t=>canonicalRows(h!,t)))).toEqual(before);
  const after=await predecessorCatalogue(h.admin);
+ const delegationSql=await readFile(new URL('../migrations/0687_lp6c_customer_portal_delegation.sql',import.meta.url),'utf8');
+ const delegationProof=JSON.parse(await readFile(new URL('./migration-proofs/0687_lp6c_customer_portal_delegation.proof.json',import.meta.url),'utf8'));
+ // Pin the exact new scope shape while retaining every raw predecessor attribute.
+ const isBinding=(r:Relation)=>r.nspname==='control_plane'&&r.relname==='request_binding';
+ type Column={attname:string;attnum:number;attnotnull:boolean;[key:string]:unknown};
+ const bindingBefore=catalogue.relations.find(isBinding)!;
+ const bindingAfter=after.relations.find(isBinding)!;
+ const bindingColumns=bindingBefore.columns as Column[];
+ const uuidColumn=bindingColumns.find(c=>c.attname==='tenant_id')!;
+ const textColumn=bindingColumns.find(c=>c.attname==='credential_kind')!;
+ expect(bindingAfter.columns).toEqual([...bindingColumns,
+  {...uuidColumn,attname:'scope_job_id',attnum:8,attnotnull:false},
+  {...textColumn,attname:'scope_command_type',attnum:9,attnotnull:false}]);
+ const bindingChecks=bindingBefore.constraints as {name:string;definition:string}[];
+ expect(bindingAfter.constraints).toEqual([
+  {name:'request_binding_credential_kind_check',definition:"CHECK ((credential_kind = ANY (ARRAY['real'::text, 'practice'::text, 'contractor_practice'::text, 'customer_portal_delegated'::text])))"},
+  {name:'request_binding_delegated_scope_check',definition:"CHECK (((NOT ((scope_job_id IS NOT NULL) IS DISTINCT FROM (NOT (credential_kind IS DISTINCT FROM 'customer_portal_delegated'::text)))) AND (NOT ((scope_command_type IS NOT NULL) IS DISTINCT FROM (NOT (credential_kind IS DISTINCT FROM 'customer_portal_delegated'::text))))))"},
+  bindingChecks.find(c=>c.name==='request_binding_pkey')!]);
  // Later migrations pin their own replacement bodies; owner, ACL, security and settings must still match.
  const boundary=MIGRATION_URLS.findIndex(u=>u.pathname.endsWith('/0613_scim2_machine.sql'));
  expect(boundary).toBeGreaterThanOrEqual(0);
@@ -117,15 +135,26 @@ it('emergency_dual_owner/scim2_machine preserve populated identity state, instal
  expect(nextShape.definition).not.toBe(priorShape.definition);
  expect(nextShape.definition.replace(/, 'paid'::[a-z ]+(?=\])/,'')).toBe(priorShape.definition);
  const afterRelations=after.relations.map((r:Relation)=>isLanding(r)?{...r,constraints:(r.constraints as Con[]).filter(c=>c.name!==added)}
-  :isJob(r)?{...r,constraints:(r.constraints as Con[]).map(c=>c.name===shape?priorShape:c)}:r);
+  :isJob(r)?{...r,constraints:(r.constraints as Con[]).map(c=>c.name===shape?priorShape:c)}
+  :isBinding(r)?{...r,columns:bindingBefore.columns,constraints:bindingBefore.constraints}:r);
  expectRelationsUnchanged(catalogue.relations,afterRelations,laterAcl);
  // 0672 lets its migration-owned pack writer read the sealed request binding; only that ACL entry is added.
  const bindingReaders=new Set(['app.current_actor','app.current_tenant']);
  for(const row of catalogue.routines){
   const expected={...row,proacl:lp6cRoutineAcl(row)};
+  if(row.nspname==='identity'&&row.proname==='customer_portal_use') {
+   const change=delegationProof.upgrade.find((entry:{section:string;after?:{nspname:string;proname:string}})=>entry.section==='routines'&&entry.after?.nspname==='identity'&&entry.after.proname==='customer_portal_use');
+   expect(row.proacl).toBe(change.before.proacl);
+   expected.proacl=change.after.proacl;
+  }
   if(bindingReaders.has(`${row.nspname}.${row.proname}`)){
    const added=after.routines.find((r:typeof row)=>r.nspname===row.nspname&&r.proname===row.proname&&r.args===row.args);
-   expect(added).toEqual(expected);
+   const declaration=`CREATE OR REPLACE FUNCTION app.${row.proname}() RETURNS uuid`;
+   const body=delegationSql.slice(delegationSql.indexOf(declaration)).match(/AS \$\$([\s\S]*?)\$\$;/u)?.[1];
+   expect(body).toBeDefined();
+   expect(added!.definition.match(/AS \$function\$([\s\S]*?)\$function\$/u)?.[1]?.trim()).toBe(body!.trim());
+   // Only the reviewed latest body changes; all owner/ACL/security/settings stay exact.
+   expect(added).toEqual({...expected,definition:added!.definition});
    continue;
   }
   if(!later.has(`${row.nspname}.${row.proname}`)){expect(after.routines).toContainEqual(expected);continue;}

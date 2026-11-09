@@ -42,7 +42,7 @@ describe("MON-5 customer messages through checked SV-7A",()=>{
   return {t,j:jobId,c,digest:sessionDigest,sponsorDigest:digest,grant,practice};
  }
  type Customer=Awaited<ReturnType<typeof customer>>;
- const send=async(w:Customer,raw=input(w.j))=>(await identityQuery("SELECT identity.customer_portal_message($1,$2,$3,$4,$5::jsonb) result",[w.t,w.j,w.c,w.digest,JSON.stringify(raw)],{tenantId:w.t,digest:w.sponsorDigest})).rows[0].result;
+ const send=async(w:Customer,raw=input(w.j))=>(await identityQuery("SELECT identity.customer_portal_message($1,$2,$3,$4,$5::jsonb) result",[w.t,w.j,w.c,w.digest,JSON.stringify(raw)])).rows[0].result;
  const fresh=async()=>customer(await seedWorkPractice(f));
  it("persists exact message/evidence once, replays concurrently, conflicts on changed text; audits session without text",async()=>{
   const w=await fresh(),raw=input(w.j,"I agree to £500 maybe, unknown text.");

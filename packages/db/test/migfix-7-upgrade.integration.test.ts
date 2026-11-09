@@ -65,7 +65,18 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   expect(relationMetadata(replayCatalog)).toEqual(expected.relations);
   expect(await policies()).toEqual(expected.policies);
   // Preserve all raw predecessor catalogue fields, including policy identities.
-  for (const row of beforeCatalog) expect(replayCatalog).toContainEqual(row);
+  for (const row of beforeCatalog) {
+    if (row.nspname === "app" && ["customer_portal_session", "customer_portal_grant"].includes(row.relname)) {
+      // 0687 adds exactly the private owner's SELECT and one tenant-scoped read policy.
+      // Complete ACL/policy metadata is checked against its exact proof above;
+      // retain every raw predecessor policy object, owner and RLS flag here.
+      const current = replayCatalog.find(r => r.nspname === row.nspname && r.relname === row.relname)!;
+      expect({ ...current, relacl: row.relacl, policies: row.policies }).toEqual(row);
+      expect(current.policies).toHaveLength((row.policies?.length ?? 0) + 1);
+      for (const policy of row.policies ?? []) expect(current.policies).toContainEqual(policy);
+      expect(current.policies.some((policy: { polname: string }) => policy.polname === "lp6_customer_binding_read")).toBe(true);
+    } else expect(replayCatalog).toContainEqual(row);
+  }
   const authority = await readFile(new URL("../migrations/0642_extra_client_send_authority.sql", import.meta.url), "utf8");
   const attribution = await readFile(new URL("../migrations/0644_extra_customer_approval.sql", import.meta.url), "utf8");
   const replacements = (source: string) => [...source.matchAll(/changed:=replace\((?:original|changed),'((?:[^']|'')*)',\s*'((?:[^']|'')*)'\);/g)]
@@ -84,6 +95,9 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   // Exact existing replacements only; all their privileges and unrelated definitions remain frozen.
   const fullBodies = new Map<string, string>();
   for (const [identity, migration, overload = 0] of [
+    ["app.current_actor()", "0687_lp6c_customer_portal_delegation.sql"],
+    ["app.current_tenant()", "0687_lp6c_customer_portal_delegation.sql"],
+    ["identity.customer_portal_message(t uuid, j uuid, c uuid, digest text, input jsonb)", "0687_lp6c_customer_portal_delegation.sql"],
     ["app.lp5_command_result(p_command_id uuid, p_outcome jsonb)", "0634_extra_proceed_statement.sql"],
     ["app.xa_approve(p_job uuid, p_request uuid, p_command uuid, p_actor uuid, p_step integer, p_hash text, p_net bigint, p_reject boolean, p_reason text)", "0635_extra_same_step.sql"],
     ["app.xa_withdraw(p_job uuid, p_variation uuid, p_command uuid, p_actor uuid, p_reason text)", "0636_extra_withdraw_roles.sql"],
@@ -134,9 +148,9 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.record_simulated_settlement(p_tenant uuid, p_id uuid, p_obligation uuid, p_provider_event character varying, p_amount bigint, p_simulated_at timestamp with time zone, p_actor uuid, p_command uuid, p_authorization uuid)", "0686_lp6c_money_binding.sql", 1],
     ["app.record_builder_attested_acceptance(p_tenant uuid, p_acceptance uuid, p_event uuid, p_job uuid, p_document uuid, p_version integer, p_hash character, p_total bigint, p_expected integer, p_actor uuid, p_customer character varying, p_method character varying, p_accepted_at timestamp with time zone, p_evidence uuid, p_command uuid, p_authorization uuid)", "0686_lp6c_money_binding.sql", 1],
     ["app.record_quote_disposition(p_tenant uuid, p_event uuid, p_job uuid, p_document uuid, p_version integer, p_hash character, p_expected integer, p_actor uuid, p_kind character varying, p_occurred timestamp with time zone, p_command uuid, p_authorization uuid)", "0686_lp6c_money_binding.sql", 1],
-    ["app.lp5_bind_effect(p_command uuid, p_authorization uuid, p_adapter text, p_reference jsonb)", "0686_lp6c_money_binding.sql"],
-    ["app.begin_command(p_version text, p_command_id uuid, p_command_type text, p_semantic_key text, p_resource jsonb, p_expected_revisions jsonb, p_significant_input jsonb)", "0686_lp6c_money_binding.sql"],
-    ["app.complete_command(p_command_id uuid, p_outcome jsonb)", "0686_lp6c_money_binding.sql"],
+    ["app.lp5_bind_effect(p_command uuid, p_authorization uuid, p_adapter text, p_reference jsonb)", "0687_lp6c_customer_portal_delegation.sql"],
+    ["app.begin_command(p_version text, p_command_id uuid, p_command_type text, p_semantic_key text, p_resource jsonb, p_expected_revisions jsonb, p_significant_input jsonb)", "0687_lp6c_customer_portal_delegation.sql"],
+    ["app.complete_command(p_command_id uuid, p_outcome jsonb)", "0687_lp6c_customer_portal_delegation.sql"],
     ["app.mon1_company_actor(t uuid, digest text)", "0686_lp6c_money_binding.sql"],
   ] as readonly (readonly [string, string, number?])[]) {
 
