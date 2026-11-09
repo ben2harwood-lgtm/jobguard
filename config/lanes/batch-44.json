@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "batch-44": {
+      "branches": [
+        "codex/sandbox/batch-44",
+        "codex/sandbox/batch-44-catchup"
+      ],
+      "note": "RED batch-44 catch-up, NOPR. All implementation already landed through later-safety-29: retain main authentication, fictional 2027 timer and discovery guards (0683-0685). Omit duplicate 1050 migration, note and proof; allow lists those retired branch paths for catch-up removal only. No new migration, behaviour or test expectations. Current-main worktree changes only this lane file.",
+      "allow": [
+        "packages/db/migration-notes/1050_readiness_plan_discovery.md",
+        "packages/db/migrations/1050_readiness_plan_discovery.sql",
+        "packages/db/test/migration-proofs/1050_readiness_plan_discovery.proof.json"
+      ]
+    }
+  }
+}
