@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-own-job-promise": {
+      "branches": [
+        "codex/sandbox/real-own-job-promise"
+      ],
+      "allow": [
+        "packages/db/src/job-source-fixtures.ts",
+        "packages/db/test/job-source-fixtures.test.ts",
+        "packages/db/test/real-own-job-promise.integration.test.ts",
+        "apps/web/app/ui/final-check-reveal-view.ts",
+        "apps/web/app/ui/final-check-reveal-view.test.ts",
+        "apps/web/e2e/real-own-job-promise.spec.ts"
+      ]
+    }
+  }
+}
