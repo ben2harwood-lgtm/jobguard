@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-72": {
+      "branches": ["codex/sandbox/later-safety-72"],
+      "allow": [
+        "apps/web/app/customer/extra-approvals/approvals.tsx",
+        "apps/web/app/customer/extra-approvals/approvals.test.tsx"
+      ]
+    }
+  }
+}
