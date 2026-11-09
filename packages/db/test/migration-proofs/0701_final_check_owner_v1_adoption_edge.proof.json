@@ -1,5 +1,5 @@
 {
-  "migration": "0960_final_check_owner_v1_adoption_edge.sql",
+  "migration": "0701_final_check_owner_v1_adoption_edge.sql",
   "lp0": [
     {
       "section": "routines",
