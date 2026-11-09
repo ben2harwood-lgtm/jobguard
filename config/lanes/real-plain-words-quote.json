@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-plain-words-quote": {
+      "branches": [
+        "codex/sandbox/real-plain-words-quote"
+      ],
+      "note": "REAL-PLAIN-WORDS-QUOTE: deterministic draft text splitting and ordinary-word example; no commercial actions.",
+      "allow": [
+        "apps/web/app/ui/jobguard-app.tsx",
+        "apps/web/e2e/WALK-2.spec.ts",
+        "apps/web/e2e/WALK-3.spec.ts",
+        "apps/web/e2e/WALK-stress.spec.ts",
+        "apps/web/e2e/capture.spec.ts",
+        "apps/web/e2e/review-confirm.spec.ts",
+        "docs/fixtures/ai/golden-run.v1.json",
+        "packages/ai/src/capture-fixture-parser.ts",
+        "packages/ai/src/capture-plain-words.test.ts",
+        "packages/ai/src/capture.test.ts"
+      ]
+    }
+  }
+}
