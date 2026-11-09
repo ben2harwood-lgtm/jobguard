@@ -1,5 +1,5 @@
 {
-  "migration": "0956_bound_context_reader.sql",
+  "migration": "0697_bound_context_reader.sql",
   "lp0": [
     {
       "section": "groups",
@@ -21,7 +21,7 @@
         },
         "downstream": "Reads only the current transaction binding through its existing owner-only accessor. No credentials, binding mutation or business caller conversion.",
         "sources": [
-          "packages/db/migrations/0956_bound_context_reader.sql",
+          "packages/db/migrations/0697_bound_context_reader.sql",
           "docs/contracts/bound-context-reader-v1.md"
         ],
         "tests": [
@@ -64,7 +64,7 @@
           "LP-12": "Propose a read-only current-transaction pair for migration-owned definer callers, subject to Ben typed yes and exact-head RED review."
         },
         "sources": [
-          "packages/db/migrations/0956_bound_context_reader.sql",
+          "packages/db/migrations/0697_bound_context_reader.sql",
           "docs/contracts/bound-context-reader-v1.md"
         ],
         "tests": [

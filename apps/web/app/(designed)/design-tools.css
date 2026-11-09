@@ -1,0 +1,94 @@
+/* Hand-written: restyles the existing working tools hosted in the designed screens (<Legacy cards>)
+   to match the approved design. Look and layout only: no element is added, removed or reordered,
+   so the tools behave exactly as on the old screens, which this file never reaches.
+   Selectors start ".jgd .jgd-legacy.jgd-tools" so they outrank the app's own rules for the same tools. */
+
+.jgd .jgd-legacy.jgd-tools{padding:0;background:transparent;color:#33566d;font:13px/1.65 Arial,Helvetica,sans-serif}
+
+/* Each tool becomes a design card, flowing down two columns (one on phones). */
+.jgd .jgd-legacy.jgd-tools .workspace-page{width:100%;max-width:none;margin:0;padding:0;columns:2 400px;column-gap:18px}
+.jgd .jgd-legacy.jgd-tools .workspace-page>*,
+.jgd .jgd-legacy.jgd-tools>:not(.workspace-page){display:block;break-inside:avoid;margin:0 0 18px;padding:20px 22px;border:1.2px solid var(--rr-line);border-radius:16px;background:var(--rr-glass);box-shadow:var(--rr-shadow);backdrop-filter:blur(15px);max-width:none;width:auto}
+/* Containers that already hold a card one level down stay invisible. */
+.jgd .jgd-legacy.jgd-tools [data-testid=watchdog-panel]>fieldset,
+.jgd .jgd-legacy.jgd-tools [data-testid=watchdog-panel]>fieldset>section{margin:0;padding:0;border:0;background:none;box-shadow:none;min-width:0}
+/* Full-width pieces: the job line, its section links, setup forms and the work-item review. */
+.jgd .jgd-legacy.jgd-tools .workspace-page>header,
+.jgd .jgd-legacy.jgd-tools .workspace-page>nav,
+.jgd .jgd-legacy.jgd-tools .workspace-page>a,
+.jgd .jgd-legacy.jgd-tools .workspace-page>section:has(form[aria-label="Customer and site details"]),
+.jgd .jgd-legacy.jgd-tools .workspace-page>section.review:not(:has(form[aria-label="Customer and site details"])),
+.jgd .jgd-legacy.jgd-tools .workspace-page>.quote-editor{column-span:all}
+
+/* The job line repeats the header above it, so it is a slim strip. */
+.jgd .jgd-legacy.jgd-tools .workspace-page>header{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:12px 18px}
+.jgd .jgd-legacy.jgd-tools .workspace-page>header h1{margin:0;font:600 17px/1.3 "Iowan Old Style","Palatino Linotype","Book Antiqua",Georgia,serif;color:#102d40}
+.jgd .jgd-legacy.jgd-tools .workspace-page>header p{margin:0}
+.jgd .jgd-legacy.jgd-tools .workspace-page>header .status{display:inline-flex;align-items:center;padding:4px 8px;border:1px solid #dbeaf0;border-radius:5px;background:#edf7fa;color:#21738b;font-size:10px;font-weight:700}
+.jgd .jgd-legacy.jgd-tools .workspace-page>a,
+.jgd .jgd-legacy.jgd-tools .workspace-page>nav{padding:0;margin:0 0 12px;border:0;background:none;box-shadow:none;backdrop-filter:none}
+.jgd .jgd-legacy.jgd-tools .workspace-page>a{display:inline-block;margin-right:16px}
+.jgd .jgd-legacy.jgd-tools .workspace-page>nav{display:flex;flex-wrap:wrap;gap:8px}
+.jgd .jgd-legacy.jgd-tools .workspace-page>nav a{display:inline-flex;align-items:center;min-height:36px;padding:0 14px;border:1px solid var(--rr-line);border-radius:8px;background:var(--rr-glass);color:#1d5266;font-size:12px;font-weight:740;text-decoration:none}
+
+/* The money trail is a short read: one column, its four amounts in a row. */
+.jgd .jgd-legacy.jgd-tools .workspace-page.value-page{columns:auto}
+.jgd .jgd-legacy.jgd-tools .value-page>a,.jgd .jgd-legacy.jgd-tools .value-page>.sandbox-banner{display:none}
+.jgd .jgd-legacy.jgd-tools .value-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
+.jgd .jgd-legacy.jgd-tools .value-card h2{margin:0 0 6px;font:600 11px/1.4 Arial,Helvetica,sans-serif;letter-spacing:0;color:#6d8291}
+.jgd .jgd-legacy.jgd-tools .value-card strong{display:block;margin:0 0 6px;font:760 15px/1.35 Arial,Helvetica,sans-serif;color:#15374b}
+
+/* Single-flow tools (decisions, new job, proof, extras, final bill) are one card; the boxes inside
+   them read as the design's light detail panels. */
+.jgd .jgd-legacy.jgd-tools :is(.decision-list,.decision-detail,.dictation,.walk-grid>*,.proof-card,.variation-card,.final-grid>*,.proof-appendix,.invoice-actions,.value-grid>*,.decision-totals>span){margin:0 0 12px;padding:14px 16px;border:1px solid rgba(70,83,77,.14);border-radius:10px;background:rgba(255,255,255,.62);box-shadow:none;color:#33566d}
+.jgd .jgd-legacy.jgd-tools .decision-totals{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 14px}
+.jgd .jgd-legacy.jgd-tools .decision-totals>span{margin:0;padding:8px 12px;font-size:12px;font-weight:700}
+.jgd .jgd-legacy.jgd-tools :is(.decision-layout,.walk-grid,.final-grid){gap:14px}
+/* "Back" buttons inside a tool read as quiet text links; the design's rail and tabs do the navigating. */
+.jgd .jgd-legacy.jgd-tools button.back{min-height:36px;margin:0 0 6px;padding:0;border:0;background:none;box-shadow:none;color:#0b7d86;font-size:12px}
+.jgd .jgd-legacy.jgd-tools :is(.pilot-badge,.fixture-note){display:inline-block;margin:0 0 10px;padding:6px 10px;border:1px solid #f2e0c0;border-radius:6px;background:#fff5e6;color:#925e1b;font-size:11px;font-weight:650}
+
+/* Type: card titles use the design's serif; everything else is the design's small, calm sans. */
+.jgd .jgd-legacy.jgd-tools h1{margin:0 0 8px;font:500 26px/1.2 "Iowan Old Style","Palatino Linotype","Book Antiqua",Georgia,serif;letter-spacing:-.025em;color:#102d40}
+.jgd .jgd-legacy.jgd-tools h2{margin:0 0 6px;font:500 22px/1.24 "Iowan Old Style","Palatino Linotype","Book Antiqua",Georgia,serif;letter-spacing:-.02em;color:#102d40}
+.jgd .jgd-legacy.jgd-tools h3,.jgd .jgd-legacy.jgd-tools legend{margin:16px 0 6px;padding:0;font:500 16px/1.3 "Iowan Old Style","Palatino Linotype","Book Antiqua",Georgia,serif;color:#102d40}
+.jgd .jgd-legacy.jgd-tools p{margin:0 0 8px;font-size:12.5px;line-height:1.7;color:#4f6b7c}
+.jgd .jgd-legacy.jgd-tools .eyebrow{margin:0 0 8px;font-size:10px;letter-spacing:1.25px;font-weight:800;text-transform:uppercase;color:#0b8995}
+.jgd .jgd-legacy.jgd-tools a{color:#0b7d86;font-weight:650}
+.jgd .jgd-legacy.jgd-tools code{font-size:11px;overflow-wrap:anywhere}
+.jgd .jgd-legacy.jgd-tools fieldset{min-width:0;margin:0;padding:0;border:0}
+
+/* Buttons: the design's white button, and its teal button for the main action. */
+.jgd .jgd-legacy.jgd-tools button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;margin:4px 8px 4px 0;padding:9px 15px;border:1px solid #cbdde4;border-radius:7px;background:#fff;color:#2c5569;font:730 12px/1.35 Arial,Helvetica,sans-serif;box-shadow:0 1px 2px #0b3a5008;cursor:pointer}
+.jgd .jgd-legacy.jgd-tools button.primary,.jgd .jgd-legacy.jgd-tools button[type=submit]{border-color:#6acfc88a;border-radius:8px;background:linear-gradient(165deg,#009398,#004955);color:#fff;box-shadow:inset 0 1px #6bd8ca80,0 4px 11px #006c7733}
+.jgd .jgd-legacy.jgd-tools button:disabled{border-color:#e0e7ea;background:#eef2f3;color:#5d6f78;box-shadow:none;cursor:not-allowed}
+.jgd .jgd-legacy.jgd-tools button:focus-visible,.jgd .jgd-legacy.jgd-tools a:focus-visible,.jgd .jgd-legacy.jgd-tools :is(input,select,textarea):focus-visible{outline:3px solid #2bb3b3;outline-offset:2px}
+
+/* Form fields: the design's labelled inputs; long setup forms lay out several fields per row. */
+.jgd .jgd-legacy.jgd-tools label{display:flex;flex-direction:column;gap:6px;margin:0 0 12px;font-size:12px;font-weight:650;color:#33566d}
+.jgd .jgd-legacy.jgd-tools label:has(>input[type=checkbox]),.jgd .jgd-legacy.jgd-tools label:has(>input[type=radio]){flex-direction:row;align-items:center;gap:8px}
+.jgd .jgd-legacy.jgd-tools :is(input:not([type=checkbox]):not([type=radio]),select,textarea){width:100%;min-height:42px;padding:9px 12px;border:1px solid #bfd5de;border-radius:6px;background:#fff;color:#15374b;font:450 13px/1.4 Arial,Helvetica,sans-serif;box-sizing:border-box}
+.jgd .jgd-legacy.jgd-tools form[aria-label="Customer and site details"]>fieldset{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:0 16px;align-items:end}
+.jgd .jgd-legacy.jgd-tools form[aria-label="Customer and site details"]>fieldset>:is(p,button){grid-column:1/-1;justify-self:start}
+
+/* Facts lists read as the design's detail blocks. */
+.jgd .jgd-legacy.jgd-tools dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:10px 0 12px}
+.jgd .jgd-legacy.jgd-tools dl>div{padding:12px 14px;border:1px solid rgba(70,83,77,.14);border-radius:7px;background:rgba(248,246,239,.7)}
+.jgd .jgd-legacy.jgd-tools dt{font-size:10.5px;font-weight:600;color:#6d8291}
+.jgd .jgd-legacy.jgd-tools dd{margin:4px 0 0;font-size:14px;font-weight:760;color:#15374b}
+/* Plain label/value lists (no wrapper per pair) read as a two-column table of facts. */
+.jgd .jgd-legacy.jgd-tools dl:not(:has(>div)){grid-template-columns:minmax(120px,max-content) 1fr;gap:6px 18px;padding:12px 14px;border:1px solid rgba(70,83,77,.14);border-radius:7px;background:rgba(248,246,239,.7)}
+.jgd .jgd-legacy.jgd-tools dl:not(:has(>div))>dd{margin:0;font-size:13px;overflow-wrap:anywhere}
+.jgd .jgd-legacy.jgd-tools dl:not(:has(>div))>dt{align-self:center}
+
+/* The watchdog's one-line status under a tool reads as the design's note. */
+.jgd .jgd-legacy.jgd-tools [data-testid=watchdog-panel]>p{margin:12px 0 0;padding:12px 14px;border:1px solid #d7e9ed;border-radius:7px;background:#f0f8fa;color:#3e6a7b;font-size:11px;line-height:1.7}
+.jgd .jgd-legacy.jgd-tools details{margin:8px 0;padding:10px 12px;border:1px solid #e6eef2;border-radius:7px;background:#f7fafc}
+.jgd .jgd-legacy.jgd-tools summary{cursor:pointer;font-weight:700;color:#1d5266}
+
+@media (max-width:760px){
+  .jgd .jgd-legacy.jgd-tools .workspace-page>*,.jgd .jgd-legacy.jgd-tools>:not(.workspace-page){padding:16px}
+  .jgd .jgd-legacy.jgd-tools h2{font-size:20px}
+  .jgd .jgd-legacy.jgd-tools h1{font-size:22px}
+  .jgd .jgd-legacy.jgd-tools :is(.decision-layout,.walk-grid,.final-grid){grid-template-columns:1fr}
+}
