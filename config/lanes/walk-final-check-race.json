@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "walk-final-check-race": {
+      "branches": [
+        "codex/sandbox/walk-final-check-race"
+      ],
+      "allow": [
+        "apps/web/app/practice-company/walkthrough/voice-journey.test.tsx",
+        "apps/web/app/practice-company/walkthrough/voice-journey.tsx"
+      ]
+    }
+  }
+}
