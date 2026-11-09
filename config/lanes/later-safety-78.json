@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-78": {
+      "branches": [
+        "codex/sandbox/later-safety-78"
+      ],
+      "note": "LATER-SAFETY-78: reopen a duplicate-closed approval request after its link is reversed; RED-lite, synthetic only, NOPR.",
+      "allow": [
+        "packages/db/migrations/0814_duplicate_unlink_reopens_request.sql",
+        "packages/db/test/migration-proofs/0814_duplicate_unlink_reopens_request.proof.json",
+        "packages/db/test/duplicate-unlink-reopens-request.integration.test.ts",
+        "packages/db/test/extra-duplicate-candidates.integration.test.ts"
+      ]
+    }
+  }
+}
