@@ -1,0 +1,6 @@
+{
+  "migration": "1053_readiness_timezone_case.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}

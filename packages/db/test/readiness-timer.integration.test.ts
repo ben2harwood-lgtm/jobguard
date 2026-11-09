@@ -232,3 +232,51 @@ it("skips unknown PostgreSQL time zones without blocking another tenant's due pl
  });
  expect(rows.some(row => row.tenant_id === badTenant)).toBe(false);
 });
+
+it.each(["europe/london", "EUROPE/LONDON", "utc"])("discovers a confirmed due plan with case-variant time zone %s", async timeZone => {
+ const caseTenant = randomUUID(), caseJob = randomUUID();
+ const caseScope = { tenantId: caseTenant, jobId: caseJob, taskId: randomUUID() };
+ await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [caseTenant]);
+ await importWatchdogFixtureJob(admin, caseTenant, caseJob);
+ const today = (await admin.query("SELECT to_char(CURRENT_TIMESTAMP AT TIME ZONE $1,'YYYY-MM-DD') today", [timeZone])).rows[0].today as string;
+ // Use the real confirmation boundary: these names pass its time-zone validator.
+ await store().confirm(testTenantContext(caseTenant), "member:synthetic-builder", { ...plan,
+  scope: caseScope, plannedDate: today, timeZone });
+ const expected = { tenant_id: caseTenant, job_id: caseJob, task_id: caseScope.taskId };
+ // Prove the old routine silently excludes the confirmed plan, then restore
+ // 1053 even if the failing-first assertion fails.
+ try {
+  await admin.query(await readFile(new URL("../migrations/1052_readiness_bad_timezone.sql", import.meta.url), "utf8"));
+  const before = (await infrastructure.query("SELECT * FROM infrastructure.discover_readiness_plans()")).rows;
+  expect(before).not.toContainEqual(expected);
+ } finally {
+  await admin.query(await readFile(new URL("../migrations/1053_readiness_timezone_case.sql", import.meta.url), "utf8"));
+ }
+ const after = (await infrastructure.query("SELECT * FROM infrastructure.discover_readiness_plans()")).rows;
+ expect(after).toContainEqual(expected);
+});
+
+it("skips an unknown zone while discovering a valid due plan in the same tenant", async () => {
+ await admin.query(await readFile(new URL("../migrations/1053_readiness_timezone_case.sql", import.meta.url), "utf8"));
+ const mixedTenant = randomUUID(), mixedJob = randomUUID();
+ await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [mixedTenant]);
+ await importWatchdogFixtureJob(admin, mixedTenant, mixedJob);
+ const mixedContext = testTenantContext(mixedTenant);
+ const badScope = { tenantId: mixedTenant, jobId: mixedJob, taskId: randomUUID() };
+ const goodScope = { tenantId: mixedTenant, jobId: mixedJob, taskId: randomUUID() };
+ const today = (await admin.query("SELECT to_char(CURRENT_TIMESTAMP AT TIME ZONE 'UTC','YYYY-MM-DD') today")).rows[0].today as string;
+ await store().confirm(mixedContext, "member:synthetic-builder", { ...plan,
+  scope: badScope, plannedDate: today, timeZone: "UTC" });
+ const timeZone = "JobGuard/Unknown";
+ expect((await admin.query("SELECT name FROM pg_catalog.pg_timezone_names WHERE lower(name)=lower($1)", [timeZone])).rows).toEqual([]);
+ const payload = { ...plan, scope: badScope, factRevision: 2, plannedDate: today, timeZone };
+ const { createHash } = await import("node:crypto");
+ await admin.query(`INSERT INTO app.scheduled_readiness_plan(tenant_id,job_id,task_id,fact_revision,plan_hash,payload,audit_event_id)
+  SELECT tenant_id,job_id,task_id,2,$4,$5,audit_event_id FROM app.scheduled_readiness_plan
+  WHERE tenant_id=$1 AND job_id=$2 AND task_id=$3 AND fact_revision=1`,
+  [mixedTenant, mixedJob, badScope.taskId, createHash("sha256").update(JSON.stringify(payload)).digest("hex"), payload]);
+ await store().confirm(mixedContext, "member:synthetic-builder", { ...plan,
+  scope: goodScope, plannedDate: today, timeZone: "utc" });
+ const rows = (await infrastructure.query("SELECT * FROM infrastructure.discover_readiness_plans() WHERE tenant_id=$1", [mixedTenant])).rows;
+ expect(rows).toEqual([{ tenant_id: mixedTenant, job_id: mixedJob, task_id: goodScope.taskId }]);
+});
