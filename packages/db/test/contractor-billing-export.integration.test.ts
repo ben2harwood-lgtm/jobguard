@@ -49,13 +49,13 @@ it("LATER-SAFETY-16 reconciliation restores an approved unlinked extra until its
  const request=await approvals.submitExtra(own.ctx,actor,{version:"submit-extra.v1",commandId:randomUUID(),jobId:own.s.jobId,extraId:canonical.variationId});
  await approvals.approveExtraStep(own.ctx,actor,approveInput({jobId:own.s.jobId,requestId:String(request.requestId),hash:String(request.revisionHash),net:338},0));
  const linked=await approvals.markDuplicate(own.ctx,actor,{version:"mark-duplicate.v1",commandId:randomUUID(),jobId:own.s.jobId,duplicateId:own.s.extraId,canonicalId:canonical.variationId});
- // Link approved work only to an approved canonical. Reopen its price for review
- // so this scenario still isolates restoration/export of the unlinked extra.
- await approvals.reviseExtra(own.ctx,own.w.members.surveyor.member,{version:"revise-extra.v1",commandId:randomUUID(),jobId:own.s.jobId,extraId:canonical.variationId,netPence:339});
- expect((await read()).reconciliation.approvedNotExported).toEqual([]);
- expect((await own.exported()).lineCount).toBe(0);
+ // Approved work links only to an approved canonical (LATER-SAFETY-111), which
+ // stays billable while the link is active (LATER-SAFETY-132): only the duplicate is masked.
+ expect((await read()).reconciliation.approvedNotExported).toEqual([{extraId:canonical.variationId,net:{numerator:"338",denominator:"1"}}]);
  const state=await readExtraDuplicateCandidates(c.runtime,own.ctx,actor,own.s.jobId);
  await extras.unlinkDuplicate(own.ctx,{version:"extra-duplicate-unlink.v1",commandId:randomUUID(),jobId:own.s.jobId,actorMembershipId:actor.membershipId,linkId:String(linked.linkId),expectedRevision:state.revision,reasonCode:"linked_in_error"});
+ // Once unlinked, the canonical may be reopened for review, isolating the restored extra.
+ await approvals.reviseExtra(own.ctx,own.w.members.surveyor.member,{version:"revise-extra.v1",commandId:randomUUID(),jobId:own.s.jobId,extraId:canonical.variationId,netPence:339});
  const restored=await read();
  expect(restored.reconciliation.approvedNotExported).toEqual(expected);
  expect(restored.reconciliation.totals.approvedNotExported).toEqual({numerator:"338",denominator:"1"});
