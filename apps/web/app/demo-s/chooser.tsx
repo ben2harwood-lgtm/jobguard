@@ -140,7 +140,7 @@ export function DemoChooser() {
     finally { busyRef.current = false; setBusy(false); }
   }
   const disabled = busy || !!pending || !membership;
-  return <main className={styles.main}><a href="/">JobGuard home</a><h1>Small-builder practice chooser</h1>
+  return <main className={styles.main}><a href="/classic">JobGuard home</a><h1>Small-builder practice chooser</h1>
     <p>Made-up data only. Choose an available journey, launch a fresh fictional job, or resume your saved selection.</p>
     <p><a href="/demo-s/core-1000">Practise core-1000 with the guided job screens</a>. This is not tied to a saved selection; choose core-1000 below to resume it and read its saved report.</p>
     <p><a href="/demo-s/shadow-30000">Open the guided £30,000 Final Check journey</a></p>

@@ -61,7 +61,7 @@ export function JobWorkState({ jobId, company }: { jobId: string; company?: { te
  return <section id="site-work" className={styles.panel} aria-labelledby="site-work-title" aria-busy={busy} data-testid="job-work-state">
   <h2 id="site-work-title">Site work</h2>
   {error && <p role="alert">{error}</p>}
-  {(offer || view?.locked) && <p role="status" data-testid="linked-job-offer"><strong>{LINKED_JOB_COPY}</strong>. This job's final account is locked, so new site work belongs on a new job. <a href="/">Start a new job</a></p>}
+  {(offer || view?.locked) && <p role="status" data-testid="linked-job-offer"><strong>{LINKED_JOB_COPY}</strong>. This job's final account is locked, so new site work belongs on a new job. <a href="/classic">Start a new job</a></p>}
   {view && <>
    <p>State: <strong data-testid="work-state">{closed ? "Closed" : view.finishedMarkerId ? "Finished on site" : "Work under way"}</strong> · revision <span data-testid="work-state-revision">{view.revision}</span></p>
    <div className={styles.actions}>

@@ -1,3 +1,4 @@
+import { loadReviewedInventory } from "./lp-0-catalog.js";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { lp4WriterSources } from "./lp4-writer-catchup-fixture.js";
@@ -39,7 +40,7 @@ describe("LP-4 actual runtime audit boundary (PostgreSQL)", () => {
   });
 
   it.each(Object.keys(lp4WriterSources))("%s installs its exact sealed definition and retains its main security contract", async name => {
-    const inventory = JSON.parse(readFileSync(new URL("../../../docs/contracts/lp-0-effective-privileges-v1.json", import.meta.url), "utf8"));
+    const {inventory} = await loadReviewedInventory();
     const expected = inventory.recorded.routines.filter((r: { identity: string }) => r.identity.startsWith(`function:${name}(`));
     expect(expected).toHaveLength(1);
     const rows = (await db.owner.query(`SELECT pg_get_userbyid(p.proowner) owner,p.prosecdef security,
