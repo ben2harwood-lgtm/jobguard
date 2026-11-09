@@ -1,0 +1,6 @@
+{
+  "migration": "0812_enterprise_fee_period_order.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}
