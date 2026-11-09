@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-95": {
+      "branches": [
+        "codex/sandbox/later-safety-95"
+      ],
+      "allow": [
+        "packages/db/migrations/0829_credit_request_digest_fields.sql",
+        "packages/db/test/migration-proofs/0829_credit_request_digest_fields.proof.json",
+        "packages/db/test/invoice-later.integration.test.ts"
+      ]
+    }
+  }
+}
