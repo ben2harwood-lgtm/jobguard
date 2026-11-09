@@ -176,10 +176,10 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
       expect(current?.definition?.split("$function$")[1]).toBe(owner.split("FUNCTION app.final_check_require_invoice_actor(")[1]!.split("AS $$")[1]!.split("$$;")[0]);
       continue;
     }
-    // 0679 adds only the synthetic-database check to the sync checkpoint writer; keep its metadata exact.
+    // 0958 adds the bound-request check to 0679's sync checkpoint writer; keep its metadata exact.
     if (prior.nspname === "app" && prior.proname === "sync_snapshot_generation" && prior.args === "u uuid, r bigint, s bigint, h text, e text") {
       expect({ ...current, definition: prior.definition }).toEqual(prior);
-      const sql = await readFile(new URL("../migrations/0679_sync_checkpoint_synthetic_guard.sql", import.meta.url), "utf8");
+      const sql = await readFile(new URL("../migrations/0958_sync_checkpoint_bound_reader.sql", import.meta.url), "utf8");
       expect(current?.definition?.split("$function$")[1]).toBe(sql.split("FUNCTION app.sync_snapshot_generation(")[1]!.split("AS $$")[1]!.split("$$;")[0]);
       continue;
     }

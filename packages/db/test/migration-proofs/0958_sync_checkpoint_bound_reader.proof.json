@@ -1,6 +1,46 @@
 {
   "migration": "0958_sync_checkpoint_bound_reader.sql",
-  "lp0": [],
+  "lp0": [
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.sync_snapshot_generation(uuid,bigint,bigint,text,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.sync_snapshot_checkpoint"
+        ],
+        "staticCalls": []
+      },
+      "after": {
+        "identity": "function:app.sync_snapshot_generation(uuid,bigint,bigint,text,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.sync_snapshot_checkpoint"
+        ],
+        "staticCalls": [
+          "app.bound_context_reader"
+        ]
+      }
+    }
+  ],
   "upgrade": [],
   "tenancy": []
 }
