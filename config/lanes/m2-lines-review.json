@@ -8,6 +8,7 @@
       ],
       "note": "M2-3/M2-4 RED catch-up on origin/main a96b743c. Retains landed prerequisite migrations 0606/0624 and all later main fixes; no new migration or renumber. Adds only the saved branch line-review UI seam. PostgreSQL/browser CI and exact-head independent RED review remain required.",
       "allow": [
+        "packages/core/src/watchdog.ts",
         "apps/web/app/api/jobs/[id]/supplier-lines/route.test.ts",
         "apps/web/app/api/jobs/[id]/supplier-lines/route.ts",
         "apps/web/app/jobs/[id]/supplier-lines/page.tsx",
