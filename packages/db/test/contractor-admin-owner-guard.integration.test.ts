@@ -7,7 +7,7 @@ import { cluster, startSession, currentCommand, ownerTx, counts, type Cluster, t
 import { rolledBack } from "./upgrade-proof-utils.js";
 
 const signature = "app.contractor_admin_command(uuid,jsonb,text)";
-const migration = readFileSync(new URL("../migrations/0816_contractor_admin_owner_guard.sql", import.meta.url), "utf8");
+const migration = readFileSync(new URL("../migrations/0695_contractor_admin_owner_guard.sql", import.meta.url), "utf8");
 const guard = (kind: "grant.revoke" | "membership.revoke") =>
  migration.slice(migration.indexOf(` WHEN '${kind}' THEN\n  IF NOT actor_owner`)).split("  INSERT")[0].split("\n").slice(1).join("\n");
 const selfGuard = "  IF member=actor AND NOT actor_owner THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;\n";

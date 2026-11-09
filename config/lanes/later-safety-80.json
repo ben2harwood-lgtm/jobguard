@@ -6,8 +6,8 @@
         "codex/sandbox/later-safety-80"
       ],
       "allow": [
-        "packages/db/migrations/0816_contractor_admin_owner_guard.sql",
-        "packages/db/test/migration-proofs/0816_contractor_admin_owner_guard.proof.json",
+        "packages/db/migrations/0695_contractor_admin_owner_guard.sql",
+        "packages/db/test/migration-proofs/0695_contractor_admin_owner_guard.proof.json",
         "packages/db/test/contractor-admin-owner-guard.integration.test.ts"
       ]
     }

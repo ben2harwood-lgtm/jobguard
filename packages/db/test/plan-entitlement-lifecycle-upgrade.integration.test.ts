@@ -173,10 +173,10 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
       expect(current?.definition?.split("$function$")[1]).toBe(sql.split("FUNCTION app.sync_snapshot_generation(")[1]!.split("AS $$")[1]!.split("$$;")[0]);
       continue;
     }
-    // 0816 and 0845 change only the contractor admin body; keep its metadata exact and bind the final body to 0845.
+    // 0695 and 0696 change only the contractor admin body; keep its metadata exact and bind the final body to 0845.
     if (prior.nspname === "app" && prior.proname === "contractor_admin_command" && prior.args === "actor uuid, payload jsonb, request_hash text") {
       expect({ ...current, definition: prior.definition }).toEqual(prior);
-      const sql = await readFile(new URL("../migrations/0845_contractor_admin_expected_revision.sql", import.meta.url), "utf8");
+      const sql = await readFile(new URL("../migrations/0696_contractor_admin_expected_revision.sql", import.meta.url), "utf8");
       expect(current?.definition?.split("$function$")[1]).toBe(sql.split("FUNCTION app.contractor_admin_command(")[1]!.split("AS $$")[1]!.split("$$;")[0]);
       continue;
     }

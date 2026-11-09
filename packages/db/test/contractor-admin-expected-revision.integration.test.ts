@@ -8,10 +8,10 @@ import { rolledBack } from "./upgrade-proof-utils.js";
 const signature = "app.contractor_admin_command(uuid,jsonb,text)";
 const oldCheck = "IF rev<>(payload->>'expectedRevision')::integer THEN";
 const newCheck = "IF (payload->>'expectedRevision') IS NULL OR rev<>(payload->>'expectedRevision')::integer THEN";
-const migration = readFileSync(new URL("../migrations/0845_contractor_admin_expected_revision.sql", import.meta.url), "utf8");
+const migration = readFileSync(new URL("../migrations/0696_contractor_admin_expected_revision.sql", import.meta.url), "utf8");
 
 it("keeps the 0816 function intact except the required revision check and preserves its security posture", () => {
- const predecessor = readFileSync(new URL("../migrations/0816_contractor_admin_owner_guard.sql", import.meta.url), "utf8");
+ const predecessor = readFileSync(new URL("../migrations/0695_contractor_admin_owner_guard.sql", import.meta.url), "utf8");
  const body = (sql: string) => sql.slice(sql.indexOf("CREATE OR REPLACE FUNCTION"), sql.indexOf("END $$;") + "END $$;".length);
  expect(body(migration).replace(newCheck, oldCheck)).toBe(body(predecessor));
  expect(body(migration).split(newCheck)).toHaveLength(2);
