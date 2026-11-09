@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "lanes": {
+    "m2-lines-review": {
+      "branches": [
+        "codex/sandbox/m2-lines-review",
+        "codex/sandbox/m2-lines-review-catchup"
+      ],
+      "note": "M2-3/M2-4 RED catch-up on origin/main a96b743c. Retains landed prerequisite migrations 0606/0624 and all later main fixes; no new migration or renumber. Adds only the saved branch line-review UI seam. PostgreSQL/browser CI and exact-head independent RED review remain required.",
+      "allow": [
+        "apps/web/app/api/jobs/[id]/supplier-lines/route.test.ts",
+        "apps/web/app/api/jobs/[id]/supplier-lines/route.ts",
+        "apps/web/app/jobs/[id]/supplier-lines/page.tsx",
+        "apps/web/app/lib/supplier-lines-service.test.ts",
+        "apps/web/app/lib/supplier-lines-service.ts",
+        "apps/web/app/ui/supplier-lines-review.tsx",
+        "apps/web/app/ui/supplier-match.tsx",
+        "apps/web/e2e/m2-lines-review.spec.ts",
+        "docs/contracts/supplier-line-matching-v1.md"
+      ]
+    }
+  }
+}
