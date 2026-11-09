@@ -1,0 +1,27 @@
+{
+  "version": 2,
+  "lanes": {
+    "demo-voice-phone": {
+      "branches": [
+        "codex/sandbox/demo-voice-phone"
+      ],
+      "note": "Self-hosted worker dictation; Ben's 9 November instruction authorizes binary static recognizer/model assets and branch-only push. Physical iPhone pass held for Ben.",
+      "allow": [
+        "apps/web/app/ui/local-dictation.tsx",
+        "apps/web/app/ui/local-speech.ts",
+        "apps/web/e2e/DEMO-VOICE-PHONE.spec.ts",
+        "apps/web/public/local-speech/manifest.json",
+        "apps/web/public/local-speech/worker.js",
+        "apps/web/public/local-speech/vosk-worker.js",
+        "apps/web/public/local-speech/model.part-0",
+        "apps/web/public/local-speech/model.part-1",
+        "apps/web/public/local-speech/COPYING",
+        "apps/web/public/local-speech/NOTICE",
+        "docs/verdicts/DEMO-VOICE-PHONE/READY.md",
+        "tools/prepare-local-speech.mjs",
+        "apps/web/e2e/fixtures/demo-voice-phone.wav",
+        "apps/web/public/local-speech/vosk.wasm"
+      ]
+    }
+  }
+}
