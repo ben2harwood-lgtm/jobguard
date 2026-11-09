@@ -85,6 +85,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   const fullBodies = new Map<string, string>();
   for (const [identity, migration] of [
     ["app.receipt_fact_proposal(t uuid, j uuid, p jsonb)", "0692_final_check_post_invoice_receipt_gate.sql"],
+    ["app.contractor_admin_command(actor uuid, payload jsonb, request_hash text)", "0696_contractor_admin_expected_revision.sql"],
     ["app.lp5_command_result(p_command_id uuid, p_outcome jsonb)", "0634_extra_proceed_statement.sql"],
     ["app.xa_approve(p_job uuid, p_request uuid, p_command uuid, p_actor uuid, p_step integer, p_hash text, p_net bigint, p_reject boolean, p_reason text)", "0635_extra_same_step.sql"],
     ["app.xa_withdraw(p_job uuid, p_variation uuid, p_command uuid, p_actor uuid, p_reason text)", "0636_extra_withdraw_roles.sql"],
