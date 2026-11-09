@@ -315,14 +315,21 @@ describe("M3-3 durable checkpoint SQL", () => {
     await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [principal]);
     await admin.query(`INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)
       VALUES($1,$2,$3,$1,'owner')`, [principal, a, id(20)]);
-    // Keep provider facts active: the real checkpoint routine must detect the database revocation.
+    // Keep provider facts active: the database authority boundary must detect the revocation.
     const facts = { version: "sync-provider-snapshot.v1", environment: "synthetic_demo", sessionId: id(124),
       userId: principal, activeTenantId: a, authorityRevision: 1, authority: { userId: principal, tenantId: a,
         membershipId: principal, role: "operative", status: "active", assignedJobIds: [job, otherJob] },
       source: [job, otherJob].map(jobId => ({ tenantId: a, jobId, workOrderId: id(125), reference: "Synthetic",
         priority: "routine", issuedOn: "2026-10-29", dueOn: null, openVisitId: null })) };
+    let revokeAfterBinding = false;
     const provider: SyntheticSnapshotProvider = { withCurrentSession: async (_session, read) =>
-      withTenant(runtime, testTenantContext(a), db => read(facts, db.$client)) };
+      withTenant(runtime, testTenantContext(a), async db => {
+        await bind(db.$client, a, principal);
+        // Model revocation racing an already authenticated request.
+        if (revokeAfterBinding) await admin.query(
+          `UPDATE app.membership SET ${column}='2020-01-01T00:00:00Z' WHERE tenant_id=$1 AND id=$2`, [a, principal]);
+        return read(facts, db.$client);
+      }) };
     const application = new SyntheticSyncDownloadApplication(new SyntheticSyncSnapshotAdapter(provider,
       { environment: "synthetic_demo", enabled: true, schemaVersion: 1 }), { environment: "synthetic_demo", enabled: true }, () => 1000);
     const request = { version: "sync-subscription-request.v1", requestedTenantId: a, profile: "contractor_assigned_jobs.v1" };
@@ -330,7 +337,7 @@ describe("M3-3 durable checkpoint SQL", () => {
     const input = { version: "sync-server-download.v1", request, token: issued.token,
       delivered: [job, otherJob], afterJobId: null, pageSize: 10 };
     expect((await application.download("synthetic-session", input)).page.rows.map(row => row.jobId)).toEqual([job, otherJob]);
-    await admin.query(`UPDATE app.membership SET ${column}='2020-01-01T00:00:00Z' WHERE tenant_id=$1 AND id=$2`, [a, principal]);
+    revokeAfterBinding = true;
     const result = await application.download("synthetic-session", input);
     expect(result.page.outcome).toBe("refused");
     expect(result.page.rows).toEqual([]);

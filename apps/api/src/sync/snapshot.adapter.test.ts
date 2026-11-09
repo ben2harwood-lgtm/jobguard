@@ -149,7 +149,7 @@ describe("M3-3 authenticated snapshot adapter (dark fake provider)", () => {
 
   it("requires cleanup of every delivered job after the database refuses lost membership", async () => {
     const f = fixture(); const issued = await f.subscribe();
-    f.query.mockResolvedValueOnce({ rows: [{ tenant_id: tenant }] });
+    f.query.mockResolvedValueOnce({ rows: [{ tenant_id: tenant, user_id: user }] });
     f.query.mockRejectedValueOnce(Object.assign(new Error("SYNC_CHECKPOINT_INVALID"), { code: "P0001" }));
     const result = await f.download(issued.token, f.create(), { delivered: [job, otherJob] });
     expect(result.page.outcome).toBe("refused");
@@ -168,7 +168,7 @@ describe("M3-3 authenticated snapshot adapter (dark fake provider)", () => {
     Object.assign(new Error("SYNC_CHECKPOINT_INVALID"), { code: "08006" }),
   ])("keeps outages and other checkpoint failures unavailable: %s", async error => {
     const f = fixture(); const issued = await f.subscribe();
-    f.query.mockResolvedValueOnce({ rows: [{ tenant_id: tenant }] });
+    f.query.mockResolvedValueOnce({ rows: [{ tenant_id: tenant, user_id: user }] });
     f.query.mockRejectedValueOnce(error);
     await expect(f.download(issued.token)).rejects.toMatchObject({ message: "SYNC_UNAVAILABLE" });
   });
