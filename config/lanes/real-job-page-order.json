@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-job-page-order": {
+      "branches": [
+        "codex/sandbox/real-job-page-order"
+      ],
+      "note": "REAL-JOB-PAGE-ORDER: captured-job layout and journey navigation only; NOPR.",
+      "allow": [
+        "apps/web/app/ui/workspace-shell.tsx",
+        "apps/web/app/ui/workspace-shell-order.test.tsx",
+        "apps/web/app/ui/practice-journey.tsx",
+        "apps/web/app/ui/practice-journey-anchors.test.tsx",
+        "apps/web/app/ui/review-proposal.tsx",
+        "apps/web/app/ui/quote-editor.tsx",
+        "apps/web/app/ui/job-final-account.tsx",
+        "apps/web/app/ui/quote-editor-slots.test.tsx"
+      ]
+    }
+  }
+}
