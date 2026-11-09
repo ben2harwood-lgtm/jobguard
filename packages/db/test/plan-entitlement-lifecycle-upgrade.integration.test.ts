@@ -31,6 +31,13 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   // Successor migrations have their own exact reviewed routine ACL additions.
   // Keep the 0556-only assertion above, and retain every predecessor definition.
   const live = await catalogue();
+  // 0960 adds only this exact administrative close routine; successor proofs bind its ACLs.
+  const abandonedVisit = await readFile(new URL("../migrations/0960_abandoned_visit_authority.sql", import.meta.url), "utf8");
+  const abandonedVisitRoutines = live.filter(row => row.nspname === "app" && row.proname === "ent3b_close_abandoned_visit"
+    && row.args === "p_actor uuid, p_command uuid, p_job uuid, p_visit uuid, p_reason text");
+  expect(abandonedVisitRoutines).toHaveLength(1);
+  expect(abandonedVisitRoutines[0]?.definition?.split("$function$")[1]).toEqual(
+    abandonedVisit.split("FUNCTION app.ent3b_close_abandoned_visit(")[1]!.split("AS $$")[1]!.split("$$;")[0]);
   // 0692 adds one owner-only helper; pin its complete body as well as successor metadata.
   const receiptGate = await readFile(new URL("../migrations/0692_final_check_post_invoice_receipt_gate.sql", import.meta.url), "utf8");
   const receiptHelpers = live.filter(row => row.nspname === "app" && row.proname === "require_receipt_final_check"
@@ -72,6 +79,10 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   const selfComparison = "(SELECT content_hash FROM app.action_authorization WHERE tenant_id=p_tenant AND id=p_authorization)";
   // This batch replaces only these exact routine identities; compare their complete bodies.
   const batchBodies = await Promise.all([
+    ["lp5b_contractor_permission", "p_type text, p_actor uuid, p_job uuid, p_input jsonb", "0960_abandoned_visit_authority.sql"],
+    ["lp5_bind_effect", "p_command uuid, p_authorization uuid, p_adapter text, p_reference jsonb", "0960_abandoned_visit_authority.sql"],
+    ["lp5b_contractor_result", "p_command uuid, p_outcome jsonb", "0960_abandoned_visit_authority.sql"],
+    ["ent3b_closeout_guard", "", "0960_abandoned_visit_authority.sql"],
     ["receipt_fact_proposal", "t uuid, j uuid, p jsonb", "0692_final_check_post_invoice_receipt_gate.sql"],
     ["read_final_check_manifest", "t uuid, j uuid, m uuid", "0698_final_check_post_invoice_rerun.sql"],
     ["evidence_pack_v3_material", "t uuid, c uuid, ordinary_only boolean", "0698_final_check_post_invoice_rerun.sql"],
@@ -114,7 +125,6 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   expect(authorityChanges).toHaveLength(3); expect(attributionChanges).toHaveLength(1);
   const clientBodyChanges = new Map([
     ["app.xa_issue_link(p_job uuid, p_request uuid, p_command uuid, p_actor uuid, p_link uuid, p_approver uuid, p_recipient text, p_token_hash text, p_expires_at timestamp with time zone, p_authorization uuid, p_outbox uuid)", authorityChanges.slice(0, 2)],
-    ["app.lp5b_contractor_permission(p_type text, p_actor uuid, p_job uuid, p_input jsonb)", authorityChanges.slice(2)],
     ["app.northside_capture_action()", attributionChanges],
   ]);
   // ENT-5 changes only these exact predecessor routines; all other definitions stay pinned.
@@ -123,7 +133,6 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   const ent5Replacements = [
     ["app.xa_approve(p_job uuid,p_request uuid,p_command uuid,p_actor uuid,p_step integer,p_hash text,p_net bigint,p_reject boolean,p_reason text)", "0635_extra_same_step.sql"],
     ["app.xa_withdraw(p_job uuid,p_variation uuid,p_command uuid,p_actor uuid,p_reason text)", "0636_extra_withdraw_roles.sql"],
-    ["app.lp5b_contractor_permission(p_type text,p_actor uuid,p_job uuid,p_input jsonb)", "0636_extra_withdraw_roles.sql"],
     ["app.xa_requirement(p_rules jsonb,p_net bigint)", "0637_extra_working_day_wait.sql"],
     ["app.xa_escalate()", "0637_extra_working_day_wait.sql"],
     ["app.xa_queue(p_member uuid)", "0637_extra_working_day_wait.sql"],

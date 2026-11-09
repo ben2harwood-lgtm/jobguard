@@ -93,15 +93,13 @@
         "definitionSha256": null,
         "staticWrites": [
           "app.closeout_answer",
-          "app.command_receipt",
           "app.site_visit"
         ],
         "staticCalls": [
           "app.append_audit",
-          "app.contractor_allowed",
-          "app.contractor_job_team",
-          "app.contractor_member_active",
-          "app.ent3b_visit_authority"
+          "app.ent3b_visit_authority",
+          "app.lp5_bind_effect",
+          "app.lp5b_contractor_permission"
         ]
       }
     },

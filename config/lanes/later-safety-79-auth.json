@@ -8,7 +8,10 @@
       "allow": [
         "packages/db/migrations/0960_abandoned_visit_authority.sql",
         "packages/db/test/migration-proofs/0960_abandoned_visit_authority.proof.json",
-        "packages/db/test/site-visit-abandoned.integration.test.ts"
+        "packages/db/test/site-visit-abandoned.integration.test.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
+        "packages/db/test/lp5-command-catalog.ts"
       ]
     }
   }
