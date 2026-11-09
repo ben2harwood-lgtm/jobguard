@@ -310,6 +310,37 @@ describe("M3-3 durable checkpoint SQL", () => {
     expect((await download(upgraded.token, app(2))).page.rows).toHaveLength(1);
   });
 
+  it.each(["revoked_at", "expires_at"])("requires download cleanup after persisted membership %s changes", async column => {
+    const principal = id(column === "revoked_at" ? 120 : 121), job = id(122), otherJob = id(123);
+    await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [principal]);
+    await admin.query(`INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)
+      VALUES($1,$2,$3,$1,'owner')`, [principal, a, id(20)]);
+    // Keep provider facts active: the real checkpoint routine must detect the database revocation.
+    const facts = { version: "sync-provider-snapshot.v1", environment: "synthetic_demo", sessionId: id(124),
+      userId: principal, activeTenantId: a, authorityRevision: 1, authority: { userId: principal, tenantId: a,
+        membershipId: principal, role: "operative", status: "active", assignedJobIds: [job, otherJob] },
+      source: [job, otherJob].map(jobId => ({ tenantId: a, jobId, workOrderId: id(125), reference: "Synthetic",
+        priority: "routine", issuedOn: "2026-10-29", dueOn: null, openVisitId: null })) };
+    const provider: SyntheticSnapshotProvider = { withCurrentSession: async (_session, read) =>
+      withTenant(runtime, testTenantContext(a), db => read(facts, db.$client)) };
+    const application = new SyntheticSyncDownloadApplication(new SyntheticSyncSnapshotAdapter(provider,
+      { environment: "synthetic_demo", enabled: true, schemaVersion: 1 }), { environment: "synthetic_demo", enabled: true }, () => 1000);
+    const request = { version: "sync-subscription-request.v1", requestedTenantId: a, profile: "contractor_assigned_jobs.v1" };
+    const issued = await application.subscribe("synthetic-session", { version: "sync-server-subscribe.v1", request });
+    const input = { version: "sync-server-download.v1", request, token: issued.token,
+      delivered: [job, otherJob], afterJobId: null, pageSize: 10 };
+    expect((await application.download("synthetic-session", input)).page.rows.map(row => row.jobId)).toEqual([job, otherJob]);
+    await admin.query(`UPDATE app.membership SET ${column}='2020-01-01T00:00:00Z' WHERE tenant_id=$1 AND id=$2`, [a, principal]);
+    const result = await application.download("synthetic-session", input);
+    expect(result.page.outcome).toBe("refused");
+    expect(result.page.rows).toEqual([]);
+    expect(result.page.cleanup).toBe("required");
+    expect(result.resync).toBe("required");
+    expect(result.cleanup.outcome).toBe("cleanup_required");
+    expect(result.cleanup.tombstones).toEqual([{ jobId: job }, { jobId: otherJob }]);
+    expect(result.cleanup.keep).toEqual([]);
+  });
+
   it("refuses generation overflow instead of wrapping or resetting", async () => {
     await admin.query("UPDATE app.sync_snapshot_checkpoint SET generation=9007199254740991 WHERE tenant_id=$1 AND user_id=$2", [b, user]);
     expect(await scoped(b)).toBe(Number.MAX_SAFE_INTEGER);

@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-96": {
+      "branches": [
+        "codex/sandbox/later-safety-96"
+      ],
+      "note": "LATER-SAFETY-96: RED synthetic sync authority-loss cleanup; no migration.",
+      "allow": [
+        "apps/api/src/sync/download.application.test.ts",
+        "apps/api/src/sync/download.application.ts",
+        "apps/api/src/sync/snapshot.adapter.test.ts",
+        "apps/api/src/sync/snapshot.adapter.ts",
+        "packages/db/test/sync-snapshot.integration.test.ts"
+      ]
+    }
+  }
+}

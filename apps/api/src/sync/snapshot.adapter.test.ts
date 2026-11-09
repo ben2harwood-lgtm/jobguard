@@ -144,7 +144,33 @@ describe("M3-3 authenticated snapshot adapter (dark fake provider)", () => {
     f.snapshot.authority.role = "operative"; f.snapshot.authorityRevision = 0;
     await expect(f.subscribe()).rejects.toMatchObject({ message: "SYNC_UNAVAILABLE" });
     f.snapshot.authority.userId = id(44);
-    await expect(f.subscribe()).rejects.toMatchObject({ message: "SYNC_UNAVAILABLE" });
+    await expect(f.subscribe()).rejects.toMatchObject({ message: "SYNC_AUTHORITY_REQUIRED" });
+  });
+
+  it("requires cleanup of every delivered job after the database refuses lost membership", async () => {
+    const f = fixture(); const issued = await f.subscribe();
+    f.query.mockResolvedValueOnce({ rows: [{ tenant_id: tenant }] });
+    f.query.mockRejectedValueOnce(Object.assign(new Error("SYNC_CHECKPOINT_INVALID"), { code: "P0001" }));
+    const result = await f.download(issued.token, f.create(), { delivered: [job, otherJob] });
+    expect(result.page.outcome).toBe("refused");
+    expect(result.page.rows).toEqual([]);
+    expect(result.page.cleanup).toBe("required");
+    expect(result.resync).toBe("required");
+    expect(result.cleanup.outcome).toBe("cleanup_required");
+    expect(result.cleanup.tombstones).toEqual([{ jobId: job }, { jobId: otherJob }]);
+    expect(result.cleanup.keep).toEqual([]);
+  });
+
+  it.each([
+    new Error("connection lost"),
+    Object.assign(new Error("SYNC_CHECKPOINT_STALE"), { code: "P0001" }),
+    new Error("SYNC_CHECKPOINT_INVALID"),
+    Object.assign(new Error("SYNC_CHECKPOINT_INVALID"), { code: "08006" }),
+  ])("keeps outages and other checkpoint failures unavailable: %s", async error => {
+    const f = fixture(); const issued = await f.subscribe();
+    f.query.mockResolvedValueOnce({ rows: [{ tenant_id: tenant }] });
+    f.query.mockRejectedValueOnce(error);
+    await expect(f.download(issued.token)).rejects.toMatchObject({ message: "SYNC_UNAVAILABLE" });
   });
 
   it("source deletion gives tombstones without generation churn; hidden changes are invisible", async () => {
