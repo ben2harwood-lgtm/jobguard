@@ -33,7 +33,7 @@ test("CH-5 previews, attests and reloads an invoiced v3 import without a count o
   expect(forgedLock.status()).toBe(409); expect((await forgedLock.json()).code).toBe("STALE_REVISION");
   const other = await browser.newContext();
   try {
-    const otherPage = await other.newPage(); await otherPage.goto("/");
+    const otherPage = await other.newPage(); await otherPage.goto("/classic");
     expect((await other.request.get(`/api/jobs/${importedId}/parties/import-v3`)).ok()).toBe(false);
   } finally { await other.close(); }
   await page.goto(`/jobs/${sourceId}/imports`);
