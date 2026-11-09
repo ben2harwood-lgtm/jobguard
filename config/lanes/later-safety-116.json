@@ -6,7 +6,6 @@
         "codex/sandbox/later-safety-116"
       ],
       "allow": [
-        "config/lanes/later-safety-80.json",
         "packages/db/migrations/0695_contractor_admin_owner_guard.sql",
         "packages/db/migrations/0696_contractor_admin_expected_revision.sql",
         "packages/db/migrations/0816_contractor_admin_owner_guard.sql",
