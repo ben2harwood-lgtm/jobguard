@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-22": {
+      "branches": [
+        "codex/sandbox/later-safety-22"
+      ],
+      "note": "LATER-SAFETY-22-CATCHUP: exact union with origin/main (6200e08ce); preserves shared dashboard deadlines and role-scoped proceed history. No new behaviour, test expectation change or migration.",
+      "allow": [
+        "apps/api/src/contractor/enterprise-dashboard.boundaries.test.ts",
+        "apps/web/app/site/extra/site-extra.test.tsx",
+        "apps/web/app/site/extra/site-extra.tsx",
+        "packages/db/src/enterprise-dashboard-queries.ts",
+        "packages/db/test/enterprise-dashboard.integration.test.ts"
+      ]
+    }
+  }
+}

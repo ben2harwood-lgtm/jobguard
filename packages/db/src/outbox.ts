@@ -3,6 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
 import { commercialOutboundClaimsEnabled } from "./commercial-outbound-pause.js";
+import { darkOrderStillAuthorized } from "./purchase-order-action-guard.js";
 import { appendAuditBatch } from "./audit.js";
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 
@@ -64,9 +65,20 @@ export class ActionExecutor {
     let refusal: OutboxRevocationRefusal | undefined;
     await withTenant(this.pool, context, async db => {
       await db.$client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1::text,54))`, [context.tenantId]);
-      const r = (await db.$client.query<any>(`SELECT o.*,a.actor_membership_id AS authorization_actor FROM app.action_outbox o JOIN app.action_authorization a ON a.tenant_id=o.tenant_id AND a.id=o.authorization_id JOIN app.decision_resolution r ON r.tenant_id=a.tenant_id AND r.id=a.resolution_id AND r.resolution='approved' JOIN app.membership m ON m.tenant_id=a.tenant_id AND m.id=a.actor_membership_id AND (m.role='owner' OR (m.role='finance' AND o.action_type='customer_portal.signin.send' AND o.adapter='fake_email' AND o.policy_version='customer-signin.synthetic.v1' AND o.recipient ~ '^[^@[:space:]]+@[^@[:space:]]+\\.invalid$' AND o.amount_pence IS NULL AND o.currency IS NULL)) AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp()) WHERE o.id=$1 AND NOT EXISTS(SELECT 1 FROM app.contractor_membership_revocation revoked WHERE revoked.tenant_id=m.tenant_id AND revoked.membership_id=m.id) AND a.revoked_at IS NULL AND o.action_type=a.action_type AND o.recipient IS NOT DISTINCT FROM a.recipient AND o.content_hash=a.content_hash AND o.aggregate_revision=a.aggregate_revision AND o.amount_pence IS NOT DISTINCT FROM a.amount_pence AND o.currency IS NOT DISTINCT FROM a.currency AND o.policy_version=a.policy_version AND o.authorization_expires_at<=a.expires_at AND (o.status='executing' OR o.next_attempt_at<=clock_timestamp()) FOR UPDATE OF o`, [id])).rows[0];
+      const r = (await db.$client.query<any>(`SELECT o.*,a.actor_membership_id AS authorization_actor FROM app.action_outbox o JOIN app.action_authorization a ON a.tenant_id=o.tenant_id AND a.id=o.authorization_id JOIN app.decision_resolution r ON r.tenant_id=a.tenant_id AND r.id=a.resolution_id AND r.resolution='approved' JOIN app.membership m ON m.tenant_id=a.tenant_id AND m.id=a.actor_membership_id AND ((m.role='owner' AND o.action_type<>'extra.client_approval_request.send') OR (o.action_type='extra.client_approval_request.send' AND o.adapter='fake_email') OR (m.role='finance' AND o.action_type='customer_portal.signin.send' AND o.adapter='fake_email' AND o.policy_version='customer-signin.synthetic.v1' AND o.recipient ~ '^[^@[:space:]]+@[^@[:space:]]+\\.invalid$' AND o.amount_pence IS NULL AND o.currency IS NULL)) AND (o.action_type='extra.client_approval_request.send' OR (m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp()))) WHERE o.id=$1 AND (o.action_type='extra.client_approval_request.send' OR NOT EXISTS(SELECT 1 FROM app.contractor_membership_revocation revoked WHERE revoked.tenant_id=m.tenant_id AND revoked.membership_id=m.id)) AND a.revoked_at IS NULL AND o.action_type=a.action_type AND o.recipient IS NOT DISTINCT FROM a.recipient AND o.content_hash=a.content_hash AND o.aggregate_revision=a.aggregate_revision AND o.amount_pence IS NOT DISTINCT FROM a.amount_pence AND o.currency IS NOT DISTINCT FROM a.currency AND o.policy_version=a.policy_version AND o.authorization_expires_at<=a.expires_at AND (o.status='executing' OR o.next_attempt_at<=clock_timestamp()) FOR UPDATE OF o`, [id])).rows[0];
       if (!r) { refusal = await cancelRevokedAction(db, id, [...this.adapters.keys()]); return; }
       if (!this.adapters.has(r.adapter)) return;
+      // Only client approval sends depend on the later client schema. PostgreSQL
+      // resolves tables/functions even in unused OR branches on older schemas.
+      if (r.action_type === "extra.client_approval_request.send") {
+        // Q14: SQL cancels unused links before any sender refusal or attempt.
+        // Kept separate so older non-client schemas need not resolve the helper.
+        const authority = await db.$client.query<{ allowed: boolean }>(`SELECT EXISTS(
+          SELECT 1 FROM app.extra_client_link k WHERE k.tenant_id=$1 AND k.outbox_action_id=$2
+            AND CASE WHEN app.xc_cancel_authority_loss($2) THEN false
+              ELSE app.xc_send_authority($3,k.variation_id) END) AS allowed`, [context.tenantId, id, r.authorization_actor]);
+        if (authority.rows[0]?.allowed !== true) return;
+      }
       if (!(await commercialOutboundClaimsEnabled(db))) return;
       // Classify the locked, authorized row, never queue-supplied action metadata.
       beforeClaim?.(r.action_type);
@@ -77,6 +89,11 @@ export class ActionExecutor {
         return;
       }
       if (!["pending", "retryable"].includes(r.status)) return;
+      if (r.adapter === "fake_merchant_order" && !await darkOrderStillAuthorized(db, context.tenantId, r.immutable_content, r.content_hash)) {
+        await db.$client.query(`UPDATE app.action_outbox SET status='cancelled',updated_at=clock_timestamp() WHERE id=$1`, [id]);
+        await auditOutcome(db, id, "cancelled", { reason: "order_authority_stale" });
+        return;
+      }
       this.telemetry.emit("outbox.queue_age", { actionId: id, seconds: Math.max(0, (Date.now() - new Date(r.created_at).getTime()) / 1000) });
       if (new Date(r.authorization_expires_at) <= new Date()) {
         await db.$client.query(`UPDATE app.action_outbox SET status='cancelled',updated_at=clock_timestamp() WHERE id=$1`, [id]);

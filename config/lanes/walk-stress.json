@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "lanes": {
+    "walk-stress": {
+      "branches": ["codex/sandbox/walk-stress"],
+      "allow": ["apps/web/e2e/WALK-stress.spec.ts"],
+      "note": "RED release tests for WALK steps 1–9: duplicate clicks, interrupted saves, session expiry and invalid input. Synthetic local server only; browser and PostgreSQL execution belongs to CI."
+    }
+  }
+}

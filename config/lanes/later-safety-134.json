@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-134": {
+      "branches": [
+        "codex/sandbox/later-safety-134"
+      ],
+      "allow": [
+        "apps/api/src/sync/snapshot.adapter.test.ts",
+        "apps/api/src/sync/snapshot.adapter.ts",
+        "packages/db/migrations/0679_sync_checkpoint_synthetic_guard.sql",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/0679_sync_checkpoint_synthetic_guard.proof.json",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
+        "packages/db/test/sync-snapshot.integration.test.ts"
+      ]
+    }
+  }
+}

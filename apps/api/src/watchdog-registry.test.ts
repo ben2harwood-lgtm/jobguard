@@ -75,7 +75,8 @@ function routeKeys(files: ReadonlyMap<string, string>): string[] {
   for (const file of files.keys()) {
     if (!/(?:^|\/)app\/api\/.*\/route\.ts$/u.test(file)) continue;
     const route = "/api/" + file.split("/app/api/")[1]!.replace(/\/route\.ts$/u, "");
-    if (!/^\/api\/(?:jobs|decisions|recovery-cases|customer-portal|contractor\/(?:jobs|work-order-imports|work-orders))(?:\/|$)/u.test(route)) continue;
+    if (!/^\/api\/(?:jobs|decisions|recovery-cases|customer-portal|contractor\/(?:jobs|work-order-imports|work-orders))(?:\/|$)/u.test(route)
+      && route !== "/api/accounting-exports/[sourceId]/route-change") continue;
     for (const verb of routeVerbs(file, read)) keys.push(routeKey(verb, route));
   }
   return keys.sort();
@@ -249,6 +250,13 @@ describe("CH-2 command coverage and lock order", () => {
     expect(() => assertClassified(nest, unclassified)).toThrow("Unclassified job mutation: nest:/contractor/work-order-imports");
     expect(() => assertClassified(next, { ...unclassified, "/api/contractor/work-order-imports": "pre_live_allowed", "PATCH /api/contractor/jobs/[id]/unclassified": "watchdog_live_only", "PUT /api/contractor/work-orders/[workOrderId]/revisions": "watchdog_live_only" })).not.toThrow();
     expect(() => assertClassified(nest, { ...unclassified, "nest:/contractor/work-order-imports": "pre_live_allowed" })).not.toThrow();
+  });
+  it("discovers the source-scoped accounting route change and refuses it without classification", () => {
+    const route = "/api/accounting-exports/[sourceId]/route-change";
+    const found = routeKeys(new Map([[`/x/app${route}/route.ts`, "export async function POST() {} export async function GET() {}"]]));
+    expect(found).toEqual([route]);
+    expect(() => assertClassified(found, {})).toThrow("Unclassified job mutation");
+    expect(jobMutationRegistry[route]).toBe("post_live_billing");
   });
   it("fails when any job mutation route is unclassified", async () => {
     const found = routeKeys(await readTree(new URL("apps/web/app/api/", root), name => name === "route.ts"));
@@ -658,6 +666,10 @@ function replayPool(select: (sql: string) => object[] | undefined) {
       let ownership = false;
       return { release: vi.fn(), query: async (sql: string) => {
         transaction.push(sql);
+        if (sql === "SELECT app.bind_request($1, $2, $3)") return { rows: [], rowCount: 0 };
+        if (sql === "SELECT app.current_actor() actor, app.current_tenant() tenant") return {
+          rows: [{ actor: "d1500000-0000-4000-8000-000000000003", tenant: "11111111-1111-4111-8111-111111111111" }], rowCount: 1,
+        };
         if (sql.includes("practice_session_digest=$3") || sql.startsWith("SELECT id FROM app.evidence")) {
           ownership = true;
           return { rows: [{ id: scopeId }], rowCount: 1 };
@@ -849,7 +861,11 @@ it.each(watchdogEndpoints)("round 12: $path $method maps stranger and missing se
   await withModuleDispatch(async dispatch => {
     for (const scenario of ["stranger", "missing"] as const) {
       routeApplication.session = scenario === "missing" ? undefined : "18000000-0000-4000-8000-000000000001";
-      const query = vi.fn(async (sql: string, _values?: unknown[]) => ({ rows: sql.includes("authenticate_practice_session") ? [{ tenant_id: "11111111-1111-4111-8111-111111111111", membership_id: scopeId, identity_user_id: otherJob }] : [] }));
+      const query = vi.fn(async (sql: string, _values?: unknown[]) => ({ rows:
+        sql.includes("authenticate_practice_session") ? [{ tenant_id: "11111111-1111-4111-8111-111111111111", membership_id: scopeId, identity_user_id: otherJob }]
+        :sql === "SELECT app.current_actor() actor, app.current_tenant() tenant"
+          ? [{ actor: scopeId, tenant: "11111111-1111-4111-8111-111111111111" }] : [],
+      }));
       const connect = vi.fn(async () => ({ query, release: vi.fn() }));
       const pool = { query, connect } as unknown as Pool;
       const cookie = routeApplication.session ? `jg_session=${routeApplication.session}` : undefined;
@@ -870,7 +886,16 @@ it.each(watchdogEndpoints)("round 12: $path $method maps stranger and missing se
       const response = await route[endpoint.verb ?? "POST"](new Request("https://synthetic.invalid", { method: endpoint.verb ?? "POST", ...(endpoint.verb ? {} : { body: "{}" }) }), { params: Promise.resolve({ id: replayJob, action: endpoint.action, decisionId: scopeId }) });
       expect({ status: response.status, body: await response.json() }).toEqual(expected);
       if (scenario === "missing") { expect(query).not.toHaveBeenCalled(); expect(connect).not.toHaveBeenCalled(); }
-      for(const [sql] of query.mock.calls)expect(sql).toMatch(/authenticate_practice_session|^(BEGIN|COMMIT|ROLLBACK)$|set_config|practice_session_digest/);
+      for(const [sql] of query.mock.calls)expect(sql).toMatch(/authenticate_practice_session|^(BEGIN|COMMIT|ROLLBACK|SELECT app\.bind_request\(\$1, \$2, \$3\)|SELECT app\.current_actor\(\) actor, app\.current_tenant\(\) tenant)$|set_config|practice_session_digest/);
+      if(scenario==="stranger"){
+        const calls=query.mock.calls as [string,unknown[]?][];
+        const bind=calls.findIndex(([sql])=>sql==="SELECT app.bind_request($1, $2, $3)");
+        expect(bind).toBeGreaterThan(0);
+        expect(calls[bind]?.[1]).toEqual(["practice",createHash("sha256").update(routeApplication.session!).digest("hex"),"11111111-1111-4111-8111-111111111111"]);
+        expect(calls[bind-1]?.[0]).toBe("BEGIN");
+        expect(calls[bind+1]?.[0]).toBe("SELECT app.current_actor() actor, app.current_tenant() tenant");
+        expect(calls.slice(bind+2).find(([sql])=>sql==="COMMIT"||sql==="ROLLBACK")?.[0]).toBe("COMMIT");
+      }
     }
   });
 });

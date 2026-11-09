@@ -66,7 +66,12 @@ export class PaymentFeeCollectionRepository {
         FROM app.payment_fee_statement WHERE tenant_id=$1 AND job_id=$2 AND id=$3`,
       [tenantId, jobId, statementId, actor]);
     } catch (error) {
-      if (error instanceof Error && error.message === "PAYMENT_FEE_REVIEW_REQUIRED") return refuse();
+      if (error instanceof Error && [
+        "PAYMENT_FEE_REVIEW_REQUIRED", "PAYMENT_FEE_SOURCE_REQUIRED", "PAYMENT_FEE_SOURCE_CHANGED", "PAYMENT_FEE_ATTRIBUTION_REQUIRED", "PAYMENT_FEE_REASSESSMENT_REQUIRED",
+        "RECOVERY_ATTRIBUTION_SOURCE_REQUIRED", "RECOVERY_ATTRIBUTION_LINE_ALREADY_BOUND", "RECOVERY_ATTRIBUTION_LINE_CAP", "RECOVERY_ATTRIBUTION_MOVEMENT_JOB_REQUIRED",
+        "STORED_RECEIPT_LINE_BINDING_REQUIRED", "RECEIPT_LINE_CAPACITY_EXCEEDED", "FINAL_INVOICE_REVISION_MISMATCH", "INVOICE_SOURCE_CORRECTION_REQUIRED",
+      ].includes(error.message)) return refuse();
+      if (error instanceof Error && error.message === "PAYMENT_FEE_PAUSED") return refuse("AUTHORITY_DISPUTED");
       throw error;
     }
     // Use a separate statement after all authorization locks return: a target-list clock

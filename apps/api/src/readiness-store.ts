@@ -2,10 +2,11 @@ import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
 import { appendAuditBatch, withTenant, type VerifiedTenantContext } from "@jobguard/db";
-import { assertAcyclicDependencies } from "@jobguard/core";
-import { ReadinessSeamError, scopeV1 } from "./readiness-adapters.js";
+import { assertAcyclicDependencies, MAX_MONEY_PENCE } from "@jobguard/core";
+import { calendarDate, ReadinessSeamError, scopeV1 } from "./readiness-adapters.js";
 import { scheduledPlanV1, type ReadinessProposal } from "./readiness-scheduler.js";
 
+const actorV1 = z.object({ membershipId: z.guid(), identityUserId: z.guid() }).strict();
 const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const digest = z.string().regex(/^[a-f0-9]{64}$/u);
 const proposalV1 = z.object({
@@ -14,9 +15,12 @@ const proposalV1 = z.object({
   ready: z.boolean(), reasons: z.array(z.string().max(200)), weather: z.union([z.boolean(), z.literal("unknown")]),
   classification: z.literal("prevention"), feeEligible: z.literal(false), recoveryFeePence: z.literal(0),
   status: z.literal("proposal"), programmeChanged: z.literal(false),
-}).strict().refine(p => p.ready === (p.reasons.length === 0) && !(p.ready && p.weather !== true));
+  labourExposurePence: z.number().int().nonnegative().max(MAX_MONEY_PENCE).nullable().optional(),
+  resequence: z.array(z.object({ taskId: z.string().uuid(), fromDate: calendarDate, toDate: calendarDate }).strict()
+    .refine(candidate => candidate.fromDate > candidate.toDate)).max(3).optional(),
+}).strict().refine(p => p.ready === (p.reasons.length === 0) && !(p.ready && (p.weather !== true || p.labourExposurePence !== undefined || p.resequence !== undefined)));
 
-/** Opt-in synthetic composition only; never registered in the live application or worker. */
+/** Synthetic composition only; the practice worker binds ports to each queued tenant. Live use remains disabled. */
 export class DurableReadinessStore {
   constructor(private readonly pool: Pool, private readonly mode = "disabled") {}
   private assertDark(): void {
@@ -28,15 +32,22 @@ export class DurableReadinessStore {
     if (!parsed.success) throw new ReadinessSeamError("INVALID_READINESS_PLAN");
     return parsed.data;
   }
-  async confirm(context: VerifiedTenantContext, actorRef: string, raw: unknown): Promise<void> {
+  async confirm(context: VerifiedTenantContext, rawActor: unknown, raw: unknown): Promise<void> {
     this.assertDark();
     const parsed = scheduledPlanV1.safeParse(raw);
     if (!parsed.success) throw new ReadinessSeamError("INVALID_READINESS_PLAN");
     const plan = parsed.data, scope = this.scope(plan.scope);
     if (scope.tenantId !== context.tenantId) throw new ReadinessSeamError("READINESS_SCOPE_MISMATCH");
     assertAcyclicDependencies(plan.edges);
+    const actor = actorV1.safeParse(rawActor);
+    if (!actor.success) throw new ReadinessSeamError("READINESS_FORBIDDEN");
     const planHash = hash(plan);
     await withTenant(this.pool, context, async db => {
+      const allowed = await db.$client.query(`SELECT 1 FROM app.membership
+        WHERE tenant_id=$1 AND id=$2 AND identity_user_id=$3 AND role IN ('owner','admin','foreman','operative')
+        AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp()) FOR SHARE`,
+      [context.tenantId, actor.data.membershipId, actor.data.identityUserId]);
+      if (!allowed.rows[0]) throw new ReadinessSeamError("READINESS_FORBIDDEN");
       await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`readiness-store:${scope.tenantId}:${scope.jobId}:${scope.taskId}`]);
       const previous = (await db.$client.query<{ fact_revision: number; plan_hash: string }>(
         `SELECT fact_revision,plan_hash FROM app.scheduled_readiness_plan WHERE tenant_id=$1 AND job_id=$2 AND task_id=$3 ORDER BY fact_revision DESC LIMIT 1`,
@@ -49,7 +60,7 @@ export class DurableReadinessStore {
       const auditId = randomUUID();
       await db.$client.query(`INSERT INTO app.scheduled_readiness_plan(tenant_id,job_id,task_id,fact_revision,plan_hash,payload,audit_event_id) VALUES($1,$2,$3,$4,$5,$6,$7)`,
         [scope.tenantId, scope.jobId, scope.taskId, plan.factRevision, planHash, plan, auditId]);
-      await appendAuditBatch(db, [{ id: auditId, version: "audit.v1", actorRef, eventType: "readiness.scheduled_plan_confirmed", subjectType: "job", subjectRef: scope.jobId,
+      await appendAuditBatch(db, [{ id: auditId, version: "audit.v1", actorRef: `membership:${actor.data.membershipId}`, eventType: "readiness.scheduled_plan_confirmed", subjectType: "job", subjectRef: scope.jobId,
         payload: { references: { taskId: scope.taskId }, hashes: { planHash }, classifications: { action: "operational" } } }]);
     });
   }
@@ -59,6 +70,18 @@ export class DurableReadinessStore {
     return withTenant(this.pool, context, async db => (await db.$client.query(
       `SELECT payload FROM app.scheduled_readiness_plan WHERE tenant_id=$1 AND job_id=$2 AND task_id=$3 ORDER BY fact_revision DESC LIMIT 1`,
       [scope.tenantId, scope.jobId, scope.taskId])).rows[0]?.payload ?? null);
+  }
+  async loadJobPlans(context: VerifiedTenantContext, raw: unknown): Promise<readonly unknown[]> {
+    const scope = this.scope(raw);
+    if (scope.tenantId !== context.tenantId) return [];
+    return withTenant(this.pool, context, async db => {
+      // Choose the latest revision BEFORE filtering cancellation, so old confirmations never reappear.
+      const rows = await db.$client.query(`SELECT payload FROM (
+        SELECT DISTINCT ON (task_id) task_id,payload FROM app.scheduled_readiness_plan
+        WHERE tenant_id=$1 AND job_id=$2 ORDER BY task_id,fact_revision DESC
+      ) latest WHERE payload->>'status'='confirmed' ORDER BY task_id`, [scope.tenantId, scope.jobId]);
+      return rows.rows.map(row => scheduledPlanV1.parse(row.payload));
+    });
   }
   async recordProposal(context: VerifiedTenantContext, raw: unknown): Promise<void> {
     this.assertDark();

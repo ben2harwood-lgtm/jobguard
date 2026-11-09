@@ -18,9 +18,9 @@ vi.mock("../../../../../../lib/identity-server",()=>({identityApplication:()=>({
 })}));
 import { POST, GET } from "./route";
 let f:FinalCheckFixture;
-const priorEnvironment=process.env.JOBGUARD_ENV,priorOrigin=process.env.AUTH_ALLOWED_ORIGIN;
-beforeAll(async()=>{f=await createFinalCheckFixture();state.pool=f.runtime;process.env.JOBGUARD_ENV="synthetic_demo";process.env.AUTH_ALLOWED_ORIGIN="http://example.invalid";},120000);
-afterAll(async()=>{await closeFinalCheckFixture(f);if(priorEnvironment===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=priorEnvironment;if(priorOrigin===undefined)delete process.env.AUTH_ALLOWED_ORIGIN;else process.env.AUTH_ALLOWED_ORIGIN=priorOrigin;});
+const priorEnvironment=process.env.JOBGUARD_ENV,priorOrigin=process.env.AUTH_ALLOWED_ORIGIN,priorTrusted=process.env.JOBGUARD_ALLOWED_ORIGINS;
+beforeAll(async()=>{f=await createFinalCheckFixture();state.pool=f.runtime;process.env.JOBGUARD_ENV="synthetic_demo";process.env.AUTH_ALLOWED_ORIGIN="http://example.invalid";process.env.JOBGUARD_ALLOWED_ORIGINS="http://example.invalid";},120000);
+afterAll(async()=>{if(priorTrusted===undefined)delete process.env.JOBGUARD_ALLOWED_ORIGINS;else process.env.JOBGUARD_ALLOWED_ORIGINS=priorTrusted;await closeFinalCheckFixture(f);if(priorEnvironment===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=priorEnvironment;if(priorOrigin===undefined)delete process.env.AUTH_ALLOWED_ORIGIN;else process.env.AUTH_ALLOWED_ORIGIN=priorOrigin;});
 type Fixture=Awaited<ReturnType<typeof realReceiptFixture>>;
 async function ready(){
  const x=await realReceiptFixture(f);
@@ -32,7 +32,7 @@ async function ready(){
  await allocator.command(x.context,x.jobId,x.auth.digest,{...p,action:"approve",commandId:randomUUID(),reviewId:review.reviewId,approvalHash:review.approvalHash});
  return {x,command:{version:"recovery-billability-command.v1",action:"review",commandId:randomUUID(),caseId:x.caseId,workId:x.workId,lineId:x.line,expectedCaseRevision:revision,claimedEligiblePrincipalPence:80000,reasons:"Fictional review via web route"}};
 }
-function send(x:Fixture,body:unknown){return POST(new Request("http://example.invalid",{method:"POST",headers:{origin:"http://example.invalid","content-type":"application/json"},body:JSON.stringify(body)}),{params:Promise.resolve({id:x.jobId,caseId:x.caseId})});}
+function send(x:Fixture,body:unknown){return POST(new Request("http://example.invalid",{method:"POST",headers:{origin:"http://example.invalid","x-csrf-token":state.identity?"synthetic-csrf":createHash("sha256").update(`billability-csrf.v1:${x.auth.digest}`).digest("hex"),"content-type":"application/json"},body:JSON.stringify(body)}),{params:Promise.resolve({id:x.jobId,caseId:x.caseId})});}
 async function owner(x:Fixture,same=false){
  const user=same?x.actor.identityUserId:randomUUID(),member=same?x.actor.membershipId:randomUUID();state.identity=randomUUID();state.digest=createHash("sha256").update(state.identity).digest("hex");state.member=member;
  await f.admin.query("INSERT INTO identity.identity_user(id) VALUES($1) ON CONFLICT DO NOTHING",[user]);

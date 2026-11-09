@@ -25,6 +25,107 @@ async function read(s: string, q: unknown = query) {
   return new EnterpriseDashboardRepository(c.runtime).read(context, s, q);
 }
 describe("ENT-9B scoped persisted reads", () => {
+  it("[LATER-SAFETY-58] Friday working-day waits show Tuesday at the same London time, matching the queue deadline", async () => {
+    const { demoRules, reviseRules } = await import("./extra-approval-chain-fixtures.js");
+    const w = await chainWorld(c), s = await session(w), rules = structuredClone(demoRules);
+    rules.bands[0]!.steps[0]!.waitWorkingDays = 2;
+    await reviseRules(c, w, rules);
+    const pending = await submitted(c, w, 10000);
+    // Owner-only clock fixture: Friday 14:00 London crosses the spring DST weekend.
+    const owner = await c.admin.connect();
+    try {
+      await owner.query("BEGIN");
+      await owner.query("ALTER TABLE app.extra_approval_request DISABLE TRIGGER immutable");
+      await owner.query("UPDATE app.extra_approval_request SET server_recorded_at='2026-03-27T14:00:00Z' WHERE id=$1", [pending.requestId]);
+      await owner.query("ALTER TABLE app.extra_approval_request ENABLE TRIGGER immutable");
+      await owner.query("COMMIT");
+    } catch (error) { await owner.query("ROLLBACK"); throw error; } finally { owner.release(); }
+    expect((await c.runtime.query("SELECT has_function_privilege(current_user,'app.xa_wait_deadline(timestamptz,jsonb)','EXECUTE') allowed")).rows[0].allowed).toBe(true);
+    const context = await contractorSessionContext(c.runtime, s);
+    await withTenant(c.runtime, context, async db => {
+      await db.$client.query(enterpriseDashboardScopeLockSql, [context.tenantId]);
+      const facts = dashboardFactsV1.parse((await db.$client.query(enterpriseDashboardSourceSql, [s, context.tenantId])).rows[0].facts);
+      const expected = (await db.$client.query(`SELECT requirement->'steps'->0 step,
+        to_char(app.xa_wait_deadline(server_recorded_at,requirement->'steps'->0) AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') deadline
+        FROM app.extra_approval_request WHERE id=$1`, [pending.requestId])).rows[0];
+      expect(expected.step.waitWorkingDays).toBe(2);
+      expect(expected.deadline).toBe("2026-03-31T13:00:00.000000Z");
+      expect(facts.extras.find(extra => extra.extraId === pending.extraId)!.steps).toMatchObject([{ dueAt: expected.deadline, outcome: "pending" }]);
+    });
+  });
+  it("[LATER-SAFETY-58] old snapshots without working-day waits retain their elapsed-minute deadline", async () => {
+    const w = await chainWorld(c), s = await session(w), pending = await submitted(c, w, 10000);
+    // Owner-only predecessor snapshot and clock fixture; runtime cannot rewrite immutable requests.
+    const owner = await c.admin.connect();
+    try {
+      await owner.query("BEGIN");
+      await owner.query("ALTER TABLE app.extra_approval_request DISABLE TRIGGER immutable");
+      await owner.query(`UPDATE app.extra_approval_request SET server_recorded_at='2026-03-27T14:00:00Z',
+        requirement=requirement #- '{steps,0,waitWorkingDays}' WHERE id=$1`, [pending.requestId]);
+      await owner.query("ALTER TABLE app.extra_approval_request ENABLE TRIGGER immutable");
+      await owner.query("COMMIT");
+    } catch (error) { await owner.query("ROLLBACK"); throw error; } finally { owner.release(); }
+    const context = await contractorSessionContext(c.runtime, s);
+    await withTenant(c.runtime, context, async db => {
+      await db.$client.query(enterpriseDashboardScopeLockSql, [context.tenantId]);
+      const facts = dashboardFactsV1.parse((await db.$client.query(enterpriseDashboardSourceSql, [s, context.tenantId])).rows[0].facts);
+      const expected = (await db.$client.query(`SELECT requirement->'steps'->0 step,
+        to_char((server_recorded_at+((requirement->'steps'->0->>'timeLimitMinutes')::integer*interval '1 minute')) AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') deadline
+        FROM app.extra_approval_request WHERE id=$1`, [pending.requestId])).rows[0];
+      expect(expected.step).not.toHaveProperty("waitWorkingDays");
+      expect(expected.step.timeLimitMinutes).toBe(1);
+      expect(expected.deadline).toBe("2026-03-27T14:01:00.000000Z");
+      expect(facts.extras.find(extra => extra.extraId === pending.extraId)!.steps).toMatchObject([{ dueAt: expected.deadline, outcome: "pending" }]);
+    });
+  });
+  it.each([false, true])("[LATER-SAFETY-22] dashboard and xa_queue share weekend deadlines (legacy snapshot: %s)", async legacy => {
+    const w = await chainWorld(c), s = await session(w);
+    const { demoRules, reviseRules } = await import("./extra-approval-chain-fixtures.js");
+    const rules = structuredClone(demoRules);
+    // An absent field in a new rule defaults to two working days in xa_requirement.
+    for (const band of rules.bands) for (const step of band.steps) delete step.waitWorkingDays;
+    await reviseRules(c, w, rules);
+    const pending = await submitted(c, w, 10000);
+    // Owner-only historical clock/snapshot fixture; runtime cannot edit immutable requests.
+    const owner = await c.admin.connect();
+    try {
+      await owner.query("BEGIN");
+      await owner.query("ALTER TABLE app.extra_approval_request DISABLE TRIGGER immutable");
+      await owner.query(`UPDATE app.extra_approval_request SET server_recorded_at='2026-11-06T14:00:00Z',
+        requirement=CASE WHEN $2 THEN jsonb_set(requirement,'{steps,0}',(requirement->'steps'->0)-'waitWorkingDays') ELSE requirement END
+        WHERE id=$1`, [pending.requestId, legacy]);
+      await owner.query("ALTER TABLE app.extra_approval_request ENABLE TRIGGER immutable");
+      await owner.query("COMMIT");
+    } catch (error) { await owner.query("ROLLBACK"); throw error; } finally { owner.release(); }
+    const context = await contractorSessionContext(c.runtime, s);
+    const facts = await withTenant(c.runtime, context, async db => {
+      await db.$client.query(enterpriseDashboardScopeLockSql, [context.tenantId]);
+      const row = (await db.$client.query(enterpriseDashboardSourceSql, [s, context.tenantId])).rows[0];
+      expect(row.authorized).toBe(true);
+      return dashboardFactsV1.parse(row.facts);
+    });
+    const extra = facts.extras.find(extra => extra.extraId === pending.extraId)!;
+    const deadline = (await c.admin.query(`SELECT app.xa_wait_deadline(server_recorded_at,requirement->'steps'->0) due
+      FROM app.extra_approval_request WHERE id=$1`, [pending.requestId])).rows[0].due.toISOString();
+    expect(deadline).toBe(legacy ? "2026-11-06T14:01:00.000Z" : "2026-11-10T14:00:00.000Z");
+    expect(extra.steps).toHaveLength(1);
+    expect(new Date(extra.steps[0]!.dueAt!).toISOString()).toBe(deadline);
+    const queued = await withTenant(c.runtime, context, async db => (await db.$client.query(
+      "SELECT q.*,clock_timestamp()>=$2::timestamptz expected_overdue FROM app.xa_queue($1) q WHERE request_id=$3",
+      [w.members.supervisor.member.membershipId, deadline, pending.requestId])).rows);
+    expect(queued).toHaveLength(1);
+    expect(queued[0].overdue).toBe(queued[0].expected_overdue);
+    // Replay the SQL deadline at fixed observation times with a matching synthetic capture clock.
+    const clockedFacts = { ...facts, extras: [{ ...extra, capturedAt: "2026-11-06T13:00:00Z" }] };
+    // Between the old minute deadline and Tuesday, only the old snapshot is overdue.
+    const weekend = projectEnterpriseDashboard({ ...clockedFacts, cutoff: "2026-11-07T14:00:00Z" }, query);
+    expect(weekend.totals.overdue.count).toBe(legacy ? 1 : 0);
+    const afterDeadline = projectEnterpriseDashboard({ ...clockedFacts, cutoff: "2026-11-10T14:01:00Z" }, query);
+    expect(afterDeadline.totals.overdue.count).toBe(1);
+    const other = await chainWorld(c);
+    const foreignContext = await contractorSessionContext(c.runtime, await session(other));
+    await expect(new EnterpriseDashboardRepository(c.runtime).read(foreignContext, s, query)).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
   it("[E9-02] counts command-created active duplicate groups once and restores two captures after an authorized unlink", async () => {
     const w = await chainWorld(c), s = await session(w), repo = new ExtraRepository(c.runtime);
     const a = await repo.raiseExtra(w.ctx, direct(w, w.members.operative)), b = await repo.raiseExtra(w.ctx, direct(w, w.members.operative));

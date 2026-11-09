@@ -268,7 +268,7 @@ test("I (practice journey): a £8,000 request fires D13 before lock and stays pe
     await expect(page.getByText("Mandatory blockers cannot be suppressed by value, confidence, or advisory budget.", { exact: true })).toBeVisible();
   };
   const openInbox = async () => {
-    await page.goto("/");
+    await page.goto("/classic");
     await page.getByRole("button", { name: /Decisions/u }).first().click();
     await assertDecision();
   };

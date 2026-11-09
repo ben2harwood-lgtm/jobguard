@@ -49,6 +49,18 @@ describe("site-visit.v1 boundaries", () => {
   for (const change of [{ environment: "production_billing" }, { realExternalActions: 1 }, { price: 1 }]) { expect(siteVisitStartedV1.safeParse({ ...started, ...change }).success).toBe(false); expect(siteVisitCompletedV1.safeParse({ ...completed, ...change }).success).toBe(false); }
   expect(siteVisitCompletedV1.safeParse({ ...completed, closeoutAnswer: "maybe" }).success).toBe(false);
  });
+ it("carries only the saved visit identity and yes/no answer while keeping read fields strict", () => {
+  const job = { jobId: id(5), workOrderId: id(6), reference: "WO-1", priority: "urgent", issuedOn: "2026-10-08", dueOn: null, openVisitId: null };
+  const read = (lastCompletedVisit: unknown) => ({ version: "site-assigned-jobs.v1", ...head, jobs: [{ ...job, lastCompletedVisit }], truncated: false });
+  for (const closeoutAnswer of ["yes", "no"]) {
+   const saved = { visitId: id(8), closeoutAnswer };
+   expect(siteAssignedJobsV1.parse(read(saved))).toEqual(read(saved));
+   for (const field of ["price", "resident", "address", "tenantId", "membershipId"]) expect(siteAssignedJobsV1.safeParse(read({ ...saved, [field]: "secret" })).success).toBe(false);
+  }
+  expect(siteAssignedJobsV1.parse(read(null))).toEqual(read(null));
+  for (const saved of [{ visitId: "invalid", closeoutAnswer: "yes" }, { visitId: id(8), closeoutAnswer: "maybe" }, { visitId: id(8) }, { closeoutAnswer: "no" }]) expect(siteAssignedJobsV1.safeParse(read(saved)).success).toBe(false);
+  expect(siteAssignedJobsV1.safeParse({ ...read(null), unexpected: true }).success).toBe(false);
+ });
  it("[B15] the read results carry no money, resident or address key", () => {
   const job = { jobId: id(5), workOrderId: id(6), reference: "WO-1", priority: "urgent", issuedOn: "2026-10-08", dueOn: null, openVisitId: null };
   const jobs = { version: "site-assigned-jobs.v1", ...head, jobs: [job], truncated: false };

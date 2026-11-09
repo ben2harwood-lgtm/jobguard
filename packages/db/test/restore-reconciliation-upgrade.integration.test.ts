@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, expect, it } from "vitest";
+import { darkOrderRegistryRow, rateSuggestionRegistryRow, contractorJobFinishRegistryRow, duplicateDispositionRegistryRow, extraProceedRegistryRow } from "./lp5-command-catalog.js";
 import { laterEmptyTables } from "./later-empty-tables.js";
 import { migrate } from "../src/migrate.js";
 import { startBeforeMigration, applyMigration, type Cluster } from "./contractor-practice-session-fixtures.js";
@@ -17,7 +18,10 @@ it("adds the resume guard without rewriting predecessor data or replacing the la
   expect(await predecessorCatalogue(cluster.admin)).toEqual(catalog);
   // Check 0581 against its exact predecessor before later migrations add their catalogues.
   await migrate(cluster.admin);
-  expect(await snapshot(cluster.admin)).toEqual({ ...laterEmptyTables, ...before });
+  // 0606, 0609, 0620, 0623 and 0634 add dark-order, rate-acceptance, EndCheck, duplicate-disposition and proceed rows.
+  const registry = (await cluster.admin.query("SELECT jsonb_agg(value ORDER BY value::text) data FROM jsonb_array_elements($1::jsonb)",
+    [JSON.stringify([...(before["app.command_type_registry"] as { command_type: string }[]).map(row => row.command_type === "IssueClientApproval" ? { ...row, permission_rule: "contractor" } : row), darkOrderRegistryRow, rateSuggestionRegistryRow, contractorJobFinishRegistryRow, duplicateDispositionRegistryRow,extraProceedRegistryRow])])).rows[0].data;
+  expect(await snapshot(cluster.admin)).toEqual({ ...laterEmptyTables, ...before, "app.command_type_registry": registry });
   expect((await cluster.admin.query("SELECT * FROM outbound_control.state")).rows).toEqual(state);
   expect((await cluster.admin.query("SELECT pg_get_functiondef('outbound_control.command(uuid,text,integer,uuid)'::regprocedure) definition")).rows).toEqual(command);
   expect((await cluster.admin.query("SELECT * FROM outbound_control.reconciliation")).rows).toEqual([]);

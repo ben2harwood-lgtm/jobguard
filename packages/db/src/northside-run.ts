@@ -41,12 +41,13 @@ export async function northsideOwnActions(pool: Pool, member: AuthenticatedMembe
 }
 
 const localArtifact = z.object({ version: z.literal("extra-client-approval-message.v1"), linkId: z.guid({ error: "Invalid uuid" }), requestId: z.guid({ error: "Invalid uuid" }), revision: z.number().int(),
+  revisionHash: z.string().regex(/^[a-f0-9]{64}$/u).optional(), signinDigest: z.string().regex(/^[a-f0-9]{64}$/u).optional(),
   recipient: z.email({ error: "Invalid email" }).refine(s => s.endsWith(".invalid")), netPence: z.number().int().positive(), expiresAt: utcDatetimeV1, path: z.string(), token: z.string().regex(/^[A-Za-z0-9_-]{32,128}$/u) }).strict();
 /** Recover server-generated replay inputs from this owner's exact command, including closed/expired artifacts.
  * The merged dispatcher still verifies the complete command hash and returns its stored result. */
 export async function northsideApprovalArtifact(pool: Pool, member: AuthenticatedMembership, context: VerifiedTenantContext, commandId: string) {
   return withTenant(pool, context, async db => {
-    const allowed = (await db.$client.query("SELECT 1 FROM app.membership WHERE tenant_id=$1 AND id=$2 AND identity_user_id=$3 AND role='owner' AND app.contractor_member_active(id)", [member.tenantId, member.membershipId, member.identityUserId])).rowCount;
+    const allowed = (await db.$client.query("SELECT 1 FROM app.membership WHERE tenant_id=$1 AND id=$2 AND identity_user_id=$3 AND role IN('surveyor','commercial_manager') AND app.contractor_member_active(id)", [member.tenantId, member.membershipId, member.identityUserId])).rowCount;
     if (!allowed) throw new ExtraApprovalError("PERMISSION_DENIED");
     const row = (await db.$client.query<{
       command_type: string; status: string; actor_membership_id: string; job_id: string; variation_id: string; approver_membership_id: string; revision_hash: string; immutable_content: string;
@@ -56,6 +57,7 @@ export async function northsideApprovalArtifact(pool: Pool, member: Authenticate
       LEFT JOIN app.action_outbox o ON(o.tenant_id,o.id)=(k.tenant_id,k.outbox_action_id)
       WHERE r.tenant_id=$1 AND r.command_id=$2`, [member.tenantId, commandId])).rows[0];
     if (!row) return null;
+    if (row && !(await db.$client.query("SELECT app.xc_send_authority($1,$2) allowed", [member.membershipId,row.variation_id])).rows[0]?.allowed) throw new ExtraApprovalError("PERMISSION_DENIED");
     if (row.command_type !== "IssueClientApproval" || row.status !== "succeeded" || row.actor_membership_id !== member.membershipId || !row.immutable_content) throw new ExtraApprovalError("COMMAND_CONFLICT");
     return { jobId: row.job_id, extraId: row.variation_id, approverMembershipId: row.approver_membership_id, revisionHash: row.revision_hash, artifact: localArtifact.parse(JSON.parse(row.immutable_content)) };
   });
@@ -63,16 +65,16 @@ export async function northsideApprovalArtifact(pool: Pool, member: Authenticate
 /** Only the owner can recover the exact locally approved artifact after reload. This performs no delivery. */
 export async function northsideLocalLinks(pool: Pool, member: AuthenticatedMembership, context: VerifiedTenantContext) {
   return withTenant(pool, context, async db => {
-    const allowed = (await db.$client.query("SELECT 1 FROM app.membership WHERE tenant_id=$1 AND id=$2 AND role='owner' AND app.contractor_member_active(id)", [member.tenantId, member.membershipId])).rowCount;
+    const allowed = (await db.$client.query("SELECT 1 FROM app.membership WHERE tenant_id=$1 AND id=$2 AND role IN('surveyor','commercial_manager') AND app.contractor_member_active(id)", [member.tenantId, member.membershipId])).rowCount;
     if (!allowed) return [];
     const rows = (await db.$client.query<{ extra_id: string; job_id: string; request_id: string; immutable_content: string }>(
       `SELECT k.variation_id extra_id,k.job_id,k.request_id,o.immutable_content FROM app.extra_client_link k JOIN app.action_outbox o ON(o.tenant_id,o.id)=(k.tenant_id,k.outbox_action_id)
-       WHERE k.tenant_id=$1 AND k.issued_by_membership_id=$2 AND k.expires_at>clock_timestamp() AND NOT EXISTS(SELECT 1 FROM app.extra_client_link_closure c WHERE(c.tenant_id,c.link_id)=(k.tenant_id,k.id))
+       WHERE k.tenant_id=$1 AND k.issued_by_membership_id=$2 AND app.xc_send_authority($2,k.variation_id) AND k.expires_at>clock_timestamp() AND NOT EXISTS(SELECT 1 FROM app.extra_client_link_closure c WHERE(c.tenant_id,c.link_id)=(k.tenant_id,k.id))
        AND k.request_id=(SELECT q.id FROM app.extra_approval_request q WHERE q.tenant_id=k.tenant_id AND q.variation_id=k.variation_id ORDER BY q.request_revision DESC LIMIT 1)`, [member.tenantId, member.membershipId])).rows;
     return rows.map(row => {
       const artifact = localArtifact.parse(JSON.parse(row.immutable_content));
       if (artifact.requestId !== row.request_id) throw new Error("NORTHSIDE_ARTIFACT_INVALID");
-      return { extraId: row.extra_id, recipient: artifact.recipient, path: `/extra-approval/${row.job_id}/${row.request_id}#t=${artifact.token}` };
+      return { extraId: row.extra_id, recipient: artifact.recipient, path: artifact.path };
     });
   });
 }

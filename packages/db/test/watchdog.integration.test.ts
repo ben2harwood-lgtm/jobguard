@@ -22,7 +22,12 @@ const tenant = randomUUID(), otherTenant = randomUUID(), member = randomUUID();
 const context = testTenantContext(tenant);
 const states = ["draft", "quoting", "accepted", "invoiced", "paid", "lost"];
 const legacy = Object.fromEntries(states.map(status => [status, { jobId: randomUUID(), uploadId: randomUUID() }]));
-const tables = ["purchase_order_draft", "purchase_order_revision", "purchase_order_placement", "supplier_document", "supplier_document_version", "supplier_document_intake", "goods_receipt", "supplier_fact_proposal", "supplier_fact_revision", "supplier_match_proposal", "supplier_match_revision", "supplier_match_allocation", "discrepancy_finding_revision", "discrepancy_review_outcome", "supplier_bill_supersession", "planned_work_revision", "readiness_snapshot", "readiness_decision", "inbox_finding_revision", "inbox_decision_revision", "inbox_outcome_event", "evidence_upload", "evidence_object", "evidence_link", "synthetic_evidence_original", "stage_completion", "watchdog_command_identity"];
+const tables = ["purchase_order_manual_attestation", "purchase_order_draft", "purchase_order_revision", "purchase_order_placement", "supplier_document", "supplier_document_version", "supplier_document_intake", "goods_receipt", "supplier_fact_proposal", "supplier_fact_revision", "supplier_match_proposal", "supplier_match_revision", "supplier_match_allocation", "discrepancy_finding_revision", "discrepancy_review_outcome", "supplier_bill_supersession", "planned_work_revision", "readiness_snapshot", "readiness_decision", "inbox_finding_revision", "inbox_decision_revision", "inbox_outcome_event", "evidence_upload", "evidence_object", "evidence_link", "synthetic_evidence_original", "stage_completion", "watchdog_command_identity"];
+// Synthetic line proposals have membership/audit guards, not the watchdog live guard.
+// Still count them on every refusal and inspect their RLS/ownership below; their
+// insert/replay/audit controls are exercised in supplier-line-corrections.integration.test.ts.
+// Dispositions have no runtime table grants; their checked writer enforces access.
+const mutationTables = [...tables, "extra_duplicate_disposition", "supplier_line_match_snapshot", "supplier_line_match_correction", "privacy_review_fact", "extra_client_command_session", "extra_client_signin", "extra_client_session", "connector_promotion", "extra_proceed_statement"];
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, directory: string;
 const storage: PrivateVersionedStorage = {
   async createUploadUrl() { return "https://generated.invalid/upload"; },
@@ -35,7 +40,10 @@ beforeAll(async () => {
   const port = await freePort(60400, 100);
   postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: "synthetic", persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
   await postgres.initialise(); await postgres.start();
-  admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password: "synthetic", max: 4 });
+  // 0678 admits manual attestations only in the synthetic demo database; run CH-2 there so every
+  // direct insert reaches the live guard. The outside-database refusal is asserted at the end.
+  await postgres.createDatabase("jobguard_synthetic_demo");
+  admin = new Pool({ host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "postgres", password: "synthetic", max: 4 });
   // Upgrade fixture: these rows existed in the preceding supported schema, where
   // proof uploads were possible before/after live. No guard is bypassed/disabled.
   await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
@@ -60,7 +68,7 @@ beforeAll(async () => {
   for (const { jobId } of Object.values(legacy)) await admin.query(
     "INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance,source_id) VALUES($1,$2,'small_builder','synthetic_demo','backfilled_synthetic_fixture',$2) ON CONFLICT DO NOTHING", [tenant, jobId]);
   await admin.query("CREATE ROLE ch2_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;GRANT jobguard_runtime TO ch2_login");
-  runtime = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "ch2_login", password: "synthetic", max: 4 });
+  runtime = new Pool({ host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "ch2_login", password: "synthetic", max: 4 });
 }, 60000);
 afterAll(async () => { await closeTestPools(runtime, admin); await postgres?.stop(); if (directory) await rm(directory, { recursive: true, force: true }); });
 
@@ -92,7 +100,7 @@ function attempts(jobId: string, uploadId: string) {
 }
 async function counts() {
   const result: Record<string, number> = {};
-  for (const table of [...tables, "audit_event", "action_outbox", "command_receipt", "decision_resolution", "action_authorization", "job_work_state_event", "job_link", "watchdog_command_result"]) result[table] = Number((await admin.query(`SELECT count(*) n FROM app.${table}`)).rows[0].n);
+  for (const table of [...mutationTables, "audit_event", "action_outbox", "command_receipt", "decision_resolution", "action_authorization", "job_work_state_event", "job_link", "watchdog_command_result"]) result[table] = Number((await admin.query(`SELECT count(*) n FROM app.${table}`)).rows[0].n);
   return result;
 }
 describe("CH-2 actual PostgreSQL enforcement", () => {
@@ -114,12 +122,12 @@ describe("CH-2 actual PostgreSQL enforcement", () => {
     expect((await admin.query("SELECT has_function_privilege('jobguard_runtime','app.require_watchdog_live(uuid)','EXECUTE') runtime,has_function_privilege('jobguard_infrastructure','app.require_watchdog_live(uuid)','EXECUTE') infrastructure")).rows[0]).toEqual({ runtime: true, infrastructure: false });
     const role=(await admin.query("SELECT rolsuper,rolbypassrls,rolcreaterole FROM pg_roles WHERE rolname='jobguard_runtime'")).rows[0];
     expect(role).toEqual({rolsuper:false,rolbypassrls:false,rolcreaterole:false});
-    const protectedTables=await admin.query("SELECT c.relname,c.relrowsecurity,c.relforcerowsecurity,r.rolname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_roles r ON r.oid=c.relowner WHERE n.nspname='app' AND c.relname=ANY($1::text[])",[tables]);
-    expect(protectedTables.rows).toHaveLength(tables.length);
+    const protectedTables=await admin.query("SELECT c.relname,c.relrowsecurity,c.relforcerowsecurity,r.rolname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_roles r ON r.oid=c.relowner WHERE n.nspname='app' AND c.relname=ANY($1::text[])",[mutationTables]);
+    expect(protectedTables.rows).toHaveLength(mutationTables.length);
     expect(protectedTables.rows.every(row=>row.relrowsecurity&&row.relforcerowsecurity&&row.rolname==='jobguard_migration')).toBe(true);
     expect((await admin.query("SELECT has_column_privilege('jobguard_runtime','app.evidence_upload','job_id','UPDATE') identity_edit,has_column_privilege('jobguard_runtime','app.evidence_upload','state','UPDATE') lifecycle_update")).rows[0]).toEqual({identity_edit:false,lifecycle_update:true});
     // Command identities and stored results are append-only for the runtime: select and insert, nothing else.
-    for (const table of ["watchdog_command_identity", "watchdog_command_result", "proof_application_response"]) {
+    for (const table of ["watchdog_command_identity", "watchdog_command_result", "proof_application_response", "purchase_order_manual_attestation"]) {
       const privilege = (role: string, kind: string) => `has_table_privilege('${role}','app.${table}','${kind}')`;
       expect((await admin.query(`SELECT ${privilege("jobguard_runtime", "SELECT")} s,${privilege("jobguard_runtime", "INSERT")} i,${privilege("jobguard_runtime", "UPDATE")} u,${privilege("jobguard_runtime", "DELETE")} d,${privilege("jobguard_runtime", "TRUNCATE")} t,${privilege("jobguard_infrastructure", "SELECT")} infra`)).rows[0]).toEqual({ s: true, i: true, u: false, d: false, t: false, infra: false });
     }
@@ -207,5 +215,27 @@ describe("CH-2 actual PostgreSQL enforcement", () => {
         }
       } finally { await a.query("ROLLBACK"); await b.query("ROLLBACK"); a.release(); b.release(); }
     }
+  });
+});
+describe("CH-2 outside the synthetic demo database", () => {
+  it("a direct manual attestation is refused MODE_FORBIDDEN before the live guard; other tables still reach JOB_NOT_LIVE", async () => {
+    const { host, port, password } = (admin as unknown as { options: { host: string; port: number; password: string } }).options;
+    await closeTestPools(runtime, admin);
+    const control = new Pool({ host, port, password, user: "postgres", database: "postgres", max: 1 });
+    try { await control.query("CREATE DATABASE jobguard_ch2_outside TEMPLATE jobguard_synthetic_demo"); }
+    finally {
+      await control.end();
+      admin = new Pool({ host, port, password, user: "postgres", database: "jobguard_synthetic_demo", max: 4 });
+      runtime = new Pool({ host, port, password, user: "ch2_login", database: "jobguard_synthetic_demo", max: 4 });
+    }
+    const outside = new Pool({ host, port, password, user: "ch2_login", database: "jobguard_ch2_outside", max: 1 });
+    try {
+      expect((await outside.query("SELECT current_database() name")).rows[0].name).toBe("jobguard_ch2_outside");
+      for (const status of states) {
+        const insert = (table: string) => withTenant(outside, context, db => db.$client.query(`INSERT INTO app.${table}(tenant_id,job_id)VALUES($1,$2)`, [tenant, legacy[status]!.jobId]));
+        await expect(insert("purchase_order_manual_attestation"), status).rejects.toMatchObject({ message: "MODE_FORBIDDEN", code: "42501" });
+        await expect(insert("purchase_order_draft"), status).rejects.toThrow("JOB_NOT_LIVE");
+      }
+    } finally { await closeTestPools(outside); }
   });
 });

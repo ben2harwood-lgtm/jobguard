@@ -1,0 +1,9 @@
+{
+  "version": 2,
+  "lanes": {
+    "test-ent10-upgrade-scope": {
+      "branches": ["codex/sandbox/test-ent10-upgrade-scope"],
+      "allow": ["packages/db/test/enterprise-access-upgrade.integration.test.ts"]
+    }
+  }
+}

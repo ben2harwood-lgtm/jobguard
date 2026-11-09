@@ -7,9 +7,9 @@ import { ctx, source, scope, consent } from "./accounting-export.test-fixtures.j
 
 const tenant = "00000000-0000-4000-8000-000000000001";
 const credentials = { sessionToken: "s".repeat(32), csrfToken: "c".repeat(24), tenantHeader: tenant, origin: "https://company.invalid" };
-const authenticate = vi.fn(), findMembership = vi.fn(), execute = vi.fn();
+const authenticate = vi.fn(), findMembership = vi.fn(), execute = vi.fn(), routeChangeRead = vi.fn(), routeChangeConfirm = vi.fn();
 const app = new AccountingExportApplication({ allowedOrigin: credentials.origin,
-  provider: { authenticate, findMembership, digest: () => "a".repeat(64) } } as never, { execute });
+  provider: { authenticate, findMembership, digest: () => "a".repeat(64) } } as never, { execute, routeChangeRead, routeChangeConfirm });
 let preview: ReturnType<AccountingExportSandbox["preview"]>;
 const approval = () => ({ version: 1, decisionId: "00000000-0000-4000-8000-000000000003", previewHash: preview.previewHash,
   expiresAt: new Date(Date.now() + 300000).toISOString(), humanConfirmed: true });
@@ -17,7 +17,7 @@ const status = (state = "pending") => ({ version: 1, sourceId: source.sourceId, 
   previewHash: preview.previewHash, artifact: preview.artifact, status: state, attemptId: null, attempts: 0, externalId: null, qualifyingRecoveryProof: false });
 beforeEach(() => {
   vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
-  authenticate.mockResolvedValue({ identityUserId: tenant, sessionId: tenant, csrfToken: credentials.csrfToken });
+  authenticate.mockResolvedValue({ identityUserId: tenant, sessionId: tenant, csrfToken: credentials.csrfToken, sessionCredential: "a".repeat(64) });
   findMembership.mockImplementation(async (_: unknown, id: string) => id === tenant ? { id: tenant, tenantId: tenant, identityUserId: tenant, role: "owner" } : undefined);
   const tenantId = `demo-${tenant}`;
   preview = new AccountingExportSandbox(new FakeCodatAdapter(), [{ ...source, tenantId }], [{ ...consent, tenantId }], true)
@@ -79,4 +79,43 @@ it("rechecks membership, stays dark in production and redacts unknown failures",
   await expect(app.execute(credentials, source.sourceId, "preview")).rejects.toThrow("EXPORT_FORBIDDEN");
   expect(execute).not.toHaveBeenCalled();
   expect(accountingExportFailure(new Error("private SQL detail")).body.code).toBe("EXPORT_UNAVAILABLE");
+});
+
+const routeApproval = () => ({ ...approval(), commandId: "00000000-0000-4000-8000-000000000004" });
+function routePreview() {
+ return { version: 1, previewHash: preview.previewHash, artifact: { version: 1, scope: preview.artifact.scope,
+  from: "codat", to: "xero", connectionRevision: 2, consentRevision: 1, entries: [] } };
+}
+it("route read and confirm bind verified context, current actor and exact server scope; unknown responses retry identically", async () => {
+ const proposed = routePreview(), input = routeApproval();
+ routeChangeRead.mockResolvedValue({ version: 1, proposal: proposed, confirmed: null, history: [] });
+ const result = { ...proposed, commandId: input.commandId, decisionId: input.decisionId, actorId: tenant, revision: 1 };
+ routeChangeConfirm.mockResolvedValue(result);
+ expect(await app.routeChange(credentials, source.sourceId, "read")).toMatchObject({ proposal: proposed });
+ for (let i = 0; i < 2; i++) expect(await app.routeChange(credentials, source.sourceId, "confirm", input)).toEqual(result);
+ expect(routeChangeConfirm.mock.calls[0]).toEqual([expect.objectContaining({ tenantId: tenant }), "a".repeat(64), source.sourceId,
+  { scope: proposed.artifact.scope, from: "codat", to: "xero", connectionRevision: 2, consentRevision: 1, ...input, action: "accounting_export.route", status: "approved", tenantId: `demo-${tenant}` }, tenant]);
+ expect(routeChangeConfirm.mock.calls[1]).toEqual(routeChangeConfirm.mock.calls[0]);
+ routeChangeRead.mockResolvedValue({ version: 1, proposal: null, confirmed: result, history: [result] });
+ expect(await app.routeChange(credentials, source.sourceId, "confirm", input)).toEqual(result);
+ expect(routeChangeConfirm.mock.calls[2]).toEqual(routeChangeConfirm.mock.calls[0]);
+});
+it("route boundary refuses supplied authority, stale hashes and roles without export permission", async () => {
+ routeChangeRead.mockResolvedValue({ version: 1, proposal: routePreview(), confirmed: null, history: [] });
+ for (const extra of [{ actorId: tenant }, { tenantId: tenant }, { scope: preview.artifact.scope }, { sessionToken: "forged" }])
+  await expect(app.routeChange(credentials, source.sourceId, "confirm", { ...routeApproval(), ...extra })).rejects.toThrow("EXPORT_INVALID_INPUT");
+ await expect(app.routeChange(credentials, source.sourceId, "confirm", { ...routeApproval(), previewHash: "f".repeat(64) })).rejects.toThrow("EXPORT_APPROVAL_REQUIRED");
+ await expect(app.routeChange(credentials, source.sourceId, "read", { actorId: tenant })).rejects.toThrow("EXPORT_INVALID_INPUT");
+ findMembership.mockResolvedValue({ id: tenant, tenantId: tenant, identityUserId: tenant, role: "read_only" });
+ await expect(app.routeChange(credentials, source.sourceId, "read")).rejects.toThrow("EXPORT_FORBIDDEN");
+ expect(routeChangeConfirm).not.toHaveBeenCalled();
+});
+it("route boundary preserves database refusals and stays synthetic only", async () => {
+ for (const code of ["EXPORT_NOT_FOUND", "EXPORT_STALE_REVISION", "EXPORT_CONSENT_EXPIRED", "EXPORT_RECONCILE_REQUIRED"]) {
+  routeChangeRead.mockRejectedValue(new StoredAccountingExportError(code));
+  await expect(app.routeChange(credentials, source.sourceId, "read")).rejects.toThrow(code);
+ }
+ routeChangeRead.mockClear(); vi.stubEnv("JOBGUARD_ENV", "production");
+ await expect(app.routeChange(credentials, source.sourceId, "read")).rejects.toThrow("EXPORT_FORBIDDEN");
+ expect(routeChangeRead).not.toHaveBeenCalled();
 });
