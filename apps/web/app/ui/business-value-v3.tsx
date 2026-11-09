@@ -81,6 +81,6 @@ export function BusinessValueV3() {
   </section>
   </>}
   <button type="button" onClick={() => refresh(n => n + 1)} style={{ minHeight: 44, minWidth: 44 }}>Refresh availability</button>
-  <p><a href="/" style={{ display: "inline-block", minHeight: 44, paddingTop: 12 }}>Back to jobs</a></p>
+  <p><a href="/classic" style={{ display: "inline-block", minHeight: 44, paddingTop: 12 }}>Back to jobs</a></p>
  </main>;
 }

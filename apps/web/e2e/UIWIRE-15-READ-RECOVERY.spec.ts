@@ -51,7 +51,7 @@ await expect(retry).toBeFocused();
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
 }
 async function reopen(page:Page,jobId:string){
- await page.goto("/");
+ await page.goto("/classic");
  const link=page.locator(`a[href="/jobs/${jobId}"]`).first();
 await expect(link).toBeVisible();
 await link.click();

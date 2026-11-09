@@ -142,7 +142,7 @@ export function RecoveryJourney({ jobId }: { jobId: string }) {
     <Link href={`/jobs/${encodeURIComponent(jobId)}`}>Back to job</Link>
     <h1>recovery-18800 practice journey</h1>
     <p>Made-up data only. Follow this guide on a fresh job; returning here reads saved progress. Opening a step never completes it.</p>
-    <p>To start again, <Link href="/">create another fresh capture from Jobs</Link>. The previous job and its history stay available.</p>
+    <p>To start again, <Link href="/classic">create another fresh capture from Jobs</Link>. The previous job and its history stay available.</p>
     {error ? <p role="alert">The saved journey could not load. No result is available.</p> : !saved ? <p role="status">Loading saved recovery sources…</p> : <>
       <p role="status" data-testid="recovery-journey-state">{report?.label ?? "Not finished yet — work through the steps, then run the money check."}</p>
       <ol>{recoveryJourneySteps(jobId).map(step => <li key={step.title} style={{ marginBottom: 16 }}>
