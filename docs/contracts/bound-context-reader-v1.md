@@ -1,6 +1,6 @@
 # Bound context reader v1
 
-PROPOSAL, NEEDS BEN. Plan piece `bound-context-reader` is RED because it crosses the request-binding security boundary. Landing requires Ben's typed yes, green PostgreSQL CI and independent review against the exact head. Migration `0956` is a placeholder for router reservation at landing.
+PROPOSAL, NEEDS BEN. Plan piece `bound-context-reader` is RED because it crosses the request-binding security boundary. Landing requires Ben's typed yes, green PostgreSQL CI and independent review against the exact head. Migration `0697` (placeholder 0956, renumbered at landing).
 
 ## Interface and authority
 

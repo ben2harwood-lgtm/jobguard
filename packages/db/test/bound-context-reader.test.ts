@@ -10,7 +10,7 @@ it("records exact private-reader allowances and a migfix-7 successor routine row
     "acl|routine|function:app.bound_context_reader()|jobguard_migration|EXECUTE|-",
     "owner|routine|function:app.bound_context_reader()|jobguard_binding_owner",
   ]);
-  const proof = loadMigrationProofs().proofs.find(item => item.migration === "0956_bound_context_reader.sql")!;
+  const proof = loadMigrationProofs().proofs.find(item => item.migration === "0697_bound_context_reader.sql")!;
   expect(proof.upgrade).toEqual([{ section: "routines", before: null, after: {
     nspname: "app", proname: "bound_context_reader", args: "", proowner: "jobguard_binding_owner",
     proacl: "{jobguard_binding_owner=X/jobguard_binding_owner,jobguard_migration=X/jobguard_binding_owner}",
@@ -20,7 +20,7 @@ it("records exact private-reader allowances and a migfix-7 successor routine row
 });
 
 it("adds only a no-argument read-only definer using the existing bound-request validator", () => {
-  const sql = readFileSync(new URL("../migrations/0956_bound_context_reader.sql", import.meta.url), "utf8");
+  const sql = readFileSync(new URL("../migrations/0697_bound_context_reader.sql", import.meta.url), "utf8");
   expect(sql.match(/CREATE FUNCTION /g)).toHaveLength(1);
   expect(sql).toContain("CREATE FUNCTION app.bound_context_reader() RETURNS jsonb");
   expect(sql).toContain("SECURITY DEFINER SET search_path=pg_catalog,pg_temp");
