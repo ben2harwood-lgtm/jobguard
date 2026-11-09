@@ -46,7 +46,7 @@ it("concurrent_first_rate_has_one_catalogue_effect", async () => {
   await blocker.query("LOCK TABLE app.merchant IN SHARE MODE");
   const pending = Promise.allSettled([
    repo.addRate(ctx, input),
-   repo.addRate(ctx, { ...input, merchantName: merchantName.toUpperCase() }),
+   repo.addRate(ctx, { ...input, merchantName: merchantName.toUpperCase(), pricePence: 2500 }),
   ]);
   try {
    await expect.poll(async () => Number((await admin.query(`SELECT count(*) n FROM pg_stat_activity WHERE usename='materials_login' AND state='active' AND wait_event_type='Lock'`)).rows[0].n), { timeout: 3000, interval: 10 }).toBe(2);
@@ -69,4 +69,44 @@ it("concurrent_first_rate_has_one_catalogue_effect", async () => {
   await blocker.query("ROLLBACK");
   blocker.release();
  }
+});
+
+
+describe("LATER-SAFETY-138 identical rate retries", () => {
+ it.each([undefined, "5"])("reuses the latest agreement without appending (pack %s)", async packEachQuantity => {
+  const repo = new MaterialRepository(runtime);
+  const input = { merchantName: `Fictional retry merchant ${packEachQuantity ?? "each"}`, sku: "RETRY", description: "Synthetic material", pricePence: 2000, priceUnit: packEachQuantity ? "box" as const : "each" as const, taxBasis: "net" as const, effectiveFrom: "2026-10-01", packEachQuantity, sourceLabel: "synthetic retry", expectedVersion: 0 };
+  const first = await repo.addRate(ctx, input);
+  expect(await repo.addRate(ctx, input)).toEqual(first);
+  const counts = async () => ({
+   revisions: (await admin.query("SELECT id,version FROM app.material_rate_revision WHERE tenant_id=$1 AND sku_id=$2 ORDER BY version", [tenant, first.skuId])).rows,
+   packs: (await admin.query("SELECT each_quantity_decimal FROM app.material_pack_conversion WHERE tenant_id=$1 AND sku_id=$2", [tenant, first.skuId])).rows,
+  });
+  const original = { revisions: [{ id: first.id, version: 1 }], packs: packEachQuantity ? [{ each_quantity_decimal: packEachQuantity }] : [] };
+  expect(await counts()).toEqual(original);
+  for (const changed of [
+   { pricePence: 2500 }, { priceUnit: "bag" as const }, { taxBasis: "gross" as const },
+   { effectiveFrom: "2026-10-02" }, { effectiveTo: "2026-10-31" }, { packEachQuantity: "10" },
+   { expectedVersion: 2 },
+  ]) {
+   await expect(repo.addRate(ctx, { ...input, ...changed })).rejects.toThrow("STALE_MATERIAL_RATE_REVISION");
+   expect(await counts()).toEqual(original);
+  }
+  // A matching expected version still appends; retries compare the latest revision only.
+  const latest = await repo.addRate(ctx, { ...input, pricePence: 2500, effectiveFrom: "2026-11-01", expectedVersion: 1 });
+  expect(latest.version).toBe(2);
+  expect(await repo.addRate(ctx, { ...input, pricePence: 2500, effectiveFrom: "2026-11-01" })).toEqual(latest);
+  await expect(repo.addRate(ctx, input)).rejects.toThrow("STALE_MATERIAL_RATE_REVISION");
+  expect((await counts()).revisions).toEqual([{ id: first.id, version: 1 }, { id: latest.id, version: 2 }]);
+  // Reuse the existing second tenant: it cannot read or link to this SKU.
+  const otherCtx = testTenantContext(other);
+  expect((await withTenant(runtime, otherCtx, db => db.$client.query("SELECT id FROM app.merchant_sku WHERE id=$1", [first.skuId]))).rows).toEqual([]);
+  const otherJob = randomUUID(), otherScope = randomUUID();
+  await importWatchdogFixtureJob(admin, other, otherJob);
+  await admin.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state)VALUES($1,$2,$3,'confirmed')", [otherScope, other, otherJob]);
+  await expect(repo.addRequirement(otherCtx, { jobId: otherJob, scopeItemId: otherScope, skuId: first.skuId, quantity: "1", unit: "each", expectedRevision: 0 })).rejects.toMatchObject({ code: "23503" });
+  const separate = await repo.addRate(otherCtx, input);
+  expect(separate.skuId).not.toBe(first.skuId);
+  expect(separate.version).toBe(1);
+ });
 });

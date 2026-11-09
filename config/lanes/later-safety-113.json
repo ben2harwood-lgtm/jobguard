@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-113": {
+      "branches": ["codex/sandbox/later-safety-113"],
+      "note": "LATER-SAFETY-113: refuse invalidation of locked Final Check evidence; RED, NOPR.",
+      "allow": [
+        "packages/db/migrations/0666_final_check_invalidation_after_lock.sql",
+        "packages/db/migration-notes/0666_final_check_invalidation_after_lock.md",
+        "packages/db/test/migration-proofs/0666_final_check_invalidation_after_lock.proof.json",
+        "packages/db/test/final-check-invalidation-lock.integration.test.ts",
+        "packages/db/test/final-check-manifest.integration.test.ts",
+        "packages/db/test/sv5pre-completion.integration.test.ts"
+      ]
+    }
+  }
+}

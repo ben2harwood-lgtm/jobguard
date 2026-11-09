@@ -1,3 +1,4 @@
+import { mapRequestBindingRefusal } from "./request-binding-error.js";
 import type { Pool } from "pg";
 import { z } from "zod";
 import { mapRecoveryReceiptToLines, recoveryReceiptFactsV1, receiptLineAllocationSnapshotV1, receiptLineAllocationCommandV1,
@@ -66,7 +67,7 @@ export class RecoveryLineAllocationRepository {
  }
  async readCurrent(context:VerifiedTenantContext,actor:RecoveryAllocationActor,digest:string,selector:Selector):Promise<ReceiptLineAllocationSnapshot>{
   this.guard(actor,digest,selector?.jobId);if(!selectorV1.safeParse(selector).success)fail("INVALID_RECEIPT_LINE_QUERY");
-  return withTenant(practiceMaterialPool(this.pool,digest),context,db=>this.readCurrentInTransaction(db,context,actor,digest,selector));
+  return mapRequestBindingRefusal(withTenant(practiceMaterialPool(this.pool,digest),context,db=>this.readCurrentInTransaction(db,context,actor,digest,selector)), () => new ReceiptLineAllocationError("RECEIPT_LINE_FORBIDDEN"));
  }
  async readCurrentInTransaction(db:TenantTransaction,context:VerifiedTenantContext,actor:RecoveryAllocationActor,digest:string,selector:Selector,expected?:z.infer<typeof expectedV1>):Promise<ReceiptLineAllocationSnapshot>{
   this.guard(actor,digest,selector?.jobId);
@@ -99,7 +100,7 @@ export class RecoveryLineAllocationRepository {
   }
  }
  private writeFacts(context:VerifiedTenantContext,actor:RecoveryAllocationActor,digest:string,jobId:string,command:{commandId:string;action:string}):Promise<NeutralReceiptFactResult>{
-  return withTenant(practiceMaterialPool(serializableReceiptPool(this.pool),digest),context,async db=>{
+  return mapRequestBindingRefusal(withTenant(practiceMaterialPool(serializableReceiptPool(this.pool),digest),context,async db=>{
    await this.scope(db,context,actor,digest,jobId);
    await db.$client.query("SELECT set_config('app.receipt_line_environment','synthetic_demo',true)");
    const row=(await db.$client.query<{result:unknown}>("SELECT app.write_receipt_allocation_facts($1,$2,$3,$4::jsonb,NULL::jsonb) result",[context.tenantId,jobId,digest,JSON.stringify(command)])).rows[0];
@@ -108,6 +109,6 @@ export class RecoveryLineAllocationRepository {
    const shared=mapRecoveryReceiptToLines(parsed.data.input);
    if(shared.length!==parsed.data.lines.length||shared.some(line=>!parsed.data.lines.some(saved=>saved.lineId===line.lineId&&saved.rule===line.rule&&saved.sourceRef===line.sourceRef&&JSON.stringify(saved.gross)===JSON.stringify(line.gross)&&JSON.stringify(saved.net)===JSON.stringify(line.net))))fail("INVALID_RECEIPT_LINE_RESULT");
    return parsed.data;
-  });
+  }), () => new ReceiptLineAllocationError("RECEIPT_LINE_FORBIDDEN"));
  }
 }

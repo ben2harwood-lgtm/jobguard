@@ -1,3 +1,4 @@
+import { RequestBindingRefusedError } from "./request-binding-error.js";
 import type { Pool } from "pg";
 import { z } from "zod";
 import { WorkOrderError } from "@jobguard/core";
@@ -9,7 +10,7 @@ import { WorkOrderRepository, derivedUuid, workOrderFailure } from "./work-order
 import { generateWorkOrderSample, type WorkOrderDemo } from "./work-order-fixtures.js";
 
 const ref = z.string().regex(/^fixture:[a-z0-9_-]{1,112}$(?![\s\S])/u);
-export const connectorPromotionV1 = z.object({ version: z.literal("connector-promotion.v1"), namespace: ref, eventId: ref }).strict();
+export const connectorPromotionV1 = z.object({ version: z.literal("connector-promotion.v1"), namespace: ref, eventId: ref, billingImport: z.string().uuid().transform(value => value.toLowerCase()).optional() }).strict();
 const staged = z.object({ namespace: ref, eventId: ref, kind: z.enum(["work_order", "materials_issue", "billing_status"]), subject: ref,
   revision: z.number().int().positive(), document: ref.nullable(), result: z.record(z.string(), z.unknown()).nullable(), hold: z.string().nullable() }).strict();
 export type StagedPromotionEvent = z.infer<typeof staged>;
@@ -19,13 +20,19 @@ export class ConnectorPromotionRepository {
   constructor(private readonly pool: Pool) {}
   private async events(db: TenantTransaction, sessionId: string, namespace: string | null, eventId: string | null) {
     const value = (await db.$client.query<{ value: unknown }>("SELECT app.connector_promotion($1,$2,$3,NULL,NULL) value", [sessionId, namespace, eventId])).rows[0]!.value;
-    return z.array(staged).parse(value);
+    return z.array(z.unknown()).parse(value).flatMap(row => {
+      const parsed = staged.safeParse(row);
+      return parsed.success ? [parsed.data] : [];
+    });
   }
   async list(sessionId: string) {
     try {
       const context: VerifiedTenantContext = await contractorSessionContext(this.pool, sessionId);
       return await withTenant(this.pool, context, db => this.events(db, sessionId, null, null));
-    } catch (error) { throw workOrderFailure(error); }
+    } catch (error) {
+      if (error instanceof RequestBindingRefusedError) throw new WorkOrderError("NOT_FOUND");
+      throw workOrderFailure(error);
+    }
   }
   async promote(sessionId: string, raw: unknown) {
     const parsed = connectorPromotionV1.safeParse(raw);
@@ -36,7 +43,13 @@ export class ConnectorPromotionRepository {
       return await withTenant(this.pool, context, async db => {
         const input = parsed.data;
         const event = (await this.events(db, sessionId, input.namespace, input.eventId))[0]!;
-        if (event.kind === "billing_status") throw new WorkOrderError("INVALID_COMMAND");
+        if (event.kind === "billing_status") {
+          if (!input.billingImport) throw new WorkOrderError("INVALID_COMMAND");
+          const result = { version: "connector-billing-status-link.v1", billingImport: input.billingImport };
+          return (await db.$client.query<{ value: Record<string, unknown> }>("SELECT app.connector_promotion($1,$2,$3,$4,$5::jsonb) value",
+            [sessionId, event.namespace, event.eventId, derivedUuid(`${context.tenantId}:${event.namespace}:${event.eventId}`), JSON.stringify(result)])).rows[0]!.value;
+        }
+        if (input.billingImport) throw new WorkOrderError("INVALID_COMMAND");
         if (event.result) return event.result;
         const commandId = derivedUuid(`${context.tenantId}:${event.namespace}:${event.eventId}`);
         let result: Record<string, unknown>;
@@ -61,7 +74,10 @@ export class ConnectorPromotionRepository {
         return (await db.$client.query<{ value: Record<string, unknown> }>("SELECT app.connector_promotion($1,$2,$3,$4,$5::jsonb) value",
           [sessionId, event.namespace, event.eventId, commandId, JSON.stringify(result)])).rows[0]!.value;
       });
-    } catch (error) { throw workOrderFailure(error); }
+    } catch (error) {
+      if (error instanceof RequestBindingRefusedError) throw new WorkOrderError("NOT_FOUND");
+      throw workOrderFailure(error);
+    }
   }
   /** Read existing fictional ENT-2 setup. No setup transaction or guessed identifiers. */
   private async demo(db: TenantTransaction, tenant: string): Promise<WorkOrderDemo> {

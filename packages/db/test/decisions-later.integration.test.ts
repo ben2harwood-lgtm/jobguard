@@ -9,6 +9,7 @@ import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { runJobChecks } from "@jobguard/core";
 import { authenticatePracticeSession, DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID, DEMO_IDENTITY_USER_ID,
   issuePracticeSession, listDecisionInbox, migrate, persistFindings, suppressAdvisoryFinding, withTenant, verifyAuditChain } from "../src/index.js";
+import { JobPartiesApplication } from "../../../apps/api/src/job-parties.application.js";
 import { DecisionsApplication } from "../../../apps/api/src/decisions/decisions.application.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool;
@@ -152,4 +153,51 @@ it("L063 proof for another scope and pending uploads do not complete the current
       VALUES($1,$2,$3,$4,$5,$6,'application/pdf',100,'standard_evidence',clock_timestamp()+interval '1 day')`, [randomUUID(), DEMO_TENANT_ID, f.job, f.scope, `synthetic/later/${randomUUID()}`, "b".repeat(64)]);
   });
   expect((await f.app.evaluate(f.command)).counts.mandatory).toBe(1);
+});
+
+it("the owner can check findings on a parties import; a stranger's forged ancestry stays NOT_FOUND", async () => {
+  const owner = await fixture(), stranger = await fixture();
+  const parties = new JobPartiesApplication(runtime);
+  const source = await parties.view({ sessionId: owner.session }, owner.job);
+  expect(source.current).not.toBeNull();
+  const imported = await parties.adopt({ sessionId: owner.session }, owner.job, {
+    version: "job-parties-import.v1", commandId: randomUUID(), expectedBindingId: source.current!.bindingId,
+  });
+  expect((await admin.query("SELECT 1 FROM app.job_import_v3 WHERE tenant_id=$1 AND job_id=$2", [DEMO_TENANT_ID, imported.jobId])).rowCount).toBe(0);
+  const receipt = (await admin.query("SELECT result FROM app.command_receipt WHERE tenant_id=$1 AND command_type='job.adopt_in_flight' AND status='succeeded' AND semantic_key=$2",
+    [DEMO_TENANT_ID, `import:${imported.jobId}`])).rows[0];
+  expect(receipt.result).toMatchObject({ jobId: imported.jobId, sourceJobId: owner.job });
+  const evaluate = (app: DecisionsApplication) => app.evaluate({ ...owner.command, commandId: randomUUID(), jobId: imported.jobId });
+  await expect(evaluate(owner.app)).resolves.toMatchObject({ version: "decision-inbox.v1" });
+  await expect(evaluate(stranger.app)).rejects.toMatchObject({ code: "NOT_FOUND", message: "NOT_FOUND" });
+  await withTenant(runtime, stranger.auth.context, db => db.$client.query("SELECT * FROM app.append_audit($1)", [JSON.stringify([{
+    id: randomUUID(), version: "audit.v1", actorRef: `membership:${DEMO_MEMBERSHIP_ID}`,
+    eventType: "job.imported_baseline_attested", subjectType: "job", subjectRef: imported.jobId,
+    payload: { references: { sourceJobId: stranger.job } },
+  }])]));
+  await expect(evaluate(stranger.app)).rejects.toMatchObject({ code: "NOT_FOUND", message: "NOT_FOUND" });
+  await expect(evaluate(owner.app)).resolves.toMatchObject({ version: "decision-inbox.v1" });
+  // Both receipt support and its checked parent are load-bearing. Mutate only
+  // inside rollback transactions; the product definition is never committed.
+  for (const mutation of ["remove_receipt", "remove_parent"] as const) {
+    const db = await admin.connect();
+    try {
+      await db.query("BEGIN");
+      await db.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
+      const definition = (await db.query("SELECT pg_get_functiondef('app.decision_check_command(text,jsonb,text,jsonb)'::regprocedure) body")).rows[0].body as string;
+      const pattern = mutation === "remove_receipt"
+        ? / OR EXISTS\(SELECT 1 FROM app\.command_receipt rv WHERE[^\n]+?rv\.result->>'sourceJobId'=source\.id::text\)/
+        : / AND rv\.result->>'sourceJobId'=source\.id::text/;
+      expect(definition).toMatch(pattern);
+      await db.query(definition.replace(pattern, ""));
+      const result = db.query("SELECT app.decision_check_command($1,$2,'begin') result", [
+        mutation === "remove_receipt" ? owner.auth.digest : stranger.auth.digest,
+        JSON.stringify({ ...owner.command, commandId: randomUUID(), jobId: imported.jobId }),
+      ]);
+      if (mutation === "remove_receipt") await expect(result).rejects.toMatchObject({ message: "NOT_FOUND" });
+      else expect((await result).rows[0].result).toEqual({ replay: false });
+    } finally { await db.query("ROLLBACK"); db.release(); }
+  }
+  await expect(evaluate(stranger.app)).rejects.toMatchObject({ code: "NOT_FOUND", message: "NOT_FOUND" });
+  await expect(evaluate(owner.app)).resolves.toMatchObject({ version: "decision-inbox.v1" });
 });

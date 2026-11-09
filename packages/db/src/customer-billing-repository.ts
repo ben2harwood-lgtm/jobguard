@@ -1,4 +1,4 @@
-import{createHash,randomUUID}from"node:crypto";import type{Pool}from"pg";import{z}from"zod";import{createSyntheticInvoicePdf,formatCustomerInvoiceNumber,projectInvoiceBalance,CUSTOMER_INVOICE_POLICY_VERSION,REAL_CUSTOMER_INVOICE_ISSUE_ENABLED,SYNTHETIC_INVOICE_WATERMARK,customerPaymentV1,customerPaymentReversalV1,money}from"@jobguard/core";import{appendOutboundAction}from"./outbox.js";import{appendAuditBatch}from"./audit.js";import{CommandError,UserCommandDispatcher,consequentialCommandV1Schema,type ConsequentialCommand}from"./commands.js";import{withTenant,type VerifiedTenantContext}from"./tenant-context.js";
+import{createHash,randomUUID}from"node:crypto";import type{Pool}from"pg";import{z}from"zod";import{createSyntheticInvoicePdf,formatCustomerInvoiceNumber,projectInvoiceBalance,CUSTOMER_INVOICE_POLICY_VERSION,REAL_CUSTOMER_INVOICE_ISSUE_ENABLED,SYNTHETIC_INVOICE_WATERMARK,customerPaymentV1,customerPaymentReversalV1,money}from"@jobguard/core";import{appendOutboundAction}from"./outbox.js";import{appendAuditBatch}from"./audit.js";import{CommandError,UserCommandDispatcher,consequentialCommandV1Schema}from"./commands.js";import{withTenant,type VerifiedTenantContext}from"./tenant-context.js";
 const uuid=z.guid({ error: "Invalid uuid" }),issuer=z.object({legalName:z.string().trim().min(1).max(160),address:z.string().trim().min(1).max(500),vatNumber:z.string().trim().max(32).nullable()}).strict();
 export const issueCustomerInvoiceV1=z.object({version:z.literal("customer-invoice.issue.v1"),command:consequentialCommandV1Schema,finalAccountRevisionId:uuid,issuedOn:z.string().regex(/^\d{4}-\d{2}-\d{2}$/u),issuer}).strict();
 export const creditCustomerInvoiceV1=z.object({version:z.literal("customer-credit-note.issue.v1"),command:consequentialCommandV1Schema,invoiceId:uuid,amountPence:z.number().int().positive(),reason:z.string().trim().min(1).max(240)}).strict();
@@ -70,15 +70,23 @@ export class CustomerBillingCommandService{
    return result;
   });
  }
- async reversePayment(context:VerifiedTenantContext,raw:unknown){const p=customerPaymentReversalV1.parse(raw),command:ConsequentialCommand={version:"command.v1",commandId:p.commandId,commandType:"customer_payment.reverse",semanticKey:`payment-reversal:${p.paymentId}`,actorMembershipId:p.actorMembershipId,subjectType:"job",subjectRef:p.jobId,authorizationId:randomUUID(),action:{actionType:"customer_payment.reverse",recipient:null,contentHash:sha(JSON.stringify(p)),aggregateRevision:0,amountPence:null,currency:null,policyVersion:"manual_receipt_v1",expiresAt:new Date(Date.now()+300000)}};return this.dispatcher.dispatch(context,command,{
-  lock:async(db,c)=>{
-   // Preserve the server-generated expiry on retries, including concurrent ones.
-   await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,475))",[`${context.tenantId}:payment-reversal:${p.paymentId}`]);
-   const prior=(await db.$client.query<{expires_at:Date}>(`SELECT a.expires_at FROM app.customer_payment_reversal x
-    JOIN app.action_authorization a ON(a.tenant_id,a.id)=(x.tenant_id,x.authorization_id)
-    WHERE x.tenant_id=$1 AND x.job_id=$2 AND x.payment_id=$3`,[context.tenantId,p.jobId,p.paymentId])).rows[0];
-   if(prior)c.action.expiresAt=new Date(prior.expires_at);
-  },mutate:async(db,c)=>{const row=(await db.$client.query<any>(`SELECT p.invoice_id FROM app.customer_payment p JOIN app.customer_invoice i ON(i.tenant_id,i.id)=(p.tenant_id,p.invoice_id) WHERE p.tenant_id=$1 AND p.job_id=$2 AND p.id=$3`,[context.tenantId,p.jobId,p.paymentId])).rows[0];if(!row)throw new Error("PAYMENT_NOT_FOUND");const id=randomUUID();await db.$client.query(`INSERT INTO app.customer_payment_reversal(id,tenant_id,job_id,payment_id,authorization_id,reason)VALUES($1,$2,$3,$4,$5,$6)`,[id,context.tenantId,p.jobId,p.paymentId,c.authorizationId,p.reason]);return{reversalId:id,invoiceId:row.invoice_id}}});}
+ async reversePayment(context:VerifiedTenantContext,raw:unknown){
+  const p=customerPaymentReversalV1.parse(raw);
+  return withTenant(this.pool,context,async db=>{
+   const member=(await db.$client.query<{role:string}>(`SELECT role FROM app.membership WHERE tenant_id=$1 AND id=$2 AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp())`,[context.tenantId,p.actorMembershipId])).rows[0];
+   if(!member||member.role!=="owner")throw new CommandError("FORBIDDEN");
+   const payment=(await db.$client.query<{invoice_id:string}>(`SELECT invoice_id FROM app.customer_payment WHERE tenant_id=$1 AND job_id=$2 AND id=$3`,[context.tenantId,p.jobId,p.paymentId])).rows[0];
+   if(!payment)throw new Error("PAYMENT_NOT_FOUND");
+   // The checked routine owns authorization, command/invoice locking and replay.
+   const row=(await db.$client.query<{reversal_id:string}>(`SELECT * FROM app.reverse_practice_customer_receipt($1,$2,$3,$4,$5,$6,$7)`,[context.tenantId,p.jobId,payment.invoice_id,p.paymentId,p.actorMembershipId,p.commandId,p.reason])).rows[0]!;
+   const seen=(await db.$client.query(`SELECT 1 FROM app.audit_event WHERE tenant_id=$1 AND event_type='command.succeeded' AND payload->'references'->>'commandId'=$2`,[context.tenantId,p.commandId])).rowCount;
+   if(!seen){
+    const reversal=(await db.$client.query<{authorization_id:string}>(`SELECT authorization_id FROM app.customer_payment_reversal WHERE tenant_id=$1 AND id=$2`,[context.tenantId,row.reversal_id])).rows[0]!;
+    await appendAuditBatch(db,[{id:randomUUID(),version:"audit.v1",actorRef:`membership:${p.actorMembershipId}`,eventType:"command.succeeded",subjectType:"job",subjectRef:p.jobId,payload:{references:{commandId:p.commandId,authorizationId:reversal.authorization_id},classifications:{action:"commercial"}}}]);
+   }
+   return{reversalId:row.reversal_id,invoiceId:payment.invoice_id};
+  });
+ }
  async balance(context:VerifiedTenantContext,invoiceId:string){return withTenant(this.pool,context,async db=>{const r=(await db.$client.query<any>(`SELECT i.total_pence,COALESCE((SELECT sum(amount_pence) FROM app.customer_credit_note c WHERE(c.tenant_id,c.invoice_id)=(i.tenant_id,i.id)),0) credit_pence,COALESCE((SELECT sum(p.amount_pence) FROM app.customer_payment p WHERE(p.tenant_id,p.invoice_id)=(i.tenant_id,i.id)),0) receipt_pence,COALESCE((SELECT sum(p.amount_pence) FROM app.customer_payment p JOIN app.customer_payment_reversal r ON(r.tenant_id,r.payment_id)=(p.tenant_id,p.id) WHERE(p.tenant_id,p.invoice_id)=(i.tenant_id,i.id)),0) reversed_pence FROM app.customer_invoice i WHERE i.tenant_id=$1 AND i.id=$2`,[context.tenantId,invoiceId])).rows[0];if(!r)throw new Error("INVOICE_NOT_FOUND");return projectInvoiceBalance({totalPence:Number(r.total_pence),creditPence:Number(r.credit_pence),receiptPence:Number(r.receipt_pence),reversedReceiptPence:Number(r.reversed_pence)})})}
 }
 

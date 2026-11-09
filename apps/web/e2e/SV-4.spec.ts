@@ -45,7 +45,7 @@ test("DW2/DW4/DW9: persisted completion survives reload, Jobs and a second brows
     const conflict = await second.request.post(path, { data: { ...data, commandId: randomUUID() } });
     expect(conflict.status()).toBe(409); expect((await conflict.json()).code).toBe("FINAL_ACCOUNT_ALREADY_LOCKED");
   } finally { await other.close(); }
-  await page.goto("/");
+  await page.goto("/classic");
   await page.locator(`a[href='/jobs/${fixture.jobId}']`).click();
   await page.getByRole("link", { name: "Final account and invoices", exact: true }).click();
   await V('lock-state','Final account completed');
