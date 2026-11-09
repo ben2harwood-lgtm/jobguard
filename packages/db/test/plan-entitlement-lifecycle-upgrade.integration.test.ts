@@ -298,6 +298,10 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
         expected = expected.replaceAll(before, after);
       }
       expect(current?.definition).toEqual(expected);
+    } else if (prior.nspname === "app" && prior.proname === "mon3_activate" && prior.args === "t uuid, digest text, command_id uuid, v jsonb") {
+      const migration = await readFile(new URL("../migrations/0822_second_job_card_gate_filters.sql", import.meta.url), "utf8");
+      const body = migration.split("CREATE OR REPLACE FUNCTION app.mon3_activate")[1]!.split("AS $$")[1]!.split("$$;")[0];
+      expect(current?.definition?.split("$function$")[1]).toEqual(body);
     } else if (ent5Bodies.has(routineKey(`${prior.nspname}.${prior.proname}(${prior.args})`))) {
       expect(current?.definition?.split("$function$")[1]).toEqual(ent5Bodies.get(routineKey(`${prior.nspname}.${prior.proname}(${prior.args})`)));
     } else {

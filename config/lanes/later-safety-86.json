@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-86": {
+      "branches": [
+        "codex/sandbox/later-safety-86"
+      ],
+      "note": "LATER-SAFETY-86 RED: synthetic second-job card gate filters.",
+      "allow": [
+        "packages/db/migrations/0822_second_job_card_gate_filters.sql",
+        "packages/db/test/free-first-job-lifecycle.integration.test.ts",
+        "packages/db/test/migration-proofs/0822_second_job_card_gate_filters.proof.json",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts"
+      ]
+    }
+  }
+}
