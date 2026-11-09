@@ -163,3 +163,21 @@ describe("LATER-SAFETY-24 receipt delivery cap", () => {
     expect(db.inserts("goods_receipt")[0]!.values.slice(6, 11)).toEqual(["10", delivered, accepted, rejected, missing]);
   });
 });
+
+
+describe("LATER-SAFETY-35 fixture intake delivery cap", () => {
+  it.each(["1", "7.999999", "8", "9.999999"])("refuses the 10-unit fixture against %s ordered", async ordered => {
+    const db = new RecordedSql(), query = db.query;
+    db.query = async (sql, values = []) => {
+      if (sql.includes("FROM app.supplier_document_intake")) return { rows: [{ n: "0" }], rowCount: 1 };
+      if (sql.includes("SELECT id,status FROM app.supplier_document") || sql.includes("document_number=$4")) return { rows: [], rowCount: 0 };
+      if (sql.includes("FROM app.purchase_order_draft")) return { rows: [{ id: job, quantity_decimal: ordered }], rowCount: 1 };
+      return query(sql, values);
+    };
+    await expect(new SupplierDocumentRepository(db.pool()).intake(context, job, {
+      version: "supplier-document-intake.v1", fixtureId: "materials-B-delivery", channel: "picker", expectedRevision: 0,
+    })).rejects.toMatchObject({ code: "ORDER_DELIVERY_EXCEEDS_ORDERED" });
+    for (const table of ["goods_receipt", "supplier_document_intake", "audit_event", "watchdog_command_result"]) expect(db.inserts(table)).toHaveLength(0);
+    expect(db.calls.some(call => call.sql === "ROLLBACK")).toBe(true);
+  });
+});
