@@ -209,8 +209,7 @@ export function VoiceJourney() {
         // Reload the existing screen's read models after the immutable lock commits.
         await until(() => text("lock-state") === "Final account completed", signal);
         await click("Load the saved final check", signal);
-        await until(() => screen().querySelector('[data-testid="final-check-reveal"]')?.getAttribute("aria-busy") === "false", signal);
-        if (!done[6]!()) await click("Run the final check (practice)", signal);
+        await click("Run the final check (practice)", signal);
         while (!done[6]!()) {
           await new Promise(resolve => setTimeout(resolve, 3000)); signal.throwIfAborted();
           await click("Load the saved final check", signal);

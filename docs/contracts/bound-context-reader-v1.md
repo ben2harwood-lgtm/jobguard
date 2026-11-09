@@ -36,19 +36,3 @@ Executed local checks on 8 November 2026, using the installed tools from this wo
 - The lane allow list equals every branch-changed path outside `config/lanes/` (using the merge base with `origin/main`). Whitespace checks passed. This branch already contained proposal commit `f9e1f59fe` at session entry; no Git writes were performed. The router must reconcile current main before pushing.
 
 Real PostgreSQL suites run in GitHub CI after the router pushes because this sandbox cannot start PostgreSQL or bind localhost. Required database checks include `bound-context-reader.integration.test.ts`, `lp-0-grant-freeze.integration.test.ts` and `migfix-7-upgrade.integration.test.ts`, with the normal migration suites. PostgreSQL execution, full CI, independent exact-head RED review and Ben's typed yes remain pending. The router owns commit and push. This is an NOPR proposal handoff.
-
-### CI repair try 1, 9 November 2026
-
-PR #680 failed only `web-shards (6)` in CI run `42667601638` at `57b56c89c34f10d5e8f925410d1914a9473621bf`. The connected GitHub log and artifact `13698278896` show 132 passing browser tests and one failure, desktop `WALK-3 Play the whole thing`. Its trace records the saved Final Check GET returning `state=completed` immediately after the immutable lock. The walkthrough then waited for `Run the final check (practice)`, which the completed read correctly removes, until the step timed out. No final-check run POST occurred.
-
-The repair waits for the saved read to finish and requests a run only while the saved completion predicate is false. Regression coverage exercises a delayed completed read with the run button removed and a delayed pending read that still requires the existing run and reload controls. The lane includes the two affected walkthrough paths. The existing migration and both sides of the main merge are preserved.
-
-Executed checks from this worktree using installed binaries because the host pnpm launcher stalled before starting its scripts.
-
-- `apps/web/node_modules/.bin/vitest run --maxWorkers=2 app/practice-company/walkthrough/voice-journey.test.tsx app/practice-company/walkthrough/screen-actions.test.ts app/ui/walkthrough/walkthrough.test.tsx`, invoked from `apps/web` as `./node_modules/.bin/vitest`, passed 3 files and 70 tests.
-- The initial targeted run found missing API build outputs. Compiling core, config, storage, AI, DB and API with the installed TypeScript compiler supplied the normal workspace artifacts, after which the same targeted tests passed.
-- `./node_modules/.bin/tsc -p apps/web/tsconfig.json --noEmit` passed.
-- `LANE_BASE_REF=origin/main node tools/lint.mjs` passed, including lane boundaries and 362 migration lint checks. Existing computed-import notices remain informational.
-- `git diff --check` passed.
-
-Browser and PostgreSQL execution remain in GitHub CI under this sandbox's constraints. The piece remains RED and requires independent review against the repaired head. This repair adds no product behavior or policy decision.

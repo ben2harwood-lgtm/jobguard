@@ -140,39 +140,3 @@ describe("step 5 saved evidence", () => {
     expect(evidenceDone()).toBe(false);
   });
 });
-
-describe("step 7 saved final check", () => {
-  it.each([true, false])("waits for the saved read before requesting a run, already completed: %s", async completed => {
-    let busy = false, status = "Running JobGuard's final check";
-    const clicks: string[] = [];
-    const names = ["Build final account", "Load the saved final check", "Run the final check (practice)"];
-    const buttons = names.map(textContent => ({
-      textContent, get disabled() { return busy; }, closest: () => null,
-      getClientRects: () => [{}], setAttribute: vi.fn(), scrollIntoView: vi.fn(),
-      click: () => {
-        clicks.push(textContent);
-        busy = true;
-        setTimeout(() => {
-          if (completed || textContent === "Run the final check (practice)") status = "JobGuard's final check found nothing missing from your bill.";
-          busy = false;
-        }, 20);
-      },
-    }));
-    const root = {
-      querySelectorAll: () => status.startsWith("JobGuard's final check found") ? buttons.slice(0, 2) : buttons,
-      querySelector: (selector: string) => ({
-        getAttribute: () => String(busy),
-        textContent: selector.includes("lock-state") ? "Final account completed"
-          : selector.includes("final-gross") ? "£1,230.00"
-          : selector.includes("final-check-status") ? status : "",
-      }),
-    };
-    vi.stubGlobal("document", { getElementById: () => root, querySelectorAll: () => [] });
-    renderToStaticMarkup(<VoiceJourney />);
-    await memo.steps[6]!.autoAction({} as HTMLElement, new AbortController().signal);
-    expect(clicks).toEqual(completed
-      ? ["Load the saved final check"]
-      : ["Load the saved final check", "Run the final check (practice)", "Load the saved final check"]);
-    expect(finalCheckDone()).toBe(true);
-  });
-});

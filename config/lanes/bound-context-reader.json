@@ -13,9 +13,7 @@
         "packages/db/test/bound-context-reader.integration.test.ts",
         "packages/db/test/bound-context-reader.test.ts",
         "packages/db/test/migration-proofs/0697_bound_context_reader.proof.json",
-        "packages/db/test/migration-proofs/0956_bound_context_reader.proof.json",
-        "apps/web/app/practice-company/walkthrough/voice-journey.tsx",
-        "apps/web/app/practice-company/walkthrough/voice-journey.test.tsx"
+        "packages/db/test/migration-proofs/0956_bound_context_reader.proof.json"
       ]
     }
   }
