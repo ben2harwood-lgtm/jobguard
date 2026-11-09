@@ -33,6 +33,7 @@
         "packages/db/test/invoice-later.integration.test.ts",
         "packages/db/test/invoice-line-vat-signed-split.integration.test.ts",
         "packages/db/test/j3-landing-allocation.integration.test.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
         "packages/db/test/migration-proofs/0709_fee_result_json_errors.proof.json",
         "packages/db/test/migration-proofs/0710_accounting_export_route_read_exported.proof.json",
         "packages/db/test/migration-proofs/0711_duplicate_disposition_lifecycle.proof.json",

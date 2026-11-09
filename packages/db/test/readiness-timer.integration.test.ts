@@ -240,7 +240,7 @@ it.each(["europe/london", "EUROPE/LONDON", "utc"])("discovers a confirmed due pl
  await importWatchdogFixtureJob(admin, caseTenant, caseJob);
  const today = (await admin.query("SELECT to_char(CURRENT_TIMESTAMP AT TIME ZONE $1,'YYYY-MM-DD') today", [timeZone])).rows[0].today as string;
  // Use the real confirmation boundary: these names pass its time-zone validator.
- await store().confirm(testTenantContext(caseTenant), "member:synthetic-builder", { ...plan,
+ await store().confirm(testTenantContext(caseTenant), await actorFor(caseTenant), { ...plan,
   scope: caseScope, plannedDate: today, timeZone });
  const expected = { tenant_id: caseTenant, job_id: caseJob, task_id: caseScope.taskId };
  // Prove the old routine silently excludes the confirmed plan, then restore
@@ -265,7 +265,7 @@ it("skips an unknown zone while discovering a valid due plan in the same tenant"
  const badScope = { tenantId: mixedTenant, jobId: mixedJob, taskId: randomUUID() };
  const goodScope = { tenantId: mixedTenant, jobId: mixedJob, taskId: randomUUID() };
  const today = (await admin.query("SELECT to_char(CURRENT_TIMESTAMP AT TIME ZONE 'UTC','YYYY-MM-DD') today")).rows[0].today as string;
- await store().confirm(mixedContext, "member:synthetic-builder", { ...plan,
+ await store().confirm(mixedContext, await actorFor(mixedTenant), { ...plan,
   scope: badScope, plannedDate: today, timeZone: "UTC" });
  const timeZone = "JobGuard/Unknown";
  expect((await admin.query("SELECT name FROM pg_catalog.pg_timezone_names WHERE lower(name)=lower($1)", [timeZone])).rows).toEqual([]);
@@ -275,7 +275,7 @@ it("skips an unknown zone while discovering a valid due plan in the same tenant"
   SELECT tenant_id,job_id,task_id,2,$4,$5,audit_event_id FROM app.scheduled_readiness_plan
   WHERE tenant_id=$1 AND job_id=$2 AND task_id=$3 AND fact_revision=1`,
   [mixedTenant, mixedJob, badScope.taskId, createHash("sha256").update(JSON.stringify(payload)).digest("hex"), payload]);
- await store().confirm(mixedContext, "member:synthetic-builder", { ...plan,
+ await store().confirm(mixedContext, await actorFor(mixedTenant), { ...plan,
   scope: goodScope, plannedDate: today, timeZone: "utc" });
  const rows = (await infrastructure.query("SELECT * FROM infrastructure.discover_readiness_plans() WHERE tenant_id=$1", [mixedTenant])).rows;
  expect(rows).toEqual([{ tenant_id: mixedTenant, job_id: mixedJob, task_id: goodScope.taskId }]);
