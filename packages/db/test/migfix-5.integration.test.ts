@@ -3,6 +3,8 @@ import type { PoolClient } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { approveVariation, priceVariation } from "@jobguard/core";
 import { FinalAccountLockRepository } from "../src/final-account-lock-repository.js";
+import { FinalCheckCompletionRepository } from "../src/shadow-detection-repository.js";
+import { authenticatePracticeSession, practiceMaterialPool } from "../src/practice-session.js";
 import { PracticeInvoiceRepository } from "../src/practice-invoice-repository.js";
 import { createLockFixture, closeLockFixture, seedAccount, prepareLock, addFixtureCapture, asFixtureTenant, LOCK_OWNER, LOCK_HASH, type LockFixture } from "./final-account-lock.integration.test.js";
 import { publishFixtureCompletion } from "./sv5pre-fixtures.js";
@@ -172,14 +174,25 @@ describe("MIGFIX-5 customer billing integrity", () => {
     await expect(credit(f, a, invoice, 1, 14)).rejects.toThrow("CREDIT_EXCEEDS_AVAILABLE_AMOUNT");
   }, 90000);
 
-  it("regression: a revised account cannot rebill invoiced scope; the supplementary path bills only the added line (132,000p aggregate)", async () => {
+  it("regression: a revised account cannot rebill invoiced scope; the supplementary path bills only the added line (132,000p aggregate)", async ({ onTestFinished }) => {
+    const environment = process.env.JOBGUARD_ENV;
+    onTestFinished(() => {
+      if (environment === undefined) delete process.env.JOBGUARD_ENV;
+      else process.env.JOBGUARD_ENV = environment;
+    });
+    process.env.JOBGUARD_ENV = "synthetic_demo";
     // Only a genuine Final Check catch may gain its first price/approval after lock.
     const checkFixture = { ...f, logs: [] }, job = await seedFinalCheckJob(checkFixture);
     const a = { ...job,
       draftId: (await f.admin.query("SELECT final_account_draft_id FROM app.final_account_revision WHERE tenant_id=$1 AND id=$2", [job.tenantId, job.revisionId])).rows[0].final_account_draft_id as string,
     };
-    const revealed = await availableFinalCheck(checkFixture, job), repo = new FinalAccountLockRepository(f.runtime);
-    const input = (revision: string, hash: string, kind: "final" | "supplementary" = "final") => ({ ...invoiceInput(a, revision, hash, kind), actorMembershipId: FINAL_CHECK_ACTOR });
+    const revealed = await availableFinalCheck(checkFixture, job);
+    await new FinalCheckCompletionRepository(f.shadow).publish(a.context, {
+      version: "final-check-publication.v1", jobId: a.jobId, runId: revealed.runId, checkId: randomUUID(),
+    });
+    const actor = await authenticatePracticeSession(f.runtime, job.sessionId, a.tenantId);
+    const scoped = practiceMaterialPool(f.runtime, actor.digest), repo = new FinalAccountLockRepository(scoped);
+    const input = (revision: string, hash: string, kind: "final" | "supplementary" = "final") => ({ ...invoiceInput(a, revision, hash, kind), actorMembershipId: actor.membershipId });
     await repo.issueInvoice(a.context, input(a.revisionId, LOCK_HASH));
     expect((await f.admin.query("SELECT total_pence FROM app.customer_invoice WHERE tenant_id=$1 AND job_id=$2", [a.tenantId, a.jobId])).rows.map(r => Number(r.total_pence))).toEqual([120000]);
     const { variationId: variation } = await new FinalCheckRepository(f.runtime).confirmCatch(a.context, a.jobId, job.digest, {
