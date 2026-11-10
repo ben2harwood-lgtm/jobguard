@@ -1,5 +1,5 @@
 {
-  "migration": "0723_firm_profile.sql",
+  "migration": "0726_firm_profile.sql",
   "lp0": [
     {
       "section": "authorityPaths",
@@ -15,7 +15,7 @@
           "LP-12": "Review use of the existing 0697 reader, runtime grants and FORCE RLS."
         },
         "sources": [
-          "packages/db/migrations/0723_firm_profile.sql",
+          "packages/db/migrations/0726_firm_profile.sql",
           "packages/db/src/firm-profile-repository.ts"
         ],
         "tests": [
@@ -114,7 +114,7 @@
         },
         "downstream": "A synthetic company profile supplies new quote snapshots; issued documents remain immutable.",
         "sources": [
-          "packages/db/migrations/0723_firm_profile.sql",
+          "packages/db/migrations/0726_firm_profile.sql",
           "packages/db/src/firm-profile-repository.ts"
         ],
         "tests": [
