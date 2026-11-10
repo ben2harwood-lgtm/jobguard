@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "lanes": {
+    "lp-8a-billing-revokes-r2": {
+      "branches": [
+        "codex/sandbox/lp-8a-billing-revokes-r2"
+      ],
+      "allow": [
+        "packages/db/migration-notes/0980_lp8a_billing_revokes.md",
+        "packages/db/migrations/0980_lp8a_billing_revokes.sql",
+        "packages/db/src/customer-billing-repository.ts",
+        "packages/db/src/final-account-repository.ts",
+        "packages/db/test/administrative-role-setup.ts",
+        "packages/db/test/lp8a-billing-revokes.integration.test.ts",
+        "packages/db/test/lp8a-billing-revokes.test.ts",
+        "packages/db/test/lp8a-legacy-billing-transport.ts",
+        "packages/db/test/migration-proofs/0980_lp8a_billing_revokes.proof.json",
+        "packages/db/tools/synthetic-restore.mjs"
+      ],
+      "note": "RED LP-8a R2, build-ahead relative to passed LP-6c c2ec9e98; no PR in this sandbox."
+    }
+  }
+}

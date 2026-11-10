@@ -10,6 +10,14 @@ import { expect, vi } from "vitest";
 // and exercise ensureRoles themselves (including the restricted-owner suites).
 const testPath = expect.getState().testPath;
 const clusterAdmins = new Map<number, {user:string;password:string}>();
+if (testPath?.endsWith("/audit-dbsrc-03.test.ts")) {
+  vi.doMock("../src/customer-billing-repository.js",async()=>{
+    const actual=await vi.importActual<typeof import("../src/customer-billing-repository.js")>("../src/customer-billing-repository.js");
+    const {legacyBillingTransport}=await import("./lp8a-legacy-billing-transport.js");
+    return legacyBillingTransport(actual);
+  });
+}
+
 // Every real integration suite can use partial schemas through shared fixtures
 // (sessions, repositories or seeds). Select the client per connected database,
 // not per filename/migration list, so mixed old/current databases stay honest.
@@ -58,6 +66,38 @@ if (testPath?.endsWith(".integration.test.ts")) {
         } finally { if (client && !delegated) client.release(); }
       }) as typeof actual.withTenant };
   });
+  // These two unchanged historical specs exercise legacy API receipts and credit
+  // races. Supply their now-required real lock/check fixtures before FIRST issue;
+  // refusal/attack suites and all explicit contexts remain untouched.
+  if (["final-account.integration.test.ts", "audit-dbsrc-03.integration.test.ts"].some(name => testPath?.endsWith(`/` + name))) {
+    vi.doMock("../src/customer-billing-repository.js", async () => {
+      const actual = await vi.importActual<typeof import("../src/customer-billing-repository.js")>("../src/customer-billing-repository.js");
+      class LegacyBillingFixture extends actual.CustomerBillingCommandService {
+        constructor(private readonly fixturePool: Pool) { super(fixturePool); }
+        override async issue(context: Parameters<import("../src/customer-billing-repository.js").CustomerBillingCommandService["issue"]>[0], raw: unknown) {
+          const input = actual.issueCustomerInvoiceV1.parse(raw);
+          const connection = (await this.fixturePool.query<{database:string;port:number}>("SELECT current_database() database,inet_server_port() port")).rows[0]!;
+          const credentials = clusterAdmins.get(Number(connection.port));
+          if (!credentials) throw new Error("Missing legacy billing fixture administrator");
+          const owner = new Pool({host:"127.0.0.1",port:connection.port,database:connection.database,...credentials,max:1});
+          try {
+            const row = (await owner.query(`SELECT r.* FROM app.final_account_revision r JOIN app.final_account_draft d
+              ON(d.tenant_id,d.job_id,d.id)=(r.tenant_id,r.job_id,r.final_account_draft_id)
+              WHERE r.tenant_id=$1 AND r.job_id=$2 AND r.id=$3 AND d.current_revision_id=r.id AND NOT r.issue_blocked
+              AND r.revision=$4 AND r.total_pence=$5
+              AND NOT EXISTS(SELECT 1 FROM app.final_account_lock WHERE tenant_id=r.tenant_id AND job_id=r.job_id)`,
+              [context.tenantId,input.command.subjectRef,input.finalAccountRevisionId,input.command.action.aggregateRevision,input.command.action.amountPence])).rows[0];
+            if(row) {
+              const {prepareBaselineInvoice} = await import("./sv5pre-fixtures.js");
+              await prepareBaselineInvoice(owner,this.fixturePool,context.tenantId,row.job_id,input.command.actorMembershipId,row.id,row.baseline_quote_version_id,Number(row.net_pence));
+            }
+          } finally { await owner.end(); }
+          return super.issue(context,raw);
+        }
+      }
+      return {...actual,CustomerBillingCommandService:LegacyBillingFixture};
+    });
+  }
   vi.doMock("../src/repository-command.js", async () => {
     const actual=await vi.importActual<typeof import("../src/repository-command.js")>("../src/repository-command.js");
     const {legacyRepositoryCommandModule}=await import("./legacy-repository-command-fixture.js");

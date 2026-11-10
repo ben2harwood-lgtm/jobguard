@@ -14,7 +14,7 @@ import { performance } from "node:perf_hooks";
 import { deflateSync } from "node:zlib";
 import { Pool } from "pg";
 import EmbeddedPostgres from "embedded-postgres";
-import { createSyntheticInvoicePdf, money } from "@jobguard/core";
+
 
 const digest = bytes => createHash("sha256").update(bytes).digest("hex");
 const canonical = value => JSON.stringify(value);
@@ -86,16 +86,17 @@ export async function runSyntheticRestoreRehearsal(options = {}, api, fixture) {
   const source = new EmbeddedPostgres({ ...clusterOptions, databaseDir: sourcePath, port: sourcePort });
   const restored = new EmbeddedPostgres({ ...clusterOptions, databaseDir: restoredPath, port: restoredPort });
   const pools = new Set();
-  const pool = (port, user = "postgres", database = "postgres") => { const p = new Pool({ host: "127.0.0.1", port, user, password, database, max: 4 }); pools.add(p); return p; };
+  const pool = (port, user = "postgres", database = "jobguard_synthetic_demo") => { const p = new Pool({ host: "127.0.0.1", port, user, password, database, max: 4 }); pools.add(p); return p; };
   const closePools = async () => { await Promise.all([...pools].map(p => p.end())); pools.clear(); await new Promise(ok => setTimeout(ok, 25)); };
   const pass = (id, detail) => checks.push({ id, status: "PASS", detail });
-  const ids = Object.fromEntries(["tenant", "otherTenant", "identity", "account", "member", "job", "otherJob", "scope", "quote", "draft", "revision", "variation"].map(name => [name, randomUUID()]));
-  const context = api.verifiedTenantContextFromMembership({ tenantId: ids.tenant, membershipId: ids.member, identityUserId: ids.identity });
-  const otherContext = api.verifiedTenantContextFromMembership({ tenantId: ids.otherTenant, membershipId: randomUUID(), identityUserId: ids.identity });
+  const ids = Object.fromEntries(["tenant", "otherTenant", "otherAccount", "otherMember", "identity", "account", "member", "job", "otherJob", "scope", "quote", "draft", "revision", "variation"].map(name => [name, randomUUID()]));
+  const sessionCredential = digest(randomUUID());
+  const context = api.verifiedTenantContextFromMembership({ tenantId: ids.tenant, membershipId: ids.member, identityUserId: ids.identity }, {kind: "real", credential: sessionCredential});
+  const otherContext = api.verifiedTenantContextFromMembership({ tenantId: ids.otherTenant, membershipId: ids.otherMember, identityUserId: ids.identity }, {kind: "real", credential: sessionCredential});
   const fixtureHash = digest("fictional-source-only");
   let exportReceipt;
   try {
-    await source.initialise(); await source.start();
+    await source.initialise(); await source.start(); await source.createDatabase("jobguard_synthetic_demo");
     let admin = pool(sourcePort);
     const postgresVersion = (await admin.query("SHOW server_version")).rows[0].server_version;
     assert.match(postgresVersion, /^16\./);
@@ -112,8 +113,14 @@ export async function runSyntheticRestoreRehearsal(options = {}, api, fixture) {
     assert.ok(migrationNames.includes("0095_job_parties.sql"));
     await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1),($2)", [ids.tenant, ids.otherTenant]);
     await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [ids.identity]);
+    await admin.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", [`${ids.identity}@fictional.invalid`,ids.identity]);
+    await admin.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3)",[ids.identity,ids.tenant,ids.member]);
+    await admin.query("INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at) VALUES($1,$2,'synthetic_demo',$3,'fictional',clock_timestamp()+interval '1 hour')",[randomUUID(),ids.identity,sessionCredential]);
     await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional restore builder')", [ids.account, ids.tenant]);
     await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [ids.member, ids.tenant, ids.account, ids.identity]);
+    await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Other fictional builder')",[ids.otherAccount,ids.otherTenant]);
+    await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')",[ids.otherMember,ids.otherTenant,ids.otherAccount,ids.identity]);
+    await admin.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3)",[ids.identity,ids.otherTenant,ids.otherMember]);
     await admin.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,'Fictional restore job','quoting'),($3,$4,'Other tenant fictional job','draft')", [ids.job, ids.tenant, ids.otherJob, ids.otherTenant]);
     // Supply explicit generated parties before the existing live-state fixture.
     const partyClient = await admin.connect();
@@ -135,6 +142,7 @@ export async function runSyntheticRestoreRehearsal(options = {}, api, fixture) {
     await admin.query("INSERT INTO app.quote_version(id,tenant_id,job_id,version,content_hash,net_value_pence,status) VALUES($1,$2,$3,1,$4,10000,'accepted')", [ids.quote, ids.tenant, ids.job, fixtureHash]);
     await admin.query("INSERT INTO app.final_account_draft(id,tenant_id,job_id) VALUES($1,$2,$3)", [ids.draft, ids.tenant, ids.job]);
     await admin.query("INSERT INTO app.final_account_revision(id,tenant_id,job_id,final_account_draft_id,revision,source_hash,baseline_quote_version_id,currency,tax_policy_version,net_pence,tax_pence,total_pence,issue_blocked,findings) VALUES($1,$2,$3,$4,1,$5,$6,'GBP','candidate_m1_standard_v1',10000,2000,12000,false,'[]')", [ids.revision, ids.tenant, ids.job, ids.draft, fixtureHash, ids.quote]);
+    await admin.query("INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,description,net_pence,ordinal) VALUES($1,$2,$3,$4,'baseline',$5,$6,$5,'Fictional restore baseline',10000,1)",[randomUUID(),ids.tenant,ids.job,ids.revision,ids.quote,ids.scope]);
     await admin.query("UPDATE app.final_account_draft SET current_revision_id=$1,revision=1 WHERE tenant_id=$2 AND id=$3", [ids.revision, ids.tenant, ids.draft]);
     // Generated login exists only inside these disposable clusters. No deployment secrets are read.
     await admin.query(`CREATE ROLE rehearsal_runtime LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_runtime TO rehearsal_runtime`);
@@ -172,13 +180,24 @@ export async function runSyntheticRestoreRehearsal(options = {}, api, fixture) {
     await api.withTenant(runtime, context, db => db.$client.query("INSERT INTO app.synthetic_evidence_original(tenant_id,upload_id,job_id,scope_item_id,object_key,object_version_id,environment,content_type,bytes) VALUES($1,$2,$3,$4,$5,$6,'synthetic_demo','image/png',$7)", [ids.tenant, upload.id, ids.job, ids.scope, upload.objectKey, objectVersion, bytes]));
     await evidenceService.finalize(context, { uploadId: upload.id, objectVersionId: objectVersion, evidenceType: "completion_photo" });
     await new api.ProofCommandService(runtime, storage).complete(context, { version: "proof.complete.v1", commandId: randomUUID(), actorMembershipId: ids.member, jobId: ids.job, scopeItemId: ids.scope, stage: "completion", evidenceId: upload.id, requiredEvidenceType: "completion_photo", decisionId: null });
+    const locks = new api.FinalAccountLockRepository(runtime);
+    await locks.acceptTerms(context,{actorMembershipId:ids.member,commandId:randomUUID(),termsVersion:"synthetic_final_check_terms.v1"});
+    await locks.disposition(context,{jobId:ids.job,actorMembershipId:ids.member,commandId:randomUUID(),scopeItemId:ids.scope,disposition:"done"});
+    await locks.lock(context,{jobId:ids.job,actorMembershipId:ids.member,commandId:randomUUID(),finalAccountRevisionId:ids.revision,expectedRevision:1,declarationVersion:"final_account_declaration.v1"});
+    await admin.query(`CREATE ROLE rehearsal_shadow LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_shadow TO rehearsal_shadow`);
+    const shadow = pool(sourcePort,"rehearsal_shadow"), workerContext = api.verifiedTenantContextForQueuedJob(ids.tenant);
+    const checksRepository = new api.FinalCheckRepository(shadow);
+    const checkManifest = await checksRepository.begin(workerContext,ids.job,"synthetic-restore.v1");
+    for(const item of checkManifest.sources.filter(item=>item.processable)) {
+      await checksRepository.record(workerContext,ids.job,checkManifest.id,item.id,randomUUID(),{version:"final-check.source-result.v1",inputHash:item.inputHash,status:"zero_result",failureCode:null,signalIds:[]});
+    }
+    // Explicit deterministic fake output; checked completion verifies the frozen
+    // evidence inventory. No status UPDATE or invented completion certificate.
+    await checksRepository.reconcile(workerContext,ids.job,checkManifest.id,[]);
+    const invoices = new api.PracticeInvoiceRepository(runtime);
+    const checkedInvoice = await invoices.issue(context,{jobId:ids.job,finalAccountRevisionId:ids.revision,actorMembershipId:ids.member,commandId:randomUUID(),recipient:"restore@example.invalid",issuedOn:"2026-09-20"});
+    const issued = {invoiceId:checkedInvoice.id}, invoicePdfHash=checkedInvoice.pdfSha256;
     const billing = new api.CustomerBillingCommandService(runtime);
-    const invoicePdfHash = digest(createSyntheticInvoicePdf({ invoiceNumber: "SYN-2026-000001", issuerName: "Fictional restore builder", total: money(12000), sourceRevisionId: ids.revision, evidenceVersionIds: [] }));
-    const issued = await billing.issue(context, {
-      version: "customer-invoice.issue.v1", finalAccountRevisionId: ids.revision, issuedOn: "2026-09-20",
-      issuer: { legalName: "Fictional restore builder", address: "Synthetic test address only", vatNumber: null },
-      command: { version: "command.v1", commandId: randomUUID(), commandType: "customer_invoice.issue", semanticKey: `invoice:${ids.revision}`, actorMembershipId: ids.member, subjectType: "job", subjectRef: ids.job, authorizationId: randomUUID(), action: { actionType: "final_account.issue", recipient: null, contentHash: invoicePdfHash, aggregateRevision: 1, amountPence: 12000, currency: "GBP", policyVersion: "candidate_m1_standard_v1", expiresAt: new Date("2099-01-01T00:00:00Z") } },
-    });
     const paymentCommand = { version: "customer-payment.record.v1", commandId: randomUUID(), actorMembershipId: ids.member, jobId: ids.job, invoiceId: issued.invoiceId, paidOn: "2026-09-20", amountPence: 5000, currency: "GBP", method: "bank_transfer", reference: "synthetic-restore-part-payment", builderAttestsReceived: true };
     const payment = await billing.recordPayment(context, paymentCommand);
     const sourceBalance = await billing.balance(context, issued.invoiceId);
