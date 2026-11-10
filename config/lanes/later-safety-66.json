@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-66": {
+      "branches": [
+        "codex/sandbox/later-safety-66"
+      ],
+      "note": "LATER-SAFETY-66 RED builder sign-out; 0836 adds session.revoked per coordinator ruling.",
+      "allow": [
+        "apps/api/src/auth/identity.application.ts",
+        "apps/api/src/auth/identity.controller.ts",
+        "apps/api/src/auth/identity.test.ts",
+        "apps/api/src/auth/persisted-auth-provider.ts",
+        "apps/web/app/api/auth/signout/route.ts",
+        "apps/web/app/lib/identity-server.ts",
+        "apps/web/app/sign-in/sign-in.tsx",
+        "apps/web/e2e/M0-6L.spec.ts",
+        "packages/db/test/identity.integration.test.ts",
+        "packages/db/migrations/0836_builder_session_revoked_event.sql",
+        "packages/db/test/migration-proofs/0836_builder_session_revoked_event.proof.json",
+        "packages/db/test/enterprise-access-upgrade.integration.test.ts"
+      ]
+    }
+  }
+}
