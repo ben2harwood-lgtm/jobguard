@@ -8,6 +8,8 @@
       "note": "REAL-FIRM-PROFILE: RED company-scoped profile and immutable new quote issuers; NOPR build-ahead.",
       "allow": [
         "apps/web/app/api/firm-profile/route.test.ts",
+        "apps/web/app/api/firm-profile/route-context.test.ts",
+        "packages/db/src/index.ts",
         "apps/web/app/api/firm-profile/route.ts",
         "apps/web/app/firm-details/firm-details.test.tsx",
         "apps/web/app/firm-details/firm-details.tsx",

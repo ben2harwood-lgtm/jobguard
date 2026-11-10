@@ -4,12 +4,9 @@ vi.mock("../../lib/identity-server", () => ({ identityApplication: () => ({ sess
 vi.mock("@jobguard/api/identity", () => ({ AuthError: class extends Error {}, identityStatus: () => ({ code: "UNAUTHENTICATED", status: 401 }) }));
 vi.mock("server-only", () => ({}));
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: (name: string) => name === "jobguard_session" ? (stub.identityToken ? { value: stub.identityToken } : undefined) : ({ value: "fictional-session" }) }) }));
-vi.mock("@jobguard/db", () => ({ authenticatePracticeSession: stub.auth, contractorSessionContext: stub.contractor, RequestBindingRefusedError: class extends Error {} }));
+vi.mock("@jobguard/db", () => ({ authenticatePracticeSession: stub.auth, contractorSessionContext: stub.contractor, RequestBindingRefusedError: class extends Error {}, FirmProfileError: class extends Error { constructor(readonly code: string) { super(code); } }, FirmProfileRepository: class { read = stub.read; save = stub.save; } }));
 vi.mock("../../lib/synthetic-server", () => ({ syntheticPool: () => stub.pool, practiceFailure: () => null }));
-vi.mock("../../../../../packages/db/src/firm-profile-repository", async original => ({ ...await original<typeof import("../../../../../packages/db/src/firm-profile-repository")>(),
- FirmProfileRepository: class { read = stub.read; save = stub.save; },
-}));
-import { FirmProfileError } from "../../../../../packages/db/src/firm-profile-repository";
+import { FirmProfileError } from "@jobguard/db";
 import { GET, POST } from "./route";
 const context = { tenantId: "fictional" };
 const request = (origin = "http://localhost:3000", body: unknown = {}) => new Request("http://localhost:3000/api/firm-profile", { method: "POST", headers: { origin, "content-type": "application/json" }, body: JSON.stringify(body) });
@@ -53,4 +50,9 @@ it("uses the real company identity and refuses ambiguous memberships without fal
  stub.identitySession.mockResolvedValue({ memberships: [{ tenantId: "one" }, { tenantId: "two" }] });
  expect((await GET()).status).toBe(403);
  expect(stub.auth).not.toHaveBeenCalled();
+});
+
+it.each([['FORBIDDEN', 403], ['42501', 403], ['INVALID_TENANT_CONTEXT', 403], ['UNAUTHENTICATED', 401]])("maps %s refusals without reporting database unavailability", async (code, status) => {
+ stub.read.mockRejectedValueOnce(Object.assign(new Error(code), { code }));
+ expect((await GET()).status).toBe(status);
 });

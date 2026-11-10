@@ -1,14 +1,16 @@
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { startBeforeMigration, applyMigration, seedHomeOwner, startSession, type Cluster } from "./contractor-practice-session-fixtures.js";
 import { startBlankPracticeCompany } from "../src/blank-practice-company.js";
 import { authenticatePracticeSession } from "../src/practice-session.js";
 import { FirmProfileRepository, firmProfileV1 } from "../src/firm-profile-repository.js";
-import { withTenant } from "../src/tenant-context.js";
+import { verifiedTenantContextFromMembership, type AuthenticatedMembership, withTenant } from "../src/tenant-context.js";
 import { QuoteRepository } from "../src/quote-repository.js";
 import { QuoteDeliveryRepository } from "../src/quote-delivery-repository.js";
 import { UserCommandDispatcher } from "../src/commands.js";
 import { IssueQuoteMutation } from "../src/quote-document-repository.js";
+import { company as practiceCompany } from "./practice-worker-switch-fixtures.js";
+import { ownerTx } from "./extra-fixtures.js";
 import { renderQuotePdf } from "@jobguard/core";
 let c: Cluster;
 const own = "1300_firm_profile.sql";
@@ -18,8 +20,21 @@ beforeAll(async () => {
  c = await startBeforeMigration(own); await applyMigration(c, own); await seedHomeOwner(c);
 }, 240_000);
 afterAll(async () => { await c?.close(); vi.unstubAllEnvs(); });
+// Company tests use a persisted real identity session, never a contractor practice tenant.
+async function realCompany() {
+ const p = { tenantId: randomUUID(), membershipId: randomUUID(), identityUserId: randomUUID() };
+ const account = randomUUID(), credential = randomBytes(32).toString("hex");
+ await c.admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [p.tenantId]);
+ await c.admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [p.identityUserId]);
+ await c.admin.query("INSERT INTO app.account(tenant_id,id,name) VALUES($1,$2,'Fictional company')", [p.tenantId, account]);
+ await c.admin.query("INSERT INTO app.membership(tenant_id,id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [p.tenantId, p.membershipId, account, p.identityUserId]);
+ await c.admin.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3)", [p.identityUserId,p.tenantId,p.membershipId]);
+ await c.admin.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", [`${p.identityUserId}@fictional.invalid`,p.identityUserId]);
+ await c.admin.query("INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at) VALUES($1,$2,'synthetic_demo',$3,'fictional',clock_timestamp()+interval '1 hour')", [randomUUID(),p.identityUserId,credential]);
+ return { p, context: verifiedTenantContextFromMembership(p as AuthenticatedMembership, { kind: "real", credential }) };
+}
 it("upserts one profile per company, audits without contact data, and rejects non-owner writes at both boundaries", async () => {
- const company = await startSession(c);
+ const company = await realCompany();
  const repo = new FirmProfileRepository(c.runtime);
  expect(await repo.read(company.context)).toMatchObject({ profile: null, canSave: true });
  expect((await repo.save(company.context, profile)).profile).toEqual(firmProfileV1.parse(profile));
@@ -37,7 +52,7 @@ it("upserts one profile per company, audits without contact data, and rejects no
  await expect(repo.save(company.context, { ...profile, tradingName: " ", tenantId: company.p.tenantId })).rejects.toMatchObject({ code: "INVALID_PROFILE" });
 });
 it("isolates companies and refuses every shared practice firm, including after reset", async () => {
- const repo = new FirmProfileRepository(c.runtime), company = await startSession(c), other = await startSession(c);
+ const repo = new FirmProfileRepository(c.runtime), company = await realCompany(), other = await realCompany();
  await repo.save(company.context, profile);
  expect((await repo.read(other.context)).profile).toBeNull();
  const key = company.context.tenantId;
@@ -61,7 +76,7 @@ it("isolates companies and refuses every shared practice firm, including after r
  expect((await repo.read(company.context)).profile?.tradingName).toBe("Fictional Oak Works");
 });
 it("freezes the saved issuer in an issued document and uses a changed profile only in new document versions", async () => {
- const company = await startSession(c), context = company.context, tenant = company.p.tenantId;
+ const company = await realCompany(), context = company.context, tenant = company.p.tenantId;
  const repo = new FirmProfileRepository(c.runtime), delivery = new QuoteDeliveryRepository(c.runtime), quotes = new QuoteRepository(c.runtime);
  const job = randomUUID(), scope = randomUUID(), revision = randomUUID(), draft = randomUUID();
  await c.admin.query("INSERT INTO app.job(tenant_id,id,title,status) VALUES($1,$2,'Fictional firm quote','quoting')", [tenant, job]);
@@ -87,7 +102,7 @@ it("pins FORCE RLS and runtime grants, forbids deletes, and detects removal of t
  const catalog = (await c.admin.query("SELECT relrowsecurity,relforcerowsecurity,pg_get_userbyid(relowner) owner FROM pg_class WHERE oid='app.firm_profile'::regclass")).rows[0];
  expect(catalog).toEqual({ relrowsecurity: true, relforcerowsecurity: true, owner: "jobguard_migration" });
  expect((await c.admin.query("SELECT privilege_type FROM information_schema.role_table_grants WHERE table_schema='app' AND table_name='firm_profile' AND grantee='jobguard_runtime' ORDER BY privilege_type")).rows.map(x => x.privilege_type)).toEqual(["INSERT", "SELECT", "UPDATE"]);
- const company = await startSession(c), repo = new FirmProfileRepository(c.runtime);
+ const company = await realCompany(), repo = new FirmProfileRepository(c.runtime);
  await repo.save(company.context, profile);
  await expect(withTenant(c.runtime, company.context, db => db.$client.query("DELETE FROM app.firm_profile"))).rejects.toThrow(/permission denied/);
  await c.admin.query("UPDATE app.membership SET role='supervisor' WHERE tenant_id=$1 AND id=$2", [company.p.tenantId, company.p.membershipId]);
@@ -101,4 +116,30 @@ it("pins FORCE RLS and runtime grants, forbids deletes, and detects removal of t
   await expect(refusedWrite()).rejects.toThrow();
  } finally { await c.admin.query(original); }
  await refusedWrite();
+});
+
+it("refuses Empty Workshop and contractor practice profiles at repository and SQL boundaries", async () => {
+ const tenant = "33333333-3333-4333-8333-333333333333", account = "33333333-3333-4333-8333-333333333334", member = "33333333-3333-4333-8333-333333333335";
+ await c.admin.query("INSERT INTO control_plane.tenant(id) VALUES($1) ON CONFLICT DO NOTHING", [tenant]);
+ await c.admin.query("INSERT INTO app.account(tenant_id,id,name) VALUES($1,$2,'Empty Workshop') ON CONFLICT DO NOTHING", [tenant,account]);
+ const user = (await c.admin.query("SELECT identity_user_id FROM app.membership WHERE tenant_id='11111111-1111-4111-8111-111111111111' LIMIT 1")).rows[0].identity_user_id;
+ await c.admin.query("INSERT INTO app.membership(tenant_id,id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner') ON CONFLICT DO NOTHING", [tenant,member,account,user]);
+ const { issuePracticeSession } = await import("../src/practice-session.js");
+ const token = await issuePracticeSession(c.runtime);
+ const empty = await authenticatePracticeSession(c.runtime, token, tenant);
+ const contractor = await startSession(c);
+ const repo = new FirmProfileRepository(c.runtime);
+ for (const context of [empty.context, contractor.context]) {
+  expect(await repo.read(context)).toMatchObject({ profile: null, isPractice: true, canSave: false });
+  await expect(repo.save(context, profile)).rejects.toMatchObject({ code: "FORBIDDEN" });
+  await expect(withTenant(c.runtime, context, db => db.$client.query("INSERT INTO app.firm_profile(tenant_id,company_key,trading_name) VALUES($1::uuid,$1::text,'Refused')", [context.tenantId]))).rejects.toMatchObject({ code: "42501" });
+ }
+});
+it("refuses a marked practice company's profile and saves", async () => {
+ const f = await practiceCompany(c);
+ await ownerTx(c, f.p.tenantId, db => db.$client.query("INSERT INTO control_plane.practice_company_marker(tenant_id,session_ref,owner_membership_id,owner_identity_user_id,marked_at) VALUES($1,$2,$3,$4,clock_timestamp())", [f.p.tenantId,f.sessionRef,f.p.membershipId,f.p.identityUserId]));
+ const repo = new FirmProfileRepository(c.runtime);
+ expect(await repo.read(f.context)).toMatchObject({ profile: null, isPractice: true, canSave: false });
+ await expect(repo.save(f.context, profile)).rejects.toMatchObject({ code: "FORBIDDEN" });
+ await expect(withTenant(c.runtime, f.context, db => db.$client.query("INSERT INTO app.firm_profile(tenant_id,company_key,trading_name) VALUES($1::uuid,$1::text,'Refused')", [f.p.tenantId]))).rejects.toMatchObject({ code: "42501" });
 });

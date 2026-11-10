@@ -4,7 +4,7 @@ import type { VerifiedTenantContext } from "@jobguard/db";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { authenticatePracticeSession, contractorSessionContext, RequestBindingRefusedError } from "@jobguard/db";
-import { FirmProfileError, FirmProfileRepository } from "../../../../../packages/db/src/firm-profile-repository";
+import { FirmProfileError, FirmProfileRepository } from "@jobguard/db";
 import { AuthError, identityStatus } from "@jobguard/api/identity";
 import { identityApplication } from "../../lib/identity-server";
 import { isTrustedBrowserOrigin } from "../contractor/origin";
@@ -33,7 +33,8 @@ function failure(error: unknown) {
  if (error instanceof AuthError) { const { code, status } = identityStatus(error); return NextResponse.json({ code }, { status, headers }); }
  if (error instanceof FirmProfileError) return NextResponse.json({ code: error.code }, { status: error.code === "INVALID_PROFILE" ? 400 : 403, headers });
  if (error instanceof RequestBindingRefusedError || ["FORBIDDEN", "42501"].includes((error as { code?: string })?.code ?? "")) return NextResponse.json({ code: "FORBIDDEN" }, { status: 403, headers });
- if ((error as { code?: string })?.code === "UNAUTHENTICATED") return NextResponse.json({ code: "UNAUTHENTICATED" }, { status: 401, headers });
+ if ((error as { code?: string })?.code === "INVALID_TENANT_CONTEXT") return NextResponse.json({ code: "FORBIDDEN" }, { status: 403, headers });
+ if ((error as { code?: string })?.code === "UNAUTHENTICATED" || (error instanceof Error && error.message === "UNAUTHENTICATED")) return NextResponse.json({ code: "UNAUTHENTICATED" }, { status: 401, headers });
  return practiceFailure(error) ?? NextResponse.json({ code: "DATABASE_UNAVAILABLE" }, { status: 503, headers });
 }
 export async function GET() {

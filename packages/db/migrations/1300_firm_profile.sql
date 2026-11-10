@@ -9,7 +9,11 @@ BEGIN
  IF (b->>'tenant_id')::uuid IS DISTINCT FROM nullif(current_setting('app.tenant_id',true),'')::uuid THEN
   RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501';
  END IF;
- IF b->>'tenant_id'='11111111-1111-4111-8111-111111111111' THEN RETURN NULL; END IF;
+ -- Match 0700's real-company boundary, including historical practice sessions.
+ IF (b->>'tenant_id')::uuid IN ('11111111-1111-4111-8111-111111111111'::uuid,'33333333-3333-4333-8333-333333333333'::uuid)
+  OR EXISTS(SELECT 1 FROM control_plane.contractor_practice_session s WHERE s.tenant_id=(b->>'tenant_id')::uuid)
+  OR EXISTS(SELECT 1 FROM control_plane.practice_company_marker k WHERE k.tenant_id=(b->>'tenant_id')::uuid)
+ THEN RETURN NULL; END IF;
  RETURN b->>'tenant_id';
 END $$;
 ALTER FUNCTION app.current_firm_profile_key() OWNER TO jobguard_migration;
