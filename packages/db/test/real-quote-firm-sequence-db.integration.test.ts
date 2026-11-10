@@ -96,8 +96,8 @@ async function document(db: PoolClient, j: Job, reference: string, issuedAt: Dat
  });
  const pdf = renderQuotePdf(snapshot), id = randomUUID(), hash = sha(pdf);
  await db.query(`INSERT INTO app.quote_document_version(id,tenant_id,job_id,quote_revision_id,document_version,reference,content_hash,object_key,object_version_id,pdf_byte_length,issuer,customer,snapshot,issued_at)
- VALUES($1,$2,$3,$4,$5,$6,$7,$8,$7,$9,$10,$11,$12,$13)`,
- [id, tenant, j.id, j.quoteRevision, version, reference, hash, `fixture/quotes/${id}.pdf`, pdf.byteLength, snapshot.issuer, snapshot.customer, snapshot, issuedAt]);
+ VALUES($1,$2,$3,$4,$5,$6,$7,$8,$14,$9,$10,$11,$12,$13)`,
+ [id, tenant, j.id, j.quoteRevision, version, reference, hash, `fixture/quotes/${id}.pdf`, pdf.byteLength, snapshot.issuer, snapshot.customer, snapshot, issuedAt, hash]);
  return { id, pdf, hash, snapshot };
 }
 async function preview(owner: Firm, j: Job) {
@@ -286,6 +286,8 @@ it("fails closed on ambiguous imported ownership, even for the previously assign
  // Deliberately damaged historical catalogue fixture. Current v3 uniqueness
  // ordinarily excludes this shape; exercise fail-closed resolution without
  // mocking the resolver or binding. Restore the constraint after this test.
+ // 0535 pre-adoption evidence references this key; drop and restore it with the key.
+ await f.admin.query("ALTER TABLE app.import_pre_adoption_evidence DROP CONSTRAINT import_pre_adoption_evidence_tenant_id_job_id_fkey");
  await f.admin.query("ALTER TABLE app.job_import_v3 DROP CONSTRAINT job_import_v3_tenant_id_job_id_key");
  const duplicate = randomUUID();
  try {
@@ -305,6 +307,7 @@ it("fails closed on ambiguous imported ownership, even for the previously assign
    await db.query("BEGIN"); await db.query("SET LOCAL session_replication_role='replica'");
    await db.query("DELETE FROM app.job_import_v3 WHERE id=$1", [duplicate]);
    await db.query("ALTER TABLE app.job_import_v3 ADD CONSTRAINT job_import_v3_tenant_id_job_id_key UNIQUE(tenant_id,job_id)");
+   await db.query("ALTER TABLE app.import_pre_adoption_evidence ADD CONSTRAINT import_pre_adoption_evidence_tenant_id_job_id_fkey FOREIGN KEY(tenant_id,job_id) REFERENCES app.job_import_v3(tenant_id,job_id)");
    await db.query("COMMIT");
   } catch (error) { await db.query("ROLLBACK"); throw error; } finally { db.release(); }
  }
