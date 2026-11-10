@@ -1,0 +1,303 @@
+{
+  "migration": "0723_firm_profile.sql",
+  "lp0": [
+    {
+      "section": "authorityPaths",
+      "before": null,
+      "after": {
+        "title": "Company firm profile",
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Verify tenant-derived company isolation and owner-only writes.",
+          "LP-12": "Review use of the existing 0697 reader, runtime grants and FORCE RLS."
+        },
+        "sources": [
+          "packages/db/migrations/0723_firm_profile.sql",
+          "packages/db/src/firm-profile-repository.ts"
+        ],
+        "tests": [
+          "packages/db/test/firm-profile.integration.test.ts"
+        ],
+        "gaps": [
+          "Real PostgreSQL execution, privilege-pin admission and independent RED review pending."
+        ],
+        "id": "ap-firm-profile",
+        "description": "A synthetic company profile supplies new quote snapshots; issued documents remain immutable."
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|rel|table|app.firm_profile|jobguard_runtime|INSERT|-",
+        "group": "a-firm-profile"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|rel|table|app.firm_profile|jobguard_runtime|SELECT|-",
+        "group": "a-firm-profile"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|rel|table|app.firm_profile|jobguard_runtime|UPDATE|-",
+        "group": "a-firm-profile"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.current_firm_profile_key()|jobguard_runtime|EXECUTE|-",
+        "group": "a-firm-profile"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.firm_profile_access(uuid,text,boolean)|jobguard_runtime|EXECUTE|-",
+        "group": "a-firm-profile"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|rel:table|app.firm_profile|jobguard_migration",
+        "group": "a-firm-profile"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.current_firm_profile_key()|jobguard_migration",
+        "group": "a-firm-profile"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.firm_profile_access(uuid,text,boolean)|jobguard_migration",
+        "group": "a-firm-profile"
+      }
+    },
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "id": "a-firm-profile",
+        "title": "Company firm profile",
+        "kind": "authority",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Build-ahead only. Landing requires exact-head RED review, catalogue verification and green CI."
+        },
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Verify tenant-derived company isolation and owner-only writes.",
+          "LP-12": "Review use of the existing 0697 reader, runtime grants and FORCE RLS."
+        },
+        "downstream": "A synthetic company profile supplies new quote snapshots; issued documents remain immutable.",
+        "sources": [
+          "packages/db/migrations/0723_firm_profile.sql",
+          "packages/db/src/firm-profile-repository.ts"
+        ],
+        "tests": [
+          "packages/db/test/firm-profile.integration.test.ts"
+        ],
+        "gaps": [
+          "Real PostgreSQL execution, privilege-pin admission and independent RED review pending."
+        ],
+        "path": "ap-firm-profile"
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.firm_profile|firm_profile_insert|PERMISSIVE|INSERT|jobguard_runtime|03a59c5b9ea794a2"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.firm_profile|firm_profile_read|PERMISSIVE|SELECT|jobguard_runtime|6b3344dd74ba054e"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.firm_profile|firm_profile_update|PERMISSIVE|UPDATE|jobguard_runtime|9540f13820e5a189"
+    },
+    {
+      "section": "rls",
+      "before": null,
+      "after": "app.firm_profile|rls=t|forced=t"
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.current_firm_profile_key()",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.bound_context_reader"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.firm_profile_access(uuid,text,boolean)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.bound_context_reader",
+          "app.current_firm_profile_key"
+        ]
+      }
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "firm_profile",
+        "policyname": "firm_profile_insert",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_runtime}",
+        "cmd": "INSERT",
+        "qual": null,
+        "with_check": "app.firm_profile_access(tenant_id, company_key, true)"
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "firm_profile",
+        "policyname": "firm_profile_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_runtime}",
+        "cmd": "SELECT",
+        "qual": "app.firm_profile_access(tenant_id, company_key, false)",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "firm_profile",
+        "policyname": "firm_profile_update",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_runtime}",
+        "cmd": "UPDATE",
+        "qual": "app.firm_profile_access(tenant_id, company_key, true)",
+        "with_check": "app.firm_profile_access(tenant_id, company_key, true)"
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "firm_profile",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=arw/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "firm_profile_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "current_firm_profile_key",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "firm_profile_access",
+        "args": "t uuid, k text, w boolean",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    }
+  ],
+  "tenancy": [
+    {
+      "relname": "firm_profile",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": false,
+        "owner": "jobguard_migration"
+      }
+    }
+  ]
+}
