@@ -59,6 +59,24 @@ describe("PostgresReservationStore transaction adapter", () => {
     expect(sql).not.toContain("FOR UPDATE");
     expect(sql).not.toContain("UPDATE app.fee_reservation_book");
   });
+  it("maps malformed JSON from the authority routine to a typed refusal and preserves unrelated errors", async () => {
+    for (const code of ["22P02", "40001"]) {
+      const f = setup();
+      const error = Object.assign(new Error("routine failure"), { code });
+      const query = f.query.getMockImplementation()!;
+      f.query.mockImplementation(async (sql, values) => {
+        if (sql.startsWith("SELECT app.replace_fee_reservation_book")) throw error;
+        return query(sql, values);
+      });
+      const result = f.store.transaction(ctx.tenantId, async () => undefined);
+      if (code === "22P02") {
+        await expect(result).rejects.toBeInstanceOf(FeeCollectionError);
+        await expect(result).rejects.toMatchObject({ code: "COLLECTION_REFUSED" });
+      } else {
+        await expect(result).rejects.toBe(error);
+      }
+    }
+  });
   it("refuses a mismatched verified tenant before starting a transaction", async () => {
     const f = setup();
     await expect(f.store.transaction(id(90), async () => undefined)).rejects.toMatchObject({ code: "COLLECTION_REFUSED" });

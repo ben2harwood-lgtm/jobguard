@@ -59,7 +59,10 @@ export class SyntheticSyncDownloadApplication {
     if (!z.string().min(1).max(4096).safeParse(sessionToken).success) throw new SyncServerError("SYNC_AUTHORITY_REQUIRED");
     let raw: unknown;
     try { raw = await this.store.readCurrentSession(sessionToken); }
-    catch { throw new SyncServerError("SYNC_UNAVAILABLE"); }
+    catch (error) {
+      if (error instanceof SyncServerError && error.code === "SYNC_AUTHORITY_REQUIRED") throw error;
+      throw new SyncServerError("SYNC_UNAVAILABLE");
+    }
     const parsed = snapshotV1.safeParse(raw);
     if (!parsed.success) throw new SyncServerError("SYNC_AUTHORITY_REQUIRED");
     const snapshot = parsed.data;

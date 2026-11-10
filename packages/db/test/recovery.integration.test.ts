@@ -94,6 +94,12 @@ describe("structural recovery fee guard",()=>{
    for (const conflict of [{amountPence:1}, {allocationId:second.allocationId}, {reversalId:randomUUID()}]) {
     await expect(port.reverseSyntheticLanding(w.ctx,{...retry,...conflict})).rejects.toMatchObject({code:"23514"});
    }
+   // Keep stored identities so each replay guard must reject its own changed field.
+   for (const conflict of [{amountPence:1}, {allocationId:second.allocationId}]) {
+    await expect(port.reverseSyntheticLanding(w.ctx,{...reversal,...conflict})).rejects.toMatchObject({code:"23514"});
+    expect(await counts()).toEqual(before);
+   }
+   await expect(port.reverseSyntheticLanding(w.ctx,{...retry,reversalId:randomUUID()})).rejects.toMatchObject({code:"23514"});
    // A different job must not turn the ID conflict into a raw primary-key error.
    const other = await createWorld(true);
    let otherCase = await open(repo,100000,other);

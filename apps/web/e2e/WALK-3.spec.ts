@@ -18,7 +18,7 @@ test(`WALK-3 ${mode} saves its own draft then honestly completes a prepared exam
   await page.getByRole("link", { name: "Walk your first practice job", exact: true }).click();
   const tour = page.getByRole("region", { name: "Guided walkthrough" });
   await expect(tour).toContainText("Step 1 of 9");
-  await expect(page.getByLabel("Work details")).toHaveValue("");
+  await expect(page.getByLabel("Work details")).toHaveValue("Practice decorating. Protect room £200.00. Prepare walls £200.00. Paint walls £200.00. Finish trim £200.00. Clean site £100.00. Replace shelves");
   expect((await page.context().cookies()).find(cookie => cookie.name === "jg_session")!.value).toBe(practiceToken);
   await tour.getByRole("button", { name: mode, exact: true }).click();
   if (mode === "Show me") {
@@ -83,7 +83,7 @@ test("WALK-3 closes playback before any draft command when stopped during the po
   await tour.getByRole("button", { name: "Play the whole thing", exact: true }).click();
   await tour.getByRole("button", { name: "Stop playback", exact: true }).click();
   await expect(tour.getByRole("button", { name: "Show me", exact: true })).toBeEnabled();
-  await expect(page.getByLabel("Work details")).toHaveValue("");
+  await expect(page.getByLabel("Work details")).toHaveValue("Practice decorating. Protect room £200.00. Prepare walls £200.00. Paint walls £200.00. Finish trim £200.00. Clean site £100.00. Replace shelves");
   expect(captures).toBe(0);
 });
 

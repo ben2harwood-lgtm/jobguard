@@ -145,6 +145,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.evidence_pack_v3_owner(t uuid, c uuid, d text)", "0690_import_ancestry_record_anchor.sql"],
     ["app.adopt_invoiced_job_v3(t uuid, source_job uuid, d text, cmd uuid, auth uuid, approved jsonb, request_hash text)", "0690_import_ancestry_record_anchor.sql"],
     ["app.apply_recovery_timeline_signal(p_tenant uuid, p_signal jsonb)", "0690_import_ancestry_record_anchor.sql"],
+    ["app.final_check_practice_owns_job(t uuid, j uuid, d text)", "0701_final_check_owner_v1_adoption_edge.sql"],
   ]) {
     const source = await readFile(new URL(`../migrations/${migration}`, import.meta.url), "utf8");
     if (identity!.startsWith("app.decision_check_command(")) {
@@ -158,6 +159,8 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     "retention_timer", "retention_timer_book", "xa_proceed", "xa_proceed_breaches",
     "xa_proceed_view", "xa_wait_deadline", "customer_practice_pay_now", "store_extra_pack_artifact",
     "guard_variation_final_account_lock",
+    "company_final_check_authority", "company_final_check_read", "company_final_check_terms",
+    "company_final_check_disposition", "company_final_check_lock", "company_final_check_request_run", "company_final_check_reveal",
   ];
   for (const name of namedAdditions) {
     expect(replayRoutines.filter(row => row.proname === name)).toHaveLength(1);
