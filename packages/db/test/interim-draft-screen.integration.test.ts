@@ -1,3 +1,4 @@
+import { testTenantContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { InterimDraftRepository } from "../src/interim-draft-repository.js";
@@ -68,12 +69,13 @@ it("screen commands persist only draft records and refuse forged authority, repl
     }
   }
   await c.admin.query("UPDATE app.membership SET role='owner' WHERE id=$1",[a.actorId]);
+  const removedAuthorityContext=testTenantContext(a.tenantId,{membershipId:a.actorId,bindRequest:false});
   await c.admin.query("UPDATE identity.session SET expires_at=clock_timestamp()-interval '1 second' WHERE id=$1",[a.sessionId]);
-  await expect(repo.command(a.context,a.digest,first)).rejects.toMatchObject({code:"FORBIDDEN"});
-  await expect(repo.read(a.context,a.jobId,a.digest)).rejects.toMatchObject({code:"FORBIDDEN"});
+  await expect(repo.command(removedAuthorityContext,a.digest,first)).rejects.toMatchObject({code:"FORBIDDEN"});
+  await expect(repo.read(removedAuthorityContext,a.jobId,a.digest)).rejects.toMatchObject({code:"FORBIDDEN"});
   await c.admin.query("UPDATE identity.session SET expires_at=clock_timestamp()+interval '1 hour', revoked_at=clock_timestamp() WHERE id=$1",[a.sessionId]);
-  await expect(repo.command(a.context,a.digest,first)).rejects.toMatchObject({code:"FORBIDDEN"});
-  await expect(repo.read(a.context,a.jobId,a.digest)).rejects.toMatchObject({code:"FORBIDDEN"});
+  await expect(repo.command(removedAuthorityContext,a.digest,first)).rejects.toMatchObject({code:"FORBIDDEN"});
+  await expect(repo.read(removedAuthorityContext,a.jobId,a.digest)).rejects.toMatchObject({code:"FORBIDDEN"});
   await c.admin.query("UPDATE identity.session SET revoked_at=NULL WHERE id=$1",[a.sessionId]);
   expect(await repo.read(a.context,a.jobId,a.digest)).toEqual(stored);
   // A verified tenant alone is no longer enough, even for direct SQL callers.
@@ -83,6 +85,7 @@ it("screen commands persist only draft records and refuse forged authority, repl
     await client.query("SELECT set_config('app.tenant_id',$1,true)",[a.tenantId]);
     await expect(client.query("SELECT app.interim_draft_records($1,NULL,$2,'read','{}'::jsonb)",[a.tenantId,a.jobId])).rejects.toThrow("METER_FORBIDDEN");
   } finally { await client.query("ROLLBACK"); client.release(); }
+
   expect(await financialSnapshot()).toEqual(before);
 });
 it("routes recheck PostgreSQL authority and return 403, 404 and the live-job code without retry wording", async () => {

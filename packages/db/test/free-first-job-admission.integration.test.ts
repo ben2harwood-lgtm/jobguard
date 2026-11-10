@@ -1,3 +1,4 @@
+import { testTenantContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { UserCommandDispatcher } from "../src/commands.js";
 import { DisabledFreeFirstJobActivationMutation } from "../src/activation-repository.js";
@@ -29,7 +30,7 @@ describe("MON3 B IDENTITY-01 LIVE-01 ATOMIC-01 disabled boundary",()=>{
    await expect(new UserCommandDispatcher(f.runtime).dispatch(a.context,command,mutation)).rejects.toThrow('FREE_FIRST_JOB_ADMISSION_DISABLED_AWAITING_C');
    expect(await ownCounts(f,a)).toEqual(before);
    await f.admin.query("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE id=$1",[a.sessionId]);
-   await expect(new UserCommandDispatcher(f.runtime).dispatch(a.context,command,mutation)).rejects.toThrow('METER_FORBIDDEN');
+   await expect(new UserCommandDispatcher(f.runtime).dispatch(testTenantContext(a.tenantId, { membershipId: a.actorId, bindRequest: false }),command,mutation)).rejects.toThrow('METER_FORBIDDEN');
    expect(await ownCounts(f,a)).toEqual(before);
   }finally{if(prior===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=prior;}
  });

@@ -1,3 +1,4 @@
+import { testActorContext } from "./tenant-context-test-utils.js";
 import { terminalizeFixtureReceipt } from "./extra-fixtures.js";
 // ENT-3c pricing basis (ruling A1): the side record beside each priced revision. Written before the code it proves.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -21,7 +22,7 @@ const hand = <T>(work: (db: Parameters<Parameters<typeof ownerTx>[2]>[0], raw: A
 describe("ENT-3c pricing basis", () => {
   it("[C24] beside each version: every revision has exactly one basis row of server_sor, same extra, hash, command, actor, time and transaction; the answer's priceSource is the stored value", async () => {
     for (const [role, fields] of [["operative", { sorCode: "CLEAR-GUTTER", quantity: "1" }], ["supervisor", { sorCode: "REPAIR-DOOR", quantity: "3" }], ["surveyor", { sorCode: "PAINT-ROOM", quantity: "0.5" }]] as const) {
-      const result = await repo.logSorSiteExtra(f.ctx, f.members[role].member, sorInput(f.jobId, fields));
+      const result = await repo.logSorSiteExtra(await testActorContext(c.admin, f.ctx, f.members[role].member), f.members[role].member, sorInput(f.jobId, fields));
       expect(result.priceSource).toBe("server_sor");
       const { revision, basis } = await stored(c, f.p.tenantId, result.variationId);
       expect(basis).toMatchObject({ tenant_id: revision.tenant_id, job_id: revision.job_id, variation_id: revision.variation_id, revision: 1, pricing_basis: "server_sor", revision_content_hash: revision.content_hash, command_id: revision.command_id, actor_membership_id: revision.raising_membership_id });
@@ -55,7 +56,7 @@ describe("ENT-3c pricing basis", () => {
   });
 
   it("[C25] UPDATE, DELETE, TRUNCATE and INSERT fail for the runtime role; UPDATE and DELETE fail for the owner", async () => {
-    await repo.logSorSiteExtra(f.ctx, f.members.supervisor.member, sorInput(f.jobId, { sorCode: "CLEAR-GUTTER", quantity: "2" }));
+    await repo.logSorSiteExtra(await testActorContext(c.admin, f.ctx, f.members.supervisor.member), f.members.supervisor.member, sorInput(f.jobId, { sorCode: "CLEAR-GUTTER", quantity: "2" }));
     for (const sql of ["UPDATE app.extra_pricing_basis SET pricing_basis='unpriced'", "UPDATE app.extra_pricing_basis SET revision_content_hash=repeat('0',64)", "DELETE FROM app.extra_pricing_basis", "TRUNCATE app.extra_pricing_basis"]) {
       await expect(withTenant(c.runtime, f.ctx, db => db.$client.query(sql)), `runtime ${sql}`).rejects.toMatchObject({ code: "42501" });
       if (!sql.startsWith("TRUNCATE")) await expect(ownerTx(c, f.p.tenantId, db => db.$client.query(sql)), `owner ${sql}`).rejects.toMatchObject({ code: "55000" });
@@ -65,7 +66,7 @@ describe("ENT-3c pricing basis", () => {
 
   it("[C26] no row of app.variation_revision is written by anything in this piece", async () => {
     expect((await written(c, f.p.tenantId)).variation_revision).toBe(0);
-    await repo.logSorSiteExtra(f.ctx, f.members.surveyor.member, sorInput(f.jobId, { sorCode: "FIT-LOCK", quantity: "4" }));
+    await repo.logSorSiteExtra(await testActorContext(c.admin, f.ctx, f.members.surveyor.member), f.members.surveyor.member, sorInput(f.jobId, { sorCode: "FIT-LOCK", quantity: "4" }));
     expect((await written(c, f.p.tenantId)).variation_revision).toBe(0);
     expect((await c.admin.query("SELECT 1 FROM app.variation WHERE tenant_id=$1 AND current_revision_id IS NOT NULL", [f.p.tenantId])).rowCount).toBe(0);
   });
