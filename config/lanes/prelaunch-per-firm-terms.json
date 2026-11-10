@@ -1,0 +1,58 @@
+{
+  "version": 2,
+  "lanes": {
+    "prelaunch-per-firm-terms": {
+      "branches": [
+        "codex/sandbox/prelaunch-per-firm-terms"
+      ],
+      "allow": [
+        "apps/api/src/final-account-lock.application.test.ts",
+        "apps/api/src/final-account-lock.application.ts",
+        "apps/api/src/shadow-detection-lock-race.test.ts",
+        "apps/api/src/shadow-detection.worker.test.ts",
+        "apps/api/src/shadow-detection.worker.ts",
+        "apps/api/src/worker.ts",
+        "apps/web/e2e/prelaunch-per-firm-terms.spec.ts",
+        "packages/core/src/final-account-lock.test.ts",
+        "packages/core/src/final-account-lock.ts",
+        "packages/db/migrations/1401_per_firm_final_check_terms.sql",
+        "packages/db/src/shadow-observation-reader.ts",
+        "packages/db/test/commercial-integrity-v3-fixtures.ts",
+        "packages/db/test/commercial-integrity-v3-published.integration.test.ts",
+        "packages/db/test/customer-portal-message.integration.test.ts",
+        "packages/db/test/customer-practice-pay-now-fixtures.ts",
+        "packages/db/test/evidence-pack-v3-commands.integration.test.ts",
+        "packages/db/test/evidence-pack-v3-isolation.integration.test.ts",
+        "packages/db/test/final-account-lock.integration.test.ts",
+        "packages/db/test/final-check-access.integration.test.ts",
+        "packages/db/test/final-check-capture-text.integration.test.ts",
+        "packages/db/test/final-check-catch-journey.integration.test.ts",
+        "packages/db/test/final-check-catch.integration.test.ts",
+        "packages/db/test/final-check-fixture.ts",
+        "packages/db/test/final-check-invalidation-lock.integration.test.ts",
+        "packages/db/test/final-check-lock-run.integration.test.ts",
+        "packages/db/test/final-check-manifest.integration.test.ts",
+        "packages/db/test/final-check-post-invoice-receipt.integration.test.ts",
+        "packages/db/test/final-check-practice-owner.integration.test.ts",
+        "packages/db/test/final-check-practice-readers.integration.test.ts",
+        "packages/db/test/final-check-races.integration.test.ts",
+        "packages/db/test/final-check-rerun-upgrade.integration.test.ts",
+        "packages/db/test/final-check-rerun.integration.test.ts",
+        "packages/db/test/final-check.integration.test.ts",
+        "packages/db/test/j3-landing-allocation.integration.test.ts",
+        "packages/db/test/job-source-test-o.integration.test.ts",
+        "packages/db/test/job-sources-evidence.integration.test.ts",
+        "packages/db/test/job-sources-isolation.integration.test.ts",
+        "packages/db/test/late-source-import.integration.test.ts",
+        "packages/db/test/migfix-5.integration.test.ts",
+        "packages/db/test/migration-proofs/1401_per_firm_final_check_terms.proof.json",
+        "packages/db/test/per-firm-final-check-terms.integration.test.ts",
+        "packages/db/test/post-lock-upload-guard.integration.test.ts",
+        "packages/db/test/recovery-attribution-fixture.ts",
+        "packages/db/test/shadow-detection.integration.test.ts",
+        "packages/db/test/stored-receipt-case-fixture.ts",
+        "packages/db/test/sv5pre-fixtures.ts"
+      ]
+    }
+  }
+}

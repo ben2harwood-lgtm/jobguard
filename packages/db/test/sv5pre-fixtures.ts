@@ -6,6 +6,7 @@ import EmbeddedPostgres from "embedded-postgres";
 import { Pool, type PoolClient } from "pg";
 import { candidateM1TaxPolicy, money, addMoney } from "@jobguard/core";
 import { migrate } from "../src/migrate.js";
+import { verifiedTenantContextFromMembership, type AuthenticatedMembership } from "../src/tenant-context.js";
 import { practiceMaterialPool } from "../src/practice-session.js";
 import { FinalAccountLockRepository } from "../src/final-account-lock-repository.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
@@ -57,7 +58,12 @@ export async function seedAccount(admin: Pool, tenantId = randomUUID(), net = 33
  return { tenantId, jobId, scopeItemId, baselineId, draftId, revisionId, lineId, context: testTenantContext(tenantId), input: { jobId, actorMembershipId: LOCK_OWNER, commandId: randomUUID(), finalAccountRevisionId: revisionId, expectedRevision: 1, declarationVersion: "final_account_declaration.v1" as const } };
 }
 export async function prepareLock(f: LockFixture, a: Awaited<ReturnType<typeof seedAccount>>) {
- const repo = new FinalAccountLockRepository(f.runtime);
+ const digest=(await f.admin.query("SELECT practice_session_digest FROM app.job WHERE tenant_id=$1 AND id=$2",[a.tenantId,a.jobId])).rows[0].practice_session_digest;
+ if(digest){
+  const principal=(await f.runtime.query("SELECT * FROM app.authenticate_practice_session($1,$2)",[digest,a.tenantId])).rows[0];
+  a.context=verifiedTenantContextFromMembership({tenantId:a.tenantId,membershipId:principal.membership_id,identityUserId:principal.identity_user_id} as AuthenticatedMembership,{kind:"practice",credential:digest});
+ }
+ const repo = new FinalAccountLockRepository(digest?practiceMaterialPool(f.runtime,digest):f.runtime);
  await repo.acceptTerms(a.context, { actorMembershipId: LOCK_OWNER, commandId: randomUUID(), termsVersion: "synthetic_final_check_terms.v1" });
  await repo.disposition(a.context, { jobId: a.jobId, actorMembershipId: LOCK_OWNER, commandId: randomUUID(), scopeItemId: a.scopeItemId, disposition: "done" });
  return repo;
@@ -110,7 +116,8 @@ export async function prepareInvoicePrerequisites(admin: Pool, runtime: Pool, te
  // Establish the synthetic small-builder premise explicitly; never rewrite an existing track.
  await asFixtureTenant(admin,tenantId,db=>db.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) SELECT tenant_id,id,'small_builder','synthetic_demo','legacy_synthetic_live_fixture' FROM app.job WHERE tenant_id=$1 AND id=$2 AND status IN ('live','invoiced','paid') ON CONFLICT(tenant_id,job_id) DO NOTHING",[tenantId,jobId]));
  const digest=(await admin.query("SELECT practice_session_digest FROM app.job WHERE tenant_id=$1 AND id=$2",[tenantId,jobId])).rows[0].practice_session_digest;
- const context=testTenantContext(tenantId),repo=new FinalAccountLockRepository(digest?practiceMaterialPool(runtime,digest):runtime);
+ const principal=digest?(await runtime.query("SELECT * FROM app.authenticate_practice_session($1,$2)",[digest,tenantId])).rows[0]:null;
+ const context=digest?verifiedTenantContextFromMembership({tenantId,membershipId:principal.membership_id,identityUserId:principal.identity_user_id} as AuthenticatedMembership,{kind:"practice",credential:digest}):testTenantContext(tenantId),repo=new FinalAccountLockRepository(digest?practiceMaterialPool(runtime,digest):runtime);
  await repo.acceptTerms(context,{actorMembershipId,commandId:randomUUID(),termsVersion:'synthetic_final_check_terms.v1'});
  const scope=(await admin.query("SELECT DISTINCT scope_item_id FROM app.final_account_line WHERE tenant_id=$1 AND job_id=$2 AND final_account_revision_id=$3 AND line_kind='baseline'",[tenantId,jobId,revisionId])).rows;
  for(const item of scope) await repo.disposition(context,{jobId,actorMembershipId,commandId:randomUUID(),scopeItemId:item.scope_item_id,disposition:'done'});

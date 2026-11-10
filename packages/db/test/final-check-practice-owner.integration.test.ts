@@ -27,6 +27,7 @@ const scoped = async <T>(a: FinalCheckJob, digest: string, work: (db: PoolClient
   const db = await practiceMaterialPool(f.runtime, digest).connect();
   try {
     await db.query("BEGIN");
+    await db.query("SELECT app.bind_request('practice',$1,$2)", [digest,a.tenantId]);
     await db.query("SELECT set_config('app.tenant_id', $1, true)", [a.tenantId]);
     const result = await work(db);
     await db.query("COMMIT");

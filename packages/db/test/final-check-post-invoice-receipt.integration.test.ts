@@ -1,3 +1,4 @@
+import { verifiedTenantContextForQueuedJob } from "../src/tenant-context.js";
 // CI only: PostgreSQL, fictional jobs and settled synthetic feed movements.
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
@@ -94,7 +95,7 @@ it("an issued final invoice permits exactly one later receipt allocation after w
 
 it("without an issued final invoice locked manifest proof cannot be withdrawn, so the receipt gate keeps its proof", async () => {
   const a = await seedFinalCheckJob(f), checked = await availableFinalCheck(f, a);
-  await new FinalCheckCompletionRepository(f.shadow).publish(a.context, {
+  await new FinalCheckCompletionRepository(f.shadow).publish(verifiedTenantContextForQueuedJob(a.tenantId), {
     version: "final-check-publication.v1", jobId: a.jobId, runId: checked.runId, checkId: randomUUID(),
   });
   await receiptGate(a.tenantId, a.jobId);

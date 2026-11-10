@@ -1,3 +1,5 @@
+import { verifiedTenantContextForQueuedJob } from "../src/tenant-context.js";
+import { practiceMaterialPool } from "../src/practice-session.js";
 import {randomUUID} from "node:crypto";
 import {afterAll,beforeAll,describe,expect,it} from "vitest";
 import {Pool} from "pg";
@@ -23,17 +25,17 @@ describe("SV-7A fixture source isolation (intake Test O remains held)",()=>{
   const {auth,jobId}=f.practice,sequences:string[][]=[],repo=new JobSourceRepository(observed(f.runtime,sequences));
   const before=await repo.read(auth.context,jobId,auth.digest,"diary"),messagesBefore=await repo.read(auth.context,jobId,auth.digest,"customer_message");const initial=sequences.splice(0);
   const reader=new ShadowObservationReader(f.runtime,new FixtureObservationSources([])),sink=new ShadowDetectionRepository(shadow);
-  const worker=new ShadowDetectionWorker({assertTermsRelation:()=>reader.assertTermsRelation(),hasAcceptedTerms:context=>reader.hasAcceptedTerms(context),read:(context,request)=>reader.read(context,request),propose:async()=>({proposals:[]}),persist:(context,request)=>sink.persist(context,request)},"synthetic_demo",()=>"2026-10-13T12:00:00Z");
-  const task={version:"shadow-detection-task.v1",tenantId:auth.context.tenantId,jobId};await worker.start();await expect(worker.execute(auth.context,task)).rejects.toMatchObject({code:"SHADOW_TERMS_NOT_ACCEPTED"});
-  const {withTenant}=await import("../src/tenant-context.js");await withTenant(f.runtime,auth.context,db=>db.$client.query("SELECT app.accept_final_check_terms($1,$2,$3,$4)",[auth.context.tenantId,auth.membershipId,randomUUID(),"synthetic_final_check_terms.v1"]));
-  await worker.execute(auth.context,task);await worker.execute(auth.context,task);
+  const worker=new ShadowDetectionWorker({assertTermsRelation:()=>reader.assertTermsRelation(),hasAcceptedTerms:(context,jobId)=>reader.hasAcceptedTerms(context,jobId),read:(context,request)=>reader.read(context,request),propose:async()=>({proposals:[]}),persist:(context,request)=>sink.persist(context,request)},"synthetic_demo",()=>"2026-10-13T12:00:00Z");
+  const task={version:"shadow-detection-task.v1",tenantId:auth.context.tenantId,jobId};await worker.start();await expect(worker.execute(verifiedTenantContextForQueuedJob(auth.context.tenantId),task)).rejects.toMatchObject({code:"SHADOW_TERMS_NOT_ACCEPTED"});
+  const {withTenant}=await import("../src/tenant-context.js");await withTenant(practiceMaterialPool(f.runtime,auth.digest),auth.context,db=>db.$client.query("SELECT app.accept_final_check_terms($1,$2,$3,$4)",[auth.context.tenantId,auth.membershipId,randomUUID(),"synthetic_final_check_terms.v1"]));
+  await worker.execute(verifiedTenantContextForQueuedJob(auth.context.tenantId),task);await worker.execute(verifiedTenantContextForQueuedJob(auth.context.tenantId),task);
   expect((await f.admin.query("SELECT state FROM app.shadow_commercial_signal WHERE tenant_id=$1 AND job_id=$2 AND coalesced_into_signal_id IS NULL",[auth.context.tenantId,jobId])).rows).toEqual([{state:"held_for_final_check"}]);
   // Labelled isolation-only work facts, each bound to a distinct persisted original.
   // Seed before the read snapshot so only shadow state changes across the comparison.
   const originals=(await reader.read(auth.context,{version:"shadow-observation-read.v1",jobId})).observations;
   expect(originals).toHaveLength(5);expect(new Set(originals.map(o=>o.evidence.id)).size).toBe(5);
   const noise=originals.slice(1).map((original,n)=>parseObservation({...original,facts:{...original.facts,workReference:`synthetic:isolation-only:${n}`}}));
-  await sink.persist(auth.context,{version:"shadow-detection-batch.v1",jobId,observations:noise,captures:[],proposals:noise.map(o=>proposalFromObservation(o,"deterministic","synthetic:isolation-fixture.v1","2026-10-13T12:00:00Z",{lock:"before_lock",adoption:"after_adoption"}))});
+  await sink.persist(verifiedTenantContextForQueuedJob(auth.context.tenantId),{version:"shadow-detection-batch.v1",jobId,observations:noise,captures:[],proposals:noise.map(o=>proposalFromObservation(o,"deterministic","synthetic:isolation-fixture.v1","2026-10-13T12:00:00Z",{lock:"before_lock",adoption:"after_adoption"}))});
   expect((await f.admin.query("SELECT count(*)::int n FROM app.shadow_commercial_signal WHERE tenant_id=$1 AND job_id=$2 AND coalesced_into_signal_id IS NULL",[auth.context.tenantId,jobId])).rows[0].n).toBe(5);
   expect(await repo.read(auth.context,jobId,auth.digest,"diary")).toEqual(before);expect(await repo.read(auth.context,jobId,auth.digest,"customer_message")).toEqual(messagesBefore);expect(sequences).toEqual(initial);
   expect(sequences.flat().some(sql=>/shadow|detect/iu.test(sql))).toBe(false);

@@ -1,3 +1,4 @@
+import { verifiedTenantContextForQueuedJob } from "../src/tenant-context.js";
 import { createHash, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -187,7 +188,7 @@ describe("MIGFIX-5 customer billing integrity", () => {
       draftId: (await f.admin.query("SELECT final_account_draft_id FROM app.final_account_revision WHERE tenant_id=$1 AND id=$2", [job.tenantId, job.revisionId])).rows[0].final_account_draft_id as string,
     };
     const revealed = await availableFinalCheck(checkFixture, job);
-    await new FinalCheckCompletionRepository(f.shadow).publish(a.context, {
+    await new FinalCheckCompletionRepository(f.shadow).publish(verifiedTenantContextForQueuedJob(a.tenantId), {
       version: "final-check-publication.v1", jobId: a.jobId, runId: revealed.runId, checkId: randomUUID(),
     });
     const actor = await authenticatePracticeSession(f.runtime, job.sessionId, a.tenantId);

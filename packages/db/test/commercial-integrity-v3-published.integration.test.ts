@@ -1,3 +1,4 @@
+import { verifiedTenantContextForQueuedJob } from "../src/tenant-context.js";
 // CI ONLY: real published Final Check and read/review projections with fictional financial parents.
 import { createHash,randomUUID } from "node:crypto";
 import { beforeAll,afterAll,it,expect } from "vitest";
@@ -12,9 +13,9 @@ afterAll(async()=>{await closeFinalCheckFixture(f);if(previous===undefined)delet
 const actor={membershipId:FINAL_CHECK_ACTOR,identityUserId:FINAL_CHECK_USER};
 async function published(){
  const a=await seedFinalCheckJob(f),evidence=await insertFinalCheckEvidence(f,a,"completion_photo","image/png",1),signal=await finalCheckProposal(f,a,evidence);
- await a.lock();const worker=new FinalCheckRepository(f.shadow),manifest=await worker.begin(a.context,a.jobId),source=manifest.sources.find(s=>s.evidenceId===evidence)!;
- await worker.record(a.context,a.jobId,manifest.id,source.id,randomUUID(),{version:"final-check.source-result.v1",inputHash:source.inputHash,status:"detected",failureCode:null,signalIds:[signal]});
- const result=await worker.reconcile(a.context,a.jobId,manifest.id,[{signalId:signal,expectedRevision:0,outcome:"reveal",references:[],comparisons:{baselineItemIds:[a.scopeItemId],captureIds:[],lockedLineIds:[a.lineId]}}]) as {runId:string;lockId:string};
+ await a.lock();const worker=new FinalCheckRepository(f.shadow),manifest=await worker.begin(verifiedTenantContextForQueuedJob(a.tenantId),a.jobId),source=manifest.sources.find(s=>s.evidenceId===evidence)!;
+ await worker.record(verifiedTenantContextForQueuedJob(a.tenantId),a.jobId,manifest.id,source.id,randomUUID(),{version:"final-check.source-result.v1",inputHash:source.inputHash,status:"detected",failureCode:null,signalIds:[signal]});
+ const result=await worker.reconcile(verifiedTenantContextForQueuedJob(a.tenantId),a.jobId,manifest.id,[{signalId:signal,expectedRevision:0,outcome:"reveal",references:[],comparisons:{baselineItemIds:[a.scopeItemId],captureIds:[],lockedLineIds:[a.lineId]}}]) as {runId:string;lockId:string};
  return {a,evidence,signal,...result};
 }
 async function save(a:FinalCheckJob,kind:string){
