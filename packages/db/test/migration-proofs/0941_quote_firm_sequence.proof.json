@@ -70,7 +70,7 @@
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "3babe4844a99838310d935520da519c17f1d1b7d0dde1057fc8c00a9d3816d91",
         "staticWrites": [],
         "staticCalls": []
       }
@@ -107,7 +107,7 @@
         "otherExecute": [
           "jobguard_migration"
         ],
-        "definitionSha256": null,
+        "definitionSha256": "733c74995de1ef6aedc3b5cb8ff5d30931214e284c1f58af2edc1f559d03b9e6",
         "staticWrites": [],
         "staticCalls": [
           "app.lp6_bound_request"
@@ -144,7 +144,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "e5b9bb1419216d5200c076ed62e4ca6e11424633425f3baf561c1f3826a9dc76",
         "staticWrites": [
           "app.quote_firm_counter",
           "app.quote_job_reference"
@@ -170,7 +170,7 @@
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "559041853acc306b4c00e75dd421989d69ac5ed8d54f17eee9cb648c318bd6b7",
         "staticWrites": [],
         "staticCalls": []
       }
@@ -323,6 +323,42 @@
         "cmd": "ALL",
         "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
         "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "quote_firm_counter_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "quote_job_reference_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "quote_firm_allocated_number",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
       }
     }
   ],
