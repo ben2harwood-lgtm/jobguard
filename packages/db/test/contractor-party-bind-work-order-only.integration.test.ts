@@ -1,3 +1,4 @@
+import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -9,14 +10,14 @@ import { jobPartiesCommandResultV1 } from "@jobguard/core";
 import {
   ContractorPartyRepository, ContractorRepository, JobPartiesRepository, JobRepository,
   WorkOrderRepository, demoFile, demoRow, migrate, prepareWorkOrderDemo,
-  verifiedTenantContextFromMembership, withTenant, type AuthenticatedMembership,
+  withTenant, type AuthenticatedMembership,
 } from "../src/index.js";
 import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
 
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, dir: string;
 const triggerName = "contractor_party_work_order_only";
-const ctx = (p: AuthenticatedMembership) => verifiedTenantContextFromMembership(p);
+const ctx = (p: AuthenticatedMembership) => testTenantContext(p.tenantId, { membershipId: p.membershipId });
 
 beforeAll(async () => {
   dir = await mkdtemp(join(tmpdir(), "jg-party-work-order-only-"));
@@ -48,7 +49,7 @@ async function fixture(status: "draft" | "quoting") {
   await command({ action: "bind", expectedJobRevision: 0, parties: { version: "job-parties.v1",
     customerRevisionId: customer.revisionId, payingPartyRevisionId: payer.revisionId, siteRevisionId: site.revisionId } });
   // Ruling 103: legacy transition setup is owner-only; binding uses runtime.
-  if (status === "quoting") await new JobRepository(admin).transition(ctx(p), ["job:update"], { jobId: job.id, expectedRevision: 1, to: "quoting", reason: "start_quote" });
+  if (status === "quoting") await new JobRepository(admin).transition(await testBoundTenantContext(admin, p.tenantId, p.membershipId), ["job:update"], { jobId: job.id, expectedRevision: 1, to: "quoting", reason: "start_quote" });
   const current = await jobs.get(ctx(p), ["job:view"], job.id);
   expect(current).toMatchObject({ status, provenance: "system_generated_quote" });
   const input = { version: "contractor-party-import.v1", environment: "synthetic_demo", commandId: randomUUID(), jobId: job.id,
