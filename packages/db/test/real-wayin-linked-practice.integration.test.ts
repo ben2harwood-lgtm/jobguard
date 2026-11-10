@@ -7,6 +7,7 @@ import { jobDoorsActor } from "./lp-job-doors-fixtures.js";
 import { enterLinkedPracticeCompany, isBlankPracticeCompany, startBlankPracticeCompany } from "../src/blank-practice-company.js";
 import { authenticatePracticeSession, authorizePracticeJob, issuePracticeSession } from "../src/practice-session.js";
 import { withTenant } from "../src/tenant-context.js";
+import { RequestBindingRefusedError } from "../src/request-binding-error.js";
 const secret = "fictional-linked-identity-key-over-32-characters";
 const enter = { version: "linked-practice-company.v1", action: "enter" };
 const reset = { ...enter, action: "reset" };
@@ -87,7 +88,7 @@ it("two fictional identity sessions retain one practice owner with independent c
   });
   await c.admin.query("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE id=$1", [firstParent.id]);
   await expect(authenticatePracticeSession(c.runtime, first.token)).rejects.toThrow("UNAUTHENTICATED");
-  await expect(withTenant(c.runtime, first.auth.context, db => db.$client.query("SELECT 1"))).rejects.toThrow("REQUEST_BINDING_REFUSED");
+  await expect(withTenant(c.runtime, first.auth.context, db => db.$client.query("SELECT 1"))).rejects.toBeInstanceOf(RequestBindingRefusedError);
   await expect(authorizePracticeJob(c.runtime, second.token, id)).resolves.toBeDefined();
   expect((await c.admin.query("SELECT count(*)::int n FROM app.job WHERE tenant_id=$1", [firstParent.tenant])).rows[0].n).toBe(0);
 });
@@ -110,7 +111,7 @@ it.each(["expired_parent", "removed_membership", "revoked_membership", "expired_
   }
   await expect(entry(p)).rejects.toThrow("UNAUTHENTICATED");
   await expect(authenticatePracticeSession(c.runtime, linked.token)).rejects.toThrow("UNAUTHENTICATED");
-  await expect(withTenant(c.runtime, linked.auth.context, db => db.$client.query("SELECT 1"))).rejects.toThrow("REQUEST_BINDING_REFUSED");
+  await expect(withTenant(c.runtime, linked.auth.context, db => db.$client.query("SELECT 1"))).rejects.toBeInstanceOf(RequestBindingRefusedError);
 });
 
 it("reset requires exact current credential and intent; all old devices and writes refuse until explicit re-entry", async () => {
@@ -122,7 +123,7 @@ it("reset requires exact current credential and intent; all old devices and writ
   expect(current.digest).not.toBe(first.auth.digest);
   for (const old of [first,second]) {
     await expect(authenticatePracticeSession(c.runtime, old.token)).rejects.toThrow("UNAUTHENTICATED");
-    await expect(withTenant(c.runtime, old.auth.context, db => db.$client.query("SELECT app.create_practice_sandbox_job($1,$2,$3,$4)", [home,randomUUID(),old.auth.membershipId,old.auth.digest]))).rejects.toThrow("REQUEST_BINDING_REFUSED");
+    await expect(withTenant(c.runtime, old.auth.context, db => db.$client.query("SELECT app.create_practice_sandbox_job($1,$2,$3,$4)", [home,randomUUID(),old.auth.membershipId,old.auth.digest]))).rejects.toBeInstanceOf(RequestBindingRefusedError);
   }
   await expect(enterLinkedPracticeCompany(identity, a.token, secret, reset, first.token)).rejects.toThrow("UNAUTHENTICATED");
   const resumed = await entry(b); expect(resumed.auth.digest).toBe(current.digest);
