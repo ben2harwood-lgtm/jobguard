@@ -85,7 +85,7 @@ test("public catalogue survives failed reads and lost company access without pre
   await expect(page.getByRole("status").filter({ hasText: "Loading subscription" })).toBeVisible();
   await catalogue(page); await privateAbsent(page);
   releaseRead();
-  await expect(page.getByRole("alert")).toContainText("Subscription details are unavailable");
+  await expect(page.getByRole("alert").filter({ hasText: "Subscription details are unavailable" })).toBeVisible();
   await catalogue(page); await privateAbsent(page);
   await page.unroute("**/api/subscriptions/current");
   await page.reload();
@@ -100,7 +100,7 @@ test("public catalogue survives failed reads and lost company access without pre
     if (path === "/api/subscriptions/commands") commands++;
   });
   await page.getByRole("combobox", { name: "Company", exact: true }).selectOption(tenant!);
-  await expect(page.getByRole("alert")).toContainText("Subscription details are unavailable");
+  await expect(page.getByRole("alert").filter({ hasText: "Subscription details are unavailable" })).toBeVisible();
   await catalogue(page); await privateAbsent(page);
   await page.reload();
   await expect(page.getByRole("link", { name: "Company sign-in", exact: true })).toBeVisible();
