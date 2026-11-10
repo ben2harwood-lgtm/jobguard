@@ -94,3 +94,48 @@ The named regression is included, with an upgrade assertion that entry is absent
 before 0942, but failing-before/passing-after and all lifecycle/race/commercial
 results still require actual PostgreSQL evidence. The independent RED checker must
 run these on the router's exact committed head. No self-review or merge occurred.
+
+
+## Repair 1 — owner fixture and successor upgrade rows (10 November 2026)
+
+READY for router commit and CI; RED independent review remains required.
+
+Source inspection traced the initial `n<>1` refusal to zero effective memberships:
+`0150_membership_authority_fix.sql` defines `identity.current_memberships` with
+an inner join to `identity.user_email`. The LP job-door actor supplies the identity,
+account and owner membership; these tests added the locator/session but omitted
+that email. `identity.provision_verified_challenge` creates the email during a
+real sign-up. Both linked-practice fixture paths now include it. Production SQL,
+including both exactly-one checks and all revocation/expiry checks, is unchanged.
+
+Added PostgreSQL regressions for the actual PersistedAuthProvider sign-up path
+through linked entry/authentication, and for zero effective memberships without
+an email becoming exactly one after the email is supplied. Existing multiple-
+membership refusal and all eight lock races remain collected for CI execution.
+
+Registered the three new control-plane tables as empty in later-empty-tables.ts
+(used by migfix-7 and plan-entitlement upgrades) and extra-proceed's replay list.
+The 0942 proof already contains all three exact `rows` additions with `before:
+null` and `data: []`; those existing proof rows are retained unchanged.
+
+Local checks, using the installed binaries without package downloads:
+
+- `packages/db/node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit` — passed.
+- `apps/api/node_modules/.bin/tsc -p apps/api/tsconfig.json --noEmit` — passed.
+- `node tools/agent-lane-boundary-lint.mjs --lane=real-wayin-linked-practice` — passed.
+- From packages/db: `./node_modules/.bin/vitest run --maxWorkers=1 src/blank-practice-company.test.ts test/migration-proof-loader.test.ts` — 83 passed, 2 files.
+- From packages/db: `./node_modules/.bin/vitest list --maxWorkers=1 test/real-wayin-linked-practice.integration.test.ts test/real-wayin-linked-practice-races.integration.test.ts test/extra-proceed-upgrade.integration.test.ts` — 24 cases collected, including all eight races. Collection only.
+- `git diff --check` — passed.
+
+PostgreSQL was not run. Database/browser execution is unavailable in this sandbox.
+CI must execute the linked journey, races, migfix-7, plan-entitlement and extra-
+proceed upgrades after the router pushes. No Git writes, push, PR or merge here.
+The referenced coordinator precheck file was absent from this checkout; diagnosis
+used the supplied failure report and inspected source/callers/tests.
+
+LATER / SIMPLICITY (initial inspection):
+`packages/db/migrations/0942_identity_linked_practice.sql`, legacy routine patch
+loop: replace the three body overlays with explicit latest routine definitions
+in a separate focused change. This would make guard placement reviewable without
+depending on string positions. Deferred optional work to keep this repair focused;
+it does not block the fixture and upgrade-list corrections.

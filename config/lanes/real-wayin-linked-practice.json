@@ -11,7 +11,9 @@
         "packages/db/test/migration-proofs/0942_identity_linked_practice.proof.json",
         "packages/db/migration-notes/0942_identity_linked_practice.md",
         "packages/db/test/real-wayin-linked-practice.integration.test.ts",
-        "packages/db/test/real-wayin-linked-practice-races.integration.test.ts"
+        "packages/db/test/real-wayin-linked-practice-races.integration.test.ts",
+        "packages/db/test/later-empty-tables.ts",
+        "packages/db/test/extra-proceed-upgrade.integration.test.ts"
       ]
     }
   }

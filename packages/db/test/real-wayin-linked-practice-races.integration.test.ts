@@ -11,6 +11,7 @@ afterAll(async () => { await c?.close(); vi.unstubAllEnvs(); });
 async function fixture() {
   const a = await jobDoorsActor(c.admin), parent = randomUUID(), token = randomUUID();
   const parentDigest = createHmac("sha256", "fictional-race-key-at-least-32-characters").update(`session:${randomUUID()}`).digest("hex");
+  await c.admin.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", [`${a.person}@practice.invalid`,a.person]);
   await c.admin.query("INSERT INTO identity.membership_locator VALUES($1,$2,$3)", [a.person,a.tenant,a.member]);
   await c.admin.query("INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at) VALUES($1,$2,'synthetic_demo',$3,'fictional',clock_timestamp()+interval '1 hour')", [parent,a.person,parentDigest]);
   await c.admin.query("SELECT identity.enter_linked_practice($1,$2,$3,NULL)", [parentDigest,digestOf(token),{version:"linked-practice-company.v1",action:"enter"}]);

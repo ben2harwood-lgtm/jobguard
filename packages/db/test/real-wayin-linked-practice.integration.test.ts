@@ -20,6 +20,8 @@ beforeAll(async () => {
 afterAll(async () => { await identity?.end(); await c?.close(); vi.unstubAllEnvs(); });
 async function parent(actor?: Awaited<ReturnType<typeof jobDoorsActor>>) {
   const a = actor ?? await jobDoorsActor(c.admin), token = randomUUID(), id = randomUUID();
+  // Match provision_verified_challenge: effective memberships require a verified email.
+  await c.admin.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2) ON CONFLICT DO NOTHING", [`${a.person}@practice.invalid`, a.person]);
   await c.admin.query("INSERT INTO identity.membership_locator VALUES($1,$2,$3) ON CONFLICT DO NOTHING", [a.person, a.tenant, a.member]);
   await c.admin.query("INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at) VALUES($1,$2,'synthetic_demo',$3,'fictional',clock_timestamp()+interval '1 hour')", [id, a.person, createHmac("sha256", secret).update(`session:${token}`).digest("hex")]);
   return { ...a, token, id };
@@ -33,6 +35,33 @@ async function job(auth: Awaited<ReturnType<typeof authenticatePracticeSession>>
   await withTenant(c.runtime, auth.context, db => db.$client.query("SELECT app.create_practice_sandbox_job($1,$2,$3,$4)", [home, id, auth.membershipId, auth.digest]));
   return id;
 }
+
+it("a verified sign-up owner can enter linked practice without fixture-only context", async () => {
+  const { IdentityRepository } = await import("../src/identity-repository.js");
+  const { PersistedAuthProvider } = await import("../../../apps/api/src/auth/persisted-auth-provider.js");
+  const { FixtureIdentityEmail } = await import("../../../apps/api/src/auth/identity-email.js");
+  const provider = new PersistedAuthProvider(new IdentityRepository(identity), secret,
+    new FixtureIdentityEmail(), "synthetic_demo", () => Date.now(), () => "12345678");
+  const email = `${randomUUID()}@practice.invalid`;
+  await provider.requestCode({ email, purpose: "signup", ip: randomUUID() });
+  const session = await provider.verifyCode(email, "signup", "12345678");
+  const principal = (await provider.authenticate(session.sessionToken))!;
+  const memberships = await provider.memberships(principal);
+  expect(memberships).toHaveLength(1);
+  expect(memberships[0]!.role).toBe("owner");
+  const token = await enterLinkedPracticeCompany(identity, session.sessionToken, secret, enter);
+  await expect(authenticatePracticeSession(c.runtime, token)).resolves.toBeDefined();
+});
+
+it("requires the verified email as well as the locator and owner membership", async () => {
+  const p = await parent();
+  await c.admin.query("DELETE FROM identity.user_email WHERE user_id=$1", [p.person]);
+  expect((await identity.query("SELECT * FROM identity.sso_session_memberships($1,$2)", [p.person,p.id])).rows).toEqual([]);
+  await expect(entry(p)).rejects.toThrow("UNAUTHENTICATED");
+  await c.admin.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", [`${p.person}@practice.invalid`,p.person]);
+  expect((await identity.query("SELECT id FROM identity.sso_session_memberships($1,$2)", [p.person,p.id])).rows).toEqual([{id:p.member}]);
+  await expect(entry(p)).resolves.toBeDefined();
+});
 
 it("two fictional identity sessions retain one practice owner with independent credentials", async () => {
   const firstParent = await parent(), secondParent = await parent(firstParent);
