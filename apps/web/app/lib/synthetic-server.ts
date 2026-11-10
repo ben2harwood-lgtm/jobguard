@@ -49,7 +49,7 @@ export async function syntheticWorkspace() {
           ? { kind: "quote", reference: "Q-1008", delivery: "queued" }
           : { kind: "none", reference: null, delivery: "not_sent" },
       customerPayment: "not_due",
-      pilotNoCharge: true, updatedLabel: `Server revision ${job.revision}`,
+      pilotNoCharge: true, updatedLabel: "",
     })),
   };
 }

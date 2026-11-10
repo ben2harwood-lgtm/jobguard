@@ -97,7 +97,11 @@ beforeEach(() => {
   h.withTenant.mockImplementation(async (_pool, _context, work) => work({ $client: { query: h.query } }));
   h.query.mockResolvedValue({ rows: [{ allowed: false }] });
   h.evidenceService.mockReturnValue({ beginUpload: h.beginUpload, finalize: h.finalize });
-  h.beginUpload.mockResolvedValue({ id: extraId, objectKey: "practice-photo" });
+  h.beginUpload.mockImplementation(async (_context, _input, persist) => {
+    const upload = { id: extraId, objectKey: "practice-photo" };
+    await persist({ $client: { query: h.query } }, upload);
+    return upload;
+  });
   h.finalize.mockResolvedValue({});
   h.rateCard.mockResolvedValue([{ code: "CLEAR-VOID", ratePence: 100 }]);
   h.priceExtra.mockResolvedValue({});
@@ -125,11 +129,19 @@ describe("Northside photo authorization (unit tests with database and storage do
     expect(h.put).not.toHaveBeenCalled();
   });
 
+  it("does not finalize or report success when the original-byte insert fails", async () => {
+    h.query.mockResolvedValue({ rows: [{ allowed: true }] });
+    h.put.mockRejectedValue(new Error("database write failed"));
+    expect((await attach()).status).toBe(503);
+    expect(h.put).toHaveBeenCalledOnce();
+    expect(h.finalize).not.toHaveBeenCalled();
+  });
+
   it("lets a currently assigned operative attach the practice photo", async () => {
     h.query.mockResolvedValue({ rows: [{ allowed: true }] });
     const response = await attach();
     expect(response.status).toBe(200);
-    expect(h.beginUpload).toHaveBeenCalledWith(context, expect.objectContaining({ jobId }));
+    expect(h.beginUpload).toHaveBeenCalledWith(context, expect.objectContaining({ jobId }), expect.any(Function));
     expect(h.put).toHaveBeenCalledOnce();
     expect(h.finalize).toHaveBeenCalledWith(context, { uploadId: extraId, objectVersionId: "v1", evidenceType: "site_photo" });
   });
