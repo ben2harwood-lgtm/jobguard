@@ -7,7 +7,7 @@ import { ApplicationAuthGuard } from "../auth/application-auth.guard.js";
 const id="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 function fixture(){
  const credentials={sessionToken:"s".repeat(32),requestedTenantId:id,csrfToken:"c".repeat(24),origin:"https://jobguard.invalid"};
- const provider={authenticate:vi.fn().mockResolvedValue({identityUserId:id,sessionId:id,csrfToken:credentials.csrfToken}),findMembership:vi.fn().mockResolvedValue({id,identityUserId:id,tenantId:id,role:"owner",email:"owner@example.invalid"})};
+ const provider={authenticate:vi.fn().mockResolvedValue({identityUserId:id,sessionId:id,csrfToken:credentials.csrfToken,sessionCredential:"a".repeat(64)}),findMembership:vi.fn().mockResolvedValue({id,identityUserId:id,tenantId:id,role:"owner",email:"owner@example.invalid"})};
  const authority={provider,allowedOrigin:credentials.origin,environment:()=>"synthetic_demo",resolve:vi.fn().mockResolvedValue({credentials,digest:"a".repeat(64)})};
  const readBusiness=vi.fn().mockResolvedValue({version:"business-value-result.v1",state:"mapped",tenantId:id,label:"mapped, inspectable",environment:"synthetic_demo",jobs:[],subscription:[]});
  const readJob=vi.fn<ValueBusinessReader["readJob"]>().mockResolvedValue(null);

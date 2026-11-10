@@ -5,7 +5,11 @@ import { PlatformTaxInvoiceFixtureRepository } from "../src/platform-tax-invoice
 import { closeWorkFixture, createWorkFixture, seedWorkJob, workTenant, type WorkFixture } from "./job-work-state-fixtures.js";
 import { preparedPeriod, calendarInput, storeMeter, issue } from "./subscription-persistence-fixtures.js";
 let f: WorkFixture;
-beforeAll(async () => { f = await createWorkFixture(); }, 240000);
+beforeAll(async () => { f = await createWorkFixture();
+  // Admin-only issuance clock: all fixture periods through December 2026 have ended.
+  // This isolated cluster exposes no runtime clock override or new grant.
+  const definition = (await f.admin.query("SELECT pg_get_functiondef('app.mon2_issue(uuid,text,date,integer)'::regprocedure) definition")).rows[0].definition as string;
+  await f.admin.query(definition.replaceAll("clock_timestamp()", "'2027-01-01T12:00:00Z'::timestamptz")); }, 240000);
 afterAll(async () => { await closeWorkFixture(f); });
 async function setup() {
   const { a, issued } = await preparedPeriod(f, 4, "Solo"), issuerId = randomUUID();

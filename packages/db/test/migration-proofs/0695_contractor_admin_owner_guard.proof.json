@@ -1,0 +1,6 @@
+{
+  "migration": "0695_contractor_admin_owner_guard.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}

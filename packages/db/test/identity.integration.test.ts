@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import EmbeddedPostgres from "embedded-postgres";
-import { Pool } from "pg";
+import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { IdentityRepository, MIGRATION_URLS, migrate, withTenant, listAccounts, UserCommandDispatcher } from "../src/index.js";
 import { PersistedAuthProvider } from "../../../apps/api/src/auth/persisted-auth-provider.js";
@@ -78,6 +78,32 @@ describe("M0-6L persisted identity / actual PostgreSQL roles",()=>{
   const ip=randomUUID();await Promise.all(Array.from({length:10},()=>fixture().requestCode({email:email(),purpose:"signup",ip})));
   await expect(p.requestCode({email:email(),purpose:"signup",ip})).rejects.toMatchObject({code:"RATE_LIMITED"});
  });
+ it("isolates client floods, keeps the fallback shared and enforces destination/global ceilings across replicas",async()=>{
+  now+=600001; // Isolate this ten-minute window from other identity scenarios.
+  const send=(ip:string,address=email(),purpose:"signup"|"signin"|"invitation"="signin")=>fixture().requestCode({email:address,purpose,ip});
+  try {
+   await Promise.all(Array.from({length:10},()=>send("192.0.2.1")));
+   await expect(send("192.0.2.1")).rejects.toMatchObject({code:"RATE_LIMITED"});
+   await expect(send("192.0.2.2")).resolves.toMatchObject({accepted:true});
+   await Promise.all(Array.from({length:10},()=>send("web-bootstrap")));
+   await expect(send("web-bootstrap")).rejects.toMatchObject({code:"RATE_LIMITED"});
+   const destination=email();
+   // Changing client or purpose cannot bypass the normalized-email ceiling.
+   for(let n=0;n<10;n++) {
+    await send(`email-client-${n}`,n%2?destination.toUpperCase():destination,n%2?"signup":"signin");
+    if(n<9)now+=60001;
+   }
+   await expect(send("new-client",destination,"invitation")).rejects.toMatchObject({code:"RATE_LIMITED"});
+   await expect(send("new-client")).resolves.toMatchObject({accepted:true});
+   now+=600001;
+   const results=await Promise.allSettled(Array.from({length:105},(_,n)=>send(`global-client-${n}`)));
+   expect(results.filter(result=>result.status==="fulfilled")).toHaveLength(100);
+   for(const result of results.filter(result=>result.status==="rejected"))expect(result.reason).toMatchObject({code:"RATE_LIMITED"});
+   await expect(send("another-client")).rejects.toMatchObject({code:"RATE_LIMITED"});
+   now+=600001;
+   await expect(send("another-client")).resolves.toMatchObject({accepted:true});
+  } finally { now+=600001; }
+ },30000);
  it("acknowledges existing/unknown signins equally and stores no raw codes or tokens",async()=>{
   const owner=await signup();const unknown=email();
   for(const address of [owner.address,unknown])expect(await fixture().requestCode({email:address,purpose:"signin",ip:randomUUID()})).toEqual({accepted:true,fixtureCode:"12345678"});
@@ -171,6 +197,66 @@ describe("M0-6L persisted identity / actual PostgreSQL roles",()=>{
   return fixture().verifyCode(address,"invitation","12345678",invitationId);
  }
  const membershipRows=(tenantId:string,userEmail:string)=>admin.query("SELECT m.id,m.role,m.revoked_at,m.expires_at FROM app.membership m JOIN identity.user_email e ON e.user_id=m.identity_user_id WHERE m.tenant_id=$1 AND e.email=$2 ORDER BY m.created_at,m.id",[tenantId,userEmail]).then(r=>r.rows);
+ // Verified challenges are seeded through the owner fixture so these checks exercise the SQL acceptance boundary
+ // directly, including its NULL result, under the restricted identity role rather than an application precheck.
+ async function verifiedInvitation(role:string){
+  const owner=await signup(),recipient=email(),invitationId=await invitationFor(owner,recipient,role);
+  await fixture().requestCode({email:recipient,purpose:"invitation",invitationId,ip:randomUUID()});
+  const challengeId=(await admin.query("UPDATE identity.challenge SET verified=true,consumed_at=clock_timestamp() WHERE invitation_id=$1 AND email=$2 RETURNING id",[invitationId,recipient])).rows[0].id as string;
+  return {owner,recipient,invitationId,challengeId};
+ }
+ type VerifiedInvitation=Awaited<ReturnType<typeof verifiedInvitation>>;
+ async function revokeIssuer(invite:VerifiedInvitation,reason:"membership"|"contractor"){
+  const {owner}=invite,tenantId=owner.membership.tenantId;
+  if(reason==="membership"){
+   await admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2",[tenantId,owner.membership.id]);
+  }else{
+   await admin.query("INSERT INTO app.contractor_member(tenant_id,membership_id,email) VALUES($1,$2,$3)",[tenantId,owner.membership.id,owner.address]);
+   await admin.query("INSERT INTO app.contractor_membership_revocation(tenant_id,id,membership_id) VALUES($1,$2,$3)",[tenantId,randomUUID(),owner.membership.id]);
+  }
+ }
+ async function refusesRevokedIssuer(invite:VerifiedInvitation,connection:Pool|PoolClient=identity){
+  const result=await connection.query("SELECT identity.provision_verified_challenge($1) AS user_id",[invite.challengeId]);
+  expect(result.rows[0].user_id).toBeNull();
+  expect(await membershipRows(invite.owner.membership.tenantId,invite.recipient)).toHaveLength(0);
+  expect((await admin.query("SELECT accepted_at FROM identity.invitation WHERE id=$1",[invite.invitationId])).rows[0].accepted_at).toBeNull();
+ }
+ for(const role of ["admin","finance","estimator","foreman","read_only"]){
+  for(const reason of ["membership","contractor"] as const)it(`LATER-SAFETY-75 refuses a verified ${role} invitation after issuer ${reason} revocation`,async()=>{
+   const invite=await verifiedInvitation(role);
+   await revokeIssuer(invite,reason);
+   await refusesRevokedIssuer(invite);
+   expect((await admin.query("SELECT verified FROM identity.challenge WHERE id=$1",[invite.challengeId])).rows[0].verified).toBe(false);
+  });
+  it(`LATER-SAFETY-75 accepts a ${role} invitation from a still-active owner`,async()=>{
+   const owner=await signup(),recipient=email(),invitationId=await invitationFor(owner,recipient,role);
+   const session=await accept(recipient,invitationId),principal=(await fixture().authenticate(session.sessionToken))!;
+   expect(await fixture().memberships(principal)).toEqual([expect.objectContaining({tenantId:owner.membership.tenantId,role,email:recipient})]);
+   expect(await membershipRows(owner.membership.tenantId,recipient)).toHaveLength(1);
+   expect((await admin.query("SELECT accepted_at FROM identity.invitation WHERE id=$1",[invitationId])).rows[0].accepted_at).not.toBeNull();
+  });
+ }
+ for(const reason of ["membership","contractor"] as const)it(`LATER-SAFETY-75 mutation: removing the issuer check breaks ${reason} revocation rejection`,async()=>{
+  const invite=await verifiedInvitation("admin");
+  await revokeIssuer(invite,reason);
+  const client=await admin.connect();
+  try{
+   await client.query("BEGIN");
+   const definition=(await client.query("SELECT pg_get_functiondef('identity.provision_verified_challenge(uuid)'::regprocedure) AS definition")).rows[0].definition as string;
+   const mutant=definition.replace(/  SELECT member_row\.id INTO issuer[\s\S]*?IF issuer IS NULL THEN RETURN NULL; END IF;\n/u,"");
+   expect(mutant).not.toBe(definition);
+   await client.query(mutant);
+   await client.query("SET LOCAL ROLE jobguard_identity");
+   // The same refusal assertion must fail with the moved guard removed. This transaction is always rolled back.
+   await expect(refusesRevokedIssuer(invite,client)).rejects.toThrow();
+   await client.query("RESET ROLE");
+   expect((await client.query("SELECT m.role FROM app.membership m JOIN identity.user_email e ON e.user_id=m.identity_user_id WHERE m.tenant_id=$1 AND e.email=$2",[invite.owner.membership.tenantId,invite.recipient])).rows).toEqual([{role:"admin"}]);
+  }finally{
+   await client.query("ROLLBACK");client.release();
+  }
+  // Rollback restores the exact function and challenge state: the real guard rejects the same challenge again.
+  await refusesRevokedIssuer(invite);
+ });
  for(const reason of ["revoked","expired"] as const)it(`lets a ${reason} member accept a fresh invitation, preserving the old membership row`,async()=>{
   const owner=await signup(),tenantId=owner.membership.tenantId,recipient=email();
   const first=await accept(recipient,await invitationFor(owner,recipient,"foreman")),principal=(await fixture().authenticate(first.sessionToken))!;

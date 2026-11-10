@@ -6,6 +6,7 @@ import {
 } from "@jobguard/core";
 import { canonicalJson, sha256Hex } from "./work-order-repository.js";
 import { withTenant, type VerifiedTenantContext, type TenantTransaction } from "./tenant-context.js";
+import { RequestBindingRefusedError } from "./request-binding-error.js";
 
 const id = z.guid().transform(value => value.toLowerCase());
 const commandV1 = z.object({ version: z.literal("interim.persist-command.v1"), commandId: id,
@@ -17,7 +18,7 @@ const storedV1 = z.object({ commandId: id, actorId: id, revision: z.number().int
 }).strict();
 const hash = (value: unknown) => sha256Hex(canonicalJson(value));
 export class InterimDraftRepositoryError extends Error {
-  constructor(public readonly code: "INVALID_INPUT" | "NOT_FOUND" | "CONFLICT" | "UNAVAILABLE" | "DARK") {
+  constructor(public readonly code: "INVALID_INPUT" | "NOT_FOUND" | "CONFLICT" | "UNAVAILABLE" | "DARK" | "FORBIDDEN" | "UNAUTHENTICATED" | "JOB_NOT_LIVE") {
     super(`INTERIM_DRAFT_${code}`); this.name = "InterimDraftRepositoryError";
   }
 }
@@ -30,8 +31,12 @@ export class InterimDraftRepository {
   private async guarded<T>(work: () => Promise<T>): Promise<T> {
     try { return await work(); } catch (error) {
       if (error instanceof InterimApplicationError || error instanceof InterimDraftRepositoryError) throw error;
+      // A revoked or mismatched bound session is a permission refusal, never a retryable outage.
+      if (error instanceof RequestBindingRefusedError) throw new InterimDraftRepositoryError("FORBIDDEN");
       const message = error instanceof Error ? error.message : "";
-      for (const code of ["INVALID_INPUT", "NOT_FOUND", "CONFLICT", "DARK"] as const) {
+      if (message === "METER_FORBIDDEN") throw new InterimDraftRepositoryError("FORBIDDEN");
+      if (message === "JOB_NOT_LIVE") throw new InterimDraftRepositoryError("JOB_NOT_LIVE");
+      for (const code of ["INVALID_INPUT", "NOT_FOUND", "CONFLICT", "DARK", "FORBIDDEN", "UNAUTHENTICATED"] as const) {
         if (message === `INTERIM_DRAFT_${code}`) throw new InterimDraftRepositoryError(code);
       }
       throw new InterimDraftRepositoryError("UNAVAILABLE");
@@ -50,9 +55,9 @@ export class InterimDraftRepository {
     return { watermark: INTERIM_APPLICATION_WATERMARK, lineage: "fixture_lineage_not_authority" as const,
       rows, book, reconciliation: reconcileInterimDraftBook(book) };
   }
-  async read(context: VerifiedTenantContext, jobId: string) {
+  async read(context: VerifiedTenantContext, jobId: string, actor: string | null = null) {
     const parsed = id.safeParse(jobId); if (!parsed.success) invalid();
-    return this.guarded(() => withTenant(this.pool, context, db => this.load(db, context, parsed.data, null)));
+    return this.guarded(() => withTenant(this.pool, context, db => this.load(db, context, parsed.data, actor)));
   }
   async command(context: VerifiedTenantContext, actor: string, raw: unknown) {
     const parsed = commandV1.safeParse(raw);

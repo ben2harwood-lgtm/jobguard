@@ -1,0 +1,7 @@
+Receipts after an issued final invoice bound to the current final-account lock no longer depend on the current proof set, and billing still does.
+
+LATER-SAFETY-135-CATCHUP READY for router commit/push: reserved 0692 renumber is filename-stem-only; SQL is byte-identical to the pre-check branch and every origin/main migration is preserved. Both historical upgrade suites pin the 0692 receipt proposal body and owner-only receipt helper. Lane coverage matches every changed file relative to origin/main, excluding config/lanes/.
+
+Local verification: installed packages/db/node_modules/.bin/vitest run --maxWorkers=1 test/migration-proof-loader.test.ts test/lp-0-catalog.test.ts test/later-safety-catalog.test.ts passed (3 files, 111 tests); vitest list --maxWorkers=1 collected all 5 tests across final-check-post-invoice-receipt, migfix-7-upgrade and plan-entitlement-lifecycle-upgrade integration files. git diff --check passed. The pnpm wrapper stalled before invoking Vitest; the installed runner was used directly without downloads.
+
+CI execution remains required after router push: LP0-17 in lp-0-authority-paths.integration.test.ts; lp-0-grant-freeze.integration.test.ts; migfix-7-upgrade.integration.test.ts; plan-entitlement-lifecycle-upgrade.integration.test.ts; final-check-post-invoice-receipt.integration.test.ts. PostgreSQL and browser runs are unavailable in this sandbox. RED exact-head independent review and green CI remain landing gates; pre-check PASS at 02d3dbe2 does not cover this catch-up head.

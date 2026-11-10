@@ -1,0 +1,6 @@
+{
+  "migration": "0654_synthetic_reversal_money_rules.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}

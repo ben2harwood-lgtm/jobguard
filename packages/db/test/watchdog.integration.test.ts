@@ -27,7 +27,7 @@ const tables = ["purchase_order_manual_attestation", "purchase_order_draft", "pu
 // Still count them on every refusal and inspect their RLS/ownership below; their
 // insert/replay/audit controls are exercised in supplier-line-corrections.integration.test.ts.
 // Dispositions have no runtime table grants; their checked writer enforces access.
-const mutationTables = [...tables, "extra_duplicate_disposition", "supplier_line_match_snapshot", "supplier_line_match_correction", "privacy_review_fact", "extra_proceed_statement"];
+const mutationTables = [...tables, "extra_duplicate_disposition", "supplier_line_match_snapshot", "supplier_line_match_correction", "privacy_review_fact", "extra_client_command_session", "extra_client_signin", "extra_client_session", "connector_promotion", "extra_proceed_statement"];
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, directory: string;
 const storage: PrivateVersionedStorage = {
   async createUploadUrl() { return "https://generated.invalid/upload"; },
@@ -40,7 +40,10 @@ beforeAll(async () => {
   const port = await freePort(60400, 100);
   postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: "synthetic", persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
   await postgres.initialise(); await postgres.start();
-  admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password: "synthetic", max: 4 });
+  // 0678 admits manual attestations only in the synthetic demo database; run CH-2 there so every
+  // direct insert reaches the live guard. The outside-database refusal is asserted at the end.
+  await postgres.createDatabase("jobguard_synthetic_demo");
+  admin = new Pool({ host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "postgres", password: "synthetic", max: 4 });
   // Upgrade fixture: these rows existed in the preceding supported schema, where
   // proof uploads were possible before/after live. No guard is bypassed/disabled.
   await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
@@ -65,7 +68,7 @@ beforeAll(async () => {
   for (const { jobId } of Object.values(legacy)) await admin.query(
     "INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance,source_id) VALUES($1,$2,'small_builder','synthetic_demo','backfilled_synthetic_fixture',$2) ON CONFLICT DO NOTHING", [tenant, jobId]);
   await admin.query("CREATE ROLE ch2_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;GRANT jobguard_runtime TO ch2_login");
-  runtime = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "ch2_login", password: "synthetic", max: 4 });
+  runtime = new Pool({ host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "ch2_login", password: "synthetic", max: 4 });
 }, 60000);
 afterAll(async () => { await closeTestPools(runtime, admin); await postgres?.stop(); if (directory) await rm(directory, { recursive: true, force: true }); });
 
@@ -212,5 +215,27 @@ describe("CH-2 actual PostgreSQL enforcement", () => {
         }
       } finally { await a.query("ROLLBACK"); await b.query("ROLLBACK"); a.release(); b.release(); }
     }
+  });
+});
+describe("CH-2 outside the synthetic demo database", () => {
+  it("a direct manual attestation is refused MODE_FORBIDDEN before the live guard; other tables still reach JOB_NOT_LIVE", async () => {
+    const { host, port, password } = (admin as unknown as { options: { host: string; port: number; password: string } }).options;
+    await closeTestPools(runtime, admin);
+    const control = new Pool({ host, port, password, user: "postgres", database: "postgres", max: 1 });
+    try { await control.query("CREATE DATABASE jobguard_ch2_outside TEMPLATE jobguard_synthetic_demo"); }
+    finally {
+      await control.end();
+      admin = new Pool({ host, port, password, user: "postgres", database: "jobguard_synthetic_demo", max: 4 });
+      runtime = new Pool({ host, port, password, user: "ch2_login", database: "jobguard_synthetic_demo", max: 4 });
+    }
+    const outside = new Pool({ host, port, password, user: "ch2_login", database: "jobguard_ch2_outside", max: 1 });
+    try {
+      expect((await outside.query("SELECT current_database() name")).rows[0].name).toBe("jobguard_ch2_outside");
+      for (const status of states) {
+        const insert = (table: string) => withTenant(outside, context, db => db.$client.query(`INSERT INTO app.${table}(tenant_id,job_id)VALUES($1,$2)`, [tenant, legacy[status]!.jobId]));
+        await expect(insert("purchase_order_manual_attestation"), status).rejects.toMatchObject({ message: "MODE_FORBIDDEN", code: "42501" });
+        await expect(insert("purchase_order_draft"), status).rejects.toThrow("JOB_NOT_LIVE");
+      }
+    } finally { await closeTestPools(outside); }
   });
 });

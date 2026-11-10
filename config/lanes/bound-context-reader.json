@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "lanes": {
+    "bound-context-reader": {
+      "branches": [
+        "codex/sandbox/bound-context-reader"
+      ],
+      "note": "RED. PROPOSAL, NEEDS BEN. NOPR handoff. Placeholder migration 0956.",
+      "allow": [
+        "docs/contracts/bound-context-reader-v1.md",
+        "packages/db/migrations/0697_bound_context_reader.sql",
+        "packages/db/migrations/0956_bound_context_reader.sql",
+        "packages/db/test/bound-context-reader.integration.test.ts",
+        "packages/db/test/bound-context-reader.test.ts",
+        "packages/db/test/migration-proofs/0697_bound_context_reader.proof.json",
+        "packages/db/test/migration-proofs/0956_bound_context_reader.proof.json"
+      ]
+    }
+  }
+}

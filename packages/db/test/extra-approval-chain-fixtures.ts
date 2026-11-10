@@ -24,7 +24,7 @@ export async function chainWorld(c: Cluster) {
   const supervisor2 = await invite(c, f, "supervisor", { kind: "team", id: f.demo.teamId });
   const client2 = await invite(c, f, "client_approver", { kind: "client", id: f.demo.clientId });
   const world = { ...f, supervisor2, client2, nextOrder: 10 };
-  const supportsWorkingDays = (await c.admin.query("SELECT 1 FROM public.jobguard_schema_migration WHERE migration_name='0637_extra_rule_wait_schema.sql'")).rows.length > 0;
+  const supportsWorkingDays = (await c.admin.query("SELECT 1 FROM public.jobguard_schema_migration WHERE migration_name='0638_extra_rule_wait_schema.sql'")).rows.length > 0;
   const rules = structuredClone(demoRules);
   // Upgrade fixtures still need to seed the actual predecessor rule schema.
   if (!supportsWorkingDays) for (const band of rules.bands) for (const step of band.steps) delete step.waitWorkingDays;
