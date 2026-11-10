@@ -33,9 +33,11 @@ async function acceptRemaining(page: Page) {
     await card.getByRole("button", { name: `Accept ${description}`, exact: true }).click();
   }
 }
+// Scope to the review card: Next's route announcer is also role="alert".
+const reviewAlert = (page: Page) => page.locator("section.review").getByRole("alert");
 async function saved(page: Page) {
   await click(page, "Save review");
-  await expect(page.getByRole("alert")).toContainText("Review saved.");
+  await expect(reviewAlert(page)).toContainText("Review saved.");
 }
 async function noOverflow(page: Page) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -69,8 +71,8 @@ test("walk 2 Split reaches confirmed scope without guessing quantity", async ({ 
   }
   await answers(page);
   await click(page, "Confirm scope");
-  await expect(page.getByRole("alert")).toContainText(`Choose Accept, Split, Merge or Dismiss for ‘${hall}’`);
-  await expect(page.getByRole("alert")).toContainText(woodwork);
+  await expect(reviewAlert(page)).toContainText(`Choose Accept, Split, Merge or Dismiss for ‘${hall}’`);
+  await expect(reviewAlert(page)).toContainText(woodwork);
   await expect(page.getByLabel(`Description ${hall}`, { exact: true })).toBeFocused();
   await noOverflow(page);
   await acceptRemaining(page);
@@ -100,7 +102,7 @@ for (const field of ["Quantity", "Unit"]) {
     const input = page.getByLabel(`${field} ${hall}`, { exact: true });
     await input.fill("");
     await click(page, "Confirm scope");
-    await expect(page.getByRole("alert")).toHaveText(new RegExp(`Scope is not confirmed\\. Add ${field} for ‘${hall}’.*REVIEW_INCOMPLETE`, "u"));
+    await expect(reviewAlert(page)).toHaveText(new RegExp(`Scope is not confirmed\\. Add ${field} for ‘${hall}’.*REVIEW_INCOMPLETE`, "u"));
     await expect(input).toBeFocused();
     expect((await snapshot(page, jobId)).status).toBe("draft");
     await expect(page.getByRole("heading", { name: "Scope confirmed", exact: true })).toHaveCount(0);
@@ -119,8 +121,8 @@ test("walk 2 unanswered questions explain why scope remains draft", async ({ pag
   // Whitespace is unanswered too, even though an input event occurred.
   await answerBoxes(page).first().fill("   ");
   await click(page, "Confirm scope");
-  await expect(page.getByRole("alert")).toContainText("Scope is not confirmed. Answer:");
-  for (const question of questions) await expect(page.getByRole("alert")).toContainText(`“${question}”`);
+  await expect(reviewAlert(page)).toContainText("Scope is not confirmed. Answer:");
+  for (const question of questions) await expect(reviewAlert(page)).toContainText(`“${question}”`);
   await expect(page.getByLabel(`Answer ${questions[0]}`, { exact: true })).toBeFocused();
   await noOverflow(page);
   expect((await snapshot(page, jobId)).status).toBe("draft");
@@ -136,7 +138,7 @@ test("walk 2 unanswered questions explain why scope remains draft", async ({ pag
   const advanced = await page.request.post(`/api/jobs/${jobId}/review`, { data: { contractVersion: "proposal_review_command_v1", expectedRevision: remote.review.revision, review: remote.review } });
   expect(advanced.ok()).toBe(true);
   await click(page, "Confirm scope");
-  await expect(page.getByRole("alert")).toHaveText("This draft changed. Review the latest version.");
+  await expect(reviewAlert(page)).toHaveText("This draft changed. Review the latest version.");
   await expect(description).toHaveValue("Bathroom work checked after saving");
   expect((await snapshot(page, jobId)).status).toBe("draft");
   await page.reload();
