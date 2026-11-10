@@ -37,6 +37,7 @@ export function readingTime(title: string, words: string) {
 /** Only viewer autoplay opts nested screen actions into presentation pacing. */
 export const viewerPlayback = new WeakSet<AbortSignal>();
 export function viewerPacing() {
+  if (typeof navigator !== "undefined" && navigator.webdriver) return false;
   return !(typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches);
 }
 
@@ -132,7 +133,11 @@ export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: reado
       const target = visibleTarget(step.target);
       if (!target) throw new Error("This step's control is unavailable. Stop the tour or return when the screen is ready.");
       if (!step.isDone()) {
-        if (viewerPlayback.has(controller.signal)) await readingPause(1200, false, controller.signal, () => {});
+        const delay = 1200;
+        await new Promise<void>(resolve => {
+          const timer = window.setTimeout(resolve, delay);
+          controller.signal.addEventListener("abort", () => { clearTimeout(timer); resolve(); }, { once: true });
+        });
         if (controller.signal.aborted) return;
         await Promise.race([
           step.autoAction(target, controller.signal),
