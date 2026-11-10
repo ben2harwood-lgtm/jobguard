@@ -15,6 +15,7 @@ import { direct } from "./site-extra-fixtures.js";
 import { digestOf } from "./contractor-practice-session-fixtures.js";
 import { ExtraRepository, readExtraDuplicateCandidates, resolveExtraDuplicateCandidates } from "../src/index.js";
 import { createWatchdogHarness } from "./watchdog-command-harness.js";
+import { JobRepository } from "../src/job-repository.js";
 
 // CH-2 Done-when, applied to EVERY watchdog_live_only command: once a command succeeds, replaying its id returns the first
 // result (never the job's current state), the same id with a changed payload conflicts, the same id on another job conflicts,
@@ -57,6 +58,9 @@ const cases = [...h.cases, ...darkCases];
 // This route uses credential-bound client commands and needs the complete contractor
 // schema, rather than the legacy-id watchdog harness. Its executable case is below.
 const clientReplayCase = { key: "/api/customer-portal/extra-approvals", registry: ["/api/customer-portal/extra-approvals"] };
+// Supplier-line snapshots/corrections use their own synthetic replay store. The
+// executable case below covers both mutations behind this route with the live guard.
+const supplierLineReplayCase = { key: "/api/jobs/[id]/supplier-lines", registry: ["/api/jobs/[id]/supplier-lines"] };
 beforeAll(async () => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); await h.boot();
   const user = (await h.admin.query("SELECT identity_user_id FROM app.membership WHERE tenant_id=$1 AND id=$2", [h.tenant,h.member])).rows[0].identity_user_id;
   await h.admin.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3)", [user,h.tenant,h.member]);
@@ -80,7 +84,7 @@ describe("every watchdog_live_only command is covered by this contract", () => {
   });
   it("covers every watchdog_live_only registry key (web routes, dynamic actions, commands and Nest routes), and no stale key", () => {
     const liveOnly = Object.entries(jobMutationRegistry).filter(([, phase]) => phase === "watchdog_live_only").map(([key]) => key).sort();
-    const covered = new Set([...cases, clientReplayCase].flatMap(c => c.registry));
+    const covered = new Set([...cases, clientReplayCase, supplierLineReplayCase].flatMap(c => c.registry));
     expect(liveOnly.filter(key => !covered.has(key))).toEqual([]);
     expect([...covered].filter(key => !liveOnly.includes(key)).sort()).toEqual([]);
   });
@@ -134,6 +138,39 @@ describe("CH-2 replay contract for each watchdog_live_only command", () => {
     for (const result of results) expect(norm(result)).toEqual(norm(results[0]));
   }, 240000);
 });
+
+it(`${supplierLineReplayCase.key}: live confirmation and correction replay historical results and refuse changed intent and pre-live writes`, async () => {
+  const a = await h.supplierLines(await live()), b = await h.supplierLines(await live());
+  const first = norm(await a.confirm());
+  expect(first).toMatchObject({ snapshotId: a.input.snapshotId, revision: 0, history: [] });
+  const corrected = norm(await a.correct());
+  expect(corrected).toMatchObject({ revision: 1, history: [expect.anything()] });
+  await a.correct({ ...a.correction, commandId: randomUUID(), expectedRevision: 1, orderVersionId: null });
+  expect((await a.read()).revision).toBe(2);
+  expect(norm(await a.confirm())).toEqual(first);
+  expect(norm(await a.correct())).toEqual(corrected);
+  await expect(a.confirm({ ...a.input, facts: { ...a.input.facts, merchantId: randomUUID() } })).rejects.toThrow(CONFLICT);
+  await expect(a.correct({ ...a.correction, orderVersionId: null })).rejects.toThrow(CONFLICT);
+  await expect(b.confirm({ ...b.input, commandId: a.input.commandId })).rejects.toThrow(CONFLICT);
+  await b.confirm();
+  await expect(b.correct({ ...b.correction, commandId: a.correction.commandId })).rejects.toThrow(CONFLICT);
+  await expect(a.correct({ ...a.correction, commandId: a.input.commandId })).rejects.toThrow(CONFLICT);
+
+  const draft = await new JobRepository(h.runtime).create(h.ctx, ["job:update"], { title: "Fictional pre-live supplier lines" });
+  const preLive = await h.supplierLines(draft.id);
+  const counts = async () => (await h.admin.query(`SELECT
+    (SELECT count(*) FROM app.supplier_line_match_snapshot WHERE tenant_id=$1) snapshots,
+    (SELECT count(*) FROM app.supplier_line_match_correction WHERE tenant_id=$1) corrections,
+    (SELECT count(*) FROM app.audit_event WHERE tenant_id=$1) audits,
+    (SELECT count(*) FROM app.action_outbox WHERE tenant_id=$1) actions,
+    (SELECT count(*) FROM app.command_receipt WHERE tenant_id=$1) receipts`, [h.tenant])).rows[0];
+  const before = await counts();
+  await expect(preLive.confirm()).rejects.toMatchObject({ code: "JOB_NOT_LIVE" });
+  await expect(preLive.correct()).rejects.toMatchObject({ code: "JOB_NOT_LIVE" });
+  expect(await counts()).toEqual(before);
+  expect(norm(await a.confirm())).toEqual(first);
+  expect(norm(await a.correct())).toEqual(corrected);
+}, 120_000);
 
 // Dedicated synthetic seam: LP-5 cross-family identity remains held in the rate contract.
 it("rate acceptance replays the stored result after new evidence and rejects changed intent", async () => {
