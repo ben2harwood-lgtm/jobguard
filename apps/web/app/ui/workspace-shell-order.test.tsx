@@ -109,18 +109,27 @@ it.each(["#quote", "#job-diary", "#customer-messages", "#variations-title", "#fi
  expect(html).toContain(`data-job-id="${jobId}"`);
 });
 
-it("keeps the review key stable when a command advances a plain job URL", () => {
- function reviewKey(status: CaptureWorkspaceResponse["status"]) {
-  const tree = workspace(status);
+it.each(["", "#quote", "#work-proof", "#final-account-title", "#job-diary"])("keeps the review mounted across status snapshots at %s", fragment => {
+ function review(status: CaptureWorkspaceResponse["status"]) {
+  const tree = workspace(status, fragment);
   function find(node: React.ReactNode): React.ReactElement | undefined {
    if (!React.isValidElement<{ children?: React.ReactNode }>(node)) return;
    if (typeof node.type === "function" && node.type.name === "ReviewProposal") return node;
    return React.Children.toArray(node.props.children).map(find).find(Boolean);
   }
-  return find(tree)?.key;
+  return find(tree) as React.ReactElement<{ initialPricing: boolean }>;
  }
- expect(reviewKey("quoting")).toBeTruthy();
- expect(reviewKey("live")).toBe(reviewKey("quoting"));
+ // A draft-to-quoting read can arrive after the user has opened pricing locally.
+ // Changing the initial view must not reset that local state or the editor's fields.
+ const key = review("draft").key;
+ expect(key).toBeTruthy();
+ for (const status of ["draft", "quoting", "accepted", "live", "invoiced", "paid"] as const) {
+  expect(review(status).key).toBe(key);
+ }
+ if (fragment === "#quote") {
+  expect(review("draft").props.initialPricing).toBe(false);
+  expect(review("quoting").props.initialPricing).toBe(true);
+ }
 });
 
 
