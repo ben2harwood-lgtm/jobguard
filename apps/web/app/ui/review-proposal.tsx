@@ -1,4 +1,5 @@
 "use client";
+import { jobPageFetch as fetch } from "./job-page-fetch";
 import {useEffect,useMemo,useRef,useState}from"react";
 import {captureWorkspaceResponseV1,type CaptureWorkspaceResponse}from"@jobguard/api/capture-contracts";
 import{QuoteEditor}from"./quote-editor";

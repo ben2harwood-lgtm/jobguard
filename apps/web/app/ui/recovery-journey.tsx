@@ -1,4 +1,5 @@
 "use client";
+import { jobPageFetch as fetch } from "./job-page-fetch";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { recoveryCaseTermsHash, type SimulationFeeCollectionView, type SimulationMoneyReport, type SuccessFeeResult } from "@jobguard/core";

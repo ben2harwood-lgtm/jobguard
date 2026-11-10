@@ -1,0 +1,6 @@
+{
+  "migration": "0712_end_check_rule_a_rerun.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}

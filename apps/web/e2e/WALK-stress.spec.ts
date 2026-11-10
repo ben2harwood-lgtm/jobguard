@@ -16,7 +16,7 @@ async function open(page: Page) {
   await page.goto(journey);
   if ((page.viewportSize()?.width ?? 1280) <= 480) await tour(page).getByRole("button", { name: "More", exact: true }).click();
   await expect(tour(page)).toContainText("Step 1 of 9");
-  await expect(page.getByLabel("Work details")).toHaveValue("");
+  await expect(page.getByLabel("Work details")).toHaveValue("Practice decorating. Protect room £200.00. Prepare walls £200.00. Paint walls £200.00. Finish trim £200.00. Clean site £100.00. Replace shelves");
 }
 async function showUntil(page: Page, step: number) {
   for (let current = 1; current < step; current++) {

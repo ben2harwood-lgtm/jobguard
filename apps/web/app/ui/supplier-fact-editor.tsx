@@ -1,4 +1,5 @@
 "use client";
+import { jobPageFetch as fetch } from "./job-page-fetch";
 import { useState, useSyncExternalStore } from "react";
 import { parsePoundsToPence, parseQuantity } from "@jobguard/core";
 import { materialsCommandFor } from "./materials-command";
