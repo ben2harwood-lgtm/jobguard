@@ -9,7 +9,7 @@ import type { JobSummary } from "../lib/contracts";
 import { jobWorkspaceResponseV1, type JobWorkspaceResponse } from "@jobguard/api/workspace-contracts";
 import { jobStatusLabels } from "../ui/workspace-lifecycle";
 import { WalkIt } from "../ui/jobguard-app";
-import { Card, Empty, Head, Icon, Legacy, Note, PHOTOS, Screen, Shell, Tag, documentLine, known, money, needsChecking, paymentLabels, readJson, readValue, shortDate, statusTag, useJobs, type JobValue, type Workspace } from "./designed-ui";
+import { Card, Empty, Head, Icon, Legacy, Note, PHOTOS, Screen, Shell, Tag, quoteAccepted, quoteLine, documentLine, known, money, needsChecking, paymentLabels, readJson, readValue, shortDate, statusTag, useJobs, type JobValue, type Workspace } from "./designed-ui";
 
 const LIST_SUBTITLE = "One place to manage the job, spot problems early and know what comes next.";
 
@@ -17,7 +17,7 @@ export function DesignedJobs() {
   return <Screen title="Your jobs." active="jobs">{workspace => <JobsList workspace={workspace}/>}</Screen>;
 }
 
-function JobsList({ workspace }: { workspace: Workspace }) {
+export function JobsList({ workspace }: { workspace: Workspace }) {
   const router = useRouter();
   const { jobs, failed } = useJobs(workspace.tenantId);
   const [filter, setFilter] = useState("");
@@ -33,7 +33,7 @@ function JobsList({ workspace }: { workspace: Workspace }) {
           : visible.length === 0 ? <Empty title={jobs.length ? "No matching jobs" : "No jobs yet"} text={jobs.length ? "Try a shorter search or clear the search box." : "Start a new job to see it here."}>{!jobs.length && <button type="button" className="btn primary" onClick={() => router.push("/jobs/new")}>Start a new job</button>}</Empty>
           : visible.map((job, index) => <article className="job-row" key={job.id}>
             <img className="job-photo" src={PHOTOS[index % PHOTOS.length]} alt="Illustrative building"/>
-            <div className="job-name"><strong>{job.title}</strong><small>{[known(job.siteLabel) || "Site details needed", known(job.customerLabel) || "Customer details needed", job.updatedLabel].join(" · ")}</small><p>{documentLine(job)} · {paymentLabels[job.customerPayment]}</p></div>
+            <div className="job-name"><strong>{job.title}</strong><small>{[known(job.siteLabel) || "Site details needed", known(job.customerLabel) || "Customer details needed", job.updatedLabel].filter(Boolean).join(" · ")}</small><p>{quoteLine(job)} · {paymentLabels[job.customerPayment]}</p></div>
             <div className="job-side"><strong>{jobStatusLabels[job.status]}</strong>{needsChecking(job) ? <Tag tone="amber">1 to check</Tag> : statusTag(job.status)}<button type="button" className="btn small" onClick={() => router.push(`/jobs/${job.id}/overview`)}>Open job →</button></div>
           </article>)}
       </div>
@@ -101,7 +101,7 @@ function JobFrame({ workspace, jobId, tab, children }: { workspace: Workspace; j
     <div className="job-header"><Head kicker={`JOB ${job.id.slice(0, 8).toUpperCase()}`} title={job.title} text={[site || "Site details needed", customer || "Customer details needed"].join(" · ")}/></div>
     <div className="job-caption" style={{ margin: "-12px 0 19px" }} data-testid={`designed-job-${tab}`} data-job-id={job.id}>{statusTag(job.status)} {summary && needsChecking(summary) ? <Tag tone="amber">1 to check</Tag> : <Tag tone="green">No current alerts</Tag>} <span>Updated {shortDate(job.updatedAt)}</span></div>
     <nav className="job-tabs" aria-label="Job sections">{tabs.map(([id, label]) => <button key={id} type="button" className={id === tab ? "active" : ""} aria-current={id === tab ? "page" : undefined} onClick={() => router.push(`/jobs/${job.id}/${id}`)}>{label}</button>)}</nav>
-    {tab === "overview" ? <Overview detail={detail} site={site}/> : tab === "work" ? <WorkTab>{children}</WorkTab> : tab === "money" ? <MoneyTab value={detail.value}>{children}</MoneyTab> : <RecordsTab jobId={job.id}>{children}</RecordsTab>}
+    {tab === "overview" ? <Overview detail={detail} site={site}/> : tab === "work" ? <WorkTab>{children}</WorkTab> : tab === "money" ? <MoneyTab value={detail.value} status={job.status}>{children}</MoneyTab> : <RecordsTab jobId={job.id}>{children}</RecordsTab>}
   </Shell>;
 }
 
@@ -128,14 +128,14 @@ function MoneyBlocks({ value, wide = false }: { value: JobValue | null; wide?: b
   </div>;
 }
 
-function Overview({ detail, site }: { detail: Detail; site: string }) {
+export function Overview({ detail, site }: { detail: Detail; site: string }) {
   const router = useRouter();
   const { job, summary, value, checks, photo } = detail;
   const open = (tab: JobTab) => router.push(`/jobs/${job.id}/${tab}`);
   const action = nextAction(job, summary);
   return <>
     <div className="job-spot">
-      <Card title="The job at a glance"><div className="photo-card"><img src={photo} alt="Illustrative photograph of a property"/><div className="photo-copy"><div className="kicker">AGREED WORK</div><h3>{job.title}</h3><p style={{ fontSize: 12, lineHeight: 1.8 }}>{job.scopeIdentityIds.length ? `${job.scopeIdentityIds.length} confirmed ${job.scopeIdentityIds.length === 1 ? "item" : "items"} of work.` : "The agreed work has not been confirmed yet."}</p><div className="job-caption"><Tag tone="blue">{summary ? documentLine(summary) : "Documents not checked"}</Tag></div><button type="button" className="btn small" onClick={() => open("work")}>Open the work plan →</button></div></div></Card>
+      <Card title="The job at a glance"><div className="photo-card"><img src={photo} alt="Illustrative photograph of a property"/><div className="photo-copy"><div className="kicker">AGREED WORK</div><h3>{job.title}</h3><p style={{ fontSize: 12, lineHeight: 1.8 }}>{job.scopeIdentityIds.length ? `${job.scopeIdentityIds.length} confirmed ${job.scopeIdentityIds.length === 1 ? "item" : "items"} of work.` : "The agreed work has not been confirmed yet."}</p><div className="job-caption"><Tag tone="blue">{quoteLine(summary ?? { status: job.status, document: { kind: "unknown", reference: null, delivery: "unknown" } })}</Tag></div><button type="button" className="btn small" onClick={() => open("work")}>Open the work plan →</button></div></div></Card>
       <Card title="Next action"><div className="card-body"><div className="kicker">JOBGUARD SUGGESTS</div><h3 style={{ fontSize: 17, margin: "8px 0" }}>{action.title}</h3><p>{action.body}</p><div style={{ marginTop: 20 }}><button type="button" className="btn primary wide" onClick={() => open(action.tab)}>{action.label} →</button></div></div></Card>
     </div>
     <div className="two-col">
@@ -167,10 +167,11 @@ function WorkTab({ children }: { children?: ReactNode }) {
   </>;
 }
 
-function MoneyTab({ value, children }: { value: JobValue | null; children?: ReactNode }) {
+export function MoneyTab({ value, status, children }: { value: JobValue | null; status: JobSummary["status"]; children?: ReactNode }) {
   return <>
     <Head kicker="MONEY / ONE CONNECTED JOB" title="Follow every pound." text="Keep the quote, extras, invoices and payments separate — so nothing gets counted twice."/>
     <Card title="Where the money stands" action={<Tag tone="blue">From practice records</Tag>}><div className="card-body">
+      <div className="detail-block"><small>Agreed with the customer</small><strong>{quoteAccepted(status) ? "Quote accepted — total not available here" : "Nothing agreed yet"}</strong></div>
       <MoneyBlocks value={value}/>
       <div style={{ marginTop: 16 }}><Note>An extra being approved does not mean it has been invoiced. An invoice being issued does not mean the customer has paid. A manually entered receipt does not prove bank settlement.</Note></div>
     </div></Card>

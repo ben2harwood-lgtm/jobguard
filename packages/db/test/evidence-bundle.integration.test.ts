@@ -58,10 +58,10 @@ it.each(['bundle', 'Northside'] as const)('LATER-SAFETY-47 %s follows exact dupl
   const approvals = new ExtraApprovalRepository(c.runtime), extras = new ExtraRepository(c.runtime);
   const actor = w.members.supervisor.member;
   const canonicalId = await raiseOn(c, w, s.jobId);
-  // LS-111 requires an approved canonical before linking approved work.
-  await approvals.priceExtra(ctx, w.members.surveyor.member, { version: 'price-extra.v1', commandId: randomUUID(), jobId: s.jobId, extraId: canonicalId, netPence: s.net });
+  // LS-111 requires an approved canonical for an approved duplicate.
+  await approvals.priceExtra(ctx, w.members.surveyor.member, { version: 'price-extra.v1', commandId: randomUUID(), jobId: s.jobId, extraId: canonicalId, netPence: 24000 });
   const canonical = await approvals.submitExtra(ctx, actor, { version: 'submit-extra.v1', commandId: randomUUID(), jobId: s.jobId, extraId: canonicalId });
-  await approvals.approveExtraStep(ctx, actor, approveInput({ jobId: s.jobId, requestId: canonical.requestId as string, hash: canonical.revisionHash as string, net: s.net }, 0));
+  await approvals.approveExtraStep(ctx, actor, approveInput({ jobId: s.jobId, requestId: canonical.requestId as string, hash: canonical.revisionHash as string, net: 24000 }, 0));
   const query = { version: 'contractor-bundle-query.v1', jobId: s.jobId, extraId: s.extraId, requestId: s.requestId };
   const read = async (state: 'approved' | 'duplicate') => {
     if (reader === 'Northside') {
@@ -99,8 +99,9 @@ it.each(['bundle', 'Northside'] as const)('LATER-SAFETY-47 %s follows exact dupl
   await read('duplicate');
   await unlink(String(relinked.linkId));
   await read('approved');
-  // Leave only the original approved line exportable, as in the original fixture.
-  await approvals.reviseExtra(ctx, w.members.surveyor.member, { version: 'revise-extra.v1', commandId: randomUUID(), jobId: s.jobId, extraId: canonicalId, netPence: s.net + 1 });
+  // The fixture canonical is no longer linked. Give it an unapproved revision
+  // so the billing assertion still concerns only the original approved extra.
+  await approvals.reviseExtra(ctx, w.members.surveyor.member, { version: 'revise-extra.v1', commandId: randomUUID(), jobId: s.jobId, extraId: canonicalId, netPence: 24001 });
   // The existing billing writer still exports the original approved identity and value.
   const batch = await f.exported();
   const lines = (await f.repo.read(ctx, f.session, s.jobId)).exports.find(row => row.id === batch.batchId)!.artifact.lines;
