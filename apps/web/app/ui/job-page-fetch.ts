@@ -8,8 +8,9 @@ export const jobPageFetch: typeof fetch = async (input, init) => {
   const response = await globalThis.fetch(input, init);
   const job = typeof input === "string" ? /^\/api\/jobs\/([^/?#]+)(?:[/?#]|$)/u.exec(input) : null;
   const method = (init?.method ?? "GET").toUpperCase();
-  if (response.ok && job && !["GET", "HEAD", "OPTIONS"].includes(method) && typeof window !== "undefined") {
-    window.dispatchEvent(new CustomEvent(JOB_SAVED_EVENT, { detail: { jobId: job[1] } }));
+  if (response.ok && job && !["GET", "HEAD", "OPTIONS"].includes(method) && typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
+    // Best effort: a refresh signal must never turn a saved response into a failure.
+    try { window.dispatchEvent(new CustomEvent(JOB_SAVED_EVENT, { detail: { jobId: job[1] } })); } catch { /* the save already succeeded */ }
   }
   return response;
 };
