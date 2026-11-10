@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-parties-atomic-save": {
+      "branches": [
+        "codex/sandbox/real-parties-atomic-save"
+      ],
+      "allow": [
+        "apps/api/src/job-parties.application.test.ts",
+        "apps/api/src/job-parties.application.ts",
+        "apps/api/src/job-parties.controller.ts",
+        "apps/web/app/api/jobs/[id]/parties/route.ts",
+        "apps/web/app/ui/job-parties.test.tsx",
+        "apps/web/app/ui/job-parties.tsx",
+        "apps/web/e2e/real-parties-atomic-save.spec.ts",
+        "docs/contracts/job-parties-v1.md",
+        "packages/core/src/job-parties.test.ts",
+        "packages/core/src/job-parties.ts",
+        "packages/db/src/job-parties-repository.ts",
+        "packages/db/test/real-parties-atomic-save.integration.test.ts"
+      ]
+    }
+  }
+}
