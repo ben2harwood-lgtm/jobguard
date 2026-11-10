@@ -1,4 +1,5 @@
 "use client";
+import { jobPageFetch as fetch } from "./job-page-fetch";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { JobSummary, SessionView } from "../lib/contracts";

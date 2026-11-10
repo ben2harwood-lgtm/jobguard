@@ -1,4 +1,5 @@
 "use client";
+import { jobPageFetch as fetch } from "./job-page-fetch";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { finalAccountResponseV1, type FinalAccountResponse } from "@jobguard/api/final-account-contracts";

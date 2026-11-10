@@ -19,9 +19,13 @@ test("own blank-firm job finds omitted hallway work and confirms only a draft ex
   await click(page, "Check and edit my draft");
   await click(page, "Save customer and site");
   await click(page, "Accept Paint walls");
+  await page.getByLabel(/Answer Confirm disposal/u).fill("Builder removes fictional waste");
   await click(page, "Confirm scope");
+  await click(page, "Price the work");
   await startWatchdogJob(page);
   const jobId = (await page.locator(".quote-editor").getAttribute("data-job-id"))!;
+  // Reopen the saved job so the site-work and Final Check panels load current state (as REAL-OWN-JOB-TO-PAID does).
+  await page.goto(`/jobs/${jobId}#quote`);
 
   const messages = page.getByTestId("customer-messages");
   await messages.getByLabel("Made-up customer name").fill("Fictional Alex");
@@ -38,6 +42,7 @@ test("own blank-firm job finds omitted hallway work and confirms only a draft ex
   await click(page, "Attach generated practice image");
   await click(page, "Check file integrity");
   await click(page, "Complete this stage");
+  await expect(page.getByTestId("stage-status")).toHaveText("Complete");
   await click(page, "Finished on site");
   await expect(page.getByTestId("work-state")).toHaveText("Finished on site");
   await click(page, "Build final account");
