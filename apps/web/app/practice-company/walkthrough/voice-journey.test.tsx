@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { recoverCapture } from "../../demo-s/journey-launch";
 import * as screenActions from "./screen-actions";
+import { requestedWorkspaceSection } from "../../ui/workspace-lifecycle";
 import { missedWorkDiary, missedWorkSaved, saveMissedWork, priceFoundExtra, addOnSiteEvidence, evidenceDone, approvedExtraDone, finalCheckDone, restoreProgress, stageWords, ownJobAction, stages, VoiceJourney } from "./voice-journey";
 const memo = vi.hoisted(() => ({ steps: [] as import("../../ui/walkthrough/walkthrough").WalkthroughStep[], states: null as unknown[] | null, cursor: 0, setState: vi.fn() }));
 vi.mock("react", async original => {
@@ -146,6 +147,38 @@ describe("step 5 saved evidence", () => {
     await action;
     expect(proof.clicks).toEqual(["Attach generated practice image", "Check file integrity", "Complete this stage"].slice(state));
     expect(evidenceDone()).toBe(true);
+  });
+  it.each(["", preparedId])("step 5 completes proof before saving the missed-work diary: example %s", async prepared => {
+    let state = 0, hasNote = false;
+    const names = ["Attach generated practice image", "Check file integrity", "Complete this stage", "Save note"];
+    const clicks: string[] = [];
+    const root = {
+      querySelector: (selector: string) => {
+        if (selector === '.proof-actions button:not(:disabled)') return state < 3 ? {} : null;
+        if (selector.includes("job-diary")) return { getAttribute: () => "false" };
+        return { textContent: selector.includes("stage-status") ? state === 3 ? "Complete" : "In progress"
+          : selector.includes("stage-review") ? ""
+          : ["Not attached", "Uploading", "File integrity checked · synthetic example", "File integrity checked · synthetic example"][state] };
+      },
+      querySelectorAll: () => hasNote ? [{ textContent: missedWorkDiary }] : [],
+    };
+    vi.stubGlobal("document", { getElementById: () => root });
+    const fill = vi.spyOn(screenActions, "fill").mockResolvedValue();
+    const click = vi.spyOn(screenActions, "click").mockImplementation(async name => {
+      expect(name).toBe(names[clicks.length]);
+      clicks.push(name);
+      if (name === "Save note") { expect(evidenceDone()).toBe(true); hasNote = true; }
+      else state++;
+    });
+    memo.states = [jobId, capture(), 0, 4, true, false, prepared, false, false, "", false, true]; memo.cursor = 0;
+    try {
+      renderToStaticMarkup(<VoiceJourney />);
+      expect(memo.steps[4]!.isDone()).toBe(false);
+      await memo.steps[4]!.autoAction({} as HTMLElement, new AbortController().signal);
+      expect(clicks).toEqual(names);
+      expect(fill).toHaveBeenCalledWith("#diary-text", missedWorkDiary);
+      expect(memo.steps[4]!.isDone()).toBe(true);
+    } finally { fill.mockRestore(); click.mockRestore(); }
   });
   it.each(["In progress", "Complete"]) ("does not accept %s without checked proof", status => {
     vi.stubGlobal("document", { getElementById: () => ({ querySelector: (selector: string) => ({ textContent: selector.includes('stage-status') ? status : "Uploading" }) }) });
@@ -312,6 +345,10 @@ it.each(["", preparedId])("waits for server-confirmed activation before remounti
     querySelectorAll: () => [{ textContent: "Record practice acceptance" }],
   };
   vi.stubGlobal("document", { getElementById: () => root });
+  const location = new URL("https://example.test/practice-company/walkthrough?walkJob=" + jobId + (prepared ? "&walkExample=" + preparedId : ""));
+  vi.stubGlobal("location", location);
+  const replaceState = vi.fn((_: unknown, __: string, url: string) => { location.href = new URL(url, location.href).href; });
+  vi.stubGlobal("history", { replaceState });
   const click = vi.spyOn(screenActions, "click").mockResolvedValue(undefined);
   try {
     renderToStaticMarkup(<VoiceJourney />);
@@ -319,9 +356,15 @@ it.each(["", preparedId])("waits for server-confirmed activation before remounti
     const action = memo.steps[3]!.autoAction({} as HTMLElement, new AbortController().signal);
     await vi.waitFor(() => expect(click).toHaveBeenCalledWith("Start this practice job", expect.any(AbortSignal)));
     expect(memo.setState).not.toHaveBeenCalled();
+    expect(replaceState).not.toHaveBeenCalled();
     activated = true;
     await action;
     expect(memo.setState).toHaveBeenCalledTimes(1);
+    expect(replaceState.mock.invocationCallOrder[0]).toBeLessThan(memo.setState.mock.invocationCallOrder[0]!);
+    expect(location.searchParams.get("walkJob")).toBe(jobId);
+    expect(location.searchParams.get("walkExample")).toBe(prepared || null);
+    expect(location.hash).toBe("#work-proof");
+    expect(requestedWorkspaceSection("live", location.hash)).toBe("work");
   } finally { memo.states = null; click.mockRestore(); }
 });
 

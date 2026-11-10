@@ -185,7 +185,7 @@ export function VoiceJourney() {
       setOwnWorkspace(saved.index >= 2);
       if (saved.index >= 2) {
         const url = new URL(location.href);
-        url.hash = saved.index >= 6 ? "final-account-title" : "quote";
+        url.hash = saved.index >= 6 ? "final-account-title" : saved.index >= 4 ? "work-proof" : "quote";
         history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
       }
       setTenantId(session.tenants[0]!.id);
@@ -282,6 +282,9 @@ export function VoiceJourney() {
           // activation is rendered, so the workspace reload sees a started job.
           await until(() => !!screen()?.querySelector('[data-testid="activation-policy"]'), signal);
         }
+        // The prepared example starts without a fragment. Select work before
+        // remounting so the live proof controls are rendered instead of scope.
+        history.replaceState(null, "", `${location.pathname}${location.search}#work-proof`);
         setScreenVersion(value => value + 1);
       },
       async (target, signal) => { await addOnSiteEvidence(target, signal); await saveMissedWork(signal); },
