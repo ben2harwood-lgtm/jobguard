@@ -1,5 +1,5 @@
 {
-  "migration": "0781_interim_draft_rules.sql",
+  "migration": "0721_interim_draft_rules.sql",
   "lp0": [
     {
       "section": "routines",

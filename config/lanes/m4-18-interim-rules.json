@@ -12,13 +12,16 @@
         "apps/api/src/interim-draft.application.ts",
         "apps/web/app/api/jobs/[id]/interim-drafts/route.test.ts",
         "apps/web/e2e/interim-drafts.spec.ts",
+        "packages/db/migration-notes/0721_interim_draft_rules.md",
         "packages/db/migration-notes/0781_interim_draft_rules.md",
+        "packages/db/migrations/0721_interim_draft_rules.sql",
         "packages/db/migrations/0781_interim_draft_rules.sql",
         "packages/db/src/interim-draft-repository.ts",
         "packages/db/test/interim-draft-repository.test.ts",
         "packages/db/test/interim-draft-screen.integration.test.ts",
         "packages/db/test/interim-draft.integration.test.ts",
         "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/0721_interim_draft_rules.proof.json",
         "packages/db/test/migration-proofs/0781_interim_draft_rules.proof.json",
         "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts"
       ]
