@@ -29,7 +29,9 @@
         "packages/db/test/later-empty-tables.ts",
         "packages/db/test/migration-proofs/0723_firm_profile.proof.json",
         "packages/db/test/migration-proofs/0726_firm_profile.proof.json",
-        "packages/db/test/migration-proofs/1300_firm_profile.proof.json"
+        "packages/db/test/migration-proofs/1300_firm_profile.proof.json",
+        "tools/commercial-integrity-boundary.unresolved.json",
+        "tools/commercial-integrity-current-source-guard.unresolved.json"
       ]
     }
   }
