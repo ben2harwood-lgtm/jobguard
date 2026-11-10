@@ -94,3 +94,30 @@ it("renders the full live-job journey before every practice tool", () => {
  }
  for (const label of ["First job trial and card", "Recovery practice guide"]) expect(html.indexOf(label)).toBeGreaterThan(divider);
 });
+
+it.each(["quoting", "accepted", "live", "invoiced", "paid"] as const)("keeps Price the work on a plain saved %s job", status => {
+ const html = renderToStaticMarkup(workspace(status));
+ expect(html).toContain('class="review confirmed-scope"');
+ expect(html).toContain('>Price the work</button>');
+ expect(html).not.toContain('class="quote-editor"');
+});
+
+it.each(["#quote", "#job-diary", "#customer-messages", "#variations-title", "#final-account-title"])("opens the live editor for explicit anchor %s", fragment => {
+ const html = renderToStaticMarkup(workspace("live", fragment));
+ expect(html).toContain('class="quote-editor"');
+ expect(html).toContain(`data-job-id="${jobId}"`);
+});
+
+it("keeps the review key stable when a command advances a plain job URL", () => {
+ function reviewKey(status: CaptureWorkspaceResponse["status"]) {
+  const tree = workspace(status);
+  function find(node: React.ReactNode): React.ReactElement | undefined {
+   if (!React.isValidElement<{ children?: React.ReactNode }>(node)) return;
+   if (typeof node.type === "function" && node.type.name === "ReviewProposal") return node;
+   return React.Children.toArray(node.props.children).map(find).find(Boolean);
+  }
+  return find(tree)?.key;
+ }
+ expect(reviewKey("quoting")).toBeTruthy();
+ expect(reviewKey("live")).toBe(reviewKey("quoting"));
+});
