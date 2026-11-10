@@ -66,6 +66,8 @@ export function readingPause(ms: number, reduced: boolean, signal: AbortSignal, 
 /** Keep even the last control above the dock, after its normal scrollIntoView. */
 export function clearPhoneDock(target: HTMLElement, dock: HTMLElement) {
   if (window.innerWidth > 480) return;
+  // Reveal it inside its own scroll box (the walkthrough screen scrolls separately) before clearing the dock.
+  target.scrollIntoView?.({ block: "nearest", behavior: "instant" });
   const rect = target.getBoundingClientRect(), bar = dock.getBoundingClientRect();
   const overlap = rect.bottom - (bar.top - 12);
   if (rect.top < 12) window.scrollBy({ top: rect.top - 12, behavior: "instant" });
@@ -102,9 +104,13 @@ export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: reado
     function update() {
       const root = visibleTarget(step!.target);
       const target = step!.spotlightTarget?.() ?? (root?.matches("button, input, textarea, select, a[href]") ? root : root?.querySelector<HTMLElement>("textarea, input, select, button, a[href]") ?? root);
-      if (highlighted !== target) { highlighted?.classList.remove(styles.target!); highlighted = target; highlighted?.classList.add(styles.target!); }
+      if (highlighted !== target) {
+        highlighted?.classList.remove(styles.target!);
+        highlighted = target;
+        highlighted?.classList.add(styles.target!);
+        if (highlighted && card.current) clearPhoneDock(highlighted, card.current);
+      }
       if (target) {
-        if (card.current) clearPhoneDock(target, card.current);
         const rect = target.getBoundingClientRect();
         setBox({ left: rect.left, top: rect.top, width: rect.width, height: rect.height });
         setDone(step!.isDone());
@@ -173,8 +179,8 @@ export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: reado
       {(busy || playing) && <div aria-hidden="true" className={styles.pointer} style={{ left: box.left + Math.min(box.width / 2, 40), top: box.top + box.height / 2 }}>➤</div>}</>}
     <section ref={card} tabIndex={-1} className={`${styles.card} ${expanded || finished ? styles.expanded : styles.collapsed}`} aria-label="Guided walkthrough">
       <div aria-live="polite" aria-atomic="true">
-        <h2>{finished ? instructionOnly ? "Tour complete" : "That's the whole job" : `Step ${index + 1} of ${steps.length} · ${step.title}`}</h2>
-        <p className={styles.words}>{finished ? instructionOnly ? "The walkthrough reached its end. Only the real screens and saved records establish job progress." : "You have followed the example from the first words to the saved final report." : step.words}</p>
+        <h2>{finished ? "Tour complete" : `Step ${index + 1} of ${steps.length} · ${step.title}`}</h2>
+        <p className={styles.words}>{finished ? instructionOnly ? "The walkthrough reached its end. Only the real screens and saved records establish job progress." : "That's the whole job. You have followed the example from the first words to the saved final report." : step.words}</p>
       </div>
       {holding && <div className={styles.progress} role="timer" aria-label="Reading time; Next continues now"><span style={{ animationDuration: `${readingTime(step.title, step.words)}ms` }} /></div>}
       {error && <p role="alert">{error}</p>}
