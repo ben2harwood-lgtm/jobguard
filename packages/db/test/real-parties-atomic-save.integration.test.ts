@@ -1,10 +1,11 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { ObservedPool, analyseLockOrder, mutableTables } from "./lock-observer.js";
 import { createWatchdogHarness } from "./watchdog-command-harness.js";
 import { JobPartiesRepository } from "../src/job-parties-repository.js";
 import { JobPartiesApplication } from "../../../apps/api/src/job-parties.application.js";
 import { authenticatePracticeSession } from "../src/practice-session.js";
+import { startBlankPracticeCompany } from "../src/blank-practice-company.js";
 import { DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID, DEMO_IDENTITY_USER_ID } from "../src/index.js";
 import type { JobPartiesCommandV1 } from "@jobguard/core";
 
@@ -66,8 +67,9 @@ it("lost-response and concurrent identical retries return the original binding; 
   await expect(run(id, { ...input, customer: { ...input.customer, name: "Changed fictional request" } })).rejects.toMatchObject({ code: "COMMAND_CONFLICT" });
   expect((await counts()).customer - before.customer!).toBe(1);
   expect((await h.admin.query("SELECT result FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [h.tenant, input.commandId])).rows[0].result).toEqual(results[0]);
-  const events = (await h.admin.query("SELECT payload FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2", [h.tenant, id])).rows;
-  expect(events).toHaveLength(3); expect(JSON.stringify(events)).not.toMatch(/Mrs Sample|Madeup Lane|sample@example/);
+  // One save: customer, site and binding events, plus the lifecycle's command.succeeded for each command.
+  const events = (await h.admin.query("SELECT event_type, payload FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 ORDER BY sequence", [h.tenant, id])).rows;
+  expect(events.map(e => e.event_type)).toEqual(["job.parties.create_customer", "job.parties.create_site", "job.parties.bind", "command.succeeded", "command.succeeded", "command.succeeded"]); expect(JSON.stringify(events)).not.toMatch(/Mrs Sample|Madeup Lane|sample@example/);
 });
 it("concurrent different forms on one revision have one winner and no losing customer", async () => {
   const id = await job(), before = await counts();
@@ -114,9 +116,9 @@ it("another blank firm cannot read jobs, references, validation details or repla
   await h.admin.query("INSERT INTO app.account(tenant_id,id,name) VALUES($1,$2,'Fictional practice')", [DEMO_TENANT_ID, account]);
   await h.admin.query("INSERT INTO app.membership(tenant_id,id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner') ON CONFLICT DO NOTHING", [DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID, account, DEMO_IDENTITY_USER_ID]);
   async function blank() {
-    const token = randomUUID(), digest = createHash("sha256").update(token).digest("hex");
-    await h.runtime.query("SELECT app.start_blank_practice_company($1)", [digest]);
-    const auth = await authenticatePracticeSession(h.runtime, token), id = randomUUID();
+    // Runtime may not call the routine directly since 0687; use the same entry point as production.
+    const token = await startBlankPracticeCompany(h.runtime, { version: "blank-practice-company.v1", action: "start" });
+    const auth = await authenticatePracticeSession(h.runtime, token), digest = auth.digest, id = randomUUID();
     await h.admin.query("INSERT INTO app.job(tenant_id,id,title,status,practice_session_digest,practice_scenario) VALUES($1,$2,'Private fictional source','draft',$3,'capture')", [DEMO_TENANT_ID, id, digest]);
     return { token, digest, id, auth };
   }
