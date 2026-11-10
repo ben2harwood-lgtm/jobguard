@@ -251,8 +251,8 @@ it("unexported source still receives a differing-route proposal after a confirme
   .toEqual({ version: 1, proposal, confirmed, history: [confirmed] });
 });
 
-it("0710_accounting_export_route_read_exported removes the backwards proposal on upgrade without changing stored facts or routine guards", async () => {
- const u = await startBeforeMigration("0710_accounting_export_route_read_exported.sql");
+it("0709_accounting_export_route_read_exported removes the backwards proposal on upgrade without changing stored facts or routine guards", async () => {
+ const u = await startBeforeMigration("0709_accounting_export_route_read_exported.sql");
  try {
   const f = await setup(u), confirmed = await f.confirm(await f.confirmation());
   const read = () => f.repo.routeChangeRead(f.a.context, f.a.digest, f.old.source.sourceId);
@@ -261,7 +261,7 @@ it("0710_accounting_export_route_read_exported removes the backwards proposal on
   const before = await proofBefore(u.admin, ["app.accounting_export_route_change", "app.accounting_export_ledger", "app.accounting_export_outbox", "app.audit_event"]);
   const routine = async () => (await u.admin.query("SELECT oid,pg_get_functiondef(oid) definition,proowner,proacl::text,prosecdef,proconfig FROM pg_proc WHERE oid='app.accounting_export_route_read(uuid,text,text)'::regprocedure")).rows[0]!;
   const prior = await routine();
-  await applyMigration(u, "0710_accounting_export_route_read_exported.sql");
+  await applyMigration(u, "0709_accounting_export_route_read_exported.sql");
   expect(await read()).toEqual({ version: 1, proposal: null, confirmed, history: [confirmed] });
   expect(await proofDifferences(u.admin, before)).toEqual({ rows: [], types: [] });
   const current = await routine();

@@ -1,6 +1,0 @@
-{
-  "migration": "0710_accounting_export_route_read_exported.sql",
-  "lp0": [],
-  "upgrade": [],
-  "tenancy": []
-}

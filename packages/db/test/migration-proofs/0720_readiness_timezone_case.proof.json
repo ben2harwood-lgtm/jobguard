@@ -1,6 +1,0 @@
-{
-  "migration": "0720_readiness_timezone_case.sql",
-  "lp0": [],
-  "upgrade": [],
-  "tenancy": []
-}

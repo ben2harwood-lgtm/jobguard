@@ -1,5 +1,5 @@
 {
-  "migration": "0719_credit_request_digest_fields.sql",
+  "migration": "0717_credit_request_digest_fields.sql",
   "lp0": [
     {
       "section": "routines",

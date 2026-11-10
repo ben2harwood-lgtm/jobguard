@@ -1,5 +1,5 @@
 {
-  "migration": "0718_invoice_line_vat_signed_split.sql",
+  "migration": "0716_invoice_line_vat_signed_split.sql",
   "lp0": [
     {
       "section": "routines",

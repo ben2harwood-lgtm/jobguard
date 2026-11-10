@@ -46,7 +46,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   expect(emergencyRoutines).toHaveLength(1);
   expect(emergencyRoutines[0]?.definition?.split("$function$")[1]).toEqual(emergencyBody);
   // 0709 replaces only this exact overload on 0656's body; pin its entire body, including all predecessor guards.
-  const feeResult = await readFile(new URL("../migrations/0709_fee_result_json_errors.sql", import.meta.url), "utf8");
+  const feeResult = await readFile(new URL("../migrations/0708_fee_result_json_errors.sql", import.meta.url), "utf8");
   const feeResultBody = feeResult.split("CREATE OR REPLACE FUNCTION app.replace_fee_reservation_book")[1]!.split("AS $$")[1]!.split("$$;")[0];
   expect(live.filter(row => row.nspname === "app" && row.proname === "replace_fee_reservation_book"
     && row.args === "p_tenant uuid, p_book jsonb, p_result jsonb")).toHaveLength(1);
@@ -74,9 +74,9 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   const batchBodies = await Promise.all([
     ["ef_prepare_statement", "p_session uuid, p_command uuid, p_period text", "0704_enterprise_fee_period_order.sql"],
     ["ef_post_statement", "p_session uuid, p_command uuid, p_statement uuid, p_authorization uuid", "0704_enterprise_fee_period_order.sql"],
-    ["receipt_fact_invoice_line", "t uuid, j uuid, i uuid, l uuid, r uuid, k uuid, ch uuid", "0715_supplementary_after_combined_receipt.sql"],
-    ["issue_practice_customer_invoice", "p_tenant uuid, p_job uuid, p_final_revision uuid, p_actor uuid, p_command uuid, p_recipient text, p_issued_on date", "0718_invoice_line_vat_signed_split.sql"],
-    ["issue_practice_customer_credit_note", "p_tenant uuid, p_job uuid, p_invoice uuid, p_actor uuid, p_command uuid, p_net_pence bigint, p_reason text, p_preview_hash text", "0719_credit_request_digest_fields.sql"],
+    ["receipt_fact_invoice_line", "t uuid, j uuid, i uuid, l uuid, r uuid, k uuid, ch uuid", "0713_supplementary_after_combined_receipt.sql"],
+    ["issue_practice_customer_invoice", "p_tenant uuid, p_job uuid, p_final_revision uuid, p_actor uuid, p_command uuid, p_recipient text, p_issued_on date", "0716_invoice_line_vat_signed_split.sql"],
+    ["issue_practice_customer_credit_note", "p_tenant uuid, p_job uuid, p_invoice uuid, p_actor uuid, p_command uuid, p_net_pence bigint, p_reason text, p_preview_hash text", "0717_credit_request_digest_fields.sql"],
     ["receipt_fact_proposal", "t uuid, j uuid, p jsonb", "0692_final_check_post_invoice_receipt_gate.sql"],
     ["read_final_check_manifest", "t uuid, j uuid, m uuid", "0698_final_check_post_invoice_rerun.sql"],
     ["evidence_pack_v3_material", "t uuid, c uuid, ordinary_only boolean", "0698_final_check_post_invoice_rerun.sql"],
@@ -230,7 +230,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     // 0808 changes only this exact authority body, preserving all routine metadata and grants.
     if (prior.nspname === "app" && prior.proname === "lp_authority" && prior.args === "p_session uuid, p_job uuid, p_action text") {
       expect({ ...current, definition: prior.definition }).toEqual(prior);
-      const sql = await readFile(new URL("../migrations/0713_end_check_rule_a_rerun.sql", import.meta.url), "utf8");
+      const sql = await readFile(new URL("../migrations/0712_end_check_rule_a_rerun.sql", import.meta.url), "utf8");
       expect(current?.definition?.split("$function$")[1]).toEqual(sql.split("AS $$")[1]!.split("$$;")[0]);
     } else
     // 0620 extends only these exact live-prompt bodies; preserve their full replacements.
@@ -287,7 +287,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     } else if (prior.nspname === "app" && prior.proname === "mon2_issue" &&
       prior.args === "t uuid, digest text, start_day date, revision integer") {
       expect({ ...current, definition: prior.definition }).toEqual(prior);
-      const migration = await readFile(new URL("../migrations/0716_subscription_period_open_refusal.sql", import.meta.url), "utf8");
+      const migration = await readFile(new URL("../migrations/0714_subscription_period_open_refusal.sql", import.meta.url), "utf8");
       const body = migration.split("CREATE OR REPLACE FUNCTION app.mon2_issue")[1]!.split("AS $$")[1]!.split("$$;")[0];
       expect(current?.definition?.split("$function$")[1]).toEqual(body);
     } else if (prior.oid === paymentFeeWriterOid) {
@@ -308,7 +308,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
       expect(current?.definition).toEqual(expected);
     } else if (prior.nspname === "app" && prior.proname === "mon3_activate" && prior.args === "t uuid, digest text, command_id uuid, v jsonb") {
       expect({ ...current, definition: prior.definition }).toEqual(prior);
-      const migration = await readFile(new URL("../migrations/0717_second_job_card_gate_filters.sql", import.meta.url), "utf8");
+      const migration = await readFile(new URL("../migrations/0715_second_job_card_gate_filters.sql", import.meta.url), "utf8");
       const body = migration.split("CREATE OR REPLACE FUNCTION app.mon3_activate")[1]!.split("AS $$")[1]!.split("$$;")[0];
       expect(current?.definition?.split("$function$")[1]).toEqual(body);
     } else if (ent5Bodies.has(routineKey(`${prior.nspname}.${prior.proname}(${prior.args})`))) {
