@@ -1,4 +1,6 @@
-"use client";import{useEffect,useRef,useState}from"react";import{feeIllustrationResponseV1,type FeeIllustrationResponse}from"@jobguard/api/fee-illustration-contracts";
+"use client";
+import { jobPageFetch as fetch } from "./job-page-fetch";
+import{useEffect,useRef,useState}from"react";import{feeIllustrationResponseV1,type FeeIllustrationResponse}from"@jobguard/api/fee-illustration-contracts";
 const pounds=(p:number)=>`${p<0?"−":""}£${Math.trunc(Math.abs(p)/100).toLocaleString("en-GB")}.${String(Math.abs(p)%100).padStart(2,"0")}`;
 const toPence=(s:string)=>{const m=/^(\d{1,10})(?:\.(\d{0,2}))?$/.exec(s.trim());return m?Number(m[1])*100+Number((m[2]??"").padEnd(2,"0")):null};
 const examples=[["£18,800.00","£2,820.00","£282.00","£203.00","£2,538.00"],["£188,000.00","£2,820.00","£2,820.00","£203.00","£2,538.00"],["£10,000.00","£2,820.00","£150.00","£71.00","£2,670.00"]];
