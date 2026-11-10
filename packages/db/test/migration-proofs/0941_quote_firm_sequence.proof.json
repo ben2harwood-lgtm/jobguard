@@ -198,6 +198,22 @@
   ],
   "upgrade": [
     {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "app.quote_firm_counter",
+        "data": []
+      }
+    },
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "app.quote_job_reference",
+        "data": []
+      }
+    },
+    {
       "section": "routines",
       "before": null,
       "after": {

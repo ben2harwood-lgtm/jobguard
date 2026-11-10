@@ -25,7 +25,14 @@ let oldArtifacts: unknown[], oldPdfs: Uint8Array[], oldAuthority: Record<string,
 
 async function firm() {
  const token = randomUUID(), digest = sha(token);
- await f.admin.query("INSERT INTO control_plane.practice_session(token_digest) VALUES($1)", [digest]);
+ const db = await f.admin.connect();
+ try {
+  await db.query("BEGIN");
+  await db.query("SET LOCAL ROLE jobguard_migration");
+  await db.query("INSERT INTO control_plane.practice_session(token_digest) VALUES($1)", [digest]);
+  await db.query("COMMIT");
+ } catch (error) { await db.query("ROLLBACK"); throw error; }
+ finally { db.release(); }
  return { token, digest, auth: await authenticatePracticeSession(f.runtime, token) };
 }
 async function job(owner: Firm, importedFrom?: string) {
