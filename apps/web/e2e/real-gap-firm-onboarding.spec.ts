@@ -1,6 +1,24 @@
+import { createHmac } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
+import { Pool } from "pg";
+import { E2E_ADMIN_DATABASE_URL, E2E_AUTH_CODE_SECRET } from "./global-setup";
+
+// Local sign-ins share one 10-per-10-minutes request bucket. Release this spec's
+// disposable request-window rows once each code is used, as DEMO-S-chooser does.
+const emails: string[] = [];
+async function releaseSignIns() {
+  if (!emails.length) return;
+  const pool = new Pool({ connectionString: E2E_ADMIN_DATABASE_URL, max: 1 });
+  try {
+    await pool.query(`DELETE FROM identity.request_window w USING identity.challenge c
+      WHERE c.email=ANY($1::text[]) AND w.requested_at=c.requested_at AND w.ip_digest=$2`,
+    [emails, createHmac("sha256", E2E_AUTH_CODE_SECRET).update("ip:web-bootstrap").digest("hex")]);
+  } finally { await pool.end(); emails.length = 0; }
+}
+test.afterEach(releaseSignIns);
 
 async function enterCode(page: Page, email: string) {
+  emails.push(email.trim().toLowerCase());
   await page.getByLabel("Fictional email address").fill(email);
   await page.getByRole("button", { name: "Request code", exact: true }).click();
   const code = await page.getByTestId("fixture-code").textContent();
@@ -8,6 +26,7 @@ async function enterCode(page: Page, email: string) {
   await page.getByLabel("Eight-digit code").fill(code!);
   await page.getByRole("button", { name: "Verify code", exact: true }).click();
   await expect(page.getByRole("heading", { name: "You're signed in.", exact: true })).toBeVisible();
+  await releaseSignIns();
 }
 
 // Same-origin fetch carries the real Secure identity cookie on 127.0.0.1.
