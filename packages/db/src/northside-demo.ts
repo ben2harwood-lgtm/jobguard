@@ -1,3 +1,4 @@
+import type { ContractorSessionMembership } from "./contractor-repository.js";
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { northsideSettings } from "./northside-settings.js";
@@ -27,7 +28,7 @@ const pad = (n: number, width = 4) => String(n).padStart(width, "0");
 const addDays = (iso: string, days: number) => { const d = new Date(`${iso}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + days); return d.toISOString().slice(0, 10); };
 
 /** Idempotent per organisation (one tenant-level session lock): a second call returns the stored seed and writes nothing. */
-export async function seedNorthsideDemo(pool: Pool, owner: AuthenticatedMembership, context: VerifiedTenantContext): Promise<NorthsideSeed> {
+export async function seedNorthsideDemo(pool: Pool, owner: ContractorSessionMembership, context: VerifiedTenantContext): Promise<NorthsideSeed> {
   const lock = await pool.connect();
   try {
     await lock.query("SELECT pg_advisory_lock(hashtextextended($1,57))", [owner.tenantId]);
@@ -88,7 +89,7 @@ export async function seedNorthsideDemo(pool: Pool, owner: AuthenticatedMembersh
   }
 }
 
-async function storedSeed(pool: Pool, owner: AuthenticatedMembership, context: VerifiedTenantContext): Promise<NorthsideSeed> {
+async function storedSeed(pool: Pool, owner: ContractorSessionMembership, context: VerifiedTenantContext): Promise<NorthsideSeed> {
   return withTenant(pool, context, async db => {
     const q = async <T extends Record<string, unknown>>(sql: string, args: unknown[] = []) => (await db.$client.query<T>(sql, [owner.tenantId, ...args])).rows;
     const clients = await q<{ id: string }>("SELECT id FROM app.client_organisation WHERE tenant_id=$1 ORDER BY name,id");

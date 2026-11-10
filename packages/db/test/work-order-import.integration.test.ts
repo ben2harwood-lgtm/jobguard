@@ -794,10 +794,12 @@ describe("ENT-2 tenant boundary", () => {
     // A principal naming tenant B with tenant A's membership, or tenant A's with an unrelated membership, is a non-member everywhere.
     await expect(importOf({ ...a.p, tenantId: b.p.tenantId }, demoFile([row1(b.demo, 2)]))).rejects.toMatchObject({ code: "NOT_FOUND" });
     await expect(orders.overview({ ...b.p, membershipId: a.p.membershipId })).rejects.toMatchObject({ code: "NOT_FOUND" });
-    // The controlled routines refuse to run without a transaction-local tenant, and a tenant context made by hand never reaches PostgreSQL.
+    // LP-6d refuses unbound routines before business validation; a hand-built context never reaches PostgreSQL.
+    const beforeUnbound = await counts(a.p.tenantId);
     for (const sql of ["SELECT app.work_order_begin($1,$2,'x')", "SELECT app.work_order_commit($1,'{}'::jsonb)", "SELECT app.import_batch_record($1,'{}'::jsonb)", "SELECT app.import_sor_version($1,'{}'::jsonb)", "SELECT app.work_order_parties_unchanged($1,$1,$1,$1,$1,'{}'::jsonb)"]) {
-      await expect(runtime.query(sql, sql.includes("$2") ? [a.p.membershipId, randomUUID()] : [a.p.membershipId]), sql).rejects.toMatchObject({ message: expect.stringMatching(/^(NOT_FOUND|MODE_FORBIDDEN|INVALID_COMMAND)$/u) });
+      await expect(runtime.query(sql, sql.includes("$2") ? [a.p.membershipId, randomUUID()] : [a.p.membershipId]), sql).rejects.toMatchObject({ code: "42501", message: "REQUEST_BINDING_REFUSED" });
     }
+    expect(await counts(a.p.tenantId)).toEqual(beforeUnbound);
     await expect(withTenant(runtime, { tenantId: a.p.tenantId } as never, db => db.$client.query("SELECT 1"))).rejects.toMatchObject({ code: "INVALID_TENANT_CONTEXT" });
     await expect(importOf({ ...a.p, tenantId: "not-a-uuid" }, demoFile([row1(a.demo, 3)]))).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect((await counts(a.p.tenantId)).work_order).toBe(0);

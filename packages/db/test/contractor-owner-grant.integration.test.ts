@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { contractorRoles, type ContractorScope, type ContractorRole } from "@jobguard/core";
-import { ContractorRepository, canonicalJson, sha256Hex, type AuthenticatedMembership } from "../src/index.js";
+import { ContractorRepository, canonicalJson, sha256Hex, withTenant, verifiedTenantContextFromMembership, type AuthenticatedMembership } from "../src/index.js";
+import { testActorContext } from "./tenant-context-test-utils.js";
 import * as proof from "./upgrade-proof-utils.js";
 import { cluster, startSession, counts, errorShape, type Cluster, type SessionFixture } from "./contractor-practice-session-fixtures.js";
 let c: Cluster, f: SessionFixture, repo: ContractorRepository;
@@ -50,12 +51,19 @@ it.each(["operative", "read-only", "other-branch", "unknown-member", "revoked-me
  if (cell === "stale") expect(await failure(repo.command(actor, await command(actor, { kind: "member.invite", role: "owner", scope: s, clientId: null, contractId: null, email: "owner@fictional.invalid" }, 0)), code)).toEqual(await failure(repo.command(actor, owner), code));
 });
 it("[PH19] mode is refused before the new owner rule in direct SQL", async () => {
- const raw = { ...await grant(f.p, o, scope("tenant", f.p.tenantId), "owner"), environment: "pilot_no_charge" };
- await expect(proof.rolledBack(c.runtime, async client => { await client.query("SELECT set_config('app.tenant_id',$1,true)", [f.p.tenantId]); return client.query("SELECT app.contractor_admin_command($1,$2::jsonb,$3)", [f.p.membershipId, JSON.stringify(raw), sha256Hex(canonicalJson(raw))]); })).rejects.toMatchObject({ message: "MODE_FORBIDDEN", code: "42501" });
+ const raw = { ...await grant(f.p, o, scope("tenant", f.p.tenantId), "owner"), environment: "pilot_no_charge" }, before = await writes();
+ // LP-6d: the unbound probe refuses before mode/owner validation.
+ await expect(proof.rolledBack(c.runtime, async client => { await client.query("SELECT set_config('app.tenant_id',$1,true)", [f.p.tenantId]); return client.query("SELECT app.contractor_admin_command($1,$2::jsonb,$3)", [f.p.membershipId, JSON.stringify(raw), sha256Hex(canonicalJson(raw))]); })).rejects.toMatchObject({ code: "42501", message: "REQUEST_BINDING_REFUSED" });
+ // Preserve the original business refusal for an authenticated, bound actor.
+ await expect(withTenant(c.runtime, await testActorContext(c.admin, verifiedTenantContextFromMembership(f.p), f.p), db => db.$client.query("SELECT app.contractor_admin_command($1,$2::jsonb,$3)", [f.p.membershipId, JSON.stringify(raw), sha256Hex(canonicalJson(raw))]))).rejects.toMatchObject({ code: "42501", message: "MODE_FORBIDDEN" });
+ expect(await writes()).toEqual(before);
 });
 it("[PH20] direct runtime routine refuses owner without any layer above it", async () => {
  const raw = await grant(f.p, o, scope("tenant", f.p.tenantId), "owner"), before = await writes();
- await expect(proof.rolledBack(c.runtime, async client => { await client.query("SELECT set_config('app.tenant_id',$1,true)", [f.p.tenantId]); return client.query("SELECT app.contractor_admin_command($1,$2::jsonb,$3)", [f.p.membershipId, JSON.stringify(raw), sha256Hex(canonicalJson(raw))]); })).rejects.toMatchObject({ code: "42501", message: "FORBIDDEN" }); expect(await writes()).toEqual(before);
+ // LP-6d: the unbound probe refuses before mode/owner validation.
+ await expect(proof.rolledBack(c.runtime, async client => { await client.query("SELECT set_config('app.tenant_id',$1,true)", [f.p.tenantId]); return client.query("SELECT app.contractor_admin_command($1,$2::jsonb,$3)", [f.p.membershipId, JSON.stringify(raw), sha256Hex(canonicalJson(raw))]); })).rejects.toMatchObject({ code: "42501", message: "REQUEST_BINDING_REFUSED" });
+ // Preserve the original business refusal for an authenticated, bound actor.
+ await expect(withTenant(c.runtime, await testActorContext(c.admin, verifiedTenantContextFromMembership(f.p), f.p), db => db.$client.query("SELECT app.contractor_admin_command($1,$2::jsonb,$3)", [f.p.membershipId, JSON.stringify(raw), sha256Hex(canonicalJson(raw))]))).rejects.toMatchObject({ code: "42501", message: "FORBIDDEN" }); expect(await writes()).toEqual(before);
 });
 it.each(contractorRoles.filter(role => role !== "owner"))("[PH21] invitation and grant still permit role %s", async role => {
  let s = scope("tenant", f.p.tenantId), clientId: string | null = null;

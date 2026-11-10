@@ -6,17 +6,18 @@ import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { migrate } from "../src/migrate.js";
-import { DEMO_TENANT_ID } from "../src/demo-seed.js";
+import { DEMO_TENANT_ID, DEMO_ACCOUNT_ID, DEMO_MEMBERSHIP_ID, DEMO_IDENTITY_USER_ID } from "../src/demo-seed.js";
 import { RecoveryDemoRepository } from "../src/recovery-demo-repository.js";
 import { PostgresRecoveryOutcomePostingPort } from "../src/recovery-repository.js";
 import { withTenant } from "../src/tenant-context.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
 
 // CI only: real PostgreSQL, isolated made-up v1 records. No new schema or grants
 // on application tables. Fixture setup uses the test administrator, never runtime.
 let postgres: EmbeddedPostgres | undefined, admin: Pool | undefined, runtime: Pool;
-const tenant = DEMO_TENANT_ID, context = testTenantContext(tenant);
+const tenant = DEMO_TENANT_ID;
+let context: Awaited<ReturnType<typeof testBoundTenantContext>>;
 beforeAll(async () => {
   const directory = await mkdtemp(join(tmpdir(), "later-b17-pg-"));
   const port = await freePort(57800, 100), credential = randomUUID();
@@ -27,6 +28,10 @@ beforeAll(async () => {
   admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password: credential, database: "jobguard_synthetic_demo" });
   await migrate(admin);
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [tenant]);
+  await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [DEMO_IDENTITY_USER_ID]);
+  await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional historical recovery')", [DEMO_ACCOUNT_ID, tenant]);
+  await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [DEMO_MEMBERSHIP_ID, tenant, DEMO_ACCOUNT_ID, DEMO_IDENTITY_USER_ID]);
+  context = await testBoundTenantContext(admin, tenant, DEMO_MEMBERSHIP_ID);
   // This isolated test role inherits the existing runtime privileges only.
   await admin.query(`CREATE ROLE later_b17_login LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '${credential}'; GRANT jobguard_runtime TO later_b17_login`);
   runtime = new Pool({ host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "later_b17_login", password: credential, max: 2 });
@@ -84,8 +89,8 @@ describe("LATER-B17 historical v1 PostgreSQL boundaries", () => {
   it("L119 displays only the second landing delta after a prior net posting", async () => {
     const input = await fixture(), repository = new RecoveryDemoRepository(runtime);
     await new PostgresRecoveryOutcomePostingPort(runtime).approveSyntheticLanding(context, input);
-    await repository.select(input.jobId, randomUUID(), "eligible");
-    const view = await repository.approve(input.jobId, randomUUID());
+    await repository.select(context, input.jobId, randomUUID(), "eligible");
+    const view = await repository.approve(context, input.jobId, randomUUID());
     expect(view).toMatchObject({ approved: true, additionalFeePence: 1500 });
     const stored = await withTenant(runtime, context, db => db.$client.query(
       "SELECT liability_pence::text,posting_delta_pence::text FROM app.recovery_fee_derivation WHERE tenant_id=$1 AND source_allocation_id=$2", [tenant, view.allocationId],

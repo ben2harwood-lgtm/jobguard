@@ -1,0 +1,45 @@
+{
+  "version": 2,
+  "lanes": {
+    "lp-6d-remaining-routines-r4": {
+      "branches": [
+        "codex/sandbox/lp-6d-remaining-routines-r4"
+      ],
+      "note": "RED LP-6d repair 5 (router SQLSTATE ruling) on c2ec9e98; READY for router commit, NOPR build-ahead. PostgreSQL and independent reviews remain required.",
+      "allow": [
+        "apps/api/src/workspace/fee-illustration.application.ts",
+        "apps/api/src/workspace/recovery.application.ts",
+        "apps/web/app/lib/northside-server.ts",
+        "docs/contracts/lp-0-effective-privileges-v1.md",
+        "packages/db/migration-notes/0980_lp6d_remaining_routines.md",
+        "packages/db/migrations/0980_lp6d_remaining_routines.sql",
+        "packages/db/src/contractor-billing-repository.ts",
+        "packages/db/src/contractor-party-repository.ts",
+        "packages/db/src/contractor-repository.ts",
+        "packages/db/src/fee-illustration-repository.ts",
+        "packages/db/src/northside-demo.ts",
+        "packages/db/src/recovery-demo-repository.ts",
+        "packages/db/src/recovery-message-repository.ts",
+        "packages/db/src/sor-repository.ts",
+        "packages/db/src/work-order-fixtures.ts",
+        "packages/db/src/work-order-repository.ts",
+        "packages/db/test/administrative-role-setup.ts",
+        "packages/db/test/contractor-owner-grant.integration.test.ts",
+        "packages/db/test/contractor-parties.integration.test.ts",
+        "packages/db/test/contractor-retained-read-boundaries.integration.test.ts",
+        "packages/db/test/fee-illustration-later.integration.test.ts",
+        "packages/db/test/job.integration.test.ts",
+        "packages/db/test/lp6d-main-predecessors.json",
+        "packages/db/test/lp6d-repository-context.test.ts",
+        "packages/db/test/lp6d-routines.integration.test.ts",
+        "packages/db/test/lp6d-routines.json",
+        "packages/db/test/lp6d-routines.test.ts",
+        "packages/db/test/lp6d-runtime-classification.json",
+        "packages/db/test/migration-proofs/0980_lp6d_remaining_routines.proof.json",
+        "packages/db/test/recovery-legacy-later.integration.test.ts",
+        "packages/db/test/site-extra-authority.integration.test.ts",
+        "packages/db/test/work-order-import.integration.test.ts"
+      ]
+    }
+  }
+}

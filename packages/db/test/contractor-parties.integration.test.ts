@@ -1,3 +1,4 @@
+import { snapshotRows } from "./upgrade-proof-utils.js";
 import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
 import { randomUUID } from "node:crypto";
@@ -139,7 +140,10 @@ describe("CH-3b PostgreSQL guarantees", () => {
       const grants = (await admin.query("SELECT pg_get_userbyid(p.proowner) owner,has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') runtime,has_function_privilege('jobguard_infrastructure',p.oid,'EXECUTE') infrastructure FROM pg_proc p WHERE p.oid=$1::regprocedure", [signature])).rows[0];
       expect(grants).toEqual({ owner: "jobguard_migration", runtime: true, infrastructure: false });
     }
-    await expect(runtime.query("SELECT app.bind_contractor_parties($1,$2::jsonb)", [f.p.membershipId, JSON.stringify(f.input)])).rejects.toMatchObject({ message: "NOT_FOUND" });
+    // LP-6d refuses the unbound call before any party/job lookup.
+    const beforeUnbound = await snapshotRows(admin, ["app.contractor_party_binding", "app.command_receipt"]);
+    await expect(runtime.query("SELECT app.bind_contractor_parties($1,$2::jsonb)", [f.p.membershipId, JSON.stringify(f.input)])).rejects.toMatchObject({ code: "42501", message: "REQUEST_BINDING_REFUSED" });
+    expect(await snapshotRows(admin, ["app.contractor_party_binding", "app.command_receipt"])).toEqual(beforeUnbound);
     // Every CH-3b function pins search_path; the three routines and the record trigger function are the only SECURITY DEFINER ones.
     const functions = (await admin.query("SELECT p.proname,p.prosecdef,p.proconfig,has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') runtime,has_function_privilege('jobguard_infrastructure',p.oid,'EXECUTE') infrastructure FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='app' AND p.proname=ANY($1::text[]) ORDER BY p.proname", [["bind_contractor_parties", "link_contractor_customer", "read_contractor_resident", "require_contractor_party_receipt", "require_contractor_party_record", "valid_contractor_resident"]])).rows;
     const pinned = ["search_path=pg_catalog"];

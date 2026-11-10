@@ -1,3 +1,5 @@
+import { RequestBindingRefusedError } from "./request-binding-error.js";
+import { ContractorRepository } from "./contractor-repository.js";
 import {contractorBillingReconciliation} from "./contractor-billing-projection.js";
 import type { Pool } from "pg";
 import { z } from "zod";
@@ -10,6 +12,7 @@ export type BillingRead={version:"contractor-billing-projection.v1";exports:{id:
 function parse<T>(schema:{safeParse(raw:unknown):z.ZodSafeParseResult<T>},raw:unknown):T {const r=schema.safeParse(raw);if(!r.success)throw new ContractorBillingError("BILLING_INVALID");return r.data;}
 export function billingDatabaseFailure(error:unknown):never {
  if(error instanceof ContractorBillingError)throw error;
+ if(error instanceof RequestBindingRefusedError)throw new ContractorBillingError("BILLING_FORBIDDEN");
  const e=error as {code?:string;message?:string};const known=contractorBillingErrorCodes.find(c=>c===e.message||c===e.code);if(known)throw new ContractorBillingError(known);
  if(e.code==="23505")throw new ContractorBillingError("BILLING_CONFLICT");
  if(e.code==="42501"||e.code==="P0002"||e.code==="23503")throw new ContractorBillingError("BILLING_FORBIDDEN");
@@ -18,9 +21,15 @@ export function billingDatabaseFailure(error:unknown):never {
 }
 export class ContractorBillingRepository {
  constructor(private readonly pool:Pool){}
+ private async sessionContext(context:VerifiedTenantContext,session:string):Promise<VerifiedTenantContext>{
+  const principal=await new ContractorRepository(this.pool).resolveSession(session);
+  if(principal.tenantId!==context.tenantId)throw new ContractorBillingError("BILLING_FORBIDDEN");
+  if(!principal.context)throw new ContractorBillingError("BILLING_FORBIDDEN");
+  return principal.context;
+ }
  async finalise(context:VerifiedTenantContext,session:string,job:string,raw:unknown):Promise<ExportResult>{
   const input=parse(billingFinaliseCommandV1,raw);parse(z.string().uuid(),job);parse(z.string().uuid(),session);
-  try{return await withTenant(this.pool,context,async db=>{
+  try{return await withTenant(this.pool,await this.sessionContext(context,session),async db=>{
    const replay=(await db.$client.query("SELECT app.cb_begin($1,$2,$3,'FinaliseExportBatch',$4::jsonb) result",[session,job,input.commandId,canonicalJson(input)])).rows[0].result as ExportResult|null;
    if(replay)return replay;
    const lines=(await db.$client.query("SELECT app.cb_candidates($1,$2,$3) lines",[session,job,input.clientContractId])).rows[0].lines as unknown[];
@@ -32,7 +41,7 @@ export class ContractorBillingRepository {
  }
  async import(context:VerifiedTenantContext,session:string,job:string,raw:unknown):Promise<{importId:string}>{
   const input=parse(billingImportCommandV1,raw),payload={...input,events:input.events.map((e:BillingStatus)=>normalizeBillingStatus(e).event)};
-  try{return await withTenant(this.pool,context,async db=>{
+  try{return await withTenant(this.pool,await this.sessionContext(context,session),async db=>{
    const replay=(await db.$client.query("SELECT app.cb_begin($1,$2,$3,'ImportBillingStatus',$4::jsonb) result",[session,job,input.commandId,canonicalJson(payload)])).rows[0].result as {importId:string}|null;
    if(replay)return replay;
    const result=(await db.$client.query("SELECT app.cb_ingest($1,$2,$3,$4::jsonb) result",[session,job,input.commandId,canonicalJson(payload)])).rows[0].result as {importId:string};
@@ -51,11 +60,11 @@ export class ContractorBillingRepository {
  }
  async approveDelivery(context:VerifiedTenantContext,session:string,job:string,raw:unknown):Promise<{outboxActionId:string}>{
   const input=parse(billingApproveDeliveryCommandV1,raw);
-  try{return await withTenant(this.pool,context,async db=>(await db.$client.query("SELECT app.cb_delivery($1,$2,$3,$4::jsonb) result",[session,job,input.commandId,canonicalJson(input)])).rows[0].result as {outboxActionId:string});}catch(e){billingDatabaseFailure(e);}
+  try{return await withTenant(this.pool,await this.sessionContext(context,session),async db=>(await db.$client.query("SELECT app.cb_delivery($1,$2,$3,$4::jsonb) result",[session,job,input.commandId,canonicalJson(input)])).rows[0].result as {outboxActionId:string});}catch(e){billingDatabaseFailure(e);}
  }
  async read(context:VerifiedTenantContext,session:string,job:string):Promise<BillingRead>{
   parse(z.string().uuid(),job);
-  try{return await withTenant(this.pool,context,async db=>{
+  try{return await withTenant(this.pool,await this.sessionContext(context,session),async db=>{
    await db.$client.query("SELECT app.cb_authority($1,$2,false)",[session,job]);
    const exports=(await db.$client.query<{id:string;artifact:{lines:unknown[];clientContractId:string};json_hash:string;csv_hash:string;csv_content:string}>("SELECT id,artifact,json_hash,csv_hash,csv_content FROM app.billing_export_batch WHERE job_id=$1 ORDER BY server_recorded_at,id",[job])).rows;
    const invoices=(await db.$client.query<{id:string;source:string;invoice_number:string;projection:BillingProjection}>(`SELECT r.* FROM app.billing_allocation_run r WHERE r.job_id=$1 AND NOT EXISTS(SELECT 1 FROM app.billing_allocation_run n WHERE n.tenant_id=r.tenant_id AND n.predecessor_id=r.id) ORDER BY source,invoice_number`,[job])).rows;

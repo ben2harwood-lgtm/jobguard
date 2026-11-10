@@ -27,19 +27,24 @@ if (testPath?.endsWith(".integration.test.ts")) {
       }) as typeof actual.bindAfterLocks,
       withTenant: (async (pool, context, work, deferred) => {
         const { needsTestRequestBinding, bindTestTenantContext } = await import("./tenant-context-test-utils.js");
-        if (!needsTestRequestBinding(context)) return actual.withTenant(pool, context, work, deferred);
         // Race/loss fixtures expose connect only. Reuse that same connection:
         // acquiring a probe then a second client changes their race barriers.
         const client = typeof pool.query === "function" ? undefined : await pool.connect();
         let delegated = false;
         const requestPool = client ? { connect: async () => { delegated = true; return client; } } as Pool : pool;
         try {
-          const { database, port, administrative } = (await (client ?? pool).query<{
-            database: string; port: number; administrative: boolean;
+          const { database, port, binding_installed } = (await (client ?? pool).query<{
+            database: string; port: number; administrative: boolean; binding_installed: boolean;
           }>(`SELECT current_database() AS database, inet_server_port() AS port,
-            (SELECT rolsuper FROM pg_roles WHERE rolname=session_user) AS administrative`)).rows[0]!;
-          // Owner fixture writes are setup, not authenticated business requests.
-          if (administrative) return await actual.withTenant(requestPool, context, work, deferred);
+            (SELECT rolsuper FROM pg_roles WHERE rolname=session_user) AS administrative,
+            to_regprocedure('app.bind_request(text,text,uuid)') IS NOT NULL AS binding_installed`)).rows[0]!;
+          // Historical upgrade databases have no binding API. Adapt only this
+          // fixture client; current schemas and direct-SQL attacks keep real guards.
+          if (!binding_installed) {
+            const { testTenantContext } = await import("./tenant-context-test-utils.js");
+            return await actual.withTenant(requestPool, testTenantContext(context.tenantId, { bindRequest: false }), work, deferred);
+          }
+          if (!needsTestRequestBinding(context)) return await actual.withTenant(requestPool, context, work, deferred);
           const credentials = clusterAdmins.get(Number(port));
           if (!credentials) throw new Error("Missing embedded PostgreSQL admin credentials for request fixture");
           const owner = new Pool({ host: "127.0.0.1", port, database, ...credentials, max: 1 });
