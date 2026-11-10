@@ -13,7 +13,7 @@ export function TrialFinalAccount() {
  const writing = useRef(false), pending = useRef<{ action: "acceptTerms" | "disposition" | "lock" | "requestRun"; input: Record<string, unknown> } | null>(null);
  const [retry, setRetry] = useState(false);
  const call = useCallback(async (b: Binding, action: string, extra: Record<string, unknown> = {}) => {
-  const response = await fetch("/demo-s/trial/final-account/commands", { method: "POST", cache: "no-store", headers: { "content-type": "application/json", "x-tenant-id": b.tenantId, "x-csrf-token": b.session.csrfToken }, body: JSON.stringify({ action, input: { version: "company-final-check.v1", jobId: b.jobId, ...extra } }) });
+  const response = await fetch(`/api/jobs/${b.jobId}/trial-final-check`, { method: "POST", cache: "no-store", headers: { "content-type": "application/json", "x-tenant-id": b.tenantId, "x-csrf-token": b.session.csrfToken }, body: JSON.stringify({ action, input: { version: "company-final-check.v1", jobId: b.jobId, ...extra } }) });
   const result = await response.json();
   if (!response.ok) throw Object.assign(new Error(result.code ?? "FINAL_CHECK_UNAVAILABLE"), { definitive: [400, 401, 403, 404, 409].includes(response.status) });
   return result;

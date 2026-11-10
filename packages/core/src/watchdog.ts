@@ -304,6 +304,8 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "nest:/jobs/:id/final-check/dispositions": "post_live_billing",
   "/api/jobs/[id]/final-check/catches": "post_live_billing",
   "nest:/jobs/:id/final-check/catches": "post_live_billing",
+  // Synthetic company-session adapter; SQL routines retain lock and job authority.
+  "/api/jobs/[id]/trial-final-check": "post_live_billing",
   "/api/jobs/[id]/final-check/runs": "post_live_billing",
   "nest:/jobs/:id/final-check/runs": "post_live_billing",
   "command:RecordFinalCheckDisposition": "post_live_billing",

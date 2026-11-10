@@ -30,7 +30,8 @@ export async function exactTarget(f: WorkFixture, a: TrialCompany, large = false
   await db.query(`INSERT INTO app.quote_acceptance(id,tenant_id,job_id,document_id,document_version,document_hash,accepted_total_pence,currency,acceptance_kind,actor_membership_id,stated_customer_name,stated_method,accepted_at)
    VALUES($1,$2,$3,$4,1,$5,$7,'GBP','builder_attestation',$6,'Fictional customer','verbal',clock_timestamp())`, [acceptanceId,a.tenantId,a.jobId,documentId,'a'.repeat(64),a.actorId,total]);
   await db.query(`INSERT INTO app.quote_send(id,tenant_id,job_id,document_id,content_hash,authorization_id,outbox_action_id,recipients) VALUES($1,$2,$3,$4,$5,$6,$7,'["fixture@example.invalid"]')`, [randomUUID(),a.tenantId,a.jobId,documentId,'a'.repeat(64),randomUUID(),randomUUID()]);
-  await db.query("UPDATE app.job SET status='accepted',accepted_quote_version_id=$3,revision=revision+1 WHERE tenant_id=$1 AND id=$2", [a.tenantId,a.jobId,documentId]);
+  // The live seed may have an imported baseline; accepted quotes have no live baseline.
+  await db.query("UPDATE app.job SET status='accepted',provenance='system_generated_quote',baseline_quote_version_id=NULL,accepted_net_value_pence=NULL,fee_policy_version=NULL,recovery_cap_pence=NULL,accepted_quote_version_id=$3,revision=revision+1 WHERE tenant_id=$1 AND id=$2", [a.tenantId,a.jobId,documentId]);
   await db.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','synthetic_demo','backfilled_synthetic_fixture') ON CONFLICT(tenant_id,job_id) DO UPDATE SET provenance='backfilled_synthetic_fixture',source_id=NULL", [a.tenantId,a.jobId]);
  });
  return {documentId, revisionId, acceptanceId};
@@ -42,7 +43,12 @@ export async function exactTarget(f: WorkFixture, a: TrialCompany, large = false
  * Trial activation and proof then run through the existing runtime commands.
  * Caller supplies JOBGUARD_ENV=synthetic_demo, as in the other trial tests.
  */
-export async function preparedTrialFixture(f: WorkFixture) {
+type TrialPreparationOptions = { description?: string; proofBytes?: Buffer; withTrial?: boolean };
+type PreparedTrial = Awaited<ReturnType<typeof prepareTrial>>;
+export function preparedTrialFixture(f: WorkFixture, options?: TrialPreparationOptions & { withTrial?: true }): Promise<PreparedTrial & { activation: NonNullable<PreparedTrial["activation"]> }>;
+export function preparedTrialFixture(f: WorkFixture, options: TrialPreparationOptions): Promise<PreparedTrial>;
+export function preparedTrialFixture(f: WorkFixture, options: TrialPreparationOptions = {}) { return prepareTrial(f, options); }
+async function prepareTrial(f: WorkFixture, options: TrialPreparationOptions) {
  const { createHash } = await import("node:crypto");
  const { FreeFirstJobLifecycleRepository } = await import("../src/free-first-job-lifecycle-repository.js");
  const { EvidenceService } = await import("../src/evidence.js");
@@ -51,7 +57,7 @@ export async function preparedTrialFixture(f: WorkFixture) {
  const a = await meterCompany(f), verification = await verifyBusiness(f, a);
  const draftId = randomUUID(), revisionId = randomUUID(), documentId = randomUUID();
  const scopeRevisionId = randomUUID(), lineId = randomUUID(), acceptanceId = randomUUID(), sendId = randomUUID();
- const description = "Fictional trial electrical installation", contentHash = "a".repeat(64);
+ const description = options.description ?? "Fictional trial electrical installation", contentHash = "a".repeat(64);
  const documentSnapshot = { schemaVersion: "quote-document.v1", documentVersion: 1,
   reference: "SYN-TRIAL-PREP", quoteRevisionId: revisionId, currency: "GBP",
   issuer: { name: "Fictional trial builder", address: ["1 Fictional Street"], email: "builder@example.invalid" },
@@ -76,12 +82,18 @@ export async function preparedTrialFixture(f: WorkFixture) {
    VALUES($1,$2,$3,$4,1,$5,120000,'GBP','builder_attestation',$6,'Fictional customer','verbal',clock_timestamp())`, [acceptanceId,a.tenantId,a.jobId,documentId,contentHash,a.actorId]);
   await db.query(`INSERT INTO app.quote_send(id,tenant_id,job_id,document_id,content_hash,authorization_id,outbox_action_id,recipients)
    VALUES($1,$2,$3,$4,$5,$6,$7,'["customer@example.invalid"]')`, [sendId,a.tenantId,a.jobId,documentId,contentHash,randomUUID(),randomUUID()]);
-  await db.query("UPDATE app.job SET status='accepted',accepted_quote_version_id=$3,revision=revision+1 WHERE tenant_id=$1 AND id=$2", [a.tenantId,a.jobId,documentId]);
+  // The live seed may have an imported baseline; accepted quotes have no live baseline.
+  await db.query("UPDATE app.job SET status='accepted',provenance='system_generated_quote',baseline_quote_version_id=NULL,accepted_net_value_pence=NULL,fee_policy_version=NULL,recovery_cap_pence=NULL,accepted_quote_version_id=$3,revision=revision+1 WHERE tenant_id=$1 AND id=$2", [a.tenantId,a.jobId,documentId]);
  });
  const lifecycle = new FreeFirstJobLifecycleRepository(f.runtime);
  const target = (await lifecycle.read(a.context, a.digest, a.jobId)).target;
- const activation = await lifecycle.activate(a.context, a.digest, a.actorId, {
+ const activation = options.withTrial !== false ? await lifecycle.activate(a.context, a.digest, a.actorId, {
   version: "trial-switch-live.v1", commandId: randomUUID(), jobId: a.jobId, ...target,
+ }) : await workTenant(f.admin, a.tenantId, async db => {
+  // Ordinary control: accepted commercial parents only, no trial or check result.
+  await db.query("SET LOCAL session_replication_role='replica'");
+  await db.query("UPDATE app.job SET status='live',baseline_quote_version_id=$3,accepted_net_value_pence=100000,fee_policy_version='reference_fee_policy_v3',recovery_cap_pence=NULL WHERE tenant_id=$1 AND id=$2", [a.tenantId,a.jobId,documentId]);
+  return null;
  });
  // Cover every confirmed scope, including the first scope required by assembly.
  const scopes = (await f.admin.query<{ id: string }>("SELECT id FROM app.scope_identity WHERE tenant_id=$1 AND job_id=$2 AND state='confirmed' ORDER BY created_at,id", [a.tenantId,a.jobId])).rows;
@@ -89,7 +101,7 @@ export async function preparedTrialFixture(f: WorkFixture) {
   for (const scope of scopes) await db.query("INSERT INTO app.scope_progress(tenant_id,job_id,scope_item_id,stage) VALUES($1,$2,$3,'not_started') ON CONFLICT DO NOTHING", [a.tenantId,a.jobId,scope.id]);
  });
  const storage = new MemoryStorage(), evidence = new EvidenceService(f.runtime, storage);
- const proof = new ProofCommandService(f.runtime, storage), bytes = pngBytes(1);
+ const proof = new ProofCommandService(f.runtime, storage), bytes = options.proofBytes ?? pngBytes(1);
  const sha256 = createHash("sha256").update(bytes).digest("hex");
  const proofs = [];
  for (const scope of scopes) {

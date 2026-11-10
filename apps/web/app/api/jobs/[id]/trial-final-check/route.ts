@@ -7,14 +7,14 @@ import { syntheticPool } from "../../../../lib/synthetic-server";
 
 export const dynamic = "force-dynamic";
 const headers = { "Cache-Control": "no-store" };
-const envelope = z.object({ action: z.enum(["read", "acceptTerms", "disposition", "lock", "requestRun", "reveal"]), input: z.unknown() }).strict();
+const envelope = z.object({ action: z.enum(["read", "acceptTerms", "disposition", "lock", "requestRun", "reveal"]), input: z.object({ jobId: z.string().uuid() }).passthrough() }).strict();
 /** Company credentials only. The six existing SQL routines own all job/replay authority. */
-export async function POST(request: Request) {
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
  try {
   if (process.env.JOBGUARD_ENV !== "synthetic_demo") return NextResponse.json({ code: "DEMO_SYNTHETIC_ONLY" }, { status: 403, headers });
   const context = await identityApplication().context(await identityCredentials(request));
   const parsed = envelope.safeParse(await request.json().catch(() => null));
-  if (!parsed.success || new URL(request.url).search) return NextResponse.json({ code: "INVALID_COMPANY_FINAL_CHECK_INPUT" }, { status: 400, headers });
+  if (!parsed.success || new URL(request.url).search || parsed.data.input.jobId !== (await params).id) return NextResponse.json({ code: "INVALID_COMPANY_FINAL_CHECK_INPUT" }, { status: 400, headers });
   const repository = new CompanyFinalCheckRepository(syntheticPool());
   const result = await repository[parsed.data.action](context, parsed.data.input);
   return NextResponse.json(result, { headers });
