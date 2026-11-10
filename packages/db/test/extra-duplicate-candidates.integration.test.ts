@@ -262,6 +262,21 @@ it("dismissal is exact, append-only and reversible; replay is inert and export k
  }
  await expect(withTenant(c.runtime,w.ctx,db=>db.$client.query("INSERT INTO app.extra_duplicate_disposition(tenant_id) VALUES($1)",[w.w.p.tenantId]))).rejects.toMatchObject({ code: "42501" });
 },120000);
+it("table owner cannot truncate append-only duplicate dispositions and all rows remain", async () => {
+ const w = await world(c); await pair(w);
+ const group = (await agreement(w)).groups[0]!, session = await sessionFor(w);
+ await resolveExtraDuplicateCandidates(c.runtime,w.ctx,session,w.s.jobId,disposition(group));
+ const rows = () => c.admin.query("SELECT * FROM app.extra_duplicate_disposition ORDER BY tenant_id,id").then(result => result.rows);
+ const before = await rows();
+ expect(before.some(row => row.tenant_id === w.w.p.tenantId)).toBe(true);
+ await expect(ownerTx(c,w.w.p.tenantId,async db => {
+  const actor = (await db.$client.query("SELECT current_user AS actor, pg_get_userbyid(relowner) AS owner FROM pg_class WHERE oid='app.extra_duplicate_disposition'::regclass")).rows[0];
+  expect(actor).toEqual({ actor: "jobguard_migration", owner: "jobguard_migration" });
+  await db.$client.query("TRUNCATE app.extra_duplicate_disposition");
+ })).rejects.toMatchObject({ code: "55000", message: "commercial revisions and snapshots are immutable" });
+ expect(await rows()).toEqual(before);
+ expect((await agreement(w)).groups).toEqual([]);
+},120000);
 it("refuses reporters, pricers, forged actor, foreign tenant, uncovered and wrong roles, with no facts or receipts",async()=>{
  const w=await world(c); const [a]=await pair(w); const group=(await read(w)).groups[0]!;
  for(const [actor, expected] of [[w.w.members.surveyor.member,"SELF_DISMISSAL"],[w.w.members.operative.member,"PERMISSION_DENIED"],[w.w.members.owner.member,"PERMISSION_DENIED"],[w.w.members.finance.member,"PERMISSION_DENIED"],[w.w.otherSupervisor.member,"PERMISSION_DENIED"]] as const) {
@@ -317,3 +332,46 @@ it("independent surveyors and commercial managers may dismiss with a covering gr
   expect((await agreement(w)).groups).toHaveLength(1);
  }
 },120000);
+
+// LATER-SAFETY-51: exercise the SQL boundary directly; the HTTP schema is not authority.
+it("refuses disposition/reason mismatches without changing receipts, facts, audit or export eligibility", async () => {
+ const w = await world(c); await pair(w);
+ const session = await sessionFor(w), group = (await agreement(w)).groups[0]!;
+ const before = await facts(w), history = await commercial(w);
+ for (const [kind, reasonCode] of [["not_duplicates", "review_changed"], ["reopen", "different_work"], ["reopen", "different_location"]]) {
+  const input = disposition(group, { disposition: kind, reasonCode });
+  await expect(withTenant(c.runtime, w.ctx, db => db.$client.query(
+   "SELECT app.extra_duplicate_resolve($1,$2,$3::jsonb)", [session, w.s.jobId, JSON.stringify(input)]
+  ))).rejects.toMatchObject({ code: "23514", message: "INVALID_COMMAND" });
+  expect(await facts(w)).toEqual(before); expect(await commercial(w)).toEqual(history);
+  expect((await agreement(w)).groups).toEqual([group]);
+  expect(await code(w.exported())).toBe("BILLING_DUPLICATES_UNRESOLVED");
+ }
+}, 120000);
+
+it("accepts both distinct-work reasons and review-changed reopening through the SQL writer", async () => {
+ const w = await world(c); await pair(w);
+ const session = await sessionFor(w), group = (await agreement(w)).groups[0]!;
+ for (const reasonCode of ["different_work", "different_location"]) {
+  await resolveExtraDuplicateCandidates(c.runtime, w.ctx, session, w.s.jobId, disposition(group, { reasonCode }));
+  expect((await agreement(w)).groups).toEqual([]);
+  await resolveExtraDuplicateCandidates(c.runtime, w.ctx, session, w.s.jobId,
+   disposition(group, { disposition: "reopen", reasonCode: "review_changed" }));
+  expect((await agreement(w)).groups).toEqual([group]);
+ }
+}, 120000);
+
+it("records the landing hold: the registered duplicate command cannot begin with repository-style input", async () => {
+ const w = await world(c); await pair(w);
+ const group = (await agreement(w)).groups[0]!, input = disposition(group);
+ const before = await facts(w);
+ // Matching the registry version still enters the commercial-action schema in
+ // begin_command; repository-command.v1 instead has no registry row for this type.
+ await expect(ownerTx(c, w.w.p.tenantId, db => db.$client.query(
+  "SELECT app.begin_command($1,$2,'ResolveDuplicateCandidates',$3,$4::jsonb,'{}'::jsonb,$5::jsonb)",
+  [input.version, input.commandId, `duplicate-disposition:${w.s.jobId}:${input.commandId}`,
+   JSON.stringify({ tenantId: w.w.p.tenantId, actorMembershipId: w.w.members.supervisor.member.membershipId, subjectType: "job", subjectRef: w.s.jobId }),
+   JSON.stringify({ version: input.version, actorMembershipId: w.w.members.supervisor.member.membershipId, input, legacyJson: JSON.stringify(input) })]
+ ))).rejects.toMatchObject({ code: "23514", message: "AUTHORIZATION_INVALID" });
+ expect(await facts(w)).toEqual(before);
+}, 120000);
