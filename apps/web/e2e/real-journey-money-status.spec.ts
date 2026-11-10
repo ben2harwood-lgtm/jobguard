@@ -65,8 +65,8 @@ async function createJob(page: Page, text: string, net: number, customer: string
   await click(page, "Preview immutable quote");
   await expect(page.getByRole("region", { name: "Quote preview" })).toContainText(pounds(net * 120));
   await click(page, "Simulate sending this quote");
-  const worker = page.getByRole("button", { name: "Continue fake worker", exact: true });
-  if (await worker.isVisible()) await worker.click();
+  // The queued state renders the fake-worker control after the send returns; wait for it.
+  await click(page, "Continue fake worker");
   await expect(page.getByTestId("quote-delivery")).toHaveText("Simulated delivery — nothing sent");
   await page.getByLabel("Stated customer", { exact: true }).fill(customer);
   await click(page, "Record practice acceptance"); await click(page, "Start this practice job");
@@ -190,7 +190,8 @@ test("walk 2: paid example job has saved amounts on every designed screen", asyn
   const jobId = await createJob(page, paidExample, 900, "Practice Customer", "14 Fictional Street");
   expect(await completeAccount(page, jobId)).toBe("completed");
   await page.goto(`/jobs/${jobId}/money`);
-  const savedMoney = page.getByRole("heading", { name: "Where the money stands", exact: true }).locator("../..");
+  // Card headings sit inside .card-head; read the whole card that owns this heading.
+  const savedMoney = page.locator("section.card").filter({ has: page.getByRole("heading", { name: "Where the money stands", exact: true }) });
   await expect(savedMoney.getByText("Agreed £1,080.00", { exact: true })).toBeVisible();
   await expect(savedMoney.getByText("No invoice issued", { exact: false })).toBeVisible();
   await page.goto(`/jobs/${jobId}/work#final-account-title`);
