@@ -7,7 +7,7 @@ test("real company saves and reloads its firm details", async ({ page }) => {
  const code = await page.getByTestId("fixture-code").textContent();
  await page.getByLabel("Eight-digit code").fill(code!);
  await page.getByRole("button", { name: "Verify code" }).click();
- await expect(page.getByRole("heading", { name: "Signed in", exact: true })).toBeVisible();
+ await expect(page.getByRole("heading", { name: "You're signed in.", exact: true })).toBeVisible();
  await page.goto("/firm-details");
  await expect(page.getByRole("button", { name: "Save firm details", exact: true })).toBeEnabled();
  await page.getByLabel("Trading name").fill("Fictional Oak Works");
