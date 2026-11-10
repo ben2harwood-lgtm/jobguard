@@ -302,10 +302,10 @@ it("MON-8 a queued approval message is cancelled after agreement loss without an
 async function queuedSurveyorSend() {
   const world = await chainWorld(c), context = await world.ctx;
   const approval = new ExtraApprovalRepository(c.runtime), s = await submitted(c, world, 150000);
-  await approval.approveExtraStep(context, world.members.supervisor.member, approveInput(s, 0));
-  await approval.approveExtraStep(context, world.supervisor2.member, approveInput(s, 1));
+  await approval.approveExtraStep(await testActorContext(c.admin, context, world.members.supervisor.member), world.members.supervisor.member, approveInput(s, 0));
+  await approval.approveExtraStep(await testActorContext(c.admin, context, world.supervisor2.member), world.supervisor2.member, approveInput(s, 1));
   const sender = world.members.surveyor;
-  const sent = await approval.issueClientApproval(context, sender.member, {
+  const sent = await approval.issueClientApproval(await testActorContext(c.admin, context, sender.member), sender.member, {
     version: "issue-client-approval.v1", commandId: randomUUID(), jobId: s.jobId, requestId: s.requestId,
     approverMembershipId: world.members.client_approver.member.membershipId,
     recipient: await emailOf(c, world, world.members.client_approver.member.membershipId),

@@ -92,7 +92,8 @@ describe("LATER-SAFETY-79 abandoned site visits", () => {
   await command(c, f, { kind: "membership.revoke", membershipId: f.members.operative.member.membershipId });
   await refused(f, () => close(f, visit.visitId, f.members.owner, cid, f.jobId, reason, f.members.admin), "PERMISSION_DENIED");
   await close(f, visit.visitId, f.members.admin, cid);
-  await refused(f, () => close(f, visit.visitId, f.members.owner, cid, f.jobId, reason, f.members.admin), "PERMISSION_DENIED");
+  // LP-6c: the forged replay is now refused at begin_command (the claim is bound to the caller), before the routine; nothing is written.
+  await refused(f, () => close(f, visit.visitId, f.members.owner, cid, f.jobId, reason, f.members.admin), "COMMAND_CONFLICT");
  });
  it("refuses a bound owner without a processing receipt, and an unbound caller", async () => {
   const f = await promptFixture(c), visit = await start(f);

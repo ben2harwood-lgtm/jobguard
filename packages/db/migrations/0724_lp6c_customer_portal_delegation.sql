@@ -297,6 +297,8 @@ BEGIN
 
 
  SELECT * INTO c FROM app.command_lifecycle_claim WHERE tenant_id=t AND command_id=p_command;
+ -- LS-79: a claimless abandoned close stays INVALID_COMMAND ahead of the LP-6c actor check.
+ IF c.command_id IS NULL AND p_reference->>'closeKind'='abandoned' THEN RAISE EXCEPTION 'INVALID_COMMAND' USING ERRCODE='23514'; END IF;
 
 
  SELECT * INTO r FROM app.command_receipt WHERE tenant_id=t AND command_id=p_command;
