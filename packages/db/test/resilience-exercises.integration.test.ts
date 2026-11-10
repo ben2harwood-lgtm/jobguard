@@ -1,14 +1,19 @@
+import { testTenantContext } from "./tenant-context-test-utils.js";
 import { expect, it } from "vitest";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import * as database from "../src/index.js";
 import { runResilienceExercises } from "../tools/resilience-exercises.mjs";
+const fixtureDatabase = { ...database,
+  verifiedTenantContextFromMembership: (membership: Parameters<typeof database.verifiedTenantContextFromMembership>[0]) =>
+    testTenantContext(membership.tenantId, { membershipId: membership.membershipId }),
+};
 
 it("writes three distinct receipts from actual disposable PostgreSQL restores", async () => {
   const directory = await mkdtemp(join(tmpdir(), "resilience-integration-"));
   try {
-    const paths = await runResilienceExercises({ version: "resilience-exercises.v1", runs: 3, outputDirectory: directory }, database);
+    const paths = await runResilienceExercises({ version: "resilience-exercises.v1", runs: 3, outputDirectory: directory }, fixtureDatabase);
     expect(new Set(paths).size).toBe(3);
     const receipts = await Promise.all(paths.map(async (path: string) => JSON.parse(await readFile(path, "utf8"))));
     expect(new Set(receipts.map(receipt => receipt.runId)).size).toBe(3);

@@ -45,6 +45,7 @@ it("A1/A2/A5/A6: direct controlled calls refuse forged artifacts and all four ef
  const { auth, jobId } = practice;
  for (const action of ["review", "approve", "review_reverse", "reverse"]) {
   await expect(workTenant(f.runtime, auth.context.tenantId, async db => {
+   await db.query("SELECT app.bind_request('practice',$1,$2)", [auth.digest, auth.context.tenantId]);
    await db.query("SELECT set_config('app.receipt_line_environment','synthetic_demo',true)");
    await db.query("SELECT app.write_receipt_allocation_facts($1,$2,$3,$4,$5)", [auth.context.tenantId, jobId, auth.digest,
     { version: "receipt-line-allocation-command.v1", action, commandId: randomUUID(), expectedSourceRevision: 1 },

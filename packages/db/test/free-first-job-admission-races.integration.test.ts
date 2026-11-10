@@ -14,7 +14,7 @@ describe("MON3 B ATOMIC-01 REPLAY-01 races/rollback",()=>{
   const a=await meterCompany(f);await verifyBusiness(f,a);const before=await ownCounts(f,a),id=randomUUID();
   await expect(workTenant(f.runtime,a.tenantId,async db=>{
    await db.query("SELECT app.mon3_request_card($1,$2,$3,$4::jsonb)",[a.tenantId,a.digest,id,JSON.stringify({version:'trial-card-request.v1'})]);throw new Error('rollback control');
-  })).rejects.toThrow('rollback control');expect(await ownCounts(f,a)).toEqual(before);
+  }, { membershipId: a.actorId, bindRequest: false })).rejects.toThrow('rollback control');expect(await ownCounts(f,a)).toEqual(before);
   const results=await Promise.allSettled([denyAdmission(f,a),denyAdmission(f,a)]);expect(results.every(result=>result.status==='rejected')).toBe(true);expect(await ownCounts(f,a)).toEqual(before);
  });
  it("audit append failure rolls back attempt and receipt in the same transaction",async()=>{
@@ -23,7 +23,7 @@ describe("MON3 B ATOMIC-01 REPLAY-01 races/rollback",()=>{
    await db.query("CREATE FUNCTION pg_temp.mon3pb_audit_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'MON3_AUDIT_CONTROL'; END $$");
    await db.query("CREATE TRIGGER mon3pb_audit_failure BEFORE INSERT ON app.audit_event FOR EACH ROW EXECUTE FUNCTION pg_temp.mon3pb_audit_failure()");
    await db.query("SELECT app.mon3_request_card($1,$2,$3,$4::jsonb)",[a.tenantId,a.digest,randomUUID(),JSON.stringify({version:'trial-card-request.v1'})]);
-  })).rejects.toThrow('MON3_AUDIT_CONTROL');
+  }, { membershipId: a.actorId })).rejects.toThrow('MON3_AUDIT_CONTROL');
   expect(await ownCounts(f,a)).toEqual(before);
  });
 

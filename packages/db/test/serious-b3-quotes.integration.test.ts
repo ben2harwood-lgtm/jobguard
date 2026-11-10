@@ -8,10 +8,11 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { type QuoteLine, quoteDocumentV1, renderQuotePdf } from "@jobguard/core";
 import { migrate, withTenant, QuoteRepository, QuoteDeliveryRepository, QuoteDocumentRepository, QuoteAcceptanceRepository, DEMO_TENANT_ID as T, DEMO_MEMBERSHIP_ID as M } from "../src/index.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 
-const context = testTenantContext(T), original = process.env.JOBGUARD_ENV;
+let context = testTenantContext(T);
+const original = process.env.JOBGUARD_ENV;
 let pg: EmbeddedPostgres | undefined, admin: Pool, runtime: Pool, dir: string;
 beforeAll(async () => {
   process.env.JOBGUARD_ENV = "synthetic_demo";
@@ -26,6 +27,7 @@ beforeAll(async () => {
   await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)",[user]);
   await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Synthetic Builder')",[account,T]);
   await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')",[M,T,account,user]);
+  context = await testBoundTenantContext(admin,T,M);
   await admin.query("CREATE ROLE serious_b3_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOBYPASSRLS; GRANT jobguard_runtime TO serious_b3_login");
   runtime = new Pool({host:"127.0.0.1",port,database:"jobguard_synthetic_demo",user:"serious_b3_login",password:"synthetic",max:4});
 },90_000);
