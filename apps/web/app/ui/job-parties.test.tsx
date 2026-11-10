@@ -150,3 +150,56 @@ describe("shared registry revisions never silently replace a job's saved parties
     expect(JSON.stringify(render())).toContain("registry");
   });
 });
+
+function nodes(node: React.ReactNode): Node[] {
+  if (Array.isArray(node)) return node.flatMap(nodes);
+  if (!React.isValidElement<Record<string, unknown>>(node)) return [];
+  return [node, ...nodes(node.props.children as React.ReactNode)];
+}
+const text = (tree: React.ReactNode): string => {
+  if (Array.isArray(tree)) return tree.map(text).join("");
+  if (React.isValidElement<Record<string, unknown>>(tree)) return text(tree.props.children as React.ReactNode);
+  return typeof tree === "string" || typeof tree === "number" ? String(tree) : "";
+};
+it("shows saved state only for the saved draft, records a successful save time and keeps technical identities closed", async () => {
+  vi.stubGlobal("React", React);
+  vi.stubGlobal("window", { addEventListener: vi.fn(), removeEventListener: vi.fn(), dispatchEvent: vi.fn() });
+  const snapshot = view();
+  const fetch = vi.fn(async (_url, options) => {
+    if (!options?.method) return { ok: true, json: async () => snapshot };
+    const input = JSON.parse(options.body);
+    return { ok: true, json: async () => ({ version: "job-parties-command-result.v1", environment: "synthetic_demo", commandId: input.commandId, id: id(2), realExternalActions: 0 }) };
+  });
+  vi.stubGlobal("fetch", fetch);
+  const render = () => { hooks.render(); const tree = JobParties({ jobId: id(1) }); hooks.effects(); return tree; };
+  render(); await new Promise<void>(resolve => setImmediate(resolve)); let tree = render();
+  expect(text(tree)).not.toContain("Unsaved draft");
+  const details = nodes(tree).find(n => n.type === "details")!;
+  expect(details.props.open).toBeUndefined(); expect(text(details)).toContain("Technical details");
+  expect(nodes(details).find(n => n.props["data-testid"] === "party-binding-id")!.props.children).toBe(id(2));
+  for (const testId of ["job-party-details", "party-customer", "party-site", "party-payer"]) expect(nodes(tree).some(n => n.props["data-testid"] === testId)).toBe(true);
+  expect(nodes(tree).find(n => n.type === "h2")!.props.id).toBe(`parties-${id(1)}`);
+  const link = nodes(tree).find(n => n.type === "a")!;
+  expect(text(link)).toBe("Bring in a job that's already under way"); expect(link.props.href).toBe(`/jobs/${id(1)}/imports`);
+  expect(text(tree)).toContain("Property reference (UPRN, optional)");
+  for (const [label, changed] of [["Customer name", "Changed customer"], ["Customer type", "business"], ["Customer email (fictional, optional)", "fictional@example.invalid"], ["Customer phone (fictional, optional)", "01234567890"], ["Company number (optional)", "12345678"], ["Who pays?", id(9)], ["Premises address", "Other fictional street"], ["More address lines (optional, one per line)", "Other line"], ["Town", "Other town"], ["UK postcode", "M1 1AE"], ["Flat or unit (optional)", "2"], ["UPRN (optional)", "123"]] as const) {
+    const original = find(tree, label)!.props.value;
+    (find(tree, label)!.props.onChange as (e: unknown) => void)({ target: { value: changed } }); tree = render();
+    expect(text(tree), label).toContain("Unsaved draft — use Save customer and site to record it.");
+    (find(tree, label)!.props.onChange as (e: unknown) => void)({ target: { value: original } }); tree = render();
+    expect(text(tree), label).not.toContain("Unsaved draft");
+  }
+  (find(tree, "Customer and site details")!.props.onSubmit as (e: unknown) => void)({ preventDefault() {} });
+  await new Promise<void>(resolve => setImmediate(resolve)); tree = render();
+  expect(text(tree)).toContain("Saved at "); expect(text(tree)).not.toContain("Unsaved draft");
+  const time = nodes(tree).find(n => n.type === "time")!;
+  expect(new Date(time.props.dateTime as string).getTime()).not.toBeNaN();
+  expect(fetch.mock.calls.filter(([, options]) => options?.method)).toHaveLength(1);
+});
+it("keeps a new unsaved job labelled as a draft", async () => {
+  vi.stubGlobal("React", React); vi.stubGlobal("window", { addEventListener: vi.fn(), removeEventListener: vi.fn() });
+  vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({ ...view(), current: null, currentIds: null }) })));
+  const render = () => { hooks.render(); const tree = JobParties({ jobId: id(1) }); hooks.effects(); return tree; };
+  render(); await new Promise<void>(resolve => setImmediate(resolve));
+  expect(text(render())).toContain("Unsaved draft — use Save customer and site to record it.");
+});

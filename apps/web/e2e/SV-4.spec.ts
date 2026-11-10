@@ -15,7 +15,8 @@ test("DW2/DW4/DW9: persisted completion survives reload, Jobs and a second brows
   await panel.getByLabel("Final-review extra price (£, optional)", { exact: true }).fill("");
   const data = { version: "final-account.lock.v1", commandId: randomUUID(), finalAccountRevisionId: fixture.account.id, expectedRevision: fixture.account.revision, declarationVersion: "final_account_declaration.v1" };
   const path = `/api/jobs/${fixture.jobId}/final-account/lock`;
-  await expect(panel.getByTestId("lock-bound-invoices").getByRole("alert")).toHaveText("FINAL_ACCOUNT_LOCK_REQUIRED");
+  await expect(panel.getByTestId("lock-bound-invoices").getByRole("alert")).toHaveText("Complete the final account first");
+  await expect(panel.getByTestId("lock-bound-invoices").getByRole("alert")).toHaveAttribute("data-error-code", "FINAL_ACCOUNT_LOCK_REQUIRED");
   await expect(panel.getByRole("button", { name: "Issue final invoice", exact: true })).toBeDisabled();
   const missing = await page.request.post(path, { data });
   expect(missing.ok()).toBe(false);
@@ -77,7 +78,8 @@ test("DW7: pending and failed reconciliation refuse both invoice kinds in comman
   const assertBlocked = async (code: "FINAL_CHECK_NOT_COMPLETE" | "FINAL_CHECK_FAILED") => {
     await page.reload();
     const panel = page.getByTestId("lock-bound-invoices");
-    await expect(panel.getByRole("alert")).toHaveText(code);
+    await expect(panel.getByRole("alert")).toHaveText(code === "FINAL_CHECK_FAILED" ? "JobGuard's final check could not finish, so this bill stays locked" : "JobGuard's final check is still running");
+    await expect(panel.getByRole("alert")).toHaveAttribute("data-error-code", code);
     await expect(panel.getByRole("button", { name: "Issue final invoice", exact: true })).toBeDisabled();
     await expect(panel.getByRole("button", { name: "Issue supplementary invoice", exact: true })).toBeDisabled();
     await expect(page.getByTestId("final-check-state")).toHaveText("Running JobGuard's final check");
@@ -115,7 +117,7 @@ test("DW7: another lock or cutoff cannot complete this job's check in commands o
    await expect(shadow.query("INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,lock_id,evidence_cutoff_at,status) VALUES($1,$2,$3,$4,$5,'completed')",[fixture.tenantId,fixture.jobId,randomUUID(),lockId,cutoff])).rejects.toMatchObject({code:'23503'});
  });
  await page.goto(`/jobs/${fixture.jobId}#final-account-title`);
- const panel=page.getByTestId('lock-bound-invoices');await expect(panel.getByRole('alert')).toHaveText('FINAL_CHECK_NOT_COMPLETE');
+ const panel=page.getByTestId('lock-bound-invoices');await expect(panel.getByRole('alert')).toHaveText("JobGuard's final check is still running");await expect(panel.getByRole('alert')).toHaveAttribute('data-error-code','FINAL_CHECK_NOT_COMPLETE');
  for(const kind of ['final','supplementary'] as const){
   await expect(panel.getByRole('button',{name:`Issue ${kind} invoice`,exact:true})).toBeDisabled();
   const refusal=await page.request.post(`/api/jobs/${fixture.jobId}/final-account/lock`,{data:{version:'lock-bound-invoice.issue.v1',commandId:randomUUID(),finalAccountRevisionId:fixture.account.id,expectedSourceHash:fixture.account.sourceHash,invoiceKind:kind,recipient:'practice-customer@example.invalid',issuedOn:'2026-10-12'}});
