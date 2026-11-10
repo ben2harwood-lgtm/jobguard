@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "lanes": {
+    "revert-706-page-order": {
+      "branches": [
+        "codex/sandbox/revert-706-page-order"
+      ],
+      "note": "Router 10 Nov: revert #706 page order; main's mobile WALK-stress fails steadily since it landed. Re-land after a real fix.",
+      "allow": [
+        "apps/web/app/ui/job-final-account.tsx",
+        "apps/web/app/ui/practice-journey-anchors.test.tsx",
+        "apps/web/app/ui/practice-journey.tsx",
+        "apps/web/app/ui/quote-editor-slots.test.tsx",
+        "apps/web/app/ui/quote-editor.tsx",
+        "apps/web/app/ui/review-proposal.tsx",
+        "apps/web/app/ui/workspace-shell-order.test.tsx",
+        "apps/web/app/ui/workspace-shell.tsx",
+        "config/lanes/real-job-page-order.json",
+        "config/lanes/revert-706-page-order.json"
+      ]
+    }
+  }
+}
