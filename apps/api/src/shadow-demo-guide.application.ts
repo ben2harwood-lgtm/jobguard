@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
-import { ShadowDemoGuideRepository } from "@jobguard/db";
+import { customerSigninLink, ShadowDemoGuideRepository } from "@jobguard/db";
 import { PracticeAccess } from "./practice-access.js";
 
 export class ShadowDemoGuideError extends Error {
@@ -25,9 +25,14 @@ export class ShadowDemoGuideApplication {
  async issueCustomerLink(jobId: string, raw: unknown, linkDigest: (secret: string) => string) {
   const auth = await this.authorize(jobId), input = linkCommandV1.safeParse(raw);
   if (!input.success) throw new ShadowDemoGuideError("INVALID_SHADOW_GUIDE_COMMAND");
-  const secret = randomBytes(32).toString("base64url");
-  const path = `/customer/sign-in#${auth.context.tenantId}/${jobId}/${input.data.customerId}/${secret}`;
-  await this.repository.issueCustomerLink(auth.context, jobId, input.data.customerId, auth.digest, linkDigest(`customer-link:${secret}`), path, ...(input.data.documentId ? [input.data.documentId] as const : [] as const));
+  const prefix = `${auth.context.tenantId}/${jobId}/${input.data.customerId}`;
+  const nonce = randomBytes(32).toString("base64url");
+  const reference = `customer-signin-reference.v1:${prefix}/${nonce}`;
+  const path = customerSigninLink(reference, linkDigest);
+  const secret = path.split("/").at(-1)!;
+  const issuanceReference = input.data.documentId
+   ? `customer-quote-signin-reference.v1:${prefix}/${input.data.documentId}/${nonce}` : reference;
+  await this.repository.issueCustomerLink(auth.context, jobId, input.data.customerId, auth.digest, linkDigest(`customer-link:${secret}`), issuanceReference);
   return { version: "shadow-guide-customer-link-issued.v1" as const, path, delivery: "simulated_delivery" as const, realExternalActions: 0 as const };
  }
 }

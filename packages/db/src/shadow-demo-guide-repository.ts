@@ -1,4 +1,3 @@
-import { randomBytes } from "node:crypto";
 import type { Pool } from "pg";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 
@@ -17,11 +16,7 @@ export class ShadowDemoGuideRepository {
  reviewInputs(context: VerifiedTenantContext, jobId: string, digest: string) {
   return this.call(context, "SELECT app.demo_shadow_review_inputs($1,$2,$3) result", [context.tenantId, jobId, digest]);
  }
- issueCustomerLink(context: VerifiedTenantContext, jobId: string, customerId: string, digest: string, linkDigest: string, path: string, documentId?: string) {
-  // Keep the one-time path at the application boundary; SQL receives an independent non-credential reference.
-  const prefix = `${context.tenantId}/${jobId}/${customerId}/`;
-  const content = new RegExp(`^/customer/sign-in#${prefix}[A-Za-z0-9_-]{43}$`).test(path)
-   ? `${documentId ? "customer-quote-signin-reference.v1" : "customer-signin-reference.v1"}:${prefix}${documentId ? `${documentId}/` : ""}${randomBytes(32).toString("base64url")}` : path;
-  return this.call(context, "SELECT app.demo_issue_customer_link($1,$2,$3,$4,$5,$6) result", [context.tenantId, jobId, customerId, digest, linkDigest, content]);
+ issueCustomerLink(context: VerifiedTenantContext, jobId: string, customerId: string, digest: string, linkDigest: string, reference: string) {
+  return this.call(context, "SELECT app.demo_issue_customer_link($1,$2,$3,$4,$5,$6) result", [context.tenantId, jobId, customerId, digest, linkDigest, reference]);
  }
 }

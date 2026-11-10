@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-papercuts-2-main": {
+      "branches": [
+        "codex/sandbox/real-papercuts-2-main"
+      ],
+      "allow": [
+        "apps/web/app/ui/quote-editor.tsx",
+        "apps/web/app/ui/quote-editor-papercuts.test.tsx"
+      ]
+    }
+  }
+}

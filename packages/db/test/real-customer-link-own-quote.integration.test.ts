@@ -3,6 +3,7 @@ import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { renderQuotePdf } from "@jobguard/core";
 import { startBeforeMigration, applyMigration, type Cluster } from "./contractor-practice-session-fixtures.js";
 import { migrate } from "../src/migrate.js";
+import { customerSigninLink } from "../src/outbox.js";
 import { startBlankPracticeCompany } from "../src/blank-practice-company.js";
 import { authenticatePracticeSession } from "../src/practice-session.js";
 import { CaptureApplication } from "../../../apps/api/src/capture/capture.application.js";
@@ -100,6 +101,8 @@ it("binds one-use redemption to the exact stored blank-firm quote and replays on
  const grant = (await c.admin.query("SELECT * FROM app.customer_portal_grant WHERE tenant_id=$1 AND job_id=$2",[w.t,w.j])).rows[0];
  expect(grant.quote_document_id).toBe(w.p.documentId);
  expect(JSON.stringify(grant)).not.toContain(k.token);
+ const delivery = (await c.admin.query("SELECT immutable_content FROM app.action_outbox WHERE tenant_id=$1 AND id=$2",[w.t,grant.outbox_id])).rows[0];
+ expect(customerSigninLink(delivery.immutable_content,hash)).toBe(issued.path);
  await use(k); await expect(use(k)).rejects.toMatchObject(refused);
  const view = (await read(k)).rows[0].result;
  expect(view.quote).toMatchObject({id:w.p.documentId,hash:w.p.hash,document:w.p.document});
@@ -134,7 +137,7 @@ it.each(["forged","party","other firm","expired","reset","revoked","rate"])("ref
  if (attack==="party") k.customer=randomUUID();
  if (attack==="other firm") {
   const other = await ready();
-  await expect(new ShadowDemoGuideRepository(c.runtime).issueCustomerLink(other.auth.context,w.j,w.party.customer_id,other.auth.digest,hash(randomUUID()),`/customer/sign-in#${other.t}/${w.j}/${w.party.customer_id}/${"a".repeat(43)}`,w.p.documentId)).rejects.toMatchObject({code:"42501"});
+  await expect(new ShadowDemoGuideRepository(c.runtime).issueCustomerLink(other.auth.context,w.j,w.party.customer_id,other.auth.digest,hash(randomUUID()),`customer-quote-signin-reference.v1:${other.t}/${w.j}/${w.party.customer_id}/${w.p.documentId}/${"a".repeat(43)}`)).rejects.toMatchObject({code:"42501"});
  } else if (attack==="expired") await c.admin.query("UPDATE app.customer_portal_grant SET issued_at=issued_at-interval '1 hour',expires_at=expires_at-interval '1 hour' WHERE tenant_id=$1 AND job_id=$2",[w.t,w.j]);
  else if (attack==="reset") await startBlankPracticeCompany(c.runtime,{version:"blank-practice-company.v1",action:"reset"},w.session);
  else if (attack==="revoked") await c.admin.query("UPDATE app.customer_portal_grant SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND job_id=$2",[w.t,w.j]);

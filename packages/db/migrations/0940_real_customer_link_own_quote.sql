@@ -80,6 +80,8 @@ BEGIN
   IF content IS NULL OR content !~ ('^customer-quote-signin-reference\.v1:'||t::text||'/'||j::text||'/'||c::text||'/[a-f0-9-]{36}/[A-Za-z0-9_-]{43}$')
    THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
   document_id:=split_part(content,'/',4)::uuid;
+  -- Persist the same independent delivery reference used to derive the transient bearer.
+  content:='customer-signin-reference.v1:'||t::text||'/'||j::text||'/'||c::text||'/'||split_part(content,'/',5);
   SELECT q.* INTO doc FROM app.quote_document_version q
    JOIN app.quote_draft draft ON(draft.tenant_id,draft.job_id,draft.current_revision_id)=(q.tenant_id,q.job_id,q.quote_revision_id)
    WHERE q.tenant_id=t AND q.job_id=j AND q.id=document_id
