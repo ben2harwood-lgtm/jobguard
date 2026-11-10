@@ -5,6 +5,9 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { ExtraApprovalRepository, northsideApprovalArtifact, northsideExtras, northsideRateCard, northsideRun, withTenant } from "@jobguard/db";
 import { DemoError, bodyOf, demoActor, demoContext, failure, json, requireOrigin, parseDemoBody } from "../../../../../lib/northside-server";
 
+// Leave five minutes for app/database clock skew inside the database's seven-day cap.
+const CLIENT_APPROVAL_LIFETIME_MS = 7 * 24 * 60 * 60_000 - 5 * 60_000;
+
 const uuid = (value: unknown): string => { if (typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(value)) return value.toLowerCase(); throw new DemoError("INVALID_COMMAND", 422); };
 /** One route per step of the journey, each a thin call into the merged ENT-5b commands. The role gates here are only a courtesy: the database routines refuse anyone without the grant. */
 export async function POST(request: Request, context: { params: Promise<{ extraId: string; action: string }> }) {
@@ -111,7 +114,7 @@ export async function POST(request: Request, context: { params: Promise<{ extraI
       const issue = async (prior: Awaited<ReturnType<typeof recover>>) => {
         if (prior && (prior.jobId !== jobId || prior.extraId !== extraId || prior.artifact.requestId !== binding.requestId || prior.revisionHash !== binding.revisionHash || prior.artifact.netPence !== binding.netPence || prior.approverMembershipId !== extra.clientApproverMembershipId || prior.artifact.recipient !== extra.clientApproverEmail)) throw new DemoError("COMMAND_CONFLICT", 409);
         const token = prior?.artifact.token ?? randomBytes(32).toString("base64url");
-        const expiresAt = prior ? new Date(prior.artifact.expiresAt) : new Date(Date.now() + 7 * 24 * 60 * 60_000);
+        const expiresAt = prior ? new Date(prior.artifact.expiresAt) : new Date(Date.now() + CLIENT_APPROVAL_LIFETIME_MS);
         const sent = await repo.issueClientApproval(tenant, member, { version: "issue-client-approval.v1", commandId, jobId, requestId: extra.requestId, approverMembershipId: extra.clientApproverMembershipId, recipient: extra.clientApproverEmail, linkToken: token, signinDigest: identityApplication().provider.digest(`customer-link:${token}`), expiresAt });
         return { token, sent };
       };

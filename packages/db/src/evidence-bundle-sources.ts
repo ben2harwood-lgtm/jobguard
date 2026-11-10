@@ -100,7 +100,7 @@ export async function loadContractorBundleSources(tx: TenantTransaction, actor: 
   JOIN app.extra_duplicate_link u ON(u.tenant_id,u.job_id,u.reverses_link_id)=(l.tenant_id,l.job_id,l.id) AND u.kind='unlink'
   WHERE(l.tenant_id,l.job_id,l.duplicate_id,l.command_id)=(e.tenant_id,e.job_id,e.variation_id,e.command_id) AND l.kind='link'
  ))
- ORDER BY e.sequence DESC LIMIT 1)='approved'`, values)).rows[0];
+ ORDER BY e.sequence DESC LIMIT 1) IN ('approved','exported','billed','part_paid','paid')`, values)).rows[0];
   if (!found || !/^[1-9][0-9]*$/u.test(found.net) || BigInt(found.net) > 1_000_000_000_000n) return fail();
   const owner = { tenantId: allowed.tenant, jobId: i.jobId, subjectId: i.extraId, scopeItemId: found.scope_item_id };
   const requestSource = source(owner, `extra_approval_request:${i.requestId}`, 'approval', found.request);
