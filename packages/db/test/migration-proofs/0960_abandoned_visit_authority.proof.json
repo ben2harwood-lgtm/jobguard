@@ -762,6 +762,267 @@
         "table": "app.command_type_registry",
         "data": [
           {
+            "command_type": "IssueClientApproval",
+            "version": "command.v1",
+            "permission_rule": "contractor",
+            "lock_adapter": "route_before_begin",
+            "completion_adapter": "client_link",
+            "audit_class": "commercial",
+            "outbox_class": "fake_email"
+          },
+          {
+            "command_type": "confirm_proposal_review",
+            "version": "command.v1",
+            "permission_rule": "owner",
+            "lock_adapter": "route_before_begin",
+            "completion_adapter": "review",
+            "audit_class": "commercial",
+            "outbox_class": null
+          },
+          {
+            "command_type": "customer_credit_note.issue",
+            "version": "command.v1",
+            "permission_rule": "owner",
+            "lock_adapter": "route_before_begin",
+            "completion_adapter": "credit",
+            "audit_class": "commercial",
+            "outbox_class": null
+          },
+          {
+            "command_type": "customer_invoice.issue",
+            "version": "command.v1",
+            "permission_rule": "owner",
+            "lock_adapter": "route_before_begin",
+            "completion_adapter": "invoice",
+            "audit_class": "commercial",
+            "outbox_class": "fake_invoice_delivery"
+          },
+          {
+            "command_type": "customer_payment.record",
+            "version": "command.v1",
+            "permission_rule": "owner",
+            "lock_adapter": "route_before_begin",
+            "completion_adapter": "payment",
+            "audit_class": "commercial",
+            "outbox_class": null
+          },
+          {
+            "command_type": "customer_payment.reverse",
+            "version": "command.v1",
+            "permission_rule": "owner",
+            "lock_adapter": "route_before_begin",
+            "completion_adapter": "payment_reversal",
+            "audit_class": "commercial",
+            "outbox_class": null
+          },
+          {
+            "command_type": "job.adopt_in_flight",
+            "version": "command.v1",
+            "permission_rule": "owner",
+            "lock_adapter": "route_before_begin",
+            "completion_adapter": "import",
+            "audit_class": "commercial",
+            "outbox_class": null
+          },
+          {
+            "command_type": "job.adopt_in_flight_v3",
+            "version": "command.v1",
+            "permission_rule": "owner",
+            "lock_adapter": "route_before_begin",
+            "completion_adapter": "import_v3",
+            "audit_class": "commercial",
+            "outbox_class": null
+          },
+          {
+            "command_type": "job.switch_live",
+            "version": "command.v1",
+            "permission_rule": "owner",
+            "lock_adapter": "route_before_begin",
+            "completion_adapter": "activation",
+            "audit_class": "commercial",
+            "outbox_class": null
+          },
+          {
+            "command_type": "managed_recovery.elect",
+            "version": "command.v1",
+            "permission_rule": "owner",
+            "lock_adapter": "route_before_begin",
+            "completion_adapter": "managed_recovery",
+            "audit_class": "commercial",
+            "outbox_class": null
+          },
+          {
+            "command_type": "purchase_order.place",
+            "version": "command.v1",
+            "permission_rule": "owner",
+            "lock_adapter": "route_before_begin",
+            "completion_adapter": "purchase_order",
+            "audit_class": "commercial",
+            "outbox_class": "fake_purchase_order"
+          },
+          {
+            "command_type": "purchase_order.send.dark",
+            "version": "command.v1",
+            "permission_rule": "owner",
+            "lock_adapter": "route_before_begin",
+            "completion_adapter": "purchase_order",
+            "audit_class": "commercial",
+            "outbox_class": "fake_merchant_order"
+          },
+          {
+            "command_type": "purchase_order.simulate",
+            "version": "command.v1",
+            "permission_rule": "owner",
+            "lock_adapter": "route_before_begin",
+            "completion_adapter": "purchase_order",
+            "audit_class": "commercial",
+            "outbox_class": "fake_purchase_order"
+          },
+          {
+            "command_type": "quote.acceptance.attest",
+            "version": "command.v1",
+            "permission_rule": "owner",
+            "lock_adapter": "route_before_begin",
+            "completion_adapter": "acceptance",
+            "audit_class": "commercial",
+            "outbox_class": null
+          },
+          {
+            "command_type": "quote.acceptance_cancelled",
+            "version": "command.v1",
+            "permission_rule": "owner",
+            "lock_adapter": "route_before_begin",
+            "completion_adapter": "disposition",
+            "audit_class": "commercial",
+            "outbox_class": null
+          },
+          {
+            "command_type": "quote.declined",
+            "version": "command.v1",
+            "permission_rule": "owner",
+            "lock_adapter": "route_before_begin",
+            "completion_adapter": "disposition",
+            "audit_class": "commercial",
+            "outbox_class": null
+          },
+          {
+            "command_type": "quote.issue",
+            "version": "command.v1",
+            "permission_rule": "owner",
+            "lock_adapter": "route_before_begin",
+            "completion_adapter": "quote_send",
+            "audit_class": "commercial",
+            "outbox_class": "fake_quote_delivery"
+          },
+          {
+            "command_type": "quote.send",
+            "version": "command.v1",
+            "permission_rule": "owner",
+            "lock_adapter": "route_before_begin",
+            "completion_adapter": "quote_send",
+            "audit_class": "commercial",
+            "outbox_class": "fake_quote_delivery"
+          },
+          {
+            "command_type": "quote.superseded",
+            "version": "command.v1",
+            "permission_rule": "owner",
+            "lock_adapter": "route_before_begin",
+            "completion_adapter": "disposition",
+            "audit_class": "commercial",
+            "outbox_class": null
+          },
+          {
+            "command_type": "recovery.follow_up.approve_reminder",
+            "version": "command.v1",
+            "permission_rule": "owner",
+            "lock_adapter": "route_before_begin",
+            "completion_adapter": "message",
+            "audit_class": "commercial",
+            "outbox_class": "fake_recovery_message"
+          },
+          {
+            "command_type": "recovery.message.approve",
+            "version": "command.v1",
+            "permission_rule": "owner",
+            "lock_adapter": "route_before_begin",
+            "completion_adapter": "message",
+            "audit_class": "commercial",
+            "outbox_class": "fake_recovery_message"
+          },
+          {
+            "command_type": "recovery.terms.approve",
+            "version": "command.v1",
+            "permission_rule": "owner",
+            "lock_adapter": "route_before_begin",
+            "completion_adapter": "recovery_terms",
+            "audit_class": "commercial",
+            "outbox_class": null
+          },
+          {
+            "command_type": "synthetic.settlement",
+            "version": "command.v1",
+            "permission_rule": "owner",
+            "lock_adapter": "route_before_begin",
+            "completion_adapter": "settlement",
+            "audit_class": "commercial",
+            "outbox_class": null
+          },
+          {
+            "command_type": "synthetic.lock",
+            "version": "command.v1",
+            "permission_rule": "owner",
+            "lock_adapter": "route_before_begin",
+            "completion_adapter": "synthetic_lock_noop",
+            "audit_class": "operational",
+            "outbox_class": null
+          },
+          {
+            "command_type": "finding.resolve",
+            "version": "decision-resolution-command.v1",
+            "permission_rule": "owner",
+            "lock_adapter": "route_before_begin",
+            "completion_adapter": "finding",
+            "audit_class": "operational",
+            "outbox_class": null
+          },
+          {
+            "command_type": "ResolveDuplicateCandidates",
+            "version": "duplicate-disposition.v1",
+            "permission_rule": "active_member",
+            "lock_adapter": "route_before_begin",
+            "completion_adapter": "duplicate_disposition",
+            "audit_class": "commercial",
+            "outbox_class": null
+          },
+          {
+            "command_type": "EndCheck",
+            "version": "end-check.v1",
+            "permission_rule": "owner",
+            "lock_adapter": "route_before_begin",
+            "completion_adapter": "contractor_job_finish",
+            "audit_class": "operational",
+            "outbox_class": null
+          },
+          {
+            "command_type": "rate.suggestion_accept",
+            "version": "rate-suggestion-accept.v1",
+            "permission_rule": "owner",
+            "lock_adapter": "route_before_begin",
+            "completion_adapter": "rate_suggestion_acceptance",
+            "audit_class": "operational",
+            "outbox_class": null
+          },
+          {
+            "command_type": "IssueLockBoundInvoice",
+            "version": "repository-command.v1",
+            "permission_rule": "owner",
+            "lock_adapter": "route_before_begin",
+            "completion_adapter": "lock_invoice",
+            "audit_class": "commercial",
+            "outbox_class": "fake_invoice_delivery"
+          },
+          {
             "command_type": "AddFinalReviewExtra",
             "version": "repository-command.v1",
             "permission_rule": "owner",
@@ -814,33 +1075,6 @@
             "completion_adapter": "contractor_extra",
             "audit_class": "operational",
             "outbox_class": null
-          },
-          {
-            "command_type": "EndCheck",
-            "version": "end-check.v1",
-            "permission_rule": "owner",
-            "lock_adapter": "route_before_begin",
-            "completion_adapter": "contractor_job_finish",
-            "audit_class": "operational",
-            "outbox_class": null
-          },
-          {
-            "command_type": "IssueClientApproval",
-            "version": "command.v1",
-            "permission_rule": "contractor",
-            "lock_adapter": "route_before_begin",
-            "completion_adapter": "client_link",
-            "audit_class": "commercial",
-            "outbox_class": "fake_email"
-          },
-          {
-            "command_type": "IssueLockBoundInvoice",
-            "version": "repository-command.v1",
-            "permission_rule": "owner",
-            "lock_adapter": "route_before_begin",
-            "completion_adapter": "lock_invoice",
-            "audit_class": "commercial",
-            "outbox_class": "fake_invoice_delivery"
           },
           {
             "command_type": "JobSource.customer_message",
@@ -951,15 +1185,6 @@
             "outbox_class": null
           },
           {
-            "command_type": "ResolveDuplicateCandidates",
-            "version": "duplicate-disposition.v1",
-            "permission_rule": "active_member",
-            "lock_adapter": "route_before_begin",
-            "completion_adapter": "duplicate_disposition",
-            "audit_class": "commercial",
-            "outbox_class": null
-          },
-          {
             "command_type": "ReviseExtra",
             "version": "repository-command.v1",
             "permission_rule": "contractor",
@@ -1023,60 +1248,6 @@
             "outbox_class": null
           },
           {
-            "command_type": "confirm_proposal_review",
-            "version": "command.v1",
-            "permission_rule": "owner",
-            "lock_adapter": "route_before_begin",
-            "completion_adapter": "review",
-            "audit_class": "commercial",
-            "outbox_class": null
-          },
-          {
-            "command_type": "customer_credit_note.issue",
-            "version": "command.v1",
-            "permission_rule": "owner",
-            "lock_adapter": "route_before_begin",
-            "completion_adapter": "credit",
-            "audit_class": "commercial",
-            "outbox_class": null
-          },
-          {
-            "command_type": "customer_invoice.issue",
-            "version": "command.v1",
-            "permission_rule": "owner",
-            "lock_adapter": "route_before_begin",
-            "completion_adapter": "invoice",
-            "audit_class": "commercial",
-            "outbox_class": "fake_invoice_delivery"
-          },
-          {
-            "command_type": "customer_payment.record",
-            "version": "command.v1",
-            "permission_rule": "owner",
-            "lock_adapter": "route_before_begin",
-            "completion_adapter": "payment",
-            "audit_class": "commercial",
-            "outbox_class": null
-          },
-          {
-            "command_type": "customer_payment.reverse",
-            "version": "command.v1",
-            "permission_rule": "owner",
-            "lock_adapter": "route_before_begin",
-            "completion_adapter": "payment_reversal",
-            "audit_class": "commercial",
-            "outbox_class": null
-          },
-          {
-            "command_type": "finding.resolve",
-            "version": "decision-resolution-command.v1",
-            "permission_rule": "owner",
-            "lock_adapter": "route_before_begin",
-            "completion_adapter": "finding",
-            "audit_class": "operational",
-            "outbox_class": null
-          },
-          {
             "command_type": "inbox.seed",
             "version": "repository-command.v1",
             "permission_rule": "active_member",
@@ -1086,48 +1257,12 @@
             "outbox_class": null
           },
           {
-            "command_type": "job.adopt_in_flight",
-            "version": "command.v1",
-            "permission_rule": "owner",
-            "lock_adapter": "route_before_begin",
-            "completion_adapter": "import",
-            "audit_class": "commercial",
-            "outbox_class": null
-          },
-          {
-            "command_type": "job.adopt_in_flight_v3",
-            "version": "command.v1",
-            "permission_rule": "owner",
-            "lock_adapter": "route_before_begin",
-            "completion_adapter": "import_v3",
-            "audit_class": "commercial",
-            "outbox_class": null
-          },
-          {
             "command_type": "job.parties",
             "version": "repository-command.v1",
             "permission_rule": "owner",
             "lock_adapter": "route_before_begin",
             "completion_adapter": "job_parties",
             "audit_class": "operational",
-            "outbox_class": null
-          },
-          {
-            "command_type": "job.switch_live",
-            "version": "command.v1",
-            "permission_rule": "owner",
-            "lock_adapter": "route_before_begin",
-            "completion_adapter": "activation",
-            "audit_class": "commercial",
-            "outbox_class": null
-          },
-          {
-            "command_type": "managed_recovery.elect",
-            "version": "command.v1",
-            "permission_rule": "owner",
-            "lock_adapter": "route_before_begin",
-            "completion_adapter": "managed_recovery",
-            "audit_class": "commercial",
             "outbox_class": null
           },
           {
@@ -1149,96 +1284,6 @@
             "outbox_class": null
           },
           {
-            "command_type": "purchase_order.place",
-            "version": "command.v1",
-            "permission_rule": "owner",
-            "lock_adapter": "route_before_begin",
-            "completion_adapter": "purchase_order",
-            "audit_class": "commercial",
-            "outbox_class": "fake_purchase_order"
-          },
-          {
-            "command_type": "purchase_order.send.dark",
-            "version": "command.v1",
-            "permission_rule": "owner",
-            "lock_adapter": "route_before_begin",
-            "completion_adapter": "purchase_order",
-            "audit_class": "commercial",
-            "outbox_class": "fake_merchant_order"
-          },
-          {
-            "command_type": "purchase_order.simulate",
-            "version": "command.v1",
-            "permission_rule": "owner",
-            "lock_adapter": "route_before_begin",
-            "completion_adapter": "purchase_order",
-            "audit_class": "commercial",
-            "outbox_class": "fake_purchase_order"
-          },
-          {
-            "command_type": "quote.acceptance.attest",
-            "version": "command.v1",
-            "permission_rule": "owner",
-            "lock_adapter": "route_before_begin",
-            "completion_adapter": "acceptance",
-            "audit_class": "commercial",
-            "outbox_class": null
-          },
-          {
-            "command_type": "quote.acceptance_cancelled",
-            "version": "command.v1",
-            "permission_rule": "owner",
-            "lock_adapter": "route_before_begin",
-            "completion_adapter": "disposition",
-            "audit_class": "commercial",
-            "outbox_class": null
-          },
-          {
-            "command_type": "quote.declined",
-            "version": "command.v1",
-            "permission_rule": "owner",
-            "lock_adapter": "route_before_begin",
-            "completion_adapter": "disposition",
-            "audit_class": "commercial",
-            "outbox_class": null
-          },
-          {
-            "command_type": "quote.issue",
-            "version": "command.v1",
-            "permission_rule": "owner",
-            "lock_adapter": "route_before_begin",
-            "completion_adapter": "quote_send",
-            "audit_class": "commercial",
-            "outbox_class": "fake_quote_delivery"
-          },
-          {
-            "command_type": "quote.send",
-            "version": "command.v1",
-            "permission_rule": "owner",
-            "lock_adapter": "route_before_begin",
-            "completion_adapter": "quote_send",
-            "audit_class": "commercial",
-            "outbox_class": "fake_quote_delivery"
-          },
-          {
-            "command_type": "quote.superseded",
-            "version": "command.v1",
-            "permission_rule": "owner",
-            "lock_adapter": "route_before_begin",
-            "completion_adapter": "disposition",
-            "audit_class": "commercial",
-            "outbox_class": null
-          },
-          {
-            "command_type": "rate.suggestion_accept",
-            "version": "rate-suggestion-accept.v1",
-            "permission_rule": "owner",
-            "lock_adapter": "route_before_begin",
-            "completion_adapter": "rate_suggestion_acceptance",
-            "audit_class": "operational",
-            "outbox_class": null
-          },
-          {
             "command_type": "recovery.follow_up.advance",
             "version": "repository-command.v1",
             "permission_rule": "owner",
@@ -1246,15 +1291,6 @@
             "completion_adapter": "recovery_follow_up_marker",
             "audit_class": "operational",
             "outbox_class": null
-          },
-          {
-            "command_type": "recovery.follow_up.approve_reminder",
-            "version": "command.v1",
-            "permission_rule": "owner",
-            "lock_adapter": "route_before_begin",
-            "completion_adapter": "message",
-            "audit_class": "commercial",
-            "outbox_class": "fake_recovery_message"
           },
           {
             "command_type": "recovery.follow_up.cancel",
@@ -1293,15 +1329,6 @@
             "outbox_class": null
           },
           {
-            "command_type": "recovery.message.approve",
-            "version": "command.v1",
-            "permission_rule": "owner",
-            "lock_adapter": "route_before_begin",
-            "completion_adapter": "message",
-            "audit_class": "commercial",
-            "outbox_class": "fake_recovery_message"
-          },
-          {
             "command_type": "recovery.message.preview",
             "version": "repository-command.v1",
             "permission_rule": "owner",
@@ -1326,33 +1353,6 @@
             "lock_adapter": "route_before_begin",
             "completion_adapter": "recovery_message_marker",
             "audit_class": "operational",
-            "outbox_class": null
-          },
-          {
-            "command_type": "recovery.terms.approve",
-            "version": "command.v1",
-            "permission_rule": "owner",
-            "lock_adapter": "route_before_begin",
-            "completion_adapter": "recovery_terms",
-            "audit_class": "commercial",
-            "outbox_class": null
-          },
-          {
-            "command_type": "synthetic.lock",
-            "version": "command.v1",
-            "permission_rule": "owner",
-            "lock_adapter": "route_before_begin",
-            "completion_adapter": "synthetic_lock_noop",
-            "audit_class": "operational",
-            "outbox_class": null
-          },
-          {
-            "command_type": "synthetic.settlement",
-            "version": "command.v1",
-            "permission_rule": "owner",
-            "lock_adapter": "route_before_begin",
-            "completion_adapter": "settlement",
-            "audit_class": "commercial",
             "outbox_class": null
           },
           {
