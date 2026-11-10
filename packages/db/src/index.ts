@@ -227,3 +227,6 @@ export * from "./blank-practice-company.js";
 export * from "./extra-evidence-pack-writer.js";
 export * from "./company-final-check-repository.js";
 export * from "./northside-photo-storage.js";
+
+export * from "./worker-action-executor.js";
+export { closeOutboundWorkerPool } from "./worker-pool.js";

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
-import { expect, vi } from "vitest";
+import { afterAll, expect, vi } from "vitest";
 
 // Tests that execute migration SQL directly still need the administrative
 // prerequisite. This starts real PostgreSQL and provisions cluster roles only;
@@ -15,6 +15,30 @@ const clusterAdmins = new Map<number, {user:string;password:string}>();
 // not per filename/migration list, so mixed old/current databases stay honest.
 // Protocol/unit doubles retain the unwrapped production module.
 if (testPath?.endsWith(".integration.test.ts")) {
+  // Existing journey assertions execute against a genuinely separate, table-free
+  // worker login. The fixture supplies credentials; no production code derives them.
+  const workers = new Map<string, Promise<Pool>>();
+  afterAll(async () => { for (const pool of workers.values()) await (await pool).end(); });
+  vi.doMock("../src/worker-pool.js", async () => {
+    const actual = await vi.importActual<typeof import("../src/worker-pool.js")>("../src/worker-pool.js");
+    return { ...actual, outboundWorkerPool: async (source: Pool) => {
+      const {database,port}=(await source.query<{database:string;port:number}>(
+        "SELECT current_database() AS database,inet_server_port() AS port")).rows[0]!;
+      const key=`${port}:${database}`;
+      if (!workers.has(key)) workers.set(key,(async () => {
+        const credentials=clusterAdmins.get(Number(port));
+        if (!credentials) throw new Error("Missing worker fixture cluster credentials");
+        const admin=new Pool({host:"127.0.0.1",port,database,...credentials,max:1});
+        try {
+          await admin.query(`DO $$ BEGIN IF NOT EXISTS(SELECT FROM pg_roles WHERE rolname='lp10_fixture_worker') THEN
+            CREATE ROLE lp10_fixture_worker LOGIN PASSWORD 'synthetic-worker-only' NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOBYPASSRLS;
+            GRANT jobguard_worker TO lp10_fixture_worker; END IF; END $$`);
+        } finally { await admin.end(); }
+        return new Pool({host:"127.0.0.1",port,database,user:"lp10_fixture_worker",password:"synthetic-worker-only",max:2});
+      })());
+      return workers.get(key)!;
+    }};
+  });
   vi.doMock("../src/tenant-context.js", async () => {
     const actual = await vi.importActual<typeof import("../src/tenant-context.js")>("../src/tenant-context.js");
     const scopes = new WeakMap<object, Map<string, object>>();
@@ -104,7 +128,7 @@ if (testPath) {
     if (readFileSync(testPath, "utf8").includes("bootstrapSyntheticDemo")) return;
     const admin = new Pool({ host: "127.0.0.1", port, user, password, database: "postgres" });
     try {
-      for (const role of ["jobguard_audit_writer", "jobguard_command_writer", "jobguard_binding_owner"]) {
+      for (const role of ["jobguard_audit_writer", "jobguard_command_writer", "jobguard_binding_owner", "jobguard_worker"]) {
         await admin.query(`DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='${role}') THEN
           CREATE ROLE ${role} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
           END IF; END $$`);

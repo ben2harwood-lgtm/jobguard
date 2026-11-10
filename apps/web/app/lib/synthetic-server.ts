@@ -1,7 +1,7 @@
 import "server-only";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { authenticatePracticeSession, isBlankPracticeCompany, PracticeAccessError, RequestBindingRefusedError, withTenant } from "@jobguard/db";
+import { closeOutboundWorkerPool, authenticatePracticeSession, isBlankPracticeCompany, PracticeAccessError, RequestBindingRefusedError, withTenant } from "@jobguard/db";
 import { readSyntheticDemo } from "@jobguard/db";
 import { SYNTHETIC_SESSION as WORKSPACE_SYNTHETIC_SESSION } from "@jobguard/api/workspace";
 import { Pool } from "pg";
@@ -26,7 +26,7 @@ export function syntheticPool() {
 export async function closeSyntheticPool() {
   const pool = poolRegistry.__jobguardSyntheticPool;
   delete poolRegistry.__jobguardSyntheticPool;
-  if (pool) await pool.end();
+  await Promise.all([pool?.end(), closeOutboundWorkerPool()]);
 }
 
 /** There is deliberately no static/no-database success path. */

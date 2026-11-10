@@ -42,6 +42,6 @@ it("0905 upgrades populated approval requests without changing any earlier row, 
   row.command_type === "IssueClientApproval" && row.permission_rule === "owner" ? { ...row, permission_rule: "contractor" } : row);
  const replayedRegistry = (await c.admin.query("SELECT jsonb_agg(value ORDER BY value::text) data FROM jsonb_array_elements($1::jsonb)",
   [JSON.stringify([...replayedRegistryRows, abandonedSiteVisitRegistryRow])])).rows[0].data;
- await migrate(c.admin); await migrate(c.admin); expect(await snapshot(c.admin)).toEqual({ ...after, "app.connector_promotion": [], "control_plane.blank_practice_session": [],
+ await migrate(c.admin); await migrate(c.admin); expect(await snapshot(c.admin)).toEqual({ ...after, "app.connector_promotion": [], "control_plane.worker_action_binding": [], "control_plane.blank_practice_session": [],
   "app.extra_client_command_session": [], "app.extra_client_session": [], "app.extra_client_signin": [], "app.extra_pack_artifact": [], "app.commercial_grant_use": [], "app.command_type_registry": replayedRegistry });
 }, 240_000);

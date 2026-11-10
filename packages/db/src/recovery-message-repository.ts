@@ -229,8 +229,8 @@ export class RecoveryMessageRepository {
       if (status === "previewed") fail("RECOVERY_MESSAGE_NOT_APPROVED");
       if (status !== "queued" && status !== "retryable") fail("RECOVERY_MESSAGE_NOT_REVOCABLE");
       await db.$client.query("UPDATE app.action_authorization SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2 AND revoked_at IS NULL", [ctx.tenantId, m.authorization_id]);
-      const cancelled = await db.$client.query("UPDATE app.action_outbox SET status='cancelled',updated_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2 AND status IN('pending','retryable')", [ctx.tenantId, m.outbox_action_id]);
-      if (cancelled.rowCount !== 1) fail("RECOVERY_MESSAGE_EXECUTION_PENDING");
+      const cancelled = await db.$client.query<{changed:boolean}>("SELECT app.control_outbox($1,'cancel') AS changed", [m.outbox_action_id]);
+      if (!cancelled.rows[0]?.changed) fail("RECOVERY_MESSAGE_EXECUTION_PENDING");
       await this.event(db, ctx.tenantId, { id: messageId, jobId: m.job_id, caseId }, actor, "revoked", input.commandId, requestHash, input.expectedRevision);
       await this.audit(db, actor, messageId, "revoked", { caseId, jobId: m.job_id, commandId: input.commandId }, m.content_hash, requestHash);
     }));
@@ -266,7 +266,7 @@ export class RecoveryMessageRepository {
         valid = !!current && current.ok && current.message.contentHash === m.content_hash;
       }
       if (!valid) {
-        await db.$client.query("UPDATE app.action_outbox SET status='cancelled',updated_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2 AND status IN('pending','retryable')", [ctx.tenantId, m.outbox_action_id]);
+        await db.$client.query("SELECT app.control_outbox($1,'cancel')", [m.outbox_action_id]);
         await this.event(db, ctx.tenantId, ref, actor, "blocked", input.commandId, requestHash, revision);
         await this.audit(db, actor, messageId, "blocked", { caseId, jobId: m.job_id, commandId: input.commandId }, m.content_hash, requestHash);
         return { replayed: false as const, blocked: true as const };
@@ -274,7 +274,7 @@ export class RecoveryMessageRepository {
       // An explicit owner retry is due now; automatic retries retain the executor's back-off.
       // Keep this business-row lock before the started event and audit append, in the same transaction.
       if (status === "retryable") {
-        await db.$client.query("UPDATE app.action_outbox SET next_attempt_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2 AND status='retryable'", [ctx.tenantId, m.outbox_action_id]);
+        await db.$client.query("SELECT app.control_outbox($1,'retry')", [m.outbox_action_id]);
       }
       const started = await this.event(db, ctx.tenantId, ref, actor, "started", input.commandId, requestHash, revision);
       await this.audit(db, actor, messageId, "started", { caseId, jobId: m.job_id, commandId: input.commandId }, m.content_hash, requestHash);
@@ -289,10 +289,7 @@ export class RecoveryMessageRepository {
     await guarded(() => withRecoveryCommands(this.pool, ctx, async db => {
       await this.lockCase(db, ctx.tenantId, caseId);
       // A declined execution or a changed-source refusal has no effect. Persist the block before recording its history.
-      await db.$client.query(`UPDATE app.action_outbox o SET status='cancelled',updated_at=clock_timestamp()
-        WHERE o.tenant_id=$1 AND o.id=$2 AND (o.status='pending' OR (o.status IN ('retryable','dead_letter') AND EXISTS(
-          SELECT 1 FROM app.action_attempt t WHERE t.tenant_id=o.tenant_id AND t.action_id=o.id AND t.error_code='FAKE_BLOCKED_CHANGED'
-          AND t.attempt_number=(SELECT max(x.attempt_number) FROM app.action_attempt x WHERE x.tenant_id=o.tenant_id AND x.action_id=o.id))))`, [ctx.tenantId, claimed.outboxId]);
+      await db.$client.query("SELECT app.control_outbox($1,'blocked')", [claimed.outboxId]);
       await this.finishHistory(db, ctx.tenantId, caseId);
     }));
     const after = await this.read(ctx, caseId);
@@ -324,9 +321,8 @@ export class RecoveryMessageRepository {
       let previous = revision;
       // A stale executing claim is uncertain, never a retry. Record uncertainty and check intent atomically.
       if (m.outbox_status === "executing" && m.claimed_at && Date.now() - new Date(m.claimed_at).getTime() > STALE_EXECUTION_MS) {
-        const changed = await db.$client.query("UPDATE app.action_outbox SET status='outcome_unknown',updated_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2 AND status='executing' AND claimed_at<clock_timestamp()-interval '5 minutes' RETURNING id", [ctx.tenantId, m.outbox_action_id]);
-        if (!changed.rowCount) fail("RECOVERY_MESSAGE_EXECUTION_PENDING");
-        await db.$client.query("UPDATE app.action_attempt SET outcome='outcome_unknown',error_code='STALE_CLAIM',finished_at=clock_timestamp() WHERE tenant_id=$1 AND action_id=$2 AND outcome='started'", [ctx.tenantId, m.outbox_action_id]);
+        const changed = await db.$client.query<{changed:boolean}>("SELECT app.control_outbox($1,'expire') AS changed", [m.outbox_action_id]);
+        if (!changed.rows[0]?.changed) fail("RECOVERY_MESSAGE_EXECUTION_PENDING");
         previous = await this.event(db, ctx.tenantId, ref, actor, "outcome_unknown", input.commandId, requestHash, previous);
         audit.push(this.auditInput(actor, messageId, "outcome_unknown", { caseId, jobId: m.job_id, commandId: input.commandId }, m.content_hash, requestHash));
         m = await this.messageRow(db, ctx.tenantId, caseId, messageId);
@@ -468,18 +464,14 @@ export class RecoveryMessageRepository {
       if (!m.outbox_action_id) continue;
       // Keep execution-result changes from racing the history's fact check. No business locks are taken after audit.
       const fact = (await db.$client.query<{ status: string; claimed_at: Date | null }>(
-        "SELECT status,claimed_at FROM app.action_outbox WHERE tenant_id=$1 AND id=$2 FOR SHARE", [tenantId, m.outbox_action_id])).rows[0];
+        "SELECT status,claimed_at FROM app.lock_outbox_for_history($2) WHERE tenant_id=$1", [tenantId, m.outbox_action_id])).rows[0];
       if (!fact) continue;
       m.outbox_status = fact.status; m.claimed_at = fact.claimed_at;
       // Direct execution may leave a definite changed-source refusal retryable or exhausted (dead_letter). Neither can
       // succeed on retry. Close only a latest changed-source refusal as blocked and release replacement preview (Sol 3).
       if (fact.status === "retryable" || fact.status === "dead_letter") {
-        const closed = await db.$client.query(`UPDATE app.action_outbox o SET status='cancelled',updated_at=clock_timestamp()
-          WHERE o.tenant_id=$1 AND o.id=$2 AND o.status IN ('retryable','dead_letter') AND EXISTS(
-            SELECT 1 FROM app.action_attempt t WHERE t.tenant_id=o.tenant_id AND t.action_id=o.id AND t.error_code=$3
-            AND t.attempt_number=(SELECT max(x.attempt_number) FROM app.action_attempt x WHERE x.tenant_id=o.tenant_id AND x.action_id=o.id))`,
-          [tenantId, m.outbox_action_id, RECOVERY_MESSAGE_BLOCKED_CODE]);
-        if (closed.rowCount) m.outbox_status = "cancelled";
+        const closed = await db.$client.query<{changed:boolean}>("SELECT app.control_outbox($1,'blocked') AS changed", [m.outbox_action_id]);
+        if (closed.rows[0]?.changed) m.outbox_status = "cancelled";
       }
       const history = (await db.$client.query<EventRow & { command_id: string; request_hash: string; actor_membership_id: string }>(
         "SELECT * FROM app.recovery_message_event WHERE tenant_id=$1 AND message_id=$2 ORDER BY revision", [tenantId, m.id])).rows;
@@ -500,7 +492,7 @@ export class RecoveryMessageRepository {
       // The shared executor can mark a stale claim unknown without closing its unfinished attempt.
       // The committed unknown outbox state is positive evidence of uncertainty, never of a successful delivery.
       if (m.outbox_status === "outcome_unknown" && attempts.at(-1)?.outcome === "started") {
-        await db.$client.query("UPDATE app.action_attempt SET outcome='outcome_unknown',error_code='STALE_CLAIM',finished_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2 AND outcome='started'", [tenantId, attempts.at(-1)!.id]);
+        await db.$client.query("SELECT app.control_outbox($1,'close_attempt')", [m.outbox_action_id]);
         attempts.at(-1)!.outcome = "outcome_unknown";
       }
       let startGroups = history.filter((event, index) => event.kind === "started" && history[index - 1]?.kind !== "started").length;
