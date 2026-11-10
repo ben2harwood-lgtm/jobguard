@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-job-page-order-fix": {
+      "branches": ["codex/sandbox/real-job-page-order-fix"],
+      "note": "REAL-JOB-PAGE-ORDER-FIX: preserve the pricing editor across snapshot updates; NOPR.",
+      "allow": [
+        "apps/web/app/ui/workspace-shell.tsx",
+        "apps/web/app/ui/workspace-shell-order.test.tsx"
+      ]
+    }
+  }
+}
