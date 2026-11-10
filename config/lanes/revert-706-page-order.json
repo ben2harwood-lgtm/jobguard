@@ -14,9 +14,7 @@
         "apps/web/app/ui/quote-editor.tsx",
         "apps/web/app/ui/review-proposal.tsx",
         "apps/web/app/ui/workspace-shell-order.test.tsx",
-        "apps/web/app/ui/workspace-shell.tsx",
-        "config/lanes/real-job-page-order.json",
-        "config/lanes/revert-706-page-order.json"
+        "apps/web/app/ui/workspace-shell.tsx"
       ]
     }
   }
