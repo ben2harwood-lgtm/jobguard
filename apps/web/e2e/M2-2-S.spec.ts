@@ -18,3 +18,27 @@ test("refuses over-delivery with rejected stock and keeps a normal later deliver
   await V(page,"delivery-accepted","9 each");
   await V(page,"delivery-later-delivered","1 each");
 });
+
+
+test("refuses fixture intake above the order before recording any delivery", async ({page}, testInfo) => {
+  await openReview(page);for(const n of["Protect room","Prepare walls","Paint walls","Finish trim","Clean site"])await page.getByRole("button",{name:`Accept ${n}`,exact:true}).click();await page.getByRole("button",{name:"Dismiss Replace shelves",exact:true}).click();await page.getByLabel("Dismissal reason Replace shelves").fill("Not needed");await page.getByLabel(/Answer Confirm disposal/u).fill("Builder removes waste");await page.getByRole("button",{name:"Confirm scope",exact:true}).click();await page.getByRole("button",{name:"Price the work",exact:true}).click();await startWatchdogJob(page);const jobId=(await page.locator(".quote-editor").getAttribute("data-job-id"))!;await page.getByLabel("SKU",{exact:true}).fill(`MAT-B-${testInfo.project.name}`);await page.getByRole("button",{name:"Save agreed price and material",exact:true}).click();await V(page,"required-material-net","£200.00");await page.locator("#purchase-orders").getByLabel("Quantity",{exact:true}).fill("9.999999");await page.getByLabel("Order unit price (£)",{exact:true}).fill("20.00");await page.getByRole("button",{name:"Preview proposed order",exact:true}).click();await V(page,"order-preview-quantity","9.999999");
+  const supplierPanel = page.locator("#supplier-documents");
+  await supplierPanel.locator("select").nth(0).selectOption("materials-B-delivery");
+  await supplierPanel.getByRole("button", {name:"Import generated document", exact:true}).click();
+  await expect(supplierPanel.locator('[role="alert"]')).toContainText("ORDER_DELIVERY_EXCEEDS_ORDERED");
+  await expect(page.getByTestId("goods-receipt-count")).toHaveCount(0);
+  await V(page,"supplier-document-identities","0");
+  await page.reload();
+  await expect(page.getByTestId("goods-receipt-count")).toHaveCount(0);
+  await V(page,"supplier-document-identities","0");
+  await page.locator("#purchase-orders").getByLabel("Quantity",{exact:true}).fill("10");
+  await page.getByRole("button",{name:"Preview changed order",exact:true}).click();
+  await V(page,"order-preview-quantity","10");
+  await supplierPanel.locator("select").nth(0).selectOption("materials-B-delivery");
+  await supplierPanel.getByRole("button",{name:"Import generated document",exact:true}).click();
+  await V(page,"goods-receipt-count","1");
+  await V(page,"delivery-ordered","10 each");
+  await V(page,"delivery-delivered","10 each");
+  await V(page,"delivery-accepted","8 each");
+  await V(page,"delivery-missing","2 each");
+});

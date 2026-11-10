@@ -1,7 +1,11 @@
 import { randomBytes, randomUUID, createHash } from "node:crypto";
-import type { PoolClient } from "pg";
+import type { Pool, PoolClient } from "pg";
+import { drizzle } from "drizzle-orm/node-postgres";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { cluster, ownerTx, type Cluster } from "./contractor-practice-session-fixtures.js";
+import { ExtraApprovalRepository, appendAuditBatch, canonicalJson, type TenantTransaction } from "../src/index.js";
+import { beginRepositoryCommand, completeRepositoryCommand } from "../src/repository-command.js";
+import { chainWorld, submitted, approveInput, emailOf, newToken } from "./extra-approval-chain-fixtures.js";
 
 // Real PostgreSQL only. The batch-42 migration must be merged before this suite runs.
 // Do not retry 40P01: a deadlock, timeout or unexpected refusal must fail the test.
@@ -44,7 +48,7 @@ async function outcome(work: Promise<unknown>) {
   try { await work; return "ok"; }
   catch (error) { return (error as { code?: string }).code ?? String(error); }
 }
-async function advisoryLocks(db: PoolClient, pid: number, w: World) {
+async function advisoryLocks(db: Pool | PoolClient, pid: number, w: { tenant: string; job: string }) {
   const rows = (await db.query(`SELECT l.mode,l.granted,k.seed FROM pg_locks l
     LEFT JOIN (SELECT seed,hashtextextended(CASE WHEN seed=54 THEN $2 ELSE $2||':'||$3 END,seed) key
       FROM unnest(ARRAY[54,417,387]) seed) k
@@ -101,6 +105,7 @@ for (const operation of ["redeem", "resolve", "signout"] as const) {
             await waitOn387(left, rightPid, w);
             await left.query("COMMIT");
             competitorResult = await pending;
+            await advisoryLocks(c.admin, rightPid, w);
             await right.query(competitorResult === "ok" ? "COMMIT" : "ROLLBACK");
           } else {
             // Force exactly the reported schedule: 387 held while fallback owns 54/417.
@@ -113,6 +118,7 @@ for (const operation of ["redeem", "resolve", "signout"] as const) {
             ]);
             expect(await advisoryLocks(right, rightPid, w)).toEqual([{ seed: 387, mode: "ExclusiveLock", granted: true }]);
             competitorResult = await outcome(competitor());
+            await advisoryLocks(c.admin, rightPid, w);
             expect(competitorResult).toBe(operation === "redeem" && competing === "resolve" ? "42501" : "ok");
             await right.query(competitorResult === "ok" ? "COMMIT" : "ROLLBACK");
             clientResult = await pending;
@@ -140,3 +146,202 @@ for (const operation of ["redeem", "resolve", "signout"] as const) {
     });
   }
 }
+
+it("matched extra-approver approval versus xa_withdraw: 50 same-job rounds, both lock owners, one outcome", async () => {
+  const w = await chainWorld(c), repo = new ExtraApprovalRepository(c.runtime), context = await w.ctx;
+  const actor = w.members.client_approver.member.membershipId, supervisor = w.members.supervisor.member.membershipId;
+  const left = await c.admin.connect(), right = await c.admin.connect();
+  try {
+    const leftPid = (await left.query("SELECT pg_backend_pid() pid")).rows[0].pid as number;
+    const rightPid = (await right.query("SELECT pg_backend_pid() pid")).rows[0].pid as number;
+    for (let round = 0; round < 50; round++) {
+      const s = await submitted(c, w, 150000), signin = digest(), session = digest();
+      const target = { tenant: w.p.tenantId, job: s.jobId };
+      await repo.approveExtraStep(context, w.members.supervisor.member, approveInput(s, 0));
+      await repo.approveExtraStep(context, w.supervisor2.member, approveInput(s, 1));
+      await repo.issueClientApproval(context, w.members.surveyor.member, {
+        version: "issue-client-approval.v1", commandId: randomUUID(), jobId: s.jobId, requestId: s.requestId,
+        approverMembershipId: actor, recipient: await emailOf(c, w, actor), linkToken: newToken(),
+        signinDigest: signin, expiresAt: new Date(Date.now() + 3600_000),
+      });
+      await begin(left);
+      expect((await left.query("SELECT identity.extra_customer_use($1,$2,$3,$4,$5,'redeem') result",
+        [target.tenant, target.job, actor, signin, session])).rows[0].result).toMatchObject({ extraApprover: true });
+      await left.query("COMMIT");
+      await begin(left);
+      await right.query("BEGIN");
+      await right.query("SET LOCAL statement_timeout='15s'");
+      await right.query("SET LOCAL ROLE jobguard_runtime");
+      await right.query("SELECT set_config('app.tenant_id',$1,true)", [target.tenant]);
+      const approval = () => left.query("SELECT identity.extra_customer_approval($1,$2,$3,$4,$5::jsonb) result", [
+        target.tenant, target.job, actor, session, { version: "extra-customer.v1", action: "decide", jobId: target.job,
+          requestId: s.requestId, commandId: randomUUID(), revisionHash: s.hash, netPence: s.net, decision: "approve" },
+      ]);
+      // A tenant writer uses exclusive 54; xa_begin itself uses shared 54 then 417.
+      // This barrier makes a reversed 417-before-54 sign-in order form a real cycle,
+      // rather than merely proving that two compatible shared tenant locks coexist.
+      const tenantWriter = () => right.query("SELECT pg_advisory_xact_lock(hashtextextended($1,54))", [target.tenant]);
+      const withdraw = async () => {
+        await tenantWriter();
+        const db = drizzle(right) as TenantTransaction, commandId = randomUUID();
+        const content = { jobId: target.job, extraId: s.extraId, reasonCode: "not_done" };
+        // Use the production command lifecycle, preserving raw SQLSTATEs (the
+        // repository maps 40P01 to STALE_REVISION, which would conceal this failure).
+        expect(await beginRepositoryCommand(db, { tenantId: target.tenant, actorMembershipId: supervisor, commandId,
+          commandType: "WithdrawExtra", semanticKey: `extra-withdraw:${target.job}:${s.extraId}:${commandId}`,
+          jobId: target.job, legacyJson: canonicalJson({ type: "WithdrawExtra", actor: supervisor, content }) })).toMatchObject({ kind: "claim" });
+        await right.query("SELECT app.xa_withdraw($1,$2,$3,$4,'not_done')", [target.job, s.extraId, commandId, supervisor]);
+        await appendAuditBatch(db, [{ id: randomUUID(), version: "audit.v1", actorRef: `membership:${supervisor}`,
+          eventType: "contractor.extra.withdrawn", subjectType: "extra", subjectRef: s.extraId,
+          payload: { references: { command: commandId, job: target.job, extra: s.extraId, environment: "synthetic_demo" },
+            classifications: { action: "commercial" } } }]);
+        return completeRepositoryCommand(db, commandId);
+      };
+      const waitOn54 = async (pid: number) => {
+        for (let attempt = 0; attempt < 200; attempt++) {
+          const locks = await advisoryLocks(c.admin, pid, target);
+          if (locks.some(lock => lock.seed === 54 && !lock.granted)) return locks;
+          await new Promise(resolve => setTimeout(resolve, 5));
+        }
+        throw new Error("Extra-approver race did not reach contested tenant lock 54");
+      };
+      const clientFirst = round % 2 === 1;
+      let clientResult: string, competitorResult: string;
+      if (clientFirst) {
+        clientResult = await outcome(approval());
+        expect(clientResult).toBe("ok");
+        expect(await advisoryLocks(c.admin, leftPid, target)).toEqual([
+          { seed: 54, mode: "ShareLock", granted: true }, { seed: 417, mode: "ExclusiveLock", granted: true },
+        ]);
+        const pending = outcome(withdraw());
+        expect(await waitOn54(rightPid)).toEqual([{ seed: 54, mode: "ExclusiveLock", granted: false }]);
+        await left.query("COMMIT");
+        competitorResult = await pending;
+        await advisoryLocks(c.admin, rightPid, target);
+        expect(competitorResult).toBe("23514");
+        await right.query("ROLLBACK");
+      } else {
+        await tenantWriter();
+        const pending = outcome(approval());
+        expect(await waitOn54(leftPid)).toEqual(expect.arrayContaining([{ seed: 54, mode: "ShareLock", granted: false }]));
+        competitorResult = await outcome(withdraw());
+        expect(competitorResult).toBe("ok");
+        const locks = await advisoryLocks(c.admin, rightPid, target);
+        expect(locks).toHaveLength(3);
+        expect(locks).toEqual(expect.arrayContaining([
+          { seed: 54, mode: "ExclusiveLock", granted: true }, { seed: 54, mode: "ShareLock", granted: true },
+          { seed: 417, mode: "ExclusiveLock", granted: true },
+        ]));
+        await right.query("COMMIT");
+        clientResult = await pending;
+        expect(clientResult).toBe("23514");
+        await left.query("ROLLBACK");
+      }
+      expect([clientResult, competitorResult]).not.toContain("40P01");
+      expect((await c.admin.query("SELECT kind FROM app.extra_approval_outcome WHERE tenant_id=$1 AND request_id=$2",
+        [target.tenant, s.requestId])).rows).toEqual([{ kind: clientFirst ? "approved" : "withdrawn" }]);
+      expect((await c.admin.query("SELECT actor_membership_id FROM app.extra_approval_step_fact WHERE tenant_id=$1 AND request_id=$2 AND actor_kind='client_approver'",
+        [target.tenant, s.requestId])).rows).toEqual(clientFirst ? [{ actor_membership_id: actor }] : []);
+    }
+  } finally {
+    await Promise.all([left.query("ROLLBACK"), right.query("ROLLBACK")]);
+    left.release(); right.release();
+  }
+}, 240_000);
+
+it("matched extra-approver approval versus xa_withdraw without a barrier: 50 same-job rounds, both winners, one outcome", async () => {
+  const w = await chainWorld(c), repo = new ExtraApprovalRepository(c.runtime), context = await w.ctx;
+  const actor = w.members.client_approver.member.membershipId, supervisor = w.members.supervisor.member.membershipId;
+  const left = await c.admin.connect(), right = await c.admin.connect();
+  const wins = { client: 0, withdraw: 0 };
+  try {
+    const leftPid = (await left.query("SELECT pg_backend_pid() pid")).rows[0].pid as number;
+    const rightPid = (await right.query("SELECT pg_backend_pid() pid")).rows[0].pid as number;
+    for (let round = 0; round < 50; round++) {
+      const s = await submitted(c, w, 150000), signin = digest(), session = digest();
+      const target = { tenant: w.p.tenantId, job: s.jobId };
+      await repo.approveExtraStep(context, w.members.supervisor.member, approveInput(s, 0));
+      await repo.approveExtraStep(context, w.supervisor2.member, approveInput(s, 1));
+      await repo.issueClientApproval(context, w.members.surveyor.member, {
+        version: "issue-client-approval.v1", commandId: randomUUID(), jobId: s.jobId, requestId: s.requestId,
+        approverMembershipId: actor, recipient: await emailOf(c, w, actor), linkToken: newToken(),
+        signinDigest: signin, expiresAt: new Date(Date.now() + 3600_000),
+      });
+      await begin(left);
+      expect((await left.query("SELECT identity.extra_customer_use($1,$2,$3,$4,$5,'redeem') result",
+        [target.tenant, target.job, actor, signin, session])).rows[0].result).toMatchObject({ extraApprover: true });
+      await left.query("COMMIT");
+      await begin(left);
+      await right.query("BEGIN");
+      await right.query("SET LOCAL statement_timeout='15s'");
+      await right.query("SET LOCAL ROLE jobguard_runtime");
+      await right.query("SELECT set_config('app.tenant_id',$1,true)", [target.tenant]);
+      // The approval enters through extra_customer_use; both paths acquire their
+      // own production locks, with no exclusive tenant barrier or pre-held job lock.
+      const approval = () => left.query("SELECT identity.extra_customer_approval($1,$2,$3,$4,$5::jsonb) result", [
+        target.tenant, target.job, actor, session, { version: "extra-customer.v1", action: "decide", jobId: target.job,
+          requestId: s.requestId, commandId: randomUUID(), revisionHash: s.hash, netPence: s.net, decision: "approve" },
+      ]);
+      // Claim the command before racing: this takes no advisory locks and must
+      // not give approval a head start over xa_withdraw's first locking statement.
+      const db = drizzle(right) as TenantTransaction, commandId = randomUUID();
+      const content = { jobId: target.job, extraId: s.extraId, reasonCode: "not_done" };
+      expect(await beginRepositoryCommand(db, { tenantId: target.tenant, actorMembershipId: supervisor, commandId,
+        commandType: "WithdrawExtra", semanticKey: `extra-withdraw:${target.job}:${s.extraId}:${commandId}`,
+        jobId: target.job, legacyJson: canonicalJson({ type: "WithdrawExtra", actor: supervisor, content }) })).toMatchObject({ kind: "claim" });
+      const withdraw = async () => {
+        // Preserve raw SQLSTATEs: repository error mapping must not hide 40P01.
+        await right.query("SELECT app.xa_withdraw($1,$2,$3,$4,'not_done')", [target.job, s.extraId, commandId, supervisor]);
+        await appendAuditBatch(db, [{ id: randomUUID(), version: "audit.v1", actorRef: `membership:${supervisor}`,
+          eventType: "contractor.extra.withdrawn", subjectType: "extra", subjectRef: s.extraId,
+          payload: { references: { command: commandId, job: target.job, extra: s.extraId, environment: "synthetic_demo" },
+            classifications: { action: "commercial" } } }]);
+        return completeRepositoryCommand(db, commandId);
+      };
+      const clientFirst = round % 2 === 1;
+      const winner = clientFirst ? left : right, loser = clientFirst ? right : left;
+      const winnerPid = clientFirst ? leftPid : rightPid, loserPid = clientFirst ? rightPid : leftPid;
+      const winnerResult = await outcome(clientFirst ? approval() : withdraw());
+      expect(winnerResult).toBe("ok");
+      expect(await advisoryLocks(c.admin, winnerPid, target)).toEqual(expect.arrayContaining([
+        { seed: 54, mode: "ShareLock", granted: true }, { seed: 417, mode: "ExclusiveLock", granted: true },
+      ]));
+      // Keep the first transaction open while the second takes its production
+      // locks. No test-owned barrier: both must hold shared 54 and meet on 417.
+      const pending = outcome(clientFirst ? withdraw() : approval());
+      const contestedLocks = [
+        { seed: 54, mode: "ShareLock", granted: true }, { seed: 417, mode: "ExclusiveLock", granted: false },
+      ];
+      let observedContention = false;
+      for (let attempt = 0; attempt < 200; attempt++) {
+        const locks = await advisoryLocks(c.admin, loserPid, target);
+        if (contestedLocks.every(expected => locks.some(lock => lock.seed === expected.seed
+          && lock.mode === expected.mode && lock.granted === expected.granted))) {
+          observedContention = true;
+          break;
+        }
+        await new Promise(resolve => setTimeout(resolve, 5));
+      }
+      expect(observedContention, `round ${round}: loser must hold shared 54 while waiting on 417`).toBe(true);
+      await winner.query("COMMIT");
+      const loserResult = await pending;
+      expect(loserResult).toBe("23514");
+      await loser.query("ROLLBACK");
+      const clientResult = clientFirst ? winnerResult : loserResult;
+      const competitorResult = clientFirst ? loserResult : winnerResult;
+      if (clientResult === "ok") wins.client++;
+      if (competitorResult === "ok") wins.withdraw++;
+      expect([clientResult, competitorResult]).not.toContain("40P01");
+      expect([clientResult, competitorResult].sort()).toEqual(["23514", "ok"]);
+      expect((await c.admin.query("SELECT kind FROM app.extra_approval_outcome WHERE tenant_id=$1 AND request_id=$2",
+        [target.tenant, s.requestId])).rows).toEqual([{ kind: clientResult === "ok" ? "approved" : "withdrawn" }]);
+      expect((await c.admin.query("SELECT actor_membership_id FROM app.extra_approval_step_fact WHERE tenant_id=$1 AND request_id=$2 AND actor_kind='client_approver'",
+        [target.tenant, s.requestId])).rows).toEqual(clientResult === "ok" ? [{ actor_membership_id: actor }] : []);
+    }
+    expect(wins.client).toBeGreaterThan(0);
+    expect(wins.withdraw).toBeGreaterThan(0);
+  } finally {
+    await Promise.all([left.query("ROLLBACK"), right.query("ROLLBACK")]);
+    left.release(); right.release();
+  }
+}, 240_000);
