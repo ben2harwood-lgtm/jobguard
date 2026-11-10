@@ -49,7 +49,7 @@ export async function resumeWalkthrough(params: URLSearchParams) {
         index = 6;
         // Before the lock and Final Check run, the read is refused (403): that is "not done", not a failure.
         const check = await read(prepared, "final-check", finalCheckReadV1, [403, 404]);
-        if (check?.state === "completed" && check.items.length === 0) {
+        if (check?.state === "completed") {
           index = 7;
           const invoices = await read(prepared, "customer-invoices", practiceInvoiceResponseV1);
           if (invoices.invoices.some(invoice => invoice.balancePence === 0)) index = 8;
