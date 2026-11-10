@@ -1,7 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { clearPhoneDock, readingPause, readingTime, viewerPacing } from "./walkthrough";
+import * as React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { clearPhoneDock, readingPause, readingTime, viewerPacing, Walkthrough } from "./walkthrough";
 import { coreGuideSteps } from "../../demo-s/core-1000/instruction-tour";
-afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
+const hooks = vi.hoisted(() => ({ effects: [] as (() => void | (() => void))[], refs: [] as { current: unknown }[] }));
+vi.mock("react", async original => ({
+  ...await original<typeof React>(),
+  useEffect: (effect: () => void | (() => void)) => { hooks.effects.push(effect); },
+  useRef: (current: unknown) => { const ref = { current }; hooks.refs.push(ref); return ref; },
+}));
+afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); hooks.effects.length = 0; hooks.refs.length = 0; });
 describe("REAL-WALK-PACE reading pause", () => {
   it.each([
     ["", "", 4000], ["Check", "the saved result", 5000], ["Long card", "word ".repeat(100), 15000],
@@ -56,6 +64,42 @@ describe("REAL-WALK-PACE reading pause", () => {
   });
 });
 describe("390px dock geometry", () => {
+  it("clears each new highlighted target once and leaves scroll and polling alone", () => {
+    vi.stubGlobal("React", React);
+    let top = 700;
+    const makeTarget = () => ({
+      getClientRects: () => [{}], checkVisibility: () => true, matches: () => true,
+      getBoundingClientRect: () => ({ left: 0, top, bottom: top + 44, width: 100, height: 44 }),
+      classList: { add: vi.fn(), remove: vi.fn() }, scrollIntoView: vi.fn(),
+    });
+    let target = makeTarget();
+    const listeners = new Map<string, () => void>();
+    let poll!: () => void;
+    const scrollBy = vi.fn(({ top: delta }: { top: number }) => { top -= delta; });
+    vi.stubGlobal("document", { querySelectorAll: () => [], querySelector: () => target });
+    vi.stubGlobal("window", {
+      innerWidth: 390, scrollBy,
+      setInterval: (update: () => void) => { poll = update; return 1; },
+      addEventListener: (event: string, update: () => void) => listeners.set(event, update),
+      removeEventListener: vi.fn(),
+    });
+    renderToStaticMarkup(React.createElement(Walkthrough, {
+      steps: [{ id: "one", target: "#one", title: "Review", words: "Check the result", isDone: () => false, autoAction: () => {} }],
+      onClose: () => {},
+    }));
+    hooks.refs[0]!.current = { focus: vi.fn(), getBoundingClientRect: () => ({ top: 600 }) };
+    const cleanup = hooks.effects[1]!();
+    expect(scrollBy).toHaveBeenCalledOnce();
+    // A viewer scrolls the same target under the bar; tracking must not undo it.
+    top = 750;
+    listeners.get("scroll")!(); poll(); poll(); listeners.get("resize")!();
+    expect(top).toBe(750);
+    expect(scrollBy).toHaveBeenCalledOnce();
+    target = makeTarget(); poll();
+    expect(scrollBy).toHaveBeenCalledTimes(2);
+    expect(top + 44).toBeLessThan(600);
+    if (typeof cleanup === "function") cleanup();
+  });
   // Synthetic DOM geometry tests the correction; CI must also measure the real screens.
   it.each(coreGuideSteps.map((step, index) => [step.title, index] as const))("clears a first control below the dock: %s", (_, index) => {
     let top = 700 + index * 30;

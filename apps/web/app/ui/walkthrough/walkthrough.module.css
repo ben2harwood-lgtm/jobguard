@@ -19,8 +19,6 @@
   .controls { margin: 4px 0 0; gap: 4px; }
   .controls button { flex: 1; padding: 4px 8px; }
   .more { display: inline-block; }
-  .collapsed .words, .collapsed .secondary, .collapsed .close { display: none; }
-  .collapsed .controls { flex-wrap: nowrap; }
-  .collapsed p[role="status"] { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .collapsed .words { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .progress span { animation: none; } }

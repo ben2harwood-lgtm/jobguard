@@ -90,8 +90,8 @@ test("WALK-3 waits for real typed capture, supports keyboard close and reduced m
   await page.goto("/practice-company/walkthrough");
   const tour = page.getByRole("region", { name: "Guided walkthrough" });
   await expect(tour).toContainText("Step 1 of 9");
-  await expect(tour.getByRole("button", { name: "Next", exact: true })).toBeDisabled();
   await expandPhoneControls(page);
+  await expect(tour.getByRole("button", { name: "Next", exact: true })).toBeDisabled();
   await tour.getByRole("button", { name: "I'll do it", exact: true }).click();
   await page.getByLabel("Work details").fill("JOB: Fictional room\nITEM: Paint a fictional wall | £200.00");
   await expect(tour).toContainText("Step 1 of 9");
@@ -228,14 +228,28 @@ test("390px collapsed bar leaves every step's first highlighted control clear", 
   for (let step = 1; step <= 9; step++) {
     await expect(tour).toContainText(`Step ${step} of 9`, { timeout: 300_000 });
     await expect(tour.getByRole("button", { name: "More", exact: true })).toHaveAttribute("aria-expanded", "false");
+    for (const name of ["Back", "I'll do it", "Next", "Close walkthrough"]) {
+      await expect(tour.getByRole("button", { name, exact: true })).toBeVisible();
+    }
     await expect.poll(async () => {
       const target = await page.locator('[class*="spotlight"]').boundingBox();
       const bar = await tour.boundingBox();
       return !!target && !!bar && target.y >= 0 && target.y + target.height <= bar.y;
     }).toBe(true);
+    if (step === 1) {
+      const scrolled = await page.evaluate(() => {
+        const before = scrollY;
+        window.scrollBy({ top: before > 0 ? -80 : 80, behavior: "instant" });
+        return { before, after: scrollY };
+      });
+      expect(scrolled.after).not.toBe(scrolled.before);
+      // More than two spotlight polls must leave the viewer's scroll alone.
+      await page.waitForTimeout(500);
+      expect(await page.evaluate(() => scrollY)).toBe(scrolled.after);
+    }
     await tour.getByRole("button", { name: "Show me", exact: true }).click();
   }
-  await expect(tour.getByRole("heading", { name: "That's the whole job" })).toBeVisible();
+  await expect(tour.getByRole("heading", { name: "Tour complete", exact: true })).toBeVisible();
   expect((await new AxeBuilder({ page }).include('section[aria-label="Guided walkthrough"]').analyze()).violations).toEqual([]);
   await tour.getByRole("button", { name: "Read the report again" }).focus();
   await page.keyboard.press("Enter");
