@@ -1,7 +1,8 @@
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { addOnSiteEvidence, evidenceDone, approvedExtraDone, finalCheckDone, restoreProgress, stages, VoiceJourney } from "./voice-journey";
+import * as screenActions from "./screen-actions";
+import { missedWorkDiary, missedWorkSaved, saveMissedWork, priceFoundExtra, addOnSiteEvidence, evidenceDone, approvedExtraDone, finalCheckDone, restoreProgress, stages, VoiceJourney } from "./voice-journey";
 const memo = vi.hoisted(() => ({ steps: [] as import("../../ui/walkthrough/walkthrough").WalkthroughStep[] }));
 vi.mock("react", async original => ({ ...await original<typeof React>(), useMemo: (factory: () => unknown) => {
   const result = factory();
@@ -16,7 +17,10 @@ describe("WALK-3 honest journey boundaries", () => {
     expect(stages[2]![1]).toContain("prerequisite still to build");
     expect(stages[3]![1]).toContain("not an authenticated customer response");
     expect(stages[5]![1]).toContain("builder's practice attestation");
-    expect(stages[6]![1]).toContain("No finding is promised");
+    expect(stages[4]![1]).toContain("forget to add it to the bill");
+    expect(stages[6]![1]).toContain("JobGuard checks your records against the bill");
+    expect(stages[7]![1]).toContain("awaiting customer approval");
+    expect(stages[7]![1]).toContain("no supplementary invoice");
     expect(stages[7]![1]).toContain("not bank-confirmed");
   });
   it("renders an empty starting screen without customer, payment or completion claims", () => {
@@ -88,6 +92,8 @@ it("step 3 lights the prepared handover control before screen actions begin", ()
   expect(memo.steps[2]!.spotlightTarget!()).toBe(prepare);
   expect(memo.steps[5]!.isDone).toBe(approvedExtraDone);
   expect(memo.steps[6]!.isDone).toBe(finalCheckDone);
+  expect(memo.steps[6]!.target).toBe("#final-check");
+  expect(memo.steps[7]!.target).toBe("#final-check");
 });
 
 it.each([["accepted", 3], ["live", 4], ["invoiced", 4], ["paid", 4]])("resumes %s examples only as far as their verified lifecycle allows", async (status, initialStep) => {
@@ -153,18 +159,19 @@ describe("step 7 saved final check", () => {
         clicks.push(textContent);
         busy = true;
         setTimeout(() => {
-          if (completed || textContent === "Run the final check (practice)") status = "JobGuard's final check found nothing missing from your bill.";
+          if (completed || textContent === "Run the final check (practice)") status = "JobGuard's final check found 1 possible extra.";
           busy = false;
         }, 20);
       },
     }));
     const root = {
-      querySelectorAll: () => status.startsWith("JobGuard's final check found") ? buttons.slice(0, 2) : buttons,
+      querySelectorAll: (selector: string) => selector === "[data-walk-action]" ? [] : status.startsWith("JobGuard's final check found") ? buttons.slice(0, 2) : buttons,
       querySelector: (selector: string) => ({
         getAttribute: () => String(busy),
         textContent: selector.includes("lock-state") ? "Final account completed"
           : selector.includes("final-gross") ? "£1,230.00"
-          : selector.includes("final-check-status") ? status : "",
+          : selector.includes("final-check-status") ? status : selector.includes("final-check-item") ? "fitted loft hatch" : "",
+        setAttribute: vi.fn(), scrollIntoView: vi.fn(),
       }),
     };
     vi.stubGlobal("document", { getElementById: () => root, querySelectorAll: () => [] });
@@ -174,5 +181,48 @@ describe("step 7 saved final check", () => {
       ? ["Load the saved final check"]
       : ["Load the saved final check", "Run the final check (practice)", "Load the saved final check"]);
     expect(finalCheckDone()).toBe(true);
-  });
+  }, 10_000); // Three deliberate 1.2s pointer pauses plus the 3s worker polling interval.
+});
+
+describe("REAL-WALK-PAYOFF screen actions", () => {
+ afterEach(() => vi.restoreAllMocks());
+ it.each([false, true])("saves missed work through Job diary only when absent: saved %s", async saved => {
+  let hasNote = saved;
+  vi.stubGlobal("document", { getElementById: () => ({
+   querySelector: () => ({ getAttribute: () => "false" }),
+   querySelectorAll: () => hasNote ? [{ textContent: missedWorkDiary }] : [],
+  }) });
+  const fill = vi.spyOn(screenActions, "fill").mockResolvedValue();
+  const click = vi.spyOn(screenActions, "click").mockImplementation(async name => { expect(name).toBe("Save note"); hasNote = true; });
+  await saveMissedWork(new AbortController().signal);
+  expect(missedWorkSaved()).toBe(true);
+  expect(fill.mock.calls).toEqual(saved ? [] : [["#diary-text", missedWorkDiary]]);
+  expect(click).toHaveBeenCalledTimes(saved ? 0 : 1);
+ });
+ it("confirms the saved finding and prices its own row without approving it", async () => {
+  let answered = false, editing = false;
+  const presses: string[] = [];
+  const row = { textContent: "fitted loft hatch", scrollIntoView: vi.fn(), querySelectorAll: () => ["Change price", "Save new proposed revision"].map(name => ({ textContent: name, disabled: false, click: () => { presses.push(name); editing = name === "Change price"; } })) };
+  const finding = { textContent: "fitted loft hatch", querySelector: () => answered ? {} : null };
+  const refresh = vi.fn();
+  vi.stubGlobal("document", { getElementById: (id: string) => id === "walk-refresh" ? { click: refresh } : {
+   querySelector: (selector: string) => selector.includes("final-check-item") ? finding : selector.includes("final-check-disposition") ? answered ? {} : null : editing ? {} : null,
+   querySelectorAll: () => [row],
+  } });
+  const fill = vi.spyOn(screenActions, "fill").mockResolvedValue();
+  const click = vi.spyOn(screenActions, "click").mockImplementation(async name => { expect(name).toBe("Yes — this was extra work"); answered = true; });
+  await priceFoundExtra({} as HTMLElement, new AbortController().signal);
+  expect(click).toHaveBeenCalledTimes(1);
+  expect(refresh).toHaveBeenCalledTimes(1);
+  expect(presses).toEqual(["Change price", "Save new proposed revision"]);
+  expect(fill).toHaveBeenCalledWith('[aria-label="New price fitted loft hatch"]', "300.00");
+ });
+ it("opens the report and scrolls its heading to the top", async () => {
+  const open = vi.fn(), scrollIntoView = vi.fn();
+  vi.stubGlobal("document", { getElementById: (id: string) => id === "walk-report" ? { click: open } : { querySelector: () => ({ scrollIntoView }) } });
+  renderToStaticMarkup(<VoiceJourney />);
+  await memo.steps[8]!.autoAction({} as HTMLElement, new AbortController().signal);
+  expect(open).toHaveBeenCalledTimes(1);
+  expect(scrollIntoView).toHaveBeenCalledWith({ block: "start", behavior: "instant" });
+ });
 });

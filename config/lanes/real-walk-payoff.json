@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-walk-payoff": {
+      "branches": [
+        "codex/sandbox/real-walk-payoff"
+      ],
+      "note": "REAL-WALK-PAYOFF RED; stacked after real-walk-pace.",
+      "allow": [
+        "apps/api/src/value/contracts.ts",
+        "apps/api/src/value/value.application.test.ts",
+        "apps/api/src/value/value.application.ts",
+        "apps/web/app/practice-company/walkthrough/voice-journey.test.tsx",
+        "apps/web/app/practice-company/walkthrough/voice-journey.tsx",
+        "apps/web/app/ui/job-value.test.tsx",
+        "apps/web/app/ui/job-value.tsx",
+        "apps/web/e2e/WALK-3.spec.ts"
+      ]
+    }
+  }
+}

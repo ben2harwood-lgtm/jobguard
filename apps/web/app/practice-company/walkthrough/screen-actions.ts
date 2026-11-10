@@ -1,3 +1,5 @@
+import { readingPause, viewerPacing, viewerPlayback } from "../../ui/walkthrough/walkthrough";
+
 /** Operate existing screen controls. Never synthesize saved business state. */
 export const screen = () => document.getElementById("walk-screen")!;
 export const text = (id: string) => screen()?.querySelector(`[data-testid="${id}"]`)?.textContent ?? "";
@@ -11,8 +13,10 @@ export async function until(check: () => boolean, signal: AbortSignal) {
 async function point(element: HTMLElement, signal?: AbortSignal) {
   document.querySelectorAll("[data-walk-action]").forEach(element => element.removeAttribute("data-walk-action"));
   element.setAttribute("data-walk-action", "true");
-  element.scrollIntoView({ block: "center" });
-  if (typeof matchMedia === "function" && !matchMedia("(prefers-reduced-motion: reduce)").matches) await new Promise(resolve => setTimeout(resolve, 450));
+  element.scrollIntoView({ block: "center", behavior: "instant" });
+  if (signal && viewerPlayback.has(signal) && viewerPacing()) {
+    await readingPause(1200, false, signal, () => {});
+  }
   signal?.throwIfAborted();
 }
 export async function click(name: string, signal: AbortSignal) {

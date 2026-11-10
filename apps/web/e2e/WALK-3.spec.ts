@@ -2,6 +2,10 @@ import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
 test.setTimeout(360_000);
+async function expandPhoneControls(page: import("@playwright/test").Page) {
+  const more = page.getByRole("region", { name: "Guided walkthrough" }).getByRole("button", { name: "More", exact: true });
+  if (await more.isVisible()) await more.click();
+}
 // Both mobile-360 and desktop run these against real synthetic routes and workers.
 for (const mode of ["Play the whole thing", "Show me"] as const) {
 test(`WALK-3 ${mode} saves its own draft then honestly completes a prepared example`, async ({ page }) => {
@@ -10,6 +14,17 @@ test(`WALK-3 ${mode} saves its own draft then honestly completes a prepared exam
   await page.route(/\/api\/jobs\/[^/]+\/customer-invoices\/[^/]+\/receipts$/, async route => {
     if (route.request().method() === "GET") await new Promise(resolve => setTimeout(resolve, 1500));
     await route.continue();
+  });
+  let catchReplay: { url: string; data: unknown } | undefined;
+  page.on("request", request => {
+    if (request.method() === "POST" && /\/final-check\/catches$/.test(request.url())) catchReplay = { url: request.url(), data: request.postDataJSON() };
+  });
+  const revealed: string[] = [];
+  page.on("response", async response => {
+    if (response.request().method() === "GET" && /\/api\/jobs\/[^/]+\/final-check$/.test(response.url()) && response.ok()) {
+      const body = await response.json();
+      for (const item of body.items ?? []) revealed.push(item.description);
+    }
   });
   await page.goto("/practice-company?name=Tommy");
   await expect(page.getByRole("heading", { name: "Tommy's practice firm", exact: true })).toBeVisible();
@@ -32,12 +47,24 @@ test(`WALK-3 ${mode} saves its own draft then honestly completes a prepared exam
   if (mode === "Show me") {
     for (let step = 3; step <= 9; step++) {
       await expect(tour).toContainText(`Step ${step} of 9`, { timeout: 300_000 });
+      if (step === 8) {
+        const result = page.getByTestId("final-check-item");
+        await expect(result).toContainText("fitted loft hatch");
+        await expect(result.getByRole("button", { name: "Yes — this was extra work", exact: true })).toBeVisible();
+        await expect(result.getByLabel("Or answer", { exact: true })).toBeVisible();
+        await expect(result.getByRole("button", { name: "Save answer", exact: true })).toBeVisible();
+      }
       await tour.getByRole("button", { name: mode, exact: true }).click();
     }
   }
   await expect(page.getByLabel("Simulated customer")).toContainText("customer view is not connected");
-  await expect(tour).toContainText("Tour complete", { timeout: 300_000 });
+  await expect(tour).toContainText("That's the whole job", { timeout: 300_000 });
   await expect(page).toHaveURL(/#final-account-title$/);
+  expect(revealed).toContain("fitted loft hatch");
+  await expect(page.getByTestId("value-found-after-lock")).toContainText("Found after your bill was complete: £300.00 — from JobGuard's final check");
+  await expect(page.getByTestId("value-found-after-lock")).toContainText("awaiting approval");
+  await expect(page.getByTestId("value-found-after-lock").getByRole("link", { name: "fitted loft hatch" })).toHaveAttribute("href", /#variation-/);
+  await expect(page.getByTestId("value-found-after-lock").getByRole("link", { name: "Inspect the Final Check result" })).toHaveAttribute("href", /#final-check$/);
   await expect(page.getByTestId("value-approved-extras")).toHaveText("£125.00");
   await expect(page.getByTestId("value-invoiced-gross")).toHaveText("£1,230.00");
   await expect(page.getByTestId("value-recorded-gross")).toHaveText("£1,230.00");
@@ -47,6 +74,12 @@ test(`WALK-3 ${mode} saves its own draft then honestly completes a prepared exam
   const own = await (await page.request.get(`/api${ownHref}/proposal`)).json();
   expect(own.status).toBe("quoting");
   expect(own.review.lines[0].description).toContain("carefully");
+  expect((await (await page.request.get(`/api${ownHref}/value`)).json()).foundAfterLock).toEqual([]);
+  expect(catchReplay).toBeDefined();
+  expect((await page.request.post(catchReplay!.url, { data: catchReplay!.data })).ok()).toBe(true);
+  const savedValue = await (await page.request.get(`/api${preparedHref}/value`)).json();
+  expect(savedValue.foundAfterLock).toHaveLength(1);
+  expect(savedValue.foundAfterLock[0]).toMatchObject({ description: "fitted loft hatch", pence: 30000, approved: false });
   await tour.getByRole("button", { name: "Close walkthrough" }).click();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
@@ -58,6 +91,7 @@ test("WALK-3 waits for real typed capture, supports keyboard close and reduced m
   const tour = page.getByRole("region", { name: "Guided walkthrough" });
   await expect(tour).toContainText("Step 1 of 9");
   await expect(tour.getByRole("button", { name: "Next", exact: true })).toBeDisabled();
+  await expandPhoneControls(page);
   await tour.getByRole("button", { name: "I'll do it", exact: true }).click();
   await page.getByLabel("Work details").fill("JOB: Fictional room\nITEM: Paint a fictional wall | £200.00");
   await expect(tour).toContainText("Step 1 of 9");
@@ -102,6 +136,7 @@ test("WALK-3 on-device words reach the real capture contract without uploading a
   await page.goto("/practice-company/walkthrough");
   const tour = page.getByRole("region", { name: "Guided walkthrough" });
   await expect(tour).toContainText("Step 1 of 9");
+  await expandPhoneControls(page);
   await tour.getByRole("button", { name: "I'll do it", exact: true }).click();
   await page.getByRole("button", { name: "Talk through the example", exact: true }).click();
   await page.getByRole("button", { name: "Use these words", exact: true }).click();
@@ -167,12 +202,43 @@ test("WALK-3 accepts a manually approved £150 extra", async ({ page }) => {
   await expect(page.getByTestId("stage-status")).toHaveText("Complete");
   await expect(page.getByTestId("proof-state")).toHaveText("File integrity checked · synthetic example");
   await expect(page.getByTestId("approved-additions")).toHaveText("£150.00");
+  await expandPhoneControls(page);
   await tour.getByRole("button", { name: "Back", exact: true }).click();
   await expect(tour).toContainText("Step 5 of 9");
   await tour.getByRole("button", { name: "Show me", exact: true }).click();
   await expect(tour).toContainText("Step 6 of 9");
   await expect(page.getByTestId("approved-additions")).toHaveText("£150.00");
   await expect(tour.getByRole("button", { name: "Next", exact: true })).toBeEnabled();
+  await expandPhoneControls(page);
   await tour.getByRole("button", { name: "Next", exact: true }).click();
   await expect(tour).toContainText("Step 7 of 9");
+});
+
+// REAL-WALK-PACE: actual layout, not mocked geometry, at the requested phone width.
+test("390px collapsed bar leaves every step's first highlighted control clear", async ({ page }) => {
+  test.setTimeout(540_000);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/practice-company/walkthrough");
+  const tour = page.getByRole("region", { name: "Guided walkthrough" });
+  const more = tour.getByRole("button", { name: "More", exact: true });
+  await more.focus(); await page.keyboard.press("Enter");
+  await expect(tour.getByRole("button", { name: "Less", exact: true })).toHaveAttribute("aria-expanded", "true");
+  await page.keyboard.press("Enter");
+  expect((await new AxeBuilder({ page }).include('section[aria-label="Guided walkthrough"]').analyze()).violations).toEqual([]);
+  for (let step = 1; step <= 9; step++) {
+    await expect(tour).toContainText(`Step ${step} of 9`, { timeout: 300_000 });
+    await expect(tour.getByRole("button", { name: "More", exact: true })).toHaveAttribute("aria-expanded", "false");
+    await expect.poll(async () => {
+      const target = await page.locator('[class*="spotlight"]').boundingBox();
+      const bar = await tour.boundingBox();
+      return !!target && !!bar && target.y >= 0 && target.y + target.height <= bar.y;
+    }).toBe(true);
+    await tour.getByRole("button", { name: "Show me", exact: true }).click();
+  }
+  await expect(tour.getByRole("heading", { name: "That's the whole job" })).toBeVisible();
+  expect((await new AxeBuilder({ page }).include('section[aria-label="Guided walkthrough"]').analyze()).violations).toEqual([]);
+  await tour.getByRole("button", { name: "Read the report again" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(tour).toHaveCount(0);
+  await expect(page.getByTestId("value-recorded-gross")).toBeVisible();
 });
