@@ -17,7 +17,7 @@ export const auditEventInputV1Schema = z.object({
   eventType: identifier.max(100), subjectType: identifier.max(100), subjectRef: identifier,
   payload: auditPayloadV1Schema,
 });
-/** Requests remain v1; only the database emits v2. Legacy history has no trust assertion. */
+/** Requests remain v1; only the database emits v2/v3. Legacy history has no trust assertion. */
 const checkedExclusionsSchema = auditEventInputV1Schema.extend({
   version: z.literal("audit.v2"), actorRef: z.literal("system:final_check"),
   eventType: z.literal("final_check.sources_excluded"), subjectType: z.literal("job"),
@@ -28,13 +28,22 @@ const checkedExclusionsSchema = auditEventInputV1Schema.extend({
   }).strict() }),
 });
 export const auditStoredInputSchema = z.union([
-  auditEventInputV1Schema.extend({ version: z.enum(["audit.v1", "audit.v2"]) }), checkedExclusionsSchema,
+  auditEventInputV1Schema.extend({ version: z.enum(["audit.v1", "audit.v2", "audit.v3"]) }), checkedExclusionsSchema,
 ]);
 export function auditEventTrust(event: Pick<AuditEvent, "version" | "payload">): "legacy" | "lower_trust" | "checked_operation" {
   if (event.version === "audit.v1") return "legacy";
   const trust = event.payload.references?.auditTrust;
   if (trust !== "lower_trust" && trust !== "checked_operation") throw new AuditVerificationError("Invalid audit trust label");
   return trust;
+}
+/** Attribution is authenticated only in v3; old actor strings remain historical claims. */
+export function auditActorAttribution(event: Pick<AuditEvent, "version" | "actorRef" | "payload">): "legacy_claim" | "bound_member" | "system" {
+  if (event.version !== "audit.v3") return "legacy_claim";
+  const refs = event.payload.references;
+  const kind = refs && "auditActorKind" in refs ? refs.auditActorKind : undefined;
+  if (kind === "bound_member" && /^membership:[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/u.test(event.actorRef)) return kind;
+  if (kind === "system" && /^system:database:[A-Za-z0-9_]+$/u.test(event.actorRef)) return kind;
+  throw new AuditVerificationError("Invalid audit actor attribution");
 }
 export type AuditEventInput = z.infer<typeof auditEventInputV1Schema>;
 export type AuditEvent = z.infer<typeof auditStoredInputSchema> & {
@@ -55,7 +64,7 @@ const canonicalJson = (value: unknown, version = "audit.v1"): string => {
     .map(([key, child]) => `${JSON.stringify(key)}:${canonicalJson(child, version)}`).join(",")}}`;
 };
 export const canonicalAuditHash = (event: Omit<AuditEvent, "eventHash" | "payload">): string =>
-  sha256([event.version, ...(event.version === "audit.v2" ? [event.id] : []), event.tenantId, String(event.sequence), event.actorRef, event.eventType,
+  sha256([event.version, ...(event.version !== "audit.v1" ? [event.id] : []), event.tenantId, String(event.sequence), event.actorRef, event.eventType,
     event.subjectType, event.subjectRef, event.occurredAt.toISOString(), event.payloadHash,
     event.previousHash ?? ""].join("\u001f"));
 
@@ -71,6 +80,40 @@ export async function appendAuditBatch(database: TenantTransaction, inputs: read
   return result.rows;
 }
 
+// Exact legacy compatibility names; never promote their content to checked trust.
+const legacyLowerTrustEventTypes = new Set([
+  "command.succeeded",
+  "contractor.extra.client_link_issued",
+  "contractor.extra.step_approved",
+  "contractor.prompt.command",
+  "contractor.visit.completed",
+  "customer_credit_note.synthetic_approved",
+  "customer_invoice.synthetic_issued",
+  "customer_payment.recorded",
+  "customer_payment.synthetic_recorded",
+  "customer_payment.synthetic_reversed",
+  "evidence_pack.attachment_approved",
+  "outbox.authorization_revoked",
+  "outbox.succeeded",
+  "proof.completed",
+  "quote.acceptance.attested",
+  "quote.acceptance_cancelled",
+  "recovery.eligibility.approve",
+  "recovery.follow_up.reminder_approved",
+  "recovery.message.approved",
+  "recovery.message.succeeded",
+  "recovery.payment_payer.mark_withdrawn",
+  "recovery.payment_payer.marked",
+  "recovery.terms.approved",
+  "sso.oidc.request.issued",
+  "sso.oidc.signin.completed",
+  "sso.request.issued",
+  "sso.signin.completed",
+  "synthetic_obligation.simulated_settlement",
+  "variation.approved",
+  "worm.authorized",
+]);
+
 export function verifyAuditChain(events: readonly AuditEvent[], checkpoint?: AuditCheckpoint): void {
   let previous: string | null = null;
   let expectedSequence = 1;
@@ -81,6 +124,20 @@ export function verifyAuditChain(events: readonly AuditEvent[], checkpoint?: Aud
       throw new AuditVerificationError(`Invalid audit chain at sequence ${event.sequence}`);
     }
     auditEventTrust(event);
+    auditActorAttribution(event);
+    if (event.version === "audit.v3") {
+      for (const section of [event.payload.references, event.payload.hashes, event.payload.classifications]) {
+        const reserved = ["actor", "tenant", "type", "tenantId", "id", "version", "actorRef",
+          "eventType", "subjectType", "subjectRef", "sequence", "occurredAt", "previousHash", "eventHash"];
+        if (section && (reserved.some(key => key in section) ||
+            (section !== event.payload.references && ["auditTrust", "auditActorKind"].some(key => key in section)))) {
+          throw new AuditVerificationError("Reserved audit payload field");
+        }
+      }
+      if (auditEventTrust(event) === "lower_trust" && !legacyLowerTrustEventTypes.has(event.eventType) && /(^|[_.:/-])(command|success[a-z]*|succeeded|approv[a-z]*|payment[a-z]*|paid|settle[a-z]*|complet[a-z]*|accept[a-z]*|authoriz[a-z]*|issued|locked)([_.:/-]|$)/u.test(event.eventType.toLowerCase())) {
+        throw new AuditVerificationError("Unchecked authority event");
+      }
+    }
     previous = event.eventHash;
     expectedSequence += 1;
   }

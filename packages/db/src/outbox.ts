@@ -4,7 +4,7 @@ import type { Pool } from "pg";
 import { z } from "zod";
 import { commercialOutboundClaimsEnabled } from "./commercial-outbound-pause.js";
 import { darkOrderStillAuthorized } from "./purchase-order-action-guard.js";
-import { appendAuditBatch } from "./audit.js";
+import { appendAuditBatch, auditEventInputV1Schema } from "./audit.js";
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 
 export const outboundActionV1Schema=z.object({version:z.literal("outbound-action.v1"),id:z.guid({ error: "Invalid uuid" }),authorizationId:z.guid({ error: "Invalid uuid" }),adapter:z.string().regex(/^fake_/u),providerEffectKey:z.string().min(1).max(300),actionType:z.string().min(1).max(100),recipient:z.string().max(320).nullable(),contentHash:z.string().regex(/^[a-f0-9]{64}$/u),immutableContent:z.string().max(1_000_000),aggregateRevision:z.number().int().nonnegative(),amountPence:z.number().int().nonnegative().nullable(),currency:z.literal("GBP").nullable(),policyVersion:z.string().min(1).max(80),authorizationExpiresAt:z.coerce.date()}).strict();
@@ -26,6 +26,14 @@ const rowToAction=(r:any):OutboundAction=>outboundActionV1Schema.parse({version:
 /** Terminal refusal: no adapter call or delivery attempt is made. */
 export type OutboxRevocationRefusal = { kind: "cancelled"; code: "AUTHORIZATION_REVOKED" };
 
+async function appendOutboxAudit(db: TenantTransaction, input: unknown): Promise<void> {
+  const event = auditEventInputV1Schema.strict().parse(input);
+  // Preserve the established pre-cutover path in supported older schemas.
+  const installed = (await db.$client.query("SELECT to_regprocedure('app.lp6e_append_outbox_audit(jsonb)') installed")).rows[0].installed;
+  if (installed) await db.$client.query("SELECT * FROM app.lp6e_append_outbox_audit($1::jsonb)", [JSON.stringify(event)]);
+  else await appendAuditBatch(db, [event]);
+}
+
 async function cancelRevokedAction(db: TenantTransaction, id: string, adapters: readonly string[]): Promise<OutboxRevocationRefusal | undefined> {
   // A failed authority lookup must not leave revoked work eligible for blind retry.
   // Scope both the authorization and revocation to the action's tenant and author.
@@ -39,20 +47,20 @@ async function cancelRevokedAction(db: TenantTransaction, id: string, adapters: 
       AND revoked.membership_id IS NOT NULL
     RETURNING o.id`, [id, adapters]);
   if (!cancelled.rows.length) return;
-  await appendAuditBatch(db, [{
+  await appendOutboxAudit(db, {
     id: randomUUID(), version: "audit.v1", actorRef: "system:outbox",
     eventType: "outbox.authorization_revoked", subjectType: "outbox_action", subjectRef: id,
     payload: { references: { outcome: "cancelled", code: "AUTHORIZATION_REVOKED" }, classifications: { action: "security" } },
-  }]);
+  });
   return { kind: "cancelled", code: "AUTHORIZATION_REVOKED" };
 }
 
 // Append only after all business writes. Reconciliation evidence and the resulting
 // state share this commit; callers cannot manufacture evidence with safeRetry.
 async function auditOutcome(db: TenantTransaction, id: string, status: string, references: Record<string, string> = {}) {
-  await appendAuditBatch(db, [{ id: randomUUID(), version: "audit.v1", actorRef: "system:outbox",
+  await appendOutboxAudit(db, { id: randomUUID(), version: "audit.v1", actorRef: "system:outbox",
     eventType: `outbox.${status}`, subjectType: "outbox_action", subjectRef: id,
-    payload: { references, classifications: { outcome: "operational" } } }]);
+    payload: { references, classifications: { outcome: "operational" } } });
 }
 
 export class ActionExecutor {
