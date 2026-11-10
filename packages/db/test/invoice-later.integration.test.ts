@@ -148,7 +148,7 @@ describe("LATER-B16 persisted invoice facts", () => {
     releaseCommit();
     expect(await firstObserved).toHaveProperty("value.creditNoteId");
     expect(await observed).toMatchObject({error:{code:"COMMAND_CONFLICT"}});
-    expect((await admin.query(`SELECT count(*)::int n FROM app.command_receipt WHERE tenant_id=$1 AND command_type='customer_credit_note.issue' AND semantic_key=$2`,[T,input.command.semanticKey])).rows[0].n).toBe(1);
+    expect((await admin.query(`SELECT count(*)::int n FROM app.command_receipt WHERE tenant_id=$1 AND command_type='customer_credit_note.issue' AND starts_with(semantic_key,$2)`,[T,input.command.semanticKey+':lp3='])).rows[0].n).toBe(1);
     expect((await repo.creditView(context,f.jobId,f.invoice.id)).credits).toHaveLength(1);
     expect((await repo.creditView(context,other.jobId,other.invoice.id)).credits).toHaveLength(0);
    } finally { releaseCommit(); await firstObserved; await second?.catch(()=>undefined); }

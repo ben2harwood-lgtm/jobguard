@@ -77,3 +77,19 @@ it("keeps the original command digest for completed historical invoice retries a
  await expect(service.issue(context,{...raw,issuer:{...issuer,address:"Changed"}})).rejects.toThrow("COMMAND_CONFLICT");
  expect(replays).toBe(2);
 });
+
+it("keeps privileged locks before audit without exposing runtime job UPDATE",()=>{
+ const source=read("../src/customer-billing-repository.ts"),sql=read("../migrations/0980_lp8a_billing_revokes.sql");
+ expect(source).toContain('SELECT app.lock_customer_invoice_issue($1)');
+ expect(source).not.toMatch(/FROM app\.job[^"`]*FOR UPDATE/u);
+ const lock=sql.split('CREATE FUNCTION app.lock_customer_invoice_issue(')[1]!.split('END $$;')[0]!;
+ expect(lock.indexOf('app.current_actor()')).toBeLessThan(lock.indexOf('FOR UPDATE'));
+ expect(lock.indexOf('final_check_require_invoice_actor')).toBeLessThan(lock.indexOf('FOR UPDATE'));
+ expect(lock.indexOf('FOR UPDATE')).toBeLessThan(lock.indexOf('pg_advisory_xact_lock'));
+ const grant=sql.indexOf('GRANT CREATE ON SCHEMA app TO jobguard_command_writer;');
+ const transfer=sql.indexOf('ALTER FUNCTION app.lp8a_billing_command(uuid,text) OWNER');
+ expect(grant).toBeLessThan(transfer);
+ expect(sql.indexOf('REVOKE CREATE ON SCHEMA app FROM jobguard_command_writer;')).toBeGreaterThan(transfer);
+ const restore=read("../tools/synthetic-restore.mjs");
+ expect(restore.indexOf('INSERT INTO app.membership')).toBeLessThan(restore.indexOf('INSERT INTO identity.membership_locator'));
+});

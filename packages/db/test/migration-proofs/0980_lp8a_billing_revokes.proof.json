@@ -481,6 +481,45 @@
         "key": "acl|routine|function:app.issue_approved_customer_credit(uuid,uuid,bigint,text,bytea)|jobguard_runtime|EXECUTE|-",
         "group": "a-lp8a-billing-adapters"
       }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lock_customer_invoice_issue(uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.current_actor",
+          "app.current_tenant",
+          "app.final_check_require_invoice_actor"
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.lock_customer_invoice_issue(uuid)|jobguard_migration",
+        "group": "a-lp8a-billing-adapters"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.lock_customer_invoice_issue(uuid)|jobguard_runtime|EXECUTE|-",
+        "group": "a-lp8a-billing-adapters"
+      }
     }
   ],
   "upgrade": [
@@ -719,6 +758,21 @@
         "nspname": "app",
         "proname": "advance_final_account_draft",
         "args": "p_tenant uuid, p_draft uuid, p_revision uuid, p_number integer",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, app, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lock_customer_invoice_issue",
+        "args": "p_job uuid",
         "proowner": "jobguard_migration",
         "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
         "prosecdef": true,

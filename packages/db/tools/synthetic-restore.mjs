@@ -114,10 +114,10 @@ export async function runSyntheticRestoreRehearsal(options = {}, api, fixture) {
     await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1),($2)", [ids.tenant, ids.otherTenant]);
     await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [ids.identity]);
     await admin.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", [`${ids.identity}@fictional.invalid`,ids.identity]);
-    await admin.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3)",[ids.identity,ids.tenant,ids.member]);
     await admin.query("INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at) VALUES($1,$2,'synthetic_demo',$3,'fictional',clock_timestamp()+interval '1 hour')",[randomUUID(),ids.identity,sessionCredential]);
     await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional restore builder')", [ids.account, ids.tenant]);
     await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [ids.member, ids.tenant, ids.account, ids.identity]);
+    await admin.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3)",[ids.identity,ids.tenant,ids.member]);
     await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Other fictional builder')",[ids.otherAccount,ids.otherTenant]);
     await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')",[ids.otherMember,ids.otherTenant,ids.otherAccount,ids.identity]);
     await admin.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3)",[ids.identity,ids.otherTenant,ids.otherMember]);

@@ -113,7 +113,7 @@ describe("SV-2 catalog and actual role isolation (DW1, DW2, DW3, DW4)",()=>{
   expect((await admin.query(`SELECT p.proname,p.prosecdef,r.rolname AS owner,has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') AS runtime,
    ARRAY(SELECT CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END FROM aclexplode(p.proacl) a WHERE a.privilege_type='EXECUTE' ORDER BY 1)::text[] AS grantees
    FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace JOIN pg_roles r ON r.oid=p.proowner WHERE n.nspname='app' AND p.proname=ANY($1) ORDER BY p.proname`,[older])).rows)
-   .toEqual(older.map(proname=>({proname,prosecdef:true,owner:"jobguard_migration",runtime:true,grantees:["jobguard_migration","jobguard_runtime"]})));
+   .toEqual(older.map(proname=>({proname,prosecdef:true,owner:"jobguard_migration",runtime:proname!=="reserve_customer_invoice_number",grantees:proname==="reserve_customer_invoice_number"?["jobguard_migration"]:["jobguard_migration","jobguard_runtime"]})));
   // Every non-trigger routine in app that each new role can execute, by catalog. Trigger functions are not callable
   // directly (checked below). Two pure arithmetic INVOKER helpers keep their default PUBLIC EXECUTE by design.
   // 0306 adds exactly three worker-only evidence-pack entrypoints; emergency access is unchanged.

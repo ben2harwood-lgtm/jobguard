@@ -172,8 +172,16 @@ it('emergency_dual_owner/scim2_machine preserve populated identity state, instal
  expectRelationsUnchanged(catalogue.relations,afterRelations,laterAcl);
  // 0672 lets its migration-owned pack writer read the sealed request binding; only that ACL entry is added.
  const bindingReaders=new Set(['app.current_actor','app.current_tenant']);
+  const billingProof=JSON.parse(await readFile(new URL('./migration-proofs/0980_lp8a_billing_revokes.proof.json',import.meta.url),'utf8'));
  for(const row of catalogue.routines){
   const expected={...row,proacl:lp6cRoutineAcl(row)};
+  // LP-8a withdraws standalone numbering and pins the draft routine's search path.
+  const billingDelta=billingProof.upgrade.find((v:any)=>v.section==='routines'&&v.before?.nspname===row.nspname&&v.before?.proname===row.proname&&v.before?.args===row.args);
+  if(billingDelta){
+   expect(expected.proacl).toBe(billingDelta.before.proacl);
+   expect(expected.proconfig).toEqual(billingDelta.before.proconfig);
+   expected.proacl=billingDelta.after.proacl;expected.proconfig=billingDelta.after.proconfig;
+  }
   if(row.nspname==='identity'&&row.proname==='customer_portal_use') {
    const change=delegationProof.upgrade.find((entry:{section:string;after?:{nspname:string;proname:string}})=>entry.section==='routines'&&entry.after?.nspname==='identity'&&entry.after.proname==='customer_portal_use');
    expect(row.proacl).toBe(change.before.proacl);

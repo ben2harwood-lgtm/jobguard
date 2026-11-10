@@ -10,14 +10,25 @@
         "packages/db/migrations/0980_lp8a_billing_revokes.sql",
         "packages/db/src/customer-billing-repository.ts",
         "packages/db/src/final-account-repository.ts",
+        "packages/db/src/practice-invoice-later.test.ts",
         "packages/db/test/administrative-role-setup.ts",
+        "packages/db/test/audit-api-file-final-account.test.ts",
+        "packages/db/test/enterprise-access-upgrade.integration.test.ts",
+        "packages/db/test/invoice-later.integration.test.ts",
+        "packages/db/test/lp-0-authority-paths.integration.test.ts",
+        "packages/db/test/lp-0-grant-freeze.integration.test.ts",
+        "packages/db/test/lp6c-money-routines.integration.test.ts",
         "packages/db/test/lp8a-billing-revokes.integration.test.ts",
         "packages/db/test/lp8a-billing-revokes.test.ts",
         "packages/db/test/lp8a-legacy-billing-transport.ts",
+        "packages/db/test/meter-work-admission-upgrade.integration.test.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
         "packages/db/test/migration-proofs/0980_lp8a_billing_revokes.proof.json",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
+        "packages/db/test/shadow-catalog.integration.test.ts",
         "packages/db/tools/synthetic-restore.mjs"
       ],
-      "note": "RED LP-8a R2, build-ahead relative to passed LP-6c c2ec9e98; no PR in this sandbox."
+      "note": "RED LP-8a repair 3; NOPR. Git metadata is read-only; router merges current main and commits. PostgreSQL and exact-head independent review remain coordinator gates."
     }
   }
 }

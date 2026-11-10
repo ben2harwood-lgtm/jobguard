@@ -37,6 +37,7 @@ describe("MON-1 0380 upgrade (PostgreSQL CI)", () => {
   expect((await f.admin.query("SELECT migration_name FROM public.jobguard_schema_migration WHERE migration_name='0399_meter_reader_revoke.sql'")).rows).toEqual([{migration_name:"0399_meter_reader_revoke.sql"}]);
   expect(await proofDifferences(f.admin,before)).toEqual({rows:[],types:[]});
   const auditOid=(await f.admin.query("SELECT 'app.audit_event'::regclass::oid oid")).rows[0].oid;
+    const billingProof=JSON.parse(await readFile(new URL('./migration-proofs/0980_lp8a_billing_revokes.proof.json',import.meta.url),'utf8'));
   const expectedGrants=await Promise.all(grants.map(async row=>{
     const acl=row.oid===auditOid ? await lp4AuditEventAcl(f.admin,row.relacl) : row.relacl;
     let relacl=await lp5RelationAcl(f.admin,row.relname,acl);
@@ -46,6 +47,8 @@ describe("MON-1 0380 upgrade (PostgreSQL CI)", () => {
       expect(items.some(item=>item.startsWith("jobguard_binding_owner="))).toBe(false);
       relacl=(await f.admin.query<{acl:string}>("SELECT $1::text[]::aclitem[]::text acl",[[...items,"jobguard_binding_owner=r/jobguard_migration"]])).rows[0]!.acl;
     }
+    const delta=billingProof.upgrade.find((v:any)=>v.section==='relations'&&v.before?.relname===row.relname);
+    if(delta){expect(relacl).toBe(delta.before.relacl);relacl=delta.after.relacl;}
     return {...row,relacl};
   }));
   expect((await f.admin.query("SELECT oid,relname,relacl::text,relowner,relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=ANY($1::oid[]) ORDER BY oid",[grants.map(row=>row.oid)])).rows).toEqual(expectedGrants);

@@ -75,6 +75,10 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
       expect(current.policies).toHaveLength((row.policies?.length ?? 0) + 1);
       for (const policy of row.policies ?? []) expect(current.policies).toContainEqual(policy);
       expect(current.policies.some((policy: { polname: string }) => policy.polname === (row.relname.startsWith("extra_") ? "lp6_client_binding_read" : "lp6_customer_binding_read"))).toBe(true);
+    } else if(row.nspname==='app' && ['customer_invoice','customer_invoice_evidence','customer_credit_note','customer_payment','customer_payment_reversal','customer_invoice_sequence','customer_credit_note_sequence'].includes(row.relname)) {
+      // 0980 changes only billing ACLs; exact replay metadata was checked above.
+      const current=replayCatalog.find(r=>r.nspname===row.nspname&&r.relname===row.relname)!;
+      expect({...current,relacl:row.relacl}).toEqual(row);
     } else if(row.nspname==='app' && row.relname==='final_check_manifest_tenant_id_job_id_lock_id_key') {
       // 0698 replaces only this index's lock identity with lock+attempt; its relation metadata is in the proof.
       expect(replayCatalog.some(r=>r.nspname===row.nspname && r.relname===row.relname)).toBe(false);
@@ -185,6 +189,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.begin_command(p_version text, p_command_id uuid, p_command_type text, p_semantic_key text, p_resource jsonb, p_expected_revisions jsonb, p_significant_input jsonb)", "0724_lp6c_customer_portal_delegation.sql"],
     ["app.complete_command(p_command_id uuid, p_outcome jsonb)", "0724_lp6c_customer_portal_delegation.sql"],
     ["app.mon1_company_actor(t uuid, digest text)", "0723_lp6c_money_binding.sql"],
+    ["app.advance_final_account_draft(p_tenant uuid, p_draft uuid, p_revision uuid, p_number integer)", "0980_lp8a_billing_revokes.sql"],
     ["app.xa_client_view_authority(p_job uuid, p_request uuid, p_actor uuid, p_email text)", "0686_extra_client_authority_loss.sql"],
     ["app.xa_client_decide(p_job uuid, p_request uuid, p_command uuid, p_actor uuid, p_token_hash text, p_email text, p_hash text, p_net bigint, p_reject boolean, p_reason text, p_role_name text, p_tester text)", "0686_extra_client_authority_loss.sql"],
     ["identity.extra_customer_use(t uuid, j uuid, c uuid, digest text, session_digest text, operation text)", "0686_extra_client_authority_loss.sql"],
@@ -231,6 +236,10 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
       for (const [before, after] of patches.get(identity) ?? []) {
         expect(definition.split(before)).toHaveLength(2);
         definition = definition.replace(before, after);
+      }
+      if(identity==='app.advance_final_account_draft(p_tenant uuid, p_draft uuid, p_revision uuid, p_number integer)') {
+        expect(definition).toContain("SET search_path TO 'pg_catalog', 'app'");
+        definition=definition.replace("SET search_path TO 'pg_catalog', 'app'", "SET search_path TO 'pg_catalog', 'app', 'pg_temp'");
       }
       expect(row.definition).toBe(definition);
     } else {

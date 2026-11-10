@@ -100,3 +100,11 @@ it("applies the cutover to an installed predecessor without changing stored bill
   expect(await upgraded.balance(account.context,invoice.id)).toMatchObject({balance:{pence:12000}});
  } finally { await old?.close(); }
 },300_000);
+
+it("checks preflight job scope without granting writes or consuming a number",async()=>{
+ const {a,context}=await invoiceFixture();
+ await withTenant(f.runtime,context,db=>db.$client.query("SELECT app.lock_customer_invoice_issue($1)",[a.jobId]));
+ await expect(withTenant(f.runtime,context,db=>db.$client.query("SELECT app.lock_customer_invoice_issue($1)",[randomUUID()]))).rejects.toMatchObject({code:"42501"});
+ expect((await f.admin.query("SELECT count(*)::int n FROM app.customer_invoice_sequence WHERE tenant_id=$1",[a.tenantId])).rows[0].n).toBe(0);
+ expect((await f.runtime.query("SELECT has_table_privilege(current_user,'app.job','UPDATE') allowed")).rows[0].allowed).toBe(false);
+});

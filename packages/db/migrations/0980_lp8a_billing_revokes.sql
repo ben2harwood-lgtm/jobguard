@@ -16,7 +16,7 @@ REVOKE EXECUTE ON FUNCTION app.reserve_customer_invoice_number(uuid)
 
 -- Retain the installed four-argument interface. Actor identity comes from the
 -- unforgeable transaction binding, never from a tenant/actor GUC or the draft.
--- Rebuild the latest base definition (0016) with LP-6c protected binding.
+-- Retain the latest pointer trigger (0677) and add LP-6c protected binding.
 -- No historical migration changes.
 CREATE OR REPLACE FUNCTION app.advance_final_account_draft(
  p_tenant uuid,p_draft uuid,p_revision uuid,p_number integer
@@ -35,7 +35,7 @@ BEGIN
   AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp());
  IF NOT FOUND THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
  IF p_draft IS NULL OR p_revision IS NULL OR p_number IS NULL OR p_number<1 THEN
-  RAISE EXCEPTION 'INVALID_FINAL_ACCOUNT_REVISION' USING ERRCODE='22023';
+  RAISE EXCEPTION 'INVALID_TRANSITION' USING ERRCODE='23514';
  END IF;
  SELECT * INTO head FROM app.final_account_draft
   WHERE tenant_id=p_tenant AND id=p_draft FOR UPDATE;
@@ -46,12 +46,12 @@ BEGIN
  SELECT r.* INTO candidate FROM app.final_account_revision r
   WHERE r.tenant_id=p_tenant AND r.job_id=head.job_id AND r.final_account_draft_id=head.id
    AND r.id=p_revision AND r.revision=p_number;
- IF NOT FOUND THEN RAISE EXCEPTION 'INVALID_FINAL_ACCOUNT_REVISION' USING ERRCODE='22023'; END IF;
+ IF NOT FOUND THEN RAISE EXCEPTION 'INVALID_TRANSITION' USING ERRCODE='23514'; END IF;
  -- An exact retry is harmless. Rewind, skipped numbers and a branch off a
  -- different parent must never move the authoritative current pointer.
  IF head.current_revision_id=p_revision AND head.revision=p_number THEN RETURN; END IF;
  IF p_number<>head.revision+1 OR candidate.previous_revision_id IS DISTINCT FROM head.current_revision_id THEN
-  RAISE EXCEPTION 'STALE_FINAL_ACCOUNT_REVISION' USING ERRCODE='40001';
+  RAISE EXCEPTION 'INVALID_TRANSITION' USING ERRCODE='23514';
  END IF;
  UPDATE app.final_account_draft SET current_revision_id=p_revision,revision=p_number,
   updated_at=transaction_timestamp() WHERE tenant_id=p_tenant AND id=p_draft;
@@ -100,7 +100,9 @@ BEGIN
   RAISE EXCEPTION 'AUTHORIZATION_INVALID' USING ERRCODE='42501'; END IF;
  RETURN jsonb_build_object('tenant',t,'actor',actor,'job',c.resource->>'subjectRef','authorization',a.id,'action',action,'semanticKey',r.semantic_key);
 END $$;
+GRANT CREATE ON SCHEMA app TO jobguard_command_writer;
 ALTER FUNCTION app.lp8a_billing_command(uuid,text) OWNER TO jobguard_command_writer;
+REVOKE CREATE ON SCHEMA app FROM jobguard_command_writer;
 REVOKE ALL ON FUNCTION app.lp8a_billing_command(uuid,text) FROM PUBLIC,jobguard_runtime;
 GRANT EXECUTE ON FUNCTION app.lp8a_billing_command(uuid,text) TO jobguard_migration;
 
@@ -134,6 +136,23 @@ BEGIN
 END $$;
 ALTER FUNCTION app.lp8a_billing_pdf(text[],boolean) OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.lp8a_billing_pdf(text[],boolean) FROM PUBLIC,jobguard_runtime;
+
+-- Lock before the dispatcher takes its audit lock, in job/number order.
+-- This grants no write or approval: identity, owner and resource are checked.
+CREATE FUNCTION app.lock_customer_invoice_issue(p_job uuid) RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app,pg_temp AS $$
+DECLARE t uuid:=app.current_tenant(); actor uuid:=app.current_actor();
+BEGIN
+ IF t IS DISTINCT FROM nullif(current_setting('app.tenant_id',true),'')::uuid THEN
+  RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501'; END IF;
+ PERFORM app.final_check_require_invoice_actor(t,p_job,actor);
+ PERFORM 1 FROM app.job WHERE tenant_id=t AND id=p_job FOR UPDATE;
+ IF NOT FOUND THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
+ PERFORM pg_advisory_xact_lock(hashtextextended(t::text||':customer-invoice-number',0));
+END $$;
+ALTER FUNCTION app.lock_customer_invoice_issue(uuid) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lock_customer_invoice_issue(uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION app.lock_customer_invoice_issue(uuid) TO jobguard_runtime;
 
 -- Compatibility for the exact-PDF legacy API, not an alternate approval path.
 -- Amounts, proof copies and number allocation are derived here, never DML from

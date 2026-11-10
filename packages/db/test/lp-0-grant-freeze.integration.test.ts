@@ -334,7 +334,7 @@ describe("LP-0 grant freeze guard against the fully migrated database", () => {
     const groups = new Map(inventory.groups.map(g => [g.id, g]));
     for (const table of ["app.customer_invoice_sequence", "app.customer_credit_note_sequence"]) {
       const entries = inventory.entries.filter(e => e.key.includes(`|${table}|${APPLICATION_ROLE}|`));
-      expect(entries.map(e => e.key.split("|")[5]).sort(), table).toEqual(["INSERT", "SELECT"]);
+      expect(entries.map(e => e.key.split("|")[5]).sort(), table).toEqual(["SELECT"]);
       for (const e of entries) {
         const g = groups.get(e.group)!;
         expect(g.kind, table).toBe("money");

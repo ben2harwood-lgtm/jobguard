@@ -1,3 +1,4 @@
+import { DEMO_MEMBERSHIP_ID } from "../src/demo-seed.js";
 import { fakeAuditAppend } from "./audit-protocol-fixture.js";
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
@@ -32,8 +33,8 @@ class FinalAccountSql {
     this.calls.push(sql);
     const rows = (items: Row[]) => ({ rows: items, rowCount: items.length });
     if (sql === "SELECT app.bind_request($1, $2, $3)") return rows([]);
-    if (sql === "SELECT app.current_actor() actor, app.current_tenant() tenant") return rows([{ actor: jobId, tenant: tenantId }]);
-    if (sql.includes("authenticate_practice_session")) return rows([{ tenant_id: tenantId, membership_id: jobId, identity_user_id: scopeId }]);
+    if (sql === "SELECT app.current_actor() actor, app.current_tenant() tenant") return rows([{ actor: DEMO_MEMBERSHIP_ID, tenant: tenantId }]);
+    if (sql.includes("authenticate_practice_session")) return rows([{ tenant_id: tenantId, membership_id: DEMO_MEMBERSHIP_ID, identity_user_id: scopeId }]);
     if (sql.includes("WITH RECURSIVE practice_owned_job")) return rows([{ id: jobId }]);
     if (sql.startsWith("SELECT 1 FROM app.membership")) {
       const pause = this.pauseMember;

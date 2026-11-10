@@ -76,6 +76,10 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     expect(signature.split("(")[0]).toBe(`app.${body[1]}`);
     lp6cReplacements.set(oid, body[4]!);
   }
+  // 0980 adds bound ownership without changing the 0677 refusal contract.
+  const billingSql=await readFile(new URL("../migrations/0980_lp8a_billing_revokes.sql",import.meta.url),"utf8");
+  const advanceOid=(await c.admin.query("SELECT 'app.advance_final_account_draft(uuid,uuid,uuid,integer)'::regprocedure::oid oid")).rows[0].oid;
+  lp6cReplacements.set(advanceOid,billingSql.split("CREATE OR REPLACE FUNCTION app.advance_final_account_draft(")[1]!.split("AS $$")[1]!.split("$$;")[0]!);
   // Only these six exact identities receive their latest 0724 bodies. Their
   // owners, ACLs and all other metadata remain checked by successor proofs.
   const delegationSql = await readFile(new URL("../migrations/0724_lp6c_customer_portal_delegation.sql", import.meta.url), "utf8");
@@ -410,6 +414,12 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
       expect(current?.source).toBe(body);
     } else if (ent5Bodies.has(routineKey(`${prior.nspname}.${prior.proname}(${prior.args})`))) {
       expect(current?.definition?.split("$function$")[1]).toEqual(ent5Bodies.get(routineKey(`${prior.nspname}.${prior.proname}(${prior.args})`)));
+    } else if (prior.oid===advanceOid) {
+      const replacement=lp6cReplacements.get(advanceOid)!;
+      expect(prior.definition).toContain("SET search_path TO 'pg_catalog', 'app'");
+      expect(current?.definition).toBe(prior.definition!.replace(prior.source,()=>replacement)
+        .replace("SET search_path TO 'pg_catalog', 'app'", "SET search_path TO 'pg_catalog', 'app', 'pg_temp'"));
+      expect(current?.source).toBe(replacement);
     } else if (lp6cReplacements.has(prior.oid)) {
       const replacement = lp6cReplacements.get(prior.oid)!;
       expect(current?.definition).toEqual(prior.definition === null ? null : prior.definition.replace(prior.source, () => replacement));
