@@ -26,7 +26,7 @@ it("1200 reproduces the populated predecessor failure, changes only two routine 
  expect(await code(approvals.markDuplicate(w.ctx,actor,reverse))).toBe("INVALID_TRANSITION");
  expect(await code(approvals.reviseExtra(w.ctx,w.w.members.surveyor.member,revision))).toBe("INVALID_TRANSITION");
  const before = await snapshot(c.admin);
- const catalogue = async () => (await c!.admin.query(`SELECT p.oid,p.proowner,p.proacl,p.prosecdef,p.proconfig,pg_get_functiondef(p.oid) definition
+ const catalogue = async () => (await c!.admin.query(`SELECT p.oid,p.proname,p.proowner,p.proacl,p.prosecdef,p.proconfig,pg_get_functiondef(p.oid) definition
   FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname IN('app','identity','control_plane','audit_control','worm_control') AND p.prokind='f' ORDER BY p.oid`)).rows;
  const routines = await catalogue();
  const sql = await readFile(new URL(`../migrations/${migration}`,import.meta.url),"utf8");
@@ -47,4 +47,36 @@ it("1200 reproduces the populated predecessor failure, changes only two routine 
  await w.exported();
  const lines = (await w.repo.read(w.ctx,w.session,w.s.jobId)).exports.flatMap(x=>x.artifact.lines);
  expect(lines.map(x=>x.extraId).sort()).toEqual([a,b].sort());
+
+ // 0653 adds one read routine. Pin it by name and exact body; every predecessor
+ // routine (including 0622's repaired writers) must remain byte-for-byte unchanged.
+ const beforeReadUpgrade = await catalogue(), beforeReadRows = await snapshot(c.admin);
+ await c.admin.query(await readFile(new URL("../migrations/0653_relinked_extra_reconciliation.sql",import.meta.url),"utf8"));
+ const afterReadUpgrade = await catalogue();
+ const added = afterReadUpgrade.filter(row=>!beforeReadUpgrade.some(old=>old.oid===row.oid));
+ expect(added.map(row=>row.proname)).toEqual(["contractor_approved_not_exported"]);
+ expect(added[0]!.definition).toBe(`CREATE OR REPLACE FUNCTION app.contractor_approved_not_exported(p_session uuid, p_job uuid)
+ RETURNS TABLE(extra_id uuid, net_pence bigint)
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+DECLARE t uuid;
+BEGIN
+ PERFORM app.cb_authority(p_session,p_job,false);
+ t:=nullif(current_setting('app.tenant_id',true),'')::uuid;
+ RETURN QUERY
+ SELECT q.variation_id,q.net_pence
+ FROM app.extra_approval_request q
+ JOIN app.extra_approval_outcome o ON(o.tenant_id,o.request_id)=(q.tenant_id,q.id) AND o.kind='approved'
+ WHERE q.tenant_id=t AND q.job_id=p_job
+ AND q.request_revision=(SELECT max(x.request_revision) FROM app.extra_approval_request x WHERE x.tenant_id=q.tenant_id AND x.variation_id=q.variation_id)
+ AND NOT EXISTS(SELECT 1 FROM app.billing_export_line l WHERE l.tenant_id=q.tenant_id AND l.extra_id=q.variation_id)
+ AND app.xa_latest_kind(q.tenant_id,q.job_id,q.variation_id)='approved'
+ ORDER BY q.variation_id;
+END $function$
+`);
+ expect(afterReadUpgrade.filter(row=>beforeReadUpgrade.some(old=>old.oid===row.oid))).toEqual(beforeReadUpgrade);
+ expect(await snapshot(c.admin)).toEqual(beforeReadRows);
+ expect((await w.repo.read(w.ctx,w.session,w.s.jobId)).reconciliation.approvedNotExported).toEqual([]);
 },240000);

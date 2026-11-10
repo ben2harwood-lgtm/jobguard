@@ -63,6 +63,7 @@ describe("ENT-3b visit authority: the rule, cell by cell", () => {
 describe("ENT-3b catalogue", () => {
  const functions = [
   ["ent3b_visit_authority", "uuid,uuid", false, true], ["ent3b_start_visit", "uuid,uuid,uuid", true, true], ["ent3b_complete_visit", "uuid,uuid,uuid,uuid,text", true, true], ["ent3b_require_open_visit", "uuid,uuid", false, true],
+  ["ent3b_close_abandoned_visit", "uuid,uuid,uuid,uuid,text", true, true],
   ["ent3b_closeout_guard", "", false, false], ["ent3b_require_closeout_audit", "", false, false],
  ] as const;
  it("[B19] every function: owner, definer flag, pinned search_path, explicit execute grants, nothing for PUBLIC or the infrastructure role", async () => {

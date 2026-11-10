@@ -199,7 +199,7 @@ export class SiteExtraApplication {
  async assignedJobs(principal: unknown) {
   return this.visitRequest(principal, async (sessionId, member) => {
    const context = await this.resolveContext(sessionId, member);
-   const result = await this.visits.assignedJobs(context, member);
+   const result = await this.visits.assignedJobs(context, member, { includeLastCompletedVisit: true });
    return siteAssignedJobsV1.parse({ version: "site-assigned-jobs.v1", environment: "synthetic_demo", realExternalActions: 0, jobs: result.jobs, truncated: result.truncated });
   });
  }

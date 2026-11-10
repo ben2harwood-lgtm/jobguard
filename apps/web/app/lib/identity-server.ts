@@ -3,6 +3,22 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { createIdentityApplication, identityStatus, type IdentityApplication } from "@jobguard/api/identity";
 const registry=globalThis as typeof globalThis & {__jobguardIdentityApplication?:IdentityApplication};
+export function identityClientAddress(request: Request): string {
+  // Only the deployment-selected Workers ingress may supply this identity.
+  // Local/Node requests retain the shared fail-closed bucket, even with CF headers.
+  const address = process.env.JOBGUARD_HOSTING === "cloudflare"
+    ? request.headers.get("cf-connecting-ip") : null;
+  if (!address) return "web-bootstrap";
+  if (address.includes(":")) {
+    // The web URL parser validates and canonicalizes a bracketed IPv6 literal.
+    if (!/^[0-9a-f:.]+$/i.test(address)) return "web-bootstrap";
+    try { return new URL(`http://[${address}]`).hostname.slice(1, -1); }
+    catch { return "web-bootstrap"; }
+  }
+  const octets = address.split(".");
+  return octets.length === 4 && octets.every(octet => /^(0|[1-9]\d{0,2})$/.test(octet) && Number(octet) <= 255)
+    ? address : "web-bootstrap";
+}
 export function identityApplication() {
   // Never retain a Worker socket between requests; release closes the connection.
   if (process.env.JOBGUARD_HOSTING === "cloudflare") return createIdentityApplication(process.env,{max:1,maxUses:1});

@@ -1,0 +1,49 @@
+{
+  "migration": "0721_interim_draft_rules.sql",
+  "lp0": [
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.interim_draft_records(uuid,text,uuid,text,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.interim_draft_record"
+        ],
+        "staticCalls": [
+          "app.mon1_company_actor"
+        ]
+      },
+      "after": {
+        "identity": "function:app.interim_draft_records(uuid,text,uuid,text,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.interim_draft_record"
+        ],
+        "staticCalls": [
+          "app.mon1_company_actor",
+          "app.require_watchdog_live"
+        ]
+      }
+    }
+  ],
+  "upgrade": [],
+  "tenancy": []
+}

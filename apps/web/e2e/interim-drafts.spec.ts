@@ -36,6 +36,22 @@ test("stored kinds survive reload, uncertain retry is unique, duplicate billing 
     // Source lineage fixtures, never issue authority or a commercial document.
     await admin.query("INSERT INTO app.quote_version(tenant_id,job_id,id,version,content_hash,net_value_pence,status) VALUES($1,$2,$3,1,$4,10000,'accepted')", [member.tenantId,jobId,baseline,"a".repeat(64)]);
     await admin.query("INSERT INTO app.scope_revision(tenant_id,job_id,id,scope_item_id,revision,description,quantity_decimal,unit,unit_price_pence,total_pence) VALUES($1,$2,$3,$4,1,'Fictional work','1','item',10000,10000)", [member.tenantId,jobId,revision,scopeId]);
+    // Owner-only fictional lifecycle fixture, as in M4-1-S; never a route or issue authority.
+    const fixture = await admin.connect();
+    try {
+      await fixture.query("BEGIN");
+      await fixture.query("SET LOCAL session_replication_role=replica");
+      await fixture.query("SELECT set_config('app.tenant_id',$1,true)", [member.tenantId]);
+      const lifecycle = (await fixture.query("SELECT revision FROM app.job WHERE tenant_id=$1 AND id=$2", [member.tenantId,jobId])).rows[0] as { revision: number };
+      const move = (expected: number, to: string, reason: string, live = false) => fixture.query(
+        "SELECT app.transition_job($1,$2,$3,$4,$5,$6,$7,$8,$9)",
+        [member.tenantId,jobId,expected,to,reason,baseline,live?10000:null,live?"reference_fee_policy_v1":null,live?150:null]);
+      await move(lifecycle.revision,"quoting","start_quote");
+      await move(lifecycle.revision+1,"accepted","accept_quote");
+      await move(lifecycle.revision+2,"live","switch_live",true);
+      await fixture.query("SET LOCAL session_replication_role=origin");
+      await fixture.query("COMMIT");
+    } catch (error) { await fixture.query("ROLLBACK"); throw error; } finally { fixture.release(); }
     const repository = new db.InterimDraftRepository(runtime), digest = provider.digest(`session:${session.sessionToken}`);
     const schedule = { id: randomUUID(), version: "interim.schedule.v1", revision: 1, previousScheduleId: null,
       baselineSnapshotId: baseline, approvalDecisionId: randomUUID(), valuationDates: ["2026-11-01"],
@@ -75,7 +91,7 @@ test("stored kinds survive reload, uncertain retry is unique, duplicate billing 
     await page.reload(); await expect(alert).toHaveText("Stored draft book loaded.");
     await expect(main.getByRole("region",{name:"Synthetic receipt",exact:true}).locator("pre")).toHaveCount(1);
     await expect(main.getByRole("region",{name:"Synthetic receipt",exact:true})).toContainText(receipt.id);
-    const saved = await repository.read(verified,jobId); expect(saved.book.records).toHaveLength(5);
+    const saved = await repository.read(verified,jobId,digest); expect(saved.book.records).toHaveLength(5);
     expect(saved.reconciliation.lines[0]).toMatchObject({applied:{pence:8000},certified:{pence:6000},invoiced:{pence:4000}});
     expect(saved.reconciliation.grossReceived.pence).toBe(2000);
     await expect(main.getByRole("region",{name:"Application",exact:true})).toContainText("8000");
@@ -85,7 +101,7 @@ test("stored kinds survive reload, uncertain retry is unique, duplicate billing 
     await main.getByLabel("Record JSON",{exact:false}).fill(JSON.stringify({...invoice,id:randomUUID()}));
     await main.getByRole("button",{name:"Add record",exact:true}).click();
     await expect(alert).toHaveText("The same completed value cannot be invoiced twice");
-    expect((await repository.read(verified,jobId)).book.records).toHaveLength(5);
+    expect((await repository.read(verified,jobId,digest)).book.records).toHaveLength(5);
     await main.getByRole("button",{name:"Reload stored book"}).click();
     await expect(alert).toHaveText("Stored draft book loaded.");
     const post = (body: unknown) => page.request.post(endpoint, { headers: { Origin: baseURL!, "x-csrf-token": session.csrfToken }, data: body });
@@ -94,7 +110,7 @@ test("stored kinds survive reload, uncertain retry is unique, duplicate billing 
     const conflict = await post({...replay,record:{...receipt,amountPence:2001}});
     expect(conflict.status()).toBe(409); expect(await conflict.json()).toMatchObject({code:"INTERIM_DRAFT_CONFLICT"});
     for (const forged of [{tenantId:randomUUID()},{actor:digest},{enabled:true}]) expect((await post({...replay,...forged})).status()).toBe(400);
-    expect((await repository.read(verified,jobId)).book.records).toHaveLength(5);
+    expect((await repository.read(verified,jobId,digest)).book.records).toHaveLength(5);
     for (const target of await main.locator("button, textarea").all()) {
       const box = await target.boundingBox(); expect(box!.height).toBeGreaterThanOrEqual(44);
     }

@@ -123,7 +123,8 @@ describe("AUDIT-FIX-DBSRC-08 real PostgreSQL regressions", () => {
     } } as unknown as Pool;
     const repo = new MaterialRepository(racingPool);
     const input = { ...rate, merchantName: "Fictional racing merchant", taxBasis: "net" as const };
-    const results = await Promise.allSettled([repo.addRate(context, input), repo.addRate(context, input)]);
+    // LATER-SAFETY-138: identical retries are reused, so the racer differs in price to stay stale.
+    const results = await Promise.allSettled([repo.addRate(context, input), repo.addRate(context, { ...input, pricePence: input.pricePence + 500 })]);
     expect(backendIds.size).toBe(2);
     expect(results.filter(r => r.status === "fulfilled")).toHaveLength(1);
     expect(results.find(r => r.status === "rejected"))

@@ -73,6 +73,8 @@ it('emergency_dual_owner/scim2_machine preserve populated identity state, instal
   for(const m of (await readFile(url,'utf8')).matchAll(/CREATE OR REPLACE FUNCTION ([a-z_]+)\.([a-z0-9_]+)\(/gu))later.add(`${m[1]}.${m[2]}`);
  // 0642 and 0644 re-create these exact bodies by text replacement; plan-entitlement-lifecycle-upgrade pins each body.
  for(const name of ['app.xa_issue_link','app.lp5b_contractor_permission','app.northside_capture_action'])later.add(name);
+ // 0667 inserts the practice-owner guard into lock_final_account by text replacement; migfix-7 and plan-entitlement pin the body.
+ later.add('app.lock_final_account');
  // A later GRANT/REVOKE on a predecessor table may change its ACL only; that migration's proof and LP-0 pin it.
  const laterAcl=new Set<string>();
  for(const url of MIGRATION_URLS.slice(boundary+1))
@@ -84,9 +86,57 @@ it('emergency_dual_owner/scim2_machine preserve populated identity state, instal
  const isLanding=(r:Relation)=>r.nspname==='app'&&r.relname==='landing_allocation';
  type Con={name:string;definition:string};
  expect((after.relations.find(isLanding)!.constraints as Con[]).filter(c=>c.name===added)).toEqual([{name:added,definition:'CHECK ((eligible_net_pence <= gross_pence))'}]);
- const afterRelations=after.relations.map((r:Relation)=>isLanding(r)?{...r,constraints:(r.constraints as Con[]).filter(c=>c.name!==added)}:r);
+ // 0669 (LATER-SAFETY-119) only adds 'paid' to job_baseline_shape's imported v3 status list; nothing else on app.job may change.
+ const isJob=(r:Relation)=>r.nspname==='app'&&r.relname==='job',shape='job_baseline_shape';
+ const priorShape=(catalogue.relations.find(isJob)!.constraints as Con[]).find(c=>c.name===shape)!;
+ const nextShape=(after.relations.find(isJob)!.constraints as Con[]).find(c=>c.name===shape)!;
+ expect(nextShape.definition).not.toBe(priorShape.definition);
+ expect(nextShape.definition.replace(/, 'paid'::[a-z ]+(?=\])/,'')).toBe(priorShape.definition);
+ // 0702 (LATER-SAFETY-139) only drops NOT NULL from app.synthetic_evidence_original.scope_item_id; nothing else on that table may change.
+ const isOriginal=(r:Relation)=>r.nspname==='app'&&r.relname==='synthetic_evidence_original';
+ type Col={attname:string;attnotnull:boolean};
+ const originalScope=(rs:Relation[])=>(rs.find(isOriginal)!.columns as Col[]).find(c=>c.attname==='scope_item_id')!;
+ expect(originalScope(catalogue.relations).attnotnull).toBe(true);
+ expect(originalScope(after.relations).attnotnull).toBe(false);
+ // 0698 adds only the append-only attempt identity, its predecessor snapshot and the replacement unique key.
+ const isManifest=(r:Relation)=>r.nspname==='app'&&r.relname==='final_check_manifest';
+ const oldManifest=catalogue.relations.find(isManifest)!,newManifest=after.relations.find(isManifest)!;
+ const attemptColumns=['attempt','predecessor_manifest_id','withdrawn_predecessor_source_ids'];
+ expect((await h.admin.query(`SELECT a.attname name,format_type(a.atttypid,a.atttypmod) type,a.attnotnull not_null,
+  pg_get_expr(d.adbin,d.adrelid) default_expr FROM pg_attribute a LEFT JOIN pg_attrdef d ON(d.adrelid,d.adnum)=(a.attrelid,a.attnum)
+  WHERE a.attrelid='app.final_check_manifest'::regclass AND a.attname=ANY($1) ORDER BY a.attnum`,[attemptColumns])).rows).toEqual([
+  {name:'attempt',type:'integer',not_null:true,default_expr:'1'},
+  {name:'predecessor_manifest_id',type:'uuid',not_null:false,default_expr:null},
+  {name:'withdrawn_predecessor_source_ids',type:'uuid[]',not_null:true,default_expr:"'{}'::uuid[]"},
+ ]);
+ const attemptConstraints=[
+  {name:'final_check_attempt_chain',definition:'CHECK ((((attempt = 1) AND (predecessor_manifest_id IS NULL) AND (cardinality(withdrawn_predecessor_source_ids) = 0)) OR ((attempt > 1) AND (predecessor_manifest_id IS NOT NULL) AND (cardinality(withdrawn_predecessor_source_ids) > 0))))'},
+  {name:'final_check_attempt_predecessor',definition:'FOREIGN KEY (tenant_id, job_id, predecessor_manifest_id) REFERENCES app.final_check_manifest(tenant_id, job_id, id)'},
+  {name:'final_check_manifest_attempt_check',definition:'CHECK ((attempt > 0))'},
+  {name:'final_check_manifest_lock_attempt',definition:'UNIQUE (tenant_id, job_id, lock_id, attempt)'},
+ ];
+ const attemptNames=new Set(attemptConstraints.map(c=>c.name));
+ expect((newManifest.constraints as Con[]).filter(c=>attemptNames.has(c.name))).toEqual(attemptConstraints);
+ const oldLockKey=(oldManifest.constraints as Con[]).find(c=>c.name==='final_check_manifest_tenant_id_job_id_lock_id_key')!;
+ expect(oldLockKey).toBeDefined();
+ expect((newManifest.constraints as Con[]).some(c=>c.name===oldLockKey.name)).toBe(false);
+ const normalizedManifest={...newManifest,
+  columns:(newManifest.columns as {attname:string}[]).filter(c=>!attemptColumns.includes(c.attname)),
+  constraints:[...(newManifest.constraints as Con[]).filter(c=>!attemptNames.has(c.name)),oldLockKey].sort((a,b)=>a.name<b.name?-1:a.name>b.name?1:0),
+ };
+ const afterRelations=after.relations.map((r:Relation)=>isLanding(r)?{...r,constraints:(r.constraints as Con[]).filter(c=>c.name!==added)}
+  :isJob(r)?{...r,constraints:(r.constraints as Con[]).map(c=>c.name===shape?priorShape:c)}:isManifest(r)?normalizedManifest
+  :isOriginal(r)?{...r,columns:(r.columns as Col[]).map(c=>c.attname==='scope_item_id'?{...c,attnotnull:true}:c)}:r);
  expectRelationsUnchanged(catalogue.relations,afterRelations,laterAcl);
+ // 0672 lets its migration-owned pack writer read the sealed request binding; only that ACL entry is added.
+ const bindingReaders=new Set(['app.current_actor','app.current_tenant']);
  for(const row of catalogue.routines){
+  if(bindingReaders.has(`${row.nspname}.${row.proname}`)){
+   const added=after.routines.find((r:typeof row)=>r.nspname===row.nspname&&r.proname===row.proname&&r.args===row.args);
+   expect({...added,proacl:row.proacl}).toEqual(row);
+   expect(added.proacl).toBe(row.proacl.replace(/\}$/u,',jobguard_migration=X/jobguard_binding_owner}'));
+   continue;
+  }
   if(!later.has(`${row.nspname}.${row.proname}`)){expect(after.routines).toContainEqual(row);continue;}
   const {definition:_d,...kept}=row;
   expect(after.routines.map(({definition:_x,...r}:typeof row)=>r)).toContainEqual(kept);

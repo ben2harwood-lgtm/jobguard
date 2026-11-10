@@ -18,7 +18,7 @@ export const finalCheckCatchV1 = z.object({
 export type FinalCheckCatch = z.infer<typeof finalCheckCatchV1>;
 export const finalCheckTaskV1 = z.object({version:z.literal("final-check.task.v1"),jobId:uuid,manifestId:uuid}).strict();
 export class FinalCheckError extends Error {
- constructor(readonly code:"INVALID_FINAL_CHECK_INPUT"|"FINAL_CHECK_FORBIDDEN"|"FINAL_CHECK_PENDING"|"FINAL_CHECK_SOURCE_CHANGED"|"FINAL_CHECK_FAILED"|"IDEMPOTENCY_CONFLICT"|"STALE_REVISION"|"FINAL_ACCOUNT_LOCK_REQUIRED"){super(code);}
+ constructor(readonly code:"INVALID_FINAL_CHECK_INPUT"|"FINAL_CHECK_FORBIDDEN"|"FINAL_CHECK_PENDING"|"FINAL_CHECK_SOURCE_CHANGED"|"FINAL_CHECK_FAILED"|"IDEMPOTENCY_CONFLICT"|"STALE_REVISION"|"FINAL_ACCOUNT_LOCK_REQUIRED"|"JOB_WORK_CLOSED"){super(code);}
 }
 export function parseFinalCheckDisposition(raw:unknown):FinalCheckDisposition{
  const p=finalCheckDispositionV1.safeParse(raw);if(!p.success)throw new FinalCheckError("INVALID_FINAL_CHECK_INPUT");return Object.freeze(p.data);

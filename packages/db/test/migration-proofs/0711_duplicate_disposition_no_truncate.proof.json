@@ -1,0 +1,12 @@
+{
+  "migration": "0711_duplicate_disposition_no_truncate.sql",
+  "lp0": [
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.extra_duplicate_disposition|no_truncate|app.reject_immutable_commercial_mutation|BEFORE TRUNCATE|O"
+    }
+  ],
+  "upgrade": [],
+  "tenancy": []
+}

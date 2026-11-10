@@ -1,3 +1,5 @@
+import ts from "typescript";
+import { sourceFixtureUrl } from "../source-fixture-url.js";
 import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
@@ -34,6 +36,11 @@ describe("entered-code authentication", () => {
     expect(provider.fixtureMemberships()[0]).toMatchObject({ email: EMAIL, role: "owner" });
     expect(session.sessionToken).not.toContain("12345678");
     await expect(provider.authenticate(session.sessionToken)).resolves.toMatchObject({ csrfToken: session.csrfToken });
+    const principal = (await provider.authenticate(session.sessionToken))!;
+    expect(principal.sessionCredential).toMatch(/^[a-f0-9]{64}$/u);
+    expect(JSON.stringify(principal)).not.toContain(principal.sessionCredential);
+    expect(JSON.stringify(principal)).not.toContain("sessionCredential");
+    expect(Object.getOwnPropertyDescriptor(principal, "sessionCredential")).toMatchObject({ enumerable: false, writable: false });
   });
 
   it("enforces expiry, five attempts, resend cooldown and per-IP throttling", async () => {
@@ -111,7 +118,7 @@ describe("principal to tenant bridge", () => {
   });
 
   it("keeps the db context constructor call confined to the principal bridge", async () => {
-    const authDirectory = new URL(".", import.meta.url);
+    const authDirectory = sourceFixtureUrl(".", import.meta.url);
     const files = (await readdir(authDirectory)).filter((file) => file.endsWith(".ts") && !file.endsWith(".test.ts"));
     const callers: string[] = [];
     for (const file of files) {
@@ -153,10 +160,11 @@ describe("principal to tenant bridge", () => {
       sessionToken: session.sessionToken, csrfToken: session.csrfToken,
       requestedTenantId: membership.tenantId, origin: ORIGIN,
     }, ORIGIN);
-    const query = vi.fn(async (_sql: string, _values?: unknown[]) => ({ rows: [] }));
+    const query = vi.fn(async (sql: string, _values?: unknown[]) => ({ rows: sql.includes("app.current_actor()") ? [{ actor: membership.id, tenant: membership.tenantId }] : [] }));
     const connect = vi.fn(async () => ({ query, release: vi.fn() }));
     await withTenant({ connect } as unknown as Pool, ctx, async () => undefined);
     expect(connect).toHaveBeenCalledOnce();
+    expect(query).toHaveBeenCalledWith("SELECT app.bind_request($1, $2, $3)", ["real", (await provider.authenticate(session.sessionToken))!.sessionCredential, membership.tenantId]);
     expect(query).toHaveBeenCalledWith("SELECT set_config('app.tenant_id', $1, true)", [membership.tenantId]);
   });
 
@@ -188,8 +196,8 @@ describe("principal to tenant bridge", () => {
     expect(work).not.toHaveBeenCalled();
   });
 
-  it("allows only the worker to call the queued-system-job context constructor", async () => {
-    const root = new URL("../../../../", import.meta.url);
+  it("allows only the worker, EnterpriseAccessRepository.emergencyNotices and RetentionRecordRepository.raiseTimerReviews to build sessionless contexts", async () => {
+    const root = sourceFixtureUrl("../../../../", import.meta.url);
     const callers: string[] = [];
     async function inspect(directory: string): Promise<void> {
       for (const entry of await readdir(join(root.pathname, directory), { withFileTypes: true })) {
@@ -199,12 +207,40 @@ describe("principal to tenant bridge", () => {
         else if (/\.(?:[cm]?[jt]s|tsx)$/u.test(entry.name) && !/\.(?:test|spec)\./u.test(entry.name)) {
           // The definition and public re-export are not constructor callers.
           if (["packages/db/src/tenant-context.ts", "packages/db/src/index.ts"].includes(path)) continue;
-          if ((await readFile(join(root.pathname, path), "utf8")).includes("verifiedTenantContextForQueuedJob")) callers.push(path);
+          const source = await readFile(join(root.pathname, path), "utf8");
+          if (!source.includes("verifiedTenantContextForQueuedJob")) continue;
+          callers.push(path);
+          const port = path === "packages/db/src/enterprise-access-repository.ts" ? ["EnterpriseAccessRepository", "emergencyNotices"]
+            : path === "packages/db/src/retention-record-repository.ts" ? ["RetentionRecordRepository", "raiseTimerReviews"] : null;
+          if (port) {
+            const file = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true);
+            let imports = 0, calls = 0;
+            function check(node: ts.Node): void {
+              if (ts.isIdentifier(node) && node.text === "verifiedTenantContextForQueuedJob") {
+                if (ts.isImportSpecifier(node.parent) && node.parent.name === node && !node.parent.propertyName) imports++;
+                else {
+                  expect(ts.isCallExpression(node.parent) && node.parent.expression === node).toBe(true);
+                  let method: ts.Node | undefined = node.parent;
+                  while (method && !ts.isMethodDeclaration(method)) method = method.parent;
+                  expect(method && ts.isMethodDeclaration(method) && method.name.getText(file)).toBe(port![1]);
+                  expect(method?.parent && ts.isClassDeclaration(method.parent) && method.parent.name?.text).toBe(port![0]);
+                  calls++;
+                }
+              }
+              ts.forEachChild(node, check);
+            }
+            check(file);
+            expect({ imports, calls }).toEqual({ imports: 1, calls: 1 });
+          }
         }
       }
     }
     for (const directory of ["apps", "packages", "tools"]) await inspect(directory);
-    expect(callers.sort()).toEqual(["apps/api/src/worker.ts"]);
+    expect(callers.sort()).toEqual([
+      "apps/api/src/worker.ts",
+      "packages/db/src/enterprise-access-repository.ts",
+      "packages/db/src/retention-record-repository.ts",
+    ]);
   });
 });
 

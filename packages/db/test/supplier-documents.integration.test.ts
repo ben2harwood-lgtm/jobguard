@@ -126,3 +126,58 @@ it("retains the whole later-delivery position, replay identity, isolation and ma
   await repo.appendReceipt(ctx, deliveryJob, { accepted: "7", rejected: "0", expectedRevision: 3 });
   expect((await repo.view(ctx, deliveryJob)).receipt).toMatchObject({ revision: 4, accepted: "7", missing: "3", laterDelivered: "0" });
 });
+
+
+it("refuses receipt totals above ordered including rejected stock without a persisted effect", async () => {
+  const repo = new SupplierDocumentRepository(runtime);
+  const before = await repo.view(ctx, job);
+  const counts = async () => (await admin.query(`SELECT
+    (SELECT count(*) FROM app.goods_receipt WHERE tenant_id=$1 AND job_id=$2) receipts,
+    (SELECT count(*) FROM app.audit_event WHERE tenant_id=$1) audits`, [tenant, job])).rows[0];
+  const priorCounts = await counts();
+  for (const [accepted, rejected] of [["9", "2"], ["10", "0.000001"], ["10.000001", "0"]]) {
+    await expect(repo.appendReceipt(ctx, job, { commandId: randomUUID(), accepted: accepted!, rejected: rejected!, expectedRevision: before.receipt!.revision }))
+      .rejects.toMatchObject({ code: "ORDER_DELIVERY_EXCEEDS_ORDERED" });
+    expect(await counts()).toEqual(priorCounts);
+    expect((await repo.view(ctx, job)).receipt).toEqual(before.receipt);
+  }
+});
+
+
+it.each(["1", "8", "9.999999"])("rolls back fixture intake above %s ordered and permits the corrected retry", async ordered => {
+  const deliveryJob = randomUUID(), scopeId = randomUUID();
+  await importWatchdogFixtureJob(admin, tenant, deliveryJob);
+  await admin.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state)VALUES($1,$2,$3,'confirmed')", [scopeId, tenant, deliveryJob]);
+  const materials = new MaterialRepository(runtime);
+  const rate = await materials.addRate(ctx, { merchantName: `Fictional later delivery ${deliveryJob}`, sku: "MAT-B",
+    description: "Synthetic item", pricePence: 2000, priceUnit: "each", taxBasis: "net",
+    effectiveFrom: "2026-09-20", sourceLabel: "materials-B", expectedVersion: 0 });
+  const requirement = await materials.addRequirement(ctx, { jobId: deliveryJob, scopeItemId: scopeId,
+    skuId: rate.skuId, quantity: ordered, unit: "each", expectedRevision: 0 });
+  await new PurchaseOrderRepository(runtime).revise(ctx, deliveryJob, { version: "purchase-order-draft.v1",
+    requirementId: requirement.id, quantity: ordered, unitPricePence: 2000,
+    recipient: "orders@fictional-merchant.invalid", requiredDate: "2026-10-01", expectedRevision: 0 });
+  const repo = new SupplierDocumentRepository(runtime);
+  const counts = async () => (await admin.query(`SELECT
+    (SELECT count(*) FROM app.goods_receipt WHERE tenant_id=$1 AND job_id=$2) receipts,
+    (SELECT count(*) FROM app.supplier_document WHERE tenant_id=$1 AND job_id=$2) documents,
+    (SELECT count(*) FROM app.supplier_document_version WHERE tenant_id=$1 AND job_id=$2) versions,
+    (SELECT count(*) FROM app.supplier_document_intake WHERE tenant_id=$1 AND job_id=$2) intakes,
+    (SELECT count(*) FROM app.watchdog_command_identity WHERE tenant_id=$1 AND job_id=$2) identities,
+    (SELECT count(*) FROM app.watchdog_command_result r JOIN app.watchdog_command_identity i USING(tenant_id,command_id) WHERE i.tenant_id=$1 AND i.job_id=$2) results,
+    (SELECT count(*) FROM app.audit_event WHERE tenant_id=$1) audits`, [tenant, deliveryJob])).rows[0];
+  const before = await counts();
+  const input = { version: "supplier-document-intake.v1" as const, commandId: randomUUID(),
+    fixtureId: "materials-B-delivery" as const, channel: "picker" as const, expectedRevision: 0 };
+  await expect(repo.intake(ctx, deliveryJob, input)).rejects.toMatchObject({ code: "ORDER_DELIVERY_EXCEEDS_ORDERED" });
+  expect(await counts()).toEqual(before);
+  expect((await repo.view(ctx, deliveryJob)).receipt).toBeNull();
+  await new PurchaseOrderRepository(runtime).revise(ctx, deliveryJob, { version: "purchase-order-draft.v1",
+    requirementId: requirement.id, quantity: "10", unitPricePence: 2000,
+    recipient: "orders@fictional-merchant.invalid", requiredDate: "2026-10-01", expectedRevision: 1 });
+  const result = await repo.intake(ctx, deliveryJob, input);
+  expect((await repo.view(ctx, deliveryJob)).receipt).toMatchObject({ ordered: "10", delivered: "10", accepted: "8", missing: "2", revision: 1 });
+  const after = await counts();
+  expect(await repo.intake(ctx, deliveryJob, input)).toEqual(result);
+  expect(await counts()).toEqual(after);
+});

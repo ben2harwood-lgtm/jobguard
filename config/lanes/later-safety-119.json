@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-119": {
+      "branches": [
+        "codex/sandbox/later-safety-119"
+      ],
+      "allow": [
+        "packages/db/migrations/0669_imported_job_paid_shape.sql",
+        "packages/db/test/migration-proofs/0669_imported_job_paid_shape.proof.json",
+        "packages/db/test/imported-job-paid-shape.integration.test.ts",
+        "packages/db/test/enterprise-access-upgrade.integration.test.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts"
+      ]
+    }
+  }
+}

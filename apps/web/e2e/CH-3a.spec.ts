@@ -54,7 +54,7 @@ test("CH-3a a new practice session cannot read, change, import or list another s
     expect(await ownParties.text()).not.toContain(customer); expect(await ownParties.text()).not.toContain(site);
     const stolen = await stranger.request.post(`/api/jobs/${ownJob}/parties`, { data: mutation });
     expect(stolen.status(), await stolen.text()).toBe(404);
-    const other = await stranger.newPage(); await other.goto("/");
+    const other = await stranger.newPage(); await other.goto("/classic");
     await expect(other.getByLabel("Search jobs")).toBeVisible();
     await other.getByLabel("Search jobs").fill(customer); await expect(other.locator(".job-card")).toHaveCount(0);
     const reused = await returning.request.get(`/api/jobs/${jobId}/parties`);
@@ -102,7 +102,7 @@ test("CH-3a captures structured parties, gates live, and preserves authoritative
   await B(page,"Preview immutable quote").click();await B(page,"Simulate sending this quote").click();await B(page,"Continue fake worker").click();await B(page,"Record practice acceptance").click();await B(page,"Start this practice job").click();
   await expect(page.getByRole("heading",{name:"Live · baseline frozen",exact:true})).toBeVisible();
   await page.reload();await expect(page.getByTestId("party-binding-id")).toHaveText(binding);
-  await page.goto("/");await page.getByLabel("Search jobs").fill("Fictional Lettings");const card=page.locator(".job-card").filter({has:page.locator(`a[href="/jobs/${jobId}"]`)});await expect(card).toContainText("SW1A 1AA");await card.getByRole("link").click();await expect(page.getByTestId("party-binding-id")).toHaveText(binding);
+  await page.goto("/classic");await page.getByLabel("Search jobs").fill("Fictional Lettings");const card=page.locator(".job-card").filter({has:page.locator(`a[href="/jobs/${jobId}"]`)});await expect(card).toContainText("SW1A 1AA");await card.getByRole("link").click();await expect(page.getByTestId("party-binding-id")).toHaveText(binding);
   const other=await browser.newContext();await other.addCookies(await page.context().cookies());const second=await other.newPage();await second.goto(`/jobs/${jobId}`);await expect(second.getByTestId("party-binding-id")).toHaveText(binding);await expect(second.getByTestId("party-customer")).toHaveText("Fictional Lettings");await other.close();
   const importCommand={version:"job-parties-import.v1",commandId:crypto.randomUUID(),expectedBindingId:binding};
   const imports=await Promise.all([page.request.post(`/api/jobs/${jobId}/parties/import`,{data:importCommand}),page.request.post(`/api/jobs/${jobId}/parties/import`,{data:importCommand})]);
@@ -134,7 +134,7 @@ test("CH-3a makes reuse explicit, leaves different flats separate, and rejects s
   const outcomes=await Promise.all([page.request.post(`/api/jobs/${jobId}/parties`,{data:{...race,commandId:crypto.randomUUID()}}),other.request.post(`/api/jobs/${jobId}/parties`,{data:{...race,commandId:crypto.randomUUID()}})]);
   expect(outcomes.map(r=>r.status()).sort()).toEqual([200,409]);expect((await outcomes.find(r=>r.status()===409)!.json()).code).toBe("REVISION_CONFLICT");await other.close();
   await page.reload();await expect(page.getByTestId("party-site")).toContainText("Flat 2");
-  await page.goto("/");await page.locator(".job-card").filter({has:page.locator(`a[href="/jobs/${jobId}"]`)}).getByRole("link").click();await expect(page.getByTestId("party-site")).toContainText("Flat 2");
+  await page.goto("/classic");await page.locator(".job-card").filter({has:page.locator(`a[href="/jobs/${jobId}"]`)}).getByRole("link").click();await expect(page.getByTestId("party-site")).toContainText("Flat 2");
   await expect(page.locator(".sandbox-banner")).toHaveText("Practice sandbox — synthetic data; nothing is sent or charged");expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
 });
 
@@ -445,7 +445,7 @@ for (const party of ["customer", "payer"] as const) {
       expect(bound.ok(), await bound.text()).toBe(true); before = await partiesView(page, first);
     }
     // A second real job in the same practice session shares and then revises this party.
-    await page.goto("/"); await B(page, "＋ Start a new job").click();
+    await page.goto("/classic"); await B(page, "＋ Start a new job").click();
     await B(page, "Make my draft").click(); await B(page, "Check and edit my draft").click();
     await expect(page.getByRole("heading", { name: "Check the work items" })).toBeVisible();
     const second = new URL(page.url()).pathname.split("/").pop()!; const secondView = await partiesView(page, second);

@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LINKED_JOB_COPY, jobWorkStateCommandV1, jobWorkStateReadV1, type JobWorkStateEvent } from "@jobguard/core";
 import { closeReasonLabels, workEventLabels, workStateView, type CloseReason } from "./job-work-state-view";
+import { JOB_SAVED_EVENT } from "./job-page-fetch";
 import styles from "./practice-receipts.module.css";
 
 type View = ReturnType<typeof workStateView>;
@@ -14,20 +15,31 @@ export function JobWorkState({ jobId, company }: { jobId: string; company?: { te
  const [view, setView] = useState<View | null>(null), [busy, setBusy] = useState(true), [error, setError] = useState(""), [offer, setOffer] = useState(false);
  const [reason, setReason] = useState<CloseReason>("cancelled_by_customer"), [note, setNote] = useState("");
  const currentJob = useRef(jobId), inFlight = useRef(false), epoch = useRef(0), pending = useRef<Record<string, unknown> | null>(null);
+ const refreshRequested = useRef(false);
  currentJob.current = jobId;
  const current = (requestEpoch: number) => currentJob.current === jobId && epoch.current === requestEpoch;
  const read = useCallback(async () => {
-  const requestEpoch = ++epoch.current; inFlight.current = true; setBusy(true);
+  const requestEpoch = ++epoch.current; refreshRequested.current = false; inFlight.current = true; setBusy(true);
   try {
    const response = await fetch(endpoint, { cache: "no-store", headers: tenantId && csrfToken ? { "x-tenant-id": tenantId, "x-csrf-token": csrfToken } : {} });
    if (!response.ok) throw new Error("Site work could not load. Try loading it again.");
    const saved = jobWorkStateReadV1.parse(await response.json());
    if (saved.jobId !== jobId) throw new Error("Unexpected job response.");
    if (current(requestEpoch)) setView(workStateView(saved));
-  } catch (e) { if (current(requestEpoch)) setError(e instanceof Error ? e.message : "Site work could not load."); }
+  } catch (e) { if (current(requestEpoch)) { setView(null); setError(e instanceof Error ? e.message : "Site work could not load."); } }
   finally { if (epoch.current === requestEpoch) { inFlight.current = false; setBusy(false); } }
  }, [jobId, endpoint, tenantId, csrfToken]);
  useEffect(() => { pending.current = null; setView(null); setError(""); setOffer(false); void read(); return () => { epoch.current++; }; }, [read]);
+ useEffect(() => {
+  const saved = (event: Event) => {
+   if ((event as CustomEvent<{ jobId: string }>).detail?.jobId !== jobId) return;
+   refreshRequested.current = true;
+   // Preserve an in-flight or unknown command's identity until its outcome is resolved.
+   if (!pending.current) void read();
+  };
+  window.addEventListener(JOB_SAVED_EVENT, saved);
+  return () => window.removeEventListener(JOB_SAVED_EVENT, saved);
+ }, [jobId, read]);
  // A retry after an unknown outcome resends the exact pending command, never a new identity.
  const send = async (command: Record<string, unknown>) => {
   if (inFlight.current) return;
@@ -51,7 +63,7 @@ export function JobWorkState({ jobId, company }: { jobId: string; company?: { te
    if (saved.jobId !== jobId) throw new Error("Unexpected job response");
    if (current(requestEpoch)) { pending.current = null; setNote(""); setView(workStateView(saved)); }
   } catch { if (current(requestEpoch)) setError("The result is unknown. Retry the same action, or load the saved state first."); }
-  finally { if (epoch.current === requestEpoch) { inFlight.current = false; setBusy(false); } }
+  finally { if (epoch.current === requestEpoch) { inFlight.current = false; setBusy(false); if (refreshRequested.current && !pending.current) void read(); } }
  };
  const act = (action: "finish" | "cancel_finish" | "close" | "reopen" | "resume", extra: Record<string, unknown> = {}) => {
   if (!view) return;
@@ -61,7 +73,7 @@ export function JobWorkState({ jobId, company }: { jobId: string; company?: { te
  return <section id="site-work" className={styles.panel} aria-labelledby="site-work-title" aria-busy={busy} data-testid="job-work-state">
   <h2 id="site-work-title">Site work</h2>
   {error && <p role="alert">{error}</p>}
-  {(offer || view?.locked) && <p role="status" data-testid="linked-job-offer"><strong>{LINKED_JOB_COPY}</strong>. This job's final account is locked, so new site work belongs on a new job. <a href="/">Start a new job</a></p>}
+  {(offer || view?.locked) && <p role="status" data-testid="linked-job-offer"><strong>{LINKED_JOB_COPY}</strong>. This job's final account is locked, so new site work belongs on a new job. <a href="/classic">Start a new job</a></p>}
   {view && <>
    <p>State: <strong data-testid="work-state">{closed ? "Closed" : view.finishedMarkerId ? "Finished on site" : "Work under way"}</strong> · revision <span data-testid="work-state-revision">{view.revision}</span></p>
    <div className={styles.actions}>
