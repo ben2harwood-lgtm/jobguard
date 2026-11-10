@@ -34,7 +34,7 @@ it("registers the operational command, side-table proof and no commercial writer
  expect(withoutProceed).toHaveLength(registry.before!.data.length);
  const historicalCommandRegistryRows = currentCommandRegistryRows.filter(row => row.command_type !== "CloseAbandonedSiteVisit");
  expect(registry.after?.data).toHaveLength(historicalCommandRegistryRows.length);
- // 0634 predates 0960 and 0642: exclude the named successor; client sends still require owner.
+ // 0634 predates 0722 and 0642: exclude the named successor; client sends still require owner.
  expect(registry.after?.data).toEqual(expect.arrayContaining(historicalCommandRegistryRows.map(row =>
   row.command_type === "IssueClientApproval" ? { ...row, permission_rule: "owner" } : row)));
  expect(proof.tenancy).toEqual([{ relname: "extra_proceed_statement", before: null, after: { relrowsecurity: true, relforcerowsecurity: true, guarded: true, owner: "jobguard_migration" } }]);

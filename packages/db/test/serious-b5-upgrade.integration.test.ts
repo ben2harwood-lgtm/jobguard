@@ -1690,7 +1690,7 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  }
  const owners = (await f.admin.query("SELECT rolname, oid FROM pg_roles")).rows;
  const withProofs = applyUpgradeProofs(expected, proofs, Object.fromEntries(owners.map(r => [r.rolname, r.oid])));
- // 0960 is a named later successor, composed from its exact committed upgrade proof.
+ // 0722 is a named later successor, composed from its exact committed upgrade proof.
  expect((withProofs.rows["app.command_type_registry"] as { command_type: string }[])
   .filter(row => row.command_type === "CloseAbandonedSiteVisit")).toEqual([abandonedSiteVisitRegistryRow]);
  // Sort only committed expected values using the server collation, never select live objects as allowances.

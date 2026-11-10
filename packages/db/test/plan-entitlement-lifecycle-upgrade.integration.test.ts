@@ -31,8 +31,8 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   // Successor migrations have their own exact reviewed routine ACL additions.
   // Keep the 0556-only assertion above, and retain every predecessor definition.
   const live = await catalogue();
-  // 0960 adds only this exact administrative close routine; successor proofs bind its ACLs.
-  const abandonedVisit = await readFile(new URL("../migrations/0960_abandoned_visit_authority.sql", import.meta.url), "utf8");
+  // 0722 adds only this exact administrative close routine; successor proofs bind its ACLs.
+  const abandonedVisit = await readFile(new URL("../migrations/0722_abandoned_visit_authority.sql", import.meta.url), "utf8");
   const abandonedVisitRoutines = live.filter(row => row.nspname === "app" && row.proname === "ent3b_close_abandoned_visit"
     && row.args === "p_actor uuid, p_command uuid, p_job uuid, p_visit uuid, p_reason text");
   expect(abandonedVisitRoutines).toHaveLength(1);
@@ -84,10 +84,10 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     ["receipt_fact_invoice_line", "t uuid, j uuid, i uuid, l uuid, r uuid, k uuid, ch uuid", "0713_supplementary_after_combined_receipt.sql"],
     ["issue_practice_customer_invoice", "p_tenant uuid, p_job uuid, p_final_revision uuid, p_actor uuid, p_command uuid, p_recipient text, p_issued_on date", "0716_invoice_line_vat_signed_split.sql"],
     ["issue_practice_customer_credit_note", "p_tenant uuid, p_job uuid, p_invoice uuid, p_actor uuid, p_command uuid, p_net_pence bigint, p_reason text, p_preview_hash text", "0717_credit_request_digest_fields.sql"],
-    ["lp5b_contractor_permission", "p_type text, p_actor uuid, p_job uuid, p_input jsonb", "0960_abandoned_visit_authority.sql"],
-    ["lp5_bind_effect", "p_command uuid, p_authorization uuid, p_adapter text, p_reference jsonb", "0960_abandoned_visit_authority.sql"],
-    ["lp5b_contractor_result", "p_command uuid, p_outcome jsonb", "0960_abandoned_visit_authority.sql"],
-    ["ent3b_closeout_guard", "", "0960_abandoned_visit_authority.sql"],
+    ["lp5b_contractor_permission", "p_type text, p_actor uuid, p_job uuid, p_input jsonb", "0722_abandoned_visit_authority.sql"],
+    ["lp5_bind_effect", "p_command uuid, p_authorization uuid, p_adapter text, p_reference jsonb", "0722_abandoned_visit_authority.sql"],
+    ["lp5b_contractor_result", "p_command uuid, p_outcome jsonb", "0722_abandoned_visit_authority.sql"],
+    ["ent3b_closeout_guard", "", "0722_abandoned_visit_authority.sql"],
     ["receipt_fact_proposal", "t uuid, j uuid, p jsonb", "0692_final_check_post_invoice_receipt_gate.sql"],
     ["read_final_check_manifest", "t uuid, j uuid, m uuid", "0698_final_check_post_invoice_rerun.sql"],
     ["evidence_pack_v3_material", "t uuid, c uuid, ordinary_only boolean", "0698_final_check_post_invoice_rerun.sql"],

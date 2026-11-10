@@ -18,7 +18,7 @@ it("adds the resume guard without rewriting predecessor data or replacing the la
   expect(await predecessorCatalogue(cluster.admin)).toEqual(catalog);
   // Check 0581 against its exact predecessor before later migrations add their catalogues.
   await migrate(cluster.admin);
-  // 0606, 0609, 0620, 0623, 0634 and 0960 add the named later registry rows.
+  // 0606, 0609, 0620, 0623, 0634 and 0722 add the named later registry rows.
   const registry = (await cluster.admin.query("SELECT jsonb_agg(value ORDER BY value::text) data FROM jsonb_array_elements($1::jsonb)",
     [JSON.stringify([...(before["app.command_type_registry"] as { command_type: string }[]).map(row => row.command_type === "IssueClientApproval" ? { ...row, permission_rule: "contractor" } : row), darkOrderRegistryRow, rateSuggestionRegistryRow, contractorJobFinishRegistryRow, duplicateDispositionRegistryRow,extraProceedRegistryRow,abandonedSiteVisitRegistryRow])])).rows[0].data;
   expect(await snapshot(cluster.admin)).toEqual({ ...laterEmptyTables, ...before, "app.command_type_registry": registry });

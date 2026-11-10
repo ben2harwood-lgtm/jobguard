@@ -37,7 +37,7 @@ it("0905 upgrades populated approval requests without changing any earlier row, 
  // On replay 0639 (batch-41) and 0641 (batch-42) add only empty tables, and 0642 (Q10) moves IssueClientApproval
  // from the owner rule to the contractor rule. WALK-2 adds only an empty blank-practice session table;
  // LS-93 (0719) adds only an empty commercial_grant_use table. Every other row still compares exactly.
- // 0960 adds only the named CloseAbandonedSiteVisit registry row; every other row still compares exactly.
+ // 0722 adds only the named CloseAbandonedSiteVisit registry row; every other row still compares exactly.
  const replayedRegistryRows = (after["app.command_type_registry"] as { command_type: string; permission_rule: string }[]).map(row =>
   row.command_type === "IssueClientApproval" && row.permission_rule === "owner" ? { ...row, permission_rule: "contractor" } : row);
  const replayedRegistry = (await c.admin.query("SELECT jsonb_agg(value ORDER BY value::text) data FROM jsonb_array_elements($1::jsonb)",

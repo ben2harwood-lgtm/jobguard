@@ -1,5 +1,5 @@
 {
-  "migration": "0960_abandoned_visit_authority.sql",
+  "migration": "0722_abandoned_visit_authority.sql",
   "lp0": [
     {
       "section": "groups",
@@ -23,7 +23,7 @@
         },
         "downstream": "Synthetic administrative visit cleanup; no API, screen, commercial action or production enablement.",
         "sources": [
-          "packages/db/migrations/0960_abandoned_visit_authority.sql"
+          "packages/db/migrations/0722_abandoned_visit_authority.sql"
         ],
         "tests": [
           "packages/db/test/site-visit-abandoned.integration.test.ts"
@@ -64,7 +64,7 @@
           "LP-6d": "Bind the actor to the verified request; require active owner/admin and covering organisation.manage grant before execution or replay."
         },
         "sources": [
-          "packages/db/migrations/0960_abandoned_visit_authority.sql"
+          "packages/db/migrations/0722_abandoned_visit_authority.sql"
         ],
         "tests": [
           "packages/db/test/site-visit-abandoned.integration.test.ts"
