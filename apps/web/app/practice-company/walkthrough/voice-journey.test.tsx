@@ -357,8 +357,8 @@ it("prepares and sends the example in one default Show me action", async () => {
   let delivered = false;
   const root = {
     querySelector: (selector: string) => selector === ".review-line" ? {} : {
-      getAttribute: () => preparedId,
-      textContent: selector.includes("quote-delivery") ? delivered ? "Simulated delivery — nothing sent" : "" : "Fictional customer",
+      getAttribute: () => selector === ".quote-editor" ? "true" : preparedId,
+      textContent: selector.includes("quote-revision") ? "1" : selector.includes("quote-delivery") ? delivered ? "Simulated delivery — nothing sent" : "" : "Fictional customer",
     },
   };
   vi.stubGlobal("document", { getElementById: () => root });
@@ -378,4 +378,60 @@ it("prepares and sends the example in one default Show me action", async () => {
     expect(memo.setState.mock.calls.filter(([value]) => value === preparedId)).toHaveLength(1);
     expect(memo.steps[2]!.isDone()).toBe(true);
   } finally { price.mockRestore(); click.mockRestore(); }
+});
+
+it.each([0, 1])("default step 3 waits for the prepared editor and saves only an unpriced example: revision %s", async initialRevision => {
+  memo.states = [jobId, capture(), 0, 1, false, false, "", false, true, "", false, false]; memo.cursor = 0;
+  let activeJob = jobId, revision = 1, ready = false, readyChecked = false, delivered = false;
+  const root = {
+    querySelector: (selector: string) => {
+      if (selector === ".review-line") return null;
+      if (selector === ".review-line, .quote-editor, .confirmed-scope") return {};
+      if (selector === ".quote-editor") return { getAttribute: () => { readyChecked = true; return String(ready); } };
+      if (selector.includes("workspace-job-id")) return { getAttribute: () => activeJob };
+      if (selector.includes("quote-revision")) return { textContent: String(revision) };
+      if (selector.includes("quote-delivery")) return { textContent: delivered ? "Simulated delivery — nothing sent" : "Not queued" };
+      if (selector.includes("party-customer")) return { textContent: "Fictional customer" };
+      return null;
+    },
+  };
+  vi.stubGlobal("document", { getElementById: () => root });
+  vi.stubGlobal("sessionStorage", { getItem: () => jobId, setItem: vi.fn() });
+  const location = new URL("https://example.test/practice-company/walkthrough?walkJob=" + jobId);
+  vi.stubGlobal("location", location);
+  const replaceState = vi.fn((_: unknown, __: string, url: string) => { location.href = new URL(url, location.href).href; });
+  vi.stubGlobal("history", { replaceState });
+  vi.mocked(recoverCapture).mockImplementationOnce(async () => { activeJob = preparedId; revision = initialRevision; return preparedId; });
+  const click = vi.spyOn(screenActions, "click").mockImplementation(async name => {
+    expect(activeJob).toBe(preparedId);
+    if (name === "Save draft revision") { expect(ready).toBe(true); revision++; }
+    if (name === "Preview immutable quote") expect(revision).toBeGreaterThan(0);
+    if (name === "Continue fake worker") delivered = true;
+  });
+  const controller = new AbortController();
+  let action: Promise<void> | undefined;
+  try {
+    renderToStaticMarkup(<VoiceJourney />);
+    expect(memo.steps[1]!.isDone()).toBe(true);
+    expect(location.hash).toBe("#quote");
+    action = Promise.resolve(memo.steps[2]!.autoAction({} as HTMLElement, controller.signal));
+    // Attach the rejection handler before checking the asynchronous handoff.
+    const result = action.then(() => null, reason => reason);
+    await vi.waitFor(() => expect(activeJob).toBe(preparedId));
+    await vi.waitFor(() => expect(readyChecked || click.mock.calls.length > 0).toBe(true));
+    expect(click).not.toHaveBeenCalled();
+    ready = true;
+    expect(await result).toBeNull();
+    expect(location.hash).toBe("");
+    expect(click.mock.calls.map(([name]) => name)).toEqual([
+      ...(initialRevision === 0 ? ["Save draft revision"] : []),
+      "Preview immutable quote", "Simulate sending this quote", "Continue fake worker",
+    ]);
+    expect(revision).toBe(1);
+    expect(memo.steps[2]!.isDone()).toBe(true);
+  } finally {
+    controller.abort(new Error("Test complete"));
+    await action?.catch(() => {});
+    click.mockRestore();
+  }
 });

@@ -206,6 +206,9 @@ export function VoiceJourney() {
       let id = sessionStorage.getItem(key);
       if (!id) { id = crypto.randomUUID(); sessionStorage.setItem(key, id); }
       const jobId = await recoverCapture(id, core1000Source);
+      // A different job must not inherit the own job's open quote view.
+      const url = new URL(location.href);
+      history.replaceState(null, "", `${url.pathname}${url.search}`);
       rememberWalkJob("walkExample", jobId);
       current.current.prepared = jobId;
       setResumeIndex(2); setPrepared(jobId); setReport(false);
@@ -256,6 +259,12 @@ export function VoiceJourney() {
           await until(() => !!screen().querySelector(".review-line, .quote-editor, .confirmed-scope"), signal);
           if (screen().querySelector(".review-line")) await reviewAndPrice(signal);
           else if (!screen().querySelector(".quote-editor")) await click("Price the work", signal);
+        }
+        // An open editor can still be loading or have no saved revision.
+        await until(() => screen().querySelector(".quote-editor")?.getAttribute("data-quote-ready") === "true", signal);
+        if (!(Number(text("quote-revision")) > 0)) {
+          await click("Save draft revision", signal);
+          await until(() => Number(text("quote-revision")) > 0, signal);
         }
         if (!text("party-customer")) await click("Save customer and site", signal);
         await until(() => !!text("party-customer"), signal);
