@@ -4,7 +4,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { WorkspaceShell } from "./workspace-shell";
 import type { CaptureWorkspaceResponse } from "@jobguard/api/capture-contracts";
 
-const state = vi.hoisted(() => ({ values: [] as unknown[], effects: [] as (() => unknown)[], live: false }));
+const state = vi.hoisted(() => ({ values: [] as unknown[], effects: [] as (() => unknown)[], live: false, editor: null as React.ReactNode }));
 vi.mock("react", async original => ({
  ...await original<typeof React>(),
  useState: (initial: unknown) => [state.values.length ? state.values.shift() : typeof initial === "function" ? initial() : initial, vi.fn()],
@@ -19,7 +19,8 @@ vi.mock("./quote-editor", async original => {
   if (state.live) state.values = [true, null, false, false, true, jobId, 1, "", [], [], [], "practice@example.invalid", null, "simulated_delivery", false,
    { documentVersion: 1, netPence: 100000, totalPence: 120000, acceptedAt: "2026-11-09", actor: "Builder", method: "email", sourceEvidence: "Fictional" },
    null, "Fictional customer", "email", "2026-11-09", [], { acceptedNetPence: 100000, acceptedDocumentVersion: 1, baseCreditPence: 0 }, false, null, "no_charge"];
-  return QuoteEditor(props);
+  state.editor = QuoteEditor(props);
+  return state.editor;
  } };
 });
 vi.mock("./job-final-account", async original => {
@@ -120,4 +121,35 @@ it("keeps the review key stable when a command advances a plain job URL", () => 
  }
  expect(reviewKey("quoting")).toBeTruthy();
  expect(reviewKey("live")).toBe(reviewKey("quoting"));
+});
+
+
+it.each(["live", "invoiced", "paid"] as const)("keeps independent job controls on a plain saved %s job and scope anchor", status => {
+ for (const fragment of ["", "#scope"]) {
+  const html = renderToStaticMarkup(workspace(status, fragment));
+  for (const marker of ['id="site-work"', 'id="job-diary"', 'id="customer-messages"', 'id="final-check"']) {
+   expect(html, `${status}${fragment}: ${marker}`).toContain(marker);
+   expect(html.indexOf(marker)).toBeLessThan(html.indexOf('id="practice-tools"'));
+  }
+  expect(html).toContain('>Price the work</button>');
+  expect(html).not.toContain('class="quote-editor"');
+ }
+});
+
+it("does not put live job controls inside the quote fieldset or sidebar", () => {
+ renderToStaticMarkup(workspace("live", "#quote"));
+ let activationFound = false;
+ function inspect(node: React.ReactNode, ancestors: React.ReactElement<{ className?: string }>[]=[]) {
+  React.Children.forEach(node, child => {
+   if (!React.isValidElement<{ children?: React.ReactNode; className?: string }>(child)) return;
+   if (child.props.className === "activation-card") {
+    activationFound = true;
+    expect(ancestors.some(parent => parent.type === "fieldset")).toBe(false);
+    expect(ancestors.some(parent => parent.props.className === "quote-side")).toBe(false);
+   }
+   inspect(child.props.children, [...ancestors, child]);
+  });
+ }
+ inspect(state.editor);
+ expect(activationFound).toBe(true);
 });
