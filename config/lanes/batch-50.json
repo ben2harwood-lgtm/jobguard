@@ -1,0 +1,38 @@
+{
+  "version": 2,
+  "lanes": {
+    "batch-50": {
+      "branches": [
+        "codex/sandbox/batch-50"
+      ],
+      "note": "Batch-50 RED: combined later-safety fixes and branch audit; no migrations. NOPR.",
+      "allow": [
+        "apps/api/src/core-loop-shared.contract.test.ts",
+        "apps/api/src/fee-collection/success-fee-composition.ts",
+        "apps/api/src/subscription.access.test.ts",
+        "apps/api/src/subscription.authority.ts",
+        "apps/web/app/api/northside/extras/[extraId]/[action]/chain-actions.test.ts",
+        "apps/web/app/api/northside/extras/[extraId]/[action]/route.ts",
+        "apps/web/app/customer/extra-approvals/approvals.test.tsx",
+        "apps/web/app/customer/extra-approvals/approvals.tsx",
+        "docs/review/unmerged-branches-2026-11-05.md",
+        "packages/core/src/native-chaos.test.ts",
+        "packages/db/src/evidence-bundle-sources.ts",
+        "packages/db/src/evidence.ts",
+        "packages/db/src/inbox-relevance-repository.ts",
+        "packages/db/src/northside-demo.ts",
+        "packages/db/src/outbox.ts",
+        "packages/db/src/subscription-repository.ts",
+        "packages/db/test/customer-signin-lock-order.integration.test.ts",
+        "packages/db/test/evidence-bundle.integration.test.ts",
+        "packages/db/test/evidence.integration.test.ts",
+        "packages/db/test/extra-approval-chain.integration.test.ts",
+        "packages/db/test/extra-unlink-rule-parity.test.ts",
+        "packages/db/test/inbox-relevance.integration.test.ts",
+        "packages/db/test/recovery-billability.integration.test.ts",
+        "packages/db/test/subscription-actions.integration.test.ts",
+        "packages/db/test/success-fee-direct-debit.integration.test.ts"
+      ]
+    }
+  }
+}

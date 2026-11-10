@@ -108,7 +108,7 @@ export class PostgresReservationStore implements ReservationStore {
           await db.$client.query(`SELECT app.replace_fee_reservation_book($1,$2::jsonb,$3::jsonb)`,
             [tenantId, JSON.stringify(next), JSON.stringify(providerResult?.() ?? null)]);
         } catch (error) {
-          if (error instanceof Error && "code" in error && error.code === "23514")
+          if (error instanceof Error && "code" in error && (error.code === "23514" || error.code === "22P02"))
             throw new FeeCollectionError("COLLECTION_REFUSED");
           throw error;
         }

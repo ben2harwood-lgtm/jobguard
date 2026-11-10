@@ -50,3 +50,14 @@ describe("MON-2A exact-path subscription access (Ben, 28 Oct)", () => {
     expect(application.command).toHaveBeenCalledWith(expect.objectContaining({ sessionToken: "real" }), id, { kind: "x" });
   });
 });
+
+it.each([
+  [new SubscriptionPersistenceError("SUBSCRIPTION_STATEMENT_ALREADY_APPROVED"), 409, "SUBSCRIPTION_STATEMENT_ALREADY_APPROVED"],
+  [new SubscriptionPersistenceError("SUBSCRIPTION_UNAVAILABLE"), 503, "SUBSCRIPTION_UNAVAILABLE"],
+  [new Error("private unrelated failure"), 503, "SUBSCRIPTION_UNAVAILABLE"],
+])("the subscription command route maps %s to HTTP %s", async (error, status, code) => {
+  const application={command:vi.fn().mockRejectedValue(error)};
+  const controller=new SubscriptionController(()=>application as never,()=>identity(async()=>({})));
+  const envelope={version:"subscription-http-command.v1",commandId:"00000000-0000-4000-8000-000000000001",command:{kind:"approve_simulation"}};
+  await expect(controller.command(envelope,{headers:{}} as never)).rejects.toMatchObject({status,response:{version:"subscription-error.v1",code}});
+});
