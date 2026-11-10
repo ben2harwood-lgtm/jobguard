@@ -36,6 +36,8 @@ export function WorkspaceShell({jobId}:{jobId:string}){
  const[loading,setLoading]=useState(true),[fragment,setFragment]=useState("");
  const errorRef=useRef<HTMLHeadingElement>(null),generation=useRef(0),activeRequest=useRef<AbortController|null>(null);
  const currentJobId=useRef(jobId);currentJobId.current=jobId;
+ // The job whose captured review is mounted in this render, if any.
+ const shownJobId=useRef<string|null>(null);shownJobId.current=!loading&&!error&&capture?.jobId===jobId?jobId:null;
  const acceptSnapshot=useCallback((snapshot:CaptureWorkspaceResponse)=>{
   if(snapshot.jobId!==currentJobId.current)return;
   // A newer post-command read supersedes any pre-command navigation request.
@@ -43,7 +45,10 @@ export function WorkspaceShell({jobId}:{jobId:string}){
  },[]);
  const load=useCallback(async()=>{
   const current=++generation.current;activeRequest.current?.abort();const controller=new AbortController();activeRequest.current=controller;
-  setLoading(true);setError(null);setJob(null);setCapture(null);
+  // A re-read of the job already on screen keeps it mounted, so unsaved review
+  // choices and an open editor survive while the server copy reloads.
+  const keep=shownJobId.current===jobId;
+  if(!keep){setLoading(true);setJob(null);setCapture(null);}setError(null);
   try{
    const proposalResponse=await fetch(`/api/jobs/${encodeURIComponent(jobId)}/proposal`,{cache:"no-store",signal:controller.signal});
    if(current!==generation.current)return;
@@ -54,7 +59,7 @@ export function WorkspaceShell({jobId}:{jobId:string}){
    const response=await fetch(`/api/jobs/${encodeURIComponent(jobId)}`,{cache:"no-store",signal:controller.signal});
    if(current!==generation.current)return;
    if(!response.ok){setError([401,403,404].includes(response.status)?"forbidden":"unavailable");return;}
-   const parsed=jobWorkspaceResponseV1.parse(await response.json());if(current===generation.current)setJob(parsed.job);
+   const parsed=jobWorkspaceResponseV1.parse(await response.json());if(current===generation.current){setCapture(null);setJob(parsed.job);}
   }catch{if(current===generation.current&&!controller.signal.aborted)setError("unavailable");}
   finally{if(current===generation.current)setLoading(false);}
  },[jobId]);
@@ -82,9 +87,11 @@ export function WorkspaceShell({jobId}:{jobId:string}){
  if(capture)return <WatchdogStatusProvider jobId={jobId} initialStatus={capture.status}>
   <main className="workspace-page" id="captured-job-workspace" data-testid="workspace-job-id" data-job-id={jobId}>
    <header><h1>{capture.proposal.title}</h1><p className="status">{jobStatusLabels[capture.status]}</p></header>
+   {/* The section links come first and never change identity, so the first control
+       on the job page stays put while the journey card and customer form load. */}
+   <nav className="workspace-stages" aria-label="Saved job sections"><a href="#scope">Scope</a>{mayOpenSavedQuote(capture.status)&&<a href="#quote">Quote</a>}{hasStartedWork(capture.status)&&<><a href="#work-proof">Work and proof</a><a href="#final-account-title">Final account and invoices</a></>}</nav>
    <PracticeJourney jobId={jobId} status={capture.status}/>
    <JobParties jobId={jobId}/>
-   <nav className="workspace-stages" aria-label="Saved job sections"><a href="#scope">Scope</a>{mayOpenSavedQuote(capture.status)&&<a href="#quote">Quote</a>}{hasStartedWork(capture.status)&&<><a href="#work-proof">Work and proof</a><a href="#final-account-title">Final account and invoices</a></>}</nav>
    <section id="scope" tabIndex={-1}><div id="quote" tabIndex={-1}><ReviewProposal key={jobId} result={capture} initialPricing={pricing} fragment={fragment} beforeProof={<><JobWorkState jobId={jobId}/><JobDiary key={`diary:${jobId}`} jobId={jobId}/><CustomerMessages key={`messages:${jobId}`} jobId={jobId}/></>} beforeInvoices={<FinalCheckReveal jobId={jobId}/>} practiceTools={null} onSnapshot={acceptSnapshot} onScope={snapshot=>{if(snapshot.jobId!==currentJobId.current)return;acceptSnapshot(snapshot);setFragment("#scope");history.replaceState(null,"",`${location.pathname}${location.search}#scope`);}} back={()=>location.assign("/classic")}/></div></section>
    {!hasStartedWork(capture.status)&&<WatchdogPanel disableControls={false}><ProofStage jobId={jobId}/></WatchdogPanel>}
    <hr/>

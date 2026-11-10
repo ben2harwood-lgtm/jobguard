@@ -53,6 +53,12 @@ it("puts the job title, continue card and customer/site before scope and practic
  expect(positions.every(position => position >= 0)).toBe(true);
  expect(positions).toEqual([...positions].sort((a,b) => a-b));
 });
+it.each(["draft", "quoting", "live"] as const)("starts the %s job page with the fixed Scope link, ahead of panels that load later", status => {
+ const html = renderToStaticMarkup(workspace(status));
+ const first = html.match(/<(?:a|button|input|select|textarea)\b[^>]*>/u)?.[0];
+ expect(first).toBe('<a href="#scope">');
+ expect(html.indexOf('aria-label="Saved job sections"')).toBeLessThan(html.indexOf('data-testid="uiwire15-journey"'));
+});
 it("keeps the data-testid set rendered by the live job before reordering", () => {
  const html = renderToStaticMarkup(workspace("live", "#quote"));
  // Captured from unmodified HEAD with this same loaded live-job fixture.
