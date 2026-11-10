@@ -1,12 +1,13 @@
 // Written before product code; NOT RUN (sandbox cannot start PostgreSQL / a browser).
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import type { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { contractorRoles, ExtraPersistenceError } from "@jobguard/core";
 import {
  ContractorRepository, ExtraRepository, WorkOrderRepository, demoFile, demoRow, withTenant,
  InvalidTenantContextError, verifyAuditChain, type AuditEvent, type ExtraTransactionSeam,
 } from "../src/index.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 import {
  cluster, fixture, raise, linkInput, orderInput, laterRevision, ownerTx, receipt, terminalizeFixtureReceipt,
  noteCanary, descriptionCanary, type Cluster, type Fixture,
@@ -106,12 +107,15 @@ async function madeUpJobs(f: Fixture) {
 }
 async function spyQueries<T>(rewrite: (sql: string, result: any) => any, work: () => Promise<T>) {
  const connect = c.runtime.connect.bind(c.runtime), clients = new WeakSet<object>();
- vi.spyOn(c.runtime, "connect").mockImplementation((async () => {
+ vi.spyOn(c.runtime, "connect").mockImplementation((async (callback?: Parameters<Pool["connect"]>[0]) => {
+  if (typeof callback === "function") return connect(callback);
   const client = await connect();
   if (clients.has(client)) return client;
   clients.add(client);
   const query = client.query.bind(client);
-  vi.spyOn(client, "query").mockImplementation((async (sql: any, params?: any) => {
+  vi.spyOn(client, "query").mockImplementation((async (sql: any, params?: any, callback?: any) => {
+   if (typeof params === "function") return query(sql, params);
+   if (typeof callback === "function") return query(sql, params, callback);
    if (sql === "COMMIT") { await query("SET CONSTRAINTS ALL IMMEDIATE"); const replacement = rewrite("COMMIT", undefined); if (replacement !== undefined) return replacement; }
    const result = await query(sql, params); return rewrite(String(sql), result) ?? result;
   }) as any); return client;
@@ -124,7 +128,7 @@ async function allowedRefusals(f: Fixture, startingRevision = 0, orderRevision?:
  const first = await linked(f);
  if (orderRevision !== undefined) await repo.linkOrderLine(f.ctx, orderInput(f, first.duplicate, await laterRevision(c, f, orderRevision)));
  const second = await linked(f), prior = input(f, second.linkId, startingRevision + 2);
- const undone = await repo.unlinkDuplicate(f.ctx, prior);
+ const undone = await repo.unlinkDuplicate(testTenantContext(f.ctx.tenantId, { membershipId: prior.actorMembershipId }), prior);
  const otherJob = await secondJob(f), wrongJob = await linked(otherJob), foreign = await organisation(), foreignLink = await linked(foreign);
  const admin = await member(f, "admin", { kind: "tenant", id: f.p.tenantId });
  const good = input(f, first.linkId, startingRevision + 3);
@@ -137,17 +141,17 @@ async function allowedRefusals(f: Fixture, startingRevision = 0, orderRevision?:
   ["COMMAND_CONFLICT", { ...prior, reasonCode: "wrong_pair" }], ["COMMAND_CONFLICT", { ...prior, actorMembershipId: admin.id }],
   ["COMMAND_CONFLICT", { ...good, commandId: first.commandId }], ["INVALID_COMMAND", { ...good, tenantId: f.p.tenantId }],
  ];
- for (const [code, raw] of cases) await refused(f, () => repo.unlinkDuplicate(f.ctx, raw), code, foreign);
+ for (const [code, raw] of cases) await refused(f, () => repo.unlinkDuplicate(testTenantContext(f.ctx.tenantId, { membershipId: (raw as { actorMembershipId: string }).actorMembershipId }), raw), code, foreign);
  await refused(f, () => repo.unlinkDuplicate({ tenantId: f.p.tenantId } as any, good), "INVALID_TENANT_CONTEXT");
  await linked(f);
- await refused(f, () => repo.unlinkDuplicate(f.ctx, good), "STALE_REVISION");
+ await refused(f, () => repo.unlinkDuplicate(testTenantContext(f.ctx.tenantId, { membershipId: good.actorMembershipId }), good), "STALE_REVISION");
 }
 
 describe("ENT-4c un-link command", () => {
  it("[D1] an owner un-links an active link: one un-link row, one completed command receipt, one domain and one checked terminal audit, nothing else", async () => {
   const f = await organisation(), l = await linked(f), raw = input(f, l.linkId), before = await snapshot(f);
   let fact: Parameters<ExtraTransactionSeam>[1] | undefined;
-  const result = await repo.unlinkDuplicate(f.ctx, raw, async (_db, value) => { fact = value; });
+  const result = await repo.unlinkDuplicate(testTenantContext(f.ctx.tenantId, { membershipId: raw.actorMembershipId }), raw, async (_db, value) => { fact = value; });
   expect(Object.keys(result).sort()).toEqual(["linkId", "revision", "unlinkId", "variationId"]);
   expect(result).toEqual({ unlinkId: expect.any(String), linkId: l.linkId, variationId: l.duplicate, revision: 2 });
   expect(fact).toEqual({ kind: "duplicate_unlink", commandId: raw.commandId, jobId: f.jobId, variationId: l.duplicate, linkId: result.unlinkId, reversesLinkId: l.linkId });
@@ -184,14 +188,14 @@ describe("ENT-4c un-link command", () => {
   for (const [role, kind] of table) {
    const actor = role === "owner" && kind === "tenant" ? f.p.membershipId : (await member(f, role, { kind, id: scopes[kind] })).id;
    const l = await linked(f, pair); revision++;
-   const before = await counts(f), result = await repo.unlinkDuplicate(f.ctx, input(f, l.linkId, revision, actor)); revision++;
+   const before = await counts(f), result = await repo.unlinkDuplicate(testTenantContext(f.ctx.tenantId, { membershipId: actor }), input(f, l.linkId, revision, actor)); revision++;
    const rows = (await c.admin.query("SELECT actor_membership_id FROM app.extra_duplicate_link WHERE tenant_id=$1 AND id=$2 AND kind='unlink'", [f.p.tenantId, result.unlinkId])).rows;
    expect(rows, `${role}/${kind}`).toEqual([{ actor_membership_id: actor }]);
    expect((await counts(f)).extra_duplicate_link! - before.extra_duplicate_link!).toBe(1);
   }
   const mixed = await member(f, "supervisor", { kind: "team", id: f.t1 }); await grantTo(f, mixed.id, "admin", { kind: "branch", id: f.b1 });
   const l = await linked(f, pair), before = await counts(f); revision++;
-  const result = await repo.unlinkDuplicate(f.ctx, input(f, l.linkId, revision, mixed.id));
+  const result = await repo.unlinkDuplicate(testTenantContext(f.ctx.tenantId, { membershipId: mixed.id }), input(f, l.linkId, revision, mixed.id));
   expect((await c.admin.query("SELECT actor_membership_id FROM app.extra_duplicate_link WHERE tenant_id=$1 AND id=$2", [f.p.tenantId, result.unlinkId])).rows).toEqual([{ actor_membership_id: mixed.id }]);
   expect((await counts(f)).extra_duplicate_link! - before.extra_duplicate_link!).toBe(1);
  }, 120_000);
@@ -202,7 +206,7 @@ describe("ENT-4c un-link command", () => {
   expect(decisions).toHaveLength(9); expect(decisions.map(([role]) => role).sort()).toEqual([...contractorRoles].sort());
   // The five true rows have all four covering scopes in D2; these six callers exercise the four refused roles.
   const actors = [f.demo.operativeMembershipId, (await member(f, "operative", { kind: "team", id: f.t1 })).id, (await member(f, "finance", { kind: "tenant", id: f.p.tenantId })).id, (await member(f, "read_only", { kind: "tenant", id: f.p.tenantId })).id, (await member(f, "read_only", { kind: "team", id: f.t1 })).id, (await member(f, "client_approver", { kind: "client", id: f.demo.clientId })).id];
-  for (const actor of actors) await refused(f, () => repo.unlinkDuplicate(f.ctx, input(f, l.linkId, 1, actor)), "UNLINK_FORBIDDEN");
+  for (const actor of actors) await refused(f, () => repo.unlinkDuplicate(testTenantContext(f.ctx.tenantId, { membershipId: actor }), input(f, l.linkId, 1, actor)), "UNLINK_FORBIDDEN");
   await withTenant(c.runtime, f.ctx, async db => {
    for (const [role, expected] of [...decisions, ["connector", false], ["made_up_role", false]] as const) expect((await db.$client.query("SELECT app.contractor_role_permits($1,'organisation.manage') OR app.contractor_role_permits($1,'extra.price') allowed", [role])).rows[0].allowed, role).toBe(expected);
   });
@@ -213,7 +217,7 @@ describe("ENT-4c un-link command", () => {
   for (const role of five) for (const scope of [{ kind: "team", id: f.t2 }, { kind: "branch", id: f.b2 }, { kind: "region", id: f.r2 }]) {
    const actor = await member(f, role, scope);
    // Owner invitations add a read-only tenant grant; their only grant of an allowed role is outside this job.
-   await refused(f, () => repo.unlinkDuplicate(f.ctx, input(f, l.linkId, 1, actor.id)), "UNLINK_FORBIDDEN");
+   await refused(f, () => repo.unlinkDuplicate(testTenantContext(f.ctx.tenantId, { membershipId: actor.id }), input(f, l.linkId, 1, actor.id)), "UNLINK_FORBIDDEN");
   }
  }, 120_000);
 
@@ -221,11 +225,11 @@ describe("ENT-4c un-link command", () => {
   const f = await organisation(), pair = await extras(f) as [string, string]; let revision = 0;
   for (const role of five) for (const kind of ["grant.revoke", "membership.revoke"]) {
    const actor = await member(f, role, { kind: "team", id: f.t1 }), l = await linked(f, pair); revision++;
-   const raw = input(f, l.linkId, revision, actor.id); await repo.unlinkDuplicate(f.ctx, raw); revision++;
+   const raw = input(f, l.linkId, revision, actor.id); await repo.unlinkDuplicate(testTenantContext(f.ctx.tenantId, { membershipId: raw.actorMembershipId }), raw); revision++;
    await command(f, kind === "grant.revoke" ? { kind, grantId: actor.grantId } : { kind, membershipId: actor.id });
    const fresh = await linked(f, pair); revision++;
-   await refused(f, () => repo.unlinkDuplicate(f.ctx, input(f, fresh.linkId, revision, actor.id)), "UNLINK_FORBIDDEN");
-   await refused(f, () => repo.unlinkDuplicate(f.ctx, raw), "UNLINK_FORBIDDEN");
+   await refused(f, () => repo.unlinkDuplicate(testTenantContext(f.ctx.tenantId, { membershipId: actor.id }), input(f, fresh.linkId, revision, actor.id)), "UNLINK_FORBIDDEN");
+   await refused(f, () => repo.unlinkDuplicate(testTenantContext(f.ctx.tenantId, { membershipId: raw.actorMembershipId }), raw), "UNLINK_FORBIDDEN");
    await repo.unlinkDuplicate(f.ctx, input(f, fresh.linkId, revision)); revision++;
   }
  }, 120_000);
@@ -234,8 +238,8 @@ describe("ENT-4c un-link command", () => {
   const f = await organisation(), other = await organisation(), l = await linked(f), foreignLink = await linked(other);
   const readOnly = await member(f, "read_only", { kind: "tenant", id: f.p.tenantId }); await grantTo(f, readOnly.id, "admin", { kind: "branch", id: f.b2 });
   const supervisor = await member(f, "supervisor", { kind: "team", id: f.t2 }); await grantTo(f, supervisor.id, "surveyor", { kind: "branch", id: f.b2 });
-  for (const actor of [readOnly.id, supervisor.id, other.p.membershipId, randomUUID()]) await refused(f, () => repo.unlinkDuplicate(f.ctx, input(f, l.linkId, 1, actor)), "UNLINK_FORBIDDEN", other);
-  await refused(other, () => repo.unlinkDuplicate(other.ctx, input(other, foreignLink.linkId, 1, f.p.membershipId)), "UNLINK_FORBIDDEN", f);
+  for (const actor of [readOnly.id, supervisor.id, other.p.membershipId, randomUUID()]) await refused(f, () => repo.unlinkDuplicate(testTenantContext(f.ctx.tenantId, { membershipId: actor }), input(f, l.linkId, 1, actor)), "UNLINK_FORBIDDEN", other);
+  await refused(other, () => repo.unlinkDuplicate(testTenantContext(other.ctx.tenantId, { membershipId: f.p.membershipId }), input(other, foreignLink.linkId, 1, f.p.membershipId)), "UNLINK_FORBIDDEN", f);
  }, 120_000);
 
  it("[D7] a refused caller gets one answer, whatever they name", async () => {
@@ -246,7 +250,7 @@ describe("ENT-4c un-link command", () => {
   const readOnly = await member(f, "read_only", { kind: "tenant", id: f.p.tenantId }), supervisor = await member(f, "supervisor", { kind: "team", id: f.t2 });
   for (const actor of [readOnly.id, supervisor.id]) {
    const good = input(f, active.linkId, 4, actor);
-   for (const raw of [good, { ...good, linkId: randomUUID() }, { ...good, linkId: reversed.linkId }, { ...good, linkId: exportedLink.linkId }, { ...good, expectedRevision: 1 }, { ...good, commandId: active.commandId }, ...[missingJob, other.jobId, ...fakeJobs].map(jobId => ({ ...good, jobId }))]) await refused(f, () => repo.unlinkDuplicate(f.ctx, raw), "UNLINK_FORBIDDEN", other);
+   for (const raw of [good, { ...good, linkId: randomUUID() }, { ...good, linkId: reversed.linkId }, { ...good, linkId: exportedLink.linkId }, { ...good, expectedRevision: 1 }, { ...good, commandId: active.commandId }, ...[missingJob, other.jobId, ...fakeJobs].map(jobId => ({ ...good, jobId }))]) await refused(f, () => repo.unlinkDuplicate(testTenantContext(f.ctx.tenantId, { membershipId: raw.actorMembershipId }), raw), "UNLINK_FORBIDDEN", other);
   }
   for (const jobId of [missingJob, other.jobId, ...fakeJobs]) await refused(f, () => repo.unlinkDuplicate(f.ctx, { ...input(f, active.linkId, 4), jobId }), "UNLINK_FORBIDDEN", other);
  }, 120_000);
@@ -260,7 +264,7 @@ describe("ENT-4c un-link command", () => {
    if (/^SELECT\s/iu.test(sql) && /\bAS allowed\b/u.test(sql) && sql.includes("app.contractor_job_allowed")) { initialChecks++; return { ...result, rows: [{ allowed: true }], rowCount: 1 }; }
    return result;
   }, async () => {
-   for (const actor of actors) await refused(f, () => repo.unlinkDuplicate(f.ctx, input(f, l.linkId, 1, actor)), "UNLINK_FORBIDDEN");
+   for (const actor of actors) await refused(f, () => repo.unlinkDuplicate(testTenantContext(f.ctx.tenantId, { membershipId: actor }), input(f, l.linkId, 1, actor)), "UNLINK_FORBIDDEN");
    expect((await repo.unlinkDuplicate(f.ctx, input(f, l.linkId))).revision).toBe(2);
   });
   expect(initialChecks).toBe(7);
@@ -275,7 +279,7 @@ describe("ENT-4c un-link command", () => {
    ready((await db.$client.query("SELECT pg_backend_pid() pid")).rows[0].pid as number); await held;
   });
   const pid = await started, before = await snapshot(f);
-  const pending = repo.unlinkDuplicate(f.ctx, raw).then(value => ({ value }), error => ({ error }));
+  const pending = repo.unlinkDuplicate(testTenantContext(f.ctx.tenantId, { membershipId: raw.actorMembershipId }), raw).then(value => ({ value }), error => ({ error }));
   try {
    let waiting = false; const until = Date.now() + 10_000;
    while (!waiting && Date.now() < until) {
@@ -292,9 +296,9 @@ describe("ENT-4c un-link command", () => {
  it("[D10] typed refusals for an allowed actor, each writing nothing", async () => { await allowedRefusals(await organisation()); }, 120_000);
 
  it("[D11] replay returns the stored result once; two callers produce one un-link", async () => {
-  const f = await organisation(), l = await linked(f), raw = input(f, l.linkId), result = await repo.unlinkDuplicate(f.ctx, raw), before = await snapshot(f);
-  expect(await repo.unlinkDuplicate(f.ctx, raw)).toEqual(result); expect(await snapshot(f)).toEqual(before);
-  const same = await linked(f), sameRaw = input(f, same.linkId, 3), sameResults = await Promise.all([repo.unlinkDuplicate(f.ctx, sameRaw), repo.unlinkDuplicate(f.ctx, sameRaw)]);
+  const f = await organisation(), l = await linked(f), raw = input(f, l.linkId), result = await repo.unlinkDuplicate(testTenantContext(f.ctx.tenantId, { membershipId: raw.actorMembershipId }), raw), before = await snapshot(f);
+  expect(await repo.unlinkDuplicate(testTenantContext(f.ctx.tenantId, { membershipId: raw.actorMembershipId }), raw)).toEqual(result); expect(await snapshot(f)).toEqual(before);
+  const same = await linked(f), sameRaw = input(f, same.linkId, 3), sameResults = await Promise.all([repo.unlinkDuplicate(testTenantContext(f.ctx.tenantId, { membershipId: sameRaw.actorMembershipId }), sameRaw), repo.unlinkDuplicate(testTenantContext(f.ctx.tenantId, { membershipId: sameRaw.actorMembershipId }), sameRaw)]);
   expect(sameResults[0]).toEqual(sameResults[1]);
   expect((await c.admin.query("SELECT id FROM app.extra_duplicate_link WHERE tenant_id=$1 AND reverses_link_id=$2", [f.p.tenantId, same.linkId])).rows).toHaveLength(1);
   const different = await linked(f), results = await Promise.allSettled([repo.unlinkDuplicate(f.ctx, input(f, different.linkId, 5)), repo.unlinkDuplicate(f.ctx, input(f, different.linkId, 5))]);
@@ -363,8 +367,22 @@ describe("ENT-4c un-link command", () => {
    for (const table of ["extra_duplicate_link", "command_receipt"]) expect((await db.$client.query(`SELECT * FROM app.${table} WHERE tenant_id=$1`, [f.p.tenantId])).rows).toEqual([]);
   });
   const raw = input(f, l.linkId), upper = { ...raw, commandId: raw.commandId.toUpperCase(), jobId: raw.jobId.toUpperCase(), actorMembershipId: raw.actorMembershipId.toUpperCase(), linkId: raw.linkId.toUpperCase() };
-  const result = await repo.unlinkDuplicate(testTenantContext(f.p.tenantId.toUpperCase()), upper), before = await snapshot(f);
-  expect(await repo.unlinkDuplicate(f.ctx, raw)).toEqual(result); expect(await snapshot(f)).toEqual(before);
+  // Bind the real actor in the transport while retaining the upper-case context under test.
+  const credential = createHash("sha256").update(`lp6-test:${f.p.tenantId}:${f.p.membershipId}`).digest("hex");
+  await testBoundTenantContext(c.admin, f.p.tenantId, f.p.membershipId, credential);
+  const pool = new Proxy(c.runtime, { get(target, key) {
+   if (key === "connect") return async () => {
+    const client = await target.connect();
+    return { release: () => client.release(), query: async (sql: string, values?: unknown[]) => {
+     const result = await client.query(sql, values);
+     if (sql === "BEGIN") await client.query("SELECT app.bind_request('real',$1,$2)", [credential, f.p.tenantId]);
+     return result;
+    } };
+   };
+   const value = Reflect.get(target, key); return typeof value === "function" ? value.bind(target) : value;
+  } });
+  const result = await new ExtraRepository(pool).unlinkDuplicate(testTenantContext(f.p.tenantId.toUpperCase(), { membershipId: f.p.membershipId, bindRequest: false }), upper), before = await snapshot(f);
+  expect(await repo.unlinkDuplicate(testTenantContext(f.ctx.tenantId, { membershipId: raw.actorMembershipId }), raw)).toEqual(result); expect(await snapshot(f)).toEqual(before);
  }, 60_000);
 
  it("[D16] nothing else changes", async () => {
@@ -387,7 +405,7 @@ describe("ENT-4c un-link command", () => {
 
  it("[D18] errors carry codes only", async () => {
   const f = await organisation(), l = await linked(f), actor = await member(f, "read_only", { kind: "tenant", id: f.p.tenantId });
-  await refused(f, () => repo.unlinkDuplicate(f.ctx, input(f, l.linkId, 1, actor.id)), "UNLINK_FORBIDDEN");
+  await refused(f, () => repo.unlinkDuplicate(testTenantContext(f.ctx.tenantId, { membershipId: actor.id }), input(f, l.linkId, 1, actor.id)), "UNLINK_FORBIDDEN");
   await exported(f, l.canonical); await refused(f, () => repo.unlinkDuplicate(f.ctx, input(f, l.linkId)), "EXTRA_EXPORTED");
   await refused(f, () => repo.unlinkDuplicate(f.ctx, input(f, l.linkId), async () => { throw new Error(noteCanary); }), "EXTRA_EXPORTED");
   const fresh = await organisation(), active = await linked(fresh);

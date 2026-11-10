@@ -1,3 +1,4 @@
+import { testActorContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, expect, it, vi } from 'vitest';
 import { ContractorBundleCheckApplication } from '../../../apps/api/src/evidence-bundle.application.js';
@@ -10,7 +11,7 @@ afterAll(async () => { await c?.close(); vi.unstubAllEnvs(); });
 it('checks actual approvals read-only, preserves absences, and refuses inaccessible/foreign jobs before reading objects', async () => {
   const w = await chainWorld(c), context = await w.ctx, s = await submitted(c, w, 40000);
   const repo = new ExtraApprovalRepository(c.runtime);
-  await repo.approveExtraStep(context, w.members.supervisor.member, approveInput(s, 0));
+  await repo.approveExtraStep(await testActorContext(c.admin, context, w.members.supervisor.member), w.members.supervisor.member, approveInput(s, 0));
   const readObject = vi.spyOn(storage, 'readExactVersion');
   const app = new ContractorBundleCheckApplication(c.runtime, storage);
   const query = { version: 'contractor-bundle-query.v1', jobId: s.jobId, extraId: s.extraId, requestId: s.requestId };
@@ -34,7 +35,7 @@ it('checks actual approvals read-only, preserves absences, and refuses inaccessi
     await expect(app.check(context, w.members.surveyor.member, { ...query, jobId })).rejects.toMatchObject({ code: 'NOT_FOUND' });
   }
   expect(readObject).not.toHaveBeenCalled();
-  await repo.reviseExtra(context, w.members.surveyor.member, { version: 'revise-extra.v1', commandId: randomUUID(), jobId: s.jobId, extraId: s.extraId, netPence: 40001 });
+  await repo.reviseExtra(await testActorContext(c.admin, context, w.members.surveyor.member), w.members.surveyor.member, { version: 'revise-extra.v1', commandId: randomUUID(), jobId: s.jobId, extraId: s.extraId, netPence: 40001 });
   expect(await app.check(context, w.members.surveyor.member, query)).toMatchObject({ reason: 'APPROVAL_OR_SCOPE_INVALID', manifestDigest: null });
   readObject.mockRestore();
 }, 120_000);

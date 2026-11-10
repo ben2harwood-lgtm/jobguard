@@ -1,3 +1,4 @@
+import { isRequestBindingRefusal } from "./request-binding-error.js";
 import { createHash } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
@@ -86,7 +87,7 @@ export class NoticeFixtureRepository {
       }
       // Keep the routine's scope refusal and its session helper's explicit
       // authority refusal indistinguishable. Other SQL faults are unknown.
-      const notFound = error instanceof Error && "code" in error
+      const notFound = isRequestBindingRefusal(error) || error instanceof Error && "code" in error
         && ((message === "NOT_FOUND" && error.code === "P0002")
           || (message === "METER_FORBIDDEN" && error.code === "42501"));
       throw new NoticeFixtureRepositoryError(notFound ? "NOT_FOUND" : "NOTICE_UNAVAILABLE");

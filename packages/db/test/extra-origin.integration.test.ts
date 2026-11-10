@@ -7,16 +7,34 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { extraOriginHashV1, ExtraPersistenceError, extraOriginV1 } from "@jobguard/core";
 import { ExtraRepository, insertVariationProposal, withTenant, auditPayloadV1Schema, verifyAuditChain, appendAuditBatch, type AuditEvent, type TenantTransaction } from "../src/index.js";
 import { cluster, fixture, raise, rawVariation, rawOrigin, receipt, finishRaw, terminalizeFixtureReceipt, newTables, newOriginColumns, ownerTx, visitAndEvidence, originSql, originHashInput, noteCanary, descriptionCanary, extraIdFor, type Cluster, type Fixture } from "./extra-fixtures.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 let c: Cluster, repo: ExtraRepository;
 beforeAll(async () => { c = await cluster(); repo = new ExtraRepository(c.runtime); }, 60_000);
 afterAll(async () => { await c?.close(); });
-const rawAttempt = async (f: Fixture, type = "LogSiteExtra", kind = "site_user", originFields: Record<string, unknown> = {}, receiptFields: { status?: string; semanticKey?: string } = {}, complete = false) => withTenant(c.admin, f.ctx, async db => {
+const rawAttempt = async (f: Fixture, type = "LogSiteExtra", kind = "site_user", originFields: Record<string, unknown> = {}, receiptFields: { status?: string; semanticKey?: string } = {}, complete = false) => withTenant(c.admin, testTenantContext(f.p.tenantId,{membershipId:f.p.membershipId,bindRequest:false}), async db => {
  const id = randomUUID(), command = await receipt(db, f.p.tenantId, f.jobId, id, f.p.membershipId, type, randomUUID(), receiptFields);
  await rawVariation(db, f.p.tenantId, f.jobId, id, kind);
  const row = await rawOrigin(db, f, id, command, { kind, ...originFields });
  if (complete) await finishRaw(db, f, id, command, row.origin_hash); await terminalizeFixtureReceipt(db,f.p.tenantId,command,{variationId:id}); return row;
 });
+// Bind the fixture's actual actor at the SQL transport boundary, retaining the
+// uppercase context being tested instead of making it a session identifier.
+async function uppercaseRequest(f: Fixture) {
+ const credential=sha256Hex(`lp6-test:${f.p.tenantId}:${f.p.membershipId}`);
+ await testBoundTenantContext(c.admin,f.p.tenantId,f.p.membershipId,credential);
+ const pool=new Proxy(c.runtime,{get(target,key){
+  if(key==='connect')return async()=>{
+   const client=await target.connect();
+   return {release:()=>client.release(),query:async(sql:string,values?:unknown[])=>{
+    const result=await client.query(sql,values);
+    if(sql==='BEGIN')await client.query("SELECT app.bind_request('real',$1,$2)",[credential,f.p.tenantId]);
+    return result;
+   }};
+  };
+  const value=Reflect.get(target,key);return typeof value==='function'?value.bind(target):value;
+ }});
+ return {repo:new ExtraRepository(pool),upper:testTenantContext(f.p.tenantId.toUpperCase(),{membershipId:f.p.membershipId,bindRequest:false})};
+}
 async function checkChain(f: Fixture) {
  const rows = (await c.admin.query("SELECT * FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence", [f.p.tenantId])).rows;
  verifyAuditChain(rows.map(r => ({ id: r.id, version: r.version, tenantId: r.tenant_id, sequence: Number(r.sequence), actorRef: r.actor_ref, eventType: r.event_type, subjectType: r.subject_type, subjectRef: r.subject_ref, occurredAt: r.occurred_at, payload: r.payload, payloadHash: r.payload_hash, previousHash: r.previous_hash, eventHash: r.event_hash })) as AuditEvent[]);
@@ -293,7 +311,7 @@ describe("ENT-4b origin persistence", () => {
   return refusal;
  }
  it("[S4] a stamped context with an UPPER-CASE tenant id commits a valid extra", async () => {
-  const f = await fixture(c), upper = testTenantContext(f.p.tenantId.toUpperCase());
+  const f = await fixture(c), {upper,repo} = await uppercaseRequest(f);
   expect(upper.tenantId).not.toBe(f.p.tenantId); expect(upper.tenantId.toLowerCase()).toBe(f.p.tenantId);
   const input = raise(f), e = await repo.raiseExtra(upper, input);
   expect(await countRows(f, e.variationId, input.commandId)).toEqual({ command_receipt: 1, variation: 1, extra_origin: 1, extra_event: 1, audit_event: 1 });
@@ -301,7 +319,7 @@ describe("ENT-4b origin persistence", () => {
   await checkChain(f);
  });
  it("[S4] both spellings of one tenant identify one extra for one client capture ID", async () => {
-  const f = await fixture(c), upper = testTenantContext(f.p.tenantId.toUpperCase()), original = raise(f, { clientCaptureId: randomUUID() });
+  const f = await fixture(c), {upper,repo} = await uppercaseRequest(f), original = raise(f, { clientCaptureId: randomUUID() });
   const a = await repo.raiseExtra(upper, original), retry = { ...original, commandId: randomUUID() };
   expect(await repo.raiseExtra(f.ctx, retry)).toEqual(a);
   expect(await repo.raiseExtra(upper, { ...original, commandId: randomUUID() })).toEqual(a);

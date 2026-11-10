@@ -77,7 +77,7 @@ describe("MON-1 work admission attacks", () => {
       ON(b.tenant_id,b.job_id,b.id)=(ac.tenant_id,ac.job_id,ac.party_binding_id)
       WHERE ac.tenant_id=$1 AND ac.job_id<>$2 LIMIT 1) other
      WHERE target.tenant_id=$1 AND target.job_id=$2`, [a.tenantId, a.jobId, shareCustomer]);
-   });
+   }, { membershipId: a.actorId });
    const attempt = command(a, "reopen", 1, { closeEventId: closed.events[0]!.id });
    if (shareCustomer) await expect(attempt).resolves.toBeDefined();
    else await expect(attempt).rejects.toThrow("METER_UPGRADE_REQUIRED");
@@ -93,9 +93,9 @@ describe("MON-1 work admission attacks", () => {
     VALUES($1,$2,$3,1,'first_site_evidence','2026-10-20T11:00Z','2026-10-20T11:00Z',NULL,NULL,$4,$5,$6),
     ($1,$2,$7,2,'finished_on_site','2026-10-23T11:00Z','2026-10-23T11:00Z',$8,$9,NULL,$5,$10)`,
     [a.tenantId,a.jobId,first,randomUUID(),"a".repeat(64),randomUUID(),finished,a.actorId,randomUUID(),randomUUID()]);
-  });
+  }, { membershipId: a.actorId });
   const committed = (cutoff: string) => workTenant(f.admin, a.tenantId, async db =>
-   (await db.query("SELECT app.mon1_work_committed($1,$2,'2026-10-01T11:00Z',$3::timestamptz) value", [a.tenantId,a.jobId,cutoff])).rows[0].value);
+   (await db.query("SELECT app.mon1_work_committed($1,$2,'2026-10-01T11:00Z',$3::timestamptz) value", [a.tenantId,a.jobId,cutoff])).rows[0].value, { membershipId: a.actorId });
   // 7 London dates cross the clock change: 30 Oct midnight is UTC midnight.
   expect(await committed("2026-10-29T23:59:59.999999Z")).toBe(true);
   expect(await committed("2026-10-30T00:00:00Z")).toBe(false);
@@ -103,13 +103,13 @@ describe("MON-1 work admission attacks", () => {
    await db.query("SET LOCAL session_replication_role='replica'");
    await db.query(`INSERT INTO app.job_work_state_event(tenant_id,job_id,id,sequence,kind,fact_at,recorded_at,source_receipt_id,request_hash,audit_event_id)
     VALUES($1,$2,$3,3,'site_activity','2026-10-30T00:00Z','2026-10-30T00:00Z',$4,$5,$6)`, [a.tenantId,a.jobId,randomUUID(),randomUUID(),"a".repeat(64),randomUUID()]);
-  });
+  }, { membershipId: a.actorId });
   expect(await committed("2026-10-30T00:00:00Z")).toBe(false);
   await workTenant(f.admin, a.tenantId, async db => {
    await db.query("SET LOCAL session_replication_role='replica'");
    await db.query(`INSERT INTO app.job_work_state_event(tenant_id,job_id,id,sequence,kind,fact_at,recorded_at,source_receipt_id,request_hash,audit_event_id)
     VALUES($1,$2,$3,4,'site_activity','2026-10-30T00:00:00.000001Z','2026-10-30T00:00:00.000001Z',$4,$5,$6)`, [a.tenantId,a.jobId,randomUUID(),randomUUID(),"a".repeat(64),randomUUID()]);
-  });
+  }, { membershipId: a.actorId });
   expect(await committed("2026-10-30T00:00:00.000001Z")).toBe(true);
   expect(await committed("2026-11-29T00:00Z")).toBe(false);
  });
@@ -167,9 +167,9 @@ describe("MON-1 work admission attacks", () => {
   await expect(command(a,"resume",1)).rejects.toMatchObject({code:"METER_PROJECTION_MISMATCH"});
   expect(await events(a)).toEqual(before);
   const b = await company();
-  expect(await workTenant(f.admin,b.tenantId,async db=>{await db.query("SET LOCAL ROLE jobguard_migration");return (await db.query("SELECT * FROM app.meter_work_ledger WHERE source_hash=$1",[hash])).rows;})).toEqual([]);
-  await expect(workTenant(f.runtime,a.tenantId,db=>db.query("SELECT * FROM app.meter_work_ledger"))).rejects.toThrow("permission denied");
-  await expect(workTenant(f.runtime,a.tenantId,db=>db.query("SELECT app.mon1_refresh_work_ledger($1)",[a.tenantId]))).rejects.toThrow("permission denied");
+  expect(await workTenant(f.admin,b.tenantId,async db=>{await db.query("SET LOCAL ROLE jobguard_migration");return (await db.query("SELECT * FROM app.meter_work_ledger WHERE source_hash=$1",[hash])).rows;}, { membershipId: b.actorId })).toEqual([]);
+  await expect(workTenant(f.runtime,a.tenantId,db=>db.query("SELECT * FROM app.meter_work_ledger"), { membershipId: a.actorId })).rejects.toThrow("permission denied");
+  await expect(workTenant(f.runtime,a.tenantId,db=>db.query("SELECT app.mon1_refresh_work_ledger($1)",[a.tenantId]), { membershipId: a.actorId })).rejects.toThrow("permission denied");
  });
  it("missing accepted terms and legacy live imports are explicitly refused, never zero-filled", async () => {
   const a = await meterCompany(f); await activation(a);
@@ -179,8 +179,8 @@ describe("MON-1 work admission attacks", () => {
   await workTenant(f.admin,b.tenantId,async db=>{
    await db.query("SET LOCAL session_replication_role='replica'");
    await db.query("UPDATE app.job SET provenance='imported' WHERE tenant_id=$1 AND id=$2",[b.tenantId,b.jobId]);
-  });
-  expect(await workTenant(f.admin,b.tenantId,async db=>{await db.query("SET LOCAL ROLE jobguard_migration");return (await db.query("SELECT (app.mon1_refresh_work_ledger($1)).source_hash hash",[b.tenantId])).rows[0].hash;})).toBeNull();
+  }, { membershipId: b.actorId });
+  expect(await workTenant(f.admin,b.tenantId,async db=>{await db.query("SET LOCAL ROLE jobguard_migration");return (await db.query("SELECT (app.mon1_refresh_work_ledger($1)).source_hash hash",[b.tenantId])).rows[0].hash;}, { membershipId: b.actorId })).toBeNull();
   await expect(command(b,"resume",0)).rejects.toThrow("CAPACITY_ADMISSION_UNAVAILABLE");
  });
  it("distinct activation terms race for the last Solo grace place under the tenant serializer", async () => {
@@ -210,10 +210,10 @@ describe("MON-1 work admission attacks", () => {
     await db.query("SET LOCAL session_replication_role='replica'");
     await db.query(`INSERT INTO app.job_small_trip_event(tenant_id,job_id,id,activation_id,baseline_quote_version_id,source_kind,source_id,effective_at,net_pence,source_hash,policy_version)
      VALUES($1,$2,$3,$4,$5,'variation_approval',$6,clock_timestamp(),400001,$7,'meter-small-trip.v1')`,[a.tenantId,a.jobId,randomUUID(),source.activation_id,source.baseline_quote_version_id,randomUUID(),'a'.repeat(64)]);
-   });
+   }, { membershipId: a.actorId });
    const last=(await snapshots(a)).at(-1)!.jobs.find((j:{jobId:string})=>j.jobId===a.jobId);
    expect(last).toMatchObject({small:false,committed:true});
-   await expect(workTenant(f.admin,a.tenantId,db=>db.query("UPDATE app.job_small_trip_event SET net_pence=400002 WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId]))).rejects.toThrow();
+   await expect(workTenant(f.admin,a.tenantId,db=>db.query("UPDATE app.job_small_trip_event SET net_pence=400002 WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId]), { membershipId: a.actorId })).rejects.toThrow();
    expect((await snapshots(a)).at(-1)!.jobs).toContainEqual(last);
   } finally {await f.admin.query("ALTER TABLE app.job_small_trip_event ENABLE TRIGGER mon1_trip_refresh");}
  });
@@ -245,13 +245,13 @@ describe("MON-1 work admission attacks", () => {
     await db.query("SET LOCAL session_replication_role='replica'");
     for(const fact of facts) await db.query(`INSERT INTO app.job_work_state_event(tenant_id,job_id,id,sequence,kind,fact_at,recorded_at,actor_membership_id,command_id,source_receipt_id,predecessor_id,close_reason,close_note,request_hash,audit_event_id)
      VALUES($1,$2,$3,$4,$5,$6,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,[a.tenantId,a.jobId,fact.id,fact.sequence,fact.kind,fact.factAt,a.actorId,fact.commandId,fact.sourceReceiptId,fact.predecessorId,fact.closeReason,fact.closeNote,'a'.repeat(64),randomUUID()]);
-   });
+   }, { membershipId: a.actorId });
    const input={version:'meter-lifecycle-input.v1',tenantId:a.tenantId,jobId:a.jobId,sourceRevision:1,
     activation:{id:randomUUID(),at:activated,termsId:randomUUID(),termsRevision:1,track:'small_builder',partyBindingId:randomUUID(),customerId:randomUUID(),siteId:randomUUID(),small:false},
     events:facts,lock:null,trip:null,trial:{status:'unavailable'},policy:{version:'meter-lifecycle-policy.v1',revision:'london-midnight-stops.v1',clockStatus:'approved'},
     asOf:scenario.cutoff,startDate:'2026-10-01',endDateExclusive:'2026-12-01'};
    const expected=projectMeterJobTimeline(input).intervals.some(interval=>interval.start<=scenario.cutoff && (interval.end===null || scenario.cutoff<interval.end));
-   expect(await workTenant(f.admin,a.tenantId,async db=>(await db.query("SELECT app.mon1_work_committed($1,$2,$3,$4) value",[a.tenantId,a.jobId,activated,scenario.cutoff])).rows[0].value)).toBe(expected);
+   expect(await workTenant(f.admin,a.tenantId,async db=>(await db.query("SELECT app.mon1_work_committed($1,$2,$3,$4) value",[a.tenantId,a.jobId,activated,scenario.cutoff])).rows[0].value, { membershipId: a.actorId })).toBe(expected);
   }
  });
  it("private helpers have neither runtime execution nor shadow dependencies", async () => {

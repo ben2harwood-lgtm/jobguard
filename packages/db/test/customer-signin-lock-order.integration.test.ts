@@ -1,3 +1,4 @@
+import { testActorContext } from "./tenant-context-test-utils.js";
 import { randomBytes, randomUUID, createHash } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
@@ -157,9 +158,9 @@ it("matched extra-approver approval versus xa_withdraw: 50 same-job rounds, both
     for (let round = 0; round < 50; round++) {
       const s = await submitted(c, w, 150000), signin = digest(), session = digest();
       const target = { tenant: w.p.tenantId, job: s.jobId };
-      await repo.approveExtraStep(context, w.members.supervisor.member, approveInput(s, 0));
-      await repo.approveExtraStep(context, w.supervisor2.member, approveInput(s, 1));
-      await repo.issueClientApproval(context, w.members.surveyor.member, {
+      await repo.approveExtraStep(await testActorContext(c.admin, context, w.members.supervisor.member), w.members.supervisor.member, approveInput(s, 0));
+      await repo.approveExtraStep(await testActorContext(c.admin, context, w.supervisor2.member), w.supervisor2.member, approveInput(s, 1));
+      await repo.issueClientApproval(await testActorContext(c.admin, context, w.members.surveyor.member), w.members.surveyor.member, {
         version: "issue-client-approval.v1", commandId: randomUUID(), jobId: s.jobId, requestId: s.requestId,
         approverMembershipId: actor, recipient: await emailOf(c, w, actor), linkToken: newToken(),
         signinDigest: signin, expiresAt: new Date(Date.now() + 3600_000),
@@ -183,6 +184,7 @@ it("matched extra-approver approval versus xa_withdraw: 50 same-job rounds, both
       const tenantWriter = () => right.query("SELECT pg_advisory_xact_lock(hashtextextended($1,54))", [target.tenant]);
       const withdraw = async () => {
         await tenantWriter();
+        await right.query("SELECT app.bind_request('real',$1,$2)", [createHash("sha256").update(`lp6-test:${target.tenant}:${supervisor}`).digest("hex"), target.tenant]);
         const db = drizzle(right) as TenantTransaction, commandId = randomUUID();
         const content = { jobId: target.job, extraId: s.extraId, reasonCode: "not_done" };
         // Use the production command lifecycle, preserving raw SQLSTATEs (the
@@ -260,9 +262,9 @@ it("matched extra-approver approval versus xa_withdraw without a barrier: 50 sam
     for (let round = 0; round < 50; round++) {
       const s = await submitted(c, w, 150000), signin = digest(), session = digest();
       const target = { tenant: w.p.tenantId, job: s.jobId };
-      await repo.approveExtraStep(context, w.members.supervisor.member, approveInput(s, 0));
-      await repo.approveExtraStep(context, w.supervisor2.member, approveInput(s, 1));
-      await repo.issueClientApproval(context, w.members.surveyor.member, {
+      await repo.approveExtraStep(await testActorContext(c.admin, context, w.members.supervisor.member), w.members.supervisor.member, approveInput(s, 0));
+      await repo.approveExtraStep(await testActorContext(c.admin, context, w.supervisor2.member), w.supervisor2.member, approveInput(s, 1));
+      await repo.issueClientApproval(await testActorContext(c.admin, context, w.members.surveyor.member), w.members.surveyor.member, {
         version: "issue-client-approval.v1", commandId: randomUUID(), jobId: s.jobId, requestId: s.requestId,
         approverMembershipId: actor, recipient: await emailOf(c, w, actor), linkToken: newToken(),
         signinDigest: signin, expiresAt: new Date(Date.now() + 3600_000),
@@ -284,6 +286,7 @@ it("matched extra-approver approval versus xa_withdraw without a barrier: 50 sam
       ]);
       // Claim the command before racing: this takes no advisory locks and must
       // not give approval a head start over xa_withdraw's first locking statement.
+      await right.query("SELECT app.bind_request('real',$1,$2)", [createHash("sha256").update(`lp6-test:${target.tenant}:${supervisor}`).digest("hex"), target.tenant]);
       const db = drizzle(right) as TenantTransaction, commandId = randomUUID();
       const content = { jobId: target.job, extraId: s.extraId, reasonCode: "not_done" };
       expect(await beginRepositoryCommand(db, { tenantId: target.tenant, actorMembershipId: supervisor, commandId,

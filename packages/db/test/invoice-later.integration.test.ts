@@ -11,7 +11,7 @@ import { closeTestPools, freePort, installLegacySyntheticPartyFixtures, syntheti
 import { testTenantContext } from "./tenant-context-test-utils.js";
 
 const T = randomUUID(), A = randomUUID(), U = randomUUID(), M = randomUUID(), H = "a".repeat(64);
-const context = testTenantContext(T), credential = randomUUID();
+const context = testTenantContext(T, { membershipId: M }), credential = randomUUID();
 let pg: EmbeddedPostgres | undefined, admin: Pool, runtime: Pool, repo: PracticeInvoiceRepository;
 beforeAll(async () => {
  const directory = await mkdtemp(join(tmpdir(), "invoice-later-pg-")), port = await freePort(60200, 150);

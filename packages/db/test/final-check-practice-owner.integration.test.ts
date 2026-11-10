@@ -27,6 +27,7 @@ const scoped = async <T>(a: FinalCheckJob, digest: string, work: (db: PoolClient
   const db = await practiceMaterialPool(f.runtime, digest).connect();
   try {
     await db.query("BEGIN");
+    await db.query("SELECT app.bind_request('practice',$1,$2)", [digest, a.tenantId]);
     await db.query("SELECT set_config('app.tenant_id', $1, true)", [a.tenantId]);
     const result = await work(db);
     await db.query("COMMIT");
@@ -126,6 +127,7 @@ it.each(["lock", "invoice"] as const)("mutation proof: removing the %s guard bre
     await db.query("BEGIN");
     await db.query(changed);
     await db.query("SET LOCAL ROLE jobguard_runtime");
+    await db.query("SELECT app.bind_request('practice',$1,$2)", [b.digest, a.tenantId]);
     await db.query("SELECT set_config('app.tenant_id',$1,true),set_config('app.practice_material_digest',$2,true)", [a.tenantId, b.digest]);
     // The exact refusal assertion above must fail when only its new guard is absent.
     await expect(forbidden(db.query(kind === "lock" ? lockSql : invoiceSql,

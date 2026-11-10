@@ -1,3 +1,4 @@
+import { mapRequestBindingRefusal } from "./request-binding-error.js";
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { appendAuditBatch } from "./audit.js";
@@ -120,12 +121,12 @@ export class PracticeInvoiceRepository {
   });
  }
  async recordReceipt(context:VerifiedTenantContext,input:{jobId:string;invoiceId:string;actorMembershipId:string;commandId:string;paidOn:string;amountPence:number;method:string;reference:string}) {
-  return withTenant(this.pool,context,async db=>{
+  return mapRequestBindingRefusal(withTenant(this.pool,context,async db=>{
    const row=(await db.$client.query<{payment_id:string}>(`SELECT * FROM app.record_practice_customer_receipt($1,$2,$3,$4,$5,$6::date,$7,$8,$9)`,[context.tenantId,input.jobId,input.invoiceId,input.actorMembershipId,input.commandId,input.paidOn,input.amountPence,input.method,input.reference])).rows[0]!;
    const seen=(await db.$client.query(`SELECT 1 FROM app.audit_event WHERE tenant_id=$1 AND event_type='customer_payment.synthetic_recorded' AND payload->'references'->>'paymentId'=$2`,[context.tenantId,row.payment_id])).rowCount;
    if(!seen)await appendAuditBatch(db,[{id:randomUUID(),version:"audit.v1",actorRef:`membership:${input.actorMembershipId}`,eventType:"customer_payment.synthetic_recorded",subjectType:"job",subjectRef:input.jobId,payload:{references:{paymentId:row.payment_id,invoiceId:input.invoiceId,commandId:input.commandId},classifications:{action:"financial",environment:"operational"}}}]);
    return {paymentId:row.payment_id};
-  });
+  }), () => Object.assign(new Error("FORBIDDEN"), { code: "42501" }));
  }
  async reverseReceipt(context:VerifiedTenantContext,input:{jobId:string;invoiceId:string;paymentId:string;actorMembershipId:string;commandId:string;reason:string}) {
   return withTenant(this.pool,context,async db=>{

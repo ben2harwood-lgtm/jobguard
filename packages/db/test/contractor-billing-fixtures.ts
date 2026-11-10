@@ -1,3 +1,4 @@
+import { testActorContext } from "./tenant-context-test-utils.js";
 import { digestOf } from "./contractor-practice-session-fixtures.js";
 import { vi } from "vitest";
 import { randomUUID } from "node:crypto";
@@ -11,7 +12,7 @@ export async function world(c: Cluster, approvedNetPence = 24000) {
  const session = randomUUID();
  await c.admin.query("INSERT INTO control_plane.contractor_practice_session(session_id,tenant_id,membership_id,identity_user_id,session_digest,created_at,expires_at) SELECT $1,$2,$3,$4,$5,r.t,r.t+interval '7 days' FROM (SELECT clock_timestamp() t) r", [session,w.p.tenantId,w.members.finance.member.membershipId,w.members.finance.member.identityUserId,digestOf(session)]);
  const s = await submitted(c,w,approvedNetPence);
- await new ExtraApprovalRepository(c.runtime).approveExtraStep(ctx,w.members.supervisor.member,approveInput(s,0));
+ await new ExtraApprovalRepository(c.runtime).approveExtraStep(await testActorContext(c.admin, ctx, w.members.supervisor.member),w.members.supervisor.member,approveInput(s,0));
  const contract = w.demo.contractId;
  const exportInput = () => ({ version:"billing-finalise.v1" as const, commandId:randomUUID(), clientContractId:contract });
  const exported = async () => repo.finalise(ctx,session,s.jobId,exportInput());

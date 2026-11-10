@@ -34,7 +34,7 @@ export class InterimDraftRepository {
       // A revoked or mismatched bound session is a permission refusal, never a retryable outage.
       if (error instanceof RequestBindingRefusedError) throw new InterimDraftRepositoryError("FORBIDDEN");
       const message = error instanceof Error ? error.message : "";
-      if (message === "METER_FORBIDDEN") throw new InterimDraftRepositoryError("FORBIDDEN");
+      if (message === "METER_FORBIDDEN" || (error instanceof Error && "code" in error && error.code === "42501" && message === "REQUEST_BINDING_REFUSED")) throw new InterimDraftRepositoryError("FORBIDDEN");
       if (message === "JOB_NOT_LIVE") throw new InterimDraftRepositoryError("JOB_NOT_LIVE");
       for (const code of ["INVALID_INPUT", "NOT_FOUND", "CONFLICT", "DARK", "FORBIDDEN", "UNAUTHENTICATED"] as const) {
         if (message === `INTERIM_DRAFT_${code}`) throw new InterimDraftRepositoryError(code);

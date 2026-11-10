@@ -7,7 +7,7 @@ import {
   withTenant, type ConsequentialCommand,
 } from "../src/index.js";
 import { clusterBefore } from "./site-extra-pricing-fixtures.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 
 // QUOTE-REACCEPT upgrade proof: a database at 0153 holding an accepted-then-cancelled quote (rows written by the OLD routines, no side-table row)
 // is upgraded by 0155 alone; the old rows are byte-identical afterwards and the same quote can then be accepted again as sequence 2.
@@ -92,6 +92,7 @@ describe("0155 upgrade over populated acceptance history", () => {
     // The old routine refuses a second acceptance of the cancelled document (the audit defect), which is why 0155 exists.
     const old = acceptance(f, 2); await expect(f.dispatcher.dispatch(f.context, { ...old.command, semanticKey: `accept:${f.document}:2` }, old.mutation)).rejects.toBeTruthy();
     await c.migrate();
+    f.context = await testBoundTenantContext(c.admin,f.tenant,f.member);
     expect(await rowsText(f)).toEqual(rowsBefore); expect(await eventsText(f)).toEqual(eventsBefore);
     expect((await c.admin.query("SELECT count(*)::int n FROM app.quote_acceptance_sequence WHERE tenant_id=$1", [f.tenant])).rows[0].n).toBe(0);
     const again = acceptance(f, 2, "message");

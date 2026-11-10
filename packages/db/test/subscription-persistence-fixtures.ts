@@ -14,9 +14,9 @@ export const terms = (a: SubscriptionCompany, plan: "Solo" | "Builder" = "Builde
  maximumPence: plan === "Solo" ? 4900 : 16900, contentHash, expectedRevision,
 }); };
 export const command = (f: WorkFixture, a: SubscriptionCompany, value: Record<string, unknown>, id = randomUUID()) =>
- workTenant(f.runtime, a.tenantId, async db => (await db.query("SELECT app.mon2_command($1,$2,$3,$4::jsonb) result", [a.tenantId, a.digest, id, JSON.stringify(value)])).rows[0].result);
+ workTenant(f.runtime, a.tenantId, async db => (await db.query("SELECT app.mon2_command($1,$2,$3,$4::jsonb) result", [a.tenantId, a.digest, id, JSON.stringify(value)])).rows[0].result, { membershipId: a.actorId, bindRequest: false });
 export const readSubscription = (f: WorkFixture, a: SubscriptionCompany) =>
- workTenant(f.runtime, a.tenantId, async db => (await db.query("SELECT app.mon2_read($1,$2) result", [a.tenantId, a.digest])).rows[0].result);
+ workTenant(f.runtime, a.tenantId, async db => (await db.query("SELECT app.mon2_read($1,$2) result", [a.tenantId, a.digest])).rows[0].result, { membershipId: a.actorId, bindRequest: false });
 export const issue = (f: WorkFixture, a: SubscriptionCompany, periodStart = "2026-09-01", expectedRevision = 1, id = randomUUID()) => command(f, a, { version: "subscription-command.v1", kind: "issue", periodStart, expectedRevision }, id);
 export async function rows(f: WorkFixture, a: SubscriptionCompany, table: string) {
  if (!/^[a-z_]+$/u.test(table)) throw new Error("Invalid fixture table");
@@ -31,7 +31,7 @@ export async function historicalAgreement(f: WorkFixture, a: SubscriptionCompany
  await workTenant(f.admin, a.tenantId, async db => {
   await db.query("SET LOCAL session_replication_role='replica'");
   await db.query("UPDATE app.subscription_agreement_revision SET effective_date=$2::date, accepted_at=$2::date::timestamp AT TIME ZONE 'Europe/London', anchor_day=extract(day FROM $2::date)::integer WHERE tenant_id=$1", [a.tenantId, date]);
- });
+ }, { membershipId: a.actorId });
  return accepted;
 }
 export async function preparedPeriod(f: WorkFixture, places = 8, plan: "Solo" | "Builder" = "Builder") {

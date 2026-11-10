@@ -8,6 +8,7 @@ import { Pool } from "pg";
 import { ContractorRepository, ExtraRepository, contractorSessionContext, migrate } from "../src/index.js";
 import { enterpriseDashboardScopeLockSql } from "../src/enterprise-dashboard-queries.js";
 import { fixture } from "./extra-fixtures.js";
+import { testActorContext } from "./tenant-context-test-utils.js";
 import { actor, direct, invite } from "./site-extra-fixtures.js";
 import { closeTestDatabase, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 
@@ -71,7 +72,7 @@ export type AuthorityCluster = Awaited<ReturnType<typeof authorityCluster>>;
 export async function authorityWorld(c: AuthorityCluster) {
   const f = await fixture(c), viewer = await invite(c, f, "supervisor", { kind: "team", id: f.demo.teamId });
   const operative = await actor(c, f, f.demo.operativeMembershipId);
-  const extra = await new ExtraRepository(c.runtime).raiseExtra(f.ctx, direct(f, operative));
+  const extra = await new ExtraRepository(c.runtime).raiseExtra(await testActorContext(c.admin, f.ctx, operative.member), direct(f, operative));
   const session = randomUUID(), sessionRef = randomUUID();
   // Invited members have genuine persisted, digest-bound practice sessions, resolved by the real bridge.
   await c.admin.query(`INSERT INTO control_plane.contractor_practice_session(session_id,tenant_id,membership_id,identity_user_id,session_digest,created_at,expires_at)

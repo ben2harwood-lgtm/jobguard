@@ -66,7 +66,7 @@ export class MeterTodayRepository {
       });
     } catch (error) {
       if (error instanceof MeterLifecyclePersistenceError) throw error;
-      if (error instanceof Error && error.message === "METER_FORBIDDEN") throw new MeterLifecyclePersistenceError("METER_FORBIDDEN");
+      if (error instanceof Error && (error.message === "METER_FORBIDDEN" || ("code" in error && error.code === "42501" && error.message === "REQUEST_BINDING_REFUSED"))) throw new MeterLifecyclePersistenceError("METER_FORBIDDEN");
       if (error instanceof Error && error.message === "METER_PROJECTION_MISMATCH") throw new MeterLifecyclePersistenceError("METER_PROJECTION_MISMATCH");
       throw new MeterLifecyclePersistenceError("METER_UNAVAILABLE");
     }

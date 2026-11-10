@@ -1,3 +1,4 @@
+import { testActorContext } from "./tenant-context-test-utils.js";
 // Written before the routines. NOT RUN (sandbox cannot start PostgreSQL / a browser).
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
@@ -21,7 +22,7 @@ describe("ENT-3a authority", () => {
    const g = (await c.admin.query("SELECT g.*,NOT EXISTS(SELECT 1 FROM app.role_grant_revocation r WHERE(r.tenant_id,r.grant_id)=(g.tenant_id,g.id)) unrevoked FROM app.role_grant g WHERE tenant_id=$1 AND id=$2", [f.p.tenantId, rows[0]!.raising_grant])).rows[0]!;
    expect(g).toMatchObject({ membership_id: f.members[role].member.membershipId, role, unrevoked: true });
    // ENT-4b's actual insert trigger is the independent scope judge.
-   await new ExtraRepository(c.runtime).raiseExtra(f.ctx, direct(f, f.members[role], { commandType: type }));
+   await new ExtraRepository(c.runtime).raiseExtra(await testActorContext(c.admin, f.ctx, f.members[role].member), direct(f, f.members[role], { commandType: type }));
   }
  });
  it.each(["unknown-command", null])("[A1] rejects unknown command type %s", async type => { expect(await decision(c, f, f.members.supervisor.member, type)).toEqual([{ decision: "forbidden", reason_code: "command_type_not_permitted", raising_grant: null }]); });
@@ -72,7 +73,7 @@ describe("ENT-3a authority", () => {
   const id = scope === "tenant" ? own.p.tenantId : scope === "team" ? own.demo.teamId : scope === "branch" ? own.demo.branchId : region;
   const a = await invite(c, own, "supervisor", { kind: scope, id });
   expect(await decision(c, own, a.member, "LogSiteExtra")).toEqual([{ decision: "allowed", reason_code: "allowed", raising_grant: a.grant }]);
-  await new SiteExtraRepository(c.runtime).logSiteExtra(own.ctx, a.member, { commandId: randomUUID(), jobId: own.jobId, note: "Fictional scope agreement", description: "Fictional extra" });
+  await new SiteExtraRepository(c.runtime).logSiteExtra(await testActorContext(c.admin, own.ctx, a.member), a.member, { commandId: randomUUID(), jobId: own.jobId, note: "Fictional scope agreement", description: "Fictional extra" });
  });
  for (const scope of ["tenant", "team", "branch", "region"] as const) it(`[A16] ${scope} non-covering lookup and merged trigger both refuse`, async () => {
   const own = await siteFixture(c);
@@ -84,10 +85,10 @@ describe("ENT-3a authority", () => {
    // A grant from another tenant must reach the insert trigger, rather than stop at the missing-job read.
    await command(c, own, { kind: "grant.revoke", grantId: own.members.supervisor.grant });
    expect((await decision(c, own, own.members.supervisor.member, "LogSiteExtra"))[0]).toEqual({ decision: "not_found", reason_code: "job_out_of_scope", raising_grant: null });
-   await expect(new ExtraRepository(c.runtime).raiseExtra(own.ctx, direct(own, own.members.supervisor, { grantId: a.grant }))).rejects.toMatchObject({ code: "INVALID_ORIGIN" });
+   await expect(new ExtraRepository(c.runtime).raiseExtra(await testActorContext(c.admin, own.ctx, own.members.supervisor.member), direct(own, own.members.supervisor, { grantId: a.grant }))).rejects.toMatchObject({ code: "INVALID_ORIGIN" });
   } else {
    expect((await decision(c, own, a.member, "LogSiteExtra"))[0]).toEqual({ decision: "not_found", reason_code: "job_out_of_scope", raising_grant: null });
-   await expect(new ExtraRepository(c.runtime).raiseExtra(own.ctx, direct(own, a))).rejects.toMatchObject({ code: "INVALID_ORIGIN" });
+   await expect(new ExtraRepository(c.runtime).raiseExtra(await testActorContext(c.admin, own.ctx, a.member), direct(own, a))).rejects.toMatchObject({ code: "INVALID_ORIGIN" });
   }
  });
  it("[A13] populated upgrade changes only two routines; ownership, specific grants and idempotent registration", async () => {
@@ -95,7 +96,7 @@ describe("ENT-3a authority", () => {
   try {
    for (const url of MIGRATION_URLS.filter(u => u.pathname.split("/").at(-1)! >= "0122_extra_origin_persistence.sql" && u.pathname.split("/").at(-1)! < "0135_site_extra_authority.sql")) { await up.admin.query(await readFile(url, "utf8")); await up.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)", [url.pathname.split("/").at(-1)]); }
    const beforeFixture = await fixture(up);
-   await new ExtraRepository(up.runtime).raiseExtra(beforeFixture.ctx, direct(beforeFixture, { member: beforeFixture.p, grant: beforeFixture.grantId }));
+   await new ExtraRepository(up.runtime).raiseExtra(await testActorContext(up.admin, beforeFixture.ctx, beforeFixture.p), direct(beforeFixture, { member: beforeFixture.p, grant: beforeFixture.grantId }));
    const catalog = async () => {
     const sql = [
      "SELECT n.nspname,c.relname,c.relkind,c.relrowsecurity,c.relforcerowsecurity,c.relacl::text,pg_get_userbyid(c.relowner) owner FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN('app','identity','control_plane','audit_control') ORDER BY 1,2",

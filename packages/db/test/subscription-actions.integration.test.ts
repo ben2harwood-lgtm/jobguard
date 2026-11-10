@@ -1,6 +1,6 @@
+import { testTenantContext } from "./tenant-context-test-utils.js";
 import { pauseCommercialOutbound } from "./commercial-outbound-pause-fixture.js";
 import { assertLp4SealedEvents } from "./lp4-writer-catchup-fixture.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
 import { SubscriptionExecutor } from "../src/subscription-executor.js";
 import { subscriptionConsentText } from "@jobguard/core";
 import { IdentityRepository, SubscriptionRepository, SubscriptionPersistenceError } from "../src/index.js";
@@ -18,7 +18,7 @@ describe("MON-2A C2/C3 billing action races", () => {
  it("M0-13a pause refuses subscription execution without consuming queued work, then resumes one effect",async()=>{
   const {a,issued}=await preparedPeriod(f);
   const approved=await command(f,a,{version:"subscription-command.v1",kind:"approve_simulation",statementId:issued.statementId,contentHash:issued.artifactHash,amountPence:issued.amountPence,expectedRevision:1});
-  const before=await readSubscription(f,a),context=testTenantContext(a.tenantId);
+  const before=await readSubscription(f,a),context=a.context;
   let calls=0;
   const executor=new SubscriptionExecutor(new SubscriptionRepository(f.runtime),{
    async execute(work){calls++;return {version:"subscription-simulated-result.v1" as const,synthetic:true as const,workId:work.workId,resultId:randomUUID(),outcome:"settled" as const};},
@@ -87,7 +87,7 @@ describe("MON-2A C2/C3 billing action races", () => {
   await workTenant(f.admin,a.tenantId,async db=>{
    await db.query("SET LOCAL session_replication_role='replica'");
    await db.query("UPDATE app.subscription_plan_change SET effective_date='2026-09-01' WHERE tenant_id=$1",[a.tenantId]);
-  });
+  }, { membershipId: a.actorId });
   const results=await Promise.allSettled([
    command(f,a,{version:"subscription-command.v1",kind:"apply_change",changeId:pending.changeId,sourceId,expectedRevision:1}),
    command(f,a,{...terms(a,"Builder",1),kind:"change"}),

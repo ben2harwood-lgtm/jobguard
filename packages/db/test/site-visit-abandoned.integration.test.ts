@@ -1,3 +1,4 @@
+import { testActorContext, testTenantContext } from "./tenant-context-test-utils.js";
 // Real PostgreSQL, fictional data only. cluster() applies every discovered migration.
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -10,13 +11,13 @@ let c: Awaited<ReturnType<typeof cluster>>, visits: SiteVisitRepository, prompts
 beforeAll(async () => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); c = await cluster(); visits = new SiteVisitRepository(c.runtime); prompts = new EnterpriseLivePromptRepository(c.runtime); });
 afterAll(async () => { await c?.close(); vi.unstubAllEnvs(); });
 const reason = "Fictional operative no longer assigned";
-const start = (f: PromptFixture) => visits.startVisit(f.ctx, f.members.operative.member, { commandId: randomUUID(), jobId: f.jobId });
+const start = async (f: PromptFixture) => visits.startVisit(await testActorContext(c.admin, f.ctx, f.members.operative.member), f.members.operative.member, { commandId: randomUUID(), jobId: f.jobId });
 const close = (f: PromptFixture, visit: string, actor: Actor = f.members.owner, cid = randomUUID(), job = f.jobId, why = reason, namedActor = actor) =>
- withTenant(c.runtime, f.ctx, async db => {
+ withTenant(c.runtime, testTenantContext(f.p.tenantId, { bound: false }), async db => {
   const role = Object.entries(f.members).find(([, a]) => a.member.membershipId === actor.member.membershipId)![0];
   await db.$client.query("SELECT app.bind_request('contractor_practice',$1,$2)", [f.sessions[role], f.p.tenantId]);
   const claim = await beginRepositoryCommand<{ answerId: string }>(db, { tenantId: f.p.tenantId,
-   actorMembershipId: namedActor.member.membershipId, commandId: cid, commandType: "CloseAbandonedSiteVisit",
+   actorMembershipId: actor.member.membershipId, commandId: cid, commandType: "CloseAbandonedSiteVisit",
    semanticKey: `abandoned-visit:${visit}`, jobId: job, legacyJson: JSON.stringify({ commandId: cid, jobId: job, visitId: visit, reason: why }) });
   if (claim.kind === "replay") return claim.result.answerId;
   const answer = (await db.$client.query("SELECT app.ent3b_close_abandoned_visit($1,$2,$3,$4,$5) answer",
@@ -91,12 +92,13 @@ describe("LATER-SAFETY-79 abandoned site visits", () => {
   await command(c, f, { kind: "membership.revoke", membershipId: f.members.operative.member.membershipId });
   await refused(f, () => close(f, visit.visitId, f.members.owner, cid, f.jobId, reason, f.members.admin), "PERMISSION_DENIED");
   await close(f, visit.visitId, f.members.admin, cid);
-  await refused(f, () => close(f, visit.visitId, f.members.owner, cid, f.jobId, reason, f.members.admin), "PERMISSION_DENIED");
+  // LP-6c: the forged replay is now refused at begin_command (the claim is bound to the caller), before the routine; nothing is written.
+  await refused(f, () => close(f, visit.visitId, f.members.owner, cid, f.jobId, reason, f.members.admin), "COMMAND_CONFLICT");
  });
  it("refuses a bound owner without a processing receipt, and an unbound caller", async () => {
   const f = await promptFixture(c), visit = await start(f);
   await command(c, f, { kind: "membership.revoke", membershipId: f.members.operative.member.membershipId });
-  const raw = (bound: boolean) => withTenant(c.runtime, f.ctx, async db => {
+  const raw = (bound: boolean) => withTenant(c.runtime, testTenantContext(f.p.tenantId, { bound: false }), async db => {
    if (bound) await db.$client.query("SELECT app.bind_request('contractor_practice',$1,$2)", [f.sessions.owner, f.p.tenantId]);
    return db.$client.query("SELECT app.ent3b_close_abandoned_visit($1,$2,$3,$4,$5)",
     [f.p.membershipId,randomUUID(),f.jobId,visit.visitId,reason]);
@@ -124,7 +126,7 @@ describe("LATER-SAFETY-79 abandoned site visits", () => {
  it("refuses changed visit or reason after begin_command claimed the exact input", async () => {
   const f = await promptFixture(c), visit = await start(f);
   await command(c, f, { kind: "membership.revoke", membershipId: f.members.operative.member.membershipId });
-  for (const changed of ["visit", "reason"]) await refused(f, () => withTenant(c.runtime, f.ctx, async db => {
+  for (const changed of ["visit", "reason"]) await refused(f, () => withTenant(c.runtime, testTenantContext(f.p.tenantId, { bound: false }), async db => {
    await db.$client.query("SELECT app.bind_request('contractor_practice',$1,$2)", [f.sessions.owner, f.p.tenantId]);
    const cid = randomUUID();
    await beginRepositoryCommand(db, { tenantId: f.p.tenantId, actorMembershipId: f.p.membershipId,

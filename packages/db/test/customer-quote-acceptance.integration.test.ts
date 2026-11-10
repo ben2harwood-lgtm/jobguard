@@ -9,7 +9,7 @@ import { QuoteRepository, QuoteDeliveryRepository, QuoteAcceptanceRepository } f
 import { UserCommandDispatcher } from "../src/commands.js";
 import { IssueQuoteMutation } from "../src/quote-document-repository.js";
 import { renderQuotePdf } from "@jobguard/core";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 const own = "0545_customer_quote_acceptance.sql";
 const hmac = (v: string) => createHmac("sha256", "fictional-customer-secret-at-least-32-bytes").update(v).digest("hex");
 let c: Cluster;
@@ -46,7 +46,7 @@ const use = (w: World, k: Awaited<ReturnType<typeof issue>>, operation = "redeem
 
 const refused={code:"42501",message:"CUSTOMER_REFUSED"};
 async function ready(existing?: World) {
- const w=existing??await world(),context=testTenantContext(w.tenant),scope=randomUUID(),revision=randomUUID();
+ const w=existing??await world(),context=await testBoundTenantContext(c.admin,w.tenant,w.member),scope=randomUUID(),revision=randomUUID();
  await c.admin.query("UPDATE app.job SET status='quoting',revision=1 WHERE tenant_id=$1 AND id=$2",[w.tenant,w.job]);
  await c.admin.query("INSERT INTO app.scope_identity(tenant_id,id,job_id,state) VALUES($1,$2,$3,'confirmed')",[w.tenant,scope,w.job]);
  await c.admin.query("INSERT INTO app.scope_revision(tenant_id,id,job_id,scope_item_id,revision,description,quantity_decimal,unit,unit_price_pence,total_pence) VALUES($1,$2,$3,$4,1,'Fictional work','1','item',10000,10000)",[w.tenant,revision,w.job,scope]);

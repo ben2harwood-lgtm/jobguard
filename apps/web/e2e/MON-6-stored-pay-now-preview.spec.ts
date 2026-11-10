@@ -26,6 +26,8 @@ async function seed() {
       const a = await meterCompany(f), token=randomUUID();
       const digest=createHmac('sha256',process.env.AUTH_CODE_SECRET).update('session:'+token).digest('hex');
       await f.admin.query('UPDATE identity.session SET token_digest=$1 WHERE id=$2',[digest,a.sessionId]);
+      const { testBoundTenantContext } = await import(${JSON.stringify(pathToFileURL(join(root, "packages/db/test/tenant-context-test-utils.ts")).href)});
+      a.context = await testBoundTenantContext(f.admin,a.tenantId,a.actorId,digest);
       const output=[];
       for(const includesApprovedVariation of [false,true]) {
         const b=includesApprovedVariation ? await (await import(${JSON.stringify(pathToFileURL(join(root, "packages/db/test/job-work-state-fixtures.ts")).href)})).seedWorkJob(f,a.tenantId) : a;

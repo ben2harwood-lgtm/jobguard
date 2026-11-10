@@ -109,7 +109,7 @@ it("tables deny all runtime writes and reads, force RLS and preserve immutable r
  for (const name of ["fixture", "decision", "ledger", "outbox", "attempt", "inbox"]) {
   const table = `app.accounting_export_${name}`;
   expect((await c.admin.query("SELECT relrowsecurity,relforcerowsecurity,has_table_privilege('jobguard_runtime',oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE') allowed FROM pg_class WHERE oid=$1::regclass", [table])).rows[0]).toEqual({ relrowsecurity: true, relforcerowsecurity: true, allowed: false });
-  await expect(workTenant(c.runtime, f.a.tenantId, db => db.query(`SELECT * FROM ${table}`))).rejects.toMatchObject({ code: "42501" });
+  await expect(workTenant(c.runtime, f.a.tenantId, db => db.query(`SELECT * FROM ${table}`), { membershipId: f.a.actorId })).rejects.toMatchObject({ code: "42501" });
  }
  await expect(c.runtime.query("INSERT INTO app.accounting_export_inbox(tenant_id,id,attempt_id,matches) VALUES($1,$2,$3,'[]')",
    [f.a.tenantId, randomUUID(), randomUUID()])).rejects.toMatchObject({ code: "42501" });
@@ -164,7 +164,7 @@ it("SQL rejects caller matches and ignores inbox observations for another tenant
  await expect(workTenant(c.runtime, f.a.tenantId, db => db.query(
   "SELECT app.accounting_export($1,$2,'reconcile',$3,$4::jsonb)",
   [f.a.tenantId, f.a.digest, source.sourceId, JSON.stringify({ version: 1, attemptId, matches: [] })]
- ))).rejects.toThrow("EXPORT_INVALID_INPUT");
+ ), { membershipId: f.a.actorId, bindRequest: false })).rejects.toThrow("EXPORT_INVALID_INPUT");
  await expect(f.call("reconcile", { version: 1, attemptId })).rejects.toThrow("EXPORT_OBSERVATION_REQUIRED");
  expect(await f.call("read")).toMatchObject({ status: "outcome_unknown", attempts: 1 });
  await expect(f.call("claim", { version: 1, attemptId: randomUUID() })).rejects.toThrow("EXPORT_RECONCILE_REQUIRED");

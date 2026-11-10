@@ -13,8 +13,9 @@ import { afterAll, beforeAll, expect, it } from "vitest";
 import { recoveryCaseTermsHash } from "@jobguard/core";
 import { DEMO_TENANT_ID as T, DEMO_MEMBERSHIP_ID as M, DEMO_IDENTITY_USER_ID as U, RecoveryCaseTermsRepository, RecoveryCaseRepository, RecoveryMessageRepository, EvidencePackRepository, PracticeActivationRepository, PracticeInvoiceRepository, FinalAccountCommandService, prepareActivationFixtureV3, migrate, withTenant, verifyAuditChain, executeAuthorizedCommercialAction } from "../src/index.js";
 import { freePort, closeTestPools } from "./pool-test-utils.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
-const context=testTenantContext(T),actor={membershipId:M,identityUserId:U},messageActor={membershipId:M,actorRef:`membership:${M}`};
+import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
+let context=testTenantContext(T, { membershipId: M });
+const actor={membershipId:M,identityUserId:U},messageActor={membershipId:M,actorRef:`membership:${M}`};
 let pg:EmbeddedPostgres,admin:Pool,runtime:Pool,dir:string,port:number,job:string,unbound:string,invoice:string,unboundInvoice:string,supplierRefs:string[];
 const original=process.env.JOBGUARD_ENV;
 const command=(caseId:string,commandId=randomUUID())=>({version:"recovery-case-terms-command.v1",action:"approve",commandId,caseId,termsVersion:"synthetic_recovery_fee_terms.v1",feePolicyVersion:"reference_fee_policy_v3",eligibilityPolicyVersion:"reference_recovery_eligibility_policy_v3",termsHash:recoveryCaseTermsHash(caseId)});
@@ -87,6 +88,7 @@ beforeAll(async()=>{
  await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)",[T]);await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)",[U]);const account=randomUUID();await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional builder')",[account,T]);await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')",[M,T,account,U]);
  await admin.query("CREATE ROLE terms_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOBYPASSRLS; GRANT jobguard_runtime TO terms_login");
  runtime=new Pool({host:"127.0.0.1",port,user:"terms_login",password:"synthetic",database:"jobguard_synthetic_demo",max:4});
+ context=await testBoundTenantContext(admin,T,M);
  job=await prepareActivationFixtureV3(admin,context,"CH7 terms",1880000,runtime);await new PracticeActivationRepository(runtime).start(context,job,{commandId:randomUUID(),scenario:"no_charge"});
  await proofFixture(admin,job);
  supplierRefs=await supplierFixture();
@@ -113,7 +115,9 @@ it.each(["admin","estimator","foreman","operative","finance","read_only","superv
 });
 it.each(["revoked","expired"])("[T2] dispatcher refuses %s owner with zero writes",async state=>{const who=await member("owner",state),id=await newCase(),before=await counts();await expect(new RecoveryCaseTermsRepository(runtime).approve(context,job,command(id),who)).rejects.toMatchObject({code:"RECOVERY_TERMS_FORBIDDEN"});expect(await counts()).toEqual(before);});
 it.each([["member","active"],["owner","revoked"],["owner","expired"]])("[T2] direct runtime forged exact inputs refuse %s/%s and roll back everything",async(role,state)=>{
- const who=await member(role,state),id=await newCase(),before=await counts();await expect(withTenant(admin,context,async db=>{const inputs=await handMade(db.$client,id,who.membershipId);return direct(db.$client,id,who.membershipId,inputs);})).rejects.toMatchObject({code:"42501",message:"RECOVERY_TERMS_AUTHORIZATION_INVALID"});expect(await counts()).toEqual(before);
+ const who=await member(role,state),id=await newCase(),before=await counts();const credential=randomUUID().replaceAll("-","").repeat(2);await testBoundTenantContext(admin,T,who.membershipId,credential);
+ // TERMS_RAW_OWNER: forged exact-input member, revoked owner and expired owner are raw SQL attacks.
+ await expect(withTenant(admin,testTenantContext(T, { membershipId: who.membershipId, bindRequest: false }),async db=>{await db.$client.query("SELECT app.bind_request('real',$1,$2)",[credential,T]);const inputs=await handMade(db.$client,id,who.membershipId);return direct(db.$client,id,who.membershipId,inputs);})).rejects.toMatchObject({code:"42501",message:state==="active"?"RECOVERY_TERMS_AUTHORIZATION_INVALID":"REQUEST_BINDING_REFUSED"});expect(await counts()).toEqual(before);
 });
 it("[T2] direct active-owner positive control accepts the same hand-made inputs; runtime cannot INSERT",async()=>{
  const id=await newCase();const result=await withTenant(admin,context,async db=>direct(db.$client,id,M,await handMade(db.$client,id,M)));expect(result.rows[0].case_id).toBe(id);
@@ -131,11 +135,11 @@ it("[T4] identical, semantic and uppercase replays return the same approval; cha
  for(const raw of [input,{...input,commandId:randomUUID()},{...input,commandId:input.commandId.toUpperCase(),caseId:id.toUpperCase()}])expect(await repo.approve(context,job.toUpperCase(),raw,actor)).toEqual(view);
  await expect(repo.approve(context,unbound,input,actor)).rejects.toMatchObject({code:"RECOVERY_TERMS_CASE_NOT_FOUND"});expect(await counts()).toEqual(before);
  const otherCase=await newCase(),afterSetup=await counts();await expect(repo.approve(context,job,command(otherCase,input.commandId),actor)).rejects.toMatchObject({code:"RECOVERY_TERMS_COMMAND_CONFLICT"});expect(await counts()).toEqual(afterSetup);
- const second=await member("owner");await expect(repo.approve(context,job,command(id),second)).rejects.toMatchObject({code:"RECOVERY_TERMS_COMMAND_CONFLICT"});expect(await counts()).toEqual(afterSetup);
+ const second=await member("owner");await expect(repo.approve(await testBoundTenantContext(admin,T,second.membershipId),job,command(id),second)).rejects.toMatchObject({code:"RECOVERY_TERMS_COMMAND_CONFLICT"});expect(await counts()).toEqual(afterSetup);
  await expect(withTenant(admin,context,async db=>direct(db.$client,id,M,await handMade(db.$client,id,M)))).rejects.toMatchObject({message:"RECOVERY_TERMS_ALREADY_APPROVED"});expect(before.recovery_case_terms_approval).toBe(afterSetup.recovery_case_terms_approval);
 });
 it("[T4] two different active owners racing leave one approval and a typed conflict",async()=>{
- const id=await newCase(),other=await member("owner"),repo=new RecoveryCaseTermsRepository(runtime);const results=await Promise.allSettled([repo.approve(context,job,command(id),actor),repo.approve(context,job,command(id),other)]);
+ const id=await newCase(),other=await member("owner"),repo=new RecoveryCaseTermsRepository(runtime);const results=await Promise.allSettled([repo.approve(context,job,command(id),actor),repo.approve(await testBoundTenantContext(admin,T,other.membershipId),job,command(id),other)]);
  expect(results.filter(r=>r.status==="fulfilled")).toHaveLength(1);expect(results.find(r=>r.status==="rejected")).toMatchObject({reason:{code:"RECOVERY_TERMS_COMMAND_CONFLICT"}});expect((await admin.query("SELECT count(*)::int n FROM app.recovery_case_terms_approval WHERE tenant_id=$1 AND case_id=$2",[T,id])).rows[0].n).toBe(1);
 });
 it("V3ApprovedTermsStillWork: preview refusal writes nothing, approval then preview/approve/deliver succeeds unchanged",async()=>{
@@ -164,7 +168,7 @@ it("NullPolicyWithheldPursuitRefused: the issued C requirement supersedes the ol
  await expect(preview(id)).rejects.toMatchObject({code:"RECOVERY_TERMS_NOT_APPROVED"});expect(await counts()).toEqual(before);
 });
 it("[T7] tenant B cannot read or approve A, and A approval cannot satisfy B's same-UUID case guard",async()=>{
- const id=await newCase(),repo=new RecoveryCaseTermsRepository(runtime);await repo.approve(context,job,command(id),actor);const b=randomUUID(),bj=randomUUID(),bm=randomUUID(),bu=randomUUID(),account=randomUUID();await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)",[b]);await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)",[bu]);const ctx=testTenantContext(b);
+ const id=await newCase(),repo=new RecoveryCaseTermsRepository(runtime);await repo.approve(context,job,command(id),actor);const b=randomUUID(),bj=randomUUID(),bm=randomUUID(),bu=randomUUID(),account=randomUUID();await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)",[b]);await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)",[bu]);let ctx=testTenantContext(b);
  await withTenant(admin,ctx,async db=>{
  await db.$client.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Tenant B fixture')",[account,b]);await db.$client.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')",[bm,b,account,bu]);
  // Adversarial SQL fixture, not a product activation: B reuses A's case UUID, with its own job/policy and no approval.
@@ -173,7 +177,7 @@ it("[T7] tenant B cannot read or approve A, and A approval cannot satisfy B's sa
  await db.$client.query("INSERT INTO app.recovery_case(id,tenant_id,job_id,claim_pence,currency,state,revision,synthetic,case_type,counterparty,book,source_type,source_refs) VALUES($1,$2,$3,32000,'GBP','identified',0,true,'withheld_customer_payment','Fictional party','builder_customer','customer_invoice','[]')",[id,b,bj]);
  await db.$client.query("INSERT INTO app.recovery_claim_revision(id,tenant_id,job_id,case_id,revision,claimed_net_pence,currency,reviewer_ref,subject_hash) VALUES($1,$2,$3,$4,1,32000,'GBP','fixture-owner',$5)",[randomUUID(),b,bj,id,hash(id)]);
  await db.$client.query("INSERT INTO app.recovery_case_event(id,tenant_id,job_id,case_id,sequence,event_type,from_state,to_state,reviewer_ref,command_id,payload_hash) VALUES($1,$2,$3,$4,1,'opened',NULL,'identified','fixture-owner',$5,$6)",[randomUUID(),b,bj,id,randomUUID(),hash(id)]);
- });const fresh=await newCase();const before=await counts();
+ });ctx=await testBoundTenantContext(admin,b,bm);const fresh=await newCase();const before=await counts();
  expect(await repo.read(ctx,job,id)).toBeNull();expect((await withTenant(runtime,ctx,db=>db.$client.query("SELECT * FROM app.recovery_case_terms_approval"))).rows).toEqual([]);
  expect((await withTenant(runtime,ctx,db=>db.$client.query("SELECT app.recovery_case_terms_approved($1,$2,$3) ok",[b,bj,id]))).rows[0].ok).toBe(false);
  await expect(repo.approve(ctx,job,command(id),{membershipId:bm,identityUserId:bu})).rejects.toMatchObject({code:"RECOVERY_TERMS_CASE_NOT_FOUND"});

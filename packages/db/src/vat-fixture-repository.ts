@@ -1,3 +1,4 @@
+import { isRequestBindingRefusal } from "./request-binding-error.js";
 import type { Pool } from "pg";
 import { z } from "zod";
 import {
@@ -26,6 +27,7 @@ export class VatFixtureRepository {
   constructor(private readonly pool: Pool) {}
   private async guarded<T>(work: () => Promise<T>): Promise<T> {
     try { return await work(); } catch (error) {
+      if (isRequestBindingRefusal(error)) throw new VatFixtureRepositoryError("FORBIDDEN");
       if (error instanceof VatFixtureRepositoryError || error instanceof VatTreatmentError) throw error;
       const code = error instanceof Error ? error.message : "";
       for (const kind of ["INVALID_INPUT", "NOT_FOUND", "CONFLICT", "DISABLED"] as const) {

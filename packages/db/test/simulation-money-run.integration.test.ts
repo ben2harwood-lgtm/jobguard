@@ -37,7 +37,7 @@ it("rejects fabricated sources, changed replay payloads, cross-job reads and rev
  await expect(y.run({version,action:"read",commandId:randomUUID(),runId:a.runId,sourceHash:a.sourceHash})).rejects.toThrow("SUCCESS_FEE_FORBIDDEN");
  await expect(repo.command(testTenantContext(randomUUID()),x.jobId,x.auth.digest,c)).rejects.toThrow("SUCCESS_FEE_FORBIDDEN");
  await f.admin.query("UPDATE control_plane.practice_session SET revoked_at=clock_timestamp() WHERE token_digest=$1",[x.auth.digest]);
- await expect(x.run(c)).rejects.toThrow("SUCCESS_FEE_FORBIDDEN");
+ await expect(repo.command(testTenantContext(x.context.tenantId,{membershipId:x.auth.membershipId,bindRequest:false}),x.jobId,x.auth.digest,c)).rejects.toThrow("SUCCESS_FEE_FORBIDDEN");
 });
 it("unknown events are visible; changed sources invalidate review/restore, and reversal exposes the missing compensation writer",async()=>{
  const x=await setup(),statements=new SimulationFeeStatementRepository(f.runtime),collection=new SimulationFeeCollectionRepository(f.runtime);

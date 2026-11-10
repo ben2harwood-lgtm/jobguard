@@ -22,7 +22,7 @@ import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from ".
 import { permitPracticeHomeJob } from "./lp-practice-home-job-fixture.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 
-const context = testTenantContext(DEMO_TENANT_ID);
+const context = testTenantContext(DEMO_TENANT_ID, { membershipId: DEMO_MEMBERSHIP_ID });
 const actor = { membershipId: DEMO_MEMBERSHIP_ID, identityUserId: DEMO_IDENTITY_USER_ID };
 const priorEnvironment = process.env.JOBGUARD_ENV;
 const passphrase = randomUUID();

@@ -15,7 +15,7 @@ import { testTenantContext } from "./tenant-context-test-utils.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 
 const tenantId = randomUUID(), accountId = randomUUID(), userId = randomUUID(), memberId = randomUUID();
-const context = testTenantContext(tenantId);
+const context = testTenantContext(tenantId, { membershipId: memberId });
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool;
 beforeAll(async () => {
   const directory = await mkdtemp(join(tmpdir(), "later-b8-pg-"));

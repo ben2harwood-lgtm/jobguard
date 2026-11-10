@@ -1,3 +1,4 @@
+import { withTenant } from "../src/tenant-context.js";
 import { publishEmptyCompletion, createHistoricalInvoice } from "./sv5pre-fixtures.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -18,7 +19,7 @@ describe("SV-4 DW7 lock-bound final and supplementary issue",()=>{
  let historical:Awaited<ReturnType<typeof createHistoricalInvoice>>;
  beforeAll(async()=>{historical=await createHistoricalInvoice()},60000);
  afterAll(async()=>{if(historical)await historical.close()});
- const direct=(a:Account,input:ReturnType<typeof invoiceInput>)=>asFixtureTenant(f.runtime,a.tenantId,db=>db.query("SELECT app.issue_lock_bound_customer_invoice($1,$2,$3,$4,$5,$6,$7,$8::date,$9)",[a.tenantId,input.jobId,input.finalAccountRevisionId,input.actorMembershipId,input.commandId,input.invoiceKind,input.recipient,input.issuedOn,input.expectedSourceHash]));
+ const direct=(a:Account,input:ReturnType<typeof invoiceInput>)=>withTenant(f.runtime,a.context,db=>db.$client.query("SELECT app.issue_lock_bound_customer_invoice($1,$2,$3,$4,$5,$6,$7,$8::date,$9)",[a.tenantId,input.jobId,input.finalAccountRevisionId,input.actorMembershipId,input.commandId,input.invoiceKind,input.recipient,input.issuedOn,input.expectedSourceHash]));
  it("missing lock, no completion, pending and failed are typed repository/routine refusals with no invoice effects",async()=>{
   const a=await seedAccount(f.admin),repo=new FinalAccountLockRepository(f.runtime);
   for(const kind of ['final','supplementary']as const){const input=invoiceInput(a,kind);await expect(repo.issueInvoice(a.context,input)).rejects.toMatchObject({code:'FINAL_ACCOUNT_LOCK_REQUIRED'});await expect(direct(a,input)).rejects.toThrow('FINAL_ACCOUNT_LOCK_REQUIRED');}

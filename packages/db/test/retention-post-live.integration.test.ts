@@ -64,7 +64,7 @@ it("refuses new human and timer rows before live while preserving reads and exac
   const record = { ...review, id, tenantId: a.tenantId, jobId: a.jobId };
   await db.query("SELECT app.retention_records($1,$2,$3,$4,$5::jsonb,$6)",
    [a.tenantId, a.digest, a.jobId, id, JSON.stringify(record), stored.bookHash]);
- })).rejects.toThrow("JOB_NOT_LIVE");
+ }, { membershipId: a.actorId, bindRequest: false })).rejects.toThrow("JOB_NOT_LIVE");
  expect(await repo.raiseTimerReviews(a.context)).toEqual({ appended: 0, refused: 1 });
  expect((await repo.read(a.context, { sessionDigest: a.digest }, a.jobId)).book).toEqual(before.book);
  // The same pending timer is allowed when the job reaches invoiced.

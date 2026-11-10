@@ -1,6 +1,7 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, createHmac, randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { expect, type Page } from "@playwright/test";
+import { E2E_AUTH_CODE_SECRET } from "../global-setup";
 import { deliveredCustomerLink } from "./customer-signin-link";
 export const portal = (page: Page, action: string, body: unknown, csrf?: string) => page.evaluate(async ({ action, body, csrf }) => {
  const response = await fetch(`/api/customer-portal/${action}`, { method: "POST", headers: { "Content-Type": "application/json", ...(csrf ? { "x-csrf-token": csrf } : {}) }, body: JSON.stringify(body) });
@@ -49,7 +50,9 @@ export async function linkIssuer(admin: Pool, page: Page) {
   await admin.query(`INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)
     SELECT $1,tenant_id,account_id,$2,'owner' FROM app.membership WHERE tenant_id=$3 AND id='d1500000-0000-4000-8000-000000000003'`, [member, session.principal.id, portalTenant]);
   await admin.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3)", [session.principal.id, portalTenant, member]);
-  return { member, user: session.principal.id as string, csrf: session.csrfToken as string };
+  const token = (await page.context().cookies()).find(cookie => cookie.name === "jobguard_session")!.value;
+  const credential = createHmac("sha256", E2E_AUTH_CODE_SECRET).update(`session:${token}`).digest("hex");
+  return { member, user: session.principal.id as string, csrf: session.csrfToken as string, credential };
 }
 
 /** Priced historical inputs only. Catch provenance is explicit; customer approval
@@ -115,11 +118,11 @@ export async function openCustomer(page: Page, path: string) {
 
 /** Run the existing deterministic detector/sink over stored originals, as the
  * shadow worker does. No model/provider call or customer-supplied rule flags. */
-export async function detectMessages(admin: Pool, job: string, member: string, user: string) {
+export async function detectMessages(admin: Pool, job: string, member: string, user: string, credential: string) {
   const nativeImport = new Function("specifier","return import(specifier)") as (specifier:string)=>Promise<any>;
   const db = await nativeImport("@jobguard/db") as typeof import("@jobguard/db");
   const core = await nativeImport("@jobguard/core") as typeof import("@jobguard/core");
-  const context = db.verifiedTenantContextFromMembership({identityUserId:user,tenantId:portalTenant,membershipId:member} as Parameters<typeof db.verifiedTenantContextFromMembership>[0]);
+  const context = db.verifiedTenantContextFromMembership({identityUserId:user,tenantId:portalTenant,membershipId:member} as Parameters<typeof db.verifiedTenantContextFromMembership>[0], {kind:"real",credential});
   await db.withTenant(admin,context, tx => tx.$client.query("SELECT app.accept_final_check_terms($1,$2,$3,$4)",[portalTenant,member,randomUUID(),"synthetic_final_check_terms.v1"]));
   const reader = new db.ShadowObservationReader(admin,new db.FixtureObservationSources([]));
   expect(await reader.hasAcceptedTerms(context)).toBe(true);

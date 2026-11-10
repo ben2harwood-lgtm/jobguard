@@ -28,15 +28,15 @@ async function revealedCatches() {
     signals.push(await finalCheckProposal(f, job, evidence));
   }
   await job.lock();
-  const worker = new FinalCheckRepository(f.shadow), manifest = await worker.begin(job.context, job.jobId);
+  const worker = new FinalCheckRepository(f.shadow), manifest = await worker.begin(job.workerContext, job.jobId);
   for (const source of manifest.sources) {
     const signal = manifest.signals.find(s => s.evidenceIds.includes(source.evidenceId!))!;
-    await worker.record(job.context, job.jobId, manifest.id, source.id, randomUUID(), {
+    await worker.record(job.workerContext, job.jobId, manifest.id, source.id, randomUUID(), {
       version: "final-check.source-result.v1", inputHash: source.inputHash,
       status: "detected", failureCode: null, signalIds: [signal.signalId],
     });
   }
-  const result = await worker.reconcile(job.context, job.jobId, manifest.id, signals.map(signalId => ({
+  const result = await worker.reconcile(job.workerContext, job.jobId, manifest.id, signals.map(signalId => ({
     signalId, expectedRevision: 0, outcome: "reveal" as const, references: [],
     comparisons: { baselineItemIds: [job.scopeItemId], captureIds: [], lockedLineIds: [job.lineId] },
   }))) as { lockId: string; runId: string };

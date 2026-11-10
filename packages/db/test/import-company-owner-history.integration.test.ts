@@ -1,3 +1,4 @@
+import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { createHash, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, expect, it } from "vitest";
@@ -31,6 +32,8 @@ it("LATER-SAFETY-118 company history follows current owners across sign-in, with
     SELECT $1,user_id,environment,$2,$3,expires_at FROM identity.session WHERE id=$4`, [randomUUID(), digest, randomUUID(), a.sessionId]);
   await f.admin.query("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE id=$1", [a.sessionId]);
 
+  const resumedContext = await testBoundTenantContext(f.admin, a.tenantId, a.actorId, digest);
+
   // Scratch database definition: reverting only the company branch must reject S2.
   // Transaction rollback restores the real routine even when an assertion fails.
   const sql = readFileSync(new URL("../migrations/0668_import_company_owner_history.sql", import.meta.url), "utf8");
@@ -45,9 +48,9 @@ it("LATER-SAFETY-118 company history follows current owners across sign-in, with
     await expect(scratch.query("SELECT app.ch5_write_history($1,$2,$3,$4,$5,$6)", [a.tenantId, jobId, digest, command.commandId, evidenceId, randomUUID()])).rejects.toThrow("FORBIDDEN");
   } finally { await scratch.query("ROLLBACK"); scratch.release(); }
 
-  const written = await history.write(a.context, digest, jobId, command);
-  expect((await imports.read(a.context, digest, jobId)).result.jobId).toBe(jobId);
-  expect(await imports.assessCatch(a.context, digest, jobId, catchCommand)).toMatchObject({ catchId: written.historyId, fee: { pence: 0, currency: "GBP" } });
+  const written = await history.write(resumedContext, digest, jobId, command);
+  expect((await imports.read(resumedContext, digest, jobId)).result.jobId).toBe(jobId);
+  expect(await imports.assessCatch(resumedContext, digest, jobId, catchCommand)).toMatchObject({ catchId: written.historyId, fee: { pence: 0, currency: "GBP" } });
   const second = await meterCompany(f, a.tenantId);
   const secondEvidence = await insertPhoto(f, { ...a, jobId, scopeId } as Parameters<typeof insertPhoto>[1], "2026-10-13T11:00:00Z", "site_photo", "2020-01-02T00:00:00Z", true);
   const secondCommand = { ...command, commandId: randomUUID(), evidenceId: secondEvidence };
@@ -76,7 +79,7 @@ it("LATER-SAFETY-118 company history follows current owners across sign-in, with
   await f.admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [a.tenantId, second.actorId]);
   await refused(second.context, second.digest);
   await refused(a.context, a.digest); // signed-out S1 stays refused
-  await expect(history.write(a.context, digest, jobId, command)).resolves.toEqual(written);
+  await expect(history.write(resumedContext, digest, jobId, command)).resolves.toEqual(written);
 
   const practice = await seedWorkPractice(f), foreignPractice = await seedWorkPractice(f);
   const p = practice.auth;

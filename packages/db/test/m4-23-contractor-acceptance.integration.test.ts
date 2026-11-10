@@ -1,3 +1,4 @@
+import { testActorContext } from "./tenant-context-test-utils.js";
 // M4-23 contractor sandbox acceptance. Real PostgreSQL; fake export adapter only.
 // M4-10 has no contractor source reader; M4-12 has no persisted ENT-14 collection adapter.
 // ENT-14 below proves reference authorization only. NOT COVERED todos preserve the missing acceptance steps.
@@ -71,8 +72,8 @@ function authorizeReference(t: Sandbox, statement: { id: string; contentHash: st
 }
 async function approve(t: Sandbox, s: Awaited<ReturnType<typeof submitted>>, rejected = false) {
   const approvals = new ExtraApprovalRepository(c.runtime), actor = t.w.members.supervisor.member;
-  if (rejected) await approvals.rejectExtra(t.ctx, actor, { ...approveInput(s, 0), version: "reject-extra.v1", reasonCode: "not_done" });
-  else await approvals.approveExtraStep(t.ctx, actor, approveInput(s, 0));
+  if (rejected) await approvals.rejectExtra(await testActorContext(c.admin, t.ctx, actor), actor, { ...approveInput(s, 0), version: "reject-extra.v1", reasonCode: "not_done" });
+  else await approvals.approveExtraStep(await testActorContext(c.admin, t.ctx, actor), actor, approveInput(s, 0));
 }
 async function extra(t: Sandbox, origin: "site" | "office" | "client" | "rejected" = "site") {
   const raiser: Role = origin === "office" ? "finance" : origin === "client" ? "commercial_manager" : "operative";
@@ -83,12 +84,12 @@ async function extra(t: Sandbox, origin: "site" | "office" | "client" | "rejecte
     return s;
   }
   const jobId = await newJob(c, t.w), approvals = new ExtraApprovalRepository(c.runtime);
-  const { variationId: extraId } = await new ExtraRepository(c.runtime).raiseExtra(t.ctx, direct(t.w, t.w.members[raiser], {
+  const { variationId: extraId } = await new ExtraRepository(c.runtime).raiseExtra(await testActorContext(c.admin, t.ctx, (t.w.members[raiser]).member), direct(t.w, t.w.members[raiser], {
     jobId, commandType: origin === "office" ? "RecordOfficeExtra" : "RecordClientInstruction",
     description: "Fictional excluded contractor work", note: "Synthetic acceptance only",
   }));
-  await approvals.priceExtra(t.ctx, t.w.members.surveyor.member, { version: "price-extra.v1", commandId: randomUUID(), jobId, extraId, netPence: 15000 });
-  const r = await approvals.submitExtra(t.ctx, t.w.members.supervisor.member, { version: "submit-extra.v1", commandId: randomUUID(), jobId, extraId });
+  await approvals.priceExtra(await testActorContext(c.admin, t.ctx, t.w.members.surveyor.member), t.w.members.surveyor.member, { version: "price-extra.v1", commandId: randomUUID(), jobId, extraId, netPence: 15000 });
+  const r = await approvals.submitExtra(await testActorContext(c.admin, t.ctx, t.w.members.supervisor.member), t.w.members.supervisor.member, { version: "submit-extra.v1", commandId: randomUUID(), jobId, extraId });
   const s = { jobId, extraId, requestId: r.requestId as string, hash: r.revisionHash as string, net: 15000, result: r };
   await approve(t, s);
   return s;
@@ -260,17 +261,17 @@ it("M4-23 credit: next month compensates once and leaves the approved bill and j
 it("M4-23 duplicate log: capture replay and an explicit duplicate resolution leave one billed fee line", async () => {
   const t = await setup(), jobId = await newJob(c, t.w), extras = new ExtraRepository(c.runtime);
   const cmd = direct(t.w, t.w.members.operative, { jobId, clientCaptureId: randomUUID() });
-  const first = await extras.raiseExtra(t.ctx, cmd);
-  expect(await extras.raiseExtra(t.ctx, cmd)).toEqual(first);
-  expect(await extras.raiseExtra(t.ctx, { ...cmd, commandId: randomUUID() })).toEqual(first);
-  const other = await extras.raiseExtra(t.ctx, direct(t.w, t.w.members.operative, { jobId, description: "Fictional duplicate work" }));
+  const first = await extras.raiseExtra(await testActorContext(c.admin, t.ctx, t.w.members.operative.member), cmd);
+  expect(await extras.raiseExtra(await testActorContext(c.admin, t.ctx, t.w.members.operative.member), cmd)).toEqual(first);
+  expect(await extras.raiseExtra(await testActorContext(c.admin, t.ctx, t.w.members.operative.member), { ...cmd, commandId: randomUUID() })).toEqual(first);
+  const other = await extras.raiseExtra(await testActorContext(c.admin, t.ctx, t.w.members.operative.member), direct(t.w, t.w.members.operative, { jobId, description: "Fictional duplicate work" }));
   const approvals = new ExtraApprovalRepository(c.runtime);
   for (const extraId of [first.variationId, other.variationId]) {
-    await approvals.priceExtra(t.ctx, t.w.members.surveyor.member, { version: "price-extra.v1", commandId: randomUUID(), jobId, extraId, netPence: 15000 });
-    const r = await approvals.submitExtra(t.ctx, t.w.members.supervisor.member, { version: "submit-extra.v1", commandId: randomUUID(), jobId, extraId });
+    await approvals.priceExtra(await testActorContext(c.admin, t.ctx, t.w.members.surveyor.member), t.w.members.surveyor.member, { version: "price-extra.v1", commandId: randomUUID(), jobId, extraId, netPence: 15000 });
+    const r = await approvals.submitExtra(await testActorContext(c.admin, t.ctx, t.w.members.supervisor.member), t.w.members.supervisor.member, { version: "submit-extra.v1", commandId: randomUUID(), jobId, extraId });
     await approve(t, { jobId, extraId, requestId: r.requestId as string, hash: r.revisionHash as string, net: 15000, result: r });
   }
-  await approvals.markDuplicate(t.ctx, t.w.members.supervisor.member, { version: "mark-duplicate.v1", commandId: randomUUID(), jobId,
+  await approvals.markDuplicate(await testActorContext(c.admin, t.ctx, t.w.members.supervisor.member), t.w.members.supervisor.member, { version: "mark-duplicate.v1", commandId: randomUUID(), jobId,
     duplicateId: other.variationId, canonicalId: first.variationId });
   await billAndPay(t, jobId, [first.variationId]);
   expect(await derive(t)).toMatchObject({ qualifyingPrincipal: exact(15000), cumulativeFeePence: 1500 });

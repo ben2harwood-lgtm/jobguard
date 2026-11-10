@@ -1,3 +1,4 @@
+import { verifiedTenantContextForQueuedJob } from "../src/tenant-context.js";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -15,7 +16,7 @@ import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from ".
 
 const tenant = randomUUID(), other = randomUUID(), job = randomUUID(), evidence = randomUUID();
 const actor = randomUUID(), second = randomUUID(), samePerson = randomUUID(), user = randomUUID();
-const context = testTenantContext(tenant);
+const context = testTenantContext(tenant, { membershipId: actor });
 const sessionDigest = "a".repeat(64), secondDigest = "b".repeat(64);
 const unregistered = randomUUID(), foreignJob = randomUUID(), foreignEvidence = randomUUID();
 let pg: EmbeddedPostgres, admin: Pool, runtime: Pool, executor: Pool, dir: string, repo: WormCommandRepository, secondRepo: WormCommandRepository;
@@ -83,7 +84,7 @@ it("projects real requested/applied/released commands, races, permissions and id
   for (const evidenceId of [unregistered, foreignEvidence]) {
     await expect(repo.submit(context, command({ evidenceId }))).rejects.toThrow("WORM_REFUSED");
   }
-  await expect(repo.listHolds(testTenantContext(other), actor, job)).rejects.toThrow("WORM_REFUSED");
+  await expect(repo.listHolds(testTenantContext(other, { membershipId: actor }), actor, job)).rejects.toThrow("WORM_REFUSED");
   await expect(repo.listHolds(context, randomUUID(), job)).rejects.toThrow("WORM_REFUSED");
   const c = command();
   const replay = await Promise.all([repo.submit(context, c), repo.submit(context, c)]);
@@ -95,7 +96,7 @@ it("projects real requested/applied/released commands, races, permissions and id
   expect(JSON.stringify(projection)).not.toMatch(/object_key|object_version|identity_user|imprint/);
   await expect(repo.submit(context, command())).rejects.toThrow("WORM_REFUSED");
   await expect(repo.submit(context, command({ action: "release_hold", releaseOf: c.commandId, actorMembershipId: second }))).rejects.toThrow("WORM_REFUSED");
-  expect((await repo.execute(context, c.commandId, storage, tsa)).status).toBe("applied");
+  expect((await repo.execute(verifiedTenantContextForQueuedJob(tenant), c.commandId, storage, tsa)).status).toBe("applied");
   expect(held).toBe(true);
   await expect(repo.submit(context, command())).rejects.toThrow("WORM_REFUSED");
   expect((await list())![0]).toMatchObject({ held: true, canApply: false, canRelease: false });
@@ -107,7 +108,7 @@ it("projects real requested/applied/released commands, races, permissions and id
   const release = command({ action: "release_hold", releaseOf: c.commandId, actorMembershipId: second });
   await secondRepo.submit(context, release);
   expect((await list())![0]).toMatchObject({ status: "queued", action: "release_hold", held: true, canApply: false, canRelease: false });
-  await repo.execute(context, release.commandId, storage, tsa);
+  await repo.execute(verifiedTenantContextForQueuedJob(tenant), release.commandId, storage, tsa);
   expect(held).toBe(false);
   expect((await list())![0]).toMatchObject({ status: "applied", action: "release_hold", held: false, canApply: true, canRelease: false });
   // Owner fixtures change membership state; the runtime cannot forge authority.

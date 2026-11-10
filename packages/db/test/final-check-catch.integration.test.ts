@@ -15,10 +15,10 @@ it.todo('SV5-17 SV5-18 Q2 catch origin, stable scope, pricing and supplementary 
 it("SV5-11 SV5-15 SV5-19 finalized synthetic diary/message/photo observations coalesce into one reveal and rerun returns the same result",async()=>{
  const {insertFinalCheckEvidence}=await import('./final-check-fixture.js'),{createFinalCheckWorker}=await import('./final-check-worker-factory.js');
  const a=await seedFinalCheckJob(f);for(const kind of ['diary','message','completion_photo'])await insertFinalCheckEvidence(f,a,kind);await a.lock();
- const repo=new FinalCheckRepository(f.shadow),m=await repo.begin(a.context,a.jobId);
+ const repo=new FinalCheckRepository(f.shadow),m=await repo.begin(a.workerContext,a.jobId);
  const observations=m.sources.map(s=>({version:'observation.v1',tenantId:a.tenantId,jobId:a.jobId,kind:s.sourceKind==='completion_photo'?'completion_photo':'note_or_voice',evidence:{id:s.evidenceId,objectVersionId:s.objectVersionId,sha256:s.sha256,serverReceivedAt:s.receivedAt},text:'Outside tap fitted',facts:{workReference:'synthetic-outside-tap',scopeArea:'job',description:'Outside tap',status:'completed',estimatedValuePence:null,safetyImplication:false,customerClearlyRequested:false,needsPriorWrittenAgreement:false,significantWork:null,activeDispute:false,silenceMateriallyWorsensDispute:false,disclosureDuty:false},citations:[{start:0,end:18,quote:'Outside tap fitted'}]}));
  const worker=createFinalCheckWorker(f.shadow,observations,'synthetic_demo'),task={version:'final-check.task.v1',jobId:a.jobId,manifestId:m.id};
- const first=await worker.execute(a.context,task);expect(await worker.execute(a.context,task)).toEqual(first);
+ const first=await worker.execute(a.workerContext,task);expect(await worker.execute(a.workerContext,task)).toEqual(first);
  const view=await new FinalCheckRepository(f.runtime).read(a.context,a.jobId,a.digest);expect(view.items).toHaveLength(1);expect(view.items[0]!.evidence).toHaveLength(3);
  expect(Number((await f.admin.query('SELECT count(*) n FROM app.variation WHERE tenant_id=$1 AND job_id=$2',[a.tenantId,a.jobId])).rows[0].n)).toBe(0);
 });
