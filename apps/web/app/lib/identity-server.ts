@@ -26,8 +26,8 @@ export function identityApplication() {
 }
 // The existing verify adapter supplies the origin; bind invitation switching to this request's old session too.
 function webIdentityApplication(application:IdentityApplication):IdentityApplication {
-  const verify=application.verify.bind(application);
-  application.verify=async(raw,origin)=>verify(raw,origin,{
+  const verify=application.verify;
+  application.verify=async(raw,origin)=>verify.call(application,raw,origin,{
     sessionToken:(await cookies()).get("jobguard_session")?.value,
     csrfToken:(await headers()).get("x-csrf-token")??undefined,
   });
