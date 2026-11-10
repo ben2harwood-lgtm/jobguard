@@ -87,7 +87,9 @@ it("rejects forged tenant/job/source/version/hash/time/length/frozen bindings at
 
 it("invalidated sources block completion/publication, and post-lock intake cannot change inventory", async () => {
   const a = await setup(), s = a.m.sources[0]!;
-  await finalCheckTenant(f.admin, a.tenantId, db => db.query("INSERT INTO app.evidence_invalidation(id,tenant_id,evidence_id,actor_membership_id,reason_code) VALUES($1,$2,$3,$4,'verification_invalid')", [randomUUID(), a.tenantId, s.evidenceId, FINAL_CHECK_ACTOR]));
+  // Owner-only simulation in this disposable cluster: 0666 refuses invalidating a locked verified source,
+  // so bypass triggers for this one insert to model evidence invalidated by other means.
+  await finalCheckTenant(f.admin, a.tenantId, async db => { await db.query("SET LOCAL session_replication_role='replica'"); return db.query("INSERT INTO app.evidence_invalidation(id,tenant_id,evidence_id,actor_membership_id,reason_code) VALUES($1,$2,$3,$4,'verification_invalid')", [randomUUID(), a.tenantId, s.evidenceId, FINAL_CHECK_ACTOR]); });
   expect(await a.ports.process(a.context, a.m, s)).toMatchObject({ status: "unsupported", failureCode: "SOURCE_INVALID" });
   await expect(a.execute()).rejects.toThrow("FINAL_CHECK_PENDING");
   await expect(new FinalCheckCompletionRepository(f.shadow).publish(a.context, { version: "final-check-publication.v1", jobId: a.jobId, runId: randomUUID(), checkId: randomUUID() })).rejects.toThrow();
