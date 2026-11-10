@@ -13,6 +13,8 @@
         "packages/db/test/real-wayin-linked-practice.integration.test.ts",
         "packages/db/test/real-wayin-linked-practice-races.integration.test.ts",
         "packages/db/test/later-empty-tables.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
         "packages/db/test/extra-proceed-upgrade.integration.test.ts"
       ]
     }

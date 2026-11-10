@@ -51,8 +51,9 @@ practice_session inserts through deferred foreign keys. This preserves anonymous
 sample behavior while linked namespace/device/retry inserts create no jobs.
 
 Complexity is confined to lifecycle validation and the existing SQL boundaries.
-Small guarded pg_get_functiondef patches retain the installed legacy routine bodies,
-grants and signatures rather than copying their business logic. The anonymous
+Full CREATE OR REPLACE definitions retain the latest legacy routine bodies plus
+only this piece’s marker guards. Existing owners, grants and signatures remain
+unchanged. The original pg_get_functiondef overlays were replaced in repair 2. The anonymous
 authority body is retained privately to keep canonical-owner checks independent of
 binding validation. The TypeScript authentication query retains an undefined-function
 fallback for supported pre-0942 anonymous upgrade fixtures. Existing non-null
@@ -139,3 +140,54 @@ loop: replace the three body overlays with explicit latest routine definitions
 in a separate focused change. This would make guard placement reviewable without
 depending on string positions. Deferred optional work to keep this repair focused;
 it does not block the fixture and upgrade-list corrections.
+
+
+## Repair 2 — explicit latest bodies and upgrade pins (10 November 2026)
+
+READY for router commit, NOPR; RED (sign-in/sessions). PostgreSQL was not run.
+
+0942 now recreates `seed_saved_v1_sample`, `issue_practice_session`,
+`start_blank_practice_company` and `start_blank_practice_company_v2` with complete
+CREATE OR REPLACE statements. Their source migrations (0109, 0356, 0657, 0687)
+match origin/main byte-for-byte at 98c839494. A source-only comparison reconstructed
+the previous overlays and confirmed all four resulting bodies are byte-identical,
+including whitespace. This completes the repair-1 LATER / SIMPLICITY item above:
+guard placement is explicit and no longer depends on runtime string patching.
+
+Both migfix-7 and plan-entitlement upgrade tests pin those four routines plus
+`authenticate_practice_session`, `lp6_session_authority` and
+`is_blank_practice_company` to 0942. Removed the stale 0657/0658 pins and the
+plan-entitlement special case that still compared the LP-6 predecessor header/body.
+Existing proof replay still checks complete routine privilege/security metadata.
+The existing replacement parser ignores DEFAULT clauses when matching exact
+identity arguments. A source-only check exercised both pin tables and confirmed
+all seven identities select the same complete bodies, including default arguments.
+A nullable proof-record access in migfix-7's latest-body lookup now uses optional
+chaining for every field; absent after-records remain excluded.
+
+The proof now supplies source-derived PostgreSQL 16 definition fingerprints for
+the three legacy void routines that previously had null after-fingerprints.
+The sample trigger fingerprint remains exactly unchanged and was checked against
+its full definition rendering. Existing non-null fingerprints, before-records,
+ACLs, tables, row proofs, signatures and trigger definition remain unchanged.
+No new domain behavior, migration number, external action or release permission.
+
+Local validation (installed binaries, no downloads):
+
+- `./packages/db/node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit` — passed.
+- `./packages/db/node_modules/.bin/tsc -p /tmp/real-wayin-linked-practice-repair2-tsconfig.json`
+  — passed after correcting the nullable proof access; temporary config includes
+  both changed upgrade test files. The first run found that existing access.
+- `node tools/agent-lane-boundary-lint.mjs --lane=real-wayin-linked-practice` — passed.
+- From packages/db: `./node_modules/.bin/vitest run --maxWorkers=1 src/blank-practice-company.test.ts test/migration-proof-loader.test.ts`
+  — 83 passed, 2 files, Vitest 4.1.12.
+- Source-only body-equivalence and seven-identity pin extraction assertions — passed.
+- `git diff --check` — passed.
+
+The coordinator reports the previous-head linked journey/race files passed 23/23
+on real PostgreSQL. That is supplied evidence for the overlay implementation,
+not execution evidence for this repair. PostgreSQL and browser suites were not
+run here: this sandbox cannot start PostgreSQL or bind localhost. CI after the
+router pushes must execute the linked journey/races, migfix-7 and plan-entitlement
+upgrades, and the required current-main checks. Independent exact-head RED review
+remains required. No Git writes, commit, push, PR or merge occurred here.

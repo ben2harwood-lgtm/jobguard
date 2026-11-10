@@ -454,7 +454,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "90b71850f980977f600f927d4d153cad81daa1c2b533ff254bc88d97bec4b34f",
         "staticWrites": [
           "app.job",
           "app.lp_job_insert_permit",
@@ -498,7 +498,7 @@
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "3f34f8252afee5c14023252018511fe6e38c5f93044b9a27cd7b0bf15c0469c6",
         "staticWrites": [
           "control_plane.blank_practice_session",
           "control_plane.practice_session"
@@ -541,7 +541,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "02f0f522c1b582557b5122b05097e860e6f2ebda30f45bb70cffa04c627ab116",
         "staticWrites": [
           "control_plane.blank_practice_session",
           "control_plane.practice_session"

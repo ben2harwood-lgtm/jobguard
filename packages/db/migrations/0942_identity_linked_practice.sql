@@ -305,33 +305,151 @@ BEGIN
 EXCEPTION WHEN invalid_authorization_specification THEN RETURN false;
 END $$;
 
-DO $patch$ DECLARE definition text; BEGIN
- SELECT pg_get_functiondef('app.seed_saved_v1_sample()'::regprocedure) INTO definition;
- IF position('BEGIN' in definition)=0 THEN RAISE EXCEPTION 'SAMPLE_TRIGGER_SHAPE_CHANGED'; END IF;
- definition:=overlay(definition placing $guard$BEGIN
+-- Full latest legacy bodies with the same private marker guards as the original
+-- overlays. CREATE OR REPLACE preserves existing owners, signatures and grants.
+CREATE OR REPLACE FUNCTION app.seed_saved_v1_sample() RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog,app AS $$
+DECLARE tenant uuid:='11111111-1111-4111-8111-111111111111'; j uuid:=gen_random_uuid(); src uuid:=gen_random_uuid(); proposal_id uuid:=gen_random_uuid(); scope uuid; line jsonb; lines jsonb:='[]'; data jsonb; label text; i integer:=0; text_value text:='Generated fictional v1 decorating sample. No real customer data.'; previous_context text;
+BEGIN
  IF EXISTS(SELECT 1 FROM control_plane.identity_practice_namespace WHERE owner_digest=NEW.token_digest)
   OR EXISTS(SELECT 1 FROM control_plane.identity_practice_credential WHERE token_digest=NEW.token_digest)
  THEN RETURN NEW; END IF;
-$guard$ from position('BEGIN' in definition) for 5);
- EXECUTE definition;
-END $patch$;
--- The legacy routines are retained, with a private marker guard ahead of their
--- existing locks/side effects. No linked credential may reset or issue anonymously.
-DO $patch$ DECLARE signature text; definition text; expression text; BEGIN
- FOREACH signature IN ARRAY ARRAY['app.issue_practice_session(text)',
-  'app.start_blank_practice_company(text,text)','app.start_blank_practice_company_v2(text,text)'] LOOP
-  SELECT pg_get_functiondef(signature::regprocedure) INTO definition;
-  expression:=CASE WHEN signature='app.start_blank_practice_company_v2(text,text)' THEN
-   $e$encode(sha256(convert_to(new_token,'UTF8')),'hex'),encode(sha256(convert_to(previous_token,'UTF8')),'hex')$e$
-   WHEN signature='app.start_blank_practice_company(text,text)' THEN 'digest,previous_digest' ELSE 'digest' END;
-  definition:=overlay(definition placing 'BEGIN
- IF EXISTS(SELECT 1 FROM control_plane.identity_practice_namespace WHERE owner_digest IN ('||expression||'))
- OR EXISTS(SELECT 1 FROM control_plane.identity_practice_credential WHERE token_digest IN ('||expression||')) THEN
- RAISE EXCEPTION ''UNAUTHENTICATED'' USING ERRCODE=''28000''; END IF;
-' from position('BEGIN' in definition) for 5);
-  EXECUTE definition;
+
+ IF current_user<>'jobguard_migration' THEN RAISE EXCEPTION 'session fixture requires migration owner' USING ERRCODE='42501'; END IF;
+ previous_context:=current_setting('app.tenant_id',true);PERFORM set_config('app.tenant_id',tenant::text,true);
+ INSERT INTO app.job(id,tenant_id,title,status,practice_session_digest,practice_scenario,saved_v1_sample) VALUES(j,tenant,'Earlier proposed pricing (v1)','draft',NEW.token_digest,'v1_sample',true);
+ FOREACH label IN ARRAY ARRAY['Protect room','Prepare walls','Paint walls','Finish trim','Clean site','Replace shelves'] LOOP
+  i:=i+1;
+  line:=jsonb_build_object('description',jsonb_build_object('value',label,'provenance',jsonb_build_object('kind','human_supplied','note','Generated saved v1 sample')),'quantity',jsonb_build_object('value','1','provenance',jsonb_build_object('kind','defaulted','note','Generated single item')),'unit',jsonb_build_object('value','item','provenance',jsonb_build_object('kind','defaulted','note','Generated item unit')),'unitPricePence',jsonb_build_object('value',CASE WHEN i<=4 THEN to_jsonb(20000) ELSE 'null'::jsonb END,'provenance',jsonb_build_object('kind','human_supplied','note','Generated sample rate or explicitly unknown')));
+  lines:=lines||jsonb_build_array(line);
  END LOOP;
-END $patch$;
+ data:=jsonb_build_object('title',jsonb_build_object('value','Earlier proposed pricing (v1)','provenance',jsonb_build_object('kind','human_supplied','note','Generated saved v1 sample')),'lines',lines,'materials','[]'::jsonb,'questions',jsonb_build_array(jsonb_build_object('question',jsonb_build_object('value','Confirm disposal','provenance',jsonb_build_object('kind','human_supplied','note','Generated sample question')))));
+ INSERT INTO app.capture_source(id,tenant_id,kind,content_bytes,content_text,sha256) VALUES(src,tenant,'text',convert_to(text_value,'UTF8'),text_value,encode(sha256(convert_to(text_value,'UTF8')),'hex'));
+ INSERT INTO app.job_record_proposal(id,tenant_id,capture_id,job_id,source_id,source_version,source_sha256,prompt_version,schema_version,model,proposal) VALUES(proposal_id,tenant,src,j,src,1,encode(sha256(convert_to(text_value,'UTF8')),'hex'),'saved-v1-sample.v1','job-record-proposal-v1','generated-no-model',data);
+ i:=0;FOR line IN SELECT value FROM jsonb_array_elements(lines) LOOP
+  i:=i+1;scope:=gen_random_uuid();INSERT INTO app.scope_identity(id,tenant_id,job_id) VALUES(scope,tenant,j);
+  INSERT INTO app.proposal_line(id,tenant_id,job_id,scope_item_id,source_hash,source_reference,proposal_id,ordinal,proposed_data) VALUES(gen_random_uuid(),tenant,j,scope,encode(sha256(convert_to(text_value,'UTF8')),'hex'),src::text||':v1',proposal_id,i,line);
+ END LOOP;
+ PERFORM set_config('app.tenant_id',coalesce(previous_context,''),true);RETURN NEW;
+END $$;
+
+CREATE OR REPLACE FUNCTION app.issue_practice_session(digest text) RETURNS void LANGUAGE plpgsql SECURITY DEFINER
+ SET search_path=pg_catalog AS $$
+DECLARE j uuid; item record; t uuid:='11111111-1111-4111-8111-111111111111';
+BEGIN
+ IF EXISTS(SELECT 1 FROM control_plane.identity_practice_namespace WHERE owner_digest IN (digest))
+ OR EXISTS(SELECT 1 FROM control_plane.identity_practice_credential WHERE token_digest IN (digest)) THEN
+ RAISE EXCEPTION 'UNAUTHENTICATED' USING ERRCODE='28000'; END IF;
+
+ IF current_database() IS DISTINCT FROM 'jobguard_synthetic_demo' THEN RAISE EXCEPTION 'MODE_FORBIDDEN' USING ERRCODE='42501'; END IF;
+ IF digest IS NULL OR digest !~ '^[0-9a-f]{64}$' OR NOT EXISTS(
+  SELECT 1 FROM app.membership m WHERE m.tenant_id='11111111-1111-4111-8111-111111111111'::uuid
+   AND m.id='d1500000-0000-4000-8000-000000000003'::uuid AND m.identity_user_id='d1500000-0000-4000-8000-000000000001'::uuid
+   AND m.role='owner' AND m.revoked_at IS NULL AND(m.expires_at IS NULL OR m.expires_at>clock_timestamp())
+ ) THEN RAISE EXCEPTION 'UNAUTHENTICATED' USING ERRCODE='42501'; END IF;
+ INSERT INTO control_plane.practice_session(token_digest) VALUES(digest);
+ PERFORM set_config('app.tenant_id','11111111-1111-4111-8111-111111111111',true);
+ FOR item IN SELECT * FROM (VALUES('Practice kitchen','quoting'),('Kitchen extension','live'),('Loft conversion','quoting')) AS recipe(title,status) LOOP
+  j:=gen_random_uuid();
+  INSERT INTO app.lp_job_insert_permit(tenant_id,job_id,backend_pid,transaction_id,operation,insert_shape,actor_membership_id)
+  VALUES(t,j,pg_backend_pid(),pg_current_xact_id(),'practice_home',
+   app.lp_job_insert_shape(jsonb_populate_record(NULL::app.job,jsonb_build_object('tenant_id',t,'id',j,'title',item.title,
+    'status',item.status,'revision',0,'provenance','system_generated_quote','practice_session_digest',digest,'practice_scenario','home'))),
+   'd1500000-0000-4000-8000-000000000003');
+  INSERT INTO app.job(id,tenant_id,title,status,practice_session_digest,practice_scenario) VALUES(j,t,item.title,item.status,digest,'home');
+ END LOOP;
+END $$;
+
+CREATE OR REPLACE FUNCTION app.start_blank_practice_company(digest text, previous_digest text DEFAULT NULL) RETURNS void
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+BEGIN
+ IF EXISTS(SELECT 1 FROM control_plane.identity_practice_namespace WHERE owner_digest IN (digest,previous_digest))
+ OR EXISTS(SELECT 1 FROM control_plane.identity_practice_credential WHERE token_digest IN (digest,previous_digest)) THEN
+ RAISE EXCEPTION 'UNAUTHENTICATED' USING ERRCODE='28000'; END IF;
+
+ IF current_database() IS DISTINCT FROM 'jobguard_synthetic_demo' THEN
+  RAISE EXCEPTION 'SYNTHETIC_MODE_REQUIRED' USING ERRCODE='42501';
+ END IF;
+ IF digest IS NULL OR digest !~ '^[0-9a-f]{64}$' OR digest IS NOT DISTINCT FROM previous_digest THEN
+  RAISE EXCEPTION 'UNAUTHENTICATED' USING ERRCODE='28000';
+ END IF;
+ IF previous_digest IS NOT NULL THEN
+  -- Reset owns only the presented live blank session. Recheck after waiting;
+  -- parallel resets cannot both succeed. Retain old jobs, sources and audit.
+  PERFORM 1 FROM control_plane.practice_session s WHERE s.token_digest=previous_digest FOR UPDATE;
+  IF NOT app.is_blank_practice_company(previous_digest) THEN
+   RAISE EXCEPTION 'UNAUTHENTICATED' USING ERRCODE='28000';
+  END IF;
+ ELSE
+  IF NOT EXISTS(SELECT 1 FROM app.membership m
+   WHERE m.tenant_id='11111111-1111-4111-8111-111111111111'::uuid
+    AND m.id='d1500000-0000-4000-8000-000000000003'::uuid
+    AND m.identity_user_id='d1500000-0000-4000-8000-000000000001'::uuid
+    AND m.role='owner' AND m.revoked_at IS NULL
+    AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp())) THEN
+   RAISE EXCEPTION 'UNAUTHENTICATED' USING ERRCODE='28000';
+  END IF;
+ END IF;
+ INSERT INTO control_plane.blank_practice_session(token_digest) VALUES(digest);
+ INSERT INTO control_plane.practice_session(token_digest) VALUES(digest);
+ IF previous_digest IS NOT NULL THEN
+  UPDATE control_plane.practice_session SET revoked_at=clock_timestamp()
+   WHERE token_digest=previous_digest;
+  UPDATE control_plane.blank_practice_session SET replaced_by=digest WHERE token_digest=previous_digest;
+ END IF;
+ -- Deliberately no seeded jobs and no business-data deletes.
+END $$;
+
+CREATE OR REPLACE FUNCTION app.start_blank_practice_company_v2(new_token text, previous_token text DEFAULT NULL) RETURNS void
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE
+ digest text;
+ previous_digest text;
+ token_pattern constant text := '^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$';
+BEGIN
+ IF EXISTS(SELECT 1 FROM control_plane.identity_practice_namespace WHERE owner_digest IN (encode(sha256(convert_to(new_token,'UTF8')),'hex'),encode(sha256(convert_to(previous_token,'UTF8')),'hex')))
+ OR EXISTS(SELECT 1 FROM control_plane.identity_practice_credential WHERE token_digest IN (encode(sha256(convert_to(new_token,'UTF8')),'hex'),encode(sha256(convert_to(previous_token,'UTF8')),'hex'))) THEN
+ RAISE EXCEPTION 'UNAUTHENTICATED' USING ERRCODE='28000'; END IF;
+
+ IF current_database() IS DISTINCT FROM 'jobguard_synthetic_demo' THEN
+  RAISE EXCEPTION 'SYNTHETIC_MODE_REQUIRED' USING ERRCODE='42501';
+ END IF;
+ -- Match practiceSessionV1 (Zod UUID); do not accept stored SHA-256 digests.
+ IF new_token IS NULL OR length(new_token)<>36 OR new_token !~ token_pattern
+  OR (previous_token IS NOT NULL AND (length(previous_token)<>36 OR previous_token !~ token_pattern)) THEN
+  RAISE EXCEPTION 'UNAUTHENTICATED' USING ERRCODE='28000';
+ END IF;
+ digest := encode(sha256(convert_to(new_token,'UTF8')),'hex');
+ previous_digest := CASE WHEN previous_token IS NULL THEN NULL
+  ELSE encode(sha256(convert_to(previous_token,'UTF8')),'hex') END;
+ IF digest IS NOT DISTINCT FROM previous_digest THEN
+  RAISE EXCEPTION 'UNAUTHENTICATED' USING ERRCODE='28000';
+ END IF;
+ IF previous_digest IS NOT NULL THEN
+  -- Reset owns only the presented live blank session. Recheck after waiting;
+  -- parallel resets cannot both succeed. Retain old jobs, sources and audit.
+  PERFORM 1 FROM control_plane.practice_session s WHERE s.token_digest=previous_digest FOR UPDATE;
+  IF NOT app.is_blank_practice_company(previous_digest) THEN
+   RAISE EXCEPTION 'UNAUTHENTICATED' USING ERRCODE='28000';
+  END IF;
+ ELSE
+  IF NOT EXISTS(SELECT 1 FROM app.membership m
+   WHERE m.tenant_id='11111111-1111-4111-8111-111111111111'::uuid
+    AND m.id='d1500000-0000-4000-8000-000000000003'::uuid
+    AND m.identity_user_id='d1500000-0000-4000-8000-000000000001'::uuid
+    AND m.role='owner' AND m.revoked_at IS NULL
+    AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp())) THEN
+   RAISE EXCEPTION 'UNAUTHENTICATED' USING ERRCODE='28000';
+  END IF;
+ END IF;
+ INSERT INTO control_plane.blank_practice_session(token_digest) VALUES(digest);
+ INSERT INTO control_plane.practice_session(token_digest) VALUES(digest);
+ IF previous_digest IS NOT NULL THEN
+  UPDATE control_plane.practice_session SET revoked_at=clock_timestamp()
+   WHERE token_digest=previous_digest;
+  UPDATE control_plane.blank_practice_session SET replaced_by=digest WHERE token_digest=previous_digest;
+ END IF;
+ -- Deliberately no seeded jobs and no business-data deletes.
+END $$;
 
 ALTER FUNCTION app.linked_practice_parent(text) OWNER TO jobguard_migration;
 ALTER FUNCTION app.linked_practice_authority(text) OWNER TO jobguard_migration;

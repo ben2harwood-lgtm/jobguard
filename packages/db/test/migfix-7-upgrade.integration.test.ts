@@ -97,6 +97,14 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   // Exact existing replacements only; all their privileges and unrelated definitions remain frozen.
   const fullBodies = new Map<string, string>();
   for (const [identity, migration, overload = 0] of [
+    // 0942 recreates these exact bodies; never pin their pre-linked predecessors.
+    ["app.issue_practice_session(digest text)", "0942_identity_linked_practice.sql"],
+    ["app.start_blank_practice_company(digest text, previous_digest text)", "0942_identity_linked_practice.sql"],
+    ["app.start_blank_practice_company_v2(new_token text, previous_token text)", "0942_identity_linked_practice.sql"],
+    ["app.seed_saved_v1_sample()", "0942_identity_linked_practice.sql"],
+    ["app.authenticate_practice_session(digest text, requested_tenant uuid)", "0942_identity_linked_practice.sql"],
+    ["app.lp6_session_authority(p_kind text, p_credential text, p_tenant uuid)", "0942_identity_linked_practice.sql"],
+    ["app.is_blank_practice_company(digest text)", "0942_identity_linked_practice.sql"],
     ["identity.extra_customer_approval(t uuid, j uuid, c uuid, digest text, input jsonb)", "0725_lp6c_client_extra_decision.sql"],
     ["app.current_actor()", "0724_lp6c_customer_portal_delegation.sql"],
     ["app.current_tenant()", "0724_lp6c_customer_portal_delegation.sql"],
@@ -130,8 +138,6 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.demo_issue_customer_link(t uuid, j uuid, c uuid, session_digest text, link_digest text, content text)", "0650_demo_customer_link_reference.sql"],
     ["identity.dark_emergency(s text, csrf text, t uuid, p jsonb)", "0655_emergency_token_minted.sql"],
     ["app.replace_fee_reservation_book(p_tenant uuid, p_book jsonb, p_result jsonb)", "0708_fee_result_json_errors.sql"],
-    ["app.start_blank_practice_company(digest text, previous_digest text)", "0657_blank_practice_company.sql"],
-    ["app.lp6_session_authority(p_kind text, p_credential text, p_tenant uuid)", "0658_lp6b_effective_session_actor.sql"],
     ["app.ch6_integrity_authority(t uuid, j uuid, digest text)", "0660_baseline_ancestry_audit_trust.sql"],
     ["app.ch6_integrity_sources(t uuid, j uuid, d text)", "0660_baseline_ancestry_audit_trust.sql"],
     ["app.ch6_record_integrity_review(t uuid, j uuid, digest text, review jsonb, source_snapshot jsonb)", "0660_baseline_ancestry_audit_trust.sql"],
@@ -239,7 +245,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
       // successor (for example 0725's GRANT on extra_customer_use) does not redefine its body.
       const create = `FUNCTION ${row.nspname}.${row.proname}(`;
       const defines = (sql: string) => new RegExp(`CREATE (?:OR REPLACE )?${create.replace(/[.()]/gu, "\\$&")}`, "u").test(sql);
-      const listed = successors.filter(p => p.upgrade.some(change => change.section === "routines" && change.after?.nspname === row.nspname && change.after.proname === row.proname && change.after.args === row.args));
+      const listed = successors.filter(p => p.upgrade.some(change => change.section === "routines" && change.after?.nspname === row.nspname && change.after?.proname === row.proname && change.after?.args === row.args));
       let sql: string | undefined;
       for (const candidate of listed.reverse()) {
         const text = await readFile(new URL(`../migrations/${candidate.migration}`, import.meta.url), "utf8");
