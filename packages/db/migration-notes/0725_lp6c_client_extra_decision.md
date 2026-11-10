@@ -42,9 +42,9 @@ Conflict resolutions:
 - `test/plan-entitlement-lifecycle-upgrade.integration.test.ts`: retain LP body/ACL/source expectations and all main cases, including abandoned-visit and receipt helpers and 0699 sync binding. Update invoice/effect body rows to LP successors and pin raw source alongside changed definitions.
 
 Latest-body rebuilds:
-- `0686_lp6c_money_binding.sql`: `app.issue_practice_customer_invoice` is 0716's complete signed-VAT body plus only LP-6c actor/tenant guard.
-- `0686_lp6c_money_binding.sql`: `app.lp5_bind_effect` is 0722's complete LS-79 body plus LP-6c tenant/claim-actor guards.
-- `0687_lp6c_customer_portal_delegation.sql`: `app.lp5_bind_effect` retains that LS-79 body and applies the existing scoped delegated-actor changes on top. Both missing-claim abandoned-reference refusal and the full abandoned-visit effect validation remain.
+- `0723_lp6c_money_binding.sql`: `app.issue_practice_customer_invoice` is 0716's complete signed-VAT body plus only LP-6c actor/tenant guard.
+- `0723_lp6c_money_binding.sql`: `app.lp5_bind_effect` is 0722's complete LS-79 body plus LP-6c tenant/claim-actor guards.
+- `0724_lp6c_customer_portal_delegation.sql`: `app.lp5_bind_effect` retains that LS-79 body and applies the existing scoped delegated-actor changes on top. Both missing-claim abandoned-reference refusal and the full abandoned-visit effect validation remain.
 - Matching proof source entries now identify the latest predecessor migrations. Their catalogue fields remain unchanged because these rebuilds add no new grants, writes or static calls beyond the existing LP changes; existing null definition digests remain null. Full bodies are pinned by MIGFIX-7 and plan-entitlement, with source regression tests proving predecessor preservation and proof continuity.
 
 Checks actually run:

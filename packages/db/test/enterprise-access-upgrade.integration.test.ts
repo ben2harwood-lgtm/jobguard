@@ -89,8 +89,8 @@ it('emergency_dual_owner/scim2_machine preserve populated identity state, instal
  await migrate(h.admin);await migrate(h.admin);
  expect(await Promise.all(tables.map(t=>canonicalRows(h!,t)))).toEqual(before);
  const after=await predecessorCatalogue(h.admin);
- const delegationSql=await readFile(new URL('../migrations/0687_lp6c_customer_portal_delegation.sql',import.meta.url),'utf8');
- const delegationProof=JSON.parse(await readFile(new URL('./migration-proofs/0687_lp6c_customer_portal_delegation.proof.json',import.meta.url),'utf8'));
+ const delegationSql=await readFile(new URL('../migrations/0724_lp6c_customer_portal_delegation.sql',import.meta.url),'utf8');
+ const delegationProof=JSON.parse(await readFile(new URL('./migration-proofs/0724_lp6c_customer_portal_delegation.proof.json',import.meta.url),'utf8'));
  // Pin the exact new scope shape while retaining every raw predecessor attribute.
  const isBinding=(r:Relation)=>r.nspname==='control_plane'&&r.relname==='request_binding';
  type Column={attname:string;attnum:number;attnotnull:boolean;[key:string]:unknown};

@@ -1,5 +1,5 @@
 {
-  "migration": "0687_lp6c_customer_portal_delegation.sql",
+  "migration": "0724_lp6c_customer_portal_delegation.sql",
   "lp0": [
     {
       "section": "authorityPaths",
@@ -17,7 +17,7 @@
           "LP-12": "Review private definer owner custody and grants."
         },
         "sources": [
-          "packages/db/migrations/0687_lp6c_customer_portal_delegation.sql",
+          "packages/db/migrations/0724_lp6c_customer_portal_delegation.sql",
           "packages/db/migrations/0722_abandoned_visit_authority.sql"
         ],
         "tests": [
@@ -51,7 +51,7 @@
         },
         "downstream": "Private transaction/job/type-scoped customer-message delegation. The binding owner reuses the existing live portal validator and reads only the two tenant-RLS portal tables. General actor/tenant access hides delegated identities; money routines remain closed. No person-facing grant or new role.",
         "sources": [
-          "packages/db/migrations/0687_lp6c_customer_portal_delegation.sql"
+          "packages/db/migrations/0724_lp6c_customer_portal_delegation.sql"
         ],
         "tests": [
           "packages/db/test/lp6c-customer-delegation.integration.test.ts",

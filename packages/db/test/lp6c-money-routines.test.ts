@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { expect, it } from "vitest";
 
 const directory = new URL("../migrations/", import.meta.url);
-const migration = "0686_lp6c_money_binding.sql";
+const migration = "0723_lp6c_money_binding.sql";
 // This is a regression contract for copied bodies, not a permission scanner or source pin.
 const functions = (sql: string) => [...sql.matchAll(/CREATE (?:OR REPLACE )?FUNCTION\s+app\.(\w+)\s*\((.*?)\)\s*RETURNS\b(.*?)\bAS\s+(\$\w*\$)(.*?)\4\s*;/gis)];
 const key = (m: RegExpMatchArray) => m[1]! + m[2]!.replace(/\s+|\(\d+(?:,\d+)?\)/gu, "").toLowerCase();
@@ -66,7 +66,7 @@ it("guards command claim actors before effect updates and completion/replay use"
 });
 
 it("declares exactly the five owner-only binding grants and exact identity-form proof arguments", () => {
-  const proof = JSON.parse(readFileSync(new URL("./migration-proofs/0686_lp6c_money_binding.proof.json", import.meta.url), "utf8"));
+  const proof = JSON.parse(readFileSync(new URL("./migration-proofs/0723_lp6c_money_binding.proof.json", import.meta.url), "utf8"));
   expect(proof.migration).toBe(migration);
   const predecessor=JSON.parse(readFileSync(new URL("./migration-proofs/0672_extra_pack_artifact_store.proof.json",import.meta.url),"utf8"));
   const existing=predecessor.lp0.filter((c:{section:string;after?:{key?:string}})=>c.section==='entries' && /^acl\|routine\|function:app\.current_(?:actor|tenant)\(\)\|jobguard_migration\|EXECUTE\|-$/u.test(c.after?.key??''))
@@ -104,14 +104,14 @@ it("retains LS-79 in the delegated effect body and preserves matching proof meta
   const main = functions(readFileSync(new URL("0722_abandoned_visit_authority.sql", directory), "utf8"))
     .find(m => m[1] === "lp5_bind_effect")![5]!;
   const bound = functions(sql()).find(m => m[1] === "lp5_bind_effect")![5]!;
-  const delegated = functions(readFileSync(new URL("0687_lp6c_customer_portal_delegation.sql", directory), "utf8"))
+  const delegated = functions(readFileSync(new URL("0724_lp6c_customer_portal_delegation.sql", directory), "utf8"))
     .find(m => m[1] === "lp5_bind_effect")![5]!;
   const missingClaim = main.split(" IF c.command_id IS NULL THEN")[1]!.split(" SELECT * INTO r")[0]!;
   expect(delegated).toContain(" IF c.command_id IS NULL THEN" + missingClaim);
   expect(delegated.split(" SELECT completion_adapter")[1]).toBe(main.split(" SELECT completion_adapter")[1]);
   expect(delegated).toContain("app.lp6_delegated_actor(t,r.command_type,(c.resource->>'subjectRef')::uuid)");
-  const proof = JSON.parse(readFileSync(new URL("./migration-proofs/0686_lp6c_money_binding.proof.json", import.meta.url), "utf8"));
-  const delegationProof = JSON.parse(readFileSync(new URL("./migration-proofs/0687_lp6c_customer_portal_delegation.proof.json", import.meta.url), "utf8"));
+  const proof = JSON.parse(readFileSync(new URL("./migration-proofs/0723_lp6c_money_binding.proof.json", import.meta.url), "utf8"));
+  const delegationProof = JSON.parse(readFileSync(new URL("./migration-proofs/0724_lp6c_customer_portal_delegation.proof.json", import.meta.url), "utf8"));
   const change = proof.lp0.find((r: { after?: { identity?: string } }) => r.after?.identity === "function:app.lp5_bind_effect(uuid,uuid,text,jsonb)");
   const next = delegationProof.lp0.find((r: { after?: { identity?: string } }) => r.after?.identity === change.after.identity);
   expect(next.before).toEqual(change.after);

@@ -209,7 +209,7 @@ it('link revocation queued before a message commits first and the message writes
   }
 });
 it('upgrade preserves every existing binding tuple, its private owner and UNLOGGED storage; scope fields are exact',async()=>{
-  const c=await startBeforeMigration('0687_lp6c_customer_portal_delegation.sql');
+  const c=await startBeforeMigration('0724_lp6c_customer_portal_delegation.sql');
   try {
     const credential=hash(randomUUID());await testBoundTenantContext(c.admin,DEMO_TENANT_ID,DEMO_MEMBERSHIP_ID,credential);
     await c.admin.query("SELECT app.bind_request('real',$1,$2)",[credential,DEMO_TENANT_ID]);
@@ -217,7 +217,7 @@ it('upgrade preserves every existing binding tuple, its private owner and UNLOGG
       FROM control_plane.request_binding ORDER BY environment_id,transaction_id`)).rows;
     const storage=async()=> (await c.admin.query("SELECT relpersistence,relowner::regrole::text owner FROM pg_class WHERE oid='control_plane.request_binding'::regclass")).rows[0];
     const before=await tuples(),posture=await storage();expect(before.length).toBeGreaterThan(0);
-    await applyMigration(c,'0687_lp6c_customer_portal_delegation.sql');
+    await applyMigration(c,'0724_lp6c_customer_portal_delegation.sql');
     expect(await tuples()).toEqual(before);expect(await storage()).toEqual(posture);
     expect(posture).toEqual({relpersistence:'u',owner:'jobguard_binding_owner'});
     expect((await c.admin.query("SELECT count(*)::int n FROM control_plane.request_binding WHERE scope_job_id IS NOT NULL OR scope_command_type IS NOT NULL")).rows[0].n).toBe(0);

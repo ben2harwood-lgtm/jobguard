@@ -1,5 +1,5 @@
 {
-  "migration": "0970_lp6c_client_extra_decision.sql",
+  "migration": "0725_lp6c_client_extra_decision.sql",
   "lp0": [
     {
       "section": "authorityPaths",
@@ -17,7 +17,7 @@
           "LP-12": "Review private owner custody and grants."
         },
         "sources": [
-          "packages/db/migrations/0970_lp6c_client_extra_decision.sql"
+          "packages/db/migrations/0725_lp6c_client_extra_decision.sql"
         ],
         "tests": [
           "packages/db/test/extra-client-session.integration.test.ts"
@@ -49,7 +49,7 @@
         },
         "downstream": "Existing extra-session validator remains authoritative; private binder records the customer approver, exact job and ClientDecideExtra scope for at most one minute. Ben typed yes on 9 Nov 2026.",
         "sources": [
-          "packages/db/migrations/0970_lp6c_client_extra_decision.sql"
+          "packages/db/migrations/0725_lp6c_client_extra_decision.sql"
         ],
         "tests": [
           "packages/db/test/extra-client-session.integration.test.ts"

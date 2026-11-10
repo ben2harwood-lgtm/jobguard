@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
-const sql=readFileSync(new URL('../migrations/0970_lp6c_client_extra_decision.sql',import.meta.url),'utf8');
+const sql=readFileSync(new URL('../migrations/0725_lp6c_client_extra_decision.sql',import.meta.url),'utf8');
 const body=(source:string)=>source.split('FUNCTION identity.extra_customer_approval(')[1]!.split('AS $$')[1]!.split('$$;')[0]!;
 it('preserves the complete customer approval body except its decide-only binder call',()=>{
  const prior=readFileSync(new URL('../migrations/0644_extra_customer_approval.sql',import.meta.url),'utf8');

@@ -42,7 +42,7 @@ const lp6cSignatures = [
   "app.complete_command(uuid,jsonb)",
   "app.mon1_company_actor(uuid,text)",
 ] as const;
-const lp6cBodies = [...readFileSync(new URL("../migrations/0686_lp6c_money_binding.sql", import.meta.url), "utf8")
+const lp6cBodies = [...readFileSync(new URL("../migrations/0723_lp6c_money_binding.sql", import.meta.url), "utf8")
   .matchAll(/CREATE OR REPLACE FUNCTION app\.(\w+)\((.*?)\)\s*RETURNS\b.*?\bAS\s+(\$\w*\$)(.*?)\3\s*;/gis)];
 let c: Cluster | undefined;
 afterAll(async () => { await c?.close(); });
@@ -76,9 +76,9 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     expect(signature.split("(")[0]).toBe(`app.${body[1]}`);
     lp6cReplacements.set(oid, body[4]!);
   }
-  // Only these six exact identities receive their latest 0687 bodies. Their
+  // Only these six exact identities receive their latest 0724 bodies. Their
   // owners, ACLs and all other metadata remain checked by successor proofs.
-  const delegationSql = await readFile(new URL("../migrations/0687_lp6c_customer_portal_delegation.sql", import.meta.url), "utf8");
+  const delegationSql = await readFile(new URL("../migrations/0724_lp6c_customer_portal_delegation.sql", import.meta.url), "utf8");
   const delegationBodies = [...delegationSql.matchAll(/CREATE OR REPLACE FUNCTION ([\w.]+)\((.*?)\)\s*RETURNS\b.*?\bAS\s+(\$\w*\$)(.*?)\3\s*;/gis)];
   const delegationSignatures = ["app.current_actor()", "app.current_tenant()", "identity.customer_portal_message(uuid,uuid,uuid,text,jsonb)",
     "app.begin_command(text,uuid,text,text,jsonb,jsonb,jsonb)", "app.lp5_bind_effect(uuid,uuid,text,jsonb)", "app.complete_command(uuid,jsonb)"];
@@ -89,7 +89,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     const oid = (await c.admin.query("SELECT $1::regprocedure::oid oid", [signature])).rows[0].oid;
     lp6cReplacements.set(oid, body![4]!);
   }
-  const clientDecisionSql = await readFile(new URL("../migrations/0970_lp6c_client_extra_decision.sql", import.meta.url), "utf8");
+  const clientDecisionSql = await readFile(new URL("../migrations/0725_lp6c_client_extra_decision.sql", import.meta.url), "utf8");
   const clientDecisionOid = (await c.admin.query("SELECT 'identity.extra_customer_approval(uuid,uuid,uuid,text,jsonb)'::regprocedure::oid oid")).rows[0].oid;
   lp6cReplacements.set(clientDecisionOid, clientDecisionSql.split("FUNCTION identity.extra_customer_approval(")[1]!.split("AS $$")[1]!.split("$$;")[0]!);
   // 0722 adds only this exact administrative close routine; successor proofs bind its ACLs.
@@ -143,10 +143,10 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     ["ef_prepare_statement", "p_session uuid, p_command uuid, p_period text", "0704_enterprise_fee_period_order.sql"],
     ["ef_post_statement", "p_session uuid, p_command uuid, p_statement uuid, p_authorization uuid", "0704_enterprise_fee_period_order.sql"],
     ["receipt_fact_invoice_line", "t uuid, j uuid, i uuid, l uuid, r uuid, k uuid, ch uuid", "0713_supplementary_after_combined_receipt.sql"],
-    ["issue_practice_customer_invoice", "p_tenant uuid, p_job uuid, p_final_revision uuid, p_actor uuid, p_command uuid, p_recipient text, p_issued_on date", "0686_lp6c_money_binding.sql"],
+    ["issue_practice_customer_invoice", "p_tenant uuid, p_job uuid, p_final_revision uuid, p_actor uuid, p_command uuid, p_recipient text, p_issued_on date", "0723_lp6c_money_binding.sql"],
     ["issue_practice_customer_credit_note", "p_tenant uuid, p_job uuid, p_invoice uuid, p_actor uuid, p_command uuid, p_net_pence bigint, p_reason text, p_preview_hash text", "0717_credit_request_digest_fields.sql"],
     ["lp5b_contractor_permission", "p_type text, p_actor uuid, p_job uuid, p_input jsonb", "0722_abandoned_visit_authority.sql"],
-    ["lp5_bind_effect", "p_command uuid, p_authorization uuid, p_adapter text, p_reference jsonb", "0687_lp6c_customer_portal_delegation.sql"],
+    ["lp5_bind_effect", "p_command uuid, p_authorization uuid, p_adapter text, p_reference jsonb", "0724_lp6c_customer_portal_delegation.sql"],
     ["lp5b_contractor_result", "p_command uuid, p_outcome jsonb", "0722_abandoned_visit_authority.sql"],
     ["ent3b_closeout_guard", "", "0722_abandoned_visit_authority.sql"],
     ["receipt_fact_proposal", "t uuid, j uuid, p jsonb", "0692_final_check_post_invoice_receipt_gate.sql"],
@@ -253,7 +253,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     }
     if (prior.nspname === "app" && prior.proname === "final_check_require_invoice_actor" && prior.args === "p_tenant uuid, p_job uuid, p_actor uuid") {
       expect({ ...current, definition: prior.definition, source: prior.source }).toEqual(prior);
-      const owner = await readFile(new URL("../migrations/0686_lp6c_money_binding.sql", import.meta.url), "utf8");
+      const owner = await readFile(new URL("../migrations/0723_lp6c_money_binding.sql", import.meta.url), "utf8");
       const body=owner.split("FUNCTION app.final_check_require_invoice_actor(")[1]!.split("AS $$")[1]!.split(/\$\$\s*;/u)[0];
       expect(current?.definition?.split("$function$")[1]).toBe(body);
       expect(current?.source).toBe(body);
