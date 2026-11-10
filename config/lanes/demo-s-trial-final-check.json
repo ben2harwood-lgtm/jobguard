@@ -1,0 +1,28 @@
+{
+  "version": 2,
+  "lanes": {
+    "demo-s-trial-final-check": {
+      "branches": [
+        "codex/sandbox/demo-s-trial-final-check"
+      ],
+      "note": "RED: DEMO-S / MON-3 guided trial lock and saved Final Check via existing company routines. NOPR; no migration.",
+      "allow": [
+        "apps/web/app/demo-s/trial/journey.tsx",
+        "apps/web/app/demo-s/trial/browser-bundle.test.mts",
+        "apps/web/app/demo-s/trial/final-account/page.tsx",
+        "apps/web/app/demo-s/trial/final-account/screen.tsx",
+        "apps/web/app/demo-s/trial/final-account/view.ts",
+        "apps/web/app/demo-s/trial/final-account/commands/route.ts",
+        "apps/web/app/demo-s/trial/final-account/commands/route.test.ts",
+        "apps/web/app/api/jobs/[id]/trial-final-check/route.ts",
+        "apps/web/app/api/jobs/[id]/trial-final-check/route.test.ts",
+        "apps/web/e2e/DEMO-J5-trial-final-check.spec.mts",
+        "packages/db/test/free-first-job-lifecycle-fixtures.ts",
+        "packages/core/src/watchdog.ts",
+        "packages/db/src/small-builder-trial-demo-repository.ts",
+        "packages/db/src/small-builder-trial-demo-repository.test.ts",
+        "docs/contracts/small-builder-demo-v1.md"
+      ]
+    }
+  }
+}

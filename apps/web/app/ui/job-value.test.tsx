@@ -40,14 +40,14 @@ const jobId = "11111111-1111-4111-8111-111111111111";
 const otherJobId = "22222222-2222-4222-8222-222222222222";
 const response = (body: unknown, status = 200) => ({ ok: status >= 200 && status < 300, status, json: async () => body });
 
-async function valuePage(replyJobId: string) {
+async function valuePage(replyJobId: string, foundAfterLock: unknown[] = []) {
   vi.stubGlobal("React", React);
   const outcome = { pence: 12500, basis: "net", sources: [] };
   // Both replies are schema-valid: only the job binding differs.
   const value = jobValueResponseV1.parse({
     version: "job-value.v1", environment: "synthetic_demo", jobId: replyJobId,
     approvedExtras: outcome, approvedReductions: outcome, invoicedGross: outcome,
-    recordedGross: outcome, outstandingGross: outcome, pendingExtras: [], quoteCoverage: [], blockedActions: [],
+    recordedGross: outcome, outstandingGross: outcome, pendingExtras: [], foundAfterLock, quoteCoverage: [], blockedActions: [],
   });
   const fetch = vi.fn(async () => response(value));
   vi.stubGlobal("fetch", fetch);
@@ -72,4 +72,28 @@ it("refuses a schema-valid reply for a different job and shows no money figure",
   expect(html).not.toContain("£");
   expect(html).not.toContain("125.00");
   expect(fetch).toHaveBeenCalledExactlyOnceWith(`/api/jobs/${jobId}/value`, { method: "GET", cache: "no-store" });
+});
+
+const found = (pence: number | null, id = otherJobId) => ({ id, description: "fitted loft hatch", sourceSignalId: jobId, revisionId: pence === null ? null : jobId, revision: pence === null ? null : 1, pence, approved: false, href: `/jobs/${jobId}#variation-${id}` });
+it("leads with the sum of priced catches and inspectable extra and Final Check links", async () => {
+ const { html } = await valuePage(jobId, [found(30000), found(5000, jobId), found(null, "33333333-3333-4333-8333-333333333333")]);
+ expect(html).toContain("Found after your bill was complete: £350.00 — from JobGuard&#x27;s final check");
+ expect(html.indexOf("value-found-after-lock")).toBeLessThan(html.indexOf("This page does not guess"));
+ expect(html).toContain(`/jobs/${jobId}#variation-${otherJobId}`);
+ expect(html).toContain(`/jobs/${jobId}#final-check`);
+ expect(html).toContain("awaiting approval");
+ expect(html).toContain("found, not priced yet");
+});
+it("shows an unpriced catch without assigning it pounds", async () => {
+ const { html } = await valuePage(jobId, [found(null)]);
+ expect(html).toContain("found, not priced yet");
+ expect(html).not.toContain("Found after your bill was complete:");
+ expect(html).not.toContain("£300");
+});
+it("adds no found line for an empty projection", async () => {
+ expect((await valuePage(jobId)).html).not.toContain("value-found-after-lock");
+});
+it("defaults older value responses to an empty catch projection", () => {
+ const outcome = { pence: null, basis: "net", sources: [] };
+ expect(jobValueResponseV1.parse({ version: "job-value.v1", environment: "synthetic_demo", jobId, approvedExtras: outcome, approvedReductions: outcome, invoicedGross: outcome, recordedGross: outcome, outstandingGross: outcome, pendingExtras: [], quoteCoverage: [], blockedActions: [] }).foundAfterLock).toEqual([]);
 });
