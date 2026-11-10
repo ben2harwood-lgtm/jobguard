@@ -1,4 +1,3 @@
-import { withTenant } from "../src/tenant-context.js";
 import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { createHash, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
@@ -74,8 +73,8 @@ describe("MIGFIX-5 customer billing integrity", () => {
     const row = (await f.admin.query("SELECT id,net_pence,tax_pence,total_pence,pdf_sha256 FROM app.customer_invoice WHERE tenant_id=$1 AND id=$2", [a.tenantId, result.invoiceId])).rows[0];
     return { a, repo, invoice: { id: row.id as string, pdf: row.pdf_sha256 as string, net: Number(row.net_pence), tax: Number(row.tax_pence), total: Number(row.total_pence) } };
   }
-  const credit = (f2: LockFixture, a: Account, invoice: { id: string; pdf: string }, net: number, credited: number) => asFixtureTenant(f2.runtime, a.tenantId, db =>
-    db.query("SELECT * FROM app.issue_practice_customer_credit_note($1,$2,$3,$4,$5,$6,'Synthetic correction',$7)", [a.tenantId, a.jobId, invoice.id, LOCK_OWNER, randomUUID(), net, previewHash(a, invoice, net, credited)]));
+  const credit = (f2: LockFixture, a: Account, invoice: { id: string; pdf: string }, net: number, credited: number) => withTenant(f2.runtime, a.context, db =>
+    db.$client.query("SELECT * FROM app.issue_practice_customer_credit_note($1,$2,$3,$4,$5,$6,'Synthetic correction',$7)", [a.tenantId, a.jobId, invoice.id, LOCK_OWNER, randomUUID(), net, previewHash(a, invoice, net, credited)]));
   async function creditTotals(a: Account, invoiceId: string) {
     const r = (await f.admin.query("SELECT coalesce(-sum(net_pence),0) net,coalesce(-sum(tax_pence),0) tax,coalesce(sum(amount_pence),0) gross,count(*) n FROM app.customer_credit_note WHERE tenant_id=$1 AND invoice_id=$2", [a.tenantId, invoiceId])).rows[0];
     return { net: Number(r.net), tax: Number(r.tax), gross: Number(r.gross), count: Number(r.n) };
@@ -190,7 +189,7 @@ describe("MIGFIX-5 customer billing integrity", () => {
       draftId: (await f.admin.query("SELECT final_account_draft_id FROM app.final_account_revision WHERE tenant_id=$1 AND id=$2", [job.tenantId, job.revisionId])).rows[0].final_account_draft_id as string,
     };
     const revealed = await availableFinalCheck(checkFixture, job);
-    await new FinalCheckCompletionRepository(f.shadow).publish(a.context, {
+    await new FinalCheckCompletionRepository(f.shadow).publish(a.workerContext, {
       version: "final-check-publication.v1", jobId: a.jobId, runId: revealed.runId, checkId: randomUUID(),
     });
     const actor = await authenticatePracticeSession(f.runtime, job.sessionId, a.tenantId);

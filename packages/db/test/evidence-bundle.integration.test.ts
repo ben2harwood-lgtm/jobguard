@@ -16,7 +16,7 @@ it('joins actual immutable origin, revision, requirement and approval facts; rep
   const w = await chainWorld(c), ctx = await w.ctx, repo = new ExtraApprovalRepository(c.runtime);
   const s = await submitted(c, w, 40000);
   const q = { version: 'contractor-bundle-query.v1', jobId: s.jobId, extraId: s.extraId, requestId: s.requestId };
-  const read = (actor = w.members.surveyor.member, input = q) => withEvidencePackV3Snapshot(c.runtime, ctx, tx => loadContractorBundleSources(tx, actor, input));
+  const read = async (actor = w.members.surveyor.member, input = q) => withEvidencePackV3Snapshot(c.runtime, await testActorContext(c.admin, ctx, actor), tx => loadContractorBundleSources(tx, actor, input));
   // No positive assertion is derived from a submission, a missing step or a non-approved outcome.
   await expect(read()).rejects.toBeDefined();
   await repo.approveExtraStep(await testActorContext(c.admin, ctx, w.members.supervisor.member), w.members.supervisor.member, approveInput(s, 0));
@@ -61,17 +61,17 @@ it.each(['bundle', 'Northside'] as const)('LATER-SAFETY-47 %s follows exact dupl
   const actor = w.members.supervisor.member;
   const canonicalId = await raiseOn(c, w, s.jobId);
   // LS-111 requires an approved canonical for an approved duplicate.
-  await approvals.priceExtra(ctx, w.members.surveyor.member, { version: 'price-extra.v1', commandId: randomUUID(), jobId: s.jobId, extraId: canonicalId, netPence: 24000 });
-  const canonical = await approvals.submitExtra(ctx, actor, { version: 'submit-extra.v1', commandId: randomUUID(), jobId: s.jobId, extraId: canonicalId });
-  await approvals.approveExtraStep(ctx, actor, approveInput({ jobId: s.jobId, requestId: canonical.requestId as string, hash: canonical.revisionHash as string, net: 24000 }, 0));
+  await approvals.priceExtra(await testActorContext(c.admin, ctx, w.members.surveyor.member), w.members.surveyor.member, { version: 'price-extra.v1', commandId: randomUUID(), jobId: s.jobId, extraId: canonicalId, netPence: 24000 });
+  const canonical = await approvals.submitExtra(await testActorContext(c.admin, ctx, actor), actor, { version: 'submit-extra.v1', commandId: randomUUID(), jobId: s.jobId, extraId: canonicalId });
+  await approvals.approveExtraStep(await testActorContext(c.admin, ctx, actor), actor, approveInput({ jobId: s.jobId, requestId: canonical.requestId as string, hash: canonical.revisionHash as string, net: 24000 }, 0));
   const query = { version: 'contractor-bundle-query.v1', jobId: s.jobId, extraId: s.extraId, requestId: s.requestId };
   const read = async (state: 'approved' | 'duplicate') => {
     if (reader === 'Northside') {
-      const rows = await northsideExtras(c.runtime, actor, 'supervisor', ctx);
+      const rows = await northsideExtras(c.runtime, actor, 'supervisor', await testActorContext(c.admin, ctx, actor));
       expect(rows.find(row => row.extraId === s.extraId)?.state).toBe(state);
       return;
     }
-    const load = () => withEvidencePackV3Snapshot(c.runtime, ctx, tx => loadContractorBundleSources(tx, actor, query));
+    const load = async () => withEvidencePackV3Snapshot(c.runtime, await testActorContext(c.admin, ctx, actor), tx => loadContractorBundleSources(tx, actor, query));
     if (state === 'duplicate') {
       await expect(load()).rejects.toMatchObject({
         constructor: EvidenceBundleError, code: 'EVIDENCE_BUNDLE_INVALID',
@@ -84,8 +84,8 @@ it.each(['bundle', 'Northside'] as const)('LATER-SAFETY-47 %s follows exact dupl
       selected: sources.map(({ sourceId, sourceVersion, objectVersion, sha256 }) => ({ sourceId, sourceVersion, objectVersion, sha256, disclosure: 'metadata' })), absentSections: loaded.absentSections });
     expect(verifyEvidenceBundle(bundle.zip).content).toBe('intact');
   };
-  const mark = () => approvals.markDuplicate(ctx, actor, { version: 'mark-duplicate.v1', commandId: randomUUID(), jobId: s.jobId, duplicateId: s.extraId, canonicalId });
-  const unlink = async (linkId: string) => extras.unlinkDuplicate(ctx, { version: 'extra-duplicate-unlink.v1', commandId: randomUUID(), jobId: s.jobId,
+  const mark = async () => approvals.markDuplicate(await testActorContext(c.admin, ctx, actor), actor, { version: 'mark-duplicate.v1', commandId: randomUUID(), jobId: s.jobId, duplicateId: s.extraId, canonicalId });
+  const unlink = async (linkId: string) => extras.unlinkDuplicate(await testActorContext(c.admin, ctx, actor), { version: 'extra-duplicate-unlink.v1', commandId: randomUUID(), jobId: s.jobId,
     actorMembershipId: actor.membershipId, linkId, expectedRevision: (await extras.readDuplicateLinks(ctx, s.jobId)).revision, reasonCode: 'linked_in_error' });
   await read('approved');
   const linked = await mark();
@@ -103,7 +103,7 @@ it.each(['bundle', 'Northside'] as const)('LATER-SAFETY-47 %s follows exact dupl
   await read('approved');
   // The fixture canonical is no longer linked. Give it an unapproved revision
   // so the billing assertion still concerns only the original approved extra.
-  await approvals.reviseExtra(ctx, w.members.surveyor.member, { version: 'revise-extra.v1', commandId: randomUUID(), jobId: s.jobId, extraId: canonicalId, netPence: 24001 });
+  await approvals.reviseExtra(await testActorContext(c.admin, ctx, w.members.surveyor.member), w.members.surveyor.member, { version: 'revise-extra.v1', commandId: randomUUID(), jobId: s.jobId, extraId: canonicalId, netPence: 24001 });
   // The existing billing writer still exports the original approved identity and value.
   const batch = await f.exported();
   const lines = (await f.repo.read(ctx, f.session, s.jobId)).exports.find(row => row.id === batch.batchId)!.artifact.lines;
@@ -133,9 +133,9 @@ it('LATER-SAFETY-89 preserves an intact bundle through real export, billed and p
   const query = { version: 'contractor-bundle-query.v1', jobId: f.s.jobId, extraId: f.s.extraId, requestId: f.s.requestId };
   const app = new ContractorBundleCheckApplication(c.runtime, storage);
   const check = async (present: string[]) => {
-    const loaded = await withEvidencePackV3Snapshot(c.runtime, f.ctx, tx => loadContractorBundleSources(tx, actor, query));
+    const loaded = await withEvidencePackV3Snapshot(c.runtime, await testActorContext(c.admin, f.ctx, actor), tx => loadContractorBundleSources(tx, actor, query));
     expect(loaded.sources.map(source => source.kind)).toEqual(expect.arrayContaining(present));
-    const result = await app.check(f.ctx, actor, query);
+    const result = await app.check(await testActorContext(c.admin, f.ctx, actor), actor, query);
     expect(result.reason).toBeNull();
     expect(result.report).toMatchObject({ content: 'intact' });
     for (const name of present) expect(result.sections).toContainEqual({ name, state: 'present' });
@@ -172,9 +172,9 @@ it.each(['credited', 'billing_rejected'])('LATER-SAFETY-89 refuses latest %s eve
   await f.repo.import(f.ctx, f.session, f.s.jobId, f.importInput([invoice]));
   await appendBillingLifecycle(f, kind);
   const query = { version: 'contractor-bundle-query.v1', jobId: f.s.jobId, extraId: f.s.extraId, requestId: f.s.requestId };
-  await expect(withEvidencePackV3Snapshot(c.runtime, f.ctx, tx => loadContractorBundleSources(tx, actor, query)))
+  await expect(withEvidencePackV3Snapshot(c.runtime, await testActorContext(c.admin, f.ctx, actor), tx => loadContractorBundleSources(tx, actor, query)))
     .rejects.toMatchObject({ constructor: EvidenceBundleError, code: 'EVIDENCE_BUNDLE_INVALID' });
-  const result = await new ContractorBundleCheckApplication(c.runtime, storage).check(f.ctx, actor, query);
+  const result = await new ContractorBundleCheckApplication(c.runtime, storage).check(await testActorContext(c.admin, f.ctx, actor), actor, query);
   expect(result).toMatchObject({ reason: 'APPROVAL_OR_SCOPE_INVALID', report: null, manifestDigest: null });
   expect(result.sections.every(section => section.state === 'not_checked')).toBe(true);
 }, 180_000);

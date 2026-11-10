@@ -1,3 +1,4 @@
+import { testTenantContext } from "./tenant-context-test-utils.js";
 import { pauseCommercialOutbound } from "./commercial-outbound-pause-fixture.js";
 import { assertLp4SealedEvents } from "./lp4-writer-catchup-fixture.js";
 import { SubscriptionExecutor } from "../src/subscription-executor.js";

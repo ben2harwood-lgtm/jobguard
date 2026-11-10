@@ -34,10 +34,10 @@ afterAll(async () => { await c?.close(); vi.unstubAllEnvs(); });
 it("E5B-01 journey: price, submit, grant-filtered queue, company steps, owner-approved send, client approval as the client", async () => {
   const s = await submitted(c, w, 150000);
   expect(s.result).toMatchObject({ state: "awaiting_approval", requestRevision: 1, stepCount: 3 });
-  const mine = (await repo.queue(ctx, sup().membershipId)).filter(x => x.request_id === s.requestId);
+  const mine = (await repo.queue(await testActorContext(c.admin, ctx, sup()), sup().membershipId)).filter(x => x.request_id === s.requestId);
   expect(mine).toHaveLength(1); expect(mine[0]).toMatchObject({ lane: "mandatory", step_index: 0, step_role: "supervisor", escalated: false });
-  expect((await repo.queue(ctx, surveyor().membershipId)).filter(x => x.request_id === s.requestId)).toEqual([]);
-  expect((await repo.queue(ctx, w.otherSupervisor.member.membershipId)).filter(x => x.request_id === s.requestId)).toEqual([]);
+  expect((await repo.queue(await testActorContext(c.admin, ctx, surveyor()), surveyor().membershipId)).filter(x => x.request_id === s.requestId)).toEqual([]);
+  expect((await repo.queue(await testActorContext(c.admin, ctx, w.otherSupervisor.member), w.otherSupervisor.member.membershipId)).filter(x => x.request_id === s.requestId)).toEqual([]);
   await repo.approveExtraStep(await testActorContext(c.admin, ctx, sup()), sup(), approveInput(s, 0));
   expect(await code(repo.approveExtraStep(await testActorContext(c.admin, ctx, sup()), sup(), approveInput(s, 1)))).toBe("REUSED_APPROVER");
   await repo.approveExtraStep(await testActorContext(c.admin, ctx, sup2()), sup2(), approveInput(s, 1));
@@ -239,10 +239,10 @@ it("E5B-11 escalation fires once, only listed alternates gain authority, origina
   const restarted = new ExtraApprovalRepository(c.runtime); // a restarted worker
   expect((await restarted.escalateOverdue(ctx)).filter(x => x.request_id === slow.requestId)).toEqual([]);
   expect(await sql("SELECT 1 FROM app.extra_escalation_fact WHERE request_id=$1", [slow.requestId])).toHaveLength(1);
-  const q = (await repo.queue(ctx, surveyor().membershipId)).filter(x => x.request_id === slow.requestId);
+  const q = (await repo.queue(await testActorContext(c.admin, ctx, surveyor()), surveyor().membershipId)).filter(x => x.request_id === slow.requestId);
   expect(q).toHaveLength(1); expect(q[0]).toMatchObject({ lane: "mandatory", escalated: true, overdue: true });
-  expect((await repo.queue(ctx, sup().membershipId)).filter(x => x.request_id === slow.requestId)).toHaveLength(1); // original approver still eligible
-  expect((await repo.queue(ctx, w.members.finance.member.membershipId)).filter(x => x.request_id === slow.requestId)).toEqual([]);
+  expect((await repo.queue(await testActorContext(c.admin, ctx, sup()), sup().membershipId)).filter(x => x.request_id === slow.requestId)).toHaveLength(1); // original approver still eligible
+  expect((await repo.queue(await testActorContext(c.admin, ctx, w.members.finance.member), w.members.finance.member.membershipId)).filter(x => x.request_id === slow.requestId)).toEqual([]);
   expect(await code(repo.approveExtraStep(await testActorContext(c.admin, ctx, w.members.finance.member), w.members.finance.member, approveInput(slow, 0)))).toBe("PERMISSION_DENIED");
   expect(await code(repo.approveExtraStep(await testActorContext(c.admin, ctx, surveyor()), surveyor(), approveInput(slow, 0)))).toBe("ok"); // an agreed backup, after the wait
   expect(await chain(c, w)).toBeTruthy();
