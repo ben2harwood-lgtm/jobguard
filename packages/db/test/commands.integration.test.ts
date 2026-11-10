@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures, syntheticOwnerPool } from "./pool-test-utils.js";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -13,7 +13,7 @@ import { ObservedPool, analyseLockOrder, mutableTables } from "./lock-observer.j
 const TENANT="81000000-0000-4000-8000-000000000001", ACCOUNT="82000000-0000-4000-8000-000000000001";
 const USER="83000000-0000-4000-8000-000000000001", MEMBER="84000000-0000-4000-8000-000000000001";
 const JOB="85000000-0000-4000-8000-000000000001", QUOTE="86000000-0000-4000-8000-000000000001";
-const HASH="a".repeat(64), context=testTenantContext(TENANT);
+const HASH="a".repeat(64); let context=testTenantContext(TENANT);
 let postgres:EmbeddedPostgres,admin:Pool,runtime:Pool,dir:string;
 beforeAll(async()=>{dir=await mkdtemp(join(tmpdir(),"jobguard-commands-"));const port=await freePort(57000,500);postgres=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"test-only",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});await postgres.initialise();await postgres.start();admin=await syntheticOwnerPool({host:"127.0.0.1",port,user:"postgres",password:"test-only"});admin.on("error",()=>undefined);await migrate(admin);await installLegacySyntheticPartyFixtures(admin);await admin.query(`
  INSERT INTO control_plane.tenant(id) VALUES('${TENANT}'); INSERT INTO identity.identity_user(id) VALUES('${USER}');
@@ -23,6 +23,7 @@ beforeAll(async()=>{dir=await mkdtemp(join(tmpdir(),"jobguard-commands-"));const
  INSERT INTO app.quote_version(id,tenant_id,job_id,version,content_hash,net_value_pence,status) VALUES('${QUOTE}','${TENANT}','${JOB}',1,'${HASH}',10000,'accepted');
  UPDATE app.job SET accepted_quote_version_id='${QUOTE}' WHERE tenant_id='${TENANT}' AND id='${JOB}';
  CREATE ROLE command_test LOGIN PASSWORD 'runtime-only' NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOBYPASSRLS; GRANT jobguard_runtime TO command_test;`);
+context = await testBoundTenantContext(admin, TENANT, MEMBER);
  runtime=new Pool({host:"127.0.0.1",port,database:"jobguard_synthetic_demo",user:"command_test",password:"runtime-only",max:5});runtime.on("error",()=>undefined);
 },60_000);
 afterAll(async()=>{await closeTestPools(runtime,admin);await postgres?.stop();await rm(dir,{recursive:true,force:true})});

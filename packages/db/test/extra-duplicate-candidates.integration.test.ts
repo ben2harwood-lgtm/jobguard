@@ -1,3 +1,4 @@
+import { testActorContext } from "./tenant-context-test-utils.js";
 import { readFileSync } from "node:fs";
 import { digestOf } from "./contractor-practice-session-fixtures.js";
 import { resolveExtraDuplicateCandidates } from "../src/extra-duplicate-candidates.js";
@@ -11,7 +12,7 @@ import { ownerTx, receipt } from "./extra-fixtures.js";
 let c: Awaited<ReturnType<typeof cluster>>;
 beforeAll(async () => { c = await cluster(); }, 240000);
 afterAll(async () => { await c?.close(); });
-const read = (w: World, job = w.s.jobId, actor = w.w.members.supervisor.member) => readExtraDuplicateCandidates(c.runtime, w.ctx, actor, job);
+const read = async (w: World, job = w.s.jobId, actor = w.w.members.supervisor.member) => readExtraDuplicateCandidates(c.runtime, await testActorContext(c.admin, w.ctx, actor), actor, job);
 async function agreement(w: World) {
  const result = await read(w);
  const truth = await ownerTx(c, w.w.p.tenantId, async db => (await db.$client.query("SELECT app.cb_unresolved($1,$2) value", [w.w.p.tenantId, w.s.jobId])).rows[0]!.value);
@@ -22,10 +23,10 @@ async function pair(w: World, sameCode = true) {
  // Direct merged raise preserves two distinct site actors; price through the existing surveyor command.
  const result: string[] = [];
  for (const actor of [w.w.members.operative, second]) {
-  const raised = await new ExtraRepository(c.runtime).raiseExtra(w.ctx, direct(w.w, actor, { jobId: w.s.jobId, ...(sameCode ? { sorItem: { versionId: w.w.demo.sorVersionId, code: "CLEAR-GUTTER" } } : {}) }));
-  await new ExtraApprovalRepository(c.runtime).priceExtra(w.ctx, w.w.members.surveyor.member, { version: "price-extra.v1", commandId: randomUUID(), jobId: w.s.jobId, extraId: raised.variationId, netPence: 338 });
-  const submitted = await new ExtraApprovalRepository(c.runtime).submitExtra(w.ctx, w.w.members.supervisor.member, { version: "submit-extra.v1", commandId: randomUUID(), jobId: w.s.jobId, extraId: raised.variationId });
-  await new ExtraApprovalRepository(c.runtime).approveExtraStep(w.ctx, w.w.members.supervisor.member, approveInput({ jobId: w.s.jobId, requestId: String(submitted.requestId), hash: String(submitted.revisionHash), net: 338 }, 0));
+  const raised = await new ExtraRepository(c.runtime).raiseExtra(await testActorContext(c.admin, w.ctx, actor.member), direct(w.w, actor, { jobId: w.s.jobId, ...(sameCode ? { sorItem: { versionId: w.w.demo.sorVersionId, code: "CLEAR-GUTTER" } } : {}) }));
+  await new ExtraApprovalRepository(c.runtime).priceExtra(await testActorContext(c.admin, w.ctx, w.w.members.surveyor.member), w.w.members.surveyor.member, { version: "price-extra.v1", commandId: randomUUID(), jobId: w.s.jobId, extraId: raised.variationId, netPence: 338 });
+  const submitted = await new ExtraApprovalRepository(c.runtime).submitExtra(await testActorContext(c.admin, w.ctx, w.w.members.supervisor.member), w.w.members.supervisor.member, { version: "submit-extra.v1", commandId: randomUUID(), jobId: w.s.jobId, extraId: raised.variationId });
+  await new ExtraApprovalRepository(c.runtime).approveExtraStep(await testActorContext(c.admin, w.ctx, w.w.members.supervisor.member), w.w.members.supervisor.member, approveInput({ jobId: w.s.jobId, requestId: String(submitted.requestId), hash: String(submitted.revisionHash), net: 338 }, 0));
   result.push(raised.variationId);
  }
  return result as [string, string];
@@ -38,9 +39,9 @@ it("two operatives remain separate and priced; linking and unlinking agree with 
  expect(prices.map(x => x.net)).toEqual([338, 338]);
  expect(await code(w.exported())).toBe("BILLING_DUPLICATES_UNRESOLVED");
  const mark = { version: "mark-duplicate.v1", commandId: randomUUID(), jobId: w.s.jobId, duplicateId: a, canonicalId: b };
- const linked = await approvals.markDuplicate(w.ctx, w.w.members.supervisor.member, mark);
- expect(await approvals.markDuplicate(w.ctx, w.w.members.supervisor.member, mark)).toEqual(linked);
- expect(await code(approvals.markDuplicate(w.ctx, w.w.members.supervisor.member, { ...mark, canonicalId: w.s.extraId }))).toBe("COMMAND_CONFLICT");
+ const linked = await approvals.markDuplicate(await testActorContext(c.admin, w.ctx, w.w.members.supervisor.member), w.w.members.supervisor.member, mark);
+ expect(await approvals.markDuplicate(await testActorContext(c.admin, w.ctx, w.w.members.supervisor.member), w.w.members.supervisor.member, mark)).toEqual(linked);
+ expect(await code(approvals.markDuplicate(await testActorContext(c.admin, w.ctx, w.w.members.supervisor.member), w.w.members.supervisor.member, { ...mark, canonicalId: w.s.extraId }))).toBe("COMMAND_CONFLICT");
  expect((await agreement(w)).groups).toEqual([]);
  const candidates = await withTenant(c.runtime, w.ctx, async db => (await db.$client.query("SELECT app.cb_candidates($1,$2,$3) lines", [w.session, w.s.jobId, w.contract])).rows[0]!.lines as Array<{ extraId: string }>);
  expect(candidates.filter(x => x.extraId === b)).toHaveLength(1);
@@ -49,9 +50,9 @@ it("two operatives remain separate and priced; linking and unlinking agree with 
  expect(group.effectiveOrigin.origin.variationId).toBe(a); // earliest origin survives choosing the later canonical
  const state = await read(w);
  const unlink = { version: "extra-duplicate-unlink.v1", commandId: randomUUID(), jobId: w.s.jobId, actorMembershipId: w.w.members.supervisor.member.membershipId, linkId: linked.linkId, expectedRevision: state.revision, reasonCode: "linked_in_error" };
- const extras = new ExtraRepository(c.runtime), unlinked = await extras.unlinkDuplicate(w.ctx, unlink);
- expect(await extras.unlinkDuplicate(w.ctx, unlink)).toEqual(unlinked);
- expect(await code(extras.unlinkDuplicate(w.ctx, { ...unlink, reasonCode: "wrong_pair" }))).toBe("COMMAND_CONFLICT");
+ const extras = new ExtraRepository(c.runtime), unlinked = await extras.unlinkDuplicate(await testActorContext(c.admin, w.ctx, w.w.members.supervisor.member), unlink);
+ expect(await extras.unlinkDuplicate(await testActorContext(c.admin, w.ctx, w.w.members.supervisor.member), unlink)).toEqual(unlinked);
+ expect(await code(extras.unlinkDuplicate(await testActorContext(c.admin, w.ctx, w.w.members.supervisor.member), { ...unlink, reasonCode: "wrong_pair" }))).toBe("COMMAND_CONFLICT");
  expect((await agreement(w)).groups).toHaveLength(1);
  expect(await code(w.exported())).toBe("BILLING_DUPLICATES_UNRESOLVED");
 }, 120000);
@@ -63,16 +64,16 @@ it("cross-tenant jobs, uncovered grants and wrong roles fail closed", async () =
  expect(await code(read(w, randomUUID()))).toBe("NOT_FOUND");
  const mark = { version: "mark-duplicate.v1", commandId: randomUUID(), jobId: w.s.jobId, duplicateId: w.s.extraId, canonicalId: other.s.extraId };
  const approvals = new ExtraApprovalRepository(c.runtime);
- expect(await code(approvals.markDuplicate(w.ctx, w.w.members.operative.member, mark))).toBe("PERMISSION_DENIED");
- expect(await code(approvals.markDuplicate(w.ctx, w.w.members.supervisor.member, { ...mark, commandId: randomUUID() }))).toBe("NOT_FOUND");
+ expect(await code(approvals.markDuplicate(await testActorContext(c.admin, w.ctx, w.w.members.operative.member), w.w.members.operative.member, mark))).toBe("PERMISSION_DENIED");
+ expect(await code(approvals.markDuplicate(await testActorContext(c.admin, w.ctx, w.w.members.supervisor.member), w.w.members.supervisor.member, { ...mark, commandId: randomUUID() }))).toBe("NOT_FOUND");
  await agreement(w);
 }, 120000);
 it("stale unlinks and linking racing an export cannot export duplicate captures", async () => {
  const w = await world(c), [a, b] = await pair(w), approvals = new ExtraApprovalRepository(c.runtime);
- const marking = approvals.markDuplicate(w.ctx, w.w.members.supervisor.member, { version: "mark-duplicate.v1", commandId: randomUUID(), jobId: w.s.jobId, duplicateId: a, canonicalId: b });
+ const marking = approvals.markDuplicate(await testActorContext(c.admin, w.ctx, w.w.members.supervisor.member), w.w.members.supervisor.member, { version: "mark-duplicate.v1", commandId: randomUUID(), jobId: w.s.jobId, duplicateId: a, canonicalId: b });
  const result = await Promise.allSettled([marking, w.exported()]); expect(result[0]!.status).toBe("fulfilled");
  const linked = await marking;
- expect(await code(new ExtraRepository(c.runtime).unlinkDuplicate(w.ctx, { version: "extra-duplicate-unlink.v1", commandId: randomUUID(), jobId: w.s.jobId, actorMembershipId: w.w.members.supervisor.member.membershipId, linkId: linked.linkId, expectedRevision: 999, reasonCode: "wrong_pair" }))).toBe("STALE_REVISION");
+ expect(await code(new ExtraRepository(c.runtime).unlinkDuplicate(await testActorContext(c.admin, w.ctx, w.w.members.supervisor.member), { version: "extra-duplicate-unlink.v1", commandId: randomUUID(), jobId: w.s.jobId, actorMembershipId: w.w.members.supervisor.member.membershipId, linkId: linked.linkId, expectedRevision: 999, reasonCode: "wrong_pair" }))).toBe("STALE_REVISION");
  await agreement(w);
  const exports = (await w.repo.read(w.ctx, w.session, w.s.jobId)).exports.flatMap(x => x.artifact.lines);
  await w.exported();
@@ -133,40 +134,40 @@ async function relinkSnapshot(w: World) {
 for (const reverse of [false, true]) it(`ENT-3 relink ${reverse ? "opposite" : "same"} direction exports once and preserves replay/history`, async () => {
  const w = await world(c), [a, b] = await pair(w), approvals = new ExtraApprovalRepository(c.runtime), extras = new ExtraRepository(c.runtime);
  const actor = w.w.members.supervisor.member;
- const first = await approvals.markDuplicate(w.ctx, actor, markInput(w, a, b));
+ const first = await approvals.markDuplicate(await testActorContext(c.admin, w.ctx, actor), actor, markInput(w, a, b));
  const un = await unlinkInput(w, String(first.linkId));
- await extras.unlinkDuplicate(w.ctx, un);
+ await extras.unlinkDuplicate(await testActorContext(c.admin, w.ctx, w.w.members.supervisor.member), un);
  const mark = markInput(w, reverse ? b : a, reverse ? a : b);
- const linked = await approvals.markDuplicate(w.ctx, actor, mark);
+ const linked = await approvals.markDuplicate(await testActorContext(c.admin, w.ctx, actor), actor, mark);
  expect(linked.linkId).not.toBe(first.linkId);
  const beforeReplay = await relinkSnapshot(w);
- expect(await approvals.markDuplicate(w.ctx, actor, mark)).toEqual(linked);
+ expect(await approvals.markDuplicate(await testActorContext(c.admin, w.ctx, actor), actor, mark)).toEqual(linked);
  expect(await relinkSnapshot(w)).toEqual(beforeReplay);
- expect(await code(approvals.markDuplicate(w.ctx, actor, { ...mark, canonicalId: w.s.extraId }))).toBe("COMMAND_CONFLICT");
+ expect(await code(approvals.markDuplicate(await testActorContext(c.admin, w.ctx, actor), actor, { ...mark, canonicalId: w.s.extraId }))).toBe("COMMAND_CONFLICT");
  expect(await relinkSnapshot(w)).toEqual(beforeReplay);
  expect((await agreement(w)).groups).toEqual([]);
  // A replay of the old unlink never reverses the fresh link.
- await extras.unlinkDuplicate(w.ctx, un);
+ await extras.unlinkDuplicate(await testActorContext(c.admin, w.ctx, w.w.members.supervisor.member), un);
  expect((await read(w)).activeLinks).toMatchObject([{ linkId: linked.linkId, duplicateId: mark.duplicateId, canonicalId: mark.canonicalId }]);
  await w.exported();
  const lines = (await w.repo.read(w.ctx, w.session, w.s.jobId)).exports.flatMap(x => x.artifact.lines);
  expect(lines.filter(x => x.extraId === mark.canonicalId)).toHaveLength(1);
  expect(lines.some(x => x.extraId === mark.duplicateId)).toBe(false);
  expect((await c.admin.query("SELECT kind FROM app.extra_duplicate_link WHERE job_id=$1 ORDER BY kind", [w.s.jobId])).rows).toEqual([{kind:"link"},{kind:"link"},{kind:"unlink"}]);
- expect(await code(extras.unlinkDuplicate(w.ctx, await unlinkInput(w, String(linked.linkId))))).toBe("EXTRA_EXPORTED");
+ expect(await code(extras.unlinkDuplicate(await testActorContext(c.admin, w.ctx, w.w.members.supervisor.member), await unlinkInput(w, String(linked.linkId))))).toBe("EXTRA_EXPORTED");
 }, 120000);
 
 it("ENT-3 unlink restores separate approved extras through the existing command and export paths", async () => {
  // Distinct free-text work has no deterministic candidate; a mistaken manual link is reversible.
  const w = await world(c), [a, b] = await pair(w, false), approvals = new ExtraApprovalRepository(c.runtime);
- const linked = await approvals.markDuplicate(w.ctx, w.w.members.supervisor.member, markInput(w, a, b));
- await new ExtraRepository(c.runtime).unlinkDuplicate(w.ctx, await unlinkInput(w, String(linked.linkId)));
+ const linked = await approvals.markDuplicate(await testActorContext(c.admin, w.ctx, w.w.members.supervisor.member), w.w.members.supervisor.member, markInput(w, a, b));
+ await new ExtraRepository(c.runtime).unlinkDuplicate(await testActorContext(c.admin, w.ctx, w.w.members.supervisor.member), await unlinkInput(w, String(linked.linkId)));
  expect((await read(w)).activeLinks).toEqual([]);
  // The original approval remains immutable; revising the formerly duplicate side still requires a new approval.
- const revised = await approvals.reviseExtra(w.ctx, w.w.members.surveyor.member, {
+ const revised = await approvals.reviseExtra(await testActorContext(c.admin, w.ctx, w.w.members.surveyor.member), w.w.members.surveyor.member, {
   version: "revise-extra.v1", commandId: randomUUID(), jobId: w.s.jobId, extraId: a, netPence: 339,
  });
- await approvals.approveExtraStep(w.ctx, w.w.supervisor2.member, approveInput({jobId:w.s.jobId,
+ await approvals.approveExtraStep(await testActorContext(c.admin, w.ctx, w.w.supervisor2.member), w.w.supervisor2.member, approveInput({jobId:w.s.jobId,
   requestId:String(revised.requestId),hash:String(revised.revisionHash),net:339},0));
  await w.exported();
  const lines = (await w.repo.read(w.ctx, w.session, w.s.jobId)).exports.flatMap(x => x.artifact.lines);
@@ -176,15 +177,15 @@ it("ENT-3 unlink restores separate approved extras through the existing command 
 
 it("ENT-3 relink refuses a forged actor, uncovered grant, wrong role and foreign tenant without effects", async () => {
  const w = await world(c), foreign = await world(c), [a,b] = await pair(w), approvals = new ExtraApprovalRepository(c.runtime);
- const linked = await approvals.markDuplicate(w.ctx,w.w.members.supervisor.member,markInput(w,a,b));
- await new ExtraRepository(c.runtime).unlinkDuplicate(w.ctx,await unlinkInput(w,String(linked.linkId)));
+ const linked = await approvals.markDuplicate(await testActorContext(c.admin, w.ctx, w.w.members.supervisor.member),w.w.members.supervisor.member,markInput(w,a,b));
+ await new ExtraRepository(c.runtime).unlinkDuplicate(await testActorContext(c.admin, w.ctx, w.w.members.supervisor.member),await unlinkInput(w,String(linked.linkId)));
  const before = await relinkSnapshot(w), otherBefore = await relinkSnapshot(foreign);
  const mark = markInput(w,a,b);
  for (const actor of [w.w.members.operative.member,w.w.otherSupervisor.member,foreign.w.members.supervisor.member]) {
-  expect(await code(approvals.markDuplicate(w.ctx,actor,mark))).toBe("PERMISSION_DENIED");
+  expect(await code(approvals.markDuplicate(await testActorContext(c.admin, w.ctx, actor),actor,mark))).toBe("PERMISSION_DENIED");
  }
- expect(await code(approvals.markDuplicate(w.ctx,w.w.members.supervisor.member,{...mark,actorMembershipId:w.w.members.owner.member.membershipId}))).toBe("INVALID_COMMAND");
- expect(await code(approvals.markDuplicate(w.ctx,w.w.members.supervisor.member,{...mark,canonicalId:foreign.s.extraId}))).toBe("NOT_FOUND");
+ expect(await code(approvals.markDuplicate(await testActorContext(c.admin, w.ctx, w.w.members.supervisor.member),w.w.members.supervisor.member,{...mark,actorMembershipId:w.w.members.owner.member.membershipId}))).toBe("INVALID_COMMAND");
+ expect(await code(approvals.markDuplicate(await testActorContext(c.admin, w.ctx, w.w.members.supervisor.member),w.w.members.supervisor.member,{...mark,canonicalId:foreign.s.extraId}))).toBe("NOT_FOUND");
  // Prove the database itself binds p_actor to the receipt, even if the repository is bypassed.
  await expect(ownerTx(c,w.w.p.tenantId,async db => {
   const commandId = await receipt(db,w.w.p.tenantId,w.s.jobId,a,w.w.members.supervisor.member.membershipId,"MarkDuplicate");
@@ -196,10 +197,10 @@ it("ENT-3 relink refuses a forged actor, uncovered grant, wrong role and foreign
 
 it("ENT-3 relink racing unlink serializes to an active fresh link or unresolved candidates", async () => {
  const w = await world(c), [a,b] = await pair(w), approvals = new ExtraApprovalRepository(c.runtime), extras = new ExtraRepository(c.runtime);
- const actor = w.w.members.supervisor.member, first = await approvals.markDuplicate(w.ctx,actor,markInput(w,a,b));
+ const actor = w.w.members.supervisor.member, first = await approvals.markDuplicate(await testActorContext(c.admin, w.ctx, actor),actor,markInput(w,a,b));
  // If unlink wins, relink may succeed; if relink sees the active link it must fail closed.
  const unlink = await unlinkInput(w,String(first.linkId));
- const result = await Promise.allSettled([extras.unlinkDuplicate(w.ctx,unlink),approvals.markDuplicate(w.ctx,actor,markInput(w,b,a))]);
+ const result = await Promise.allSettled([extras.unlinkDuplicate(await testActorContext(c.admin, w.ctx, w.w.members.supervisor.member),unlink),approvals.markDuplicate(await testActorContext(c.admin, w.ctx, actor),actor,markInput(w,b,a))]);
  expect(result[0]!.status).toBe("fulfilled");
  const view = await agreement(w);
  if(result[1]!.status === "fulfilled") {
@@ -208,7 +209,7 @@ it("ENT-3 relink racing unlink serializes to an active fresh link or unresolved 
   expect(["INVALID_TRANSITION","INVALID_COMMAND"]).toContain(result[1]!.reason.code);
   expect(view.activeLinks).toEqual([]); expect(view.groups).toHaveLength(1);
   expect(await code(w.exported())).toBe("BILLING_DUPLICATES_UNRESOLVED");
-  await approvals.markDuplicate(w.ctx,actor,markInput(w,b,a));
+  await approvals.markDuplicate(await testActorContext(c.admin, w.ctx, actor),actor,markInput(w,b,a));
  }
  await w.exported();
  const lines = (await w.repo.read(w.ctx,w.session,w.s.jobId)).exports.flatMap(x=>x.artifact.lines);
@@ -217,13 +218,13 @@ it("ENT-3 relink racing unlink serializes to an active fresh link or unresolved 
 
 it("ENT-3 reversal never promotes a duplicate-dismissed pending approval to approved", async () => {
  const w = await world(c), approvals = new ExtraApprovalRepository(c.runtime);
- const raised = await new ExtraRepository(c.runtime).raiseExtra(w.ctx,direct(w.w,w.w.members.operative,{jobId:w.s.jobId}));
+ const raised = await new ExtraRepository(c.runtime).raiseExtra(await testActorContext(c.admin, w.ctx, w.w.members.operative.member),direct(w.w,w.w.members.operative,{jobId:w.s.jobId}));
  const extraId = raised.variationId;
- await approvals.priceExtra(w.ctx,w.w.members.surveyor.member,{version:"price-extra.v1",commandId:randomUUID(),jobId:w.s.jobId,extraId,netPence:338});
- const pending = await approvals.submitExtra(w.ctx,w.w.members.supervisor.member,{version:"submit-extra.v1",commandId:randomUUID(),jobId:w.s.jobId,extraId});
- const linked = await approvals.markDuplicate(w.ctx,w.w.members.supervisor.member,markInput(w,extraId,w.s.extraId));
- await new ExtraRepository(c.runtime).unlinkDuplicate(w.ctx,await unlinkInput(w,String(linked.linkId)));
- expect(await code(approvals.approveExtraStep(w.ctx,w.w.members.supervisor.member,approveInput({jobId:w.s.jobId,
+ await approvals.priceExtra(await testActorContext(c.admin, w.ctx, w.w.members.surveyor.member),w.w.members.surveyor.member,{version:"price-extra.v1",commandId:randomUUID(),jobId:w.s.jobId,extraId,netPence:338});
+ const pending = await approvals.submitExtra(await testActorContext(c.admin, w.ctx, w.w.members.supervisor.member),w.w.members.supervisor.member,{version:"submit-extra.v1",commandId:randomUUID(),jobId:w.s.jobId,extraId});
+ const linked = await approvals.markDuplicate(await testActorContext(c.admin, w.ctx, w.w.members.supervisor.member),w.w.members.supervisor.member,markInput(w,extraId,w.s.extraId));
+ await new ExtraRepository(c.runtime).unlinkDuplicate(await testActorContext(c.admin, w.ctx, w.w.members.supervisor.member),await unlinkInput(w,String(linked.linkId)));
+ expect(await code(approvals.approveExtraStep(await testActorContext(c.admin, w.ctx, w.w.members.supervisor.member),w.w.members.supervisor.member,approveInput({jobId:w.s.jobId,
   requestId:String(pending.requestId),hash:String(pending.revisionHash),net:338},0)))).toBe("STALE_REVISION");
  expect((await c.admin.query("SELECT kind FROM app.extra_approval_outcome WHERE request_id=$1",[pending.requestId])).rows).toEqual([{kind:"duplicate"}]);
  await w.exported();
@@ -283,7 +284,7 @@ it("refuses reporters, pricers, forged actor, foreign tenant, uncovered and wron
   const session=await sessionFor(w,actor), before=await facts(w);
   expect(await code(resolveExtraDuplicateCandidates(c.runtime,w.ctx,session,w.s.jobId,disposition(group)))).toBe(expected); expect(await facts(w)).toEqual(before);
  }
- const own = await new ExtraRepository(c.runtime).raiseExtra(w.ctx,direct(w.w,w.w.members.supervisor,{jobId:w.s.jobId,sorItem:{versionId:w.w.demo.sorVersionId,code:"CLEAR-GUTTER"}}));
+ const own = await new ExtraRepository(c.runtime).raiseExtra(await testActorContext(c.admin, w.ctx, w.w.members.supervisor.member),direct(w.w,w.w.members.supervisor,{jobId:w.s.jobId,sorItem:{versionId:w.w.demo.sorVersionId,code:"CLEAR-GUTTER"}}));
  expect(own.variationId).not.toBe(a);
  const session=await sessionFor(w), current=(await read(w)).groups[0]!, before=await facts(w);
  expect(await code(resolveExtraDuplicateCandidates(c.runtime,w.ctx,session,w.s.jobId,disposition(current)))).toBe("SELF_DISMISSAL");
@@ -298,11 +299,11 @@ it("revision changes and a new extra racing dismissal raise the group again and 
  const w=await world(c), [a]=await pair(w), session=await sessionFor(w);
  const run=(raw:unknown)=>resolveExtraDuplicateCandidates(c.runtime,w.ctx,session,w.s.jobId,raw);
  const group=(await agreement(w)).groups[0]!; await run(disposition(group));
- await new ExtraApprovalRepository(c.runtime).reviseExtra(w.ctx,w.w.members.surveyor.member,{version:"revise-extra.v1",commandId:randomUUID(),jobId:w.s.jobId,extraId:a,netPence:339});
+ await new ExtraApprovalRepository(c.runtime).reviseExtra(await testActorContext(c.admin, w.ctx, w.w.members.surveyor.member),w.w.members.surveyor.member,{version:"revise-extra.v1",commandId:randomUUID(),jobId:w.s.jobId,extraId:a,netPence:339});
  const revised=(await agreement(w)).groups[0]!; expect(revised.fingerprint).not.toBe(group.fingerprint);
  expect(await code(run(disposition(group)))).toBe("STALE_REVISION"); expect(await code(w.exported())).toBe("BILLING_DUPLICATES_UNRESOLVED");
  const input=disposition(revised);
- const raising=new ExtraRepository(c.runtime).raiseExtra(w.ctx,direct(w.w,w.w.members.operative,{jobId:w.s.jobId,sorItem:{versionId:w.w.demo.sorVersionId,code:"CLEAR-GUTTER"}}));
+ const raising=new ExtraRepository(c.runtime).raiseExtra(await testActorContext(c.admin, w.ctx, w.w.members.operative.member),direct(w.w,w.w.members.operative,{jobId:w.s.jobId,sorItem:{versionId:w.w.demo.sorVersionId,code:"CLEAR-GUTTER"}}));
  const results=await Promise.allSettled([run(input),raising]); expect(results[1]!.status).toBe("fulfilled");
  if(results[0]!.status==="rejected") expect((results[0] as PromiseRejectedResult).reason.code).toBe("STALE_REVISION");
  const current=(await agreement(w)).groups[0]!; expect(current.extras).toHaveLength(3); expect(current.fingerprint).not.toBe(revised.fingerprint);
@@ -312,7 +313,7 @@ it("dismisses one group only; every other group still refuses export and concurr
  const w=await world(c); await pair(w);
  // Another independent code forms a separate group, using the same real capture command.
  const codeRow=(await c.admin.query("SELECT code FROM app.sor_item WHERE tenant_id=$1 AND version_id=$2 AND code<>'CLEAR-GUTTER' ORDER BY code LIMIT 1",[w.w.p.tenantId,w.w.demo.sorVersionId])).rows[0]!;
- for(let n=0;n<2;n++) await new ExtraRepository(c.runtime).raiseExtra(w.ctx,direct(w.w,w.w.members.operative,{jobId:w.s.jobId,sorItem:{versionId:w.w.demo.sorVersionId,code:codeRow.code}}));
+ for(let n=0;n<2;n++) await new ExtraRepository(c.runtime).raiseExtra(await testActorContext(c.admin, w.ctx, w.w.members.operative.member),direct(w.w,w.w.members.operative,{jobId:w.s.jobId,sorItem:{versionId:w.w.demo.sorVersionId,code:codeRow.code}}));
  const groups=(await agreement(w)).groups; expect(groups).toHaveLength(2);
  const session=await sessionFor(w), input=disposition(groups[0]!), before=await facts(w);
  const run=()=>resolveExtraDuplicateCandidates(c.runtime,w.ctx,session,w.s.jobId,input);
@@ -367,7 +368,10 @@ it("begins the registered duplicate command with repository-style input", async 
  const before = await facts(w);
  const actor = w.w.members.supervisor.member.membershipId;
  const content = { actor, job: w.s.jobId, body: input };
- await expect(ownerTx(c, w.w.p.tenantId, async db => {
+ // 0807 registers ResolveDuplicateCandidates, so a begin-only probe now claims; LP-6c (0723) requires the
+ // request to be bound to the acting supervisor, as on main.
+ await expect(withTenant(c.admin, await testActorContext(c.admin, w.ctx, w.w.members.supervisor.member), async db => {
+  await db.$client.query("SET LOCAL ROLE jobguard_migration");
   await db.$client.query("SAVEPOINT begin_probe");
   const result = await db.$client.query(
    "SELECT app.begin_command($1,$2,'ResolveDuplicateCandidates',$3,$4::jsonb,'{}'::jsonb,$5::jsonb) claim",

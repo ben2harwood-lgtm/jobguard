@@ -123,3 +123,18 @@ it("drill-down refuses missing, stale or foreign ledger facts instead of inventi
  }
  await expect(fixture({ view }).repository.readJobs(context, digest)).rejects.toThrow("METER_UNAVAILABLE");
 });
+
+it.each([
+ ["42501", "REQUEST_BINDING_REFUSED", "METER_FORBIDDEN"],
+ ["XX000", "REQUEST_BINDING_REFUSED", "METER_UNAVAILABLE"],
+ ["42501", "unrelated permission denial", "METER_UNAVAILABLE"],
+])("maps only the exact binding refusal (%s, %s) for both readers", async (sqlstate, message, expected) => {
+ for (const method of ["read", "readJobs"] as const) {
+  const error = Object.assign(new Error(message), { code: sqlstate });
+  const f = fixture(undefined,error);
+  await expect(f.repository[method](context,digest)).rejects.toThrow(expected);
+  expect(f.query).toHaveBeenLastCalledWith("ROLLBACK");
+  expect(f.query.mock.calls.some(([sql]) => sql === "COMMIT")).toBe(false);
+  expect(f.release).toHaveBeenCalledOnce();
+ }
+});

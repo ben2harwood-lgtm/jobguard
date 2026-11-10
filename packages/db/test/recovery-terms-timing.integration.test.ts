@@ -13,7 +13,7 @@ import { migrate, issuePracticeSession, authenticatePracticeSession, practiceMat
 import { DEMO_TENANT_ID as T, DEMO_ACCOUNT_ID as A, DEMO_MEMBERSHIP_ID as M, DEMO_IDENTITY_USER_ID as U } from "../src/demo-seed.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
-const ctx=testTenantContext(T),actor={membershipId:M,identityUserId:U};
+const ctx=testTenantContext(T,{membershipId:M}),actor={membershipId:M,identityUserId:U};
 let postgres:EmbeddedPostgres,admin:Pool,runtime:Pool,runtimeConfig:PoolConfig,adminConfig:PoolConfig;
 const previousEnvironment=process.env.JOBGUARD_ENV;
 async function start(){
@@ -264,7 +264,7 @@ it("ForgedTermsTimingRefused: real foreign-tenant approval cannot authorize this
   await owner.query("INSERT INTO app.recovery_case_event(id,tenant_id,job_id,case_id,sequence,event_type,from_state,to_state,reviewer_ref,command_id,payload_hash)VALUES($1,$2,$3,$4,1,'opened',NULL,'identified','fixture-owner',$5,$6)",[randomUUID(),tenant,job,caseId,randomUUID(),"a".repeat(64)]);
   await owner.query("COMMIT");
  }catch(error){await owner.query("ROLLBACK");throw error;}finally{owner.release();}
- const foreign=await new RecoveryCaseTermsRepository(runtime).approve(testTenantContext(tenant),job,termsCommand(caseId),{membershipId:member,identityUserId:user});
+ const foreign=await new RecoveryCaseTermsRepository(runtime).approve(testTenantContext(tenant,{membershipId:member}),job,termsCommand(caseId),{membershipId:member,identityUserId:user});
  const f=await fixture();await f.advance("receipt-3000");await approve(f);
  const before=await counts(f);await expect(raw(f,candidate(f),foreign.id)).rejects.toMatchObject({code:"23514",message:"ELIGIBILITY_AUDIT_REQUIRED"});expect(await counts(f)).toEqual(before);
 });

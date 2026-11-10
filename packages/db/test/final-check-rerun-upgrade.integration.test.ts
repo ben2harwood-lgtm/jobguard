@@ -16,9 +16,9 @@ beforeAll(async()=>{vi.stubEnv('JOBGUARD_ENV','synthetic_demo');f=await createFi
 },60000);
 afterAll(async()=>{await closeFinalCheckFixture(f);vi.unstubAllEnvs();});
 it('backfills populated history as attempt 1, preserves every prior column byte and all grants, and replays harmlessly',async()=>{
- const a=await seedFinalCheckJob(f);await insertFinalCheckEvidence(f,a);await a.lock();const repo=new FinalCheckRepository(f.shadow),m=await repo.begin(a.context,a.jobId),s=m.sources[0]!;
- await repo.record(a.context,a.jobId,m.id,s.id,randomUUID(),{version:'final-check.source-result.v1',inputHash:s.inputHash,status:'zero_result',failureCode:null,signalIds:[]});
- const r=await repo.reconcile(a.context,a.jobId,m.id,[]) as {runId:string};await new FinalCheckCompletionRepository(f.shadow).publish(a.context,{version:'final-check-publication.v1',jobId:a.jobId,runId:r.runId,checkId:m.id});
+ const a=await seedFinalCheckJob(f);await insertFinalCheckEvidence(f,a);await a.lock();const repo=new FinalCheckRepository(f.shadow),m=await repo.begin(a.workerContext,a.jobId),s=m.sources[0]!;
+ await repo.record(a.workerContext,a.jobId,m.id,s.id,randomUUID(),{version:'final-check.source-result.v1',inputHash:s.inputHash,status:'zero_result',failureCode:null,signalIds:[]});
+ const r=await repo.reconcile(a.workerContext,a.jobId,m.id,[]) as {runId:string};await new FinalCheckCompletionRepository(f.shadow).publish(a.workerContext,{version:'final-check-publication.v1',jobId:a.jobId,runId:r.runId,checkId:m.id});
  const tables=['final_check_manifest','final_check_manifest_source','final_check_processing_source','final_check_source_attempt','final_check_run_binding','shadow_final_check_source_attempt','shadow_final_check_run_binding','shadow_final_check_completion','final_account_lock_check'];
  const cols:Record<string,string[]>={},before:Record<string,unknown>={};
  const rows=async(t:string)=>(await f.admin.query(`SELECT row_to_json(x)::text row FROM (SELECT ${cols[t]!.map(c=>'"'+c+'"').join(',')} FROM app.${t} WHERE tenant_id=$1 AND job_id=$2) x ORDER BY row_to_json(x)::text`,[a.tenantId,a.jobId])).rows;

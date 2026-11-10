@@ -18,7 +18,7 @@ import { DEMO_TENANT_ID as T, DEMO_ACCOUNT_ID as A, DEMO_MEMBERSHIP_ID as M, DEM
 import { closeTestPools, freePort } from "./pool-test-utils.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 
-const ctx = testTenantContext(T), actor = { membershipId: M, identityUserId: U };
+const ctx = testTenantContext(T, { membershipId: M }), actor = { membershipId: M, identityUserId: U };
 const migrationName = "0127_recovery_timing_pin.sql", functionName = "app.pin_recovery_timing_created_at()";
 const tables = ["practice_feed_event", "recovery_case"] as const;
 const past = "2000-01-01T00:00:00Z", future = "2099-01-01T00:00:00Z";
