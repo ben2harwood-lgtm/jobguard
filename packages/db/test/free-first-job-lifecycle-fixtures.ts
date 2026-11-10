@@ -3,6 +3,25 @@ import type { TrialCompany } from "./free-first-job-admission-fixtures.js";
 import { randomUUID } from "node:crypto";
 import { meterCompany,verifyBusiness,workTenant,type WorkFixture } from "./free-first-job-admission-fixtures.js";
 import { keyParent,snapshot,store } from "./free-first-job-keys-fixtures.js";
+import type { PrivateVersionedStorage, StoredObject } from "@jobguard/storage";
+import { generatePracticePng } from "../src/practice-proof-image.js";
+
+// Keep trial proof bytes independent of the contractor fixture graph. Playwright's
+// filename-only transform cache can reuse its CJS transforms in this ESM journey.
+class TrialProofStorage implements PrivateVersionedStorage {
+ private readonly versions = new Map<string, StoredObject>();
+ put(key: string, versionId: string, bytes: Uint8Array) {
+  this.versions.set(`${key}:${versionId}`, { key, versionId, bytes, byteLength: bytes.length, contentType: "image/png" });
+ }
+ async createUploadUrl({ key }: { key: string }) { return `memory://upload/${key}`; }
+ async createDownloadUrl({ key, versionId }: { key: string; versionId: string }) { return `memory://download/${key}/${versionId}`; }
+ async readExactVersion(key: string, versionId: string) {
+  const value = this.versions.get(`${key}:${versionId}`);
+  if (!value) throw new Error("not found");
+  return value;
+ }
+ async deleteExactVersion(key: string, versionId: string) { this.versions.delete(`${key}:${versionId}`); }
+}
 // Prerequisite activation parents are owner fixtures, not successful capacity/quote command proof.
 export async function firstTrialFixture(f:WorkFixture,startedAt?:string){
  const a=await meterCompany(f),verification=await verifyBusiness(f,a),parent=await keyParent(f,a.tenantId),s=snapshot(parent);
@@ -53,7 +72,6 @@ async function prepareTrial(f: WorkFixture, options: TrialPreparationOptions) {
  const { FreeFirstJobLifecycleRepository } = await import("../src/free-first-job-lifecycle-repository.js");
  const { EvidenceService } = await import("../src/evidence.js");
  const { ProofCommandService } = await import("../src/proof-repository.js");
- const { MemoryStorage, pngBytes } = await import("./site-extra-evidence-fixtures.js");
  const a = await meterCompany(f), verification = await verifyBusiness(f, a);
  const draftId = randomUUID(), revisionId = randomUUID(), documentId = randomUUID();
  const scopeRevisionId = randomUUID(), lineId = randomUUID(), acceptanceId = randomUUID(), sendId = randomUUID();
@@ -100,8 +118,8 @@ async function prepareTrial(f: WorkFixture, options: TrialPreparationOptions) {
  await workTenant(f.admin, a.tenantId, async db => {
   for (const scope of scopes) await db.query("INSERT INTO app.scope_progress(tenant_id,job_id,scope_item_id,stage) VALUES($1,$2,$3,'not_started') ON CONFLICT DO NOTHING", [a.tenantId,a.jobId,scope.id]);
  });
- const storage = new MemoryStorage(), evidence = new EvidenceService(f.runtime, storage);
- const proof = new ProofCommandService(f.runtime, storage), bytes = options.proofBytes ?? pngBytes(1);
+ const storage = new TrialProofStorage(), evidence = new EvidenceService(f.runtime, storage);
+ const proof = new ProofCommandService(f.runtime, storage), bytes = options.proofBytes ?? generatePracticePng();
  const sha256 = createHash("sha256").update(bytes).digest("hex");
  const proofs = [];
  for (const scope of scopes) {
