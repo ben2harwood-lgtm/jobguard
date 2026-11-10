@@ -80,6 +80,99 @@ const scoped = (tenant: string, u = user, r = 1, s = 1, h = hash) =>
   });
 
 describe("M3-3 durable checkpoint SQL", () => {
+  // Direct runtime SQL bypasses the adapter: SQL must enforce the binding itself.
+  it.each([false, true])("refuses unbound direct SQL (forged settings: %s) without inserting a checkpoint", async forged => {
+    expect((await admin.query("SELECT * FROM app.sync_snapshot_checkpoint WHERE tenant_id=$1 AND user_id=$2", [a, secondUser])).rows).toEqual([]);
+    await expect(withTenant(runtime, testTenantContext(a), async db => {
+      await db.$client.query("SET LOCAL ROLE jobguard_runtime");
+      expect((await db.$client.query("SELECT current_user AS role")).rows[0].role).toBe("jobguard_runtime");
+      if (forged) await db.$client.query("SELECT set_config('app.actor_id',$1,true),set_config('app.tenant_id',$2,true)", [id(24), a]);
+      return advance(db.$client, secondUser, 99);
+    })).rejects.toThrow("SYNC_AUTHORITY_REQUIRED");
+    expect((await admin.query("SELECT * FROM app.sync_snapshot_checkpoint WHERE tenant_id=$1 AND user_id=$2", [a, secondUser])).rows).toEqual([]);
+  });
+
+  it("refuses member A naming active member B in direct SQL and preserves B's checkpoint", async () => {
+    expect(await scoped(a, secondUser)).toBe(1);
+    const before = (await admin.query("SELECT * FROM app.sync_snapshot_checkpoint ORDER BY tenant_id,user_id")).rows;
+    await expect(withTenant(runtime, testTenantContext(a), async db => {
+      await bind(db.$client, a);
+      await db.$client.query("SET LOCAL ROLE jobguard_runtime");
+      return advance(db.$client, secondUser, 99);
+    })).rejects.toThrow("SYNC_AUTHORITY_REQUIRED");
+    expect((await admin.query("SELECT * FROM app.sync_snapshot_checkpoint ORDER BY tenant_id,user_id")).rows).toEqual(before);
+  });
+
+  it("refuses direct SQL naming another tenant despite active memberships in both", async () => {
+    const before = (await admin.query("SELECT * FROM app.sync_snapshot_checkpoint ORDER BY tenant_id,user_id")).rows;
+    await expect(withTenant(runtime, testTenantContext(a), async db => {
+      await bind(db.$client, a);
+      await db.$client.query("SELECT set_config('app.tenant_id',$1,true)", [b]);
+      await db.$client.query("SET LOCAL ROLE jobguard_runtime");
+      return advance(db.$client, user, 99);
+    })).rejects.toThrow("SYNC_AUTHORITY_REQUIRED");
+    expect((await admin.query("SELECT * FROM app.sync_snapshot_checkpoint ORDER BY tenant_id,user_id")).rows).toEqual(before);
+  });
+
+  it("refuses an expired binding in direct runtime SQL without changing checkpoints", async () => {
+    const before = (await admin.query("SELECT * FROM app.sync_snapshot_checkpoint ORDER BY tenant_id,user_id")).rows;
+    const client = await admin.connect();
+    try {
+      await client.query("BEGIN; SET LOCAL ROLE jobguard_runtime");
+      await client.query("SELECT set_config('app.tenant_id',$1,true)", [a]);
+      await bind(client, a);
+      // Only the fixture owner can expire the binding; the call itself uses the runtime role.
+      await client.query("RESET ROLE");
+      await client.query("UPDATE control_plane.request_binding SET expires_at=clock_timestamp()-interval '1 second' WHERE transaction_id=pg_current_xact_id()");
+      await client.query("SET LOCAL ROLE jobguard_runtime");
+      expect((await client.query("SELECT current_user AS role")).rows[0].role).toBe("jobguard_runtime");
+      await expect(advance(client, user, 99)).rejects.toThrow("SYNC_AUTHORITY_REQUIRED");
+    } finally { await client.query("ROLLBACK"); client.release(); }
+    expect((await admin.query("SELECT * FROM app.sync_snapshot_checkpoint ORDER BY tenant_id,user_id")).rows).toEqual(before);
+  });
+
+  it.each(["removed", "revoked", "expired", "contractor-revoked"])("refuses direct SQL after bound membership is %s", async status => {
+    const u = randomUUID(), membership = randomUUID();
+    await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [u]);
+    await admin.query(`INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)
+      VALUES($1,$2,$3,$4,'owner')`, [membership, a, id(20), u]);
+    if (status === "contractor-revoked") await admin.query(
+      "INSERT INTO app.contractor_member(tenant_id,membership_id,email) VALUES($1,$2,'direct-sql@fictional.invalid')", [a, membership]);
+    const before = (await admin.query("SELECT * FROM app.sync_snapshot_checkpoint ORDER BY tenant_id,user_id")).rows;
+    await expect(withTenant(runtime, testTenantContext(a), async db => {
+      await bind(db.$client, a, u);
+      if (status === "removed") {
+        await admin.query("DELETE FROM identity.membership_locator WHERE user_id=$1", [u]);
+        await admin.query("DELETE FROM app.membership WHERE tenant_id=$1 AND id=$2", [a, membership]);
+      } else if (status === "contractor-revoked") {
+        await admin.query("INSERT INTO app.contractor_membership_revocation(tenant_id,id,membership_id) VALUES($1,$2,$2)", [a, membership]);
+      } else {
+        const column = status === "revoked" ? "revoked_at" : "expires_at";
+        await admin.query(`UPDATE app.membership SET ${column}='2020-01-01T00:00:00Z' WHERE tenant_id=$1 AND id=$2`, [a, membership]);
+      }
+      await db.$client.query("SET LOCAL ROLE jobguard_runtime");
+      return advance(db.$client, u, 99);
+    })).rejects.toThrow("SYNC_AUTHORITY_REQUIRED");
+    expect((await admin.query("SELECT * FROM app.sync_snapshot_checkpoint ORDER BY tenant_id,user_id")).rows).toEqual(before);
+  });
+
+  it("preserves direct SQL generation semantics for a matching bound membership and user", async () => {
+    const u = randomUUID(), membership = randomUUID();
+    await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [u]);
+    await admin.query(`INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)
+      VALUES($1,$2,$3,$4,'owner')`, [membership, a, id(20), u]);
+    const matching = (r = 1, schema = 1) => withTenant(runtime, testTenantContext(a), async db => {
+      await bind(db.$client, a, u);
+      await db.$client.query("SET LOCAL ROLE jobguard_runtime");
+      return advance(db.$client, u, r, schema);
+    });
+    expect(await matching()).toBe(1);
+    expect(await matching()).toBe(1);
+    expect(await matching(2)).toBe(2);
+    expect(await matching(2, 2)).toBe(3);
+    expect(await matching(2, 2)).toBe(3);
+  });
+
   it("refuses synthetic checkpoint writes in a differently named database after a fresh migration", async () => {
     const database = "jobguard_sync_checkpoint_guard";
     await admin.query(`CREATE DATABASE ${database}`);
@@ -308,6 +401,44 @@ describe("M3-3 durable checkpoint SQL", () => {
     expect((await download(renewed.token, app(2))).resync).toBe("required");
     const upgraded = await subscribe(app(2));
     expect((await download(upgraded.token, app(2))).page.rows).toHaveLength(1);
+  });
+
+  it.each(["revoked_at", "expires_at"])("requires download cleanup after persisted membership %s changes", async column => {
+    const principal = id(column === "revoked_at" ? 120 : 121), job = id(122), otherJob = id(123);
+    await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [principal]);
+    await admin.query(`INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)
+      VALUES($1,$2,$3,$1,'owner')`, [principal, a, id(20)]);
+    // Keep provider facts active: the database authority boundary must detect the revocation.
+    const facts = { version: "sync-provider-snapshot.v1", environment: "synthetic_demo", sessionId: id(124),
+      userId: principal, activeTenantId: a, authorityRevision: 1, authority: { userId: principal, tenantId: a,
+        membershipId: principal, role: "operative", status: "active", assignedJobIds: [job, otherJob] },
+      source: [job, otherJob].map(jobId => ({ tenantId: a, jobId, workOrderId: id(125), reference: "Synthetic",
+        priority: "routine", issuedOn: "2026-10-29", dueOn: null, openVisitId: null })) };
+    let revokeAfterBinding = false;
+    const provider: SyntheticSnapshotProvider = { withCurrentSession: async (_session, read) =>
+      withTenant(runtime, testTenantContext(a), async db => {
+        await bind(db.$client, a, principal);
+        // Model revocation racing an already authenticated request.
+        if (revokeAfterBinding) await admin.query(
+          `UPDATE app.membership SET ${column}='2020-01-01T00:00:00Z' WHERE tenant_id=$1 AND id=$2`, [a, principal]);
+        return read(facts, db.$client);
+      }) };
+    const application = new SyntheticSyncDownloadApplication(new SyntheticSyncSnapshotAdapter(provider,
+      { environment: "synthetic_demo", enabled: true, schemaVersion: 1 }), { environment: "synthetic_demo", enabled: true }, () => 1000);
+    const request = { version: "sync-subscription-request.v1", requestedTenantId: a, profile: "contractor_assigned_jobs.v1" };
+    const issued = await application.subscribe("synthetic-session", { version: "sync-server-subscribe.v1", request });
+    const input = { version: "sync-server-download.v1", request, token: issued.token,
+      delivered: [job, otherJob], afterJobId: null, pageSize: 10 };
+    expect((await application.download("synthetic-session", input)).page.rows.map(row => row.jobId)).toEqual([job, otherJob]);
+    revokeAfterBinding = true;
+    const result = await application.download("synthetic-session", input);
+    expect(result.page.outcome).toBe("refused");
+    expect(result.page.rows).toEqual([]);
+    expect(result.page.cleanup).toBe("required");
+    expect(result.resync).toBe("required");
+    expect(result.cleanup.outcome).toBe("cleanup_required");
+    expect(result.cleanup.tombstones).toEqual([{ jobId: job }, { jobId: otherJob }]);
+    expect(result.cleanup.keep).toEqual([]);
   });
 
   it("refuses generation overflow instead of wrapping or resetting", async () => {

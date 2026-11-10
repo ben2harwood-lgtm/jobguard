@@ -1,4 +1,5 @@
 "use client";
+import { jobPageFetch as fetch } from "./job-page-fetch";
 import {lateSourceReceiptV1} from "@jobguard/core";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { answerLabels, catchCommand, dispositionCommand, dispositionLabels, finalCheckReadV1, referenceChoices, revealStatus, type FinalCheckRead, type RevealAnswer, type RevealItem } from "./final-check-reveal-view";

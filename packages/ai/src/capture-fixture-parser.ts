@@ -33,6 +33,60 @@ function explicit(candidates: Cell[], prefix: string): Cell | null {
   return { value: content.trim(), start: cell.start + prefix.length + leading };
 }
 
+const workWord = /^(?:rip|remove|strip|take|clear|fit|install|supply|new|replace|tile|paint|plaster|skim|board|lay|hang|build|make|fix|repair|wire|plumb|test|prepare|protect|clean|seal|fill|sand|prime|connect|move|cut)\b/iu;
+const timing = /^(?:should take|will take|takes?|timing)\b/iu;
+const total = /\b(?:in total|altogether|all in)\b/iu;
+const priceLiteral = /(?<![\p{L}\p{N}£.,])(?:£(?:0|[1-9]\d{0,10}|[1-9]\d{0,2}(?:,\d{3})+)(?:\.\d{1,2})?|(?:0|[1-9]\d{0,10}|[1-9]\d{0,2}(?:,\d{3})+)(?:\.\d{1,2})?\s+(?:pounds|quid))(?=$|[^\p{L}\p{N}.,]|[.,](?:\s|$))/giu;
+
+/** Deterministic local draft helper, not an accuracy claim. A builder must check
+ * every line. Offsets always refer to the untouched source, including prices.
+ * ITEM: records never enter this path. No source text is executed or fetched.
+ */
+function plainDraft(text: string): { chunks: Cell[]; notes: string[]; title: Cell | null } {
+  const chunks: Cell[] = [], notes: string[] = [];
+  const add = (start: number, end: number) => {
+    const raw = text.slice(start, end), value = raw.trim();
+    if (value) chunks.push({ value, start: start + raw.length - raw.trimStart().length });
+  };
+  let start = 0;
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i]!;
+    // A decimal point or thousands separator belongs to the amount.
+    if (/[.!?;\r\n]/u.test(char) && !(char === "." && /\d/u.test(text[i - 1] ?? "") && /\d/u.test(text[i + 1] ?? ""))) {
+      add(start, i); start = i + 1;
+    } else {
+      const separator = char === "," ? "," : /^(?: and | then )/iu.exec(text.slice(i, i + 6))?.[0];
+      if (!separator) continue;
+      const next = text.slice(i + separator.length).trimStart();
+      // Keep the disposal phrase attached to the removal it describes.
+      if (separator.trim().toLowerCase() === "and" && /^take it away\b/iu.test(next)) continue;
+      if (workWord.test(next) || timing.test(next) || /^(?:about\s+)?(?:£?\d|in total\b|altogether\b|all in\b)/iu.test(next) && total.test(next.split(/[,;.!?\r\n]/u)[0]!)) {
+        add(start, i); start = i + separator.length; i = start - 1;
+      }
+    }
+  }
+  add(start, text.length);
+  const first = chunks[0];
+  const titleText = first?.value.split(/ for | at /iu)[0]?.slice(0, 200).trim();
+  const title = first && titleText ? { value: titleText, start: first.start } : null;
+  const work = chunks.filter((chunk, index) => {
+    if (timing.test(chunk.value)) { notes.push(`Confirm timing: ${chunk.value.slice(0, 450)}`); return false; }
+    if (!workWord.test(chunk.value) && total.test(chunk.value)) {
+      notes.push(`You said “${chunk.value.slice(0, 400)}”. Add a price to each line, or put it on one line.`); return false;
+    }
+    return !/^JOB:/u.test(chunk.value) && !(index === 0 && !workWord.test(chunk.value));
+  });
+  if (work.length > 100) throw new CaptureFixtureError("FIXTURE_STRUCTURE_REQUIRED");
+  return { chunks: work, notes, title };
+}
+
+function plainPrice(chunk: Cell): Cell | null {
+  const matches = [...chunk.value.matchAll(priceLiteral)];
+  if (matches.length !== 1 || matches[0]![0] === chunk.value || /\b(?:about|around|roughly|approximately)\b/iu.test(chunk.value)) return null;
+  const match = matches[0]!;
+  return { value: match[0], start: chunk.start + match.index };
+}
+
 /** Structured synthetic recipe parser, NOT a live model or natural-language
  * accuracy claim. JOB:/ITEM: records are inert data. No code, URL or commercial
  * action in a record is evaluated. Additional grammar is opt-in QTY:/UNIT:/RATE:.
@@ -64,16 +118,40 @@ export function parseCaptureFixture(sourceId: string, text: string): JobRecordPr
     ? "Confirm disposal and waste allowance" : "Please turn these words into work items")];
   if (titles.length > 1) questions.push(question("Confirm which stated job title applies"));
   let lines: JobRecordProposal["lines"];
+  let plainTitle: Cell | null = null;
   if (!items.length) {
-    const description = text.trim();
-    const kept = description.slice(0, 500);
-    if (kept.length < description.length) questions.push(question("Confirm the work items; the source note is longer than one description and was shortened"));
-    lines = [{
-      description: { value: kept, provenance: extracted(text.indexOf(description), kept.length) },
-      quantity: { value: null, provenance: defaulted("Quantity not stated in structured fixture grammar") },
-      unit: { value: null, provenance: defaulted("Unit not stated in structured fixture grammar") },
-      unitPricePence: { value: null, provenance: defaulted("Rate not stated; never invented") },
-    }];
+    const draft = plainDraft(text);
+    if (draft.chunks.length >= 2) {
+      plainTitle = draft.title;
+      questions[0] = question("Confirm disposal and waste allowance");
+      questions.push(...draft.notes.map(question));
+      lines = draft.chunks.map(chunk => {
+        const rate = plainPrice(chunk);
+        const rateValue = rate ? exactRate(`£${rate.value.replace(/£|,|\s*(?:pounds|quid)/giu, "")}`) : null;
+        // A trailing stated price is separate from the work description.
+        const description = rate && rate.start + rate.value.length === chunk.start + chunk.value.length
+          ? chunk.value.slice(0, rate.start - chunk.start).trimEnd() : chunk.value;
+        const kept = description.slice(0, 500);
+        if (kept.length < description.length) questions.push(question(`Confirm the description for ${kept.slice(0, 160)}; it is longer than one description and was shortened`));
+        return {
+          description: { value: kept, provenance: extracted(chunk.start, kept.length) },
+          quantity: { value: "1", provenance: defaulted("One item per draft line; confirm before quoting") },
+          unit: { value: "item", provenance: defaulted("Draft work item; confirm before quoting") },
+          unitPricePence: { value: rateValue, provenance: rateValue !== null && rate
+            ? extracted(rate.start, rate.value.length) : defaulted("Rate not stated exactly; never invented") },
+        };
+      });
+    } else {
+      const description = text.trim();
+      const kept = description.slice(0, 500);
+      if (kept.length < description.length) questions.push(question("Confirm the work items; the source note is longer than one description and was shortened"));
+      lines = [{
+        description: { value: kept, provenance: extracted(text.indexOf(description), kept.length) },
+        quantity: { value: null, provenance: defaulted("Quantity not stated in structured fixture grammar") },
+        unit: { value: null, provenance: defaulted("Unit not stated in structured fixture grammar") },
+        unitPricePence: { value: null, provenance: defaulted("Rate not stated; never invented") },
+      }];
+    }
   } else {
     lines = items.map(line => {
       const parts = cells(line.raw, line.start);
@@ -118,6 +196,7 @@ export function parseCaptureFixture(sourceId: string, text: string): JobRecordPr
   return {
     title: titleValue && title
       ? { value: titleValue, provenance: extracted(title.start + title.raw.indexOf(titleValue, 4), titleValue.length) }
+      : plainTitle ? { value: plainTitle.value, provenance: extracted(plainTitle.start, plainTitle.value.length) }
       : { value: "Work described in your words", provenance: defaulted("No job title was stated") },
     lines,
     materials: [{ description: { value: "Review materials required", provenance: {

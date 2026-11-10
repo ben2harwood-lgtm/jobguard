@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-45-main": {
+      "branches": ["codex/sandbox/later-safety-45-main"],
+      "note": "LATER-SAFETY-45: test-only practice manual placement regression coverage, rebuilt from main. No migrations.",
+      "allow": ["apps/web/e2e/M2-1-order-screen.spec.ts"]
+    }
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "migration": "0715_second_job_card_gate_filters.sql",
+  "lp0": [
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.mon3_activate(uuid,text,uuid,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.trial_admission",
+          "app.trial_identity_snapshot"
+        ],
+        "staticCalls": [
+          "app.mon1_company_actor",
+          "app.mon3_owner",
+          "app.mon3_read_eligibility",
+          "app.switch_job_live_v3"
+        ]
+      },
+      "after": {
+        "identity": "function:app.mon3_activate(uuid,text,uuid,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.trial_admission",
+          "app.trial_identity_snapshot"
+        ],
+        "staticCalls": [
+          "app.mon1_company_actor",
+          "app.mon3_owner",
+          "app.mon3_read_eligibility",
+          "app.switch_job_live_v3"
+        ]
+      }
+    }
+  ],
+  "upgrade": [],
+  "tenancy": []
+}

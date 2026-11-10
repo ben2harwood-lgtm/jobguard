@@ -21,7 +21,7 @@ export async function approveJ3Catches(page: Page, browser: Browser, jobId: stri
   await issuer.getByRole("button", { name: "Request code", exact: true }).click();
   await issuer.getByLabel("Eight-digit code").fill((await issuer.getByTestId("fixture-code").innerText()).trim());
   await issuer.getByRole("button", { name: "Verify code", exact: true }).click();
-  await expect(issuer.getByRole("heading", { name: "Signed in", exact: true })).toBeVisible();
+  await expect(issuer.getByRole("heading", { name: "You're signed in.", exact: true })).toBeVisible();
   // Match customer-extra-approval: read through the signed-in browser, whose
   // same-origin fetch carries the Secure identity cookie on the local origin.
   const signedIn = await issuer.evaluate(async () => {
@@ -30,6 +30,7 @@ export async function approveJ3Catches(page: Page, browser: Browser, jobId: stri
   });
   expect(signedIn.status, "Read signed-in link issuer through the browser session").toBe(200);
   const session = signedIn.body;
+  await issuer.getByText("Technical details", { exact: true }).click();
   expect(session.principal.id).toBe(await issuer.getByTestId("identity-id").innerText());
   expect(session.memberships.some((membership: { tenantId: string }) => membership.tenantId === tenantId)).toBe(false);
   // The practice job's tenant is fixed by the existing demo bootstrap, whereas
