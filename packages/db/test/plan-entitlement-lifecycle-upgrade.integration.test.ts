@@ -120,7 +120,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     && row.args === "p_tenant uuid, p_book jsonb, p_result jsonb")).toHaveLength(1);
   expect(live.find(row => row.nspname === "app" && row.proname === "replace_fee_reservation_book"
     && row.args === "p_tenant uuid, p_book jsonb, p_result jsonb")?.definition?.split("$function$")[1]).toEqual(feeResultBody);
-  const billingSource = await readFile(new URL("../migrations/0817_billing_export_delivery_once.sql", import.meta.url), "utf8");
+  const billingSource = await readFile(new URL("../migrations/0727_billing_export_delivery_once.sql", import.meta.url), "utf8");
   const billingBodies = new Map([
     ["cb_delivery|p_session uuid, p_job uuid, p_command uuid, p_payload jsonb", billingSource.split("FUNCTION app.cb_delivery(")[1]!.split("AS $$")[1]!.split("$$;")[0]!],
     ["cb_csv_cell|v text", billingSource.split("FUNCTION app.cb_csv_cell(")[1]!.split("AS $$")[1]!.split("$$;")[0]!],

@@ -97,8 +97,8 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   // Exact existing replacements only; all their privileges and unrelated definitions remain frozen.
   const fullBodies = new Map<string, string>();
   for (const [identity, migration, overload = 0] of [
-    ["app.cb_delivery(p_session uuid, p_job uuid, p_command uuid, p_payload jsonb)", "0817_billing_export_delivery_once.sql"],
-    ["app.cb_csv_cell(v text)", "0817_billing_export_delivery_once.sql"],
+    ["app.cb_delivery(p_session uuid, p_job uuid, p_command uuid, p_payload jsonb)", "0727_billing_export_delivery_once.sql"],
+    ["app.cb_csv_cell(v text)", "0727_billing_export_delivery_once.sql"],
     ["identity.extra_customer_approval(t uuid, j uuid, c uuid, digest text, input jsonb)", "0725_lp6c_client_extra_decision.sql"],
     ["app.current_actor()", "0724_lp6c_customer_portal_delegation.sql"],
     ["app.current_tenant()", "0724_lp6c_customer_portal_delegation.sql"],
