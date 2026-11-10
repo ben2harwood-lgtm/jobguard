@@ -11,8 +11,8 @@
           "LP-12"
         ],
         "responsibilities": {
-          "LP-11": "Verify session-derived company isolation and owner-only writes.",
-          "LP-12": "Review the private binding reader, runtime grants and FORCE RLS."
+          "LP-11": "Verify tenant-derived company isolation and owner-only writes.",
+          "LP-12": "Review use of the existing 0697 reader, runtime grants and FORCE RLS."
         },
         "sources": [
           "packages/db/migrations/1300_firm_profile.sql",
@@ -72,14 +72,6 @@
       "section": "entries",
       "before": null,
       "after": {
-        "key": "acl|routine|function:app.firm_profile_bound_session()|jobguard_migration|EXECUTE|-",
-        "group": "a-firm-profile"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
         "key": "owner|rel:table|app.firm_profile|jobguard_migration",
         "group": "a-firm-profile"
       }
@@ -101,14 +93,6 @@
       }
     },
     {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "owner|routine|function:app.firm_profile_bound_session()|jobguard_binding_owner",
-        "group": "a-firm-profile"
-      }
-    },
-    {
       "section": "groups",
       "before": null,
       "after": {
@@ -125,8 +109,8 @@
           "LP-12"
         ],
         "responsibilities": {
-          "LP-11": "Verify session-derived company isolation and owner-only writes.",
-          "LP-12": "Review the private binding reader, runtime grants and FORCE RLS."
+          "LP-11": "Verify tenant-derived company isolation and owner-only writes.",
+          "LP-12": "Review use of the existing 0697 reader, runtime grants and FORCE RLS."
         },
         "downstream": "A synthetic company profile supplies new quote snapshots; issued documents remain immutable.",
         "sources": [
@@ -179,7 +163,7 @@
         "definitionSha256": null,
         "staticWrites": [],
         "staticCalls": [
-          "app.firm_profile_bound_session"
+          "app.bound_context_reader"
         ]
       }
     },
@@ -200,31 +184,8 @@
         "definitionSha256": null,
         "staticWrites": [],
         "staticCalls": [
-          "app.current_firm_profile_key",
-          "app.firm_profile_bound_session"
-        ]
-      }
-    },
-    {
-      "section": "routines",
-      "before": null,
-      "after": {
-        "identity": "function:app.firm_profile_bound_session()",
-        "owner": "jobguard_binding_owner",
-        "securityDefiner": true,
-        "searchPath": "search_path=pg_catalog, pg_temp",
-        "returnsTrigger": false,
-        "extension": null,
-        "reachable": true,
-        "runtimeExecute": false,
-        "publicExecute": false,
-        "otherExecute": [
-          "jobguard_migration"
-        ],
-        "definitionSha256": null,
-        "staticWrites": [],
-        "staticCalls": [
-          "app.lp6_bound_request"
+          "app.bound_context_reader",
+          "app.current_firm_profile_key"
         ]
       }
     }
@@ -294,21 +255,6 @@
         "relacl": null,
         "relrowsecurity": false,
         "relforcerowsecurity": false
-      }
-    },
-    {
-      "section": "routines",
-      "before": null,
-      "after": {
-        "nspname": "app",
-        "proname": "firm_profile_bound_session",
-        "args": "",
-        "proowner": "jobguard_binding_owner",
-        "proacl": "{jobguard_binding_owner=X/jobguard_binding_owner,jobguard_migration=X/jobguard_binding_owner}",
-        "prosecdef": true,
-        "proconfig": [
-          "search_path=pg_catalog, pg_temp"
-        ]
       }
     },
     {

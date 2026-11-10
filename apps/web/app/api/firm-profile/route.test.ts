@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-const stub = vi.hoisted(() => ({ auth: vi.fn(), contractor: vi.fn(), read: vi.fn(), save: vi.fn(), pool: {} }));
+const stub = vi.hoisted(() => ({ auth: vi.fn(), contractor: vi.fn(), read: vi.fn(), save: vi.fn(), pool: {}, identityToken: undefined as string | undefined, identitySession: vi.fn(), identityContext: vi.fn() }));
+vi.mock("../../lib/identity-server", () => ({ identityApplication: () => ({ session: stub.identitySession, context: stub.identityContext, allowedOrigin: "http://localhost:3000" }) }));
+vi.mock("@jobguard/api/identity", () => ({ AuthError: class extends Error {}, identityStatus: () => ({ code: "UNAUTHENTICATED", status: 401 }) }));
 vi.mock("server-only", () => ({}));
-vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => ({ value: "fictional-session" }) }) }));
+vi.mock("next/headers", () => ({ cookies: async () => ({ get: (name: string) => name === "jobguard_session" ? (stub.identityToken ? { value: stub.identityToken } : undefined) : ({ value: "fictional-session" }) }) }));
 vi.mock("@jobguard/db", () => ({ authenticatePracticeSession: stub.auth, contractorSessionContext: stub.contractor, RequestBindingRefusedError: class extends Error {} }));
 vi.mock("../../lib/synthetic-server", () => ({ syntheticPool: () => stub.pool, practiceFailure: () => null }));
 vi.mock("../../../../../packages/db/src/firm-profile-repository", async original => ({ ...await original<typeof import("../../../../../packages/db/src/firm-profile-repository")>(),
@@ -12,7 +14,7 @@ import { GET, POST } from "./route";
 const context = { tenantId: "fictional" };
 const request = (origin = "http://localhost:3000", body: unknown = {}) => new Request("http://localhost:3000/api/firm-profile", { method: "POST", headers: { origin, "content-type": "application/json" }, body: JSON.stringify(body) });
 beforeEach(() => {
- vi.clearAllMocks();
+ vi.clearAllMocks(); stub.identityToken = undefined;
  for (const key of ["VERCEL", "CF_PAGES", "CF_PAGES_URL", "JOBGUARD_HOSTING", "JOBGUARD_ALLOWED_ORIGINS", "VERCEL_URL", "VERCEL_BRANCH_URL", "VERCEL_PROJECT_PRODUCTION_URL"]) vi.stubEnv(key, "");
  stub.auth.mockResolvedValue({ context }); stub.read.mockResolvedValue({ profile: null, canSave: true }); stub.save.mockResolvedValue({ profile: {}, canSave: true });
 });
@@ -39,4 +41,16 @@ it("falls back to a persisted company session only on authentication refusal", a
 it("does not turn a missing session into a company profile", async () => {
  stub.auth.mockRejectedValueOnce(new Error("UNAUTHENTICATED")); stub.contractor.mockRejectedValueOnce(Object.assign(new Error("UNAUTHENTICATED"), { code: "UNAUTHENTICATED" }));
  expect((await GET()).status).toBe(401); expect(stub.read).not.toHaveBeenCalled();
+});
+
+it("uses the real company identity and refuses ambiguous memberships without falling back to practice", async () => {
+ stub.identityToken = "real-company-session";
+ stub.identitySession.mockResolvedValue({ memberships: [{ tenantId: "company" }], csrfToken: "csrf" });
+ stub.identityContext.mockResolvedValue(context);
+ expect((await GET()).status).toBe(200);
+ expect(stub.identityContext).toHaveBeenCalledWith({ sessionToken: "real-company-session", requestedTenantId: "company", csrfToken: "csrf", origin: "http://localhost:3000" });
+ expect(stub.auth).not.toHaveBeenCalled();
+ stub.identitySession.mockResolvedValue({ memberships: [{ tenantId: "one" }, { tenantId: "two" }] });
+ expect((await GET()).status).toBe(403);
+ expect(stub.auth).not.toHaveBeenCalled();
 });

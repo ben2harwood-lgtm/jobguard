@@ -36,27 +36,29 @@ it("upserts one profile per company, audits without contact data, and rejects no
  expect((await repo.read(company.context)).profile?.tradingName).toBe("Fictional Oak Works");
  await expect(repo.save(company.context, { ...profile, tradingName: " ", tenantId: company.p.tenantId })).rejects.toMatchObject({ code: "INVALID_PROFILE" });
 });
-it("isolates another company and two blank firms sharing the demo tenant; reset cannot inherit the old firm's profile", async () => {
+it("isolates companies and refuses every shared practice firm, including after reset", async () => {
  const repo = new FirmProfileRepository(c.runtime), company = await startSession(c), other = await startSession(c);
  await repo.save(company.context, profile);
  expect((await repo.read(other.context)).profile).toBeNull();
+ const key = company.context.tenantId;
  const start = { version: "blank-practice-company.v1", action: "start" };
  const token = await startBlankPracticeCompany(c.runtime, start), secondToken = await startBlankPracticeCompany(c.runtime, start);
  const first = await authenticatePracticeSession(c.runtime, token), second = await authenticatePracticeSession(c.runtime, secondToken);
  expect(first.context.tenantId).toBe(second.context.tenantId);
- await repo.save(first.context, profile);
- expect((await repo.read(second.context)).profile).toBeNull();
- const key = await withTenant(c.runtime, first.context, async db => (await db.$client.query("SELECT app.current_firm_profile_key() key")).rows[0].key);
- for (const context of [second.context, other.context]) {
-  expect(await withTenant(c.runtime, context, async db => (await db.$client.query("SELECT * FROM app.firm_profile WHERE tenant_id=$1 AND company_key=$2", [first.context.tenantId, key])).rows)).toEqual([]);
-  expect(await withTenant(c.runtime, context, async db => (await db.$client.query("UPDATE app.firm_profile SET trading_name='Stolen' WHERE tenant_id=$1 AND company_key=$2", [first.context.tenantId, key])).rowCount)).toBe(0);
-  await expect(withTenant(c.runtime, context, db => db.$client.query("INSERT INTO app.firm_profile(tenant_id,company_key,trading_name) VALUES($1,$2,'Stolen')", [first.context.tenantId, key]))).rejects.toThrow(/row-level security/);
+ for (const context of [first.context, second.context, other.context]) {
+  expect(await withTenant(c.runtime, context, async db => (await db.$client.query("SELECT * FROM app.firm_profile WHERE tenant_id=$1 AND company_key=$2", [company.context.tenantId, key])).rows)).toEqual([]);
+  expect(await withTenant(c.runtime, context, async db => (await db.$client.query("UPDATE app.firm_profile SET trading_name='Stolen' WHERE tenant_id=$1 AND company_key=$2", [company.context.tenantId, key])).rowCount)).toBe(0);
+  await expect(withTenant(c.runtime, context, db => db.$client.query("INSERT INTO app.firm_profile(tenant_id,company_key,trading_name) VALUES($1,$2,'Stolen')", [company.context.tenantId, key]))).rejects.toThrow(/row-level security/);
  }
- await repo.save(second.context, { ...profile, tradingName: "Fictional Other Works" });
- expect((await repo.read(first.context)).profile?.tradingName).toBe("Fictional Oak Works");
+ for (const context of [first.context, second.context]) {
+  expect(await repo.read(context)).toMatchObject({ profile: null, canSave: false, isPractice: true });
+  await expect(repo.save(context, profile)).rejects.toMatchObject({ code: "FORBIDDEN" });
+  await expect(withTenant(c.runtime, context, db => db.$client.query("INSERT INTO app.firm_profile(tenant_id,company_key,trading_name) VALUES($1,$2,'Stolen')", [context.tenantId, context.tenantId]))).rejects.toThrow(/row-level security/);
+ }
  const next = await startBlankPracticeCompany(c.runtime, { ...start, action: "reset" }, token);
- expect((await repo.read((await authenticatePracticeSession(c.runtime, next)).context)).profile).toBeNull();
- expect((await c.admin.query("SELECT count(*)::int n FROM app.firm_profile WHERE tenant_id=$1 AND company_key=$2", [first.context.tenantId, key])).rows[0].n).toBe(1);
+ expect(await repo.read((await authenticatePracticeSession(c.runtime, next)).context)).toMatchObject({ profile: null, canSave: false, isPractice: true });
+ expect((await c.admin.query("SELECT count(*)::int n FROM app.firm_profile WHERE tenant_id=$1", [first.context.tenantId])).rows[0].n).toBe(0);
+ expect((await repo.read(company.context)).profile?.tradingName).toBe("Fictional Oak Works");
 });
 it("freezes the saved issuer in an issued document and uses a changed profile only in new document versions", async () => {
  const company = await startSession(c), context = company.context, tenant = company.p.tenantId;

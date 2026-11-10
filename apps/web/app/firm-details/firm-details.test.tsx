@@ -62,3 +62,16 @@ it("uses the saved trading name after an authenticated read", async () => {
  await new Promise(resolve => setTimeout(resolve, 0));
  expect(hooks.sets).toContain("Fictional Oak Works");
 });
+
+it("keeps practice firms on the sample name and disables their save handler", async () => {
+ const fetch = vi.fn(); vi.stubGlobal("fetch", fetch);
+ const tree = FirmDetailsForm({ initial: { profile: null, canSave: false, isPractice: true } });
+ const html = renderToStaticMarkup(tree);
+ expect(html).toContain("A Builder Ltd");
+ expect(html).toContain("Practice firms use the sample name");
+ expect(html).toContain("<fieldset disabled");
+ expect(html).not.toContain("Only the company owner");
+ const element = (tree.props.children as React.ReactElement[]).find(x => React.isValidElement(x) && x.type === "form")!;
+ await (element.props as { onSubmit: (event: { preventDefault: () => void }) => void }).onSubmit({ preventDefault() {} });
+ expect(fetch).not.toHaveBeenCalled();
+});

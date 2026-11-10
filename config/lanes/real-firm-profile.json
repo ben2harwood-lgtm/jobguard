@@ -19,7 +19,8 @@
         "packages/db/src/quote-delivery-repository.ts",
         "packages/db/test/firm-profile.integration.test.ts",
         "packages/db/test/later-empty-tables.ts",
-        "packages/db/test/migration-proofs/1300_firm_profile.proof.json"
+        "packages/db/test/migration-proofs/1300_firm_profile.proof.json",
+        "apps/web/e2e/REAL-FIRM-PROFILE.spec.ts"
       ]
     }
   }

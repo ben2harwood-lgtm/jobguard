@@ -35,11 +35,11 @@ export class FirmProfileRepository {
  constructor(private readonly pool: Pool) {}
  async read(context: VerifiedTenantContext) {
   return withTenant(this.pool, context, async db => {
-   const row = (await db.$client.query(`SELECT role FROM app.membership
+   const row = (await db.$client.query(`SELECT role,app.current_firm_profile_key() company_key FROM app.membership
     WHERE tenant_id=app.current_tenant() AND id=app.current_actor() AND revoked_at IS NULL
      AND (expires_at IS NULL OR expires_at>clock_timestamp())`)).rows[0];
    if (!row) throw new FirmProfileError("FORBIDDEN");
-   return { version: "firm-profile-view.v1" as const, profile: await readFirmProfile(db), canSave: row.role === "owner" };
+   return { version: "firm-profile-view.v1" as const, profile: await readFirmProfile(db), isPractice: row.company_key === null, canSave: row.company_key !== null && row.role === "owner" };
   });
  }
  async save(context: VerifiedTenantContext, raw: unknown) {
@@ -50,7 +50,7 @@ export class FirmProfileRepository {
    const actor = (await db.$client.query(`SELECT id,app.current_firm_profile_key() company_key FROM app.membership
     WHERE tenant_id=app.current_tenant() AND id=app.current_actor() AND role='owner'
      AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp()) FOR SHARE`)).rows[0];
-   if (!actor) throw new FirmProfileError("FORBIDDEN");
+   if (!actor?.company_key) throw new FirmProfileError("FORBIDDEN");
    await db.$client.query(`INSERT INTO app.firm_profile(tenant_id,company_key,trading_name,address_lines,contact_email,contact_phone)
     VALUES(app.current_tenant(),app.current_firm_profile_key(),$1,$2,$3,$4)
     ON CONFLICT(tenant_id,company_key) DO UPDATE SET trading_name=excluded.trading_name,
