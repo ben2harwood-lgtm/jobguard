@@ -75,14 +75,16 @@ it("keeps full accessible names and walkthrough Accept text with one-word visibl
 it("announces Split, focuses the first adjacent editable child, and saves the unchanged lineage payload", async () => {
   const fetch = vi.fn(async () => ({ ok: false, json: async () => ({ code: "TEST_RESPONSE" }) }));
   vi.stubGlobal("fetch", fetch);
-  const p = panel();
+  const nullableParent = { ...line, quantity: null, unit: null };
+  const splitFixture = { ...fixture, review: { ...fixture.review!, lines: [nullableParent] } } as ReviewCaptureResult;
+  const p = panel(splitFixture);
   p.button(p.render(), "Split Protect room").props.onClick();
   expect(fetch).not.toHaveBeenCalled();
   let tree = p.render();
   const articles = all(tree, n => n.type === "article");
   expect(articles).toHaveLength(3);
   expect(text(all(articles[0], n => n.type === "strong")[0])).toBe("split");
-  expect(text(all(articles[1], n => n.props.role === "status")[0])).toBe("Split into two lines — edit each description");
+  expect(text(all(articles[1], n => n.props.role === "status")[0])).toBe("Split into two lines — check both descriptions and accept each child. Part A and part B are editable placeholders.");
   expect(p.focus).toHaveBeenCalledExactlyOnceWith(articles[1]!.key);
   const descriptions = all(tree, n => n.type === "input" && n.props["aria-label"]?.startsWith("Description "));
   expect(descriptions.map(n => n.props.value)).toEqual(["Protect room", "Protect room — part A", "Protect room — part B"]);
@@ -97,10 +99,10 @@ it("announces Split, focuses the first adjacent editable child, and saves the un
   expect(options.method).toBe("POST");
   const command = JSON.parse(options.body as string);
   const children = command.review.lines.slice(1);
-  expect(command).toEqual({ contractVersion: "proposal_review_command_v1", expectedRevision: 3, review: { ...fixture.review, lines: [{ ...line, disposition: "split" }, ...children] } });
+  expect(command).toEqual({ contractVersion: "proposal_review_command_v1", expectedRevision: 3, review: { ...splitFixture.review, lines: [{ ...nullableParent, disposition: "split" }, ...children] } });
   expect(children).toHaveLength(2);
   for (const [index, child] of children.entries()) expect(child).toEqual({
-    ...line, id: expect.any(String), scopeItemId: expect.any(String), origin: "human", description: index === 0 ? "Protect doorway" : "Protect floor", unitPricePence: null, disposition: "accepted", parentScopeItemIds: ["scope"], sourceExcerpt: null,
+    ...line, id: expect.any(String), scopeItemId: expect.any(String), origin: "human", description: index === 0 ? "Protect doorway" : "Protect floor", quantity: "1", unit: "item", unitPricePence: null, disposition: "proposed", parentScopeItemIds: ["scope"], sourceExcerpt: null,
   });
   expect(new Set(children.flatMap((child: any) => [child.id, child.scopeItemId])).size).toBe(4);
 });
@@ -112,4 +114,92 @@ it.each([["Accept", "accepted", "Accepted"], ["Dismiss", "dismissed", "Dismissed
   expect(text(all(tree, n => n.type === "strong").find(n => text(n) === disposition))).toBe(disposition);
   expect(p.scroll).toHaveBeenCalledWith({ block: "nearest" });
   expect(p.focus).not.toHaveBeenCalled();
+});
+
+function validFixture(): ReviewCaptureResult {
+  const jobId = crypto.randomUUID(), proposalId = crypto.randomUUID(), reviewId = crypto.randomUUID();
+  const validLine = { ...line, origin: "proposal" as const, id: crypto.randomUUID(), scopeItemId: crypto.randomUUID(), disposition: "accepted" as const, unitPricePence: null };
+  return {
+    version: 1, environment: "synthetic_demo", captureId: crypto.randomUUID(), jobId, proposalId, reviewId, status: "draft",
+    source: { kind: "text", text: line.sourceExcerpt, version: 1, acquisition: null, audioByteLength: 0 },
+    proposal: { title: "Fictional job", lines: [{ ...validLine, description: { value: validLine.description }, quantity: { value: "1" }, unit: { value: "item" }, unitPricePence: { value: null } }], questions: [] },
+    review: { version: "proposal_review_v1", reviewId, proposalId, jobId, revision: 3, lines: [validLine], questions: [] },
+  };
+}
+const settle = () => new Promise<void>(resolve => setImmediate(resolve));
+function server(result: ReviewCaptureResult, confirmStatus = 200) {
+  return vi.fn(async (url: string, options: RequestInit) => {
+    if (url.endsWith("/review")) {
+      const command = JSON.parse(options.body as string);
+      return { ok: true, status: 200, json: async () => ({ ...result, review: { ...command.review, revision: command.expectedRevision + 1 } }) };
+    }
+    return { ok: confirmStatus === 200, status: confirmStatus, json: async () => confirmStatus === 200 ? { ...result, status: "quoting" } : { code: "REVIEW_REVISION_CONFLICT" } };
+  });
+}
+it.each(["Quantity", "Unit"])("names missing %s and its line, saves valid choices, and never sends confirmation", async field => {
+  const result = validFixture(), fetch = server(result);
+  vi.stubGlobal("fetch", fetch);
+  const p = panel(result);
+  all(p.render(), n => n.props["aria-label"] === `${field} Protect room`)[0]!.props.onChange({ target: { value: "" } });
+  p.button(p.render(), "Confirm scope").props.onClick(); await settle();
+  const tree = p.render();
+  expect(text(all(tree, n => n.props.role === "alert"))).toContain(`Scope is not confirmed. Add ${field} for ‘Protect room’ (REVIEW_INCOMPLETE).`);
+  expect(fetch.mock.calls.map(call => call[0])).toEqual([`/api/jobs/${result.jobId}/review`]);
+});
+it("names all unanswered questions, treats whitespace as unanswered, and keeps the refusal after saving", async () => {
+  const result = validFixture();
+  result.review!.questions = ["Who removes waste?", "Which finish?"].map(question => ({ id: crypto.randomUUID(), question, blocking: true, disposition: "unresolved", answer: null }));
+  const fetch = server(result); vi.stubGlobal("fetch", fetch);
+  const p = panel(result);
+  all(p.render(), n => n.props["aria-label"] === "Answer Who removes waste?")[0]!.props.onChange({ target: { value: "   " } });
+  p.button(p.render(), "Confirm scope").props.onClick(); await settle();
+  expect(text(all(p.render(), n => n.props.role === "alert"))).toBe("Scope is not confirmed. Answer: “Who removes waste?”; Answer: “Which finish?” (REVIEW_INCOMPLETE).");
+  expect(fetch).toHaveBeenCalledTimes(1);
+  const command = JSON.parse(fetch.mock.calls[0]![1].body as string);
+  expect(command.review.questions[0]).toMatchObject({ answer: null, disposition: "unresolved" });
+});
+it("submits edits after Save review before confirming, allows unknown prices, and retains edits on a conflict", async () => {
+  const result = validFixture(), fetch = server(result, 409);
+  vi.stubGlobal("fetch", fetch);
+  const p = panel(result);
+  p.button(p.render(), "Save review").props.onClick(); await settle();
+  let tree = p.render();
+  expect(text(all(tree, n => n.props.role === "alert"))).toContain("Review saved.");
+  all(tree, n => n.props["aria-label"] === "Description Protect room")[0]!.props.onChange({ target: { value: "Protect fictional doorway" } });
+  p.button(p.render(), "Confirm scope").props.onClick(); await settle();
+  tree = p.render();
+  expect(fetch.mock.calls.map(call => call[0].split("/").at(-1))).toEqual(["review", "review", "confirm"]);
+  const saved = JSON.parse(fetch.mock.calls[1]![1].body as string);
+  expect(saved).toMatchObject({ expectedRevision: 4, review: { revision: 4, lines: [{ description: "Protect fictional doorway", unitPricePence: null }] } });
+  expect(JSON.parse(fetch.mock.calls[2]![1].body as string).expectedRevision).toBe(5);
+  expect(text(all(tree, n => n.props.role === "alert"))).toBe("This draft changed. Review the latest version.");
+  expect(all(tree, n => n.props["aria-label"] === "Description Protect fictional doorway")[0]!.props.value).toBe("Protect fictional doorway");
+});
+it("preserves input typed during a save and does not confirm an older saved draft", async () => {
+  const result = validFixture();
+  let release!: (response: unknown) => void;
+  const fetch = vi.fn(() => new Promise(resolve => { release = resolve; }));
+  vi.stubGlobal("fetch", fetch);
+  const p = panel(result);
+  p.button(p.render(), "Confirm scope").props.onClick();
+  const command = JSON.parse((fetch.mock.calls[0] as unknown as [string, RequestInit])[1].body as string);
+  all(p.render(), n => n.props["aria-label"] === "Description Protect room")[0]!.props.onChange({ target: { value: "Newer input" } });
+  p.render();
+  release({ ok: true, status: 200, json: async () => ({ ...result, review: { ...command.review, revision: 4 } }) });
+  await settle();
+  const tree = p.render();
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(all(tree, n => n.props["aria-label"] === "Description Newer input")[0]!.props.value).toBe("Newer input");
+  expect(text(all(tree, n => n.props.role === "alert"))).toContain("Your review changed while saving");
+});
+it("lists invalid descriptions, quantities, units and dismissal reasons without submitting invalid schemas", async () => {
+  const result = validFixture();
+  result.review!.lines[0] = { ...result.review!.lines[0]!, description: " ", quantity: "not a quantity", unit: "" };
+  result.review!.lines.push({ ...result.review!.lines[0]!, id: crypto.randomUUID(), scopeItemId: crypto.randomUUID(), description: "Excluded work", disposition: "dismissed", quantity: "1", unit: "item", dismissalReason: " " });
+  const fetch = vi.fn(); vi.stubGlobal("fetch", fetch);
+  const p = panel(result);
+  p.button(p.render(), "Confirm scope").props.onClick(); await settle();
+  const notice = text(all(p.render(), n => n.props.role === "alert"));
+  for (const phrase of ["Description", "Quantity", "Unit", "Dismissal reason for ‘Excluded work’", "REVIEW_INCOMPLETE"]) expect(notice).toContain(phrase);
+  expect(fetch).not.toHaveBeenCalled();
 });
