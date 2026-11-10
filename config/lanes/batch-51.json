@@ -13,6 +13,7 @@
         "packages/db/migrations/0706_duplicate_unlink_reopens_request.sql",
         "packages/db/migrations/0707_recovery_terms_no_truncate.sql",
         "packages/db/src/variation-repository.ts",
+        "packages/db/test/customer-variation-approval.integration.test.ts",
         "packages/db/test/duplicate-unlink-command-binding.integration.test.ts",
         "packages/db/test/duplicate-unlink-reopens-request.integration.test.ts",
         "packages/db/test/enterprise-fee-posting.integration.test.ts",
