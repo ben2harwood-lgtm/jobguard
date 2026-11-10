@@ -10,11 +10,14 @@
         "apps/api/src/value/contracts.ts",
         "apps/api/src/value/value.application.test.ts",
         "apps/api/src/value/value.application.ts",
+        "apps/web/app/practice-company/walkthrough/resume.test.ts",
+        "apps/web/app/practice-company/walkthrough/resume.ts",
         "apps/web/app/practice-company/walkthrough/voice-journey.test.tsx",
         "apps/web/app/practice-company/walkthrough/voice-journey.tsx",
         "apps/web/app/ui/job-value.test.tsx",
         "apps/web/app/ui/job-value.tsx",
-        "apps/web/e2e/WALK-3.spec.ts"
+        "apps/web/e2e/WALK-3.spec.ts",
+        "apps/web/e2e/WALK-stress.spec.ts"
       ]
     }
   }

@@ -141,6 +141,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.issue_practice_customer_invoice(p_tenant uuid, p_job uuid, p_final_revision uuid, p_actor uuid, p_command uuid, p_recipient text, p_issued_on date)", "0716_invoice_line_vat_signed_split.sql"],
     ["app.issue_practice_customer_credit_note(p_tenant uuid, p_job uuid, p_invoice uuid, p_actor uuid, p_command uuid, p_net_pence bigint, p_reason text, p_preview_hash text)", "0717_credit_request_digest_fields.sql"],
     ["infrastructure.discover_readiness_plans()", "0718_readiness_timezone_case.sql"],
+    ["app.guard_watchdog_upload_update()", "0720_verified_upload_immutable.sql"],
     ["app.reverse_synthetic_landing(p_tenant uuid, p_reversal uuid, p_derivation uuid, p_journal uuid, p_allocation uuid, p_amount bigint, p_reason character varying)", "0682_synthetic_reversal_replay_match.sql"],
     ["app.xa_client_view_authority(p_job uuid, p_request uuid, p_actor uuid, p_email text)", "0686_extra_client_authority_loss.sql"],
     ["app.xa_client_decide(p_job uuid, p_request uuid, p_command uuid, p_actor uuid, p_token_hash text, p_email text, p_hash text, p_net bigint, p_reject boolean, p_reason text, p_role_name text, p_tester text)", "0686_extra_client_authority_loss.sql"],
