@@ -69,6 +69,10 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     if(row.nspname==='app' && row.relname==='final_check_manifest_tenant_id_job_id_lock_id_key') {
       // 0698 replaces only this index's lock identity with lock+attempt; its relation metadata is in the proof.
       expect(replayCatalog.some(r=>r.nspname===row.nspname && r.relname===row.relname)).toBe(false);
+    } else if (row.nspname==='app' && row.relname==='extra_duplicate_disposition') {
+      // 0807 adds only command_writer SELECT and lp5b_command_read; both are pinned by its proof via expected.relations/policies above.
+      const now = replayCatalog.find(r => r.nspname===row.nspname && r.relname===row.relname)!;
+      expect({ ...now, relacl: row.relacl, policies: row.policies }).toEqual(row);
     } else expect(replayCatalog).toContainEqual(row);
   }
   const authority = await readFile(new URL("../migrations/0642_extra_client_send_authority.sql", import.meta.url), "utf8");
