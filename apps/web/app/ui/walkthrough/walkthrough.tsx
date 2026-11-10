@@ -66,6 +66,8 @@ export function readingPause(ms: number, reduced: boolean, signal: AbortSignal, 
 /** Keep even the last control above the dock, after its normal scrollIntoView. */
 export function clearPhoneDock(target: HTMLElement, dock: HTMLElement) {
   if (window.innerWidth > 480) return;
+  // Reveal it inside its own scroll box (the walkthrough screen scrolls separately) before clearing the dock.
+  target.scrollIntoView?.({ block: "nearest", behavior: "instant" });
   const rect = target.getBoundingClientRect(), bar = dock.getBoundingClientRect();
   const overlap = rect.bottom - (bar.top - 12);
   if (rect.top < 12) window.scrollBy({ top: rect.top - 12, behavior: "instant" });
