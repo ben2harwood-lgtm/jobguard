@@ -155,7 +155,8 @@
         "staticCalls": [
           "app.append_final_check_audit",
           "app.mon8_require_feature",
-          "app.xa_client_view_authority"
+          "app.xa_client_view_authority",
+          "app.xc_link_current"
         ]
       },
       "after": {
@@ -179,7 +180,8 @@
         "staticCalls": [
           "app.append_final_check_audit",
           "app.mon8_require_feature",
-          "app.xa_client_view_authority"
+          "app.xa_client_view_authority",
+          "app.xc_link_current"
         ]
       }
     },
