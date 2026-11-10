@@ -107,6 +107,8 @@ test("steps 1–9: double-click every save/send without duplicate commercial rec
   await double(page, "Attach generated practice image");
   await double(page, "Check file integrity");
   await double(page, "Complete this stage");
+  await page.locator("#diary-text").fill("Fictional practice diary: fitted loft hatch. Estimated extra: £300 net.");
+  await double(page, "Save note");
   await expect(tour(page)).toContainText("Step 6 of 9");
   await tour(page).getByRole("button", { name: "I'll do it", exact: true }).click();
   await page.locator(".variation-entry").getByLabel("Description", { exact: true }).fill("Extra preparation");
@@ -134,7 +136,7 @@ test("steps 1–9: double-click every save/send without duplicate commercial rec
   await expect.poll(async () => {
     await button(page, "Load the saved final check").click();
     return page.getByTestId("final-check-status").textContent();
-  }, { timeout: 300_000, intervals: [3000] }).toBe("JobGuard's final check found nothing missing from your bill.");
+  }, { timeout: 300_000, intervals: [3000] }).toBe("JobGuard's final check found 1 thing that may be missing from your bill.");
   await expect(tour(page)).toContainText("Step 8 of 9");
   await tour(page).getByRole("button", { name: "I'll do it", exact: true }).click();
   await double(page, "Issue and simulate this invoice");

@@ -15,6 +15,17 @@ test(`WALK-3 ${mode} saves its own draft then honestly completes a prepared exam
     if (route.request().method() === "GET") await new Promise(resolve => setTimeout(resolve, 1500));
     await route.continue();
   });
+  let catchReplay: { url: string; data: unknown } | undefined;
+  page.on("request", request => {
+    if (request.method() === "POST" && /\/final-check\/catches$/.test(request.url())) catchReplay = { url: request.url(), data: request.postDataJSON() };
+  });
+  const revealed: string[] = [];
+  page.on("response", async response => {
+    if (response.request().method() === "GET" && /\/api\/jobs\/[^/]+\/final-check$/.test(response.url()) && response.ok()) {
+      const body = await response.json();
+      for (const item of body.items ?? []) revealed.push(item.description);
+    }
+  });
   await page.goto("/practice-company?name=Tommy");
   await expect(page.getByRole("heading", { name: "Tommy's practice firm", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Ready for your first job" })).toBeVisible();
@@ -36,12 +47,24 @@ test(`WALK-3 ${mode} saves its own draft then honestly completes a prepared exam
   if (mode === "Show me") {
     for (let step = 3; step <= 9; step++) {
       await expect(tour).toContainText(`Step ${step} of 9`, { timeout: 300_000 });
+      if (step === 8) {
+        const result = page.getByTestId("final-check-item");
+        await expect(result).toContainText("fitted loft hatch");
+        await expect(result.getByRole("button", { name: "Yes — this was extra work", exact: true })).toBeVisible();
+        await expect(result.getByLabel("Or answer", { exact: true })).toBeVisible();
+        await expect(result.getByRole("button", { name: "Save answer", exact: true })).toBeVisible();
+      }
       await tour.getByRole("button", { name: mode, exact: true }).click();
     }
   }
   await expect(page.getByLabel("Simulated customer")).toContainText("customer view is not connected");
   await expect(tour).toContainText("That's the whole job", { timeout: 300_000 });
   await expect(page).toHaveURL(/#final-account-title$/);
+  expect(revealed).toContain("fitted loft hatch");
+  await expect(page.getByTestId("value-found-after-lock")).toContainText("Found after your bill was complete: £300.00 — from JobGuard's final check");
+  await expect(page.getByTestId("value-found-after-lock")).toContainText("awaiting approval");
+  await expect(page.getByTestId("value-found-after-lock").getByRole("link", { name: "fitted loft hatch" })).toHaveAttribute("href", /#variation-/);
+  await expect(page.getByTestId("value-found-after-lock").getByRole("link", { name: "Inspect the Final Check result" })).toHaveAttribute("href", /#final-check$/);
   await expect(page.getByTestId("value-approved-extras")).toHaveText("£125.00");
   await expect(page.getByTestId("value-invoiced-gross")).toHaveText("£1,230.00");
   await expect(page.getByTestId("value-recorded-gross")).toHaveText("£1,230.00");
@@ -51,6 +74,12 @@ test(`WALK-3 ${mode} saves its own draft then honestly completes a prepared exam
   const own = await (await page.request.get(`/api${ownHref}/proposal`)).json();
   expect(own.status).toBe("quoting");
   expect(own.review.lines[0].description).toContain("carefully");
+  expect((await (await page.request.get(`/api${ownHref}/value`)).json()).foundAfterLock).toEqual([]);
+  expect(catchReplay).toBeDefined();
+  expect((await page.request.post(catchReplay!.url, { data: catchReplay!.data })).ok()).toBe(true);
+  const savedValue = await (await page.request.get(`/api${preparedHref}/value`)).json();
+  expect(savedValue.foundAfterLock).toHaveLength(1);
+  expect(savedValue.foundAfterLock[0]).toMatchObject({ description: "fitted loft hatch", pence: 30000, approved: false });
   await tour.getByRole("button", { name: "Close walkthrough" }).click();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
