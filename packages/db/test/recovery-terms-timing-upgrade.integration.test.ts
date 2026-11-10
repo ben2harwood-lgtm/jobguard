@@ -11,9 +11,9 @@ import { recoveryCaseTermsHash } from "@jobguard/core";
 import { migrate, MIGRATION_URLS, issuePracticeSession, authenticatePracticeSession, practiceMaterialPool, RecoveryCaseRepository, RecoveryCaseTermsRepository, RecoveryEligibilityV3Repository, PracticeFeedRepository, withTenant, appendAuditBatch } from "../src/index.js";
 import { DEMO_TENANT_ID as T, DEMO_ACCOUNT_ID as A, DEMO_MEMBERSHIP_ID as M, DEMO_IDENTITY_USER_ID as U } from "../src/demo-seed.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testActorContext, testTenantContext } from "./tenant-context-test-utils.js";
 import { proofBefore, proofDifferences, rolledBack } from "./upgrade-proof-utils.js";
-const ctx=testTenantContext(T),actor={membershipId:M,identityUserId:U};
+const ctx=testTenantContext(T,{membershipId:M}),actor={membershipId:M,identityUserId:U};
 let postgres:EmbeddedPostgres,admin:Pool,runtime:Pool,runtimeConfig:PoolConfig,adminConfig:PoolConfig;
 const previousEnvironment=process.env.JOBGUARD_ENV;
 async function start(){
@@ -48,7 +48,7 @@ const note="This came in before your fee terms were agreed, so it isn't counted 
 const termsCommand=(caseId:string)=>({version:"recovery-case-terms-command.v1",action:"approve",commandId:randomUUID(),caseId,termsVersion:"synthetic_recovery_fee_terms.v1",feePolicyVersion:"reference_fee_policy_v3",eligibilityPolicyVersion:"reference_recovery_eligibility_policy_v3",termsHash:recoveryCaseTermsHash(caseId)});
 type Fixture=Awaited<ReturnType<typeof fixture>>;
 const approve=(f:Fixture)=>new RecoveryCaseTermsRepository(practiceMaterialPool(runtime,f.auth.digest)).approve(ctx,f.jobId,termsCommand(f.c.id),actor);
-const save=(f:Fixture,command=review(f.c,"F18"))=>f.repo.review(ctx,f.jobId,command,actor,f.auth.digest);
+const save=async(f:Fixture,command=review(f.c,"F18"))=>f.repo.review(await testActorContext(admin,ctx,{tenantId:T,membershipId:M}),f.jobId,command,actor,f.auth.digest);
 
 const position=MIGRATION_URLS.findIndex(u=>basename(fileURLToPath(u))==="0199_recovery_eligibility_terms_timing.sql");
 beforeAll(async()=>{

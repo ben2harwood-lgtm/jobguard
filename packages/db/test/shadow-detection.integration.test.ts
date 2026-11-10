@@ -32,7 +32,7 @@ async function setup(){
  await postgres.initialise();await postgres.start();admin=pool("postgres");await migrate(admin);await seed();
  for(const [login,role] of [["sv3_runtime","jobguard_runtime"],["sv3_shadow","jobguard_shadow"],["sv3_emergency","jobguard_shadow_emergency_access"]]){await admin.query(`CREATE ROLE ${login} LOGIN PASSWORD '${credential}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT ${role} TO ${login}`);}
  runtime=pool("sv3_runtime");shadow=pool("sv3_shadow");emergency=pool("sv3_emergency");
- await withTenant(runtime,testTenantContext(T),db=>db.$client.query("SELECT app.accept_final_check_terms($1,$2,$3,$4)",[T,M,randomUUID(),"synthetic_final_check_terms.v1"]));
+ await withTenant(runtime,testTenantContext(T,{membershipId:M}),db=>db.$client.query("SELECT app.accept_final_check_terms($1,$2,$3,$4)",[T,M,randomUUID(),"synthetic_final_check_terms.v1"]));
 }
 async function evidence(o:Observation,p:Pool=admin){
  await fixtureContext(p,o.tenantId,async db=>{

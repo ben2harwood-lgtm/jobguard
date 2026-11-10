@@ -17,7 +17,7 @@ import { testTenantContext } from "./tenant-context-test-utils.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 
 const tenantId = randomUUID(), accountId = randomUUID(), userId = randomUUID(), memberId = randomUUID();
-const context = testTenantContext(tenantId), hash = "a".repeat(64);
+const context = testTenantContext(tenantId, { membershipId: memberId }), hash = "a".repeat(64);
 let postgres: EmbeddedPostgres, directory: string, admin: Pool, runtime: Pool;
 
 beforeAll(async () => {

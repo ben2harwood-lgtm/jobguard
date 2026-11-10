@@ -8,10 +8,12 @@ import { beginRepositoryCommand, completeRepositoryCommand } from "../src/reposi
 import { DEMO_ACCOUNT_ID, DEMO_IDENTITY_USER_ID, DEMO_JOB_ID, DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID, seedDemo, type DemoSeedCommand } from "../src/demo-seed.js";
 import { withTenant } from "../src/tenant-context.js";
 let db:JobDoorsDatabase,actor:Awaited<ReturnType<typeof jobDoorsActor>>;
-const priorEnvironment=process.env.JOBGUARD_ENV,context=testTenantContext(DEMO_TENANT_ID);
+const priorEnvironment=process.env.JOBGUARD_ENV;
+let context: ReturnType<typeof testTenantContext>;
 beforeAll(async()=>{
  process.env.JOBGUARD_ENV="synthetic_demo";db=await jobDoorsDatabase(true);
  actor=await jobDoorsActor(db.owner,DEMO_TENANT_ID);
+ context=testTenantContext(DEMO_TENANT_ID, { membershipId: actor.member });
  // Session issuance requires the fixed synthetic principal. The separate owner
  // above remains this suite's actor, including the revoked-replay assertions.
  await db.owner.query("INSERT INTO identity.identity_user(id) VALUES($1) ON CONFLICT DO NOTHING",[DEMO_IDENTITY_USER_ID]);
@@ -43,13 +45,14 @@ const restore=()=>db.owner.query("UPDATE app.membership SET revoked_at=NULL WHER
 describe("LP-5b feedback and demo checkpoint business records",()=>{
  it("feedback keeps its complete result, exact replay and conflict, and refuses revoked replay",async()=>{
   const f=await feedbackFixture(),repo=new CommercialIntegrityApplicationRepository(db.runtime);
-  const run=(changed=false)=>repo.review(context,actor.member,f.jobId,changed?{...f.input,explanation:"Changed fictional explanation"}:f.input,f.digest);
+  let revokedFeedback=false;
+  const run=(changed=false)=>repo.review(testTenantContext(context.tenantId,{membershipId:actor.member,bindRequest:!revokedFeedback}),actor.member,f.jobId,changed?{...f.input,explanation:"Changed fictional explanation"}:f.input,f.digest);
   const first=await run();
   expect(first).toEqual({...f.input,jobId:f.jobId,recordedAt:expect.stringMatching(/\.\d{3}Z$/)});
   expect(await receipt(f.input.commandId)).toEqual([{status:"succeeded",result:first}]);
   expect(await effects(f.input.commandId)).toEqual([{record_kind:"feedback",result:first}]);
   expect(await run()).toEqual(first);await expect(run(true)).rejects.toMatchObject({message:"IDEMPOTENCY_CONFLICT"});
-  await revoke();try{await expect(run()).rejects.toMatchObject({code:"NOT_FOUND"});expect(await effects(f.input.commandId)).toEqual([{record_kind:"feedback",result:first}]);}finally{await restore();}
+  await revoke();revokedFeedback=true;try{await expect(run()).rejects.toMatchObject({code:"NOT_FOUND"});expect(await effects(f.input.commandId)).toEqual([{record_kind:"feedback",result:first}]);}finally{await restore();}
  });
  it("demo seed distinguishes created/replayed and keeps one result; changed reuse and revoked replay fail",async()=>{
   const input=await demoInput(),first=await executeCheckpoint(input);

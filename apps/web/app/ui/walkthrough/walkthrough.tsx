@@ -41,23 +41,19 @@ export function viewerPacing() {
   return !(typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches);
 }
 
-/** Deadlines, target readiness, user input and cancellation all release the hold. */
-export function readingPause(ms: number, reduced: boolean, signal: AbortSignal, registerSkip: (skip: () => void) => void, ready?: () => boolean) {
+/** Only explicit Next or cancellation releases reading before its timer.
+ * Callers requesting a reduced-motion manual hold still wait for Next. */
+export function readingPause(ms: number, reduced: boolean, signal: AbortSignal, registerSkip: (skip: () => void) => void) {
   return new Promise<void>(resolve => {
-    let timer: ReturnType<typeof setTimeout> | undefined, poll: ReturnType<typeof setInterval> | undefined;
-    const events = ["pointerdown", "keydown", "input", "click", "wheel"] as const;
-    const input = () => finish();
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const finish = () => {
-      clearTimeout(timer); clearInterval(poll); signal.removeEventListener("abort", finish);
-      if (typeof document !== "undefined") for (const event of events) document.removeEventListener?.(event, input, true);
+      clearTimeout(timer); signal.removeEventListener("abort", finish);
       resolve();
     };
     registerSkip(finish);
-    if (signal.aborted || ready?.()) finish();
+    if (signal.aborted) finish();
     else {
       signal.addEventListener("abort", finish, { once: true });
-      if (typeof document !== "undefined") for (const event of events) document.addEventListener?.(event, input, true);
-      if (ready) poll = setInterval(() => { if (ready()) finish(); }, 50);
       if (!reduced) timer = setTimeout(finish, ms);
     }
   });
@@ -153,10 +149,9 @@ export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: reado
       while (!controller.signal.aborted && !step.isDone()) await new Promise(resolve => window.setTimeout(resolve, 100));
       if (!controller.signal.aborted && visibleTarget(step.target)) {
         clearTimeout(timeout);
-        if (viewerPlayback.has(controller.signal) && steps[index + 1]) {
+        if (viewerPlayback.has(controller.signal)) {
           setHolding(true);
-          await readingPause(readingTime(step.title, step.words), false, controller.signal, next => { skip.current = next; },
-            () => !!steps[index + 1] && !!visibleTarget(steps[index + 1]!.target));
+          await readingPause(readingTime(step.title, step.words), false, controller.signal, next => { skip.current = next; });
           skip.current = null; setHolding(false);
         }
         if (!controller.signal.aborted) advance();

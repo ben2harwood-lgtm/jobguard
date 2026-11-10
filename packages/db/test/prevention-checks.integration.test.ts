@@ -1,3 +1,4 @@
+import { testTenantContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -32,7 +33,7 @@ beforeAll(async () => {
   await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)",[user]);
   await admin.query("INSERT INTO app.account(tenant_id,id,name) VALUES($1,$2,'Fictional account')",[tenant,account]);
   await admin.query("INSERT INTO app.membership(tenant_id,id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')",[tenant,member,account,user]);
-  context=verifiedTenantContextFromMembership({identityUserId:user,tenantId:tenant,membershipId:member} as AuthenticatedMembership);
+  context=testTenantContext(tenant,{membershipId:member});
   await admin.query("CREATE ROLE prevention_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_runtime TO prevention_login");
   runtime=new Pool({host:"127.0.0.1",port,database:"postgres",user:"prevention_login",password:"synthetic"});
   parties=new JobPartiesRepository(runtime);prevention=new PreventionCheckRepository(runtime);
