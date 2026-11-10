@@ -30,3 +30,15 @@ it("keeps typed conflicts, missing/foreign jobs and dark composition no-store", 
   }
   expect(mocks.credentials).not.toHaveBeenCalled();
 });
+it.each([["FORBIDDEN",403],["UNAUTHENTICATED",401],["JOB_NOT_LIVE",409],["UNAVAILABLE",503]] as const)("returns %s through GET and POST without turning refusal into retry", async (code, status) => {
+  mocks.create.mockReturnValue(mocks);
+  mocks.read.mockRejectedValue(new InterimDraftRepositoryError(code));
+  mocks.command.mockRejectedValue(new InterimDraftRepositoryError(code));
+  for (const handler of [GET, POST]) {
+    const response = await handler(new Request("https://practice.invalid", { method: handler === POST ? "POST" : "GET", ...(handler === POST ? { body: "{}" } : {}) }), { params: Promise.resolve({ id: "job" }) });
+    expect(response.status).toBe(status); expect(response.headers.get("cache-control")).toBe("no-store");
+    const answer = await response.json();
+    if (status !== 503) expect(answer.message).not.toMatch(/retry/iu);
+    if (status === 403) expect(answer.message).toBe("You don't have permission.");
+  }
+});

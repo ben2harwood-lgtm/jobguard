@@ -36,6 +36,22 @@ test("stored kinds survive reload, uncertain retry is unique, duplicate billing 
     // Source lineage fixtures, never issue authority or a commercial document.
     await admin.query("INSERT INTO app.quote_version(tenant_id,job_id,id,version,content_hash,net_value_pence,status) VALUES($1,$2,$3,1,$4,10000,'accepted')", [member.tenantId,jobId,baseline,"a".repeat(64)]);
     await admin.query("INSERT INTO app.scope_revision(tenant_id,job_id,id,scope_item_id,revision,description,quantity_decimal,unit,unit_price_pence,total_pence) VALUES($1,$2,$3,$4,1,'Fictional work','1','item',10000,10000)", [member.tenantId,jobId,revision,scopeId]);
+    // Owner-only fictional lifecycle fixture, as in M4-1-S; never a route or issue authority.
+    const fixture = await admin.connect();
+    try {
+      await fixture.query("BEGIN");
+      await fixture.query("SET LOCAL session_replication_role=replica");
+      await fixture.query("SELECT set_config('app.tenant_id',$1,true)", [member.tenantId]);
+      const lifecycle = (await fixture.query("SELECT revision FROM app.job WHERE tenant_id=$1 AND id=$2", [member.tenantId,jobId])).rows[0] as { revision: number };
+      const move = (expected: number, to: string, reason: string, live = false) => fixture.query(
+        "SELECT app.transition_job($1,$2,$3,$4,$5,$6,$7,$8,$9)",
+        [member.tenantId,jobId,expected,to,reason,baseline,live?10000:null,live?"reference_fee_policy_v1":null,live?150:null]);
+      await move(lifecycle.revision,"quoting","start_quote");
+      await move(lifecycle.revision+1,"accepted","accept_quote");
+      await move(lifecycle.revision+2,"live","switch_live",true);
+      await fixture.query("SET LOCAL session_replication_role=origin");
+      await fixture.query("COMMIT");
+    } catch (error) { await fixture.query("ROLLBACK"); throw error; } finally { fixture.release(); }
     const repository = new db.InterimDraftRepository(runtime), digest = provider.digest(`session:${session.sessionToken}`);
     const schedule = { id: randomUUID(), version: "interim.schedule.v1", revision: 1, previousScheduleId: null,
       baselineSnapshotId: baseline, approvalDecisionId: randomUUID(), valuationDates: ["2026-11-01"],

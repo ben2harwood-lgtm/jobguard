@@ -20,10 +20,10 @@ export const stages = [
   ["Check the quote lines", "Check the source excerpts and fix a line. Accept the lines, answer the questions, confirm scope and save a priced draft. Show me changes one description before saving."],
   ["Send the quote", "This part uses a prepared example job. Your own draft stays saved. Customer invitation before final-account lock is a prerequisite still to build. This example simulates delivery; nothing is sent."],
   ["Customer says yes", "This part uses a prepared example job. The existing control records builder-attested practice acceptance, not an authenticated customer response. Record it and start the practice job."],
-  ["Add on-site evidence", "Attach the generated fictional photo, check file integrity and complete the stage. Never upload a real site photo in this exercise."],
+  ["Add on-site evidence", "Attach the generated fictional photo, check file integrity and complete the stage. The customer asks for one more thing. You do it, but forget to add it to the bill. Save the fictional loft-hatch diary note as evidence, not a priced extra. Never upload a real site photo in this exercise."],
   ["Price extra work", "Add a £125 fictional extra and approve its exact revision. Approval here is a builder's practice attestation; authenticated customer approval is not available on this pre-lock example."],
-  ["Lock and run Final Check", "This part uses a prepared example job. Build the final bill, mark the baseline work done, accept the terms and lock. Run Final Check and load its saved result; it may take a few minutes. No finding is promised."],
-  ["Invoice and simulated payment", "Issue the invoice from the checked bill. Record its full amount as a fictional practice receipt. A recorded receipt is not bank-confirmed payment and cannot earn a recovery fee."],
+  ["Lock and run Final Check", "This part uses a prepared example job. Build the final bill, mark the baseline work done, accept the terms and lock. JobGuard checks your records against the bill. Run Final Check and load its saved result; it may take a few minutes. Inspect the fitted loft hatch and the answers before continuing."],
+  ["Invoice and simulated payment", "Answer Yes — this was extra work and price the draft catch at £300. It stays a proposal awaiting customer approval, outside the locked bill; no supplementary invoice is issued here. Issue the invoice from the checked bill. Record its full amount as a fictional practice receipt. A recorded receipt is not bank-confirmed payment and cannot earn a recovery fee."],
   ["Read the end report", "Open the report in pounds and follow its saved source links. These are the prepared job's figures, not savings on your own draft. The report does not guess money protected."],
 ] as const;
 
@@ -70,6 +70,46 @@ export function approvedExtraDone() {
 }
 export const evidenceDone = () => text("stage-status") === "Complete" &&
   text("proof-state") === "File integrity checked · synthetic example" && !text("stage-review");
+
+export const missedWorkDiary = "Fictional practice diary: fitted loft hatch. Estimated extra: £300 net.";
+export const missedWorkSaved = () => [...(screen()?.querySelectorAll('[data-testid="diary-entry"]') ?? [])].some(entry => entry.textContent?.includes(missedWorkDiary));
+export async function saveMissedWork(signal: AbortSignal) {
+  await until(() => screen()?.querySelector('[data-testid="job-diary"]')?.getAttribute("aria-busy") === "false", signal);
+  if (missedWorkSaved()) return;
+  await fill("#diary-text", missedWorkDiary);
+  await click("Save note", signal);
+  await until(missedWorkSaved, signal);
+}
+
+export async function priceFoundExtra(_: HTMLElement, signal: AbortSignal) {
+  // Confirm via Final Check, then reload the product's saved variation list.
+  const finding = screen()?.querySelector('[data-testid="final-check-item"]');
+  if (!finding?.textContent?.includes("fitted loft hatch")) throw new Error("Inspect the saved loft-hatch finding before continuing.");
+  if (!finding.querySelector('[data-testid="final-check-disposition"]')) {
+    await click("Yes — this was extra work", signal);
+    await until(() => !!screen()?.querySelector('[data-testid="final-check-disposition"]'), signal);
+  }
+  document.getElementById("walk-refresh")?.click();
+  let row: HTMLElement | undefined;
+  await until(() => {
+    row = [...screen().querySelectorAll<HTMLElement>(".variation-list article")].find(item => item.textContent?.includes("fitted loft hatch"));
+    return !!row;
+  }, signal);
+  async function press(name: string) {
+    let button: HTMLButtonElement | undefined;
+    await until(() => {
+      button = [...row!.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent === name && !item.disabled);
+      return !!button;
+    }, signal);
+    row!.scrollIntoView({ block: "center", behavior: "instant" });
+    signal.throwIfAborted(); button!.click();
+  }
+  await press("Change price");
+  await until(() => !!screen().querySelector('[aria-label="New price fitted loft hatch"]'), signal);
+  await fill('[aria-label="New price fitted loft hatch"]', "300.00");
+  await press("Save new proposed revision");
+  await until(() => !screen().querySelector('[aria-label="New price fitted loft hatch"]'), signal);
+}
 
 export async function addOnSiteEvidence(_: HTMLElement, signal: AbortSignal) {
   // The saved proof read can arrive after Show me starts on a resumed job.
@@ -142,7 +182,7 @@ export function VoiceJourney() {
       () => { if (!ownPriced.current && !current.current.prepared && Number(text("quote-revision")) > 0) { ownPriced.current = true; remember(true); } return ownPriced.current; },
       () => !!current.current.prepared && text("quote-delivery") === "Simulated delivery — nothing sent",
       () => !!screen()?.querySelector('[data-testid="activation-policy"]'),
-      evidenceDone,
+      () => evidenceDone() && missedWorkSaved(),
       approvedExtraDone,
       finalCheckDone,
       () => !!text("invoice-gross") && text("invoice-balance") === "GBP 0.00",
@@ -182,7 +222,7 @@ export function VoiceJourney() {
         await click("Continue fake worker", signal);
       },
       async (_, signal) => { await click("Record practice acceptance", signal); await click("Start this practice job", signal); },
-      addOnSiteEvidence,
+      async (target, signal) => { await addOnSiteEvidence(target, signal); await saveMissedWork(signal); },
       async (_, signal) => {
         if (!screen().querySelector(".variation-list article")) {
           await fill('.variation-entry input:not([aria-label])', "Extra preparation");
@@ -209,15 +249,22 @@ export function VoiceJourney() {
         // Reload the existing screen's read models after the immutable lock commits.
         await until(() => text("lock-state") === "Final account completed", signal);
         await click("Load the saved final check", signal);
-        await click("Run the final check (practice)", signal);
+        await until(() => screen().querySelector('[data-testid="final-check-reveal"]')?.getAttribute("aria-busy") === "false", signal);
+        if (!done[6]!()) await click("Run the final check (practice)", signal);
         while (!done[6]!()) {
           await new Promise(resolve => setTimeout(resolve, 3000)); signal.throwIfAborted();
           await click("Load the saved final check", signal);
         }
+        const result = screen().querySelector<HTMLElement>('[data-testid="final-check-item"]');
+        if (!result?.textContent?.includes("fitted loft hatch")) throw new Error("The saved final check has no loft-hatch finding. Inspect it before continuing.");
+        screen().querySelectorAll("[data-walk-action]").forEach(element => element.removeAttribute("data-walk-action"));
+        result.setAttribute("data-walk-action", "true");
+        result.scrollIntoView({ block: "center", behavior: "instant" });
       },
-      async (_, signal) => {
-        // Keep the checked bill mounted; refreshing would reopen the scope screen.
+      async (target, signal) => {
+        // Reload the saved catch with the final-account editor open.
         history.replaceState(null, "", `${location.pathname}${location.search}#final-account-title`);
+        await priceFoundExtra(target, signal);
         await until(() => !!text("final-gross") && !!text("final-check-status"), signal);
         if (!text("invoice-gross")) await click("Issue and simulate this invoice", signal);
         await until(() => !!text("invoice-gross"), signal);
@@ -232,9 +279,13 @@ export function VoiceJourney() {
         await fill('[data-testid="uiwire12-receipt-reference"]', "Fictional walkthrough receipt");
         await click("Record practice receipt", signal);
       },
-      () => { document.getElementById("walk-report")?.click(); },
+      async (_, signal) => {
+        document.getElementById("walk-report")?.click();
+        await until(() => !!screen()?.querySelector(".value-page h1"), signal);
+        screen().querySelector<HTMLElement>(".value-page h1")?.scrollIntoView({ block: "start", behavior: "instant" });
+      },
     ];
-    return stages.map(([title, words], index) => ({ id: `walk-${index + 1}`, title, words, target: index === 2 ? "#walk-prepare, #walk-screen" : "#walk-screen", spotlightTarget: () => screen()?.querySelector<HTMLElement>("[data-walk-action]") ?? (index === 2 ? document.getElementById("walk-prepare") : null), isDone: done[index]!, autoAction: actions[index]!, timeoutMs: index === 6 ? 240_000 : 30_000 }));
+    return stages.map(([title, words], index) => ({ id: `walk-${index + 1}`, title, words, target: index === 2 ? "#walk-prepare, #walk-screen" : index === 6 || index === 7 ? "#final-check" : "#walk-screen", spotlightTarget: () => (index === 8 ? screen()?.querySelector<HTMLElement>(".value-page h1") : screen()?.querySelector<HTMLElement>("[data-walk-action]")) ?? (index === 2 ? document.getElementById("walk-prepare") : null), isDone: done[index]!, autoAction: actions[index]!, timeoutMs: index === 6 ? 240_000 : 30_000 }));
   }, []);
   return <>
     <header className="workspace-page"><a href="/practice-company">Back to your practice firm and reset</a><h1>Walk your first practice job</h1>

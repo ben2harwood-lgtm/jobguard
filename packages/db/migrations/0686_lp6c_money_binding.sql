@@ -271,7 +271,7 @@ CREATE OR REPLACE FUNCTION app.reserve_customer_invoice_number(p_tenant uuid) RE
  END IF;
  IF p_tenant IS DISTINCT FROM nullif(current_setting('app.tenant_id',true),'')::uuid THEN RAISE EXCEPTION 'tenant context mismatch' USING ERRCODE='42501';END IF;INSERT INTO app.customer_invoice_sequence(id,tenant_id,next_number)VALUES(gen_random_uuid(),p_tenant,2) ON CONFLICT(tenant_id) DO UPDATE SET next_number=app.customer_invoice_sequence.next_number+1 RETURNING next_number-1 INTO n;RETURN n;END$$;
 
--- Latest predecessor: 0524_practice_invoice_closed_job.sql.
+-- Latest predecessor: 0716_invoice_line_vat_signed_split.sql.
 CREATE OR REPLACE FUNCTION app.issue_practice_customer_invoice(
  p_tenant uuid,p_job uuid,p_final_revision uuid,p_actor uuid,p_command uuid,p_recipient text,p_issued_on date
 ) RETURNS TABLE(invoice_id uuid,invoice_number text,pdf_sha256 text,total_pence bigint,source_hash text,outbox_status text)
@@ -382,11 +382,21 @@ BEGIN
  INSERT INTO app.customer_invoice(id,tenant_id,job_id,final_account_revision_id,authorization_id,invoice_number,issued_on,issuer_details,tax_policy_version,currency,net_pence,tax_pence,total_pence,source_hash,pdf_sha256,pdf_bytes,synthetic,watermark)
  VALUES(new_invoice,p_tenant,p_job,p_final_revision,authorization_id,number,p_issued_on,jsonb_build_object('legalName','Fictional Builder Ltd','runIdentity',p_tenant),final_row.tax_policy_version,'GBP',final_row.net_pence,final_row.tax_pence,final_row.total_pence,final_row.source_hash,digest,convert_to(artifact,'UTF8'),true,'SYNTHETIC - NOT A REAL INVOICE');
  INSERT INTO app.final_account_invoice_binding(tenant_id,job_id,invoice_id,invoice_kind,lock_id,revision_id,check_id) VALUES(p_tenant,p_job,new_invoice,'final',lock_row.id,p_final_revision,check_row.check_id);
- FOR item IN WITH weights AS(SELECT to_jsonb(l) value,abs(l.net_pence::numeric) weight FROM app.final_account_line l WHERE l.tenant_id=p_tenant AND l.job_id=p_job AND l.final_account_revision_id=p_final_revision),
- parts AS(SELECT value,CASE WHEN sum(weight) OVER()=0 THEN 0 ELSE floor(final_row.tax_pence::numeric*weight/sum(weight) OVER()) END base,
+ -- Mixed-sign lines share VAT by signed net; all-positive and zero-sum
+ -- invoices retain their existing largest-remainder allocation.
+ FOR item IN WITH source_lines AS(
+ SELECT to_jsonb(l) value,l.net_pence::numeric net,sum(l.net_pence::numeric) OVER() signed_net,
+ bool_or(l.net_pence<0) OVER() has_negative FROM app.final_account_line l
+ WHERE l.tenant_id=p_tenant AND l.job_id=p_job AND l.final_account_revision_id=p_final_revision),
+ weights AS(SELECT *,CASE WHEN signed_net>0 THEN net ELSE abs(net) END weight FROM source_lines),
+ parts AS(SELECT *,CASE WHEN sum(weight) OVER()=0 THEN 0 ELSE floor(final_row.tax_pence::numeric*weight/sum(weight) OVER()) END base,
  CASE WHEN sum(weight) OVER()=0 THEN 0 ELSE mod(final_row.tax_pence::numeric*weight,sum(weight) OVER()) END remainder FROM weights),
- ranked AS(SELECT *,row_number() OVER(ORDER BY remainder DESC,value->>'id') rank,final_row.tax_pence-sum(base) OVER() left_over FROM parts)
- SELECT value||jsonb_build_object('allocated_tax',base+CASE WHEN rank<=left_over THEN 1 ELSE 0 END) FROM ranked LOOP
+ ranked AS(SELECT *,row_number() OVER(ORDER BY CASE WHEN signed_net>0 AND has_negative THEN net ELSE remainder END DESC,value->>'id') rank,
+ count(*) FILTER(WHERE net>0) OVER() positive_count,final_row.tax_pence-sum(base) OVER() left_over FROM parts)
+ SELECT value||jsonb_build_object('allocated_tax',base+CASE
+ WHEN signed_net>0 AND has_negative THEN CASE WHEN net>0 THEN
+  floor(left_over/positive_count)+CASE WHEN rank<=mod(left_over,positive_count) THEN 1 ELSE 0 END ELSE 0 END
+ ELSE CASE WHEN rank<=left_over THEN 1 ELSE 0 END END) FROM ranked LOOP
   INSERT INTO app.final_account_invoiced_line(tenant_id,job_id,invoice_id,final_account_line_id,revision_id,scope_item_id,commercial_revision_id,line_kind,source_id,net_pence,tax_pence,gross_pence)
   VALUES(p_tenant,p_job,new_invoice,(item->>'id')::uuid,p_final_revision,(item->>'scope_item_id')::uuid,(item->>'commercial_revision_id')::uuid,item->>'line_kind',(item->>'source_id')::uuid,(item->>'net_pence')::bigint,(item->>'allocated_tax')::bigint,(item->>'net_pence')::bigint+(item->>'allocated_tax')::bigint);
  END LOOP;
@@ -1204,7 +1214,7 @@ BEGIN
  RETURN result;
 END $$;
 
--- Latest predecessor: 0522_lp5b_writers.sql.
+-- Latest predecessor: 0722_abandoned_visit_authority.sql.
 CREATE OR REPLACE FUNCTION app.lp5_bind_effect(p_command uuid,p_authorization uuid,p_adapter text,p_reference jsonb) RETURNS void
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
 DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; c app.command_lifecycle_claim; r app.command_receipt; adapter text;
@@ -1216,7 +1226,9 @@ BEGIN
 
  SELECT * INTO c FROM app.command_lifecycle_claim WHERE tenant_id=t AND command_id=p_command;
  IF c.actor_membership_id IS DISTINCT FROM app.current_actor() THEN RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501'; END IF;
- IF c.command_id IS NULL THEN RETURN; END IF; -- LP-5b unconverted callers retain their own backstops.
+ IF c.command_id IS NULL THEN
+  IF p_reference->>'closeKind'='abandoned' THEN RAISE EXCEPTION 'INVALID_COMMAND' USING ERRCODE='23514'; END IF;
+  RETURN; END IF; -- LP-5b unconverted callers retain their own backstops.
  SELECT * INTO r FROM app.command_receipt WHERE tenant_id=t AND command_id=p_command;
  SELECT completion_adapter INTO adapter FROM app.command_type_registry WHERE command_type=r.command_type AND version=c.version;
  IF r.status IS DISTINCT FROM 'processing' OR c.transaction_id IS DISTINCT FROM pg_current_xact_id()
@@ -1229,6 +1241,15 @@ BEGIN
   OR adapter IS DISTINCT FROM p_adapter OR c.effect_ref IS NOT NULL
   OR p_adapter NOT IN('activation','review','import','site_visit','extra_chain','contractor_extra','source_intake','lock_invoice') OR jsonb_typeof(p_reference) IS DISTINCT FROM 'object' THEN
   RAISE EXCEPTION 'AUTHORIZATION_INVALID' USING ERRCODE='23514'; END IF;
+ IF r.command_type='CloseAbandonedSiteVisit' OR p_reference->>'closeKind'='abandoned' THEN
+  IF r.command_type IS DISTINCT FROM 'CloseAbandonedSiteVisit'
+   OR c.actor_membership_id IS DISTINCT FROM r.actor_membership_id
+   OR (c.resource->>'subjectRef') IS DISTINCT FROM (p_reference->>'jobId')
+   OR (c.significant_input->'input'->>'visitId') IS DISTINCT FROM (p_reference->>'visitId')
+   OR encode(sha256(convert_to(c.significant_input->'input'->>'reason','UTF8')),'hex') IS DISTINCT FROM (p_reference->>'reasonHash')
+   OR (p_reference->>'closeKind') IS DISTINCT FROM 'abandoned' THEN
+   RAISE EXCEPTION 'AUTHORIZATION_INVALID' USING ERRCODE='23514'; END IF;
+ END IF;
  UPDATE app.command_lifecycle_claim SET effect_ref=p_reference,authorization_id=p_authorization WHERE tenant_id=t AND command_id=p_command;
 END $$;
 

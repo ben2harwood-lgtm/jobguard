@@ -25,6 +25,15 @@ it("preserves latest predecessor bodies, including permission, approval clocks, 
   const latest = new Map<string, RegExpMatchArray>();
   for (const filename of readdirSync(directory).filter(f => f.endsWith(".sql") && f < migration).sort())
     for (const definition of functions(readFileSync(new URL(filename, directory), "utf8"))) latest.set(key(definition), definition);
+  // Landing catch-up: these successors are main's latest bodies. Migration
+  // numbers remain reserved for the router to renumber after this merge.
+  for (const [name, filename] of [
+    ["issue_practice_customer_invoice", "0716_invoice_line_vat_signed_split.sql"],
+    ["lp5_bind_effect", "0722_abandoned_visit_authority.sql"],
+  ]) {
+    const definition = functions(readFileSync(new URL(filename!, directory), "utf8")).find(m => m[1] === name)!;
+    latest.set(key(definition), definition);
+  }
   for (const definition of functions(sql())) {
     if (definition[1] === "mon1_company_actor") continue;
     const unchanged = definition[5]!
@@ -89,4 +98,28 @@ it("pins pg_temp last on every legacy and authorized acceptance, activation and 
   expect(definitions).toHaveLength(8);
   for (const definition of definitions)
     expect(definition[3], key(definition)).toMatch(/SET search_path=pg_catalog,app,pg_temp\s*$/u);
+});
+
+it("retains LS-79 in the delegated effect body and preserves matching proof metadata", () => {
+  const main = functions(readFileSync(new URL("0722_abandoned_visit_authority.sql", directory), "utf8"))
+    .find(m => m[1] === "lp5_bind_effect")![5]!;
+  const bound = functions(sql()).find(m => m[1] === "lp5_bind_effect")![5]!;
+  const delegated = functions(readFileSync(new URL("0687_lp6c_customer_portal_delegation.sql", directory), "utf8"))
+    .find(m => m[1] === "lp5_bind_effect")![5]!;
+  const missingClaim = main.split(" IF c.command_id IS NULL THEN")[1]!.split(" SELECT * INTO r")[0]!;
+  expect(delegated).toContain(" IF c.command_id IS NULL THEN" + missingClaim);
+  expect(delegated.split(" SELECT completion_adapter")[1]).toBe(main.split(" SELECT completion_adapter")[1]);
+  expect(delegated).toContain("app.lp6_delegated_actor(t,r.command_type,(c.resource->>'subjectRef')::uuid)");
+  const proof = JSON.parse(readFileSync(new URL("./migration-proofs/0686_lp6c_money_binding.proof.json", import.meta.url), "utf8"));
+  const delegationProof = JSON.parse(readFileSync(new URL("./migration-proofs/0687_lp6c_customer_portal_delegation.proof.json", import.meta.url), "utf8"));
+  const change = proof.lp0.find((r: { after?: { identity?: string } }) => r.after?.identity === "function:app.lp5_bind_effect(uuid,uuid,text,jsonb)");
+  const next = delegationProof.lp0.find((r: { after?: { identity?: string } }) => r.after?.identity === change.after.identity);
+  expect(next.before).toEqual(change.after);
+  const invoiceProof = JSON.parse(readFileSync(new URL("./migration-proofs/0716_invoice_line_vat_signed_split.proof.json", import.meta.url), "utf8"));
+  const invoice = proof.lp0.find((r: { after?: { identity?: string } }) => r.after?.identity === "function:app.issue_practice_customer_invoice(uuid,uuid,uuid,uuid,uuid,text,date)");
+  const predecessor = invoiceProof.lp0.find((r: { after?: { identity?: string } }) => r.after?.identity === invoice.after.identity);
+  expect(invoice.before).toEqual(predecessor.after);
+  expect(invoice.after).toEqual({ ...invoice.before,
+    staticCalls: [...invoice.before.staticCalls, "app.current_actor", "app.current_tenant"].sort() });
+  expect(bound).toContain("c.actor_membership_id IS DISTINCT FROM app.current_actor()");
 });

@@ -16,11 +16,11 @@ export function createSuccessFeeDirectDebitExecutor(context: VerifiedTenantConte
 }) {
   const repository = new PaymentFeeCollectionRepository(input.ownerPool);
   const store: ReservationStore = {
-    async transaction(tenantId, work) {
+    async transaction(tenantId, work, providerResult) {
       if (tenantId !== context.tenantId) throw new FeeCollectionError("COLLECTION_REFUSED");
       try {
         return await input.store.transaction(tenantId, (book, sources) =>
-          repository.withReader(context, input.digest, successFee => work(book, { ...sources, successFee })));
+          repository.withReader(context, input.digest, successFee => work(book, { ...sources, successFee })), providerResult);
       } catch (error) {
         if (error instanceof PaymentFeeCollectionSourceError) return pauseSuccessFee(error.reason);
         throw error;

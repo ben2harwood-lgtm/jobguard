@@ -305,7 +305,9 @@ BEGIN
   app.lp6_delegated_actor(t,r.command_type,(c.resource->>'subjectRef')::uuid))) THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
- IF c.command_id IS NULL THEN RETURN; END IF; -- LP-5b unconverted callers retain their own backstops.
+ IF c.command_id IS NULL THEN
+  IF p_reference->>'closeKind'='abandoned' THEN RAISE EXCEPTION 'INVALID_COMMAND' USING ERRCODE='23514'; END IF;
+  RETURN; END IF; -- LP-5b unconverted callers retain their own backstops.
  SELECT completion_adapter INTO adapter FROM app.command_type_registry WHERE command_type=r.command_type AND version=c.version;
  IF r.status IS DISTINCT FROM 'processing' OR c.transaction_id IS DISTINCT FROM pg_current_xact_id()
   OR (c.authorization_id IS DISTINCT FROM p_authorization AND NOT(p_adapter='lock_invoice' AND c.authorization_id IS NULL
@@ -317,6 +319,15 @@ BEGIN
   OR adapter IS DISTINCT FROM p_adapter OR c.effect_ref IS NOT NULL
   OR p_adapter NOT IN('activation','review','import','site_visit','extra_chain','contractor_extra','source_intake','lock_invoice') OR jsonb_typeof(p_reference) IS DISTINCT FROM 'object' THEN
   RAISE EXCEPTION 'AUTHORIZATION_INVALID' USING ERRCODE='23514'; END IF;
+ IF r.command_type='CloseAbandonedSiteVisit' OR p_reference->>'closeKind'='abandoned' THEN
+  IF r.command_type IS DISTINCT FROM 'CloseAbandonedSiteVisit'
+   OR c.actor_membership_id IS DISTINCT FROM r.actor_membership_id
+   OR (c.resource->>'subjectRef') IS DISTINCT FROM (p_reference->>'jobId')
+   OR (c.significant_input->'input'->>'visitId') IS DISTINCT FROM (p_reference->>'visitId')
+   OR encode(sha256(convert_to(c.significant_input->'input'->>'reason','UTF8')),'hex') IS DISTINCT FROM (p_reference->>'reasonHash')
+   OR (p_reference->>'closeKind') IS DISTINCT FROM 'abandoned' THEN
+   RAISE EXCEPTION 'AUTHORIZATION_INVALID' USING ERRCODE='23514'; END IF;
+ END IF;
  UPDATE app.command_lifecycle_claim SET effect_ref=p_reference,authorization_id=p_authorization WHERE tenant_id=t AND command_id=p_command;
 END $$;
 

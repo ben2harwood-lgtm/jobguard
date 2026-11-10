@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
 import { authenticatePracticeSession, PracticeAccessError } from "./practice-session.js";
@@ -20,8 +20,8 @@ export async function startBlankPracticeCompany(pool: Pool, raw: unknown, token?
   const command = blankPracticeCompanyCommandV1.parse(raw);
   let previous: string | null = null;
   if (command.action === "reset") {
-    const auth = await authenticatePracticeSession(pool, token);
-    previous = auth.digest;
+    await authenticatePracticeSession(pool, token);
+    previous = token!;
   } else if (token) {
     try {
       const auth = await authenticatePracticeSession(pool, token);
@@ -31,9 +31,8 @@ export async function startBlankPracticeCompany(pool: Pool, raw: unknown, token?
     }
   }
   const next = randomUUID();
-  const digest = createHash("sha256").update(next).digest("hex");
   try {
-    await pool.query("SELECT app.start_blank_practice_company($1,$2)", [digest, previous]);
+    await pool.query("SELECT app.start_blank_practice_company_v2($1,$2)", [next, previous]);
   } catch (error) {
     if (error instanceof Error && error.message === "UNAUTHENTICATED") throw new PracticeAccessError("UNAUTHENTICATED");
     throw error;

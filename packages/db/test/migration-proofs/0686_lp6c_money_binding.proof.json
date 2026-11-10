@@ -7,7 +7,7 @@
       "after": {
         "id": "ap-lp6c-money-binding",
         "title": "LP-6c money and commitment binding enforcement",
-        "description": "Five owner-only EXECUTE grants let existing migration and command-writer definers read the protected actor/tenant; the migration-owned meter credential bridge uses bind_request. Runtime gets no additional grants. Permission, exact approval, replay, resource and CH-7-TERMS clock checks remain separate.",
+        "description": "Five owner-only EXECUTE grants let existing migration and command-writer definers read the protected actor/tenant; the migration-owned meter credential bridge uses bind_request. Runtime gets no additional grants. Permission, exact approval, replay, resource and CH-7-TERMS clock checks remain separate. Landing catch-up uses 0716 signed invoice VAT and 0722 LS-79 abandoned-visit effect checks as the complete predecessor bodies, adding only LP-6c identity guards.",
         "cards": [
           "LP-6c",
           "LP-6d",
@@ -21,7 +21,9 @@
           "LP-12": "Review existing money/command definer owner custody."
         },
         "sources": [
-          "packages/db/migrations/0686_lp6c_money_binding.sql"
+          "packages/db/migrations/0686_lp6c_money_binding.sql",
+          "packages/db/migrations/0716_invoice_line_vat_signed_split.sql",
+          "packages/db/migrations/0722_abandoned_visit_authority.sql"
         ],
         "tests": [
           "packages/db/test/lp6c-money-routines.test.ts",

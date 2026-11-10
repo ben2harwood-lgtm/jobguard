@@ -1,7 +1,7 @@
 import { Body, Controller, HttpCode, HttpException, Inject, Post, Req, Res } from "@nestjs/common";
 import { ApiOperation, ApiResponse, ApiTags } from "@nestjs/swagger";
 import { CUSTOMER_VARIATION_APPLICATION, CustomerVariationApplication, type CustomerVariationAction } from "./customer-variation.js";
-import { customerRefusal } from "./customer-signin.js";
+import { customerVariationFailure } from "./customer-variation.js";
 import type { IdentityHttpRequest } from "./identity-http.js";
 @ApiTags("customer portal") @ApiResponse({status:401,description:"CUSTOMER_REFUSED: no credential or scope diagnostics"})
 @Controller("customer-portal")
@@ -10,7 +10,7 @@ export class CustomerVariationController {
   private async run(action: CustomerVariationAction, body: unknown, request: IdentityHttpRequest, response: {setHeader(name: string, value: string): void}) {
     response.setHeader("Cache-Control", "no-store"); response.setHeader("Referrer-Policy", "no-referrer");
     try { return await this.application().run(action, body, request); }
-    catch (error) { const failure = customerRefusal(error); throw new HttpException(failure.body, failure.status); }
+    catch (error) { const failure = customerVariationFailure(error); throw new HttpException(failure.body, failure.status); }
   }
   @ApiOperation({summary:"Read current extra revisions for this authenticated customer's job"})
   @Post("variations/read") @HttpCode(200)

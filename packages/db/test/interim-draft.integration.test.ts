@@ -106,6 +106,14 @@ describe("M4-18 PostgreSQL synthetic draft books",()=>{
     await c.admin.query("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE id=$1",[f.a.sessionId]);
     await expect(f.repo.command(testTenantContext(f.a.tenantId,{membershipId:f.a.actorId,bindRequest:false}),f.a.digest,f.input(f.schedule))).rejects.toMatchObject({code:"FORBIDDEN"});
   });
+  it("refuses reads and appends for a job that has never switched live",async()=>{
+    const f=await fixture(), draftJob=randomUUID();
+    await c.admin.query("INSERT INTO app.job(tenant_id,id,title,status) VALUES($1,$2,'Fictional draft','draft')",[f.a.tenantId,draftJob]);
+    await expect(f.repo.read(f.a.context,draftJob,f.a.digest)).rejects.toMatchObject({code:"JOB_NOT_LIVE"});
+    await expect(f.repo.command(f.a.context,f.a.digest,{...f.input(f.schedule),jobId:draftJob})).rejects.toMatchObject({code:"JOB_NOT_LIVE"});
+    await expect(workTenant(c.runtime,f.a.tenantId,db=>db.query("SELECT app.interim_draft_records($1,NULL,$2,'read','{}'::jsonb)",[f.a.tenantId,f.a.jobId]))).rejects.toThrow("METER_FORBIDDEN");
+    expect((await f.repo.read(f.a.context,f.a.jobId,f.a.digest)).rows).toEqual([]);
+  });
   it("restores the caller tenant setting and restricts raw runtime access",async()=>{
     const f=await fixture();await f.append(f.schedule);
     await workTenant(c.runtime,f.a.tenantId,async db=>{

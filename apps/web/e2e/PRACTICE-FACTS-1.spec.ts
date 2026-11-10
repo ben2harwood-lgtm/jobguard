@@ -26,7 +26,7 @@ test("six extra facts persist, keep the merged panel separate, and show supplier
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
   for(const control of await panel.locator("button:visible,select:visible").all()){const box=await control.boundingBox();expect(box!.width).toBeGreaterThanOrEqual(44);expect(box!.height).toBeGreaterThanOrEqual(44);}
   await page.reload();await expect(panel.getByTestId("practice-fact")).toHaveCount(6);
-  await page.goto("/");await expect(page.getByRole("heading",{name:"Jobs",exact:true})).toBeVisible();await page.goto(`/jobs/${jobId}`);await expect(panel.getByTestId("practice-fact")).toHaveCount(6);
+  await page.goto("/classic");await expect(page.getByRole("heading",{name:"Jobs",exact:true})).toBeVisible();await page.goto(`/jobs/${jobId}`);await expect(panel.getByTestId("practice-fact")).toHaveCount(6);
   const second=await browser.newContext({storageState:await context.storageState(),baseURL:info.project.use.baseURL??"http://127.0.0.1:3000",...(info.project.use.viewport?{viewport:info.project.use.viewport}:{})});
   try{const view=await second.newPage();await view.goto(`/jobs/${jobId}`);await expect(view.locator("#practice-facts").getByTestId("practice-fact")).toHaveCount(6);}finally{await second.close();}
 });

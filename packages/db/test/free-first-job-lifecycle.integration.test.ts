@@ -166,4 +166,40 @@ const outcomes=await Promise.allSettled([run(0),run(1)]);
   expect((await f.admin.query("SELECT count(*)::int n FROM app.job_activation WHERE tenant_id=$1",[a.tenantId])).rows[0].n).toBe(0);
  });
 
+
+ it.each([
+  {column:"provider",value:"fictional_other_provider",predicate:"a.provider='simulated'"},
+  {column:"environment",value:"pilot_no_charge",predicate:"a.environment='synthetic_demo'"},
+ ])("second-job gate refuses a completed card with $column=$value; removing that filter exposes the bypass",async({column,value,predicate})=>{
+  const a=await first(f),second=await seedWorkJob(f,a.tenantId);
+  await exactTarget(f,{...a,jobId:second.jobId});
+  const card=await requestCard(f,a);await recordCard(f,a,resultFixture(card.attemptId));
+  const db=await f.admin.connect();
+  try{
+   await db.query("BEGIN");await db.query("SELECT set_config('app.tenant_id',$1,true)",[a.tenantId]);
+   // Owner-only adversarial fixture. Relax exactly one CHECK and the immutable
+   // trigger inside this rolled-back transaction; runtime never receives these powers.
+   await db.query("SET LOCAL ROLE jobguard_migration");
+   await db.query(`ALTER TABLE app.trial_card_attempt DROP CONSTRAINT trial_card_attempt_${column}_check`);
+   await db.query("ALTER TABLE app.trial_card_attempt DISABLE TRIGGER immutable");
+   await db.query(`UPDATE app.trial_card_attempt SET ${column}=$3 WHERE tenant_id=$1 AND id=$2`,[a.tenantId,card.attemptId,value]);
+   await db.query("ALTER TABLE app.trial_card_attempt ENABLE TRIGGER immutable");
+   const definition=(await db.query("SELECT pg_get_functiondef('app.mon3_activate(uuid,text,uuid,jsonb)'::regprocedure) body")).rows[0].body as string;
+   const input={version:'trial-admission.v1',activationId:randomUUID(),termsId:randomUUID(),jobId:second.jobId,acceptedDocumentId:randomUUID(),acceptedDocumentVersion:1,acceptedDocumentHash:'a'.repeat(64),expectedJobRevision:1,authorizationId:randomUUID()};
+   const attempt=()=>db.query("SELECT app.mon3_activate($1,$2,$3,$4::jsonb)",[a.tenantId,a.digest,randomUUID(),JSON.stringify(input)]);
+   await db.query("SAVEPOINT checked_gate");await db.query("SET LOCAL ROLE jobguard_runtime");
+   await expect(attempt()).rejects.toThrow('TRIAL_COMPLETED_CARD_REQUIRED');
+   await db.query("ROLLBACK TO SAVEPOINT checked_gate");
+   // Scratch mutation: remove only this predicate, leaving its sibling intact.
+   // A card now passes the gate and reaches the distinct missing-terms refusal.
+   const mutant=definition.replace(predicate,'true');expect(mutant).not.toBe(definition);
+   await db.query(mutant);await db.query("SAVEPOINT mutated_gate");await db.query("SET LOCAL ROLE jobguard_runtime");
+   await expect(attempt()).rejects.toThrow('TRIAL_SUBSCRIPTION_TERMS_REQUIRED');
+   await db.query("ROLLBACK TO SAVEPOINT mutated_gate");
+  }finally{await db.query("ROLLBACK");db.release();}
+  // DDL, fixture contamination and mutated function must all be gone.
+  expect((await f.admin.query(`SELECT ${column} value FROM app.trial_card_attempt WHERE tenant_id=$1 AND id=$2`,[a.tenantId,card.attemptId])).rows[0].value).toBe(column==='provider'?'simulated':'synthetic_demo');
+  expect((await f.admin.query("SELECT pg_get_functiondef('app.mon3_activate(uuid,text,uuid,jsonb)'::regprocedure) body")).rows[0].body).toContain(predicate);
+ });
+
 });

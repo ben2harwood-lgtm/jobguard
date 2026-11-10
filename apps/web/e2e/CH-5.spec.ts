@@ -7,8 +7,9 @@ test("CH-5 previews, attests and reloads an invoiced v3 import without a count o
   const main = page.getByRole("main");
   const sourceId = (await main.locator(".quote-editor").getAttribute("data-job-id"))!;
   await main.getByRole("button", { name: "Save customer and site", exact: true }).click();
+  await main.getByText("Technical details", { exact: true }).click();
   await expect(main.getByTestId("party-binding-id")).toBeVisible();
-  await main.getByRole("link", { name: "Import a job under v3 terms", exact: true }).click();
+  await main.getByRole("link", { name: "Bring in a job that's already under way", exact: true }).click();
   await expect(main.getByRole("heading", { name: "Import a fictional job under v3 terms" })).toBeVisible();
   await main.getByRole("button", { name: "Preview import", exact: true }).click();
   await expect(main.getByRole("button", { name: "Confirm import", exact: true })).toBeDisabled();
@@ -33,7 +34,7 @@ test("CH-5 previews, attests and reloads an invoiced v3 import without a count o
   expect(forgedLock.status()).toBe(409); expect((await forgedLock.json()).code).toBe("STALE_REVISION");
   const other = await browser.newContext();
   try {
-    const otherPage = await other.newPage(); await otherPage.goto("/");
+    const otherPage = await other.newPage(); await otherPage.goto("/classic");
     expect((await other.request.get(`/api/jobs/${importedId}/parties/import-v3`)).ok()).toBe(false);
   } finally { await other.close(); }
   await page.goto(`/jobs/${sourceId}/imports`);

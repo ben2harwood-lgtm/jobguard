@@ -14,8 +14,9 @@ async function read(page: Page, path: string) {
 }
 async function open(page: Page) {
   await page.goto(journey);
+  if ((page.viewportSize()?.width ?? 1280) <= 480) await tour(page).getByRole("button", { name: "More", exact: true }).click();
   await expect(tour(page)).toContainText("Step 1 of 9");
-  await expect(page.getByLabel("Work details")).toHaveValue("");
+  await expect(page.getByLabel("Work details")).toHaveValue("Practice decorating. Protect room £200.00. Prepare walls £200.00. Paint walls £200.00. Finish trim £200.00. Clean site £100.00. Replace shelves");
 }
 async function showUntil(page: Page, step: number) {
   for (let current = 1; current < step; current++) {
@@ -106,6 +107,8 @@ test("steps 1–9: double-click every save/send without duplicate commercial rec
   await double(page, "Attach generated practice image");
   await double(page, "Check file integrity");
   await double(page, "Complete this stage");
+  await page.locator("#diary-text").fill("Fictional practice diary: fitted loft hatch. Estimated extra: £300 net.");
+  await double(page, "Save note");
   await expect(tour(page)).toContainText("Step 6 of 9");
   await tour(page).getByRole("button", { name: "I'll do it", exact: true }).click();
   await page.locator(".variation-entry").getByLabel("Description", { exact: true }).fill("Extra preparation");
@@ -133,7 +136,7 @@ test("steps 1–9: double-click every save/send without duplicate commercial rec
   await expect.poll(async () => {
     await button(page, "Load the saved final check").click();
     return page.getByTestId("final-check-status").textContent();
-  }, { timeout: 300_000, intervals: [3000] }).toBe("JobGuard's final check found nothing missing from your bill.");
+  }, { timeout: 300_000, intervals: [3000] }).toBe("JobGuard's final check found 1 thing that may be missing from your bill.");
   await expect(tour(page)).toContainText("Step 8 of 9");
   await tour(page).getByRole("button", { name: "I'll do it", exact: true }).click();
   await double(page, "Issue and simulate this invoice");
@@ -146,7 +149,7 @@ test("steps 1–9: double-click every save/send without duplicate commercial rec
   await expect(tour(page)).toContainText("Step 9 of 9");
   await tour(page).getByRole("button", { name: "I'll do it", exact: true }).click();
   await button(page, "Open the saved end report").click();
-  await expect(tour(page)).toContainText("Tour complete");
+  await expect(tour(page)).toContainText("That's the whole job");
   await expect(page.getByTestId("value-recorded-gross")).toHaveText("£1,230.00");
   await expect(page.getByTestId("value-outstanding-gross")).toHaveText("£0.00");
 

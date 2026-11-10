@@ -197,7 +197,7 @@ test("DEMO-S tenant isolation: foreign session and same-session foreign job cann
       await refuses(await stranger.request.post(path(target, "proof"), { data: select }), 404, "NOT_FOUND");
     }
     // A second real job of the owner still cannot consume the first job's upload.
-    await page.goto("/");
+    await page.goto("/classic");
     await page.getByRole("main").getByRole("button", { name: "＋ Start a new job", exact: true }).click();
     await page.getByRole("main").getByRole("button", { name: "Make my draft", exact: true }).click();
     await page.getByRole("main").getByRole("button", { name: "Check and edit my draft", exact: true }).click();

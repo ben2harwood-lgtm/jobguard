@@ -63,3 +63,25 @@ it("LP-5a concurrent send retries recover the original generated grant expiry",a
  expect((await admin.query("SELECT count(*)::int n FROM app.command_receipt WHERE tenant_id=$1 AND command_type='quote.issue' AND semantic_key=$2",[TENANT,semanticKey])).rows[0].n).toBe(1);
  expect((await admin.query("SELECT count(*)::int n FROM app.quote_send WHERE tenant_id=$1 AND document_id=$2",[TENANT,preview.documentId])).rows[0].n).toBe(1);
 });
+
+
+it("LATER-SAFETY-92 conflicts on foreign and fresh draft ids without changing either practice job", async () => {
+ const { QuoteConflictError } = await import("../src/quote-repository.js");
+ const repository = new QuoteRepository(runtime);
+ const jobA = randomUUID(), jobB = randomUUID(), draftA = randomUUID(), draftB = randomUUID();
+ await withTenant(admin, context, async db => {
+  for (const job of [jobA, jobB]) await db.$client.query(
+   "INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,'Synthetic isolated quote','quoting')", [job, TENANT]);
+ });
+ const base = { currency: "GBP", taxPolicyVersion: "candidate_m1_standard_v1", lines: [], effectiveAt: new Date("2026-09-14T10:00:00Z") };
+ await repository.saveDraft(context, { ...base, jobId: jobA, draftId: draftA, expectedRevision: 0 });
+ await repository.saveDraft(context, { ...base, jobId: jobB, draftId: draftB, expectedRevision: 0 });
+ const beforeA = await repository.readWorkspace(context, jobA), beforeB = await repository.readWorkspace(context, jobB);
+ for (const draftId of [draftB, randomUUID()]) {
+  // Match the real revision so the id mismatch, rather than stale input, must produce the conflict.
+  await expect(repository.saveDraft(context, { ...base, jobId: jobA, draftId, expectedRevision: 1 }))
+   .rejects.toBeInstanceOf(QuoteConflictError);
+  expect(await repository.readWorkspace(context, jobA)).toEqual(beforeA);
+  expect(await repository.readWorkspace(context, jobB)).toEqual(beforeB);
+ }
+});

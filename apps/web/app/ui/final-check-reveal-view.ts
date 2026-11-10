@@ -34,7 +34,7 @@ export const dispositionLabels: Readonly<Record<string, string>> = {
 export function revealStatus(read: FinalCheckRead): string {
  if (read.state === "unlocked") return "JobGuard's final check runs after you complete the final account.";
  if (read.state === "pending") return FINAL_CHECK_RUNNING_TEXT;
- if (read.state === "failed") return "The final check could not finish. Nothing is shown until it does.";
+ if (read.state === "failed") return "The final check could not finish, so nothing is shown and this job's bill stays locked.";
  return read.items.length === 0 ? FINAL_CHECK_EMPTY_TEXT : `JobGuard's final check found ${read.items.length === 1 ? "1 thing" : `${read.items.length} things`} that may be missing from your bill.`;
 }
 

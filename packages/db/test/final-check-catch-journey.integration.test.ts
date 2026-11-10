@@ -130,17 +130,21 @@ it("runtime direct case/claim writes remain held, including after legitimate app
   expect(await claims(a.tenantId, a.jobId)).toEqual([]);
 });
 
-it("zero/negative prices open no case; later positive pricing and re-pricing create only one case", async () => {
+it("zero/negative prices open no case; later positive pricing opens one case and re-pricing is rejected", async () => {
   const { job: a, app, commands, variations } = await revealedCatches();
   await app.confirmCatch(a.jobId, commands[0]!);
   let previous: string | null = null;
-  for (const [amount, direction] of [[0, "addition"], [100, "omission"], [50_000, "addition"], [30_000, "addition"]] as const) {
+  for (const [amount, direction] of [[0, "addition"], [100, "omission"], [50_000, "addition"]] as const) {
     const command = price(commands[0]!.commandId, amount, direction, previous);
     await variations.command(a.jobId, command);
     previous = command.revisionId;
     expect(await cases(a.tenantId, a.jobId)).toHaveLength(amount > 100 ? 1 : 0);
     expect(await claims(a.tenantId, a.jobId)).toEqual([]);
   }
+  await expect(variations.command(a.jobId, price(commands[0]!.commandId, 30_000, "addition", previous)))
+    .rejects.toMatchObject({ name: "VariationRevisionConflict", code: "CATCH_PRICE_LOCKED" });
+  expect(await cases(a.tenantId, a.jobId)).toHaveLength(1);
+  expect(await claims(a.tenantId, a.jobId)).toEqual([]);
 });
 
 it("another tenant cannot confirm, replay or price this job's catch", async () => {

@@ -24,3 +24,34 @@ Commands executed (repository root unless stated):
 - In `packages/db`, `./node_modules/.bin/vitest run --maxWorkers=2 test/lp6c-client-extra-decision.test.ts test/migration-proof-loader.test.ts test/lp-0-catalog.test.ts`: 111 passed.
 - `node tools/lint.mjs`: core purity PASS; aggregate lane check FAIL (inherited parent delta). `node tools/agent-lane-boundary-lint.mjs` after adding this lane: same inherited-parent failure. Direct `lanePathAllowed` check of all eight working-delta paths: PASS; not a substitute for aggregate CI lint.
 - Compared 0686 and 0687 bytes directly with `git show 9f036617:<path>`: identical. No git writes.
+
+## READY — LP-6C landing catch-up, 10 November 2026
+
+Compared every conflicted file with stage 1 (merge base), stage 2 (LP-6c) and stage 3 (main). No git writes were performed; the index intentionally still lists the files as unmerged for the router to stage and commit.
+
+Conflict resolutions:
+- `src/interim-draft-repository.ts`: retain exact SQL and wrapped binding refusals, main's JOB_NOT_LIVE handling and expanded typed error codes.
+- `test/commands.integration.test.ts`: retain bound-context setup and main's UUID import and single-use commercial-grant cases.
+- `test/enterprise-access-upgrade.integration.test.ts`: union binding columns/constraints/ACL expectations with manifest-attempt and nullable-original-scope expectations.
+- `test/extra-duplicate-candidates.integration.test.ts`: retain actor bindings and main's STALE_REVISION expectation and new regression cases; bind the actor for main's direct begin-command schema refusal while keeping its migration-role restriction.
+- `test/inbox-metrics.integration.test.ts`: retain bound membership context and main's fictional demo-owner fixtures.
+- `test/inbox-relevance.integration.test.ts`: retain bound membership context and main's held-merchant/idempotent seeding case.
+- `test/j3-landing-allocation.integration.test.ts`: retain queued-worker publication context plus reviewed-inventory import and main's late supplementary-catch cases.
+- `test/migfix-5.integration.test.ts`: retain bound lock setup and main's concurrent locked-variation refusal/no-effect assertions.
+- `test/migfix-7-upgrade.integration.test.ts`: union catalogue exceptions and body rows; retain overload-aware extraction and latest actual CREATE lookup; pin latest LP invoice/delegated-effect bodies without obsolete duplicate rows.
+- `test/plan-entitlement-lifecycle-upgrade.integration.test.ts`: retain LP body/ACL/source expectations and all main cases, including abandoned-visit and receipt helpers and 0699 sync binding. Update invoice/effect body rows to LP successors and pin raw source alongside changed definitions.
+
+Latest-body rebuilds:
+- `0686_lp6c_money_binding.sql`: `app.issue_practice_customer_invoice` is 0716's complete signed-VAT body plus only LP-6c actor/tenant guard.
+- `0686_lp6c_money_binding.sql`: `app.lp5_bind_effect` is 0722's complete LS-79 body plus LP-6c tenant/claim-actor guards.
+- `0687_lp6c_customer_portal_delegation.sql`: `app.lp5_bind_effect` retains that LS-79 body and applies the existing scoped delegated-actor changes on top. Both missing-claim abandoned-reference refusal and the full abandoned-visit effect validation remain.
+- Matching proof source entries now identify the latest predecessor migrations. Their catalogue fields remain unchanged because these rebuilds add no new grants, writes or static calls beyond the existing LP changes; existing null definition digests remain null. Full bodies are pinned by MIGFIX-7 and plan-entitlement, with source regression tests proving predecessor preservation and proof continuity.
+
+Checks actually run:
+- Installed `tsc -p packages/db/tsconfig.json --noEmit`: PASS, including final edits.
+- Installed db Vitest, `--maxWorkers=1`, exactly `test/lp6c-money-routines.test.ts test/lp6c-fixture-compatibility.test.ts test/lp6c-client-extra-decision.test.ts`: PASS, 3 files / 21 tests.
+- `node tools/agent-lane-boundary-lint.mjs`: FAILED because this in-progress merge includes main and earlier LP-6c paths outside the follow-on lane; no lane permissions were widened. Router must handle integration ownership and renumbering.
+- `git diff --check`: PASS; no conflict markers remain in the ten files.
+- pnpm's automatic pinned-version switch could not reach/verify registry packages; used installed binaries, with no dependency changes.
+
+PostgreSQL was not run. Browser suites were not run. Database behaviour, complete suites, green CI and independent RED review remain for the router/CI. Migration numbers 0686/0687/0970 are unchanged; router renumbers to 0723/0724/0725 before final landing. READY means source resolution is ready for the router's merge commit, not an independent acceptance or CI pass.

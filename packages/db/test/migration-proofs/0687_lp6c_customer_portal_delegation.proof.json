@@ -7,7 +7,7 @@
       "after": {
         "id": "ap-lp6c-customer-delegation",
         "title": "LP-6c scoped customer-message delegation",
-        "description": "Private transaction/job/type-scoped customer-message delegation. The binding owner reuses the existing live portal validator and reads only the two tenant-RLS portal tables. General actor/tenant access hides delegated identities; money routines remain closed. No person-facing grant or new role.",
+        "description": "Private transaction/job/type-scoped customer-message delegation. The binding owner reuses the existing live portal validator and reads only the two tenant-RLS portal tables. General actor/tenant access hides delegated identities; money routines remain closed. No person-facing grant or new role. Landing catch-up retains the complete 0722 LS-79 effect checks beneath 0686 identity enforcement and this migration's scoped delegated-actor resolution.",
         "cards": [
           "LP-6c",
           "LP-12"
@@ -17,7 +17,8 @@
           "LP-12": "Review private definer owner custody and grants."
         },
         "sources": [
-          "packages/db/migrations/0687_lp6c_customer_portal_delegation.sql"
+          "packages/db/migrations/0687_lp6c_customer_portal_delegation.sql",
+          "packages/db/migrations/0722_abandoned_visit_authority.sql"
         ],
         "tests": [
           "packages/db/test/lp6c-customer-delegation.integration.test.ts",
