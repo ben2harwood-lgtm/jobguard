@@ -42,7 +42,7 @@ it("loads current stored options, checks GET's actor and clears options at zero 
 });
 it("does not read history after a refused owner/admin gate or authentication", async () => {
   findMembership.mockResolvedValueOnce({ role: "read_only" });
-  await expect(app.read(credentials, id, id)).rejects.toThrow("UNAVAILABLE"); expect(mocks.read).not.toHaveBeenCalled();
+  await expect(app.read(credentials, id, id)).rejects.toThrow("FORBIDDEN"); expect(mocks.read).not.toHaveBeenCalled();
   mocks.resolve.mockRejectedValueOnce(new Error("UNAUTHENTICATED"));
   await expect(app.command(credentials, id, id, { commandId, rail: "card" })).rejects.toThrow("UNAUTHENTICATED"); expect(mocks.command).not.toHaveBeenCalled();
 });
@@ -58,11 +58,58 @@ it("preserves repository not-found and conflict refusals", () => {
 });
 it.each(["estimator", "foreman", "operative", "finance", "read_only"])("refuses %s on GET before invoice access", async role => {
   findMembership.mockResolvedValue({ role });
-  await expect(app.read(credentials, id, id)).rejects.toThrow("UNAVAILABLE");
+  await expect(app.read(credentials, id, id)).rejects.toThrow("FORBIDDEN");
   expect(mocks.list).not.toHaveBeenCalled(); expect(mocks.read).not.toHaveBeenCalled();
 });
 it("refuses an altered stored locator instead of rendering its options", async () => {
   mocks.query.mockResolvedValue({ rows: [{ result: { invoice: { ...invoice, tenantId: commandId } } }] });
   await expect(app.read(credentials, id, id)).rejects.toThrow("UNAVAILABLE");
   expect(mocks.read).not.toHaveBeenCalled();
+});
+
+it.each([["FORBIDDEN", 403], ["UNAUTHENTICATED", 401], ["UNAVAILABLE", 503]] as const)(
+  "maps %s to %i without retry wording", (code, status) => {
+    expect(payNowAttemptFailure(new PayNowAttemptError(code))).toEqual({
+      status, body: { version: "pay-now-preview-error.v1", code },
+    });
+  });
+it("refuses a session lost after context resolution before invoice access", async () => {
+  authenticate.mockResolvedValue(null);
+  await expect(app.read(credentials, id, id)).rejects.toThrow("UNAUTHENTICATED");
+  expect(mocks.list).not.toHaveBeenCalled();
+});
+it.each(["METER_FORBIDDEN", "PAY_NOW_UNAUTHENTICATED", "private database fault"])(
+  "classifies prepare failure %s", async message => {
+    mocks.query.mockRejectedValue(new Error(message));
+    expect(await app.read(credentials, id, id).catch(payNowAttemptFailure)).toMatchObject({
+      status: message === "METER_FORBIDDEN" ? 403 : message === "PAY_NOW_UNAUTHENTICATED" ? 401 : 503,
+    });
+  });
+const customerQuery = vi.fn();
+const customerApp = new PayNowAttemptApplication({ provider: { digest, repository: { pool: { query: customerQuery } } } } as unknown as IdentityApplication, {} as Pool);
+const customerRequest = { headers: { cookie: `jobguard_customer=${id}.${id}.${id}.${"a".repeat(43)}` } };
+it.each([1, 12000, 1000000000000])("customer sees exactly %i pence and only public options", async balancePence => {
+  customerQuery.mockResolvedValue({ rows: [{ result: { invoiceNumber: "TEST-1", balancePence } }] });
+  const view = await customerApp.customerPractice(customerRequest);
+  expect(view).toEqual({ invoiceNumber: "TEST-1", amountDue: { pence: balancePence, currency: "GBP" }, options: ["bank_transfer", "card", "pay_by_bank"].map(rail => ({ rail, customerTotal: { pence: balancePence, currency: "GBP" } })) });
+  expect(JSON.stringify(view)).not.toMatch(/fee|catch|surcharge|policy|attempt|tenant|account/iu);
+  expect(customerQuery).toHaveBeenCalledWith("SELECT identity.customer_practice_pay_now($1,$2,$3,$4) result", [id, id, id, "a".repeat(64)]);
+  expect(mocks.command).not.toHaveBeenCalled(); expect(mocks.read).not.toHaveBeenCalled();
+});
+it("customer full payment offers no collectable options", async () => {
+  customerQuery.mockResolvedValue({ rows: [{ result: { invoiceNumber: "TEST-1", balancePence: 0 } }] });
+  expect((await customerApp.customerPractice(customerRequest)).options).toEqual([]);
+});
+it.each([{}, { cookie: "jobguard_customer=forged" }, { ...customerRequest.headers, "x-tenant-id": id }])("refuses missing, malformed or request-scoped credentials before invoice reads", async headers => {
+  await expect(customerApp.customerPractice({ headers })).rejects.toMatchObject({ code: "CUSTOMER_REFUSED" });
+  expect(customerQuery).not.toHaveBeenCalled();
+});
+it("normalizes revoked and foreign customer session refusals", async () => {
+  customerQuery.mockRejectedValue(Object.assign(new Error("private"), { code: "42501" }));
+  await expect(customerApp.customerPractice(customerRequest)).rejects.toMatchObject({ code: "CUSTOMER_REFUSED" });
+});
+it("customer practice refuses production before session or invoice access", async () => {
+  vi.stubEnv("JOBGUARD_ENV", "production");
+  await expect(customerApp.customerPractice(customerRequest)).rejects.toThrow("NOT_FOUND");
+  expect(customerQuery).not.toHaveBeenCalled();
 });

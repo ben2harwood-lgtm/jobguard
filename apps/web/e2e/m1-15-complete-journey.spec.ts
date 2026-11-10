@@ -29,13 +29,13 @@ test("M1-15 complete synthetic journey retains the job spine and accepted scope"
   const seedFindings = await page.request.post("/api/decisions", { data: { version: "finding-evaluation-command.v1", commandId: crypto.randomUUID(), tenantId: "11111111-1111-4111-8111-111111111111", jobId: jobId! } });
   expect(seedFindings.status()).toBe(200);
 
-  await page.goto("/");
+  await page.goto("/classic");
   const decisions=page.getByRole("button", { name: /Decisions/ }).first(); await expect(decisions).toBeVisible(); await expect(decisions).toBeEnabled(); await decisions.click();
   await page.getByRole("button", { name: /Check the materials bill/ }).click();
   await click(page, "Dismiss suggestion");
   await expect(page.getByText("Dismissed — no action authorized")).toBeVisible();
 
-  await page.goto("/");
+  await page.goto("/classic");
   await click(page, "Add a photo");
   const png = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82]);
   await page.getByLabel("Choose site photo").setInputFiles({ name: "runtime-proof.png", mimeType: "image/png", buffer: png });
@@ -43,7 +43,7 @@ test("M1-15 complete synthetic journey retains the job spine and accepted scope"
   await click(page, "Complete stage");
   await expect(page.getByText("Proof complete · verified evidence linked")).toBeVisible();
 
-  await page.goto("/");
+  await page.goto("/classic");
   await click(page, "Add extra work");
   await page.getByLabel("Use approved fixture audio transcript").check();
   await click(page, "Create variation proposal");
@@ -51,7 +51,7 @@ test("M1-15 complete synthetic journey retains the job spine and accepted scope"
   await click(page, "Confirm price");
   await click(page, "Record approval for this exact revision");
 
-  await page.goto("/");
+  await page.goto("/classic");
   await click(page, "Prepare the final bill");
   const account = page.locator(".final-account");
   await expect(account).toHaveAttribute("data-job-id", jobId!);

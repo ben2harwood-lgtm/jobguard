@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-16": {
+      "branches": [
+        "codex/sandbox/later-safety-16"
+      ],
+      "note": "LATER-SAFETY-16; RED money alert; caught up with origin/main through 0652; PR landing.",
+      "allow": [
+        "packages/db/src/contractor-billing-repository.ts",
+        "packages/db/test/contractor-billing-export.integration.test.ts",
+        "packages/db/migrations/0653_relinked_extra_reconciliation.sql",
+        "packages/db/migration-notes/0653_relinked_extra_reconciliation.md",
+        "packages/db/test/migration-proofs/0653_relinked_extra_reconciliation.proof.json",
+        "packages/db/test/extra-relink-upgrade.integration.test.ts",
+        "packages/db/test/contractor-billing-read.test.ts"
+      ]
+    }
+  }
+}

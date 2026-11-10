@@ -11,7 +11,8 @@
         "packages/db/test/extra-duplicate-candidates.integration.test.ts",
         "packages/db/test/lp5-command-catalog.ts",
         "packages/db/test/late-source-import-migration.test.ts",
-        "packages/db/test/restore-reconciliation-upgrade.integration.test.ts"
+        "packages/db/test/restore-reconciliation-upgrade.integration.test.ts",
+        "packages/db/test/extra-proceed-migration.test.ts"
       ]
     }
   }

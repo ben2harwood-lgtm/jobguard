@@ -1,4 +1,5 @@
 "use client";
+import { jobPageFetch as fetch } from "./job-page-fetch";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { exposureScheduleCommandV1, exposureScheduleViewV1, parsePoundsToPence, type ExposureScheduleV1 } from "@jobguard/core";
 import { ExposureCurvePreview } from "./exposure-curve-preview";

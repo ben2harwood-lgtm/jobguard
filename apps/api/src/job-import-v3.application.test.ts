@@ -34,7 +34,7 @@ describe("company imports retain the meter identity and CSRF boundary", () => {
   function fixture() {
     const repository = { source: vi.fn(), read: vi.fn(), preview: vi.fn(), adopt: vi.fn(async () => ({ saved: true })), assessCatch: vi.fn() };
     const adopt = repository.adopt;
-    const authenticate = vi.fn(async (token: string) => token === credentials.sessionToken ? { identityUserId: tenant, sessionId: tenant, csrfToken: credentials.csrfToken } : undefined);
+    const authenticate = vi.fn(async (token: string) => token === credentials.sessionToken ? { identityUserId: tenant, sessionId: tenant, csrfToken: credentials.csrfToken, sessionCredential: "a".repeat(64) } : undefined);
     const findMembership = vi.fn(async (_: unknown, id: string): Promise<{ id: string; identityUserId: string; tenantId: string; role: string } | undefined> => id === tenant ? { id: actor, identityUserId: tenant, tenantId: tenant, role: "owner" } : undefined);
     const app = new CompanyJobImportV3Application({ allowedOrigin: credentials.origin, provider: { authenticate, findMembership, digest: () => "a".repeat(64) } } as never, repository as never);
     return { adopt, app, repository, authenticate, findMembership };

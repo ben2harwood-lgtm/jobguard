@@ -124,7 +124,7 @@
           {
             "command_type": "IssueClientApproval",
             "version": "command.v1",
-            "permission_rule": "owner",
+            "permission_rule": "contractor",
             "lock_adapter": "route_before_begin",
             "completion_adapter": "client_link",
             "audit_class": "commercial",
@@ -410,6 +410,15 @@
             "outbox_class": null
           },
           {
+            "command_type": "CloseAbandonedSiteVisit",
+            "version": "repository-command.v1",
+            "permission_rule": "contractor",
+            "lock_adapter": "route_before_begin",
+            "completion_adapter": "site_visit",
+            "audit_class": "operational",
+            "outbox_class": null
+          },
+          {
             "command_type": "CompleteSiteVisit",
             "version": "repository-command.v1",
             "permission_rule": "contractor",
@@ -496,6 +505,15 @@
             "permission_rule": "contractor",
             "lock_adapter": "route_before_begin",
             "completion_adapter": "contractor_extra",
+            "audit_class": "operational",
+            "outbox_class": null
+          },
+          {
+            "command_type": "RecordExtraProceed",
+            "version": "repository-command.v1",
+            "permission_rule": "active_member",
+            "lock_adapter": "route_before_begin",
+            "completion_adapter": "extra_proceed",
             "audit_class": "operational",
             "outbox_class": null
           },
@@ -714,7 +732,7 @@
           {
             "command_type": "IssueClientApproval",
             "version": "command.v1",
-            "permission_rule": "owner",
+            "permission_rule": "contractor",
             "lock_adapter": "route_before_begin",
             "completion_adapter": "client_link",
             "audit_class": "commercial",
@@ -1009,6 +1027,15 @@
             "outbox_class": null
           },
           {
+            "command_type": "CloseAbandonedSiteVisit",
+            "version": "repository-command.v1",
+            "permission_rule": "contractor",
+            "lock_adapter": "route_before_begin",
+            "completion_adapter": "site_visit",
+            "audit_class": "operational",
+            "outbox_class": null
+          },
+          {
             "command_type": "CompleteSiteVisit",
             "version": "repository-command.v1",
             "permission_rule": "contractor",
@@ -1095,6 +1122,15 @@
             "permission_rule": "contractor",
             "lock_adapter": "route_before_begin",
             "completion_adapter": "contractor_extra",
+            "audit_class": "operational",
+            "outbox_class": null
+          },
+          {
+            "command_type": "RecordExtraProceed",
+            "version": "repository-command.v1",
+            "permission_rule": "active_member",
+            "lock_adapter": "route_before_begin",
+            "completion_adapter": "extra_proceed",
             "audit_class": "operational",
             "outbox_class": null
           },

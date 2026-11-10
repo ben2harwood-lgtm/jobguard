@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-69-sv5pre": {
+      "branches": [
+        "codex/sandbox/later-safety-69-sv5pre"
+      ],
+      "allow": [
+        "packages/db/migration-notes/0720_verified_upload_immutable.md",
+        "packages/db/migration-notes/0965_verified_upload_immutable.md",
+        "packages/db/migrations/0720_verified_upload_immutable.sql",
+        "packages/db/migrations/0965_verified_upload_immutable.sql",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/0720_verified_upload_immutable.proof.json",
+        "packages/db/test/migration-proofs/0965_verified_upload_immutable.proof.json",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
+        "packages/db/test/verified-upload-immutable.integration.test.ts"
+      ],
+      "note": "LATER-SAFETY-69 reconcile repair 1; RED, NOPR; migration placeholder 0965."
+    }
+  }
+}

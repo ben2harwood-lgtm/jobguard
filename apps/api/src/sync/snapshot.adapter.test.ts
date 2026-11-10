@@ -10,7 +10,7 @@ const row = (jobId: string, tenantId = tenant) => ({ tenantId, jobId, workOrderI
   priority: "routine", issuedOn: "2026-10-29", dueOn: null, openVisitId: null,
   shadow: "HIDDEN", bank: "BANK", lockedBill: "LOCKED", secret: "SECRET", resident: "PERSON" });
 
-function fixture(transactionTenantId?: string | null) {
+function fixture(transactionTenantId?: string | null, transactionUserId?: string | null) {
   const snapshot = { version: "sync-provider-snapshot.v1", environment: "synthetic_demo", sessionId: id(7), userId: user,
     activeTenantId: tenant, authorityRevision: 1,
     authority: { userId: user, tenantId: tenant, membershipId: id(8), role: "operative", status: "active", assignedJobIds: [job] },
@@ -18,8 +18,9 @@ function fixture(transactionTenantId?: string | null) {
   // Explicit deterministic checkpoint fake; real SQL, concurrency and restart proofs live in the DB suite.
   const checkpoints = new Map<string, { revision: number; schema: number; hash: string; generation: number }>();
   const query = vi.fn(async (sql: string, values: unknown[] = []) => {
-    if (sql.includes("current_setting")) return { rows: [{ tenant_id: transactionTenantId === undefined
-      ? snapshot.activeTenantId : transactionTenantId }] };
+    if (sql.includes("app.current_actor()")) return { rows: [{ tenant_id: transactionTenantId === undefined
+      ? snapshot.activeTenantId : transactionTenantId, user_id: transactionUserId === undefined
+      ? snapshot.userId : transactionUserId }] };
     const [u, revision, schema, hash] = values as [string, number, number, string];
     const key = `${snapshot.activeTenantId}:${u}`, previous = checkpoints.get(key);
     if (previous && (revision < previous.revision || schema < previous.schema || (revision === previous.revision && hash !== previous.hash))) throw Error("private database details");
@@ -50,7 +51,24 @@ describe("M3-3 authenticated snapshot adapter (dark fake provider)", () => {
     const store = new SyntheticSyncSnapshotAdapter(f.provider, { environment: "synthetic_demo", enabled: true, schemaVersion: 1 });
     await expect(store.readCurrentSession("synthetic-session")).rejects.toMatchObject({ code: "SYNC_AUTHORITY_REQUIRED" });
     expect(f.query).toHaveBeenCalledTimes(1);
-    expect(f.query.mock.calls[0]?.[0]).toContain("current_setting('app.tenant_id'");
+    expect(f.query.mock.calls[0]?.[0]).toContain("app.current_tenant()");
+    expect(f.checkpoints.size).toBe(0);
+  });
+
+  it.each([id(99), null])("refuses a different or missing bound user %j without writes", async userId => {
+    const f = fixture(tenant, userId);
+    const store = new SyntheticSyncSnapshotAdapter(f.provider, { environment: "synthetic_demo", enabled: true, schemaVersion: 1 });
+    await expect(store.readCurrentSession("synthetic-session")).rejects.toMatchObject({ code: "SYNC_AUTHORITY_REQUIRED" });
+    expect(f.query).toHaveBeenCalledTimes(1);
+    expect(f.checkpoints.size).toBe(0);
+  });
+
+  it("maps binding lookup errors to authority refusal without writes or database details", async () => {
+    const f = fixture();
+    f.query.mockRejectedValueOnce(Error("private database details"));
+    const store = new SyntheticSyncSnapshotAdapter(f.provider, { environment: "synthetic_demo", enabled: true, schemaVersion: 1 });
+    await expect(store.readCurrentSession("synthetic-session")).rejects.toMatchObject({ code: "SYNC_AUTHORITY_REQUIRED" });
+    expect(f.query).toHaveBeenCalledTimes(1);
     expect(f.checkpoints.size).toBe(0);
   });
 
@@ -126,7 +144,33 @@ describe("M3-3 authenticated snapshot adapter (dark fake provider)", () => {
     f.snapshot.authority.role = "operative"; f.snapshot.authorityRevision = 0;
     await expect(f.subscribe()).rejects.toMatchObject({ message: "SYNC_UNAVAILABLE" });
     f.snapshot.authority.userId = id(44);
-    await expect(f.subscribe()).rejects.toMatchObject({ message: "SYNC_UNAVAILABLE" });
+    await expect(f.subscribe()).rejects.toMatchObject({ message: "SYNC_AUTHORITY_REQUIRED" });
+  });
+
+  it("requires cleanup of every delivered job after the database refuses lost membership", async () => {
+    const f = fixture(); const issued = await f.subscribe();
+    f.query.mockResolvedValueOnce({ rows: [{ tenant_id: tenant, user_id: user }] });
+    f.query.mockRejectedValueOnce(Object.assign(new Error("SYNC_CHECKPOINT_INVALID"), { code: "P0001" }));
+    const result = await f.download(issued.token, f.create(), { delivered: [job, otherJob] });
+    expect(result.page.outcome).toBe("refused");
+    expect(result.page.rows).toEqual([]);
+    expect(result.page.cleanup).toBe("required");
+    expect(result.resync).toBe("required");
+    expect(result.cleanup.outcome).toBe("cleanup_required");
+    expect(result.cleanup.tombstones).toEqual([{ jobId: job }, { jobId: otherJob }]);
+    expect(result.cleanup.keep).toEqual([]);
+  });
+
+  it.each([
+    new Error("connection lost"),
+    Object.assign(new Error("SYNC_CHECKPOINT_STALE"), { code: "P0001" }),
+    new Error("SYNC_CHECKPOINT_INVALID"),
+    Object.assign(new Error("SYNC_CHECKPOINT_INVALID"), { code: "08006" }),
+  ])("keeps outages and other checkpoint failures unavailable: %s", async error => {
+    const f = fixture(); const issued = await f.subscribe();
+    f.query.mockResolvedValueOnce({ rows: [{ tenant_id: tenant, user_id: user }] });
+    f.query.mockRejectedValueOnce(error);
+    await expect(f.download(issued.token)).rejects.toMatchObject({ message: "SYNC_UNAVAILABLE" });
   });
 
   it("source deletion gives tombstones without generation churn; hidden changes are invisible", async () => {

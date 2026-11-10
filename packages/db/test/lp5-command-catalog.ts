@@ -596,6 +596,11 @@ export const siteSupervisorQueryRegistryRow = {
   command_type: "RecordSiteSupervisorQuery", version: "repository-command.v1", permission_rule: "active_member",
   lock_adapter: "route_before_begin", completion_adapter: "site_supervisor_query", audit_class: "operational", outbox_class: null,
 };
+export const extraProceedRegistryRow = {
+  command_type: "RecordExtraProceed", version: "repository-command.v1", permission_rule: "active_member",
+  lock_adapter: "route_before_begin", completion_adapter: "extra_proceed", audit_class: "operational", outbox_class: null,
+};
+
 export const duplicateDispositionRegistryRow = {
  command_type: "ResolveDuplicateCandidates", version: "duplicate-disposition.v1", permission_rule: "active_member",
  lock_adapter: "route_before_begin", completion_adapter: "duplicate_disposition", audit_class: "commercial", outbox_class: null,
@@ -606,7 +611,12 @@ export const darkOrderRegistryRow = {
   lock_adapter: "route_before_begin", completion_adapter: "purchase_order", audit_class: "commercial", outbox_class: "fake_merchant_order",
 };
 export const contractorJobFinishRegistryRow = {"command_type": "EndCheck", "version": "end-check.v1", "permission_rule": "owner", "lock_adapter": "route_before_begin", "completion_adapter": "contractor_job_finish", "audit_class": "operational", "outbox_class": null};
-export const currentCommandRegistryRows = [...lp5RegistryRows, lateSourceRegistryRow, managedRecoveryRegistryRow, siteSupervisorQueryRegistryRow, darkOrderRegistryRow, rateSuggestionRegistryRow, contractorJobFinishRegistryRow, duplicateDispositionRegistryRow];
+export const abandonedSiteVisitRegistryRow = {
+  command_type: "CloseAbandonedSiteVisit", version: "repository-command.v1", permission_rule: "contractor",
+  lock_adapter: "route_before_begin", completion_adapter: "site_visit", audit_class: "operational", outbox_class: null,
+};
+export const currentCommandRegistryRows = [...lp5RegistryRows.map(row => row.command_type === "IssueClientApproval"
+  ? { ...row, permission_rule: "contractor" } : row), lateSourceRegistryRow, managedRecoveryRegistryRow, siteSupervisorQueryRegistryRow, darkOrderRegistryRow, rateSuggestionRegistryRow, contractorJobFinishRegistryRow, duplicateDispositionRegistryRow,extraProceedRegistryRow,abandonedSiteVisitRegistryRow];
 export const lp5bRoutines = [
   {
     "signature": "app.lp5b_bind_follow_up_cancel()",

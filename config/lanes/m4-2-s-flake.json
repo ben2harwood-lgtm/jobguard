@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-2-s-flake": {
+      "branches": ["codex/sandbox/m4-2-s-flake"],
+      "note": "Wait for scope confirmation and the persisted recovery-case command result before using eligibility controls.",
+      "allow": ["apps/web/e2e/M4-2-S.spec.ts"]
+    }
+  }
+}

@@ -1,0 +1,25 @@
+import { afterEach, expect, it, vi } from "vitest";
+import { Pool } from "pg";
+import * as db from "@jobguard/db";
+import { type AuthenticatedMembership } from "@jobguard/db";
+import { SiteExtraApplication } from "./site-extra.application.js";
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
+it("derives actor and tenant from the current session and rechecks it for replay", async () => {
+ vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
+ const pool = new Pool(), sessionId = crypto.randomUUID(), jobId = crypto.randomUUID(), extraId = crypto.randomUUID();
+ const member = { tenantId: crypto.randomUUID(), identityUserId: crypto.randomUUID(), membershipId: crypto.randomUUID() } as AuthenticatedMembership;
+ const lookup = vi.spyOn(db.ContractorRepository.prototype, "resolveSession").mockResolvedValue(member);
+ const entitlement = vi.spyOn(db.ContractorEntitlementAuthorityRepository.prototype, "requireFeature").mockResolvedValue();
+ const repo = vi.spyOn(db, "extraProceed").mockResolvedValue({ version: "extra-proceed-view.v1", jobId, extraId, requestId: null, history: [] });
+ const app = new SiteExtraApplication(pool), principal = { version: "contractor-principal.v1", sessionId };
+ const body = { version: "record-extra-proceed.v1", commandId: crypto.randomUUID(), requestId: crypto.randomUUID(), reason: "Fictional reason" };
+ await app.proceed(principal, jobId, extraId, body);
+ expect(lookup.mock.calls).toEqual([[sessionId], [sessionId]]);
+ expect(repo).toHaveBeenCalledWith(pool, expect.objectContaining({ tenantId: member.tenantId }), member, jobId, extraId, body);
+ expect(entitlement).toHaveBeenCalledWith(sessionId, "site_origin_capture");
+ for (const key of ["actorMembershipId", "tenantId", "recordedAt"]) await expect(app.proceed(principal, jobId, extraId, { ...body, [key]: crypto.randomUUID() })).rejects.toMatchObject({ code: "INVALID_COMMAND" });
+ lookup.mockRejectedValue(Object.assign(new Error("revoked"), { code: "UNAUTHENTICATED" }));
+ await expect(app.proceed(principal, jobId, extraId, body)).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+ expect(repo).toHaveBeenCalledOnce();
+ await pool.end();
+});

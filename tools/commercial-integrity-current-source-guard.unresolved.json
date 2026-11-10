@@ -15,8 +15,15 @@
   },
   {
     "file": "packages/db/src/practice-session.ts",
+    "line": 63,
+    "fingerprint": "37cf6d1cbae38bc6b0f702c19be3bddf52c560f9c6c824a7415a8cbb0698ab37",
+    "reason": "v1 adoption receipt read inside the recursive ownership CTE; non-advisory, definer-written command receipt required by the ACCEPT-V1-RECEIPT ruling; Ben approved 7 Nov",
+    "code": "UNRESOLVED_COVERED_EDGE"
+  },
+  {
+    "file": "packages/db/src/practice-session.ts",
     "line": 73,
-    "fingerprint": "ad3ac47cb73083599ccbd5fd355eb9f2f313b9af4ceca2115da91270658d50ca",
+    "fingerprint": "a52add41726877212b3d0441a7351647222c7aa760b4e2be0f07d3ea2fd00c04",
     "reason": "Generic local query helper receives runtime sql/values parameters; callers are not specialized by runtime data flow.",
     "code": "UNRESOLVED_COVERED_EDGE"
   },
@@ -59,7 +66,7 @@
     "code": "UNRESOLVED_COVERED_EDGE",
     "file": "packages/db/src/extra-approval-chain-repository.ts",
     "line": 94,
-    "fingerprint": "afbffeb30d1a014e8ccd5823926378c931403a72313c2e51287461f81173cc8b",
+    "fingerprint": "a2152ab0e4c54d80c5b08e6884e852d11613f2fdece5ab6140a8c790d0e9a5ff",
     "reason": "Generic local call helper receives runtime sql/args; all nine callers pass literal SELECT app.xa_* calls and none reads advisory results."
   }
 ]

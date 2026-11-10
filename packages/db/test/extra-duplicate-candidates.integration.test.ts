@@ -224,7 +224,7 @@ it("ENT-3 reversal never promotes a duplicate-dismissed pending approval to appr
  const linked = await approvals.markDuplicate(w.ctx,w.w.members.supervisor.member,markInput(w,extraId,w.s.extraId));
  await new ExtraRepository(c.runtime).unlinkDuplicate(w.ctx,await unlinkInput(w,String(linked.linkId)));
  expect(await code(approvals.approveExtraStep(w.ctx,w.w.members.supervisor.member,approveInput({jobId:w.s.jobId,
-  requestId:String(pending.requestId),hash:String(pending.revisionHash),net:338},0)))).toBe("ALREADY_DECIDED");
+  requestId:String(pending.requestId),hash:String(pending.revisionHash),net:338},0)))).toBe("STALE_REVISION");
  expect((await c.admin.query("SELECT kind FROM app.extra_approval_outcome WHERE request_id=$1",[pending.requestId])).rows).toEqual([{kind:"duplicate"}]);
  await w.exported();
  const lines = (await w.repo.read(w.ctx,w.session,w.s.jobId)).exports.flatMap(x=>x.artifact.lines);
@@ -261,6 +261,21 @@ it("dismissal is exact, append-only and reversible; replay is inert and export k
   await expect(ownerTx(c,w.w.p.tenantId,db=>db.$client.query(sql,[w.w.p.tenantId]))).rejects.toBeDefined();
  }
  await expect(withTenant(c.runtime,w.ctx,db=>db.$client.query("INSERT INTO app.extra_duplicate_disposition(tenant_id) VALUES($1)",[w.w.p.tenantId]))).rejects.toMatchObject({ code: "42501" });
+},120000);
+it("table owner cannot truncate append-only duplicate dispositions and all rows remain", async () => {
+ const w = await world(c); await pair(w);
+ const group = (await agreement(w)).groups[0]!, session = await sessionFor(w);
+ await resolveExtraDuplicateCandidates(c.runtime,w.ctx,session,w.s.jobId,disposition(group));
+ const rows = () => c.admin.query("SELECT * FROM app.extra_duplicate_disposition ORDER BY tenant_id,id").then(result => result.rows);
+ const before = await rows();
+ expect(before.some(row => row.tenant_id === w.w.p.tenantId)).toBe(true);
+ await expect(ownerTx(c,w.w.p.tenantId,async db => {
+  const actor = (await db.$client.query("SELECT current_user AS actor, pg_get_userbyid(relowner) AS owner FROM pg_class WHERE oid='app.extra_duplicate_disposition'::regclass")).rows[0];
+  expect(actor).toEqual({ actor: "jobguard_migration", owner: "jobguard_migration" });
+  await db.$client.query("TRUNCATE app.extra_duplicate_disposition");
+ })).rejects.toMatchObject({ code: "55000", message: "commercial revisions and snapshots are immutable" });
+ expect(await rows()).toEqual(before);
+ expect((await agreement(w)).groups).toEqual([]);
 },120000);
 it("refuses reporters, pricers, forged actor, foreign tenant, uncovered and wrong roles, with no facts or receipts",async()=>{
  const w=await world(c); const [a]=await pair(w); const group=(await read(w)).groups[0]!;

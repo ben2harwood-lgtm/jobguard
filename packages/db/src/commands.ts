@@ -84,7 +84,11 @@ export class UserCommandDispatcher {
     const command = binding ? { ...parsed, semanticKey: parsed.semanticKey.replace(/:lp3=[a-f0-9]{64}$/u, "") + `:lp3=${binding}` } : parsed;
     if (command.semanticKey.length > 300) throw new CommandError("COMMAND_CONFLICT");
     return withTenant(this.pool, context, async database => {
-      await requireOwner(database, context.tenantId, command.actorMembershipId);
+      if (command.commandType === "IssueClientApproval") {
+        const allowed = (await database.$client.query<{ allowed: boolean }>(
+          "SELECT app.xc_send_authority($1,$2) allowed", [command.actorMembershipId, command.subjectRef])).rows[0]?.allowed;
+        if (!allowed) throw new CommandError("FORBIDDEN");
+      } else await requireOwner(database, context.tenantId, command.actorMembershipId);
       await handler.lock?.(database, command);
       const resource = { tenantId: context.tenantId, actorMembershipId: command.actorMembershipId, subjectType: command.subjectType, subjectRef: command.subjectRef };
       const claimed = (await database.$client.query(`SELECT app.begin_command($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7::jsonb) result`,
@@ -129,11 +133,16 @@ export async function executeAuthorizedCommercialAction<T>(database: TenantTrans
     JOIN app.decision_resolution r ON r.tenant_id=a.tenant_id AND r.id=a.resolution_id
     JOIN app.membership m ON m.tenant_id=a.tenant_id AND m.id=a.actor_membership_id
     WHERE a.id=$1 AND a.revoked_at IS NULL AND a.expires_at>clock_timestamp() AND r.resolution='approved'
-      AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp())`,[authorizationId])).rows[0];
+      AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp())
+    FOR UPDATE OF a`,[authorizationId])).rows[0];
   const matches=row && row.action_type===action.actionType && row.recipient===action.recipient && row.content_hash===action.contentHash &&
     Number(row.aggregate_revision)===action.aggregateRevision && (row.amount_pence===null?action.amountPence===null:Number(row.amount_pence)===action.amountPence) &&
-    row.currency===action.currency && row.policy_version===action.policyVersion;
+    row.currency===action.currency && row.policy_version===action.policyVersion &&
+    row.expires_at instanceof Date && row.expires_at.getTime()===action.expiresAt.getTime();
   if(!matches) throw new CommandError("AUTHORIZATION_INVALID");
   if(!(await commercialOutboundClaimsEnabled(database))) throw new CommandError("AUTHORIZATION_INVALID");
+  const used=await database.$client.query(`INSERT INTO app.commercial_grant_use(tenant_id,authorization_id)
+    VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING authorization_id`,[row.tenant_id,authorizationId]);
+  if(!used.rowCount) throw new CommandError("AUTHORIZATION_INVALID");
   return invoke();
 }

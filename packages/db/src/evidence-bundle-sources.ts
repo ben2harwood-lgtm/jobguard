@@ -93,7 +93,14 @@ export async function loadContractorBundleSources(tx: TenantTransaction, actor: 
       AND b.source_hash=q.revision_hash AND (r.id IS NOT NULL OR s.id IS NOT NULL)
       AND NOT EXISTS(SELECT 1 FROM app.extra_approval_request n WHERE n.tenant_id=q.tenant_id AND n.variation_id=q.variation_id AND n.request_revision>q.request_revision)
       AND NOT EXISTS(SELECT 1 FROM app.extra_approval_revision_binding n WHERE n.tenant_id=b.tenant_id AND n.variation_id=b.variation_id AND n.logical_revision>b.logical_revision)
-      AND (SELECT kind FROM app.extra_event e WHERE(e.tenant_id,e.job_id,e.variation_id)=(q.tenant_id,q.job_id,q.variation_id) ORDER BY sequence DESC LIMIT 1)='approved'`, values)).rows[0];
+      AND (SELECT e.kind FROM app.extra_event e
+ WHERE(e.tenant_id,e.job_id,e.variation_id)=(q.tenant_id,q.job_id,q.variation_id)
+ AND (e.kind<>'duplicate' OR NOT EXISTS(
+  SELECT 1 FROM app.extra_duplicate_link l
+  JOIN app.extra_duplicate_link u ON(u.tenant_id,u.job_id,u.reverses_link_id)=(l.tenant_id,l.job_id,l.id) AND u.kind='unlink'
+  WHERE(l.tenant_id,l.job_id,l.duplicate_id,l.command_id)=(e.tenant_id,e.job_id,e.variation_id,e.command_id) AND l.kind='link'
+ ))
+ ORDER BY e.sequence DESC LIMIT 1) IN ('approved','exported','billed','part_paid','paid')`, values)).rows[0];
   if (!found || !/^[1-9][0-9]*$/u.test(found.net) || BigInt(found.net) > 1_000_000_000_000n) return fail();
   const owner = { tenantId: allowed.tenant, jobId: i.jobId, subjectId: i.extraId, scopeItemId: found.scope_item_id };
   const requestSource = source(owner, `extra_approval_request:${i.requestId}`, 'approval', found.request);

@@ -45,6 +45,7 @@ Merged ENT-6/ENT-7/ENT-8a foundations are not persisted connector functionality.
 | Region / subprocessors / retention | No new external processor. Event/database/log/backup locations and retention for real usage remain unapproved; no retention/deletion change |
 | Gate / owner | DARK, made-up data only. G5 and route-specific security/operational owner approvals remain outstanding; no production enablement path |
 | Evidence | `apps/api/src/connectors/inbound.test.ts` deterministic contract tests; `packages/db/test/connector-intake.integration.test.ts` real-PostgreSQL CI tests, not local execution or provider evidence |
+| Human fixture promotion (ENT-13a, dark) | A persisted human session selects staged fixture references; the fixed local generator feeds existing ENT-2/materials imports. The tenant-bound import, append-only promotion and audit commit together. Existing per-client work-order or materials owner/finance permission applies. Connector receipts remain staged with zero domain effects. No upload, real data, provider or delivery; billing composition, machine landing, SFTP and G5 remain held |
 
 No external alert service is introduced. Callers receive only `CONNECTOR_INPUT_REFUSED`;
 future composition must count refusals without raw bodies, headers, signatures or driver

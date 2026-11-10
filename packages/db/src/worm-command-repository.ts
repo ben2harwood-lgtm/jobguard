@@ -28,15 +28,18 @@ export type WormOperatorAlert = {
   code: "WORM_STORAGE_REFUSED"; severity: "critical"; occurred_at: Date;
 };
 export class WormCommandError extends Error {
-  constructor(readonly code: "DARK_ONLY" | "INVALID_INPUT" | "WORM_REFUSED" | "WORM_REPLAY_CONFLICT" | "D07_REQUIRED") {
+  constructor(readonly code: "DARK_ONLY" | "INVALID_INPUT" | "WORM_REFUSED" | "WORM_UNCONFIRMED" | "WORM_REPLAY_CONFLICT" | "D07_REQUIRED") {
     super(code); this.name = "WormCommandError";
   }
 }
-const refuse = (error: unknown): never => {
-  if (error instanceof WormCommandError) throw error;
-  if (error instanceof Error && error.message === "WORM_REPLAY_CONFLICT") throw new WormCommandError("WORM_REPLAY_CONFLICT");
-  throw new WormCommandError("WORM_REFUSED"); // No SQL details, keys, provider errors or token material escape.
-};
+const refusal = (error: unknown): WormCommandError => {
+  if (error instanceof WormCommandError) return error;
+  const code = typeof error === "object" && error !== null && "code" in error ? error.code : undefined;
+  // Only callback SQLSTATEs 42501 (privilege), 23514 (check), P0001 (RAISE)
+  // prove refusal. The legacy routine identifies replay conflicts within P0001.
+  if (code === "P0001" && error instanceof Error && error.message === "WORM_REPLAY_CONFLICT") return new WormCommandError("WORM_REPLAY_CONFLICT");
+  return new WormCommandError(["42501", "23514", "P0001"].includes(String(code)) ? "WORM_REFUSED" : "WORM_UNCONFIRMED");
+}; // No SQL details, keys, provider errors or token material escape.
 async function audit(db: TenantTransaction, c: WormReceipt, phase: string) {
   await appendAuditBatch(db, [{ id: randomUUID(), version: "audit.v1", actorRef: c.actor_id,
     eventType: `worm.${phase}`, subjectType: "evidence", subjectRef: c.evidence_id,
@@ -50,15 +53,70 @@ export class WormCommandRepository {
   constructor(private readonly pool: Pool, private readonly enabled = false,
     private readonly executorPool?: Pool, private readonly operatorPool?: Pool,
     private readonly sessionDigest = "") {}
+  private async transaction<T>(pool: Pool, context: VerifiedTenantContext,
+    work: (db: TenantTransaction) => Promise<T>): Promise<T> {
+    let rejected: WormCommandError | undefined;
+    try {
+      return await withTenant(pool, context, async db => {
+        try { return await work(db); }
+        catch (error) { rejected = refusal(error); throw rejected; }
+      });
+    } catch (error) {
+      // BEGIN/connect, COMMIT, rollback and release failures cannot prove refusal.
+      if (rejected && error === rejected) throw rejected;
+      throw new WormCommandError("WORM_UNCONFIRMED");
+    }
+  }
   private requireDark() { if (!this.enabled) throw new WormCommandError("DARK_ONLY"); }
+
+  /** Runtime SELECT grants already cover these tenant-scoped synthetic projections.
+   * An applied hold remains in force while its release is only requested.
+   */
+  async listHolds(context: VerifiedTenantContext, actorId: string, jobId: string) {
+    this.requireDark();
+    if (![actorId, jobId].every(value => uuid.safeParse(value).success)) throw new WormCommandError("INVALID_INPUT");
+    return this.transaction(this.pool, context, async db => {
+      const owner = await db.$client.query(`SELECT identity_user_id FROM app.membership m
+        WHERE m.tenant_id=$1 AND m.id=$2 AND m.role='owner' AND m.revoked_at IS NULL
+        AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp())
+        AND NOT EXISTS(SELECT 1 FROM app.contractor_membership_revocation r
+          WHERE r.tenant_id=m.tenant_id AND r.membership_id=m.id)`, [context.tenantId, actorId]);
+      if (!owner.rows.length) throw new WormCommandError("WORM_REFUSED");
+      if (!(await db.$client.query("SELECT id FROM app.job WHERE tenant_id=$1 AND id=$2", [context.tenantId, jobId])).rows.length) return null;
+      return (await db.$client.query<{
+        evidenceId: string; label: string; commandId: string | null;
+        action: "apply_hold" | "release_hold" | null; status: WormReceipt["status"] | null;
+        holdId: string | null; held: boolean; canApply: boolean; canRelease: boolean;
+      }>(`SELECT e.id AS "evidenceId", e.evidence_type AS label,
+        latest.id AS "commandId", latest.action, latest.status, h.id AS "holdId",
+        coalesce(h.status='applied',false) AS held, h.id IS NULL AS "canApply",
+        coalesce(h.status='applied' AND h.identity_user_id<>$3::uuid AND NOT EXISTS(
+          SELECT 1 FROM app.worm_command r WHERE r.tenant_id=$1 AND r.release_of=h.id
+          AND r.status NOT IN ('refused','cancelled')),false) AS "canRelease"
+        FROM app.worm_synthetic_version f JOIN app.evidence_object e
+          ON (e.tenant_id,e.id,e.job_id)=(f.tenant_id,f.evidence_id,f.job_id)
+        LEFT JOIN LATERAL (SELECT c.id,c.action,c.status FROM app.worm_command c
+          WHERE c.tenant_id=$1 AND c.job_id=$2 AND c.evidence_id=e.id
+          AND c.action IN ('apply_hold','release_hold') ORDER BY c.created_at DESC,c.id DESC LIMIT 1) latest ON true
+        LEFT JOIN LATERAL (SELECT a.id,a.status,a.identity_user_id FROM app.worm_command a
+          WHERE a.tenant_id=$1 AND a.job_id=$2 AND a.evidence_id=e.id AND a.action='apply_hold'
+          AND a.status NOT IN ('refused','cancelled') AND NOT EXISTS(
+            SELECT 1 FROM app.worm_command r WHERE r.tenant_id=$1 AND r.release_of=a.id AND r.status='applied')
+          ORDER BY a.created_at DESC,a.id DESC LIMIT 1) h ON true
+        WHERE e.tenant_id=$1 AND e.job_id=$2
+          AND e.object_key LIKE 'synthetic/tenants/'||$1::text||'/%'
+          AND e.object_key !~ '(^|/)\\.\\.?(/|$)' AND e.object_version_id NOT IN ('','null')
+        ORDER BY e.id`, [context.tenantId, jobId, owner.rows[0].identity_user_id])).rows;
+    });
+  }
 
   /** Stored refusal receipts are the alert source; no second mutable alert store. */
   async operatorAlerts(context: VerifiedTenantContext): Promise<WormOperatorAlert[]> {
     this.requireDark();
     if (!this.operatorPool) throw new WormCommandError("WORM_REFUSED");
-    return withTenant(this.operatorPool, context, async db =>
+    return this.transaction(this.operatorPool, context, async db =>
       (await db.$client.query<WormOperatorAlert>("SELECT * FROM worm_control.worm_operator_alerts()")).rows
-    ).catch(refuse);
+    );
   }
 
   async submit(context: VerifiedTenantContext, input: unknown): Promise<WormReceipt> {
@@ -66,7 +124,7 @@ export class WormCommandRepository {
     const parsed = wormCommandV1.safeParse(input);
     if (!parsed.success) throw new WormCommandError("INVALID_INPUT");
     if (!/^[a-f0-9]{64}$/u.test(this.sessionDigest)) throw new WormCommandError("WORM_REFUSED");
-    return withTenant(this.pool, context, async db => {
+    return this.transaction(this.pool, context, async db => {
       // Reauthenticate before receipt lookup, including exact replay. The shared
       // synthetic session gate binds the supplied owner to this tenant and session.
       const session = (await db.$client.query<{ actor: string | null }>(
@@ -78,7 +136,7 @@ export class WormCommandRepository {
       const c = (await db.$client.query<WormReceipt>("SELECT * FROM app.worm_submit($1::jsonb)", [JSON.stringify(parsed.data)])).rows[0]!;
       if (!existed.rows.length) await audit(db, c, "authorized");
       return c;
-    }).catch(refuse);
+    });
   }
 
   /** Claim commits before provider I/O. An executing/unknown hold is never blindly retried.
@@ -90,13 +148,13 @@ export class WormCommandRepository {
     if (!uuid.safeParse(commandId).success) throw new WormCommandError("INVALID_INPUT");
     // Supply separately provisioned executor credentials, never the request runtime pool.
     if (!this.executorPool) throw new WormCommandError("WORM_REFUSED");
-    const claim = await withTenant(this.executorPool, context, async db => {
+    const claim = await this.transaction(this.executorPool, context, async db => {
       await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`${context.tenantId}/worm`]);
       const prior = (await db.$client.query<WormReceipt>("SELECT * FROM app.worm_command WHERE tenant_id=$1 AND id=$2", [context.tenantId, commandId])).rows[0];
       const c = (await db.$client.query<WormReceipt>("SELECT * FROM app.worm_claim($1)", [commandId])).rows[0]!;
       const claimed = !!prior && ["queued", "pending"].includes(prior.status) && c.status === "executing";
       return { c, claimed };
-    }).catch(refuse);
+    });
     if (!claim.claimed) return claim.c;
     const { c } = claim;
     const target = { tenantId: context.tenantId, key: c.object_key, versionId: c.object_version_id };
@@ -121,12 +179,12 @@ export class WormCommandRepository {
       status = refused ? "refused" : c.action === "request_anchor" ? "pending" : "outcome_unknown";
       material = { status, reason: refused ? "storage_refused" : "service_unavailable" };
     }
-    return withTenant(this.executorPool, context, async db => {
+    return this.transaction(this.executorPool, context, async db => {
       const finished = (await db.$client.query<WormReceipt>("SELECT * FROM app.worm_finish($1,$2,$3,$4::jsonb)",
         [commandId, c.attempts, status, JSON.stringify(material)])).rows[0]!;
       // worm_finish appends its restricted audit event atomically.
       return finished;
-    }).catch(refuse);
+    });
   }
 
   /** Operator reconciliation only: exact-version reads, never a storage mutation or retry.
@@ -139,16 +197,16 @@ export class WormCommandRepository {
     if (!parsed.success) throw new WormCommandError("INVALID_INPUT");
     if (!this.operatorPool) throw new WormCommandError("WORM_REFUSED");
     const { commandId } = parsed.data;
-    const c = await withTenant(this.operatorPool, context, async db =>
+    const c = await this.transaction(this.operatorPool, context, async db =>
       (await db.$client.query<WormReceipt>("SELECT * FROM worm_control.worm_recovery_target($1)", [commandId])).rows[0]!
-    ).catch(refuse);
+    );
     if (c.status === "applied") return c;
     let observed: boolean | null = null;
     try {
       const state = await storage.read({ tenantId: context.tenantId, key: c.object_key, versionId: c.object_version_id });
       if (typeof state.held === "boolean") observed = state.held;
     } catch { /* Unavailable/missing readback cannot prove the write; leave unresolved. */ }
-    return withTenant(this.operatorPool, context, async db => {
+    return this.transaction(this.operatorPool, context, async db => {
       await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`${context.tenantId}/worm`]);
       const prior = (await db.$client.query<WormReceipt>("SELECT * FROM worm_control.worm_recovery_target($1)", [commandId])).rows[0]!;
       if (prior.status === "applied") return prior; // Concurrent reconciliation already committed.
@@ -156,7 +214,7 @@ export class WormCommandRepository {
         [commandId, c.attempts, observed])).rows[0]!;
       // The restricted SQL routine appends the audit event in this transaction.
       return finished;
-    }).catch(refuse);
+    });
   }
 
   /** No policy inferred from hold release; D07 has not approved expiry or deletion. */

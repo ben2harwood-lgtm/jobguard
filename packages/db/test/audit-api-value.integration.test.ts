@@ -62,3 +62,23 @@ it.each(["addition", "omission"] as const)("value preserves the approved amount 
  // Both exact approvals survive; the projection counts only the latest one.
  expect((await admin.query("SELECT revision_id FROM app.variation_approval WHERE tenant_id=$1 AND variation_id=$2 ORDER BY revision", [DEMO_TENANT_ID, variationId])).rows).toEqual([{ revision_id: first.id }, { revision_id: secondId }]);
 });
+
+it("removes a rejected extra while retaining another pending extra on the same job", async () => {
+ const session = await issuePracticeSession(runtime), auth = await authenticatePracticeSession(runtime, session);
+ const jobId = (await admin.query<{ id: string }>("SELECT id FROM app.job WHERE tenant_id=$1 AND practice_session_digest=$2 AND status='live' AND practice_scenario='home'", [DEMO_TENANT_ID, auth.digest])).rows[0]!.id;
+ const parent = randomUUID();
+ await admin.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')", [parent, DEMO_TENANT_ID, jobId]);
+ const variations = new VariationApplication(runtime, session), value = new ValueApplication(runtime, session);
+ const propose = async () => {
+  const variationId = randomUUID();
+  const proposed = await variations.command(jobId, { version: "variation-command.v1", action: "propose", proposalId: variationId, scopeItemId: randomUUID(), existingScopeItemId: null, lineageParentScopeItemId: parent, captureText: "Fictional extra", description: "Fictional extra", price: { quantity: "1", unit: "item", unitRatePence: 12500, direction: "addition" } });
+  return proposed.variations.find(row => row.id === variationId)!;
+ };
+ const proposed = await propose(), revisionId = proposed.currentRevisionId!;
+ expect((await value.read(jobId)).pendingExtras.map(row => row.id)).toEqual([revisionId]);
+ await variations.command(jobId, { version: "variation-command.v1", action: "reject", variationId: proposed.id, revisionId, rejectionId: randomUUID() });
+ const rejected = await value.read(jobId);
+ expect(rejected.pendingExtras).toEqual([]);
+ const other = await propose(), pending = await value.read(jobId);
+ expect(pending).toEqual({ ...rejected, pendingExtras: [{ id: other.currentRevisionId, revision: 1, description: other.description, pence: 12500, status: "awaiting_approval", href: `/jobs/${jobId}#variation-${other.id}` }] });
+});

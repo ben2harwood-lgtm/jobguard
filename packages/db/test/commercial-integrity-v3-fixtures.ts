@@ -1,3 +1,4 @@
+import { historicalPracticeSeed } from "./historical-practice-fixture.js";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -35,8 +36,8 @@ export async function createIntegrityFixture(throughCurrent=true, encoding: "UTF
  await admin.query(`ALTER ROLE ${login} SET log_statement='all'`);
  const runtime=new Pool({host:"127.0.0.1",port,user:login,password,database:"jobguard_synthetic_demo",max:2});
  const previous=process.env.JOBGUARD_ENV;process.env.JOBGUARD_ENV="synthetic_demo";
- const token=await issuePracticeSession(runtime),auth=await authenticatePracticeSession(runtime,token);
- const otherToken=await issuePracticeSession(runtime),other=await authenticatePracticeSession(runtime,otherToken);
+ const token=await issuePracticeSession(runtime),verifiedAuth=await authenticatePracticeSession(runtime,token),auth=throughCurrent?verifiedAuth:historicalPracticeSeed(verifiedAuth);
+ const otherToken=await issuePracticeSession(runtime),verifiedOther=await authenticatePracticeSession(runtime,otherToken),other=throughCurrent?verifiedOther:historicalPracticeSeed(verifiedOther);
  const repo=new CommercialIntegrityV3Repository(runtime);
  return {admin,runtime,repo,auth,other,logs,login,runtimeConfig:{host:"127.0.0.1",port,user:login,password,database:"jobguard_synthetic_demo"},async close(){if(previous===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=previous;await closeTestPools(runtime,admin);await pg.stop();await rm(dir,{recursive:true,force:true});}};
 }
@@ -107,4 +108,16 @@ export async function addIntegrityLock(f:IntegrityFixture,x:Awaited<ReturnType<t
   await appendAuditBatch(db,[{id:event,version:"audit.v1",actorRef:`membership:${member}`,eventType:"synthetic.ch6.lock_fixture",subjectType:"job",subjectRef:x.job,payload:{references:{jobId:x.job}}}]);
  });
  return id;
+}
+
+/** Real synthetic adoption through the product boundary; no owner-sealed audit event. */
+export async function importIntegrityJob(f: IntegrityFixture, sourceJobId: string) {
+ const { JobImportV3Repository } = await import("../src/job-import-v3-repository.js");
+ const { IMPORT_V3_FIXTURE_ID } = await import("../src/job-import-v3-fixtures.js");
+ const repo = new JobImportV3Repository(f.runtime);
+ const binding = (await f.admin.query("SELECT binding_id FROM app.job_party_current WHERE tenant_id=$1 AND job_id=$2", [tenant, sourceJobId])).rows[0].binding_id as string;
+ const request = { version: "job-import-preview.v3", expectedBindingId: binding, fixtureId: IMPORT_V3_FIXTURE_ID, lifecyclePoint: "invoiced" };
+ const preview = await repo.preview(f.auth.context, f.auth.digest, sourceJobId, request);
+ const result = await repo.adopt(f.auth.context, f.auth.digest, sourceJobId, { ...request, version: "job-parties-import.v3", commandId: randomUUID(), previewHash: preview.previewHash, attest: true });
+ return result.jobId as string;
 }
