@@ -5,6 +5,7 @@ import { z } from "zod";
 import { ContractorError } from "@jobguard/core";
 import { ContractorRepository, contractorSessionContext, WormCommandRepository, WormCommandError, type VerifiedTenantContext, type WormReceipt } from "@jobguard/db";
 import { syntheticPool } from "./synthetic-server";
+import { identityApplication, identityCredentials } from "./identity-server";
 import { isTrustedBrowserOrigin } from "../api/contractor/origin";
 
 const fields = { version: z.literal("evidence-hold.v1"), commandId: z.uuid(), idempotencyKey: z.uuid(), evidenceId: z.uuid() };
@@ -38,7 +39,13 @@ export async function evidenceHoldResponse(request: Request, jobId: string, muta
     const member = await new ContractorRepository(pool).resolveSession(sessionId);
     const context: VerifiedTenantContext = await contractorSessionContext(pool, sessionId);
     if (!z.uuid().safeParse(jobId).success) throw notFound();
-    const repository = new WormCommandRepository(pool, true);
+    let digest = "";
+    if (mutation) {
+      const credentials = await identityCredentials(request);
+      if (!z.string().min(32).safeParse(credentials.sessionToken).success) throw new HoldFailure("UNAUTHENTICATED", 401, "Sign in to synthetic practice first.");
+      digest = identityApplication().provider.digest(`session:${credentials.sessionToken}`);
+    }
+    const repository = new WormCommandRepository(pool, true, undefined, undefined, digest);
     const items = await repository.listHolds(context, member.membershipId, jobId);
     if (!items) throw notFound();
     if (!mutation) return NextResponse.json({ version: "evidence-holds.v1", items: items.map(item => ({
@@ -60,7 +67,7 @@ export async function evidenceHoldResponse(request: Request, jobId: string, muta
     if (error instanceof HoldFailure) return NextResponse.json({ code: error.code, message: error.message }, { status: error.status, headers });
     if (error instanceof SyntaxError) return NextResponse.json({ code: "INVALID_INPUT", message: "The hold request is invalid." }, { status: 400, headers });
     if (error instanceof ContractorError && error.code === "UNAUTHENTICATED") return NextResponse.json({ code: error.code, message: "Sign in to synthetic practice first." }, { status: 401, headers });
-    if (error instanceof WormCommandError) {
+    if (error instanceof WormCommandError && error.code !== "WORM_UNCONFIRMED") {
       const conflict = error.code === "WORM_REPLAY_CONFLICT";
       return NextResponse.json({ code: error.code, message: conflict ? "This request key was already used for different content." : "Request refused. An active owner must request a hold; a different person must release an applied hold. An existing hold or release request must be resolved first." }, { status: conflict ? 409 : 403, headers });
     }

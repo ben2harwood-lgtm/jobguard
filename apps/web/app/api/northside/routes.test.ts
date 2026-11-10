@@ -3,10 +3,15 @@ import { northsideSettings } from "../../../../../packages/db/src/northside-sett
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const h = vi.hoisted(() => ({
-  actor: vi.fn(), query: vi.fn(), withTenant: vi.fn(), beginUpload: vi.fn(), finalize: vi.fn(), put: vi.fn(),
+  identityQuery: vi.fn(), actor: vi.fn(), query: vi.fn(), withTenant: vi.fn(), beginUpload: vi.fn(), finalize: vi.fn(), put: vi.fn(),
   evidenceService: vi.fn(), rateCard: vi.fn(), priceExtra: vi.fn(), extras: vi.fn(), run: vi.fn(), queue: vi.fn(), clientView: vi.fn(), clientDecide: vi.fn(), facts: vi.fn(), targets: vi.fn(), ownActions: vi.fn(), approvalArtifact: vi.fn(), issueClientApproval: vi.fn(),
 }));
 vi.mock("server-only", () => ({}));
+vi.mock("../../lib/identity-server", () => ({
+  identityApplication: () => ({ allowedOrigin: "https://practice.invalid", provider: {
+    digest: () => "c".repeat(64), repository: { pool: { query: h.identityQuery } },
+  } }),
+}));
 vi.mock("@jobguard/db", () => ({
   withTenant: h.withTenant,
   northsideRateCard: h.rateCard,
@@ -49,7 +54,7 @@ describe("Northside send replay (stored-artifact/command doubles)", () => {
   const artifact = (input: { linkToken: string; expiresAt: Date }) => ({ jobId, extraId, revisionHash, approverMembershipId: membershipId,
     artifact: { token: input.linkToken, expiresAt: input.expiresAt.toISOString(), requestId: extraId, recipient, netPence: 108000 } });
   beforeEach(() => {
-    h.actor.mockResolvedValue({ pool, context, member, role: "owner" });
+    h.actor.mockResolvedValue({ pool, context, member, role: "surveyor" });
     h.extras.mockResolvedValue([{ extraId, jobId, requestId: extraId, revisionHash, netPence: 108000, clientApproverMembershipId: membershipId, clientApproverEmail: recipient }]);
     h.approvalArtifact.mockResolvedValue(null);
   });
@@ -79,7 +84,7 @@ describe("Northside send replay (stored-artifact/command doubles)", () => {
     h.approvalArtifact.mockResolvedValueOnce(null).mockResolvedValue(winner);
     h.issueClientApproval.mockRejectedValueOnce({ code: "COMMAND_CONFLICT" }).mockResolvedValue({ linkId: extraId });
     const response = await send(); expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({ path: `/extra-approval/${jobId}/${extraId}#t=${winner.artifact.token}` });
+    expect(await response.json()).toMatchObject({ path: `/customer/sign-in#${tenantId}/${jobId}/${membershipId}/${winner.artifact.token}` });
     expect(h.issueClientApproval.mock.calls[1]![2]).toMatchObject({ linkToken: winner.artifact.token, expiresAt: new Date(winner.artifact.expiresAt) });
   });
 });
@@ -92,7 +97,11 @@ beforeEach(() => {
   h.withTenant.mockImplementation(async (_pool, _context, work) => work({ $client: { query: h.query } }));
   h.query.mockResolvedValue({ rows: [{ allowed: false }] });
   h.evidenceService.mockReturnValue({ beginUpload: h.beginUpload, finalize: h.finalize });
-  h.beginUpload.mockResolvedValue({ id: extraId, objectKey: "practice-photo" });
+  h.beginUpload.mockImplementation(async (_context, _input, persist) => {
+    const upload = { id: extraId, objectKey: "practice-photo" };
+    await persist({ $client: { query: h.query } }, upload);
+    return upload;
+  });
   h.finalize.mockResolvedValue({});
   h.rateCard.mockResolvedValue([{ code: "CLEAR-VOID", ratePence: 100 }]);
   h.priceExtra.mockResolvedValue({});
@@ -120,11 +129,19 @@ describe("Northside photo authorization (unit tests with database and storage do
     expect(h.put).not.toHaveBeenCalled();
   });
 
+  it("does not finalize or report success when the original-byte insert fails", async () => {
+    h.query.mockResolvedValue({ rows: [{ allowed: true }] });
+    h.put.mockRejectedValue(new Error("database write failed"));
+    expect((await attach()).status).toBe(503);
+    expect(h.put).toHaveBeenCalledOnce();
+    expect(h.finalize).not.toHaveBeenCalled();
+  });
+
   it("lets a currently assigned operative attach the practice photo", async () => {
     h.query.mockResolvedValue({ rows: [{ allowed: true }] });
     const response = await attach();
     expect(response.status).toBe(200);
-    expect(h.beginUpload).toHaveBeenCalledWith(context, expect.objectContaining({ jobId }));
+    expect(h.beginUpload).toHaveBeenCalledWith(context, expect.objectContaining({ jobId }), expect.any(Function));
     expect(h.put).toHaveBeenCalledOnce();
     expect(h.finalize).toHaveBeenCalledWith(context, { uploadId: extraId, objectVersionId: "v1", evidenceType: "site_photo" });
   });
@@ -164,15 +181,28 @@ describe("r-d13 closed Northside boundaries (unit doubles)", () => {
     expect(h.query).not.toHaveBeenCalled();
     expect(h.evidenceService).not.toHaveBeenCalled();
   });
-  it("ACTOR-BINDING binds client decisions to the persisted owner rather than request text", async () => {
-    h.actor.mockResolvedValue({ pool, context, member, role: "client_approver" });
-    const body = { action: "decide", jobId, requestId: extraId, token: "a".repeat(40), email: "client@fictional.invalid", revisionHash: "b".repeat(64), netPence: 108000, decision: "approve" };
-    expect((await clientAction(request({ ...body, actualTesterReference: "someone else" }))).status).toBe(422);
-    expect(h.clientDecide).not.toHaveBeenCalled();
-    expect((await clientAction(request(body))).status).toBe(200);
-    expect(h.clientDecide).toHaveBeenCalledWith(context, member, expect.objectContaining({ actualTesterReference: `membership:${membershipId}`, fictionalRoleName: "Fictional client approver", revisionHash: body.revisionHash, netPence: 108000 }));
+  it("ACTOR-BINDING binds client decisions to the signed-in named client rather than request text", async () => {
+    vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
+    try {
+      h.identityQuery.mockResolvedValueOnce({ rows: [{ result: { extraApprover: true } }] })
+        .mockResolvedValue({ rows: [{ result: { state: "approved" } }] });
+      const body = { version: "extra-customer.v1", action: "decide", commandId: extraId, jobId, requestId: extraId, revisionHash: "b".repeat(64), netPence: 108000, decision: "approve" };
+      const clientRequest = (raw: unknown) => new Request("https://practice.invalid/api/northside/client", {
+        method: "POST", headers: { "content-type": "application/json", origin: "https://practice.invalid",
+          cookie: `jobguard_customer=${tenantId}.${jobId}.${membershipId}.${"a".repeat(43)}` }, body: JSON.stringify(raw),
+      });
+      const refused = await clientAction(clientRequest({ ...body, actualTesterReference: "someone else" }));
+      expect(refused.status).toBe(401);
+      expect(await refused.json()).toEqual({ code: "CUSTOMER_REFUSED" });
+      expect(h.identityQuery).not.toHaveBeenCalled();
+      expect((await clientAction(clientRequest(body))).status).toBe(200);
+      expect(h.identityQuery.mock.calls[1]![1].slice(0,4)).toEqual([tenantId,jobId,membershipId,"c".repeat(64)]);
+      expect(JSON.parse(h.identityQuery.mock.calls[1]![1][4])).toEqual(body);
+      expect(h.actor).not.toHaveBeenCalled();
+      expect(h.clientDecide).not.toHaveBeenCalled();
+    } finally { vi.unstubAllEnvs(); }
   });
-  it("AUTHORITY-FIRST denies owner-only request approval before reading the extra or settings", async () => {
+  it("AUTHORITY-FIRST denies an operative client-invitation send before reading the extra or settings", async () => {
     const response = await action(request({ jobId }), { params: Promise.resolve({ extraId, action: "send" }) });
     expect(response.status).toBe(403);
     expect(h.extras).not.toHaveBeenCalled(); expect(h.run).not.toHaveBeenCalled();

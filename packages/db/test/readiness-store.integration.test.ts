@@ -20,11 +20,13 @@ const now = "2026-10-30T12:00:00.000Z", due = "2026-11-02T09:00:00.000Z";
 const plan: ScheduledPlan = { version: "readiness-scheduled-plan.v1", synthetic: true, scope, factRevision: 1,
   ruleRevision: "readiness-scheduled.v1", status: "confirmed", plannedDate: "2026-11-02", jurisdiction: "england-and-wales",
   localTime: "09:00", timeZone: "Europe/London", predecessors: [], edges: [], material: { requiredUnits: 1, landedUnits: 1 }, access: "unknown", crew: true };
+let actor: { membershipId:string; identityUserId:string };
 const store = (verifiedContext = context) => {
   const service = new DurableReadinessStore(runtime, "synthetic_demo");
   return {
-    confirm: (raw: unknown, actor: string) => service.confirm(verifiedContext, actor, raw),
+    confirm: (raw: unknown, rawActor: unknown = actor) => service.confirm(verifiedContext, rawActor, raw),
     load: (raw: unknown) => service.load(verifiedContext, raw),
+    loadJobPlans: (raw: unknown) => service.loadJobPlans(verifiedContext, raw),
     recordProposal: (raw: ReadinessProposal) => service.recordProposal(verifiedContext, raw),
     proposals: (raw: unknown) => service.proposals(verifiedContext, raw),
   };
@@ -53,14 +55,16 @@ beforeAll(async () => {
   await importWatchdogFixtureJob(admin, tenantId, scope.jobId);
   const previousJob = (await admin.query("SELECT to_jsonb(j) payload FROM app.job j WHERE tenant_id=$1 AND id=$2", [tenantId, scope.jobId])).rows;
   await migrate(admin); await migrate(admin);
+  const member=(await admin.query("SELECT id,identity_user_id FROM app.membership WHERE tenant_id=$1 AND role='owner' LIMIT 1",[tenantId])).rows[0]!;
+  actor={membershipId:member.id,identityUserId:member.identity_user_id};
   expect((await admin.query("SELECT to_jsonb(j) payload FROM app.job j WHERE tenant_id=$1 AND id=$2", [tenantId, scope.jobId])).rows).toEqual(previousJob);
   runtime = new Pool({ host: "127.0.0.1", port, user: "postgres", password: "synthetic", database: "postgres", max: 2, options: "-c role=jobguard_runtime" });
 }, 120_000);
 afterAll(async () => { await closeTestPools(runtime, admin); await pg?.stop(); });
 
 it("persists confirmed facts and unknown adapter outcomes across store/scheduler reconstruction; concurrent replay makes one row and audit", async () => {
-  await store().confirm(plan, "member:synthetic-builder");
-  await store().confirm(plan, "member:synthetic-builder");
+  await store().confirm(plan);
+  await store().confirm(plan);
   expect(await store().load(scope)).toEqual(plan);
   const adapters = { weather: async () => ({ suitable: true }), holidays: async () => ({ version: "readiness-holidays.v1", synthetic: true, revision: "fixture.v1", observedAt: now,
     expiresAt: "2026-12-01T00:00:00.000Z", jurisdiction: "england-and-wales", from: "2026-01-01", through: "2026-12-31", holidays: [] }) };
@@ -74,9 +78,9 @@ it("persists confirmed facts and unknown adapter outcomes across store/scheduler
   const counts = await admin.query("SELECT event_type,count(*)::int n FROM app.audit_event WHERE tenant_id=$1 GROUP BY event_type", [tenantId]);
   expect(counts.rows).toEqual(expect.arrayContaining([{ event_type: "readiness.scheduled_plan_confirmed", n: 1 }, { event_type: "readiness.scheduled_proposal_recorded", n: 1 }]));
   await expect(store().recordProposal({ ...rows[0]!, reasons: ["forged"] })).rejects.toThrow("READINESS_STORE_CONFLICT");
-  await expect(store().confirm({ ...plan, access: false }, "member:synthetic-builder")).rejects.toThrow("READINESS_STORE_CONFLICT");
+  await expect(store().confirm({ ...plan, access: false })).rejects.toThrow("READINESS_STORE_CONFLICT");
   // A second version changes readiness without mutating history; an old evaluation cannot write against it.
-  await store().confirm({ ...plan, factRevision: 2, status: "cancelled" }, "member:synthetic-builder");
+  await store().confirm({ ...plan, factRevision: 2, status: "cancelled" });
   await expect(store().recordProposal(rows[0]!)).rejects.toThrow("READINESS_STORE_CONFLICT");
   expect(await store().proposals(scope)).toEqual(rows);
   await expect(new DarkReadinessScheduler(refusedLiveReadinessAdapters, store()).execute(task, due)).rejects.toThrow("READINESS_LIVE_DISABLED");
@@ -117,4 +121,55 @@ it("rolls plan writes back when audit fails and binds all plan/proposal identiti
   expect((await admin.query("SELECT count(*)::int n FROM app.scheduled_readiness_proposal")).rows).toEqual([{ n: 1 }]);
   await expect(withTenant(runtime, context, db => db.$client.query(`INSERT INTO app.scheduled_readiness_proposal(tenant_id,job_id,task_id,proposal_key,plan_hash,payload,audit_event_id) VALUES($1,$2,$3,$4,$5,$6,$7)`,
     [tenantId, scope.jobId, scope.taskId, "d".repeat(64), p.payload.planHash, { ...p.payload, key: "d".repeat(64), recoveryFeePence: 1 }, p.audit_event_id]))).rejects.toMatchObject({ code: "23514" });
+});
+
+it("refuses wrong identity, read-only, expired and revoked actors even on a confirmed replay",async()=>{
+ const before=(await admin.query("SELECT count(*) n FROM app.scheduled_readiness_plan")).rows;
+ await expect(store().confirm(plan,{...actor,identityUserId:randomUUID()})).rejects.toThrow("READINESS_FORBIDDEN");
+ for(const change of ["role='read_only'", "expires_at=clock_timestamp()-interval '1 minute'", "revoked_at=clock_timestamp()"]){
+  await admin.query(`UPDATE app.membership SET ${change} WHERE tenant_id=$1 AND id=$2`,[tenantId,actor.membershipId]);
+  await expect(store().confirm(plan)).rejects.toThrow("READINESS_FORBIDDEN");
+  await admin.query("UPDATE app.membership SET role='owner',expires_at=NULL,revoked_at=NULL WHERE tenant_id=$1 AND id=$2",[tenantId,actor.membershipId]);
+ }
+ expect((await admin.query("SELECT count(*) n FROM app.scheduled_readiness_plan")).rows).toEqual(before);
+});
+
+it("reads latest confirmed plans in one tenant/job and proposes without writing programme facts", async () => {
+  const jobId = randomUUID(), otherJob = randomUUID(), foreignJob = randomUUID();
+  await importWatchdogFixtureJob(admin, tenantId, jobId);
+  await importWatchdogFixtureJob(admin, tenantId, otherJob);
+  await importWatchdogFixtureJob(admin, other, foreignJob);
+  const member = (await admin.query("SELECT id,identity_user_id FROM app.membership WHERE tenant_id=$1 AND role='owner' LIMIT 1", [other])).rows[0]!;
+  const foreignActor = { membershipId: member.id, identityUserId: member.identity_user_id };
+  const blocked = { ...plan, scope: { tenantId, jobId, taskId: randomUUID() },
+    labourRatePence: 999_999_999_999, uncertainDurationHours: 1 };
+  const next = { ...blocked, scope: { tenantId, jobId, taskId: randomUUID() }, access: true as const, plannedDate: "2026-11-03" };
+  const cancelled = { ...next, scope: { ...next.scope, taskId: randomUUID() } };
+  for (const p of [blocked, next, cancelled, { ...next, scope: { ...next.scope, jobId: otherJob } }])
+    await store().confirm(p);
+  await store().confirm({ ...cancelled, factRevision: 2, status: "cancelled" });
+  await store(testTenantContext(other)).confirm({ ...next, scope: { ...next.scope, tenantId: other, jobId: foreignJob } }, foreignActor);
+  expect(await store().loadJobPlans(blocked.scope)).toEqual(expect.arrayContaining([blocked, next]));
+  expect(await store().loadJobPlans(blocked.scope)).toHaveLength(2);
+  expect(await store(testTenantContext(other)).loadJobPlans(blocked.scope)).toEqual([]);
+  const snapshot = async () => (await admin.query("SELECT to_jsonb(p) AS row FROM app.scheduled_readiness_plan p ORDER BY tenant_id,job_id,task_id,fact_revision")).rows;
+  const before = await snapshot();
+  const adapters = { weather: async () => null, holidays: async () => ({ version: "readiness-holidays.v1", synthetic: true,
+    revision: "fixture.v1", observedAt: now, expiresAt: "2026-12-01T00:00:00.000Z", jurisdiction: "england-and-wales",
+    from: "2026-01-01", through: "2026-12-31", holidays: [] }) };
+  const addJob = vi.fn(async (..._args: unknown[]) => ({}));
+  const scheduler = new DarkReadinessScheduler(adapters, store(), "synthetic_demo");
+  await scheduler.schedule(blocked.scope, now, { addJob } as unknown as Parameters<DarkReadinessScheduler["schedule"]>[2]);
+  const task = addJob.mock.calls[0]![1];
+  await scheduler.execute(task, due); await scheduler.execute(task, due);
+  expect(await snapshot()).toEqual(before);
+  const proposals = await store().proposals(blocked.scope);
+  expect(proposals).toHaveLength(1);
+  expect(proposals[0]).toMatchObject({ labourExposurePence: 999_999_999_999,
+    resequence: [{ taskId: next.scope.taskId, fromDate: next.plannedDate, toDate: blocked.plannedDate }],
+    programmeChanged: false, classification: "prevention", feeEligible: false, recoveryFeePence: 0 });
+  // Only a human confirmation creates the new fact revision and supersedes the queued evaluation.
+  await store().confirm({ ...blocked, factRevision: 2, plannedDate: "2026-11-04" });
+  expect(await scheduler.execute(task, due)).toBe("superseded");
+  expect(await store().load(blocked.scope)).toMatchObject({ factRevision: 2, plannedDate: "2026-11-04" });
 });

@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-const f = vi.hoisted(() => ({ list: vi.fn(), submit: vi.fn(), session: vi.fn(), context: {}, token: "10000000-0000-4000-8000-000000000001" }));
+const f = vi.hoisted(() => ({ list: vi.fn(), submit: vi.fn(), session: vi.fn(), repository: vi.fn(), digest: vi.fn(), identityToken: "s".repeat(32), context: {}, token: "10000000-0000-4000-8000-000000000001" }));
 vi.mock("server-only", () => ({}));
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => ({ value: f.token }) }) }));
 vi.mock("./synthetic-server", () => ({ syntheticPool: () => ({}) }));
+vi.mock("./identity-server", () => ({ identityCredentials: async () => ({ sessionToken: f.identityToken }),
+  identityApplication: () => ({ provider: { digest: f.digest } }) }));
 vi.mock("@jobguard/db", () => ({
   ContractorRepository: class { resolveSession = f.session; },
   contractorSessionContext: async () => f.context,
-  WormCommandRepository: class { listHolds = f.list; submit = f.submit; },
+  WormCommandRepository: class { constructor(...args: unknown[]) { f.repository(...args); } listHolds = f.list; submit = f.submit; },
   WormCommandError: class extends Error { constructor(readonly code: string) { super(code); } },
 }));
 import { WormCommandError } from "@jobguard/db";
@@ -20,6 +22,7 @@ const req = (body: unknown = input(), origin: string | null = "https://holds.inv
 const params = { params: Promise.resolve({ id: id(2) }) };
 beforeEach(() => {
   vi.clearAllMocks(); vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); vi.stubEnv("JOBGUARD_ALLOWED_ORIGINS", "https://holds.invalid");
+  f.identityToken = "s".repeat(32); f.digest.mockReturnValue("a".repeat(64));
   f.token = id(1); f.session.mockResolvedValue({ membershipId: id(6) });
   f.list.mockResolvedValue([{ evidenceId: id(5), action: "apply_hold", status: "queued", held: false }]);
   f.submit.mockResolvedValue({ id: id(3), status: "queued", object_key: "secret", actor_id: "private", result: { private: true } });
@@ -38,6 +41,17 @@ describe("session-only evidence hold transport", () => {
     expect(response.status).toBe(201); expect(response.headers.get("cache-control")).toBe("no-store");
     expect(await response.json()).toEqual({ version: "evidence-hold-result.v1", commandId: id(3), status: "queued", message: "Hold requested" });
     expect(f.submit).toHaveBeenCalledExactlyOnceWith(f.context, { ...input(), version: "worm.command.v1", policyVersion: "synthetic_d07_v1", actorMembershipId: id(6), jobId: id(2) });
+  });
+  it.each(["apply_hold", "release_hold"])("passes the identity session digest for %s to the guarded repository", async action => {
+    const body = { ...input(), action, ...(action === "release_hold" ? { releaseOf: id(7) } : {}) };
+    expect((await POST(req(body), params)).status).toBe(201);
+    expect(f.digest).toHaveBeenCalledExactlyOnceWith(`session:${f.identityToken}`);
+    expect(f.repository).toHaveBeenCalledExactlyOnceWith({}, true, undefined, undefined, "a".repeat(64));
+  });
+  it("refuses a missing identity session before submitting", async () => {
+    f.identityToken = "";
+    expect((await POST(req(), params)).status).toBe(401);
+    expect(f.submit).not.toHaveBeenCalled(); expect(f.digest).not.toHaveBeenCalled();
   });
   it.each([null, "https://attacker.invalid"])("refuses missing or untrusted origin %s before session or database", async origin => {
     expect((await POST(req(input(), origin), params)).status).toBe(403); expect(f.session).not.toHaveBeenCalled();
@@ -89,3 +103,14 @@ describe("session-only evidence hold transport", () => {
     expect((await (await GET(new Request("https://holds.invalid"), params)).json()).items[0]).toMatchObject({ message: "Hold released", held: false });
   });
 });
+
+it.each([["WORM_REFUSED", 403], ["WORM_UNCONFIRMED", 503], ["WORM_REPLAY_CONFLICT", 409]] as const)(
+  "LATER-SAFETY-26 maps %s to %s without internal detail", async (code, status) => {
+    const error = new WormCommandError(code); error.message = "SELECT secret_key FROM private";
+    f.submit.mockRejectedValueOnce(error);
+    const response = await POST(req(), params);
+    expect(response.status).toBe(status);
+    const body = await response.json();
+    expect(JSON.stringify(body)).not.toMatch(/SELECT|secret_key|private/);
+    if (status === 503) expect(body).toEqual({ code: "UNAVAILABLE", message: "The server could not confirm this request. Retry the same request." });
+  });

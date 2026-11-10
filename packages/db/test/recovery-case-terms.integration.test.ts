@@ -244,6 +244,25 @@ it.each([{policy_status:"approved"},{environment:"production_billing"},{fee_poli
 it("[T7] even the migration owner cannot mislink tenant/job/case identity",async()=>{
  const id=await newCase();await expect(withTenant(admin,context,async db=>{const ids=await handMade(db.$client,id,M);await db.$client.query("SET LOCAL ROLE jobguard_migration");return db.$client.query(`INSERT INTO app.recovery_case_terms_approval(id,tenant_id,job_id,case_id,terms_version,fee_policy_version,eligibility_policy_version,policy_status,environment,terms_hash,actor_membership_id,command_id,authorization_id) VALUES($1,$2,$3,$4,'synthetic_recovery_fee_terms.v1','reference_fee_policy_v3','reference_recovery_eligibility_policy_v3','proposed','synthetic_demo',$5,$6,$7,$8)`,[randomUUID(),T,unbound,id,recoveryCaseTermsHash(id),M,ids.c,ids.a]);})).rejects.toMatchObject({code:"23503"});
 });
+it("migration owner cannot truncate fee-terms approvals and all rows remain",async()=>{
+ const id=await newCase();
+ await new RecoveryCaseTermsRepository(runtime).approve(context,job,command(id),actor);
+ const before=(await admin.query("SELECT * FROM app.recovery_case_terms_approval ORDER BY tenant_id,id")).rows;
+ expect(before.length).toBeGreaterThan(0);
+ const db=await admin.connect();
+ try{
+  await db.query("BEGIN");
+  await db.query("SET LOCAL ROLE jobguard_migration");
+  expect((await db.query("SELECT current_user AS role")).rows[0].role).toBe("jobguard_migration");
+  await expect(db.query("TRUNCATE app.recovery_case_terms_approval")).rejects.toMatchObject({
+   code:"55000",message:"commercial revisions and snapshots are immutable",
+  });
+ }finally{
+  await db.query("ROLLBACK");
+  db.release();
+ }
+ expect((await admin.query("SELECT * FROM app.recovery_case_terms_approval ORDER BY tenant_id,id")).rows).toEqual(before);
+});
 it("[T10] routine timestamps are pinned inside PostgreSQL, never a supplied date",async()=>{
  const id=await newCase();await withTenant(admin,context,async db=>{const ids=await handMade(db.$client,id,M);const r=await direct(db.$client,id,M,ids);expect((await db.$client.query("SELECT approved_at=transaction_timestamp() pinned FROM app.recovery_case_terms_approval WHERE tenant_id=$1 AND id=$2",[T,r.rows[0].id])).rows[0].pinned).toBe(true);});
 });

@@ -21,7 +21,7 @@ const identities = (page: Page, revision: number) => page.locator(`[data-testid=
 test('the office imports generated files, sees a typed error on a refused row, revises orders, and the persisted state is the same after reload and in a second browser', async ({ page, browser }) => {
   await startPractice(page);
   // Reach the register from Jobs, the way an office user would.
-  await page.goto('/');
+  await page.goto('/classic');
   await page.getByRole('button', { name: 'Skip tour', exact: true }).click();
   await page.getByRole('button', { name: 'Account', exact: true }).click();
   await page.getByRole('link', { name: 'Contractor work orders', exact: true }).click();

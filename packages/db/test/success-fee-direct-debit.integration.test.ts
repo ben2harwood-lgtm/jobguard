@@ -10,6 +10,7 @@ import { withTenant } from "../src/tenant-context.js";
 import { RecoveryAttributionRepository } from "../src/recovery-attribution-repository.js";
 import { createSuccessFeeDirectDebitExecutor } from "../../../apps/api/src/fee-collection/success-fee-composition.js";
 import { FakeGoCardlessRail } from "../../../apps/api/src/fee-collection/fake-gocardless.js";
+import { PostgresReservationStore } from "../../../apps/api/src/fee-collection/postgres-reservation-store.js";
 import type { CollectionBook, ReservationStore } from "../../../apps/api/src/fee-collection/contracts.js";
 import type { ActiveMembership } from "../../../apps/api/src/auth/auth-provider.js";
 let f: FinalCheckFixture;
@@ -19,7 +20,7 @@ afterAll(async () => {
   if (f) await closeFinalCheckFixture(f);
   if (environment === undefined) delete process.env.JOBGUARD_ENV; else process.env.JOBGUARD_ENV = environment;
 });
-async function fixture() {
+async function fixture(realReservationStore = false) {
   const x = await catchFeeFixture(f);
   const command = (raw: unknown) => withTenant(f.runtime, x.context, async db =>
     (await db.$client.query("SELECT app.write_payment_fee($1,$2,$3::jsonb) result", [x.jobId, x.auth.digest, raw])).rows[0].result);
@@ -29,7 +30,7 @@ async function fixture() {
   await command(approval);
   const books = new Map<string, CollectionBook>(); let queue = Promise.resolve();
   // Reservation-store double only. Sources are never supplied by this double.
-  const store: ReservationStore = { async transaction(tenantId, work) {
+  const memoryStore: ReservationStore = { async transaction(tenantId, work) {
     const previous = queue; let unlock!: () => void; queue = new Promise(resolve => { unlock = resolve; });
     await previous;
     try {
@@ -38,6 +39,13 @@ async function fixture() {
       const result = await work(copy, { collection: unavailable, credit: unavailable }); books.set(tenantId, copy); return result;
     } finally { unlock(); }
   } };
+  const unavailable = async (): Promise<never> => { throw new Error("STAND_IN_SOURCE_USED"); };
+  const store = realReservationStore
+    ? new PostgresReservationStore(f.runtime, x.context, () => ({ collection: unavailable, credit: unavailable }))
+    : memoryStore;
+  if (realReservationStore) await f.admin.query(
+    "INSERT INTO app.fee_provider_fixture_key VALUES($1,'direct_debit',$2)",
+    [x.context.tenantId, "synthetic-only-secret"]);
   // Database-authenticated practice session/membership bridge for the dark executor.
   const sessions = {
     async authenticate(token: string) {
@@ -67,6 +75,24 @@ async function fixture() {
     statementHash: statement.statementHash, amountPence: statement.feePence, rail: "direct_debit", purpose: "receipt_success_fee" };
   return { ...x, command, statement, approval, store, rail, executor, compose, ctx, collection, book: () => structuredClone(books.get(x.context.tenantId) ?? { attempts: [], events: {}, audit: [] }) };
 }
+it("forwards authenticated results through the composition to settle the PostgreSQL reservation book", async () => {
+  const x = await fixture(true);
+  const read = () => x.store.transaction(x.context.tenantId, async book => structuredClone(book));
+  expect(await x.executor.reserve(x.ctx, x.collection)).toMatchObject({ state: "reserved" });
+  await x.executor.execute(x.ctx, x.collection.commandId);
+  expect((await read()).attempts[0]).toMatchObject({ state: "provider_accepted", paymentState: "pending_submission" });
+  const body = JSON.stringify({ events: [{ version: "fake-dd-event.v1", environment: "synthetic_demo", account: "fake_jobguard_dd",
+    tenantId: x.context.tenantId, eventId: randomUUID(), commandId: x.collection.commandId,
+    objectId: x.rail.objectId(x.context.tenantId, x.collection.commandId), amountPence: x.statement.feePence,
+    kind: "collection", state: "paid_out" }] });
+  await x.executor.directDebitWebhook(x.ctx, body, x.rail.sign(body));
+  const settled = await read();
+  expect(settled.attempts).toHaveLength(1);
+  expect(settled.attempts[0]).toMatchObject({ commandId: x.collection.commandId, state: "settled", paymentState: "paid_out" });
+  expect(settled.audit.map(entry => entry.state)).toEqual(["reserved", "outcome_unknown", "provider_accepted", "settled"]);
+  await x.executor.directDebitWebhook(x.ctx, body, x.rail.sign(body));
+  expect(await read()).toEqual(settled);
+});
 it("collects a real MON-4A approval once despite clicks/replays and preserves customer money", async () => {
   const x = await fixture(), submit = vi.spyOn(x.rail, "submit");
   const customer = async () => (await f.admin.query("SELECT to_jsonb(p) value FROM app.customer_payment p WHERE tenant_id=$1 AND id=$2",

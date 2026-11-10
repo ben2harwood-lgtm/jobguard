@@ -161,6 +161,10 @@ Billing status is held as `BILLING_COMPOSITION_REQUIRED`; machine landing, expor
 delivery, SFTP, reconciliation authority and G5 remain closed. Independent RED review
 and PostgreSQL/browser CI are still required; this does not finish ENT-13a.
 
+Human promotion uses its own append-only receipt outside the LP-5 lifecycle dispatcher.
+LP-5 integration and dispatcher replay coverage remain held before composition or activation.
+The promotion integration suite proves only this separate dark path.
+
 ## ENT-13a machine connection — fictional rulings, 4 November 2026
 
 This section supersedes the historical Q2/H1, Q3/H2, Q4/H3 and Q7/H5 STOPs **only
@@ -208,6 +212,13 @@ secret resolver, endpoint or network action. Existing staging still returns only
 H4, billing/materials/export promotion dependencies and every real-endpoint gate
 remain open. CI PostgreSQL proof and exact-head independent RED review are required;
 local transport/guard tests alone do not close ENT-13a or G5.
+
+LATER-SAFETY-15 hardens this fictional boundary: legacy `connector.intake` refuses
+all bindings registered as machine connections, even with a correct token or an
+existing receipt. Machine input must use `machine_stage`, whose key reference and
+capability kind must be present, nonempty and currently authorised before consuming
+a nonce. Refusals use `CONNECTOR_INPUT_REFUSED`; existing non-machine intake and
+machine staging validation, deduplication and atomic audit remain required.
 
 ### Machine command lifecycle hold
 

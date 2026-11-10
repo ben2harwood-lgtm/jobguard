@@ -14,6 +14,7 @@ const pageSchema = z.object({items:z.array(itemSchema),nextCursor:z.guid({ error
 function failure(error:unknown):never {
  if(error instanceof EnterpriseLivePromptPersistenceError)throw error;
  const message=(error as {message?:string}).message;
+ if ((error as {code?:string}).code === "42501" && ["FORBIDDEN", "UNAUTHENTICATED"].includes(message ?? "")) throw new EnterpriseLivePromptPersistenceError("EXTRA_FORBIDDEN");
  const codes=["INVALID_PROMPT_COMMAND","EXTRA_FORBIDDEN","JOB_NOT_LIVE","PROMPT_CONFLICT","PROMPT_ORIGIN_HELD","PROMPT_SOURCE_INVALID","PROMPT_AMBIGUOUS","PROMPT_END_CHECK_HELD","PROMPT_PRACTICE_ONLY"] as const;
  const code=codes.find(c=>c===message);if(code)throw new EnterpriseLivePromptPersistenceError(code);
  if(message==="MODE_FORBIDDEN")throw new EnterpriseLivePromptPersistenceError("PROMPT_PRACTICE_ONLY");
@@ -46,7 +47,7 @@ export class EnterpriseLivePromptRepository {
     }
     const output=(await db.$client.query<{value:{replay:boolean;result:Result;audits:AuditEventInput[]}}>("SELECT app.lp_command($1,$2::jsonb,$3::bytea) value",[sessionId,JSON.stringify(input),sourceBytes])).rows[0]!.value;
     if(output.replay)return output.result;
-    if(input.version==="completion-observation.v1"||input.version==="evaluate-live-prompts.v1"){
+    if(input.version==="completion-observation.v1"||input.version==="evaluate-live-prompts.v1"||(input.version==="end-check.v1"&&(output.result as {checkRan?:boolean}).checkRan===true)){
      // Rule (a) is rerun from stored bytes, tags/locators and the bound order, never a supplied snapshot.
      // SQL independently enforces the persisted result; disagreement rolls back the entire command.
      const findings=await readEnterpriseCompletionFindings(db,sessionId,input.jobId);

@@ -14,7 +14,7 @@ const outcome = async (request: string) => (await sql("SELECT kind,actor_kind,by
 const lastEvent = async (extra: string) => (await sql("SELECT kind FROM app.extra_event WHERE variation_id=$1 ORDER BY sequence DESC LIMIT 1", [extra]))[0]?.kind as string;
 const issue = (s: { jobId: string; requestId: string }, over: Record<string, unknown> = {}) => {
   const token = newToken();
-  return emailOf(c, w, client().membershipId).then(async recipient => ({ token, recipient, run: () => repo.issueClientApproval(ctx, owner(), { version: "issue-client-approval.v1", commandId: randomUUID(), jobId: s.jobId, requestId: s.requestId, approverMembershipId: client().membershipId, recipient, linkToken: token, expiresAt: new Date(Date.now() + 3600_000), ...over }) }));
+  return emailOf(c, w, client().membershipId).then(async recipient => ({ token, recipient, run: () => repo.issueClientApproval(ctx, surveyor(), { version: "issue-client-approval.v1", commandId: randomUUID(), jobId: s.jobId, requestId: s.requestId, approverMembershipId: client().membershipId, recipient, linkToken: token, expiresAt: new Date(Date.now() + 3600_000), ...over }) }));
 };
 const decide = (s: { jobId: string; requestId: string; hash: string; net: number }, token: string, email: string, over: Record<string, unknown> = {}, by = client()) =>
   repo.decideClientApproval(ctx, by, { version: "decide-client-approval.v1", commandId: randomUUID(), jobId: s.jobId, requestId: s.requestId, linkToken: token, email, revisionHash: s.hash, netPence: s.net, decision: "approve", fictionalRoleName: "Fictional Housing Approver", actualTesterReference: "tester:practice-ben", ...over });
@@ -73,8 +73,8 @@ it("E5B-02 stale revision, wrong hash/net, unpriced and replay semantics", async
   expect(await code(repo.reviseExtra(ctx, surveyor(), { ...revise, netPence: 60001 }))).toBe("COMMAND_CONFLICT"); // same command id, different content
   expect(await code(repo.approveExtraStep(ctx, sup2(), approveInput(s, 0)))).toBe("STALE_REVISION"); // revision 1 after 2 exists (even though it was decided)
   const s2 = { ...s, requestId: second.requestId as string, hash: second.revisionHash as string, net: 60000 };
-  expect(await code(repo.approveExtraStep(ctx, sup(), approveInput(s2, 0)))).toBe("REPEAT_HELD"); // same person, same slot, later version: held, refused
-  expect(await code(repo.approveExtraStep(ctx, sup2(), approveInput(s2, 0)))).toBe("ok");
+  expect(await code(repo.approveExtraStep(ctx, sup(), approveInput(s2, 0)))).toBe("ok"); // Q04: same person can occupy the same slot on a new request revision
+  expect(await code(repo.approveExtraStep(ctx, sup2(), approveInput(s2, 0)))).toBe("STEP_OUT_OF_ORDER");
   expect(await code(repo.approveExtraStep(ctx, sup(), approveInput(s2, 1)))).toBe("REUSED_APPROVER"); // approved step 0 of the first version, may not fill step 1 of the next
   const bindings = await sql("SELECT logical_revision,source_kind FROM app.extra_approval_revision_binding WHERE variation_id=$1 ORDER BY logical_revision", [s.extraId]);
   expect(bindings).toEqual([{ logical_revision: 1, source_kind: "ordinary" }, { logical_revision: 2, source_kind: "ordinary" }]);
@@ -172,10 +172,10 @@ it("E5B-07 the send is owner-only and exact", async () => {
   expect(await sql("SELECT 1 FROM app.action_outbox WHERE action_type='extra.client_approval_request.send' AND recipient LIKE 'real.person%'")).toEqual([]);
 });
 
-it("E5B-08 withdraw (supervisors only), reject, and duplicate", async () => {
+it("E5B-08 withdraw (covered supervisory roles), reject, and duplicate", async () => {
   const s = await submitted(c, w, 40000), w2 = { version: "withdraw-extra.v1", commandId: randomUUID(), jobId: s.jobId, extraId: s.extraId, reasonCode: "not_done" };
   expect(await code(repo.withdrawExtra(ctx, w.members.operative.member, w2))).toBe("PERMISSION_DENIED");
-  expect(await code(repo.withdrawExtra(ctx, surveyor(), { ...w2, commandId: randomUUID() }))).toBe("PERMISSION_DENIED"); // wider roles held
+  expect(await code(repo.withdrawExtra(ctx, w.members.owner.member, { ...w2, commandId: randomUUID() }))).toBe("PERMISSION_DENIED"); // Q11: owner is not a covered withdrawer
   expect(await code(repo.withdrawExtra(ctx, sup(), w2))).toBe("ok");
   expect(await outcome(s.requestId)).toEqual([{ kind: "withdrawn", actor_kind: "member", by_rule: false }]);
   expect(await code(repo.withdrawExtra(ctx, sup(), { ...w2, commandId: randomUUID() }))).toBe("ALREADY_DECIDED");
@@ -281,7 +281,7 @@ it("MON-8 a queued approval message is cancelled after agreement loss without an
   await repository.approveExtraStep(context,other.members.supervisor.member,approveInput(s,0));
   await repository.approveExtraStep(context,other.supervisor2.member,approveInput(s,1));
   const token=newToken(),recipient=await emailOf(c,other,other.members.client_approver.member.membershipId);
-  const sent=await repository.issueClientApproval(context,other.members.owner.member,{version:"issue-client-approval.v1",commandId:randomUUID(),jobId:s.jobId,requestId:s.requestId,
+  const sent=await repository.issueClientApproval(context,other.members.surveyor.member,{version:"issue-client-approval.v1",commandId:randomUUID(),jobId:s.jobId,requestId:s.requestId,
     approverMembershipId:other.members.client_approver.member.membershipId,recipient,linkToken:token,expiresAt:new Date(Date.now()+3600_000)});
   await c.admin.query(`INSERT INTO app.contractor_agreement_status_revision
     SELECT tenant_id,$2,assignment_id,revision+1,'suspended',schema_version,environment,clock_timestamp(),$3
@@ -295,4 +295,100 @@ it("MON-8 a queued approval message is cancelled after agreement loss without an
   expect(await sql("SELECT 1 FROM app.action_attempt WHERE action_id=$1",[sent.outboxActionId])).toEqual([]);
   // Security revocation remains available even while new approval work is refused.
   await repository.revokeClientApproval(context,other.members.owner.member,{version:"revoke-client-approval.v1",commandId:randomUUID(),jobId:s.jobId,linkId:sent.linkId});
+});
+
+// LATER-SAFETY-36: fresh worlds keep grant revocation isolated from earlier journeys.
+async function queuedSurveyorSend() {
+  const world = await chainWorld(c), context = await world.ctx;
+  const approval = new ExtraApprovalRepository(c.runtime), s = await submitted(c, world, 150000);
+  await approval.approveExtraStep(context, world.members.supervisor.member, approveInput(s, 0));
+  await approval.approveExtraStep(context, world.supervisor2.member, approveInput(s, 1));
+  const sender = world.members.surveyor;
+  const sent = await approval.issueClientApproval(context, sender.member, {
+    version: "issue-client-approval.v1", commandId: randomUUID(), jobId: s.jobId, requestId: s.requestId,
+    approverMembershipId: world.members.client_approver.member.membershipId,
+    recipient: await emailOf(c, world, world.members.client_approver.member.membershipId),
+    linkToken: newToken(), signinDigest: sha256Hex(randomUUID()), expiresAt: new Date(Date.now() + 3600_000),
+  });
+  const deliver = vi.fn<import("../src/outbox.js").OutboundAdapter["deliver"]>(async () => ({ kind: "succeeded" as const, providerReference: `synthetic:${randomUUID()}` }));
+  const executor = new ActionExecutor(c.runtime, new Map([["fake_email", {
+    name: "fake_email" as const, supportsProviderDeduplication: true, deliver, reconcile: async () => "unknown" as const,
+  }]]), { emit: () => undefined });
+  const execute = (scope = context) => executor.execute(scope, sent.outboxActionId);
+  const state = async () => (await sql("SELECT status FROM app.action_outbox WHERE tenant_id=$1 AND id=$2", [world.p.tenantId, sent.outboxActionId]))[0].status;
+  const attempts = () => sql("SELECT id FROM app.action_attempt WHERE tenant_id=$1 AND action_id=$2", [world.p.tenantId, sent.outboxActionId]);
+  const audit = () => sql("SELECT actor_ref,subject_ref,payload FROM app.audit_event WHERE tenant_id=$1 AND payload->'references'->>'outboxId'=$2 AND event_type='contractor.extra.client_authority_lost' ORDER BY sequence", [world.p.tenantId, sent.outboxActionId]);
+  return { world, context, sender, sent, jobId: s.jobId, deliver, execute, state, attempts, audit };
+}
+
+it.each(["pending", "retryable"])("LATER-SAFETY-36 cancels a %s send after its surveyor grant is revoked; restoring the role cannot revive it", async status => {
+  const q = await queuedSurveyorSend();
+  if (status === "retryable") {
+    q.deliver.mockResolvedValueOnce({ kind: "retryable", code: "synthetic_unavailable" });
+    await q.execute();
+    expect(await q.state()).toBe("retryable");
+  }
+  const calls = q.deliver.mock.calls.length, attempts = (await q.attempts()).length;
+  await command(c, q.world, { kind: "grant.revoke", grantId: q.sender.grant });
+  if (status === "retryable") {
+    // Not yet due: the executor does not claim it, so nothing is delivered.
+    await expect(q.execute()).resolves.toBeUndefined();
+    expect(await q.state()).toBe("retryable");
+    expect(q.deliver).toHaveBeenCalledTimes(calls);
+    await sql("UPDATE app.action_outbox SET next_attempt_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [q.world.p.tenantId, q.sent.outboxActionId]);
+  }
+  await expect(q.execute()).resolves.toBeUndefined();
+  expect(await q.state()).toBe("cancelled");
+  expect(q.deliver).toHaveBeenCalledTimes(calls);
+  expect(await q.attempts()).toHaveLength(attempts);
+  expect(await q.audit()).toEqual([{
+    actor_ref: "system:outbox", subject_ref: q.jobId,
+    payload: { references: { auditTrust: "checked_operation", linkId: q.sent.linkId, outboxId: q.sent.outboxActionId }, hashes: {} },
+  }]);
+  await command(c, q.world, { kind: "grant.create", membershipId: q.sender.member.membershipId,
+    role: "surveyor", scope: { kind: "branch", id: q.world.demo.branchId }, contractId: null });
+  const restored = await withTenant(c.runtime, q.context, db => db.$client.query(
+    "SELECT app.xc_send_authority($1,k.variation_id) allowed FROM app.extra_client_link k WHERE k.tenant_id=$2 AND k.outbox_action_id=$3",
+    [q.sender.member.membershipId, q.world.p.tenantId, q.sent.outboxActionId]));
+  expect(restored.rows).toEqual([{ allowed: true }]);
+  await q.execute();
+  expect(await q.state()).toBe("cancelled");
+  expect(q.deliver).toHaveBeenCalledTimes(calls);
+  expect(await q.attempts()).toHaveLength(attempts);
+  expect(await q.audit()).toHaveLength(1);
+  expect(await chain(c, q.world)).toBeTruthy();
+});
+
+it("LATER-SAFETY-36 keeps a surveyor's send executable when another sender loses a grant", async () => {
+  const q = await queuedSurveyorSend();
+  await command(c, q.world, { kind: "grant.revoke", grantId: q.world.otherSurveyor.grant });
+  await q.execute();
+  expect(q.deliver).toHaveBeenCalledOnce();
+  expect(await q.state()).toBe("succeeded");
+  expect(await q.attempts()).toHaveLength(1);
+  expect(await q.audit()).toEqual([]);
+});
+
+it("LATER-SAFETY-36 still cancels a client send after sender membership revocation", async () => {
+  const q = await queuedSurveyorSend();
+  await command(c, q.world, { kind: "membership.revoke", membershipId: q.sender.member.membershipId });
+  await expect(q.execute()).resolves.toBeUndefined();
+  expect(await q.state()).toBe("cancelled");
+  expect(q.deliver).not.toHaveBeenCalled();
+  expect(await q.attempts()).toEqual([]);
+  expect(await q.audit()).toHaveLength(1);
+});
+
+it("LATER-SAFETY-36 ignores another tenant's role revocation and cannot cancel a foreign action", async () => {
+  const q = await queuedSurveyorSend(), other = await queuedSurveyorSend();
+  await command(c, other.world, { kind: "grant.revoke", grantId: other.sender.grant });
+  await other.execute(q.context);
+  expect(await other.state()).toBe("pending");
+  expect(await other.audit()).toEqual([]);
+  await q.execute();
+  expect(await q.state()).toBe("succeeded");
+  expect(q.deliver).toHaveBeenCalledOnce();
+  expect(await q.audit()).toEqual([]);
+  await expect(other.execute()).resolves.toBeUndefined();
+  expect(other.deliver).not.toHaveBeenCalled();
 });

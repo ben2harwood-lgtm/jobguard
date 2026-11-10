@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-26": {
+      "branches": [
+        "codex/sandbox/later-safety-26"
+      ],
+      "allow": [
+        "apps/web/app/jobs/[id]/evidence-holds/evidence-holds.test.tsx",
+        "apps/web/app/jobs/[id]/evidence-holds/evidence-holds.tsx",
+        "apps/web/app/lib/evidence-hold-server.test.ts",
+        "apps/web/app/lib/evidence-hold-server.ts",
+        "apps/web/e2e/m4-4-evidence-holds.spec.ts",
+        "packages/db/src/worm-command-repository.test.ts",
+        "packages/db/src/worm-command-repository.ts",
+        "packages/db/test/worm-command.integration.test.ts",
+        "packages/db/test/worm-hold-screen.integration.test.ts"
+      ]
+    }
+  }
+}

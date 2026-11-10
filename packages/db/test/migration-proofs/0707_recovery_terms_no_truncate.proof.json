@@ -1,0 +1,6 @@
+{
+  "migration": "0707_recovery_terms_no_truncate.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}

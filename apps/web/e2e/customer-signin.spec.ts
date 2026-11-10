@@ -52,7 +52,7 @@ test("emailed fictional link signs into exactly one job with a browser-session c
   await page.getByRole("main").getByRole("button", { name: "Request code", exact: true }).click();
   const code = await page.getByRole("main").getByTestId("fixture-code").textContent();
   await page.getByRole("main").getByLabel("Eight-digit code").fill(code!); await page.getByRole("main").getByRole("button", { name: "Verify code" }).click();
-  await expect(page.getByRole("main").getByRole("heading", { name: "Signed in", exact: true })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("heading", { name: "You're signed in.", exact: true })).toBeVisible();
   const session = await page.evaluate(async () => (await fetch("/api/auth/session")).json());
   const tenant = session.memberships[0].tenantId as string, fixture = await seedJob(admin, tenant);
   await seedQuote(admin,tenant,fixture.job,session.memberships[0].id,session.principal.id);

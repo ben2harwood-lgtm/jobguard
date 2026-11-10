@@ -39,6 +39,7 @@
         "packages/db/migrations/0622_extra_duplicate_relink.sql",
         "packages/db/migrations/0623_extra_duplicate_disposition.sql",
         "packages/db/migrations/0624_supplier_line_corrections.sql",
+        "packages/db/src/connector-promotion-repository.test.ts",
         "packages/db/src/connector-promotion-repository.ts",
         "packages/db/src/extra-duplicate-candidates.test.ts",
         "packages/db/src/extra-duplicate-candidates.ts",

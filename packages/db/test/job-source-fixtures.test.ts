@@ -28,3 +28,23 @@ describe("SV-5 Test I practice original", () => {
     expect(tap?.facts.significantWork).toBeNull();
   });
 });
+
+describe("REAL-OWN-JOB-PROMISE reviewed hallway originals", () => {
+  it.each([
+    ["customer_request", "can you also paint the hallway ceiling? Happy to pay extra", "requested", true, null],
+    ["note_or_voice", "Painted the hallway ceiling as asked, three hours extra, about 150 pounds", "completed", false, 15000],
+  ] as const)("decodes only the exact %s original without firing D13", (kind, original, status, customerClearlyRequested, estimatedValuePence) => {
+    const decoded = decodeJobSourceFixture(null, original, kind)!;
+    expect(decoded).toEqual({ text: original, citations: [{ start: 0, end: original.length, quote: original }], facts: {
+      workReference: "practice:hallway-ceiling", scopeArea: "job", description: "hallway ceiling", status, estimatedValuePence,
+      customerClearlyRequested, safetyImplication: false, needsPriorWrittenAgreement: false, significantWork: null,
+      activeDispute: false, silenceMateriallyWorsensDispute: false, disclosureDuty: false,
+    } });
+    const observation = observationV1.parse({ version: "observation.v1", tenantId: "10000000-0000-4000-8000-000000000001", jobId: "10000000-0000-4000-8000-000000000002", kind,
+      evidence: { id: "10000000-0000-4000-8000-000000000003", objectVersionId: "practice-v1", sha256: sha256(original), serverReceivedAt: "2026-11-09T10:00:00Z" }, ...decoded });
+    expect(observationMustSurface(observation).firedRules).toEqual([]);
+    expect(decodeJobSourceFixture(null, original + ".", kind)).toBeNull();
+    expect(decodeJobSourceFixture(null, original, kind === "customer_request" ? "note_or_voice" : "customer_request")).toBeNull();
+    expect(decodeJobSourceFixture("practice:hallway-ceiling", original, kind)).toBeNull();
+  });
+});

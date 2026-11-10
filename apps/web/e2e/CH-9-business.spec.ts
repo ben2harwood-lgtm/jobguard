@@ -25,7 +25,7 @@ test("CH9-B10 held business view survives reload, preserves job access and expos
  await refresh.click();
  await expect(page.getByTestId("business-value-status")).toContainText("Business value is unavailable");
  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
- await expect(page.getByRole("link", { name: "Back to jobs" })).toHaveAttribute("href", "/");
+ await expect(page.getByRole("link", { name: "Back to jobs" })).toHaveAttribute("href", "/classic");
  const foreign = await browser.newContext();
  try {
   const tab = await foreign.newPage(); await tab.goto(new URL("/value", page.url()).href);
