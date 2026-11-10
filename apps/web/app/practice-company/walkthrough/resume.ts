@@ -46,7 +46,7 @@ export async function resumeWalkthrough(params: URLSearchParams) {
     if (proof.completion && !proof.completion.reviewRequired) {
       index = 5;
       const extras = await read(active, "variations", variationWorkspaceResponseV1);
-      if (extras.approvedAdditionsPence > 0) {
+      if (extras.approvedAdditionsPence === 12500) {
         index = 6;
         // Before the lock and Final Check run, the read is refused (403): that is "not done", not a failure.
         const check = await read(active, "final-check", finalCheckReadV1, [403, 404]);
