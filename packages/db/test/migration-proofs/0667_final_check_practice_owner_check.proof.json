@@ -19,6 +19,46 @@
         "staticWrites": [],
         "staticCalls": []
       }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.final_check_require_invoice_actor(uuid,uuid,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "986095160668b8e0826428a715fbc71dd9eb2b3e2fda8cbda63c5b692efff564",
+        "staticWrites": [],
+        "staticCalls": [
+          "app.authenticate_practice_session",
+          "app.final_lock_require_owner"
+        ]
+      },
+      "after": {
+        "identity": "function:app.final_check_require_invoice_actor(uuid,uuid,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "52b03a8fc58910f4765007f574a8c435f3528421e77dce9acf99cf565598f7c3",
+        "staticWrites": [],
+        "staticCalls": [
+          "app.authenticate_practice_session",
+          "app.final_check_practice_owns_job",
+          "app.final_lock_require_owner"
+        ]
+      }
     }
   ],
   "upgrade": [

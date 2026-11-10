@@ -2,7 +2,7 @@
 
 // Today, To check, Money and More, in the approved design.
 // Routes: /api/session, /api/decisions, /api/jobs, /api/jobs/[id]/value.
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { JobSummary } from "../lib/contracts";
 import { jobStatusLabels } from "../ui/workspace-lifecycle";
@@ -11,22 +11,13 @@ import { VariationFlow } from "../ui/variation-flow";
 import { ProofCapture } from "../ui/proof-capture";
 import { FinalAccount } from "../ui/final-account";
 import { FeeStatement } from "../ui/fee-statement";
-import { Card, Empty, Head, Legacy, Note, PHOTOS, RailIcon, Screen, Shell, Tag, quoteLine, documentLine, known, money, needsChecking, readValue, statusTag, useJobs, type JobValue, type Workspace } from "./designed-ui";
+import { Card, Empty, Head, Legacy, Note, PHOTOS, RailIcon, Screen, Shell, Tag, agreedLine, useJobFacts, useAttention, quoteLine, documentLine, known, money, statusTag, useJobs, type JobValue, type Workspace } from "./designed-ui";
 
 const INNER_SUBTITLE = "One place to manage the job, spot problems early and know what comes next.";
 
-function useValues(jobs: JobSummary[] | null) {
-  const [values, setValues] = useState<Record<string, JobValue | null> | null>(null);
-  useEffect(() => {
-    if (!jobs) return;
-    let current = true;
-    Promise.all(jobs.map(async job => [job.id, await readValue(job.id)] as const)).then(entries => { if (current) setValues(Object.fromEntries(entries)); });
-    return () => { current = false; };
-  }, [jobs]);
-  return values;
-}
 function total(values: Record<string, JobValue | null> | null, pick: (value: JobValue) => number | null) {
   if (!values) return undefined;
+  if (Object.values(values).some(value => value === null || pick(value) === null)) return null;
   const amounts = Object.values(values).flatMap(value => { const pence = value ? pick(value) : null; return pence === null ? [] : [pence]; });
   return amounts.length ? amounts.reduce((sum, pence) => sum + pence, 0) : null;
 }
@@ -42,44 +33,44 @@ const ATTENTION_PHOTOS = ["crew", "boards", "invoice"];
 export function Today({ workspace }: { workspace: Workspace }) {
   const router = useRouter();
   const { jobs, failed } = useJobs(workspace.tenantId);
-  const open = (workspace.decisions?.decisions ?? []).filter(item => item.resolution === "open");
-  const shown = open.slice(0, 3);
+  const facts = useJobFacts(workspace.tenantId, (jobs ?? []).map(job => job.id));
+  const attention = useAttention(workspace, jobs, facts);
+  const shown = attention.items;
   const active = (jobs ?? []).filter(job => job.status !== "lost" && job.status !== "paid");
   const featured = (jobs ?? []).find(job => job.status === "live") ?? jobs?.[0];
-  const [featuredValue, setFeaturedValue] = useState<JobValue | null>(null);
-  useEffect(() => { if (featured) void readValue(featured.id).then(setFeaturedValue); }, [featured]);
+  const featuredValue = featured ? facts?.[featured.id]?.value : null;
   const stage = featured ? STAGES.findIndex(([, statuses]) => statuses.includes(featured.status)) : -1;
-  return <Shell workspace={workspace} today title="Your jobs, under control." subtitle="JobGuard watches your jobs, flags problems early and helps you get paid for everything you’re entitled to." active="today">
+  return <Shell workspace={{ ...workspace, pending: attention.items.length }} today title="Your jobs, under control." subtitle="JobGuard watches your jobs, flags problems early and helps you get paid for everything you’re entitled to." active="today">
     <section className="rr-dashboard" aria-label="Today dashboard" data-testid="designed-today">
       <div className="rr-metrics">
         <button type="button" className="rr-metric rr-glass" onClick={() => router.push("/jobs")}><span className="rr-medallion mint"><RailIcon name="helmet"/></span><span><strong>{jobs ? active.length : "…"}</strong><small>jobs in progress</small></span><RailIcon name="chevron"/></button>
-        <button type="button" className="rr-metric rr-glass" onClick={() => router.push("/check")}><span className="rr-medallion orange"><RailIcon name="alert"/></span><span><strong>{workspace.pending}</strong><small>need attention</small></span><RailIcon name="chevron"/></button>
+        <button type="button" className="rr-metric rr-glass" onClick={() => router.push("/check")}><span className="rr-medallion orange"><RailIcon name="alert"/></span><span><strong>{attention.complete || attention.items.length ? attention.items.length : "…"}</strong><small style={{ whiteSpace: "normal" }}>jobs need attention</small></span><RailIcon name="chevron"/></button>
         <button type="button" className="rr-metric rr-glass rr-cost-metric" onClick={() => router.push("/money")}><span className="rr-medallion mint"><RailIcon name="database"/></span><span><b>Money by job</b><small>Invoices and payments are kept separate</small></span><RailIcon name="chevron"/></button>
       </div>
       <div className="rr-main-grid">
-        <section className="rr-attention rr-glass"><div className="rr-section-head"><h2>What needs you today</h2><button type="button" className="rr-text-button" onClick={() => router.push("/check")}>View all ({open.length})</button></div>
-          <div className="rr-attention-list">{shown.length ? shown.map((item, index) => <article className="rr-attention-row" key={item.id}>
+        <section className="rr-attention rr-glass" style={{ height: "auto" }}><div className="rr-section-head"><h2>What needs you today</h2><button type="button" className="rr-text-button" onClick={() => router.push("/check")}>View all ({attention.items.length} jobs)</button></div>
+          <div className="rr-attention-list" style={{ height: "auto", gridTemplateRows: "none" }}>{shown.length ? shown.map((item, index) => <article className="rr-attention-row" key={item.id}>
             <span className={`rr-photo rr-photo-${ATTENTION_PHOTOS[index % 3]}`} role="img" aria-label="Illustrative image"></span>
-            <span className="rr-medallion orange"><RailIcon name={item.classification === "mandatory" ? "alert" : "file"}/></span>
-            <div className="rr-attention-copy"><h3>{item.title}</h3><p>{item.detail}</p><div className="rr-attention-bottom"><div className="rr-pills"><span>{item.jobLabel}</span><span>{item.classification === "mandatory" ? "Must decide" : "Worth a look"}</span></div><button type="button" className="rr-button" onClick={() => router.push("/check")}>Review <RailIcon name="arrow"/></button></div></div>
-          </article>) : <div className="rr-clear"><h3>No immediate action</h3><p>Nothing needs a decision right now. Your job records are below.</p></div>}</div>
+            <span className="rr-medallion orange"><RailIcon name={"alert"}/></span>
+            <div className="rr-attention-copy"><h3>{item.title}</h3>{item.reasons.map(reason => <p key={reason} style={{ fontSize: 13, lineHeight: 1.5 }}>{reason}</p>)}<div className="rr-attention-bottom"><div className="rr-pills"><span>Job needing attention</span></div><button type="button" className="rr-button" style={{ minWidth: 0, whiteSpace: "normal" }} onClick={() => router.push(item.href)}>Work / Final Check <RailIcon name="arrow"/></button></div></div>
+          </article>) : attention.complete ? <div className="rr-clear"><h3>No immediate action</h3><p>Nothing needs a decision right now. Your job records are below.</p></div> : null}{!attention.complete && <p role="status">Some job checks could not be loaded</p>}</div>
         </section>
-        {featured ? <section className="rr-feature rr-glass" aria-label={`Featured job: ${featured.title}`}>
+        {featured ? <section className="rr-feature rr-glass" style={{ height: "auto" }} aria-label={`Featured job: ${featured.title}`}>
           <div className="rr-feature-art"><div className="rr-feature-heading"><span className="rr-status green"><i></i>{jobStatusLabels[featured.status].toUpperCase()}</span><h2>{featured.title}</h2><p>{known(featured.customerLabel) || "Customer details needed"}</p><div className="rr-location"><RailIcon name="pin"/><span>{known(featured.siteLabel) || "Site details needed"}</span><b></b><RailIcon name="calendar"/><span>{featured.updatedLabel}</span><button type="button" className="rr-icon-button" aria-label={`Open ${featured.title}`} onClick={() => router.push(`/jobs/${featured.id}/overview`)}><RailIcon name="chevron"/></button></div></div>
             <div className="rr-paper"><div className="rr-paper-top"><span>{featured.document.reference ?? "Job record"}</span><button type="button" className="rr-paper-menu" aria-label="Open job records" onClick={() => router.push(`/jobs/${featured.id}/records`)}>•••</button></div><p>{featured.title}<br/>{known(featured.siteLabel) || "Site details needed"}</p><ul>{STAGES.slice(1).map(([label], index) => <li key={label}>{index + 1 < stage ? <RailIcon name="check"/> : <span></span>}{label}</li>)}</ul></div>
           </div>
           <div className="rr-feature-bottom">
             <div className="rr-stage-rail" data-stage={stage} aria-label="Job stages">{STAGES.map(([label], index) => <button key={label} type="button" className={index < stage ? "done" : index === stage ? "current" : ""} onClick={() => router.push(`/jobs/${featured.id}/${index >= 4 ? "money" : "work"}`)}><span>{index < stage && <RailIcon name="check"/>}</span><small>{label}</small></button>)}</div>
-            <div className="rr-financials">{([["Approved extras", featuredValue?.approvedExtras.pence], ["Invoiced", featuredValue?.invoicedGross.pence], ["Paid", featuredValue?.recordedGross.pence], ["Still owed", featuredValue?.outstandingGross.pence]] as const).map(([label, pence]) => <div key={label}><span>{label}{label === "Paid" && <> <small title="Manually entered, not verified bank settlement">ⓘ</small></>}</span><strong title={pence === null || pence === undefined ? "Not recorded yet" : undefined}>{pence === null || pence === undefined ? "—" : money(pence).replace(/\.00$/u, "")}</strong></div>)}</div>
+            <p>{agreedLine(featured ? facts?.[featured.id] : undefined)}</p><p>Payments recorded by you, not bank-confirmed.</p><div className="rr-financials">{([["Approved extras", featuredValue?.approvedExtras.pence], ["Invoiced", featuredValue?.invoicedGross.pence], ["Paid", featuredValue?.recordedGross.pence], ["Still owed", featuredValue?.outstandingGross.pence]] as const).map(([label, pence]) => <div key={label}><span>{label}{label === "Paid" && <> <small title="Manually entered, not verified bank settlement">ⓘ</small></>}</span><strong title={pence === null || pence === undefined ? "Not recorded yet" : undefined}>{pence === null || pence === undefined ? "—" : money(pence).replace(/\.00$/u, "")}</strong></div>)}</div>
           </div>
         </section> : <section className="rr-feature rr-glass"><Empty title={failed ? "Your jobs did not load" : jobs ? "No jobs yet" : "Loading your jobs…"} text={jobs && !jobs.length ? "Start a new job to see it here." : "This takes a moment."}/></section>}
       </div>
       <section className="rr-your-jobs rr-glass"><div className="rr-section-head"><h2>Your jobs</h2><div><button type="button" className="rr-text-button" onClick={() => router.push("/jobs")}>View all jobs <RailIcon name="arrow"/></button><button type="button" className="rr-button" onClick={() => router.push("/jobs/new")}><RailIcon name="plus"/> New quote</button></div></div>
         <div className="rr-job-grid">{(jobs ?? []).slice(0, 3).map((job, index) => <article className="rr-mini-job" key={job.id}>
           <button type="button" className="rr-mini-photo" aria-label={`Open ${job.title}`} onClick={() => router.push(`/jobs/${job.id}/overview`)}><span className={`rr-photo rr-photo-${["job-martin", "job-harper", "job-ocean"][index % 3]}`} role="img" aria-label="Illustrative image"></span></button>
-          <div className="rr-mini-copy"><div className="rr-mini-top"><span className={`rr-status ${needsChecking(job) ? "amber" : job.status === "live" ? "green" : "grey"}`}><i></i>{(needsChecking(job) ? "Needs attention" : jobStatusLabels[job.status]).toUpperCase()}</span><button type="button" className="rr-mini-menu" aria-label="Open job records" onClick={() => router.push(`/jobs/${job.id}/records`)}>•••</button></div>
+          <div className="rr-mini-copy"><div className="rr-mini-top"><span className={`rr-status ${attention.items.some(item => item.id === job.id) ? "amber" : job.status === "live" ? "green" : "grey"}`}><i></i>{(attention.items.some(item => item.id === job.id) ? "Needs attention" : jobStatusLabels[job.status]).toUpperCase()}</span><button type="button" className="rr-mini-menu" aria-label="Open job records" onClick={() => router.push(`/jobs/${job.id}/records`)}>•••</button></div>
             <button type="button" className="rr-job-title" onClick={() => router.push(`/jobs/${job.id}/overview`)}>{job.title}</button><p>{known(job.siteLabel) || known(job.customerLabel) || "Details needed"}</p>
-            <div className="rr-mini-footer"><strong>{quoteLine(job)}</strong><div><small>Payment</small><span>{job.customerPayment === "not_due" ? "Not due" : job.customerPayment === "settled" ? "Paid" : job.customerPayment === "part_paid" ? "Part paid" : job.customerPayment === "due" ? "Due" : "Not checked"}</span></div></div></div>
+            <div className="rr-mini-footer"><strong>{quoteLine(job)} · {agreedLine(facts?.[job.id])}</strong><div><small>Payment</small><span>{facts?.[job.id]?.payment?.paymentStatus ?? "Payment status unavailable"}</span><small>Recorded by you, not bank-confirmed</small></div></div></div>
         </article>)}</div>
       </section>
     </section>
@@ -92,10 +83,13 @@ export function DesignedCheck() {
 }
 function Check({ workspace }: { workspace: Workspace }) {
   const router = useRouter();
+  const { jobs } = useJobs(workspace.tenantId);
+  const facts = useJobFacts(workspace.tenantId, (jobs ?? []).map(job => job.id));
   const [counts, setCounts] = useState(workspace.decisions?.counts ?? null);
-  return <Shell workspace={{ ...workspace, pending: counts?.pending ?? workspace.pending }} title="The things that need you." subtitle={INNER_SUBTITLE} active="check">
-    <Head kicker="THE JOBGUARD WATCHDOG" title="Only what needs attention." text="Every item says what we noticed, why it matters and what to do. No AI makes approvals, sends claims or spends money in this practice." action={counts && <Tag tone={counts.pending ? "amber" : "green"}>{counts.pending ? `${counts.pending} to decide` : "All clear"}</Tag>}/>
-    <div data-testid="designed-check"><Legacy label="Decision inbox" cards><DecisionInbox tenantId={workspace.tenantId} close={() => router.push("/today")} onCounts={setCounts}/></Legacy></div>
+  const attention = useAttention(workspace, jobs, facts, counts?.pending);
+  return <Shell workspace={{ ...workspace, pending: attention.items.length }} title="The things that need you." subtitle={INNER_SUBTITLE} active="check">
+    <Head kicker="THE JOBGUARD WATCHDOG" title="Only what needs attention." text="Every item says what we noticed, why it matters and what to do. No AI makes approvals, sends claims or spends money in this practice." action={<Tag tone={attention.items.length || !attention.complete ? "amber" : "green"}>{attention.items.length} jobs need attention</Tag>}/>
+    <div data-testid="designed-check">{!attention.complete && <p role="status">Some job checks could not be loaded</p>}{attention.items.map(item => <Card key={item.id} title={item.title}><div className="card-body">{item.reasons.map(reason => <p key={reason}>{reason}</p>)}<a className="btn small" href={item.href}>Open Work / Final Check →</a></div></Card>)}<Legacy label="Decision inbox" cards><DecisionInbox tenantId={workspace.tenantId} close={() => router.push("/today")} onCounts={setCounts}/></Legacy></div>
   </Shell>;
 }
 
@@ -106,7 +100,8 @@ export function DesignedMoney() {
 function MoneyHome({ workspace }: { workspace: Workspace }) {
   const router = useRouter();
   const { jobs, failed } = useJobs(workspace.tenantId);
-  const values = useValues(jobs);
+  const facts = useJobFacts(workspace.tenantId, (jobs ?? []).map(job => job.id));
+  const values = facts ? Object.fromEntries(Object.entries(facts).map(([id, fact]) => [id, fact.value])) : null;
   const outstanding = total(values, value => value.outstandingGross.pence), invoiced = total(values, value => value.invoicedGross.pence);
   const paid = total(values, value => value.recordedGross.pence), approved = total(values, value => value.approvedExtras.pence);
   const show = (pence: number | null | undefined) => pence === undefined ? "…" : money(pence);
@@ -122,7 +117,7 @@ function MoneyHome({ workspace }: { workspace: Workspace }) {
         {failed ? <Empty title="Your jobs did not load" text="Nothing changed. Refresh the page to try again."/> : !jobs ? <Empty title="Loading…" text="This takes a moment."/> : !jobs.length ? <Empty title="No jobs yet" text="Start a new job to see its money here."/>
           : jobs.map((job, index) => { const value = values?.[job.id]; return <div className="job-row" key={job.id}>
             <img className="job-photo" src={PHOTOS[index % PHOTOS.length]} alt="Illustrative property"/>
-            <div className="job-name"><strong>{job.title}</strong><small>{money(value?.invoicedGross.pence)} invoiced · {money(value?.recordedGross.pence)} recorded as paid</small><p>{documentLine(job)}</p>{statusTag(job.status)}</div>
+            <div className="job-name"><strong>{job.title}</strong><small>{money(value?.invoicedGross.pence)} invoiced · {money(value?.recordedGross.pence)} recorded as paid</small><p>{agreedLine(facts?.[job.id])}</p><p>{facts?.[job.id]?.payment?.paymentStatus ?? "Payment status unavailable"} · recorded by you, not bank-confirmed</p><p>{documentLine(job)}</p>{statusTag(job.status)}</div>
             <div className="job-side"><strong>{value ? money(value.outstandingGross.pence) : "…"}</strong><button type="button" className="btn small primary" onClick={() => router.push(`/jobs/${job.id}/money`)}>Open money →</button></div>
           </div>; })}
       </Card></div>

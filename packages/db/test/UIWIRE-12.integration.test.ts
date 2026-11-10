@@ -1,5 +1,5 @@
 import { prepareInvoicePrerequisites } from "./sv5pre-fixtures.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
@@ -11,7 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { migrate, MIGRATION_URLS, PracticeInvoiceRepository, withTenant } from "../src/index.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 const T="11000000-0000-4000-8000-000000000001", A="21000000-0000-4000-8000-000000000002", U="31000000-0000-4000-8000-000000000003", M="41000000-0000-4000-8000-000000000004";
-const context=testTenantContext(T);
+let context=testTenantContext(T);
 let pg:EmbeddedPostgres,admin:Pool,runtime:Pool,dir:string,repo:PracticeInvoiceRepository;
 type Fixture={jobId:string;invoiceId:string;quoteId:string;draftId:string;revisionId:string};
 type ReceiptInput=Parameters<PracticeInvoiceRepository["recordReceipt"]>[1];
@@ -70,6 +70,7 @@ beforeAll(async()=>{
   reversalHistory={f,p,other};
  }
  await migrate(admin);await installLegacySyntheticPartyFixtures(admin);
+ context=await testBoundTenantContext(admin,T,M);
  const names=MIGRATION_URLS.map(url=>fileURLToPath(url).split("/").at(-1)!);
  const applied=await admin.query(`SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name`);
  expect(applied.rowCount).toBe(MIGRATION_URLS.length);
@@ -155,7 +156,7 @@ describe("UIWIRE-12 customer receipts",()=>{
   const user=randomUUID(),member=randomUUID();
   await admin.query(`INSERT INTO identity.identity_user(id)VALUES($1)`,[user]);
   await admin.query(`INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)VALUES($1,$2,$3,$4,'owner')`,[member,T,A,user]);
-  await expect(repo.recordReceipt(context,{...c,actorMembershipId:member})).rejects.toMatchObject({code:"23505"});
+  await expect(repo.recordReceipt(await testBoundTenantContext(admin,T,member),{...c,actorMembershipId:member})).rejects.toMatchObject({code:"23505"});
  });
  it.each([{amountPence:null},{amountPence:0},{amountPence:1_000_000_000_001},{method:null},{method:"bank_confirmed"},{reference:null},{reference:" "},{reference:"x".repeat(121)},{paidOn:"infinity"},{paidOn:"-infinity"}])("rejects malformed direct SQL inputs %j",async extra=>{
   const f=await freshInvoice();await expect(rawRecord(command(f),extra)).rejects.toMatchObject({code:"22023"});

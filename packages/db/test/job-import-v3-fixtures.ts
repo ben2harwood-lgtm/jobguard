@@ -22,6 +22,9 @@ type ScriptedImportPool = {
 export function scriptedImportPool(): ScriptedImportPool {
   const state = { authenticated: true, owns: true, provenance: "system_generated_quote", actor: M, binding: { ...parties } };
   const query = vi.fn<ScriptQuery>(async (sql: string, _values?: unknown[]) => {
+    // This scripted transport has no PostgreSQL cluster; select the setup-only
+    // path when the integration binding adapter probes the connection.
+    if (sql.startsWith("SELECT current_database() AS database, inet_server_port() AS port,")) return { rows: [{ database: "unit", port: 0, administrative: true }], rowCount: 1 };
     if (["BEGIN", "COMMIT", "ROLLBACK"].includes(sql) || sql.startsWith("SELECT set_config") || sql.startsWith("SELECT pg_advisory_xact_lock")) return { rows: [], rowCount: 0 };
     if ((sql.includes("authenticate_practice_session") || sql.includes("ch5_import_actor"))) return { rows: state.authenticated ? [{ membership_id: state.actor }] : [], rowCount: state.authenticated ? 1 : 0 };
     if (sql.includes("FROM practice_owned_job")) return { rows: state.owns ? [{ id: J, provenance: state.provenance }] : [], rowCount: state.owns ? 1 : 0 };
@@ -31,7 +34,7 @@ export function scriptedImportPool(): ScriptedImportPool {
     throw new Error(`Unexpected SQL in unit transport: ${sql}`);
   });
   const release = vi.fn(), client = { query, release }, pool = { connect: vi.fn(async () => client) } as unknown as Pool;
-  return { pool, query, state, release, context: testTenantContext(T) };
+  return { pool, query, state, release, context: testTenantContext(T, { membershipId: M }) };
 }
 export async function createImportFixture() {
   const f = await createWorkFixture();

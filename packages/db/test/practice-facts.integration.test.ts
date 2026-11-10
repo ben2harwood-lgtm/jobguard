@@ -18,7 +18,7 @@ import { testTenantContext } from "./tenant-context-test-utils.js";
 const priorEnvironment = process.env.JOBGUARD_ENV;
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, directory: string;
 const password = "synthetic-feed-test-only";
-const context = testTenantContext(DEMO_TENANT_ID);
+const context = testTenantContext(DEMO_TENANT_ID, { membershipId: DEMO_MEMBERSHIP_ID });
 const actor = { membershipId: DEMO_MEMBERSHIP_ID, identityUserId: DEMO_IDENTITY_USER_ID };
 const previousJob = randomUUID(), otherTenant = randomUUID();
 const command = (expectedRevision: number, extra: Record<string, unknown>) => ({ version: "practice-feed-command.v1", commandId: randomUUID(), expectedRevision, ...extra });

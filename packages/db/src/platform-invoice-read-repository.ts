@@ -1,3 +1,4 @@
+import { isRequestBindingRefusal } from "./request-binding-error.js";
 import type { Pool } from "pg";
 import { PlatformInvoiceError, type PlatformInvoiceDocument } from "@jobguard/core";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
@@ -18,7 +19,7 @@ export class PlatformInvoiceReadRepository {
         }));
       });
     } catch (error) {
-      if ((error as { code?: string }).code === "42501") throw new PlatformInvoiceError("PLATFORM_INVOICE_FORBIDDEN");
+      if (isRequestBindingRefusal(error) || (error as { code?: string }).code === "42501") throw new PlatformInvoiceError("PLATFORM_INVOICE_FORBIDDEN");
       throw error;
     }
   }

@@ -6,7 +6,7 @@ const hooks = vi.hoisted(() => {
   let cursor = 0;
   const slots: any[] = [], effects: (() => void)[] = [];
   return {
-    seed(parties: boolean | null) { slots[0] = parties; slots[7] = true; },
+    seed(parties: boolean | null) { slots[1] = parties; slots[8] = true; },
     reset() { cursor = 0; slots.length = 0; effects.length = 0; },
     render() { cursor = 0; },
     effects() { while (effects.length) effects.shift()!(); },

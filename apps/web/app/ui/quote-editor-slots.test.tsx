@@ -61,5 +61,7 @@ it("keeps loaded live markup identical when no slot is passed", () => {
   {documentVersion:1, netPence:100000, totalPence:120000, acceptedAt:"2026-11-09", actor:"Builder", method:"email", sourceEvidence:"Fictional"},
   null, "Fictional customer", "email", "2026-11-09", [], {acceptedNetPence:100000, acceptedDocumentVersion:1, baseCreditPence:0}, false, null, "no_charge"];
  const html = renderToStaticMarkup(<QuoteEditor jobId={jobId} source={[]} questions={[]} back={()=>undefined}/>);
- expect(createHash("sha256").update(html).digest("hex")).toBe("293b2a79adec74bc48440740523bae05a601fd1ab6f58985a06684212c0af989");
+ // Main intentionally groups the practice delivery controls in a labelled fieldset.
+ expect(html).toContain("<legend>Practice only: pretend sending problems</legend>");
+ expect(createHash("sha256").update(html).digest("hex")).toBe("a3bd9285780640100a088d15dae64a94e98159db7812fff5a7385604178654e2");
 });

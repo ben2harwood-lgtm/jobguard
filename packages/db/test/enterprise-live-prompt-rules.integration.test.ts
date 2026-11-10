@@ -1,3 +1,4 @@
+import { testActorContext } from "./tenant-context-test-utils.js";
 // Real PostgreSQL command fixtures. NOT RUN in the restricted builder sandbox.
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -52,16 +53,16 @@ describe("persisted deterministic prompt rules", () => {
  });
  it("completed visit yes creates a job-wide closeout prompt before the visit transaction commits", async () => {
   const f = await promptFixture(c), visits = new SiteVisitRepository(c.runtime), actor=f.members.operative.member;
-  const started = await visits.startVisit(f.ctx,actor,startInput(f));
-  await visits.completeVisit(f.ctx,actor,completeInput(f,started.visitId,'yes'));
+  const started = await visits.startVisit(await testActorContext(c.admin, f.ctx, actor),actor,startInput(f));
+  await visits.completeVisit(await testActorContext(c.admin, f.ctx, actor),actor,completeInput(f,started.visitId,'yes'));
   expect((await repo.list(f.sessions.named!,listInput(f))).items).toEqual(expect.arrayContaining([expect.objectContaining({rule:'d'})]));
   const citation = (await c.admin.query("SELECT c.source_id FROM app.extra_prompt_citation c JOIN app.extra_prompt p ON(p.tenant_id,p.id)=(c.tenant_id,c.prompt_id) WHERE c.tenant_id=$1 AND p.rule='d'",[f.p.tenantId])).rows[0]!;
   expect((await c.admin.query("SELECT site_visit_id FROM app.closeout_answer WHERE tenant_id=$1 AND id=$2",[f.p.tenantId,citation.source_id])).rows[0]!.site_visit_id).toBe(started.visitId);
  });
  it("closeout confirmation requires explicit work identity and creates no implicit price",async()=>{
   const f=await promptFixture(c),visits=new SiteVisitRepository(c.runtime),actor=f.members.operative.member;
-  const start=await visits.startVisit(f.ctx,actor,startInput(f));
-  await visits.completeVisit(f.ctx,actor,completeInput(f,start.visitId,'yes'));
+  const start=await visits.startVisit(await testActorContext(c.admin, f.ctx, actor),actor,startInput(f));
+  await visits.completeVisit(await testActorContext(c.admin, f.ctx, actor),actor,completeInput(f,start.visitId,'yes'));
   const page=await repo.list(f.sessions.named!,listInput(f));
   const prompt=page.items.find((p:{rule:string})=>p.rule==='d')!;
   const cmd={version:'confirm-prompt.v1',commandId:randomUUID(),jobId:f.jobId,promptId:prompt.id,promptHash:prompt.promptHash};
@@ -73,8 +74,8 @@ describe("persisted deterministic prompt rules", () => {
  });
  it("no answer suppresses closeout and missing factor suppresses visit duration", async () => {
   const f = await promptFixture(c), visits = new SiteVisitRepository(c.runtime), actor=f.members.operative.member;
-  const started = await visits.startVisit(f.ctx,actor,startInput(f));
-  await visits.completeVisit(f.ctx,actor,completeInput(f,started.visitId,'no'));
+  const started = await visits.startVisit(await testActorContext(c.admin, f.ctx, actor),actor,startInput(f));
+  await visits.completeVisit(await testActorContext(c.admin, f.ctx, actor),actor,completeInput(f,started.visitId,'no'));
   expect((await repo.list(f.sessions.named!,listInput(f))).items).toHaveLength(0);
  });
  it("completed visits compare exact server microseconds to immutable contract factor", async () => {
@@ -90,8 +91,8 @@ describe("persisted deterministic prompt rules", () => {
   expect((await c.admin.query('SELECT contract_version_id FROM app.work_order WHERE tenant_id=$1 AND id=$2',[f.p.tenantId,order.orderId])).rows[0]!.contract_version_id).toBe(contract.id);
   expect((await c.admin.query('SELECT l.sor_version_id,i.standard_minutes FROM app.work_order_line l JOIN app.sor_item i ON(i.tenant_id,i.version_id,i.code)=(l.tenant_id,l.sor_version_id,l.sor_code) WHERE l.tenant_id=$1 AND l.job_id=$2',[f.p.tenantId,f.jobId])).rows).toEqual([{sor_version_id:sor.versionId,standard_minutes:1}]);
   await ownerTx(c,f.p.tenantId,db=>db.$client.query("INSERT INTO app.extra_prompt_rule_settings(tenant_id,id,client_contract_version_id,version,factor_numerator,factor_denominator,recognition,content_hash) VALUES($1,$2,$3,'extra-prompt-rule-settings.v1',1,1000000000000,'[]',$4)",[f.p.tenantId,randomUUID(),f.demo.contractVersionId,'a'.repeat(64)]));
-  const started=await visits.startVisit(f.ctx,actor,startInput(f));
-  await visits.completeVisit(f.ctx,actor,completeInput(f,started.visitId,'no'));
+  const started=await visits.startVisit(await testActorContext(c.admin, f.ctx, actor),actor,startInput(f));
+  await visits.completeVisit(await testActorContext(c.admin, f.ctx, actor),actor,completeInput(f,started.visitId,'no'));
   expect((await repo.list(f.sessions.named!,listInput(f))).items).toEqual(expect.arrayContaining([expect.objectContaining({rule:'c'})]));
   expect((await c.admin.query("SELECT count(*)::int n FROM app.extra_prompt_citation c JOIN app.extra_prompt p ON(p.tenant_id,p.id)=(c.tenant_id,c.prompt_id) WHERE c.tenant_id=$1 AND p.rule='c' AND c.source_id=$2",[f.p.tenantId,started.visitId])).rows[0]!.n).toBe(1);
  });
