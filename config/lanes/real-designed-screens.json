@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-designed-screens": {
+      "branches": [
+        "codex/sandbox/real-designed-screens"
+      ],
+      "allow": [
+        "apps/web/app/(designed)/designed-ui.tsx",
+        "apps/web/app/(designed)/home-screens.tsx",
+        "apps/web/app/(designed)/jobs-screens.tsx",
+        "apps/web/app/(designed)/real-designed-screens.test.tsx",
+        "apps/web/app/api/jobs/route.ts",
+        "apps/web/app/api/jobs/route.test.ts",
+        "apps/web/app/lib/synthetic-server.ts",
+        "apps/web/app/(designed)/design-fit.css"
+      ]
+    }
+  }
+}

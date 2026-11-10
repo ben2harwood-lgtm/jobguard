@@ -16,6 +16,7 @@ export class PolicyGateDeniedError extends Error {
 /** Deployment mode is supplied by trusted server configuration, never request input. */
 export type EnterpriseGate = "enterprise_real_data" | "enterprise_fee_posting" | "enterprise_fee_collection" | "enterprise_ai_prompts";
 export function requireApprovedDecision(mode: DeploymentMode, requiredId: DecisionId, decision: DecisionRecord, gate?: EnterpriseGate): void {
+  if (!deploymentModes.includes(mode)) mode = "production_billing";
   if ((mode === "production_billing" || (mode === "pilot_no_charge" && gate !== undefined)) && (decision.id !== requiredId || decision.status !== "approved")) {
     throw new PolicyGateDeniedError(requiredId, mode, decision.policyVersion);
   }

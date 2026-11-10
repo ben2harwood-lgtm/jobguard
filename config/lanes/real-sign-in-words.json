@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-sign-in-words": {
+      "branches": [
+        "codex/sandbox/real-sign-in-words"
+      ],
+      "allow": [
+        "apps/web/app/sign-in/sign-in.test.tsx",
+        "apps/web/app/sign-in/sign-in.tsx",
+        "apps/web/e2e/DEMO-S-chooser.spec.ts",
+        "apps/web/e2e/ENT-10d.spec.ts",
+        "apps/web/e2e/M0-6L.spec.ts",
+        "apps/web/e2e/M4-13-mandate-screen.spec.ts",
+        "apps/web/e2e/customer-extra-approval.spec.ts",
+        "apps/web/e2e/customer-signin.spec.ts",
+        "apps/web/e2e/helpers/chooser-sign-in.ts",
+        "apps/web/e2e/helpers/j3-integrity-approval.ts",
+        "apps/web/e2e/practice-bank.spec.ts"
+      ]
+    }
+  }
+}

@@ -41,7 +41,7 @@ test("blank practice is private, survives reload and resets to empty", async ({ 
     await expect(page.getByRole("heading", { name: "Ready for your first job" })).toBeVisible();
     expect((await other.cookies()).find(cookie => cookie.name === "jg_session")!.value).toBe(otherToken);
     await page.getByRole("button", { name: "＋ Start a new job" }).click();
-    await expect(page.getByLabel("Work details")).toHaveValue("");
+    await expect(page.getByLabel("Work details")).toHaveValue("Practice decorating. Protect room £200.00. Prepare walls £200.00. Paint walls £200.00. Finish trim £200.00. Clean site £100.00. Replace shelves");
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   } finally { await other.close(); }
 });

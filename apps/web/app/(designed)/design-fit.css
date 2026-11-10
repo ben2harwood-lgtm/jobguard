@@ -12,3 +12,7 @@ body:has(.jgd) .sandbox-banner{position:sticky;top:0}
 @media (max-width:760px){.jgd .jgd-legacy.jgd-legacy{padding:4px 12px 16px}}
 /* Hosted tools that print their own copy of the sandbox banner: the page already shows it once. */
 .jgd .jgd-legacy.jgd-legacy .sandbox-banner{display:none}
+
+/* Quote states need to wrap where the reference card used a short document number. */
+.jgd .rr-mini-footer.rr-mini-footer{flex-wrap:wrap}
+.jgd .rr-mini-footer.rr-mini-footer>strong{min-width:0;max-width:100%;white-space:normal;overflow-wrap:anywhere}

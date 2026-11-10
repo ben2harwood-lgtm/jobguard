@@ -1,4 +1,5 @@
 "use client";
+import { jobPageFetch as fetch } from "./job-page-fetch";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LINKED_JOB_COPY, customerMessageInputV1, customerMessageReadV1, diaryInputV1, diaryReadV1, type CustomerMessageRead, type DiaryRead } from "@jobguard/core";
 import styles from "./practice-receipts.module.css";

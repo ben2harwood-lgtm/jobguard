@@ -87,7 +87,7 @@ test("[B] [S1] [S3] SSO requirement persists, emailed-code session is refused an
   const tab=await fresh.newPage();let message:string|null=null;
   for(const email of [account.email,`unknown-${crypto.randomUUID()}@fictional.invalid`]) {
    challengeEmails.push(email);await tab.goto("/sign-in");
-   await tab.getByLabel("Sign-in purpose").selectOption("signin");
+   await tab.getByLabel("What do you want to do?").selectOption("signin");
    await tab.getByLabel("Fictional email address").fill(email);
    const requested=tab.waitForResponse(r=>r.url().endsWith("/api/auth/request")&&r.request().method()==="POST");
    await tab.getByRole("button",{name:"Request code",exact:true}).click();

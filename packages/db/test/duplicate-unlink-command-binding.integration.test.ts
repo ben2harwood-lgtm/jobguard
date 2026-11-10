@@ -94,12 +94,14 @@ describe("LATER-SAFETY-131 duplicate unlink command binding on PostgreSQL", () =
  });
 
  it("the same refusal assertion fails with the old unlink branch and the fixed guard is restored", async () => {
-  const l = await linked(), semantic = (command: string) => key(l.f, l.linkId, command);
-  const mutant = await probe(l, "MarkDuplicate", semantic, true);
+  // 0706 also requires an UnlinkDuplicate receipt. Keep that receipt valid while
+  // using the wrong link key to isolate the semantic binding in the mutated guard.
+  const l = await linked(), wrongLink = randomUUID(), semantic = (command: string) => key(l.f, wrongLink, command);
+  const mutant = await probe(l, "UnlinkDuplicate", semantic, true);
   expect(mutant.error).toBeUndefined();
   expect(mutant.rows).toHaveLength(1);
   expect(() => assertRefused(mutant)).toThrow();
-  assertRefused(await probe(l, "MarkDuplicate", semantic));
+  assertRefused(await probe(l, "UnlinkDuplicate", semantic));
   expect((await repo.readDuplicateLinks(l.f.ctx, l.f.jobId)).activeLinks).toHaveLength(1);
  });
 });

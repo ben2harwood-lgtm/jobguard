@@ -92,6 +92,12 @@ it('emergency_dual_owner/scim2_machine preserve populated identity state, instal
  const nextShape=(after.relations.find(isJob)!.constraints as Con[]).find(c=>c.name===shape)!;
  expect(nextShape.definition).not.toBe(priorShape.definition);
  expect(nextShape.definition.replace(/, 'paid'::[a-z ]+(?=\])/,'')).toBe(priorShape.definition);
+ // 0702 (LATER-SAFETY-139) only drops NOT NULL from app.synthetic_evidence_original.scope_item_id; nothing else on that table may change.
+ const isOriginal=(r:Relation)=>r.nspname==='app'&&r.relname==='synthetic_evidence_original';
+ type Col={attname:string;attnotnull:boolean};
+ const originalScope=(rs:Relation[])=>(rs.find(isOriginal)!.columns as Col[]).find(c=>c.attname==='scope_item_id')!;
+ expect(originalScope(catalogue.relations).attnotnull).toBe(true);
+ expect(originalScope(after.relations).attnotnull).toBe(false);
  // 0698 adds only the append-only attempt identity, its predecessor snapshot and the replacement unique key.
  const isManifest=(r:Relation)=>r.nspname==='app'&&r.relname==='final_check_manifest';
  const oldManifest=catalogue.relations.find(isManifest)!,newManifest=after.relations.find(isManifest)!;
@@ -119,7 +125,8 @@ it('emergency_dual_owner/scim2_machine preserve populated identity state, instal
   constraints:[...(newManifest.constraints as Con[]).filter(c=>!attemptNames.has(c.name)),oldLockKey].sort((a,b)=>a.name<b.name?-1:a.name>b.name?1:0),
  };
  const afterRelations=after.relations.map((r:Relation)=>isLanding(r)?{...r,constraints:(r.constraints as Con[]).filter(c=>c.name!==added)}
-  :isJob(r)?{...r,constraints:(r.constraints as Con[]).map(c=>c.name===shape?priorShape:c)}:isManifest(r)?normalizedManifest:r);
+  :isJob(r)?{...r,constraints:(r.constraints as Con[]).map(c=>c.name===shape?priorShape:c)}:isManifest(r)?normalizedManifest
+  :isOriginal(r)?{...r,columns:(r.columns as Col[]).map(c=>c.attname==='scope_item_id'?{...c,attnotnull:true}:c)}:r);
  expectRelationsUnchanged(catalogue.relations,afterRelations,laterAcl);
  // 0672 lets its migration-owned pack writer read the sealed request binding; only that ACL entry is added.
  const bindingReaders=new Set(['app.current_actor','app.current_tenant']);
