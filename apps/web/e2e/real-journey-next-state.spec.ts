@@ -30,11 +30,18 @@ test("walk 2 saved facts select the no-extra account and paid end states", async
     expect(response.ok(), `${suffix}: ${response.status()} ${await response.text()}`).toBe(true);
     return schema.parse(await response.json());
   };
+  // Before the lock and its Final Check run, the read is refused (403): "not available yet", not a failure.
+  const readCheckBeforeLock = async () => {
+    const response = await page.request.get(`/api/jobs/${jobId}/final-check`);
+    if (response.status() === 403) return undefined;
+    expect(response.ok(), `/final-check: ${response.status()} ${await response.text()}`).toBe(true);
+    return checkView.parse(await response.json());
+  };
   const savedFacts = async (checkpoint: string) => {
     const [workspace, proof, variations, account, lock, check, invoices] = await Promise.all([
       read("", jobWorkspaceResponseV1), read("/proof", proofView), read("/variations", variationWorkspaceResponseV1),
       read("/final-account", finalAccountResponseV1), read("/final-account/lock", lockView),
-      read("/final-check", checkView), read("/customer-invoices", practiceInvoiceResponseV1),
+      readCheckBeforeLock(), read("/customer-invoices", practiceInvoiceResponseV1),
     ]);
     const facts = { job: workspace.job, proof, variations, account, lock, check, invoices };
     const result = derivePracticeNextStep(facts);
