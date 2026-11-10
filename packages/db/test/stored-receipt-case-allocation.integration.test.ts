@@ -1,3 +1,4 @@
+import { withTenant } from "../src/tenant-context.js";
 // CI ONLY: real PostgreSQL and real writer chains. No replica-mode fixtures.
 import {assertLp4SealedEvents} from "./lp4-writer-catchup-fixture.js";
 import {randomUUID} from "node:crypto";
@@ -153,7 +154,7 @@ it.each([
 it("forged money and artifacts are refused at SQL, and private tables have no runtime grant",async()=>{
  const x=await realReceiptFixture(f);
  await expect(finalCheckTenant(f.runtime,x.context.tenantId,db=>db.query("SELECT * FROM app.receipt_allocation_fact_line"))).rejects.toMatchObject({code:"42501"});
- await expect(finalCheckTenant(f.runtime,x.context.tenantId,async db=>{await db.query("SELECT set_config('app.receipt_line_environment','synthetic_demo',true)");return db.query("SELECT app.write_receipt_allocation_facts($1,$2,$3,$4::jsonb,$5::jsonb)",[x.context.tenantId,x.jobId,x.auth.digest,{version:"receipt-line-facts-command.v1",action:"review",commandId:randomUUID(),paymentId:x.paymentId,expectedSourceRevision:2,grossPence:1},{grossPence:1}]);})).rejects.toThrow("INVALID_RECEIPT_LINE_COMMAND");
+ await expect(withTenant(f.runtime,x.context,async transaction=>{const db=transaction.$client;await db.query("SELECT set_config('app.receipt_line_environment','synthetic_demo',true)");return db.query("SELECT app.write_receipt_allocation_facts($1,$2,$3,$4::jsonb,$5::jsonb)",[x.context.tenantId,x.jobId,x.auth.digest,{version:"receipt-line-facts-command.v1",action:"review",commandId:randomUUID(),paymentId:x.paymentId,expectedSourceRevision:2,grossPence:1},{grossPence:1}]);})).rejects.toThrow("INVALID_RECEIPT_LINE_COMMAND");
 });
 it("positive producer replay is exact; a changed payload and a stale watermark cannot authorize new work",async()=>{
  const x=await realReceiptFixture(f),p={version:"receipt-line-facts-command.v1",action:"approve",commandId:x.produced.commandId,reviewId:x.produced.reviewId,approvalHash:x.produced.approvalHash,expectedSourceRevision:x.produced.sourceRevision};

@@ -25,7 +25,7 @@ async function member(options: { revoked?: boolean } = {}) {
 async function claimed(job: string, actor: string) {
   const upload = await h.pre.upload(job), finalizeId = randomUUID(), completeId = randomUUID();
   await h.repos.evidence.finalize(h.ctx, { commandId: finalizeId, uploadId: upload.id, objectVersionId: "v1", evidenceType: "electrical_certificate" });
-  await h.repos.proof.complete(h.ctx, { version: "proof.complete.v1", commandId: completeId, actorMembershipId: actor, jobId: job, scopeItemId: h.st(job).scope, stage: "electrical-stage", evidenceId: upload.id, requiredEvidenceType: "electrical_certificate", decisionId: null });
+  await h.repos.proof.complete(testTenantContext(h.tenant,{membershipId:actor}), { version: "proof.complete.v1", commandId: completeId, actorMembershipId: actor, jobId: job, scopeItemId: h.st(job).scope, stage: "electrical-stage", evidenceId: upload.id, requiredEvidenceType: "electrical_certificate", decisionId: null });
   return { select_generated: upload.id, finalize: finalizeId, complete: completeId } as const;
 }
 const actions = ["select_generated", "finalize", "complete"] as const;
@@ -88,13 +88,13 @@ describe("proof application records", () => {
 
     const completeId = randomUUID(), completeSpec = { commandId: completeId, jobId: job, action: "complete" as const, requestHash: hashOf({ job, completeId }) };
     const completion = { version: "proof.complete.v1", commandId: completeId, actorMembershipId: actor, jobId: job, scopeItemId: h.st(job).scope, stage: "electrical-stage", evidenceId: upload.id, requiredEvidenceType: "electrical_certificate", decisionId: null };
-    await expect(h.repos.proof.complete(h.ctx, completion, lost)).rejects.toThrow("lost before the answer was stored");
+    await expect(h.repos.proof.complete(testTenantContext(h.tenant,{membershipId:actor}), completion, lost)).rejects.toThrow("lost before the answer was stored");
     expect((await h.admin.query("SELECT 1 FROM app.stage_completion WHERE tenant_id=$1 AND command_id=$2", [h.tenant, completeId])).rowCount).toBe(0);
-    await h.repos.proof.complete(h.ctx, completion, async db => { await records.recordIn(db, h.tenant, { ...completeSpec, response: { as: "completed" } }); });
+    await h.repos.proof.complete(testTenantContext(h.tenant,{membershipId:actor}), completion, async db => { await records.recordIn(db, h.tenant, { ...completeSpec, response: { as: "completed" } }); });
     expect((await h.admin.query("SELECT 1 FROM app.stage_completion WHERE tenant_id=$1 AND command_id=$2", [h.tenant, completeId])).rowCount).toBe(1);
     expect(await records.replay(h.ctx, { ...completeSpec, actorMembershipId: actor })).toEqual({ response: { as: "completed" } });
     const replayedCompletion = vi.fn(async () => {});
-    await h.repos.proof.complete(h.ctx, completion, replayedCompletion);
+    await h.repos.proof.complete(testTenantContext(h.tenant,{membershipId:actor}), completion, replayedCompletion);
     expect(replayedCompletion).not.toHaveBeenCalled();
   });
 

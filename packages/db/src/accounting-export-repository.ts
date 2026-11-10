@@ -1,3 +1,4 @@
+import { isRequestBindingRefusal } from "./request-binding-error.js";
 import type { Pool } from "pg";
 import { z } from "zod";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
@@ -76,7 +77,7 @@ export class AccountingExportRepository {
    });
   } catch (error) {
    const message = error instanceof Error ? error.message : "";
-   throw new StoredAccountingExportError(message === "METER_FORBIDDEN" ? "EXPORT_FORBIDDEN" :
+   throw new StoredAccountingExportError((message === "METER_FORBIDDEN" || isRequestBindingRefusal(error)) ? "EXPORT_FORBIDDEN" :
     /^EXPORT_[A-Z_]+$/.test(message) ? message : "EXPORT_UNAVAILABLE");
   }
  }

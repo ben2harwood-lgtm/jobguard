@@ -54,7 +54,9 @@ it("refuses malformed or production reads and propagates network failure", async
 it("renders a loading state and synthetic notice before authenticated figures arrive", () => {
   const html = renderToStaticMarkup(createElement(PlanScreen));
   expect(html).toContain('role="status"'); expect(html).toContain("No real payments are taken");
-  expect(html).not.toContain("£");
+  for (const label of ["Solo", "Builder", "£29.00", "£69.00", "£49.00", "£169.00", "excluding VAT"]) expect(html).toContain(label);
+  expect(html.match(/aria-label="Plans"/g)).toHaveLength(1);
+  for (const label of ['aria-label="Your subscription"', 'aria-label="Subscription periods"', 'aria-label="Manage subscription"', 'aria-label="Company"', "No accepted subscription agreement", "No issued subscription periods", "<button", "<input"]) expect(html).not.toContain(label);
 });
 it("renders only Solo/Builder monthly options, with explicit empty agreement and periods", () => {
   const html = renderToStaticMarkup(createElement(PlanDetails, { view: subscriptionPlanView(empty, "2026-04-30") }));
