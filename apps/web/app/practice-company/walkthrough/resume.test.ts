@@ -30,12 +30,18 @@ describe("WALK server-backed resume", () => {
     expect(await resumeWalkthrough(params())).toMatchObject({ prepared: example, index: 4 });
     expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes("final-check"))).toBe(false);
   });
-  it.each(["pending", "failed", "completed"])("uses the saved %s check state before resuming invoicing", async state => {
+  it.each([
+    { state: "pending", items: [] },
+    { state: "failed", items: [] },
+    { state: "completed", items: [] },
+    { state: "completed", items: [{ signalId: own, signalRevision: 0, description: "fitted loft hatch", evidence: [],
+      comparisons: { lockedLineIds: [], baselineItemIds: [] }, disposition: null, answer: null }] },
+  ])("uses the saved $state check with $items before resuming invoicing", async ({ state, items }) => {
     server({ [`/api/jobs/${own}/proposal`]: capture(), [`/api/jobs/${example}/proposal`]: capture(example, "live"),
       [`/api/jobs/${example}/quotes/delivery`]: { status: "simulated_delivery" },
       [`/api/jobs/${example}/proof`]: { version: "practice-proof-view.v1", jobId: example, completion: { id: own, reviewRequired: false } },
       [`/api/jobs/${example}/variations`]: { version: 1, environment: "synthetic_demo", jobId: example, baselinePence: 100000, capPence: 0, parentScopeItemId: own, approvedAdditionsPence: 12500, approvedOmissionsPence: 0, pendingExtrasPence: 0, variations: [] },
-      [`/api/jobs/${example}/final-check`]: { state, items: [] },
+      [`/api/jobs/${example}/final-check`]: { state, items },
       [`/api/jobs/${example}/customer-invoices`]: { version: 1, environment: "synthetic_demo", jobId: example, invoices: [] } });
     expect((await resumeWalkthrough(params())).index).toBe(state === "completed" ? 7 : 6);
   });

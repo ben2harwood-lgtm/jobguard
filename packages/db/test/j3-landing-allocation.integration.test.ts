@@ -23,7 +23,7 @@ import {testTenantContext} from "./tenant-context-test-utils.js";
 import {createFinalCheckFixture,closeFinalCheckFixture,finalCheckTenant,type FinalCheckFixture} from "./final-check-fixture.js";
 import {pngBytes} from "./site-extra-evidence-fixtures.js";
 const hash="a".repeat(64);
-async function combinedReceiptFixture(f:FinalCheckFixture){
+async function combinedReceiptFixture(f:FinalCheckFixture,lateCatch=false){
  const baselineNetPence=3000000;
  process.env.JOBGUARD_ENV="synthetic_demo";
  await f.admin.query("INSERT INTO control_plane.tenant(id) VALUES($1) ON CONFLICT DO NOTHING",[DEMO_TENANT_ID]);
@@ -89,25 +89,34 @@ async function combinedReceiptFixture(f:FinalCheckFixture){
  const run=await worker.reconcile(context,jobId,manifest.id,classifications) as {runId:string;lockId:string};
  // Reconciliation makes the result available; publication authorizes invoicing.
  await new FinalCheckCompletionRepository(f.shadow).publish(context,{version:"final-check-publication.v1",jobId,runId:run.runId,checkId:randomUUID()});
- const catches=[];
- for(const [index,signalId] of signals.entries()){
+ const catches:{caseId:string;workId:string;commercialRevisionId:string}[]=[];
+ const confirmCatch=async(index:number)=>{
+  const signalId=signals[index]!;
   const confirm=await new FinalCheckRepository(scoped).confirmCatch(context,jobId,auth.digest,{version:"final-check.catch.v1",commandId:randomUUID(),lockId:run.lockId,runId:run.runId,signalId,expectedSignalRevision:1}) as {variationId:string};
-  const priced=await price(confirm.variationId,"Fictional catch",index===0?50000:30000);
+  const priced=await price(confirm.variationId,"Fictional catch",index===0?50000:lateCatch?32000:30000);
   const caseId=(await f.admin.query("SELECT id FROM app.recovery_case WHERE tenant_id=$1 AND job_id=$2 AND case_type='missed_variation_final_account' AND source_refs ? $3",[DEMO_TENANT_ID,jobId,'variation:'+confirm.variationId])).rows[0].id as string;
   catches.push({caseId,workId:workIds[index]!,commercialRevisionId:priced.id});
- }
+ };
+ for(const index of lateCatch?[0]:[0,1])await confirmCatch(index);
  drafted=await assembly.assemble(context,{version:"final-account.assemble.v1",commandId:randomUUID(),jobId,actorMembershipId:actor.membershipId,expectedRevision:drafted.revision});
  const issue={jobId,actorMembershipId:actor.membershipId,commandId:randomUUID(),finalAccountRevisionId:drafted.id,expectedSourceHash:drafted.sourceHash,invoiceKind:"final" as const,recipient:"practice-customer@example.invalid",issuedOn:"2026-10-28"};
- const invoice=await locks.issueInvoice(context,issue);
- expect(invoice).toMatchObject({netPence:3440000,totalPence:4128000});
+ let invoice=await locks.issueInvoice(context,issue);
+ const combinedInvoice=invoice;
+ expect(invoice).toMatchObject(lateCatch?{netPence:3410000,totalPence:4092000}:{netPence:3440000,totalPence:4128000});
  expect(await locks.issueInvoice(context,issue)).toEqual(invoice);
+ if(lateCatch){
+  await confirmCatch(1);
+  drafted=await assembly.assemble(context,{version:"final-account.assemble.v1",commandId:randomUUID(),jobId,actorMembershipId:actor.membershipId,expectedRevision:drafted.revision});
+  invoice=await locks.issueInvoice(context,{...issue,commandId:randomUUID(),finalAccountRevisionId:drafted.id,expectedSourceHash:drafted.sourceHash,invoiceKind:"supplementary"});
+  expect(invoice).toMatchObject({netPence:32000,totalPence:38400});
+ }
  const invoices=new PracticeInvoiceRepository(scoped);
- const payment=await invoices.recordReceipt(context,{jobId,invoiceId:invoice.invoiceId,actorMembershipId:actor.membershipId,commandId:randomUUID(),paidOn:"2026-10-28",amountPence:4128000,method:"bank_transfer",reference:"Fictional combined receipt"});
+ const payment=await invoices.recordReceipt(context,{jobId,invoiceId:invoice.invoiceId,actorMembershipId:actor.membershipId,commandId:randomUUID(),paidOn:"2026-10-28",amountPence:lateCatch?38400:4128000,method:"bank_transfer",reference:"Fictional combined receipt"});
  for(const action of ["advance","match_receipt"] as const){
-  const view=await feed.command(context,actor,auth.digest,jobId,{version:"practice-feed-command.v1",action,commandId:randomUUID(),expectedRevision:feedRevision,movement:"receipt-41280",...(action==="advance"?{step:"settled"}:{paymentId:payment.paymentId})});
+  const view=await feed.command(context,actor,auth.digest,jobId,{version:"practice-feed-command.v1",action,commandId:randomUUID(),expectedRevision:feedRevision,movement:lateCatch?"receipt-384":"receipt-41280",...(action==="advance"?{step:"settled"}:{paymentId:payment.paymentId})});
   feedRevision=view.revision;
  }
- return {context,actor,auth,session,jobId,lock,invoice,paymentId:payment.paymentId,invoices,catches,locks,scoped,drafted};
+ return {context,actor,auth,session,jobId,lock,invoice,combinedInvoice,paymentId:payment.paymentId,invoices,catches,locks,scoped,drafted};
 }
 let f:FinalCheckFixture;const environment=process.env.JOBGUARD_ENV;
 beforeAll(async()=>{f=await createFinalCheckFixture();},120000);
@@ -144,6 +153,61 @@ async function assess(x:Combined,index:number,lineId:string,expectedAttributionR
  expect(await repository.assess(x.context,x.jobId,x.auth.digest,command)).toEqual(saved);
  return saved;
 }
+it("a later supplementary catch reaches receipt allocation and attribution after a combined final; exact-R0 mutation fails",async()=>{
+ const x=await combinedReceiptFixture(f,true);
+ const {readFile}=await import("node:fs/promises");
+ const identity="app.receipt_fact_invoice_line(uuid,uuid,uuid,uuid,uuid,uuid,uuid)";
+ const definition=(await f.admin.query("SELECT pg_get_functiondef($1::regprocedure) definition",[identity])).rows[0].definition as string;
+ const security=async()=>(await f.admin.query("SELECT proowner,proacl,prosecdef,proconfig FROM pg_proc WHERE oid=$1::regprocedure",[identity])).rows;
+ const before=await security();
+ // Scratch mutation uses the exact predecessor body, whose only difference is
+ // the final-binding predicate. Restore it even when the regression fails.
+ const predecessor=await readFile(new URL("../migrations/0413_j3_combined_invoice.sql",import.meta.url),"utf8");
+ const oldFunction=predecessor.slice(predecessor.indexOf("CREATE OR REPLACE FUNCTION app.receipt_fact_invoice_line("));
+ try{
+  await f.admin.query(oldFunction.slice(0,oldFunction.indexOf("END $$;")+9));
+  await expect(produce(x)).rejects.toThrow("STORED_RECEIPT_LINE_BINDING_REQUIRED");
+ }finally{await f.admin.query(definition);}
+ expect(await security()).toEqual(before);
+ const saved=await produce(x);
+ expect(saved).toHaveProperty("allocationRevisionId");
+ const snapshot=await app(x).view(x.jobId);
+ expect(snapshot.rows).toHaveLength(1);
+ const line=snapshot.rows.find(row=>row.commercialRevisionId===x.catches[1]!.commercialRevisionId)!;
+ expect(line).toMatchObject({invoiceId:x.invoice.invoiceId,net:{numerator:"32000",denominator:"1"}});
+ await allocate(x,1,line.lineAllocationId);
+ const attributed=await assess(x,1,line.lineId);
+ expect(attributed).toMatchObject({assessmentOutcome:"eligible_for_review",remainingPrincipal:{numerator:"32000",denominator:"1"}});
+ const {attributionValueReceipt}=await import("../../../apps/api/src/recovery-attribution-value.js");
+ expect(attributionValueReceipt(attributed).fee.pence).toBe(3200);
+ // The copied catch A at R2 was already billed at R1. The supplementary has
+ // only B, and neither its receipt facts nor the private helper can allocate A.
+ expect(snapshot.rows.some(row=>row.commercialRevisionId===x.catches[0]!.commercialRevisionId)).toBe(false);
+ const copied=(await f.admin.query("SELECT id FROM app.final_account_line WHERE tenant_id=$1 AND job_id=$2 AND final_account_revision_id=$3 AND commercial_revision_id=$4",[x.context.tenantId,x.jobId,x.drafted.id,x.catches[0]!.commercialRevisionId])).rows[0].id as string;
+ const binding=(await f.admin.query("SELECT check_id FROM app.final_account_invoice_binding WHERE tenant_id=$1 AND invoice_id=$2",[x.context.tenantId,x.invoice.invoiceId])).rows[0];
+ const checkLine=(db:import("pg").PoolClient,lineId=line.lineId)=>db.query("SELECT app.receipt_fact_invoice_line($1,$2,$3,$4,$5,$6,$7)",[x.context.tenantId,x.jobId,x.invoice.invoiceId,lineId,x.drafted.id,x.lock.id,binding.check_id]);
+ await expect(finalCheckTenant(f.admin,x.context.tenantId,db=>checkLine(db,copied))).rejects.toThrow("STORED_RECEIPT_LINE_BINDING_REQUIRED");
+ // Owner-only corruption probes are rolled back, including all trigger changes.
+ // Keep the supplementary's own binding intact to exercise the final predicate.
+ for(const attack of ["different_lock","sibling_revision"] as const){
+  await expect(finalCheckTenant(f.admin,x.context.tenantId,async db=>{
+   const forged=randomUUID();
+   if(attack==="sibling_revision"){
+    await db.query(`INSERT INTO app.final_account_revision SELECT (jsonb_populate_record(NULL::app.final_account_revision,
+     to_jsonb(r)||jsonb_build_object('id',$4::text,'revision',r.revision+1,'source_hash',$5::text,'previous_revision_id',$6::text))).*
+     FROM app.final_account_revision r WHERE tenant_id=$1 AND job_id=$2 AND id=$3`,[x.context.tenantId,x.jobId,x.drafted.id,forged,createHash("sha256").update(forged).digest("hex"),x.lock.finalAccountRevisionId]);
+   }
+   await db.query("ALTER TABLE app.final_account_invoice_binding DISABLE TRIGGER ALL");
+   if(attack==="different_lock")await db.query("UPDATE app.final_account_invoice_binding SET lock_id=$3 WHERE tenant_id=$1 AND invoice_id=$2",[x.context.tenantId,x.combinedInvoice.invoiceId,forged]);
+   else await db.query("UPDATE app.final_account_invoice_binding SET revision_id=$3 WHERE tenant_id=$1 AND invoice_id=$2",[x.context.tenantId,x.combinedInvoice.invoiceId,forged]);
+   await db.query("ALTER TABLE app.final_account_invoice_binding ENABLE TRIGGER ALL");
+   await checkLine(db);
+  })).rejects.toThrow("STORED_RECEIPT_LINE_BINDING_REQUIRED");
+ }
+ await finalCheckTenant(f.admin,x.context.tenantId,db=>checkLine(db));
+ // Both failures rolled back; a normal read still proves the saved attribution.
+ expect((await new RecoveryAttributionRepository(f.runtime).history(x.context,x.jobId,x.auth.digest)).find(row=>row.assessmentId===attributed.assessmentId)).toEqual(attributed);
+});
 it("combined J3 value retains £3,600 captures and £800/£80/£720 recovery, refuses foreign reads, and appends a reversal revision",async()=>{
  const x=await combinedReceiptFixture(f);const produced=await produce(x);
  if(!("allocationRevisionId" in produced)||!produced.allocationRevisionId)throw new Error("Expected saved receipt revision");
