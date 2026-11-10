@@ -13,7 +13,7 @@ import { company as practiceCompany } from "./practice-worker-switch-fixtures.js
 import { ownerTx } from "./extra-fixtures.js";
 import { renderQuotePdf } from "@jobguard/core";
 let c: Cluster;
-const own = "1300_firm_profile.sql";
+const own = "0723_firm_profile.sql";
 const profile = { version: "firm-profile.v1", tradingName: " Fictional Oak Works ", addressLines: ["12 Example Lane"], contactEmail: "oak@fictional.invalid", contactPhone: "01234 000000" };
 beforeAll(async () => {
  vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
