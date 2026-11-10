@@ -7,7 +7,7 @@ import {
   FINAL_ACCOUNT_DECLARATION, FINAL_ACCOUNT_DECLARATION_VERSION, FINAL_ACCOUNT_REVIEW_PROMPT,
   FINAL_CHECK_RUNNING_TEXT, FINAL_CHECK_TERMS_STATEMENTS, FINAL_CHECK_TERMS_VERSION, parsePoundsToPence,
 } from "@jobguard/core";
-import { CustomerInvoices } from "./customer-invoices";
+import { CustomerInvoices, invoiceGuardMessages } from "./customer-invoices";
 
 const uuid = z.string().uuid();
 const viewV1 = z.object({
@@ -81,14 +81,19 @@ export function FinalAccountLock({ jobId, account, onChanged }: {
           <label style={{ display: "block" }}>Final-review extra price (£, optional)<input style={targetSize} inputMode="decimal" value={amount} onChange={event => setAmount(event.target.value)} /></label>
           <button style={targetSize} disabled={!description.trim()} onClick={() => void addReviewExtra()}>Add final-review extra</button>
           <ul>{FINAL_CHECK_TERMS_STATEMENTS.map(statement => <li key={statement}>{statement}</li>)}</ul>
+          {busy && <p role="status">Saving your final-account review. Wait for this to finish before continuing.</p>}
+          {view.termsAccepted && <p>Final check terms accepted.</p>}
           <button style={targetSize} disabled={view.termsAccepted} onClick={() => void command("terms", { version: "final-check-terms.accept.v1", commandId: crypto.randomUUID(), termsVersion: FINAL_CHECK_TERMS_VERSION })}>Accept final check terms</button>
           <p>{FINAL_ACCOUNT_DECLARATION}</p>
+          {!allDisposed && <p>Choose Done, Removed or Deferred for every accepted line before completing the final account.</p>}
+          {!view.termsAccepted && <p>Press “Accept final check terms” before completing the final account.</p>}
+          {account.issueBlocked && <p>Complete the required proof, then press “Rebuild from approved sources” to include the saved proof in this bill. You can then complete the final account.</p>}
           <button className="primary" style={targetSize} disabled={!allDisposed || !view.termsAccepted || account.issueBlocked}
             onClick={() => void command("lock", { version: "final-account.lock.v1", commandId: crypto.randomUUID(), finalAccountRevisionId: account.id, expectedRevision: account.revision, declarationVersion: FINAL_ACCOUNT_DECLARATION_VERSION })}>Complete final account</button>
         </fieldset>
       </> : <p data-testid="final-check-state" role="status">{FINAL_CHECK_RUNNING_TEXT}</p>}
       <CustomerInvoices jobId={jobId} finalAccount={account} lockGuard={{ code: view.invoiceGuard, kind: "final", ...(view.lock ? {lockedRevision:{id:view.lock.finalAccountRevisionId,sourceHash:view.lock.sourceHash,issueBlocked:false}} : {}) }} />
     </> : null}
-    {error ? <p ref={errorTarget} tabIndex={-1} data-testid="final-account-lock-error" role="alert">{error}</p> : null}
+    {error ? <p ref={errorTarget} tabIndex={-1} data-testid="final-account-lock-error" role="alert" data-error-code={error}>{Object.hasOwn(invoiceGuardMessages, error) ? invoiceGuardMessages[error as keyof typeof invoiceGuardMessages] : error}</p> : null}
   </section>;
 }

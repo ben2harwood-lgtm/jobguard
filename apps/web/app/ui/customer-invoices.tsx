@@ -7,13 +7,24 @@ import { CustomerReceipts } from "./customer-receipts";
 import { notifyInvoiceChanged } from "./customer-payment-status";
 import { CustomerInvoicePayNow } from "./pay-now-synthetic";
 const pounds=(p:number)=>`GBP ${(p/100).toLocaleString("en-GB",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+export const invoiceGuardMessages = {
+ FINAL_ACCOUNT_LOCK_REQUIRED: "Complete the final account first",
+ FINAL_CHECK_NOT_COMPLETE: "JobGuard's final check is still running",
+ FINAL_CHECK_FAILED: "JobGuard's final check could not finish, so this bill stays locked",
+} as const;
+function invoiceFailureMessage(code: string): string {
+ if (Object.hasOwn(invoiceGuardMessages, code)) return invoiceGuardMessages[code as keyof typeof invoiceGuardMessages];
+ if (["STALE_FINAL_ACCOUNT_AUTHORIZATION", "STALE_OR_BLOCKED_FINAL_ACCOUNT"].includes(code)) return "The final account changed. Rebuild it before issuing this invoice.";
+ if (code === "FINAL_INVOICE_ALREADY_ISSUED") return "This final invoice has already been issued. Reload the saved invoice history.";
+ return "The invoice result could not be confirmed. Reload the saved records before trying again.";
+}
 type LockInvoiceGuard = { code: "FINAL_ACCOUNT_LOCK_REQUIRED" | "FINAL_CHECK_NOT_COMPLETE" | "FINAL_CHECK_FAILED" | null; kind: "final" | "supplementary"; lockedRevision?:{id:string;sourceHash:string;issueBlocked:boolean} };
 export function CustomerInvoices({jobId,finalAccount,lockGuard}:{jobId:string;finalAccount:{id:string;sourceHash:string;issueBlocked:boolean};lockGuard?:LockInvoiceGuard}) {
  if(lockGuard)return <LockBoundCustomerInvoices jobId={jobId} finalAccount={finalAccount} guard={lockGuard}/>;
  return <PracticeCustomerInvoices jobId={jobId} finalAccount={finalAccount}/>;
 }
 function PracticeCustomerInvoices({jobId,finalAccount}:{jobId:string;finalAccount:{id:string;sourceHash:string;issueBlocked:boolean}}) {
- const [view,setView]=useState<PracticeInvoiceResponse|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState(""),[busy,setBusy]=useState(false);
+ const [view,setView]=useState<PracticeInvoiceResponse|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState(""),[busy,setBusy]=useState(false),[errorCode,setErrorCode]=useState("");
  const load=useCallback(async(refresh=false)=>{
   if(!refresh)setLoading(true);
   setError("");
@@ -32,11 +43,11 @@ function PracticeCustomerInvoices({jobId,finalAccount}:{jobId:string;finalAccoun
  },[jobId]);
  useEffect(()=>{void load();},[load]);
  async function issue(){
-  setBusy(true);setError("");
+  setBusy(true);setError("");setErrorCode("");
   try{
    const r=await fetch(`/api/jobs/${jobId}/customer-invoices`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({version:"practice-customer-invoice.issue.v1",commandId:crypto.randomUUID(),finalAccountRevisionId:finalAccount.id,expectedSourceHash:finalAccount.sourceHash,recipient:"practice-customer@example.invalid",issuedOn:new Date().toISOString().slice(0,10)})});
    if(r.ok){setView(practiceInvoiceResponseV1.parse(await r.json()));notifyInvoiceChanged(jobId);}
-   else setError(r.status===409?"The final account changed. Rebuild it before issuing this invoice.":"The invoice result could not be confirmed. Reload the saved records before trying again.");
+   else { const body = await r.json(); const code = typeof body.code === "string" ? body.code : ""; setErrorCode(code); setError(invoiceFailureMessage(code)); }
   }catch{setError("The invoice result could not be confirmed. Reload the saved records before trying again.");}
   finally{setBusy(false);}
  }
@@ -59,7 +70,9 @@ function PracticeCustomerInvoices({jobId,finalAccount}:{jobId:string;finalAccoun
    <CustomerCreditNotes jobId={jobId} invoiceId={invoice.id} onChanged={()=>void load(true)}/>
    <CustomerReceipts key={invoice.id} jobId={jobId} invoiceId={invoice.id} onChanged={()=>void load(true)}/>
   </article>}
-  {error&&<p role="alert">{error}</p>}
+  {busy&&<p role="status">Issuing this invoice. Wait for the saved result before continuing.</p>}
+  {finalAccount.issueBlocked&&!invoice&&<p>Complete the required proof, then press “Rebuild from approved sources” to include it before issuing this bill.</p>}
+  {error&&<p role="alert" data-error-code={errorCode}>{error}</p>}
  </section>;
 }
 
@@ -84,8 +97,10 @@ function LockBoundCustomerInvoices({jobId,finalAccount,guard}:{jobId:string;fina
  return <section data-testid="lock-bound-invoices" aria-label="Lock-bound customer invoices">
   <button style={{minHeight:44,minWidth:44}} disabled={busy||!!guard.code||finalAccount.issueBlocked} onClick={()=>void issue("final")}>Issue final invoice</button>
   <button style={{minHeight:44,minWidth:44}} disabled={busy||!!guard.code||finalAccount.issueBlocked} onClick={()=>void issue("supplementary")}>Issue supplementary invoice</button>
-  {guard.code&&<p role="alert">{guard.code}</p>}
-  {error&&<p role="alert">{error}</p>}
+  {busy&&<p role="status">Issuing this invoice. Wait for the saved result before continuing.</p>}
+  {guard.code&&<p role="alert" data-error-code={guard.code}>{invoiceGuardMessages[guard.code]}</p>}
+  {finalAccount.issueBlocked&&<p>Complete the required proof, then press “Rebuild from approved sources” before issuing this bill.</p>}
+  {error&&<p role="alert" data-error-code={error}>{invoiceFailureMessage(error)}</p>}
   {latest&&<p data-testid="lock-bound-invoice-gross">{pounds(latest.totalPence)}</p>}
  </section>;
 }
