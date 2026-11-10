@@ -30,6 +30,7 @@ export async function approveJ3Catches(page: Page, browser: Browser, jobId: stri
   });
   expect(signedIn.status, "Read signed-in link issuer through the browser session").toBe(200);
   const session = signedIn.body;
+  await issuer.getByText("Technical details", { exact: true }).click();
   expect(session.principal.id).toBe(await issuer.getByTestId("identity-id").innerText());
   expect(session.memberships.some((membership: { tenantId: string }) => membership.tenantId === tenantId)).toBe(false);
   // The practice job's tenant is fixed by the existing demo bootstrap, whereas
