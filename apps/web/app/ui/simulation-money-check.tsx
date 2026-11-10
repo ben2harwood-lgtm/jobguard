@@ -1,4 +1,5 @@
 "use client";
+import { jobPageFetch as fetch } from "./job-page-fetch";
 import { useState } from "react";
 import { simulationMoneyRunResultV1,type SimulationMoneyReport } from "@jobguard/core";
 type Saved={runId:string;sourceHash:string;paused:true;report:SimulationMoneyReport};

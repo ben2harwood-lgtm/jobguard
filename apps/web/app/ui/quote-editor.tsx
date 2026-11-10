@@ -1,4 +1,5 @@
 "use client";
+import { jobPageFetch as fetch } from "./job-page-fetch";
 import { PreventionChecks } from "./prevention-checks";
 import{JobVariations}from"./job-variations";
 import { WatchdogPanel } from "./watchdog-panel";

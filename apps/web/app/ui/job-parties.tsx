@@ -1,4 +1,5 @@
 "use client";
+import { jobPageFetch as fetch } from "./job-page-fetch";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { customerTypes, jobPartiesCommandResultV1, jobPartiesImportResultV1, jobPartiesWorkspaceV1, siteMatchKey, type JobPartiesCommandV1 } from "@jobguard/core";
 import type { z } from "zod";
