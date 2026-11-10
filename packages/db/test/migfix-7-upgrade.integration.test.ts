@@ -66,7 +66,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   expect(await policies()).toEqual(expected.policies);
   // Preserve all raw predecessor catalogue fields, including policy identities.
   for (const row of beforeCatalog) {
-    if (row.nspname === "app" && ["customer_portal_session", "customer_portal_grant"].includes(row.relname)) {
+    if (row.nspname === "app" && ["customer_portal_session", "customer_portal_grant", "extra_client_session", "extra_client_link"].includes(row.relname)) {
       // 0687 adds exactly the private owner's SELECT and one tenant-scoped read policy.
       // Complete ACL/policy metadata is checked against its exact proof above;
       // retain every raw predecessor policy object, owner and RLS flag here.
@@ -74,7 +74,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
       expect({ ...current, relacl: row.relacl, policies: row.policies }).toEqual(row);
       expect(current.policies).toHaveLength((row.policies?.length ?? 0) + 1);
       for (const policy of row.policies ?? []) expect(current.policies).toContainEqual(policy);
-      expect(current.policies.some((policy: { polname: string }) => policy.polname === "lp6_customer_binding_read")).toBe(true);
+      expect(current.policies.some((policy: { polname: string }) => policy.polname === (row.relname.startsWith("extra_") ? "lp6_client_binding_read" : "lp6_customer_binding_read"))).toBe(true);
     } else expect(replayCatalog).toContainEqual(row);
   }
   const authority = await readFile(new URL("../migrations/0642_extra_client_send_authority.sql", import.meta.url), "utf8");
@@ -95,6 +95,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   // Exact existing replacements only; all their privileges and unrelated definitions remain frozen.
   const fullBodies = new Map<string, string>();
   for (const [identity, migration, overload = 0] of [
+    ["identity.extra_customer_approval(t uuid, j uuid, c uuid, digest text, input jsonb)", "0970_lp6c_client_extra_decision.sql"],
     ["app.current_actor()", "0687_lp6c_customer_portal_delegation.sql"],
     ["app.current_tenant()", "0687_lp6c_customer_portal_delegation.sql"],
     ["identity.customer_portal_message(t uuid, j uuid, c uuid, digest text, input jsonb)", "0687_lp6c_customer_portal_delegation.sql"],

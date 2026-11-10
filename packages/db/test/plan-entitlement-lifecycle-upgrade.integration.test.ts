@@ -89,6 +89,9 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     const oid = (await c.admin.query("SELECT $1::regprocedure::oid oid", [signature])).rows[0].oid;
     lp6cReplacements.set(oid, body![4]!);
   }
+  const clientDecisionSql = await readFile(new URL("../migrations/0970_lp6c_client_extra_decision.sql", import.meta.url), "utf8");
+  const clientDecisionOid = (await c.admin.query("SELECT 'identity.extra_customer_approval(uuid,uuid,uuid,text,jsonb)'::regprocedure::oid oid")).rows[0].oid;
+  lp6cReplacements.set(clientDecisionOid, clientDecisionSql.split("FUNCTION identity.extra_customer_approval(")[1]!.split("AS $$")[1]!.split("$$;")[0]!);
   // 0655 replaces only the emergency capability body; pin the complete reviewed replacement.
   const emergency = await readFile(new URL("../migrations/0655_emergency_token_minted.sql", import.meta.url), "utf8");
   const emergencyBody = emergency.split("FUNCTION identity.dark_emergency(")[1]!.split("AS $$")[1]!.split("$$;")[0];
