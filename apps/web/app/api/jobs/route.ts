@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
       const projected=await (await workspaceApplication()).parties.list({sessionId:cookie!});
       workspace.jobs=projected.jobs.map(job=>{
         const existing=workspace.jobs.find(value=>value.id===job.id);
-        return {id:job.id,tenantId:parsed.data,title:job.title,status:job.status,customerLabel:job.customerLabel,siteLabel:job.siteLabel,updatedLabel:`Server revision ${job.revision}`,
+        return {id:job.id,tenantId:parsed.data,title:job.title,status:job.status,customerLabel:job.customerLabel,siteLabel:job.siteLabel,updatedLabel:"",
           document:existing?.document??{kind:"unknown",reference:null,delivery:"unknown"},customerPayment:existing?.customerPayment??"unknown",pilotNoCharge:existing?.pilotNoCharge??false};
       });
     }

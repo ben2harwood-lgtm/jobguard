@@ -41,7 +41,7 @@ async function signIn(context:BrowserContext,token:string) {
 }
 async function screen(page:Page) {
  await page.goto('/admin/contractor/identity');
- return page.getByRole('region',{name:'Restricted emergency access'});
+ return page.getByRole('main').getByRole('region',{name:'Restricted emergency access'});
 }
 test('dual-owner request to revocation, notices and retired-route refusal',async({browser,page})=>{
  const f=await seed(),[requester,a,b,target]=f.actors;
@@ -79,5 +79,52 @@ test('dual-owner request to revocation, notices and retired-route refusal',async
   const events=(await pool.query("SELECT event_type FROM app.audit_event WHERE tenant_id=$1 AND event_type LIKE 'sso.emergency.%'",[f.tenantId])).rows.map(r=>r.event_type);
   for(const op of ['request','approve','open','inspect','revoke_member','notices'])expect(events).toContain(`sso.emergency.${op}`);
  }finally{await pool.end();}
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
+});
+
+test('emergency-owner revocation keeps company single sign-on required',async({browser,page})=>{
+ const f=await seed(),[requester,a,b,target]=f.actors;
+ const pool=new Pool({host:'127.0.0.1',port:55432,user:'postgres',password:'sbox-e2e-owner',database:'jobguard_synthetic_demo',max:1});
+ try {
+  // Owner fixture writes only: model existing SSO sessions before requiring company SSO.
+  // Ordinary email-code sessions are correctly excluded once the requirement is on.
+  const connectionId=randomUUID();
+  await pool.query('BEGIN');
+  await pool.query('INSERT INTO identity.sso_connection(tenant_id,id,metadata) VALUES($1,$2,$3::jsonb)',[
+   f.tenantId,connectionId,JSON.stringify({version:'sso-metadata.v1',protocol:'saml2',provider:'in-process-test-idp',id:connectionId,tenantId:f.tenantId})]);
+  for(const actor of [requester!,a!,b!]) {
+   const subjectHash=randomBytes(32).toString('hex'),emailHash=randomBytes(32).toString('hex');
+   await pool.query('INSERT INTO identity.sso_subject(tenant_id,connection_id,subject_hash,email_hash,user_id,membership_id) VALUES($1,$2,$3,$4,$5,$6)',[
+    f.tenantId,connectionId,subjectHash,emailHash,actor.userId,actor.membershipId]);
+   await pool.query('INSERT INTO identity.sso_session_binding(tenant_id,connection_id,subject_hash,session_id) VALUES($1,$2,$3,$4)',[
+    f.tenantId,connectionId,subjectHash,actor.sessionId]);
+  }
+  await pool.query("INSERT INTO identity.sso_required_event(tenant_id,id,revision,required,connection_id,actor_membership_id,actor_kind,reason) VALUES($1,$2,1,true,$3,$4,'admin','Fictional company requires single sign-on')",[
+   f.tenantId,randomUUID(),connectionId,requester!.membershipId]);
+  await pool.query('COMMIT');
+ }finally{await pool.end();}
+ await signIn(page.context(),requester!.token);const controls=await screen(page);
+ await controls.getByLabel('Emergency reason').fill('Fictional compromised non-owner account with company SSO required');
+ await controls.getByRole('button',{name:'Request emergency access',exact:true}).click();
+ await expect(controls.getByRole('status')).toHaveText('request recorded.');
+ const id=await controls.getByLabel('Emergency request ID').inputValue();expect(id).toMatch(/^[a-f0-9-]{36}$/);
+ for(const approver of [a!,b!]) {
+  const context=await browser.newContext({viewport:page.viewportSize()!});
+  try {
+   await signIn(context,approver.token);const tab=await context.newPage(),approval=await screen(tab);
+   await approval.getByLabel('Emergency request ID').fill(id);
+   await approval.getByRole('button',{name:'Approve emergency request',exact:true}).click();
+   await expect(approval.getByRole('status')).toHaveText('approve recorded.');
+  }finally{await context.close();}
+ }
+ await controls.getByRole('button',{name:'Open emergency access',exact:true}).click();
+ await expect(controls.getByRole('status')).toContainText('open recorded');
+ await controls.getByRole('button',{name:'Inspect sign-in requirement',exact:true}).click();
+ await expect(controls.getByRole('status')).toHaveText('Single sign-on required: On');
+ await controls.getByLabel('Non-owner membership ID').fill(target!.membershipId);
+ await controls.getByRole('button',{name:'Revoke non-owner access',exact:true}).click();
+ await expect(controls.getByRole('status')).toHaveText('revoke_member recorded.');
+ await controls.getByRole('button',{name:'Inspect sign-in requirement',exact:true}).click();
+ await expect(controls.getByRole('status')).toHaveText('Single sign-on required: On');
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
 });

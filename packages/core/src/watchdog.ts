@@ -187,6 +187,7 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "/api/jobs/[id]/supplier-documents/facts/confirm": "watchdog_live_only",
   "/api/jobs/[id]/supplier-documents/intake": "watchdog_live_only",
   "/api/jobs/[id]/supplier-documents/receipts": "watchdog_live_only",
+  "/api/jobs/[id]/supplier-lines": "pre_live_allowed",
   "/api/jobs/[id]/supplier-matches/corrections": "watchdog_live_only",
   "/api/jobs/[id]/supplier-matches": "watchdog_live_only",
   "/api/jobs/[id]/things-to-check/[action]": "watchdog_live_only",
@@ -304,6 +305,8 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "nest:/jobs/:id/final-check/dispositions": "post_live_billing",
   "/api/jobs/[id]/final-check/catches": "post_live_billing",
   "nest:/jobs/:id/final-check/catches": "post_live_billing",
+  // Synthetic company-session adapter; SQL routines retain lock and job authority.
+  "/api/jobs/[id]/trial-final-check": "post_live_billing",
   "/api/jobs/[id]/final-check/runs": "post_live_billing",
   "nest:/jobs/:id/final-check/runs": "post_live_billing",
   "command:RecordFinalCheckDisposition": "post_live_billing",
