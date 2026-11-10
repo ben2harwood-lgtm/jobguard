@@ -183,6 +183,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     if (prior.nspname === "app" && prior.proname === "sync_snapshot_generation" && prior.args === "u uuid, r bigint, s bigint, h text, e text") {
       expect({ ...current, definition: prior.definition }).toEqual(prior);
       const sql = await readFile(new URL("../migrations/0699_sync_checkpoint_bound_reader.sql", import.meta.url), "utf8");
+      expect(current?.definition?.split("$function$")[1]).toBe(sql.split("FUNCTION app.sync_snapshot_generation(")[1]!.split("AS $$")[1]!.split("$$;")[0]);
       continue;
     }
     // 0695 and 0696 change only the contractor admin body; keep its metadata exact and bind the final body to 0845.
