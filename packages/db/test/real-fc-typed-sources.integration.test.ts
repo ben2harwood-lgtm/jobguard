@@ -20,10 +20,12 @@ async function setup(note: string | null = diary, message: string | null = reque
   if (message !== null) await sources.intake(a.context, a.jobId, a.digest, "customer_message", { version: "customer-message-input.v1", commandId: randomUUID(), fictionalCustomer: { kind: "named_fictional_customer", name: "Fictional Alex" }, text: message });
   if (note !== null) await sources.intake(a.context, a.jobId, a.digest, "diary", { version: "job-diary-input.v1", commandId: randomUUID(), entryMode: "typed", onSite: false, text: note });
   await a.lock();
-  const repo = new FinalCheckRepository(f.shadow), m = await repo.begin(a.context, a.jobId);
+  // LP-6c: shadow-side calls use an unbound tenant context, as main's final-check tests do.
+  const shadow = testTenantContext(a.tenantId, { bound: false });
+  const repo = new FinalCheckRepository(f.shadow), m = await repo.begin(shadow, a.jobId);
   const ports = practiceFinalCheckPorts(f.shadow, f.runtime, "f".repeat(64));
   const worker = new FinalCheckWorker(ports, "synthetic_demo");
-  return { ...a, repo, m, ports, execute: () => worker.execute(a.context, { version: "final-check.task.v1", jobId: a.jobId, manifestId: m.id }) };
+  return { ...a, shadow, repo, m, ports, execute: () => worker.execute(shadow, { version: "final-check.task.v1", jobId: a.jobId, manifestId: m.id }) };
 }
 it.each([
   [diary, request, null],
@@ -37,13 +39,13 @@ it.each([
 ] as const)("examines ordinary originals, coalesces proposals and replays certificate/invoice once: %s", async (note, message, estimate) => {
   const a = await setup(note, message), result = await a.execute() as { runId: string };
   const count = message.startsWith("Thanks") ? 0 : 1;
-  const completed = await a.repo.manifest(a.context, a.jobId, a.m.id);
+  const completed = await a.repo.manifest(a.shadow, a.jobId, a.m.id);
   expect(completed.sources.every(s => ["zero_result", "detected"].includes(s.status))).toBe(true);
   if (count === 0) expect(completed.sources.every(s => s.status === "zero_result")).toBe(true);
   const completion = new FinalCheckCompletionRepository(f.shadow), checkId = randomUUID();
   const publication = { version: "final-check-publication.v1" as const, jobId: a.jobId, runId: result.runId, checkId };
-  await completion.publish(a.context, publication);
-  await completion.publish(a.context, publication);
+  await completion.publish(a.shadow, publication);
+  await completion.publish(a.shadow, publication);
   expect(await a.execute()).toMatchObject({ runId: result.runId });
   const view = await new FinalCheckRepository(f.runtime).read(a.context, a.jobId, a.digest);
   expect(view).toMatchObject({ state: "completed" }); expect(view.items).toHaveLength(count);
@@ -64,9 +66,9 @@ it.each([
 
 it("preserves the reviewed must-surface fixture refusal in the actual worker", async () => {
   const a = await setup(null, "Fictional practice customer request: please build a garden room for £8,000 net; written agreement is required before work starts.");
-  expect(await a.ports.process(a.context, a.m, a.m.sources[0]!)).toMatchObject({ status: "unsupported", failureCode: "UNSUPPORTED_SOURCE" });
+  expect(await a.ports.process(a.shadow, a.m, a.m.sources[0]!)).toMatchObject({ status: "unsupported", failureCode: "UNSUPPORTED_SOURCE" });
   await expect(a.execute()).rejects.toThrow("FINAL_CHECK_PENDING");
-  expect((await a.repo.manifest(a.context, a.jobId, a.m.id)).result).toBeNull();
+  expect((await a.repo.manifest(a.shadow, a.jobId, a.m.id)).result).toBeNull();
 });
 
 it("rejects forged tenant/job/source/version/hash/time/length/frozen bindings at the actual worker port", async () => {
@@ -75,13 +77,13 @@ it("rejects forged tenant/job/source/version/hash/time/length/frozen bindings at
     { ...s, sourceKind: "email" }, { ...s, sourceRef: randomUUID() }, { ...s, evidenceId: randomUUID() },
     { ...s, objectVersionId: "wrong-version" }, { ...s, sha256: "0".repeat(64) }, { ...s, inputHash: "0".repeat(64) },
     { ...s, receivedAt: s.receivedAt.replace("Z", "+00:01") }, { ...s, input: { ...(s.input as object), byte_length: 1 } },
-  ]) expect(await a.ports.process(a.context, a.m, changed)).toMatchObject({ status: "unsupported" });
-  await expect(a.ports.process(testTenantContext(randomUUID()), a.m, s)).rejects.toThrow();
-  await expect(a.ports.process(a.context, { ...a.m, comparisons: { ...a.m.comparisons, jobId: other.jobId } }, s)).rejects.toThrow();
+  ]) expect(await a.ports.process(a.shadow, a.m, changed)).toMatchObject({ status: "unsupported" });
+  await expect(a.ports.process(testTenantContext(randomUUID(), { bound: false }), a.m, s)).rejects.toThrow();
+  await expect(a.ports.process(a.shadow, { ...a.m, comparisons: { ...a.m.comparisons, jobId: other.jobId } }, s)).rejects.toThrow();
   // Another firm/session cannot read or process A's job merely by knowing IDs.
   await expect(new JobSourceRepository(f.runtime).read(a.context, a.jobId, other.digest, "diary")).rejects.toThrow();
   await f.admin.query("UPDATE control_plane.practice_session SET revoked_at=clock_timestamp() WHERE token_digest=$1", [a.digest]);
-  expect(await a.ports.process(a.context, a.m, s)).toMatchObject({ status: "unsupported", failureCode: "SOURCE_INVALID" });
+  expect(await a.ports.process(a.shadow, a.m, s)).toMatchObject({ status: "unsupported", failureCode: "SOURCE_INVALID" });
   await expect(new FinalCheckRepository(f.runtime).read(a.context, a.jobId, a.digest)).rejects.toThrow();
 });
 
@@ -90,11 +92,11 @@ it("invalidated sources block completion/publication, and post-lock intake canno
   // Owner-only simulation in this disposable cluster: 0666 refuses invalidating a locked verified source,
   // so bypass triggers for this one insert to model evidence invalidated by other means.
   await finalCheckTenant(f.admin, a.tenantId, async db => { await db.query("SET LOCAL session_replication_role='replica'"); return db.query("INSERT INTO app.evidence_invalidation(id,tenant_id,evidence_id,actor_membership_id,reason_code) VALUES($1,$2,$3,$4,'verification_invalid')", [randomUUID(), a.tenantId, s.evidenceId, FINAL_CHECK_ACTOR]); });
-  expect(await a.ports.process(a.context, a.m, s)).toMatchObject({ status: "unsupported", failureCode: "SOURCE_INVALID" });
+  expect(await a.ports.process(a.shadow, a.m, s)).toMatchObject({ status: "unsupported", failureCode: "SOURCE_INVALID" });
   await expect(a.execute()).rejects.toThrow("FINAL_CHECK_PENDING");
-  await expect(new FinalCheckCompletionRepository(f.shadow).publish(a.context, { version: "final-check-publication.v1", jobId: a.jobId, runId: randomUUID(), checkId: randomUUID() })).rejects.toThrow();
+  await expect(new FinalCheckCompletionRepository(f.shadow).publish(a.shadow, { version: "final-check-publication.v1", jobId: a.jobId, runId: randomUUID(), checkId: randomUUID() })).rejects.toThrow();
   await expect(new JobSourceRepository(f.runtime).intake(a.context, a.jobId, a.digest, "diary", { version: "job-diary-input.v1", commandId: randomUUID(), entryMode: "typed", onSite: false, text: diary })).rejects.toMatchObject({ code: "POST_LOCK_WORK_REQUIRES_LINKED_JOB" });
-  expect((await a.repo.manifest(a.context, a.jobId, a.m.id)).sources.map(source => source.id)).toEqual(a.m.sources.map(source => source.id));
+  expect((await a.repo.manifest(a.shadow, a.jobId, a.m.id)).sources.map(source => source.id)).toEqual(a.m.sources.map(source => source.id));
 });
 
 it("missing, altered and invalid UTF-8 original bytes cannot become examined zero-results", async () => {
@@ -110,7 +112,7 @@ it("missing, altered and invalid UTF-8 original bytes cannot become examined zer
         await db.query("SET LOCAL session_replication_role='replica'");
         await db.query("UPDATE app.job_source_original SET bytes=$3 WHERE tenant_id=$1 AND evidence_id=$2", [a.tenantId, s.evidenceId, bytes]);
       });
-      expect(await a.ports.process(a.context, a.m, s)).toMatchObject({ status: "unsupported", failureCode: "SOURCE_INVALID" });
+      expect(await a.ports.process(a.shadow, a.m, s)).toMatchObject({ status: "unsupported", failureCode: "SOURCE_INVALID" });
       await expect(a.execute()).rejects.toThrow("FINAL_CHECK_PENDING");
     }
   } finally {
