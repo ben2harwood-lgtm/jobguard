@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-journey-next-to-paid-send": {
+      "branches": [
+        "codex/sandbox/real-journey-next-to-paid-send"
+      ],
+      "allow": [
+        "apps/api/src/quote/quote.application.ts",
+        "apps/api/src/quote/quote.application.test.ts",
+        "packages/db/test/real-journey-practice-send.integration.test.ts",
+        "apps/web/e2e/real-journey-next-to-paid-send.spec.ts"
+      ]
+    }
+  }
+}
