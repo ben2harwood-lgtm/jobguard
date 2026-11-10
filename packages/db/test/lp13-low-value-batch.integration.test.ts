@@ -129,9 +129,9 @@ it("keeps legacy raisers explicitly unknown without manufacturing command attrib
   const c=await db.owner.connect();
   try {
     await c.query("BEGIN");
-    // Live job under its own tenant context, as the work-state guard requires (extra-origin smallFixture shape).
+    // The work-state guard (0144 ch4_source_job) requires this transaction's tenant context.
     await c.query("SELECT set_config('app.tenant_id',$1,true)",[p.tenant]);
-    await c.query("INSERT INTO app.job(tenant_id,id,title,status) VALUES($1,$2,'Fictional legacy job','live')",[p.tenant,job]);
+    await c.query("INSERT INTO app.job(tenant_id,id,title) VALUES($1,$2,'Fictional legacy job')",[p.tenant,job]);
     await c.query(`INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance)
       VALUES($1,$2,'small_builder','synthetic_demo','backfilled_synthetic_fixture')`,[p.tenant,job]);
     await c.query("INSERT INTO app.scope_identity(tenant_id,job_id,id,state) VALUES($1,$2,$3,'confirmed')",[p.tenant,job,scope]);
