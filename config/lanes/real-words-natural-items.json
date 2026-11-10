@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-words-natural-items": {
+      "branches": [
+        "codex/sandbox/real-words-natural-items"
+      ],
+      "allow": [
+        "apps/web/e2e/real-words-natural-items.spec.ts",
+        "docs/fixtures/ai/EVALUATION.md",
+        "docs/fixtures/ai/golden-run.v1.json",
+        "docs/fixtures/ai/labels.v1.json",
+        "packages/ai/src/capture-fixture-parser.ts",
+        "packages/ai/src/capture-plain-words.test.ts",
+        "packages/ai/src/capture.test.ts",
+        "packages/core/src/capture.test.ts",
+        "packages/core/src/capture.ts"
+      ]
+    }
+  }
+}
