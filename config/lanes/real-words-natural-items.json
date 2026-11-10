@@ -6,6 +6,7 @@
         "codex/sandbox/real-words-natural-items"
       ],
       "allow": [
+        "apps/web/e2e/UIWIRE-1.spec.ts",
         "apps/web/e2e/real-words-natural-items.spec.ts",
         "docs/fixtures/ai/EVALUATION.md",
         "docs/fixtures/ai/golden-run.v1.json",
