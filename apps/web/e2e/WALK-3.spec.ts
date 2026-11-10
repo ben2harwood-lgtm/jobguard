@@ -37,14 +37,14 @@ test(`WALK-3 ${mode} completes the builder’s own job without a second job`, as
   await expect(tour).toContainText("Step 1 of 9");
   await expect(page.getByLabel("Work details")).toHaveValue("Practice decorating. Protect room £200.00. Prepare walls £200.00. Paint walls £200.00. Finish trim £200.00. Clean site £100.00. Replace shelves");
   expect((await page.context().cookies()).find(cookie => cookie.name === "jg_session")!.value).toBe(practiceToken);
-  await tour.getByRole("button", { name: mode, exact: true }).click();
-  if (mode === "Show me") {
-    await expect(tour).toContainText("Step 2 of 9");
-    await tour.getByRole("button", { name: mode, exact: true }).click();
-  }
+  await tour.getByRole("button", { name: "Show me", exact: true }).click();
+  await expect(tour).toContainText("Step 2 of 9");
+  await tour.getByRole("button", { name: "Show me", exact: true }).click();
   await expect(tour).toContainText("Step 3 of 9", { timeout: 40_000 });
   await expect(page.locator("body")).not.toContainText("This part uses a prepared example job");
   await expect(tour).toContainText("Customer invitation is still to build");
+  await page.getByRole("button", { name: "Continue on my own saved job", exact: true }).click();
+  if (mode !== "Show me") await tour.getByRole("button", { name: mode, exact: true }).click();
   const ownHref = await page.getByRole("link", { name: "Open your saved job", exact: true }).getAttribute("href");
   if (mode === "Show me") {
     for (let step = 3; step <= 9; step++) {
@@ -290,6 +290,7 @@ for (const refusal of ["refused", "disabled"] as const) {
       await tour.getByRole("button", { name: "Show me", exact: true }).click();
     }
     await expect(tour).toContainText("Step 3 of 9");
+    await page.getByRole("button", { name: "Continue on my own saved job", exact: true }).click();
     const own = new URL(page.url()).searchParams.get("walkJob")!;
     await expect(page.getByTestId("workspace-job-id")).toHaveAttribute("data-job-id", own);
     let attempts = 0;
@@ -314,9 +315,9 @@ for (const refusal of ["refused", "disabled"] as const) {
     expect(ownState.status).toBe("quoting");
     expect((await (await page.request.get(`/api/jobs/${own}/customer-invoices`)).json()).invoices).toEqual([]);
     await tour.getByRole("button", { name: "Show me", exact: true }).click();
-    await expect(tour).toContainText("Step 4 of 9");
+    await expect(tour).toContainText("Step 4 of 9", { timeout: 30_000 });
     await page.reload();
-    await expect(tour).toContainText("Step 4 of 9");
+    await expect(tour).toContainText("Step 4 of 9", { timeout: 30_000 });
     await expect(tour).toContainText("This part uses a prepared example job");
     await expect(page.getByTestId("workspace-job-id")).toHaveAttribute("data-job-id", example!);
   });

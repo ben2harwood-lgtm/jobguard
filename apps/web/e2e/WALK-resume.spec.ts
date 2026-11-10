@@ -37,6 +37,7 @@ test("WALK refresh resumes steps 2, 5 and 8 on the same saved jobs", async ({ pa
       if (step === 8) await expect(page.getByTestId("final-gross")).toBeVisible();
       expect(captures).toBe(beforeRefresh);
     }
+    if (step === 3) await page.getByRole("button", { name: "Continue on my own saved job", exact: true }).click();
     await tour.getByRole("button", { name: "Show me", exact: true }).click();
   }
   await expect(tour).toContainText("Step 9 of 9");
@@ -49,6 +50,7 @@ test("WALK refresh stays on step 5 after completed proof is invalidated", async 
   const tour = page.getByRole("region", { name: "Guided walkthrough" });
   for (let step = 1; step <= 5; step++) {
     await expect(tour).toContainText(`Step ${step} of 9`, { timeout: 60_000 });
+    if (step === 3) await page.getByRole("button", { name: "Continue on my own saved job", exact: true }).click();
     await tour.getByRole("button", { name: "Show me", exact: true }).click();
   }
   await expect(tour).toContainText("Step 6 of 9");

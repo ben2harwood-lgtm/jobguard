@@ -21,6 +21,7 @@ async function open(page: Page) {
 async function showUntil(page: Page, step: number) {
   for (let current = 1; current < step; current++) {
     await expect(tour(page)).toContainText(`Step ${current} of 9`, { timeout: 300_000 });
+    if (current === 3) await button(page, "Continue on my own saved job").click();
     await tour(page).getByRole("button", { name: "Show me", exact: true }).click();
   }
   await expect(tour(page)).toContainText(`Step ${step} of 9`, { timeout: 300_000 });
@@ -50,8 +51,10 @@ async function reviewAndPrice(page: Page) {
   await double(page, "Price the work");
   await expect(page.locator(".quote-editor")).toHaveAttribute("data-quote-ready", "true");
   await double(page, "Save draft revision");
+  await button(page, "Continue on my own saved job").click();
+  // Pricing hands off to a fresh workspace; verify its persisted revision.
+  await expect(page.getByTestId("workspace-job-id")).toHaveAttribute("data-job-id", await ownJob(page));
   await expect(page.getByTestId("quote-revision")).toHaveText("1");
-  await expect(page.locator(".quote-notice").filter({ hasText: "Draft revision 1 saved" })).toBeVisible();
 }
 async function receiptPath(page: Page, jobId: string) {
   const view = await read(page, `/api/jobs/${jobId}/customer-invoices`);

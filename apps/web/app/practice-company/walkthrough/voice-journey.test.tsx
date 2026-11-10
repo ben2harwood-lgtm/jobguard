@@ -1,17 +1,19 @@
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { recoverCapture } from "../../demo-s/journey-launch";
 import * as screenActions from "./screen-actions";
 import { missedWorkDiary, missedWorkSaved, saveMissedWork, priceFoundExtra, addOnSiteEvidence, evidenceDone, approvedExtraDone, finalCheckDone, restoreProgress, stageWords, ownJobAction, stages, VoiceJourney } from "./voice-journey";
-const memo = vi.hoisted(() => ({ steps: [] as import("../../ui/walkthrough/walkthrough").WalkthroughStep[], states: null as unknown[] | null, cursor: 0 }));
+const memo = vi.hoisted(() => ({ steps: [] as import("../../ui/walkthrough/walkthrough").WalkthroughStep[], states: null as unknown[] | null, cursor: 0, setState: vi.fn() }));
 vi.mock("react", async original => {
   const actual = await original<typeof React>();
-  return { ...actual, useState: (initial: unknown) => memo.states && memo.cursor < memo.states.length ? [memo.states[memo.cursor++], vi.fn()] : actual.useState(initial), useMemo: (factory: () => unknown) => {
+  return { ...actual, useState: (initial: unknown) => memo.states && memo.cursor < memo.states.length ? [memo.states[memo.cursor++], memo.setState] : actual.useState(initial), useMemo: (factory: () => unknown) => {
     const result = factory();
     if (Array.isArray(result) && result[0]?.id === "walk-1") memo.steps = result;
     return result;
   } };
 });
+vi.mock("../../demo-s/journey-launch", () => ({ recoverCapture: vi.fn().mockResolvedValue("00000000-0000-4000-8000-000000000002") }));
 vi.mock("../../ui/workspace-shell", () => ({ WorkspaceShell: ({ jobId }: { jobId: string }) => <section data-workspace-job={jobId} /> }));
 vi.mock("../../ui/job-value", () => ({ ValuePage: ({ jobId }: { jobId: string }) => <section data-value-job={jobId} /> }));
 vi.stubGlobal("React", React);
@@ -44,7 +46,7 @@ describe("WALK-3 honest journey boundaries", () => {
   });
 });
 
-afterEach(() => { vi.unstubAllGlobals(); vi.stubGlobal("React", React); });
+afterEach(() => { memo.states = null; vi.unstubAllGlobals(); vi.stubGlobal("React", React); });
 const jobId = "00000000-0000-4000-8000-000000000001";
 const preparedId = "00000000-0000-4000-8000-000000000002";
 const capture = (id = jobId) => ({ version: 1, environment: "synthetic_demo", captureId: id, jobId: id, proposalId: id, reviewId: id, source: { text: "fictional", version: 1, kind: "text", acquisition: null, audioByteLength: 0 }, proposal: { title: "fictional", lines: [], questions: [] }, review: null, status: "quoting" });
@@ -98,8 +100,8 @@ it("step 3 lights the prepared handover control before screen actions begin", ()
   renderToStaticMarkup(<VoiceJourney />);
   expect(memo.steps[2]!.target).toBe("#walk-prepare, #walk-screen");
   expect(memo.steps[2]!.spotlightTarget!()).toBe(prepare);
-  expect(memo.steps[5]!.isDone).toBe(approvedExtraDone);
-  expect(memo.steps[6]!.isDone).toBe(finalCheckDone);
+  expect(memo.steps[5]!.isDone).toBeTypeOf("function");
+  expect(memo.steps[6]!.isDone).toBeTypeOf("function");
   expect(memo.steps[6]!.target).toBe("#final-check");
   expect(memo.steps[7]!.target).toBe("#final-check");
 });
@@ -183,6 +185,7 @@ describe("step 7 saved final check", () => {
       }),
     };
     vi.stubGlobal("document", { getElementById: () => root, querySelectorAll: () => [] });
+    memo.states = [jobId, capture(), 0, 6, true, false, preparedId, false, false, "", false, false]; memo.cursor = 0;
     renderToStaticMarkup(<VoiceJourney />);
     await memo.steps[6]!.autoAction({} as HTMLElement, new AbortController().signal);
     expect(clicks).toEqual(completed
@@ -228,6 +231,7 @@ describe("REAL-WALK-PAYOFF screen actions", () => {
  it("opens the report and scrolls its heading to the top", async () => {
   const open = vi.fn(), scrollIntoView = vi.fn();
   vi.stubGlobal("document", { getElementById: (id: string) => id === "walk-report" ? { click: open } : { querySelector: () => ({ scrollIntoView }) } });
+  memo.states = [jobId, capture(), 0, 8, true, false, preparedId, false, false, "", false, false]; memo.cursor = 0;
   renderToStaticMarkup(<VoiceJourney />);
   await memo.steps[8]!.autoAction({} as HTMLElement, new AbortController().signal);
   expect(open).toHaveBeenCalledTimes(1);
@@ -276,12 +280,14 @@ it("restores own-job progress past pricing from live server state with no prepar
 
 
 it.each([false, true])("renders the real workspace and report with the own job selector: report %s", report => {
-  memo.states = [jobId, capture(), 0, 2, true, false, "", report, false, "", false]; memo.cursor = 0;
+  memo.states = [jobId, capture(), 0, 2, true, false, "", report, false, "", false, true]; memo.cursor = 0;
   try {
     const html = renderToStaticMarkup(<VoiceJourney />);
     expect(html).toContain(`${report ? "data-value-job" : "data-workspace-job"}="${jobId}"`);
     expect(html).not.toContain("This part uses a prepared example job");
     expect(html).not.toContain("prepared job's figures");
+    expect(html).toContain("Use the prepared example job");
+    expect(html).toContain("Continue on my own saved job");
     expect(html).toContain("acceptance and extra approval use explicit builder practice attestations");
     for (const index of [2, 3, 6, 8]) expect(memo.steps[index]!.words).not.toContain("prepared");
   } finally { memo.states = null; }
@@ -295,4 +301,81 @@ it("renders the honest fallback and keeps old prepared tours on their verified s
     expect(html).toContain("This part uses a prepared example job");
     expect(memo.steps[8]!.words).toContain("These are the prepared job's figures");
   } finally { memo.states = null; }
+});
+
+
+it.each(["", preparedId])("waits for server-confirmed activation before remounting the workspace: example %s", async prepared => {
+  memo.states = [jobId, capture(), 0, 3, true, false, prepared, false, false, "", false, true]; memo.cursor = 0;
+  let activated = false;
+  const root = {
+    querySelector: (selector: string) => selector.includes("activation-policy") && activated ? {} : null,
+    querySelectorAll: () => [{ textContent: "Record practice acceptance" }],
+  };
+  vi.stubGlobal("document", { getElementById: () => root });
+  const click = vi.spyOn(screenActions, "click").mockResolvedValue(undefined);
+  try {
+    renderToStaticMarkup(<VoiceJourney />);
+    memo.setState.mockClear();
+    const action = memo.steps[3]!.autoAction({} as HTMLElement, new AbortController().signal);
+    await vi.waitFor(() => expect(click).toHaveBeenCalledWith("Start this practice job", expect.any(AbortSignal)));
+    expect(memo.setState).not.toHaveBeenCalled();
+    activated = true;
+    await action;
+    expect(memo.setState).toHaveBeenCalledTimes(1);
+  } finally { memo.states = null; click.mockRestore(); }
+});
+
+
+it.each([2, 4, 8])("defaults an unchosen tour to the prepared example before step %s actions", async index => {
+  memo.states = [jobId, capture(), 0, index, true, false, "", false, false, "", false, false]; memo.cursor = 0;
+  vi.stubGlobal("sessionStorage", { getItem: () => jobId, setItem: vi.fn() });
+  vi.stubGlobal("location", { href: "https://example.test/practice-company/walkthrough?walkJob=" + jobId });
+  const replaceState = vi.fn(); vi.stubGlobal("history", { replaceState });
+  const click = vi.spyOn(screenActions, "click").mockResolvedValue();
+  vi.mocked(recoverCapture).mockClear();
+  try {
+    const html = renderToStaticMarkup(<VoiceJourney />);
+    expect(html).toContain("Use the prepared example job");
+    expect(html).toContain("Continue on my own saved job");
+    expect(memo.steps[index]!.isDone!()).toBe(false);
+    // Stop at the workspace handoff: no own-job control may run while the
+    // prepared job has not rendered, even if the own workspace looks ready.
+    const controller = new AbortController();
+    vi.stubGlobal("document", { getElementById: () => ({ querySelector: () => ({ getAttribute: () => jobId }) }) });
+    const action = memo.steps[index]!.autoAction({} as HTMLElement, controller.signal);
+    await vi.waitFor(() => expect(replaceState).toHaveBeenCalled());
+    controller.abort(new Error("Stopped at handoff"));
+    await expect(action).rejects.toThrow("Stopped at handoff");
+    expect(recoverCapture).toHaveBeenCalledTimes(1);
+    expect(replaceState).toHaveBeenCalledWith(null, "", expect.stringContaining("walkExample=" + preparedId));
+    expect(click).not.toHaveBeenCalled();
+  } finally { click.mockRestore(); }
+});
+
+it("prepares and sends the example in one default Show me action", async () => {
+  memo.states = [jobId, capture(), 0, 2, true, false, "", false, true, "", false, false]; memo.cursor = 0;
+  let delivered = false;
+  const root = {
+    querySelector: (selector: string) => selector === ".review-line" ? {} : {
+      getAttribute: () => preparedId,
+      textContent: selector.includes("quote-delivery") ? delivered ? "Simulated delivery — nothing sent" : "" : "Fictional customer",
+    },
+  };
+  vi.stubGlobal("document", { getElementById: () => root });
+  vi.stubGlobal("sessionStorage", { getItem: () => jobId, setItem: vi.fn() });
+  vi.stubGlobal("location", { href: "https://example.test/practice-company/walkthrough?walkJob=" + jobId });
+  vi.stubGlobal("history", { replaceState: vi.fn() });
+  const price = vi.spyOn(screenActions, "reviewAndPrice").mockResolvedValue();
+  const click = vi.spyOn(screenActions, "click").mockImplementation(async name => { if (name === "Continue fake worker") delivered = true; });
+  try {
+    renderToStaticMarkup(<VoiceJourney />);
+    memo.setState.mockClear();
+    await memo.steps[2]!.autoAction({} as HTMLElement, new AbortController().signal);
+    expect(price).toHaveBeenCalledTimes(1);
+    expect(click.mock.calls.map(([name]) => name)).toEqual(["Preview immutable quote", "Simulate sending this quote", "Continue fake worker"]);
+    // The default handoff keeps the running walkthrough mounted; an explicit
+    // example choice or refused own control still restarts it at sending.
+    expect(memo.setState.mock.calls.filter(([value]) => value === preparedId)).toHaveLength(1);
+    expect(memo.steps[2]!.isDone()).toBe(true);
+  } finally { price.mockRestore(); click.mockRestore(); }
 });

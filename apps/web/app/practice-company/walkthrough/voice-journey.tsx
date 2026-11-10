@@ -164,7 +164,8 @@ export function VoiceJourney() {
   const [ownWorkspace, setOwnWorkspace] = useState(false), [fallbackNeeded, setFallbackNeeded] = useState(false);
   const [prepared, setPrepared] = useState(""), [report, setReport] = useState(false), [tour, setTour] = useState(true);
   const [error, setError] = useState(""), [preparing, setPreparing] = useState(false);
-  const current = useRef({ capture, prepared, report, tenantId }); current.current = { capture, prepared, report, tenantId };
+  const [ownChosen, setOwnChosen] = useState(false), [tourVersion, setTourVersion] = useState("");
+  const current = useRef({ capture, prepared, report, tenantId, ownChosen }); current.current = { capture, prepared, report, tenantId, ownChosen };
   const ownPriced = useRef(false), preparingRef = useRef(false);
   useEffect(() => {
     // WALK-2 owns creation and privacy. Reading this route alone never creates example jobs.
@@ -174,8 +175,12 @@ export function VoiceJourney() {
       const response = await fetch("/api/session", { cache: "no-store" });
       if (!response.ok) throw new Error("The practice session could not load.");
       const session = sessionResponseV1.parse(await response.json());
-      const saved = await resumeWalkthrough(new URLSearchParams(location.search));
-      setCapture(saved.capture); setPrepared(saved.prepared); setResumeIndex(saved.index);
+      const params = new URLSearchParams(location.search);
+      const saved = await resumeWalkthrough(params);
+      const chosen = params.get("walkOwn") === "1";
+      setOwnChosen(chosen);
+      setCapture(saved.capture); setPrepared(saved.prepared);
+      setResumeIndex(saved.prepared || chosen ? saved.index : Math.min(saved.index, 2));
       ownPriced.current = saved.index >= 2;
       setOwnWorkspace(saved.index >= 2);
       if (saved.index >= 2) {
@@ -192,7 +197,7 @@ export function VoiceJourney() {
     try { sessionStorage.setItem(progressKey(current.current.tenantId), JSON.stringify({ jobId: capture.jobId, prepared, priced })); } catch { /* The journey also works without storage. */ }
   }
   useEffect(() => { if (tenantId) remember(); }, [tenantId, capture, prepared]);
-  async function prepare() {
+  async function prepare(restartTour = true) {
     if (preparingRef.current || current.current.prepared) return;
     preparingRef.current = true; setPreparing(true); setError("");
     try {
@@ -204,6 +209,7 @@ export function VoiceJourney() {
       rememberWalkJob("walkExample", jobId);
       current.current.prepared = jobId;
       setResumeIndex(2); setPrepared(jobId); setReport(false);
+      if (restartTour) setTourVersion(jobId);
     } catch (reason) { setError((reason as Error).message); }
     finally { preparingRef.current = false; setPreparing(false); }
   }
@@ -263,6 +269,9 @@ export function VoiceJourney() {
           const accept = [...screen().querySelectorAll("button")].some(button => button.textContent === "Record practice acceptance");
           if (accept) await click("Record practice acceptance", signal);
           await click("Start this practice job", signal);
+          // The control returns before its request. Remount only after the saved
+          // activation is rendered, so the workspace reload sees a started job.
+          await until(() => !!screen()?.querySelector('[data-testid="activation-policy"]'), signal);
         }
         setScreenVersion(value => value + 1);
       },
@@ -336,7 +345,13 @@ export function VoiceJourney() {
         screen().querySelector<HTMLElement>(".value-page h1")?.scrollIntoView({ block: "start", behavior: "instant" });
       },
     ];
-    return stages.map(([title], index) => ({ id: `walk-${index + 1}`, title, words: stageWords(index, prepared), target: index === 2 ? "#walk-prepare, #walk-screen" : index === 6 || index === 7 ? "#final-check" : "#walk-screen", spotlightTarget: () => (index === 8 ? screen()?.querySelector<HTMLElement>(".value-page h1") : screen()?.querySelector<HTMLElement>("[data-walk-action]")) ?? (index === 2 ? document.getElementById("walk-prepare") : null), isDone: done[index]!, autoAction: async (target, signal) => {
+    return stages.map(([title], index) => ({ id: `walk-${index + 1}`, title, words: stageWords(index, prepared), target: index === 2 ? "#walk-prepare, #walk-screen" : index === 6 || index === 7 ? "#final-check" : "#walk-screen", spotlightTarget: () => (index === 8 ? screen()?.querySelector<HTMLElement>(".value-page h1") : screen()?.querySelector<HTMLElement>("[data-walk-action]")) ?? (index === 2 ? document.getElementById("walk-prepare") : null), isDone: () => (index < 2 || !!current.current.prepared || current.current.ownChosen) && done[index]!(), autoAction: async (target, signal) => {
+      // No choice means the prepared tour, including autoplay and old resume URLs.
+      if (index >= 2 && !current.current.prepared && !current.current.ownChosen) {
+        await prepare(false);
+        if (!current.current.prepared) throw new Error("The prepared example could not load. Try again.");
+        await until(() => screen()?.querySelector('[data-testid="workspace-job-id"]')?.getAttribute("data-job-id") === current.current.prepared, signal);
+      }
       if (done[index]!()) return;
       const action = async (bounded: AbortSignal) => { await actions[index]!(target, bounded); if (index !== 8) await until(done[index]!, bounded); };
       if (index < 2 || current.current.prepared) return action(signal);
@@ -350,13 +365,17 @@ export function VoiceJourney() {
       <p>Show me and Play the whole thing use sample text instead of recording audio. Voice, when available, stays on your device.</p>
       {!tour && <button onClick={() => setTour(true)}>Open guided walkthrough</button>}
       {capture && <p>Your own draft: <a href={`/jobs/${capture.jobId}`}>Open your saved job</a>.</p>}
-      {capture && !prepared && fallbackNeeded && <section><h2>Continue with the prepared example</h2><p>This part uses a prepared example job. A control on your own job could not continue. The example uses simulated sending and builder-recorded practice acceptance.</p><button id="walk-prepare" disabled={preparing} onClick={() => void prepare()}>Use the prepared example job</button></section>}
+      {capture && !prepared && (ownWorkspace || fallbackNeeded) && <section><h2>Continue with the prepared example</h2><p>{fallbackNeeded ? "A control on your own job could not continue. " : "The tour uses the prepared example unless you choose your own saved job. "}The example uses simulated sending and builder-recorded practice acceptance.</p><button id="walk-prepare" disabled={preparing} onClick={() => void prepare()}>Use the prepared example job</button><button disabled={preparing} aria-pressed={ownChosen} onClick={() => {
+        const url = new URL(location.href); url.searchParams.set("walkOwn", "1");
+        history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+        current.current.ownChosen = true; setOwnChosen(true);
+      }}>Continue on my own saved job</button></section>}
       {activeJob && <aside aria-label="Simulated customer"><h2>{prepared ? "Prepared example · simulated customer" : "Your own job · simulated customer"}</h2><p>{prepared ? "This part uses a prepared example job. " : ""} No invitation is sent. The customer view is not connected here; acceptance and extra approval use explicit builder practice attestations.</p><p>Use the quote preview below to inspect the exact fictional document.</p><button id="walk-refresh" onClick={() => setScreenVersion(value => value + 1)}>{prepared ? "Refresh the prepared job" : "Refresh the saved job"}</button><button id="walk-report" onClick={() => setReport(true)}>Open the saved end report</button>{report && <button onClick={() => setReport(false)}>{prepared ? "Return to the prepared job" : "Return to the saved job"}</button>}</aside>}
       {error && <p role="alert">{error}</p>}
     </header>
     <div id="walk-screen" className={styles.screen} tabIndex={-1}>
       {!tenantId ? <p role="status">Loading your private practice firm…</p> : activeJob ? report ? <ValuePage jobId={activeJob} /> : <WorkspaceShell key={`${activeJob}:${screenVersion}`} jobId={activeJob} /> : capture ? <ReviewProposal result={capture} back={() => location.assign("/practice-company")} /> : <WalkIt tenantId={tenantId} initialText="" close={() => location.assign("/practice-company")} onCaptured={result => { rememberWalkJob("walkJob", result.jobId); setCapture(result); }} />}
     </div>
-    {tenantId && tour && <Walkthrough key={prepared || "own"} steps={steps} initialIndex={resumeIndex} onClose={() => setTour(false)} />}
+    {tenantId && tour && <Walkthrough key={tourVersion || "own"} steps={steps} initialIndex={resumeIndex} onClose={() => setTour(false)} />}
   </>;
 }
