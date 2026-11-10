@@ -1,3 +1,4 @@
+import { testActorContext } from "./tenant-context-test-utils.js";
 // PostgreSQL CI coverage; the builder sandbox cannot start PostgreSQL.
 import { randomBytes, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
@@ -47,7 +48,7 @@ it("stores an actor-bound immutable snapshot, replays exactly, and uses the merg
   expect(inspectExtraSourcePack(row.artifact, f.pack.integrity.sources.slice(1)).findings).toContain("Missing original source");
   expect(await f.writer.create(f.context, f.input)).toEqual(created);
   await expect(f.writer.create(f.context, { ...f.input, expectedManifestDigest: "a".repeat(64) })).rejects.toMatchObject({ code: "EXTRA_PACK_COMMAND_CONFLICT" });
-  await new ExtraApprovalRepository(c.runtime).approveExtraStep(await w.ctx, w.members.supervisor.member, approveInput(f.s, 0));
+  await new ExtraApprovalRepository(c.runtime).approveExtraStep(await testActorContext(c.admin, await w.ctx, w.members.supervisor.member), w.members.supervisor.member, approveInput(f.s, 0));
   expect(await f.writer.create(f.context, f.input)).toEqual(created);
   const current = await withTenant(c.runtime, f.context, db => loadExtraEvidenceSources(db, f.query));
   const nextPack = await assembleExtraSourcePack(current, storage);

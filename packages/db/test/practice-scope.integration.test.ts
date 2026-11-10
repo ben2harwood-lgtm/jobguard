@@ -16,7 +16,7 @@ import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from ".
 const tenant="a1000000-0000-4000-8000-000000000001", otherTenant="a1000000-0000-4000-8000-000000000002";
 const job="a2000000-0000-4000-8000-000000000001",otherJob="a2000000-0000-4000-8000-000000000002",emptyJob="a2000000-0000-4000-8000-000000000003",foreignJob="a2000000-0000-4000-8000-000000000004";
 const member="a3000000-0000-4000-8000-000000000001",retired="00000000-0000-4000-8000-000000000001",reserved="00000000-0000-4000-8000-000000000002",first="b0000000-0000-4000-8000-000000000001",second="b0000000-0000-4000-8000-000000000002";
-const context=testTenantContext(tenant),foreignContext=testTenantContext(otherTenant);
+const context=testTenantContext(tenant, { membershipId: member }),foreignContext=testTenantContext(otherTenant, { membershipId: member });
 let postgres:EmbeddedPostgres,admin:Pool,runtime:Pool,directory:string;
 beforeAll(async()=>{
  directory=await mkdtemp(join(tmpdir(),"jobguard-practice-scope-"));const port=await freePort(59000,300);
