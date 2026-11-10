@@ -2,19 +2,27 @@ import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as screenActions from "./screen-actions";
-import { missedWorkDiary, missedWorkSaved, saveMissedWork, priceFoundExtra, addOnSiteEvidence, evidenceDone, approvedExtraDone, finalCheckDone, restoreProgress, stages, VoiceJourney } from "./voice-journey";
-const memo = vi.hoisted(() => ({ steps: [] as import("../../ui/walkthrough/walkthrough").WalkthroughStep[] }));
-vi.mock("react", async original => ({ ...await original<typeof React>(), useMemo: (factory: () => unknown) => {
-  const result = factory();
-  if (Array.isArray(result) && result[0]?.id === "walk-1") memo.steps = result;
-  return result;
-} }));
+import { missedWorkDiary, missedWorkSaved, saveMissedWork, priceFoundExtra, addOnSiteEvidence, evidenceDone, approvedExtraDone, finalCheckDone, restoreProgress, stageWords, ownJobAction, stages, VoiceJourney } from "./voice-journey";
+const memo = vi.hoisted(() => ({ steps: [] as import("../../ui/walkthrough/walkthrough").WalkthroughStep[], states: null as unknown[] | null, cursor: 0 }));
+vi.mock("react", async original => {
+  const actual = await original<typeof React>();
+  return { ...actual, useState: (initial: unknown) => memo.states && memo.cursor < memo.states.length ? [memo.states[memo.cursor++], vi.fn()] : actual.useState(initial), useMemo: (factory: () => unknown) => {
+    const result = factory();
+    if (Array.isArray(result) && result[0]?.id === "walk-1") memo.steps = result;
+    return result;
+  } };
+});
+vi.mock("../../ui/workspace-shell", () => ({ WorkspaceShell: ({ jobId }: { jobId: string }) => <section data-workspace-job={jobId} /> }));
+vi.mock("../../ui/job-value", () => ({ ValuePage: ({ jobId }: { jobId: string }) => <section data-value-job={jobId} /> }));
 vi.stubGlobal("React", React);
 describe("WALK-3 honest journey boundaries", () => {
   it("keeps nine stages and names the prepared-job and acceptance limitations", () => {
     expect(stages).toHaveLength(9);
-    for (const index of [2, 3, 6]) expect(stages[index]![1]).toContain("This part uses a prepared example job");
-    expect(stages[2]![1]).toContain("prerequisite still to build");
+    for (const index of [2, 3, 6, 8]) {
+      expect(stageWords(index, "")).not.toContain("prepared");
+      expect(stageWords(index, preparedId)).toContain("This part uses a prepared example job");
+    }
+    expect(stages[2]![1]).toContain("invitation is still to build");
     expect(stages[3]![1]).toContain("not an authenticated customer response");
     expect(stages[5]![1]).toContain("builder's practice attestation");
     expect(stages[4]![1]).toContain("forget to add it to the bill");
@@ -199,10 +207,10 @@ describe("REAL-WALK-PAYOFF screen actions", () => {
   expect(fill.mock.calls).toEqual(saved ? [] : [["#diary-text", missedWorkDiary]]);
   expect(click).toHaveBeenCalledTimes(saved ? 0 : 1);
  });
- it("confirms the saved finding and prices its own row without approving it", async () => {
-  let answered = false, editing = false;
+ it.each([false, true])("confirms and prices its own row without approving or duplicating it: already priced %s", async priced => {
+  let answered = priced, editing = false;
   const presses: string[] = [];
-  const row = { textContent: "fitted loft hatch", scrollIntoView: vi.fn(), querySelectorAll: () => ["Change price", "Save new proposed revision"].map(name => ({ textContent: name, disabled: false, click: () => { presses.push(name); editing = name === "Change price"; } })) };
+  const row = { textContent: "fitted loft hatch", scrollIntoView: vi.fn(), querySelectorAll: (selector: string) => selector === ".variation-revision" ? priced ? [{ querySelector: () => ({ textContent: "Price revision 2 · £300.00" }) }] : [] : ["Change price", "Save new proposed revision"].map(name => ({ textContent: name, disabled: false, click: () => { presses.push(name); editing = name === "Change price"; } })) };
   const finding = { textContent: "fitted loft hatch", querySelector: () => answered ? {} : null };
   const refresh = vi.fn();
   vi.stubGlobal("document", { getElementById: (id: string) => id === "walk-refresh" ? { click: refresh } : {
@@ -212,10 +220,10 @@ describe("REAL-WALK-PAYOFF screen actions", () => {
   const fill = vi.spyOn(screenActions, "fill").mockResolvedValue();
   const click = vi.spyOn(screenActions, "click").mockImplementation(async name => { expect(name).toBe("Yes — this was extra work"); answered = true; });
   await priceFoundExtra({} as HTMLElement, new AbortController().signal);
-  expect(click).toHaveBeenCalledTimes(1);
+  expect(click).toHaveBeenCalledTimes(priced ? 0 : 1);
   expect(refresh).toHaveBeenCalledTimes(1);
-  expect(presses).toEqual(["Change price", "Save new proposed revision"]);
-  expect(fill).toHaveBeenCalledWith('[aria-label="New price fitted loft hatch"]', "300.00");
+  expect(presses).toEqual(priced ? [] : ["Change price", "Save new proposed revision"]);
+  expect(fill.mock.calls).toEqual(priced ? [] : [['[aria-label="New price fitted loft hatch"]', "300.00"]]);
  });
  it("opens the report and scrolls its heading to the top", async () => {
   const open = vi.fn(), scrollIntoView = vi.fn();
@@ -225,4 +233,66 @@ describe("REAL-WALK-PAYOFF screen actions", () => {
   expect(open).toHaveBeenCalledTimes(1);
   expect(scrollIntoView).toHaveBeenCalledWith({ block: "start", behavior: "instant" });
  });
+});
+
+
+describe("REAL-WALK-OWN-JOB control boundary", () => {
+  it("continues an available own-job control without preparing another job", async () => {
+    const action = vi.fn().mockResolvedValue(undefined), fallback = vi.fn();
+    await ownJobAction(action, new AbortController().signal, fallback, 100);
+    expect(action).toHaveBeenCalledTimes(1); expect(fallback).not.toHaveBeenCalled();
+  });
+  it("switches once after refusal without replaying the refused control", async () => {
+    const action = vi.fn().mockRejectedValue(new Error("refused")), fallback = vi.fn().mockResolvedValue(undefined);
+    await expect(ownJobAction(action, new AbortController().signal, fallback, 100)).rejects.toThrow("refused");
+    expect(action).toHaveBeenCalledTimes(1); expect(fallback).toHaveBeenCalledTimes(1);
+  });
+  it("switches after a disabled control exceeds the bounded wait", async () => {
+    const fallback = vi.fn().mockResolvedValue(undefined);
+    await expect(ownJobAction(signal => screenActions.until(() => false, signal), new AbortController().signal, fallback, 1)).rejects.toThrow("stayed unavailable");
+    expect(fallback).toHaveBeenCalledTimes(1);
+  });
+  it("stopping playback never creates a fallback", async () => {
+    const controller = new AbortController(), fallback = vi.fn(); controller.abort();
+    await expect(ownJobAction(async signal => signal.throwIfAborted(), controller.signal, fallback, 100)).rejects.toBeDefined();
+    expect(fallback).not.toHaveBeenCalled();
+  });
+  it.each([false, true])("an own draft needs a server-priced revision: %s", async priced => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(response(capture())).mockResolvedValueOnce(response(quote(jobId, priced))));
+    expect(await restoreProgress(JSON.stringify({ jobId, prepared: "", priced: true }))).toMatchObject({ prepared: "", priced, initialStep: priced ? 2 : 1 });
+  });
+});
+
+it("restores own-job progress past pricing from live server state with no prepared selector", async () => {
+  const live = { ...capture(), status: "live" };
+  const records: Record<string, unknown> = {
+    [`/api/jobs/${jobId}/proposal`]: live, [`/api/jobs/${jobId}/quotes`]: quote(),
+    [`/api/jobs/${jobId}/quotes/delivery`]: { status: "simulated_delivery" },
+    [`/api/jobs/${jobId}/proof`]: { version: "practice-proof-view.v1", jobId, completion: null },
+  };
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => { expect(url in records).toBe(true); return response(records[url]); }));
+  expect(await restoreProgress(JSON.stringify({ jobId, prepared: "", priced: true }))).toEqual({ capture: live, priced: true, prepared: "", initialStep: 4 });
+});
+
+
+it.each([false, true])("renders the real workspace and report with the own job selector: report %s", report => {
+  memo.states = [jobId, capture(), 0, 2, true, false, "", report, false, "", false]; memo.cursor = 0;
+  try {
+    const html = renderToStaticMarkup(<VoiceJourney />);
+    expect(html).toContain(`${report ? "data-value-job" : "data-workspace-job"}="${jobId}"`);
+    expect(html).not.toContain("This part uses a prepared example job");
+    expect(html).not.toContain("prepared job's figures");
+    expect(html).toContain("acceptance and extra approval use explicit builder practice attestations");
+    for (const index of [2, 3, 6, 8]) expect(memo.steps[index]!.words).not.toContain("prepared");
+  } finally { memo.states = null; }
+});
+
+it("renders the honest fallback and keeps old prepared tours on their verified selector", () => {
+  memo.states = [jobId, capture(), 0, 2, true, true, preparedId, true, false, "", false]; memo.cursor = 0;
+  try {
+    const html = renderToStaticMarkup(<VoiceJourney />);
+    expect(html).toContain(`data-value-job="${preparedId}"`);
+    expect(html).toContain("This part uses a prepared example job");
+    expect(memo.steps[8]!.words).toContain("These are the prepared job's figures");
+  } finally { memo.states = null; }
 });

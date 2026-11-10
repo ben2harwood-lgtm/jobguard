@@ -51,3 +51,21 @@ describe("WALK server-backed resume", () => {
     await expect(resumeWalkthrough(new URLSearchParams({ walkJob: "invalid" }))).rejects.toThrow();
   });
 });
+
+
+it.each([false, true])("resumes a completed Final Check with its finding on own or legacy prepared job: prepared %s", async prepared => {
+  const active = prepared ? example : own;
+  const records: Record<string, unknown> = {
+    [`/api/jobs/${own}/proposal`]: capture(own, prepared ? "draft" : "live"),
+    [`/api/jobs/${active}/quotes`]: { version: 1, environment: "synthetic_demo", jobId: active, scope: [], draft: null, revisions: [{ id: own, revision: 1, previousRevisionId: null, netPence: 90000, taxPence: 18000, totalPence: 108000, issuable: true, blockers: [], lines: [] }] },
+    [`/api/jobs/${active}/quotes/delivery`]: { status: "simulated_delivery" },
+    [`/api/jobs/${active}/proof`]: { version: "practice-proof-view.v1", jobId: active, completion: { id: own, reviewRequired: false } },
+    [`/api/jobs/${active}/variations`]: { version: 1, environment: "synthetic_demo", jobId: active, baselinePence: 90000, capPence: 0, parentScopeItemId: own, approvedAdditionsPence: 15000, approvedOmissionsPence: 0, pendingExtrasPence: 0, variations: [] },
+    [`/api/jobs/${active}/final-check`]: { state: "completed", items: [{ signalId: own, signalRevision: 1, description: "fitted loft hatch", evidence: [], comparisons: { lockedLineIds: [], baselineItemIds: [] }, disposition: null, answer: null }] },
+    [`/api/jobs/${active}/customer-invoices`]: { version: 1, environment: "synthetic_demo", jobId: active, invoices: [] },
+  };
+  if (prepared) records[`/api/jobs/${active}/proposal`] = capture(active, "live");
+  server(records);
+  expect(await resumeWalkthrough(new URLSearchParams({ walkJob: own, ...(prepared ? { walkExample: example } : {}), step: "9" }))).toMatchObject({ prepared: prepared ? example : "", index: 7 });
+  expect(vi.mocked(fetch).mock.calls.every(([, init]) => init?.cache === "no-store")).toBe(true);
+});

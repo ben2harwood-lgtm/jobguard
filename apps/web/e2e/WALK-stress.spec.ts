@@ -53,13 +53,6 @@ async function reviewAndPrice(page: Page) {
   await expect(page.getByTestId("quote-revision")).toHaveText("1");
   await expect(page.locator(".quote-notice").filter({ hasText: "Draft revision 1 saved" })).toBeVisible();
 }
-async function preparedJob(page: Page) {
-  const response = page.waitForResponse(r => r.request().method() === "POST" && r.url().endsWith("/api/jobs/capture"));
-  await double(page, "Use the prepared example job");
-  const captured = await (await response).json();
-  expect(captured.jobId).toEqual(expect.any(String));
-  return captured.jobId as string;
-}
 async function receiptPath(page: Page, jobId: string) {
   const view = await read(page, `/api/jobs/${jobId}/customer-invoices`);
   expect(view.invoices).toHaveLength(1);
@@ -80,7 +73,7 @@ test.beforeEach(async ({ page, baseURL }) => {
 test("steps 1–9: double-click every save/send without duplicate commercial records", async ({ page }) => {
   await open(page);
   await tour(page).getByRole("button", { name: "I'll do it", exact: true }).click();
-  await page.getByLabel("Work details").fill("JOB: Fictional stress room\nITEM: Paint fictional walls | £200.00");
+  await page.getByLabel("Work details").fill("JOB: Fictional stress room\nITEM: Paint fictional walls | £900.00");
   await double(page, "Make my draft");
   await expect(tour(page)).toContainText("Step 2 of 9");
   await tour(page).getByRole("button", { name: "I'll do it", exact: true }).click();
@@ -88,9 +81,8 @@ test("steps 1–9: double-click every save/send without duplicate commercial rec
   await reviewAndPrice(page);
   await expect(tour(page)).toContainText("Step 3 of 9");
   await tour(page).getByRole("button", { name: "I'll do it", exact: true }).click();
-  const prepared = await preparedJob(page);
-  expect(prepared).not.toBe(own);
-  await reviewAndPrice(page);
+  const prepared = own;
+  await expect(page.getByTestId("workspace-job-id")).toHaveAttribute("data-job-id", own);
   await double(page, "Save customer and site");
   await expect(page.getByTestId("party-customer")).not.toBeEmpty();
   await double(page, "Preview immutable quote");
@@ -107,6 +99,8 @@ test("steps 1–9: double-click every save/send without duplicate commercial rec
   await double(page, "Attach generated practice image");
   await double(page, "Check file integrity");
   await double(page, "Complete this stage");
+  await page.locator("#diary-text").fill("Fictional practice diary: fitted loft hatch. Estimated extra: £300 net.");
+  await double(page, "Save note");
   await expect(tour(page)).toContainText("Step 6 of 9");
   await tour(page).getByRole("button", { name: "I'll do it", exact: true }).click();
   await page.locator(".variation-entry").getByLabel("Description", { exact: true }).fill("Extra preparation");
@@ -115,6 +109,8 @@ test("steps 1–9: double-click every save/send without duplicate commercial rec
   await double(page, "Approve exact revision");
   await expect(tour(page)).toContainText("Step 7 of 9");
   await tour(page).getByRole("button", { name: "I'll do it", exact: true }).click();
+  await double(page, "Finished on site");
+  await expect(page.getByTestId("work-state")).toHaveText("Finished on site");
   await double(page, "Build final account");
   const dispositions = page.locator('select[aria-label^="Disposition "]');
   await expect(dispositions.first()).toBeVisible();
@@ -127,6 +123,7 @@ test("steps 1–9: double-click every save/send without duplicate commercial rec
   if (await button(page, "Accept final check terms").isEnabled()) {
     await double(page, "Accept final check terms");
   }
+  await double(page, "Rebuild from approved sources");
   await double(page, "Complete final account");
   await expect(page.getByTestId("lock-state")).toHaveText("Final account completed");
   await button(page, "Load the saved final check").click();
@@ -134,9 +131,15 @@ test("steps 1–9: double-click every save/send without duplicate commercial rec
   await expect.poll(async () => {
     await button(page, "Load the saved final check").click();
     return page.getByTestId("final-check-status").textContent();
-  }, { timeout: 300_000, intervals: [3000] }).toBe("JobGuard's final check found nothing missing from your bill.");
+  }, { timeout: 300_000, intervals: [3000] }).toContain("JobGuard's final check found 1 thing");
   await expect(tour(page)).toContainText("Step 8 of 9");
   await tour(page).getByRole("button", { name: "I'll do it", exact: true }).click();
+  await double(page, "Yes — this was extra work");
+  await button(page, "Refresh the saved job").click();
+  const found = page.locator(".variation-list article").filter({ hasText: "fitted loft hatch" });
+  await found.getByRole("button", { name: "Change price", exact: true }).click();
+  await page.getByLabel("New price fitted loft hatch").fill("300.00");
+  await found.getByRole("button", { name: "Save new proposed revision", exact: true }).dblclick({ delay: 40 });
   await double(page, "Issue and simulate this invoice");
   await expect(page.getByTestId("invoice-gross")).toHaveText("GBP 1,230.00");
   await expect(page.getByTestId("uiwire12-receipt-amount")).toBeEnabled();
@@ -154,8 +157,8 @@ test("steps 1–9: double-click every save/send without duplicate commercial rec
   // Durable counts catch duplicates hidden by a UI that displays only the last row.
   const session = await read(page, "/api/session");
   const jobs = await read(page, `/api/jobs?tenantId=${session.tenants[0].id}`);
-  expect(jobs.jobs.map((job: { id: string }) => job.id).sort()).toEqual([own, prepared].sort());
-  for (const id of [own, prepared]) {
+  expect(jobs.jobs.map((job: { id: string }) => job.id).sort()).toEqual([own]);
+  for (const id of [own]) {
     expect((await read(page, `/api/jobs/${id}/quotes`)).revisions).toHaveLength(1);
   }
   const delivery = await read(page, `/api/jobs/${prepared}/quotes/delivery`);
@@ -165,14 +168,14 @@ test("steps 1–9: double-click every save/send without duplicate commercial rec
   expect(delivery.attempts).toBe(1);
   expect(delivery.effects).toEqual({ platformDebt: 0, chargeAttempts: 0, realExternalActions: 0 });
   const extras = await read(page, `/api/jobs/${prepared}/variations`);
-  expect(extras.variations).toHaveLength(1);
-  expect(extras.variations[0].revisions).toHaveLength(1);
+  expect(extras.variations).toHaveLength(2);
+  expect(extras.variations.find((item: { description: string }) => item.description === "Extra preparation").revisions).toHaveLength(1);
   expect(extras.approvedAdditionsPence).toBe(12500);
   const receipts = await read(page, await receiptPath(page, prepared));
   expect(receipts.receipts).toHaveLength(1);
   expect(receipts.receipts[0].amountPence).toBe(123000);
   expect(receipts.eligibleRecoveryPrincipalPence).toBe(0);
-  expect((await read(page, `/api/jobs/${own}/proposal`)).status).toBe("quoting");
+  expect(["live", "invoiced", "paid"]).toContain((await read(page, `/api/jobs/${own}/proposal`)).status);
 });
 
 test("step 1: empty and overlong work details explain refusal and keep the entered text", async ({ page }) => {
@@ -194,8 +197,8 @@ test("step 2: invalid quote rates block sending without overwriting the saved qu
   await open(page);
   await showUntil(page, 3);
   await tour(page).getByRole("button", { name: "I'll do it", exact: true }).click();
-  const id = await preparedJob(page);
-  await reviewAndPrice(page);
+  const id = await ownJob(page);
+  await expect(page.getByTestId("workspace-job-id")).toHaveAttribute("data-job-id", id);
   const path = `/api/jobs/${id}/quotes`;
   const before = await read(page, path);
   await button(page, "Save customer and site").click();

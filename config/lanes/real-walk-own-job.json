@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-walk-own-job": {
+      "branches": [
+        "codex/sandbox/real-walk-own-job"
+      ],
+      "note": "REAL-WALK-OWN-JOB, WALK-3 own-job continuity; RED; stacked on real-walk-payoff; NOPR. No migrations.",
+      "allow": [
+        "apps/web/app/practice-company/walkthrough/resume.test.ts",
+        "apps/web/app/practice-company/walkthrough/resume.ts",
+        "apps/web/app/practice-company/walkthrough/voice-journey.test.tsx",
+        "apps/web/app/practice-company/walkthrough/voice-journey.tsx",
+        "apps/web/e2e/WALK-3.spec.ts",
+        "apps/web/e2e/WALK-resume.spec.ts",
+        "apps/web/e2e/WALK-stress.spec.ts"
+      ]
+    }
+  }
+}

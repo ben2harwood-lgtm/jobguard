@@ -20,7 +20,7 @@ test("WALK refresh resumes steps 2, 5 and 8 on the same saved jobs", async ({ pa
       ownJob ??= url.searchParams.get("walkJob");
       exampleJob ??= url.searchParams.get("walkExample");
       expect(ownJob).toBeTruthy();
-      if (step >= 5) expect(exampleJob).toBeTruthy();
+      expect(exampleJob).toBeNull();
       const beforeRefresh = captures;
       // No browser storage or claimed step may establish completion.
       await page.evaluate(() => { localStorage.clear(); sessionStorage.clear(); });
@@ -32,7 +32,7 @@ test("WALK refresh resumes steps 2, 5 and 8 on the same saved jobs", async ({ pa
       await expect(page.getByRole("link", { name: "Open your saved job", exact: true })).toHaveAttribute("href", `/jobs/${ownJob}`);
       if (step >= 5) {
         expect(new URL(page.url()).searchParams.get("walkExample")).toBe(exampleJob);
-        await expect(page.getByTestId("workspace-job-id")).toHaveAttribute("data-job-id", exampleJob!);
+        await expect(page.getByTestId("workspace-job-id")).toHaveAttribute("data-job-id", ownJob!);
       }
       if (step === 8) await expect(page.getByTestId("final-gross")).toBeVisible();
       expect(captures).toBe(beforeRefresh);
@@ -40,7 +40,7 @@ test("WALK refresh resumes steps 2, 5 and 8 on the same saved jobs", async ({ pa
     await tour.getByRole("button", { name: "Show me", exact: true }).click();
   }
   await expect(tour).toContainText("Step 9 of 9");
-  expect(captures).toBe(2);
+  expect(captures).toBe(1);
 });
 
 test("WALK refresh stays on step 5 after completed proof is invalidated", async ({ page }) => {
@@ -56,7 +56,7 @@ test("WALK refresh stays on step 5 after completed proof is invalidated", async 
   await expect(tour).toContainText("Step 5 of 9");
   await page.getByRole("button", { name: "Simulate proof invalidation", exact: true }).click();
   await expect(page.getByTestId("stage-review")).toHaveText("Proof needs review");
-  const exampleJob = new URL(page.url()).searchParams.get("walkExample");
+  const exampleJob = new URL(page.url()).searchParams.get("walkJob");
   expect(exampleJob).toBeTruthy();
 
   await page.reload();
