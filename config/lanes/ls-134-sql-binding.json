@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "lanes": {
+    "ls-134-sql-binding": {
+      "branches": [
+        "codex/sandbox/ls-134-sql-binding"
+      ],
+      "allow": [
+        "packages/db/migrations/0699_sync_checkpoint_bound_reader.sql",
+        "packages/db/migrations/0958_sync_checkpoint_bound_reader.sql",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/0699_sync_checkpoint_bound_reader.proof.json",
+        "packages/db/test/migration-proofs/0958_sync_checkpoint_bound_reader.proof.json",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
+        "packages/db/test/sync-snapshot.integration.test.ts"
+      ]
+    }
+  }
+}

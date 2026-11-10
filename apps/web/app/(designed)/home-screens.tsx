@@ -11,7 +11,7 @@ import { VariationFlow } from "../ui/variation-flow";
 import { ProofCapture } from "../ui/proof-capture";
 import { FinalAccount } from "../ui/final-account";
 import { FeeStatement } from "../ui/fee-statement";
-import { Card, Empty, Head, Legacy, Note, PHOTOS, RailIcon, Screen, Shell, Tag, documentLine, known, money, needsChecking, readValue, statusTag, useJobs, type JobValue, type Workspace } from "./designed-ui";
+import { Card, Empty, Head, Legacy, Note, PHOTOS, RailIcon, Screen, Shell, Tag, quoteLine, documentLine, known, money, needsChecking, readValue, statusTag, useJobs, type JobValue, type Workspace } from "./designed-ui";
 
 const INNER_SUBTITLE = "One place to manage the job, spot problems early and know what comes next.";
 
@@ -39,7 +39,7 @@ export function DesignedToday() {
 const STAGES: [string, JobSummary["status"][]][] = [["Draft", ["draft"]], ["Quote", ["quoting"]], ["Accepted", ["accepted"]], ["Work", ["live"]], ["Invoiced", ["invoiced"]], ["Paid", ["paid"]]];
 const ATTENTION_PHOTOS = ["crew", "boards", "invoice"];
 
-function Today({ workspace }: { workspace: Workspace }) {
+export function Today({ workspace }: { workspace: Workspace }) {
   const router = useRouter();
   const { jobs, failed } = useJobs(workspace.tenantId);
   const open = (workspace.decisions?.decisions ?? []).filter(item => item.resolution === "open");
@@ -79,7 +79,7 @@ function Today({ workspace }: { workspace: Workspace }) {
           <button type="button" className="rr-mini-photo" aria-label={`Open ${job.title}`} onClick={() => router.push(`/jobs/${job.id}/overview`)}><span className={`rr-photo rr-photo-${["job-martin", "job-harper", "job-ocean"][index % 3]}`} role="img" aria-label="Illustrative image"></span></button>
           <div className="rr-mini-copy"><div className="rr-mini-top"><span className={`rr-status ${needsChecking(job) ? "amber" : job.status === "live" ? "green" : "grey"}`}><i></i>{(needsChecking(job) ? "Needs attention" : jobStatusLabels[job.status]).toUpperCase()}</span><button type="button" className="rr-mini-menu" aria-label="Open job records" onClick={() => router.push(`/jobs/${job.id}/records`)}>•••</button></div>
             <button type="button" className="rr-job-title" onClick={() => router.push(`/jobs/${job.id}/overview`)}>{job.title}</button><p>{known(job.siteLabel) || known(job.customerLabel) || "Details needed"}</p>
-            <div className="rr-mini-footer"><strong>{job.document.reference ?? "No quote yet"}</strong><div><small>Payment</small><span>{job.customerPayment === "not_due" ? "Not due" : job.customerPayment === "settled" ? "Paid" : job.customerPayment === "part_paid" ? "Part paid" : job.customerPayment === "due" ? "Due" : "Not checked"}</span></div></div></div>
+            <div className="rr-mini-footer"><strong>{quoteLine(job)}</strong><div><small>Payment</small><span>{job.customerPayment === "not_due" ? "Not due" : job.customerPayment === "settled" ? "Paid" : job.customerPayment === "part_paid" ? "Part paid" : job.customerPayment === "due" ? "Due" : "Not checked"}</span></div></div></div>
         </article>)}</div>
       </section>
     </section>

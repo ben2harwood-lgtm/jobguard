@@ -1,0 +1,38 @@
+{
+  "runtime": {
+    "name": "vosk-browser",
+    "version": "0.0.8",
+    "licence": "Apache-2.0",
+    "upstreamSha256": "29504515526e974f4cb053cf08811c4de5fb2a74007c0a5a957db50eaa8d5d0c",
+    "file": "vosk-worker.js",
+    "bytes": 167398,
+    "sha256": "30d5725b11558ec365395f8f3e7cae14cb64a2cf5380e8a80251f03243fe1f35"
+  },
+  "wasm": {
+    "file": "vosk.wasm",
+    "runtimeVersion": "0.0.8",
+    "licence": "Apache-2.0",
+    "bytes": 3122379,
+    "sha256": "0f13920e74cb122d3f879b9bbfc9ad36b5f3d979a5f0510b7e2622767300a4ef"
+  },
+  "model": {
+    "name": "vosk-model-small-en-us",
+    "version": "0.15",
+    "licence": "Apache-2.0",
+    "source": "https://raw.githubusercontent.com/ccoreilly/vosk-browser/a4b0d0fe60359e5ea9800f810f6b6f6c1d2b03c6/models/vosk-model-small-en-us-0.15.tar.gz",
+    "bytes": 41184862,
+    "sha256": "f0b24bb92a48ca575b6a96500d6b543f0f079c573dfe85bbe16001fc0404e1d8",
+    "parts": [
+      {
+        "file": "model.part-0",
+        "bytes": 25165824,
+        "sha256": "badc817d9ae2a963674d774ceb4ec476da783d9fb91e5759d187e85538bc4d36"
+      },
+      {
+        "file": "model.part-1",
+        "bytes": 16019038,
+        "sha256": "00ebe6ebb3189ee71567b02095d50216ac3946078e5c3c7015358dc74a056620"
+      }
+    ]
+  }
+}

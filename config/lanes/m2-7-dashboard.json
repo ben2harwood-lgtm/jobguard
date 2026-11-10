@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "lanes": {
+    "m2-7-dashboard": {
+      "branches": [
+        "codex/sandbox/m2-7-dashboard",
+        "codex/sandbox/m2-7-dashboard-catchup"
+      ],
+      "note": "M2-7 RED catch-up on origin/main a96b743c6. Preserve batch-14 dashboard migration 0589 and current actor/visibility guards. Integrate remaining practice dismissal feedback. No additional migration or live route.",
+      "allow": [
+        "apps/web/app/api/jobs/[id]/relevance-inbox/decisions/[decisionId]/route.test.ts",
+        "apps/web/app/api/jobs/[id]/relevance-inbox/decisions/[decisionId]/route.ts",
+        "apps/web/app/lib/inbox-metrics-server.ts",
+        "apps/web/app/ui/relevance-inbox.test.tsx",
+        "apps/web/app/ui/relevance-inbox.tsx",
+        "apps/web/e2e/m2-7-inbox-record.spec.ts",
+        "packages/db/src/inbox-relevance-repository.ts",
+        "packages/db/test/inbox-metrics.integration.test.ts"
+      ]
+    }
+  }
+}

@@ -60,7 +60,19 @@ export function Legacy({ children, label, cards = false }: { children: ReactNode
 export const known = (value: string) => value && value !== UNKNOWN ? value : "";
 const initials = (name: string) => name.split(/\s+/u).filter(Boolean).slice(0, 2).map(part => part[0]!.toUpperCase()).join("") || "JG";
 export function money(pence: number | null | undefined) { return pence === null || pence === undefined ? "Not recorded yet" : `£${(pence / 100).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; }
-export function shortDate(iso: string) { const date = new Date(iso); return Number.isNaN(date.getTime()) ? "" : date.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }); }
+export function shortDate(iso: string) { const date = new Date(iso); return Number.isNaN(date.getTime()) ? "" : date.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" }); }
+/** These reads expose quote state, but no stored accepted total. */
+export function quoteAccepted(status: JobSummary["status"]) {
+  return ["accepted", "live", "invoiced", "paid"].includes(status);
+}
+export function quoteLine(job: Pick<JobSummary, "status" | "document">) {
+  if (quoteAccepted(job.status)) return "Quote accepted";
+  if (job.document.kind === "quote" && job.document.delivery === "delivered") return "Quote sent, waiting for the customer";
+  if (job.document.delivery === "outcome_unknown") return "Quote sending needs checking";
+  if (job.document.delivery === "queued") return "Quote waiting to send — not sent yet";
+  if (job.document.kind === "unknown" && job.status !== "draft") return "Quote status not checked yet";
+  return "Quote not sent yet";
+}
 export function documentLine(job: JobSummary) {
   const { kind, reference, delivery } = job.document;
   if (kind === "none") return "No quote sent yet";
@@ -209,7 +221,7 @@ export function StateScreen({ load, retry, title, active = "jobs" }: { load: Loa
   const [busy, setBusy] = useState(false);
   async function signIn() { setBusy(true); try { await fetch("/api/session", { method: "POST" }); } finally { setBusy(false); retry(); } }
   const body = load.state === "loading" ? <Card title="Getting your jobs ready"><div className="card-body"><p aria-live="polite">Loading…</p></div></Card>
-    : load.state === "signed-out" ? <Card title="Open the practice workspace"><div className="card-body"><p>This uses made-up jobs only. Nothing is sent or charged.</p><div style={{ marginTop: 18 }}><button type="button" className="btn primary" disabled={busy} onClick={() => void signIn()}>Open the practice workspace →</button></div></div></Card>
+    : load.state === "signed-out" ? <Card title="Open the practice workspace"><div className="card-body"><div className="head-buttons"><a className="btn primary" href="/practice-company">Start my own practice firm</a><button type="button" className="btn" disabled={busy} onClick={() => void signIn()}>Look around an example firm</button></div><p style={{ marginTop: 18 }}>Made-up jobs only. Nothing is sent or charged.</p></div></Card>
     : <Card title="Your jobs did not load"><div className="card-body"><p role="alert">Nothing changed. Please try again.</p><div style={{ marginTop: 18 }}><button type="button" className="btn primary" onClick={retry}>Try again</button></div></div></Card>;
   return <Shell workspace={null} title={title} subtitle="One place to manage the job, spot problems early and know what comes next." active={active}><div className="rr-state">{body}</div></Shell>;
 }
