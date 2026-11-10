@@ -35,9 +35,9 @@ it("0905 upgrades populated approval requests without changing any earlier row, 
  }
  // On replay 0639 (batch-41) and 0641 (batch-42) add only empty tables, and 0642 (Q10) moves IssueClientApproval
  // from the owner rule to the contractor rule. WALK-2 adds only an empty blank-practice session table;
- // every other row still compares exactly.
+ // LS-93 (0719) adds only an empty commercial_grant_use table. Every other row still compares exactly.
  const replayedRegistry = (after["app.command_type_registry"] as { command_type: string; permission_rule: string }[]).map(row =>
   row.command_type === "IssueClientApproval" && row.permission_rule === "owner" ? { ...row, permission_rule: "contractor" } : row);
  await migrate(c.admin); await migrate(c.admin); expect(await snapshot(c.admin)).toEqual({ ...after, "app.connector_promotion": [], "control_plane.blank_practice_session": [],
-  "app.extra_client_command_session": [], "app.extra_client_session": [], "app.extra_client_signin": [], "app.extra_pack_artifact": [], "app.command_type_registry": replayedRegistry });
+  "app.extra_client_command_session": [], "app.extra_client_session": [], "app.extra_client_signin": [], "app.extra_pack_artifact": [], "app.commercial_grant_use": [], "app.command_type_registry": replayedRegistry });
 }, 240_000);

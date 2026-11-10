@@ -11,6 +11,7 @@
         "packages/db/src/commands.ts",
         "packages/db/src/commercial-outbound-paths.test.ts",
         "packages/db/test/commands.integration.test.ts",
+        "packages/db/test/extra-proceed-upgrade.integration.test.ts",
         "packages/db/test/later-empty-tables.ts",
         "packages/db/test/migration-proofs/0719_commercial_grant_single_use.proof.json",
         "packages/db/test/migration-proofs/0827_commercial_grant_single_use.proof.json"
