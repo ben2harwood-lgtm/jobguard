@@ -6,6 +6,7 @@
         "codex/sandbox/real-papercuts-1"
       ],
       "allow": [
+        "apps/web/e2e/CH-5.spec.ts",
         "apps/web/app/ui/job-parties.test.tsx",
         "apps/web/app/ui/job-parties.tsx",
         "apps/web/app/ui/payment-fee-statements.test.ts",
