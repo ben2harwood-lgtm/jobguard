@@ -55,7 +55,7 @@ export function failure(error: unknown) {
 }
 
 /** Persistent generated originals shared by capture and bundle checks. */
-export const practiceStorage = (context: VerifiedTenantContext, jobId: string, pool = syntheticPool()) => new NorthsidePhotoStorage(pool, context, jobId);
+export const practiceStorage = (context: VerifiedTenantContext, jobId: string, pool = syntheticPool()) => NorthsidePhotoStorage.forTenant(pool, context, jobId);
 export const evidenceService = (context: VerifiedTenantContext, jobId: string, pool = syntheticPool()) => new EvidenceService(pool, practiceStorage(context, jobId, pool));
 /** A complete 1x1 PNG whose pixel bytes depend on the seed, so each practice photo has its own SHA-256. */
 export function practicePng(): { bytes: Uint8Array; sha256: string } {
