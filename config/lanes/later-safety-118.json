@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-118": {
+      "branches": [
+        "codex/sandbox/later-safety-118"
+      ],
+      "note": "LATER-SAFETY-118 RED: current company owners retain import history across sessions; practice binding unchanged.",
+      "allow": [
+        "packages/db/migrations/0668_import_company_owner_history.sql",
+        "packages/db/test/migration-proofs/0668_import_company_owner_history.proof.json",
+        "packages/db/src/job-import-v3-repository.ts",
+        "packages/db/test/import-company-owner-history.integration.test.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
+        "packages/db/migration-notes/0668_import_company_owner_history.md"
+      ]
+    }
+  }
+}

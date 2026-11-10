@@ -12,6 +12,11 @@ type Availability = "synthetic_only" | "unavailable";
 export function capabilityReport(declared: Partial<Record<Capability, Availability>>) {
   return Object.fromEntries(connectorCapabilities.map(key => [key, declared[key] ?? "unavailable"])) as Record<Capability, Availability>;
 }
+/** Inbound staging only. This report grants no outbound or reconciliation authority. */
+export function stagedInputCapabilityReport() {
+  return capabilityReport({ work_orders: "synthetic_only", billing_status: "synthetic_only",
+    materials_issues: "synthetic_only", export_delivery: "synthetic_only" });
+}
 export type ForbiddenWriters = Record<"origin" | "approval" | "fee", () => void>;
 export interface ConnectorFixture {
   adapter: OutboundAdapter;

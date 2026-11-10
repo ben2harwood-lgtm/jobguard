@@ -1,0 +1,66 @@
+{
+  "migration": "0675_work_order_team_scope.sql",
+  "lp0": [
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.work_order_commit(uuid,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "ce92d62ad90b21252e7a0995be6cb92f6ce17dc039a6a79977a5261f42096049",
+        "staticWrites": [
+          "app.job",
+          "app.job_assignment",
+          "app.scope_identity",
+          "app.work_order",
+          "app.work_order_current",
+          "app.work_order_line",
+          "app.work_order_revision"
+        ],
+        "staticCalls": [
+          "app.contractor_member_active",
+          "app.work_order_client_permitted",
+          "app.work_order_import_permitted"
+        ]
+      },
+      "after": {
+        "identity": "function:app.work_order_commit(uuid,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.job",
+          "app.job_assignment",
+          "app.scope_identity",
+          "app.work_order",
+          "app.work_order_current",
+          "app.work_order_line",
+          "app.work_order_revision"
+        ],
+        "staticCalls": [
+          "app.contractor_allowed",
+          "app.contractor_member_active",
+          "app.mon8_require_feature",
+          "app.work_order_client_permitted",
+          "app.work_order_import_permitted"
+        ]
+      }
+    }
+  ],
+  "upgrade": [],
+  "tenancy": []
+}

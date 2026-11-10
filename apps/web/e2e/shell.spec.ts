@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 async function signIn(page: import("@playwright/test").Page) {
-  await page.goto("/");
+  await page.goto("/classic");
   await expect(page.getByRole("heading", { name: "Keep every job and every pound on track." })).toBeVisible();
   await page.getByRole("button", { name: "Start the demo" }).click();
   await page.getByRole("button", { name: "Skip tour" }).click();
@@ -9,7 +9,7 @@ async function signIn(page: import("@playwright/test").Page) {
 }
 
 test("first visit explains the journey and the help button reopens it", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/classic");
   await expect(page.getByRole("button", { name: "Start the demo" })).toBeVisible();
   await expect(page.getByText("A safe demo, nothing is really sent, charged, or saved to a real customer.")).toBeVisible();
   await page.getByRole("button", { name: "Start the demo" }).click();

@@ -1,3 +1,4 @@
+import { sourceFixtureUrl } from "../source-fixture-url.js";
 import { readFile, readdir } from "node:fs/promises";
 import { describe, expect, it, vi } from "vitest";
 import type { ExecutionContext } from "@nestjs/common";
@@ -59,7 +60,7 @@ describe("M0-6L route, cookie and server composition boundaries",()=>{
   expect(identityStatus(new Error("a sensitive provider response"))).toEqual({code:"IDENTITY_UNAVAILABLE",status:503});
  });
  it("registers the Nest guard and refuses synthetic cookies in every other mode",async()=>{
-  const module=await readFile(new URL("../app.module.ts",import.meta.url),"utf8");expect(module).toContain("provide:APP_GUARD,useClass:ApplicationAuthGuard");
+  const module=await readFile(sourceFixtureUrl("../app.module.ts", import.meta.url),"utf8");expect(module).toContain("{provide:APP_GUARD,useClass:machineRegistrationEnabled(process.env)?MachineApplicationAuthGuard:ApplicationAuthGuard}");
   const guard=new ApplicationAuthGuard(()=>{throw new Error("identity configuration unavailable");});
   const request={path:"/jobs/capture",headers:{cookie:"jg_session=b690f3c7-0d23-4c83-bca2-5f60ce9a0f19"}};
   const context={switchToHttp:()=>({getRequest:()=>request})} as ExecutionContext;
@@ -72,6 +73,16 @@ describe("M0-6L route, cookie and server composition boundaries",()=>{
    request.headers.cookie="";await expect(guard.canActivate(context)).rejects.toMatchObject({status:401});
   }finally{if(saved===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=saved;}
  });
+ it("registers ApplicationAuthGuard when machine registration is not enabled",async()=>{
+  const saved=process.env.JOBGUARD_CONNECTOR_MACHINE;
+  delete process.env.JOBGUARD_CONNECTOR_MACHINE;
+  try {
+   const {APP_GUARD}=await import("@nestjs/core");
+   const {AppModule}=await import("../app.module.js");
+   const providers=Reflect.getMetadata("providers",AppModule) as Array<{provide?:unknown;useClass?:unknown}>;
+   expect(providers.filter(provider=>provider.provide===APP_GUARD)).toEqual([{provide:APP_GUARD,useClass:ApplicationAuthGuard}]);
+  }finally{if(saved===undefined)delete process.env.JOBGUARD_CONNECTOR_MACHINE;else process.env.JOBGUARD_CONNECTOR_MACHINE=saved;}
+ });
  it("keeps practice mode guards ahead of cookies, pools and authenticated workspace work",async()=>{
   const {runInNewContext}=await import("node:vm");
   const {transpileModule,ModuleKind}=await import("typescript");
@@ -80,7 +91,7 @@ describe("M0-6L route, cookie and server composition boundaries",()=>{
   const environment:Record<string,string|undefined>={DATABASE_URL:"postgresql://fixture.invalid/synthetic"};
   const load=async(path:string)=>{
    const exports:Record<string,any>={};
-   const js=transpileModule(await readFile(new URL(`../../../web/app/${path}`,import.meta.url),"utf8"),{compilerOptions:{module:ModuleKind.CommonJS}}).outputText;
+   const js=transpileModule(await readFile(sourceFixtureUrl(`../../../web/app/${path}`, import.meta.url),"utf8"),{compilerOptions:{module:ModuleKind.CommonJS}}).outputText;
    runInNewContext(js,{exports,require:(id:string)=>{if(!(id in adapters))throw new Error(`Unexpected practice import: ${id}`);return adapters[id]},Response,process:{env:environment}});
    return exports;
   };
@@ -107,19 +118,19 @@ describe("M0-6L route, cookie and server composition boundaries",()=>{
   }
  });
  it("confines real identity context construction to the authenticated principal bridge",async()=>{
-  const files=await readdir(new URL(".",import.meta.url));
+  const files=await readdir(sourceFixtureUrl(".", import.meta.url));
   const callers=[];
   for(const file of files.filter(f=>f.endsWith(".ts")&&!f.endsWith(".test.ts"))) {
-   const source=await readFile(new URL(file,import.meta.url),"utf8");
+   const source=await readFile(sourceFixtureUrl(file, import.meta.url),"utf8");
    expect(source).not.toMatch(/from\s+["'](?:next-auth|@auth\/)/u);
    if(/verifiedTenantContextFromMembership\s*\(/u.test(source)||/as\s+VerifiedTenantContext/u.test(source)||/effective_tenant_id\s*[:=]/u.test(source))callers.push(file);
   }
   expect(callers).toEqual(["principal-bridge.ts"]);
-  const web=new URL("../../../web/app/lib/",import.meta.url);
+  const web=sourceFixtureUrl("../../../web/app/lib/", import.meta.url);
   for(const file of ["identity-server.ts","synthetic-server.ts","workspace-server.ts"]){const source=await readFile(new URL(file,web),"utf8");expect(source).not.toMatch(/verifiedTenantContextFromMembership|as\s+VerifiedTenantContext/u);if(file!=="identity-server.ts")expect(source).toContain('process.env.JOBGUARD_ENV');}
  });
  it("keeps Auth.js adapter-only and MemoryAuthProvider construction test-only across the applications",async()=>{
-  for(const root of [new URL("../",import.meta.url),new URL("../../../web/app/",import.meta.url)]) {
+  for(const root of [sourceFixtureUrl("../", import.meta.url),sourceFixtureUrl("../../../web/app/", import.meta.url)]) {
    for(const file of (await readdir(root,{recursive:true})).filter(name=>/\.tsx?$/u.test(name)&&!name.endsWith(".test.ts"))) {
     const source=await readFile(new URL(file,root),"utf8");
     if(/^[\s]*["']use client/u.test(source))expect(source,file).not.toMatch(/@jobguard\/api\/identity|@jobguard\/db/u);

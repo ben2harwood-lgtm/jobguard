@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "fix-ent10-cutover-status": {
+      "branches": ["codex/sandbox/fix-ent10-cutover-status"],
+      "note": "RED ENT-10 presentation repair: keep the emergency action status unique and preserve the unavailable-notices warning.",
+      "allow": [
+        "apps/web/app/admin/contractor/identity/emergency-actions.test.tsx",
+        "apps/web/app/admin/contractor/identity/emergency-notice.tsx"
+      ]
+    }
+  }
+}

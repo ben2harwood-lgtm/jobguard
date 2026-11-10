@@ -13,7 +13,7 @@ const recreatedWriters: { name: string; file: string; sql: string }[] = [];
 for (const file of readdirSync(directory).filter(f => /^\d{4}.*\.sql$/.test(f)).sort()) {
   for (const fn of functions(readFileSync(new URL(file, directory), "utf8"))) {
     final.set(fn.name, fn.sql);
-    if (file !== sealingMigration) main.set(fn.name, { file, sql: fn.sql });
+    if (file !== sealingMigration && !(file === "0660_baseline_ancestry_audit_trust.sql" && fn.name === "app.decision_check_command") && !(file === "0698_final_check_post_invoice_rerun.sql" && fn.name === "app.guard_final_check_manifest")) main.set(fn.name, { file, sql: fn.sql });
     if (file > sealingMigration && replacements.has(fn.name)) recreatedWriters.push({ ...fn, file });
   }
 }
@@ -51,6 +51,25 @@ describe("LP-4 catch-up preserves latest main routine behaviour", () => {
     expect(normalize(replacement)).toBe(normalize(expectedSealedDefinition(source.sql)));
     expect(replacement).not.toMatch(directWrite);
     expect(replacement).not.toContain("app.lock_audit_head()");
+  });
+  it("LATER-SAFETY-87 pins the complete successor decision writer", () => {
+    const successor = functions(readFileSync(new URL("0660_baseline_ancestry_audit_trust.sql", directory), "utf8"))
+      .filter(fn => fn.name === "app.decision_check_command");
+    expect(successor).toHaveLength(1);
+    expect(final.get("app.decision_check_command")).toBe(successor[0]!.sql);
+    expect(successor[0]!.sql).toContain("iv.job_id=next_job.id AND iv.source_job_id=source.id");
+    expect(successor[0]!.sql).toContain("rv.command_type='job.adopt_in_flight' AND rv.status='succeeded'");
+    expect(successor[0]!.sql).toContain("rv.semantic_key='import:'||next_job.id::text AND rv.result->>'jobId'=next_job.id::text AND rv.result->>'sourceJobId'=source.id::text");
+  });
+  it("LATER-SAFETY-142 pins the complete append-only manifest guard successor", () => {
+    const successor=functions(readFileSync(new URL("0698_final_check_post_invoice_rerun.sql",directory),"utf8"))
+      .filter(fn=>fn.name==="app.guard_final_check_manifest");
+    expect(successor).toHaveLength(1);
+    expect(final.get("app.guard_final_check_manifest")).toBe(successor[0]!.sql);
+    expect(successor[0]!.sql).toContain("removed:=app.require_final_check_rerun(NEW.tenant_id,NEW.job_id,predecessor.id)");
+    expect(successor[0]!.sql).toContain("NEW.withdrawn_predecessor_source_ids:=removed");
+    expect(successor[0]!.sql).toMatch(sealedCall);
+    expect(successor[0]!.sql).not.toMatch(directWrite);
   });
   it("LP-0 retains the sealed definition and call inventory for every rerouted writer", () => {
     const catalogue = JSON.parse(readFileSync(new URL("../../../docs/contracts/lp-0-effective-privileges-v1.json", import.meta.url), "utf8"));

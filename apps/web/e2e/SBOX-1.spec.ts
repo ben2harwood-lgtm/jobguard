@@ -3,7 +3,7 @@ test.setTimeout(90_000);
 
 const banner = "Practice sandbox — synthetic data; nothing is sent or charged";
 async function signIn(page: import("@playwright/test").Page) {
-  await page.goto("/"); await page.getByRole("button", { name: "Start the demo" }).click();
+  await page.goto("/classic"); await page.getByRole("button", { name: "Start the demo" }).click();
   const skip = page.getByRole("button", { name: "Skip tour" }); await skip.waitFor({ state: "visible" }); await skip.click();
 }
 async function noOverflow(page: import("@playwright/test").Page) { expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true); }

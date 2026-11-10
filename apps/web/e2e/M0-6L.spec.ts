@@ -25,7 +25,7 @@ test("entered code persists a server-owned tenant, rejects replay and real email
  await page.getByLabel("Eight-digit code").fill(wrong);await page.getByRole("button",{name:"Verify code"}).click();
  const alert=page.getByRole("alert").filter({hasText:"invalid or expired"});await expect(alert).toHaveCount(1);await expect(alert).toBeFocused();
  await page.getByLabel("Eight-digit code").fill(code!);await page.getByRole("button",{name:"Verify code"}).click();
- await expect(page.getByRole("heading",{name:"Signed in",exact:true})).toBeVisible();await expect(page.getByText("Role: owner",{exact:true})).toBeVisible();
+ await expect(page.getByRole("heading",{name:"You're signed in.",exact:true})).toBeVisible();await expect(page.getByText("Owner",{exact:true})).toBeVisible();
  const identity=await page.getByTestId("identity-id").textContent(),tenant=await page.getByTestId("identity-tenant").textContent();
  const cookies=await page.context().cookies();const cookie=cookies.find(c=>c.name==="jobguard_session")!;
  expect(cookie).toMatchObject({httpOnly:true,secure:true,sameSite:"Strict"});
@@ -85,9 +85,9 @@ test("entered code persists a server-owned tenant, rejects replay and real email
  const wrongTenant=await api(page,"/api/auth/invitations",{method:"POST",headers:{"x-csrf-token":session.body.csrfToken,"x-tenant-id":crypto.randomUUID()},data:{version:"identity-invitation.v1",email:"invitee@practice.invalid",requested_tenant_id:tenant,role:"foreman"}});expect(wrongTenant.status).toBe(403);
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
  // Jobs still uses its separately scoped demo session; returning to identity preserves its own tenant.
- await page.getByRole("link",{name:"Open practice Jobs"}).click();await page.goto("/sign-in");await expect(page.getByTestId("identity-tenant")).toHaveText(tenant!);
+ await page.getByRole("link",{name:"Open my jobs"}).click();await page.goto("/sign-in");await expect(page.getByTestId("identity-tenant")).toHaveText(tenant!);
  await page.getByRole("button",{name:"Sign out",exact:true}).click();
- await expect(page.getByRole("heading",{name:"Signed in",exact:true})).toHaveCount(0);
+ await expect(page.getByRole("heading",{name:"You're signed in.",exact:true})).toHaveCount(0);
  await expect(page.getByRole("button",{name:"Request code",exact:true})).toBeVisible();
  expect((await api(page,"/api/auth/session")).status).toBe(401);
  await page.reload();await expect(page.getByRole("button",{name:"Request code",exact:true})).toBeVisible();
@@ -125,7 +125,7 @@ test("invitation joins only its stored tenant and role, and the page says plainl
  try {
   // The existing user signs up first (own business, own tenant) and stays signed in with a valid session cookie.
   const memberPage=await memberContext.newPage();await memberPage.goto("/sign-in");await enterCode(memberPage,member);
-  await expect(memberPage.getByRole("heading",{name:"Signed in",exact:true})).toBeVisible();await expect(memberPage.getByText("Role: owner",{exact:true})).toBeVisible();
+  await expect(memberPage.getByRole("heading",{name:"You're signed in.",exact:true})).toBeVisible();await expect(memberPage.getByText("Owner",{exact:true})).toBeVisible();
   const ownTenant=(await memberPage.getByTestId("identity-tenant").textContent())!,memberIdentity=(await memberPage.getByTestId("identity-id").textContent())!;
   const invited=await ownerInvites(browser,[{email:member,role:"finance"},{email:recipient,role:"foreman"}]);
   expect(invited.tenant).not.toBe(ownTenant);
@@ -134,13 +134,13 @@ test("invitation joins only its stored tenant and role, and the page says plainl
   // (Nothing is requested or verified here, so this spends no identity requests.)
   const preview=await recipientContext.newPage();await preview.goto(`/sign-in?invitationId=${invited.ids[1]}`);
   await expect(preview.getByRole("note",{name:"Practice sandbox notice"})).toContainText("Practice sandbox — synthetic data; nothing is sent or charged");
-  await expect(preview.getByLabel("Sign-in purpose")).toHaveValue("invitation");await expect(preview.getByLabel("Invitation reference")).toHaveValue(invited.ids[1]!);
-  await expect(preview.getByText("switches to that other account")).toHaveCount(0);await expect(preview.getByRole("heading",{name:"Signed in",exact:true})).toHaveCount(0);
+  await expect(preview.getByLabel("What do you want to do?")).toHaveValue("invitation");await expect(preview.getByLabel("Invitation reference")).toHaveValue(invited.ids[1]!);
+  await expect(preview.getByText("switches to that other account")).toHaveCount(0);await expect(preview.getByRole("heading",{name:"You're signed in.",exact:true})).toHaveCount(0);
 
   // SAME address: the signed-in user follows an invitation from another tenant that was sent to their own address. The page
   // says what verification does, and afterwards the business is one of THIS account's memberships (identity unchanged).
   await memberPage.goto(`/sign-in?invitationId=${invited.ids[0]}`);
-  await expect(memberPage.getByRole("heading",{name:"Signed in",exact:true})).toBeVisible();
+  await expect(memberPage.getByRole("heading",{name:"You're signed in.",exact:true})).toBeVisible();
   await expect(memberPage.getByTestId("identity-tenant")).toHaveText(ownTenant);
   await expect(memberPage.getByLabel("Invitation reference")).toHaveValue(invited.ids[0]!);
   await expect(memberPage.getByRole("note",{name:"Practice sandbox notice"})).toContainText("Practice sandbox — synthetic data; nothing is sent or charged");
@@ -152,7 +152,7 @@ test("invitation joins only its stored tenant and role, and the page says plainl
   await enterCode(memberPage,member);
   await expect(memberPage.getByTestId("identity-tenant")).toHaveCount(2);
   await expect(memberPage.getByTestId("identity-id")).toHaveText(memberIdentity);
-  await expect(memberPage.getByText("Role: owner",{exact:true})).toBeVisible();await expect(memberPage.getByText("Role: finance",{exact:true})).toBeVisible();
+  await expect(memberPage.getByText("Owner",{exact:true})).toBeVisible();await expect(memberPage.getByText("Finance",{exact:true})).toBeVisible();
   expect(await memberPage.getByTestId("identity-tenant").allTextContents()).toEqual(expect.arrayContaining([ownTenant,invited.tenant]));
   await expect(memberPage.getByText("is now one of this account's memberships")).toBeVisible();await expect(memberPage.getByText("which is a different account")).toHaveCount(0);
   await expect(memberPage.getByRole("button",{name:"Verify code"})).toHaveCount(0);
@@ -179,7 +179,7 @@ test("invitation joins only its stored tenant and role, and the page says plainl
   await expect(memberPage.getByLabel("Invitation reference")).toHaveValue(invited.ids[1]!);
   await expect(memberPage.getByRole("region",{name:"Accept an invitation"})).toContainText("If it is a different address, this browser switches to that other account and signs this one out here");
   await enterCode(memberPage,recipient);
-  await expect(memberPage.getByText("Role: foreman",{exact:true})).toBeVisible();
+  await expect(memberPage.getByText("Foreman",{exact:true})).toBeVisible();
   await expect(memberPage.getByTestId("identity-tenant")).toHaveCount(1);await expect(memberPage.getByTestId("identity-tenant")).toHaveText(invited.tenant);
   await expect(memberPage.getByTestId("identity-id")).not.toHaveText(memberIdentity);
   await expect(memberPage.getByText(ownTenant,{exact:true})).toHaveCount(0);
@@ -190,6 +190,6 @@ test("invitation joins only its stored tenant and role, and the page says plainl
   expect(await memberPage.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
   // A second browser context carrying the same cookies reads the same persisted result.
   const second=await browser.newContext({storageState:await memberContext.storageState()});
-  try {const tab=await second.newPage();await tab.goto("/sign-in");await expect(tab.getByTestId("identity-tenant")).toHaveText(invited.tenant);await expect(tab.getByText("Role: foreman",{exact:true})).toBeVisible();await expect(tab.getByTestId("identity-id")).toHaveText(recipientIdentity);}finally{await second.close();}
+  try {const tab=await second.newPage();await tab.goto("/sign-in");await expect(tab.getByTestId("identity-tenant")).toHaveText(invited.tenant);await expect(tab.getByText("Foreman",{exact:true})).toBeVisible();await expect(tab.getByTestId("identity-id")).toHaveText(recipientIdentity);}finally{await second.close();}
  } finally {await memberContext.close();await recipientContext.close();}
 });

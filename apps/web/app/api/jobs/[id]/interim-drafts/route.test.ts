@@ -20,7 +20,7 @@ it("passes the session credentials and untouched command with no-store", async (
   expect(get.status).toBe(200); expect(get.headers.get("cache-control")).toBe("no-store");
 });
 it("keeps typed conflicts, missing/foreign jobs and dark composition no-store", async () => {
-  for (const [code, status] of [["CONFLICT",409],["NOT_FOUND",404],["DARK",404]] as const) {
+  for (const [code, status] of [["CONFLICT",409],["NOT_FOUND",404],["DARK",404],["FORBIDDEN",403]] as const) {
     mocks.create.mockImplementation(() => { throw new InterimDraftRepositoryError(code); });
     for (const handler of [GET, POST]) {
       const result = await handler(new Request("https://practice.invalid"), { params: Promise.resolve({ id: "job" }) });
@@ -29,4 +29,16 @@ it("keeps typed conflicts, missing/foreign jobs and dark composition no-store", 
     }
   }
   expect(mocks.credentials).not.toHaveBeenCalled();
+});
+it.each([["FORBIDDEN",403],["UNAUTHENTICATED",401],["JOB_NOT_LIVE",409],["UNAVAILABLE",503]] as const)("returns %s through GET and POST without turning refusal into retry", async (code, status) => {
+  mocks.create.mockReturnValue(mocks);
+  mocks.read.mockRejectedValue(new InterimDraftRepositoryError(code));
+  mocks.command.mockRejectedValue(new InterimDraftRepositoryError(code));
+  for (const handler of [GET, POST]) {
+    const response = await handler(new Request("https://practice.invalid", { method: handler === POST ? "POST" : "GET", ...(handler === POST ? { body: "{}" } : {}) }), { params: Promise.resolve({ id: "job" }) });
+    expect(response.status).toBe(status); expect(response.headers.get("cache-control")).toBe("no-store");
+    const answer = await response.json();
+    if (status !== 503) expect(answer.message).not.toMatch(/retry/iu);
+    if (status === 403) expect(answer.message).toBe("You don't have permission.");
+  }
 });

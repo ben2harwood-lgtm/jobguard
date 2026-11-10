@@ -148,3 +148,36 @@ describe("supplier receipt exact decimals (repair r1)", () => {
     expect(db.calls).toHaveLength(0);
   });
 });
+
+describe("LATER-SAFETY-24 receipt delivery cap", () => {
+  it.each([["9", "2"], ["10", "0.000001"], ["10.000001", "0"]])("refuses accepted %s plus rejected %s beyond ordered", async (accepted, rejected) => {
+    const db = receiptSql("10"), repo = new SupplierDocumentRepository(db.pool());
+    await expect(repo.appendReceipt(context, job, { accepted, rejected, expectedRevision: 1 }))
+      .rejects.toMatchObject({ code: "ORDER_DELIVERY_EXCEEDS_ORDERED", message: "ORDER_DELIVERY_EXCEEDS_ORDERED" });
+    for (const table of ["goods_receipt", "audit_event", "watchdog_command_result"]) expect(db.inserts(table)).toHaveLength(0);
+    expect(db.calls.some(call => call.sql === "ROLLBACK")).toBe(true);
+  });
+  it.each([["9", "0", "9", "1"], ["9", "1", "10", "1"]])("allows the normal later receipt and exact cap: %s + %s", async (accepted, rejected, delivered, missing) => {
+    const db = receiptSql("10");
+    await expect(new SupplierDocumentRepository(db.pool()).appendReceipt(context, job, { accepted, rejected, expectedRevision: 1 })).resolves.toEqual({ revision: 2 });
+    expect(db.inserts("goods_receipt")[0]!.values.slice(6, 11)).toEqual(["10", delivered, accepted, rejected, missing]);
+  });
+});
+
+
+describe("LATER-SAFETY-35 fixture intake delivery cap", () => {
+  it.each(["1", "7.999999", "8", "9.999999"])("refuses the 10-unit fixture against %s ordered", async ordered => {
+    const db = new RecordedSql(), query = db.query;
+    db.query = async (sql, values = []) => {
+      if (sql.includes("FROM app.supplier_document_intake")) return { rows: [{ n: "0" }], rowCount: 1 };
+      if (sql.includes("SELECT id,status FROM app.supplier_document") || sql.includes("document_number=$4")) return { rows: [], rowCount: 0 };
+      if (sql.includes("FROM app.purchase_order_draft")) return { rows: [{ id: job, quantity_decimal: ordered }], rowCount: 1 };
+      return query(sql, values);
+    };
+    await expect(new SupplierDocumentRepository(db.pool()).intake(context, job, {
+      version: "supplier-document-intake.v1", fixtureId: "materials-B-delivery", channel: "picker", expectedRevision: 0,
+    })).rejects.toMatchObject({ code: "ORDER_DELIVERY_EXCEEDS_ORDERED" });
+    for (const table of ["goods_receipt", "supplier_document_intake", "audit_event", "watchdog_command_result"]) expect(db.inserts(table)).toHaveLength(0);
+    expect(db.calls.some(call => call.sql === "ROLLBACK")).toBe(true);
+  });
+});
