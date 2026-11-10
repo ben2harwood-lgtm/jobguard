@@ -11,8 +11,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { migrate, MIGRATION_URLS, SwitchJobLiveMutation, withTenant, DEMO_TENANT_ID as T, DEMO_MEMBERSHIP_ID as M, PracticeActivationRepository, FinalAccountCommandService, QuoteRepository, insertVariationProposal, UserCommandDispatcher, SwitchJobLiveV3Mutation, prepareActivationFixtureV3, seedActivationFixturesV3, issuePracticeSession, authenticatePracticeSession, authorizePracticeJob } from "../src/index.js";
 import { freePort, closeTestPools } from "./pool-test-utils.js";
 import { proofBefore, proofColumns, proofDifferences, rolledBack, scratchReplaceFunction } from "./upgrade-proof-utils.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
-const context=testTenantContext(T);
+import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
+let context=testTenantContext(T);
 const originalEnvironment=process.env.JOBGUARD_ENV;
 let pg:EmbeddedPostgres,admin:Pool,runtime:Pool,dir:string,pgPort:number;
 beforeAll(async()=>{
@@ -22,6 +22,7 @@ beforeAll(async()=>{
  admin = await syntheticOwnerPool({host:"127.0.0.1",port,user:"postgres",password:"synthetic"});await migrate(admin);
  await admin.query(`INSERT INTO control_plane.tenant(id)VALUES('${T}');INSERT INTO identity.identity_user(id)VALUES('d1500000-0000-4000-8000-000000000001');INSERT INTO app.account(id,tenant_id,name)VALUES('d1500000-0000-4000-8000-000000000002','${T}','Synthetic');INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)VALUES('${M}','${T}','d1500000-0000-4000-8000-000000000002','d1500000-0000-4000-8000-000000000001','owner');CREATE ROLE ch1_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOBYPASSRLS;GRANT jobguard_runtime TO ch1_login;`);
  runtime=new Pool({host:"127.0.0.1",port,database:"jobguard_synthetic_demo",user:"ch1_login",password:"synthetic",max:4});
+ context=await testBoundTenantContext(admin,T,M);
 },60000);
 afterAll(async()=>{await closeTestPools(runtime,admin);await pg?.stop();await rm(dir,{recursive:true,force:true});if(originalEnvironment===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=originalEnvironment;});
 const counts=async(jobId:string)=>(await admin.query(`SELECT (SELECT count(*)::int FROM app.job_activation WHERE job_id=$1) activations,(SELECT count(*)::int FROM app.job_activation_terms WHERE job_id=$1) terms,(SELECT count(*)::int FROM app.cap_snapshot WHERE job_id=$1) caps,(SELECT count(*)::int FROM app.synthetic_obligation WHERE job_id=$1) obligations,(SELECT count(*)::int FROM app.journal WHERE tenant_id=$2) journals`,[jobId,T])).rows[0];
@@ -118,9 +119,10 @@ describe("CH-1 v3 activation",()=>{
    }
    await applyOutboundPause(upgrade);
    await upgrade.query(`INSERT INTO control_plane.tenant(id)VALUES('${T}');INSERT INTO identity.identity_user(id)VALUES('d1500000-0000-4000-8000-000000000001');INSERT INTO app.account(id,tenant_id,name)VALUES('d1500000-0000-4000-8000-000000000002','${T}','Synthetic');INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)VALUES('${M}','${T}','d1500000-0000-4000-8000-000000000002','d1500000-0000-4000-8000-000000000001','owner');`);
-   const job=await prepareActivationFixtureV3(upgrade,context,"historic-upgrade",100000),row=(await upgrade.query(`SELECT j.revision,d.id,d.document_version,d.content_hash FROM app.job j JOIN app.quote_document_version d ON(d.tenant_id,d.id)=(j.tenant_id,j.accepted_quote_version_id) WHERE j.id=$1`,[job])).rows[0];
+   const historicalContext=testTenantContext(T);
+   const job=await prepareActivationFixtureV3(upgrade,historicalContext,"historic-upgrade",100000),row=(await upgrade.query(`SELECT j.revision,d.id,d.document_version,d.content_hash FROM app.job j JOIN app.quote_document_version d ON(d.tenant_id,d.id)=(j.tenant_id,j.accepted_quote_version_id) WHERE j.id=$1`,[job])).rows[0];
    const input={version:"switch-live.v1",activationId:randomUUID(),capSnapshotId:randomUUID(),syntheticObligationId:null,jobId:job,acceptedDocumentId:row.id,acceptedDocumentVersion:row.document_version,acceptedDocumentHash:row.content_hash,expectedJobRevision:row.revision,acceptedNetValuePence:100000,recoveryCapPence:1500,mode:"pilot_no_charge",activationTermsVersion:"pilot_no_charge.v1",feePolicyVersion:"reference_fee_policy_v1",activatedAt:new Date()};
-   await withTenant(upgrade,context,db=>db.$client.query(`SELECT app.switch_job_live($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,[T,input.activationId,input.capSnapshotId,input.syntheticObligationId,job,input.acceptedDocumentId,input.acceptedDocumentVersion,input.acceptedDocumentHash,input.expectedJobRevision,input.acceptedNetValuePence,input.recoveryCapPence,input.mode,input.activationTermsVersion,input.feePolicyVersion,M,input.activatedAt]));
+   await withTenant(upgrade,historicalContext,db=>db.$client.query(`SELECT app.switch_job_live($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,[T,input.activationId,input.capSnapshotId,input.syntheticObligationId,job,input.acceptedDocumentId,input.acceptedDocumentVersion,input.acceptedDocumentHash,input.expectedJobRevision,input.acceptedNetValuePence,input.recoveryCapPence,input.mode,input.activationTermsVersion,input.feePolicyVersion,M,input.activatedAt]));
    const snapshot=async()=>(await upgrade.query(`SELECT row_to_json(a)::text activation,row_to_json(c)::text snapshot FROM app.job_activation a JOIN app.cap_snapshot c ON(c.tenant_id,c.activation_id)=(a.tenant_id,a.id)`)).rows;
    const before=await snapshot();
    expect(before.length, "[MO4-4a] pre-existing joined rows").toBeGreaterThan(0);

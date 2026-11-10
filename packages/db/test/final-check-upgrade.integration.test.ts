@@ -36,7 +36,7 @@ it("SV5-31 SV5-34 populated own-migration comparison preserves named bytes/types
   await db.query("INSERT INTO app.shadow_signal_disposition(tenant_id,job_id,id,run_id,signal_id,disposition) VALUES($1,$2,$3,$4,$5,'not_completed')",[a.tenantId,a.jobId,randomUUID(),run,signal]);
   await db.query("INSERT INTO app.recovery_case(id,tenant_id,job_id,claim_pence,currency,state,synthetic) VALUES($1,$2,$3,100,'GBP','identified',true)",[randomUUID(),a.tenantId,a.jobId]);
  });
- await a.lock();await new FinalCheckCompletionRepository(f.shadow).freeze(a.context,{version:'final-check-manifest.v1',jobId:a.jobId,manifestId:randomUUID(),detectorVersion:'shadow-detection.v1',reconciliationVersion:'final-check.reconciliation.v1'});
+ await a.lock();await new FinalCheckCompletionRepository(f.shadow).freeze(a.workerContext,{version:'final-check-manifest.v1',jobId:a.jobId,manifestId:randomUUID(),detectorVersion:'shadow-detection.v1',reconciliationVersion:'final-check.reconciliation.v1'});
  await f.admin.query("CREATE FUNCTION app.sv5_upgrade_control() RETURNS integer LANGUAGE sql AS 'SELECT 1'");
  const protection=await manifestProtection(f.admin);const before=await snapshot(f.admin);await f.admin.query(await readFile(MIGRATION_URLS[n]!,'utf8'));await compare(f.admin,before);
  const afterProtection=await manifestProtection(f.admin);expect(afterProtection.relations).toEqual(protection.relations);expect(afterProtection.policies).toEqual(protection.policies);for(const constraint of protection.constraints)expect(afterProtection.constraints).toContainEqual(constraint);

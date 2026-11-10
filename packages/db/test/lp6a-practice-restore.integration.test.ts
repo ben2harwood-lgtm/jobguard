@@ -1,3 +1,4 @@
+import { migrate } from "../src/migrate.js";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { join } from "node:path";
@@ -72,6 +73,14 @@ it("upgrades dark, round-trips a logical binding-table dump into a fresh cluster
     const old=(await other.owner.query("SELECT pg_get_functiondef('app.contractor_session(uuid)'::regprocedure) definition")).rows[0].definition;
     await other.owner.query(await readFile(new URL("../migrations/0562_lp6a_request_binding.sql",import.meta.url),"utf8"));
     expect((await other.owner.query("SELECT pg_get_functiondef('app.contractor_session(uuid)'::regprocedure) definition")).rows[0].definition).toBe(old);
+    // The dark-foundation preservation assertion above remains exact. Restore
+    // current logical rows into the same current binding-table schema, including
+    // delegated scope columns, while retaining the deliberately wrong DB name.
+    await other.owner.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES('0562_lp6a_request_binding.sql') ON CONFLICT DO NOTHING");
+    await migrate(other.owner);
+    const bindingColumns = async (owner: Pool) => (await owner.query("SELECT attname,format_type(atttypid,atttypmod) type FROM pg_attribute WHERE attrelid='control_plane.request_binding'::regclass AND attnum>0 AND NOT attisdropped ORDER BY attnum")).rows;
+    expect(await bindingColumns(other.owner)).toEqual(await bindingColumns(db.owner));
+
     const digest=randomBytes(32).toString("hex");
     await seedHomeSession(db.owner,digest);
     await source.query("BEGIN");await source.query("SELECT app.bind_request('practice',$1,$2)",[digest,DEMO_TENANT_ID]);

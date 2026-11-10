@@ -7,7 +7,7 @@ import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { ContractorRepository, WorkOrderRepository, prepareWorkOrderDemo, demoRow, demoFile, MIGRATION_URLS, migrate, withTenant, appendAuditBatch, derivedUuid, sha256Hex, type TenantTransaction, type AuthenticatedMembership, type WorkOrderDemo } from "../src/index.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { freePort, closeTestPools, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 export const newTables = ["extra_event", "extra_duplicate_link", "extra_order_line_link"];
 export const newOriginColumns = ["command_type", "raising_grant_id", "raiser_assigned", "work_order_id", "work_order_revision_id", "site_visit_id", "evidence_id", "resident_confirmation_evidence_id", "client_capture_id", "origin_hash"];
@@ -50,13 +50,17 @@ export async function fixture(c: Cluster, n = 1) {
  await new WorkOrderRepository(c.runtime).importCsv(p, { commandId: randomUUID(), name: "fictional.csv", kind: "csv", csv: demoFile([demoRow(demo, n)]) });
  const row = (await c.admin.query("SELECT w.id order_id,w.job_id,c.revision_id FROM app.work_order w JOIN app.work_order_current c ON (c.tenant_id,c.work_order_id)=(w.tenant_id,w.id) WHERE w.tenant_id=$1", [p.tenantId])).rows[0];
  const grant = (await c.admin.query("SELECT id FROM app.role_grant WHERE tenant_id=$1 AND membership_id=$2 AND scope_kind='tenant'", [p.tenantId, p.membershipId])).rows[0];
- const ctx = testTenantContext(p.tenantId);
+ const ctx = (await c.admin.query("SELECT to_regprocedure('app.bind_request(text,text,uuid)') installed")).rows[0].installed
+  ? await testBoundTenantContext(c.admin,p.tenantId,p.membershipId) : testTenantContext(p.tenantId, { membershipId: p.membershipId });
  return { p, demo, ctx, jobId: row.job_id as string, orderId: row.order_id as string, revisionId: row.revision_id as string, grantId: grant.id as string };
 }
 export type Fixture = Awaited<ReturnType<typeof fixture>>;
 export const raise = <T extends Record<string, unknown> = Record<string, never>>(f: Fixture, fields: T = {} as T) => ({ version: "raise-extra.v1", commandId: randomUUID(), commandType: "LogSiteExtra", jobId: f.jobId, actorMembershipId: f.p.membershipId, grantId: f.grantId, note: noteCanary, description: descriptionCanary, ...fields });
 export async function ownerTx<T>(c: Cluster, tenantId: string, work: (db: TenantTransaction) => Promise<T>) {
- return withTenant(c.admin, testTenantContext(tenantId), async db => { await db.$client.query("SET LOCAL ROLE jobguard_migration"); return work(db); });
+ // Owner-only setup must not create sign-in rows: practice marker tests
+ // deliberately attach those rows themselves, and assert their absence first.
+ const context = testTenantContext(tenantId, { bindRequest: false });
+ return withTenant(c.admin, context, async db => { await db.$client.query("SET LOCAL ROLE jobguard_migration"); return work(db); });
 }
 export async function receipt(db: TenantTransaction, tenantId: string, jobId: string, variationId: string, actor: string, type = "LogSiteExtra", commandId = randomUUID(), fields: { status?: string; semanticKey?: string } = {}) {
  await db.$client.query("INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id,result,completed_at) VALUES($1,$2,$3,$4,$5,$6::text,$7,CASE WHEN $6::text='succeeded' THEN '{}'::jsonb ELSE NULL END,CASE WHEN $6::text='succeeded' THEN clock_timestamp() ELSE NULL END)", [tenantId, commandId, type, fields.semanticKey ?? `extra-origin:${jobId}:${variationId}`, "a".repeat(64), fields.status ?? "processing", actor]); return commandId;

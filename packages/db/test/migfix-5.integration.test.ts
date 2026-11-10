@@ -1,3 +1,4 @@
+import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { createHash, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -72,8 +73,8 @@ describe("MIGFIX-5 customer billing integrity", () => {
     const row = (await f.admin.query("SELECT id,net_pence,tax_pence,total_pence,pdf_sha256 FROM app.customer_invoice WHERE tenant_id=$1 AND id=$2", [a.tenantId, result.invoiceId])).rows[0];
     return { a, repo, invoice: { id: row.id as string, pdf: row.pdf_sha256 as string, net: Number(row.net_pence), tax: Number(row.tax_pence), total: Number(row.total_pence) } };
   }
-  const credit = (f2: LockFixture, a: Account, invoice: { id: string; pdf: string }, net: number, credited: number) => asFixtureTenant(f2.runtime, a.tenantId, db =>
-    db.query("SELECT * FROM app.issue_practice_customer_credit_note($1,$2,$3,$4,$5,$6,'Synthetic correction',$7)", [a.tenantId, a.jobId, invoice.id, LOCK_OWNER, randomUUID(), net, previewHash(a, invoice, net, credited)]));
+  const credit = (f2: LockFixture, a: Account, invoice: { id: string; pdf: string }, net: number, credited: number) => withTenant(f2.runtime, a.context, db =>
+    db.$client.query("SELECT * FROM app.issue_practice_customer_credit_note($1,$2,$3,$4,$5,$6,'Synthetic correction',$7)", [a.tenantId, a.jobId, invoice.id, LOCK_OWNER, randomUUID(), net, previewHash(a, invoice, net, credited)]));
   async function creditTotals(a: Account, invoiceId: string) {
     const r = (await f.admin.query("SELECT coalesce(-sum(net_pence),0) net,coalesce(-sum(tax_pence),0) tax,coalesce(sum(amount_pence),0) gross,count(*) n FROM app.customer_credit_note WHERE tenant_id=$1 AND invoice_id=$2", [a.tenantId, invoiceId])).rows[0];
     return { net: Number(r.net), tax: Number(r.tax), gross: Number(r.gross), count: Number(r.n) };
@@ -90,7 +91,7 @@ describe("MIGFIX-5 customer billing integrity", () => {
     });
     expect(await before()).toEqual({ locks: 0, receipts: 0, audit: 0 });
     await expect(repo.lock(a.context, lockInput(a, a.revisionId, 1))).rejects.toMatchObject({ code: "STALE_REVISION" });
-    await expect(asFixtureTenant(f.runtime, a.tenantId, lockSql(f, a, a.revisionId, 1))).rejects.toThrow("STALE_OR_BLOCKED_FINAL_ACCOUNT");
+    await expect(withTenant(f.runtime, a.context, db=>lockSql(f,a,a.revisionId,1)(db.$client))).rejects.toThrow("STALE_OR_BLOCKED_FINAL_ACCOUNT");
     expect(await before()).toEqual({ locks: 0, receipts: 0, audit: 0 });
 
     // Reassemble with the approved extra: the lock now succeeds and the invoice is 3,440,000 / 688,000 / 4,128,000.
@@ -109,7 +110,7 @@ describe("MIGFIX-5 customer billing integrity", () => {
     const approval = await f.admin.connect();
     try {
       await approval.query("BEGIN"); await approval.query("SELECT set_config('app.tenant_id',$1,true)", [a.tenantId]); await approveOn(approval, a, v1);
-      const racing = asFixtureTenant(f.runtime, a.tenantId, lockSql(f, a, a.revisionId, 1)); const settled = racing.then(() => "locked", (e: Error) => e.message);
+      const racing = withTenant(f.runtime, a.context, db=>lockSql(f,a,a.revisionId,1)(db.$client)); const settled = racing.then(() => "locked", (e: Error) => e.message);
       await blocked(); await approval.query("COMMIT");
       expect(await settled).toContain("STALE_OR_BLOCKED_FINAL_ACCOUNT");
     } finally { await approval.query("ROLLBACK").catch(() => undefined); approval.release(); }
@@ -120,7 +121,8 @@ describe("MIGFIX-5 customer billing integrity", () => {
     const v2 = await addFixtureCapture(f, b, 80000);
     const locking = await f.runtime.connect(); let approvalDone = false;
     try {
-      await locking.query("BEGIN"); await locking.query("SELECT set_config('app.tenant_id',$1,true)", [b.tenantId]); await lockSql(f, b, b.revisionId, 1)(locking);
+      await testBoundTenantContext(f.admin,b.tenantId,LOCK_OWNER);
+      await locking.query("BEGIN"); await locking.query("SELECT app.bind_request('real',encode(sha256(convert_to($1,'UTF8')),'hex'),$2)",[`lp6-test:${b.tenantId}:${LOCK_OWNER}`,b.tenantId]); await locking.query("SELECT set_config('app.tenant_id',$1,true)", [b.tenantId]); await lockSql(f, b, b.revisionId, 1)(locking);
       const late = asFixtureTenant(f.admin, b.tenantId, db => approveOn(db, b, v2))
         .then(() => { approvalDone = true; return null; }, error => error);
       await blocked(); expect(approvalDone).toBe(false); await locking.query("COMMIT");
@@ -187,7 +189,7 @@ describe("MIGFIX-5 customer billing integrity", () => {
       draftId: (await f.admin.query("SELECT final_account_draft_id FROM app.final_account_revision WHERE tenant_id=$1 AND id=$2", [job.tenantId, job.revisionId])).rows[0].final_account_draft_id as string,
     };
     const revealed = await availableFinalCheck(checkFixture, job);
-    await new FinalCheckCompletionRepository(f.shadow).publish(a.context, {
+    await new FinalCheckCompletionRepository(f.shadow).publish(a.workerContext, {
       version: "final-check-publication.v1", jobId: a.jobId, runId: revealed.runId, checkId: randomUUID(),
     });
     const actor = await authenticatePracticeSession(f.runtime, job.sessionId, a.tenantId);

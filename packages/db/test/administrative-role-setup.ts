@@ -15,6 +15,49 @@ const clusterAdmins = new Map<number, {user:string;password:string}>();
 // not per filename/migration list, so mixed old/current databases stay honest.
 // Protocol/unit doubles retain the unwrapped production module.
 if (testPath?.endsWith(".integration.test.ts")) {
+  vi.doMock("../src/tenant-context.js", async () => {
+    const actual = await vi.importActual<typeof import("../src/tenant-context.js")>("../src/tenant-context.js");
+    const scopes = new WeakMap<object, Map<string, object>>();
+    const deferredContexts = new WeakMap<import("../src/tenant-context.js").TenantTransaction,
+      { original: import("../src/tenant-context.js").VerifiedTenantContext; bound: import("../src/tenant-context.js").VerifiedTenantContext }>();
+    return { ...actual,
+      bindAfterLocks: (async (db, context) => {
+        const pair = deferredContexts.get(db);
+        return actual.bindAfterLocks(db, pair?.original === context ? pair.bound : context);
+      }) as typeof actual.bindAfterLocks,
+      withTenant: (async (pool, context, work, deferred) => {
+        const { needsTestRequestBinding, bindTestTenantContext } = await import("./tenant-context-test-utils.js");
+        if (!needsTestRequestBinding(context)) return actual.withTenant(pool, context, work, deferred);
+        // Race/loss fixtures expose connect only. Reuse that same connection:
+        // acquiring a probe then a second client changes their race barriers.
+        const client = typeof pool.query === "function" ? undefined : await pool.connect();
+        let delegated = false;
+        const requestPool = client ? { connect: async () => { delegated = true; return client; } } as Pool : pool;
+        try {
+          const { database, port, administrative } = (await (client ?? pool).query<{
+            database: string; port: number; administrative: boolean;
+          }>(`SELECT current_database() AS database, inet_server_port() AS port,
+            (SELECT rolsuper FROM pg_roles WHERE rolname=session_user) AS administrative`)).rows[0]!;
+          // Owner fixture writes are setup, not authenticated business requests.
+          if (administrative) return await actual.withTenant(requestPool, context, work, deferred);
+          const credentials = clusterAdmins.get(Number(port));
+          if (!credentials) throw new Error("Missing embedded PostgreSQL admin credentials for request fixture");
+          const owner = new Pool({ host: "127.0.0.1", port, database, ...credentials, max: 1 });
+          const databases = scopes.get(credentials) ?? new Map<string, object>();
+          scopes.set(credentials, databases);
+          const scope = databases.get(database) ?? {};
+          databases.set(database, scope);
+          let bound;
+          try { bound = await bindTestTenantContext(owner, context, scope); }
+          finally { await owner.end(); }
+          return await actual.withTenant(requestPool, bound, async db => {
+            deferredContexts.set(db, { original: context, bound });
+            try { return await work(db); }
+            finally { deferredContexts.delete(db); }
+          }, deferred);
+        } finally { if (client && !delegated) client.release(); }
+      }) as typeof actual.withTenant };
+  });
   vi.doMock("../src/repository-command.js", async () => {
     const actual=await vi.importActual<typeof import("../src/repository-command.js")>("../src/repository-command.js");
     const {legacyRepositoryCommandModule}=await import("./legacy-repository-command-fixture.js");

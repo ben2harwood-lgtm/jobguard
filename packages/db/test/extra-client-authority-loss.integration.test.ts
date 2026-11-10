@@ -1,3 +1,4 @@
+import { testActorContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
@@ -20,12 +21,12 @@ async function invitation(w: ChainWorld, onJob?: string) {
   let s: Awaited<ReturnType<typeof submitted>>;
   if (onJob) {
     const extraId = await raiseOn(c, w, onJob);
-    await repo.priceExtra(ctx, w.members.surveyor.member, { version: "price-extra.v1", commandId: randomUUID(), jobId: onJob, extraId, netPence: 150000 });
-    const result = await repo.submitExtra(ctx, w.members.supervisor.member, { version: "submit-extra.v1", commandId: randomUUID(), jobId: onJob, extraId });
+    await repo.priceExtra(await testActorContext(c.admin, ctx, w.members.surveyor.member), w.members.surveyor.member, { version: "price-extra.v1", commandId: randomUUID(), jobId: onJob, extraId, netPence: 150000 });
+    const result = await repo.submitExtra(await testActorContext(c.admin, ctx, w.members.supervisor.member), w.members.supervisor.member, { version: "submit-extra.v1", commandId: randomUUID(), jobId: onJob, extraId });
     s = { jobId: onJob, extraId, requestId: result.requestId as string, hash: result.revisionHash as string, net: 150000, result };
   } else s = await submitted(c, w, 150000);
-  await repo.approveExtraStep(ctx, w.members.supervisor.member, approveInput(s, 0));
-  await repo.approveExtraStep(ctx, w.supervisor2.member, approveInput(s, 1));
+  await repo.approveExtraStep(await testActorContext(c.admin, ctx, w.members.supervisor.member), w.members.supervisor.member, approveInput(s, 0));
+  await repo.approveExtraStep(await testActorContext(c.admin, ctx, w.supervisor2.member), w.supervisor2.member, approveInput(s, 1));
   return issueInvitation(w, repo, ctx, s);
 }
 async function issueInvitation(w: ChainWorld, repo: ExtraApprovalRepository, ctx: Awaited<ChainWorld["ctx"]>,
@@ -33,7 +34,7 @@ async function issueInvitation(w: ChainWorld, repo: ExtraApprovalRepository, ctx
   const token = newToken(), signinDigest = randomUUID().replaceAll("-", "").repeat(2);
   const sd = randomUUID().replaceAll("-", "").repeat(2);
   const recipient = await emailOf(c, w, actor);
-  const sent = await repo.issueClientApproval(ctx, w.members.surveyor.member, {
+  const sent = await repo.issueClientApproval(await testActorContext(c.admin, ctx, w.members.surveyor.member), w.members.surveyor.member, {
     version: "issue-client-approval.v1", commandId: randomUUID(), jobId: s.jobId, requestId: s.requestId,
     approverMembershipId: actor, recipient, linkToken: token, signinDigest, expiresAt: new Date(Date.now() + 3600_000),
   });
@@ -45,7 +46,7 @@ async function issueInvitation(w: ChainWorld, repo: ExtraApprovalRepository, ctx
       version: "extra-customer.v1", action, jobId: s.jobId, requestId: s.requestId, commandId: randomUUID(),
       revisionHash: s.hash, netPence: s.net, decision: "approve",
     } : { version: "extra-customer.v1", action, jobId: s.jobId }]).then(r => r.rows[0].result);
-  const view = () => repo.clientApprovalView(ctx, w.members.client_approver.member, {
+  const view = async () => repo.clientApprovalView(await testActorContext(c.admin, ctx, w.members.client_approver.member), w.members.client_approver.member, {
     version: "client-approval-view.v1", jobId: s.jobId, requestId: s.requestId, linkToken: token, email: recipient,
   });
   return { w, repo, ctx, s, sent, actor, use, run, view, sd, token, recipient };
@@ -79,7 +80,7 @@ it("A3 control: approver who keeps authority is not over-cancelled; send deliver
 it("A8 legacy runtime decide path refuses an unused link after sender grant loss", async () => {
   const f = await invitation(await chainWorld(c));
   await revoke(f.w, "sender grant");
-  await expect(f.repo.decideClientApproval(f.ctx, f.w.members.client_approver.member, {
+  await expect(f.repo.decideClientApproval(await testActorContext(c.admin, f.ctx, f.w.members.client_approver.member), f.w.members.client_approver.member, {
     version: "decide-client-approval.v1", commandId: randomUUID(), jobId: f.s.jobId, requestId: f.s.requestId,
     linkToken: f.token, email: f.recipient, revisionHash: f.s.hash, netPence: f.s.net, decision: "approve",
     fictionalRoleName: "Fictional Housing Approver", actualTesterReference: "tester:practice-ben",
@@ -147,14 +148,14 @@ it("Q14 contractor bundle check returns only verification, and refuses export in
   const f = await invitation(await chainWorld(c)); await f.use(); await f.run("decide");
   const app = new ContractorBundleCheckApplication(c.runtime, storage);
   const input = { version: "contractor-bundle-query.v1", jobId: f.s.jobId, extraId: f.s.extraId, requestId: f.s.requestId };
-  const result = await app.check(f.ctx, f.w.members.surveyor.member, input);
+  const result = await app.check(await testActorContext(c.admin, f.ctx, f.w.members.surveyor.member), f.w.members.surveyor.member, input);
   expect(result.reason).toBeNull();
   expect(result.report?.content).toBe("intact");
   expect(Object.keys(result).sort()).toEqual(["manifestDigest", "reason", "report", "sections", "version"]);
   const bytes = JSON.stringify(result);
   for (const privateValue of [f.actor, f.s.requestId, f.sent.linkId, "extra_approval_step_fact", "server_recorded_at", "bundle_text"])
     expect(bytes).not.toContain(privateValue);
-  await expect(app.check(f.ctx, f.w.members.surveyor.member, { ...input, export: true }))
+  await expect(app.check(await testActorContext(c.admin, f.ctx, f.w.members.surveyor.member), f.w.members.surveyor.member, { ...input, export: true }))
     .rejects.toMatchObject({ code: "INVALID_INPUT" });
 });
 
