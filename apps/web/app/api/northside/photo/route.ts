@@ -21,9 +21,8 @@ export async function POST(request: Request) {
     if (!allowed) throw new DemoError("PERMISSION_DENIED", 403);
     const run = await northsideRun(pool, member, context);
     if (!run) throw new DemoError("NOT_FOUND", 404);
-    const service = evidenceService(), photo = practicePng();
-    const upload = await service.beginUpload(context, { jobId, scopeItemId: null, expectedSha256: photo.sha256, contentType: "image/png", maximumBytes: 10_000, retentionClass: "standard_evidence", expiresAt: new Date(Date.now() + run.settings.photoUploadLifetimeMinutes * 60_000) });
-    practiceStorage().put(upload.objectKey, "v1", photo.bytes);
+    const service = evidenceService(context, jobId, pool), photo = practicePng();
+    const upload = await service.beginUpload(context, { jobId, scopeItemId: null, expectedSha256: photo.sha256, contentType: "image/png", maximumBytes: 10_000, retentionClass: "standard_evidence", expiresAt: new Date(Date.now() + run.settings.photoUploadLifetimeMinutes * 60_000) }, (db, pending) => practiceStorage(context, jobId, pool).put(db, pending, "v1", photo.bytes));
     await service.finalize(context, { uploadId: upload.id, objectVersionId: "v1", evidenceType: "site_photo" });
     return json({ version: "northside-photo.v1", environment: "synthetic_demo", realExternalActions: 0, photoEvidenceId: upload.id, photoSha256: photo.sha256, shownContentSha256: siteExtraContentSha256V1({ jobId, description, note, photoSha256: photo.sha256 }) });
   } catch (error) { return failure(error); }

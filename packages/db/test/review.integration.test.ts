@@ -31,3 +31,31 @@ function command(review:ProposalReview,id=randomUUID()){return{version:"command.
 describe("review persistence and confirmation",()=>{it("persists edits, rejects stale saves, preserves reserved identity and confirms once concurrently",async()=>{const{review,reserved}=await fixture();const repo=new ProposalReviewRepository(runtime);const saved=await repo.save(context,review,0);expect(saved.revision).toBe(1);await expect(repo.save(context,{...saved,lines:[{...saved.lines[0]!,description:"stale overwrite"}]},0)).rejects.toMatchObject({code:"REVIEW_REVISION_CONFLICT"});const dispatcher=new UserCommandDispatcher(runtime),raw=command(saved);const [a,b]=await Promise.all([dispatcher.dispatch(context,raw,new ConfirmProposalReview(saved)),dispatcher.dispatch(context,{...raw,commandId:randomUUID()},new ConfirmProposalReview(saved))]);expect(a).toEqual(b);await withTenant(runtime,context,async db=>{expect((await db.$client.query(`SELECT description,unit_price_pence FROM app.scope_revision WHERE scope_item_id=$1`,[reserved])).rows).toEqual([{description:"Fit edited cabinets",unit_price_pence:null}]);expect((await db.$client.query(`SELECT state FROM app.scope_identity WHERE id=$1`,[reserved])).rows[0].state).toBe("confirmed");expect((await db.$client.query(`SELECT status FROM app.job WHERE id=$1`,[review.jobId])).rows[0].status).toBe("quoting");expect(Number((await db.$client.query(`SELECT count(*) n FROM app.command_receipt WHERE semantic_key=$1`,[raw.semanticKey])).rows[0].n)).toBe(1);expect(Number((await db.$client.query(`SELECT count(*) n FROM app.audit_event WHERE subject_ref=$1`,[review.jobId])).rows[0].n)).toBe(1);});});
 it("rolls scope, job, audit, authorization and receipt back together",async()=>{const{review}=await fixture();const saved=await new ProposalReviewRepository(runtime).save(context,review,0),raw=command(saved);await expect(new UserCommandDispatcher(runtime).dispatch(context,raw,new ConfirmProposalReview(saved,true))).rejects.toThrow("SYNTHETIC_CONFIRMATION_FAILURE");await withTenant(runtime,context,async db=>{expect((await db.$client.query(`SELECT status FROM app.job WHERE id=$1`,[review.jobId])).rows[0].status).toBe("draft");for(const table of["scope_revision","audit_event","command_receipt","action_authorization"]){expect(Number((await db.$client.query(`SELECT count(*) n FROM app.${table} WHERE tenant_id=$1`,[TENANT])).rows[0].n)).toBeGreaterThanOrEqual(0);}expect(Number((await db.$client.query(`SELECT count(*) n FROM app.command_receipt WHERE semantic_key=$1`,[raw.semanticKey])).rows[0].n)).toBe(0);expect(Number((await db.$client.query(`SELECT count(*) n FROM app.scope_revision WHERE job_id=$1`,[review.jobId])).rows[0].n)).toBe(0);expect(Number((await db.$client.query(`SELECT count(*) n FROM app.audit_event WHERE subject_ref=$1`,[review.jobId])).rows[0].n)).toBe(0);expect(Number((await db.$client.query(`SELECT count(*) n FROM app.decision WHERE subject_ref=$1`,[review.jobId])).rows[0].n)).toBe(0);expect(Number((await db.$client.query(`SELECT count(*) n FROM app.action_authorization WHERE content_hash=$1`,[raw.action.contentHash])).rows[0].n)).toBe(0);});});
 it("capture and confirmation create no quote, send, ledger journal or platform collection",async()=>{const{review}=await fixture();const saved=await new ProposalReviewRepository(runtime).save(context,review,0);await new UserCommandDispatcher(runtime).dispatch(context,command(saved),new ConfirmProposalReview(saved));await withTenant(runtime,context,async db=>{for(const table of["quote_revision","quote_document_version","journal","simulated_settlement_event"]){expect(Number((await db.$client.query(`SELECT count(*) n FROM app.${table} WHERE tenant_id=$1`,[TENANT])).rows[0].n)).toBe(0);}});});});
+
+
+it("LATER-SAFETY-92 refuses another practice job's review id without waiting on or changing its review", async () => {
+  const repository = new ProposalReviewRepository(runtime);
+  const a = await repository.save(context, (await fixture()).review, 0);
+  const b = (await fixture()).review;
+  // Revision 1 on a job with no saved review is refused before any insert.
+  const input = { ...b, revision: 1 };
+  const unknown = await repository.save(context, { ...input, reviewId: randomUUID() }, 1).catch(error => error);
+  expect(unknown).toMatchObject({ code: "REVIEW_REVISION_CONFLICT", message: "The review does not have the expected revision" });
+  const holder = await runtime.connect();
+  const limited = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "review_login", password: "synthetic", max: 1, options: "-c lock_timeout=1000" });
+  try {
+    await holder.query("BEGIN");
+    await holder.query("SELECT set_config('app.tenant_id',$1,true)", [TENANT]);
+    await holder.query("SELECT id FROM app.proposal_review WHERE tenant_id=$1 AND id=$2 FOR UPDATE", [TENANT, a.reviewId]);
+    // A lookup reaching A would time out on its row lock instead of matching the unknown-id refusal.
+    const foreign = await new ProposalReviewRepository(limited).save(context, { ...input, reviewId: a.reviewId }, 1).catch(error => error);
+    expect(foreign).toBeInstanceOf(unknown.constructor);
+    expect(foreign).toMatchObject({ code: unknown.code, message: unknown.message });
+  } finally {
+    await holder.query("ROLLBACK");
+    holder.release();
+    await closeTestPools(limited);
+  }
+  expect(await repository.read(context, a.jobId)).toEqual(a);
+  expect(await repository.read(context, b.jobId)).toBeNull();
+});
