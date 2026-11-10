@@ -72,6 +72,14 @@
       "section": "entries",
       "before": null,
       "after": {
+        "key": "owner|rel:table|app.extra_client_session|jobguard_migration",
+        "group": "lp6c-client-extra-decision"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
         "key": "acl|rel|table|app.extra_client_link|jobguard_binding_owner|SELECT|-",
         "group": "lp6c-client-extra-decision"
       }
@@ -247,6 +255,31 @@
     }
   ],
   "upgrade": [
+    {
+      "section": "routines",
+      "before": {
+        "nspname": "identity",
+        "proname": "extra_customer_approval",
+        "args": "t uuid, j uuid, c uuid, digest text, input jsonb",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_identity=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      },
+      "after": {
+        "nspname": "identity",
+        "proname": "extra_customer_approval",
+        "args": "t uuid, j uuid, c uuid, digest text, input jsonb",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_identity=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
     {
       "section": "routines",
       "before": {
