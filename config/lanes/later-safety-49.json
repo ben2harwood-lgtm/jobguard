@@ -9,6 +9,7 @@
       "allow": [
         "packages/db/migrations/0804_extra_reject_null_step.sql",
         "packages/db/test/extra-approval-chain.integration.test.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
         "packages/db/test/migration-proofs/0804_extra_reject_null_step.proof.json",
         "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts"
       ]
