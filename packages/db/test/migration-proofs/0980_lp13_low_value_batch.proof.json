@@ -1,0 +1,6 @@
+{
+  "migration": "0980_lp13_low_value_batch.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}
