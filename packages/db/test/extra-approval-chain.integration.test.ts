@@ -330,6 +330,13 @@ it.each(["pending", "retryable"])("LATER-SAFETY-36 cancels a %s send after its s
   }
   const calls = q.deliver.mock.calls.length, attempts = (await q.attempts()).length;
   await command(c, q.world, { kind: "grant.revoke", grantId: q.sender.grant });
+  if (status === "retryable") {
+    // Not yet due: the executor does not claim it, so nothing is delivered.
+    await expect(q.execute()).resolves.toBeUndefined();
+    expect(await q.state()).toBe("retryable");
+    expect(q.deliver).toHaveBeenCalledTimes(calls);
+    await sql("UPDATE app.action_outbox SET next_attempt_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [q.world.p.tenantId, q.sent.outboxActionId]);
+  }
   await expect(q.execute()).resolves.toBeUndefined();
   expect(await q.state()).toBe("cancelled");
   expect(q.deliver).toHaveBeenCalledTimes(calls);
