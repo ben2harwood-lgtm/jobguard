@@ -12,6 +12,7 @@
         "docs/fixtures/ai/labels.v1.json",
         "packages/ai/src/capture-fixture-parser.ts",
         "packages/ai/src/capture-plain-words.test.ts",
+        "packages/ai/src/capture.test.ts",
         "packages/core/src/capture.test.ts",
         "packages/core/src/capture.ts"
       ]
