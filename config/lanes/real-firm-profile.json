@@ -1,0 +1,33 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-firm-profile": {
+      "branches": [
+        "codex/sandbox/real-firm-profile"
+      ],
+      "note": "REAL-FIRM-PROFILE: RED company-scoped profile and immutable new quote issuers; NOPR build-ahead.",
+      "allow": [
+        "apps/web/app/api/firm-profile/route-context.test.ts",
+        "apps/web/app/api/firm-profile/route.test.ts",
+        "apps/web/app/api/firm-profile/route.ts",
+        "apps/web/app/firm-details/firm-details.test.tsx",
+        "apps/web/app/firm-details/firm-details.tsx",
+        "apps/web/app/firm-details/page.tsx",
+        "apps/web/app/ui/quote-editor.tsx",
+        "apps/web/e2e/REAL-FIRM-PROFILE.spec.ts",
+        "packages/db/migration-notes/1300_firm_profile.md",
+        "packages/db/migrations/0723_firm_profile.sql",
+        "packages/db/migrations/1300_firm_profile.sql",
+        "packages/db/src/acceptance-repository.ts",
+        "packages/db/src/firm-profile-repository.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/quote-delivery-repository.ts",
+        "packages/db/test/extra-proceed-upgrade.integration.test.ts",
+        "packages/db/test/firm-profile.integration.test.ts",
+        "packages/db/test/later-empty-tables.ts",
+        "packages/db/test/migration-proofs/0723_firm_profile.proof.json",
+        "packages/db/test/migration-proofs/1300_firm_profile.proof.json"
+      ]
+    }
+  }
+}
