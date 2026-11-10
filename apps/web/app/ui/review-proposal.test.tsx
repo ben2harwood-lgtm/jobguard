@@ -113,3 +113,33 @@ it.each([["Accept", "accepted", "Accepted"], ["Dismiss", "dismissed", "Dismissed
   expect(p.scroll).toHaveBeenCalledWith({ block: "nearest" });
   expect(p.focus).not.toHaveBeenCalled();
 });
+
+it.each(["", "#scope", "#quote"])("preserves locally opened pricing through snapshots at %s and handles explicit navigation", initialFragment => {
+ let result = {...fixture, status:"quoting" as ReviewCaptureResult["status"]};
+ let fragment = initialFragment;
+ const render = () => {
+  hooks.render();
+  const tree = ReviewProposal({result, fragment, initialPricing:fragment==="#quote", back:vi.fn()});
+  hooks.effects();
+  return tree;
+ };
+ let tree = render();
+ if (initialFragment !== "#quote") {
+  all(tree, node => node.type === "button" && text(node.props.children) === "Price the work")[0]!.props.onClick();
+ }
+ const editor = () => all(render(), node => typeof node.type === "function" && node.type.name === "QuoteEditor")[0];
+ const source = editor()!.props.source;
+ result = {...result, status:"live"};
+ expect(editor()!.props.source).toEqual(source);
+ // Fragment navigation selects the view without destroying review state.
+ fragment = "#quote";
+ render();
+ expect(editor()).toBeDefined();
+ fragment = "#scope";
+ render();
+ expect(editor()).toBeUndefined();
+ expect(text(render())).toContain("Price the work");
+ fragment = "#quote";
+ render();
+ expect(editor()!.props.source).toEqual(source);
+});
