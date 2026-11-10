@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-gap-plan-preview": {
+      "branches": ["codex/sandbox/real-gap-plan-preview"],
+      "note": "REAL-GAP-PLAN-PREVIEW: public hypothetical catalogue; company subscription authority unchanged. RED. No migration.",
+      "allow": [
+        "apps/web/app/plans/plan-screen.tsx",
+        "apps/web/app/plans/plan-screen.test.tsx",
+        "apps/web/e2e/real-gap-plan-preview.spec.ts"
+      ]
+    }
+  }
+}

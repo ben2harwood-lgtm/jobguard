@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-tour-readable-steps": {
+      "branches": ["codex/sandbox/real-tour-readable-steps"],
+      "note": "RED: completed autoplay result reading; practice sandbox only. NOPR; independent exact-head review and real PostgreSQL browser evidence required.",
+      "allow": [
+        "apps/web/app/ui/walkthrough/walkthrough.tsx",
+        "apps/web/app/ui/walkthrough/walkthrough-pace.test.ts",
+        "apps/web/e2e/real-tour-readable-steps.spec.ts"
+      ]
+    }
+  }
+}
