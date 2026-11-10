@@ -122,6 +122,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.ch6_record_integrity_review(t uuid, j uuid, digest text, review jsonb, source_snapshot jsonb)", "0660_baseline_ancestry_audit_trust.sql"],
     ["app.decision_check_command(p_digest text, p_command jsonb, p_phase text, p_data jsonb)", "0660_baseline_ancestry_audit_trust.sql"],
     ["app.interim_draft_records(t uuid, digest text, j uuid, operation text, v jsonb)", "0665_interim_read_authority.sql"],
+    ["app.interim_draft_records(t uuid, digest text, j uuid, operation text, v jsonb)", "0721_interim_draft_rules.sql"],
     ["app.final_check_require_invoice_actor(p_tenant uuid, p_job uuid, p_actor uuid)", "0667_final_check_practice_owner_check.sql"],
     ["app.ch5_history_actor(t uuid, j uuid, d text)", "0668_import_company_owner_history.sql"],
     ["app.accounting_export(t uuid, digest text, operation text, source text, v jsonb)", "0693_accounting_export_credit_invoice_route.sql"],
