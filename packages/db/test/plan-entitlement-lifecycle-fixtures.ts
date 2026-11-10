@@ -1,3 +1,4 @@
+import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { expect } from "vitest";
 import { PlanEntitlementsApplication } from "../../../apps/api/src/plan-entitlements.application.js";
@@ -23,7 +24,7 @@ export async function companyService(f: WorkFixture, a: SubscriptionCompany) {
   const sessionToken = randomUUID().repeat(2), csrfToken = randomUUID(), origin = "https://jobguard.invalid";
   const digest = provider.digest(`session:${sessionToken}`);
   await f.admin.query("UPDATE identity.session SET token_digest=$2,csrf_token=$3 WHERE id=$1", [a.sessionId, digest, csrfToken]);
-  const bound = { ...a, digest };
+  const bound = { ...a, digest, context: await testBoundTenantContext(f.admin,a.tenantId,a.actorId,digest) };
   return { a: bound, app: companyPlanEntitlements(f.runtime, new IdentityApplication(provider, origin),
     { sessionToken, csrfToken, origin, requestedTenantId: a.tenantId }) };
 }

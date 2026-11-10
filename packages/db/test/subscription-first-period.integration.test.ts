@@ -66,7 +66,7 @@ describe.sequential("MON-2A first-period safety", () => {
   // The acceptance boundary itself passes the new guard (then needs its meter source).
   await expect(issue(f, a, "2026-06-15")).rejects.toThrow("SUBSCRIPTION_SOURCE_UNAVAILABLE");
   await expect(workTenant(f.runtime, b.tenantId, db => db.query("SELECT app.mon2_command($1,$2,$3,$4::jsonb)",
-   [a.tenantId, b.digest, randomUUID(), JSON.stringify(terms(a, "Solo", 0, 15))]))).rejects.toThrow();
+   [a.tenantId, b.digest, randomUUID(), JSON.stringify(terms(a, "Solo", 0, 15))]), { membershipId: b.actorId })).rejects.toThrow();
   expect(await count(f, a, "subscription_period")).toBe(0);
   expect(await count(f, b, "subscription_agreement_revision")).toBe(0);
  });

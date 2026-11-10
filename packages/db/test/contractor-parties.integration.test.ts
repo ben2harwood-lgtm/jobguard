@@ -1,3 +1,4 @@
+import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -14,11 +15,16 @@ const tables = ["contractor_client_customer", "contractor_party_binding", "contr
 const document = { version: "client-contract.v1", reference: "FICTIONAL", startsOn: "2026-10-01", endsOn: null, sorVersionIds: [], tenderedAdjustment: { numerator: "0", denominator: "1" }, photoRule: "required", vatCode: "synthetic-unreviewed", exportedNotBilledAlertDays: 30 };
 const resident = { kind: "contact" as const, contact: { version: "resident-contact.v1" as const, name: "Fictional Resident Canary", phone: "00000123456", email: "resident-canary@example.invalid" } };
 const linkInput = (customerRevisionId: string) => ({ version: "contractor-customer-link.v1", environment: "synthetic_demo", commandId: randomUUID(), customerRevisionId });
-const ctx = (p: AuthenticatedMembership) => verifiedTenantContextFromMembership(p);
+const sessions = new WeakMap<AuthenticatedMembership, ReturnType<typeof verifiedTenantContextFromMembership>>();
+const ctx = (p: AuthenticatedMembership) => {
+  const context = sessions.get(p);
+  if (!context) throw new Error("Synthetic fixture session missing");
+  return context;
+};
 const query = (p: AuthenticatedMembership) => contractors.query(p, { version: "contractor-query.v1", tenantId: p.tenantId, resource: "organisation" });
 const command = async (p: AuthenticatedMembership, fields: Record<string, unknown>) => contractors.command(p, { version: "contractor-command.v1", environment: "synthetic_demo", commandId: randomUUID(), id: randomUUID(), expectedRevision: (await query(p)).revision, ...fields });
 async function setup(type = "insurer") {
-  const session = randomUUID(), p = await contractors.startPractice(session); await seedActiveContractorAgreement(admin,p.tenantId); const v = await query(p);
+  const session = randomUUID(), p = await contractors.startPractice(session); sessions.set(p, verifiedTenantContextFromMembership(p, { kind: "contractor_practice", credential: session })); await seedActiveContractorAgreement(admin,p.tenantId); const v = await query(p);
   const job = randomUUID();
   await withTenant(runtime, ctx(p), db => db.$client.query("SELECT app.work_order_begin($1,$2,$3)", [p.membershipId, job, "Fictional contractor job"]));
   const jp = new JobPartiesRepository(runtime);
@@ -215,6 +221,7 @@ it('denies a job UUID colliding with an ENT-1 team; team membership is not a job
  const member=randomUUID();await command(f.p,{kind:'member.invite',id:member,role:'supervisor',email:'supervisor@example.invalid',scope:{kind:'team',id:job},clientId:null,contractId:null});
  const identity=(await withTenant(runtime,ctx(f.p),db=>db.$client.query('SELECT identity_user_id FROM app.membership WHERE id=$1',[member]))).rows[0].identity_user_id;
  const actor={...f.p,membershipId:member,identityUserId:identity};
+ sessions.set(actor, await testBoundTenantContext(admin, actor.tenantId, actor.membershipId));
  expect((await withTenant(runtime,ctx(actor),db=>db.$client.query("SELECT app.contractor_allowed($1,'resident.read',$2) allowed",[member,job]))).rows[0].allowed).toBe(true);
  await expect(parties.readResident(actor,job)).rejects.toMatchObject({code:'NOT_FOUND'});
 });
@@ -240,7 +247,9 @@ const effects = (f: Fixture) => withTenant(runtime, ctx(f.p), async db => (await
 async function invite(f: Fixture, role: string): Promise<AuthenticatedMembership> {
   const id = randomUUID(); await command(f.p, { kind: "member.invite", id, role, email: `${id}@fictional.invalid`, scope: { kind: "tenant", id: f.p.tenantId }, clientId: null, contractId: null });
   const row = (await withTenant(runtime, ctx(f.p), db => db.$client.query("SELECT identity_user_id FROM app.membership WHERE id=$1", [id]))).rows[0];
-  return { ...f.p, membershipId: id, identityUserId: row.identity_user_id };
+  const actor = { ...f.p, membershipId: id, identityUserId: row.identity_user_id };
+  sessions.set(actor, await testBoundTenantContext(admin, actor.tenantId, id));
+  return actor;
 }
 async function reviseCustomer(f: Fixture, type: string, name = "Fictional Client") {
   const current = (await withTenant(runtime, ctx(f.p), db => db.$client.query("SELECT max(revision)::int n FROM app.customer_revision WHERE customer_id=$1", [f.customer.id]))).rows[0].n;

@@ -94,7 +94,10 @@ test("an explicit authorised existing-extra choice coalesces without creating an
  const { c, f, prompt } = await fixture();
  try {
   const line = (await c.admin.query("SELECT l.scope_item_id,l.sor_version_id FROM app.work_order_line l JOIN app.work_order_current w ON(w.tenant_id,w.revision_id)=(l.tenant_id,l.revision_id) WHERE l.tenant_id=$1 AND l.job_id=$2 AND l.sor_code='REPAIR-DOOR'", [f.p.tenantId, f.jobId])).rows[0]!;
-  const office = async () => new (await database()).ExtraRepository(c.runtime).raiseExtra(f.ctx, { version: "raise-extra.v1", commandId: crypto.randomUUID(), commandType: "RecordOfficeExtra", jobId: f.jobId, actorMembershipId: f.members.finance!.member.membershipId, grantId: f.members.finance!.grant, note: "Fictional office extra", description: "Fictional door excess", sorItem: { versionId: line.sor_version_id, code: "REPAIR-DOOR" }, excessOfScopeItemId: line.scope_item_id });
+  const db = await database();
+  const finance = await new db.ContractorRepository(c.runtime).resolveSession(f.sessions.finance!);
+  const financeContext = db.verifiedTenantContextFromMembership(finance, { kind: "contractor_practice", credential: f.sessions.finance! });
+  const office = async () => new db.ExtraRepository(c.runtime).raiseExtra(financeContext, { version: "raise-extra.v1", commandId: crypto.randomUUID(), commandType: "RecordOfficeExtra", jobId: f.jobId, actorMembershipId: f.members.finance!.member.membershipId, grantId: f.members.finance!.grant, note: "Fictional office extra", description: "Fictional door excess", sorItem: { versionId: line.sor_version_id, code: "REPAIR-DOOR" }, excessOfScopeItemId: line.scope_item_id });
   await office(); const chosen = await office();
   await context.addCookies([{ name: "jg_session", value: f.sessions.supervisor!, url: origin }]);
   await page.goto(`/contractor/jobs/${f.jobId}/possible-extras?promptId=${prompt.id}`);

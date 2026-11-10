@@ -1,3 +1,5 @@
+import { testBoundTenantContext } from "./tenant-context-test-utils.js";
+import { withTenant } from "../src/tenant-context.js";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import type { Pool, PoolClient } from "pg";
@@ -22,9 +24,13 @@ type Command = { jobId: string; finalAccountRevisionId: string; actorMembershipI
 const command = (a: Account): Command => ({ jobId: a.jobId, finalAccountRevisionId: a.revisionId, actorMembershipId: LOCK_OWNER,
   commandId: randomUUID(), recipient: "practice-customer@example.invalid", issuedOn: "2026-10-12" });
 async function rawIssue(f: LockFixture, a: Account, c: Command) {
-  return asFixtureTenant(f.admin, a.tenantId, async db => (await db.query(
+  const issue = async (db: Queryable) => (await db.query(
     "SELECT * FROM app.issue_practice_customer_invoice($1,$2,$3,$4,$5,$6,$7::date)",
-    [a.tenantId, c.jobId, c.finalAccountRevisionId, c.actorMembershipId, c.commandId, c.recipient, c.issuedOn])).rows[0]);
+    [a.tenantId, c.jobId, c.finalAccountRevisionId, c.actorMembershipId, c.commandId, c.recipient, c.issuedOn])).rows[0];
+  const binding = (await f.admin.query("SELECT to_regprocedure('app.bind_request(text,text,uuid)') installed")).rows[0].installed;
+  return binding
+    ? withTenant(f.admin, await testBoundTenantContext(f.admin, a.tenantId, LOCK_OWNER), tx => issue(tx.$client))
+    : asFixtureTenant(f.admin, a.tenantId, issue);
 }
 async function compare(db: Queryable, proof: Proof) {
   expect(await proofDifferences(db, proof)).toEqual({ rows: [], types: [] });
