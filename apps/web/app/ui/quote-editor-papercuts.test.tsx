@@ -141,3 +141,21 @@ it("keeps the existing delivery-state handlers and visibility rules", () => {
   expect(buttons).not.toContain("Continue fake worker");
   expect(buttons).not.toContain("Simulate timeout after acceptance");
 });
+
+it.each([
+  ["before noon", "2026-11-09T01:15:00.000Z", "2026-11-09", "2026-11-09T01:15:00.000Z"],
+  ["after noon", "2026-11-09T18:15:00.000Z", "2026-11-09", "2026-11-09T12:00:00.000Z"],
+  ["a past date", "2026-11-09T01:15:00.000Z", "2026-11-08", "2026-11-08T12:00:00.000Z"],
+])("caps the acceptance timestamp at now for %s", async (_label, now, date, expected) => {
+  vi.setSystemTime(new Date(now));
+  render(); await settle();
+  input(render(), "Customer approval date").props.onChange({ target: { value: date } });
+  const preview = elements(render()).find(element => element.type === "button" && text(element) === "Preview immutable quote")!;
+  vi.mocked(fetch).mockResolvedValueOnce({ ok: true, json: async () => ({ view: { documentVersion: 1, documentId: "fictional-document", contentHash: "fictional-hash", status: "simulated_delivery" } }) } as Response);
+  await preview.props.onClick();
+  const accept = elements(render()).find(element => element.type === "button" && text(element) === "Record practice acceptance")!;
+  await accept.props.onClick();
+  const request = vi.mocked(fetch).mock.calls.find(([url, options]) => String(url).endsWith("/acceptance") && options?.method === "POST");
+  expect(request).toBeDefined();
+  expect(JSON.parse(request![1]!.body as string).acceptedAt).toBe(expected);
+});
