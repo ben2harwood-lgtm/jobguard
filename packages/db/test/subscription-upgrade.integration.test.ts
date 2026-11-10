@@ -1,3 +1,4 @@
+import { testTenantContext } from "./tenant-context-test-utils.js";
 import { readFile } from "node:fs/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { MIGRATION_URLS, migrate } from "../src/migrate.js";
@@ -21,7 +22,10 @@ describe.sequential("MON-2A-P upgrade against populated predecessors", () => {
    await f.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)", [url.pathname.split("/").at(-1)]);
   }
   await installLegacySyntheticPartyFixtures(f.admin);
-  const company = await meterCompany(f); await storeMeter(f, company, meterInput(company.tenantId)); await refreshMeter(f, company);
+  const company = await meterCompany(f);
+  // This populated predecessor predates request binding; its routines still verify the supplied credential.
+  company.context = testTenantContext(company.tenantId, { membershipId: company.actorId, bindRequest: false });
+  await storeMeter(f, company, meterInput(company.tenantId)); await refreshMeter(f, company);
   before = await proofBefore(f.admin, ["app.account", "app.membership", "app.job", "app.command_receipt", "app.meter_input_event", "app.meter_computation", "app.meter_day_ledger"]);
   for (const table of ["app.job", "app.meter_input_event", "app.meter_computation", "app.meter_day_ledger"]) expect(Object.keys(before[table]!.rows).length).toBeGreaterThan(0);
   const acl = (await f.admin.query("SELECT c.oid,c.relacl::text FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN('app','identity') AND c.relkind='r' ORDER BY c.oid")).rows;

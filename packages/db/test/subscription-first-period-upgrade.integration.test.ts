@@ -1,3 +1,4 @@
+import { testTenantContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { afterAll, beforeAll, expect, it } from "vitest";
@@ -26,6 +27,8 @@ it("0374 preserves legacy agreements, approvals, receipts and routine privileges
  // Install MON-3 trial facts before 0374, then exercise the replaced routine.
  // Six places would bill both base and extras without MON-3's trial handling.
  const trial = await firstTrialFixture(f, "2026-09-01T12:00:00.123456Z");
+ // This predecessor predates request binding; its routines verify the supplied credential.
+ trial.context = testTenantContext(trial.tenantId, { membershipId: trial.actorId, bindRequest: false });
  await historicalAgreement(f, trial, "Solo");
  const sourceId = await storeMeter(f, trial, meterInput(trial.tenantId, 6));
  await migrate(f.admin); await migrate(f.admin);

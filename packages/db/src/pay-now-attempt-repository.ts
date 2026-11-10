@@ -1,3 +1,4 @@
+import { isRequestBindingRefusal, RequestBindingRefusedError } from "./request-binding-error.js";
 import { isDeepStrictEqual } from "node:util";
 import type { Pool } from "pg";
 import { z } from "zod";
@@ -19,6 +20,8 @@ export class PayNowAttemptError extends Error {
   /** Share SQL refusal classification with the application's read-only prepare. */
   static fromDatabase(error: unknown): PayNowAttemptError {
     if (error instanceof PayNowAttemptError) return error;
+    if (error instanceof RequestBindingRefusedError) return new PayNowAttemptError("UNAUTHENTICATED");
+    if (isRequestBindingRefusal(error)) return new PayNowAttemptError("FORBIDDEN");
     const message = error instanceof Error ? error.message : "";
     if (message === "METER_FORBIDDEN") return new PayNowAttemptError("FORBIDDEN");
     if (message === "PAY_NOW_UNAUTHENTICATED") return new PayNowAttemptError("UNAUTHENTICATED");

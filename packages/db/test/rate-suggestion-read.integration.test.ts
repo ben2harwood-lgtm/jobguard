@@ -19,7 +19,7 @@ it("retains actor/source provenance across repository reload and refuses foreign
       await db.query(`INSERT INTO app.rate_book_observation(tenant_id,job_id,scope_item_id,id,source_scope_revision_id,unit,rate_principal_pence,currency,tax_basis,category,region,effective_at,provenance)
         VALUES($1,$2,$3,$4,$5,'each',100,'GBP','standard_rate_20','paint','london','2026-10-30','entered')`, [a.tenantId,a.jobId,row.scope,row.id,row.revision]);
     }
-  });
+  }, { membershipId: a.actorId });
   const query = { version: "rate-query.v1", asOf: "2026-11-01T00:00:00.000Z", unit: "each", taxBasis: "standard_rate_20", category: "paint", region: "london" };
   const baseline = await repo.read(a.context, query), target = sources[0]!;
   const input = { version: "rate-suggestion-accept.v1", commandId: randomUUID(), jobId: a.jobId,
@@ -33,7 +33,7 @@ it("retains actor/source provenance across repository reload and refuses foreign
   const outdated = sources[1]!;
   await workTenant(f.admin, a.tenantId, db => db.query(`INSERT INTO app.scope_revision
     (tenant_id,job_id,scope_item_id,id,revision,description,quantity_decimal,unit,unit_price_pence,total_pence)
-    VALUES($1,$2,$3,$4,2,'New fictional revision','1','each',100,100)`, [a.tenantId,a.jobId,outdated.scope,randomUUID()]));
+    VALUES($1,$2,$3,$4,2,'New fictional revision','1','each',100,100)`, [a.tenantId,a.jobId,outdated.scope,randomUUID()]), { membershipId: a.actorId });
   await expect(repo.accept(a.context, actor, { ...input, commandId: randomUUID(), scopeItemId: outdated.scope,
     currentRevisionId: outdated.revision })).rejects.toThrow("STALE_REVISION");
   expect((await f.admin.query("SELECT count(*)::int n FROM app.rate_suggestion_acceptance WHERE tenant_id=$1", [a.tenantId])).rows[0].n).toBe(0);
@@ -50,11 +50,11 @@ it("retains actor/source provenance across repository reload and refuses foreign
   await expect(repo.readAcceptances(a.context, actor, b.jobId)).rejects.toThrow("NOT_FOUND");
   await expect(repo.readAcceptances(b.context, actor, a.jobId)).rejects.toThrow();
   await expect(repo.readAcceptances(a.context, { kind: "human", sessionDigest: b.digest }, a.jobId)).rejects.toThrow();
-  await workTenant(f.admin, a.tenantId, db => db.query("UPDATE app.membership SET role='read_only' WHERE tenant_id=$1 AND id=$2", [a.tenantId,a.actorId]));
+  await workTenant(f.admin, a.tenantId, db => db.query("UPDATE app.membership SET role='read_only' WHERE tenant_id=$1 AND id=$2", [a.tenantId,a.actorId]), { membershipId: a.actorId });
   await expect(repo.readAcceptances(a.context, actor, a.jobId)).rejects.toThrow();
-  await workTenant(f.admin, a.tenantId, db => db.query("UPDATE app.membership SET role='owner',revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [a.tenantId,a.actorId]));
+  await workTenant(f.admin, a.tenantId, db => db.query("UPDATE app.membership SET role='owner',revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [a.tenantId,a.actorId]), { membershipId: a.actorId });
   await expect(repo.readAcceptances(a.context, actor, a.jobId)).rejects.toThrow();
-  await expect(workTenant(f.runtime, a.tenantId, db => db.query("SELECT * FROM app.rate_suggestion_acceptance"))).rejects.toThrow("permission denied");
+  await expect(workTenant(f.runtime, a.tenantId, db => db.query("SELECT * FROM app.rate_suggestion_acceptance"), { membershipId: a.actorId })).rejects.toThrow("permission denied");
   expect((await f.admin.query("SELECT count(*)::int n FROM app.rate_suggestion_acceptance WHERE tenant_id=$1", [a.tenantId])).rows[0].n).toBe(1);
   expect(await snapshot()).toEqual(before);
 }, 120_000);

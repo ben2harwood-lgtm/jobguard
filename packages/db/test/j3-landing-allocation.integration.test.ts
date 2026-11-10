@@ -1,3 +1,4 @@
+import { verifiedTenantContextForQueuedJob } from "../src/tenant-context.js";
 import { loadReviewedInventory } from "./lp-0-catalog.js";
 import { applyOutboundPause } from "./outbound-pause-fixture.js";
 // CI: real PostgreSQL, genuine writers; only evidence/classifier inputs are fixtures.
@@ -19,7 +20,7 @@ import {VariationRepository,insertPricedVariation,approvePricedVariation} from "
 import {PracticeFeedRepository} from "../src/practice-feed-repository.js";
 import {PracticeInvoiceRepository} from "../src/practice-invoice-repository.js";
 import {withTenant} from "../src/tenant-context.js";
-import {testTenantContext} from "./tenant-context-test-utils.js";
+import {testTenantContext, testBoundTenantContext} from "./tenant-context-test-utils.js";
 import {createFinalCheckFixture,closeFinalCheckFixture,finalCheckTenant,type FinalCheckFixture} from "./final-check-fixture.js";
 import {pngBytes} from "./site-extra-evidence-fixtures.js";
 const hash="a".repeat(64);
@@ -33,7 +34,7 @@ async function combinedReceiptFixture(f:FinalCheckFixture,lateCatch=false){
   await db.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional allocator builder')",[account,DEMO_TENANT_ID]);
   await db.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner') ON CONFLICT DO NOTHING",[DEMO_MEMBERSHIP_ID,DEMO_TENANT_ID,account,DEMO_IDENTITY_USER_ID]);
  });
- const session=await issuePracticeSession(f.runtime),auth=await authenticatePracticeSession(f.runtime,session),context=testTenantContext(DEMO_TENANT_ID),actor={membershipId:DEMO_MEMBERSHIP_ID,identityUserId:DEMO_IDENTITY_USER_ID};
+ const session=await issuePracticeSession(f.runtime),auth=await authenticatePracticeSession(f.runtime,session),context=await testBoundTenantContext(f.admin, DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID),actor={membershipId:DEMO_MEMBERSHIP_ID,identityUserId:DEMO_IDENTITY_USER_ID};
  const scoped=practiceMaterialPool(f.runtime,auth.digest),jobId=await prepareActivationFixtureV3(f.admin,context,"shadow-30000",baselineNetPence,scoped,baselineNetPence,auth.digest);
  await new PracticeActivationRepository(scoped).start(context,jobId,{commandId:randomUUID(),scenario:"no_charge"});
  const scope=(await f.admin.query("SELECT id FROM app.scope_identity WHERE tenant_id=$1 AND job_id=$2 AND state='confirmed' ORDER BY created_at,id LIMIT 1",[DEMO_TENANT_ID,jobId])).rows[0].id as string;
@@ -83,12 +84,12 @@ async function combinedReceiptFixture(f:FinalCheckFixture,lateCatch=false){
  });
  expect(await readBeforeLock()).toBeNull();
  const lock=await locks.lock(context,{jobId,actorMembershipId:actor.membershipId,commandId:randomUUID(),finalAccountRevisionId:drafted.id,expectedRevision:drafted.revision,declarationVersion:"final_account_declaration.v1"});
- const worker=new FinalCheckRepository(f.shadow),manifest=await worker.begin(context,jobId);
- for(const s of manifest.sources){if(s.sourceKind==="builder_capture_not_scanned"&&!s.processable)continue;await worker.record(context,jobId,manifest.id,s.id,randomUUID(),{version:"final-check.source-result.v1",inputHash:s.inputHash,status:s.evidenceId===evidence?"detected":"zero_result",failureCode:null,signalIds:s.evidenceId===evidence?signals:[]});}
+ const worker=new FinalCheckRepository(f.shadow),manifest=await worker.begin(verifiedTenantContextForQueuedJob(context.tenantId),jobId);
+ for(const s of manifest.sources){if(s.sourceKind==="builder_capture_not_scanned"&&!s.processable)continue;await worker.record(verifiedTenantContextForQueuedJob(context.tenantId),jobId,manifest.id,s.id,randomUUID(),{version:"final-check.source-result.v1",inputHash:s.inputHash,status:s.evidenceId===evidence?"detected":"zero_result",failureCode:null,signalIds:s.evidenceId===evidence?signals:[]});}
  const classifications:FinalCheckClassification[]=signals.map(signalId=>({signalId,expectedRevision:0,outcome:"reveal",references:[],comparisons:{baselineItemIds:[scope],captureIds:manifest.comparisons.captures.map(c=>(c as {id:string}).id),lockedLineIds:manifest.comparisons.lines.map(l=>l.id)}}));
- const run=await worker.reconcile(context,jobId,manifest.id,classifications) as {runId:string;lockId:string};
+ const run=await worker.reconcile(verifiedTenantContextForQueuedJob(context.tenantId),jobId,manifest.id,classifications) as {runId:string;lockId:string};
  // Reconciliation makes the result available; publication authorizes invoicing.
- await new FinalCheckCompletionRepository(f.shadow).publish(context,{version:"final-check-publication.v1",jobId,runId:run.runId,checkId:randomUUID()});
+ await new FinalCheckCompletionRepository(f.shadow).publish(verifiedTenantContextForQueuedJob(context.tenantId),{version:"final-check-publication.v1",jobId,runId:run.runId,checkId:randomUUID()});
  const catches:{caseId:string;workId:string;commercialRevisionId:string}[]=[];
  const confirmCatch=async(index:number)=>{
   const signalId=signals[index]!;

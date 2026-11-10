@@ -1,6 +1,6 @@
 import { applyRequestBindingFoundation } from "./request-binding-fixture.js";
 import { installAuditCommandWriterRoles } from "./pool-test-utils.js";
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { proofEvidenceTypeSchema } from "../../core/src/proof.js";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -9,7 +9,8 @@ import EmbeddedPostgres from "embedded-postgres";
 import { Pool, type PoolClient } from "pg";
 import { seedSyntheticPartyFixture } from "../src/synthetic-party-fixture.js";
 import { freePort, closeTestDatabase, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { withTenant } from "../src/tenant-context.js";
+import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 
 export const CH4_HASH = "a".repeat(64);
 // Ruling 103 (Q4): suites that issue a practice session need the trusted practice database; every other caller keeps the default.
@@ -44,10 +45,8 @@ export async function closeWorkFixture(f?: WorkFixture) {
   await f.postgres.stop();
  } }, f.directory, f.runtime, f.admin);
 }
-export async function workTenant<T>(pool: Pool, tenantId: string, work: (db: PoolClient) => Promise<T>) {
- const db = await pool.connect();
- try { await db.query("BEGIN"); await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenantId]); const result = await work(db); await db.query("COMMIT"); return result; }
- catch (error) { await db.query("ROLLBACK"); throw error; } finally { db.release(); }
+export async function workTenant<T>(pool: Pool, tenantId: string, work: (db: PoolClient) => Promise<T>, options: { membershipId?: string; bindRequest?: boolean } = {}) {
+ return withTenant(pool, testTenantContext(tenantId, options), db => work(db.$client));
 }
 export async function seedWorkJob(f: WorkFixture, tenantId: string = randomUUID()) {
  const userId = randomUUID(), actorId = randomUUID(), accountId = randomUUID(), jobId = randomUUID(), scopeId = randomUUID();
@@ -65,7 +64,7 @@ export async function seedWorkJob(f: WorkFixture, tenantId: string = randomUUID(
   await db.query("UPDATE app.job SET status='live' WHERE tenant_id=$1 AND id=$2", [tenantId, jobId]);
   await db.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')", [scopeId, tenantId, jobId]);
  });
- return { tenantId, actorId, jobId, scopeId, context: testTenantContext(tenantId) };
+ return { tenantId, actorId, jobId, scopeId, context: (await f.admin.query("SELECT to_regprocedure('app.bind_request(text,text,uuid)') installed")).rows[0].installed ? await testBoundTenantContext(f.admin, tenantId, actorId) : testTenantContext(tenantId, { membershipId: actorId }) };
 }
 export type WorkJob = Awaited<ReturnType<typeof seedWorkJob>>;
 export async function insertPhoto(f: WorkFixture, a: WorkJob, receivedAt = "2026-10-13T10:00:00.000001Z", type: string = proofEvidenceTypeSchema.enum.pre_cover_photo, capturedAt: string | null = null, historicalImportFixture = false) {
@@ -77,15 +76,16 @@ export async function insertPhoto(f: WorkFixture, a: WorkJob, receivedAt = "2026
    VALUES($1,$2,$3,$4,$5,$6,'image/png',100,'standard_evidence',clock_timestamp()+interval '1 day','verified',$7,$8,clock_timestamp(),$9)`, [id,a.tenantId,a.jobId,a.scopeId,`synthetic/ch4/${id}`,CH4_HASH,version,receivedAt,capturedAt]);
   await db.query(`INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at,device_captured_at)
    VALUES($1,$2,$1,$3,$4,'original',$5,$6,$7,$8,80,'image/png','standard_evidence',$9,clock_timestamp(),$10)`,[id,a.tenantId,a.jobId,a.scopeId,type,`synthetic/ch4/${id}`,version,CH4_HASH,receivedAt,capturedAt]);
- }); return id;
+ }, { membershipId: a.actorId }); return id;
 }
 export async function workEvents(f: WorkFixture, a: WorkJob) {
- return workTenant(f.runtime,a.tenantId, async db => (await db.query(`SELECT id,kind,source_receipt_id,sequence::text,to_char(fact_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') fact_at FROM app.job_work_state_event WHERE tenant_id=$1 AND job_id=$2 ORDER BY sequence`, [a.tenantId,a.jobId])).rows);
+ return workTenant(f.runtime,a.tenantId, async db => (await db.query(`SELECT id,kind,source_receipt_id,sequence::text,to_char(fact_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') fact_at FROM app.job_work_state_event WHERE tenant_id=$1 AND job_id=$2 ORDER BY sequence`, [a.tenantId,a.jobId])).rows, { membershipId: a.actorId });
 }
 /** Explicit held lifecycle storage only: no runtime command or permission is inferred. */
 export async function fixtureLifecycle(f: WorkFixture,a: WorkJob,kind: string, predecessor: string | null = null) {
  const id=randomUUID();
- await workTenant(f.admin,a.tenantId,async db=> {
+ await withTenant(f.admin,a.context,async transaction=> {
+  const db=transaction.$client;
   // Constraint-valid references use a pre-existing receipt/audit from an explicitly labelled fixture.
   await db.query(`INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id,result,completed_at) VALUES($1,$2,'ch4.fixture',$2::uuid::text,$3,'succeeded',$4,'{}',clock_timestamp())`,[a.tenantId,id,CH4_HASH,a.actorId]);
   await db.query(`INSERT INTO app.job_work_state_event(tenant_id,job_id,id,sequence,kind,fact_at,actor_membership_id,command_id,predecessor_id,close_reason,close_note,request_hash,audit_event_id)
@@ -98,7 +98,7 @@ export async function boundaryLock(f:WorkFixture,a:Awaited<ReturnType<typeof see
  await workTenant(f.admin,a.tenantId,async db=>{
   await db.query("SET LOCAL session_replication_role='replica'");
   await db.query(`INSERT INTO app.final_account_lock(tenant_id,job_id,id,final_account_revision_id,baseline_quote_version_id,capture_register_hash,line_set_hash,scope_disposition_hash,snapshot_digest,snapshot,declaration,declaration_version,onboarding_terms_version,locking_membership_id,locked_at,command_id,audit_event_id) VALUES($1,$2,$3,$4,$5,$6,$6,$6,$6,'{}','I''ve reviewed the work and extras on this job and this is my complete final account.','final_account_declaration.v1','synthetic_final_check_terms.v1',$7,clock_timestamp(),$8,$9)`,[a.tenantId,a.jobId,randomUUID(),randomUUID(),randomUUID(),CH4_HASH,a.actorId,randomUUID(),randomUUID()]);
- });
+ }, { membershipId: a.actorId });
 }
 
 export async function prepareWorkAccount(f:WorkFixture,a:WorkJob) {
@@ -110,7 +110,7 @@ export async function prepareWorkAccount(f:WorkFixture,a:WorkJob) {
    VALUES($1,$2,$3,$4,1,$5,$6,'GBP','candidate_m1_standard_v1',1000,200,1200,false,'[]')`,[revisionId,a.tenantId,a.jobId,draftId,CH4_HASH,baselineId]);
   await db.query("INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,description,net_pence,ordinal) VALUES($1,$2,$3,$4,'baseline',$5,$6,$5,'Fictional baseline',1000,1)",[lineId,a.tenantId,a.jobId,revisionId,baselineId,a.scopeId]);
   await db.query("UPDATE app.final_account_draft SET current_revision_id=$1,revision=1 WHERE tenant_id=$2 AND id=$3",[revisionId,a.tenantId,draftId]);
- });
+ }, { membershipId: a.actorId });
  return {baselineId,draftId,revisionId,lineId};
 }
 
@@ -126,7 +126,10 @@ export async function seedWorkPractice(f:WorkFixture) {
   await db.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional CH-4 practice') ON CONFLICT DO NOTHING",[DEMO_ACCOUNT_ID,DEMO_TENANT_ID]);
   await db.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner') ON CONFLICT DO NOTHING",[DEMO_MEMBERSHIP_ID,DEMO_TENANT_ID,DEMO_ACCOUNT_ID,DEMO_IDENTITY_USER_ID]);
  });
- const sessionId=await issuePracticeSession(f.runtime),auth=await authenticatePracticeSession(f.runtime,sessionId);
+ const sessionId=await issuePracticeSession(f.runtime),principal=await authenticatePracticeSession(f.runtime,sessionId);
+ // A separate identity credential leaves the practice session free for revocation races.
+ const bindingCredential=randomBytes(32).toString("hex");
+ const auth={...principal,context:await testBoundTenantContext(f.admin,principal.context.tenantId,principal.membershipId,bindingCredential)};
  const jobId=(await f.admin.query("SELECT id FROM app.job WHERE tenant_id=$1 AND practice_session_digest=$2 AND status='live' AND practice_scenario='home'",[DEMO_TENANT_ID,auth.digest])).rows[0].id as string;
- return {sessionId,jobId,auth};
+ return {sessionId,jobId,auth,bindingCredential};
 }

@@ -5,14 +5,14 @@ import { AdoptInFlightJobMutation } from "../src/job-import-repository.js";
 import { ConfirmProposalReview } from "../src/review-repository.js";
 import { UserCommandDispatcher } from "../src/commands.js";
 import { withTenant, type TenantTransaction } from "../src/tenant-context.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { adoptionFixture, reviewFixture, jobDoorsActor, jobDoorsDatabase, type JobDoorsDatabase } from "./lp-job-doors-fixtures.js";
 
 let db: JobDoorsDatabase;
 beforeAll(async () => { db = await jobDoorsDatabase(true); await installLegacySyntheticPartyFixtures(db.owner); }, 300_000);
 afterAll(async () => { await db?.close(); });
 async function fixture() {
-  const actor = await jobDoorsActor(db.owner), context = testTenantContext(actor.tenant);
+  const actor = await jobDoorsActor(db.owner), context = await testBoundTenantContext(db.owner, actor.tenant, actor.member);
   const job = randomUUID(), decision = randomUUID(), finding = randomUUID();
   const fingerprint = createHash("sha256").update(finding).digest("hex");
   await db.owner.query(`INSERT INTO app.job(tenant_id,id,title,status) VALUES($1,$2,'Fictional command fixture','live')`, [actor.tenant, job]);
@@ -70,7 +70,7 @@ describe("LP-5a actual PostgreSQL command lifecycle", () => {
   it("does not disclose another owner's or tenant's replay", async () => {
     const f = await fixture(), other = await jobDoorsActor(db.owner, f.actor.tenant), foreign = await fixture();
     await f.dispatcher.dismissDecision(f.context, f.command);
-    await expect(f.dispatcher.dismissDecision(f.context, { ...f.command, actorMembershipId: other.member })).rejects.toMatchObject({ code: "COMMAND_CONFLICT" });
+    await expect(f.dispatcher.dismissDecision(await testBoundTenantContext(db.owner, other.tenant, other.member), { ...f.command, actorMembershipId: other.member })).rejects.toMatchObject({ code: "COMMAND_CONFLICT" });
     await expect(f.dispatcher.dismissDecision(foreign.context, f.command)).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
   it("resolves both keys and refuses a command ID and semantic key belonging to different receipts", async () => {
@@ -146,7 +146,7 @@ describe("LP-5a actual PostgreSQL command lifecycle", () => {
     expect(await counts(f.actor.tenant)).toMatchObject({ receipts: 1, authorizations: 1 });
   });
   it("replays legacy adoption with a fresh server-generated expiry and retains its base result contract", async () => {
-    const f = await adoptionFixture(db), context = testTenantContext(f.actor.tenant), dispatcher = new UserCommandDispatcher(db.runtime);
+    const f = await adoptionFixture(db), context = await testBoundTenantContext(db.owner, f.actor.tenant, f.actor.member), dispatcher = new UserCommandDispatcher(db.runtime);
     const mutation = new AdoptInFlightJobMutation(f.actor.tenant, "synthetic_candidate", f.input);
     let calls = 0, expected: Record<string, unknown> | undefined;
     const handler = { auditEvents: mutation.auditEvents.bind(mutation), mutate: async (tx: Parameters<typeof mutation.mutate>[0], command: Parameters<typeof mutation.mutate>[1]) => {
