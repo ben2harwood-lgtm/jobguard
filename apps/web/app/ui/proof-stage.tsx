@@ -1,4 +1,6 @@
-"use client";import { useWatchdogActive } from "./watchdog-panel";import{useCallback,useEffect,useRef,useState}from"react";
+"use client";
+import { jobPageFetch as fetch } from "./job-page-fetch";
+import { useWatchdogActive } from "./watchdog-panel";import{useCallback,useEffect,useRef,useState}from"react";
 type View={scopeItemId:string;upload:null|{id:string;state:string;objectVersionId:string|null;evidenceId:string|null};completion:null|{id:string;reviewRequired:boolean};mandatoryDecisionCount:number;realExternalActions:number};
 // Background load failures are announced in place. Only a failed user command
 // moves focus to its error; a late read must not interrupt another panel’s keyboard path.

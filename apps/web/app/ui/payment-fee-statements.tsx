@@ -1,4 +1,5 @@
 "use client";
+import { jobPageFetch as fetch } from "./job-page-fetch";
 import { useEffect,useState } from "react";
 import { paymentFeeViewV1,parseExactPence,divideRounded,type PaymentFeeAuthorityCommand,type PaymentFeeCommand } from "@jobguard/core";
 import type { z } from "zod";

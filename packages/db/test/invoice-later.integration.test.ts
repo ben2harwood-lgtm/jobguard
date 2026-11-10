@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
@@ -154,6 +154,57 @@ describe("LATER-B16 persisted invoice facts", () => {
    } finally { releaseCommit(); await firstObserved; await second?.catch(()=>undefined); }
   });
  }
+ it("LATER-SAFETY-95 rejects a colliding changed credit payload and preserves exact replay", async () => {
+  const f = await fresh(), input = { ...await creditCommand(f,12), reason:"3abc" };
+  const first = await callCredit(input);
+  await expect(callCredit({...input,netPence:123,reason:"abc"})).rejects.toThrow("IDEMPOTENCY_PAYLOAD_CONFLICT");
+  expect(await callCredit(input)).toEqual(first);
+  expect((await repo.creditView(context,f.jobId,f.invoice.id)).credits).toHaveLength(1);
+ });
+ it("LATER-SAFETY-95 old-digest mutation exposes the collision; restored routine safely replays legacy receipts", async () => {
+  const f = await fresh(), input = { ...await creditCommand(f,12), reason:"3abc" };
+  const db = await admin.connect();
+  const signature = "app.issue_practice_customer_credit_note(uuid,uuid,uuid,uuid,uuid,bigint,text,text)";
+  try {
+   await db.query("BEGIN"); await db.query(`SELECT set_config('app.tenant_id',$1,true)`,[T]);
+   const original = (await db.query(`SELECT pg_get_functiondef($1::regprocedure) definition`,[signature])).rows[0].definition as string;
+   const structured = "jsonb_build_object('job',p_job,'invoice',p_invoice,'net',p_net_pence,'reason',p_reason,'preview',p_preview_hash)::text";
+   expect(original).toContain(structured);
+   // Scratch mutation lives only in this transaction. ROLLBACK restores the installed routine even on failure.
+   await db.query(original.replace(structured,"p_job::text||p_invoice::text||p_net_pence::text||p_reason||p_preview_hash"));
+   const direct = async (net: number, reason: string) => (await db.query(
+    `SELECT * FROM app.issue_practice_customer_credit_note($1,$2,$3,$4,$5,$6,$7,$8)`,
+    [T,input.jobId,input.invoiceId,M,input.commandId,net,reason,input.previewHash])).rows[0];
+   const first = await direct(12,"3abc");
+   // The regression assertion itself must fail with the old concatenation: it incorrectly replays.
+   await expect(expect(direct(123,"abc")).rejects.toThrow("IDEMPOTENCY_PAYLOAD_CONFLICT")).rejects.toThrow();
+   expect(await direct(123,"abc")).toEqual(first);
+   await db.query(original);
+   expect(await direct(12,"3abc")).toEqual(first);
+   await db.query("SAVEPOINT changed_payload");
+   await expect(direct(123,"abc")).rejects.toThrow("IDEMPOTENCY_PAYLOAD_CONFLICT");
+   await db.query("ROLLBACK TO SAVEPOINT changed_payload");
+   expect((await db.query(`SELECT count(*)::int n FROM app.customer_credit_note WHERE tenant_id=$1 AND invoice_id=$2`,[T,input.invoiceId])).rows[0].n).toBe(1);
+   expect(await direct(12,"3abc")).toEqual(first);
+  } finally { await db.query("ROLLBACK"); db.release(); }
+ });
+ it("LATER-SAFETY-95 exact pre-change replay preserves the raw reason digest", async () => {
+  const f = await fresh(), input = { ...await creditCommand(f,12), reason:"  Synthetic correction  " };
+  const db = await admin.connect();
+  try {
+   await db.query("BEGIN"); await db.query(`SELECT set_config('app.tenant_id',$1,true)`,[T]);
+   const original = (await db.query(`SELECT pg_get_functiondef('app.issue_practice_customer_credit_note(uuid,uuid,uuid,uuid,uuid,bigint,text,text)'::regprocedure) definition`)).rows[0].definition as string;
+   const predecessor = await readFile(new URL("../migrations/0190_credit_command_replay.sql",import.meta.url),"utf8");
+   await db.query(predecessor.slice(predecessor.indexOf("CREATE OR REPLACE FUNCTION"),predecessor.lastIndexOf("COMMIT;")));
+   const direct = async (reason: string) => (await db.query(
+    `SELECT * FROM app.issue_practice_customer_credit_note($1,$2,$3,$4,$5,$6,$7,$8)`,
+    [T,input.jobId,input.invoiceId,M,input.commandId,input.netPence,reason,input.previewHash])).rows[0];
+   const first = await direct(input.reason);
+   await db.query(original);
+   expect(await direct(input.reason)).toEqual(first);
+   await expect(direct(input.reason.trim())).rejects.toThrow("IDEMPOTENCY_PAYLOAD_CONFLICT");
+  } finally { await db.query("ROLLBACK"); db.release(); }
+ });
  it("L082 concurrent identical direct credit commands return one credit and replay", async () => {
   const f = await fresh(), input = await creditCommand(f);
   const holder = await runtime.connect();
