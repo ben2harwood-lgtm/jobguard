@@ -26,7 +26,7 @@ function conflictSince(observed: View, latest: View, refs: DraftRefs): string | 
   if (isLive(observed.status) !== isLive(latest.status)) return WENT_LIVE_MESSAGE;
   return partiesChanged(observed, latest, refs) ? CHANGED_MESSAGE : null;
 }
-export function JobParties({ jobId }: { jobId: string }) {
+export function JobParties({ jobId, onSettled }: { jobId: string; onSettled?: (jobId: string) => void }) {
   const [view, setView] = useState<View | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState(false);
   const [customerRevisionId, setCustomerRevisionId] = useState("");
   const [customerId, setCustomerId] = useState(""), [name, setName] = useState("Practice Customer"), [type, setType] = useState<(typeof customerTypes)[number]>("person");
@@ -60,6 +60,7 @@ export function JobParties({ jobId }: { jobId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [load, fetchView, jobId]);
   useEffect(() => { if (error) errorRef.current?.focus(); }, [error]);
+  useEffect(() => { if (view || error) onSettled?.(jobId); }, [view, error, jobId, onSettled]);
   const site = { version: "site.v1" as const, addressLines: addressLinesFromDraft(address, more), town, postcode, ...(unit ? { unit } : {}), ...(uprn ? { uprn } : {}) };
   const saved = view?.current;
   const draftChanged = !saved || customerId !== view?.currentIds?.customerId || customerRevisionId !== saved.customerRevisionId

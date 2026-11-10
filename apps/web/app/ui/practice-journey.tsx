@@ -24,7 +24,7 @@ async function readJson(path: string, signal: AbortSignal, absent?: { status: nu
 }
 
 /** Persisted read models decide the next step; this component never advances a job locally. */
-export function PracticeJourney({ jobId, status }: { jobId: string; status: string }) {
+export function PracticeJourney({ jobId, status, onSettled }: { jobId: string; status: string; onSettled?: (jobId: string, status: string) => void }) {
  const [state, setState] = useState<ReadState>({ jobId, status, phase: "loading" });
  const generation = useRef(0), activeRequest = useRef<AbortController | null>(null);
  const currentJob = useRef({ jobId, status }); currentJob.current = { jobId, status };
@@ -66,6 +66,8 @@ export function PracticeJourney({ jobId, status }: { jobId: string; status: stri
   if (phase === "failed" && state.phase === "failed" && state.userInitiated &&
    (document.activeElement === retryButton.current || document.activeElement === document.body)) errorHeading.current?.focus();
  }, [phase, state]);
+ // Report only the current read: a previous lifecycle must not enable pricing.
+ useEffect(() => { if (phase !== "loading") onSettled?.(jobId, status); }, [phase, jobId, status, onSettled]);
  const retry = <button ref={retryButton} type="button" style={{ minHeight: 44, minWidth: 44 }} onClick={() => void load(true)}>{phase === "failed" ? "Try checking saved progress again" : "Check saved progress"}</button>;
  if (phase !== "ready" || state.phase !== "ready") return <section className="journey-progress" aria-label="Practice journey progress" data-testid="uiwire15-journey">
   <p className="eyebrow">One persisted practice job</p>

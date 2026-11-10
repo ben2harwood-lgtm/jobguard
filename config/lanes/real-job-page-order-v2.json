@@ -15,6 +15,8 @@
         "apps/web/app/ui/workspace-shell-order.test.tsx",
         "apps/web/app/ui/practice-journey-anchors.test.tsx",
         "apps/web/app/ui/quote-editor-slots.test.tsx",
+        "apps/web/app/ui/quote-editor-interaction.test.tsx",
+        "apps/web/app/ui/job-parties.tsx",
         "apps/web/app/ui/review-proposal.test.tsx"
       ]
     }
