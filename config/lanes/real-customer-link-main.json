@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-customer-link-main": {
+      "branches": [
+        "codex/sandbox/real-customer-link-main"
+      ],
+      "allow": [
+        "apps/api/src/shadow-demo-guide.application.ts",
+        "apps/web/app/api/jobs/[id]/shadow-demo/customer-link/route.ts",
+        "apps/web/app/customer/sign-in/signin.tsx",
+        "apps/web/app/ui/quote-editor.tsx",
+        "apps/web/e2e/real-customer-link-own-quote.spec.ts",
+        "packages/db/migrations/0940_real_customer_link_own_quote.sql",
+        "packages/db/src/shadow-demo-guide-repository.ts",
+        "packages/db/test/migration-proofs/0940_real_customer_link_own_quote.proof.json",
+        "packages/db/test/real-customer-link-own-quote.integration.test.ts"
+      ]
+    }
+  }
+}

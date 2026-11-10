@@ -1,0 +1,6 @@
+{
+  "migration": "0940_real_customer_link_own_quote.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}
