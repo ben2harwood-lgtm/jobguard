@@ -129,6 +129,9 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.ent4b_fact_guard()", "0673_duplicate_unlink_command_binding.sql"],
     ["app.work_order_commit(actor uuid, payload jsonb)", "0676_work_order_expected_revision.sql"],
     ["app.sync_snapshot_generation(u uuid, r bigint, s bigint, h text, e text)", "0699_sync_checkpoint_bound_reader.sql"],
+    ["identity.provision_verified_challenge(challenge_id uuid)", "0703_invitation_issuer_recheck.sql"],
+    ["app.ef_prepare_statement(p_session uuid, p_command uuid, p_period text)", "0704_enterprise_fee_period_order.sql"],
+    ["app.ef_post_statement(p_session uuid, p_command uuid, p_statement uuid, p_authorization uuid)", "0704_enterprise_fee_period_order.sql"],
     ["app.accounting_export_route_read(t uuid, digest text, source text)", "0710_accounting_export_route_read_exported.sql"],
     ["app.extra_duplicate_resolve(p_session uuid, p_job uuid, p_body jsonb)", "0711_duplicate_disposition_lifecycle.sql"],
     ["app.lp_authority(p_session uuid, p_job uuid, p_action text)", "0713_end_check_rule_a_rerun.sql"],
@@ -151,6 +154,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.evidence_pack_v3_owner(t uuid, c uuid, d text)", "0690_import_ancestry_record_anchor.sql"],
     ["app.adopt_invoiced_job_v3(t uuid, source_job uuid, d text, cmd uuid, auth uuid, approved jsonb, request_hash text)", "0690_import_ancestry_record_anchor.sql"],
     ["app.apply_recovery_timeline_signal(p_tenant uuid, p_signal jsonb)", "0690_import_ancestry_record_anchor.sql"],
+    ["app.final_check_practice_owns_job(t uuid, j uuid, d text)", "0701_final_check_owner_v1_adoption_edge.sql"],
   ]) {
     const source = await readFile(new URL(`../migrations/${migration}`, import.meta.url), "utf8");
     if (identity!.startsWith("app.decision_check_command(")) {
@@ -163,6 +167,8 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     "retention_timer", "retention_timer_book", "xa_proceed", "xa_proceed_breaches",
     "xa_proceed_view", "xa_wait_deadline", "customer_practice_pay_now", "store_extra_pack_artifact",
     "guard_variation_final_account_lock",
+    "company_final_check_authority", "company_final_check_read", "company_final_check_terms",
+    "company_final_check_disposition", "company_final_check_lock", "company_final_check_request_run", "company_final_check_reveal",
   ];
   for (const name of namedAdditions) {
     expect(replayRoutines.filter(row => row.proname === name)).toHaveLength(1);

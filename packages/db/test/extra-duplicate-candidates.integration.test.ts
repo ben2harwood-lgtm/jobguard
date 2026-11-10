@@ -224,7 +224,7 @@ it("ENT-3 reversal never promotes a duplicate-dismissed pending approval to appr
  const linked = await approvals.markDuplicate(w.ctx,w.w.members.supervisor.member,markInput(w,extraId,w.s.extraId));
  await new ExtraRepository(c.runtime).unlinkDuplicate(w.ctx,await unlinkInput(w,String(linked.linkId)));
  expect(await code(approvals.approveExtraStep(w.ctx,w.w.members.supervisor.member,approveInput({jobId:w.s.jobId,
-  requestId:String(pending.requestId),hash:String(pending.revisionHash),net:338},0)))).toBe("ALREADY_DECIDED");
+  requestId:String(pending.requestId),hash:String(pending.revisionHash),net:338},0)))).toBe("STALE_REVISION");
  expect((await c.admin.query("SELECT kind FROM app.extra_approval_outcome WHERE request_id=$1",[pending.requestId])).rows).toEqual([{kind:"duplicate"}]);
  await w.exported();
  const lines = (await w.repo.read(w.ctx,w.session,w.s.jobId)).exports.flatMap(x=>x.artifact.lines);
