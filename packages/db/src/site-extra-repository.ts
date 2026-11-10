@@ -6,10 +6,11 @@ import { ExtraRepository, type ExtraTransactionSeam, type RaisedExtra } from "./
 import { appendAuditBatch } from "./audit.js";
 import { assertContractorGate, derivedUuid } from "./work-order-repository.js";
 import { withTenant, InvalidTenantContextError, type VerifiedTenantContext, type AuthenticatedMembership, type TenantTransaction } from "./tenant-context.js";
+import { RequestBindingRefusedError } from "./request-binding-error.js";
 import { requireLiveJob, WatchdogError } from "./watchdog.js";
 import { SorSiteExtraError, canonicalSorQuantity, orderCheckV1, parseOrderCheckQuery, parseSorItemsQuery, parseSorSiteExtraInput, type SiteOrderCheck, type SorSiteExtraErrorCode } from "@jobguard/core";
 import { canonicalJson, sha256Hex } from "./work-order-repository.js";
-import { readOrderFacts, readReplay, readStoredPriced, searchItems, type StoredPriced } from "./site-extra-pricing-queries.js";
+import { readOrderFacts, readReplay, readStoredPriced, recentItems, searchItems, type StoredPriced } from "./site-extra-pricing-queries.js";
 /** ENT-3c: what a priced log answers. The price itself is never part of an answer (Q7). */
 export type StoredSorExtra = Pick<StoredPriced, "variationId" | "jobId" | "coverage" | "sorCode" | "unit" | "claimedQuantity" | "instructedQuantity" | "extraQuantity" | "orderLineScopeItemId" | "priceSource">;
 const commandType = "LogSiteExtra";
@@ -47,7 +48,7 @@ const photoRefusal: EvidenceRefusal = { code: "PHOTO_NOT_ACCEPTED", reason: "pho
 type Gate = { raise: { evidenceId?: string; residentConfirmationEvidenceId?: string }; evidence?: EvidenceFacts };
 export class SiteExtraRepository {
  constructor(private readonly pool: Pool) {}
- private async precheck(context: VerifiedTenantContext, actor: AuthenticatedMembership, jobId: string, siteVisitId?: string, retained = false): Promise<Authority> {
+ private async precheck(context: VerifiedTenantContext, actor: AuthenticatedMembership, jobId: string, siteVisitId?: string, retained = false, replayCommandId?: string): Promise<Authority> {
   return withTenant(this.pool, context, async db => {
    try { await assertContractorGate(db, actor, retained ? "retained_member" : "member", "site_origin_capture"); } catch (error) {
     if (error instanceof WorkOrderError && error.code === "TRACK_FORBIDDEN") return { code: "TRACK_FORBIDDEN", reason: "track_not_contractor" };
@@ -58,7 +59,9 @@ export class SiteExtraRepository {
    const answer = answerV1.safeParse(rows.length === 1 ? rows[0] : undefined);
    if (!answer.success) return { code: "NOT_FOUND", reason: "job_out_of_scope" };
    if (answer.data.decision === "allowed") {
-    await requireLiveJob(db, jobId);
+    // Let the owning command verify the request hash and return its stored success, even after invoicing.
+    const replay = replayCommandId && (await db.$client.query("SELECT 1 FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2 AND command_type=$3 AND actor_membership_id=$4 AND status='succeeded'", [context.tenantId, replayCommandId, commandType, actor.membershipId])).rowCount;
+    if (!replay) await requireLiveJob(db, jobId);
     // A visit reference is checked only after the caller is known to be allowed: it must be the caller's own open visit on this job.
     if (siteVisitId && !(await db.$client.query("SELECT 1 FROM app.site_visit WHERE tenant_id=$1 AND id=$2 AND job_id=$3 AND membership_id=$4 AND completed_at IS NULL", [actor.tenantId, siteVisitId, jobId, actor.membershipId])).rowCount) return { code: "NOT_FOUND", reason: "visit_out_of_scope" };
     return { grant: answer.data.raising_grant };
@@ -162,7 +165,7 @@ export class SiteExtraRepository {
    if (!context || typeof context.tenantId !== "string") throw new InvalidTenantContextError();
    if (actor.tenantId.toLowerCase() !== context.tenantId.toLowerCase()) refusal = { code: "EXTRA_FORBIDDEN", reason: "member_inactive" };
    else {
-    const authority = await this.precheck(context, actor, input.jobId, input.siteVisitId);
+    const authority = await this.precheck(context, actor, input.jobId, input.siteVisitId, false, input.commandId);
     if ("code" in authority) refusal = authority;
     else {
      const gate = await this.evidenceGate(context, actor, input);
@@ -194,6 +197,7 @@ export class SiteExtraRepository {
    }
   } catch (error) {
    if (error instanceof InvalidTenantContextError) refusal = { code: "NOT_FOUND", reason: "job_out_of_scope" };
+   else if (error instanceof RequestBindingRefusedError) refusal = { code: "EXTRA_FORBIDDEN", reason: "member_inactive" };
    else if (error instanceof WatchdogError) {
     if (error.code === "JOB_NOT_FOUND") refusal = { code: "NOT_FOUND", reason: "job_out_of_scope" };
     else throw error;
@@ -329,6 +333,18 @@ export class SiteExtraRepository {
    const facts = await readOrderFacts(db, tenant, jobId, null);
    if (!facts || !facts.sorVersionId) throw new SorSiteExtraError("SITE_PRICING_UNAVAILABLE");
    return { sorVersionId: facts.sorVersionId, ...(await searchItems(db, tenant, facts.sorVersionId, query.q)) };
+  });
+ }
+ /** Recent codes belong to the authenticated actor, never to a request-selected membership. */
+ async sorRecentItems(context: VerifiedTenantContext, actor: AuthenticatedMembership, jobId: string) {
+  if (!z.guid({ error: "Invalid uuid" }).safeParse(jobId).success) throw new SorSiteExtraError("NOT_FOUND");
+  const authority = await this.sorAuthority(context, actor, jobId, true);
+  if ("code" in authority) throw new SorSiteExtraError(authority.code);
+  const tenant = context.tenantId.toLowerCase();
+  return withTenant(this.pool, context, async db => {
+   const facts = await readOrderFacts(db, tenant, jobId, null);
+   if (!facts || !facts.sorVersionId) throw new SorSiteExtraError("SITE_PRICING_UNAVAILABLE");
+   return { sorVersionId: facts.sorVersionId, items: await recentItems(db, tenant, facts.sorVersionId, actor.membershipId) };
   });
  }
  /** The order check as a read: the same outcome the command then acts on, already-on-the-order included as a result. Writes nothing and records no refusal. */

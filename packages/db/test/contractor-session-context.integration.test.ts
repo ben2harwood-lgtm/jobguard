@@ -1,3 +1,4 @@
+import { testTenantContext } from "./tenant-context-test-utils.js";
 import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -45,9 +46,9 @@ describe("contractor session PostgreSQL boundary tests", () => {
   it("[D3] attributes a revoked member to the session tenant without granting query authority", async () => {
     const { session, member } = await practice();
     await database.admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [member.tenantId, member.membershipId]);
-    const context = await contractorSessionContext(database.runtime, session);
-    expect(context.tenantId).toBe(member.tenantId);
-    await expect(new ContractorRepository(database.runtime).query(member, { version: "contractor-query.v1", tenantId: member.tenantId, resource: "contracts" }))
+    expect((await database.admin.query("SELECT tenant_id FROM control_plane.contractor_practice_session WHERE session_digest=encode(sha256(convert_to($1,'UTF8')),'hex')", [session])).rows[0].tenant_id).toBe(member.tenantId);
+    await expect(contractorSessionContext(database.runtime, session)).rejects.toMatchObject({ code: "42501", message: "REQUEST_BINDING_REFUSED" });
+    await expect(new ContractorRepository(database.runtime).query({ ...member, context: testTenantContext(member.tenantId, { membershipId: member.membershipId, bindRequest: false }) }, { version: "contractor-query.v1", tenantId: member.tenantId, resource: "contracts" }))
       .rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 });

@@ -1,3 +1,4 @@
+import { testActorContext } from "./tenant-context-test-utils.js";
 import { assertLp4SealedEvents } from "./lp4-writer-catchup-fixture.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";
@@ -30,15 +31,15 @@ async function setup(net = 15000) {
 type Setup = Awaited<ReturnType<typeof setup>>;
 async function addExtra(t: Setup, net: number, kind: "site_user" | "office_entry" | "client_instruction" = "site_user", siteActor: Actor = t.w.w.members.operative) {
   const { w } = t, role = kind === "site_user" ? "operative" : kind === "office_entry" ? "finance" : "commercial_manager";
-  const extraId = (await new ExtraRepository(c.runtime).raiseExtra(w.ctx, direct(w.w, kind === "site_user" ? siteActor : w.w.members[role], {
+  const extraId = (await new ExtraRepository(c.runtime).raiseExtra(await testActorContext(c.admin, w.ctx, (kind === "site_user" ? siteActor : w.w.members[role]).member), direct(w.w, kind === "site_user" ? siteActor : w.w.members[role], {
     jobId: w.s.jobId, commandType: kind === "site_user" ? "LogSiteExtra" : kind === "office_entry" ? "RecordOfficeExtra" : "RecordClientInstruction",
     description: `Fictional separate work ${randomUUID()}`, note: "Made-up command fixture",
   }))).variationId;
   const repo = new ExtraApprovalRepository(c.runtime);
-  await repo.priceExtra(w.ctx, w.w.members.surveyor.member, { version: "price-extra.v1", commandId: randomUUID(), jobId: w.s.jobId, extraId, netPence: net });
-  const submitted = await repo.submitExtra(w.ctx, w.w.members.supervisor.member, { version: "submit-extra.v1", commandId: randomUUID(), jobId: w.s.jobId, extraId });
-  await repo.approveExtraStep(w.ctx, w.w.members.supervisor.member, approveInput({ jobId: w.s.jobId, requestId: submitted.requestId as string, hash: submitted.revisionHash as string, net }, 0));
-  if (net > 50000) await repo.approveExtraStep(w.ctx, w.w.supervisor2.member, approveInput({ jobId: w.s.jobId, requestId: submitted.requestId as string, hash: submitted.revisionHash as string, net }, 1));
+  await repo.priceExtra(await testActorContext(c.admin, w.ctx, w.w.members.surveyor.member), w.w.members.surveyor.member, { version: "price-extra.v1", commandId: randomUUID(), jobId: w.s.jobId, extraId, netPence: net });
+  const submitted = await repo.submitExtra(await testActorContext(c.admin, w.ctx, w.w.members.supervisor.member), w.w.members.supervisor.member, { version: "submit-extra.v1", commandId: randomUUID(), jobId: w.s.jobId, extraId });
+  await repo.approveExtraStep(await testActorContext(c.admin, w.ctx, w.w.members.supervisor.member), w.w.members.supervisor.member, approveInput({ jobId: w.s.jobId, requestId: submitted.requestId as string, hash: submitted.revisionHash as string, net }, 0));
+  if (net > 50000) await repo.approveExtraStep(await testActorContext(c.admin, w.ctx, w.w.supervisor2.member), w.w.supervisor2.member, approveInput({ jobId: w.s.jobId, requestId: submitted.requestId as string, hash: submitted.revisionHash as string, net }, 1));
   return extraId;
 }
 async function invoice(t: Setup, nets: Record<string, number>, orderNet = 0) {
@@ -184,17 +185,17 @@ for (const state of ["withdrawn", "rejected", "unexported", "unpaid"] as const) 
   const t = await setup(), approvals = new ExtraApprovalRepository(c.runtime);
   if (state === "withdrawn" || state === "rejected") {
     const extraId = await raiseOn(c, t.w.w, t.w.s.jobId);
-    await approvals.priceExtra(t.w.ctx, t.w.w.members.surveyor.member, {
+    await approvals.priceExtra(await testActorContext(c.admin, t.w.ctx, t.w.w.members.surveyor.member), t.w.w.members.surveyor.member, {
       version: "price-extra.v1", commandId: randomUUID(), jobId: t.w.s.jobId, extraId, netPence: 15000,
     });
-    const request = await approvals.submitExtra(t.w.ctx, t.w.w.members.supervisor.member, {
+    const request = await approvals.submitExtra(await testActorContext(c.admin, t.w.ctx, t.w.w.members.supervisor.member), t.w.w.members.supervisor.member, {
       version: "submit-extra.v1", commandId: randomUUID(), jobId: t.w.s.jobId, extraId,
     });
     const result = state === "withdrawn"
-      ? await approvals.withdrawExtra(t.w.ctx, t.w.w.members.supervisor.member, {
+      ? await approvals.withdrawExtra(await testActorContext(c.admin, t.w.ctx, t.w.w.members.supervisor.member), t.w.w.members.supervisor.member, {
         version: "withdraw-extra.v1", commandId: randomUUID(), jobId: t.w.s.jobId, extraId, reasonCode: "not_done",
       })
-      : await approvals.rejectExtra(t.w.ctx, t.w.w.members.supervisor.member, {
+      : await approvals.rejectExtra(await testActorContext(c.admin, t.w.ctx, t.w.w.members.supervisor.member), t.w.w.members.supervisor.member, {
         ...approveInput({ jobId: t.w.s.jobId, requestId: request.requestId as string, hash: request.revisionHash as string, net: 15000 }, 0),
         version: "reject-extra.v1", reasonCode: "price_not_agreed",
       });

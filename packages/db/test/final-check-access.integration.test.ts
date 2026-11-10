@@ -29,7 +29,7 @@ it("SV5-24 before lock zero/many signals yield identical controlled response",as
  expect(await repo.read(a.context,a.jobId,a.digest)).toEqual(before);expect(before).toEqual({state:'unlocked',items:[]});
 });
 it("SV5-22 own source integrity validator refuses an after-cutoff or same-tenant wrong-job source",async()=>{
- const a=await seedFinalCheckJob(f);await a.lock();const m=await new FinalCheckRepository(f.shadow).begin(a.context,a.jobId);
+ const a=await seedFinalCheckJob(f);await a.lock();const m=await new FinalCheckRepository(f.shadow).begin(a.workerContext,a.jobId);
  await expect(finalCheckTenant(f.admin,a.tenantId,db=>db.query("INSERT INTO app.final_check_processing_source(tenant_id,job_id,manifest_id,id,source_kind,source_ref,source_received_at,adapter_version,input_hash,processable,frozen_input) VALUES($1,$2,$3,$4,'pending_upload',$4,clock_timestamp()+interval '1 day','synthetic-observation.v1',$5,false,'{}')",[a.tenantId,a.jobId,m.id,randomUUID(),'a'.repeat(64)]))).rejects.toThrow('FINAL_CHECK_SOURCE_CHANGED');
 });
 it("SV5-24 before-lock disposition refuses before any hidden signal/proof lookup",async()=>{

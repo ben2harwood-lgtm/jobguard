@@ -1,7 +1,7 @@
 import "server-only";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { authenticatePracticeSession, PracticeAccessError, RequestBindingRefusedError, withTenant } from "@jobguard/db";
+import { authenticatePracticeSession, isBlankPracticeCompany, PracticeAccessError, RequestBindingRefusedError, withTenant } from "@jobguard/db";
 import { readSyntheticDemo } from "@jobguard/db";
 import { SYNTHETIC_SESSION as WORKSPACE_SYNTHETIC_SESSION } from "@jobguard/api/workspace";
 import { Pool } from "pg";
@@ -18,7 +18,7 @@ export function syntheticPool() {
   if (!connectionString) throw Object.assign(new Error("Database configuration is unavailable"), { code: "DATABASE_UNAVAILABLE" });
   // Workers cannot share sockets across requests. maxUses closes on release,
   // including transaction clients; there are no idle sockets/timers to retain.
-  if (process.env.JOBGUARD_HOSTING === "cloudflare") return new Pool({ connectionString, max: 1, maxUses: 1, application_name: "jobguard-cloudflare-synthetic-demo" });
+  if (process.env.JOBGUARD_HOSTING === "cloudflare") return new Pool({ connectionString, max: 3, maxUses: 1, connectionTimeoutMillis: 10_000, application_name: "jobguard-cloudflare-synthetic-demo" });
   poolRegistry.__jobguardSyntheticPool ??= new Pool({ connectionString, max: 12, application_name: "jobguard-vercel-synthetic-demo" });
   return poolRegistry.__jobguardSyntheticPool;
 }
@@ -34,9 +34,11 @@ export async function syntheticWorkspace() {
   if (process.env.JOBGUARD_ENV !== "synthetic_demo") throw Object.assign(new Error("Synthetic session is unavailable"), {code:"UNAUTHENTICATED"});
   const token=(await cookies()).get("jg_session")?.value;
   const auth=await authenticatePracticeSession(syntheticPool(),token);
-  const seeded = await readSyntheticDemo(syntheticPool());
+  const blankCompany = await isBlankPracticeCompany(syntheticPool(), auth.digest);
+  const seeded = blankCompany ? { tenant: { id: auth.context.tenantId }, tenants: [{ id: auth.context.tenantId, name: "Builder's practice firm" }] } : await readSyntheticDemo(syntheticPool());
   const jobs=await withTenant(syntheticPool(),auth.context,async db=>(await db.$client.query<{id:string;title:string;status:string;revision:number;customerLabel?:string;siteLabel?:string}>("SELECT id,title,status,revision FROM app.job WHERE tenant_id=$1 AND practice_session_digest=$2 AND practice_scenario='home' ORDER BY created_at,id",[auth.context.tenantId,auth.digest])).rows);
   return {
+    blankCompany,
     tenants: seeded.tenants,
     jobs: jobs.map((job): JobSummary => ({
       id: job.id, tenantId: seeded.tenant.id, title: job.title,

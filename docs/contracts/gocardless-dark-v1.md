@@ -68,3 +68,1019 @@ The pnpm wrapper stalled before executing checks and was stopped; installed
 binaries were used without downloading packages. Database/browser/full CI and the
 independent RED review remain for the router/CI. Conflict markers are resolved in
 files; the read-only git index still needs the router to stage the resolution.
+
+
+M4-12 reservation persistence (0478): `PostgresReservationStore` implements the
+shared seam with one tenant row lock, including concurrent first use. It is an
+explicit server composition dependency, with no default registration. Its caller
+supplies the whole verified tenant context; the executor separately checks
+the current session/membership. Its source factory captures that caller context
+and must read and lock current invoice/statement/terms/credit revisions through
+the supplied transaction. A fake
+source factory in the PostgreSQL tests is not a production source implementation.
+Both rails must receive the same database-backed store. Provider calls remain
+outside its transaction. Book state, event fingerprints and appended chain audit
+commit together. Existing command bindings/events/audit cannot be rewritten by
+this adapter; unknown outcomes remain reserved across restarts. The book is
+internal reservation state, not a journal, invoice, receipt or settlement posting.
+Only the reservation book is durable here: the fake provider and mandate still
+use memory. Forward fix: stop new executor initiation and preserve the table and
+audit while repairing; never roll back by dropping or clearing unknown attempts.
+Database CI and the independent RED review must verify migration, row locking,
+RLS and durability before merge. No live capability is enabled by this addition.
+
+
+M4-12 reserve cleanup (RED, built ahead on reserve-pg): additive migration
+`0604_fee_reservation_archive.sql` follows the shared reservation book migration
+`0603_fee_reservation_book.sql`; both numbers are claimed for this catch-up. No earlier migration is
+edited. Compaction is lazy on the next successful store transaction, under the
+same tenant book lock. Released attempts, all event fingerprints and all book
+audit entries move to INSERT-only tenant-qualified archive records before the
+active book is rewritten. Released lifecycle snapshots are versioned append-only, including later failure
+status changes. The history remains readable to the adapter; it is not deleted. Unknown, pending, settled and reconciliation attempts stay active.
+Replays cannot create another release, reservation or chained audit entry.
+A late settlement of an archived release restores an active reconciliation hold,
+blocking an already reserved replacement. Refund replacements retain the original
+settled-principal cap. No new replacement command or provider behavior is needed:
+the executor already releases definite failures exactly once.
+
+This keeps released-retry/event/audit history out of the repeatedly rewritten JSON
+row. The existing whole-book callback interface still hydrates archived history
+inside the transaction for replay, balance and late-event checks; memory and read
+cost remain proportional to tenant history. Selective history reads would require
+a separate interface change. The archive is internal state, with runtime SELECT
+and INSERT only, FORCE RLS and no runtime UPDATE, DELETE or TRUNCATE. Existing
+LP-0, tenancy, entitlement and SERIOUS-B5 expectations include exactly the added
+table, primary key, grants and policy. No routine is recreated.
+
+Forward fix: stop executor initiation, preserve both tables and chain audit, and
+repair forward. Do not run the predecessor adapter on compacted books: it cannot
+read archived command/event identities. Rolling back requires a reviewed forward
+rehydration retaining active overrides, not dropping or clearing archive rows.
+PostgreSQL concurrency, populated upgrade, rollback, RLS and catalogue tests are
+added for CI; this sandbox cannot execute them. Independent RED review and green
+CI against current main remain required. Fake sources/adapters only; no live rail,
+real money, production source reader or release is enabled.
+
+
+M4-12 reserve cleanup landing preparation, 4 November 2026 (NOPR, RED):
+resolved the contractor-entitlement upgrade merge as the union of both lists;
+registered the two reservation tables in later-empty-tables. The dark store now
+captures the caller-supplied verified context and transaction source factory,
+rather than retaining context-bearing callbacks as class properties. All local
+callers are synthetic fixtures; no application route composes this store. Tenant
+matching, withTenant verification, source locking, reservation and replay behavior
+remain covered without weakening the context guard. No migration was changed or
+added in this preparation; 0607/0608 and their proof fragments remain intact.
+
+Local deterministic evidence: installed Vitest 4.1.12 with --maxWorkers=2 passed
+context-boundary, postgres-reservation-store and executor (221 tests),
+watchdog-registry and identity (133 tests), and migration-proof-loader (76 tests).
+Initial runs used stale dependency output and failed; rebuilding the five library
+packages with installed tsc resolved the import/schema failures. The context
+boundary failure was repaired in the store, without guard exemptions. PL/pgSQL
+CASE lint passed all 233 migrations, and git diff --check passed.
+
+The pnpm typecheck and pnpm test wrappers stalled after their package-settings
+warning; installed binaries were used instead. Direct tsc compilation/typechecking
+passed for core, config, storage, db, ai, api and web. The normal lane tool was run and
+refused incoming main files still staged against the pre-merge HEAD. A separate
+read-only comparison against origin/main verifies the lane allow equals exactly
+all eleven changed non-lane files and only this piece's lane differs. The router
+must stage the resolved file, finish the merge and rerun the normal lane check.
+No Git writes, fetch, database, browser, live provider or paid call were made.
+CI must prove PostgreSQL concurrency, RLS/grants, atomic rollback, populated
+upgrades and preservation proofs, plus the full required suites. Independent RED
+review at the final head remains required before landing.
+## M4-15 durable synthetic facts seam (0758)
+
+`DirectDebitFixtureRepository` is separate from the in-memory fake rail, which
+remains unwired and behaves as before. It records only already verified fake
+mandate and collection-payment events. Callers must supply a genuine withTenant
+context and independent server bindings (synthetic environment, fake account,
+mandate, and accepted payment command/object/amount). Payload tenant or account
+claims never select context. No signature or raw webhook is accepted as proof by
+this repository; signature verification remains the rail's responsibility.
+
+Initial mandate state must be `created`. Each later write compares the supplied
+previous history head under a database lock. Exact event replays are idempotent
+across process/pool restarts, changed content conflicts, and swapped known
+references return the same not-found as foreign tenants. Calls use separate
+transactions so one invalid batch member leaves no fact and does not stop others.
+Reads return the full stored history and derive mandate/payment states with the
+shared core lifecycle rules. Terminal mandates block new submission permanently;
+this is a read answer, not execution authority. Payment payout appears only after
+a stored `paid_out` event; failures, chargebacks and late failures stay distinct.
+Facts and hashes are append-only under FORCE RLS; runtime has no direct table
+access. No collection, reservation, settlement, release or financial posting occurs.
+
+The initial review simplification (LATER / SIMPLICITY):
+`apps/api/src/fee-collection/executor.ts:195` duplicates the payment progress
+ordering now exported by `packages/core/src/direct-debit-lifecycle.ts`. A future
+executor change can import that ordering to reduce maintenance drift; executor
+and reservation behaviour are outside this slice.
+
+This adds persistence only and does not complete M4-15. Real rail, application
+wiring, notices, mandate replacement and retries await their own approvals and
+D04/D05. PostgreSQL migration/upgrade/tenancy, restart/concurrency and immutable
+fact tests require CI; green local unit checks are not database evidence or an
+independent RED review.
+
+## Optional signed-event recorder (M4-15 remains open)
+
+The fake rail now accepts an optional `FakeDirectDebitRecorder` constructor port.
+Its explicit async `recordWebhookBatch` method authenticates the bounded exact
+body/timestamp before parsing, validates each member separately, then records
+schema-valid mandate/collection events independently. Invalid members leave no
+fact and do not prevent later valid members from being processed. A missing port
+refuses recording. Existing synchronous verification, mandate setup/ingestion and
+executor consumers retain their original behaviour; none are wired to this seam.
+
+`DirectDebitFixtureRecorder` closes over caller-verified context and copies trusted
+mandate/request bindings at construction. It never resolves a tenant or request
+binding from payload fields. Tenant, account, mandate, command, object and amount
+must match those bindings; refunds are refused. Each call reads the durable head
+and uses the repository's existing compare-and-append transaction. Exact replays
+return event IDs from stored history, including after a fresh rail/pool. Changed
+content or competing new events preserve the store conflict; no automatic retry
+is introduced. Stored lifecycle projections remain the repository's authority:
+submission/confirmation is not payout, delayed progress cannot revive terminal
+states, and only a stored `paid_out` event can project payout.
+
+This adds no migration, role, grant, route, application registration or financial
+write. The new real-PostgreSQL test sends signed bodies through fresh rails and
+pools, checks concurrent duplicate delivery, forgery/routing/batch rejection and
+lifecycle ordering, and snapshots all tenant-owned app rows outside the fixture
+facts to check that financial rows do not change. It is written for CI, not run
+in this database-free sandbox. Local unit checks cannot establish those database
+guarantees. Real rail, wiring, cross-rail reservations, refunds, notice/settings,
+mandate replacement/retries and production gates remain held. M4-15 is not finished.
+
+## MON-4B: receipt success fees (synthetic, real MON-4A reader)
+
+Plan: MON-4 / §10.3.4, M4-15 and §12.4. RED money. Repair 1 addresses
+independent review of 4a11b726: the original slice only registered a fake source
+in tests. `createSuccessFeeDirectDebitExecutor` now registers
+`PaymentFeeCollectionRepository` over the actual MON-4A 0359 tables and routines.
+The existing stand-in remains a unit-test double only. No migration is needed;
+there are no new grants, schema objects, source writers or provider routes.
+
+The caller supplies an explicit owner pool, the stamped PracticeAccess context
+and session digest unchanged, the shared reservation store, sessions and fake
+rails. The repository uses `withTenant` plus `practiceMaterialPool` and refuses
+outside synthetic_demo. Each source read calls `app.payment_fee_actor`, which
+reauthenticates current ownership/membership and the synthetic database and takes
+MON-4A's existing case/allocation/session locks. Every statement lookup has tenant,
+job and statement predicates. The reader invokes `app.payment_fee_current` to
+recompute settlement/qualification, prior-statement source freshness and disputes.
+It reads the immutable document from `app.payment_fee_statement` and the exact
+`app.action_authorization` via `app.payment_fee_command`, binding its approved
+Decision resolution, current actor, recipient, hash/revision, policy, amount and
+currency. The authorization row is locked against revocation until the reservation
+callback finishes. No historical replay or read-view status is used as a token.
+
+MON-4A has no platform invoice. For this synthetic statement-collection path,
+`CollectionIntent.invoiceId` is the **fee statement ID**, the existing reservation
+interface's balance key. It is never the customer's invoice ID. `statementHash`
+and amount bind the immutable statement; feePence is consumed unchanged, without
+new rounding, allocation, fee formula or VAT calculation. Credits/prior fee
+receipts outside the shared reservation book do not exist on this MON-4A slice;
+reversals invalidate current source authority, and book settlements/refunds retain
+the existing reservation/reconciliation behavior. No customer payment is mutated.
+
+The composition encloses each reservation-store callback in the tenant SQL read
+transaction. Source locks remain held through its local reservation/dispatch
+transition; both complete before provider I/O. The store remains shared across
+card and DD and retains command/balance uniqueness. Production storage is still
+unregistered; this work does not claim restart durability for an in-memory store
+or fake provider. Real database source verification and fake provider settlement
+are distinct evidence.
+
+0359 states map to bounded `SuccessFeeCollectionError.reason` values:
+`disputed` → `AUTHORITY_DISPUTED`, `approval_revoked` → `AUTHORITY_REVOKED`,
+`approval_expired` → `AUTHORITY_EXPIRED`, and changed/missing/unapproved authority
+→ `AUTHORITY_STALE`. A pre-dispatch pause preserves the reservation and makes no
+provider call. The original scoped fake-source reasons and local mandate checks
+remain. Accepted or unknown requests are reconciled rather than resubmitted.
+Payout reversal blocks replacement attempts on both rails.
+
+Standing authority is unchanged and fake-only: MON-4A still returns
+standingAuthority null. The real reader emits only exact statement authority.
+There is no standing grant/renewal writer, production consent, SDK, live endpoint,
+worker or HTTP route. Production remains refused (`productionEnabled:false` on
+the fake), subject to all separate commercial/security approvals and G4-S.
+The shadow-30000 demo definitions are untouched: £41,280 received, £800 qualifying,
+£80 fee and £720 before tax; VAT remains uncalculated in simulation.
+
+Repair 1 checks (30 October 2026):
+- Existing three collection Vitest files: 128 passed, maxWorkers=2.
+- payment-fee-collection-repository.test.ts: 9 passed, maxWorkers=2.
+- success-fee-composition.test.ts: 3 passed, maxWorkers=2; verifies real-reader
+  registration overrides a test stand-in and preserves specific pause reasons.
+- DB/API TypeScript, integration-test type checking, diff whitespace, money
+  arithmetic and commercial-boundary checks passed. The exact slice lane check
+  since issued base b1c91ec6 passed for 14 paths (13 non-lane paths), excluding
+  inherited predecessor changes against main.
+- PostgreSQL integration suite is authored in packages/db/test and discovered by
+  the installed repository Vitest runner. It creates actual MON-4A statements and
+  approvals using the real allocator, attribution and payment-fee writers, then
+  drives the concrete composition and fake DD rail. Cases cover once-only
+  collection/replay, disputed/revoked/expired dispatch, cross-tenant refusal,
+  runtime read denial and unchanged customer payments. Only the reservation book
+  and payment rail are test doubles. The expiry negative control follows MON-4A's
+  existing rollback-only protected-row expiry technique; positive fixtures keep
+  all integrity controls enabled.
+
+No PostgreSQL or browser suite was executed in this sandbox. This built-ahead
+base does not yet contain MON-4A migration 0359; coordinator/CI must run the suite
+with its main dependencies integrated. Test discovery initially needed the
+existing storage build output; it was built without downloading packages.
+Full CI/lane comparison and one independent Claude RED review remain required.
+The earlier main-comparison lane failure includes inherited M4-12/M4-13/M4-15
+changes; this lane is not broadened to absorb those predecessor changes. All new
+paths are explicitly listed in config/lanes/mon-4b.json. No acceptance or live
+MON-4B completion is inferred from source inspection, local unit tests or discovery.
+
+Catch-up verification (31 October 2026): merged current main in the worktree and
+resolved only the core/DB export conflicts by retaining both sides' exports.
+Shared LP inventories, tenancy/serious-b5 expectations, watchdog registry and
+customer-signin tests match main; no unions were necessary. No routines, routes,
+migrations or collection behaviour changed. Targeted installed Vitest runs passed
+140 tests: executor, success-fee-direct-debit and success-fee-composition (94),
+fake-gocardless (37), and payment-fee-collection-repository (9), each with at most
+two workers and three named files. Installed TypeScript builds passed for core,
+storage, config and DB; API TypeScript --noEmit passed. Money arithmetic,
+commercial boundary and whitespace checks passed. PostgreSQL/browser suites remain for GitHub CI; this
+sandbox cannot start PostgreSQL or bind localhost. The router must stage the two
+resolved export files because the Git index is read-only here. Existing RED
+review evidence predates this merged head; exact-head review and green CI remain
+required before merge. No live capability or approval is inferred.
+
+Catch-up verification (2 November 2026): MON-4B, no migration. Resolved the two
+core/DB barrel conflicts as the exact union of both sides, retaining each export
+once. Updated the existing MON-4B lane. No collection behavior, routines, tests,
+expectations, migration SQL, LP inventories or protected journey files changed.
+The LP catalogs, tenancy/serious-b5 expectation files, privilege snapshot and
+legacy migration inventory match origin/main byte-for-byte. All migration SQL
+matches origin/main; there are no branch-added migrations or proofs to renumber.
+
+Installed Vitest 4.1.12 checks, each with --maxWorkers=2 and at most three named files:
+- API executor.test.ts, success-fee-direct-debit.test.ts and
+  success-fee-composition.test.ts: 94 passed.
+- API fake-gocardless.test.ts: 37 passed.
+- DB src/payment-fee-collection-repository.test.ts: 9 passed.
+Installed TypeScript --noEmit with each package's tsconfig.json passed for API,
+DB and core. Both staged and working-tree whitespace checks passed. The pnpm
+wrapper stalled before executing checks and was stopped; installed binaries were
+used without downloading packages. An initial root-tsconfig invocation was
+incorrect: it includes unrelated package sources without their package settings
+and reported decorator/JSX/test typing errors. The corrected package invocations
+above passed; that root invocation is not evidence of a repository check failure.
+
+READY for router staging/commit on the same branch, NOPR=1. The read-only Git index
+still lists the two resolved export files as unmerged; the router must stage them.
+PostgreSQL, browser and full required CI checks were not run here and remain due
+when the freeze permits CI. One independent RED review of the exact final head
+remains required before merge. Shared fee-collection paths with M4-12 and M4-15
+must serialize integration. All production gates remain closed.
+
+Catch-up verification (3 November 2026): MON-4B, NOPR, no migration. Resolved
+only the DB barrel conflict by preserving the collection repository export and
+main's offline-upload export. The remaining diff against the merged main contains
+only MON-4B's existing slice and its lane; removed the stale core barrel entry
+from that lane. No tests, expectations, SQL routines or collection behavior changed.
+All migration SQL and predecessor lane files match the merged main.
+
+Installed Vitest 4.1.12, --maxWorkers=2, at most three named files per invocation:
+- executor, success-fee-direct-debit, success-fee-composition: 94 passed.
+- fake-gocardless and m4-23-sb-rails: 40 passed.
+- payment-fee-collection-repository: 9 passed.
+Installed package TypeScript --noEmit passed for API, DB and core. Money arithmetic,
+commercial boundary and diff whitespace checks passed. The pnpm wrapper stalled
+before invoking checks and was interrupted; installed binaries were used without
+package downloads. PostgreSQL, browser and full CI suites remain unproved here.
+Exact-head independent RED review and green CI remain required before merge.
+READY for router staging and commit; the read-only index still records the DB
+barrel as unmerged even though its working-tree conflict markers are resolved.
+
+Catch-up verification (3 November 2026): MON-4B, RED, NOPR. Incoming main is
+111865cf65f5e68a28ce1891bd52aad0ac7a0f10 (MERGE_HEAD/origin/main; the local main
+ref is older). Core exports now match incoming main exactly; DB exports retain
+main's offline-intent review and MON-4B's collection repository. Removed the
+inherited MON-4B lane in favour of the exact mon-4b-collect-recheck lane.
+
+Renamed only the branch migration/proof stem from
+0601_payment_fee_collect_recheck to 0678_payment_fee_collect_recheck, and updated
+the upgrade test to main's 0527_payment_fee_collect_review predecessor. No main
+migration was edited; no new table or second migration is needed. Source comparison
+verified that the recreated writer equals main's latest 0527 body except for
+replacing its inline review loop with the shared current-review helper. Existing
+payment_fee_actor authentication/locking, command identity, fee calculation and
+append_final_check_audit are preserved. The latter's latest 0520 implementation
+calls app.lp4_seal_audit with checked_operation; this branch does not replace or
+bypass it. No entitlement, command-authority or audit helper is recreated.
+Main's standing-authority support remains intact; MON-4B's existing reader still
+requires an exact statement authorization and enables no production collection.
+
+Installed Vitest 4.1.12 runs, each with --maxWorkers=2 and no more than three
+named files: DB src/payment-fee-collection-repository.test.ts plus
+test/migration-proof-loader.test.ts passed 89 tests; API executor.test.ts,
+success-fee-direct-debit.test.ts and success-fee-composition.test.ts passed 94;
+API fake-gocardless.test.ts passed 37. Total: 220 tests. Core, DB and API package
+TypeScript checks passed using installed tsc; core, DB and config build output
+was generated locally for package imports. The first API test attempt found
+missing config build output and ran no tests; after the config build all passed.
+The pnpm version probe stalled and was stopped; no packages were downloaded.
+Money arithmetic and commercial-boundary checks passed. No expectations were
+weakened; integration-test edits only update migration references and its label.
+
+READY for router staging and commit, NOPR. Conflict markers are resolved in the
+working files; the read-only index still requires router staging. PostgreSQL and
+browser suites, full CI and independent RED review of the exact resulting head
+remain required before merge. No live services, real data or production approvals
+were used. Shared collection files still serialize integration with other pieces.
+Working-tree lane validation against incoming main passed for all 15 non-lane
+paths, with only this piece's lane added, no conflict markers, valid migration
+ordering and clean diff whitespace. This is a deterministic working-tree check;
+the standard committed-head lane gate remains for CI after router staging.
+
+
+Batch-13 union verification (3 November 2026), MON-4B collect recheck, RED, NOPR:
+The two preceding catch-up receipts are historical. This batch uses the available
+origin/main bc8993090 (local main is stale); no fetch was run. Kept both sides'
+contract notes and all HEAD DB exports, including resumable evidence, offline
+review and the collection repository. No new collection behavior was introduced.
+The branch-only migration and proof are now 0678_payment_fee_collect_recheck;
+all main migration bytes are unchanged. The writer matches main's latest 0527
+body after substituting the shared review helper for its inline loop. Existing
+entitlements, command authority and LP4-sealed audit remain in place. No new
+tables need later-empty-tables registration. Removed the incoming piece lane;
+batch-13's lane covers exactly all 49 non-lane paths differing from origin/main,
+including pre-existing batch work retained by this union.
+
+Local verification used installed Vitest 4.1.12, --maxWorkers=2, sequential runs
+of at most three named files: DB payment-fee-collection-repository and
+migration-proof-loader (89 passed); API executor, success-fee-direct-debit and
+success-fee-composition (94 passed); API fake-gocardless and m4-23-sb-rails
+(40 passed). Total: 223 tests. Money arithmetic, commercial-boundary and
+working-tree lane/proof/main-SQL checks passed. No test was weakened.
+The initial API typecheck read an incomplete DB barrel during conflict
+resolution; the complete barrel was restored before the final typechecks.
+
+Final installed package checks: packages/core, packages/db and apps/api each
+passed `./node_modules/.bin/tsc -p tsconfig.json --noEmit` in its own directory.
+DB was checked again after restoring the complete barrel; the final API run
+passed. `node tools/money-arithmetic-lint.mjs`,
+`node tools/commercial-boundary-lint.mjs` and `git diff --check` passed.
+
+READY for router staging and merge completion, RED, NOPR. The read-only index
+still records unmerged entries; resolved working files are the handoff. CI must
+prove real PostgreSQL fresh/upgrade/proof/catalog/privilege behavior, including
+success-fee-direct-debit.integration.test.ts's stale/revoked/expired and row-lock
+wait cases, plus mandatory full checks and applicable browser journeys. An
+independent RED review must pass at the exact resulting head before merge.
+No database/browser suite was run locally, and no live service or real data was
+used. Forward fix or revert the new migration only before deployment; do not
+edit previously applied main migrations.
+
+
+Batch-13 PR landing union (4 November 2026), MON-4B collect recheck, RED:
+This receipt supersedes the historical NOPR/numbering handoffs above. Incoming
+main is 84c57224bb39f51f7ec6f93405d8b0798ad9426d (top migration 0586).
+Resolved the DB barrel and plan-entitlement-lifecycle upgrade conflicts by
+retaining both sides' exports and exact named routine exceptions. The existing
+hardened collection work is preserved. The sole branch migration and proof are
+renamed by stem from 0678 to 0587_payment_fee_collect_recheck. Main has no copy
+of this helper/recheck; no migration was dropped or split. Main's migration
+bytes are unchanged. Compared with the latest 0527 writer, 0587 only replaces
+the inline review loop with the existing hardened shared helper and removes
+its unused local variables. No new product behavior was added in this union.
+
+Static recheck: no new tables, table-column shape changes, command kinds or
+routes; no new CI images or web files relative to incoming main. No SET app.*
+function clause or command_lifecycle_claim access in 0587. The existing actor,
+command-authority and LP4-sealed audit paths are retained. Branch tests contain
+no raw practice-session revocation or direct outbound-pause clearing. Incoming
+restore-reconciliation-upgrade retains laterEmptyTables. Existing web routes
+were source-checked for direct apps/api source imports; none were found. No
+Cloudflare build was attempted in this constrained environment.
+
+Local checks used the installed package binaries, sequential Vitest invocations
+with --maxWorkers=2 and at most three named files per invocation:
+- API auth/context-boundary + auth/identity: 152 passed.
+- DB migration-proof-loader + payment-fee-collection-repository: 89 passed.
+- API watchdog-registry + success-fee-direct-debit + success-fee-composition:
+  156 passed.
+- API fee-collection/executor + fake-gocardless + ai-capture-authority: 111 passed.
+- DB subscription-stripe-sandbox-adapter + subscription-webhook-verifier:
+  40 passed.
+- AI gateway + later-gateway + claude-provider: 79 passed.
+- Core shadow-pilot-report: 16 passed.
+Total: 643 Vitest tests; node --test tools/ai-provider-boundary.test.mjs also
+passed all 5 tests. Money-arithmetic, commercial-boundary and AI-provider
+boundary linters passed. Installed tsc passed for core, config, DB, API and AI
+(core/config/DB emitted package build output for imports; API/AI used --noEmit).
+Root pnpm typecheck and pnpm test invocations stalled before useful output and
+were interrupted. The initial watchdog run failed on stale core dist output;
+it passed after rebuilding core/config/DB. No expectations were weakened.
+
+The standard lane command was run and refuses the unfinished read-only index,
+which still contains incoming-main changes and the old migration stem. A
+working-tree comparison against MERGE_HEAD, including untracked renamed files,
+passes the existing lane matcher: exactly 50 non-lane paths, no self-listed
+lane file, unchanged main migration bytes, valid consecutive 0587 ordering and
+no conflict markers. git diff --check passed. These are deterministic local
+checks, not independent review or PostgreSQL/browser evidence.
+
+READY for router staging, merge completion, commit, push and PR opening. CI
+must prove the full mandatory checks, fresh/upgrade/replay PostgreSQL migrations,
+proof/catalog/privilege/RLS guarantees, plan-entitlement-lifecycle and restore
+upgrade snapshots, and success-fee-direct-debit integration tests (including
+stale/revoked/expired review and real authorization row-lock waits), plus
+applicable browser journeys. No local DB/browser suite ran. Independent RED
+review must PASS at the exact resulting head and required CI must be green
+before merge. Synthetic data and fake payment rails only; production gates
+and required external approvals remain unchanged.
+
+
+Batch-20 landing attempt (5 November 2026), M4-15 debit store / ENT-8a prompt sources, RED:
+Incoming main: 108373dc9e9ff496931419193cf983cb27f2d873 (top migration 0594;
+0595 reserved for #560). Resolved working-file conflicts in both barrels, both
+contracts and laterEmptyTables by retaining both sides. Kept the batch-20
+hardened observation route pending the incompatibility below. Removed its
+duplicate watchdog registry key. Renamed only the full migration filename stem
+from 0855_direct_debit_fixture_facts to 0596_direct_debit_fixture_facts across
+SQL/proof/note paths and references. No main migration has the same store, and
+all main SQL bytes are unchanged. Added only the requested 240-second beforeAll
+timeout in recovery-eligibility-v3.integration.test.ts. Materials form buttons
+now use explicit AA-contrast foreground/background colours, including busy state.
+
+NOT READY / do not commit: exact-union route conflict. Main routes observations
+through possibleExtrasResponse / EnterpriseLivePromptApplication, returning 403
+EXTRA_FORBIDDEN and passing the repository answer through. This batch routes
+through promptSourcesResponse, projecting only observationId plus validated
+evaluation and hiding EXTRA_FORBIDDEN as 404 NOT_FOUND. The incoming route test
+expects 403 and mocks only {observationId}; the retained hardened route requires
+evaluation, so that successful-response assertion receives 503. These contracts
+cannot both hold for the same route without choosing behaviour or changing a
+test expectation. Keep the hardened route and obtain a scoped reconciliation
+order; do not weaken either test or silently remove the hardening.
+
+Local checks (installed binaries, Vitest --maxWorkers=2, <=3 named files/run):
+- Core direct-debit-lifecycle: 2 passed.
+- DB direct-debit-fixture-repository + migration-proof-loader: 84 passed.
+- API direct-debit-fixture-recorder + fake-gocardless-recorder + fake-gocardless:
+  48 passed.
+- API auth/context-boundary + auth/identity + watchdog-registry: 278 passed.
+- Web prompt-sources-server + materials-issues + possible-extras/route: final
+  run 29 passed, 1 failed (route conflict above). Initial run lacked API dist;
+  built the installed API package and reran. No package downloads.
+- Installed tsc passed core, config, DB and API emitting build output; API and
+  web --noEmit checks passed. Core initially found the duplicate registry key;
+  it passed after deduplication.
+- Money arithmetic, commercial boundary, commercial integrity boundary and
+  current-source guards passed; both integrity guards had 0 diagnostics with
+  their existing 9 unresolved baselines. No fingerprint was changed.
+- Standard lane lint ran and failed because the read-only unfinished index still
+  contains incoming-main paths and the old 0855 stem. A working-file comparison
+  with MERGE_HEAD using the existing lane matcher/order functions passed: 30
+  non-lane paths, no self-listing, sole new SQL 0596, main SQL unchanged.
+- git diff --check passed. No provider-register data-flow source changed, no
+  new CI image, and no new runtime writes to protected command tables. New
+  private tables are in laterEmptyTables; restore-reconciliation-upgrade uses it.
+  No command_lifecycle_claim access, SET app.* function clause, direct session
+  revocation or outbound-pause clearing was added. New server transport is
+  server-only; changed web routes do not directly import API source. Cloudflare
+  build was not run in this restricted environment; source inspection was used.
+
+LATER / SIMPLICITY: apps/web/app/lib/prompt-sources-server.ts duplicates the
+existing live-prompt application transport. After explicitly reconciling denial
+status and response projection contracts, one shared transport would reduce
+authorization/error handling drift. This observation does not block by itself.
+
+No PostgreSQL or browser suites were run here. CI still must prove migration
+fresh/upgrade/catalogue/privilege/RLS and immutable replay guarantees; the two
+Direct Debit integrations, source route integration, recovery eligibility hook,
+restore snapshots and phone/desktop ENT-8a browser journey; full mandatory
+checks and exact-head independent RED review remain required before merge.
+No git write, push, PR, real data, live provider or release action was performed.
+
+### Batch-20 reconciliation follow-up — 5 November 2026
+
+READY for router commit/push/PR; supersedes the NOT READY observation-route
+conflict above. Applied the router's ruling: observations retain main's public
+403 EXTRA_FORBIDDEN while keeping the strict validated evaluation projection.
+Materials/evaluate refusal behavior is unchanged. The shared transport test now
+checks the observation-specific 403; no existing expectation in
+possible-extras/route.test.ts changed. Its success mock has the full projection,
+and a new regression proves an incomplete projection yields 503
+PROMPT_UNAVAILABLE with Cache-Control: no-store (no response cache storage).
+This output validation does not establish database rollback after a repository
+call. The recovery eligibility hook already has the requested 240_000 timeout;
+its diff from incoming main contains only that timeout.
+
+Current local verification, using installed binaries (no downloads):
+- From apps/web: ./node_modules/.bin/vitest run --maxWorkers=2
+  'app/api/contractor/jobs/[id]/possible-extras/route.test.ts'
+  app/lib/prompt-sources-server.test.ts
+  'app/contractor/jobs/[id]/materials-issues/materials-issues.test.tsx'
+  passed: 3 files, 31 tests.
+- From apps/web: ./node_modules/.bin/tsc -p tsconfig.json --noEmit passed.
+- git diff --check passed.
+- node tools/agent-lane-boundary-lint.mjs --lane=batch-20 failed on the
+  unfinished read-only index (incoming-main paths and old 0855 entries).
+  Working-file verification against MERGE_HEAD using lanePathAllowed and
+  migrationOrderViolations passed: exact 31 non-lane paths, no lane self-entry,
+  unchanged incoming-main SQL, sole new SQL 0596. Router must stage the resolved
+  working files/renames and rerun standard lane lint after completing the merge.
+- pnpm wrappers made no progress and were interrupted; checks above ran through
+  the installed Vitest/TypeScript executables instead.
+
+No DB/browser suites were attempted: this sandbox cannot start PostgreSQL or
+bind localhost. CI must prove the full mandatory checks, fresh/upgrade migration
+and catalog/grant/RLS guarantees, Direct Debit repository/recorder integrations,
+source-route integration, recovery eligibility, restore reconciliation, and
+phone/desktop ENT-8a journeys. Exact-head independent RED review remains a
+merge gate. This handoff is readiness for a PR, not evidence of those gates.
+No git write, commit, push, PR creation, live provider or release was performed.
+
+
+### Batch-20 PR #562 independent-check repair — 5 November 2026 (RED)
+
+Applied on clean head `40dca9548` (the merge from main following `b0b50fe6`).
+This repair changes test expectations and documentation only: the foreign
+observation expects 403 / EXTRA_FORBIDDEN per the router ruling; return/correction
+facts expect PostgreSQL's six-decimal quantity text; the route integration test
+loads @jobguard/db from source using the managed-recovery test's mock pattern.
+The 0596 note heading and proof description now identify the actual synthetic
+append-only facts routine. Product code and migration 0596 SQL are unchanged.
+
+Local checks using installed binaries, with at most two Vitest workers:
+- From apps/web: `./node_modules/.bin/vitest run --maxWorkers=2
+  'app/api/contractor/jobs/[id]/possible-extras/route.test.ts'
+  app/lib/prompt-sources-server.test.ts
+  'app/contractor/jobs/[id]/materials-issues/materials-issues.test.tsx'`
+  passed: 3 files, 31 tests.
+- From apps/web: `./node_modules/.bin/vitest list --maxWorkers=2
+  'app/api/contractor/jobs/[id]/possible-extras/materials/route.integration.test.ts'`
+  collected all 8 cases successfully. Collection is not database execution.
+- From apps/web: `./node_modules/.bin/tsc -p tsconfig.json --noEmit` passed.
+- `node tools/agent-lane-boundary-lint.mjs --lane=batch-20` and
+  `git diff --check` passed. Working-file comparison with origin/main also
+  confirms exactly 31 non-lane paths in the lane allow list, with no self-entry.
+
+READY for router commit/push and CI; not a merge or release approval.
+No database or browser suite ran here: the sandbox cannot start PostgreSQL or
+bind localhost. CI must execute the repaired source-route integration assertions,
+fresh/upgrade migration and catalogue/grant/FORCE RLS checks, Direct Debit
+repository and recorder integrations, recovery eligibility, restore checks and
+phone/desktop ENT-8a journeys, plus all mandatory typecheck/lint/test/build gates.
+The independent RED check must pass against the resulting exact head before
+merge. No live provider, real customer data, git write or release was used.
+
+## Batch-25 landing preparation, 5 November 2026 (RED)
+
+Resolved the workspace exports, this contract and later-empty-table registry as
+an exact union with incoming main. The four batch migrations have reserved
+landing numbers 0602–0605; SQL bodies are unchanged. Main has no duplicate of
+these migrations. Earlier migration numbers in historical receipts above are
+historical, including reservation 0607/0608. The batch-25 lane covers exactly the
+35 changed files versus origin/main, excluding its own lane entry.
+
+Main's executor now carries optional receipt-success-fee purpose and authorization
+bindings. The reservation parser retains both existing contract fields; its strict
+shape and immutable-identity check remain enforced. Regression coverage verifies
+round-trip persistence and refusal of changed or removed authority bindings.
+This compatibility union adds no rail, provider wiring or production capability.
+AIS practice and the always-refusing production stub remain outside LP-5 lifecycle
+dispatch; their lifecycle/production activation is held for separate work.
+
+Local deterministic evidence: installed Vitest 4.1.12 with at most two workers
+and at most three named files per run passed 454 tests: reservation store,
+executor and practice-bank application (82); watchdog registry, context boundary
+and identity (278); migration proof loader, AIS and enterprise-fee repositories
+(89); practice-bank route and screen (5). The first reservation run exposed the
+new optional authority fields and failed; the regression run passed after retaining
+them. Installed tsc built core, config, storage, db and ai and passed API/web
+no-emit typechecks. Commercial integrity boundary and current-source guards passed
+with zero diagnostics and the existing nine baselined sites. PL/pgSQL CASE lint
+passed 266 migrations. Provider register check and git diff --check passed.
+
+The normal lane lint was run and refused the still-unfinished merge index's
+incoming main files and former migration paths. A read-only comparison of the
+actual working files against origin/main passed exact lane coverage and migration
+order using the lane tool's own functions. The router must stage the resolutions,
+complete the merge and rerun the normal lane lint. No Git writes were made here.
+The pnpm wrapper could not verify/obtain its pinned package version in this
+restricted environment; installed tools supplied the local checks. Web route and
+server-module imports were source-inspected: they use the API workspace export,
+not apps/api source. Database and browser suites were not run.
+
+CI must prove fresh and populated migrations, preservation fingerprints, LP/RLS
+catalogues and grants, reservation concurrency/rollback/restart/replay and late
+settlement handling, AIS ownership/session/consent isolation and financial
+non-effects, fee derivation/attribution/reversal integrity, phone/desktop browser
+journeys and the Cloudflare build. Green required CI against current main and an
+independent RED review of the final exact head remain required before merge.
+Made-up data only; live providers, real money and release remain disabled.
+
+The aggregate lint entrypoint also ran: core purity passed, then it stopped at
+that same pending-index lane refusal. The Cloudflare pnpm wrapper stalled without
+starting a build and was stopped; no Cloudflare build pass is claimed. The named
+batch-25-harden brief was absent; the available batch-25 original brief contains
+its hardening rules and was read alongside batch-9-harden and this landing brief.
+
+## Stored practice lifecycle screen (M4-15 still open)
+
+The session-only `/jobs/[id]/direct-debit-practice` page reads a server projection
+of durable fixture facts. GET never creates facts. Its POST accepts only a
+versioned server-issued step; it feeds one event through the signed fake rail's
+recorder port. Repeating a step replays that same event, including after refresh
+or a new application instance. No public webhook is added. The server derives
+one fictional mandate and four fictional requests per tenant/job; the client
+cannot choose tenant, account, mandate, object, amount, event or signature. The
+short sequence includes request, submission, failure, a retry example,
+confirmation, payout, chargeback, payment cancellation, late failure and mandate
+revocation. These are fictional event facts, never collection execution or retry
+authority. The ephemeral fake signing material stays on the server.
+
+The caller authenticates the persisted practice session and supplies its verified
+context and actor. Application authorization rechecks immutable job ownership
+before any fixture read or replay. Foreign-company and unreadable jobs have the
+same not-found response. POST uses the existing configured browser-origin gate;
+all responses are no-store. The client displays server labels and stored order,
+with the latest fact marked current and a separate current state per payment.
+Requested/submitted/confirmed never mean payout. The stored mandate projection
+reports that cancelled/revoked mandates block new collection; this slice adds no
+collection capability. Responses contain no raw events, bank details, bindings,
+account IDs or signing material.
+
+No migration, grants, SDK, real endpoint, financial writes, executor, reservations,
+refunds, mandate replacement, notices, worker or scheduler changed. The real rail,
+cross-rail balance guarantee, notices and G0–G5 release gates remain open/closed
+as before; this does not finish M4-15. CI must run the new real-PostgreSQL
+application test and the headless mobile-360/desktop browser spec (both saved API
+and transport rendering cases). Local unit/type checks are not database/browser
+proof or independent RED review. NOPR; the router owns commit/push and later review.
+
+Local verification for this screen: installed Vitest passed 5 application tests,
+11 existing recorder/rail tests, 4 route/render tests, 278 watchdog-registry /
+context-boundary / identity tests, and 76 migration-proof-loader tests, each run
+with at most two workers and three named files. Direct installed TypeScript
+checks passed API, web, core and DB; lane lint and `git diff --check` passed.
+Root `turbo typecheck --concurrency=2` stalled in its pnpm subprocesses with no
+completed task for about 100 seconds and was interrupted; that is not a full
+workspace typecheck pass. No database, browser, build, deployment or provider was
+run here. CI must prove the remaining suites, including Cloudflare bundling.
+
+
+## Batch-36 catch-up (4 November 2026, RED, NOPR)
+
+Resolved the contract notes, core/DB exports and later-empty-table list as a union
+of both pieces and current origin/main (56b74eaec; the local main ref is stale).
+Preserved both sides' barrel exports and snapshot entries. Renamed the one added
+migration, note and proof by filename stem to 0995_direct_debit_fixture_facts.
+No older migration, routine body, product behavior or guard was changed. Removed
+the two piece lane files and added the batch-36 lane with the final changed paths.
+
+Installed TypeScript package checks passed for core, DB, API and web. Dependency
+outputs were built with the installed TypeScript compiler for core/config/storage,
+DB and AI; no packages were downloaded. Early runs could not import absent built
+workspace packages; after producing those outputs the guards passed. An early
+export-union omission was corrected, and both sides' exports were verified.
+
+Installed Vitest 4.1.12 checks passed, each invocation limited to two workers and
+at most three named files (434 tests total):
+- API watchdog-registry, context-boundary and identity: 278.
+- Core direct-debit-lifecycle and recurring-extras: 8.
+- DB migration-proof-loader and direct-debit-fixture-repository: 84.
+- API direct-debit practice application, fixture recorder and fake recorder: 16.
+- Web direct-debit route/screen and recurring-extras route/screen: 11.
+- Existing fake-gocardless: 37.
+Working-tree and staged whitespace checks passed.
+
+Named holds for landing: tools/agent-lane-boundary-lint.mjs refuses the required deletions
+of config/lanes/m4-15-debit-store.json and config/lanes/m5-6-recurring-extras.json.
+Its lanePathAllowed rule permits a non-integration lane to edit only its own lane
+file. This is a tooling-policy conflict with the issued batch cleanup; no guard
+was weakened to bypass it. The read-only index also retains the old staged 0758
+migration/note/proof paths, which the final working-tree batch lane correctly
+does not list; router staging resolves those three transient path violations.
+The two lane-deletion violations still need the router's integration handling.
+
+No database, browser, provider, PR, push or release was run here. CI must prove
+PostgreSQL fresh/upgrade migrations and catalogs, immutable facts, tenant isolation,
+replay/restart/concurrency, unchanged financial data, and the mobile/desktop
+practice journeys, plus the required full checks and Cloudflare build. Independent
+RED review must bind to the final committed head before landing. This catch-up
+closes neither full M4-15 nor full M5-6.
+
+### Batch-36 resume (5 November 2026, RED, NOPR)
+
+READY for launcher save under the 4 November router ruling; the named landing
+holds above remain. No guard, scanner, pin, test assertion or product policy was
+changed. Corrected the migration note heading to its reserved number, 0995.
+The working files contain the resolved union; the read-only Git index still needs
+the launcher to stage those resolutions and the migration rename.
+
+Current local verification: installed Vitest 4.1.12, invoked directly with
+`node node_modules/vitest/vitest.mjs run --maxWorkers=2` from each package, passed
+119 tests, with at most three named files per invocation:
+- Core: `src/direct-debit-lifecycle.test.ts`, `src/recurring-extras.test.ts` (8).
+- DB: `test/migration-proof-loader.test.ts`, `test/direct-debit-fixture-repository.test.ts` (84).
+- API: `src/fee-collection/direct-debit-practice.application.test.ts`,
+  `src/fee-collection/direct-debit-fixture-recorder.test.ts`,
+  `src/fee-collection/fake-gocardless-recorder.test.ts` (16).
+- Web: `app/api/jobs/[id]/direct-debit-practice/route.test.ts`,
+  `app/jobs/[id]/direct-debit-practice/screen.test.ts`,
+  `app/api/jobs/[id]/recurring-extras/route.test.ts` (9); separately
+  `app/jobs/[id]/recurring-extras/recurring-extras-screen.test.tsx` (2).
+`node node_modules/typescript/bin/tsc -p <package>/tsconfig.json --noEmit`
+passed for packages/core, packages/db, apps/api and apps/web. The initial
+`pnpm exec vitest` invocation stalled before starting tests and was interrupted;
+the direct installed runner supplied the results above. Whitespace checks passed.
+Lane lint was rerun and still rejects the two lane deletions and three obsolete
+0758 staged paths listed above. This is a named landing hold, not a check pass.
+No PostgreSQL or browser suite ran; required CI and exact-head independent RED
+review remain outstanding. READY means saved for router handling, not landed.
+
+### Batch-36 landing reconciliation — 5 November 2026 (RED, NOPR)
+
+READY for router staging, merge completion and commit on the existing branch.
+This entry supersedes the earlier batch-36 migration/lane landing notes above.
+Incoming main is MERGE_HEAD / origin/main
+`62081c68933d0b953e7dd75a8cbd7b3a2fb4f304`; local main is stale.
+The batch-36 pre-check was explicitly skipped in PRECHECK-FINDINGS.md because
+this branch was being rebuilt; no independent pre-check PASS is claimed.
+
+Resolved working files retain main's complete core/DB barrels and later-empty
+registry, with this branch's recurring-extra export and existing subscription
+sandbox export retained. The contract keeps main's current text and this branch's
+stored-practice-screen description and historical receipts. Neither tests nor
+product behavior were weakened.
+
+Migration inventory against incoming main:
+- Removed `0995_direct_debit_fixture_facts.sql`: byte-for-byte duplicate of
+  main's `0596_direct_debit_fixture_facts.sql`. SQL SHA-256 for both:
+  `40c5442bfa78c0ae135248587dfc0742cb6e1c63e7ef117ae137f0772605b738`.
+- Removed the 0995 migration note: identical to main's 0596 note after replacing
+  the stem/heading number. Removed its proof: identical after stem replacement
+  except for its target description. Main's description correctly says synthetic
+  append-only mandate/payment facts; the older proof says bounded lifecycle
+  dispatch. Main's latest note and proof are retained unchanged.
+- The 0758 SQL/note/proof paths are already absent in both final working files
+  and incoming main; their unmerged index entries still need router staging.
+- No branch-only SQL migration remains, so there is nothing to number at 1200.
+  All 273 main SQL files compare byte-for-byte with incoming main. No routine
+  is re-created or replaced by this delta; main's latest direct_debit_fixture,
+  lp5_command_result (including purchase_order.send.dark) and all other routine
+  bodies are preserved without a branch override.
+
+The durable M4-15 fact store, lifecycle, recorder and their existing tests are
+wholly on main. This branch still adds the stored Direct Debit practice screen
+and application plus the tenant-private, read-only recurring-extra slice of
+M5-6. Neither full plan piece is declared finished. The lane lists exactly the
+28 changed non-lane paths versus incoming main, and does not list itself.
+
+Local checks used installed dependencies only, with Node 24.17.0 and Vitest
+4.1.12. Commands below used at most two workers and three named files per run:
+- From packages/core: `node node_modules/vitest/vitest.mjs run --maxWorkers=2
+  src/recurring-extras.test.ts src/direct-debit-lifecycle.test.ts
+  src/watchdog.test.ts` — 15 tests passed.
+- From apps/api: the same runner/options with
+  `src/fee-collection/direct-debit-practice.application.test.ts`,
+  `src/fee-collection/direct-debit-fixture-recorder.test.ts`, and
+  `src/fee-collection/fake-gocardless-recorder.test.ts` — 16 passed.
+- From apps/web: the same runner/options with
+  `app/api/jobs/[id]/direct-debit-practice/route.test.ts`,
+  `app/api/jobs/[id]/recurring-extras/route.test.ts`, and
+  `app/jobs/[id]/direct-debit-practice/screen.test.ts` — 9 passed;
+  separately `app/jobs/[id]/recurring-extras/recurring-extras-screen.test.tsx`
+  — 2 passed. Total: 42 passed.
+- `node node_modules/typescript/bin/tsc -p <package>/tsconfig.json --noEmit`
+  passed for packages/core, packages/db, apps/api and apps/web. DB was checked
+  again after retaining the subscription sandbox export.
+- Working-file lane comparison with MERGE_HEAD using the existing exported
+  loadLanePolicy/lanePathAllowed/migrationOrderViolations functions passed:
+  exactly 28 non-lane paths and no migration-order violation. `git diff --check
+  MERGE_HEAD` passed; no working-file conflict markers remain.
+- The pnpm wrapper made no test progress and was interrupted; a first direct
+  runner attempt used a nonexistent root Vitest path and failed before tests.
+  Successful runs above use the installed package-local runner.
+
+#### Named holds for landing
+
+- The sandbox's read-only .git still contains unmerged entries and the obsolete
+  0758/0995 paths. Router must stage the resolved additions/removals and complete
+  the existing merge. Standard `node tools/agent-lane-boundary-lint.mjs
+  --lane=batch-36` currently fails against the unfinished index/history; it must
+  pass after router staging/merge completion against current main. The working
+  comparison above is separate evidence, not a standard lane-lint PASS.
+- CI must prove full required typecheck/lint/test/build, PostgreSQL fresh/upgrade
+  migrations and catalog/grant/FORCE RLS guarantees, existing Direct Debit
+  repository/recorder integrations, direct-debit-practice.integration.test.ts,
+  recurring-extras.integration.test.ts, immutable replay/concurrency and unchanged
+  financial records, plus mobile-360/desktop M4-15-direct-debit-practice.spec.ts
+  and M5-6-recurring-extras.spec.ts and applicable regression/restore checks.
+  No PostgreSQL or browser suite was attempted in this sandbox.
+- An independent RED PASS must bind to the exact resulting head and CI must be
+  green against current main before landing. Production rail wiring, real-data,
+  provider, commercial and release gates remain separate; made-up data only.
+
+No Git write command, commit, push, PR, provider call or deployment was performed.
+
+
+### Batch-36 pre-check repair — 6 November 2026 (RED, NOPR)
+
+READY for router staging and completion of the existing merge. Incoming main is
+MERGE_HEAD / origin/main `f5415ddb4c3a40796dd812e8b5946ba5094daa2b`.
+Resolved the three export-list/contract-note conflicts as unions, retaining main's
+merchant and rate-suggestion exports and notes beside this group's practice slices.
+Removed the subscription-stripe-sandbox-adapter barrel export identified by
+coordinator/prechecks/batch-36.md. This supersedes the earlier receipt's statement
+that this export should be retained; main intentionally removed it in f67b4c1f1.
+No tests or application behavior were otherwise changed.
+
+Working-tree comparison against incoming main confirms all 512 migration, note
+and proof files are byte-for-byte identical, with no branch-only files in those
+three directories. No migration or routine override remains to recreate; main's
+latest routine bodies are preserved unchanged. The existing lane exactly lists
+all 28 changed non-lane paths and does not list itself.
+
+Checks executed using installed package-local tools (Node 24.17.0, Vitest 4.1.12):
+- packages/db: `node node_modules/vitest/vitest.mjs run --maxWorkers=2
+  src/subscription-webhook-verifier.test.ts` — 28 passed, including the unchanged
+  application/DB barrel boundary guard.
+- packages/core: same runner/options with `src/recurring-extras.test.ts`,
+  `src/rate-baseline.test.ts`, `src/watchdog.test.ts` — 34 passed.
+- apps/api: same runner/options with
+  `src/fee-collection/direct-debit-practice.application.test.ts`,
+  `src/fee-collection/direct-debit-fixture-recorder.test.ts`,
+  `src/fee-collection/fake-gocardless-recorder.test.ts` — 16 passed.
+- apps/web: same runner/options with
+  `app/api/jobs/[id]/direct-debit-practice/route.test.ts`,
+  `app/api/jobs/[id]/recurring-extras/route.test.ts`,
+  `app/jobs/[id]/recurring-extras/recurring-extras-screen.test.tsx` — 9 passed.
+- apps/api: `node node_modules/typescript/bin/tsc -p tsconfig.json --noEmit`
+  passed. API package JSON parses; working-file conflict markers are absent;
+  `git diff --check MERGE_HEAD` passed.
+
+87 tests passed; at most two test workers and three named files per run. The pnpm
+version probe stalled and was interrupted, so checks used installed runners.
+The read-only index still has unmerged entries: router must stage these working
+resolutions and complete the merge, then run standard lane lint. PostgreSQL,
+browser and full required CI checks remain for GitHub CI after router push;
+exact-head independent RED review remains required. No Git writes, commit, push,
+PR, provider use or release occurred here. Neither full plan piece is finished.
+
+### Batch-36 landing verification — 6 November 2026 (RED, NOPR)
+
+READY for the router's commit/push and subsequent PR turn. This supersedes the
+earlier unresolved-index hold: the launcher already completed the main merge at
+`ae9b3295cd893e79290e4e7c8c80bbfab71767a2`; the index has no unmerged entries.
+The comparison base is origin/main `919b7f3e60b82ef1ed1e32a6f259ba92246f6541`
+(the local main branch is stale). No additional code repair was necessary.
+
+Main's migrations, migration notes and migration proofs are unchanged. No
+branch-only migration or SQL routine override remains. Shared exports, package
+exports and the watchdog registry differ only by this group's additions; main's
+rows remain intact. The lane lists exactly the 28 changed non-lane paths and
+does not list itself. No test or product behavior was changed in this pass.
+
+Executed with installed package-local Vitest 4.1.12 (`run --maxWorkers=2`):
+- Core: `src/recurring-extras.test.ts`, `src/watchdog.test.ts`,
+  `src/rate-baseline.test.ts` — 34 passed.
+- API: `src/fee-collection/direct-debit-practice.application.test.ts`,
+  `src/fee-collection/fake-gocardless.test.ts` — 42 passed.
+- Web: `app/api/jobs/[id]/direct-debit-practice/route.test.ts`,
+  `app/api/jobs/[id]/recurring-extras/route.test.ts`,
+  `app/jobs/[id]/direct-debit-practice/screen.test.ts` — 9 passed.
+- Web: `app/jobs/[id]/recurring-extras/recurring-extras-screen.test.tsx`
+  — 2 passed.
+- DB: `src/subscription-webhook-verifier.test.ts`,
+  `test/migration-proof-loader.test.ts` — 105 passed; the same invocation's
+  mistyped `src/direct-debit-fixture-repository.test.ts` matched no file.
+- DB: corrected `test/direct-debit-fixture-repository.test.ts` — 8 passed.
+
+Total: 200 tests passed, at most three named filters per invocation. Installed
+`tsc -p tsconfig.json --noEmit` passed separately in core, DB, API and web.
+`LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs --lane=batch-36`
+and `git diff --check origin/main` passed. The pnpm wrapper stalled before
+checks began and was interrupted; direct installed runners supplied the results.
+
+PostgreSQL and browser suites were not run in this sandbox. Full required CI
+and independent RED review against the resulting exact head remain required
+before merge. Neither full M4-15 nor full M5-6 is finished. No Git write,
+provider call, deployment or release was performed.
+
+### Batch-36 catch-up5 fixture alignment — 6 November 2026 (RED, NOPR)
+
+READY for router commit/push. Applied the checker's
+`coordinator/prechecks/batch-36-catchup5-fix.diff` exactly to
+`packages/db/test/direct-debit-practice.integration.test.ts`: reuse
+`seedHomeOwner(c)` after cluster setup and select each session's existing
+practice job instead of inserting a job directly. Assertions and product code
+are unchanged. This is fixture-only catch-up for M4-15 / M5-6, not a repair round.
+
+Local checks using installed package-local Vitest 4.1.12:
+- From packages/db: `node node_modules/vitest/vitest.mjs run --maxWorkers=2
+  test/direct-debit-fixture-repository.test.ts` — 8 passed.
+- From apps/api: `node node_modules/vitest/vitest.mjs run --maxWorkers=2
+  src/fee-collection/direct-debit-practice.application.test.ts` — 5 passed.
+- Exact fixture edit comparison passed. `LANE_BASE_REF=origin/main node
+  tools/agent-lane-boundary-lint.mjs --lane=batch-36` passed. The unchanged lane
+  covers exactly all 28 branch-changed non-lane paths relative to the merge-base
+  with origin/main and excludes itself. `git diff --check` passed.
+
+PostgreSQL and browser suites were not run in this sandbox. CI must run
+`direct-debit-practice.integration.test.ts` (expected 1/1; not locally verified)
+and the required browser/full checks after router push. Main has advanced beyond
+this branch; current-main catch-up and exact-head independent RED review remain
+landing gates. No migration, assertion, product change, Git write, provider call,
+deployment or release occurred. Neither full plan piece is declared finished.
+
+
+### Batch-36 current-main merge — 6 November 2026 (RED, NOPR)
+
+READY for router staging and merge commit. Incoming main is
+`daed0c282aee4337eac5630a9f26cc8901ea553b` (MERGE_HEAD / origin/main;
+local main is stale). Resolved the two export-list conflicts by retaining both
+recurring-extra exports and main's extra-proceed exports. No new behavior or
+test changes. Relative to incoming main, every changed file is additions only;
+no migration, migration note, proof or SQL routine differs. The lane covers
+exactly the 28 changed non-lane paths and excludes itself.
+
+Executed using installed package-local runners, at most two Vitest workers and
+at most three named files per invocation:
+- Core: `node node_modules/vitest/vitest.mjs run --maxWorkers=2
+  src/recurring-extras.test.ts src/extra-proceed.test.ts src/watchdog.test.ts`
+  — 14 passed.
+- API: same runner with `src/fee-collection/direct-debit-practice.application.test.ts
+  src/fee-collection/fake-gocardless.test.ts` — 42 passed.
+- Web: same runner with `app/api/jobs/[id]/direct-debit-practice/route.test.ts`,
+  `app/api/jobs/[id]/recurring-extras/route.test.ts`, and
+  `app/jobs/[id]/direct-debit-practice/screen.test.ts` — 9 passed.
+- Web: same runner with
+  `app/jobs/[id]/recurring-extras/recurring-extras-screen.test.tsx` — 2 passed.
+- DB: same runner with `test/direct-debit-fixture-repository.test.ts` — 8 passed.
+- `node node_modules/typescript/bin/tsc -p tsconfig.json --noEmit` passed
+  separately in core, DB, API and web.
+- `git diff --check MERGE_HEAD` passed. Exact lane equality and preservation
+  of all incoming main exports passed. The existing lane policy's exported
+  `loadLanePolicy`, `selectLane`, and `lanePathAllowed` accepted all 29 paths
+  from `git diff MERGE_HEAD --name-only`, including the lane file.
+
+The pnpm wrapper stalled before execution and was interrupted; installed
+runners produced the results above. The standard lane CLI currently fails
+because its uncommitted-merge comparison counts incoming main's staged files
+as this branch's changes. Do not widen the lane: rerun the standard lane CLI
+against origin/main after the router stages the resolutions and commits.
+The index still reports unmerged entries until that authorized router step;
+all working-file conflict markers are resolved. No Git write was attempted.
+
+PostgreSQL, browser and full required suites remain CI gates after router push;
+exact-head independent RED review remains required before landing. No provider,
+real data, deployment or launch. Full M4-15 and M5-6 remain open.
+
+### Batch-36 PR-turn verification — 6 November 2026 (RED)
+
+READY for router commit/push and PR opening. The launcher completed the merge
+at `409caa842033ab7d04f31604553cdac97302b52e`; origin/main is
+`41938db7646c8e988e5bcdbde93f33f3c1425ad4`. No unresolved index entries or
+product repairs were needed. Main's exports and watchdog registry entries are
+preserved, and the removed fake Stripe sandbox export remains absent.
+
+Migration inventory against origin/main: none. No migration proof changes or
+SQL routine replacements exist, so there is no branch routine body to reconcile
+against main. Exact lane coverage passed for all 28 non-lane changed paths;
+the lane excludes itself. Runtime web imports use API package exports; their
+route test's source import is test-only. Cloudflare build was not executed.
+The coordinator precheck files and VERDICTS.tsv are not in this checkout;
+existing checked work was preserved without claiming those checks were rerun.
+
+Executed using installed package-local runners (Vitest 4.1.12,
+`node node_modules/vitest/vitest.mjs run --maxWorkers=2`, no more than three
+named files per run):
+- Core: `src/recurring-extras.test.ts`, `src/extra-proceed.test.ts`,
+  `src/watchdog.test.ts` — 14 passed.
+- API: `src/fee-collection/direct-debit-practice.application.test.ts`,
+  `src/fee-collection/fake-gocardless.test.ts` — 42 passed.
+- Web: `app/api/jobs/[id]/direct-debit-practice/route.test.ts`,
+  `app/api/jobs/[id]/recurring-extras/route.test.ts`,
+  `app/jobs/[id]/direct-debit-practice/screen.test.ts` — 9 passed.
+- Web: `app/jobs/[id]/recurring-extras/recurring-extras-screen.test.tsx`
+  — 2 passed.
+- DB: `test/direct-debit-fixture-repository.test.ts`,
+  `test/migration-proof-loader.test.ts` — 85 passed.
+
+Total: 152 passed. Installed `node node_modules/typescript/bin/tsc -p
+ tsconfig.json --noEmit` passed separately in core, DB, API and web.
+`LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs --lane=batch-36`
+and `git diff --check origin/main...HEAD` passed. The pnpm wrapper stalled
+before execution and was interrupted; installed runners supplied these results.
+
+CI must prove real-PostgreSQL integration, whole-database migfix-6/7 and upgrade
+snapshots including restore reconciliation, browser journeys, and all required
+checks. Exact-head independent RED review remains a merge gate. This sandbox
+ran no database, browser, provider, deployment or release. Full M4-15 and M5-6
+remain open; READY means ready for the router's PR step.

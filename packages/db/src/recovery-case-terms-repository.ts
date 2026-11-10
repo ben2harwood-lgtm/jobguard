@@ -1,3 +1,4 @@
+import { isRequestBindingRefusal } from "./request-binding-error.js";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { Pool } from "pg";
@@ -15,6 +16,7 @@ function fromRow(raw:unknown):RecoveryCaseTerms {
  return recoveryCaseTermsV1.parse({version:"recovery-case-terms.v1",id:r.id,tenantId:r.tenant_id,jobId:r.job_id,caseId:r.case_id,termsVersion:r.terms_version,feePolicyVersion:r.fee_policy_version,eligibilityPolicyVersion:r.eligibility_policy_version,policyStatus:r.policy_status,environment:r.environment,termsHash:r.terms_hash.trim(),actorMembershipId:r.actor_membership_id,commandId:r.command_id,authorizationId:r.authorization_id,approvedAt:r.approved_at.toISOString(),realExternalActions:0});
 }
 function translate(error:unknown):never {
+ if(isRequestBindingRefusal(error))throw new RecoveryCaseTermsError("RECOVERY_TERMS_FORBIDDEN");
  if(error instanceof CommandError)throw new RecoveryCaseTermsError(error.code==="FORBIDDEN"?"RECOVERY_TERMS_FORBIDDEN":error.code==="COMMAND_CONFLICT"?"RECOVERY_TERMS_COMMAND_CONFLICT":"RECOVERY_TERMS_AUTHORIZATION_INVALID");
  const pg=error as {code?:string;message?:string};
  const code=CODES.find(code=>code===pg?.message);

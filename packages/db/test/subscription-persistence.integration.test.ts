@@ -25,7 +25,7 @@ describe("MON-2A-P persisted subscription", () => {
    let revision = 1;
    if (upgraded) {
     await command(f, a, { ...terms(a, "Builder", 1), kind: "change" }); revision = 2;
-    await workTenant(f.admin, a.tenantId, async db => { await db.query("SET LOCAL session_replication_role='replica'"); await db.query("UPDATE app.subscription_agreement_revision SET effective_date='2026-09-11' WHERE tenant_id=$1 AND revision=2", [a.tenantId]); });
+    await workTenant(f.admin, a.tenantId, async db => { await db.query("SET LOCAL session_replication_role='replica'"); await db.query("UPDATE app.subscription_agreement_revision SET effective_date='2026-09-11' WHERE tenant_id=$1 AND revision=2", [a.tenantId]); }, { membershipId: a.actorId });
    }
    await storeMeter(f, a, input); actual.push((await issue(f, a, input.startDate, revision)).amountPence);
   }
@@ -52,7 +52,7 @@ describe("MON-2A-P persisted subscription", () => {
   const input = calendarInput(a.tenantId, 6, 9);
   const sourceId = await storeMeter(f, a, input);
   // Synthetic fixture brings the scheduled boundary into the past; no runtime time override exists.
-  await workTenant(f.admin, a.tenantId, async db => { await db.query("SET LOCAL session_replication_role='replica'"); await db.query("UPDATE app.subscription_plan_change SET effective_date='2026-09-01' WHERE tenant_id=$1", [a.tenantId]); });
+  await workTenant(f.admin, a.tenantId, async db => { await db.query("SET LOCAL session_replication_role='replica'"); await db.query("UPDATE app.subscription_plan_change SET effective_date='2026-09-01' WHERE tenant_id=$1", [a.tenantId]); }, { membershipId: a.actorId });
   const refusal = await command(f, a, { version: "subscription-command.v1", kind: "apply_change", changeId: changed.changeId, sourceId, expectedRevision: 1 });
   expect(refusal.outcome).toBe("refused_capacity"); expect((await readSubscription(f, a)).agreements).toHaveLength(1);
  });
@@ -73,8 +73,8 @@ describe("MON-2A-P persisted subscription", () => {
   const digest = createHash("sha256").update(randomUUID()).digest("hex");
   await workTenant(f.admin, a.tenantId, async db => {
    const user = (await db.query("UPDATE app.membership SET role='admin' WHERE tenant_id=$1 AND id=$2 RETURNING identity_user_id", [a.tenantId, executor.actorId])).rows[0].identity_user_id;
-   await db.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", [`${randomUUID()}@meter.invalid`, user]);
-   await db.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3)", [user, a.tenantId, executor.actorId]);
+   await db.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2) ON CONFLICT DO NOTHING", [`${randomUUID()}@meter.invalid`, user]);
+   await db.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING", [user, a.tenantId, executor.actorId]);
    await db.query("INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at) VALUES($1,$2,'synthetic_demo',$3,$4,clock_timestamp()+interval '1 hour')", [sessionId, user, digest, randomUUID()]);
    if (invalidated === "expired session") await db.query("UPDATE identity.session SET expires_at=clock_timestamp()-interval '1 second' WHERE id=$1", [a.sessionId]);
    else if (invalidated === "revoked session") await db.query("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE id=$1", [a.sessionId]);
@@ -82,7 +82,7 @@ describe("MON-2A-P persisted subscription", () => {
    // Admin-only historical fixture; no runtime clock override or authorization edit.
    await db.query("SET LOCAL session_replication_role='replica'");
    await db.query("UPDATE app.subscription_plan_change SET effective_date='2026-09-01' WHERE tenant_id=$1 AND id=$2", [a.tenantId, changed.changeId]);
-  });
+  }, { membershipId: a.actorId });
   const fresh = { ...executor, digest, sessionId };
   const revoked = invalidated === "revoked membership";
   expect(await command(f, fresh, { version: "subscription-command.v1", kind: "apply_change", changeId: changed.changeId, sourceId, expectedRevision: 1 }))
@@ -97,7 +97,7 @@ describe("MON-2A-P persisted subscription", () => {
    await db.query("SET LOCAL session_replication_role='replica'");
    await db.query("UPDATE app.meter_computation SET principal_pence=1,result='{}' WHERE tenant_id=$1", [a.tenantId]);
    await db.query("UPDATE app.meter_day_ledger SET day=jsonb_set(day,'{countedPlaces}','0') WHERE tenant_id=$1", [a.tenantId]);
-  });
+  }, { membershipId: a.actorId });
   expect((await issue(f, a)).amountPence).toBe(8900);
  });
  it("issued periods and allocations never change", async () => {
@@ -115,7 +115,7 @@ describe("MON-2A-P persisted subscription", () => {
   await workTenant(f.admin,a.tenantId,async db=>{
    await db.query("SET LOCAL session_replication_role='replica'");
    await db.query("UPDATE app.subscription_plan_change SET effective_date='2026-09-01' WHERE tenant_id=$1",[a.tenantId]);
-  });
+  }, { membershipId: a.actorId });
   expect(await command(f,a,{version:"subscription-command.v1",kind:"apply_change",changeId:changed.changeId,sourceId,expectedRevision:1})).toMatchObject({outcome:"applied",revision:2});
   expect((await readSubscription(f,a)).agreements).toHaveLength(2);
  });

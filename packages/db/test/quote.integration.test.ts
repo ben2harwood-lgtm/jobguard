@@ -31,9 +31,10 @@ it("CH-3a refuses, inside the send transaction, a quote whose frozen binding cha
   receipt:(await admin.query(`SELECT 1 FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2`,[TENANT,attempt.commandId])).rowCount,
   decision:(await admin.query(`SELECT 1 FROM app.decision WHERE tenant_id=$1 AND subject_ref=$2`,[TENANT,documentId])).rowCount});
  // A binding change holds the job lock exactly as bind_job_parties does, and commits only after the send is waiting on it.
+ await testBoundTenantContext(admin,TENANT,MEMBER);
  const view=await new JobPartiesRepository(runtime).view(context,MEMBER,JOB),holder=await admin.connect(),bindCommand=randomUUID();
  try{
-  await holder.query("BEGIN");await holder.query("SELECT set_config('app.tenant_id',$1,true)",[TENANT]);
+  await holder.query("BEGIN");await holder.query("SELECT app.bind_request('real',encode(sha256(convert_to($1,'UTF8')),'hex'),$2)",[`lp6-test:${TENANT}:${MEMBER}`,TENANT]);await holder.query("SELECT set_config('app.tenant_id',$1,true)",[TENANT]);
   await holder.query(`INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,'job.parties',$3,$4,'processing',$5)`,[bindCommand,TENANT,bindCommand,"d".repeat(64),MEMBER]);
   const bindingId=randomUUID();
   await holder.query(`SELECT app.bind_job_parties($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,[TENANT,JOB,bindingId,view.jobRevision,view.current!.customerRevisionId,null,view.current!.siteRevisionId,true,"Race correction",MEMBER,bindCommand]);

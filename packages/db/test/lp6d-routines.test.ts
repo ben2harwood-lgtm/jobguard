@@ -76,7 +76,7 @@ it("converts the invitation bridge and withdraws direct authorization revocation
   const { inventory } = await loadReviewedInventory();
   expect(pathCompleteness(inventory, repoFileExists)).toEqual([]);
   expect(inventory.entries.some(e => e.key === "acl|col|app.action_authorization.revoked_at|jobguard_runtime|UPDATE|-")).toBe(false);
-  expect(inventory.entries.filter(e => e.group === "a-lp6d-routine-binding")).toHaveLength(4);
+  expect(inventory.entries.filter(e => e.group === "a-lp6d-routine-binding")).toHaveLength(2);
 });
 
 it("leaves the final-lock owner helper exclusively to LP-6c", () => {
@@ -101,7 +101,7 @@ it("starts from the latest exact predecessor overload rather than an earlier cop
 
 it("preserves LP-6b's entire latest session helper except its private projection edge", () => {
   const pattern = /CREATE OR REPLACE FUNCTION app\.lp6_session_authority\([\s\S]*?\$\$;/u;
-  const previous = read("../migrations/0584_lp6b_effective_session_actor.sql").match(pattern)![0];
+  const previous = read("../migrations/0658_lp6b_effective_session_actor.sql").match(pattern)![0];
   expect(sql.match(pattern)![0]).toBe(previous.replace("FROM app.contractor_session(p_credential::uuid) effective", "FROM app.lp6d_contractor_session_identity(p_credential::uuid) effective"));
   expect(sql).not.toContain("GRANT EXECUTE ON FUNCTION app.current_actor()");
   expect(sql).not.toContain("GRANT EXECUTE ON FUNCTION app.bind_request(text,text,uuid)");
@@ -123,25 +123,31 @@ it("binds new evidence authority, payload actors and source readers without rela
 });
 
 it("reuses every actual LP-6c replacement without recreating its routines", () => {
-  const previous = definitions(read("../migrations/0591_lp6c_money_binding.sql"));
+  const previous = definitions(read("../migrations/0686_lp6c_money_binding.sql"));
   const own = new Set(definitions(sql).map(m => m[1]! + argumentsKey(m[2]!)));
   expect(previous).toHaveLength(28);
   for (const m of previous) expect(own.has(m[1]! + argumentsKey(m[2]!)), m[1]).toBe(false);
 });
 
-it("keeps the pre-session feature lookup available while retaining request guards elsewhere", () => {
-  expect(routines.some(r => r.name === "app.mon8_feature_decision")).toBe(false);
-  expect(sql).not.toContain("CREATE OR REPLACE FUNCTION app.mon8_feature_decision(");
-  expect(classification["app.mon8_feature_decision(uuid,text,text)"]).toContain("pre-session SSO");
-  const sso = read("../migrations/0549_contractor_feature_guards.sql");
-  expect(sso).toContain("app.mon8_feature_decision");
+it("bounds pre-session SSO to a private SSO-only helper while guarding all runtime features", () => {
+  const checked = body(sql, routines.find(r => r.name === "app.mon8_feature_decision")!);
+  expect(checked).toContain("LP6D_BOUND");
+  const helper = sql.match(/CREATE OR REPLACE FUNCTION app\.mon8_sso_feature_decision\(actor uuid\)[\s\S]*?AS \$\$([\s\S]*?)\$\$;/u)![1]!;
+  expect(helper).toContain("feature constant text:='sso'; purpose constant text:='new_work'");
+  expect(sql).toContain("REVOKE ALL ON FUNCTION app.mon8_sso_feature_decision(uuid) FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure");
+  const source = read("../migrations/0549_contractor_feature_guards.sql");
+  const previous = source.match(/CREATE OR REPLACE FUNCTION identity\.sso_complete\([\s\S]*?\$\$;/u)![0];
+  expect(sql.match(/CREATE OR REPLACE FUNCTION identity\.sso_complete\([\s\S]*?\$\$;/u)![0])
+    .toBe(previous.replace("app.mon8_feature_decision(member,'sso')", "app.mon8_sso_feature_decision(member)"));
 });
 
-it("records both private and request routine identities and the retained worker owner", async () => {
+it("records private and request identities, and omits owners of runtime-inaccessible routines", async () => {
   const { inventory } = await loadReviewedInventory();
-  for (const signature of ["lp6d_contractor_session_identity(uuid)", "revoke_recovery_message_authorization(uuid,uuid,uuid,uuid)"]) {
+  for (const signature of ["lp6d_contractor_session_identity(uuid)", "revoke_recovery_message_authorization(uuid,uuid,uuid,uuid)", "mon8_sso_feature_decision(uuid)"]) {
     expect(inventory.recorded.routines.filter(r => r.identity === `function:app.${signature}`)).toHaveLength(1);
-    expect(inventory.entries.some(e => e.key === `owner|routine|function:app.${signature}|jobguard_migration`)).toBe(true);
   }
-  expect(inventory.entries.some(e => e.key === "owner|routine|function:app.apply_recovery_timeline_signal(uuid,jsonb)|jobguard_migration")).toBe(true);
+  expect(inventory.entries.some(e => e.key === "owner|routine|function:app.revoke_recovery_message_authorization(uuid,uuid,uuid,uuid)|jobguard_migration")).toBe(true);
+  for (const signature of ["lp6d_contractor_session_identity(uuid)", "apply_recovery_timeline_signal(uuid,jsonb)", "mon8_sso_feature_decision(uuid)"]) {
+    expect(inventory.entries.some(e => e.key === `owner|routine|function:app.${signature}|jobguard_migration`)).toBe(false);
+  }
 });

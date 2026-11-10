@@ -1,5 +1,7 @@
+import { syntheticSpeechAudio } from "@jobguard/core";
+import { rolledBack } from "./upgrade-proof-utils.js";
 import { verifiedTenantContextFromMembership } from "../src/tenant-context.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { importWatchdogFixtureJob } from "./watchdog-fixtures.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { createHash, randomUUID } from "node:crypto";
@@ -16,7 +18,7 @@ import { EvidenceError, EvidenceService, ProofCommandService, migrate, withTenan
 const TENANT="71000000-0000-4000-8000-000000000001", OTHER="71000000-0000-4000-8000-000000000002";
 const MEMBER="74000000-0000-4000-8000-000000000001";
 const JOB="72000000-0000-4000-8000-000000000001", SCOPE="73000000-0000-4000-8000-000000000001";
-const context=testTenantContext(TENANT), otherContext=testTenantContext(OTHER);
+let context=testTenantContext(TENANT), otherContext=testTenantContext(OTHER);
 const hash=(bytes:Uint8Array)=>createHash("sha256").update(bytes).digest("hex");
 function validPng(){const crc=(bytes:Buffer)=>{let value=0xffffffff;for(const byte of bytes){value^=byte;for(let i=0;i<8;i++)value=(value>>>1)^((value&1)?0xedb88320:0)}return(value^0xffffffff)>>>0};const chunk=(type:string,data:Buffer)=>{const name=Buffer.from(type),out=Buffer.alloc(data.length+12);out.writeUInt32BE(data.length);name.copy(out,4);data.copy(out,8);out.writeUInt32BE(crc(Buffer.concat([name,data])),8+data.length);return out};const header=Buffer.alloc(13);header.writeUInt32BE(1,0);header.writeUInt32BE(1,4);header[8]=8;header[9]=2;return Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]),chunk("IHDR",header),chunk("IDAT",deflateSync(Buffer.from([0,20,30,40]))),chunk("IEND",Buffer.alloc(0))])}
 
@@ -30,6 +32,14 @@ class MemoryVersionedStorage implements PrivateVersionedStorage {
 }
 let postgres:EmbeddedPostgres,admin:Pool,runtime:Pool,dir:string;const storage=new MemoryVersionedStorage();let service:EvidenceService,proof:ProofCommandService;
 beforeAll(async()=>{dir=await mkdtemp(join(tmpdir(),"jobguard-evidence-pg16-"));const port=await freePort(56500,300);postgres=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic-test-only",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});await postgres.initialise();await postgres.start();admin=new Pool({host:"127.0.0.1",port,database:"postgres",user:"postgres",password:"synthetic-test-only"});await migrate(admin);await installLegacySyntheticPartyFixtures(admin);await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1),($2)",[TENANT,OTHER]);await admin.query("INSERT INTO identity.identity_user(id) VALUES('75000000-0000-4000-8000-000000000001')");await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES('76000000-0000-4000-8000-000000000001',$1,'Synthetic')",[TENANT]);await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($2,$1,'76000000-0000-4000-8000-000000000001','75000000-0000-4000-8000-000000000001','owner')",[TENANT,MEMBER]);await importWatchdogFixtureJob(admin,TENANT,JOB,"Synthetic stage");await admin.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($3,$1,$2,'confirmed')",[TENANT,JOB,SCOPE]);await admin.query("INSERT INTO app.scope_progress(tenant_id,job_id,scope_item_id,stage) VALUES($1,$2,$3,'in_progress')",[TENANT,JOB,SCOPE]);await admin.query(`CREATE ROLE jobguard_evidence_login LOGIN PASSWORD 'synthetic-runtime-only' NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOBYPASSRLS`);await admin.query("GRANT jobguard_runtime TO jobguard_evidence_login");runtime=new Pool({host:"127.0.0.1",port,database:"postgres",user:"jobguard_evidence_login",password:"synthetic-runtime-only"});service=new EvidenceService(runtime,storage);proof=new ProofCommandService(runtime,storage);},60_000);
+beforeAll(async()=>{
+ context=await testBoundTenantContext(admin,TENANT,MEMBER);
+ const user=randomUUID(),account=randomUUID(),member=randomUUID();
+ await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)",[user]);
+ await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional evidence peer')",[account,OTHER]);
+ await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')",[member,OTHER,account,user]);
+ otherContext=await testBoundTenantContext(admin,OTHER,member);
+});
 afterAll(async()=>{await closeTestPools(runtime,admin);await postgres?.stop();await rm(dir,{recursive:true,force:true});});
 
 async function begin(bytes:Uint8Array,overrides:Record<string,unknown>={}){return service.beginUpload(context,{jobId:JOB,scopeItemId:SCOPE,expectedSha256:hash(bytes),contentType:"image/png",maximumBytes:100,expiresAt:new Date(Date.now()+60_000),...overrides});}
@@ -50,7 +60,6 @@ describe("verified evidence lifecycle",()=>{
 describe("dark resumable evidence", () => {
  const member = { tenantId: TENANT, membershipId: MEMBER,
   identityUserId: "75000000-0000-4000-8000-000000000001" } as Parameters<typeof verifiedTenantContextFromMembership>[0];
- const context = verifiedTenantContextFromMembership(member);
  const actor = { membershipId: member.membershipId, identityUserId: member.identityUserId };
  async function transfer() {
   const { ResumableEvidenceService } = await import("../src/resumable-evidence.js");
@@ -126,4 +135,29 @@ describe("dark resumable evidence", () => {
   await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role,revoked_at) VALUES($1,$2,'76000000-0000-4000-8000-000000000001','75000000-0000-4000-8000-000000000001','owner',clock_timestamp())",[revoked,TENANT]);
   await expect(f.resumable.status(context,actor,{...f.input,actorMembershipId:revoked})).rejects.toMatchObject({code:"NOT_FOUND"});
  });
+});
+
+it("fixture WAV requires the current tenant's synthetic job at upload and finalization, even on replay",async()=>{
+ const bytes=syntheticSpeechAudio(),input={id:randomUUID(),jobId:JOB,contentType:"audio/wav",syntheticAudioFixture:true,expectedSha256:hash(bytes),maximumBytes:46,expiresAt:new Date("2099-01-01")};
+ const upload=await service.beginUpload(context,input);
+ storage.put(upload.objectKey,"fixture-v1",bytes,"audio/wav");
+ const final={uploadId:upload.id,objectVersionId:"fixture-v1",evidenceType:"synthetic_speech_audio"};
+ const object=await service.finalize(context,final);
+ expect(await service.finalize(context,final)).toEqual(object);
+ await expect(service.beginUpload(otherContext,input)).rejects.toMatchObject({code:"EVIDENCE_NOT_AUTHORIZED"});
+ await rolledBack(admin,async db=>{
+  await db.query("SELECT set_config('app.tenant_id',$1,true)",[TENANT]);
+  // Rollback-only negative control; never change a real job or relax a runtime grant.
+  await db.query("ALTER TABLE app.job_commercial_track DISABLE TRIGGER USER");
+  await db.query("UPDATE app.job_commercial_track SET environment='pilot_no_charge' WHERE tenant_id=$1 AND job_id=$2",[TENANT,JOB]);
+  await db.query("ALTER TABLE app.job_commercial_track ENABLE TRIGGER USER");
+  await db.query("SET LOCAL ROLE jobguard_runtime");
+  // Retain the outer rollback transaction while the service exercises real runtime SQL/RLS.
+  const pool={connect:async()=>({release(){},query:(sql:string,values?:unknown[])=>
+   ["BEGIN","COMMIT","ROLLBACK"].includes(sql)?Promise.resolve({rows:[]}):db.query(sql,values)})} as unknown as Pool;
+  const bound=new EvidenceService(pool,storage);
+  await expect(bound.beginUpload(context,input)).rejects.toMatchObject({code:"EVIDENCE_NOT_AUTHORIZED"});
+  await expect(bound.finalize(context,final)).rejects.toMatchObject({code:"EVIDENCE_NOT_AUTHORIZED"});
+ });
+ expect(await service.finalize(context,final)).toEqual(object);
 });

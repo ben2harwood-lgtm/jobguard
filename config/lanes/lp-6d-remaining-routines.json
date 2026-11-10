@@ -5,12 +5,13 @@
       "branches": [
         "codex/sandbox/lp-6d-remaining-routines"
       ],
-      "note": "LP-6d RED, NOPR serial LP chain; last repair round 2. Exact non-lane paths over LP-6c 397a5a53. Router stages the resolved merge and commits/pushes; real PostgreSQL, main catch-up and exact-head independent RED review remain required.",
+      "note": "LP-6d RED, NOPR repair 4 on 4677be1d. Exact non-lane file changes; router stages the pending merge. PostgreSQL CI, independent RED review and second security look remain landing gates.",
       "allow": [
         "apps/api/src/audit-export/audit-export.application.test.ts",
         "apps/api/src/audit-export/audit-export.context.test.ts",
         "apps/api/src/contractor/contractor-retained-read.application.test.ts",
         "apps/api/src/contractor/contractor.projection.test.ts",
+        "apps/api/src/contractor/extra-proceed.application.test.ts",
         "apps/api/src/contractor/offline-risk.application.test.ts",
         "apps/api/src/contractor/operative-entitlements.application.test.ts",
         "apps/api/src/contractor/operative-offline.application.test.ts",
@@ -39,8 +40,8 @@
         "packages/db/src/work-order-fixtures.ts",
         "packages/db/src/work-order-repository.ts",
         "packages/db/test/contractor-parties.integration.test.ts",
+        "packages/db/test/contractor-session-context.integration.test.ts",
         "packages/db/test/contractor.integration.test.ts",
-        "packages/db/test/extra-fixtures.ts",
         "packages/db/test/fee-illustration-later.integration.test.ts",
         "packages/db/test/lp6d-main-predecessors.json",
         "packages/db/test/lp6d-repository-context.test.ts",
@@ -50,6 +51,7 @@
         "packages/db/test/lp6d-runtime-classification.json",
         "packages/db/test/migration-proofs/0780_lp6d_remaining_routines.proof.json",
         "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
+        "packages/db/test/quote.integration.test.ts",
         "packages/db/test/recovery-legacy-later.integration.test.ts",
         "packages/db/test/request-binding-fixture.ts",
         "packages/db/test/sor-pricing.integration.test.ts",

@@ -33,7 +33,7 @@ async function failure(c: PoolClient, sql: string, values: unknown[], expected: 
 }
 interface Routine { name: string; names: string[]; types: string[]; executable: boolean }
 async function routines() {
-  const migration = readFileSync(new URL("../migrations/0591_lp6c_money_binding.sql", import.meta.url), "utf8");
+  const migration = readFileSync(new URL("../migrations/0686_lp6c_money_binding.sql", import.meta.url), "utf8");
   const names = [...migration.matchAll(/CREATE OR REPLACE FUNCTION app\.(\w+)\(/gu)].map(m => m[1]);
   const rows = (await db.owner.query<Routine>(`SELECT p.proname name,p.proargnames names,
     ARRAY(SELECT format_type(x,NULL) FROM unnest(p.proargtypes::oid[]) x) types,

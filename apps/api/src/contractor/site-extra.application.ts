@@ -1,9 +1,11 @@
+import { extraProceed } from "@jobguard/db";
+import { recordExtraProceedV1 } from "@jobguard/core";
 import type { Pool } from "pg";
 import { z } from "zod";
 import { parseOfflineIntentV1, SiteExtraError, logSiteExtraV1, logSiteExtraV3, logSiteExtraV4, siteExtraLoggedV4, siteExtraLoggedV1, siteExtraLoggedV3, siteExtraFailureV1, siteExtraHttpStatus, siteExtraContentSha256V1 } from "@jobguard/core";
 import { derivedUuid, ExtraApprovalRepository, ContractorEntitlementAuthorityRepository, ContractorRepository, SiteExtraRepository, WatchdogError, contractorSessionContext, type AuthenticatedMembership, type VerifiedTenantContext } from "@jobguard/db";
 import { workOrderPrincipalV1 } from "./work-order.contracts.js";
-import { recordSiteSupervisorQueryV1, siteSupervisorQueryV1, siteSupervisorQueriesV1, sorSiteExtraSubmittedV2, SorSiteExtraError, parseLogSorSiteExtra, parseOrderCheckQuery, parseSorItemsQuery, siteOrderCheckV1, siteSorItemsV1, sorSiteExtraFailureV1, sorSiteExtraHttpStatus, sorSiteExtraLoggedV1 } from "@jobguard/core";
+import { recordSiteSupervisorQueryV1, siteSupervisorQueryV1, siteSupervisorQueriesV1, sorSiteExtraSubmittedV2, SorSiteExtraError, parseLogSorSiteExtra, parseOrderCheckQuery, parseSorItemsQuery, siteOrderCheckV1, siteSorItemsV1, siteSorRecentItemsV1, sorSiteExtraFailureV1, sorSiteExtraHttpStatus, sorSiteExtraLoggedV1 } from "@jobguard/core";
 import { SiteVisitRepository } from "@jobguard/db";
 import { SiteVisitError, logSiteExtraV2, startSiteVisitV1, parseCompleteSiteVisit, siteVisitStartedV1, siteVisitCompletedV1, siteAssignedJobsV1, siteOrderLinesV1, siteVisitFailureV1, siteVisitHttpStatus, type SiteVisitErrorCode } from "@jobguard/core";
 export function assertSiteExtraMode(): void {
@@ -109,6 +111,17 @@ export class SiteExtraApplication {
    return submission ? sorSiteExtraSubmittedV2.parse({ ...answer, version: "sor-site-extra-submitted.v2", state: submission.state, requestId: submission.requestId }) : sorSiteExtraLoggedV1.parse(answer);
   } catch (error) { throw this.sorError(error); }
  }
+ async proceed(principal: unknown, jobId: string, extraId: string, raw?: unknown) {
+  const sessionId = this.sorEntry(principal);
+  try {
+   const member = await new ContractorRepository(this.pool).resolveSession(sessionId);
+   if (!z.guid().safeParse(jobId).success || !z.guid().safeParse(extraId).success) throw new SorSiteExtraError("NOT_FOUND");
+   if (raw !== undefined && !recordExtraProceedV1.safeParse(raw).success) throw new SorSiteExtraError("INVALID_COMMAND");
+   const context = await this.resolveContext(sessionId, member);
+   if (raw !== undefined) await this.requireSiteOrigin(sessionId);
+   return await extraProceed(this.pool, context, member, jobId, extraId, raw);
+  } catch (error) { throw this.sorError(error); }
+ }
  async supervisorQueries(principal: unknown, jobId: string, raw?: unknown) {
   const sessionId = this.sorEntry(principal);
   try {
@@ -133,6 +146,16 @@ export class SiteExtraApplication {
    const context = await this.resolveContext(sessionId, member);
    const result = await this.repository.sorItems(context, member, job.data, parsed);
    return siteSorItemsV1.parse({ version: "site-sor-items.v1", environment: "synthetic_demo", realExternalActions: 0, jobId: job.data, sorVersionId: result.sorVersionId, items: result.items, truncated: result.truncated });
+  } catch (error) { throw this.sorError(error); }
+ }
+ async sorRecentItems(principal: unknown, jobId: string) {
+  const sessionId = this.sorEntry(principal);
+  try {
+   const member = await new ContractorRepository(this.pool).resolveSession(sessionId);
+   const job = z.guid({ error: "Invalid uuid" }).safeParse(jobId); if (!job.success) throw new SorSiteExtraError("NOT_FOUND");
+   const context = await this.resolveContext(sessionId, member);
+   const result = await this.repository.sorRecentItems(context, member, job.data);
+   return siteSorRecentItemsV1.parse({ version: "site-sor-recent-items.v1", environment: "synthetic_demo", realExternalActions: 0, jobId: job.data, sorVersionId: result.sorVersionId, items: result.items });
   } catch (error) { throw this.sorError(error); }
  }
  async orderCheck(principal: unknown, jobId: string, query: unknown) {
@@ -176,7 +199,7 @@ export class SiteExtraApplication {
  async assignedJobs(principal: unknown) {
   return this.visitRequest(principal, async (sessionId, member) => {
    const context = await this.resolveContext(sessionId, member);
-   const result = await this.visits.assignedJobs(context, member);
+   const result = await this.visits.assignedJobs(context, member, { includeLastCompletedVisit: true });
    return siteAssignedJobsV1.parse({ version: "site-assigned-jobs.v1", environment: "synthetic_demo", realExternalActions: 0, jobs: result.jobs, truncated: result.truncated });
   });
  }

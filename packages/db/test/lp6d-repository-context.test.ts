@@ -70,3 +70,12 @@ it("binds a newly issued contractor credential before bootstrap reads and audit"
     "BEGIN", "SELECT app.start_contractor_practice($1) tenant_id", "SELECT app.bind_request('contractor_practice',$1,$2)",
   ]);
 });
+
+it("hides a malformed import tenant before opening a database transaction", async () => {
+  const { pool } = fixture();
+  const principal = await new ContractorRepository(pool).resolveSession(session);
+  await expect(new WorkOrderRepository(pool).importCsv({ ...principal, tenantId: "not-a-uuid" }, {
+    commandId: randomUUID(), name: "fictional.csv", kind: "csv", csv: "",
+  })).rejects.toMatchObject({ code: "NOT_FOUND", message: "NOT_FOUND" });
+  expect(pool.connect).not.toHaveBeenCalled();
+});

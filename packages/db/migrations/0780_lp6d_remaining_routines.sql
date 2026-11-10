@@ -277,7 +277,7 @@ END;
 END
 $$;
 
--- Latest body: packages/db/migrations/0549_contractor_feature_guards.sql
+-- Latest body: packages/db/migrations/0676_work_order_expected_revision.sql
 CREATE OR REPLACE FUNCTION app.work_order_commit(actor uuid, payload jsonb) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
@@ -304,7 +304,7 @@ BEGIN
   IF NOT coalesce(app.work_order_client_permitted(actor,binding.client_id),false) THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='P0002'; END IF;
   SELECT * INTO job_row FROM app.job WHERE tenant_id=t AND id=binding.job_id FOR UPDATE;
   IF job_row.provenance<>'work_order' OR job_row.status<>'draft' THEN RAISE EXCEPTION 'STALE_REVISION' USING ERRCODE='40001'; END IF;
-  IF (payload->>'expectedRevision')::integer<>0 OR status_value<>'ordered' THEN RAISE EXCEPTION 'STALE_REVISION' USING ERRCODE='40001'; END IF;
+  IF (payload->>'expectedRevision')::integer IS DISTINCT FROM 0 OR status_value<>'ordered' THEN RAISE EXCEPTION 'STALE_REVISION' USING ERRCODE='40001'; END IF;
   INSERT INTO app.work_order(tenant_id,id,job_id,client_id,contract_id,contract_version_id,reference)
   VALUES(t,binding.work_order_id,binding.job_id,binding.client_id,binding.contract_id,binding.contract_version_id,payload->>'reference') RETURNING * INTO wo;
   revision_no:=1;
@@ -313,7 +313,7 @@ BEGIN
   -- An order of a client outside the actor's scope is, to them, an order that does not exist (ENT-1): no revision, cancellation or line/team change.
   IF wo.id IS NULL OR NOT coalesce(app.work_order_client_permitted(actor,wo.client_id),false) THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='P0002'; END IF;
   SELECT r.* INTO cur FROM app.work_order_current c JOIN app.work_order_revision r ON(r.tenant_id,r.work_order_id,r.id)=(c.tenant_id,c.work_order_id,c.revision_id) WHERE c.tenant_id=t AND c.work_order_id=wo.id;
-  IF cur.id IS NULL OR cur.revision<>(payload->>'expectedRevision')::integer THEN RAISE EXCEPTION 'STALE_REVISION' USING ERRCODE='40001'; END IF;
+  IF cur.id IS NULL OR cur.revision IS DISTINCT FROM (payload->>'expectedRevision')::integer THEN RAISE EXCEPTION 'STALE_REVISION' USING ERRCODE='40001'; END IF;
   revision_no:=cur.revision+1;
  END IF;
  SELECT document INTO doc FROM app.client_contract_version WHERE tenant_id=t AND id=wo.contract_version_id;
@@ -343,6 +343,7 @@ BEGIN
  FROM jsonb_array_elements(lines) l;
  IF team_value IS NOT NULL THEN
   IF NOT EXISTS(SELECT 1 FROM app.team WHERE tenant_id=t AND id=team_value) THEN RAISE EXCEPTION 'ASSIGNMENT_INVALID' USING ERRCODE='22023'; END IF;
+  IF NOT coalesce(app.contractor_allowed(actor,'organisation.manage',team_value) OR app.contractor_allowed(actor,'data.import',t),false) THEN RAISE EXCEPTION 'ASSIGNMENT_INVALID' USING ERRCODE='22023'; END IF;
   INSERT INTO app.job_assignment(tenant_id,id,job_id,work_order_id,revision_id,team_id,membership_id) VALUES(t,gen_random_uuid(),wo.job_id,wo.id,revision_id,team_value,NULL);
   FOR member IN SELECT value::uuid FROM jsonb_array_elements_text(coalesce(payload->'team'->'membershipIds','[]'::jsonb)) LOOP
    IF NOT coalesce(app.contractor_member_active(member),false) OR NOT EXISTS(SELECT 1 FROM app.team_membership tm WHERE tm.tenant_id=t AND tm.membership_id=member AND tm.team_id=team_value AND tm.active
@@ -845,7 +846,7 @@ END;
 END
 $$;
 
--- Latest body: packages/db/migrations/0522_lp5b_writers.sql
+-- Latest body: packages/db/migrations/0635_extra_same_step.sql
 CREATE OR REPLACE FUNCTION app.xa_approve(p_job uuid, p_request uuid, p_command uuid, p_actor uuid, p_step integer, p_hash text, p_net bigint, p_reject boolean, p_reason text) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
@@ -877,11 +878,20 @@ BEGIN
  v_grant:=app.xa_covers(p_actor,v_roles,p_job,'extra.approve');
  IF v_grant IS NULL THEN RAISE EXCEPTION 'PERMISSION_DENIED' USING ERRCODE='42501'; END IF;
  IF p_actor=v_origin.raising_membership_id THEN RAISE EXCEPTION 'SELF_APPROVAL' USING ERRCODE='23514'; END IF;
- SELECT f.step_index,f.request_id INTO v_prior FROM app.extra_approval_step_fact f JOIN app.extra_approval_request q ON(q.tenant_id,q.id)=(f.tenant_id,f.request_id)
-  WHERE f.tenant_id=v_tenant AND q.variation_id=v_req.variation_id AND f.actor_membership_id=p_actor ORDER BY (f.request_id=p_request) DESC,f.step_index LIMIT 1;
+ -- Rejection occupies a step too, even though it is an outcome rather than an approval fact.
+ SELECT h.step_index,h.request_id INTO v_prior FROM (
+  SELECT f.step_index,f.request_id FROM app.extra_approval_step_fact f
+   WHERE f.tenant_id=v_tenant AND f.variation_id=v_req.variation_id AND f.actor_membership_id=p_actor
+  UNION ALL
+  SELECT (r.result->>'stepIndex')::integer,o.request_id FROM app.extra_approval_outcome o
+   JOIN app.command_receipt r ON(r.tenant_id,r.command_id)=(o.tenant_id,o.command_id)
+   WHERE o.tenant_id=v_tenant AND o.variation_id=v_req.variation_id AND o.actor_membership_id=p_actor
+    AND o.kind='rejected' AND r.status='succeeded'
+ ) h ORDER BY (h.step_index<>v_n) DESC,h.step_index LIMIT 1;
  IF v_prior.request_id IS NOT NULL THEN
-  IF v_prior.request_id=p_request OR v_prior.step_index<>v_n THEN RAISE EXCEPTION 'REUSED_APPROVER' USING ERRCODE='23514'; END IF;
-  RAISE EXCEPTION 'REPEAT_HELD' USING ERRCODE='23514';
+  IF v_prior.step_index<>v_n THEN RAISE EXCEPTION 'REUSED_APPROVER' USING ERRCODE='23514'; END IF;
+  -- Same person may approve the same slot of a new request revision.
+  -- Same-request repeats are resolved by the durable command receipt before this routine.
  END IF;
  SELECT b.variation_revision_id INTO v_rev FROM app.extra_approval_revision_binding b WHERE(b.tenant_id,b.id)=(v_tenant,v_req.binding_id);
  IF p_reject THEN
@@ -906,7 +916,7 @@ END;
 END
 $$;
 
--- Latest body: packages/db/migrations/0522_lp5b_writers.sql
+-- Latest body: packages/db/migrations/0636_extra_withdraw_roles.sql
 CREATE OR REPLACE FUNCTION app.xa_withdraw(p_job uuid, p_variation uuid, p_command uuid, p_actor uuid, p_reason text) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
@@ -920,8 +930,8 @@ DECLARE lp5_result jsonb; v_tenant uuid; v_req app.extra_approval_request; v_lat
 BEGIN
  v_tenant:=app.xa_begin(p_job,p_command,ARRAY['WithdrawExtra'],p_actor);
  IF NOT EXISTS(SELECT 1 FROM app.extra_origin x WHERE(x.tenant_id,x.job_id,x.variation_id)=(v_tenant,p_job,p_variation) AND x.job_track='contractor' AND x.provenance='command') THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='P0002'; END IF;
- -- Ben, 13 Oct 2026 (answer 12): supervisors withdraw. Wider roles are held and therefore refused.
- IF app.xa_covers(p_actor,ARRAY['supervisor'],p_job,'job.read') IS NULL THEN RAISE EXCEPTION 'PERMISSION_DENIED' USING ERRCODE='42501'; END IF;
+ -- ENT-5 Q11, 4 Nov: covered supervisor, surveyor or commercial manager before final outcome.
+ IF app.xa_covers(p_actor,ARRAY['supervisor','surveyor','commercial_manager'],p_job,'job.read') IS NULL THEN RAISE EXCEPTION 'PERMISSION_DENIED' USING ERRCODE='42501'; END IF;
  IF p_reason IS NULL OR p_reason NOT IN('not_done','raised_in_error','resident_cancelled','already_on_order') THEN RAISE EXCEPTION 'INVALID_COMMAND' USING ERRCODE='23514'; END IF;
  v_latest:=app.xa_latest_kind(v_tenant,p_job,p_variation);
  -- Withdrawing is withdrawing the request: once it is approved the extra stays approved (so an approve that wins a race is the one effect).
@@ -940,7 +950,7 @@ END;
 END
 $$;
 
--- Latest body: packages/db/migrations/0522_lp5b_writers.sql
+-- Latest body: packages/db/migrations/0622_extra_duplicate_relink.sql
 CREATE OR REPLACE FUNCTION app.xa_mark_duplicate(p_job uuid, p_duplicate uuid, p_canonical uuid, p_command uuid, p_actor uuid, p_link uuid) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
@@ -956,6 +966,7 @@ BEGIN
  IF app.xa_covers(p_actor,ARRAY['supervisor','surveyor','commercial_manager'],p_job,'job.read') IS NULL THEN RAISE EXCEPTION 'PERMISSION_DENIED' USING ERRCODE='42501'; END IF;
  IF p_duplicate=p_canonical OR NOT EXISTS(SELECT 1 FROM app.extra_origin x WHERE(x.tenant_id,x.job_id,x.variation_id)=(v_tenant,p_job,p_duplicate) AND x.job_track='contractor')
   OR NOT EXISTS(SELECT 1 FROM app.extra_origin x WHERE(x.tenant_id,x.job_id,x.variation_id)=(v_tenant,p_job,p_canonical) AND x.job_track='contractor') THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='P0002'; END IF;
+ -- Read the effective state: an explicitly reversed duplicate fact no longer masks the prior state.
  v_latest:=app.xa_latest_kind(v_tenant,p_job,p_duplicate);
  IF v_latest IS NULL OR v_latest NOT IN('logged','awaiting_approval','approved','rejected') OR app.xa_latest_kind(v_tenant,p_job,p_canonical) IN('withdrawn','duplicate') THEN RAISE EXCEPTION 'INVALID_TRANSITION' USING ERRCODE='23514'; END IF;
  INSERT INTO app.extra_duplicate_link(tenant_id,id,job_id,duplicate_id,canonical_id,kind,command_id,actor_membership_id) VALUES(v_tenant,p_link,p_job,p_duplicate,p_canonical,'link',p_command,p_actor);
@@ -2148,7 +2159,7 @@ END;
 END
 $$;
 
--- Latest body: packages/db/migrations/0520_lp4_database_audit.sql
+-- Latest body: packages/db/migrations/0660_baseline_ancestry_audit_trust.sql
 CREATE OR REPLACE FUNCTION app.decision_check_command(p_digest text,p_command jsonb,p_phase text,p_data jsonb DEFAULT '{}'::jsonb)
  RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 BEGIN
@@ -2185,7 +2196,7 @@ BEGIN
    SELECT next_job.id FROM owned_job source JOIN app.audit_event e ON e.tenant_id=t AND e.subject_type='job'
      AND e.event_type='job.imported_baseline_attested' AND e.payload->'references'->>'sourceJobId'=source.id::text
    JOIN app.job next_job ON next_job.tenant_id=e.tenant_id AND next_job.id::text=e.subject_ref
-     AND next_job.provenance='imported' AND next_job.practice_session_digest IS NULL
+     AND next_job.provenance='imported' AND next_job.practice_session_digest IS NULL AND (EXISTS(SELECT 1 FROM app.job_import_v3 iv WHERE iv.tenant_id=t AND iv.job_id=next_job.id AND iv.source_job_id=source.id) OR EXISTS(SELECT 1 FROM app.command_receipt rv WHERE rv.tenant_id=t AND rv.command_type='job.adopt_in_flight' AND rv.status='succeeded' AND rv.semantic_key='import:'||next_job.id::text AND rv.result->>'jobId'=next_job.id::text AND rv.result->>'sourceJobId'=source.id::text))
  ) SELECT EXISTS(SELECT 1 FROM owned_job WHERE id=j) INTO owned;
  IF NOT owned THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='42501'; END IF;
  -- Same lock order on all phases: authority -> job -> command -> receipt -> finding -> audit.
@@ -2603,7 +2614,7 @@ END;
 END
 $$;
 
--- Latest body: packages/db/migrations/0522_lp5b_writers.sql
+-- Latest body: packages/db/migrations/0636_extra_withdraw_roles.sql
 CREATE OR REPLACE FUNCTION app.lp5b_contractor_permission(p_type text,p_actor uuid,p_job uuid,p_input jsonb) RETURNS void
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
 BEGIN
@@ -2669,7 +2680,7 @@ BEGIN
     WHERE o.tenant_id=t AND o.job_id=p_job AND o.variation_id=(v->>'extraId')::uuid AND o.raising_membership_id=p_actor)
     AND coalesce(app.contractor_job_allowed(p_actor,'extra.log',p_job),false));
  WHEN 'PriceExtra','ReviseExtra' THEN allowed:=app.xa_covers(p_actor,ARRAY['surveyor'],p_job,'extra.price') IS NOT NULL;
- WHEN 'WithdrawExtra' THEN allowed:=app.xa_covers(p_actor,ARRAY['supervisor'],p_job,'job.read') IS NOT NULL;
+ WHEN 'WithdrawExtra' THEN allowed:=app.xa_covers(p_actor,ARRAY['supervisor','surveyor','commercial_manager'],p_job,'job.read') IS NOT NULL;
  WHEN 'MarkDuplicate' THEN allowed:=app.xa_covers(p_actor,ARRAY['supervisor','surveyor','commercial_manager'],p_job,'job.read') IS NOT NULL;
  WHEN 'RevokeClientApproval' THEN allowed:=role_name='owner';
  WHEN 'ApproveExtraStep','RejectExtra' THEN
@@ -2896,7 +2907,7 @@ END;
 END
 $$;
 
--- Latest body: packages/db/migrations/0158_extra_approval_chain.sql
+-- Latest body: packages/db/migrations/0637_extra_working_day_wait.sql
 CREATE OR REPLACE FUNCTION app.xa_escalate() RETURNS TABLE(request_id uuid, job_id uuid, variation_id uuid, step_index integer, eligible_roles text[])
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog AS $$
 #variable_conflict use_column
@@ -2917,11 +2928,13 @@ BEGIN
    AND NOT EXISTS(SELECT 1 FROM app.extra_approval_outcome o WHERE(o.tenant_id,o.request_id)=(r.tenant_id,r.id)) ORDER BY r.server_recorded_at,r.id LOOP
   PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(v_tenant::text||':'||q.job_id::text,417));
   IF EXISTS(SELECT 1 FROM app.extra_approval_outcome o WHERE(o.tenant_id,o.request_id)=(q.tenant_id,q.id)) THEN CONTINUE; END IF;
+  IF q.request_revision<>(SELECT max(r.request_revision) FROM app.extra_approval_request r WHERE r.tenant_id=q.tenant_id AND r.variation_id=q.variation_id) THEN CONTINUE; END IF;
   SELECT count(*),max(f.server_recorded_at) INTO v_n,v_started FROM app.extra_approval_step_fact f WHERE(f.tenant_id,f.request_id)=(q.tenant_id,q.id);
   v_started:=coalesce(v_started,q.server_recorded_at); v_step:=q.requirement->'steps'->v_n;
   CONTINUE WHEN v_step IS NULL OR v_step->>'kind'<>'human' OR v_step->>'role'='client_approver';
-  CONTINUE WHEN clock_timestamp()<v_started+((v_step->>'timeLimitMinutes')::numeric*interval '1 minute');
-  v_roles:=ARRAY[v_step->>'escalationRole']||ARRAY(SELECT jsonb_array_elements_text(v_step->'alternateRoles'));
+  CONTINUE WHEN clock_timestamp()<app.xa_wait_deadline(v_started,v_step);
+  v_roles:=array_remove(ARRAY[v_step->>'escalationRole']||ARRAY(SELECT jsonb_array_elements_text(v_step->'alternateRoles')),NULL);
+  CONTINUE WHEN cardinality(v_roles)=0;
   INSERT INTO app.extra_escalation_fact(tenant_id,id,job_id,variation_id,request_id,step_index,eligible_roles) VALUES(q.tenant_id,pg_catalog.gen_random_uuid(),q.job_id,q.variation_id,q.id,v_n,v_roles)
   ON CONFLICT(tenant_id,request_id,step_index) DO NOTHING RETURNING id INTO v_id;
   IF v_id IS NOT NULL THEN request_id:=q.id; job_id:=q.job_id; variation_id:=q.variation_id; step_index:=v_n; eligible_roles:=v_roles; RETURN NEXT; END IF;
@@ -3244,7 +3257,7 @@ END;
 END
 $$;
 
--- Latest body: packages/db/migrations/0518_shadow_demo_guide.sql
+-- Latest body: packages/db/migrations/0650_demo_customer_link_reference.sql
 CREATE OR REPLACE FUNCTION app.demo_issue_customer_link(t uuid,j uuid,c uuid,session_digest text,link_digest text,content text) RETURNS uuid
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
@@ -3271,7 +3284,13 @@ BEGIN
  SELECT lower(payload->>'email') INTO recipient FROM app.customer_revision WHERE tenant_id=t AND id=b.customer_revision_id;
  IF b.id IS NULL OR recipient IS NULL OR recipient !~ '^[^@[:space:]]+@[^@[:space:]]+\.invalid$' OR link_digest IS NULL OR link_digest !~ '^[a-f0-9]{64}$'
   OR content IS NULL OR length(content)>4096 THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
- IF content !~ ('^/customer/sign-in#'||t::text||'/'||j::text||'/'||c::text||'/[A-Za-z0-9_-]{43}$') THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
+ -- Preserve exact legacy path validation for existing synthetic callers, but never persist a credential.
+ IF content ~ ('^/customer/sign-in#'||t::text||'/'||j::text||'/'||c::text||'/[A-Za-z0-9_-]{43}$') THEN
+  content:='customer-signin-redacted.v1:'||encode(sha256(convert_to(content,'UTF8')),'hex');
+ ELSE
+  -- Same non-credential reference boundary as 0533's identity.customer_portal_issue.
+  IF content !~ ('^customer-signin-reference\.v1:'||t::text||'/'||j::text||'/'||c::text||'/[A-Za-z0-9_-]{43}$') THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
+ END IF;
  ts:=clock_timestamp();
  IF EXISTS(SELECT 1 FROM app.customer_portal_grant WHERE tenant_id=t AND job_id=j AND issued_at>ts-interval '1 minute') THEN RAISE EXCEPTION 'CUSTOMER_LINK_RATE_LIMITED' USING ERRCODE='P0001'; END IF;
  UPDATE app.action_outbox SET status='cancelled',updated_at=ts WHERE tenant_id=t AND id IN(SELECT outbox_id FROM app.customer_portal_grant WHERE tenant_id=t AND job_id=j) AND status IN('pending','retryable');
@@ -3321,7 +3340,7 @@ END;
 END
 $$;
 
--- Latest body: packages/db/migrations/0526_commercial_integrity_sources.sql
+-- Latest body: packages/db/migrations/0660_baseline_ancestry_audit_trust.sql
 CREATE OR REPLACE FUNCTION app.ch6_integrity_sources(t uuid,j uuid,d text) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog STABLE AS $$BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
@@ -3354,7 +3373,7 @@ BEGIN
   UNION SELECT source.candidate_id,parent.id FROM ancestry source
   JOIN app.job child ON child.tenant_id=t AND child.id=source.id AND child.provenance='imported' AND child.practice_session_digest IS NULL
   JOIN app.audit_event e ON e.tenant_id=t AND e.subject_type='job' AND e.event_type='job.imported_baseline_attested' AND e.subject_ref=child.id::text
-  JOIN app.job parent ON parent.tenant_id=t AND parent.id::text=e.payload->'references'->>'sourceJobId'
+  JOIN app.job parent ON parent.tenant_id=t AND parent.id::text=e.payload->'references'->>'sourceJobId' AND (EXISTS(SELECT 1 FROM app.job_import_v3 iv WHERE iv.tenant_id=t AND iv.job_id=child.id AND iv.source_job_id=parent.id) OR EXISTS(SELECT 1 FROM app.command_receipt rv WHERE rv.tenant_id=t AND rv.command_type='job.adopt_in_flight' AND rv.status='succeeded' AND rv.semantic_key='import:'||child.id::text AND rv.result->>'jobId'=child.id::text AND rv.result->>'sourceJobId'=parent.id::text))
  ), owned AS (
   SELECT DISTINCT source.candidate_id AS id FROM ancestry source JOIN app.job root ON root.tenant_id=t AND root.id=source.id AND root.practice_session_digest=d
  )
@@ -3413,7 +3432,7 @@ END;
 END
 $$;
 
--- Latest body: packages/db/migrations/0526_commercial_integrity_sources.sql
+-- Latest body: packages/db/migrations/0660_baseline_ancestry_audit_trust.sql
 CREATE OR REPLACE FUNCTION app.ch6_record_integrity_review(t uuid,j uuid,digest text,review jsonb,source_snapshot jsonb) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
@@ -3456,7 +3475,7 @@ BEGIN
  -- Related-quote facts also use owned jobs in this session, never another tenant.
  WITH RECURSIVE owned AS (SELECT id FROM app.job WHERE tenant_id=t AND practice_session_digest=digest
  UNION SELECT x.id FROM owned source JOIN app.audit_event e ON e.tenant_id=t AND e.subject_type='job' AND e.event_type='job.imported_baseline_attested' AND e.payload->'references'->>'sourceJobId'=source.id::text
- JOIN app.job x ON x.tenant_id=t AND x.id::text=e.subject_ref AND x.provenance='imported' AND x.practice_session_digest IS NULL)
+ JOIN app.job x ON x.tenant_id=t AND x.id::text=e.subject_ref AND x.provenance='imported' AND x.practice_session_digest IS NULL AND (EXISTS(SELECT 1 FROM app.job_import_v3 iv WHERE iv.tenant_id=t AND iv.job_id=x.id AND iv.source_job_id=source.id) OR EXISTS(SELECT 1 FROM app.command_receipt rv WHERE rv.tenant_id=t AND rv.command_type='job.adopt_in_flight' AND rv.status='succeeded' AND rv.semantic_key='import:'||x.id::text AND rv.result->>'jobId'=x.id::text AND rv.result->>'sourceJobId'=source.id::text)))
  SELECT array_agg(id ORDER BY id) INTO owned_jobs FROM owned;
  PERFORM 1 FROM app.job WHERE tenant_id=t AND id=ANY(owned_jobs) ORDER BY id FOR SHARE;
  PERFORM 1 FROM app.job_activation WHERE tenant_id=t AND job_id=j ORDER BY id FOR SHARE;
@@ -3504,7 +3523,7 @@ END;
 END
 $$;
 
--- Latest body: packages/db/migrations/0525_commercial_integrity_v3_receipts.sql
+-- Latest body: packages/db/migrations/0660_baseline_ancestry_audit_trust.sql
 CREATE OR REPLACE FUNCTION app.ch6_integrity_authority(t uuid,j uuid,digest text) RETURNS uuid
 LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog AS $$BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
@@ -3524,7 +3543,7 @@ BEGIN
    UNION SELECT parent.id FROM practice_owned_job source
    JOIN app.job child ON child.tenant_id=t AND child.id=source.id AND child.provenance='imported' AND child.practice_session_digest IS NULL
    JOIN app.audit_event e ON e.tenant_id=t AND e.subject_type='job' AND e.event_type='job.imported_baseline_attested' AND e.subject_ref=child.id::text
-   JOIN app.job parent ON parent.tenant_id=t AND parent.id::text=e.payload->'references'->>'sourceJobId'
+   JOIN app.job parent ON parent.tenant_id=t AND parent.id::text=e.payload->'references'->>'sourceJobId' AND (EXISTS(SELECT 1 FROM app.job_import_v3 iv WHERE iv.tenant_id=t AND iv.job_id=child.id AND iv.source_job_id=parent.id) OR EXISTS(SELECT 1 FROM app.command_receipt rv WHERE rv.tenant_id=t AND rv.command_type='job.adopt_in_flight' AND rv.status='succeeded' AND rv.semantic_key='import:'||child.id::text AND rv.result->>'jobId'=child.id::text AND rv.result->>'sourceJobId'=parent.id::text))
   ) SELECT 1 FROM practice_owned_job source JOIN app.job root ON root.tenant_id=t AND root.id=source.id WHERE root.practice_session_digest=digest
  ) THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='42501'; END IF;
  RETURN actor;
@@ -3727,7 +3746,7 @@ END;
 END
 $$;
 
--- Latest body: packages/db/migrations/0535_import_pre_adoption.sql
+-- Latest body: packages/db/migrations/0668_import_company_owner_history.sql
 CREATE OR REPLACE FUNCTION app.ch5_history_actor(t uuid,j uuid,d text) RETURNS uuid
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
@@ -3745,7 +3764,7 @@ BEGIN
  ELSE actor:=app.ch5_import_actor(t,d); END IF;
  IF actor IS NULL OR NOT EXISTS(SELECT 1 FROM app.job_import_v3 i JOIN app.job_commercial_track c
   ON(c.tenant_id,c.job_id)=(i.tenant_id,i.job_id)
-  WHERE i.tenant_id=t AND i.job_id=j AND i.session_digest=d AND c.job_track='small_builder' AND c.environment='synthetic_demo')
+  WHERE i.tenant_id=t AND i.job_id=j AND (t<>'11111111-1111-4111-8111-111111111111'::uuid OR i.session_digest=d) AND c.job_track='small_builder' AND c.environment='synthetic_demo')
  THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
  RETURN actor;
 END;
@@ -4041,7 +4060,7 @@ END;
 END
 $$;
 
--- Latest body: packages/db/migrations/0551_sync_snapshot_checkpoint.sql
+-- Latest body: packages/db/migrations/0679_sync_checkpoint_synthetic_guard.sql
 CREATE OR REPLACE FUNCTION app.sync_snapshot_generation(u uuid,r bigint,s bigint,h text,e text)
 RETURNS bigint LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
@@ -4053,6 +4072,9 @@ RETURNS bigint LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $
  END IF;
 DECLARE t uuid := nullif(current_setting('app.tenant_id',true),'')::uuid; g bigint;
 BEGIN
+ IF current_database()<>'jobguard_synthetic_demo' THEN
+  RAISE EXCEPTION 'SYNC_CHECKPOINT_INVALID';
+ END IF;
  IF t IS NULL OR u IS NULL OR e IS DISTINCT FROM 'synthetic_demo'
   OR r IS NULL OR r NOT BETWEEN 0 AND 9007199254740991
   OR s IS NULL OR s NOT BETWEEN 1 AND 9007199254740991
@@ -4091,7 +4113,7 @@ $$;
 ALTER FUNCTION app.lp6d_contractor_session_identity(uuid) OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.lp6d_contractor_session_identity(uuid) FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure;
 
--- Latest body: packages/db/migrations/0584_lp6b_effective_session_actor.sql
+-- Latest body: packages/db/migrations/0658_lp6b_effective_session_actor.sql
 CREATE OR REPLACE FUNCTION app.lp6_session_authority(p_kind text,p_credential text,p_tenant uuid)
  RETURNS TABLE(session_ref text,actor_id uuid,expires_at timestamptz)
  LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
@@ -5063,7 +5085,7 @@ DECLARE n integer;BEGIN IF p_tenant IS DISTINCT FROM nullif(current_setting('app
 END
 $$;
 
--- Latest body: packages/db/migrations/0356_unchecked_job_doors.sql
+-- Latest body: packages/db/migrations/0631_legacy_recovery_money_integrity.sql
 CREATE OR REPLACE FUNCTION app.approve_synthetic_landing(p jsonb)RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
@@ -5093,7 +5115,7 @@ BEGIN
  IF a.id IS NULL OR a.status<>'approved' OR a.policy_version<>'reference_fee_policy_v1' OR a.expected_case_revision<>c.revision OR a.expires_at<=clock_timestamp() THEN RAISE EXCEPTION 'current eligibility approval required' USING ERRCODE='42501';END IF;
  SELECT * INTO a FROM app.recovery_approval WHERE tenant_id=t AND id=(p->>'landingApprovalId')::uuid AND job_id=c.job_id AND case_id=c.id AND kind='landing';
  IF a.id IS NULL OR a.status<>'approved' OR a.expected_case_revision<>c.revision OR a.expires_at<=clock_timestamp() THEN RAISE EXCEPTION 'current landing approval required' USING ERRCODE='42501';END IF;
- IF gross<=0 OR eligible<=0 OR (SELECT COALESCE(sum(gross_pence),0) FROM app.landing_allocation WHERE tenant_id=t AND receipt_id=r.id)+gross>r.gross_pence OR c.approved_landed+eligible>c.claim_pence-c.written_off THEN RAISE EXCEPTION 'allocation exceeds available receipt or claim' USING ERRCODE='23514';END IF;
+ IF gross<=0 OR eligible<=0 OR eligible>gross OR (SELECT COALESCE(sum(gross_pence),0) FROM app.landing_allocation WHERE tenant_id=t AND receipt_id=r.id)+gross>r.gross_pence OR c.approved_landed+eligible>c.claim_pence-c.written_off THEN RAISE EXCEPTION 'allocation exceeds available receipt or claim' USING ERRCODE='23514';END IF;
  INSERT INTO app.landing_allocation VALUES(l,t,c.job_id,c.id,r.id,e.id,(p->>'eligibilityApprovalId')::uuid,(p->>'landingApprovalId')::uuid,gross,eligible,'GBP','reference_fee_policy_v1',DEFAULT);
  SELECT COALESCE(sum(x.eligible_net_pence),0),COALESCE((SELECT sum(y.eligible_net_pence)FROM app.landing_reversal y WHERE y.tenant_id=t AND y.job_id=c.job_id),0)INTO landed,reversed FROM app.landing_allocation x WHERE x.tenant_id=t AND x.job_id=c.job_id;
  landed:=landed-reversed;SELECT recovery_cap_pence INTO cap FROM app.cap_snapshot WHERE tenant_id=t AND job_id=c.job_id AND fee_policy_version='reference_fee_policy_v1';
@@ -5107,7 +5129,7 @@ END;
 END
 $$;
 
--- Latest body: packages/db/migrations/0356_unchecked_job_doors.sql
+-- Latest body: packages/db/migrations/0682_synthetic_reversal_replay_match.sql
 CREATE OR REPLACE FUNCTION app.reverse_synthetic_landing(p_tenant uuid,p_reversal uuid,p_derivation uuid,p_journal uuid,p_allocation uuid,p_amount bigint,p_reason varchar)RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
@@ -5116,17 +5138,31 @@ BEGIN
   OR p_tenant IS DISTINCT FROM app.current_tenant() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
-DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid;x app.landing_allocation;landed bigint;cap bigint;fee bigint;credit bigint;liability bigint;prior bigint;delta bigint;original uuid;
+DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid;x app.landing_allocation;existing app.landing_reversal;replay uuid;landed bigint;cap bigint;fee bigint;credit bigint;liability bigint;prior bigint;delta bigint;original uuid;
 BEGIN
- IF current_database() IS DISTINCT FROM 'jobguard_synthetic_demo' THEN RAISE EXCEPTION 'MODE_FORBIDDEN' USING ERRCODE='42501'; END IF; IF t IS DISTINCT FROM p_tenant THEN RAISE EXCEPTION 'tenant mismatch' USING ERRCODE='42501';END IF;SELECT*INTO x FROM app.landing_allocation WHERE tenant_id=t AND id=p_allocation FOR UPDATE;PERFORM 1 FROM app.job WHERE tenant_id=t AND id=x.job_id FOR UPDATE;
+ IF current_database() IS DISTINCT FROM 'jobguard_synthetic_demo' THEN RAISE EXCEPTION 'MODE_FORBIDDEN' USING ERRCODE='42501'; END IF; IF t IS DISTINCT FROM p_tenant THEN RAISE EXCEPTION 'tenant mismatch' USING ERRCODE='42501';END IF;
+ -- Serialize reuse of the tenant/reversal identity, including different jobs.
+ PERFORM pg_advisory_xact_lock(hashtext(t::text),hashtext('synthetic_reversal:'||p_reversal::text));
+ SELECT * INTO existing FROM app.landing_reversal WHERE tenant_id=t AND id=p_reversal;
+ IF existing.id IS NOT NULL THEN
+  IF existing.allocation_id IS DISTINCT FROM p_allocation OR existing.eligible_net_pence IS DISTINCT FROM p_amount OR existing.reason IS DISTINCT FROM p_reason THEN
+   RAISE EXCEPTION 'invalid reversal' USING ERRCODE='23514';
+  END IF;
+  SELECT id INTO replay FROM app.recovery_fee_derivation WHERE tenant_id=t AND source_reversal_id=p_reversal;
+  IF replay IS NULL OR replay IS DISTINCT FROM p_derivation OR EXISTS(
+   SELECT 1 FROM app.recovery_fee_journal WHERE tenant_id=t AND derivation_id=replay AND kind='compensation' AND id IS DISTINCT FROM p_journal
+  ) THEN RAISE EXCEPTION 'invalid reversal' USING ERRCODE='23514';END IF;
+  RETURN replay;
+ END IF;
+ SELECT*INTO x FROM app.landing_allocation WHERE tenant_id=t AND id=p_allocation FOR UPDATE;PERFORM 1 FROM app.job WHERE tenant_id=t AND id=x.job_id FOR UPDATE;
  IF x.id IS NULL OR p_amount<=0 OR p_amount>x.eligible_net_pence OR EXISTS(SELECT 1 FROM app.landing_reversal WHERE tenant_id=t AND allocation_id=x.id)THEN RAISE EXCEPTION 'invalid reversal' USING ERRCODE='23514';END IF;
- INSERT INTO app.landing_reversal VALUES(p_reversal,t,x.job_id,x.id,p_amount,p_reason,DEFAULT);SELECT COALESCE(sum(eligible_net_pence),0)INTO landed FROM app.landing_allocation WHERE tenant_id=t AND job_id=x.job_id;landed:=landed-p_amount;SELECT recovery_cap_pence INTO cap FROM app.cap_snapshot WHERE tenant_id=t AND job_id=x.job_id;fee:=least(app.half_even_ratio(landed,1,10),cap);credit:=least(7900,fee);liability:=fee-credit;SELECT COALESCE(sum(CASE kind WHEN'fee_obligation'THEN amount_pence ELSE -amount_pence END),0)INTO prior FROM app.recovery_fee_journal WHERE tenant_id=t AND job_id=x.job_id;delta:=liability-prior;
+ INSERT INTO app.landing_reversal VALUES(p_reversal,t,x.job_id,x.id,p_amount,p_reason,DEFAULT);SELECT COALESCE(sum(a.eligible_net_pence),0)-COALESCE((SELECT sum(r.eligible_net_pence) FROM app.landing_reversal r WHERE r.tenant_id=t AND r.job_id=x.job_id),0) INTO landed FROM app.landing_allocation a WHERE a.tenant_id=t AND a.job_id=x.job_id;SELECT recovery_cap_pence INTO cap FROM app.cap_snapshot WHERE tenant_id=t AND job_id=x.job_id AND fee_policy_version='reference_fee_policy_v1';fee:=least(app.half_even_ratio(landed,1,10),cap);credit:=least(CASE WHEN EXISTS(SELECT 1 FROM app.simulated_settlement_event s JOIN app.synthetic_obligation o ON(o.tenant_id,o.id)=(s.tenant_id,s.obligation_id)WHERE s.tenant_id=t AND o.job_id=x.job_id)THEN 7900 ELSE 0 END,fee);liability:=fee-credit;SELECT COALESCE(sum(CASE kind WHEN'fee_obligation'THEN amount_pence ELSE -amount_pence END),0)INTO prior FROM app.recovery_fee_journal WHERE tenant_id=t AND job_id=x.job_id;delta:=liability-prior;
  INSERT INTO app.recovery_fee_derivation VALUES(p_derivation,t,x.job_id,NULL,p_reversal,'reference_fee_policy_v1',landed,cap,fee,credit,liability,delta,DEFAULT);INSERT INTO app.recovery_review VALUES(gen_random_uuid(),t,x.job_id,p_derivation,'landing_reversed','open',DEFAULT);
  IF delta<0 THEN SELECT id INTO original FROM app.recovery_fee_journal WHERE tenant_id=t AND job_id=x.job_id AND kind='fee_obligation' ORDER BY created_at LIMIT 1;INSERT INTO app.recovery_fee_journal VALUES(p_journal,t,x.job_id,p_derivation,'compensation',-delta,'GBP','recovery_fee_deferred','recovery_fee_receivable',original,DEFAULT);END IF;RETURN p_derivation;END;
 END
 $$;
 
--- Latest body: packages/db/migrations/0356_unchecked_job_doors.sql
+-- Latest body: packages/db/migrations/0670_recovery_demo_replay_job.sql
 CREATE OR REPLACE FUNCTION app.configure_recovery_demo(p_job uuid,p_command uuid,p_scenario varchar) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
@@ -5139,7 +5175,13 @@ BEGIN
  IF current_database() IS DISTINCT FROM 'jobguard_synthetic_demo' THEN RAISE EXCEPTION 'MODE_FORBIDDEN' USING ERRCODE='42501'; END IF;
  IF t IS NULL OR p_scenario NOT IN('missing_evidence','pending_money','manual_receipt','unapproved_eligibility','prevented','eligible') THEN RAISE EXCEPTION 'invalid synthetic scenario' USING ERRCODE='22023';END IF;
  PERFORM 1 FROM app.job_activation WHERE tenant_id=t AND job_id=p_job AND mode='synthetic_demo' AND fee_policy_version='reference_fee_policy_v1';IF NOT FOUND THEN RAISE EXCEPTION 'synthetic live job required' USING ERRCODE='42501';END IF;
- IF EXISTS(SELECT 1 FROM app.recovery_demo_selection WHERE tenant_id=t AND command_id=p_command) THEN RETURN p_command;END IF;
+ IF EXISTS(SELECT 1 FROM app.recovery_demo_selection WHERE tenant_id=t AND command_id=p_command) THEN
+  IF EXISTS(SELECT 1 FROM app.recovery_demo_selection WHERE tenant_id=t AND command_id=p_command
+   AND (job_id IS DISTINCT FROM p_job OR scenario IS DISTINCT FROM p_scenario)) THEN
+   RAISE EXCEPTION 'scenario command conflict' USING ERRCODE='23505';
+  END IF;
+  RETURN p_command;
+ END IF;
  IF EXISTS(SELECT 1 FROM app.recovery_demo_selection WHERE tenant_id=t AND job_id=p_job) THEN RAISE EXCEPTION 'scenario already selected' USING ERRCODE='23505';END IF;
  INSERT INTO app.recovery_case(id,tenant_id,job_id,claim_pence,currency,state,revision,synthetic)VALUES(c,t,p_job,15000,'GBP',CASE WHEN p_scenario='prevented'THEN'prevented'ELSE'active'END,0,true);
  IF p_scenario<>'manual_receipt' THEN INSERT INTO app.synthetic_recovery_receipt(id,tenant_id,job_id,source_identity,reconciliation_identity,status,gross_pence,currency,synthetic,settled_at)VALUES(r,t,p_job,'generated-fake-settlement:'||r,'generated-movement:'||r,CASE WHEN p_scenario='pending_money'THEN'pending'ELSE'settled'END,18000,'GBP',true,CASE WHEN p_scenario='pending_money'THEN NULL ELSE clock_timestamp() END) ; END IF;
@@ -5740,5 +5782,198 @@ END;
 END
 $$;
 -- Latest body: packages/db/migrations/0548_server_plan_entitlements.sql
+CREATE OR REPLACE FUNCTION app.mon8_feature_decision(actor uuid, feature text, purpose text DEFAULT 'new_work') RETURNS jsonb
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog AS $$
+BEGIN
+ -- LP6D_BOUND: run before original DECLARE initializers and business locks.
+ PERFORM app.current_actor();
+ IF nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text THEN
+  RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
+ END IF;
+DECLARE t uuid; assignment app.commercial_track_assignment; status app.contractor_agreement_status_revision;
+ agreement app.subscription_agreement_revision; entitlement text:='held'; reason text:='agreement_authority_held';
+ contractor_feature boolean; today date;
+BEGIN
+ IF current_database()<>'jobguard_synthetic_demo' OR current_setting('transaction_isolation')<>'read committed' THEN RAISE EXCEPTION 'MODE_FORBIDDEN' USING ERRCODE='42501'; END IF;
+ BEGIN t:=nullif(current_setting('app.tenant_id',true),'')::uuid; EXCEPTION WHEN invalid_text_representation THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END;
+ IF t IS NULL OR actor IS NULL OR feature IS NULL OR purpose IS NULL
+ OR feature NOT IN('watchdog','final_check','invoices','recovery_cases','pay_now','accounting_export','operative_roles','site_origin_capture','approval_chains','work_orders','sso')
+ OR purpose NOT IN('new_work','retained_read') THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
+ -- Organisation/status before subscription/lifecycle before business locks before audit.
+ contractor_feature:=feature IN('operative_roles','site_origin_capture','approval_chains','work_orders','sso');
+ PERFORM pg_advisory_xact_lock_shared(hashtextextended(t::text,54));
+ IF NOT contractor_feature AND purpose='new_work' THEN PERFORM pg_advisory_xact_lock_shared(hashtextextended(t::text,184)); END IF;
+ -- Read after both waits. The actor belongs to this transaction's verified tenant.
+ IF NOT EXISTS(SELECT 1 FROM app.membership m WHERE m.tenant_id=t AND m.id=actor AND m.revoked_at IS NULL
+ AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp())
+ AND NOT EXISTS(SELECT 1 FROM app.contractor_membership_revocation r WHERE r.tenant_id=t AND r.membership_id=m.id)) THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
+ IF purpose='retained_read' THEN
+  -- Availability only: each reader must still enforce its exact role/resource/export permissions.
+  entitlement:='included'; reason:='available';
+ ELSE
+  SELECT * INTO assignment FROM app.commercial_track_assignment WHERE tenant_id=t ORDER BY revision DESC LIMIT 1;
+  today:=(clock_timestamp() AT TIME ZONE 'Europe/London')::date;
+  IF NOT contractor_feature THEN SELECT * INTO agreement FROM app.subscription_agreement_revision WHERE tenant_id=t AND effective_date<=today ORDER BY effective_date DESC,revision DESC LIMIT 1; END IF;
+  IF assignment.commercial_track='contractor' THEN
+   IF contractor_feature THEN
+    SELECT * INTO status FROM app.contractor_agreement_status_revision WHERE tenant_id=t AND assignment_id=assignment.id ORDER BY revision DESC LIMIT 1;
+    IF status.status='active' THEN entitlement:='included'; reason:='available'; END IF;
+   ELSE entitlement:='excluded'; reason:='track_forbidden'; END IF;
+  ELSIF assignment.commercial_track='small_builder' OR (assignment.id IS NULL AND (agreement.id IS NOT NULL OR contractor_feature)) THEN
+   IF contractor_feature THEN entitlement:='excluded'; reason:='track_forbidden';
+   ELSIF agreement.id IS NOT NULL AND agreement.plan IN('Solo','Builder') THEN
+    entitlement:='included';
+    -- Live payment/accounting readiness and persisted MON-3 trial authority are not on main.
+    reason:=CASE WHEN feature IN('pay_now','accounting_export') THEN 'feature_disabled' ELSE 'available' END;
+   END IF;
+  END IF;
+ END IF;
+ RETURN jsonb_build_object('version','plan-entitlement-decision.v1','environment','synthetic_demo','feature',feature,
+  'entitlement',entitlement,'executable',reason='available','reason',reason);
+END;
+END
+$$;
+
+-- Private SSO bootstrap: the validated sign-in path supplies the member and tenant.
+CREATE OR REPLACE FUNCTION app.mon8_sso_feature_decision(actor uuid) RETURNS jsonb
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE feature constant text:='sso'; purpose constant text:='new_work'; t uuid; assignment app.commercial_track_assignment; status app.contractor_agreement_status_revision;
+ agreement app.subscription_agreement_revision; entitlement text:='held'; reason text:='agreement_authority_held';
+ contractor_feature boolean; today date;
+BEGIN
+ IF current_database()<>'jobguard_synthetic_demo' OR current_setting('transaction_isolation')<>'read committed' THEN RAISE EXCEPTION 'MODE_FORBIDDEN' USING ERRCODE='42501'; END IF;
+ BEGIN t:=nullif(current_setting('app.tenant_id',true),'')::uuid; EXCEPTION WHEN invalid_text_representation THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END;
+ IF t IS NULL OR actor IS NULL OR feature IS NULL OR purpose IS NULL
+ OR feature NOT IN('watchdog','final_check','invoices','recovery_cases','pay_now','accounting_export','operative_roles','site_origin_capture','approval_chains','work_orders','sso')
+ OR purpose NOT IN('new_work','retained_read') THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
+ -- Organisation/status before subscription/lifecycle before business locks before audit.
+ contractor_feature:=feature IN('operative_roles','site_origin_capture','approval_chains','work_orders','sso');
+ PERFORM pg_advisory_xact_lock_shared(hashtextextended(t::text,54));
+ IF NOT contractor_feature AND purpose='new_work' THEN PERFORM pg_advisory_xact_lock_shared(hashtextextended(t::text,184)); END IF;
+ -- Read after both waits. The actor belongs to this transaction's verified tenant.
+ IF NOT EXISTS(SELECT 1 FROM app.membership m WHERE m.tenant_id=t AND m.id=actor AND m.revoked_at IS NULL
+ AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp())
+ AND NOT EXISTS(SELECT 1 FROM app.contractor_membership_revocation r WHERE r.tenant_id=t AND r.membership_id=m.id)) THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
+ IF purpose='retained_read' THEN
+  -- Availability only: each reader must still enforce its exact role/resource/export permissions.
+  entitlement:='included'; reason:='available';
+ ELSE
+  SELECT * INTO assignment FROM app.commercial_track_assignment WHERE tenant_id=t ORDER BY revision DESC LIMIT 1;
+  today:=(clock_timestamp() AT TIME ZONE 'Europe/London')::date;
+  IF NOT contractor_feature THEN SELECT * INTO agreement FROM app.subscription_agreement_revision WHERE tenant_id=t AND effective_date<=today ORDER BY effective_date DESC,revision DESC LIMIT 1; END IF;
+  IF assignment.commercial_track='contractor' THEN
+   IF contractor_feature THEN
+    SELECT * INTO status FROM app.contractor_agreement_status_revision WHERE tenant_id=t AND assignment_id=assignment.id ORDER BY revision DESC LIMIT 1;
+    IF status.status='active' THEN entitlement:='included'; reason:='available'; END IF;
+   ELSE entitlement:='excluded'; reason:='track_forbidden'; END IF;
+  ELSIF assignment.commercial_track='small_builder' OR (assignment.id IS NULL AND (agreement.id IS NOT NULL OR contractor_feature)) THEN
+   IF contractor_feature THEN entitlement:='excluded'; reason:='track_forbidden';
+   ELSIF agreement.id IS NOT NULL AND agreement.plan IN('Solo','Builder') THEN
+    entitlement:='included';
+    -- Live payment/accounting readiness and persisted MON-3 trial authority are not on main.
+    reason:=CASE WHEN feature IN('pay_now','accounting_export') THEN 'feature_disabled' ELSE 'available' END;
+   END IF;
+  END IF;
+ END IF;
+ RETURN jsonb_build_object('version','plan-entitlement-decision.v1','environment','synthetic_demo','feature',feature,
+  'entitlement',entitlement,'executable',reason='available','reason',reason);
+END $$;
+ALTER FUNCTION app.mon8_sso_feature_decision(uuid) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.mon8_sso_feature_decision(uuid) FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure;
+DO $revoke$ DECLARE r record; BEGIN
+ FOR r IN SELECT rolname FROM pg_roles WHERE rolcanlogin LOOP
+  EXECUTE format('REVOKE ALL ON FUNCTION app.mon8_sso_feature_decision(uuid) FROM %I',r.rolname);
+ END LOOP;
+END $revoke$;
+
+-- Latest body: packages/db/migrations/0549_contractor_feature_guards.sql; only the SSO feature call changes.
+CREATE OR REPLACE FUNCTION identity.sso_complete(c uuid,claims jsonb,state char(64),new_session uuid,token char(64),csrf text,expires timestamptz) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE t uuid; r identity.sso_request; sub identity.sso_subject; u uuid; member uuid; account uuid; address text:=(claims->>'email'); email_domain text; group_row record; grant_id uuid; grants_count integer:=0; allow_new_grants boolean:=false; sh char(64):=(claims->>'subjectHash'); eh char(64):=(claims->>'emailHash'); link identity.session; binding jsonb; BEGIN
+ binding:=identity.sso_load_connection(c); t:=nullif(current_setting('app.tenant_id',true),'')::uuid;
+ PERFORM pg_advisory_xact_lock(hashtextextended(t::text,54));
+ -- Match email-code serialization order and lock globally shared email before identity creation/linking.
+ PERFORM pg_advisory_xact_lock(hashtextextended('identity-email:'||address,0));
+ SELECT * INTO r FROM identity.sso_request WHERE tenant_id=t AND connection_id=c AND request_id=(claims->>'requestId') FOR UPDATE;
+ IF r.request_id IS NULL OR r.state_digest<>state OR r.expires_at<=clock_timestamp() OR r.consumed_at IS NULL THEN RAISE EXCEPTION 'REQUEST_REFUSED' USING ERRCODE='22023'; END IF;
+ IF address IS NULL OR address<>lower(address) OR address NOT LIKE '%.invalid' OR length(address)>320 THEN RAISE EXCEPTION 'DOMAIN_UNVERIFIED' USING ERRCODE='22023'; END IF;
+ email_domain:=split_part(address,'@',2);
+ IF NOT EXISTS(SELECT 1 FROM identity.verified_domain WHERE tenant_id=t AND connection_id=c AND verified_domain.domain=email_domain) THEN RAISE EXCEPTION 'DOMAIN_UNVERIFIED' USING ERRCODE='22023'; END IF;
+ IF binding->>'protocol'='oidc' THEN
+  IF EXISTS(SELECT 1 FROM identity.oidc_assertion_use WHERE tenant_id=t AND connection_id=c AND (assertion_id=claims->>'assertionId' OR request_id=r.request_id)) THEN RAISE EXCEPTION 'ASSERTION_REPLAY' USING ERRCODE='23505'; END IF;
+ ELSE
+ IF EXISTS(SELECT 1 FROM identity.sso_assertion_use WHERE assertion_id=(claims->>'assertionId')) THEN RAISE EXCEPTION 'ASSERTION_REPLAY' USING ERRCODE='23505'; END IF;
+ END IF;
+ SELECT * INTO sub FROM identity.sso_subject WHERE tenant_id=t AND connection_id=c AND subject_hash=sh;
+ IF sub.user_id IS NOT NULL THEN
+  IF sub.email_hash<>eh THEN RAISE EXCEPTION 'LINK_FORBIDDEN' USING ERRCODE='42501'; END IF;
+  u:=sub.user_id; member:=sub.membership_id;
+  IF NOT app.contractor_member_active(member) THEN RAISE EXCEPTION 'MEMBERSHIP_REVOKED' USING ERRCODE='42501'; END IF;
+  -- Existing linked SSO identity cannot be replaced by a different account.
+  IF r.link_session_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM identity.session WHERE id=r.link_session_id AND user_id=u AND revoked_at IS NULL AND expires_at>clock_timestamp()) THEN RAISE EXCEPTION 'LINK_FORBIDDEN' USING ERRCODE='42501'; END IF;
+ ELSE
+  SELECT user_id INTO u FROM identity.user_email WHERE email=address;
+  IF u IS NOT NULL THEN
+   IF r.link_session_id IS NULL THEN RAISE EXCEPTION 'LINK_REQUIRED' USING ERRCODE='42501'; END IF;
+   SELECT * INTO link FROM identity.session WHERE id=r.link_session_id AND user_id=u AND environment='synthetic_demo' AND revoked_at IS NULL AND expires_at>clock_timestamp() FOR SHARE;
+   IF link.id IS NULL THEN RAISE EXCEPTION 'LINK_FORBIDDEN' USING ERRCODE='42501'; END IF;
+   SELECT id INTO member FROM app.membership WHERE tenant_id=t AND identity_user_id=u AND app.contractor_member_active(id) FOR SHARE;
+   IF member IS NULL THEN RAISE EXCEPTION 'LINK_FORBIDDEN' USING ERRCODE='42501'; END IF;
+  ELSIF r.link_session_id IS NOT NULL THEN RAISE EXCEPTION 'LINK_FORBIDDEN' USING ERRCODE='42501';
+  END IF;
+ END IF;
+ IF member IS NOT NULL THEN allow_new_grants:=(app.mon8_sso_feature_decision(member)->>'executable')::boolean; END IF;
+ SELECT count(*) INTO grants_count FROM (SELECT DISTINCT ON(idp_group) * FROM identity.idp_group_role_mapping WHERE tenant_id=t AND connection_id=c ORDER BY idp_group,revision DESC) g
+  WHERE enabled AND idp_group IN(SELECT jsonb_array_elements_text(claims->'groups'));
+ IF sub.user_id IS NOT NULL THEN
+  -- Revocation on a verified next sign-in is a committed fact even if no mapped group remains.
+  UPDATE identity.session SET revoked_at=clock_timestamp() WHERE id IN(SELECT session_id FROM identity.sso_session_binding WHERE tenant_id=t AND connection_id=c AND subject_hash=sh) AND revoked_at IS NULL;
+  INSERT INTO app.role_grant_revocation(tenant_id,id,grant_id) SELECT t,gen_random_uuid(),g.grant_id FROM identity.sso_grant g
+   WHERE tenant_id=t AND connection_id=c AND subject_hash=sh AND NOT EXISTS(SELECT 1 FROM app.role_grant_revocation v WHERE v.tenant_id=t AND v.grant_id=g.grant_id)
+   AND (allow_new_grants OR NOT EXISTS(
+    SELECT 1 FROM app.role_grant old_grant JOIN (
+     SELECT DISTINCT ON(idp_group) * FROM identity.idp_group_role_mapping WHERE tenant_id=t AND connection_id=c ORDER BY idp_group,revision DESC
+    ) mapping ON mapping.role=old_grant.role AND mapping.scope_kind=old_grant.scope_kind AND mapping.scope_id=old_grant.scope_id
+    WHERE old_grant.tenant_id=t AND old_grant.id=g.grant_id AND mapping.enabled
+    AND mapping.idp_group IN(SELECT jsonb_array_elements_text(claims->'groups'))));
+ END IF;
+ IF grants_count=0 THEN
+  IF binding->>'protocol'='oidc' THEN
+   INSERT INTO identity.oidc_assertion_use(tenant_id,connection_id,assertion_id,request_id) VALUES(t,c,(claims->>'assertionId'),r.request_id);
+  ELSE
+   INSERT INTO identity.sso_assertion_use(tenant_id,connection_id,assertion_id,request_id) VALUES(t,c,(claims->>'assertionId'),r.request_id);
+  END IF;
+  RETURN jsonb_build_object('code','NO_MAPPED_GRANTS');
+ END IF;
+ IF expires<=clock_timestamp() OR expires>clock_timestamp()+interval '15 minutes' THEN RAISE EXCEPTION 'REQUEST_REFUSED' USING ERRCODE='22023'; END IF;
+ -- DB uniqueness is inside the same transaction as identity, membership, grants and session.
+ IF binding->>'protocol'='oidc' THEN
+   INSERT INTO identity.oidc_assertion_use(tenant_id,connection_id,assertion_id,request_id) VALUES(t,c,(claims->>'assertionId'),r.request_id);
+  ELSE
+   INSERT INTO identity.sso_assertion_use(tenant_id,connection_id,assertion_id,request_id) VALUES(t,c,(claims->>'assertionId'),r.request_id);
+  END IF;
+ IF member IS NULL THEN
+  u:=gen_random_uuid(); member:=gen_random_uuid();
+  SELECT id INTO account FROM app.account WHERE tenant_id=t ORDER BY created_at,id LIMIT 1;
+  INSERT INTO identity.identity_user(id) VALUES(u);
+  INSERT INTO identity.user_email(email,user_id) VALUES(address,u);
+  INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES(member,t,account,u,'read_only');
+  INSERT INTO app.contractor_member VALUES(t,member,NULL,address);
+  INSERT INTO identity.membership_locator VALUES(u,t,member);
+ END IF;
+ IF sub.user_id IS NULL THEN PERFORM app.mon8_require_feature(member,'sso'); allow_new_grants:=true; END IF;
+ IF sub.user_id IS NULL THEN
+  INSERT INTO identity.sso_subject(tenant_id,connection_id,subject_hash,email_hash,user_id,membership_id) VALUES(t,c,sh,eh,u,member);
+ END IF;
+ FOR group_row IN SELECT * FROM (SELECT DISTINCT ON(idp_group) * FROM identity.idp_group_role_mapping WHERE tenant_id=t AND connection_id=c ORDER BY idp_group,revision DESC) g
+  WHERE enabled AND allow_new_grants AND idp_group IN(SELECT jsonb_array_elements_text(claims->'groups')) LOOP
+  grant_id:=gen_random_uuid();
+  INSERT INTO app.role_grant VALUES(t,grant_id,member,group_row.role,group_row.scope_kind,group_row.scope_id,NULL);
+  INSERT INTO identity.sso_grant(tenant_id,connection_id,subject_hash,grant_id) VALUES(t,c,sh,grant_id);
+ END LOOP;
+ INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at) VALUES(new_session,u,'synthetic_demo',token,csrf,expires);
+ INSERT INTO identity.sso_session_binding(tenant_id,connection_id,subject_hash,session_id) VALUES(t,c,sh,new_session);
+ INSERT INTO identity.security_event(id,event_type,subject_id) VALUES(gen_random_uuid(),'session.issued',new_session);
+ RETURN jsonb_build_object('userId',u,'membershipId',member,'tenantId',t);
+END $$;
 
 COMMIT;

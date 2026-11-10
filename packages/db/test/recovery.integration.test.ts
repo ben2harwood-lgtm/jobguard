@@ -1,6 +1,6 @@
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
@@ -8,11 +8,13 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { migrate, RecoveryCaseRepository, type VerifiedTenantContext, withTenant } from "../src/index.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
+import { PostgresRecoveryOutcomePostingPort } from "../src/recovery-repository.js";
+import { rolledBack } from "./upgrade-proof-utils.js";
 // Test-only shared contract import from source: DB tests need no API build artifact.
 import { recoveryCommandRefusalV1, recoveryCommandRefusalRulesV1, recoveryCaseCommandResponseV1 } from "../../../apps/api/src/recovery-case.contracts.js";
 
 const T="10000000-0000-4000-8000-000000000001",J="20000000-0000-4000-8000-000000000002",C1="30000000-0000-4000-8000-000000000003",C2="30000000-0000-4000-8000-000000000004",R="40000000-0000-4000-8000-000000000004",E="50000000-0000-4000-8000-000000000005",EA1="60000000-0000-4000-8000-000000000006",LA1="70000000-0000-4000-8000-000000000007",EA2="60000000-0000-4000-8000-000000000008",LA2="70000000-0000-4000-8000-000000000009";
-const context=testTenantContext(T);const owner={membershipId:randomUUID(),identityUserId:randomUUID()},owner2={membershipId:randomUUID(),identityUserId:randomUUID()};let pg:EmbeddedPostgres,admin:Pool,runtime:Pool,dir:string;
+const owner={membershipId:randomUUID(),identityUserId:randomUUID()},owner2={membershipId:randomUUID(),identityUserId:randomUUID()};const context=testTenantContext(T, { membershipId: owner.membershipId });let pg:EmbeddedPostgres,admin:Pool,runtime:Pool,dir:string;
 beforeAll(async()=>{dir=await mkdtemp(join(tmpdir(),"recovery-pg-"));const port=await freePort(57600,100);pg=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C"],onLog:()=>undefined});await pg.initialise();await pg.start(); await pg.createDatabase("jobguard_synthetic_demo");admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic", database: "jobguard_synthetic_demo"});await migrate(admin);await installLegacySyntheticPartyFixtures(admin);
  await admin.query(`SET session_replication_role=replica;INSERT INTO control_plane.tenant(id)VALUES('${T}');INSERT INTO identity.identity_user(id)VALUES('${owner.identityUserId}');INSERT INTO app.account(id,tenant_id,name)VALUES('${T}','${T}','Synthetic account');INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)VALUES('${owner.membershipId}','${T}','${T}','${owner.identityUserId}','owner');INSERT INTO app.job(id,tenant_id,title,status,revision)VALUES('${J}','${T}','Synthetic recovery','live',1);INSERT INTO app.job_activation(id,tenant_id,job_id,accepted_document_id,accepted_document_version,accepted_document_hash,mode,activation_terms_version,fee_policy_version,actor_membership_id,activated_at)VALUES(gen_random_uuid(),'${T}','${J}',gen_random_uuid(),1,'${"a".repeat(64)}','synthetic_demo','synthetic_demo_illustrative.v1','reference_fee_policy_v1',gen_random_uuid(),now());INSERT INTO app.cap_snapshot(id,tenant_id,job_id,activation_id,baseline_quote_version_id,accepted_net_value_pence,currency,recovery_cap_pence,fee_policy_version,illustrative)SELECT gen_random_uuid(),tenant_id,job_id,id,gen_random_uuid(),1880000,'GBP',28200,'reference_fee_policy_v1',true FROM app.job_activation;INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,state,object_version_id,server_verified_at,expires_at)VALUES(gen_random_uuid(),'${T}','${J}','synthetic/upload','${"b".repeat(64)}','application/pdf',1,'standard_evidence','verified','v1',now(),now()+interval '1 hour');INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)SELECT '${E}','${T}',id,'${J}','original','synthetic_bank_receipt','synthetic/key','v1','${"b".repeat(64)}',1,'application/pdf','standard_evidence',now(),now() FROM app.evidence_upload WHERE tenant_id='${T}';INSERT INTO app.recovery_case(id,tenant_id,job_id,claim_pence,currency,state,revision,synthetic)VALUES('${C1}','${T}','${J}',100,'GBP','active',0,true),('${C2}','${T}','${J}',100,'GBP','active',0,true);INSERT INTO app.synthetic_recovery_receipt(id,tenant_id,job_id,source_identity,reconciliation_identity,status,gross_pence,currency,synthetic,settled_at)VALUES('${R}','${T}','${J}','fake-provider-1','cash-1','settled',100,'GBP',true,now());INSERT INTO app.recovery_approval(id,tenant_id,job_id,case_id,kind,expected_case_revision,status,policy_version,expires_at,command_id)VALUES('${EA1}','${T}','${J}','${C1}','eligibility',0,'approved','reference_fee_policy_v1',now()+interval '1 hour',gen_random_uuid()),('${LA1}','${T}','${J}','${C1}','landing',0,'approved','reference_fee_policy_v1',now()+interval '1 hour',gen_random_uuid()),('${EA2}','${T}','${J}','${C2}','eligibility',0,'approved','reference_fee_policy_v1',now()+interval '1 hour',gen_random_uuid()),('${LA2}','${T}','${J}','${C2}','landing',0,'approved','reference_fee_policy_v1',now()+interval '1 hour',gen_random_uuid());SET session_replication_role=origin;CREATE ROLE recovery_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOBYPASSRLS;GRANT jobguard_runtime TO recovery_login;`);runtime=new Pool({host:"127.0.0.1",port,database:"jobguard_synthetic_demo",user:"recovery_login",password:"synthetic",max:4});},60_000);
 afterAll(async()=>{await closeTestPools(runtime,admin);await pg.stop();await rm(dir,{recursive:true,force:true});});
@@ -43,7 +45,7 @@ describe("structural recovery fee guard",()=>{
   const E2 = randomUUID(), T2 = randomUUID();
   type World = { tenant: string; ctx: VerifiedTenantContext; job: string; evidence: string; reviewer: { membershipId: string; identityUserId: string } };
   const base: World = { tenant: T, ctx: context, job: J, evidence: E2, reviewer: owner };
-  const second = { tenant: T2, ctx: testTenantContext(T2), reviewer: owner2 };
+  const second = { tenant: T2, ctx: testTenantContext(T2, { membershipId: owner2.membershipId }), reviewer: owner2 };
   // These tests keep their landings; they use their own evidence object so that the later invalidation test (which invalidates E) sees only its own derivation.
   beforeAll(async () => {
    const upload = randomUUID();
@@ -69,6 +71,141 @@ describe("structural recovery fee guard",()=>{
   const allocationsAndDerivations = async (caseId: string, w = base) => (await admin.query("SELECT (SELECT count(*) FROM app.landing_allocation WHERE tenant_id=$1 AND case_id=$2)::int allocations,(SELECT count(*) FROM app.recovery_fee_derivation d JOIN app.landing_allocation a ON(a.tenant_id,a.id)=(d.tenant_id,d.source_allocation_id) WHERE d.tenant_id=$1 AND a.case_id=$2)::int derivations,(SELECT count(*) FROM app.recovery_fee_journal j JOIN app.recovery_fee_derivation d ON(d.tenant_id,d.id)=(j.tenant_id,j.derivation_id) JOIN app.landing_allocation a ON(a.tenant_id,a.id)=(d.tenant_id,d.source_allocation_id) WHERE j.tenant_id=$1 AND a.case_id=$2)::int journal", [w.tenant, caseId])).rows[0];
   const reverseApproved = (allocationId: string, amount: number, w = base) => withTenant(runtime, w.ctx, db => db.$client.query("SELECT app.reverse_synthetic_landing($1,$2,$3,$4,$5,$6,$7) id", [w.tenant, randomUUID(), randomUUID(), randomUUID(), allocationId, amount, "Practice receipt reversed"]));
   const viewOf = async (repo: RecoveryCaseRepository, id: string, w = base) => (await repo.list(w.ctx, w.job)).find(x => x.id === id)!;
+
+  it("LATER-SAFETY-17: replays the stored derivation without writes and refuses conflicting reversal identities", async () => {
+   const repo = new RecoveryCaseRepository(runtime), port = new PostgresRecoveryOutcomePostingPort(runtime), w = await createWorld(true);
+   let c = await open(repo, 400000, w);
+   c = await step(repo, c, {eventType:"assemble_evidence"}, w);
+   // Each allocation needs its own settled receipt (unique tenant/receipt/case/evidence).
+   const first = (await readyToLand(c, 400000, w))(200000); await land(first, w);
+   const second = (await readyToLand(c, 400000, w))(200000); await land(second, w);
+   const reversal = {version:"recovery.landing.reverse.v1", reversalId:randomUUID(), derivationId:randomUUID(), journalId:randomUUID(), allocationId:first.allocationId, amountPence:200000, reason:"Fictional reversal"};
+   const counts = async () => (await admin.query(`SELECT
+    (SELECT count(*)::int FROM app.landing_reversal WHERE tenant_id=$1 AND job_id=$2) reversals,
+    (SELECT count(*)::int FROM app.recovery_fee_derivation WHERE tenant_id=$1 AND job_id=$2) derivations,
+    (SELECT count(*)::int FROM app.recovery_review WHERE tenant_id=$1 AND job_id=$2) reviews,
+    (SELECT count(*)::int FROM app.recovery_fee_journal WHERE tenant_id=$1 AND job_id=$2) journals`, [w.tenant,w.job])).rows[0];
+   expect(await Promise.all([port.reverseSyntheticLanding(w.ctx,reversal),port.reverseSyntheticLanding(w.ctx,reversal)])).toEqual([reversal.derivationId,reversal.derivationId]);
+   const before = await counts();
+   expect(before).toEqual({reversals:1,derivations:3,reviews:1,journals:3});
+   const retry = {...reversal,derivationId:randomUUID(),journalId:randomUUID()};
+   await Promise.all([0,1].map(() => expect(port.reverseSyntheticLanding(w.ctx,retry)).rejects.toMatchObject({code:"23514"})));
+   expect(await counts()).toEqual(before);
+   for (const conflict of [{amountPence:1}, {allocationId:second.allocationId}, {reversalId:randomUUID()}]) {
+    await expect(port.reverseSyntheticLanding(w.ctx,{...retry,...conflict})).rejects.toMatchObject({code:"23514"});
+   }
+   // A different job must not turn the ID conflict into a raw primary-key error.
+   const other = await createWorld(true);
+   let otherCase = await open(repo,100000,other);
+   otherCase = await step(repo,otherCase,{eventType:"assemble_evidence"},other);
+   const otherLanding = (await readyToLand(otherCase,100000,other))(100000);
+   await land(otherLanding,other);
+   await expect(port.reverseSyntheticLanding(other.ctx,{...retry,allocationId:otherLanding.allocationId,amountPence:100000})).rejects.toMatchObject({code:"23514"});
+   await expect(port.reverseSyntheticLanding(context,retry)).rejects.toMatchObject({code:"23514"});
+   await expect(withTenant(runtime,w.ctx,db=>db.$client.query("SELECT app.reverse_synthetic_landing($1,$2,$3,$4,$5,$6,$7)",[T,reversal.reversalId,randomUUID(),randomUUID(),first.allocationId,200000,"Tenant mismatch"]))).rejects.toMatchObject({code:"42501"});
+   expect(await counts()).toEqual(before);
+   expect((await admin.query("SELECT id FROM app.recovery_fee_derivation WHERE tenant_id=$1 AND source_reversal_id=$2",[w.tenant,reversal.reversalId])).rows).toEqual([{id:reversal.derivationId}]);
+  });
+
+  it.each([200000, 1])("LATER-SAFETY-30: binds reversal replay payload without writes (reversal %i pence)", async amountPence => {
+   const repo = new RecoveryCaseRepository(runtime), port = new PostgresRecoveryOutcomePostingPort(runtime), w = await createWorld(true);
+   let c = await open(repo,400000,w);
+   c = await step(repo,c,{eventType:"assemble_evidence"},w);
+   const approved = (await readyToLand(c,400000,w))(400000);
+   await land(approved,w);
+   const reversal = {version:"recovery.landing.reverse.v1",reversalId:randomUUID(),derivationId:randomUUID(),journalId:randomUUID(),allocationId:approved.allocationId,amountPence,reason:"Fictional reversal replay"};
+   expect(await port.reverseSyntheticLanding(w.ctx,reversal)).toBe(reversal.derivationId);
+   // Compare complete stored rows, including immutable timestamps and identities.
+   const snapshot = async () => {
+    const rows = [];
+    for (const table of ["landing_reversal","recovery_fee_derivation","recovery_review","recovery_fee_journal"]) {
+     rows.push((await admin.query(`SELECT * FROM app.${table} WHERE tenant_id=$1 AND job_id=$2 ORDER BY id`,[w.tenant,w.job])).rows);
+    }
+    return rows;
+   };
+   const before = await snapshot();
+   expect((await admin.query("SELECT id,kind FROM app.recovery_fee_journal WHERE tenant_id=$1 AND derivation_id=$2",[w.tenant,reversal.derivationId])).rows)
+    .toEqual(amountPence === 200000 ? [{id:reversal.journalId,kind:"compensation"}] : []);
+   expect(await port.reverseSyntheticLanding(w.ctx,reversal)).toBe(reversal.derivationId);
+   expect(await snapshot()).toEqual(before);
+   const conflicts = [{reason:"Different fictional reason"},{derivationId:randomUUID()},...(amountPence === 200000 ? [{journalId:randomUUID()}] : [])];
+   for (const conflict of conflicts) {
+    await expect(port.reverseSyntheticLanding(w.ctx,{...reversal,...conflict})).rejects.toMatchObject({code:"23514"});
+    expect(await snapshot()).toEqual(before);
+   }
+   // With no compensation row, there is no stored journal identity to bind.
+   if (amountPence === 1) {
+    expect(await port.reverseSyntheticLanding(w.ctx,{...reversal,journalId:randomUUID()})).toBe(reversal.derivationId);
+    expect(await snapshot()).toEqual(before);
+   }
+   await expect(port.reverseSyntheticLanding(context,reversal)).rejects.toMatchObject({code:"23514"});
+   expect(await snapshot()).toEqual(before);
+  });
+
+  it("LATER-SAFETY-17: selects the v1 cap when a hostile fixture contains another policy snapshot", async () => {
+   const repo = new RecoveryCaseRepository(runtime), w = await createWorld(true);
+   let c = await open(repo,500000,w);
+   c = await step(repo,c,{eventType:"assemble_evidence"},w);
+   const approved = (await readyToLand(c,500000,w))(500000);
+   await land(approved,w);
+   const constraints = async () => (await admin.query("SELECT conname FROM pg_constraint WHERE conrelid='app.cap_snapshot'::regclass ORDER BY conname")).rows;
+   const before = await constraints();
+   await rolledBack(admin, async db => {
+    await db.query("SELECT set_config('app.tenant_id',$1,true)",[w.tenant]);
+    // Today's two uniqueness constraints prevent multiple snapshots. Exercise the
+    // policy-selection defence in a rollback-only fixture, never a schema migration.
+    await db.query("ALTER TABLE app.cap_snapshot DROP CONSTRAINT cap_snapshot_tenant_id_job_id_key, DROP CONSTRAINT cap_snapshot_tenant_id_activation_id_key");
+    await db.query("SET LOCAL session_replication_role=replica");
+    await db.query("UPDATE app.cap_snapshot SET fee_policy_version='fixture_other_policy',recovery_cap_pence=1 WHERE tenant_id=$1 AND job_id=$2",[w.tenant,w.job]);
+    await db.query(`INSERT INTO app.cap_snapshot(id,tenant_id,job_id,activation_id,baseline_quote_version_id,accepted_net_value_pence,currency,recovery_cap_pence,fee_policy_version,illustrative)
+     SELECT gen_random_uuid(),tenant_id,job_id,activation_id,baseline_quote_version_id,accepted_net_value_pence,currency,28200,'reference_fee_policy_v1',illustrative FROM app.cap_snapshot WHERE tenant_id=$1 AND job_id=$2`,[w.tenant,w.job]);
+    await db.query("SET LOCAL session_replication_role=origin");
+    expect((await db.query("SELECT fee_policy_version FROM app.cap_snapshot WHERE tenant_id=$1 AND job_id=$2 ORDER BY fee_policy_version",[w.tenant,w.job])).rows).toEqual([{fee_policy_version:"fixture_other_policy"},{fee_policy_version:"reference_fee_policy_v1"}]);
+    await db.query("SET LOCAL ROLE jobguard_runtime");
+    const id = randomUUID();
+    await db.query("SELECT app.reverse_synthetic_landing($1,$2,$3,$4,$5,$6,$7)",[w.tenant,randomUUID(),id,randomUUID(),approved.allocationId,100000,"Fictional policy cap"]);
+    expect((await db.query("SELECT cap_pence,cumulative_landed_pence,capped_fee_pence,liability_pence FROM app.recovery_fee_derivation WHERE tenant_id=$1 AND id=$2",[w.tenant,id])).rows[0]).toEqual({cap_pence:"28200",cumulative_landed_pence:"400000",capped_fee_pence:"28200",liability_pence:"20300"});
+   });
+   expect(await constraints()).toEqual(before);
+  });
+
+  it.each([true, false])("LATER-SAFETY-17: proves the historical defect and preserves cumulative reversals and settled-plan credit (settled=%s)", async (planCredit) => {
+   const repo = new RecoveryCaseRepository(runtime), w = await createWorld(planCredit);
+   let c = await open(repo,400000,w);
+   c = await step(repo,c,{eventType:"assemble_evidence"},w);
+   // Each allocation needs its own settled receipt (unique tenant/receipt/case/evidence).
+   const first = (await readyToLand(c,400000,w))(200000); await land(first,w);
+   const second = (await readyToLand(c,400000,w))(200000); await land(second,w);
+   const signature = "app.reverse_synthetic_landing(uuid,uuid,uuid,uuid,uuid,bigint,character varying)";
+   const historical = await readFile(new URL("../migrations/0356_unchecked_job_doors.sql",import.meta.url),"utf8");
+   const predecessor = "CREATE OR REPLACE FUNCTION app.reverse_synthetic_landing" + historical.split("CREATE OR REPLACE FUNCTION app.reverse_synthetic_landing")[1]!.split("END$$;")[0]! + "END$$;";
+   const fixed = (await readFile(new URL("../migrations/0654_synthetic_reversal_money_rules.sql",import.meta.url),"utf8")).split("CREATE OR REPLACE FUNCTION app.reverse_synthetic_landing")[1]!.split("END$$;")[0]!;
+   await rolledBack(admin, async db => {
+    await db.query("SELECT set_config('app.tenant_id',$1,true)",[w.tenant]);
+    const rows = await db.query("SELECT * FROM app.recovery_fee_derivation WHERE tenant_id=$1 AND job_id=$2 ORDER BY id",[w.tenant,w.job]);
+    const metadata = async () => (await db.query("SELECT proowner,proacl,prosecdef,proconfig FROM pg_proc WHERE oid=$1::regprocedure",[signature])).rows;
+    const before = await metadata();
+    const reverseBoth = async () => {
+     await db.query("SET LOCAL ROLE jobguard_runtime");
+     await db.query("SELECT app.reverse_synthetic_landing($1,$2,$3,$4,$5,$6,$7)",[w.tenant,randomUUID(),randomUUID(),randomUUID(),first.allocationId,100000,"First fictional reversal"]);
+     const id = randomUUID();
+     await db.query("SELECT app.reverse_synthetic_landing($1,$2,$3,$4,$5,$6,$7)",[w.tenant,randomUUID(),id,randomUUID(),second.allocationId,150000,"Second fictional reversal"]);
+     return (await db.query("SELECT cumulative_landed_pence,capped_fee_pence,liability_pence,posting_delta_pence FROM app.recovery_fee_derivation WHERE tenant_id=$1 AND id=$2",[w.tenant,id])).rows[0];
+    };
+    await db.query("SAVEPOINT predecessor_control");
+    await db.query(predecessor);
+    const old = await reverseBoth();
+    expect(old).toMatchObject({cumulative_landed_pence:"250000",capped_fee_pence:"25000",liability_pence:"17100"});
+    expect(old.cumulative_landed_pence).not.toBe("150000");
+    await db.query("ROLLBACK TO SAVEPOINT predecessor_control");
+    // Own-step replacement over populated v1 facts: the same signature retains
+    // privileges, owner and all earlier derivations, without running a down migration.
+    await db.query("CREATE OR REPLACE FUNCTION app.reverse_synthetic_landing" + fixed + "END$$;");
+    expect(await metadata()).toEqual(before);
+    expect((await db.query("SELECT * FROM app.recovery_fee_derivation WHERE tenant_id=$1 AND job_id=$2 ORDER BY id",[w.tenant,w.job])).rows).toEqual(rows.rows);
+    expect(await reverseBoth()).toEqual({cumulative_landed_pence:"150000",capped_fee_pence:"15000",liability_pence:planCredit ? "7100" : "15000",posting_delta_pence:"-13200"});
+   });
+  });
 
   it("repair 17: delayed original, below-settled retry, approved reversal and late execution keep the browser attempt unknown until replay", async () => {
    const repo = new RecoveryCaseRepository(runtime), w = await createWorld(false);

@@ -12,9 +12,9 @@ afterAll(async()=>{await closeFinalCheckFixture(f);if(previous===undefined)delet
 const actor={membershipId:FINAL_CHECK_ACTOR,identityUserId:FINAL_CHECK_USER};
 async function published(){
  const a=await seedFinalCheckJob(f),evidence=await insertFinalCheckEvidence(f,a,"completion_photo","image/png",1),signal=await finalCheckProposal(f,a,evidence);
- await a.lock();const worker=new FinalCheckRepository(f.shadow),manifest=await worker.begin(a.context,a.jobId),source=manifest.sources.find(s=>s.evidenceId===evidence)!;
- await worker.record(a.context,a.jobId,manifest.id,source.id,randomUUID(),{version:"final-check.source-result.v1",inputHash:source.inputHash,status:"detected",failureCode:null,signalIds:[signal]});
- const result=await worker.reconcile(a.context,a.jobId,manifest.id,[{signalId:signal,expectedRevision:0,outcome:"reveal",references:[],comparisons:{baselineItemIds:[a.scopeItemId],captureIds:[],lockedLineIds:[a.lineId]}}]) as {runId:string;lockId:string};
+ await a.lock();const worker=new FinalCheckRepository(f.shadow),manifest=await worker.begin(a.workerContext,a.jobId),source=manifest.sources.find(s=>s.evidenceId===evidence)!;
+ await worker.record(a.workerContext,a.jobId,manifest.id,source.id,randomUUID(),{version:"final-check.source-result.v1",inputHash:source.inputHash,status:"detected",failureCode:null,signalIds:[signal]});
+ const result=await worker.reconcile(a.workerContext,a.jobId,manifest.id,[{signalId:signal,expectedRevision:0,outcome:"reveal",references:[],comparisons:{baselineItemIds:[a.scopeItemId],captureIds:[],lockedLineIds:[a.lineId]}}]) as {runId:string;lockId:string};
  return {a,evidence,signal,...result};
 }
 async function save(a:FinalCheckJob,kind:string){
@@ -139,15 +139,25 @@ async function invoicedCatch(x:Awaited<ReturnType<typeof published>>){
    VALUES($1,$2,$3,$4,'variation',$5,$6,$5,$7,$8,10000,2)`,[line,a.tenantId,a.jobId,descendant,priced.id,v.scope_item_id,approval.id,v.description]);
   await db.query("UPDATE app.final_account_draft SET current_revision_id=$1,revision=2 WHERE tenant_id=$2 AND job_id=$3",[descendant,a.tenantId,a.jobId]);
  });
- const supplementary=await invoices.issueInvoice(a.context,{...input,commandId:randomUUID(),finalAccountRevisionId:descendant,expectedSourceHash:hash,invoiceKind:"supplementary"});
+ const supplementaryInput={...input,commandId:randomUUID(),finalAccountRevisionId:descendant,expectedSourceHash:hash,invoiceKind:"supplementary" as const};
+ const supplementary=await invoices.issueInvoice(a.context,supplementaryInput);
+ expect(await invoices.issueInvoice(a.context,supplementaryInput)).toEqual(supplementary);
  expect(supplementary).toMatchObject({lockId:x.lockId,netPence:10000,taxPence:2000,totalPence:12000});
  expect((await f.admin.query("SELECT final_account_line_id,revision_id,source_id FROM app.final_account_invoiced_line WHERE tenant_id=$1 AND invoice_id=$2",[a.tenantId,supplementary.invoiceId])).rows).toEqual([{final_account_line_id:line,revision_id:descendant,source_id:priced.id}]);
  expect((await f.admin.query("SELECT final_account_line_id FROM app.final_account_invoiced_line WHERE tenant_id=$1 AND invoice_id=$2",[a.tenantId,main.invoiceId])).rows).toEqual([{final_account_line_id:a.lineId}]);
- return {invoice:supplementary.invoiceId,line,pricedRevision:priced.id,variation:confirmed.variationId};
+ return {invoice:supplementary.invoiceId,line,descendant,pricedRevision:priced.id,variation:confirmed.variationId};
 }
 it("CH-6 published catch on a real supplementary descendant cites its issued line and original lock",async()=>{
  const x=await published(),a=x.a,ids=await invoicedCatch(x);
  expect(ids.pricedRevision).not.toBe(ids.variation);
+ // Prove this is a post-lock descendant and an issued catch, rather than a
+ // catch-shaped line on the original bill or an unissued account revision.
+ expect((await f.admin.query(`SELECT r.previous_revision_id,l.final_account_revision_id locked_revision
+  FROM app.final_account_revision r JOIN app.final_account_lock l ON(l.tenant_id,l.job_id)=(r.tenant_id,r.job_id)
+  WHERE r.tenant_id=$1 AND r.job_id=$2 AND r.id=$3 AND l.id=$4`,[a.tenantId,a.jobId,ids.descendant,x.lockId])).rows)
+  .toEqual([{previous_revision_id:a.revisionId,locked_revision:a.revisionId}]);
+ expect((await f.admin.query(`SELECT invoice_kind,lock_id,revision_id FROM app.final_account_invoice_binding
+  WHERE tenant_id=$1 AND job_id=$2 AND invoice_id=$3`,[a.tenantId,a.jobId,ids.invoice])).rows).toEqual([{invoice_kind:"supplementary",lock_id:x.lockId,revision_id:ids.descendant}]);
  const evidence=await insertFinalCheckEvidence(f,a,"writeoff_record","application/pdf",1);
  await finalCheckTenant(f.admin,a.tenantId,db=>db.query(`INSERT INTO app.ch6_line_correction_source(tenant_id,job_id,id,session_digest,correction_kind,invoice_id,line_id,lock_id,evidence_id,amount_pence,authority_ref)
   VALUES($1,$2,$3,$4,'writeoff',$5,$6,$7,$8,1,'synthetic_fixture:supplementary-writeoff')`,[a.tenantId,a.jobId,randomUUID(),a.digest,ids.invoice,ids.line,x.lockId,evidence]));

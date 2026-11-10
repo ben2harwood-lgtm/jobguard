@@ -81,50 +81,75 @@ export class InvalidTenantContextError extends Error {
 
 export type TenantTransaction = NodePgDatabase<typeof schema> & { $client: PoolClient };
 
+/** Exact retained compatibility boundaries; no caller-controlled mode is accepted. */
+type DeferredBinding = "identity-sso" | "identity-oidc" | "identity-sso-required" | "shadow-persist" | "audit-export-refusal"
+  | "practice-switch-off" | "contractor-session-revoke" | "commercial-integrity-read" | "commercial-integrity-read-family"
+  | "evidence-pack-approval";
+type LateBinding = { complete: boolean };
+const lateBindings = new WeakMap<TenantTransaction, WeakMap<VerifiedTenantContext, LateBinding>>();
+
+async function bindRequest(client: PoolClient, context: VerifiedTenantContext): Promise<void> {
+  const session = sessionReferences.get(context);
+  if (!session) return;
+  try {
+    await client.query("SELECT app.bind_request($1, $2, $3)", [session.kind, session.credential, context.tenantId]);
+    const bound = (await client.query<{ actor: string; tenant: string }>(
+      "SELECT app.current_actor() actor, app.current_tenant() tenant",
+    )).rows[0];
+    if (!bound || bound.actor !== session.membershipId || bound.tenant !== context.tenantId) throw new RequestBindingRefusedError(session.kind);
+  } catch (error) {
+    if ((error as { code?: string }).code === "42501") throw new RequestBindingRefusedError(session.kind);
+    throw error;
+  }
+}
+
+/** Only an active approval transaction may bind after its established locks. */
+export async function bindAfterLocks(database: TenantTransaction, context: VerifiedTenantContext): Promise<void> {
+  const binding = lateBindings.get(database)?.get(context);
+  if (!binding || binding.complete) throw new InvalidTenantContextError();
+  await bindRequest(database.$client, context);
+  binding.complete = true;
+}
+
 /**
- * Runs work in one transaction. Session-bearing contexts bind database authority
- * first; transaction-local RLS settings keep retained callers compatible.
- * Only contexts minted by this module instance are accepted; copies lose the stamp.
+ * Session-bearing contexts bind first except the exact retained boundaries.
+ * Approval must complete the same binding after its locks and before commit.
  */
 export async function withTenant<T>(
   pool: Pool,
   context: VerifiedTenantContext,
   work: (database: TenantTransaction) => Promise<T>,
-  deferredBinding?: "identity-sso" | "identity-oidc" | "identity-sso-required" | "shadow-persist" | "audit-export-refusal",
+  deferredBinding?: DeferredBinding,
 ): Promise<T> {
   if (!genuineTenantContexts.has(context) || typeof context.tenantId !== "string" || !UUID.test(context.tenantId)) {
     throw new InvalidTenantContextError();
   }
 
-  if (deferredBinding !== undefined && !["identity-sso", "identity-oidc", "identity-sso-required", "shadow-persist", "audit-export-refusal"].includes(deferredBinding)) throw new InvalidTenantContextError();
+  if (deferredBinding !== undefined && !["identity-sso", "identity-oidc", "identity-sso-required", "shadow-persist", "audit-export-refusal",
+    "practice-switch-off", "contractor-session-revoke", "commercial-integrity-read", "commercial-integrity-read-family",
+    "evidence-pack-approval"].includes(deferredBinding)) throw new InvalidTenantContextError();
   const client = await pool.connect();
+  let database: TenantTransaction | undefined;
   try {
     await client.query("BEGIN");
-    const session = sessionReferences.get(context);
-    if (session && deferredBinding === undefined) {
-      try {
-        await client.query("SELECT app.bind_request($1, $2, $3)", [session.kind, session.credential, context.tenantId]);
-        const bound = (await client.query<{ actor: string; tenant: string }>(
-          "SELECT app.current_actor() actor, app.current_tenant() tenant",
-        )).rows[0];
-        if (!bound || bound.actor !== session.membershipId || bound.tenant !== context.tenantId) throw new RequestBindingRefusedError(session.kind);
-      } catch (error) {
-        // Expiry can also be discovered by the authority lookup immediately after bind.
-        if ((error as { code?: string }).code === "42501") throw new RequestBindingRefusedError(session.kind);
-        throw error;
-      }
-    }
-    // Compatibility for retained dark synthetic/queued callers and pre-LP-6c routines.
-    // On session paths the database has already derived and checked the authority.
+    if (deferredBinding === undefined) await bindRequest(client, context);
     await client.query("SELECT set_config('app.tenant_id', $1, true)", [context.tenantId]);
-    const database = drizzle(client, { schema }) as TenantTransaction;
+    database = drizzle(client, { schema }) as TenantTransaction;
+    const late = deferredBinding === "evidence-pack-approval" ? { complete: false } : undefined;
+    if (late) {
+      const contexts = new WeakMap<VerifiedTenantContext, LateBinding>();
+      contexts.set(context, late);
+      lateBindings.set(database, contexts);
+    }
     const result = await work(database);
+    if (late && !late.complete) throw new RequestBindingRefusedError(sessionReferences.get(context)?.kind ?? "real");
     await client.query("COMMIT");
     return result;
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
   } finally {
+    if (database) lateBindings.delete(database);
     client.release();
   }
 }

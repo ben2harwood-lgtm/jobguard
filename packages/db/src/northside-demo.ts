@@ -145,7 +145,11 @@ export async function northsideExtras(pool: Pool, member: AuthenticatedMembershi
     const rows = (await db.$client.query(`
       SELECT o.variation_id,o.job_id,w.reference,v.description,v.capture_text,o.evidence_id IS NOT NULL has_photo,o.resident_confirmation_evidence_id IS NOT NULL confirmed,
         (SELECT e.kind FROM app.extra_event e WHERE e.tenant_id=o.tenant_id AND e.variation_id=o.variation_id ORDER BY e.sequence DESC LIMIT 1) state,
-        (SELECT r.signed_delta_pence::text FROM app.extra_approval_revision_binding b JOIN app.variation_revision r ON(r.tenant_id,r.job_id,r.id)=(b.tenant_id,b.job_id,b.variation_revision_id) WHERE b.tenant_id=o.tenant_id AND b.variation_id=o.variation_id ORDER BY b.logical_revision DESC LIMIT 1) quoted,
+        (SELECT CASE b.source_kind WHEN 'server_sor' THEN s.net_pence::text ELSE r.signed_delta_pence::text END
+          FROM app.extra_approval_revision_binding b
+          LEFT JOIN app.extra_sor_revision s ON(s.tenant_id,s.job_id,s.variation_id,s.id)=(b.tenant_id,b.job_id,b.variation_id,b.sor_revision_id)
+          LEFT JOIN app.variation_revision r ON(r.tenant_id,r.job_id,r.variation_id,r.id)=(b.tenant_id,b.job_id,b.variation_id,b.variation_revision_id)
+          WHERE b.tenant_id=o.tenant_id AND b.job_id=o.job_id AND b.variation_id=o.variation_id ORDER BY b.logical_revision DESC LIMIT 1) quoted,
         o.server_recorded_at,q.id request_id,q.net_pence::text net,q.revision_hash,q.requirement,
         (SELECT coalesce(array_agg(f.step_index ORDER BY f.step_index),'{}') FROM app.extra_approval_step_fact f WHERE f.tenant_id=q.tenant_id AND f.request_id=q.id) done,
         EXISTS(SELECT 1 FROM app.extra_client_link k WHERE k.tenant_id=q.tenant_id AND k.request_id=q.id) link_issued,

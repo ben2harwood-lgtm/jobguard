@@ -7,16 +7,34 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { extraOriginHashV1, ExtraPersistenceError, extraOriginV1 } from "@jobguard/core";
 import { ExtraRepository, insertVariationProposal, withTenant, auditPayloadV1Schema, verifyAuditChain, appendAuditBatch, type AuditEvent, type TenantTransaction } from "../src/index.js";
 import { cluster, fixture, raise, rawVariation, rawOrigin, receipt, finishRaw, terminalizeFixtureReceipt, newTables, newOriginColumns, ownerTx, visitAndEvidence, originSql, originHashInput, noteCanary, descriptionCanary, extraIdFor, type Cluster, type Fixture } from "./extra-fixtures.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 let c: Cluster, repo: ExtraRepository;
 beforeAll(async () => { c = await cluster(); repo = new ExtraRepository(c.runtime); }, 60_000);
 afterAll(async () => { await c?.close(); });
-const rawAttempt = async (f: Fixture, type = "LogSiteExtra", kind = "site_user", originFields: Record<string, unknown> = {}, receiptFields: { status?: string; semanticKey?: string } = {}, complete = false) => withTenant(c.admin, f.ctx, async db => {
+const rawAttempt = async (f: Fixture, type = "LogSiteExtra", kind = "site_user", originFields: Record<string, unknown> = {}, receiptFields: { status?: string; semanticKey?: string } = {}, complete = false) => withTenant(c.admin, testTenantContext(f.p.tenantId,{membershipId:f.p.membershipId,bindRequest:false}), async db => {
  const id = randomUUID(), command = await receipt(db, f.p.tenantId, f.jobId, id, f.p.membershipId, type, randomUUID(), receiptFields);
  await rawVariation(db, f.p.tenantId, f.jobId, id, kind);
  const row = await rawOrigin(db, f, id, command, { kind, ...originFields });
  if (complete) await finishRaw(db, f, id, command, row.origin_hash); await terminalizeFixtureReceipt(db,f.p.tenantId,command,{variationId:id}); return row;
 });
+// Bind the fixture's actual actor at the SQL transport boundary, retaining the
+// uppercase context being tested instead of making it a session identifier.
+async function uppercaseRequest(f: Fixture) {
+ const credential=sha256Hex(`lp6-test:${f.p.tenantId}:${f.p.membershipId}`);
+ await testBoundTenantContext(c.admin,f.p.tenantId,f.p.membershipId,credential);
+ const pool=new Proxy(c.runtime,{get(target,key){
+  if(key==='connect')return async()=>{
+   const client=await target.connect();
+   return {release:()=>client.release(),query:async(sql:string,values?:unknown[])=>{
+    const result=await client.query(sql,values);
+    if(sql==='BEGIN')await client.query("SELECT app.bind_request('real',$1,$2)",[credential,f.p.tenantId]);
+    return result;
+   }};
+  };
+  const value=Reflect.get(target,key);return typeof value==='function'?value.bind(target):value;
+ }});
+ return {repo:new ExtraRepository(pool),upper:testTenantContext(f.p.tenantId.toUpperCase(),{membershipId:f.p.membershipId,bindRequest:false})};
+}
 async function checkChain(f: Fixture) {
  const rows = (await c.admin.query("SELECT * FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence", [f.p.tenantId])).rows;
  verifyAuditChain(rows.map(r => ({ id: r.id, version: r.version, tenantId: r.tenant_id, sequence: Number(r.sequence), actorRef: r.actor_ref, eventType: r.event_type, subjectType: r.subject_type, subjectRef: r.subject_ref, occurredAt: r.occurred_at, payload: r.payload, payloadHash: r.payload_hash, previousHash: r.previous_hash, eventHash: r.event_hash })) as AuditEvent[]);
@@ -252,16 +270,24 @@ describe("ENT-4b origin persistence", () => {
  it("[S9] scanner and seven pinned bridges stay byte-identical", async () => {
   const hashes = {
    // renewed caller review 28 Oct (jg-checks, ch9-p2 review)
-   "packages/db/src/practice-session.ts": "9b765f410777c28334f9f7d8388e0a3c6e30f52bb6d4b4070c9b69e4ecbf1b14",
+   // renewed caller review 4 Nov 2026 (Ben: 'Yes, update S9')
+   // Renewed caller source review 6 Nov 2026, later-safety-108 repair 4: v1 ownership now requires the succeeded import receipt.
+   // Persisted-session authentication, synthetic-only gate and the sole context constructor are unchanged; RED review remains required.
+   "packages/db/src/practice-session.ts": "49c6c2dadcaa0412208dbce6585c0e30a283b4d4c3b98b50179eec3bad054729",
    "packages/db/src/contractor-repository.ts": "56b95b80360434f0cf58376ef2ec44d0354b194e5080bcfd9414ac283971006c",
    "packages/db/src/contractor-party-repository.ts": "e5852288e5355b53f7548c4d5741aef54ee55a2b8a66dd56a54b08963cd1fdb0",
-   "packages/db/src/work-order-repository.ts": "6f769b3b5261219e8e277b3c8460b19b917fe93e66245d15285af5a04c098418",
+   // Renewed caller review 5 Nov 2026: Ben approved batch-41 ("Yes, all three") in the router chat.
+   // ~/.local/share/full-steam/coordinator/prechecks/batch-41.md: importCsvInTransaction makes no new context;
+   // ConnectorPromotionRepository.promote uses context and principal from the same persisted session.
+   "packages/db/src/work-order-repository.ts": "51e64ceaa39564c8d1b083fbb6b24048143455dfe76080ff63309ce7d808dfb6",
    "packages/db/src/sor-repository.ts": "b66552d4d408c5e476ab9bff44324cf160b741561b5a03926c0697853e31514f",
    "packages/db/src/job-scheduling-repository.ts": "7517df3c6597af44f651c8b704c9bd91c4f40894ce5aa58e3b4fcea16cc9eb57",
    "packages/db/src/work-order-fixtures.ts": "703b2f726e9d4256cbd0a1908676f2cd401d64bad28741853f8131183cd0a0ea",
+   // Ben 6 Nov router-chat "yes": exactly the emergency-notice and retention-timer constructor sites.
+   // Hold: break-glass identity design goes to Ben before real data.
    // Scanner bytes change only for the renewed caller review citation above.
-   "apps/api/src/auth/context-boundary.test.ts": "b77c7b63985dc66d359af04285e099463335085aa47e64100af9473dc9f58bc0"
-};
+   "apps/api/src/auth/context-boundary.test.ts": "b9b8b46c72fd0d572ec338cd8ee37f6e0886eca728c8ea06eb2f3a1f284bb926"
+  };
   for (const [file, hash] of Object.entries(hashes)) expect(sha256Hex(await readFile(new URL(`../../../${file}`, import.meta.url), "utf8")), file).toBe(hash);
  });
  it("[C3] all fixtures are synthetic_demo and every raised identity is a new scope item", async () => {
@@ -285,7 +311,7 @@ describe("ENT-4b origin persistence", () => {
   return refusal;
  }
  it("[S4] a stamped context with an UPPER-CASE tenant id commits a valid extra", async () => {
-  const f = await fixture(c), upper = testTenantContext(f.p.tenantId.toUpperCase());
+  const f = await fixture(c), {upper,repo} = await uppercaseRequest(f);
   expect(upper.tenantId).not.toBe(f.p.tenantId); expect(upper.tenantId.toLowerCase()).toBe(f.p.tenantId);
   const input = raise(f), e = await repo.raiseExtra(upper, input);
   expect(await countRows(f, e.variationId, input.commandId)).toEqual({ command_receipt: 1, variation: 1, extra_origin: 1, extra_event: 1, audit_event: 1 });
@@ -293,7 +319,7 @@ describe("ENT-4b origin persistence", () => {
   await checkChain(f);
  });
  it("[S4] both spellings of one tenant identify one extra for one client capture ID", async () => {
-  const f = await fixture(c), upper = testTenantContext(f.p.tenantId.toUpperCase()), original = raise(f, { clientCaptureId: randomUUID() });
+  const f = await fixture(c), {upper,repo} = await uppercaseRequest(f), original = raise(f, { clientCaptureId: randomUUID() });
   const a = await repo.raiseExtra(upper, original), retry = { ...original, commandId: randomUUID() };
   expect(await repo.raiseExtra(f.ctx, retry)).toEqual(a);
   expect(await repo.raiseExtra(upper, { ...original, commandId: randomUUID() })).toEqual(a);

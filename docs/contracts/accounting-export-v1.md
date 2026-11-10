@@ -23,7 +23,7 @@ The contract and executable fake live in `apps/api/src/accounting-export.contrac
 | Regional data path | Process memory only | No external destination, logs, credentials, telemetry or live/sandbox-provider evidence |
 | Real Codat sandbox/live | Not built | Codat SDK is not installed; no dependencies added |
 
-The bounded document contract carries source totals, IDs and revisions. It does not fabricate tax calculations, item lines, settlement evidence or missing provider capabilities. There is no rounding: validated integer pennies are preserved. Credits and receipts share one conservative per-invoice allocation ceiling across all target companies, computed with bigint from immutable export reservations (including failed/unknown attempts). Only the exact company/source entry being retried is excluded from the sum before adding its amount. Reservations cannot be silently released by source edits or cancellation. This is not an accounting balance or fee calculation.
+The bounded document contract carries source totals, IDs and revisions. It does not fabricate tax calculations, item lines, settlement evidence or missing provider capabilities. There is no rounding: validated integer pennies are preserved. Credits and receipts share one conservative per-invoice allocation ceiling across all target companies, computed with bigint from immutable export reservations (including failed/unknown attempts). Only the exact company/source entry being retried is excluded from the sum before adding its amount. An invoice and its credits/receipts must share the company and customer mapping bound by the first export reservation in that invoice family. This also applies when an adjustment is exported before its parent; later parent or sibling exports cannot change those bindings. Reservations cannot be silently released by source edits or cancellation. This is not an accounting balance or fee calculation.
 
 ## Authorization and reconciliation
 
@@ -219,3 +219,239 @@ the batch's database integration suites, the export-preview browser journey
 and all required typecheck/lint/test/build checks against current main.
 Independent RED review must PASS at the exact resulting head before merge;
 this local source inspection and deterministic testing are not that review.
+
+## M5-2 stored route changes (dark slice, 4 November 2026)
+
+`AccountingExportRepository.routeChangePreview` and `routeChangeConfirm` use the
+migration-owned `app.accounting_export_route` session boundary. Inputs are strict
+version-1 schemas. The destination connection/mapping proposal is an existing
+administrator-owned synthetic export fixture, identified by source ID; runtime
+callers cannot seed, edit or assert its connection state. Its full scope must
+match tenant, target company, job, source revision and mapping. No tenant-wide
+switch exists. A switch with no previous route/history is refused.
+
+The canonical database preview hash binds version, exact scope/mapping, old and
+new route, target connection revision, consent revision and the ordered historic
+ledger artifacts, references, external IDs and execution states. Every historic
+entry must be pushed with an external ID. Pending, unknown, absent, edited,
+duplicate or conflicting entries hold the switch until reconciliation. These
+are persisted synthetic observations, not fresh provider lookups or real
+provider conformance. Live connection and target-visibility verification remain
+with the held adapters/G5 work.
+
+Confirmation is an explicit human-approved `accounting_export.route` Decision,
+with an exact preview hash, tenant, expiry, command ID and single-use Decision ID.
+The current session supplies the actor; caller-supplied actors are refused.
+Confirmation appends one FORCE-RLS record and a checked-operation audit event in
+one transaction under the existing tenant export lock. Identical command replay
+returns the original record after current session, fixture consent/revisions and
+reconciliation holds are checked; altered replay and Decision reuse across route
+changes and ordinary export approvals fail. Expired confirmation cannot replay.
+
+Existing ledger artifacts, mappings, references and external IDs are never
+rewritten. Their existing export claim rules prevent reposting. A new source's
+administrator-owned fixture must match the confirmed destination route,
+connection/consent revisions and exact mapping before preview/approval; the
+server does not silently rewrite a stale proposal. Other jobs/companies retain
+their routes. No HTTP, screen, worker, scheduler, OAuth, SDK, endpoint, tax,
+settlement or recovery-proof capability is added. M5-2 remains open; G0–G5,
+provider approval, CI database execution and exact-head independent RED review
+remain held.
+
+## M5-2 stored route read and human confirmation screen — 4 November 2026 (RED, NOPR)
+
+Migration `0617_accounting_export_route_change_read` adds one checked synthetic-only
+read with the existing owner/admin session permission and tenant export lock. It
+returns the hash-bound current proposal and immutable confirmed route history,
+without changing tables, grants, predecessors, ledger mappings or external IDs.
+Its only dispatcher call fixes the operation to the existing read-only preview.
+The session-only `/api/accounting-exports/[sourceId]/route-change` GET/POST uses
+the package application export, strict approval input, trusted POST origin and
+no-store responses. The server derives scope/tenant from the checked read and
+binds the session actor; actor mismatch rolls back before commit. SQL rechecks
+the exact hash, revisions, expiry, Decision reuse and reconciliation holds.
+
+The practice section shows old/new routes, target company, mapping and historic
+entries. Confirmation retains identical command/Decision/expiry bytes after an
+uncertain response; the server can replay the stored artifact after a committed
+but lost response. Reload reads the confirmed route/history. Already-sent items
+are never reissued. This supersedes the earlier slice's statement that no screen
+or HTTP boundary exists. Real adapters, connections on screen, workers, production
+use and G0–G5 remain closed; this does not finish M5-2.
+
+Local validation used installed TypeScript/Vitest directly, with no downloads:
+`tsc -p` for core, db and API, and web with `--noEmit`, passed. Vitest with
+`--maxWorkers=1`, at most three named files per run and two test workers total:
+API accounting-export.application (18); watchdog-registry/context-boundary/identity
+(278); db accounting-export-repository/migration-proof-loader (82); web existing
+export route/new route-change route/route-change component (11): 389 tests passed.
+Lane boundary, core purity, exact-money, commercial boundary, AI provider boundary,
+PL/pgSQL CASE-in-IF and diff whitespace checks passed. Initial JSX import and a
+duplicate test fixture property were fixed without weakening assertions.
+
+CI must run the extended real-PostgreSQL route-change suite, including read
+isolation/permission, no-write reload and predecessor-preserving 0617 upgrade;
+actual catalog/proof/RLS checks; and `m5-2-route-change.spec.ts` headless on
+mobile-360 and desktop (lost response/replay, stale proposal, held unknown export,
+permission and preserved historic IDs). No database or browser ran here. Full CI
+against current main and independent exact-head RED review remain required.
+Router commits/pushes this NOPR branch and reconciles/renumbers it into its group;
+this session performed no Git writes, fetch, main merge, PR or release.
+LP-5 lifecycle hold: the dark stored route-change operation uses its own checked
+synthetic session boundary and immutable Decision record, outside LP-5 lifecycle
+dispatch. Integration with that lifecycle remains held before live route changes
+can be enabled. This slice grants no live provider or payment authority.
+
+
+## Batch-32 merge repair — 5 November 2026 (RED, READY for router handoff)
+
+Comparison base: merged `origin/main` / `MERGE_HEAD`
+`62081c68933d0b953e7dd75a8cbd7b3a2fb4f304`; branch before repair
+`55753a8f0cb25a4ef5f28eb1316690c9a6b77aef`. Both sides of the registry,
+package exports and contract conflicts are retained. The working-tree content is
+resolved; the router must stage the resolutions because this sandbox cannot write
+the Git index. Main's later-empty-table list and lifecycle-upgrade expectation are
+retained exactly. No test assertion was removed or weakened by this repair.
+
+Migration inventory against that main:
+
+| Branch migration | Disposition | Evidence |
+| --- | --- | --- |
+| `0975_accounting_export_route_change` (formerly `0764`) | Remove duplicate SQL, proof and note; retain main's `0599_accounting_export_route_change` triplet unchanged | SQL is byte-identical, SHA-256 `771f27d7ff44b6451e7b53bbe7aecd2833f1b488a3ce83f33b8b4120ab9e974d`; proof is identical after stem normalization; note differs only by the obsolete NOPR label |
+| `0976_accounting_export_route_change_read` | Rename triplet to `1200_accounting_export_route_change_read` | SQL, proof and note equal branch originals after stem-only replacement |
+| `0977_merchant_delivery_record_read` | Rename triplet to `1201_merchant_delivery_record_read` | SQL, proof and note equal branch originals after stem-only replacement |
+
+All 273 main migration blobs match the working tree byte for byte. Each remaining
+migration creates one new routine and replaces none: `accounting_export_route_read`
+and `merchant_delivery_record_read`. Consequently no predecessor routine body diff
+is needed; main's latest `accounting_export` and `lp5_command_result`, including
+`purchase_order.send.dark`, remain intact. The stored route-change slice is already
+on main through batch-23; the M5-2 read/screen and M5-6 merchant delivery projection
+remain real branch changes. Neither full plan piece is complete.
+
+Working-tree lane coverage and migration ordering pass using the repository's
+existing `loadLanePolicy`, `selectLane`, `lanePathAllowed` and
+`migrationOrderViolations` helpers against main plus untracked paths. The standard
+lane CLI was attempted and fails on the old HEAD/index merge union; this is not a
+PASS for the final commit. It must be rerun after the router stages and commits.
+The lane lists exactly every changed file from main, excluding `config/lanes/`.
+
+Local checks for this repair (installed tools, no downloads; one Vitest worker,
+at most three named files per invocation):
+
+- Core merchant-reliability: 4 passed. Database accounting-export-repository and
+  migration-proof-loader: 82 passed. Web route-change route/component,
+  merchant-reliability route/screen and existing accounting-export route: 16 passed.
+- API accounting-export.application, watchdog-registry and auth/context-boundary:
+  290 passed with temporary `/tmp/batch-32-vitest-api.config.mjs` resolving core/db
+  to current source and a 60-second test timeout. The initial default run had
+  288 passed, one stale-dist registry failure and one 30-second boundary-scan
+  timeout. After rebuilding the packages, the normal API Vitest invocation with
+  `--maxWorkers=1 --testTimeout=60000` passed the same 290 tests without aliases.
+  No assertions or repository test configuration were changed. The final focused
+  suites total 392 passed tests across 11 files.
+- Core, database and API TypeScript builds and web `--noEmit` typecheck passed
+  using installed TypeScript 5.8.3. Core purity,
+  money arithmetic, commercial boundary, AI provider boundary, PL/pgSQL CASE-in-IF
+  (275 migrations), exact working-tree lane coverage and migration order,
+  main migration blob preservation, triplet stem-only comparison and diff
+  whitespace checks passed. Core purity reports 11 existing unverifiable computed
+  import names without refusing them.
+- The pnpm wrapper and a redundant wrapper-based compiler attempt were stopped
+  after stalling; direct installed Node/TypeScript/Vitest entrypoints were used.
+
+### Named holds for landing
+
+- Router must stage all content resolutions and the duplicate removals/renames,
+  commit, push, and rerun the standard lane check at the resulting head. Numbers
+  1200/1201 are provisional and must be reconciled at landing with proof/note stems.
+- CI must prove real PostgreSQL fresh install, repeated migration, populated upgrade,
+  unchanged predecessor data/routines/ACLs, tenant and permission refusal, no-write
+  reads, catalog/RLS/proof reconciliation, route replay/unknown outcome and merchant
+  latest-revision isolation. Run the full mandatory database and migration suites,
+  including accounting-export-route-change, merchant-reliability,
+  plan-entitlement-lifecycle-upgrade and accounting-export integration tests.
+- CI must run `m5-2-route-change.spec.ts`, `M5-6-merchant-reliability.spec.ts` and
+  `m5-1-export-preview.spec.ts` at phone and desktop widths, at most two workers,
+  plus required typecheck/lint/test/build checks against current main.
+- Independent RED review must PASS at the exact landing head. No PostgreSQL,
+  browser, provider conformance, production approval or live release was established
+  in this sandbox; G0–G5 and the existing provider/legal/commercial holds remain.
+
+## Batch-32 PR handoff — 5 November 2026 (RED)
+
+Current comparison is incoming `origin/main` / `MERGE_HEAD`
+`d16ef1978eb44d7d9d33a77926fb179e794af196`, against batch head
+`0e620fb4358cba952fc64f3fba89c59dbce8e73f`. This supersedes the earlier
+NOPR/numbering handoff above. The three merge conflicts retain both sides:
+core exports, database exports, and the rate-baseline contract. The router must
+stage the resolved working files and complete the merge; this sandbox made no
+Git writes. The named `batch-32-harden.md` and `PRECHECK-FINDINGS.md` were absent;
+the available `batch-32.md`, `batch-9-harden.md`, batch-32 prechecks/recheck and
+current PR brief were read. The proven numeric receipt fixture cast is retained.
+
+Migration reconciliation against that incoming main:
+
+| Migration | Landing disposition |
+| --- | --- |
+| Main's `0599_accounting_export_route_change` | Retained unchanged; the previously removed duplicate is still absent |
+| Branch `1200_accounting_export_route_change_read` | Reserved `0617_accounting_export_route_change_read`; SQL byte-identical, proof/note/test references renamed |
+| Branch `1201_merchant_delivery_record_read` | Reserved `0618_merchant_delivery_record_read`; SQL byte-identical, proof/note/test references renamed |
+
+All 278 incoming-main SQL migration blobs match the resolved working tree.
+Neither remaining stem repeats main. Each adds a new routine; neither recreates
+any routine, and no latest main routine body is replaced or loses a guard.
+0614–0616 remain reserved for #576 and must land first. No new table, command
+registry row, worker task, provider route, grant to a table, `SET app.*` clause,
+identity/control-plane schema change, or financial posting is introduced here.
+The merchant proof now describes read-only session projection, rather than
+claiming lifecycle dispatch. The existing route-change LP-5 hold remains above.
+Raw session revocation fixtures here target `identity.session`, not the audited
+`control_plane.contractor_practice_session` repository boundary.
+
+The route confirmation screen now treats 4xx other than 408/429 as definite
+refusals: discard approval/proposal and require a fresh read. Network failures,
+408 and 429 retain the same exact approval for retry. The existing browser
+journey now checks identical bytes after lost response/408/429 and removal of
+the confirmation button after a stale-proposal refusal. The merchant server
+boundary test has a 120-second budget. No test assertion was weakened.
+
+Local execution, installed tools only, at most two workers and three named
+Vitest files per invocation:
+
+- `node node_modules/typescript/bin/tsc -p` for core, db and API passed;
+  web `--noEmit` passed, including a repeat after the refusal handling change.
+- Core `src/merchant-reliability.test.ts`: 4 passed.
+- DB `test/accounting-export-repository.test.ts`,
+  `test/migration-proof-loader.test.ts`, `test/m2-1-migration-proof.test.ts`:
+  87 passed.
+- API `src/accounting-export.application.test.ts`,
+  `src/watchdog-registry.test.ts`, `src/auth/context-boundary.test.ts`:
+  290 passed with `--testTimeout=60000`; `src/auth/identity.test.ts`: 7 passed.
+- Web route-change component/route and merchant-reliability route: 10 passed;
+  merchant screen and existing accounting-export route: 6 passed. The six
+  route-change component/route tests passed again after the final screen change.
+  Total unique tests: 404 passed across 13 files, all `--maxWorkers=1`.
+- Core-purity, money-arithmetic, commercial-boundary, AI-provider-boundary and
+  PL/pgSQL CASE-in-IF linters passed. Core purity reports 11 existing computed
+  import names as unverifiable. Provider register matches its authoritative
+  data-flow sources; those sources did not change. Diff whitespace passed.
+- The standard `node tools/agent-lane-boundary-lint.mjs` was run and fails on the
+  unfinished Git merge's old HEAD/index union, including incoming main paths
+  and old migration filenames. This is not a final-head lane PASS. Separately,
+  blob comparison to incoming main plus the repository's `loadLanePolicy`,
+  `lanePathAllowed` and `migrationOrderViolations` helpers confirms exact
+  resolved-tree coverage (35 paths plus the lane file), no self-listing, and
+  valid reserved numbering. Rerun the standard CLI after the router commits.
+- Cloudflare compatibility was source-inspected: this batch's web routes use
+  package exports, with no direct apps/api source imports. Cloudflare build was
+  not executed in this restricted environment.
+
+Required next evidence: router stages/commits/pushes and opens this group's PR;
+standard lane lint and mandatory CI checks at that head; real PostgreSQL fresh,
+upgrade, migration-proof/catalog/RLS, tenant/session refusal, no-write merchant
+read and route replay tests; both changed browser journeys at phone and desktop
+widths, max two workers; independent RED PASS at the exact resulting head.
+The prior precheck is evidence for its old head only. No PostgreSQL, browser,
+live adapter, real customer data, deployment or launch ran here. M5-2/M5-6 remain
+partial synthetic slices with existing commercial/provider/release holds.

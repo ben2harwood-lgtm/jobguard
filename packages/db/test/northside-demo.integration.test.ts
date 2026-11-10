@@ -87,7 +87,7 @@ it("FLAKE-DIAG-1 measures legacy/new reads and preserves allowed AND denied seed
       expect(authorityLoops[1]).toBeLessThan(authorityLoops[0]!);
       const legacy = (await db.$client.query(legacyAssignedJobsQuery, args)).rows;
       const optimized = (await db.$client.query(assignedJobsQuery, args)).rows;
-      expect(optimized).toEqual(legacy); // includes order, all fields and caller's visit
+      expect(optimized).toEqual(legacy.map(row => ({ ...row, last_completed_visit: null }))); // includes order, all fields and caller's visit; no visit is completed yet
       const decisions = (await db.$client.query(`SELECT w.job_id,a.decision,a.reason_code
         FROM app.work_order w CROSS JOIN LATERAL app.ent3b_visit_authority($2,w.job_id) a
         WHERE w.tenant_id=$1 ORDER BY w.job_id`, args)).rows;
@@ -102,8 +102,8 @@ it("FLAKE-DIAG-1 measures legacy/new reads and preserves allowed AND denied seed
       }
       return legacy;
     });
-    const actual = await new SiteVisitRepository(c.runtime).assignedJobs(context, actor);
-    expect(actual).toEqual({ truncated: false, jobs: expected.map(row => ({ jobId: row.job_id, workOrderId: row.work_order_id, reference: row.reference, priority: row.priority, issuedOn: row.issued_on, dueOn: row.due_on, openVisitId: row.open_visit })) });
+    const actual = await new SiteVisitRepository(c.runtime).assignedJobs(context, actor, { includeLastCompletedVisit: true });
+    expect(actual).toEqual({ truncated: false, jobs: expected.map(row => ({ jobId: row.job_id, workOrderId: row.work_order_id, reference: row.reference, priority: row.priority, issuedOn: row.issued_on, dueOn: row.due_on, openVisitId: row.open_visit, lastCompletedVisit: null })) });
   } finally {
     await switches.switchOff(await requestContext(c, session), session.p, session.session, { version: "practice-worker-switch-off.v1", commandId: randomUUID() });
   }
@@ -136,13 +136,14 @@ it("ACTION-ATTRIBUTION durably binds every journey command to the persisted test
   const originBefore = (await c.admin.query("SELECT row_to_json(o)::text bytes FROM app.extra_origin o WHERE tenant_id=$1 AND variation_id=$2", [f.p.tenantId, extra.extraId])).rows;
   const sv = await act(seed.surveyorMembershipId), priceId = randomUUID();
   await repo.priceExtra(await ctx(), sv, { version: "price-extra.v1", commandId: priceId, jobId: extra.jobId, extraId: extra.extraId, netPence: 108000 });
+  expect((await northsideExtras(c.runtime, sv, "surveyor", await ctx())).find(row => row.extraId === extra.extraId)).toMatchObject({ quotedPence: 108000, state: "logged" });
   const sup = await act(seed.supervisorMembershipId), submitId = randomUUID();
   const submitted = await repo.submitExtra(await ctx(), sup, { version: "submit-extra.v1", commandId: submitId, jobId: extra.jobId, extraId: extra.extraId });
   const approveId = randomUUID();
   await repo.approveExtraStep(await ctx(), sup, { version: "approve-extra-step.v1", commandId: approveId, jobId: extra.jobId, requestId: submitted.requestId, stepIndex: 0, revisionHash: submitted.revisionHash, netPence: 108000 });
   await expect(repo.issueClientApproval(await ctx(), sup, { version: "issue-client-approval.v1", commandId: randomUUID(), jobId: extra.jobId, requestId: submitted.requestId,
     approverMembershipId: seed.clientApproverMembershipId, recipient: seed.clientApproverEmail, linkToken: "a".repeat(40), expiresAt: new Date(Date.now() + 600000) })).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
-  const owner = await act(), sendId = randomUUID(), token = randomUUID().replaceAll("-", "").repeat(2);
+  const owner = await act(seed.surveyorMembershipId), sendId = randomUUID(), token = randomUUID().replaceAll("-", "").repeat(2);
   await repo.issueClientApproval(await ctx(), owner, { version: "issue-client-approval.v1", commandId: sendId, jobId: extra.jobId, requestId: submitted.requestId,
     approverMembershipId: seed.clientApproverMembershipId, recipient: seed.clientApproverEmail, linkToken: token, expiresAt: new Date(Date.now() + northsideSettings.linkLifetimeMinutes * 60000) });
   const replay = await northsideApprovalArtifact(c.runtime, owner, await ctx(), sendId);
@@ -161,7 +162,7 @@ it("ACTION-ATTRIBUTION durably binds every journey command to the persisted test
   const ids = [extra.commandId, priceId, submitId, approveId, sendId, decideId];
   const rows = (await c.admin.query(`SELECT a.*,r.status FROM app.northside_action_attribution a JOIN app.command_receipt r ON(r.tenant_id,r.command_id)=(a.tenant_id,a.command_id)
     WHERE a.tenant_id=$1 AND a.command_id=ANY($2::uuid[]) ORDER BY array_position($2::uuid[],a.command_id)`, [f.p.tenantId, ids])).rows;
-  expect(rows.map(r => r.actor_role)).toEqual(["operative", "surveyor", "supervisor", "supervisor", "owner", "client_approver"]);
+  expect(rows.map(r => r.actor_role)).toEqual(["operative", "surveyor", "supervisor", "supervisor", "surveyor", "client_approver"]);
   expect(rows.map(r => r.actor_membership_id)).toEqual([op.membershipId, sv.membershipId, sup.membershipId, sup.membershipId, owner.membershipId, client.membershipId]);
   for (const row of rows) {
     expect(row.status).toBe("succeeded"); expect(row.tester_membership_id).toBe(f.p.membershipId); expect(row.tester_identity_user_id).toBe(f.p.identityUserId);
@@ -203,7 +204,7 @@ it("CLIENT-ISOLATION permits a second client's own extra and denies cross-client
   const supervisor = await act(sup);
   const submitted = await repo.submitExtra(await ctx(), supervisor, { version: "submit-extra.v1", commandId: randomUUID(), jobId: extra.jobId, extraId: extra.extraId });
   await repo.approveExtraStep(await ctx(), supervisor, { version: "approve-extra-step.v1", commandId: randomUUID(), jobId: extra.jobId, requestId: submitted.requestId, stepIndex: 0, revisionHash: submitted.revisionHash, netPence: 108000 });
-  const owner = await act(), token = randomUUID().replaceAll("-", "").repeat(2);
+  const owner = await act(sv), token = randomUUID().replaceAll("-", "").repeat(2);
   await repo.issueClientApproval(await ctx(), owner, { version: "issue-client-approval.v1", commandId: randomUUID(), jobId: extra.jobId, requestId: submitted.requestId,
     approverMembershipId: clientId, recipient: "second.approver@fictional.invalid", linkToken: token, expiresAt: new Date(Date.now() + 600000) });
   const view = { version: "client-approval-view.v1", jobId: extra.jobId, requestId: submitted.requestId, linkToken: token, email: "second.approver@fictional.invalid" };

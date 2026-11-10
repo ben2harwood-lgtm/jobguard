@@ -14,7 +14,11 @@ export async function seedWorkPractice(f: WorkFixture) {
 }
 export type WorkPractice = Awaited<ReturnType<typeof seedWorkPractice>>;
 export const workCommand = (action = "finish", extra: Record<string, unknown> = {}) => ({version:"job-work-state-command.v1",commandId:randomUUID(),expectedRevision:0,action,...extra});
+export async function bindWorkRequest(db: Pick<PoolClient,"query">, p: WorkPractice) {
+ await db.query("SELECT app.bind_request($1::text,$2::text,$3::uuid)",["real",p.bindingCredential,p.auth.context.tenantId]);
+}
 export async function commandOn(db: Pick<PoolClient,"query">, p: WorkPractice, input: unknown, jobId = p.jobId, digest = p.auth.digest) {
+ await bindWorkRequest(db,p);
  const result = await db.query("SELECT app.ch4_record_work_state($1,$2,$3,$4::jsonb) result",[p.auth.context.tenantId,jobId,digest,JSON.stringify(input)]);
  return jobWorkStateReadV1.parse(result.rows[0].result);
 }
@@ -56,27 +60,21 @@ export async function linkPair(f:WorkFixture,preLive=false,successorOwner?:WorkP
  const input={version:"job-link-command.v1",action:"link",commandId:randomUUID(),expectedRevision:0,successorJobId:successor,predecessorBindingId:source.id as string,successorBindingId:binding};
  return {p,successor,input};
 }
-export async function runLink(pool:Pool,p:WorkPractice,input:unknown,jobId=p.jobId){return workTenant(pool,p.auth.context.tenantId,async db=>jobWorkStateReadV1.parse((await db.query("SELECT app.ch4_link_post_lock_job($1,$2,$3,$4::jsonb) result",[p.auth.context.tenantId,jobId,p.auth.digest,JSON.stringify(input)])).rows[0].result))}
-
-/** Real synthetic adoption command; source lineage is the existing immutable audit contract. */
-export async function importWorkJob(f:WorkFixture,p:WorkPractice,sourceJobId=p.jobId){
- const {AdoptInFlightJobMutation,UserCommandDispatcher}=await import("../src/index.js");
- const t=p.auth.context.tenantId,jobId=randomUUID(),baselineHash="b".repeat(64);
- const binding=(await f.admin.query("SELECT b.* FROM app.job_party_binding b JOIN app.job_party_current c ON(c.tenant_id,c.job_id,c.binding_id)=(b.tenant_id,b.job_id,b.id) WHERE b.tenant_id=$1 AND b.job_id=$2",[t,sourceJobId])).rows[0]!;
- const mutation=new AdoptInFlightJobMutation(t,"synthetic_candidate",{
-  version:"adopt-job.v1",jobId,baselineId:randomUUID(),title:"Fictional inherited work job",lifecyclePoint:"live",
-  provenance:"imported",lineageStrength:"builder_attested_weaker",baselineHash,baselineDescription:"Fictional baseline",
-  acceptedNetValuePence:100000,recoveryCapPence:1500,acceptedValueSource:"builder_attestation",attestedByMembershipId:p.auth.membershipId,
-  attestedAt:new Date(0),importTermsVersion:"synthetic_import_terms_candidate.v1",feePolicyVersion:"reference_fee_policy_v1",mode:"synthetic_candidate",
-  parties:{customerRevisionId:binding.customer_revision_id as string,siteRevisionId:binding.site_revision_id as string},
+export async function runLink(pool: Pool, p: WorkPractice, input: unknown, jobId = p.jobId) {
+ return workTenant(pool,p.auth.context.tenantId,async db=>{
+  await bindWorkRequest(db,p);
+  const result=await db.query("SELECT app.ch4_link_post_lock_job($1,$2,$3,$4::jsonb) result",
+   [p.auth.context.tenantId,jobId,p.auth.digest,JSON.stringify(input)]);
+  return jobWorkStateReadV1.parse(result.rows[0].result);
  });
- await new UserCommandDispatcher(f.runtime).dispatch(p.auth.context,{
-  version:"command.v1",commandId:randomUUID(),commandType:"job.adopt_in_flight",semanticKey:`import:${jobId}`,
-  actorMembershipId:p.auth.membershipId,subjectType:"job",subjectRef:jobId,
-  action:{actionType:"job.adopt_in_flight",recipient:null,contentHash:baselineHash,aggregateRevision:0,amountPence:100000,
-   currency:"GBP",policyVersion:"synthetic_import_terms_candidate.v1",expiresAt:new Date(Date.now()+300000)},
- },{mutate:mutation.mutate.bind(mutation),auditEvents:(result,cmd)=>mutation.auditEvents(result,cmd).map(event=>({
-  ...event,payload:{...event.payload,references:{...event.payload.references,sourceJobId}},
- }))});
+}
+
+/** Use the real adoption path so its succeeded receipt binds the source job. */
+export async function importWorkJob(f:WorkFixture,p:WorkPractice,sourceJobId=p.jobId){
+ const {JobPartiesApplication}=await import("../../../apps/api/src/job-parties.application.js");
+ const binding=(await f.admin.query("SELECT binding_id FROM app.job_party_current WHERE tenant_id=$1 AND job_id=$2",[p.auth.context.tenantId,sourceJobId])).rows[0]!;
+ const {jobId}=await new JobPartiesApplication(f.runtime).adopt({sessionId:p.sessionId},sourceJobId,{
+  version:"job-parties-import.v1",commandId:randomUUID(),expectedBindingId:binding.binding_id,
+ });
  return {...p,jobId};
 }

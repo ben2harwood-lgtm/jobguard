@@ -1,0 +1,391 @@
+{
+  "migration": "0970_lp6c_client_extra_decision.sql",
+  "lp0": [
+    {
+      "section": "authorityPaths",
+      "before": null,
+      "after": {
+        "id": "ap-lp6c-client-extra-decision",
+        "title": "LP-6c scoped client extra decisions",
+        "description": "Existing extra-session validator remains authoritative; private binder records the customer approver, exact job and ClientDecideExtra scope for at most one minute. Ben typed yes on 9 Nov 2026.",
+        "cards": [
+          "LP-6c",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-6c": "Bind only the validated client approver to ClientDecideExtra for this job.",
+          "LP-12": "Review private owner custody and grants."
+        },
+        "sources": [
+          "packages/db/migrations/0970_lp6c_client_extra_decision.sql"
+        ],
+        "tests": [
+          "packages/db/test/extra-client-session.integration.test.ts"
+        ],
+        "gaps": [
+          "Exact-head independent RED review remains required before merge."
+        ]
+      }
+    },
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "id": "lp6c-client-extra-decision",
+        "title": "LP-6c scoped client extra decisions",
+        "kind": "authority",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Existing extra-session validator remains authoritative; private binder records the customer approver, exact job and ClientDecideExtra scope for at most one minute. Ben typed yes on 9 Nov 2026."
+        },
+        "cards": [
+          "LP-6c",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-6c": "Bind only the validated client approver to ClientDecideExtra for this job.",
+          "LP-12": "Review private owner custody and grants."
+        },
+        "downstream": "Existing extra-session validator remains authoritative; private binder records the customer approver, exact job and ClientDecideExtra scope for at most one minute. Ben typed yes on 9 Nov 2026.",
+        "sources": [
+          "packages/db/migrations/0970_lp6c_client_extra_decision.sql"
+        ],
+        "tests": [
+          "packages/db/test/extra-client-session.integration.test.ts"
+        ],
+        "gaps": [
+          "Exact-head independent RED review remains required before merge."
+        ],
+        "path": "ap-lp6c-client-extra-decision"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|rel|table|app.extra_client_session|jobguard_binding_owner|SELECT|-",
+        "group": "lp6c-client-extra-decision"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|rel:table|app.extra_client_session|jobguard_migration",
+        "group": "lp6c-client-extra-decision"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|rel|table|app.extra_client_link|jobguard_binding_owner|SELECT|-",
+        "group": "lp6c-client-extra-decision"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.lp6_bind_client_approver(uuid,uuid,uuid,text,text)|jobguard_migration|EXECUTE|-",
+        "group": "lp6c-client-extra-decision"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.lp6_bind_client_approver(uuid,uuid,uuid,text,text)|jobguard_binding_owner",
+        "group": "lp6c-client-extra-decision"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:identity.extra_customer_use(uuid,uuid,uuid,text,text,text)|jobguard_binding_owner|EXECUTE|-",
+        "group": "lp6c-client-extra-decision"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp6_bind_client_approver(uuid,uuid,uuid,text,text)",
+        "owner": "jobguard_binding_owner",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_migration"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [
+          "control_plane.request_binding"
+        ],
+        "staticCalls": [
+          "identity.extra_customer_use"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:identity.extra_customer_use(uuid,uuid,uuid,text,text,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_identity"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.extra_client_session"
+        ],
+        "staticCalls": [
+          "app.append_final_check_audit",
+          "app.mon8_require_feature",
+          "app.xa_client_view_authority"
+        ]
+      },
+      "after": {
+        "identity": "function:identity.extra_customer_use(uuid,uuid,uuid,text,text,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_binding_owner",
+          "jobguard_identity"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.extra_client_session"
+        ],
+        "staticCalls": [
+          "app.append_final_check_audit",
+          "app.mon8_require_feature",
+          "app.xa_client_view_authority"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:identity.extra_customer_approval(uuid,uuid,uuid,text,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_identity"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.extra_client_command_session"
+        ],
+        "staticCalls": [
+          "app.append_final_check_audit",
+          "app.begin_command",
+          "app.complete_command",
+          "app.final_lock_canonical",
+          "app.xa_client_decide",
+          "app.xa_client_view_authority",
+          "app.xc_timing",
+          "identity.extra_customer_use"
+        ]
+      },
+      "after": {
+        "identity": "function:identity.extra_customer_approval(uuid,uuid,uuid,text,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_identity"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.extra_client_command_session"
+        ],
+        "staticCalls": [
+          "app.append_final_check_audit",
+          "app.begin_command",
+          "app.complete_command",
+          "app.final_lock_canonical",
+          "app.lp6_bind_client_approver",
+          "app.xa_client_decide",
+          "app.xa_client_view_authority",
+          "app.xc_timing",
+          "identity.extra_customer_use"
+        ]
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.extra_client_session|lp6_client_binding_read|PERMISSIVE|SELECT|jobguard_binding_owner|56e1f20812d74a1c"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.extra_client_link|lp6_client_binding_read|PERMISSIVE|SELECT|jobguard_binding_owner|56e1f20812d74a1c"
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "routines",
+      "before": {
+        "nspname": "identity",
+        "proname": "extra_customer_approval",
+        "args": "t uuid, j uuid, c uuid, digest text, input jsonb",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_identity=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      },
+      "after": {
+        "nspname": "identity",
+        "proname": "extra_customer_approval",
+        "args": "t uuid, j uuid, c uuid, digest text, input jsonb",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_identity=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "nspname": "identity",
+        "proname": "extra_customer_use",
+        "args": "t uuid, j uuid, c uuid, digest text, session_digest text, operation text",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_identity=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      },
+      "after": {
+        "nspname": "identity",
+        "proname": "extra_customer_use",
+        "args": "t uuid, j uuid, c uuid, digest text, session_digest text, operation text",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_identity=X/jobguard_migration,jobguard_binding_owner=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp6_bind_client_approver",
+        "args": "t uuid, j uuid, c uuid, token_hash text, recipient text",
+        "proowner": "jobguard_binding_owner",
+        "proacl": "{jobguard_binding_owner=X/jobguard_binding_owner,jobguard_migration=X/jobguard_binding_owner}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "relations",
+      "before": {
+        "nspname": "app",
+        "relname": "extra_client_session",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      },
+      "after": {
+        "nspname": "app",
+        "relname": "extra_client_session",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_binding_owner=r/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "extra_client_session",
+        "policyname": "lp6_client_binding_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_binding_owner}",
+        "cmd": "SELECT",
+        "qual": "(NOT (tenant_id IS DISTINCT FROM (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "relations",
+      "before": {
+        "nspname": "app",
+        "relname": "extra_client_link",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=r/jobguard_migration,jobguard_command_writer=r/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      },
+      "after": {
+        "nspname": "app",
+        "relname": "extra_client_link",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=r/jobguard_migration,jobguard_command_writer=r/jobguard_migration,jobguard_binding_owner=r/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "extra_client_link",
+        "policyname": "lp6_client_binding_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_binding_owner}",
+        "cmd": "SELECT",
+        "qual": "(NOT (tenant_id IS DISTINCT FROM (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid))",
+        "with_check": null
+      }
+    }
+  ],
+  "tenancy": []
+}

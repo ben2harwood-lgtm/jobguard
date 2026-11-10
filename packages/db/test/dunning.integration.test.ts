@@ -22,6 +22,27 @@ describe("M4-16 durable synthetic dunning",()=>{
  }
  const read=(a:Company)=>new DunningRepository(c.runtime).read(a.context,a.digest,{jobId:a.jobId,nowTick:3});
  const command=(row:{invoiceId:string;snapshotHash:string}, extra={})=>({version:"dunning-persist-command.v1",commandId:randomUUID(),invoiceId:row.invoiceId,snapshotHash:row.snapshotHash,nowTick:3,...extra});
+ it("lets admins request but only current owners approve, including concurrent replay and tenant isolation",async()=>{
+  const a=await company(), b=await company();await seed(a);
+  const repo=new DunningRepository(c.runtime),row=(await read(a)).invoices[0]!;
+  await c.admin.query("UPDATE app.membership SET role='admin' WHERE tenant_id=$1 AND id=$2",[a.tenantId,a.actorId]);
+  const draft=await repo.command(a.context,a.digest,a.jobId,"request",command(row));
+  const approval=command(row,{decisionId:draft.decisionId});
+  const sqlApprove=()=>workTenant(c.runtime,a.tenantId,db=>db.query("SELECT app.dunning_workbench($1,$2,$3,'approve',$4::jsonb)",[a.tenantId,a.digest,a.jobId,JSON.stringify(approval)]), { membershipId: a.actorId, bindRequest: false });
+  await expect(sqlApprove()).rejects.toMatchObject({message:"DUNNING_UNAVAILABLE",code:"42501"});
+  await expect(repo.command(a.context,a.digest,a.jobId,"approve",approval)).rejects.toMatchObject({code:"DUNNING_UNAVAILABLE",status:403});
+  expect((await c.admin.query("SELECT count(*)::int n FROM app.decision_resolution WHERE tenant_id=$1",[a.tenantId])).rows[0].n).toBe(0);
+  await c.admin.query("UPDATE app.membership SET role='owner' WHERE tenant_id=$1 AND id=$2",[a.tenantId,a.actorId]);
+  const [first,replay]=await Promise.all([repo.command(a.context,a.digest,a.jobId,"approve",approval),repo.command(a.context,a.digest,a.jobId,"approve",approval)]);
+  expect(first.status).toBe("approved");expect(replay).toEqual(first);
+  await expect(repo.read(a.context,a.digest,{jobId:b.jobId,nowTick:3})).rejects.toThrow("DUNNING_UNAVAILABLE");
+  for(const state of ["admin","expired","revoked"]){
+   await c.admin.query("UPDATE app.membership SET role=$3, expires_at=CASE WHEN $4='expired' THEN clock_timestamp()-interval '1 second' ELSE NULL END, revoked_at=CASE WHEN $4='revoked' THEN clock_timestamp() ELSE NULL END WHERE tenant_id=$1 AND id=$2",[a.tenantId,a.actorId,state==="admin"?"admin":"owner",state]);
+   await expect(repo.command(a.context,a.digest,a.jobId,"approve",approval)).rejects.toThrow("DUNNING_UNAVAILABLE");
+   await expect(sqlApprove()).rejects.toThrow();
+  }
+  expect((await c.admin.query("SELECT count(*)::int n FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2",[a.tenantId,approval.commandId])).rows[0].n).toBe(1);
+ });
  it("refuses client-forged future eligibility at the repository and direct SQL boundaries",async()=>{
   const a=await company();await seed(a,{dueTick:Date.now()+86400000});
   const repo=new DunningRepository(c.runtime), rows=await repo.read(a.context,a.digest,{jobId:a.jobId,nowTick:Number.MAX_SAFE_INTEGER});
@@ -31,7 +52,7 @@ describe("M4-16 durable synthetic dunning",()=>{
    const input=command(row,{nowTick:Number.MAX_SAFE_INTEGER,...(operation==="approve"?{decisionId:randomUUID()}:{})});
    await expect(repo.command(a.context,a.digest,a.jobId,operation,input)).rejects.toThrow("DUNNING_UNAVAILABLE");
    await expect(workTenant(c.runtime,a.tenantId,db=>db.query("SELECT app.dunning_workbench($1,$2,$3,$4,$5::jsonb)",
-    [a.tenantId,a.digest,a.jobId,operation,JSON.stringify(input)]))).rejects.toThrow("DUNNING_UNAVAILABLE");
+    [a.tenantId,a.digest,a.jobId,operation,JSON.stringify(input)]), { membershipId: a.actorId, bindRequest: false })).rejects.toThrow("DUNNING_UNAVAILABLE");
   }
   expect((await c.admin.query("SELECT count(*)::int n FROM app.dunning_reminder WHERE tenant_id=$1",[a.tenantId])).rows[0].n).toBe(0);
  });
@@ -40,7 +61,7 @@ describe("M4-16 durable synthetic dunning",()=>{
   const row=(await read(a)).invoices[0]!;expect(row.reminder).not.toBeNull();
   const request=command(row,{nowTick:0});
   const draft=(await workTenant(c.runtime,a.tenantId,db=>db.query("SELECT app.dunning_workbench($1,$2,$3,'request',$4::jsonb) result",
-   [a.tenantId,a.digest,a.jobId,JSON.stringify(request)]))).rows[0].result;
+   [a.tenantId,a.digest,a.jobId,JSON.stringify(request)]), { membershipId: a.actorId, bindRequest: false })).rows[0].result;
   expect(draft.status).toBe("pending");
   const approved=await new DunningRepository(c.runtime).command(a.context,a.digest,a.jobId,"approve",command(row,{nowTick:0,decisionId:draft.decisionId}));
   expect(approved).toMatchObject({status:"approved",executable:false});
@@ -75,7 +96,7 @@ describe("M4-16 durable synthetic dunning",()=>{
   const input=command({invoiceId:p.invoiceId,snapshotHash:hash});
   await expect(new DunningRepository(c.runtime).command(a.context,a.digest,a.jobId,"request",input)).rejects.toThrow("DUNNING_UNAVAILABLE");
   // Attack the SQL boundary as well as the repository preflight.
-  await expect(workTenant(c.runtime,a.tenantId,db=>db.query("SELECT app.dunning_workbench($1,$2,$3,'request',$4::jsonb)",[a.tenantId,a.digest,a.jobId,JSON.stringify(input)]))).rejects.toThrow("DUNNING_UNAVAILABLE");
+  await expect(workTenant(c.runtime,a.tenantId,db=>db.query("SELECT app.dunning_workbench($1,$2,$3,'request',$4::jsonb)",[a.tenantId,a.digest,a.jobId,JSON.stringify(input)]), { membershipId: a.actorId, bindRequest: false })).rejects.toThrow("DUNNING_UNAVAILABLE");
  });
  it("invalidates old approvals on changed balances, preserving old Decisions and regenerating drafts",async()=>{
   const a=await company(),p=await seed(a),repo=new DunningRepository(c.runtime),row=(await read(a)).invoices[0]!;
@@ -150,14 +171,14 @@ describe("M4-16 durable synthetic dunning",()=>{
   const hash=(await c.admin.query("SELECT app.final_lock_hash(projection) h FROM app.dunning_invoice WHERE tenant_id=$1 AND invoice_id=$2",[a.tenantId,p.invoiceId])).rows[0].h;
   for(const [operation,input] of [["request",command({...row,snapshotHash:hash})],["approve",approval]] as const){
    await expect(repo.command(a.context,a.digest,a.jobId,operation,input)).rejects.toThrow("DUNNING_UNAVAILABLE");
-   await expect(workTenant(c.runtime,a.tenantId,db=>db.query("SELECT app.dunning_workbench($1,$2,$3,$4,$5::jsonb)",[a.tenantId,a.digest,a.jobId,operation,JSON.stringify(input)]))).rejects.toThrow("DUNNING_UNAVAILABLE");
+   await expect(workTenant(c.runtime,a.tenantId,db=>db.query("SELECT app.dunning_workbench($1,$2,$3,$4,$5::jsonb)",[a.tenantId,a.digest,a.jobId,operation,JSON.stringify(input)]), { membershipId: a.actorId, bindRequest: false })).rejects.toThrow("DUNNING_UNAVAILABLE");
   }
  });
  it("skips malformed rows and denies direct runtime reads/writes and cross-job references",async()=>{
   const a=await company(),b=await company();await seed(a);await seed(a,{outstandingPence:"malformed-secret"});
   const rows=await read(a);expect(rows.invoices).toHaveLength(1);expect(rows.skippedCount).toBe(1);expect(JSON.stringify(rows)).not.toContain("malformed-secret");
-  await expect(workTenant(c.runtime,a.tenantId,db=>db.query("SELECT * FROM app.dunning_invoice"))).rejects.toMatchObject({code:"42501"});
-  await expect(workTenant(c.runtime,a.tenantId,db=>db.query("UPDATE app.dunning_invoice SET projection='{}'"))).rejects.toMatchObject({code:"42501"});
+  await expect(workTenant(c.runtime,a.tenantId,db=>db.query("SELECT * FROM app.dunning_invoice"), { membershipId: a.actorId, bindRequest: false })).rejects.toMatchObject({code:"42501"});
+  await expect(workTenant(c.runtime,a.tenantId,db=>db.query("UPDATE app.dunning_invoice SET projection='{}'"), { membershipId: a.actorId, bindRequest: false })).rejects.toMatchObject({code:"42501"});
   await expect(c.admin.query("INSERT INTO app.dunning_invoice(tenant_id,job_id,invoice_id,projection) VALUES($1,$2,$3,'{}')",[a.tenantId,b.jobId,randomUUID()])).rejects.toMatchObject({code:"23503"});
   const policies=(await c.admin.query("SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid IN('app.dunning_invoice'::regclass,'app.dunning_reminder'::regclass)")).rows;
   expect(policies).toEqual([{relrowsecurity:true,relforcerowsecurity:true},{relrowsecurity:true,relforcerowsecurity:true}]);

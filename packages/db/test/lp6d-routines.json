@@ -58,7 +58,7 @@
   {
     "name": "app.work_order_commit",
     "arguments": "actor uuid, payload jsonb",
-    "source": "packages/db/migrations/0549_contractor_feature_guards.sql",
+    "source": "packages/db/migrations/0676_work_order_expected_revision.sql",
     "actor": "actor",
     "tenant": null
   },
@@ -156,21 +156,21 @@
   {
     "name": "app.xa_approve",
     "arguments": "p_job uuid, p_request uuid, p_command uuid, p_actor uuid, p_step integer, p_hash text, p_net bigint, p_reject boolean, p_reason text",
-    "source": "packages/db/migrations/0522_lp5b_writers.sql",
+    "source": "packages/db/migrations/0635_extra_same_step.sql",
     "actor": "p_actor",
     "tenant": null
   },
   {
     "name": "app.xa_withdraw",
     "arguments": "p_job uuid, p_variation uuid, p_command uuid, p_actor uuid, p_reason text",
-    "source": "packages/db/migrations/0522_lp5b_writers.sql",
+    "source": "packages/db/migrations/0636_extra_withdraw_roles.sql",
     "actor": "p_actor",
     "tenant": null
   },
   {
     "name": "app.xa_mark_duplicate",
     "arguments": "p_job uuid, p_duplicate uuid, p_canonical uuid, p_command uuid, p_actor uuid, p_link uuid",
-    "source": "packages/db/migrations/0522_lp5b_writers.sql",
+    "source": "packages/db/migrations/0622_extra_duplicate_relink.sql",
     "actor": "p_actor",
     "tenant": null
   },
@@ -367,7 +367,7 @@
   {
     "name": "app.decision_check_command",
     "arguments": "p_digest text,p_command jsonb,p_phase text,p_data jsonb DEFAULT '{}'::jsonb",
-    "source": "packages/db/migrations/0520_lp4_database_audit.sql",
+    "source": "packages/db/migrations/0660_baseline_ancestry_audit_trust.sql",
     "actor": null,
     "tenant": null
   },
@@ -416,7 +416,7 @@
   {
     "name": "app.lp5b_contractor_permission",
     "arguments": "p_type text,p_actor uuid,p_job uuid,p_input jsonb",
-    "source": "packages/db/migrations/0522_lp5b_writers.sql",
+    "source": "packages/db/migrations/0636_extra_withdraw_roles.sql",
     "actor": "p_actor",
     "tenant": null
   },
@@ -458,7 +458,7 @@
   {
     "name": "app.xa_escalate",
     "arguments": "",
-    "source": "packages/db/migrations/0158_extra_approval_chain.sql",
+    "source": "packages/db/migrations/0637_extra_working_day_wait.sql",
     "actor": null,
     "tenant": null
   },
@@ -529,7 +529,7 @@
   {
     "name": "app.demo_issue_customer_link",
     "arguments": "t uuid,j uuid,c uuid,session_digest text,link_digest text,content text",
-    "source": "packages/db/migrations/0518_shadow_demo_guide.sql",
+    "source": "packages/db/migrations/0650_demo_customer_link_reference.sql",
     "actor": null,
     "tenant": "t"
   },
@@ -543,21 +543,21 @@
   {
     "name": "app.ch6_integrity_sources",
     "arguments": "t uuid,j uuid,d text",
-    "source": "packages/db/migrations/0526_commercial_integrity_sources.sql",
+    "source": "packages/db/migrations/0660_baseline_ancestry_audit_trust.sql",
     "actor": null,
     "tenant": "t"
   },
   {
     "name": "app.ch6_record_integrity_review",
     "arguments": "t uuid,j uuid,digest text,review jsonb,source_snapshot jsonb",
-    "source": "packages/db/migrations/0526_commercial_integrity_sources.sql",
+    "source": "packages/db/migrations/0660_baseline_ancestry_audit_trust.sql",
     "actor": null,
     "tenant": "t"
   },
   {
     "name": "app.ch6_integrity_authority",
     "arguments": "t uuid,j uuid,digest text",
-    "source": "packages/db/migrations/0525_commercial_integrity_v3_receipts.sql",
+    "source": "packages/db/migrations/0660_baseline_ancestry_audit_trust.sql",
     "actor": null,
     "tenant": "t"
   },
@@ -585,7 +585,7 @@
   {
     "name": "app.ch5_history_actor",
     "arguments": "t uuid,j uuid,d text",
-    "source": "packages/db/migrations/0535_import_pre_adoption.sql",
+    "source": "packages/db/migrations/0668_import_company_owner_history.sql",
     "actor": null,
     "tenant": "t"
   },
@@ -627,7 +627,7 @@
   {
     "name": "app.sync_snapshot_generation",
     "arguments": "u uuid,r bigint,s bigint,h text,e text",
-    "source": "packages/db/migrations/0551_sync_snapshot_checkpoint.sql",
+    "source": "packages/db/migrations/0679_sync_checkpoint_synthetic_guard.sql",
     "actor": null,
     "tenant": null
   },
@@ -725,21 +725,21 @@
   {
     "name": "app.approve_synthetic_landing",
     "arguments": "p jsonb",
-    "source": "packages/db/migrations/0356_unchecked_job_doors.sql",
+    "source": "packages/db/migrations/0631_legacy_recovery_money_integrity.sql",
     "actor": null,
     "tenant": null
   },
   {
     "name": "app.reverse_synthetic_landing",
     "arguments": "p_tenant uuid,p_reversal uuid,p_derivation uuid,p_journal uuid,p_allocation uuid,p_amount bigint,p_reason varchar",
-    "source": "packages/db/migrations/0356_unchecked_job_doors.sql",
+    "source": "packages/db/migrations/0682_synthetic_reversal_replay_match.sql",
     "actor": null,
     "tenant": "p_tenant"
   },
   {
     "name": "app.configure_recovery_demo",
     "arguments": "p_job uuid,p_command uuid,p_scenario varchar",
-    "source": "packages/db/migrations/0356_unchecked_job_doors.sql",
+    "source": "packages/db/migrations/0670_recovery_demo_replay_job.sql",
     "actor": null,
     "tenant": null
   },
@@ -812,5 +812,13 @@
     "source": "packages/db/migrations/0406_success_fee_catch_posting.sql",
     "actor": null,
     "tenant": null
+  },
+  {
+    "name": "app.mon8_feature_decision",
+    "arguments": "actor uuid, feature text, purpose text DEFAULT 'new_work'",
+    "source": "packages/db/migrations/0548_server_plan_entitlements.sql",
+    "actor": null,
+    "tenant": null,
+    "subjectActor": true
   }
 ]

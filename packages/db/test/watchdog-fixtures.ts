@@ -1,15 +1,22 @@
-import { testBoundTenantContext } from "./tenant-context-test-utils.js";
+import { testBoundTenantContext, testTenantContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
-import { AdoptInFlightJobMutation, UserCommandDispatcher, withTenant } from "../src/index.js";
+import type { VerifiedTenantContext } from "../src/index.js";
 
 /** Minimal synthetic M1-17 command fixture. Never inserts/updates job status. */
-export async function importWatchdogFixtureJob(admin: Pool, tenantId: string, jobId: string, title = "Fictional watchdog job", lifecyclePoint: "live" | "invoiced" = "live") {
+export async function importWatchdogFixtureJob(admin: Pool, tenantId: string, jobId: string, title = "Fictional watchdog job", lifecyclePoint: "live" | "invoiced" = "live",
+  loaded?: { db: typeof import("../src/index.js"); context: VerifiedTenantContext }) {
+  // Browser fixtures supply their native ESM module/context so Playwright never loads the source gateway.
+  const { AdoptInFlightJobMutation, UserCommandDispatcher, withTenant } = loaded?.db ?? await import("../src/index.js");
   const userId = randomUUID(), accountId = randomUUID(), membershipId = randomUUID();
   await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [userId]);
   await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Synthetic watchdog fixture')", [accountId, tenantId]);
   await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [membershipId, tenantId, accountId, userId]);
-  const context = await testBoundTenantContext(admin, tenantId, membershipId);
+  const bindingInstalled=(await admin.query("SELECT to_regprocedure('app.bind_request(text,text,uuid)') IS NOT NULL installed")).rows[0].installed;
+  const context = loaded?.context ?? (bindingInstalled ? await testBoundTenantContext(admin, tenantId, membershipId) : testTenantContext(tenantId,{membershipId}));
+  const actorMembershipId = loaded
+    ? (await withTenant(admin, context, db => db.$client.query("SELECT app.current_actor() actor"))).rows[0].actor as string
+    : membershipId;
   // CH-3a's controlled import requires explicit registry revisions. Seed only
   // fictional identity metadata here; adoption still creates the job/binding,
   // authorization, immutable baseline and audit through the real runtime path.
@@ -24,10 +31,10 @@ export async function importWatchdogFixtureJob(admin: Pool, tenantId: string, jo
   });
   const input = { version: "adopt-job.v1", jobId, baselineId: randomUUID(), title, lifecyclePoint,
     provenance: "imported", lineageStrength: "builder_attested_weaker", baselineHash: "a".repeat(64), baselineDescription: "Fictional builder-attested work underway",
-    acceptedNetValuePence: 100000, recoveryCapPence: 1500, acceptedValueSource: "builder_attestation", attestedByMembershipId: membershipId,
+    acceptedNetValuePence: 100000, recoveryCapPence: 1500, acceptedValueSource: "builder_attestation", attestedByMembershipId: actorMembershipId,
     attestedAt: new Date(0), importTermsVersion: "synthetic_import_terms_candidate.v1", feePolicyVersion: "reference_fee_policy_v1", mode: "synthetic_candidate", parties: { version: "job-parties.v1", customerRevisionId, siteRevisionId } };
   const command = { version: "command.v1", commandId: randomUUID(), commandType: "job.adopt_in_flight", semanticKey: `import:${jobId}`,
-    actorMembershipId: membershipId, subjectType: "job", subjectRef: jobId,
+    actorMembershipId, subjectType: "job", subjectRef: jobId,
     action: { actionType: "job.adopt_in_flight", recipient: null, contentHash: input.baselineHash, aggregateRevision: 0,
       amountPence: input.acceptedNetValuePence, currency: "GBP", policyVersion: input.importTermsVersion, expiresAt: new Date("2099-01-01") } };
   const mutation = new AdoptInFlightJobMutation(tenantId, "synthetic_candidate", input);

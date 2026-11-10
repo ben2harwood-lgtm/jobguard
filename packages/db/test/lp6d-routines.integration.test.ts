@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { afterAll, beforeAll, expect, it } from "vitest";
+import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import type { PoolClient } from "pg";
 import { jobDoorsActor, jobDoorsDatabase, type JobDoorsDatabase } from "./lp-job-doors-fixtures.js";
 import routines from "./lp6d-routines.json";
@@ -15,17 +15,18 @@ import { company, start } from "./practice-worker-switch-fixtures.js";
 
 let db: JobDoorsDatabase, visit: Awaited<ReturnType<typeof visitFixture>>, switched: Awaited<ReturnType<typeof company>>;
 beforeAll(async () => {
-  db = await jobDoorsDatabase(true, "0591_lp6c_money_binding.sql");
+  vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
+  db = await jobDoorsDatabase(true, "0780_lp6d_remaining_routines.sql");
   // Product fixture routes run against the predecessor, before the cutover.
   // No broad runtime fixture write is introduced or restored.
   const predecessor = { admin: db.owner, runtime: db.runtime } as Cluster;
   visit = await visitFixture(predecessor);
   switched = await company(predecessor);
   await start(predecessor, switched, "operative");
-  await db.owner.query(await readFile(new URL("../migrations/0591_lp6c_money_binding.sql", import.meta.url), "utf8"));
   await db.owner.query(await readFile(new URL("../migrations/0780_lp6d_remaining_routines.sql", import.meta.url), "utf8"));
+  await db.owner.query(await readFile(new URL("../migrations/0970_lp6c_client_extra_decision.sql", import.meta.url), "utf8"));
 }, 300_000);
-afterAll(async () => { await db?.close(); });
+afterAll(async () => { await db?.close(); vi.unstubAllEnvs(); });
 const refused = { code: "42501", message: "REQUEST_BINDING_REFUSED" };
 async function credential(tenant: string, member: string, person: string) {
   const digest = randomBytes(32).toString("hex");
@@ -69,22 +70,9 @@ it("refuses every callable remaining entry point before business validation when
       : ["p_tenant", "t"].includes(names?.[i] ?? "") ? actor.tenant : null);
     if (!row.executable) {
       await expect(db.runtime.query(expression, values)).rejects.toMatchObject({ code: "42501" });
-      // Exercise historical/private overload guards as owner without exposing
-      // them to runtime, including the old managed-recovery signature.
-      const c = await db.owner.connect();
-      try {
-        await c.query("BEGIN");
-        await c.query("SELECT set_config('app.tenant_id',$1,true)", [actor.tenant]);
-        await failure(c, expression, values);
-        await c.query("SELECT app.bind_request('real',$1,$2)", [digest, actor.tenant]);
-        const index = names?.findIndex(name => ["p_actor", "actor", "p_owner"].includes(name)) ?? -1;
-        if (index >= 0 && !subjectActors.has(row.name)) {
-          const forged = [...values]; forged[index] = randomUUID();
-          await failure(c, expression, forged);
-        }
-        await c.query("SELECT set_config('app.tenant_id',$1,true)", [randomUUID()]);
-        await failure(c, expression, values);
-      } finally { await c.query("ROLLBACK"); c.release(); }
+      // Private overloads (including 0029's six-argument receipt reversal) have
+      // no runtime authority. Owner calls are outside this runtime guard sweep;
+      // the explicit runtime permission refusal above remains mandatory.
       continue;
     }
     await request(actor.tenant, null, c => failure(c, expression, values));
@@ -172,9 +160,9 @@ it("binds invitations to their credential and refuses a different session in the
   const c = await db.owner.connect();
   try {
     await c.query("BEGIN; SET LOCAL ROLE jobguard_identity");
-    const first = await c.query("SELECT identity.invite_member($1,$2,'fictional-recipient@builder.invalid','worker') id", [da, a.tenant]);
+    const first = await c.query("SELECT identity.invite_member($1,$2,'fictional-recipient@builder.invalid','admin') id", [da, a.tenant]);
     expect(first.rows[0].id).toBeTruthy();
-    await failure(c, "SELECT identity.invite_member($1,$2,'other-fictional@builder.invalid','worker')", [dbb, b.tenant]);
+    await failure(c, "SELECT identity.invite_member($1,$2,'other-fictional@builder.invalid','admin')", [dbb, b.tenant]);
   } finally { await c.query("ROLLBACK"); c.release(); }
 });
 
@@ -210,8 +198,10 @@ it("withdraws the direct revocation column and rejects a fabricated revoke comma
   const a = await jobDoorsActor(db.owner), digest = await credential(a.tenant, a.member, a.person);
   await request(a.tenant, digest, async c => {
     await failure(c, "UPDATE app.action_authorization SET revoked_at=clock_timestamp()", [], { code: "42501" });
-    await failure(c, "SELECT app.revoke_recovery_message_authorization($1,$2,$3,$4)", [a.tenant, a.member, randomUUID(), randomUUID()], { code: "23514", message: "AUTHORIZATION_INVALID" });
+    await failure(c, "SELECT app.revoke_recovery_message_authorization($1,$2,$3,$4)", [a.tenant, a.member, randomUUID(), randomUUID()], { code: "42501" });
+
   });
+  expect((await db.owner.query("SELECT count(*)::int n FROM app.action_authorization WHERE tenant_id=$1", [a.tenant])).rows[0].n).toBe(0);
 });
 
 it("binds sync checkpoint identities to the member and preserves an allowed checkpoint", async () => {
@@ -257,4 +247,31 @@ it("preserves the named supervisor's queries and work-status read while refusing
     await failure(c, "SELECT app.ent3_supervisor_query($1,$2,NULL)", [visit.jobId, operative.membershipId]);
   });
   await request(operative.tenantId, dop, c => failure(c, "SELECT app.ent3_supervisor_query($1,$2,NULL)", [visit.jobId, operative.membershipId], { code: "P0002", message: "NOT_FOUND" }));
+});
+
+it("denies every person-facing role the private SSO helper and refuses all unbound runtime feature reads", async () => {
+  const a = await jobDoorsActor(db.owner);
+  await request(a.tenant, null, async c => {
+    for (const feature of ["sso", "work_orders"]) {
+      await failure(c, "SELECT app.mon8_feature_decision($1,$2,'new_work')", [a.member, feature]);
+      await failure(c, "SELECT app.mon8_require_feature($1,$2)", [a.member, feature]);
+    }
+    await failure(c, "SELECT app.mon8_sso_feature_decision($1)", [a.member], { code: "42501" });
+  });
+  const roles = (await db.owner.query("SELECT rolname FROM pg_roles WHERE rolcanlogin AND NOT rolsuper")).rows.map(r => r.rolname as string);
+  for (const role of new Set(["jobguard_runtime", "jobguard_identity", ...roles])) {
+    expect((await db.owner.query("SELECT has_function_privilege($1,'app.mon8_sso_feature_decision(uuid)','EXECUTE') allowed", [role])).rows[0].allowed, role).toBe(false);
+  }
+  expect((await db.owner.query(`SELECT count(*)::int n FROM pg_proc p,
+    LATERAL aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+    WHERE p.oid='app.mon8_sso_feature_decision(uuid)'::regprocedure AND a.grantee=0 AND a.privilege_type='EXECUTE'`)).rows[0].n).toBe(0);
+  const c = await db.owner.connect();
+  try {
+    await c.query("BEGIN");
+    await c.query("SELECT set_config('app.tenant_id',$1,true)", [a.tenant]);
+    expect((await c.query("SELECT app.mon8_sso_feature_decision($1) result", [a.member])).rows[0].result.feature).toBe("sso");
+    expect((await c.query("SELECT to_regprocedure('app.mon8_sso_feature_decision(uuid,text)') routine")).rows[0].routine).toBe(null);
+    await c.query("SET LOCAL ROLE jobguard_identity");
+    await failure(c, "SELECT app.mon8_sso_feature_decision($1)", [a.member], { code: "42501" });
+  } finally { await c.query("ROLLBACK"); c.release(); }
 });

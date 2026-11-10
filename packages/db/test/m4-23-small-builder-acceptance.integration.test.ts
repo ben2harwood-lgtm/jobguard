@@ -1,8 +1,12 @@
+import { verifiedTenantContextForQueuedJob } from "../src/tenant-context.js";
 // M4-23-SB, RED. Real PostgreSQL; synthetic data and existing writers only.
 // Coverage limits are executable TODOs below. A withheld-payment recovery is
 // deliberately not described as the plan's merchant-overcharge Chain A.
 import { randomUUID } from "node:crypto";
 import { verifyStandalonePack } from "@jobguard/core";
+import { FakeTrueLayerAisAdapter, SyntheticAisTokenVault, aisHash, type AisPage } from "../src/ais-adapter.js";
+import { meterCompany } from "./meter-persistence-fixtures.js";
+import { DarkAisRepository } from "../src/ais-repository.js";
 import { MaterialRepository } from "../src/material-repository.js";
 import { PurchaseOrderRepository } from "../src/purchase-order-repository.js";
 import { SupplierDocumentRepository } from "../src/supplier-document-repository.js";
@@ -297,7 +301,7 @@ describe("M4-23-SB integrated sandbox outcomes", () => {
     const x = source!, worker = new FinalCheckRepository(f.shadow);
     const manifestId = (await f.admin.query("SELECT id FROM app.final_check_manifest WHERE tenant_id=$1 AND job_id=$2",
       [x.context.tenantId, x.jobId])).rows[0].id as string;
-    const manifest = await worker.manifest(x.context, x.jobId, manifestId);
+    const manifest = await worker.manifest(verifiedTenantContextForQueuedJob(x.context.tenantId), x.jobId, manifestId);
     expect(manifest.signals.map(signal => signal.signalId)).toContain(x.signalId);
     expect(manifest.sources.some(s => s.evidenceId !== null && s.status === "detected")).toBe(true);
     const captureIds = manifest.comparisons.captures.map(c => (c as { id: string }).id);
@@ -307,9 +311,9 @@ describe("M4-23-SB integrated sandbox outcomes", () => {
     const expectedRevision = manifest.signals.find(s => s.signalId === x.signalId)!.revision;
     // Valid comparisons remove the setup refusal: this now reaches the actual
     // matched-variation-in-capture-register guard against a forged reveal.
-    await expect(worker.reconcile(x.context, x.jobId, manifest.id, [{ signalId: x.signalId, expectedRevision,
+    await expect(worker.reconcile(verifiedTenantContextForQueuedJob(x.context.tenantId), x.jobId, manifest.id, [{ signalId: x.signalId, expectedRevision,
       outcome: "reveal", references: [], comparisons }])).rejects.toThrow("FINAL_CHECK_SOURCE_CHANGED");
-    const result = await worker.reconcile(x.context, x.jobId, manifest.id, [{ signalId: x.signalId, expectedRevision,
+    const result = await worker.reconcile(verifiedTenantContextForQueuedJob(x.context.tenantId), x.jobId, manifest.id, [{ signalId: x.signalId, expectedRevision,
       outcome: "builder_captured", references: [captureId], comparisons }]) as { runId: string; lockId: string };
     await expect(new FinalCheckRepository(practiceMaterialPool(f.runtime, x.auth.digest)).confirmCatch(x.context, x.jobId, x.auth.digest, {
       version: "final-check.catch.v1", commandId: randomUUID(), lockId: result.lockId, runId: result.runId,
@@ -351,6 +355,50 @@ describe("M4-23-SB integrated sandbox outcomes", () => {
     await post(x, 16000, 1600);
     await collectOnce(x, await issue(x), 1600);
     expect(await feeTotal(x)).toBe("1600");
+  });
+
+  it("fake TrueLayer partial receipt ingestion stays non-qualifying without the AIS-to-allocation bridge", async () => {
+    const company = await meterCompany(f), connectionId = randomUUID();
+    const x: Subject = { context: company.context, jobId: company.jobId, auth: { digest: company.digest } };
+    const adapter = new FakeTrueLayerAisAdapter(), vault = new SyntheticAisTokenVault();
+    const ais = new DarkAisRepository(f.runtime, adapter, vault, "synthetic_demo");
+    const consent = await ais.start(x.context, x.auth.digest, { version: "ais-start.v1", connectionId,
+      expiresAt: new Date(Date.now() + 3_600_000).toISOString() });
+    // £192 gross is half the £384 receipt for the £320 net claim. No practice
+    // feed event/match is manufactured to stand in for this ingested movement.
+    const statuses = ["pending", "settled", "reversed"] as const;
+    const pages = new Map<string, AisPage>(statuses.map((status, index) => [index === 0 ? "first" : `fake_page_${index}`, {
+      version: "ais-page.v1", nextCursor: index < 2 ? `fake_page_${index + 1}` : null,
+      observations: [{ version: "ais-observation.v1", accountRef: "fake_partial_account", movementRef: "fake_partial_cash",
+        providerRef: `fake_partial_${index}`, revision: index + 1, status,
+        amount: { pence: 19200, currency: "GBP" }, bookedOn: "2026-10-30" }],
+    }]));
+    const code = adapter.register({ version: "ais-binding.v1", tenantId: x.context.tenantId, connectionId,
+      stateHash: aisHash(consent.state) }, "fake_partial_account", pages);
+    await ais.callback(x.context, x.auth.digest, connectionId, { version: "ais-callback.v1", state: consent.state, code });
+    for (const [index, status] of statuses.entries()) {
+      const window = { version: "ais-window.v1", from: "2026-10-01", to: "2026-10-31",
+        cursor: index === 0 ? null : `fake_page_${index}` };
+      expect((await ais.pull(x.context, x.auth.digest, connectionId, window)).changed).toBe(true);
+      expect((await ais.pull(x.context, x.auth.digest, connectionId, window)).changed).toBe(false);
+      const observations = (await f.admin.query(
+        "SELECT status,pence::text amount FROM app.ais_observation WHERE tenant_id=$1 AND movement_ref='fake_partial_cash' ORDER BY revision",
+        [x.context.tenantId])).rows;
+      expect(observations).toEqual(statuses.slice(0, index + 1).map(status => ({ status, amount: "19200" })));
+      // This is a company AIS session, not the pack's practice session. Neither
+      // a receipt match nor qualifying allocation is produced by ingestion.
+      for (const table of ["practice_feed_receipt_match", "recovery_case_allocation", "success_fee_source"]) {
+        expect((await f.admin.query(`SELECT count(*)::int n FROM app.${table} WHERE tenant_id=$1`,
+          [x.context.tenantId])).rows).toEqual([{ n: 0 }]);
+      }
+      expect(await feeTotal(x), status).toBe("0");
+    }
+    await expect(new DarkAisRepository(f.runtime, adapter, vault, "production")
+      .read(x.context, x.auth.digest, connectionId)).rejects.toThrow("AIS_DARK_ONLY");
+    await expect(ais.read(testTenantContext(randomUUID()), x.auth.digest, connectionId)).rejects.toThrow("AIS_FORBIDDEN");
+    await ais.stop(x.context, x.auth.digest, connectionId, "revoked");
+    await expect(ais.pull(x.context, x.auth.digest, connectionId,
+      { version: "ais-window.v1", from: "2026-10-01", to: "2026-10-31", cursor: null })).rejects.toThrow("AIS_INACTIVE");
   });
 
   it("unknown outcomes and out-of-order terminal events cannot collect twice or manufacture settlement", async () => {
@@ -398,10 +446,10 @@ describe("M4-23-SB integrated sandbox outcomes", () => {
 // Chain A's detection, claim, pack and pursuit run above. Approved merchant
 // cash billability is not claimed: v1 only offers evidence_backed_withheld_payment;
 // v3 merchant F14 is a supplier-credit path, not a merchant cash landing.
-// M4-2/M4-7/M4-8/M4-9-S still need a
-// merchant-cash qualification/allocation source (0489 accepts withheld only).
+// M4-7 now ingests fake AIS observations, but M4-8/M4-9-S still need a
+// merchant-cash qualification/allocation source (0511 accepts withheld only).
 // Neither a supplier credit nor a customer receipt may stand in for that source.
-it.todo("NOT COVERED — Chain A merchant cash qualification/allocation into the v3 £32 fee source (M4-2, M4-7, M4-8, M4-9-S); the fee statement/collection/reconciliation depend on this missing merchant adapter");
+it.todo("NOT COVERED — Chain A merchant cash qualification/allocation into the v3 £32 fee source (M4-2, M4-7, M4-8, M4-9-S); the v3 source path still requires evidence_backed_withheld_payment/customer receipt or Final Check attribution, while merchant F14 is supplier credit; AIS observations have no merchant-cash qualification or allocation bridge");
 // M4-15's fake executor seam is tested in apps/api/src/fee-collection/m4-23-sb-rails.test.ts.
 // It has no PostgreSQL ReservationStore/LockedCollectionSources implementation
 // connecting these exact issued statements to the shared card/DD balance, and
@@ -409,4 +457,4 @@ it.todo("NOT COVERED — Chain A merchant cash qualification/allocation into the
 // Do not substitute asserted in-memory sources for this pack's approved fee.
 it.todo("NOT COVERED — competing payment rails on the pack fee: missing PostgreSQL ReservationStore and LockedCollectionSources bridge from SimulationFeeStatementRepository to DarkFeeCollectionExecutor; the fake card/DD shared-balance seam is tested separately");
 it.todo("NOT COVERED — duplicate/out-of-order/batch provider notifications on the pack fee: missing writer from DarkFeeCollectionExecutor.directDebitWebhook to SimulationFeeCollectionRepository and SimulationMoneyRunRepository; fake signed notification deduplication is tested separately, not PostgreSQL settlement/reconciliation");
-it.todo("NOT COVERED — actual part receipt ingestion: M4-7 / live provider ingestion is absent; the partial test bounds allocation from an existing settled receipt");
+it.todo("NOT COVERED — partial AIS receipt → proportional fee: DarkAisRepository persists app.ais_observation, but RecoveryAllocationRepository.snapshot consumes only customer_payment joined to practice_feed_receipt_match/practice_feed_event; no AIS movement-to-receipt/allocation bridge exists; AIS authenticates identity.session via mon1_company_actor while the pack uses authenticate_practice_session. Fake partial ingestion is tested above; the £16 test uses an existing practice receipt, not AIS cash");

@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "lanes": {
+    "lp-6c-client-extra-decision": {
+      "branches": [
+        "codex/sandbox/lp-6c-client-extra-decision"
+      ],
+      "note": "LP-6C-CLIENT-EXTRA-DECISION; RED, separate follow-on commit based on LP-6c PASS 9f036617. Only this follow-on delta is owned here; router must retain LP-6c ancestry in its integration lane.",
+      "allow": [
+        "packages/db/test/command-replay-contract.integration.test.ts",
+        "packages/db/test/meter-work-admission-upgrade.integration.test.ts",
+        "packages/db/migration-notes/0970_lp6c_client_extra_decision.md",
+        "packages/db/migrations/0970_lp6c_client_extra_decision.sql",
+        "packages/db/test/extra-client-session.integration.test.ts",
+        "packages/db/test/lp6c-client-extra-decision.test.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/0970_lp6c_client_extra_decision.proof.json",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts"
+      ]
+    }
+  }
+}

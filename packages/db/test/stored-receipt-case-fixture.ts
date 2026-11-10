@@ -21,9 +21,11 @@ import {pngBytes} from "./site-extra-evidence-fixtures.js";
 const hash="a".repeat(64);
 // Preserve protocol callers from the producer lane and numeric-baseline callers from CH-8.
 export async function realReceiptFixture(f:FinalCheckFixture,kind:"F5"|"F7"="F7",protocolOrBaseline:string|number=3360000,mixedFinalCheck=false,collectionOrProtocol:boolean|string=false,
- // Optional source-time attack; defaults preserve all existing caller journeys.
- beforeLock?: (source: {context: ReturnType<typeof testTenantContext>; jobId: string; signalId: string; digest: string}) => Promise<void>,
+ // Preserve source-time attacks, two-catch callers and main's combined/partial options.
+ beforeLockOrTwoCatches?: boolean | ((source: {context: ReturnType<typeof testTenantContext>; jobId: string; signalId: string; digest: string}) => Promise<void>),
  sv6?: {combined?: boolean; partial?: boolean}){
+ const beforeLock=typeof beforeLockOrTwoCatches==="function"?beforeLockOrTwoCatches:undefined;
+ const twoCatches=beforeLockOrTwoCatches===true;
  const collection282=typeof collectionOrProtocol==="boolean"?collectionOrProtocol:false;
  const protocol=typeof protocolOrBaseline==="string"?protocolOrBaseline:typeof collectionOrProtocol==="string"?collectionOrProtocol:"receipt-line-facts-command.v1";
  const baselineNetPence=typeof protocolOrBaseline==="number"?protocolOrBaseline:3360000;
@@ -35,7 +37,7 @@ export async function realReceiptFixture(f:FinalCheckFixture,kind:"F5"|"F7"="F7"
   await db.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional allocator builder')",[account,DEMO_TENANT_ID]);
   await db.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner') ON CONFLICT DO NOTHING",[DEMO_MEMBERSHIP_ID,DEMO_TENANT_ID,account,DEMO_IDENTITY_USER_ID]);
  });
- const session=await issuePracticeSession(f.runtime),auth=await authenticatePracticeSession(f.runtime,session),context=testTenantContext(DEMO_TENANT_ID),actor={membershipId:DEMO_MEMBERSHIP_ID,identityUserId:DEMO_IDENTITY_USER_ID};
+ const session=await issuePracticeSession(f.runtime),auth=await authenticatePracticeSession(f.runtime,session),context=(await f.admin.query("SELECT to_regprocedure('app.bind_request(text,text,uuid)') installed")).rows[0].installed ? auth.context : testTenantContext(DEMO_TENANT_ID, { membershipId: DEMO_MEMBERSHIP_ID }),actor={membershipId:DEMO_MEMBERSHIP_ID,identityUserId:DEMO_IDENTITY_USER_ID};
  const scoped=practiceMaterialPool(f.runtime,auth.digest),jobId=await prepareActivationFixtureV3(f.admin,context,baselineNetPence===3000000?"shadow-30000":"Fictional receipt allocation",baselineNetPence,scoped,baselineNetPence,auth.digest);
  await new PracticeActivationRepository(scoped).start(context,jobId,{commandId:randomUUID(),scenario:"no_charge"});
  const scope=(await f.admin.query("SELECT id FROM app.scope_identity WHERE tenant_id=$1 AND job_id=$2 AND state='confirmed' ORDER BY created_at,id LIMIT 1",[DEMO_TENANT_ID,jobId])).rows[0].id as string;
@@ -82,7 +84,7 @@ export async function realReceiptFixture(f:FinalCheckFixture,kind:"F5"|"F7"="F7"
  await locks.acceptTerms(context,{actorMembershipId:actor.membershipId,commandId:randomUUID(),termsVersion:"synthetic_final_check_terms.v1"});
  await locks.disposition(context,{jobId,actorMembershipId:actor.membershipId,commandId:randomUUID(),scopeItemId:scope,disposition:"done"});
  const signal=randomUUID(), hiddenSignal=randomUUID(), otherCatchSignal=randomUUID();
- const signals=mixedFinalCheck?[signal,hiddenSignal,otherCatchSignal]:[signal];
+ const signals=mixedFinalCheck?[signal,hiddenSignal,otherCatchSignal]:twoCatches?[signal,otherCatchSignal]:[signal];
  if(kind==="F7")for(const signalId of signals)await finalCheckTenant(f.shadow,DEMO_TENANT_ID,async db=>{
   await db.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state) VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic.v1',clock_timestamp(),$5,'low','held_for_final_check')",[DEMO_TENANT_ID,jobId,signalId,signalId===signal?workId:randomUUID(),signalId===hiddenSignal?'CH8-R1 unrevealed description':signalId===otherCatchSignal?'CH8-R1 other catch proof':'Fictional catch']);
   const e=(await f.admin.query("SELECT object_version_id,sha256,server_received_at::text received FROM app.evidence_object WHERE tenant_id=$1 AND id=$2",[DEMO_TENANT_ID,evidence])).rows[0];
@@ -90,18 +92,26 @@ export async function realReceiptFixture(f:FinalCheckFixture,kind:"F5"|"F7"="F7"
  });
  if(beforeLock)await beforeLock({context,jobId,signalId:signal,digest:auth.digest});
  const lock=await locks.lock(context,{jobId,actorMembershipId:actor.membershipId,commandId:randomUUID(),finalAccountRevisionId:drafted.id,expectedRevision:drafted.revision,declarationVersion:"final_account_declaration.v1"});
- const worker=new FinalCheckRepository(f.shadow),manifest=await worker.begin(context,jobId);
- for(const s of manifest.sources){if(s.sourceKind==="builder_capture_not_scanned"&&!s.processable)continue;await worker.record(context,jobId,manifest.id,s.id,randomUUID(),{version:"final-check.source-result.v1",inputHash:s.inputHash,status:kind==="F7"&&s.evidenceId===evidence?"detected":"zero_result",failureCode:null,signalIds:kind==="F7"&&s.evidenceId===evidence?signals:[]});}
+ // Test-only queued shadow work has no member session; use the synthetic helper,
+ // leaving the production queued-context constructor confined to its allowlist.
+ const workerContext=testTenantContext(context.tenantId, { bound: false });
+ const worker=new FinalCheckRepository(f.shadow),manifest=await worker.begin(workerContext,jobId);
+ for(const s of manifest.sources){if(s.sourceKind==="builder_capture_not_scanned"&&!s.processable)continue;await worker.record(workerContext,jobId,manifest.id,s.id,randomUUID(),{version:"final-check.source-result.v1",inputHash:s.inputHash,status:kind==="F7"&&s.evidenceId===evidence?"detected":"zero_result",failureCode:null,signalIds:kind==="F7"&&s.evidenceId===evidence?signals:[]});}
  const signalRevisions=beforeLock?new Map((await f.admin.query("SELECT id,revision FROM app.shadow_commercial_signal WHERE tenant_id=$1 AND job_id=$2",[DEMO_TENANT_ID,jobId])).rows.map(row=>[row.id,row.revision as number])):null;
  const classifications:FinalCheckClassification[]=kind==="F7"?signals.map(signalId=>({signalId,expectedRevision:signalRevisions?.get(signalId)??0,outcome:signalId===hiddenSignal?"not_enough_evidence" as const:"reveal" as const,references:[],comparisons:{baselineItemIds:[scope],captureIds:[],lockedLineIds:manifest.comparisons.lines.map(l=>l.id)}})):[];
- const run=await worker.reconcile(context,jobId,manifest.id,classifications) as {runId:string;lockId:string};
+ const run=await worker.reconcile(workerContext,jobId,manifest.id,classifications) as {runId:string;lockId:string};
  // Reconciliation makes the result available; publication authorizes invoicing.
- await new FinalCheckCompletionRepository(f.shadow).publish(context,{version:"final-check-publication.v1",jobId,runId:run.runId,checkId:randomUUID()});
+ await new FinalCheckCompletionRepository(f.shadow).publish(workerContext,{version:"final-check-publication.v1",jobId,runId:run.runId,checkId:randomUUID()});
  const issue=async(invoiceKind:"final"|"supplementary")=>locks.issueInvoice(context,{jobId,actorMembershipId:actor.membershipId,commandId:randomUUID(),finalAccountRevisionId:drafted.id,expectedSourceHash:drafted.sourceHash,invoiceKind,recipient:"practice-customer@example.invalid",issuedOn:"2026-10-28"});
  let main=sv6?.combined?null:await issue("final");let invoiceId=main?.invoiceId??"";
  if(kind==="F7"){
   const confirm=await new FinalCheckRepository(scoped).confirmCatch(context,jobId,auth.digest,{version:"final-check.catch.v1",commandId:randomUUID(),lockId:run.lockId,runId:run.runId,signalId:signal,expectedSignalRevision:1}) as {variationId:string};
-  variationId=confirm.variationId;await price(variationId,"Fictional catch");drafted=await assembly.assemble(context,{version:"final-account.assemble.v1",commandId:randomUUID(),jobId,actorMembershipId:actor.membershipId,expectedRevision:drafted.revision});
+  variationId=confirm.variationId;await price(variationId,"Fictional catch");
+  if(twoCatches){
+   const other=await new FinalCheckRepository(scoped).confirmCatch(context,jobId,auth.digest,{version:"final-check.catch.v1",commandId:randomUUID(),lockId:run.lockId,runId:run.runId,signalId:otherCatchSignal,expectedSignalRevision:1}) as {variationId:string};
+   await price(other.variationId,"Fictional second confirmed catch");
+  }
+  drafted=await assembly.assemble(context,{version:"final-account.assemble.v1",commandId:randomUUID(),jobId,actorMembershipId:actor.membershipId,expectedRevision:drafted.revision});
   if(sv6?.combined){main=await issue("final");invoiceId=main.invoiceId;}
   else invoiceId=(await issue("supplementary")).invoiceId;
   if(mixedFinalCheck){
@@ -109,7 +119,7 @@ export async function realReceiptFixture(f:FinalCheckFixture,kind:"F5"|"F7"="F7"
    await price(other.variationId,"Fictional second confirmed catch");
   }
  }
- const line=(await f.admin.query("SELECT id FROM app.final_account_line WHERE tenant_id=$1 AND job_id=$2 AND final_account_revision_id=$3 AND line_kind='variation'",[DEMO_TENANT_ID,jobId,drafted.id])).rows[0].id as string;
+ const line=(await f.admin.query("SELECT id FROM app.final_account_line WHERE tenant_id=$1 AND job_id=$2 AND final_account_revision_id=$3 AND line_kind='variation' AND commercial_revision_id IN(SELECT id FROM app.variation_revision WHERE tenant_id=$1 AND variation_id=$4)",[DEMO_TENANT_ID,jobId,drafted.id,variationId])).rows[0].id as string;
  const invoices=new PracticeInvoiceRepository(scoped);
  const receipt=async(amountPence:number,movement:"receipt-12000"|"receipt-14640"|"receipt-960"|"receipt-384"|"receipt-3000"|"receipt-480-a"|"receipt-480-b",alreadySettled=false)=>{
   const payment=await invoices.recordReceipt(context,{jobId,invoiceId,actorMembershipId:actor.membershipId,commandId:randomUUID(),paidOn:"2026-10-28",amountPence,method:"bank_transfer",reference:"Fictional matched receipt"});
@@ -131,5 +141,5 @@ export async function realReceiptFixture(f:FinalCheckFixture,kind:"F5"|"F7"="F7"
  if(kind==="F7")caseId=(await f.admin.query("SELECT id FROM app.recovery_case WHERE tenant_id=$1 AND job_id=$2 AND case_type='missed_variation_final_account' AND source_refs ? $3",[DEMO_TENANT_ID,jobId,'variation:'+variationId])).rows[0].id;
  else caseId=(await new RecoveryCaseRepository(scoped).command(context,jobId,{version:"recovery-case-command.v1",action:"open",commandId:randomUUID(),caseType:"withheld_customer_payment",expectedRevision:0,counterparty:"Fictional payer",book:"builder_customer",sourceType:"customer_invoice",sourceRefs:[invoiceId],claimedNetPence:80000,reviewerRef:`membership:${actor.membershipId}`},actor)).id;
  const snapshot=await producer.readCurrent(context,actor,auth.digest,{jobId}),fact=snapshot.rows.find(r=>r.paymentId===paymentId&&r.lineId===line)!;
- return {f,context,actor,auth,session,jobId,scope,evidence,lock,main:main!,invoiceId,line,caseId,workId,producer,produced,paymentId,deposit,scoped,invoices,receipt,produce,fact,signal,hiddenSignal,otherCatchSignal,run};
+ return {f,context,workerContext,actor,auth,session,jobId,scope,evidence,lock,main:main!,invoiceId,line,caseId,workId,producer,produced,paymentId,deposit,scoped,invoices,receipt,produce,fact,signal,hiddenSignal,otherCatchSignal,run};
 }

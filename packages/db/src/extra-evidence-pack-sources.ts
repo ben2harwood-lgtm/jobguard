@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { extraOriginHashV1, extraSorRevisionHashV1, residentConfirmationDocumentV1, residentConfirmationStatementV1, siteExtraContentSha256V1, sha256, type EvidenceSource } from "@jobguard/core";
+import { readExtraApprovalTiming } from "./extra-approval-timing.js";
 import type { TenantTransaction } from "./tenant-context.js";
 
 export class ExtraSourceError extends Error {
@@ -21,6 +22,10 @@ const originColumns = "tenant_id,job_id,variation_id,job_track,kind,command_id,c
 const sorColumns = "tenant_id,id,job_id,variation_id,revision,work_order_id,work_order_revision_id,sor_version_id,sor_code,unit,rate_pence,adjustment_numerator,adjustment_denominator,coverage,excess_of_scope_item_id,instructed_quantity,claimed_quantity,quantity,net_pence,content_hash,request_hash,command_id,raising_membership_id,server_recorded_at";
 const basisColumns = "tenant_id,id,job_id,variation_id,revision,pricing_basis,revision_content_hash,command_id,actor_membership_id,server_recorded_at";
 const evidenceColumns = "tenant_id,id,upload_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at";
+// Deliberately excludes client links, recipient addresses and tester free text.
+const requestColumns = "tenant_id,id,job_id,variation_id,request_revision,binding_id,rule_version_id,contract_version_id,client_id,rule_document_hash,requirement,comparisons,net_pence,revision_hash,command_id,submitter_membership_id,server_recorded_at,request_hash";
+const stepColumns = "tenant_id,id,job_id,variation_id,request_id,step_index,step_role,actor_kind,actor_membership_id,grant_id,approved_hash,approved_net_pence,command_id,server_recorded_at";
+const outcomeColumns = "tenant_id,id,job_id,variation_id,request_id,kind,by_rule,reason_code,actor_kind,actor_membership_id,command_id,server_recorded_at";
 /** Named canonical PostgreSQL JSON text; columns are internal constants, never request data. */
 async function record(db: TenantTransaction, table: string, columns: string, where: string, values: unknown[]): Promise<NamedRecord | undefined> {
   const result = await db.$client.query<{ content: string }>(`SELECT row_to_json(t)::text content FROM (SELECT ${columns} FROM app.${table} WHERE ${where}) t`, values);
@@ -86,5 +91,48 @@ export async function loadExtraEvidenceSources(db: TenantTransaction, raw: unkno
     if (basis) throw new ExtraSourceError("EXTRA_SOURCE_INVALID");
     omissions.push("Confirmed price absent; no commercial approval authority");
   }
+  // Select the request once. All dependent facts are qualified by that exact identity,
+  // never by "latest" a second time (or by an unqualified request/extra id).
+  // One SQL statement keeps request, steps and outcome in the same MVCC snapshot,
+  // including when the surrounding caller uses READ COMMITTED.
+  const approval = (await db.$client.query<{ request: string; steps: string[]; outcome: string | null }>(`
+    SELECT row_to_json(q)::text request,
+      ARRAY(SELECT row_to_json(f)::text FROM (SELECT ${stepColumns} FROM app.extra_approval_step_fact
+        WHERE tenant_id=$1 AND job_id=$2 AND variation_id=$3 AND request_id=q.id ORDER BY step_index,id) f) steps,
+      (SELECT row_to_json(o)::text FROM (SELECT ${outcomeColumns} FROM app.extra_approval_outcome
+        WHERE tenant_id=$1 AND job_id=$2 AND variation_id=$3 AND request_id=q.id) o) outcome
+    FROM (SELECT ${requestColumns} FROM app.extra_approval_request
+      WHERE tenant_id=$1 AND job_id=$2 AND variation_id=$3 ORDER BY request_revision DESC LIMIT 1) q`, values)).rows[0];
+  if (!approval) {
+    omissions.push("Approval request absent; requirement and steps unavailable; approval not complete");
+  } else {
+    const named = (content: string): NamedRecord => ({ content, record: JSON.parse(content) as Record<string, unknown> });
+    const request = named(approval.request), r = request.record, requestId = text(r, "id"), revision = Number(r.request_revision);
+    add("extra_approval_request", requestId, request, "approval", "Frozen approval requirement and exact request revision", revision);
+    const steps = approval.steps.map(named);
+    for (const step of steps) add("extra_approval_step_fact", text(step.record, "id"), step, "approval",
+      `Recorded approval step ${text(step.record, "step_index")}: ${text(step.record, "actor_kind")}`);
+    const outcome = approval.outcome === null ? undefined : named(approval.outcome);
+    if (outcome) add("extra_approval_outcome", text(outcome.record, "id"), outcome, "approval", `Recorded request outcome: ${text(outcome.record, "kind")}`);
+    const requirement = z.object({ version: z.literal("extra-approval-requirement.v1"), steps: z.array(z.object({
+      index: z.number().int().nonnegative(), role: z.string(), kind: z.enum(["human", "contract_rule"]),
+    })).min(1) }).safeParse(r.requirement);
+    if (!requirement.success) throw new ExtraSourceError("EXTRA_SOURCE_INVALID");
+    const allSteps = r.net_pence !== null && requirement.data.steps.length === steps.length && requirement.data.steps.every((required, i) => {
+      const fact = steps[i]?.record;
+      return required.index === i && fact?.step_index === i && fact.step_role === required.role &&
+        fact.approved_hash === r.revision_hash && String(fact.approved_net_pence) === String(r.net_pence) &&
+        fact.actor_kind === (required.kind === "contract_rule" ? "contract_rule" : required.role === "client_approver" ? "client_approver" : "member");
+    });
+    const status = outcome ? text(outcome.record, "kind") : "pending";
+    if (status !== "approved" || !allSteps) omissions.push(`Approval not complete: request ${requestId} is ${status}; ${steps.length}/${requirement.data.steps.length} required steps recorded`);
+  }
+  // Use exactly the already-selected request, including its earlier frozen requirements.
+  // With no request, the projection still supplies visit bounds without inventing a work time.
+  const requestId = approval ? text(JSON.parse(approval.request) as Record<string, unknown>, "id") : "00000000-0000-0000-0000-000000000000";
+  const timing = await readExtraApprovalTiming(db, tenant, input.jobId, input.extraId, requestId);
+  sources.push({ sourceId: `extra_approval_timing:${input.extraId}`, version: 2, kind: "approval",
+    label: "Server-derived visit interval and approval timing; not exact extra work times", jobId: input.jobId,
+    content: JSON.stringify({ version: "extra-pack-timing.v1", ...timing }) });
   return { jobId: input.jobId, extraId: input.extraId, sources, omissions, originalObjects };
 }

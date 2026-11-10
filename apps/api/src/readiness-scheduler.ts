@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import type { JobHelpers, TaskList } from "graphile-worker";
 import { z } from "zod";
-import { assertAcyclicDependencies, dueAtLocalTime, evaluateReadiness, MAX_MONEY_PENCE, nextWorkday } from "@jobguard/core";
-import { calendarDate, jurisdiction, ReadinessSeamError, readHolidays, readWeather, sameScope, scopeV1, type ReadinessAdapters, type ReadinessScope } from "./readiness-adapters.js";
+import { assertAcyclicDependencies, dueAtLocalTime, evaluateReadiness, MAX_MONEY_PENCE, nextWorkday, proposeResequence, type ResequenceCandidate } from "@jobguard/core";
+import { calendarDate, jurisdiction, ReadinessSeamError, readHolidays, readWeather, sameScope, scopeV1, type HolidayReading, type ReadinessAdapters, type ReadinessScope } from "./readiness-adapters.js";
 
 const truth = z.union([z.boolean(), z.literal("unknown")]);
 export const scheduledPlanV1 = z.object({
@@ -32,10 +32,13 @@ export type ReadinessProposal = Readonly<{
   ready: boolean; reasons: readonly string[]; weather: true | false | "unknown";
   classification: "prevention"; feeEligible: false; recoveryFeePence: 0;
   status: "proposal"; programmeChanged: false;
+  labourExposurePence?: number | null | undefined; resequence?: readonly ResequenceCandidate[] | undefined;
 }>;
 export interface ReadinessSchedulePorts {
   /** Authoritative confirmed plan, scoped by ALL three identifiers. */
   load(scope: ReadinessScope): Promise<unknown>;
+  /** Latest confirmed plan per task on the queued tenant/job. Legacy ports offer no candidates. */
+  loadJobPlans?(scope: ReadinessScope): Promise<readonly unknown[]>;
   /** Atomically insert-if-absent by key. No commercial or programme write capability. */
   recordProposal(proposal: ReadinessProposal): Promise<void>;
 }
@@ -50,6 +53,16 @@ function localDate(now: string, timeZone: string): string {
   const parts = new Intl.DateTimeFormat("en-GB", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date(now));
   const part = (name: string) => parts.find(value => value.type === name)!.value;
   return `${part("year")}-${part("month")}-${part("day")}`;
+}
+function precedingWorkday(plan: ScheduledPlan, calendar: HolidayReading): string | undefined {
+  if (plan.plannedDate > calendar.through) return undefined;
+  const day = new Date(`${plan.plannedDate}T12:00:00Z`);
+  while (true) {
+    day.setUTCDate(day.getUTCDate() - 1);
+    const date = day.toISOString().slice(0, 10);
+    if (date < calendar.from) return undefined;
+    if (day.getUTCDay() !== 0 && day.getUTCDay() !== 6 && !calendar.holidays.includes(date)) return date;
+  }
 }
 /** Opt-in composition seam: no registration in the live worker, no environment flag can enable live use. */
 export class DarkReadinessScheduler {
@@ -78,7 +91,9 @@ export class DarkReadinessScheduler {
     });
     if (next > reading.through) return "calendar_unknown";
     if (plan.plannedDate !== next) return "not_next_workday";
-    const task: ScheduledTask = { version: "readiness-scheduled-task.v1", scope: plan.scope, planHash: digest(plan), calendarHash: digest(reading), dueAt: dueAtLocalTime(next, plan.localTime, plan.timeZone) };
+    const previous = precedingWorkday(plan, reading);
+    if (previous === undefined) return "calendar_unknown";
+    const task: ScheduledTask = { version: "readiness-scheduled-task.v1", scope: plan.scope, planHash: digest(plan), calendarHash: digest(reading), dueAt: dueAtLocalTime(previous, plan.localTime, plan.timeZone) };
     await queue.addJob("readiness_evaluate", task, { runAt: new Date(task.dueAt), jobKey: `readiness:${digest(task)}`, jobKeyMode: "preserve_run_at" });
     return "scheduled";
   }
@@ -92,13 +107,21 @@ export class DarkReadinessScheduler {
     if (!parsed.success || !z.iso.datetime().safeParse(now).success) throw new ReadinessSeamError("INVALID_READINESS_TASK");
     const task = parsed.data, plan = await this.load(task.scope);
     if (plan.status === "cancelled" || digest(plan) !== task.planHash) return "superseded";
-    if (task.dueAt !== dueAtLocalTime(plan.plannedDate, plan.localTime, plan.timeZone)) throw new ReadinessSeamError("INVALID_READINESS_TASK");
+    const dueDate = localDate(task.dueAt, plan.timeZone);
+    if (dueDate >= plan.plannedDate || task.dueAt !== dueAtLocalTime(dueDate, plan.localTime, plan.timeZone)) throw new ReadinessSeamError("INVALID_READINESS_TASK");
     if (Date.parse(now) < Date.parse(task.dueAt)) throw new ReadinessSeamError("READINESS_NOT_DUE");
     const calendar = await readHolidays(this.adapters, plan.jurisdiction, now);
     if (calendar.state === "known" && digest(calendar.value) !== task.calendarHash) return "calendar_changed";
+    if (calendar.state === "known" && dueDate !== precedingWorkday(plan, calendar.value)) throw new ReadinessSeamError("INVALID_READINESS_TASK");
     const weather = await readWeather(this.adapters, { scope: plan.scope, date: plan.plannedDate }, now);
+    const predecessors = [...plan.predecessors];
+    for (const edge of plan.edges) {
+      if (edge.taskId === plan.scope.taskId && !predecessors.some(fact => fact.taskId === edge.dependsOnTaskId)) {
+        predecessors.push({ taskId: edge.dependsOnTaskId, complete: "unknown" });
+      }
+    }
     const result = evaluateReadiness({ version: "readiness-input.v1", taskId: plan.scope.taskId, taskRevision: plan.factRevision, ruleRevision: plan.ruleRevision,
-      predecessors: plan.predecessors, material: plan.material, access: plan.access, crew: plan.crew, evaluatedAt: now,
+      predecessors, material: plan.material, access: plan.access, crew: plan.crew, evaluatedAt: now,
       weather: weather.state === "known" ? { suitable: weather.value.suitable, observedAt: weather.value.observedAt, staleAfterMinutes: (Date.parse(weather.value.expiresAt) - Date.parse(weather.value.observedAt)) / 60_000, synthetic: true, adapterRevision: weather.value.revision } : null,
       ...(plan.labourRatePence === undefined ? {} : { labourRatePence: plan.labourRatePence }),
       ...(plan.uncertainDurationHours === undefined ? {} : { uncertainDurationHours: plan.uncertainDurationHours }),
@@ -106,9 +129,15 @@ export class DarkReadinessScheduler {
     const reasons = [...result.reasons];
     if (weather.state === "unknown" || result.weather === "unknown") reasons.push("Weather availability unknown");
     if (calendar.state === "unknown") reasons.push("Workday calendar unknown");
-    const key = digest({ task, weather, calendar, reasons });
+    const ready = reasons.length === 0;
+    const jobPlans = ready || !this.ports.loadJobPlans ? [] : (await this.ports.loadJobPlans(plan.scope))
+      .map(raw => scheduledPlanV1.parse(raw))
+      .filter(other => other.scope.tenantId === plan.scope.tenantId && other.scope.jobId === plan.scope.jobId)
+      .sort((a, b) => a.scope.taskId.localeCompare(b.scope.taskId));
+    const risk = ready ? {} : { labourExposurePence: result.exposure?.pence ?? null, resequence: proposeResequence(plan, jobPlans) };
+    const key = digest({ task, weather, calendar, reasons, jobPlans, risk });
     await this.ports.recordProposal({ version: "readiness-prevention-proposal.v1", scope: plan.scope, key, planHash: task.planHash, ruleRevision: plan.ruleRevision, evaluatedAt: now,
-      ready: reasons.length === 0, reasons, weather: result.weather, classification: "prevention", feeEligible: false, recoveryFeePence: 0, status: "proposal", programmeChanged: false });
+      ...risk, ready, reasons, weather: result.weather, classification: "prevention", feeEligible: false, recoveryFeePence: 0, status: "proposal", programmeChanged: false });
     return "evaluated";
   }
 }

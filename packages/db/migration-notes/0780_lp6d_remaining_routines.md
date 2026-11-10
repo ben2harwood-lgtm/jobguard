@@ -1,5 +1,198 @@
 # LP-6d remaining routines — RED, NOPR, held for landing
 
+## 10 November — repair 4 on 4677be1d: READY
+
+This section supersedes repair 3's commit refusal only. Repair 3's source work,
+assertion explanations and remaining landing holds are retained below. READY is
+for the router's combined pending-merge/repair commit on the held NOPR branch;
+it is not PostgreSQL proof, independent review, landing or release approval.
+
+- Fix only extra-proceed.application.test.ts's fixture: use the existing
+  verifiedTenantContextFromMembership constructor with contractor_practice and
+  that fixture's sessionId. No assertion changed: the two session lookups, exact
+  repository member/tenant, entitlement, three INVALID_COMMAND refusals,
+  UNAUTHENTICATED replay refusal and called-once check all remain intact.
+- API and web direct typechecks both PASS; no other same-cause fixture needed a
+  change. Add this test to the lane (49 non-lane paths), keep its sole branch and
+  update the note to repair 4. No production, migration or proof change in repair 4.
+- Installed runner only, no downloads; all Vitest runs use at most two workers
+  and three named files. From repository root:
+  `./node_modules/.bin/tsc -p apps/api/tsconfig.json --noEmit` and the same command
+  with `apps/web/tsconfig.json`: PASS.
+- From apps/api: `../../packages/db/node_modules/.bin/vitest run --config
+  ../../packages/db/vitest.config.ts --maxWorkers=2` with six groups (logs
+  /tmp/lp6d-r4-api-1.log through /tmp/lp6d-r4-api-6.log):
+  1. audit-export.application, audit-export.context, extra-proceed.application:
+     3 files / 31 tests PASS.
+  2. contractor-retained-read.application, contractor.projection,
+     offline-risk.application: 3 files / 10 tests PASS.
+  3. operative-entitlements.application, operative-offline.application,
+     site-extra-evidence.application: 3 files / 22 tests PASS.
+  4. site-extra-pricing.application, site-extra-pricing.http,
+     site-extra.application: 2 files / 120 tests PASS; pricing HTTP's 17 tests
+     blocked by sandbox listen EPERM.
+  5. site-extra.http, site-visit.application, site-visit.http: application file /
+     59 tests PASS; the two HTTP files' 50 tests blocked by sandbox listen EPERM.
+  6. fee-illustration-later, contractor-parties.application,
+     work-order.application: 3 files / 49 tests PASS.
+  Total: 15 API files / 291 tests PASS; 3 HTTP files / 67 tests could not run
+  successfully because localhost binding is forbidden. These are not green
+  suites; CI must rerun all three without changing or skipping their assertions.
+  An initial root-cwd invocation gave source-path failures; rerunning from the
+  API package's required cwd passed those source assertions unchanged.
+- From repository root: `./packages/db/node_modules/.bin/vitest run --root
+  packages/db --maxWorkers=2` with groups lp6d-routines, lp6d-repository-context,
+  migration-proof-loader (106); lp6c-money-routines, lp-0-catalog,
+  contractor-session-context (54); recovery-legacy-later,
+  recovery-message-repository (39). Use test/*.test.ts except
+  src/recovery-legacy-later.test.ts. Eight distinct files / 199 tests PASS.
+  Logs: /tmp/lp6d-r4-db-1.log through /tmp/lp6d-r4-db-3.log.
+- `LANE_BASE_REF=4677be1d node tools/lint.mjs`: core purity PASS; actual lane
+  guard FAILS on inherited/unmerged index paths, including extra-fixtures.ts,
+  .env.example and BUILD_PLAN.md. Log: /tmp/lp6d-r4-lane.log. Router must stage
+  the six resolved files, complete the pending merge and rerun the actual lane
+  check. No lane PASS or subsequent root-lint checks are claimed.
+- `git diff --check`: PASS. All six unmerged-index working files have no conflict
+  markers. No Git-writing command was run. PostgreSQL and browsers unavailable;
+  no database or browser execution is claimed.
+
+Named holds for landing: retain the whole real PostgreSQL suite and every named
+check in repair 3 below, ordinary CI/build/browser gates, independent RED review
+and second security look, landing after LP-6c, renumbering 0780 by filename stem
+only, and sibling customer-proof/inventory call-path rechecks. Repair 3's hold 1
+(API TS2345) is closed; pending-index lane checking remains router work.
+
+## 10 November — repair 3 on 4677be1d: do not commit
+
+This section supersedes the earlier repair status and landing-hold lists below.
+The launcher merged exactly `4677be1d2eb8979a24b27f695b779bb9859b8ec5` into
+`4c6dc1922289f193441ee3ea0d7d15a247e1fb85`. All six expected working-file
+conflicts are resolved. The index is deliberately untouched and still unmerged.
+No Git write, fetch, commit, push, PR, provider or real-data operation was run.
+
+Implemented within the allowed paths:
+
+- Keep LP-6c's passed work-order transaction helper and contractor test behavior;
+  put LP-6d's real session-bearing principals and typed binding refusals on top.
+  Reject malformed import tenant IDs before opening a transaction. The new unit
+  test proves NOT_FOUND and no pool connection. Quote's competing holder binds a
+  persisted testBoundTenantContext credential before app.bind_job_parties.
+- Refresh all 16 newly changed predecessor bodies in addition to the six named
+  main bodies. Preserve LP6D_BOUND before original initializers and retain the
+  explicit CH4/source-writer amendments. Unit checks bind every manifest body to
+  its latest exact overload. All 353 predecessor migrations, including 0686,
+  0687 and 0970, are byte-identical to 4677be1d. No LP-6c command/accessor body is
+  recreated by LP-6d.
+- Reinstate the bound mon8_feature_decision for every feature. Add one private,
+  migration-owned SSO-only helper with constant feature/purpose and one argument;
+  revoke PUBLIC, runtime, identity, infrastructure and direct login execution.
+  Recreate the latest identity.sso_complete with exactly its single feature-call
+  edge changed. No scanner/pin edit, role or person-facing grant is introduced.
+- Correct LP0 owner entries to omit private routines. Extend the existing proof
+  to all 125 re-created/new routine identities and their exact static-call/write
+  records. Classify additions from main 0581–0685 and LP-6c, including the two
+  approved binders. Existing synthetic fixture storage, trigger-only ports and
+  credential bootstrap paths have specific reasons rather than an unassigned
+  blanket category. signal_outbox/review_invalidated_recovery_evidence are
+  trigger-context-only; demo_trial uses the checked owner bridge.
+- Repair the own integration harness's environment, migration order and invitation
+  role. Runtime-denied private overloads still require explicit permission refusal;
+  owner-only calls are outside the runtime guard sweep. The fabricated revoke
+  call correctly expects 42501: jobguard_migration cannot SELECT the private
+  command_lifecycle_claim table. No grant is added to manufacture a later 23514;
+  a separate owner query verifies no authorization write. The valid revoke path
+  remains for PostgreSQL CI to prove.
+- Retain incoming LP-6c's older fixture fixes, including evidence's bound context.
+  D3 now verifies persisted tenant attribution, protected SQL binding refusal,
+  and the original revoked-member business query refusal with an explicitly
+  unbound fixture. Add SSO helper ACL/identity/runtime/login refusal checks and
+  explicit unbound sso/work_orders checks. Add UTF8 to the legacy PostgreSQL seed.
+
+Local evidence (installed tools only, at most two Vitest workers and three named
+files per run):
+
+- 8 distinct database unit files / 199 distinct tests PASS. Commands and logs:
+  `./packages/db/node_modules/.bin/vitest run --root packages/db --maxWorkers=2`
+  with groups `test/lp6d-routines.test.ts test/lp6d-repository-context.test.ts
+  test/migration-proof-loader.test.ts` (106), `test/lp6c-money-routines.test.ts
+  test/lp-0-catalog.test.ts test/contractor-session-context.test.ts` (54), and
+  `test/lp6d-repository-context.test.ts src/recovery-legacy-later.test.ts
+  test/recovery-message-repository.test.ts` (56, including the repeated 17).
+  Logs: /tmp/lp6d-r3-unit.log, /tmp/lp6d-r3-compat.log,
+  /tmp/lp6d-r3-final-db-unit.log.
+- Database tsc --noEmit and direct tsc build PASS. AI direct tsc build PASS.
+  Workspace turbo build stalled and was interrupted; its cache log is not a build
+  completion claim. Direct compilers used installed dependencies, no download.
+- SQL CASE-in-IF lint PASS (354 migrations); money arithmetic and commercial
+  boundary lint PASS; protected source guard PASS (94 roots, zero diagnostics,
+  ten existing baseline cases); git diff --check PASS. 41 changed TypeScript
+  files transpile without syntax diagnostics (not integration execution).
+- API/web targeted runs initially could not collect without built package
+  entries. After db was built, six API files / 39 tests passed; eight API files
+  still could not collect without the AI entry, and the web route could not
+  collect without the API workspace entry. They are not declared green.
+- Actual API tsc then FAILED at the new predecessor test
+  apps/api/src/contractor/extra-proceed.application.test.ts:11:97, TS2345:
+  resolveSession's mock returns AuthenticatedMembership without its required
+  context. This is a real typecheck failure, not a load stall. The file is outside
+  this repair's allowed paths; leave it untouched. /tmp/lp6d-r3-api-build.log.
+- The lane contains exactly 48 non-lane working-file changes over 4677be1d,
+  excluding itself. The real lane guard fails with inherited/index paths while
+  the merge remains unmerged; no lane PASS is claimed. Both default and supplied
+  LANE_BASE_REF runs are in /tmp/lp6d-r3-lane*.log.
+
+### Named holds for landing
+
+1. **do not commit — API TS2345 outside the allowed paths.** The predecessor's
+   extra-proceed.application.test.ts mock must return the session-bearing
+   ContractorSessionMembership with a genuine synthetic context. Preserve all
+   assertions. The router must issue that exact test-fixture repair before this
+   branch is READY. No wider source or permission change is needed or authorized.
+2. Router stages the six resolved files and completes the pending merge only
+   after the code failure above is repaired; rerun the real lane guard then.
+   Keep NOPR and wait for LP-6c to land. Renumber 0780 by filename stem only.
+3. CI/checker must run the whole real PostgreSQL database suite against the
+   4677be1d baseline and every named suite in the repair brief: enterprise-identity
+   (21/21 SSO), contractor-parties, work-order-import, fee-illustration-later,
+   recovery-legacy-later, lp-0-grant-freeze (LP0-02), lp-0-authority-paths (LP0-17),
+   lp-0-catalog, lp6d-routines unit/integration, lp6d-repository-context, quote,
+   quote-reacceptance, lp5-commands, evidence, proof-replay,
+   contractor-session-context, contractor-full-demo-package, sor-pricing and
+   migration-proof-loader. Prove fresh/upgrade installs, guard-removal mutation,
+   every runtime guarded unbound/forged/cross-tenant refusal without writes,
+   permitted decided contractor/member flows, revoked/non-member NOT_FOUND,
+   SSO private access and continued sign-in, and the valid revoke path. Run all
+   affected API/web suites and required typecheck/lint/test/build/browser gates.
+   PostgreSQL and localhost/browser execution are unavailable in this sandbox;
+   no database or browser PASS is claimed.
+4. Keep the independent RED PostgreSQL review and LP-6d's second security look.
+   LP-6e audit attribution remains untouched. Sibling lp-6d-customer-proof and
+   lp-6d-customer-inventory files are unchanged; their shared source-writer,
+   final-check and customer-command call chains must be rechecked with these
+   guarded latest bodies and LP-6c's approved delegation binders. No sibling
+   acceptance or closure is claimed.
+
+Changed assertions, with equal-strength reasons: LP0 private-owner expectations
+now assert absence (the scanner deliberately records only reachable owners), and
+its LP-6d entry count is two rather than four; routine identities remain checked.
+The old blanket unbound SSO expectation is replaced by bound runtime and exact
+single-edge/private-helper assertions. The private-overload sweep retains runtime
+42501 and excludes only non-runtime owner execution. Fabricated revocation now
+expects earlier 42501 with no-write proof instead of inaccessible 23514. D3 adds
+binding refusal and retains FORBIDDEN business authorization. Contractor parties'
+unbound call now expects REQUEST_BINDING_REFUSED and separately retains bound
+NOT_FOUND for the absent job. Lifecycle checks all 125 exact named LP-6d bodies
+and unchanged metadata before predecessor branches; LP-6c and all unrelated
+assertions remain. Fixture roles, credentials and holder binding change setup,
+not successful outcome criteria. The malformed-tenant and SSO ACL cases add
+coverage. No test is deleted, weakened, marked skipped or made optional.
+
+The initial LATER / SIMPLICITY note remains historical below; no new review
+simplification is added in this repair.
+
+---
+Historical repair receipts follow.
+
 ## 6 November — real-PostgreSQL recheck repair round 2 (last): READY
 
 READY for router staging, NOPR commit/push and CI; not database verification,

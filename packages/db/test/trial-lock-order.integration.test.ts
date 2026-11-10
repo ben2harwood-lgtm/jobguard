@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { FreeFirstJobLifecycleRepository } from "../src/free-first-job-lifecycle-repository.js";
-import { createWorkFixture, closeWorkFixture, meterCompany, verifyBusiness, workTenant, type WorkFixture } from "./free-first-job-admission-fixtures.js";
+import { createWorkFixture, closeWorkFixture, meterCompany, verifyBusiness, requestCard, workTenant, type WorkFixture } from "./free-first-job-admission-fixtures.js";
+import { seedWorkJob } from "./job-work-state-fixtures.js";
 import { activateMeterJob } from "./meter-journey-fixtures.js";
 import { exactTarget } from "./free-first-job-lifecycle-fixtures.js";
 import { historicalAgreement } from "./subscription-persistence-fixtures.js";
@@ -45,14 +46,19 @@ describe("lock-order-418 trial versus MON-1 admission (real PostgreSQL)", () => 
    EXISTS(SELECT 1 FROM aclexplode(p.proacl) a WHERE a.grantee=0 AND a.privilege_type='EXECUTE') public
    FROM pg_proc p WHERE p.oid='app.mon3_lock_activation(uuid,text,uuid)'::regprocedure`)).rows;
   expect(grants).toEqual([{job_update:false,owner:'jobguard_migration',prosecdef:true,proconfig:['search_path=pg_catalog'],runtime:true,infrastructure:false,public:false}]);
-  await expect(workTenant(f.runtime, a.tenantId, db => db.query("SELECT id FROM app.job WHERE tenant_id=$1 AND id=$2 FOR UPDATE", [a.tenantId,a.jobId])))
+  await expect(workTenant(f.runtime, a.tenantId, db => db.query("SELECT id FROM app.job WHERE tenant_id=$1 AND id=$2 FOR UPDATE", [a.tenantId,a.jobId]), { membershipId: a.actorId }))
    .rejects.toMatchObject({code:'42501'});
   const repo = new FreeFirstJobLifecycleRepository(f.runtime), view = await repo.read(a.context,a.digest,a.jobId);
   expect(await repo.activate(a.context,a.digest,a.actorId,{version:'trial-switch-live.v1',commandId:randomUUID(),jobId:a.jobId,...view.target})).toMatchObject({jobId:a.jobId,state:'live'});
   expect((await f.admin.query("SELECT count(*)::int n FROM app.trial_start WHERE tenant_id=$1",[a.tenantId])).rows[0].n).toBe(1);
   const b = await meterCompany(f);
-  const lock = (tenant:string,digest:string) => workTenant(f.runtime,tenant,db => db.query("SELECT app.mon3_lock_activation($1,$2,$3)",[tenant,digest,a.jobId]));
-  await expect(lock(b.tenantId,a.digest)).rejects.toThrow('METER_FORBIDDEN');
+  const lock = (tenant:string,digest:string) => workTenant(f.runtime,tenant,db => db.query("SELECT app.mon3_lock_activation($1,$2,$3)",[tenant,digest,a.jobId]), { membershipId: a.actorId, bindRequest: false });
+  const unchanged = async () => Promise.all(["trial_start","trial_admission","job_activation","command_receipt","audit_event"].map(async table =>
+   (await f.admin.query(`SELECT to_jsonb(r) row FROM app.${table} r WHERE tenant_id=ANY($1::uuid[]) ORDER BY to_jsonb(r)::text`,[[a.tenantId,b.tenantId]])).rows));
+  const beforeForeignLock = await unchanged();
+  // The direct SQL entry binds the supplied credential before its domain guard.
+  await expect(lock(b.tenantId,a.digest)).rejects.toMatchObject({code:"42501",message:"REQUEST_BINDING_REFUSED"});
+  expect(await unchanged()).toEqual(beforeForeignLock);
   await f.admin.query("UPDATE identity.session SET expires_at=clock_timestamp()-interval '1 second' WHERE id=$1",[a.sessionId]);
   await expect(lock(a.tenantId,a.digest)).rejects.toThrow('METER_FORBIDDEN');
  });
@@ -66,7 +72,7 @@ describe("lock-order-418 trial versus MON-1 admission (real PostgreSQL)", () => 
     if (entry === "dispatcher") await new FreeFirstJobLifecycleRepository(f.runtime).activate(a.context, a.digest, a.actorId, input);
     else await workTenant(f.runtime, a.tenantId, db => db.query("SELECT app.mon3_activate($1,$2,$3,$4::jsonb)",
      [a.tenantId, a.digest, input.commandId, JSON.stringify({ ...input, version: "trial-admission.v1", commandId: undefined,
-      activationId: randomUUID(), termsId: randomUUID(), authorizationId: randomUUID() })]));
+      activationId: randomUUID(), termsId: randomUUID(), authorizationId: randomUUID() })]), { membershipId: a.actorId, bindRequest: false });
     return "unexpected success";
    } catch (error) { return (error as Error).message; }
   };
@@ -77,6 +83,7 @@ describe("lock-order-418 trial versus MON-1 admission (real PostgreSQL)", () => 
   try {
    await meter.query("BEGIN"); await meter.query("SET LOCAL statement_timeout='10s'");
    await meter.query("SELECT set_config('app.tenant_id',$1,true)", [a.tenantId]);
+   await meter.query("SELECT app.bind_request('real',$1,$2)", [a.digest,a.tenantId]);
    await meter.query("SELECT app.require_watchdog_live($1)", [a.jobId]);
    const pid = (await meter.query("SELECT pg_backend_pid() pid")).rows[0].pid;
    pending = trial();
@@ -94,11 +101,45 @@ describe("lock-order-418 trial versus MON-1 admission (real PostgreSQL)", () => 
    await meter.query("COMMIT");
    expect(await pending).toBe("TRIAL_LEGACY_POLICY_CONVERSION_FORBIDDEN");
    const replay = await workTenant(f.runtime, a.tenantId, async db => (await db.query("SELECT app.ch4_record_work_state($1,$2,$3,$4::jsonb) result",
-    [a.tenantId, a.jobId, a.actorId, JSON.stringify(command)])).rows[0].result);
+    [a.tenantId, a.jobId, a.actorId, JSON.stringify(command)])).rows[0].result, { membershipId: a.actorId });
    expect(replay).toEqual(result);
    expect((await f.admin.query("SELECT count(*)::int n FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [a.tenantId, input.commandId])).rows[0].n).toBe(0);
   } finally {
    await meter.query("ROLLBACK"); meter.release(); await pending;
   }
  });
+ it("concurrent trial-path activations cannot exceed Solo's six-place cap enforced by the live-source trigger", async () => {
+  const a = await meterCompany(f); await verifyBusiness(f, a); await historicalAgreement(f, a, "Solo");
+  const repo = new FreeFirstJobLifecycleRepository(f.runtime);
+  const prepare = async (jobId: string) => {
+   // Large, distinct customer/site fixtures: none can share a place or use the small-job allowance.
+   await exactTarget(f, { ...a, jobId }, true);
+   return { version: "trial-switch-live.v1", commandId: randomUUID(), jobId,
+    ...(await repo.read(a.context, a.digest, jobId)).target };
+  };
+  const activate = (input: Awaited<ReturnType<typeof prepare>>) => repo.activate(a.context, a.digest, a.actorId, input);
+  await activate(await prepare(a.jobId));
+  const card = randomUUID(); await requestCard(f, a, card);
+  await workTenant(f.runtime, a.tenantId, db => db.query("SELECT app.mon3_simulate_card($1,$2,$3,'{\"version\":\"trial-card-simulate.v1\"}')", [a.tenantId, a.digest, card]), { membershipId: a.actorId, bindRequest: false });
+  for (let n = 0; n < 4; n++) {
+   const job = await seedWorkJob(f, a.tenantId); await activate(await prepare(job.jobId));
+  }
+  const inputs = [];
+  for (let n = 0; n < 2; n++) {
+   const job = await seedWorkJob(f, a.tenantId); inputs.push(await prepare(job.jobId));
+  }
+  const results = await Promise.allSettled(inputs.map(activate));
+  expect(results.filter(r => r.status === "fulfilled")).toHaveLength(1);
+  expect(results.filter(r => r.status === "rejected").map(r => (r as PromiseRejectedResult).reason.message))
+   .toEqual(["METER_UPGRADE_REQUIRED"]);
+  expect((await f.admin.query(`SELECT count(*)::int n FROM app.job_activation_terms
+   WHERE tenant_id=$1 AND NOT small_job`, [a.tenantId])).rows).toEqual([{ n: 6 }]);
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.trial_admission WHERE tenant_id=$1", [a.tenantId])).rows).toEqual([{ n: 6 }]);
+  const loser = inputs[results.findIndex(r => r.status === "rejected")]!;
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [a.tenantId, loser.commandId])).rows).toEqual([{ n: 0 }]);
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.job_activation WHERE tenant_id=$1 AND job_id=$2", [a.tenantId, loser.jobId])).rows).toEqual([{ n: 0 }]);
+  // A serial retry also reaches capacity admission, rather than an earlier trial/card gate.
+  await expect(activate(loser)).rejects.toThrow("METER_UPGRADE_REQUIRED");
+ });
+
 });

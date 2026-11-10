@@ -552,18 +552,28 @@ and database OID directly; there is no control-file grant or environment helper.
 
 ### LP-6c build-ahead delta — protected money/commitment identity
 
-`0591_lp6c_money_binding.sql` guards 28 existing definitions without withdrawing compatibility parameters or changing existing runtime grants. The new `a-lp6c-money-binding` inventory group records exactly five owner-only binding EXECUTE grants. The meter bridge now selects identity through `bind_request`, retaining synthetic-environment and live owner/admin restrictions. Financial authorization membership, command resource/claim actors and all explicit actor/tenant arguments covered by this slice must match the protected binding before business access or replay returns.
+`0686_lp6c_money_binding.sql` guards 28 existing definitions without withdrawing compatibility parameters or changing existing runtime grants. The new `a-lp6c-money-binding` inventory group records exactly five owner-only binding EXECUTE grants. The meter bridge now selects identity through `bind_request`, retaining synthetic-environment and live owner/admin restrictions. Financial authorization membership, command resource/claim actors and all explicit actor/tenant arguments covered by this slice must match the protected binding before business access or replay returns.
 
-The body-preservation regression checks the latest predecessor definitions; permission, exact approval, money formulas and CH-7-TERMS clocks remain independent controls. See `packages/db/migration-notes/0591_lp6c_money_binding.md` and `packages/db/test/lp6c-money-routines.integration.test.ts`. LP-6b ca05fd9240627059cbbd19f4104fa5e8b690b96d is the predecessor; its JSON baseline remains unchanged and the LP-6c inventory delta is in the 0591 proof fragment. This is source-inspected construction, not PostgreSQL-executed or independently verified closure. Full PostgreSQL CI, two exact-head security checks and remaining LP-6d/LP-8/LP-9 gates remain required.
+The body-preservation regression checks the latest predecessor definitions; permission, exact approval, money formulas and CH-7-TERMS clocks remain independent controls. See `packages/db/migration-notes/0686_lp6c_money_binding.md` and `packages/db/test/lp6c-money-routines.integration.test.ts`. LP-6b ca05fd9240627059cbbd19f4104fa5e8b690b96d is the predecessor; its JSON baseline remains unchanged and the LP-6c inventory delta is in the 1217 proof fragment. This is source-inspected construction, not PostgreSQL-executed or independently verified closure. Full PostgreSQL CI, two exact-head security checks and remaining LP-6d/LP-8/LP-9 gates remain required.
 
-## LP-6d round 2 catalogue amendment (0780)
+### LP-6c customer-message delegation delta
 
-The migration proof explicitly retains migration ownership of
-`app.apply_recovery_timeline_signal(uuid,jsonb)` after withdrawing runtime EXECUTE.
-It also names the owner-only `app.lp6d_contractor_session_identity(uuid)` projection
-and the bound `app.revoke_recovery_message_authorization(uuid,uuid,uuid,uuid)` entry
-point in the recorded routine catalogue. Both new routines remain owned by
-`jobguard_migration`; only the revocation entry point grants runtime EXECUTE.
-The private projection has no PUBLIC or application-role EXECUTE. These reviewed
-source expectations require LP0-02 and LP0-17 on real PostgreSQL; they do not
-assert a live catalogue pass or independent acceptance.
+`0687_lp6c_customer_portal_delegation.sql` introduces a private, expiring transaction binding scoped to one tenant, one job and `JobSource.customer_message`. The recorded actor remains the validated grant sponsor. The general actor and tenant accessors return NULL for this kind, keeping other money guards closed. The command resource records the delegated credential kind. Historical 0547 and byte-identical 0686 remain unchanged.
+
+The `lp6c-customer-delegation` proof group lists exact private grants and owner records. Both new helpers are binding-owner owned. Their sole direct EXECUTE grantees are `jobguard_migration` for `lp6_bind_customer_portal` and `jobguard_command_writer` for `lp6_delegated_actor`, as approved by the coordinator on 9 November. The binding owner can SELECT the two portal tables under exact tenant read policies and invoke the existing portal validator to re-resolve the session with its existing revocation locks. No role or person-facing capability is added. The reader is denied to migration and the binder to command-writer; PUBLIC, runtime, identity, infrastructure, shadow and login roles gain neither helper. The existing command routine ownership stays unchanged.
+
+The proof, MIGFIX-7, plan-entitlement and LP0-17 checks retain exact metadata, latest bodies and authority-path coverage. See `packages/db/migration-notes/0687_lp6c_customer_portal_delegation.md` for current test evidence. Final validation passes: all 892 database files (7,574 tests; 19 existing TODOs), 4,317 API tests, 2,320 web tests and all 14 requested/adjacent Chromium cases at both widths. The database/API/web red list against main is empty. The migration note names the separate ClientDecideExtra customer-link hold affecting ENT-11a/11b; overall CI is not declared green. Exact-head independent RED review remains a separate pre-merge gate.
+
+## LP-6d repair 3 catalogue amendment (0780)
+
+Private routines retain their recorded routine identities, but LP0 owner entries
+are limited to runtime-reachable routines. Withdrawing runtime EXECUTE from
+`app.apply_recovery_timeline_signal(uuid,jsonb)` therefore removes its owner entry;
+no owner entry is added for `app.lp6d_contractor_session_identity(uuid)` or the new
+`app.mon8_sso_feature_decision(uuid)`. The latter is a migration-owned SSO-only
+bootstrap helper with no PUBLIC, runtime, identity or login EXECUTE. Only the
+validated `identity.sso_complete` path calls it; that routine changes one call
+from its latest 0549 body. Runtime feature decisions require LP6D_BOUND for every
+feature. Guarded body copies start at the latest merged predecessors on 4677be1d.
+No new role, person-facing grant or scanner allowlist is introduced. Real
+PostgreSQL LP0-02/LP0-17 and independent security checks remain landing gates.

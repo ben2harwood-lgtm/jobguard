@@ -135,6 +135,9 @@ export * from "./evidence-pack-v3-assembly.js";
 export * from "./meter-today.js";
 
 export * from "./small-builder-demo-lifecycle.js";
+
+export * from "./supplier-line-matching.js";
+export * from "./supplier-match-corrections.js";
 export * from "./managed-recovery.js";
 export * from "./platform-tax-invoice.js";
 export * from "./merchant-connectors.js";
@@ -168,10 +171,24 @@ export * from "./exposure-curve.js";
 export * from "./pay-now-synthetic.js";
 export * from "./contractor-mandate.js";
 
+export * from "./shadow-pilot-financial-record.js";
 export * from "./cancellation-kit.js";
 export * from "./value-source-receipt-v2.js";
+export * from "./privacy-operations.js";
 export * from "./sync-device-cache.js";
 export * from "./offline-client-queue.js";
 export * from "./offline-capture.js";
 
 export * from "./contractor-fee-mandate.js";
+
+export * from "./direct-debit-lifecycle.js";
+
+export * from "./extra-approval-inbox.js";
+export * from "./deepgram-transcript.js";
+export * from "./offline-reconciliation.js";
+export * from "./core-loop-views.js";
+
+export * from "./recurring-extras.js";
+export * from "./extra-proceed.js";
+export * from "./merchant-reliability.js";
+export * from "./rate-baseline.js";

@@ -5,7 +5,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { ActionExecutor, appendOutboundAction, operateOutbox, withTenant, type OutboundAction, type OutboundAdapter } from "../src/index.js";
+import { ActionExecutor, appendOutboundAction, operateOutbox, withTenant, verifiedTenantContextForQueuedJob, type OutboundAction, type OutboundAdapter } from "../src/index.js";
 import { auditRows, createScimHarness, fixture, memberIn, sha256, type ScimHarness, type ScimFixture } from "./scim-fixtures.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 
@@ -23,11 +23,11 @@ async function approvedAction(f: ScimFixture) {
   const expiresAt = new Date(Date.now() + 600_000);
   await h.admin.query("INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,recipient,content_hash,aggregate_revision,policy_version,expires_at) VALUES($1,$2,$3,$4,$5,'send_quote','customer@fixture.invalid',$6,1,'synthetic.v1',$7)", [authorizationId, tenantId, decisionId, resolutionId, memberId, contentHash, expiresAt]);
   const action: OutboundAction = { version: "outbound-action.v1", id: randomUUID(), authorizationId, adapter: "fake_capture", providerEffectKey: randomUUID(), actionType: "send_quote", recipient: "customer@fixture.invalid", contentHash, immutableContent: content, aggregateRevision: 1, amountPence: null, currency: null, policyVersion: "synthetic.v1", authorizationExpiresAt: expiresAt };
-  const context = testTenantContext(tenantId);
+  const context = testTenantContext(tenantId, { membershipId: memberId });
   await withTenant(h.runtime, context, db => appendOutboundAction(db, tenantId, action));
   const deliver = vi.fn<OutboundAdapter["deliver"]>(async () => ({ kind: "succeeded" as const, providerReference: `synthetic:${randomUUID()}` }));
   const adapter: OutboundAdapter = { name: "fake_capture", supportsProviderDeduplication: false, deliver, reconcile: async () => "unknown" };
-  const execute = () => new ActionExecutor(h.runtime, new Map([[adapter.name, adapter]]), { emit: () => undefined }).execute(context, action.id);
+  const execute = () => new ActionExecutor(h.runtime, new Map([[adapter.name, adapter]]), { emit: () => undefined }).execute(verifiedTenantContextForQueuedJob(tenantId), action.id);
   const attempts = async () => (await h.admin.query<{ n: number }>("SELECT count(*)::integer n FROM app.action_attempt WHERE tenant_id=$1 AND action_id=$2", [tenantId, action.id])).rows[0]!.n;
   return { action, deliver, execute, attempts };
 }
@@ -68,7 +68,7 @@ describe("SERIOUS-B10 outbox revocation", () => {
     const before = await auditRows(h, f.principal.tenantId);
     await expect(queued.execute()).resolves.toEqual({ kind: "cancelled", code: "AUTHORIZATION_REVOKED" });
     await queued.execute();
-    await expect(operateOutbox(h.runtime, testTenantContext(f.principal.tenantId), queued.action.id, "retry", true)).rejects.toThrow("UNSAFE_OUTBOX_COMMAND");
+    await expect(operateOutbox(h.runtime, testTenantContext(f.principal.tenantId, { membershipId: f.principal.membershipId, bindRequest: false }), queued.action.id, "retry", true)).rejects.toThrow("UNSAFE_OUTBOX_COMMAND");
     expect(queued.deliver).not.toHaveBeenCalled();
     expect(await queued.attempts()).toBe(0);
     expect(await state(f, queued.action.id)).toBe("cancelled");
@@ -147,7 +147,7 @@ describe("SERIOUS-B10 outbox revocation", () => {
     const f = await fixture(h), other = await fixture(h), queued = await approvedAction(f);
     await revoke(f);
     const adapter: OutboundAdapter = { name: "fake_capture", supportsProviderDeduplication: false, deliver: queued.deliver, reconcile: async () => "unknown" };
-    await new ActionExecutor(h.runtime, new Map([[adapter.name, adapter]]), { emit: () => undefined }).execute(testTenantContext(other.principal.tenantId), queued.action.id);
+    await new ActionExecutor(h.runtime, new Map([[adapter.name, adapter]]), { emit: () => undefined }).execute(verifiedTenantContextForQueuedJob(other.principal.tenantId), queued.action.id);
     expect(await state(f, queued.action.id)).toBe("pending");
     expect(queued.deliver).not.toHaveBeenCalled();
     await queued.execute();
@@ -158,7 +158,7 @@ describe("SERIOUS-B10 outbox revocation", () => {
     const f = await fixture(h), queued = await approvedAction(f);
     await revoke(f);
     const before = await auditRows(h, f.principal.tenantId);
-    await new ActionExecutor(h.runtime, new Map(), { emit: () => undefined }).execute(testTenantContext(f.principal.tenantId), queued.action.id);
+    await new ActionExecutor(h.runtime, new Map(), { emit: () => undefined }).execute(verifiedTenantContextForQueuedJob(f.principal.tenantId), queued.action.id);
     expect(await state(f, queued.action.id)).toBe("pending");
     expect(await auditRows(h, f.principal.tenantId)).toEqual(before);
     await queued.execute();

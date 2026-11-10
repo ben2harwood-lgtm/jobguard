@@ -150,3 +150,120 @@ RLS protects rows within a correctly authenticated/stamped tenant context; it ca
 - No new migration, database object, dependency, route, UI, provider or release. Other source files, indexes, shared helpers, security pins, tools, CI, AI, BUILD_PLAN and AGENTS stay untouched.
 
 Builder tests use synthetic organisations and `.invalid` members, with no outbound call. D1–D18 require actual PostgreSQL execution by the Mac helper and CI on the final head; source compilation does not prove database behavior. RED requires fresh Opus and separate Sol verdicts bound to the exact committed head, separate acceptance and dispatcher catch-up on main before a PR. Existing production/data/fee gates remain pending.
+
+## ENT-5 / ENT-3 candidate-only extension — 4 November 2026
+
+This issued extension opens the candidate list, MarkDuplicate and pre-export
+un-link transport and controls on `/approvals/extras` in synthetic practice only.
+It does not close ENT-3 or ENT-5. The historical “Not built” list above describes
+that earlier leaf; only these candidate surfaces are opened here.
+
+GET `/api/contractor/jobs/[id]/duplicate-candidates` returns
+`extra-duplicate-candidates.v1`: jobId, link-history revision, unresolved groups
+(`id`, `extras` containing extraId, canonicalId and existing description), and
+active links (linkId, endpoint IDs and their existing descriptions). No prices,
+notes, origin facts or new authority appear. Supervisor, surveyor and
+commercial_manager require the existing covering xa_covers/job.read grant.
+Owner/admin visibility remains held; their existing un-link command authority is
+unchanged. An eligible member's uncovered, missing or foreign job is NOT_FOUND;
+a member without a permitted list role is PERMISSION_DENIED.
+
+POST to that same route accepts the strict `mark-duplicate.v1` command minus
+jobId (the route supplies it). POST
+`/api/contractor/jobs/[id]/duplicate-unlinks` accepts the strict
+`extra-duplicate-unlink.v1` command minus jobId and actorMembershipId. The server
+binds both from the path and persisted session; no request may set tenant, actor,
+role, time or origin. Both POSTs require the configured trusted browser origin;
+all responses are no-store. Existing repository methods, role checks, command
+receipts, audit, replay/conflict, stale-link and exported-endpoint guards remain
+the authority. Error bodies expose only a version and closed code, and the
+screen displays the server refusal.
+
+The unresolved grouping uses exactly cb_unresolved's active-link/member/pair
+rule. The CREATE-only read leaves cb_unresolved untouched, using the issued
+agreement-test fallback rather than replacing an older routine: source pins and
+installed-routine PostgreSQL fixture comparisons guard against drift. Same visit
+OR same UTC server day; same non-null SoR code OR same non-null excess line.
+Different visits alone do not exempt same-day captures; different lines alone
+do not exempt captures with the same code. Connected candidates are displayed
+together, collapsed through active links as in cb_unresolved. The original candidate-only extension introduced no dismissal. The issued
+4 November dismissal extension below supersedes that limit. The selected
+canonical controls billing identity, never the group's effective origin.
+
+Validation: local TypeScript and bounded unit guards; database integration and
+headless mobile-360/desktop rendering/transport tests are authored for CI. The
+browser case checks 44px targets, accessible control names, Chromium AA contrast,
+server refusals, linking and reason-required un-linking. These are automated
+checks, not a full human accessibility assessment. Exact-head RED independent
+review and green CI remain required before merge. NOPR; production gates stay
+closed. The dismissal ruling below supersedes the former decision hold.
+
+### ENT-3-RELINK-FIX: effective state after reversal (0966)
+
+The event history remains immutable. `xa_latest_kind` skips a `duplicate` event
+only when the link written by that exact event's command has an explicit un-link
+fact for the same tenant, job and duplicate. An active duplicate event remains
+current. Other events and approval outcomes are unchanged. This shared read is
+used by the mark command, revision commands and billing eligibility, so an old
+reversed link cannot permanently hide the preceding state.
+
+Relinking in either direction creates a fresh link and duplicate event through
+the existing MarkDuplicate command, with the same roles, grants, receipt checks,
+job lock and exported-endpoint guard as before. An old un-link replay cannot
+reverse a later link. Unlinking two independently approved extras restores their
+separate eligibility; it does not manufacture approval. Any still-unresolved
+deterministic candidate continues to block export. Mistaken manual links between
+distinct work can be reversed and both approved extras exported separately.
+Existing completed duplicate approval outcomes are not reopened.
+
+## ENT-5 exact-group dismissal — issued 4 November 2026
+
+Authority: Ben's instruction to proceed and the router ruling recorded in
+AGENT_CHOICES.md. Supervisor, surveyor or commercial_manager must have an active
+covering job.read grant, and must not have reported or priced any group member.
+The session is resolved again inside the database writer; the HTTP body cannot
+select a tenant, actor, role or job. Owner/admin dismissal is not opened.
+
+POST `/api/contractor/jobs/[id]/duplicate-dispositions` accepts exactly
+`{version:'duplicate-disposition.v1', commandId, groupId, fingerprint,
+disposition:'not_duplicates'|'reopen', reasonCode}`. Reasons are `different_work`,
+`different_location`, or `review_changed`. The route supplies the job; the
+persisted session supplies the actor. Trusted browser origin, no-store responses,
+and synthetic_demo / jobguard_synthetic_demo fences apply.
+
+The candidate response adds a 64-character SHA-256 `fingerprint` per group.
+Migration 0910 defines one grouping function and one unresolved projection used
+by both the list and app.cb_unresolved (and hence export refusal). The snapshot
+contains sorted member identities, canonical identities, all immutable ordinary
+and SoR revision IDs/hashes, and approval binding IDs. Descriptions are existing
+labels and never authority. No group-wide waiver or client-supplied member list
+is accepted. A new member, canonical change or revision invalidates the old
+snapshot. Other groups still block export.
+
+`app.extra_duplicate_disposition` is tenant-scoped, forced-RLS and append-only;
+runtime has no table writes. Its checked SECURITY DEFINER writer serializes on
+the existing tenant fence (54) then job lock (417), shared with extra creation,
+revision/link commands and export. Authority and feature entitlement are checked
+before replay; a new command requires the exact current group. Reporter and
+pricing checks cover every member, including linked members and past bindings.
+It writes one receipt, one disposition fact and one final audit append atomically.
+LP-5 lifecycle integration remains held: `ResolveDuplicateCandidates` uses this
+checked writer and its own receipt/replay path; it does not dispatch through
+`begin_command` / `complete_command` or `lp5_command_result`. The registry row
+does not establish lifecycle completion. Production remains disabled.
+No price, approval, origin, link, extra event or export line is changed. The latest
+fact for the exact snapshot decides whether it is unresolved. `reopen` records a
+new fact under the same authority, reason and snapshot rules; history is retained.
+A successful same-command replay is inert; changed payload/job/actor conflicts.
+
+Closed failures: INVALID_COMMAND, MODE_FORBIDDEN, PERMISSION_DENIED, NOT_FOUND,
+SELF_DISMISSAL, STALE_REVISION, COMMAND_CONFLICT, DATABASE_UNAVAILABLE. Existing
+entitlement failures stay fail-closed. Error responses contain no SQL details.
+A write racing a new extra either commits before it (the enlarged group raises
+again) or observes a stale fingerprint and rolls back. Audit is the last
+contending lock. RLS retains its authenticated-context limitation.
+
+This extension changes candidate disposition only, never commercial approval or
+fee entitlement. PostgreSQL/catalogue/upgrade/race tests and mobile/desktop
+transport rendering are CI proofs; independent RED review must bind the exact
+landing head. No real data, provider, money or release is enabled.

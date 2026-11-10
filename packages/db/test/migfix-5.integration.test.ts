@@ -1,3 +1,5 @@
+import { withTenant } from "../src/tenant-context.js";
+import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { createHash, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -83,7 +85,7 @@ describe("MIGFIX-5 customer billing integrity", () => {
     });
     expect(await before()).toEqual({ locks: 0, receipts: 0, audit: 0 });
     await expect(repo.lock(a.context, lockInput(a, a.revisionId, 1))).rejects.toMatchObject({ code: "STALE_REVISION" });
-    await expect(asFixtureTenant(f.runtime, a.tenantId, lockSql(f, a, a.revisionId, 1))).rejects.toThrow("STALE_OR_BLOCKED_FINAL_ACCOUNT");
+    await expect(withTenant(f.runtime, a.context, db=>lockSql(f,a,a.revisionId,1)(db.$client))).rejects.toThrow("STALE_OR_BLOCKED_FINAL_ACCOUNT");
     expect(await before()).toEqual({ locks: 0, receipts: 0, audit: 0 });
 
     // Reassemble with the approved extra: the lock now succeeds and the invoice is 3,440,000 / 688,000 / 4,128,000.
@@ -102,7 +104,7 @@ describe("MIGFIX-5 customer billing integrity", () => {
     const approval = await f.admin.connect();
     try {
       await approval.query("BEGIN"); await approval.query("SELECT set_config('app.tenant_id',$1,true)", [a.tenantId]); await approveOn(approval, a, v1);
-      const racing = asFixtureTenant(f.runtime, a.tenantId, lockSql(f, a, a.revisionId, 1)); const settled = racing.then(() => "locked", (e: Error) => e.message);
+      const racing = withTenant(f.runtime, a.context, db=>lockSql(f,a,a.revisionId,1)(db.$client)); const settled = racing.then(() => "locked", (e: Error) => e.message);
       await blocked(); await approval.query("COMMIT");
       expect(await settled).toContain("STALE_OR_BLOCKED_FINAL_ACCOUNT");
     } finally { await approval.query("ROLLBACK").catch(() => undefined); approval.release(); }
@@ -113,7 +115,8 @@ describe("MIGFIX-5 customer billing integrity", () => {
     const v2 = await addFixtureCapture(f, b, 80000);
     const locking = await f.runtime.connect(); let approvalDone = false;
     try {
-      await locking.query("BEGIN"); await locking.query("SELECT set_config('app.tenant_id',$1,true)", [b.tenantId]); await lockSql(f, b, b.revisionId, 1)(locking);
+      await testBoundTenantContext(f.admin,b.tenantId,LOCK_OWNER);
+      await locking.query("BEGIN"); await locking.query("SELECT app.bind_request('real',encode(sha256(convert_to($1,'UTF8')),'hex'),$2)",[`lp6-test:${b.tenantId}:${LOCK_OWNER}`,b.tenantId]); await locking.query("SELECT set_config('app.tenant_id',$1,true)", [b.tenantId]); await lockSql(f, b, b.revisionId, 1)(locking);
       const late = asFixtureTenant(f.admin, b.tenantId, db => approveOn(db, b, v2)).then(() => { approvalDone = true; });
       await blocked(); expect(approvalDone).toBe(false); await locking.query("COMMIT"); await late;
     } finally { await locking.query("ROLLBACK").catch(() => undefined); locking.release(); }

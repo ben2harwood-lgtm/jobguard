@@ -27,11 +27,11 @@ async function seedJob(admin: Pool, tenant: string) {
  } catch (error) { await db.query("ROLLBACK"); throw error; } finally { db.release(); }
 }
 /** Uses the existing domain/command writers to make a synthetic issued quote, never a provider. */
-async function seedQuote(admin: Pool, tenant: string, job: string, member: string, user: string) {
+async function seedQuote(admin: Pool, tenant: string, job: string, member: string, user: string, credential: string) {
  const nativeImport=new Function("specifier","return import(specifier)") as (specifier:string)=>Promise<any>;
  const db=await nativeImport("@jobguard/db") as typeof import("@jobguard/db");
  const core=await nativeImport("@jobguard/core") as typeof import("@jobguard/core");
- const context=db.verifiedTenantContextFromMembership({identityUserId:user,tenantId:tenant,membershipId:member} as Parameters<typeof db.verifiedTenantContextFromMembership>[0]);
+ const context=db.verifiedTenantContextFromMembership({identityUserId:user,tenantId:tenant,membershipId:member} as Parameters<typeof db.verifiedTenantContextFromMembership>[0],{kind:"real",credential});
  const scope=randomUUID(),revision=randomUUID();
  await admin.query("UPDATE app.job SET status='quoting',revision=1 WHERE tenant_id=$1 AND id=$2",[tenant,job]);
  await admin.query("INSERT INTO app.scope_identity(tenant_id,id,job_id,state) VALUES($1,$2,$3,'confirmed')",[tenant,scope,job]);
@@ -55,7 +55,9 @@ test("emailed fictional link signs into exactly one job with a browser-session c
   await expect(page.getByRole("main").getByRole("heading", { name: "Signed in", exact: true })).toBeVisible();
   const session = await page.evaluate(async () => (await fetch("/api/auth/session")).json());
   const tenant = session.memberships[0].tenantId as string, fixture = await seedJob(admin, tenant);
-  await seedQuote(admin,tenant,fixture.job,session.memberships[0].id,session.principal.id);
+  const builderToken = (await page.context().cookies()).find(cookie => cookie.name === "jobguard_session")!.value;
+  const builderCredential = createHmac("sha256", E2E_AUTH_CODE_SECRET).update(`session:${builderToken}`).digest("hex");
+  await seedQuote(admin,tenant,fixture.job,session.memberships[0].id,session.principal.id,builderCredential);
   // Synthetic owner fixture: an existing verified stage, never a portal-created completion.
   const scope = randomUUID(), evidence = randomUUID(), evidenceLink = randomUUID(), completion = randomUUID(), objectVersion = randomUUID();
   const stageDb = await admin.connect();

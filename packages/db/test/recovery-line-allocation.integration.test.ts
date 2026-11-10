@@ -21,7 +21,6 @@ import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from ".
 import { permitPracticeHomeJob } from "./lp-practice-home-job-fixture.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 
-const context = testTenantContext(DEMO_TENANT_ID);
 const actor = { membershipId: DEMO_MEMBERSHIP_ID, identityUserId: DEMO_IDENTITY_USER_ID };
 const priorEnvironment = process.env.JOBGUARD_ENV;
 const passphrase = randomUUID();
@@ -71,6 +70,7 @@ afterAll(async () => {
 
 async function fixture({ claim1 = 3_440_000, claim2 = 250_000, settle = true, combined = false, lateCatch = false, historical = false }: { claim1?: number; claim2?: number; settle?: boolean; combined?: boolean; lateCatch?: boolean; historical?: boolean } = {}) {
   const session = await issuePracticeSession(runtime), auth = await authenticatePracticeSession(runtime, session), digest = auth.digest;
+  const context = auth.context;
   const jobId = randomUUID(), quoteId = randomUUID(), quoteDraftId = randomUUID(), quoteRevisionId = randomUUID();
   const draftId = randomUUID(), revisionId = randomUUID(), scopeId = randomUUID(), lineId = randomUUID(), catchLineId = randomUUID();
   const scoped = practiceMaterialPool(runtime, digest), invoices = new PracticeInvoiceRepository(scoped);
@@ -92,21 +92,23 @@ async function fixture({ claim1 = 3_440_000, claim2 = 250_000, settle = true, co
       VALUES($1,$2,$3,$4,1,$5,4128000,'GBP','builder_attestation',$6,'Fictional customer','verbal',clock_timestamp())`, [randomUUID(), DEMO_TENANT_ID, jobId, quoteId, hash(quoteId), actor.membershipId]);
     await db.query("SELECT app.transition_job($1,$2,2,'live','switch_live',$3,3440000,'reference_fee_policy_v1',28200)", [DEMO_TENANT_ID, jobId, quoteId]);
     await db.query("INSERT INTO app.final_account_draft(id,tenant_id,job_id) VALUES($1,$2,$3)", [draftId, DEMO_TENANT_ID, jobId]);
+    let earlierRevision: string | null = null;
     if (lateCatch) {
-      const earlierRevision = randomUUID();
+      earlierRevision = randomUUID();
       await db.query(`INSERT INTO app.final_account_revision(id,tenant_id,job_id,final_account_draft_id,revision,source_hash,baseline_quote_version_id,currency,tax_policy_version,net_pence,tax_pence,total_pence,issue_blocked,findings,created_at)
         VALUES($1,$2,$3,$4,1,$5,$6,'GBP','candidate_m1_standard_v1',3360000,672000,4032000,false,'[]',clock_timestamp()-interval '1 day')`, [earlierRevision, DEMO_TENANT_ID, jobId, draftId, hash(earlierRevision), quoteId]);
       await db.query(`INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,description,net_pence,ordinal)
         VALUES($1,$2,$3,$4,'baseline',$5,$5,$6,'Fictional baseline before catch',3360000,1)`, [randomUUID(), DEMO_TENANT_ID, jobId, earlierRevision, scopeId, quoteRevisionId]);
     }
-    await db.query(`INSERT INTO app.final_account_revision(id,tenant_id,job_id,final_account_draft_id,revision,source_hash,baseline_quote_version_id,currency,tax_policy_version,net_pence,tax_pence,total_pence,issue_blocked,findings,created_at)
-      VALUES($1,$2,$3,$4,CASE WHEN $7 THEN 2 ELSE 1 END,$5,$6,'GBP','candidate_m1_standard_v1',3440000,688000,4128000,false,'[]',clock_timestamp()+CASE WHEN $7 THEN interval '1 day' ELSE interval '0 seconds' END)`, [revisionId, DEMO_TENANT_ID, jobId, draftId, hash(revisionId), quoteId, lateCatch]);
+    await db.query(`INSERT INTO app.final_account_revision(id,tenant_id,job_id,final_account_draft_id,revision,previous_revision_id,source_hash,baseline_quote_version_id,currency,tax_policy_version,net_pence,tax_pence,total_pence,issue_blocked,findings,created_at)
+      VALUES($1,$2,$3,$4,CASE WHEN $7 THEN 2 ELSE 1 END,$8,$5,$6,'GBP','candidate_m1_standard_v1',3440000,688000,4128000,false,'[]',clock_timestamp()+CASE WHEN $7 THEN interval '1 day' ELSE interval '0 seconds' END)`, [revisionId, DEMO_TENANT_ID, jobId, draftId, hash(revisionId), quoteId, lateCatch, earlierRevision]);
     await db.query(`INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,description,net_pence,ordinal)
       VALUES($1,$2,$3,$4,'baseline',$5,$5,$6,'Fictional baseline',3360000,1)`, [lineId, DEMO_TENANT_ID, jobId, revisionId, scopeId, quoteRevisionId]);
     const catchScope = randomUUID();
     await db.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')", [catchScope, DEMO_TENANT_ID, jobId]);
     await db.query(`INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,description,net_pence,ordinal)
       VALUES($1,$2,$3,$4,'baseline',$5,$5,$6,'Synthetic catch line',80000,2)`, [catchLineId, DEMO_TENANT_ID, jobId, revisionId, catchScope, quoteRevisionId]);
+    if (earlierRevision) await db.query("UPDATE app.final_account_draft SET revision=1,current_revision_id=$3 WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, draftId, earlierRevision]);
     await db.query("UPDATE app.final_account_draft SET revision=CASE WHEN $4 THEN 2 ELSE 1 END,current_revision_id=$3 WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, draftId, revisionId, lateCatch]);
     await db.query("COMMIT");
   } catch (error) { await db.query("ROLLBACK"); throw error; } finally { db.release(); }
@@ -155,18 +157,18 @@ async function fixture({ claim1 = 3_440_000, claim2 = 250_000, settle = true, co
     feedView = await feed.command(context, actor, digest, jobId, { version: "practice-feed-command.v1", action: "advance", commandId: randomUUID(), expectedRevision: feedView.revision, movement, step: "settled" });
     feedView = await feed.command(context, actor, digest, jobId, { version: "practice-feed-command.v1", action: "match_receipt", commandId: randomUUID(), expectedRevision: feedView.revision, movement, paymentId });
   }
-  return { jobId, digest, invoiceId: invoice.id, invoices, cases, packs, feed, feedView, scopeId, lineId, catchLineId, revisionId,
+  return { context, jobId, digest, invoiceId: invoice.id, invoices, cases, packs, feed, feedView, scopeId, lineId, catchLineId, revisionId,
     case1: views[0]!, case2: views[1]!, payment1: payments[0]!, payment2: payments[1]!, evidence1: evidenceIds[0]!, evidence2: evidenceIds[1]! };
 }
 
 type Fixture = Awaited<ReturnType<typeof fixture>>;
-const read = (f: Fixture) => repo().view(context, actor, f.digest, f.jobId);
+const read = (f: Fixture) => repo().view(f.context, actor, f.digest, f.jobId);
 async function allocate(f: Fixture, paymentId: string, grossPence: number, remittanceEvidenceId?: string) {
-  const current = (await f.cases.listForMember(context, f.jobId, actor)).find(c => c.id === f.case1.id)!;
+  const current = (await f.cases.listForMember(f.context, f.jobId, actor)).find(c => c.id === f.case1.id)!;
   const input = { version, action: "review", commandId: randomUUID(), caseId: current.id, paymentId, evidenceId: f.evidence1,
     expectedCaseRevision: current.revision, grossPence, ...(remittanceEvidenceId ? { remittanceEvidenceId } : {}) };
-  const view = await repo().command(context, actor, f.digest, f.jobId, input);
-  return repo().command(context, actor, f.digest, f.jobId, { ...input, action: "allocate", commandId: randomUUID(), approvalHash: view.review!.approvalHash });
+  const view = await repo().command(f.context, actor, f.digest, f.jobId, input);
+  return repo().command(f.context, actor, f.digest, f.jobId, { ...input, action: "allocate", commandId: randomUUID(), approvalHash: view.review!.approvalHash });
 }
 const total = (rows: readonly { net: { numerator: string; denominator: string } }[]) => serializeExactPence(sumExactPence(rows.map(row => parseExactPence(row.net))));
 function feeCheck(net: { numerator: string; denominator: string }, expected: number) {
@@ -301,17 +303,17 @@ it("DW7: post-lock remittance naming a later line is refused at upload, before a
 });
 
 async function reverse(f: Fixture, allocationId: string, grossPence: number, creditNoteId?: string, remittanceEvidenceId?: string) {
-  const current = (await f.cases.listForMember(context, f.jobId, actor)).find(c => c.id === f.case1.id)!;
+  const current = (await f.cases.listForMember(f.context, f.jobId, actor)).find(c => c.id === f.case1.id)!;
   const input = { version, action: "review_reverse", commandId: randomUUID(), allocationId,
     expectedCaseRevision: current.revision, grossPence, ...(creditNoteId ? { creditNoteId } : {}), ...(remittanceEvidenceId ? { remittanceEvidenceId } : {}) };
-  const view = await repo().command(context, actor, f.digest, f.jobId, input);
-  return repo().command(context, actor, f.digest, f.jobId, { ...input, action: "reverse", commandId: randomUUID(), approvalHash: view.review!.approvalHash });
+  const view = await repo().command(f.context, actor, f.digest, f.jobId, input);
+  return repo().command(f.context, actor, f.digest, f.jobId, { ...input, action: "reverse", commandId: randomUUID(), approvalHash: view.review!.approvalHash });
 }
 
 it("DW8: an unallocated partial refund reverses exact pro-rata amounts across the lines that receipt settled", async () => {
   const f = await fixture(), allocated = await allocate(f, f.payment1, 2400000), original = allocated.allocations[0]!;
   const originalRows = (await admin.query("SELECT row_to_json(t)::text AS bytes FROM app.receipt_line_allocation t WHERE tenant_id=$1 AND job_id=$2 ORDER BY id", [DEMO_TENANT_ID, f.jobId])).rows;
-  await f.invoices.reverseReceipt(context, { jobId: f.jobId, invoiceId: f.invoiceId, paymentId: f.payment1, actorMembershipId: actor.membershipId, commandId: randomUUID(), reason: "Synthetic partial allocation refund" });
+  await f.invoices.reverseReceipt(f.context, { jobId: f.jobId, invoiceId: f.invoiceId, paymentId: f.payment1, actorMembershipId: actor.membershipId, commandId: randomUUID(), reason: "Synthetic partial allocation refund" });
   const reversed = await reverse(f, original.id, 96000), catchReversals = reversed.lines.filter(row => row.lineId === f.catchLineId && row.reversesId !== null);
   expect(catchReversals).toHaveLength(1);
   expect(catchReversals[0]).toMatchObject({ rule: "pro_rata", net: { numerator: "-80000", denominator: "43" } });
@@ -334,10 +336,10 @@ it.each(["refund", "credit"] as const)("DW8 (historical, unlocked): an item-spec
   const original = view.allocations[0]!, source = await remittance(f, f.payment1, f.catchLineId, 51600);
   let creditNoteId: string | undefined;
   if (kind === "refund") {
-    await f.invoices.reverseReceipt(context, { jobId: f.jobId, invoiceId: f.invoiceId, paymentId: f.payment1, actorMembershipId: actor.membershipId, commandId: randomUUID(), reason: "Synthetic item-specific refund" });
+    await f.invoices.reverseReceipt(f.context, { jobId: f.jobId, invoiceId: f.invoiceId, paymentId: f.payment1, actorMembershipId: actor.membershipId, commandId: randomUUID(), reason: "Synthetic item-specific refund" });
   } else {
-    const credit = await f.invoices.previewCredit(context, { jobId: f.jobId, invoiceId: f.invoiceId, netPence: 43000, reason: "Synthetic named-line credit" });
-    creditNoteId = (await f.invoices.issueCredit(context, { jobId: f.jobId, invoiceId: f.invoiceId, actorMembershipId: actor.membershipId, commandId: randomUUID(), netPence: 43000, reason: "Synthetic named-line credit", previewHash: credit.previewHash })).creditNoteId;
+    const credit = await f.invoices.previewCredit(f.context, { jobId: f.jobId, invoiceId: f.invoiceId, netPence: 43000, reason: "Synthetic named-line credit" });
+    creditNoteId = (await f.invoices.issueCredit(f.context, { jobId: f.jobId, invoiceId: f.invoiceId, actorMembershipId: actor.membershipId, commandId: randomUUID(), netPence: 43000, reason: "Synthetic named-line credit", previewHash: credit.previewHash })).creditNoteId;
   }
   const reversed = await reverse(f, original.id, 51600, creditNoteId, source), rows = reversed.lines.filter(row => row.reversesId !== null);
   expect(rows).toHaveLength(1);

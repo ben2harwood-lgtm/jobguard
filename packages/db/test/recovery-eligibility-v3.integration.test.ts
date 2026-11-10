@@ -15,7 +15,7 @@ import * as mo4Proof from "./upgrade-proof-utils.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import type { TenantTransaction } from "../src/tenant-context.js";
 import { evaluateRecoveryEligibilityV3 } from "@jobguard/core";
-const ctx=testTenantContext(T), actor={membershipId:M,identityUserId:U};
+const ctx=testTenantContext(T, { membershipId: M }), actor={membershipId:M,identityUserId:U};
 let postgres:EmbeddedPostgres,admin:Pool,runtime:Pool,directory:string;
 const previousEnvironment=process.env.JOBGUARD_ENV;
 let legacy:unknown[];
@@ -84,7 +84,7 @@ beforeAll(async()=>{
  upgradeProof = { proof, ownRegistry, ownRows, controls, afterControls: await mo4Proof.proofDifferences(admin, proof) };
  await migrate(admin);await migrate(admin);
  await admin.query("CREATE ROLE ch7_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;GRANT jobguard_runtime TO ch7_login");runtime=new Pool({host:"127.0.0.1",port,database:"jobguard_synthetic_demo",user:"ch7_login",password:"synthetic"});
-});
+}, 240_000);
 afterAll(async()=>{if(previousEnvironment===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=previousEnvironment;await closeTestPools(runtime,admin);await postgres?.stop();if(directory)await rm(directory,{recursive:true,force:true});});
 async function fixture(type="withheld_customer_payment",before=false){
  const sessionId=await issuePracticeSession(runtime),auth=await authenticatePracticeSession(runtime,sessionId),jobId=randomUUID();
