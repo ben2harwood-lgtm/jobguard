@@ -1,0 +1,756 @@
+{
+  "migration": "0942_identity_linked_practice.sql",
+  "lp0": [
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "id": "a-identity-linked-practice",
+        "title": "Identity-linked fictional practice ownership",
+        "kind": "authority",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Fictional practice only. Fresh/upgrade PostgreSQL and independent exact-head RED check required."
+        },
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Fence parent, membership, credential and namespace lifecycle through commit.",
+          "LP-12": "Keep identity/control-plane rows private and canonical ownership behind protected binding."
+        },
+        "downstream": "Validate parent identity sessions and exact current owner membership, mint independent practice credentials, and reset only the current namespace. Namespace digests are not credentials.",
+        "sources": [
+          "packages/db/migrations/0942_identity_linked_practice.sql",
+          "packages/db/src/blank-practice-company.ts",
+          "packages/db/src/practice-session.ts"
+        ],
+        "tests": [
+          "packages/db/test/real-wayin-linked-practice.integration.test.ts",
+          "packages/db/test/real-wayin-linked-practice-races.integration.test.ts"
+        ],
+        "gaps": [
+          "Fictional practice only. Fresh/upgrade PostgreSQL and independent exact-head RED check required."
+        ],
+        "path": "ap-identity-linked-practice"
+      }
+    },
+    {
+      "section": "authorityPaths",
+      "before": null,
+      "after": {
+        "title": "Identity-linked fictional practice ownership",
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Fence parent, membership, credential and namespace lifecycle through commit.",
+          "LP-12": "Keep identity/control-plane rows private and canonical ownership behind protected binding."
+        },
+        "sources": [
+          "packages/db/migrations/0942_identity_linked_practice.sql",
+          "packages/db/src/blank-practice-company.ts",
+          "packages/db/src/practice-session.ts"
+        ],
+        "tests": [
+          "packages/db/test/real-wayin-linked-practice.integration.test.ts",
+          "packages/db/test/real-wayin-linked-practice-races.integration.test.ts"
+        ],
+        "gaps": [
+          "Fictional practice only. Fresh/upgrade PostgreSQL and independent exact-head RED check required."
+        ],
+        "id": "ap-identity-linked-practice",
+        "description": "Validate parent identity sessions and exact current owner membership, mint independent practice credentials, and reset only the current namespace. Namespace digests are not credentials."
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.linked_practice_parent(text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "identity.sso_session_memberships",
+          "identity.sso_session_scope"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.linked_practice_authority(text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.linked_practice_parent"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.linked_practice_bound_owner(text,uuid)",
+        "owner": "jobguard_binding_owner",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_migration"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.lp6_bound_request"
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.linked_practice_bound_owner(text,uuid)|jobguard_binding_owner",
+        "group": "a-identity-linked-practice"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.linked_practice_bound_owner(text,uuid)|jobguard_migration|EXECUTE|-",
+        "group": "a-identity-linked-practice"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.anonymous_practice_authority(text,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.authenticate_practice_session(text,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "9d652d997dd248aaf132960510a64a1a3289762bdc30687c644fde0df2ae4671",
+        "staticWrites": [],
+        "staticCalls": []
+      },
+      "after": {
+        "identity": "function:app.authenticate_practice_session(text,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "ca6baa09b50e75dc3f71210e64bfa2c30a1d7794ae28a667e2ca082db7663b63",
+        "staticWrites": [],
+        "staticCalls": [
+          "app.anonymous_practice_authority",
+          "app.linked_practice_authority",
+          "app.linked_practice_bound_owner"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.practice_owner_digest(text,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.authenticate_practice_session"
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.practice_owner_digest(text,uuid)|jobguard_migration",
+        "group": "a-identity-linked-practice"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.practice_owner_digest(text,uuid)|jobguard_runtime|EXECUTE|-",
+        "group": "a-identity-linked-practice"
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.lp6_session_authority(text,text,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_binding_owner"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.authenticate_practice_session",
+          "app.contractor_practice_home_deadline",
+          "app.contractor_practice_session_digest",
+          "app.contractor_session",
+          "identity.sso_session_memberships"
+        ]
+      },
+      "after": {
+        "identity": "function:app.lp6_session_authority(text,text,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_binding_owner"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.anonymous_practice_authority",
+          "app.authenticate_practice_session",
+          "app.contractor_practice_home_deadline",
+          "app.contractor_practice_session_digest",
+          "app.contractor_session",
+          "app.linked_practice_authority",
+          "identity.sso_session_memberships"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:identity.enter_linked_practice(text,text,jsonb,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_identity"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [
+          "control_plane.blank_practice_session",
+          "control_plane.identity_practice_company",
+          "control_plane.identity_practice_credential",
+          "control_plane.identity_practice_namespace",
+          "control_plane.practice_session"
+        ],
+        "staticCalls": [
+          "app.linked_practice_authority",
+          "app.linked_practice_parent"
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:identity.enter_linked_practice(text,text,jsonb,text)|jobguard_migration",
+        "group": "a-identity-linked-practice"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:identity.enter_linked_practice(text,text,jsonb,text)|jobguard_identity|EXECUTE|-",
+        "group": "a-identity-linked-practice"
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.is_blank_practice_company(text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.authenticate_practice_session"
+        ]
+      },
+      "after": {
+        "identity": "function:app.is_blank_practice_company(text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.authenticate_practice_session"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.seed_saved_v1_sample()",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "f893705b302b13c4d8a2514c4afad0b04eee2cc6799c3264be30e1636620350d",
+        "staticWrites": [
+          "app.capture_source",
+          "app.job",
+          "app.job_record_proposal",
+          "app.proposal_line",
+          "app.scope_identity"
+        ],
+        "staticCalls": []
+      },
+      "after": {
+        "identity": "function:app.seed_saved_v1_sample()",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "53e0deeeb1d338d1dfaf1b970fe6a4c5480886df5c248781cec90a7419a04eca",
+        "staticWrites": [
+          "app.capture_source",
+          "app.job",
+          "app.job_record_proposal",
+          "app.proposal_line",
+          "app.scope_identity"
+        ],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.issue_practice_session(text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.job",
+          "app.lp_job_insert_permit",
+          "control_plane.practice_session"
+        ],
+        "staticCalls": [
+          "app.lp_job_insert_shape"
+        ]
+      },
+      "after": {
+        "identity": "function:app.issue_practice_session(text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.job",
+          "app.lp_job_insert_permit",
+          "control_plane.practice_session"
+        ],
+        "staticCalls": [
+          "app.lp_job_insert_shape"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.start_blank_practice_company(text,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "control_plane.blank_practice_session",
+          "control_plane.practice_session"
+        ],
+        "staticCalls": [
+          "app.is_blank_practice_company"
+        ]
+      },
+      "after": {
+        "identity": "function:app.start_blank_practice_company(text,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "control_plane.blank_practice_session",
+          "control_plane.practice_session"
+        ],
+        "staticCalls": [
+          "app.is_blank_practice_company"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.start_blank_practice_company_v2(text,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "control_plane.blank_practice_session",
+          "control_plane.practice_session"
+        ],
+        "staticCalls": [
+          "app.is_blank_practice_company"
+        ]
+      },
+      "after": {
+        "identity": "function:app.start_blank_practice_company_v2(text,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "control_plane.blank_practice_session",
+          "control_plane.practice_session"
+        ],
+        "staticCalls": [
+          "app.is_blank_practice_company"
+        ]
+      }
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "linked_practice_parent",
+        "args": "d text",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "linked_practice_authority",
+        "args": "d text",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "linked_practice_bound_owner",
+        "args": "d text, t uuid",
+        "proowner": "jobguard_binding_owner",
+        "proacl": "{jobguard_binding_owner=X/jobguard_binding_owner,jobguard_migration=X/jobguard_binding_owner}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "anonymous_practice_authority",
+        "args": "digest text, requested_tenant uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "practice_owner_digest",
+        "args": "d text, t uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "identity",
+        "proname": "enter_linked_practice",
+        "args": "parent_digest text, new_digest text, command jsonb, current_digest text",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_identity=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "control_plane.identity_practice_namespace",
+        "data": []
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "control_plane",
+        "relname": "identity_practice_namespace",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "control_plane",
+        "relname": "identity_practice_namespace_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "control_plane",
+        "relname": "identity_practice_namespace_identity_tenant_id_owner_digest_key",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "control_plane.identity_practice_company",
+        "data": []
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "control_plane",
+        "relname": "identity_practice_company",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "control_plane",
+        "relname": "identity_practice_company_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "control_plane.identity_practice_credential",
+        "data": []
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "control_plane",
+        "relname": "identity_practice_credential",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "control_plane",
+        "relname": "identity_practice_credential_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    }
+  ],
+  "tenancy": []
+}
