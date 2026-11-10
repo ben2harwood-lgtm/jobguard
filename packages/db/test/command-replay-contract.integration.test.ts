@@ -1,5 +1,3 @@
-import { withTenant } from "../src/tenant-context.js";
-import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { testActorContext } from "./tenant-context-test-utils.js";
 import { createHash, randomUUID } from "node:crypto";
 import { Pool } from "pg";
@@ -177,6 +175,7 @@ it(`${clientReplayCase.key}: client decision replays the first result and confli
       .toEqual([{ session_user: "jobguard_identity", current_user: "jobguard_identity", app_usage: false }]);
     const w = await chainWorld(c), repo = new ExtraApprovalRepository(c.runtime), ctx = await w.ctx;
     const actor = w.members.client_approver.member.membershipId;
+    await identity.query("SELECT set_config('app.tenant_id',$1,false)", [w.p.tenantId]);
     async function client() {
       const s = await submitted(c, w, 150000);
       await repo.approveExtraStep(await testActorContext(c.admin, ctx, w.members.supervisor.member), w.members.supervisor.member, approveInput(s, 0));
@@ -190,11 +189,11 @@ it(`${clientReplayCase.key}: client decision replays the first result and confli
       await identity!.query("SELECT identity.extra_customer_use($1,$2,$3,$4,$5,'redeem')", [w.p.tenantId, s.jobId, actor, signin, digest]);
       const input = { version: "extra-customer.v1", action: "decide", jobId: s.jobId, requestId: s.requestId,
         commandId: randomUUID(), revisionHash: s.hash, netPence: s.net, decision: "approve" };
-      const clientContext=await testBoundTenantContext(c.admin,w.p.tenantId,actor);
-      const run = (command = input) => withTenant(c.admin,clientContext,async db=>{
-        await db.$client.query("SET LOCAL ROLE jobguard_identity");
-        return (await db.$client.query("SELECT identity.extra_customer_approval($1,$2,$3,$4,$5::jsonb) result",[w.p.tenantId,s.jobId,actor,digest,command])).rows[0].result;
-      });
+      // Match the production identity login: the decision routine creates its own request binding.
+      const run = async (command = input) => (await identity!.query(
+        "SELECT identity.extra_customer_approval($1,$2,$3,$4,$5::jsonb) result",
+        [w.p.tenantId,s.jobId,actor,digest,command],
+      )).rows[0].result;
       return { s, input, run };
     }
     const a = await client(), b = await client(), first = await a.run();
