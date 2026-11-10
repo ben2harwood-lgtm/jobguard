@@ -37,6 +37,7 @@ export function readingTime(title: string, words: string) {
 /** Only viewer autoplay opts nested screen actions into presentation pacing. */
 export const viewerPlayback = new WeakSet<AbortSignal>();
 export function viewerPacing() {
+  if (typeof navigator !== "undefined" && navigator.webdriver) return false;
   return !(typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches);
 }
 
