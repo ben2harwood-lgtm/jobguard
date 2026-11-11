@@ -113,15 +113,32 @@ export async function publishEmptyCompletion(f: Pick<LockFixture,'shadow'|'admin
  return publishFixtureCompletion(f.shadow,f.admin,a.tenantId,a.jobId);
 }
 /** A fixture established before 0147 remains historical; it deliberately uses the old issue path. */
+/** Tests only: 1401 lets nobody accept for a never-imported, firm-less job in the shared practice
+ * tenant. Such fixture jobs use privileged unattributed acceptance, the pre-1401 history shape.
+ * Returns false (and writes nothing) when the job has a firm or 1401 is not installed. */
+export async function unattributedTermsHistory(admin: Pool, tenantId: string, jobId: string, actorMembershipId: string) {
+ if(tenantId!=="11111111-1111-4111-8111-111111111111")return false;
+ if(!(await admin.query("SELECT to_regprocedure('app.final_check_job_scope(uuid,uuid)') IS NOT NULL installed")).rows[0].installed)return false;
+ if((await asFixtureTenant(admin,tenantId,db=>db.query("SELECT app.final_check_job_scope($1,$2) digest",[tenantId,jobId]))).rows[0].digest!==null)return false;
+ if((await admin.query("SELECT 1 FROM app.final_check_terms_acceptance WHERE tenant_id=$1 AND practice_session_digest IS NULL",[tenantId])).rowCount)return true;
+ await asFixtureTenant(admin,tenantId,async db=>{
+  await db.query("SET LOCAL session_replication_role='replica'");
+  await db.query("INSERT INTO app.final_check_terms_acceptance(tenant_id,id,terms_version,accepting_membership_id,accepted_at,command_id,audit_event_id) VALUES($1,$2,'synthetic_final_check_terms.v1',$3,clock_timestamp(),$4,$5)",[tenantId,randomUUID(),actorMembershipId,randomUUID(),randomUUID()]);
+ });
+ return true;
+}
 export async function prepareInvoicePrerequisites(admin: Pool, runtime: Pool, tenantId: string, jobId: string, actorMembershipId: string, revisionId: string) {
  if(!(await admin.query("SELECT to_regclass('app.shadow_final_check_completion') installed")).rows[0].installed) return;
  // Legacy fixtures transition a draft directly, without inserting job_activation (SH-1's track binding).
  // Establish the synthetic small-builder premise explicitly; never rewrite an existing track.
  await asFixtureTenant(admin,tenantId,db=>db.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) SELECT tenant_id,id,'small_builder','synthetic_demo','legacy_synthetic_live_fixture' FROM app.job WHERE tenant_id=$1 AND id=$2 AND status IN ('live','invoiced','paid') ON CONFLICT(tenant_id,job_id) DO NOTHING",[tenantId,jobId]));
- const digest=(await admin.query("SELECT practice_session_digest FROM app.job WHERE tenant_id=$1 AND id=$2",[tenantId,jobId])).rows[0].practice_session_digest;
+ const own=(await admin.query("SELECT practice_session_digest FROM app.job WHERE tenant_id=$1 AND id=$2",[tenantId,jobId])).rows[0].practice_session_digest;
+ // 1401: an imported child without its own digest acts through the firm that owns its ancestry.
+ const digest=own ?? ((await admin.query("SELECT to_regprocedure('app.final_check_job_scope(uuid,uuid)') IS NOT NULL installed")).rows[0].installed
+  ? (await asFixtureTenant(admin,tenantId,db=>db.query("SELECT app.final_check_job_scope($1,$2) digest",[tenantId,jobId]))).rows[0].digest : null);
  const member=(await admin.query("SELECT identity_user_id FROM app.membership WHERE tenant_id=$1 AND id=$2",[tenantId,actorMembershipId])).rows[0];
  const context=digest ? verifiedTenantContextFromMembership({identityUserId:member.identity_user_id,tenantId,membershipId:actorMembershipId} as Parameters<typeof verifiedTenantContextFromMembership>[0],{kind:"practice",credential:digest}) : await testBoundTenantContext(admin,tenantId,actorMembershipId),repo=new FinalAccountLockRepository(digest?practiceMaterialPool(runtime,digest):runtime);
- await repo.acceptTerms(context,{actorMembershipId,commandId:randomUUID(),termsVersion:'synthetic_final_check_terms.v1'});
+ if(!(await unattributedTermsHistory(admin,tenantId,jobId,actorMembershipId)))await repo.acceptTerms(context,{actorMembershipId,commandId:randomUUID(),termsVersion:'synthetic_final_check_terms.v1'});
  const scope=(await admin.query("SELECT DISTINCT scope_item_id FROM app.final_account_line WHERE tenant_id=$1 AND job_id=$2 AND final_account_revision_id=$3 AND line_kind='baseline'",[tenantId,jobId,revisionId])).rows;
  for(const item of scope) await repo.disposition(context,{jobId,actorMembershipId,commandId:randomUUID(),scopeItemId:item.scope_item_id,disposition:'done'});
  const revision=(await admin.query("SELECT revision FROM app.final_account_revision WHERE tenant_id=$1 AND job_id=$2 AND id=$3",[tenantId,jobId,revisionId])).rows[0].revision;

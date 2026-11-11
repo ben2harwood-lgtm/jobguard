@@ -71,8 +71,8 @@ BEGIN
    JOIN app.job parent ON parent.tenant_id=t AND parent.id=e.src
  ) SELECT array_agg(DISTINCT jb.practice_session_digest::text) FILTER(WHERE jb.practice_session_digest IS NOT NULL),count(*)
  INTO scopes,ancestors FROM parents p JOIN app.job jb ON jb.tenant_id=t AND jb.id=p.id;
- SELECT provenance='imported' INTO imported FROM app.job WHERE tenant_id=t AND id=j;
- IF scopes IS NULL AND ancestors=1 AND imported IS FALSE THEN RETURN NULL; END IF;
+ SELECT coalesce(provenance='imported',false) INTO imported FROM app.job WHERE tenant_id=t AND id=j;
+ IF scopes IS NULL AND ancestors=1 AND NOT imported THEN RETURN NULL; END IF;
  IF cardinality(scopes) IS DISTINCT FROM 1 THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
  RETURN scopes[1];
 END $$;
@@ -81,8 +81,9 @@ REVOKE ALL ON FUNCTION app.final_check_job_scope(uuid,uuid) FROM PUBLIC,jobguard
 
 CREATE FUNCTION app.final_check_job_terms(t uuid,j uuid,v text,cutoff timestamptz DEFAULT 'infinity') RETURNS boolean
  LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,app AS $$
-DECLARE d text:=app.final_check_job_scope(t,j);
+DECLARE d text;
 BEGIN
+ d:=app.final_check_job_scope(t,j);
  RETURN EXISTS(SELECT 1 FROM app.final_check_terms_acceptance a WHERE a.tenant_id=t AND a.terms_version=v
   AND a.practice_session_digest IS NOT DISTINCT FROM d AND a.accepted_at<=cutoff)
  -- A job locked before this migration keeps the unattributed acceptance it was locked
@@ -91,6 +92,8 @@ BEGIN
    ON a.tenant_id=l.tenant_id AND a.terms_version=v AND a.practice_session_digest IS NULL
     AND a.accepted_at<=l.locked_at AND a.accepted_at<=cutoff
    WHERE l.tenant_id=t AND l.job_id=j);
+-- An ambiguous or missing firm is never accepted; callers keep their own refusal codes.
+EXCEPTION WHEN insufficient_privilege THEN RETURN false;
 END $$;
 ALTER FUNCTION app.final_check_job_terms(uuid,uuid,text,timestamptz) OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.final_check_job_terms(uuid,uuid,text,timestamptz) FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure,jobguard_shadow,jobguard_shadow_emergency_access;
@@ -149,8 +152,10 @@ END $$;
 
 -- Full latest bodies (main through 0728: 0237/0238/0306/0380/0632/0667/0690/0698 and
 -- every later guard), changed only to check the job's own firm acceptance and, for
--- lock_final_account, to refuse an unscoped request on a firm's job before replay
--- (0667's owner guard, kept below, refuses a different firm's bound scope).
+-- lock_final_account, to refuse a firm's job before replay unless the request is bound
+-- as that firm or carries a checked material scope (0667's owner guard, kept below,
+-- then refuses a different firm). A firm-scoped request also checks its terms first;
+-- other requests keep main's order, where the job's own firm terms are checked.
 -- CREATE OR REPLACE keeps each owner and ACL unchanged.
 CREATE OR REPLACE FUNCTION app.lock_final_account(p_tenant uuid, p_job uuid, p_actor uuid, p_command uuid, p_revision uuid, p_expected integer, p_declaration text)
  RETURNS app.final_account_lock
@@ -163,15 +168,16 @@ DECLARE request_digest text; prior app.command_receipt; existing_lock app.final_
 BEGIN
  PERFORM app.final_lock_require_owner(p_tenant,p_actor);
  IF p_tenant='11111111-1111-4111-8111-111111111111'::uuid AND
-    app.final_check_request_scope(p_tenant) IS NULL AND app.final_check_job_scope(p_tenant,p_job) IS NOT NULL THEN
+    app.final_check_request_scope(p_tenant) IS NULL AND app.final_check_job_scope(p_tenant,p_job) IS NOT NULL AND
+    NOT app.final_check_bound_practice(p_tenant,app.final_check_job_scope(p_tenant,p_job)) THEN
     RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
-   IF p_tenant='11111111-1111-4111-8111-111111111111'::uuid AND
-    NOT app.final_check_job_terms(p_tenant,p_job,'synthetic_final_check_terms.v1') THEN
-    RAISE EXCEPTION 'DISCLOSURE_TERMS_NOT_ACCEPTED'; END IF;
  IF nullif(current_setting('app.practice_material_digest',true),'') IS NOT NULL
   AND NOT app.final_check_practice_owns_job(p_tenant,p_job,nullif(current_setting('app.practice_material_digest',true),'')) THEN
   RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501';
  END IF;
+ IF p_tenant='11111111-1111-4111-8111-111111111111'::uuid AND app.final_check_request_scope(p_tenant) IS NOT NULL AND
+    NOT app.final_check_job_terms(p_tenant,p_job,'synthetic_final_check_terms.v1') THEN
+    RAISE EXCEPTION 'DISCLOSURE_TERMS_NOT_ACCEPTED'; END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended('final-review-command:'||p_tenant::text||':'||p_command::text,0));
  PERFORM app.final_lock_require_owner(p_tenant,p_actor);
  -- Always the job first, as in SV-2 reveal/disclosure; audit allocation is last.

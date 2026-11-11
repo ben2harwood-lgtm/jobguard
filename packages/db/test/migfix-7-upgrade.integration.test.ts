@@ -95,10 +95,15 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   expect(authorityChanges).toHaveLength(3); expect(attributionChanges).toHaveLength(1);
   const practiceOwner = await readFile(new URL("../migrations/0667_final_check_practice_owner_check.sql", import.meta.url), "utf8");
   const lockAnchor = "BEGIN\n PERFORM app.final_lock_require_owner(p_tenant,p_actor);", lockGuard = "\n" + practiceOwner.split("$guard$")[1]!;
-  const perFirm = await readFile(new URL("../migrations/1401_per_firm_final_check_terms.sql", import.meta.url), "utf8");
-  // 1401 keeps 0667's guard text verbatim, right after the first owner check and its own unscoped-request refusal.
-  expect(perFirm.split("FUNCTION app.lock_final_account(")[1]!.split("AS $$")[1]!.split("$$;")[0]!).toContain(lockGuard);
-  expect(perFirm.split("FUNCTION app.lock_final_account(")[1]!.split("AS $$")[1]!.split("$$;")[0]!.split(lockAnchor)).toHaveLength(2);
+  // 1401's full lock_final_account body (pinned exactly below) keeps 0667's guard verbatim in the
+  // INSTALLED source, right after the first owner check and 1401's own scope refusal.
+  const installedLock = replayRoutines.filter(r => r.nspname === "app" && r.proname === "lock_final_account");
+  expect(installedLock).toHaveLength(1);
+  const lockSource = installedLock[0]!.definition.split("$function$")[1] as string;
+  expect(lockSource.split(lockAnchor)).toHaveLength(2);
+  const afterOwner = lockSource.split(lockAnchor)[1]!, scopeEnd = afterOwner.indexOf("END IF;") + "END IF;".length;
+  expect(afterOwner.slice(0, scopeEnd)).toContain("app.final_check_bound_practice(p_tenant,app.final_check_job_scope(p_tenant,p_job))");
+  expect(afterOwner.slice(scopeEnd).startsWith(lockGuard)).toBe(true);
   const patches = new Map([
     ["app.xa_issue_link(p_job uuid, p_request uuid, p_command uuid, p_actor uuid, p_link uuid, p_approver uuid, p_recipient text, p_token_hash text, p_expires_at timestamp with time zone, p_authorization uuid, p_outbox uuid)", authorityChanges.slice(0, 2)],
     ["app.northside_capture_action()", attributionChanges],

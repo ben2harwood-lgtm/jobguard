@@ -4,6 +4,7 @@ import { JobImportV3Repository } from "../src/job-import-v3-repository.js";
 import { FinalAccountLockRepository } from "../src/final-account-lock-repository.js";
 import { FinalAccountCommandService } from "../src/final-account-repository.js";
 import { withTenant } from "../src/tenant-context.js";
+import { practiceMaterialPool } from "../src/practice-session.js";
 import { seedWorkPractice } from "./job-work-state-fixtures.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { createImportFixture, closeWorkFixture, freshIntent, importState, type ImportFixture } from "./job-import-v3-fixtures.js";
@@ -42,7 +43,10 @@ describe("CH-5 positive invoiced import — PostgreSQL CI", () => {
     // No new fee, invoice, ledger payment, quote acceptance, or customer lock was fabricated.
     for (const table of ["customer_invoice", "synthetic_obligation", "quote_acceptance", "final_account_lock", "recovery_fee_journal"])
       expect((await f.admin.query(`SELECT count(*)::int n FROM app.${table} WHERE tenant_id=$1 AND job_id=$2`, [auth.context.tenantId, a.jobId])).rows[0].n).toBe(0);
-    await expect(new FinalAccountLockRepository(f.runtime).lock(auth.context, { jobId: String(a.jobId), actorMembershipId: auth.membershipId,
+    // 1401: the importing firm accepts Final Check terms and locks through its own practice scope.
+    const firmLocks = new FinalAccountLockRepository(practiceMaterialPool(f.runtime, auth.digest));
+    await firmLocks.acceptTerms(auth.practiceContext, { actorMembershipId: auth.membershipId, commandId: randomUUID(), termsVersion: "synthetic_final_check_terms.v1" });
+    await expect(firmLocks.lock(auth.practiceContext, { jobId: String(a.jobId), actorMembershipId: auth.membershipId,
       commandId: randomUUID(), finalAccountRevisionId: String(a.baselineId), expectedRevision: 1,
       declarationVersion: "final_account_declaration.v1" })).rejects.toMatchObject({ code: "STALE_REVISION" });
     await expect(new FinalAccountCommandService(f.runtime).assemble(auth.context, { version: "final-account.assemble.v1", commandId: randomUUID(),

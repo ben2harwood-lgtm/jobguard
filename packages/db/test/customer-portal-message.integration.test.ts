@@ -89,7 +89,7 @@ describe("MON-5 customer messages through checked SV-7A",()=>{
   const before=await f.repository.read(a.context,w.j,a.digest,"customer_message");
   const reader=new ShadowObservationReader(f.runtime,new FixtureObservationSources([])),sink=new ShadowDetectionRepository(shadow);
   const worker=new ShadowDetectionWorker({assertTermsRelation:()=>reader.assertTermsRelation(),hasAcceptedTerms:(c,j)=>reader.hasAcceptedTerms(c,j),read:(c,r)=>reader.read(c,r),propose:async()=>({proposals:[]}),persist:(c,r)=>sink.persist(c,r)},"synthetic_demo",()=>new Date().toISOString());
-  await withTenant(practiceMaterialPool(f.runtime,a.digest),a.context,db=>db.$client.query("SELECT app.accept_final_check_terms($1,$2,$3,$4)",[w.t,a.membershipId,randomUUID(),"synthetic_final_check_terms.v1"]));
+  await withTenant(practiceMaterialPool(f.runtime,a.digest),a.practiceContext,db=>db.$client.query("SELECT app.accept_final_check_terms($1,$2,$3,$4)",[w.t,a.membershipId,randomUUID(),"synthetic_final_check_terms.v1"]));
   const task={version:"shadow-detection-task.v1",tenantId:w.t,jobId:w.j};await worker.start();await worker.execute(verifiedTenantContextForQueuedJob(w.t),task);
   expect((await f.admin.query("SELECT state FROM app.shadow_commercial_signal WHERE tenant_id=$1 AND job_id=$2 AND coalesced_into_signal_id IS NULL",[w.t,w.j])).rows).toEqual([{state:"held_for_final_check"}]);
   expect(await send(w,raw)).toEqual(saved);expect(await f.repository.read(a.context,w.j,a.digest,"customer_message")).toEqual(before);

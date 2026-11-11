@@ -299,6 +299,7 @@
         ],
         "staticCalls": [
           "app.append_final_lock_audit",
+          "app.final_check_bound_practice",
           "app.final_check_job_scope",
           "app.final_check_job_terms",
           "app.final_check_practice_owns_job",

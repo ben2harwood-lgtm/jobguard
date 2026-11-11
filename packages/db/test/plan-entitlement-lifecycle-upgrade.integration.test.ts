@@ -262,13 +262,21 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
       const owner = await readFile(new URL("../migrations/0667_final_check_practice_owner_check.sql", import.meta.url), "utf8");
       const anchor = "BEGIN\n PERFORM app.final_lock_require_owner(p_tenant,p_actor);";
       expect(prior.definition?.split(anchor)).toHaveLength(2);
-      // 1401 then re-creates the full latest body; 0667's guard stays verbatim after the first owner check.
+      // 1401 then re-creates the full latest body. The INSTALLED definition must equal the
+      // predecessor definition with exactly that body, and 0667's guard must stay verbatim in
+      // the installed source, right after the first owner check and 1401's scope refusal.
       const perFirm = await readFile(new URL("../migrations/1401_per_firm_final_check_terms.sql", import.meta.url), "utf8");
       const body = perFirm.split("CREATE OR REPLACE FUNCTION app.lock_final_account(")[1]!.split("AS $$")[1]!.split("$$;")[0]!;
-      expect(body).toContain(anchor);
-      expect(body).toContain("\n" + owner.split("$guard$")[1]!);
-      expect(current?.definition?.split("$function$")[1]).toBe(body);
-      expect(current?.source).toBe(body);
+      const parts = prior.definition!.split("$function$"); parts[1] = body;
+      const expectedDefinition = parts.join("$function$");
+      expect(current?.definition).toBe(expectedDefinition);
+      expect(current?.source).toBe(expectedDefinition.split("$function$")[1]);
+      const installed = current!.source!, guard = owner.split("$guard$")[1]!;
+      expect(installed.split(anchor)).toHaveLength(2);
+      const afterOwner = installed.split(anchor)[1]!, scopeEnd = afterOwner.indexOf("END IF;") + "END IF;".length;
+      expect(afterOwner.slice(0, scopeEnd)).toContain("app.final_check_bound_practice(p_tenant,app.final_check_job_scope(p_tenant,p_job))");
+      expect(afterOwner.slice(scopeEnd).startsWith("\n" + guard)).toBe(true);
+      expect(installed.split(guard)).toHaveLength(2);
       continue;
     }
     if (prior.nspname === "app" && prior.proname === "final_check_require_invoice_actor" && prior.args === "p_tenant uuid, p_job uuid, p_actor uuid") {

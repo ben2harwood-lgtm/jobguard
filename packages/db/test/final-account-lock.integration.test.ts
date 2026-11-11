@@ -79,10 +79,12 @@ export async function prepareLock(f: LockFixture, a: Awaited<ReturnType<typeof s
  if(digest){
   const principal=(await f.runtime.query("SELECT * FROM app.authenticate_practice_session($1,$2)",[digest,a.tenantId])).rows[0];
   a.context=verifiedTenantContextFromMembership({tenantId:a.tenantId,membershipId:principal.membership_id,identityUserId:principal.identity_user_id} as AuthenticatedMembership,{kind:"practice",credential:digest});
+  // The bound practice session acts as its own member; lock with that same member.
+  a.input={...a.input,actorMembershipId:principal.membership_id};
  }
  const repo = new FinalAccountLockRepository(digest?practiceMaterialPool(f.runtime,digest):f.runtime);
- await repo.acceptTerms(a.context, { actorMembershipId: LOCK_OWNER, commandId: randomUUID(), termsVersion: "synthetic_final_check_terms.v1" });
- await repo.disposition(a.context, { jobId: a.jobId, actorMembershipId: LOCK_OWNER, commandId: randomUUID(), scopeItemId: a.scopeItemId, disposition: "done" });
+ await repo.acceptTerms(a.context, { actorMembershipId: a.input.actorMembershipId, commandId: randomUUID(), termsVersion: "synthetic_final_check_terms.v1" });
+ await repo.disposition(a.context, { jobId: a.jobId, actorMembershipId: a.input.actorMembershipId, commandId: randomUUID(), scopeItemId: a.scopeItemId, disposition: "done" });
  return repo;
 }
 export async function addFixtureCapture(f: LockFixture, a: CaptureAccount, net: number | null, review = false) {
