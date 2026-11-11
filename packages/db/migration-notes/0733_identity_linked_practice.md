@@ -1,4 +1,4 @@
-# 0942 — identity-linked fictional practice
+# 0733 — identity-linked fictional practice
 
 Piece `real-wayin-linked-practice`, RED (sessions, tenancy, immutable ownership).
 Base inspected: `ae125e625` on `codex/sandbox/real-wayin-linked-practice`; no stacked branches.
@@ -56,7 +56,7 @@ only this piece’s marker guards. Existing owners, grants and signatures remain
 unchanged. The original pg_get_functiondef overlays were replaced in repair 2. The anonymous
 authority body is retained privately to keep canonical-owner checks independent of
 binding validation. The TypeScript authentication query retains an undefined-function
-fallback for supported pre-0942 anonymous upgrade fixtures. Existing non-null
+fallback for supported pre-0733 anonymous upgrade fixtures. Existing non-null
 authentication and sample-trigger fingerprints remain non-null in the proof.
 
 Forward fix only. Do not remove the association tables, clear ownership or revive
@@ -92,7 +92,7 @@ Not run here (sandbox cannot start PostgreSQL or bind localhost):
 - `pnpm --filter @jobguard/web test:e2e --workers=1 --project=mobile-360 --project=desktop` (anonymous 390px compatibility belongs to the unchanged entry journey).
 
 The named regression is included, with an upgrade assertion that entry is absent
-before 0942, but failing-before/passing-after and all lifecycle/race/commercial
+before 0733, but failing-before/passing-after and all lifecycle/race/commercial
 results still require actual PostgreSQL evidence. The independent RED checker must
 run these on the router's exact committed head. No self-review or merge occurred.
 
@@ -116,7 +116,7 @@ membership refusal and all eight lock races remain collected for CI execution.
 
 Registered the three new control-plane tables as empty in later-empty-tables.ts
 (used by migfix-7 and plan-entitlement upgrades) and extra-proceed's replay list.
-The 0942 proof already contains all three exact `rows` additions with `before:
+The 0733 proof already contains all three exact `rows` additions with `before:
 null` and `data: []`; those existing proof rows are retained unchanged.
 
 Local checks, using the installed binaries without package downloads:
@@ -135,7 +135,7 @@ The referenced coordinator precheck file was absent from this checkout; diagnosi
 used the supplied failure report and inspected source/callers/tests.
 
 LATER / SIMPLICITY (initial inspection):
-`packages/db/migrations/0942_identity_linked_practice.sql`, legacy routine patch
+`packages/db/migrations/0733_identity_linked_practice.sql`, legacy routine patch
 loop: replace the three body overlays with explicit latest routine definitions
 in a separate focused change. This would make guard placement reviewable without
 depending on string positions. Deferred optional work to keep this repair focused;
@@ -146,7 +146,7 @@ it does not block the fixture and upgrade-list corrections.
 
 READY for router commit, NOPR; RED (sign-in/sessions). PostgreSQL was not run.
 
-0942 now recreates `seed_saved_v1_sample`, `issue_practice_session`,
+0733 now recreates `seed_saved_v1_sample`, `issue_practice_session`,
 `start_blank_practice_company` and `start_blank_practice_company_v2` with complete
 CREATE OR REPLACE statements. Their source migrations (0109, 0356, 0657, 0687)
 match origin/main byte-for-byte at 98c839494. A source-only comparison reconstructed
@@ -156,7 +156,7 @@ guard placement is explicit and no longer depends on runtime string patching.
 
 Both migfix-7 and plan-entitlement upgrade tests pin those four routines plus
 `authenticate_practice_session`, `lp6_session_authority` and
-`is_blank_practice_company` to 0942. Removed the stale 0657/0658 pins and the
+`is_blank_practice_company` to 0733. Removed the stale 0657/0658 pins and the
 plan-entitlement special case that still compared the LP-6 predecessor header/body.
 Existing proof replay still checks complete routine privilege/security metadata.
 The existing replacement parser ignores DEFAULT clauses when matching exact
@@ -191,3 +191,61 @@ run here: this sandbox cannot start PostgreSQL or bind localhost. CI after the
 router pushes must execute the linked journey/races, migfix-7 and plan-entitlement
 upgrades, and the required current-main checks. Independent exact-head RED review
 remains required. No Git writes, commit, push, PR or merge occurred here.
+
+
+## Preparation — 0733 renumber and merged-main unions (11 November 2026)
+
+READY for router commit; preparation only, NOPR, RED (practice sign-in/session
+boundary). Landing approval remains with the router; this is no launch approval.
+
+Renamed migration, proof and note from 0942 to 0733. SQL bytes are identical;
+proof bytes differ only by migration-name references. Updated both upgrade pin
+lists and the linked-practice upgrade fixture. The lane allows both old deleted
+paths and new paths. Conflict resolution takes the union: all three identity
+practice tables plus main's firm_profile, and all seven linked-practice routine
+pins plus main's two 0727 billing-export routine pins. No behavior or other test
+expectation changed.
+
+Source inspection of the merged migration tree found the latest predecessor
+bodies at 0109, 0185, 0356, 0657, 0658 and 0687. Source assertions confirmed the
+four legacy bodies equal those latest bodies plus the existing private-marker
+guards, anonymous authority retains the complete latest authentication body,
+and LP6 retains its latest body plus the existing linked-practice prelude.
+The blank-company predicate retains the previously reviewed linked-owner change.
+No SQL rewrite was necessary. No Git command was run, including for inspection.
+
+Protected packages/db/src/practice-session.ts is byte-identical to the start of
+this preparation. Its pre-0942 historical comment, protected pin and bridge hash
+were deliberately left untouched for the router. Advisory-lock key 942 is an
+existing runtime key, not a migration reference, and remains unchanged in both
+SQL and its description to preserve identical migration content.
+
+Local validation (installed tools, no downloads, headless, one Vitest worker):
+
+- From packages/db, ./node_modules/.bin/vitest run --maxWorkers=1
+  src/blank-practice-company.test.ts test/migration-proof-loader.test.ts
+  test/extra-proceed-migration.test.ts — 85 passed, three files.
+- From packages/db, ./node_modules/.bin/vitest run --maxWorkers=1
+  test/lp-0-catalog.test.ts test/lp6a-binding.test.ts — 33 passed, two files.
+- ./packages/db/node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit — passed.
+- ./packages/db/node_modules/.bin/tsc -p
+  /tmp/real-wayin-linked-practice-renumber-tsconfig.json — passed; includes linked
+  practice, extra-proceed, migfix-7 and plan-entitlement upgrade tests.
+- Source assertions — identical SQL, name-only proof changes, unchanged protected
+  source, latest-body preservation and conflict unions passed.
+- Source-only lane validation using the existing loadLanePolicy/selectLane/
+  lanePathAllowed/migrationOrderViolations exports printed "Lane boundary passed";
+  registered branch, declared changed/deleted paths and 0733 above merged-main
+  migrations passed. The Git-backed diff/CLI check was not run because Git commands
+  are forbidden here. The router/CI must perform the full diff-based lane lint.
+
+PostgreSQL and browser suites were not run: the sandbox cannot start PostgreSQL
+or bind localhost. CI must prove fresh install and upgrade to 0733, migration
+replay, preserved historical rows/catalog metadata/ACLs/RLS, exact latest routine
+bodies, linked-session/namespace separation, parent expiry/revocation and owner
+membership checks, entry/reset serialization and race outcomes. Run linked-practice
+journey/races, extra-proceed, migfix-7 and plan-entitlement upgrade suites plus
+required migration/tenant and browser journeys after the router pushes. The
+protected S9 practice-session bridge pin must be refreshed separately by the
+router; it was not changed to make a check pass. Exact-head RED review and green
+required CI remain necessary before landing.

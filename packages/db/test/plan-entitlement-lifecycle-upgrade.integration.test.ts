@@ -120,6 +120,14 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     && row.args === "p_tenant uuid, p_book jsonb, p_result jsonb")).toHaveLength(1);
   expect(live.find(row => row.nspname === "app" && row.proname === "replace_fee_reservation_book"
     && row.args === "p_tenant uuid, p_book jsonb, p_result jsonb")?.definition?.split("$function$")[1]).toEqual(feeResultBody);
+  const billingSource = await readFile(new URL("../migrations/0727_billing_export_delivery_once.sql", import.meta.url), "utf8");
+  const billingBodies = new Map([
+    ["cb_delivery|p_session uuid, p_job uuid, p_command uuid, p_payload jsonb", billingSource.split("FUNCTION app.cb_delivery(")[1]!.split("AS $$")[1]!.split("$$;")[0]!],
+    ["cb_csv_cell|v text", billingSource.split("FUNCTION app.cb_csv_cell(")[1]!.split("AS $$")[1]!.split("$$;")[0]!],
+  ]);
+  for (const key of billingBodies.keys()) {
+    expect(live.filter(row => row.nspname === "app" && `${row.proname}|${row.args}` === key)).toHaveLength(1);
+  }
   // 0697 adds only this owner-only trigger routine; pin its exact identity and complete body.
   const variationLock = await readFile(new URL("../migrations/0694_variation_post_lock_refusal.sql", import.meta.url), "utf8");
   const variationLockBody = variationLock.split("FUNCTION app.guard_variation_final_account_lock()")[1]!.split("AS $$")[1]!.split("$$;")[0];
@@ -195,15 +203,16 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   const ent5Bodies = new Map<string, string>();
   const ent5Replacements = [
     // Linked-practice successors retain metadata and replace these seven bodies.
-    ["app.issue_practice_session(digest text)", "0942_identity_linked_practice.sql"],
-    ["app.start_blank_practice_company(digest text,previous_digest text)", "0942_identity_linked_practice.sql"],
-    ["app.start_blank_practice_company_v2(new_token text,previous_token text)", "0942_identity_linked_practice.sql"],
-    ["app.seed_saved_v1_sample()", "0942_identity_linked_practice.sql"],
-    ["app.authenticate_practice_session(digest text,requested_tenant uuid)", "0942_identity_linked_practice.sql"],
-    ["app.lp6_session_authority(p_kind text,p_credential text,p_tenant uuid)", "0942_identity_linked_practice.sql"],
-    ["app.is_blank_practice_company(digest text)", "0942_identity_linked_practice.sql"],
+    ["app.issue_practice_session(digest text)", "0733_identity_linked_practice.sql"],
+    ["app.start_blank_practice_company(digest text,previous_digest text)", "0733_identity_linked_practice.sql"],
+    ["app.start_blank_practice_company_v2(new_token text,previous_token text)", "0733_identity_linked_practice.sql"],
+    ["app.seed_saved_v1_sample()", "0733_identity_linked_practice.sql"],
+    ["app.authenticate_practice_session(digest text,requested_tenant uuid)", "0733_identity_linked_practice.sql"],
+    ["app.lp6_session_authority(p_kind text,p_credential text,p_tenant uuid)", "0733_identity_linked_practice.sql"],
+    ["app.is_blank_practice_company(digest text)", "0733_identity_linked_practice.sql"],
     ["identity.provision_verified_challenge(challenge_id uuid)", "0703_invitation_issuer_recheck.sql"],
     ["app.xa_approve(p_job uuid,p_request uuid,p_command uuid,p_actor uuid,p_step integer,p_hash text,p_net bigint,p_reject boolean,p_reason text)", "0635_extra_same_step.sql"],
+    ["app.xa_approve(p_job uuid,p_request uuid,p_command uuid,p_actor uuid,p_step integer,p_hash text,p_net bigint,p_reject boolean,p_reason text)", "0728_extra_reject_null_step.sql"],
     ["app.xa_withdraw(p_job uuid,p_variation uuid,p_command uuid,p_actor uuid,p_reason text)", "0636_extra_withdraw_roles.sql"],
     ["app.xa_requirement(p_rules jsonb,p_net bigint)", "0637_extra_working_day_wait.sql"],
     ["app.xa_escalate()", "0637_extra_working_day_wait.sql"],
@@ -212,6 +221,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     ["app.xa_client_view_authority(p_job uuid,p_request uuid,p_actor uuid,p_email text)", "0686_extra_client_authority_loss.sql"],
     ["app.xa_client_decide(p_job uuid,p_request uuid,p_command uuid,p_actor uuid,p_token_hash text,p_email text,p_hash text,p_net bigint,p_reject boolean,p_reason text,p_role_name text,p_tester text)", "0686_extra_client_authority_loss.sql"],
     ["identity.extra_customer_use(t uuid,j uuid,c uuid,digest text,session_digest text,operation text)", "0686_extra_client_authority_loss.sql"],
+    ["app.lp5b_contractor_permission(p_type text,p_actor uuid,p_job uuid,p_input jsonb)", "0636_extra_withdraw_roles.sql"],
   ] as const;
   for (const [identity, file] of ent5Replacements) {
     const sql = await readFile(new URL(`../migrations/${file}`, import.meta.url), "utf8");
@@ -409,6 +419,8 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
       expect(current?.source).toBe(body);
     } else if (ent5Bodies.has(routineKey(`${prior.nspname}.${prior.proname}(${prior.args})`))) {
       expect(current?.definition?.split("$function$")[1]).toEqual(ent5Bodies.get(routineKey(`${prior.nspname}.${prior.proname}(${prior.args})`)));
+    } else if (prior.nspname === "app" && billingBodies.has(`${prior.proname}|${prior.args}`)) {
+      expect(current?.definition?.split("$function$")[1]).toEqual(billingBodies.get(`${prior.proname}|${prior.args}`));
     } else if (lp6cReplacements.has(prior.oid)) {
       const replacement = lp6cReplacements.get(prior.oid)!;
       expect(current?.definition).toEqual(prior.definition === null ? null : prior.definition.replace(prior.source, () => replacement));

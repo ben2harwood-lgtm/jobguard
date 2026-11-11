@@ -1,5 +1,5 @@
 {
-  "migration": "0942_identity_linked_practice.sql",
+  "migration": "0733_identity_linked_practice.sql",
   "lp0": [
     {
       "section": "groups",
@@ -23,7 +23,7 @@
         },
         "downstream": "Validate parent identity sessions and exact current owner membership, mint independent practice credentials, and reset only the current namespace. Namespace digests are not credentials.",
         "sources": [
-          "packages/db/migrations/0942_identity_linked_practice.sql",
+          "packages/db/migrations/0733_identity_linked_practice.sql",
           "packages/db/src/blank-practice-company.ts",
           "packages/db/src/practice-session.ts"
         ],
@@ -51,7 +51,7 @@
           "LP-12": "Keep identity/control-plane rows private and canonical ownership behind protected binding."
         },
         "sources": [
-          "packages/db/migrations/0942_identity_linked_practice.sql",
+          "packages/db/migrations/0733_identity_linked_practice.sql",
           "packages/db/src/blank-practice-company.ts",
           "packages/db/src/practice-session.ts"
         ],

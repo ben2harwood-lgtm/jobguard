@@ -166,12 +166,12 @@ it("rejects canonical-digest credentials, forged GUCs, wrong firms, identity ten
 });
 
 it("proves the named regression absent before migration and preserves anonymous ownership on upgrade", async () => {
-  const old = await startBeforeMigration("0942_identity_linked_practice.sql");
+  const old = await startBeforeMigration("0733_identity_linked_practice.sql");
   try {
     const token = await issuePracticeSession(old.runtime), owner = digestOf(token);
     const before = (await old.admin.query("SELECT row_to_json(j) value FROM app.job j WHERE practice_session_digest=$1 ORDER BY id", [owner])).rows;
     await expect(old.admin.query("SELECT identity.enter_linked_practice($1,$2,$3,NULL)", ["a".repeat(64),"b".repeat(64),enter])).rejects.toMatchObject({ code: "42883" });
-    await old.admin.query(await readFile(new URL("../migrations/0942_identity_linked_practice.sql", import.meta.url), "utf8"));
+    await old.admin.query(await readFile(new URL("../migrations/0733_identity_linked_practice.sql", import.meta.url), "utf8"));
     expect((await authenticatePracticeSession(old.runtime, token)).digest).toBe(owner);
     expect((await old.admin.query("SELECT row_to_json(j) value FROM app.job j WHERE practice_session_digest=$1 ORDER BY id", [owner])).rows).toEqual(before);
   } finally { await old.close(); }

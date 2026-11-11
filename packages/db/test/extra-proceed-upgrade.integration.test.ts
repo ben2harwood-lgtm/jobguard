@@ -2,7 +2,7 @@
 import { afterAll, expect, it, vi } from "vitest";
 import { startBeforeMigration, applyMigration, snapshot, type Cluster } from "./contractor-entitlement-fixtures.js";
 import { chainWorld, submitted } from "./extra-approval-chain-fixtures.js";
-import { abandonedSiteVisitRegistryRow } from "./lp5-command-catalog.js";
+import { abandonedSiteVisitRegistryRow, duplicateDispositionLifecycleRegistryRow } from "./lp5-command-catalog.js";
 import { migrate } from "../src/index.js";
 let c: Cluster | undefined;
 afterAll(async () => { await c?.close(); vi.unstubAllEnvs(); });
@@ -36,13 +36,13 @@ it("0905 upgrades populated approval requests without changing any earlier row, 
  }
  // On replay 0639 (batch-41) and 0641 (batch-42) add only empty tables, and 0642 (Q10) moves IssueClientApproval
  // from the owner rule to the contractor rule. WALK-2 adds only an empty blank-practice session table;
- // LS-93 (0719) adds only an empty commercial_grant_use table. Every other row still compares exactly.
- // 0722 adds only the named CloseAbandonedSiteVisit registry row; every other row still compares exactly.
+ // LS-93 (0719) adds only an empty commercial_grant_use table and REAL-FIRM-PROFILE only an empty firm_profile table. Every other row still compares exactly.
+ // 0722 adds CloseAbandonedSiteVisit and 0729 adds the ResolveDuplicateCandidates lifecycle row; every other row still compares exactly.
  const replayedRegistryRows = (after["app.command_type_registry"] as { command_type: string; permission_rule: string }[]).map(row =>
   row.command_type === "IssueClientApproval" && row.permission_rule === "owner" ? { ...row, permission_rule: "contractor" } : row);
  const replayedRegistry = (await c.admin.query("SELECT jsonb_agg(value ORDER BY value::text) data FROM jsonb_array_elements($1::jsonb)",
-  [JSON.stringify([...replayedRegistryRows, abandonedSiteVisitRegistryRow])])).rows[0].data;
+  [JSON.stringify([...replayedRegistryRows, abandonedSiteVisitRegistryRow, duplicateDispositionLifecycleRegistryRow])])).rows[0].data;
  await migrate(c.admin); await migrate(c.admin); expect(await snapshot(c.admin)).toEqual({ ...after, "app.connector_promotion": [], "control_plane.blank_practice_session": [],
   "control_plane.identity_practice_namespace": [], "control_plane.identity_practice_company": [], "control_plane.identity_practice_credential": [],
-  "app.extra_client_command_session": [], "app.extra_client_session": [], "app.extra_client_signin": [], "app.extra_pack_artifact": [], "app.commercial_grant_use": [], "app.command_type_registry": replayedRegistry });
+  "app.extra_client_command_session": [], "app.extra_client_session": [], "app.extra_client_signin": [], "app.extra_pack_artifact": [], "app.commercial_grant_use": [], "app.firm_profile": [], "app.command_type_registry": replayedRegistry });
 }, 240_000);
