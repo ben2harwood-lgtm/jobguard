@@ -9,8 +9,8 @@
   {
     "code": "UNRESOLVED_COVERED_EDGE",
     "file": "packages/db/src/demo-seed.ts",
-    "line": 93,
-    "fingerprint": "6452587a177430d30e266983504305f1dae4ebbcea3f42215b7ba39bb46ebefb",
+    "line": 100,
+    "fingerprint": "5a5c69f049c0b210dc61aba70fca1217bd6c9eed0cd89574fc8f21b52be23222",
     "reason": "Quote delivery execute receives context/job/document arguments; terminal execute is conservatively covered and unresolved."
   },
   {
@@ -30,15 +30,15 @@
   {
     "code": "UNRESOLVED_COVERED_EDGE",
     "file": "packages/db/src/quote-delivery-repository.ts",
-    "line": 43,
-    "fingerprint": "b4e916ec4fcee91265657a785634ae4bd66e3c14a2619fccb368173a2119a37e",
+    "line": 66,
+    "fingerprint": "2cc55f6e0f4b3adca343f3004d03e3298836fb63419f0b87ae7df1d2ad198373",
     "reason": "Business ActionExecutor.execute(context,id) is a terminal execute call; its first argument is not static SQL."
   },
   {
     "code": "UNRESOLVED_COVERED_EDGE",
     "file": "packages/db/src/quote-delivery-repository.ts",
-    "line": 44,
-    "fingerprint": "aa8a24c18eeb1b0d5db6fd07917687dca8474aebbcbb8c12dd8c38d4f6b7595a",
+    "line": 67,
+    "fingerprint": "d06109decee751b8195fc5ae39ac39daa5db045e5a1e053c955c7a60952bf51b",
     "reason": "Second business ActionExecutor.execute(context,id) call has the same unresolved syntactic boundary."
   },
   {

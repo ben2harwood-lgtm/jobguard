@@ -8,7 +8,13 @@
         "packages/db/src/quote-delivery-repository.ts",
         "packages/db/test/real-quote-firm-sequence.integration.test.ts",
         "packages/db/test/real-quote-firm-sequence-db.integration.test.ts",
-        "apps/web/e2e/real-quote-firm-sequence-server.spec.ts"
+        "apps/web/e2e/real-quote-firm-sequence-server.spec.ts",
+        "packages/db/src/demo-seed.ts",
+        "packages/db/test/firm-profile.integration.test.ts",
+        "packages/db/test/quote-reacceptance.integration.test.ts",
+        "tools/commercial-integrity-boundary.unresolved.json",
+        "tools/commercial-integrity-current-source-guard.unresolved.json",
+        "packages/db/src/demo-seed.ownership.test.ts"
       ]
     }
   }

@@ -144,7 +144,7 @@ beforeAll(async () => {
  const delivery = new QuoteDeliveryRepository(f.runtime);
  // Supply the historical artifact without calling the not-yet-installed allocator.
  const { QuoteDocumentRepository } = await import("../src/quote-document-repository.js");
- const document = quoteDocumentV1.parse({
+ const legacyDocument = quoteDocumentV1.parse({
   schemaVersion: "quote-document.v1", documentVersion: 3, reference: "Q-0003", quoteRevisionId: legacyA.quoteRevision, currency: "GBP",
   issuer: { name: "Fictional builder", address: ["1 Fictional Road"], email: "builder@example.invalid" },
   customer: { name: "Fictional customer", address: ["2 Fictional Road"], email: "customer@example.invalid" },
@@ -152,9 +152,9 @@ beforeAll(async () => {
   exclusions: [], qualifications: [], subtotalPence: 10000, discountPence: 0, netPence: 10000, taxPence: 2000, totalPence: 12000,
  });
  const supplied = await new QuoteDocumentRepository(f.runtime).create(legacyFirm.auth.context, {
-  jobId: legacyA.id, documentId: randomUUID(), quoteRevisionId: legacyA.quoteRevision, objectVersionId: "fictional-legacy-v3", document,
+  jobId: legacyA.id, documentId: randomUUID(), quoteRevisionId: legacyA.quoteRevision, objectVersionId: "fictional-legacy-v3", document: legacyDocument,
  });
- const issued = { documentId: supplied.id, hash: supplied.content_hash, document };
+ const issued = { documentId: supplied.id, hash: supplied.content_hash, document: legacyDocument };
  await delivery.issue(legacyFirm.auth.context, legacyA.id, {
   documentId: issued.documentId, contentHash: issued.hash, recipient: "customer@example.invalid", commandId: randomUUID(),
  });

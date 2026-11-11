@@ -6,6 +6,7 @@ import { QuoteRepository } from "./quote-repository.js";
 import { QuoteDeliveryRepository } from "./quote-delivery-repository.js";
 import { PracticeActivationRepository } from "./activation-repository.js";
 import { createHash } from "node:crypto";
+import { authenticatePracticeSession, issuePracticeSession } from "./practice-session.js";
 import { money, type Money } from "@jobguard/core";
 
 export const DEMO_TENANT_ID = "11111111-1111-4111-8111-111111111111";
@@ -77,9 +78,15 @@ export async function seedDemo(environment: DemoEnvironment, boundary: DemoComma
  */
 export async function prepareActivationFixtureV3(owner:Pool,context:VerifiedTenantContext,name:string,acceptedNetPence:number, runtime:Pool=owner, highestSentNetPence=acceptedNetPence, practiceDigest:string|null=null){
  if(process.env.JOBGUARD_ENV!=="synthetic_demo"||context.tenantId!==DEMO_TENANT_ID)throw new DemoSeedSafetyError("CH-1 fixtures require the synthetic tenant");
+ // Every generated job belongs to a practice firm before its first preview.
+ // Explicit owners retain their existing context; legacy fixture callers get a fresh firm.
+ if(practiceDigest===null){
+  const auth=await authenticatePracticeSession(runtime,await issuePracticeSession(runtime));
+  context=auth.context;practiceDigest=auth.digest;
+ }
  const jobId=randomUUID(),scope=randomUUID(),scopeRevision=randomUUID();
  await withTenant(owner,context,async db=>{
-  await db.$client.query(`INSERT INTO app.job(id,tenant_id,title,status,practice_session_digest,practice_scenario) VALUES($1,$2,$3,'quoting',$4::text,CASE WHEN $4::text IS NULL THEN NULL ELSE 'capture' END)`,[jobId,context.tenantId,name,practiceDigest]);
+  await db.$client.query(`INSERT INTO app.job(id,tenant_id,title,status,practice_session_digest,practice_scenario) VALUES($1,$2,$3,'quoting',$4::text,'capture')`,[jobId,context.tenantId,name,practiceDigest]);
   await seedSyntheticPartyFixture(db.$client,context.tenantId,jobId);
   await db.$client.query(`INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')`,[scope,context.tenantId,jobId]);
   await db.$client.query(`INSERT INTO app.scope_revision(id,tenant_id,job_id,scope_item_id,revision,description,quantity_decimal,unit,unit_price_pence,total_pence) VALUES($1,$2,$3,$4,1,'Generated fictional work','1','item',$5,$5)`,[scopeRevision,context.tenantId,jobId,scope,acceptedNetPence]);
@@ -102,9 +109,12 @@ export async function prepareActivationFixtureV3(owner:Pool,context:VerifiedTena
  return jobId;
 }
 export async function seedActivationFixturesV3(owner:Pool,runtime:Pool,context:VerifiedTenantContext){
+ if(process.env.JOBGUARD_ENV!=="synthetic_demo"||context.tenantId!==DEMO_TENANT_ID)throw new DemoSeedSafetyError("CH-1 fixtures require the synthetic tenant");
+ const auth=await authenticatePracticeSession(runtime,await issuePracticeSession(runtime));
+ context=auth.context;
  const jobs={} as Record<"core-1000"|"recovery-18800"|"shadow-30000",string>;
  for(const [name,net] of [["core-1000",100000],["recovery-18800",1880000],["shadow-30000",3000000]] as const){
-  const job=await prepareActivationFixtureV3(owner,context,name,net,runtime);
+  const job=await prepareActivationFixtureV3(owner,context,name,net,runtime,net,auth.digest);
   await new PracticeActivationRepository(runtime).start(context,job,{commandId:randomUUID(),scenario:"no_charge"});jobs[name]=job;
  }
  return jobs;
