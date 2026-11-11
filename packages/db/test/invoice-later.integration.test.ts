@@ -112,16 +112,17 @@ describe("LATER-B16 persisted invoice facts", () => {
   expect((await repo.creditView(context,other.jobId,other.invoice.id)).credits).toHaveLength(0);
  });
  for (const identity of ["command", "semantic"]) {
-  it(`r1 L076 concurrent changed invoice conflicts after waiting on ${identity} uniqueness`, async () => {
+  it(`r1 L076 concurrent changed invoice conflicts after waiting on ${identity} identity`, async () => {
    const f = await fresh(10000,2000), other = await fresh(10000,2000);
    let atCommit!: () => void, releaseCommit!: () => void;
    const reachedCommit = new Promise<void>(resolve => { atCommit = resolve; });
    const canCommit = new Promise<void>(resolve => { releaseCommit = resolve; });
-   let held = false;
+   let held = false, firstPid: number;
    // Pause a real transaction just before COMMIT; every SQL statement still goes
    // to PostgreSQL under the runtime role. No provider/SQL result is substituted.
    const heldPool = { connect: async () => {
     const client = await runtime.connect();
+    firstPid = (await client.query("SELECT pg_backend_pid() pid")).rows[0].pid;
     return { release: () => client.release(), query: async (sql: string, values?: unknown[]) => {
      if (sql === "COMMIT" && !held) { held = true; atCommit(); await canCommit; }
      return client.query(sql,values);
@@ -137,11 +138,13 @@ describe("LATER-B16 persisted invoice facts", () => {
    try {
     await Promise.race([reachedCommit,first.then(()=>{throw new Error("credit completed before commit barrier");})]);
     second = new CustomerBillingCommandService(runtime).credit(context,{...input,invoiceId:other.invoice.id,
-     command:{...input.command,commandId:identity==="command"?input.command.commandId:randomUUID()}});
+     command:{...input.command,commandId:identity==="command"?input.command.commandId:randomUUID(),
+      semanticKey:identity==="semantic"?input.command.semanticKey:`credit:${randomUUID()}`}});
     const observed = second.then(value=>({value}),error=>({error}));
     let waiting = false;
     for (let attempt=0;attempt<100&&!waiting;attempt++) {
-     waiting = (await admin.query(`SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE usename='invoice_later_login' AND wait_event='transactionid') waiting`)).rows[0].waiting;
+     // Observe the actual blocker, regardless of advisory or uniqueness wait.
+     waiting = (await admin.query(`SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE usename='invoice_later_login' AND $1::int=ANY(pg_blocking_pids(pid))) waiting`,[firstPid!])).rows[0].waiting;
      if (!waiting) await new Promise(resolve=>setTimeout(resolve,10));
     }
     expect(waiting).toBe(true);

@@ -390,7 +390,6 @@ describe("LP-0 grant freeze guard against the fully migrated database", () => {
     // Existing powers are reported as what they are, not as SELECT/INSERT-only and not as the final state.
     for (const [key, cards] of [
       ["acl|rel|table|app.audit_event|jobguard_audit_writer|INSERT|-", ["LP-4", "LP-6e"]],
-      ["acl|rel|table|app.customer_invoice|jobguard_runtime|INSERT|-", ["LP-8a"]],
       ["acl|rel|table|app.proposal_review|jobguard_runtime|DELETE|-", ["LP-6d"]],
       ["acl|rel|table|app.evidence_upload|jobguard_runtime|INSERT|-", ["LP-8b"]],
     ] as const) {
@@ -403,6 +402,12 @@ describe("LP-0 grant freeze guard against the fully migrated database", () => {
     // LP-4 deliberately withdraws direct runtime audit INSERT; its dedicated
     // NOLOGIN writer is the remaining, separately reviewed capability above.
     expect(find("acl|rel|table|app.audit_event|jobguard_runtime|INSERT|-")).toBeUndefined();
+    // LP-8a removes direct billing inserts from both facts and reviewed exceptions.
+    for (const table of ["customer_invoice", "customer_invoice_evidence", "customer_credit_note", "customer_payment", "customer_payment_reversal", "customer_invoice_sequence", "customer_credit_note_sequence"]) {
+      const key = `acl|rel|table|app.${table}|jobguard_runtime|INSERT|-`;
+      expect(find(key), key).toBeUndefined();
+      expect(inventory.entries.some(entry => entry.key === key), key).toBe(false);
+    }
     // LP-1 and LP-5c closed these broad powers; neither live facts nor the reviewed exceptions may retain them.
     for (const key of [
       "acl|rel|table|app.command_receipt|jobguard_runtime|INSERT|-",

@@ -64,7 +64,7 @@ it("preserves issue, credit, manual payment, reversal and exact replay after rev
 it("refuses unbound requests and invalid final-account parent/revision links inside the owner routine", async () => {
  const {a,context}=await invoiceFixture();
  await expect(f.runtime.query("SELECT app.advance_final_account_draft($1,$2,$3,1)",[a.tenantId,a.draftId,a.revisionId])).rejects.toMatchObject({code:"42501"});
- await expect(withTenant(f.runtime,context,db=>db.$client.query("SELECT app.advance_final_account_draft($1,$2,$3,2)",[a.tenantId,a.draftId,randomUUID()]))).rejects.toMatchObject({code:"22023"});
+ await expect(withTenant(f.runtime,context,db=>db.$client.query("SELECT app.advance_final_account_draft($1,$2,$3,2)",[a.tenantId,a.draftId,randomUUID()]))).rejects.toMatchObject({code:"23514",message:"INVALID_TRANSITION"});
  await expect(withTenant(f.runtime,context,db=>db.$client.query("SELECT app.advance_final_account_draft($1,$2,$3,1)",[randomUUID(),a.draftId,a.revisionId]))).rejects.toMatchObject({code:"42501"});
  await expect(withTenant(f.runtime,context,db=>db.$client.query("SELECT app.issue_approved_customer_credit($1,$2,1200,'forged',NULL)",[randomUUID(),randomUUID()]))).rejects.toMatchObject({code:"42501"});
 });

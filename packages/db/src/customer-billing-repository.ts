@@ -68,11 +68,18 @@ export class CustomerBillingCommandService{
   if(c.commandType!=="customer_credit_note.issue"||c.action.actionType!=="customer_credit_note.issue"||c.action.amountPence!==input.amountPence||c.action.currency!=="GBP")throw new Error("CREDIT_ACTION_MISMATCH");
   const result=await this.dispatcher.dispatch(context,c,{
    inputHash:()=>sha(JSON.stringify([input.invoiceId.toLowerCase(),input.amountPence,input.reason])),
-   // One shared invoice lock protects remaining debt. Receipt uniqueness serializes
-   // command and semantic identities, including retries targeting another invoice.
+   // Serialize the caller's semantic identity before invoice and audit locks.
+   // Payload suffixes bind exact inputs but must not turn a changed retry into new work.
    lock:async(db,command)=>{
     await requireBoundActor(db,context,c.actorMembershipId);
-    await preserveLegacyBillingReplay(db,context,command,c.semanticKey);
+    const originalKey=c.semanticKey.replace(/:lp3=[a-f0-9]{64}$/u,"");
+    await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))",[`${context.tenantId}:customer-credit:${originalKey}`]);
+    await preserveLegacyBillingReplay(db,context,command,originalKey);
+    const changed=(await db.$client.query(`SELECT 1 FROM app.command_receipt WHERE tenant_id=$1
+     AND command_type='customer_credit_note.issue'
+     AND (semantic_key=$2 OR (starts_with(semantic_key,$2||':lp3=') AND length(semantic_key)=length($2)+69))
+     AND semantic_key<>$3`,[context.tenantId,originalKey,command.semanticKey])).rows[0];
+    if(changed)throw new CommandError("COMMAND_CONFLICT");
     await db.$client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text || ':' || $2::uuid::text,0))`,[context.tenantId,input.invoiceId]);
    },
    mutate:async(db,command)=>{

@@ -193,9 +193,14 @@ export async function runSyntheticRestoreRehearsal(options = {}, api, fixture) {
     }
     // Explicit deterministic fake output; checked completion verifies the frozen
     // evidence inventory. No status UPDATE or invented completion certificate.
-    await checksRepository.reconcile(workerContext,ids.job,checkManifest.id,[]);
+    const checkedResult = await checksRepository.reconcile(workerContext,ids.job,checkManifest.id,[]);
     const invoices = new api.PracticeInvoiceRepository(runtime);
-    const checkedInvoice = await invoices.issue(context,{jobId:ids.job,finalAccountRevisionId:ids.revision,actorMembershipId:ids.member,commandId:randomUUID(),recipient:"restore@example.invalid",issuedOn:"2026-09-20"});
+    const invoiceInput = {jobId:ids.job,finalAccountRevisionId:ids.revision,actorMembershipId:ids.member,commandId:randomUUID(),recipient:"restore@example.invalid",issuedOn:"2026-09-20"};
+    await assert.rejects(invoices.issue(context,invoiceInput), /FINAL_CHECK_NOT_COMPLETE/);
+    // Reconciliation verifies processing; publication separately certifies it
+    // through the checked completion trigger required by every invoice issuer.
+    await new api.FinalCheckCompletionRepository(shadow).publish(workerContext,{version:"final-check-publication.v1",jobId:ids.job,runId:checkedResult.runId,checkId:randomUUID()});
+    const checkedInvoice = await invoices.issue(context,invoiceInput);
     const issued = {invoiceId:checkedInvoice.id}, invoicePdfHash=checkedInvoice.pdfSha256;
     const billing = new api.CustomerBillingCommandService(runtime);
     const paymentCommand = { version: "customer-payment.record.v1", commandId: randomUUID(), actorMembershipId: ids.member, jobId: ids.job, invoiceId: issued.invoiceId, paidOn: "2026-09-20", amountPence: 5000, currency: "GBP", method: "bank_transfer", reference: "synthetic-restore-part-payment", builderAttestsReceived: true };

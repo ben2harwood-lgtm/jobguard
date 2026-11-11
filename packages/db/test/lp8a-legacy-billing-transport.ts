@@ -9,6 +9,14 @@ function transport(pool:Pool,context:VerifiedTenantContext,actor:string):Pool {
  return {connect:async()=>{
   const client=await pool.connect();let authorizationId:string|undefined,invoice:any;
   return {release:()=>client.release(),query:async(sql:string,values:any[]=[])=>{
+   // BillingSql has one global invoice-lock queue and cannot model distinct
+   // advisory keys. Its tests use distinct semantic identities; the real PG
+   // invoice-later suite covers semantic serialization and changed retries.
+   if(sql==="SELECT pg_advisory_xact_lock(hashtextextended($1,0))")return {rows:[]};
+   if(sql.startsWith("SELECT 1 FROM app.command_receipt")) {
+    const found=await client.query("SELECT request_hash,status,result FROM app.command_receipt",[values[0],null,"customer_credit_note.issue",values[1]]);
+    return {rows:found.rows.filter((row:any)=>row.semantic_key!==values[2])};
+   }
    if(sql==="SELECT app.current_actor() actor, app.current_tenant() tenant")return {rows:[{actor,tenant:context.tenantId}]};
    if(sql.startsWith("SELECT semantic_key FROM app.command_receipt")){
     const found=await client.query("SELECT request_hash,status,result FROM app.command_receipt",[values[0],values[2],values[1],values[3]]);
