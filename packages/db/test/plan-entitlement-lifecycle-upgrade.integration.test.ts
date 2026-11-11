@@ -77,7 +77,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     lp6cReplacements.set(oid, body[4]!);
   }
   // LATER-SAFETY-144 replaces only this exact writer body; retain its metadata checks.
-  const signedInvoiceSql = await readFile(new URL("../migrations/1400_combined_invoice_signed_vat.sql", import.meta.url), "utf8");
+  const signedInvoiceSql = await readFile(new URL("../migrations/0731_combined_invoice_signed_vat.sql", import.meta.url), "utf8");
   const signedInvoiceOid = (await c.admin.query("SELECT 'app.issue_lock_bound_customer_invoice(uuid,uuid,uuid,uuid,uuid,text,text,date,text)'::regprocedure::oid oid")).rows[0].oid;
   lp6cReplacements.set(signedInvoiceOid, signedInvoiceSql.split("FUNCTION app.issue_lock_bound_customer_invoice(")[1]!.split("AS $$")[1]!.split(/\$\$\s*;/u)[0]!);
   // Only these six exact identities receive their latest 0724 bodies. Their

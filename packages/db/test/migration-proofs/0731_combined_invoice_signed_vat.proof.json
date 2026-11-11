@@ -1,5 +1,5 @@
 {
-  "migration": "1400_combined_invoice_signed_vat.sql",
+  "migration": "0731_combined_invoice_signed_vat.sql",
   "lp0": [
     {
       "section": "routines",
