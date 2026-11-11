@@ -79,7 +79,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
       // 0698 replaces only this index's lock identity with lock+attempt; its relation metadata is in the proof.
       expect(replayCatalog.some(r=>r.nspname===row.nspname && r.relname===row.relname)).toBe(false);
     } else if (row.nspname==='app' && row.relname==='extra_duplicate_disposition') {
-      // 0807 adds only command_writer SELECT and lp5b_command_read; both are pinned by its proof via expected.relations/policies above.
+      // 0729 adds only command_writer SELECT and lp5b_command_read; both are pinned by its proof via expected.relations/policies above.
       const now = replayCatalog.find(r => r.nspname===row.nspname && r.relname===row.relname)!;
       expect({ ...now, relacl: row.relacl, policies: row.policies }).toEqual(row);
     } else expect(replayCatalog).toContainEqual(row);
@@ -122,7 +122,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.request_final_check_run(t uuid, j uuid, d text)", "0698_final_check_post_invoice_rerun.sql"],
     ["app.request_practice_final_check_on_lock()", "0698_final_check_post_invoice_rerun.sql"],
     ["app.verify_final_check_run(p_tenant uuid, p_job uuid, p_run uuid, p_lock uuid, p_cutoff timestamp with time zone)", "0698_final_check_post_invoice_rerun.sql"],
-    ["app.lp5_command_result(p_command_id uuid, p_outcome jsonb)", "0807_duplicate_disposition_command_lifecycle.sql"],
+    ["app.lp5_command_result(p_command_id uuid, p_outcome jsonb)", "0729_duplicate_disposition_command_lifecycle.sql"],
     ["app.xa_approve(p_job uuid, p_request uuid, p_command uuid, p_actor uuid, p_step integer, p_hash text, p_net bigint, p_reject boolean, p_reason text)", "0728_extra_reject_null_step.sql"],
     ["app.xa_withdraw(p_job uuid, p_variation uuid, p_command uuid, p_actor uuid, p_reason text)", "0636_extra_withdraw_roles.sql"],
     ["app.lp5b_contractor_permission(p_type text, p_actor uuid, p_job uuid, p_input jsonb)", "0722_abandoned_visit_authority.sql"],
@@ -154,7 +154,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.ef_prepare_statement(p_session uuid, p_command uuid, p_period text)", "0704_enterprise_fee_period_order.sql"],
     ["app.ef_post_statement(p_session uuid, p_command uuid, p_statement uuid, p_authorization uuid)", "0704_enterprise_fee_period_order.sql"],
     ["app.accounting_export_route_read(t uuid, digest text, source text)", "0709_accounting_export_route_read_exported.sql"],
-    ["app.extra_duplicate_resolve(p_session uuid, p_job uuid, p_body jsonb)", "0807_duplicate_disposition_command_lifecycle.sql"],
+    ["app.extra_duplicate_resolve(p_session uuid, p_job uuid, p_body jsonb)", "0729_duplicate_disposition_command_lifecycle.sql"],
     ["app.lp_authority(p_session uuid, p_job uuid, p_action text)", "0712_end_check_rule_a_rerun.sql"],
     ["app.receipt_fact_invoice_line(t uuid, j uuid, i uuid, l uuid, r uuid, k uuid, ch uuid)", "0713_supplementary_after_combined_receipt.sql"],
     ["app.mon2_issue(t uuid, digest text, start_day date, revision integer)", "0714_subscription_period_open_refusal.sql"],

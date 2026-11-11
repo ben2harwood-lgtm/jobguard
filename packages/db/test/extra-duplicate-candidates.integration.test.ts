@@ -374,7 +374,7 @@ it("begins the registered duplicate command with repository-style input", async 
  const before = await facts(w);
  const actor = w.w.members.supervisor.member.membershipId;
  const content = { actor, job: w.s.jobId, body: input };
- // 0807 registers ResolveDuplicateCandidates, so a begin-only probe now claims; LP-6c (0723) requires the
+ // 0729 registers ResolveDuplicateCandidates, so a begin-only probe now claims; LP-6c (0723) requires the
  // request to be bound to the acting supervisor, as on main.
  await expect(withTenant(c.admin, await testActorContext(c.admin, w.ctx, w.w.members.supervisor.member), async db => {
   await db.$client.query("SET LOCAL ROLE jobguard_migration");

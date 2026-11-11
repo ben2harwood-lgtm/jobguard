@@ -1,5 +1,5 @@
 {
-  "migration": "0807_duplicate_disposition_command_lifecycle.sql",
+  "migration": "0729_duplicate_disposition_command_lifecycle.sql",
   "lp0": [
     {
       "section": "routines",
