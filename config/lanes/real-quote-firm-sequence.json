@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-quote-firm-sequence": {
+      "branches": ["codex/sandbox/real-quote-firm-sequence"],
+      "note": "RED runtime quote firm allocator integration; inherited allocator files remain outside this lane.",
+      "allow": [
+        "packages/db/src/quote-delivery-repository.ts",
+        "packages/db/test/real-quote-firm-sequence.integration.test.ts",
+        "packages/db/test/real-quote-firm-sequence-db.integration.test.ts",
+        "apps/web/e2e/real-quote-firm-sequence-server.spec.ts"
+      ]
+    }
+  }
+}
