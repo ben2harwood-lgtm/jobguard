@@ -21,7 +21,9 @@
         "packages/db/test/migration-proofs/1430_final_check_typed_recovery.proof.json",
         "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
         "packages/db/test/real-fc-typed-recovery.integration.test.ts",
-        "packages/db/test/shadow-catalog.integration.test.ts"
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
+        "packages/db/test/shadow-catalog.integration.test.ts",
+        "packages/db/test/sv5pre-completion-access.integration.test.ts"
       ]
     }
   }

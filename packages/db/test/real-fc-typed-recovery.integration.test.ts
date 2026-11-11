@@ -23,11 +23,14 @@ let infrastructure: Pool;
 beforeAll(async () => {
   vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); f = await createFinalCheckFixture();
   const login = `recovery_infrastructure_${randomUUID().replaceAll("-", "")}`, password = randomUUID();
-  const ddl = await f.admin.query("SELECT format('CREATE ROLE %I LOGIN INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS IN ROLE jobguard_infrastructure PASSWORD %L',$1,$2) ddl", [login,password]);
+  const ddl = await f.admin.query("SELECT format('CREATE ROLE %I LOGIN INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS IN ROLE jobguard_infrastructure PASSWORD %L',$1::text,$2::text) ddl", [login,password]);
   await f.admin.query(ddl.rows[0].ddl);
   await f.admin.query(`CREATE SCHEMA graphile_worker AUTHORIZATION ${login}`);
   infrastructure = new Pool({ ...f.admin.options, user: login, password, max: 2 });
+  // As sv5pre-worker-execution: CREATE is temporary and confined to this disposable test database.
+  await f.admin.query(`GRANT CREATE ON DATABASE ${(await f.admin.query("SELECT current_database() d")).rows[0].d} TO ${login}`);
   const utils = await makeWorkerUtils({ pgPool: infrastructure }); await utils.migrate(); await utils.release();
+  await f.admin.query(`REVOKE CREATE ON DATABASE ${(await f.admin.query("SELECT current_database() d")).rows[0].d} FROM ${login}`);
 }, 300000);
 afterAll(async () => { await infrastructure?.end(); await closeFinalCheckFixture(f); vi.unstubAllEnvs(); });
 const recoveryContext = (tenantId: string) => testTenantContext(tenantId, { bound: false });
@@ -53,8 +56,8 @@ async function payload(jobId: string) {
   const q = await requestRow(jobId);
   return { version: "final-check-practice-run.v1", tenantId: q.tenant_id, jobId, lockId: q.lock_id, manifestId: q.manifest_id, attempt: q.attempt, cycleId: q.cycle_id };
 }
-async function issue(a: Pick<Awaited<ReturnType<typeof seedFinalCheckJob>>, "tenantId" | "jobId" | "revisionId" | "digest" | "context">, commandId: string) {
-  return withTenant(practiceMaterialPool(f.runtime, a.digest), a.context, db => db.$client.query("SELECT app.issue_lock_bound_customer_invoice($1,$2,$3,$4,$5,'final','fictional@example.invalid','2026-11-10'::date,$6)", [a.tenantId, a.jobId, a.revisionId, FINAL_CHECK_ACTOR, commandId, "a".repeat(64)]));
+async function issue(a: Pick<Awaited<ReturnType<typeof seedFinalCheckJob>>, "tenantId" | "jobId" | "revisionId" | "digest" | "context">, commandId: string, runtime: Pool = f.runtime) {
+  return withTenant(practiceMaterialPool(runtime, a.digest), a.context, db => db.$client.query("SELECT app.issue_lock_bound_customer_invoice($1,$2,$3,$4,$5,'final','fictional@example.invalid','2026-11-10'::date,$6)", [a.tenantId, a.jobId, a.revisionId, FINAL_CHECK_ACTOR, commandId, "a".repeat(64)]));
 }
 it("three failed executions stop; owner restart completes the same bill", async () => {
   const a = await setup(), original = await requestRow(a.jobId), stale = await payload(a.jobId);
@@ -64,7 +67,7 @@ it("three failed executions stop; owner restart completes the same bill", async 
   try {
     await expect.poll(async () => (await requestRow(a.jobId)).cycle_state, { timeout: 90000 }).toBe("failed");
     expect((await requestRow(a.jobId)).executions).toBe(3);
-    const manifest = await new FinalCheckRepository(f.shadow).manifest(a.context, a.jobId, original.manifest_id);
+    const manifest = await new FinalCheckRepository(f.shadow).manifest(a.workerContext, a.jobId, original.manifest_id);
     const history = (await f.admin.query("SELECT * FROM app.final_check_source_attempt WHERE manifest_id=$1 ORDER BY id", [manifest.id])).rows;
     expect(history.length).toBeGreaterThanOrEqual(3);
     for (let i = 0; i < 4; i++) await discover();
@@ -84,14 +87,14 @@ it("three failed executions stop; owner restart completes the same bill", async 
     await discover();
     await expect.poll(async () => (await requestRow(a.jobId)).cycle_state, { timeout: 30000 }).toBe("completed");
     expect((await requestRow(a.jobId)).executions).toBe(1);
-    const after = await new FinalCheckRepository(f.shadow).manifest(a.context, a.jobId, manifest.id);
+    const after = await new FinalCheckRepository(f.shadow).manifest(a.workerContext, a.jobId, manifest.id);
     expect([after.id, after.lockId, after.cutoff, after.hash, after.sources.map(s => s.id)]).toEqual([manifest.id, manifest.lockId, manifest.cutoff, manifest.hash, manifest.sources.map(s => s.id)]);
     const view = await repo().read(a.context, a.jobId, a.digest);
     expect(view).toMatchObject({ state: "completed", items: [{ estimatedValuePence: 15000 }] });
     await issue(a, command); await issue(a, command);
     await executePracticeFinalCheck(recoveryContext((stale).tenantId), stale, f.shadow, factory(() => false), "synthetic_demo");
     await executePracticeFinalCheck(recoveryContext((await payload(a.jobId)).tenantId), await payload(a.jobId), f.shadow, factory(() => false), "synthetic_demo");
-    for (const succeeded of [false, true]) await withTenant(f.shadow, a.context, db => db.$client.query("SELECT app.final_check_cycle_finish($1,$2,$3,$4,$5,$6,$7)", [a.tenantId, a.jobId, stale.lockId, stale.manifestId, stale.attempt, stale.cycleId, succeeded]));
+    for (const succeeded of [false, true]) await withTenant(f.shadow, a.workerContext, db => db.$client.query("SELECT app.final_check_cycle_finish($1,$2,$3,$4,$5,$6,$7)", [a.tenantId, a.jobId, stale.lockId, stale.manifestId, stale.attempt, stale.cycleId, succeeded]));
     expect((await requestRow(a.jobId)).cycle_state).toBe("completed");
     expect((await requestRow(a.jobId)).executions).toBe(1);
     expect((await requestRow(a.jobId)).cycle_history).toHaveLength(1);
@@ -156,17 +159,17 @@ it("upgrade preserves historical records and ACLs, rests legacy queued work and 
   try {
     await installLegacySyntheticPartyFixtures(db.owner);
     // Reuse the existing runtime fixture; generated shadow login has no extra business grants.
-    const ddl = await db.owner.query("SELECT format('CREATE ROLE recovery_upgrade_shadow LOGIN INHERIT IN ROLE jobguard_shadow PASSWORD %L',$1) ddl", [db.owner.options.password]);
+    const ddl = await db.owner.query("SELECT format('CREATE ROLE recovery_upgrade_shadow LOGIN INHERIT IN ROLE jobguard_shadow PASSWORD %L',$1::text) ddl", [db.owner.options.password]);
     await db.owner.query(ddl.rows[0].ddl);
-    const shadow = new (await import("pg")).Pool({ ...db.owner.options, user: "recovery_upgrade_shadow" });
+    const shadow = new (await import("pg")).Pool({ ...db.owner.options, user: "recovery_upgrade_shadow", password: db.owner.options.password });
     try {
       const fixture = { ...f, admin: db.owner, runtime: db.runtime, shadow }, a = await seedFinalCheckJob(fixture);
       await a.lock();
-      const worker = new FinalCheckRepository(shadow), m = await worker.begin(a.context, a.jobId);
+      const worker = new FinalCheckRepository(shadow), m = await worker.begin(a.workerContext, a.jobId);
       const ports = practiceFinalCheckPorts(shadow, db.runtime, "f".repeat(64));
-      await new FinalCheckWorker(ports, "synthetic_demo").execute(a.context, { version: "final-check.task.v1", jobId: a.jobId, manifestId: m.id });
-      const result = await worker.manifest(a.context, a.jobId, m.id);
-      await new FinalCheckCompletionRepository(shadow).publish(a.context, { version: "final-check-publication.v1", jobId: a.jobId, runId: result.result!.runId, checkId: m.id });
+      await new FinalCheckWorker(ports, "synthetic_demo").execute(a.workerContext, { version: "final-check.task.v1", jobId: a.jobId, manifestId: m.id });
+      const result = await worker.manifest(a.workerContext, a.jobId, m.id);
+      await new FinalCheckCompletionRepository(shadow).publish(a.workerContext, { version: "final-check-publication.v1", jobId: a.jobId, runId: result.result!.runId, checkId: m.id });
       const invalidated = await seedFinalCheckJob(fixture);
       await new JobSourceRepository(db.runtime).intake(invalidated.context,invalidated.jobId,invalidated.digest,"diary",{version:"job-diary-input.v1",commandId:randomUUID(),entryMode:"typed",onSite:false,text:"Fictional ordinary work note."});
       await invalidated.lock();
@@ -174,6 +177,8 @@ it("upgrade preserves historical records and ACLs, rests legacy queued work and 
       await new FinalCheckWorker(ports,"synthetic_demo").execute(invalidated.workerContext,{version:"final-check.task.v1",jobId:invalidated.jobId,manifestId:bad.id});
       const badResult=await worker.manifest(invalidated.workerContext,invalidated.jobId,bad.id);
       await new FinalCheckCompletionRepository(shadow).publish(invalidated.workerContext,{version:"final-check-publication.v1",jobId:invalidated.jobId,runId:badResult.result!.runId,checkId:bad.id});
+      // 0666: locked manifest evidence can be withdrawn only after the final invoice is issued.
+      await issue(invalidated,randomUUID(),db.runtime);
       await finalCheckTenant(db.runtime,invalidated.tenantId,client=>client.query("INSERT INTO app.evidence_invalidation(id,tenant_id,evidence_id,actor_membership_id,reason_code) VALUES($1,$2,$3,$4,'verification_invalid')",[randomUUID(),invalidated.tenantId,badResult.sources.find(x=>x.evidenceId)!.evidenceId,FINAL_CHECK_ACTOR]));
       const pending = await seedFinalCheckJob(fixture); await pending.lock();
       await db.owner.query("UPDATE infrastructure.final_check_request SET enqueued_at=clock_timestamp()");
@@ -237,7 +242,7 @@ it("keeps completed-invalidated reruns under separate manifest-attempt authority
   const a = await setup(), originalTask = await payload(a.jobId);
   await executePracticeFinalCheck(recoveryContext((originalTask).tenantId), originalTask, f.shadow, factory(() => false), "synthetic_demo");
   await issue(a, randomUUID());
-  const worker = new FinalCheckRepository(f.shadow), original = await worker.manifest(a.context, a.jobId, originalTask.manifestId);
+  const worker = new FinalCheckRepository(f.shadow), original = await worker.manifest(a.workerContext, a.jobId, originalTask.manifestId);
   await expect(repo().requestRun(a.context, a.jobId, a.digest)).rejects.toMatchObject({ code: "FINAL_CHECK_SOURCE_CHANGED" });
   const evidence = original.sources.find(s => s.evidenceId !== null)!;
   const { finalCheckTenant } = await import("./final-check-fixture.js");
@@ -246,10 +251,10 @@ it("keeps completed-invalidated reruns under separate manifest-attempt authority
   await repo().requestRun(a.context, a.jobId, a.digest); const next = await requestRow(a.jobId);
   expect(next.attempt).toBe(originalTask.attempt + 1); expect(next.manifest_id).not.toBe(originalTask.manifestId);
   await discover(); await executePracticeFinalCheck(recoveryContext((await payload(a.jobId)).tenantId), await payload(a.jobId), f.shadow, factory(() => false), "synthetic_demo");
-  const current = await worker.manifest(a.context, a.jobId, next.manifest_id);
+  const current = await worker.manifest(a.workerContext, a.jobId, next.manifest_id);
   expect([current.lockId, current.cutoff]).toEqual([original.lockId, original.cutoff]);
   expect((await requestRow(a.jobId)).cycle_state).toBe("completed");
-  expect((await worker.manifest(a.context, a.jobId, original.id)).hash).toBe(original.hash);
+  expect((await worker.manifest(a.workerContext, a.jobId, original.id)).hash).toBe(original.hash);
 });
 
 it("closed jobs refuse admission and execution, and lifecycle grants remain narrow", async () => {
@@ -368,6 +373,8 @@ it("unmanaged published-invalidated work retains the original pending-rerun proj
   const result=await worker.manifest(context,a.jobId,manifest.id);
   await new FinalCheckCompletionRepository(f.shadow).publish(context,{version:"final-check-publication.v1",jobId:a.jobId,runId:result.result!.runId,checkId:manifest.id});
   expect((await repo().read(a.context,a.jobId,a.digest)).state).toBe("completed");
+  // 0666: locked manifest evidence can be withdrawn only after the final invoice is issued.
+  await issue(a,randomUUID());
   await finalCheckTenant(f.runtime,a.tenantId,client=>client.query("INSERT INTO app.evidence_invalidation(id,tenant_id,evidence_id,actor_membership_id,reason_code) VALUES($1,$2,$3,$4,'verification_invalid')",[randomUUID(),a.tenantId,result.sources.find(x=>x.evidenceId)!.evidenceId,FINAL_CHECK_ACTOR]));
   expect((await repo().read(a.context,a.jobId,a.digest)).state).toBe("failed");
   await repo().requestRun(a.context,a.jobId,a.digest);
