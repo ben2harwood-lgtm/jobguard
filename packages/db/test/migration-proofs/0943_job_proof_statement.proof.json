@@ -66,14 +66,6 @@
       "section": "entries",
       "before": null,
       "after": {
-        "key": "acl|col|public.jobguard_schema_migration.migration_name|jobguard_runtime|SELECT|-",
-        "group": "a-real-gap-proof-by-trade"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
         "key": "owner|routine|function:app.job_proof_session_digest()|jobguard_binding_owner",
         "group": "a-real-gap-proof-by-trade"
       }
@@ -108,14 +100,6 @@
           "app.lp6_bound_request",
           "app.lp6_session_authority"
         ]
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "owner|routine|function:app.job_proof_authority(uuid,boolean)|jobguard_migration",
-        "group": "a-real-gap-proof-by-trade"
       }
     },
     {
@@ -262,14 +246,6 @@
       }
     },
     {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "owner|routine|function:app.bind_final_account_proof_statement()|jobguard_migration",
-        "group": "a-real-gap-proof-by-trade"
-      }
-    },
-    {
       "section": "routines",
       "before": null,
       "after": {
@@ -291,14 +267,6 @@
       }
     },
     {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "owner|routine|function:app.guard_job_proof_source()|jobguard_migration",
-        "group": "a-real-gap-proof-by-trade"
-      }
-    },
-    {
       "section": "routines",
       "before": null,
       "after": {
@@ -315,14 +283,6 @@
         "definitionSha256": null,
         "staticWrites": [],
         "staticCalls": []
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "owner|routine|function:app.guard_final_lock_proof_statement()|jobguard_migration",
-        "group": "a-real-gap-proof-by-trade"
       }
     },
     {
@@ -347,14 +307,6 @@
       }
     },
     {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "owner|routine|function:app.guard_job_proof_receipt()|jobguard_migration",
-        "group": "a-real-gap-proof-by-trade"
-      }
-    },
-    {
       "section": "routines",
       "before": null,
       "after": {
@@ -371,14 +323,6 @@
         "definitionSha256": null,
         "staticWrites": [],
         "staticCalls": []
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "owner|routine|function:app.validate_job_proof_receipt(uuid,uuid)|jobguard_migration",
-        "group": "a-real-gap-proof-by-trade"
       }
     },
     {
@@ -400,14 +344,6 @@
         "staticCalls": [
           "app.final_lock_hash"
         ]
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "owner|routine|function:app.require_completed_job_proof_statement()|jobguard_migration",
-        "group": "a-real-gap-proof-by-trade"
       }
     },
     {
@@ -508,14 +444,6 @@
       }
     },
     {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "owner|rel:table|app.job_proof_statement|jobguard_migration",
-        "group": "a-real-gap-proof-by-trade"
-      }
-    },
-    {
       "section": "policies",
       "before": null,
       "after": "app.job_proof_statement|tenant_owner|PERMISSIVE|ALL|jobguard_migration|6fa387f2f629fba6"
@@ -524,14 +452,6 @@
       "section": "triggers",
       "before": null,
       "after": "app.job_proof_statement|immutable|app.reject_immutable_commercial_mutation|BEFORE DELETE/UPDATE/TRUNCATE|O"
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "owner|rel:table|app.final_account_proof_statement|jobguard_migration",
-        "group": "a-real-gap-proof-by-trade"
-      }
     },
     {
       "section": "policies",
@@ -606,7 +526,7 @@
       "after": {
         "nspname": "app",
         "proname": "job_proof_authority",
-        "args": "j uuid, locking boolean DEFAULT false",
+        "args": "j uuid, locking boolean",
         "proowner": "jobguard_migration",
         "proacl": "{jobguard_migration=X/jobguard_migration}",
         "prosecdef": true,
@@ -621,7 +541,7 @@
       "after": {
         "nspname": "app",
         "proname": "read_job_proof_statement",
-        "args": "j uuid, r uuid DEFAULT NULL::uuid",
+        "args": "j uuid, r uuid",
         "proowner": "jobguard_migration",
         "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
         "prosecdef": true,
@@ -637,7 +557,7 @@
       "after": {
         "nspname": "app",
         "proname": "job_proof_requirement",
-        "args": "j uuid, r uuid DEFAULT NULL::uuid",
+        "args": "j uuid, r uuid",
         "proowner": "jobguard_migration",
         "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
         "prosecdef": true,
@@ -907,7 +827,7 @@
       "after": {
         "relrowsecurity": true,
         "relforcerowsecurity": true,
-        "guarded": false,
+        "guarded": true,
         "owner": "jobguard_migration"
       }
     },
@@ -917,7 +837,7 @@
       "after": {
         "relrowsecurity": true,
         "relforcerowsecurity": true,
-        "guarded": false,
+        "guarded": true,
         "owner": "jobguard_migration"
       }
     }

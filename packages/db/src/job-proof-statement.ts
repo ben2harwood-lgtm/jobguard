@@ -16,10 +16,11 @@ async function installed(db: TenantTransaction): Promise<boolean> {
  const signatures = ["app.read_job_proof_statement(uuid,uuid)", "app.answer_job_proof_statement(uuid,jsonb)", "app.job_proof_authority(uuid,boolean)", "app.job_proof_session_digest()", "app.job_proof_requirement(uuid,uuid)", "app.bind_final_account_proof_statement()", "app.guard_job_proof_source()", "app.guard_final_lock_proof_statement()", "app.guard_job_proof_receipt()", "app.validate_job_proof_receipt(uuid,uuid)", "app.require_completed_job_proof_statement()", "app.retire_replaced_job_proof_findings(uuid,uuid)", "app.retired_job_proof_findings(uuid)"];
  const present = (await db.$client.query<{ name: string }>("SELECT name FROM unnest($1::text[]) source(name) WHERE pg_catalog.to_regclass(name) IS NOT NULL", [objects])).rows;
  const routines = (await db.$client.query<{ name: string }>("SELECT name FROM unnest($1::text[]) source(name) WHERE pg_catalog.to_regprocedure(name) IS NOT NULL", [signatures])).rows;
- const ledger = (await db.$client.query<{ name: string }>("SELECT name FROM unnest(ARRAY['public.jobguard_schema_migration']) source(name) WHERE pg_catalog.to_regclass(name) IS NOT NULL AND pg_catalog.has_column_privilege(name,'migration_name','SELECT')")).rows;
- const recorded = ledger.length ? (await db.$client.query("SELECT 1 FROM public.jobguard_schema_migration WHERE migration_name=$1", ["0943_job_proof_statement.sql"])).rowCount !== 0 : false;
- if (!recorded && !present.length && !routines.length) return false;
- if (!recorded || present.length !== objects.length || routines.length !== signatures.length) throw new JobProofStatementError("PROOF_SCHEMA_INCONSISTENT");
+ if (!present.length && !routines.length) return false;
+ if (present.length !== objects.length || routines.length !== signatures.length) throw new JobProofStatementError("PROOF_SCHEMA_INCONSISTENT");
+ // The existing requirement reader checks its own ledger record as its owner;
+ // the runtime receives no access to the migration ledger.
+ await db.$client.query("SELECT app.job_proof_requirement(NULL,NULL)");
  return true;
 }
 
@@ -37,7 +38,7 @@ export async function readJobProofStatement(db: TenantTransaction, jobId: string
 /** Serialization only: the private credential bridge is exclusive to statement reads/writes. */
 export async function lockJobProofAuthority(db: TenantTransaction, jobId: string): Promise<void> {
  if (!await installed(db)) return;
- await db.$client.query("SELECT 1 FROM app.job WHERE tenant_id=current_setting('app.tenant_id')::uuid AND id=$1 FOR UPDATE", [jobId]);
+ await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended('job-proof:'||current_setting('app.tenant_id')::uuid::text||':'||$1::uuid::text,0))", [jobId]);
 }
 
 export class JobProofStatementService {

@@ -8,6 +8,27 @@ import { authenticatePracticeSession } from "../src/practice-session.js";
 import { seedHomeOwner } from "./contractor-practice-session-fixtures.js";
 import { DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID } from "../src/demo-seed.js";
 
+// Same transaction-bound, exact-shape permit used by practice-session tests.
+async function insertPracticeJob(client: { query: (sql: string, values?: unknown[]) => Promise<unknown> }, owner: Awaited<ReturnType<typeof authenticatePracticeSession>>, job: string, title: string, status: string) {
+ const initialStatus=status==="live"?"quoting":status;
+ await client.query("SELECT set_config('app.tenant_id',$1,true)",[owner.context.tenantId]);
+ await client.query(`INSERT INTO app.lp_job_insert_permit(tenant_id,job_id,backend_pid,transaction_id,operation,insert_shape,actor_membership_id)
+  VALUES($1,$2,pg_backend_pid(),pg_current_xact_id(),'practice_home',
+   app.lp_job_insert_shape(jsonb_populate_record(NULL::app.job,jsonb_build_object(
+    'tenant_id',$1::uuid,'id',$2::uuid,'title',$3::text,'status',$4::text,'revision',0,
+    'practice_session_digest',$5::text,'practice_scenario','home','provenance','system_generated_quote'))),$6)`,
+  [owner.context.tenantId,job,title,initialStatus,owner.digest,owner.membershipId]);
+ await client.query("INSERT INTO app.job(tenant_id,id,title,status,practice_session_digest,practice_scenario) VALUES($1,$2,$3,$4,$5,'home')",
+  [owner.context.tenantId,job,title,initialStatus,owner.digest]);
+ if(status==="live") {
+  // The job insert itself uses the normal permit and guards. Retain the
+  // suite's existing owner-only synthetic live prerequisites after admission.
+  await client.query("SET LOCAL session_replication_role='replica'");
+  await client.query("UPDATE app.job SET status='live' WHERE tenant_id=$1 AND id=$2",[owner.context.tenantId,job]);
+  await client.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','synthetic_demo','backfilled_synthetic_fixture')",[owner.context.tenantId,job]);
+ }
+}
+
 const base = createWatchdogHarness("real-gap-proof-by-trade", 63300);
 let practice: Awaited<ReturnType<typeof authenticatePracticeSession>>;
 const scopeIds = new Map<string,string>();
@@ -23,11 +44,10 @@ const h = {
   const job = randomUUID(), scope = randomUUID(), client = await base.admin.connect();
   try {
    await client.query("BEGIN");
+   await insertPracticeJob(client,practice,job,"Fictional decorating","live");
    await client.query("SET LOCAL session_replication_role='replica'");
-   await client.query("INSERT INTO app.job(tenant_id,id,title,status,practice_session_digest,practice_scenario) VALUES($1,$2,'Fictional decorating','live',$3,'home')", [DEMO_TENANT_ID,job,practice.digest]);
    await client.query("INSERT INTO app.scope_identity(tenant_id,job_id,id,state) VALUES($1,$2,$3,'confirmed')",[DEMO_TENANT_ID,job,scope]);
    await client.query("INSERT INTO app.scope_progress(tenant_id,job_id,scope_item_id,stage) VALUES($1,$2,$3,'in_progress')",[DEMO_TENANT_ID,job,scope]);
-   await client.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','synthetic_demo','backfilled_synthetic_fixture')",[DEMO_TENANT_ID,job]);
    await client.query("COMMIT");
   } catch(error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
   scopeIds.set(job,scope); return job;
@@ -91,6 +111,7 @@ describe("explicit job proof statements", () => {
  });
  it("refuses direct runtime statement, binding and result forgery", async () => {
   const job=await h.live();await answer(job,false);
+  expect((await h.runtime.query("SELECT has_column_privilege(current_user,'public.jobguard_schema_migration','migration_name','SELECT') allowed")).rows[0].allowed).toBe(false);
   for(const table of ["job_proof_statement","final_account_proof_statement"]){
    await expect(withTenant(h.runtime,h.ctx,db=>db.$client.query(`SELECT * FROM app.${table}`))).rejects.toMatchObject({code:"42501"});
    await expect(withTenant(h.runtime,h.ctx,db=>db.$client.query(`INSERT INTO app.${table} DEFAULT VALUES`))).rejects.toMatchObject({code:"42501"});
@@ -103,7 +124,7 @@ describe("explicit job proof statements", () => {
    const two=await startBlankPracticeCompany(h.runtime,{version:"blank-practice-company.v1",action:"start"});
    const first=await authenticatePracticeSession(h.runtime,one),other=await authenticatePracticeSession(h.runtime,two);
    const job=randomUUID();
-   await h.admin.query("INSERT INTO app.job(tenant_id,id,title,status,practice_session_digest,practice_scenario) VALUES($1,$2,'Fictional decorating','draft',$3,'home')",[first.context.tenantId,job,first.digest]);
+   await withTenant(h.admin,first.context,db=>insertPracticeJob(db.$client,first,job,"Fictional decorating","draft"));
    await withTenant(h.runtime,first.context,db=>readJobProofStatement(db,job));
    await expect(withTenant(h.runtime,other.context,db=>readJobProofStatement(db,job))).rejects.toThrow("NOT_FOUND");
   } finally {if(old===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=old;}
@@ -246,11 +267,11 @@ it("No requires verified completion photo; absent statement preserves legacy has
   const owner=await authenticatePracticeSession(c.runtime,token),fresh=randomUUID(),scope=randomUUID();
   const fixture=await c.admin.connect();
   try {
-   await fixture.query("BEGIN");await fixture.query("SET LOCAL session_replication_role='replica'");
-   await fixture.query("INSERT INTO app.job(tenant_id,id,title,status,practice_session_digest,practice_scenario) VALUES($1,$2,'Fictional completion photo','live',$3,'home')",[owner.context.tenantId,fresh,owner.digest]);
+   await fixture.query("BEGIN");
+   await insertPracticeJob(fixture,owner,fresh,"Fictional completion photo","live");
+   await fixture.query("SET LOCAL session_replication_role='replica'");
    await fixture.query("INSERT INTO app.scope_identity(tenant_id,job_id,id,state) VALUES($1,$2,$3,'confirmed')",[owner.context.tenantId,fresh,scope]);
    await fixture.query("INSERT INTO app.scope_progress(tenant_id,job_id,scope_item_id,stage) VALUES($1,$2,$3,'in_progress')",[owner.context.tenantId,fresh,scope]);
-   await fixture.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','synthetic_demo','backfilled_synthetic_fixture')",[owner.context.tenantId,fresh]);
    await fixture.query("COMMIT");
   } catch(error){await fixture.query("ROLLBACK");throw error;}finally{fixture.release();}
   const no=await new JobProofStatementService(c.runtime).answer(owner.context,fresh,{version:"practice-proof-command.v1",action:"answer_statement",commandId:randomUUID(),includesElectricalWork:false});

@@ -1,6 +1,5 @@
 BEGIN;
--- Practice-only proof rule. Migration metadata is the only additional column read grant.
-GRANT SELECT(migration_name) ON public.jobguard_schema_migration TO jobguard_runtime;
+-- Practice-only proof rule. Runtime has no access to the migration ledger.
 -- Private bridge: derive the home credential from the real transaction binding,
 -- never from app.* settings. Existing binding owner/credential tables only.
 GRANT CREATE ON SCHEMA app TO jobguard_binding_owner;
@@ -49,8 +48,10 @@ BEGIN
  END IF;
  IF NOT owned THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='42501'; END IF;
  IF locking THEN
-  -- Same authority -> job -> command -> upload -> audit order as the existing paths.
-  PERFORM 1 FROM app.job WHERE tenant_id=t AND id=j FOR UPDATE;
+  -- Keep the job share lock before proof serialization, matching live writers
+  -- and avoiding inversion with Final Check's existing job update lock.
+  PERFORM 1 FROM app.job WHERE tenant_id=t AND id=j FOR SHARE;
+  PERFORM pg_advisory_xact_lock(hashtextextended('job-proof:'||t::text||':'||j::text,0));
   PERFORM 1 FROM app.membership WHERE tenant_id=t AND id=a FOR SHARE;
  END IF;
  -- Separate statements recheck after waits; every replay follows the same checks.
@@ -125,6 +126,10 @@ CREATE FUNCTION app.job_proof_requirement(j uuid,r uuid DEFAULT NULL) RETURNS js
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
 DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid;
 BEGIN
+ IF NOT EXISTS(SELECT 1 FROM public.jobguard_schema_migration WHERE migration_name='0943_job_proof_statement.sql')
+ THEN RAISE EXCEPTION 'PROOF_SCHEMA_INCONSISTENT' USING ERRCODE='23514'; END IF;
+ -- NULL is the internal presence probe, after all object signatures were checked.
+ IF j IS NULL AND r IS NULL THEN RETURN 'true'::jsonb; END IF;
  IF EXISTS(SELECT 1 FROM app.job_proof_statement WHERE tenant_id=t AND job_id=j)
   OR EXISTS(SELECT 1 FROM app.final_account_proof_statement WHERE tenant_id=t AND job_id=j AND revision_id=r)
  THEN RETURN app.read_job_proof_statement(j,r); END IF;
@@ -239,7 +244,7 @@ BEGIN
  IF TG_TABLE_NAME='evidence_upload' THEN
   IF NEW.scope_item_id IS NULL OR NEW.expected_content_type='audio/wav' THEN RETURN NEW; END IF;
  END IF;
- PERFORM 1 FROM app.job WHERE tenant_id=t AND id=j FOR UPDATE;
+ PERFORM pg_advisory_xact_lock(hashtextextended('job-proof:'||t::text||':'||j::text,0));
  IF NOT EXISTS(SELECT 1 FROM app.job_proof_statement WHERE tenant_id=t AND job_id=j) THEN RETURN NEW; END IF;
  IF TG_TABLE_NAME='evidence_upload' THEN
   IF EXISTS(SELECT 1 FROM app.evidence_upload WHERE tenant_id=t AND id=NEW.id) THEN RETURN NEW; END IF;
@@ -273,7 +278,7 @@ CREATE FUNCTION app.guard_final_lock_proof_statement() RETURNS trigger
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
 DECLARE s app.job_proof_statement; binding app.final_account_proof_statement; requirement jsonb; anchor uuid; canonical_source text; invalidations text; expected_hash text;
 BEGIN
- PERFORM 1 FROM app.job WHERE tenant_id=NEW.tenant_id AND id=NEW.job_id FOR UPDATE;
+ PERFORM pg_advisory_xact_lock(hashtextextended('job-proof:'||NEW.tenant_id::text||':'||NEW.job_id::text,0));
  SELECT * INTO s FROM app.job_proof_statement WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id ORDER BY revision DESC LIMIT 1;
  SELECT * INTO binding FROM app.final_account_proof_statement WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id AND revision_id=NEW.final_account_revision_id;
  IF s.id IS NULL THEN RETURN NEW; END IF;
