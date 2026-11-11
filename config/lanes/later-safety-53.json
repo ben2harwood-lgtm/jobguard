@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-53": {
+      "branches": [
+        "codex/sandbox/later-safety-53"
+      ],
+      "allow": [
+        "packages/db/migration-notes/0807_duplicate_disposition_command_lifecycle.md",
+        "packages/db/migrations/0729_duplicate_disposition_command_lifecycle.sql",
+        "packages/db/migrations/0807_duplicate_disposition_command_lifecycle.sql",
+        "packages/db/test/extra-duplicate-candidates.integration.test.ts",
+        "packages/db/test/extra-proceed-migration.test.ts",
+        "packages/db/test/extra-proceed-upgrade.integration.test.ts",
+        "packages/db/test/late-source-import-migration.test.ts",
+        "packages/db/test/lp5-command-catalog.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/0729_duplicate_disposition_command_lifecycle.proof.json",
+        "packages/db/test/migration-proofs/0807_duplicate_disposition_command_lifecycle.proof.json",
+        "packages/db/test/restore-reconciliation-upgrade.integration.test.ts"
+      ]
+    }
+  }
+}
