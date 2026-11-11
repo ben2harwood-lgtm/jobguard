@@ -170,6 +170,8 @@ export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: reado
   }
   async function show() {
     if (!step || running.current) return;
+    // The input requesting tour execution must not outlive it as a manual hold.
+    lastInput.current = null;
     running.current = true; setBusy(true); setError("");
     const controller = new AbortController(); action.current = controller;
     const timeout = window.setTimeout(() => controller.abort(), step.timeoutMs ?? 12_000);

@@ -305,6 +305,24 @@ describe("recent human input and spotlight replacements", () => {
       f.enter(2); expect(f.scrollBy).toHaveBeenCalledTimes(5);
     } finally { f.cleanup(); }
   });
+  it("Show me input cannot suppress next-step clearance after execution finishes", async () => {
+    const f = fixture();
+    try {
+      // A trusted click starts Show me; its action can finish within the input window.
+      f.input("pointerdown"); f.input("pointerup");
+      f.button("Show me").onClick();
+      await vi.advanceTimersByTimeAsync(650);
+      expect(f.refs[2]!.current).toBe(false);
+      expect(hooks.setters[0]).toHaveBeenCalled();
+      f.enter(1);
+      const replacement = f.replace();
+      expect(replacement.scrollIntoView).toHaveBeenCalledOnce();
+      expect(f.scrollBy).toHaveBeenCalledTimes(3);
+      // Fresh manual input on the new screen still suppresses subsequent replacements.
+      f.input("keydown");
+      expect(f.replace().scrollIntoView).not.toHaveBeenCalled();
+    } finally { f.cleanup(); }
+  });
   it.each(["pointerdown", "touchstart", "keydown"])("accepts only trusted %s; exact expiry never defers a skipped target", type => {
     const f = fixture();
     try {
