@@ -52,8 +52,10 @@ describe("SV-4 DW7 lock-bound final and supplementary issue",()=>{
     SELECT gen_random_uuid(),tenant_id,job_id,$1,line_kind,source_id,scope_item_id,commercial_revision_id,approval_id,description,net_pence,ordinal FROM app.final_account_line WHERE tenant_id=$2 AND final_account_revision_id=$3`,[revision,a.tenantId,a.revisionId]);
    for(const [index,net]of added.entries()){
     const source=randomUUID();
-    await db.query(`INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,description,net_pence,ordinal)
-     VALUES($1,$2,$3,$4,'variation',$5,$6,$5,'Fictional supplementary line',$7,$8)`,[randomUUID(),a.tenantId,a.jobId,revision,source,a.scopeItemId,net,index+2]);
+    // Product variation lines always carry their approval (final-account-repository.ts);
+    // omission variations are negative (core variation.ts), so signed nets are reachable.
+    await db.query(`INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,approval_id,description,net_pence,ordinal)
+     VALUES($1,$2,$3,$4,'variation',$5,$6,$5,$9,'Fictional supplementary line',$7,$8)`,[randomUUID(),a.tenantId,a.jobId,revision,source,a.scopeItemId,net,index+2,randomUUID()]);
    }
    await db.query("UPDATE app.final_account_draft SET current_revision_id=$1,revision=2 WHERE tenant_id=$2 AND id=$3",[revision,a.tenantId,a.draftId]);
   });return {revision,hash};
