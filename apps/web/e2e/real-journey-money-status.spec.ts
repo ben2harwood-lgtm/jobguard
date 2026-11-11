@@ -23,10 +23,20 @@ async function createJob(page: Page, text: string, net: number, customer: string
   await click(page, "Make my draft"); await click(page, "Check and edit my draft");
   await expect(page.getByRole("heading", { name: "Check the work items", exact: true })).toBeVisible();
   const jobId = new URL(page.url()).pathname.split("/")[2]!;
-  await page.getByLabel("Customer name", { exact: true }).fill(customer);
-  await page.getByLabel("Premises address", { exact: true }).fill(address);
-  // Keep the supplied valid practice postcode, as the hand walk did.
-  await expect(page.getByLabel("UK postcode", { exact: true })).not.toHaveValue("");
+  if (/\bfor\s+.+?\s+at\s+\d/u.test(text)) {
+    // The builder's words name the customer and site, so the form suggests them
+    // and leaves town and postcode for the builder to enter.
+    await expect(page.getByText("Suggested from your words — check before saving", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("Customer name", { exact: true })).toHaveValue(customer);
+    await expect(page.getByLabel("Premises address", { exact: true })).toHaveValue(address);
+    await page.getByLabel("Town", { exact: true }).fill("London");
+    await page.getByLabel("UK postcode", { exact: true }).fill("SW1A 1AA");
+  } else {
+    await page.getByLabel("Customer name", { exact: true }).fill(customer);
+    await page.getByLabel("Premises address", { exact: true }).fill(address);
+    // Keep the supplied valid practice postcode, as the hand walk did.
+    await expect(page.getByLabel("UK postcode", { exact: true })).not.toHaveValue("");
+  }
   await click(page, "Save customer and site");
   await expect(page.getByTestId("party-customer")).toHaveText(customer);
   if (split) {
