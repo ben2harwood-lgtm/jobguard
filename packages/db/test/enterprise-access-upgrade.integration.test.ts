@@ -166,9 +166,30 @@ it('emergency_dual_owner/scim2_machine preserve populated identity state, instal
   columns:(newManifest.columns as {attname:string}[]).filter(c=>!attemptColumns.includes(c.attname)),
   constraints:[...(newManifest.constraints as Con[]).filter(c=>!attemptNames.has(c.name)),oldLockKey].sort((a,b)=>a.name<b.name?-1:a.name>b.name?1:0),
  };
+ // 0943 adds only its named receipt guards; pin both triggers to its proof and
+ // remove only the deferred trigger's exact constraint from the predecessor comparison.
+ const proofStatement=JSON.parse(await readFile(new URL('./migration-proofs/0943_job_proof_statement.proof.json',import.meta.url),'utf8'));
+ expect(proofStatement.lp0.filter((entry:{section:string;after:unknown})=>entry.section==='triggers'&&typeof entry.after==='string'&&entry.after.startsWith('app.command_receipt|')).map((entry:{after:string})=>entry.after)).toEqual([
+  'app.command_receipt|proof_statement_receipt_guard|app.guard_job_proof_receipt|BEFORE INSERT/DELETE/UPDATE|O',
+  'app.command_receipt|proof_statement_receipt_complete|app.require_completed_job_proof_statement|AFTER INSERT/UPDATE|O',
+ ]);
+ expect((await h.admin.query(`SELECT t.tgname name,n.nspname||'.'||p.proname routine,t.tgtype type,
+  t.tgenabled enabled,t.tgdeferrable deferrable,t.tginitdeferred deferred
+  FROM pg_trigger t JOIN pg_proc p ON p.oid=t.tgfoid JOIN pg_namespace n ON n.oid=p.pronamespace
+  WHERE t.tgrelid='app.command_receipt'::regclass AND t.tgname=ANY($1) ORDER BY t.tgname`,
+  [['proof_statement_receipt_guard','proof_statement_receipt_complete']])).rows).toEqual([
+  {name:'proof_statement_receipt_complete',routine:'app.require_completed_job_proof_statement',type:21,enabled:'O',deferrable:true,deferred:true},
+  {name:'proof_statement_receipt_guard',routine:'app.guard_job_proof_receipt',type:31,enabled:'O',deferrable:false,deferred:false},
+ ]);
+ const isReceipt=(r:Relation)=>r.nspname==='app'&&r.relname==='command_receipt';
+ const receiptConstraints=after.relations.find(isReceipt)!.constraints as Con[];
+ expect(receiptConstraints.filter(c=>c.name==='proof_statement_receipt_complete')).toEqual([
+  {name:'proof_statement_receipt_complete',definition:'TRIGGER DEFERRABLE INITIALLY DEFERRED'},
+ ]);
  const afterRelations=after.relations.map((r:Relation)=>isLanding(r)?{...r,constraints:(r.constraints as Con[]).filter(c=>c.name!==added)}
   :isJob(r)?{...r,constraints:(r.constraints as Con[]).map(c=>c.name===shape?priorShape:c)}:isBinding(r)?{...r,columns:bindingBefore.columns,constraints:bindingBefore.constraints}:isManifest(r)?normalizedManifest
-  :isOriginal(r)?{...r,columns:(r.columns as Col[]).map(c=>c.attname==='scope_item_id'?{...c,attnotnull:true}:c)}:r);
+  :isOriginal(r)?{...r,columns:(r.columns as Col[]).map(c=>c.attname==='scope_item_id'?{...c,attnotnull:true}:c)}
+  :isReceipt(r)?{...r,constraints:receiptConstraints.filter(c=>c.name!=='proof_statement_receipt_complete')}:r);
  expectRelationsUnchanged(catalogue.relations,afterRelations,laterAcl);
  // 0672 lets its migration-owned pack writer read the sealed request binding; only that ACL entry is added.
  const bindingReaders=new Set(['app.current_actor','app.current_tenant']);

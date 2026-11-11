@@ -10,7 +10,7 @@ export class JobProofStatementError extends Error {
  constructor(readonly code: "PROOF_SCHEMA_UNAVAILABLE" | "PROOF_SCHEMA_INCONSISTENT" | "FORBIDDEN" | "NOT_FOUND" | "PROOF_STATEMENT_FROZEN" | "INVALID_COMMAND" | "IDEMPOTENCY_CONFLICT") { super(code); }
 }
 
-/** Inspect both the installation record and signatures on each transaction. Never cache across upgrades. */
+/** Inspect object presence and signatures on each transaction. Never cache across upgrades. */
 async function installed(db: TenantTransaction): Promise<boolean> {
  const objects = ["app.job_proof_statement", "app.final_account_proof_statement"];
  const signatures = ["app.read_job_proof_statement(uuid,uuid)", "app.answer_job_proof_statement(uuid,jsonb)", "app.job_proof_authority(uuid,boolean)", "app.job_proof_session_digest()", "app.job_proof_requirement(uuid,uuid)", "app.bind_final_account_proof_statement()", "app.guard_job_proof_source()", "app.guard_final_lock_proof_statement()", "app.guard_job_proof_receipt()", "app.validate_job_proof_receipt(uuid,uuid)", "app.require_completed_job_proof_statement()", "app.retire_replaced_job_proof_findings(uuid,uuid)", "app.retired_job_proof_findings(uuid)"];
@@ -18,9 +18,6 @@ async function installed(db: TenantTransaction): Promise<boolean> {
  const routines = (await db.$client.query<{ name: string }>("SELECT name FROM unnest($1::text[]) source(name) WHERE pg_catalog.to_regprocedure(name) IS NOT NULL", [signatures])).rows;
  if (!present.length && !routines.length) return false;
  if (present.length !== objects.length || routines.length !== signatures.length) throw new JobProofStatementError("PROOF_SCHEMA_INCONSISTENT");
- // The existing requirement reader checks its own ledger record as its owner;
- // the runtime receives no access to the migration ledger.
- await db.$client.query("SELECT app.job_proof_requirement(NULL,NULL)");
  return true;
 }
 

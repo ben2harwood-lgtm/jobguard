@@ -281,7 +281,7 @@ it("No requires verified completion photo; absent statement preserves legacy has
 },300_000);
 
 describe("schema presence and command serialization", () => {
- it("fails closed for partial installed objects and objects without their installation record", async () => {
+ it("fails closed for partial installed objects and uses complete objects without ledger access", async () => {
   const job=await h.live();
   await h.admin.query("ALTER FUNCTION app.job_proof_requirement(uuid,uuid) RENAME TO proof_requirement_missing_fixture");
   try {
@@ -289,7 +289,7 @@ describe("schema presence and command serialization", () => {
    await expect(answer(job,false)).rejects.toThrow("PROOF_SCHEMA_INCONSISTENT");
   } finally { await h.admin.query("ALTER FUNCTION app.proof_requirement_missing_fixture(uuid,uuid) RENAME TO job_proof_requirement"); }
   await h.admin.query("UPDATE public.jobguard_schema_migration SET migration_name='0943_missing_record_fixture.sql' WHERE migration_name='0943_job_proof_statement.sql'");
-  try { await expect(read(job)).rejects.toThrow("PROOF_SCHEMA_INCONSISTENT"); }
+  try { expect(await read(job)).toMatchObject({statement:null,requiredEvidenceType:"electrical_certificate"}); }
   finally { await h.admin.query("UPDATE public.jobguard_schema_migration SET migration_name='0943_job_proof_statement.sql' WHERE migration_name='0943_missing_record_fixture.sql'"); }
   expect(await read(job)).toMatchObject({statement:null,requiredEvidenceType:"electrical_certificate"});
  });

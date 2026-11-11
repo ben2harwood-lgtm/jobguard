@@ -11,8 +11,9 @@ BEGIN
  IF b.credential_kind<>'practice' THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
  SELECT s.token_digest INTO d FROM control_plane.practice_session s
  WHERE encode(sha256(convert_to('lp6-home:'||s.token_digest,'UTF8')),'hex')=b.session_ref
-  AND s.environment='synthetic_demo' AND s.revoked_at IS NULL AND s.expires_at>clock_timestamp() FOR SHARE;
+  AND s.environment='synthetic_demo' AND s.revoked_at IS NULL AND s.expires_at>clock_timestamp();
  IF d IS NULL THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
+ -- The migration-owned authority reader takes the session share lock.
  SELECT x.actor_id INTO a FROM app.lp6_session_authority('practice',d,b.tenant_id) x;
  IF a IS DISTINCT FROM b.actor_id THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
  RETURN d;
@@ -126,8 +127,6 @@ CREATE FUNCTION app.job_proof_requirement(j uuid,r uuid DEFAULT NULL) RETURNS js
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
 DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid;
 BEGIN
- IF NOT EXISTS(SELECT 1 FROM public.jobguard_schema_migration WHERE migration_name='0943_job_proof_statement.sql')
- THEN RAISE EXCEPTION 'PROOF_SCHEMA_INCONSISTENT' USING ERRCODE='23514'; END IF;
  -- NULL is the internal presence probe, after all object signatures were checked.
  IF j IS NULL AND r IS NULL THEN RETURN 'true'::jsonb; END IF;
  IF EXISTS(SELECT 1 FROM app.job_proof_statement WHERE tenant_id=t AND job_id=j)
