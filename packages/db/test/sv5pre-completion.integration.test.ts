@@ -1,6 +1,6 @@
 import { withTenant } from "../src/tenant-context.js";
 import { verifiedTenantContextForQueuedJob } from "../src/tenant-context.js";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createLockFixture, closeLockFixture, seedAccount, prepareLock, asFixtureTenant, publishFixtureCompletion, LOCK_OWNER, LOCK_HASH } from "./sv5pre-fixtures.js";
 import { FinalAccountLockRepository } from "../src/final-account-lock-repository.js";
@@ -305,6 +305,8 @@ describe("SV5PRE authoritative completion", () => {
     await db.query("BEGIN");
     await db.query("SELECT set_config('app.tenant_id',$1,true)",[a.tenantId]);
     await db.query("SET LOCAL lock_timeout='10s'");
+    // LP-6d: a direct call needs a bound request; bind the lock owner's persisted fixture credential.
+    await db.query("SELECT app.bind_request('real',$1,$2)",[createHash("sha256").update(`lp6-test:${a.tenantId}:${LOCK_OWNER}`).digest("hex"),a.tenantId]);
     await db.query("SELECT app.require_watchdog_live($1)",[a.jobId]);
    }
    // Both already hold the merged live guard's SHARE lock. An UPDATE upgrade cannot succeed here.

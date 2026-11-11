@@ -67,7 +67,9 @@ describe("ENT-3b success paths", () => {
   const receipts = (await c.admin.query("SELECT command_type,status FROM app.command_receipt WHERE tenant_id=$1 AND command_type IN('StartSiteVisit','CompleteSiteVisit') ORDER BY command_type", [f.p.tenantId])).rows;
   expect(receipts).toEqual([{ command_type: "CompleteSiteVisit", status: "succeeded" }, { command_type: "StartSiteVisit", status: "succeeded" }]);
   await chain(c, f);
-  const shown = (await new JobSchedulingRepository(c.runtime).siteVisits(f.members.supervisor.member, f.jobId)).visits.find(v => v.id === started.visitId);
+  // LP-6d: the scheduling read runs in the supervisor's own bound request.
+  const supervisor = { ...f.members.supervisor.member, context: await testActorContext(c.admin, f.ctx, f.members.supervisor.member) };
+  const shown = (await new JobSchedulingRepository(c.runtime).siteVisits(supervisor, f.jobId)).visits.find(v => v.id === started.visitId);
   expect(shown).toMatchObject({ membershipId: a.member.membershipId, startedAt: expect.any(String), completedAt: expect.any(String) });
   expect(Date.parse(shown!.completedAt!)).toBeGreaterThanOrEqual(Date.parse(shown!.startedAt));
   // A "yes" with no extra logged is accepted (the prompt for it belongs to a later piece).
@@ -345,7 +347,8 @@ describe("ENT-3b repair round 2 authority races (real PostgreSQL)", () => {
    const open = kind === "complete" ? await start(f, a) : undefined;
    const raw = kind === "start" ? startInput(f) : completeInput(f, open!.visitId, "yes");
    let exerciseRevocation = false;
-   const actingContext = () => exerciseRevocation && change === "membership-revocation" ? testTenantContext(f.p.tenantId,{membershipId:a.member.membershipId,bindRequest:false}) : testActorContext(c.admin,f.ctx,a.member);
+   // LP-6d: the member always acts through its own bound request; once revoked, that request can no longer bind.
+   const actingContext = () => testActorContext(c.admin,f.ctx,a.member);
    const run = async () => kind === "start" ? repo.startVisit(await actingContext(), a.member, raw) : repo.completeVisit(await actingContext(), a.member, raw);
    const first = path === "replay" ? await run() : undefined;
    exerciseRevocation = true;
@@ -360,8 +363,10 @@ describe("ENT-3b repair round 2 authority races (real PostgreSQL)", () => {
      // The pre-check has COMMITted and released its connection. This is a separate real PostgreSQL command/COMMIT before the visit transaction starts.
      if (change === "membership-revocation") await command(c, f, { kind: "membership.revoke", membershipId: a.member.membershipId });
      else await reviseOrder(c, f, f.revision, [f.named.member.membershipId]);
-     const decision = await withTenant(c.runtime, f.ctx, async db => (await db.$client.query("SELECT decision,reason_code FROM app.ent3b_visit_authority($1,$2)", [a.member.membershipId, f.jobId])).rows);
-     expect(decision).toEqual(change === "membership-revocation" ? [{ decision: "forbidden", reason_code: "member_inactive" }] : [{ decision: "not_found", reason_code: "job_out_of_scope" }]);
+     // LP-6d: the decision is read in the member's own bound request; a revoked member cannot bind one at all.
+     const decision = withTenant(c.runtime, await testActorContext(c.admin, f.ctx, a.member), async db => (await db.$client.query("SELECT decision,reason_code FROM app.ent3b_visit_authority($1,$2)", [a.member.membershipId, f.jobId])).rows);
+     if (change === "membership-revocation") await expect(decision).rejects.toMatchObject({ code: "FORBIDDEN" });
+     else expect(await decision).toEqual([{ decision: "not_found", reason_code: "job_out_of_scope" }]);
      before = await snapshot(c, f.p.tenantId);
     }
     return authority;

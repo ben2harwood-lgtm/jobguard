@@ -64,15 +64,19 @@ it.each(["work orders", "contractor parties"] as const)("hides rejected bindings
 });
 
 it("binds a newly issued contractor credential before bootstrap reads and audit", async () => {
-  const query = vi.fn(async (sql: string) => ({ rows: sql.includes("start_contractor_practice") ? [{ tenant_id: member.tenantId }] : [] }));
+  const query = vi.fn(async (sql: string, _values?: unknown[]) => ({ rows: sql.includes("start_contractor_practice") ? [{ tenant_id: member.tenantId }]
+    : sql.includes("app.contractor_session") ? [{ tenant_id: member.tenantId, membership_id: member.membershipId, identity_user_id: member.identityUserId }]
+    : sql.includes("app.current_actor()") ? [{ actor: member.membershipId, tenant: member.tenantId }] : [] }));
   const pool = {
     connect: async () => ({ query, release: vi.fn() }),
     query: async () => ({ rows: [{ tenant_id: member.tenantId, membership_id: member.membershipId, identity_user_id: member.identityUserId }] }),
   } as unknown as Pool;
   await new ContractorRepository(pool).startPractice(session);
-  expect(query.mock.calls.map(([sql]) => sql).slice(0, 3)).toEqual([
-    "BEGIN", "SELECT app.start_contractor_practice($1) tenant_id", "SELECT app.bind_request('contractor_practice',$1,$2)",
+  expect(query.mock.calls.map(([sql]) => sql).slice(0, 5)).toEqual([
+    "BEGIN", "SELECT app.start_contractor_practice($1) tenant_id", "SELECT * FROM app.contractor_session($1)",
+    "SELECT app.bind_request($1, $2, $3)", "SELECT app.current_actor() actor, app.current_tenant() tenant",
   ]);
+  expect(query.mock.calls[3]?.[1]).toEqual(["contractor_practice", session, member.tenantId]);
 });
 
 it("hides a malformed import tenant before opening a database transaction", async () => {

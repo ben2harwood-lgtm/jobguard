@@ -2,7 +2,8 @@ import type { Pool } from "pg";
 import { z } from "zod";
 import { WorkOrderError, jobAssignmentsV1, jobSiteVisitsV1 } from "@jobguard/core";
 import { assertContractorGate, workOrderFailure } from "./work-order-repository.js";
-import { verifiedTenantContextFromMembership, withTenant, type AuthenticatedMembership, type TenantTransaction } from "./tenant-context.js";
+import { requireContractorRequestContext, type ContractorSessionMembership } from "./contractor-repository.js";
+import { withTenant, type AuthenticatedMembership, type TenantTransaction } from "./tenant-context.js";
 
 /**
  * Read projection of the scheduling facts ENT-2 owns (Q3, coordinator ruling 8 Oct): who is assigned to a job and its recorded site visits.
@@ -16,10 +17,10 @@ export class JobSchedulingRepository {
     const allowed = (await db.$client.query<{ allowed: boolean }>("SELECT app.contractor_job_allowed($1,'job.read',$2) allowed", [principal.membershipId, jobId])).rows[0]!.allowed;
     if (!allowed) throw new WorkOrderError("NOT_FOUND");
   }
-  async assignments(principal: AuthenticatedMembership, jobId: string) {
+  async assignments(principal: ContractorSessionMembership, jobId: string) {
     if (!z.string().uuid().safeParse(jobId).success) throw new WorkOrderError("NOT_FOUND");
     try {
-      return await withTenant(this.pool, verifiedTenantContextFromMembership(principal), async db => {
+      return await withTenant(this.pool, requireContractorRequestContext(principal), async db => {
         await this.scoped(db, principal, jobId);
         const c = db.$client;
         const team = (await c.query<{ work_order_id: string; team_id: string; name: string }>(
@@ -33,10 +34,10 @@ export class JobSchedulingRepository {
       });
     } catch (error) { throw workOrderFailure(error); }
   }
-  async siteVisits(principal: AuthenticatedMembership, jobId: string) {
+  async siteVisits(principal: ContractorSessionMembership, jobId: string) {
     if (!z.string().uuid().safeParse(jobId).success) throw new WorkOrderError("NOT_FOUND");
     try {
-      return await withTenant(this.pool, verifiedTenantContextFromMembership(principal), async db => {
+      return await withTenant(this.pool, requireContractorRequestContext(principal), async db => {
         await this.scoped(db, principal, jobId);
         const visits = (await db.$client.query<{ id: string; membership_id: string; started_at: Date; completed_at: Date | null }>(
           "SELECT id,membership_id,started_at,completed_at FROM app.site_visit WHERE tenant_id=$1 AND job_id=$2 ORDER BY started_at,id", [principal.tenantId, jobId])).rows;

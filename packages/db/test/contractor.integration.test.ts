@@ -1,4 +1,4 @@
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testBoundTenantContext, testTenantContext } from "./tenant-context-test-utils.js";
 import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
 import { randomUUID, createHash } from "node:crypto";
 import { readFile, mkdtemp, rm } from "node:fs/promises";
@@ -38,8 +38,12 @@ async function command(p:AuthenticatedMembership,fields:Record<string,unknown>){
 async function fixtureMember(p:AuthenticatedMembership,role:string,kind:string,scopeId:string,clientId:string|null=null,contractId:string|null=null){
  const id=randomUUID();await command(p,{kind:'member.invite',id,role,email:`${id}@fictional.invalid`,scope:{kind,id:scopeId},clientId,contractId});
  const row=(await admin.query<{identity_user_id:string}>('SELECT identity_user_id FROM app.membership WHERE tenant_id=$1 AND id=$2',[p.tenantId,id])).rows[0]!;
- return {...p,membershipId:id,identityUserId:row.identity_user_id} as AuthenticatedMembership;
+ return ownContext({...p,membershipId:id,identityUserId:row.identity_user_id} as AuthenticatedMembership);
 }
+// LP-6d: direct database pins run inside the actor's own bound request, so the database constraint (not the binding) decides.
+const boundOf=(m:AuthenticatedMembership)=>(m as unknown as {context:ReturnType<typeof verifiedTenantContextFromMembership>}).context;
+// LP-6d: an invited fixture member acts through its own persisted credential, never the owner's bound context.
+async function ownContext(m:AuthenticatedMembership){return {...m,context:await testBoundTenantContext(admin,m.tenantId,m.membershipId)} as AuthenticatedMembership;}
 describe('ENT-1 PostgreSQL guarantees',()=>{
  it('generates one audited organisation for racing practice creation',async()=>{
   const session=randomUUID();const [a,b]=await Promise.all([repo.startPractice(session),repo.startPractice(session)]);expect(a).toEqual(b);
@@ -168,7 +172,7 @@ describe('ENT-1 PostgreSQL guarantees',()=>{
   await command(p,{kind:'member.invite',id:membershipId,role:'commercial_manager',email:'manager@fictional.invalid',scope:{kind:'branch',id:branch},clientId:null,contractId:null});
   // Authentication fixture lookup uses the real runtime role, never the migration connection.
   const identity=(await withTenant(runtime,verifiedTenantContextFromMembership(p),db=>db.$client.query('SELECT identity_user_id FROM app.membership WHERE id=$1',[membershipId]))).rows[0].identity_user_id;
-  const manager={...p,membershipId,identityUserId:identity} as AuthenticatedMembership;
+  const manager=await ownContext({...p,membershipId,identityUserId:identity} as AuthenticatedMembership);
   let projection=await query(manager,'contracts');expect(projection.revision).toBe(2);expect(projection.members).toEqual([]);expect(projection.grants).toEqual([]);
   await expect(query(manager)).rejects.toMatchObject({code:'NOT_FOUND'});
   const revise=await repo.command(manager,{version:'contractor-command.v1',environment:'synthetic_demo',commandId:randomUUID(),id:randomUUID(),expectedRevision:projection.revision,kind:'contract.revise',clientId:client,contractId,document,rules:referenceApprovalRulesV1});
@@ -176,7 +180,7 @@ describe('ENT-1 PostgreSQL guarantees',()=>{
   const invitedId=randomUUID();
   await repo.command(manager,{version:'contractor-command.v1',environment:'synthetic_demo',commandId:randomUUID(),id:invitedId,expectedRevision:projection.revision,kind:'member.invite',role:'client_approver',scope:{kind:'client',id:client},email:'approver@fictional.invalid',clientId:client,contractId});
   const clientIdentity=(await withTenant(runtime,verifiedTenantContextFromMembership(p),db=>db.$client.query('SELECT identity_user_id FROM app.membership WHERE id=$1',[invitedId]))).rows[0].identity_user_id;
-  const restricted={...p,membershipId:invitedId,identityUserId:clientIdentity} as AuthenticatedMembership;
+  const restricted=await ownContext({...p,membershipId:invitedId,identityUserId:clientIdentity} as AuthenticatedMembership);
   const before=await query(restricted,'contracts');expect(before.revision).toBe(0);expect(before.members).toEqual([]);expect(before.grants).toEqual([]);
   await command(p,{kind:'team.create',branchId:branch,name:'Fictional unrelated administration'});
   expect(await query(restricted,'contracts')).toEqual(before);
@@ -191,7 +195,7 @@ describe('ENT-1 PostgreSQL guarantees',()=>{
    const raw={version:'contractor-command.v1',environment:'synthetic_demo',commandId:randomUUID(),id:randomUUID(),expectedRevision:before.revision,kind,role:'finance',scope:{kind:'team',id:team},contractId:null,...(kind==='member.invite'?{email:'finance@fictional.invalid',clientId:null}:{membershipId:member.membershipId})};
    await expect(repo.command(p,raw)).rejects.toMatchObject({code:'INVALID_COMMAND'});
    // Bypass TypeScript to pin the database's existing independent constraint. Migration 0054 stays unchanged.
-   await expect(withTenant(runtime,verifiedTenantContextFromMembership(p),db=>db.$client.query('SELECT app.contractor_admin_command($1,$2::jsonb,$3)',[p.membershipId,JSON.stringify(raw),createHash('sha256').update(JSON.stringify(raw)).digest('hex')]))).rejects.toMatchObject({code:'23514'});
+   await expect(withTenant(runtime,boundOf(p),db=>db.$client.query('SELECT app.contractor_admin_command($1,$2::jsonb,$3)',[p.membershipId,JSON.stringify(raw),createHash('sha256').update(JSON.stringify(raw)).digest('hex')]))).rejects.toMatchObject({code:'23514'});
    expect(await query(p)).toEqual(before);
   }
  });
@@ -306,7 +310,7 @@ describe('ENT-1 PostgreSQL guarantees',()=>{
   await expect(repo.command(p,{...raw,name:'Changed'})).rejects.toMatchObject({code:'COMMAND_CONFLICT'});
   const races=await Promise.allSettled([repo.command(p,{...raw,commandId:randomUUID(),id:randomUUID(),expectedRevision:1}),repo.command(p,{...raw,commandId:randomUUID(),id:randomUUID(),expectedRevision:1})]);expect(races.filter(x=>x.status==='fulfilled')).toHaveLength(1);expect((races.find(x=>x.status==='rejected') as PromiseRejectedResult).reason.code).toBe('STALE_REVISION');
   const noAudit={...raw,commandId:randomUUID(),id:randomUUID(),expectedRevision:2};
-  await expect(withTenant(runtime,verifiedTenantContextFromMembership(p),db=>db.$client.query('SELECT app.contractor_admin_command($1,$2::jsonb,$3)',[p.membershipId,JSON.stringify(noAudit),createHash('sha256').update('no audit').digest('hex')]))).rejects.toMatchObject({code:'23514'});
+  await expect(withTenant(runtime,boundOf(p),db=>db.$client.query('SELECT app.contractor_admin_command($1,$2::jsonb,$3)',[p.membershipId,JSON.stringify(noAudit),createHash('sha256').update('no audit').digest('hex')]))).rejects.toMatchObject({code:'23514'});
   expect((await query(p)).revision).toBe(2);expect((await query(p)).clients).toHaveLength(2);
   const assignments=(await admin.query('SELECT * FROM app.commercial_track_assignment WHERE tenant_id=$1',[p.tenantId])).rows;
   for(const role of ['owner','admin']){const actor=role==='owner'?p:await fixtureMember(p,'admin','tenant',p.tenantId);await expect(withTenant(runtime,verifiedTenantContextFromMembership(actor),db=>db.$client.query("SELECT app.assign_commercial_track($1,$2,'small_builder',$3,1,'tenant-admin')",[p.tenantId,randomUUID(),`synthetic-agreement:${p.tenantId}`]))).rejects.toMatchObject({code:'42501'});}
@@ -383,7 +387,7 @@ it('ENT-2 conformance: the work-order import, SoR import, register, batch, revis
  const jobs=await Promise.all(Object.keys(positions).map(async(name,index)=>({name,client:demos[name]!.client,reference:baseRows[index]!.workOrderReference as string,orderId:result.rows[index]!.workOrderId!,jobId:(await admin.query<{job_id:string}>('SELECT job_id FROM app.work_order WHERE id=$1',[result.rows[index]!.workOrderId])).rows[0]!.job_id})));
  const clientKeyOf=new Map<string,ClientKey>([[demo.clientId,'A'],[demoB.clientId,'B']]);
  const operative=await fixtureMember(p,'operative','team',own);
- const assignedOperative=await(async()=>{const row=(await admin.query<{identity_user_id:string}>('SELECT identity_user_id FROM app.membership WHERE id=$1',[demo.operativeMembershipId])).rows[0]!;return {...p,membershipId:demo.operativeMembershipId,identityUserId:row.identity_user_id} as AuthenticatedMembership;})();
+ const assignedOperative=await(async()=>{const row=(await admin.query<{identity_user_id:string}>('SELECT identity_user_id FROM app.membership WHERE id=$1',[demo.operativeMembershipId])).rows[0]!;return ownContext({...p,membershipId:demo.operativeMembershipId,identityUserId:row.identity_user_id} as AuthenticatedMembership);})();
  type Actor={label:string;actor:AuthenticatedMembership;grants:ContractorGrant[];assigned:ReadonlySet<string>};
  const actors:Actor[]=[{label:'owner',actor:p,grants:[{role:'owner',scope:{kind:'tenant',id:p.tenantId}}],assigned:new Set()}];
  const scopeIds:Record<string,string>={tenant:p.tenantId,region,branch,team:own};

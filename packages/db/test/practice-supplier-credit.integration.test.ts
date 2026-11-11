@@ -206,7 +206,8 @@ it('PF1B-A16 A16_ActorDerivedAndRechecked',async()=>{
   }
   await expect(raw(f,{...review(f),actorMembershipId:M})).rejects.toThrow('INVALID_COMMAND');expect(await snapshot(f)).toEqual(before);
   for(const field of ["role='member'","revoked_at=clock_timestamp()","expires_at=clock_timestamp()-interval '1 second'"]) {
-    await expect(rolledBack(admin,async db=>{await db.query(`UPDATE app.membership SET ${field} WHERE tenant_id=$1 AND id=$2`,[T,M]);await db.query("SELECT set_config('app.tenant_id',$1,true),set_config('app.practice_material_digest',$2,true),set_config('app.recovery_eligibility_environment','synthetic_demo',true)",[T,f.auth.digest]);await db.query('SELECT app.pf1b_review_supplier_credit($1,$2,$3)',[T,f.jobId,review(f)]);})).rejects.toThrow('ELIGIBILITY_REVIEWER_FORBIDDEN');
+    // LP-6d: bind the reviewer's own practice session first, so the routine's revoked-actor recheck still decides.
+    await expect(rolledBack(admin,async db=>{await db.query("SELECT app.bind_request('practice',$1,$2)",[f.auth.digest,T]);await db.query(`UPDATE app.membership SET ${field} WHERE tenant_id=$1 AND id=$2`,[T,M]);await db.query("SELECT set_config('app.tenant_id',$1,true),set_config('app.practice_material_digest',$2,true),set_config('app.recovery_eligibility_environment','synthetic_demo',true)",[T,f.auth.digest]);await db.query('SELECT app.pf1b_review_supplier_credit($1,$2,$3)',[T,f.jobId,review(f)]);})).rejects.toThrow('ELIGIBILITY_REVIEWER_FORBIDDEN');
   }
 });
 it('PF1B-A17 A17_SettingsAreNotActorAuthority',async()=>{
@@ -220,7 +221,9 @@ it('CrossJobReplayRefused',async()=>{const f=await setup();await advance(f);cons
 it('StaleRevisionRefused',async()=>{const f=await setup();await advance(f);await save(f);await refusal(f,review(f),'ELIGIBILITY_STALE_REVISION');await refusal(f,{...review(f,'F16-partial',1),expectedCaseRevision:f.c!.revision+1},'ELIGIBILITY_STALE_REVISION');});
 it('RevokedActorReplayRefused',async()=>{
   const f=await setup();await advance(f);const command=review(f);await save(f,command);
+  // LP-6d: each case binds the reviewer's practice session before revoking it, so the routine's own recheck refuses the replay.
   for(const table of ['membership','expired_membership','session','expired_session'])await expect(rolledBack(admin,async db=>{
+    await db.query("SELECT app.bind_request('practice',$1,$2)",[f.auth.digest,T]);
     if(table==='membership')await db.query('UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2',[T,M]);else if(table==='expired_membership')await db.query("UPDATE app.membership SET expires_at=clock_timestamp()-interval '1 second' WHERE tenant_id=$1 AND id=$2",[T,M]);else if(table==='expired_session')await db.query("UPDATE control_plane.practice_session SET expires_at=clock_timestamp()-interval '1 second' WHERE token_digest=$1",[f.auth.digest]);else await db.query('UPDATE control_plane.practice_session SET revoked_at=clock_timestamp() WHERE token_digest=$1',[f.auth.digest]);
     await db.query("SELECT set_config('app.tenant_id',$1,true),set_config('app.practice_material_digest',$2,true),set_config('app.recovery_eligibility_environment','synthetic_demo',true)",[T,f.auth.digest]);await db.query('SELECT app.pf1b_review_supplier_credit($1,$2,$3)',[T,f.jobId,command]);
   })).rejects.toThrow('ELIGIBILITY_REVIEWER_FORBIDDEN');

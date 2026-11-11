@@ -6,6 +6,7 @@ import { appendAuditBatch, type AuditEventInput } from "./audit.js";
 import { assertContractorGate, canonicalJson, derivedUuid } from "./work-order-repository.js";
 import { withTenant, InvalidTenantContextError, type VerifiedTenantContext, type AuthenticatedMembership, type TenantTransaction } from "./tenant-context.js";
 import { requireLiveJob, WatchdogError } from "./watchdog.js";
+import { RequestBindingRefusedError } from "./request-binding-error.js";
 // Each command-type string is written once, here, and reaches SQL only as a bound parameter.
 const startCommandType = "StartSiteVisit";
 const completeCommandType = "CompleteSiteVisit";
@@ -182,6 +183,8 @@ export class SiteVisitRepository {
    }
   } catch (error) {
    if (error instanceof InvalidTenantContextError) refusal = { code: "NOT_FOUND", reason: "job_out_of_scope" };
+   // LP-6d: a member whose request can no longer be bound (revoked or expired) is the inactive-member refusal.
+   else if (error instanceof RequestBindingRefusedError) refusal = { code: "VISIT_FORBIDDEN", reason: "member_inactive" };
    else if (error instanceof SiteVisitError) throw error;
    else throw new SiteVisitError("SITE_VISIT_UNAVAILABLE");
   }

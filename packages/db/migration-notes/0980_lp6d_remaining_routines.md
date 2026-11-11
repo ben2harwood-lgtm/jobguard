@@ -638,3 +638,110 @@ body regression coverage rather than introducing another runtime abstraction.
 
 Forward-fix only. No policy, approval, history, table fingerprint or function SET
 app.* contract is relaxed. No live provider, real data, money, release or main push.
+
+
+## Repair 6 — 11 November 2026 — NOT READY
+
+Starting head: `7fa373f9`. Read the coordinator precheck
+`coordinator/prechecks/lp-6d-remaining-routines-r5-9fdabf17.md` from the
+full-steam coordinator directory. The coordinator's 19 inner-END semicolons
+are present in the supplied migration. No migration body or refusal was changed
+in this attempt.
+
+Concrete fixture repairs:
+
+- The integration `withTenant` adapter inspected binding installation with
+  `to_regprocedure('app.bind_request(text,text,uuid)')` on the calling connection.
+  An identity login lacks schema app USAGE by design. Use pg_proc/pg_namespace
+  metadata and the exact argument signature instead, so this setup probe does
+  not require app schema access. The SSO helper's existing owner,
+  jobguard_migration, already owns schema app; no new identity or helper grant
+  is justified by this source finding. PostgreSQL must confirm whether the
+  reported SSO failures also have another cause.
+- Two contractor-party actor fixtures changed membership IDs while retaining
+  the owner's principal.context. Attach each actor's own persisted real-session
+  context to the principal as well as the fixture's WeakMap. Existing negative
+  role/resource assertions are retained.
+- The work-order missing-revision mutation probe previously set only the tenant
+  GUC before SET LOCAL ROLE jobguard_runtime. Provision a persisted synthetic
+  credential with the existing testBoundTenantContext helper and call main's
+  app.bind_request(text,text,uuid) before invoking the controlled routine. Keep
+  both the required 40001/STALE_REVISION assertion and the mutation assertion.
+
+Actual local checks (installed dependencies, no downloads):
+
+- `./node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit`: PASS.
+- `./node_modules/.bin/tsc -p apps/api/tsconfig.json --noEmit`: PASS.
+- `node tools/agent-lane-boundary-lint.mjs`: PASS.
+- `./packages/db/node_modules/.bin/vitest run --root packages/db --maxWorkers=1 test/lp6d-routines.test.ts test/lp6d-repository-context.test.ts test/migration-proof-loader.test.ts`:
+  3 files, 121 tests PASS. These are source/unit checks, not PostgreSQL behavior.
+- `node tools/plpgsql-case-in-if-lint.mjs`: PASS, 391 migrations.
+- `node --check packages/db/test/administrative-role-setup.ts`: PASS.
+- Read all 134 routine bodies in 0980 and checked each standalone END:
+  no inner standalone END lacks its semicolon. This is a source check,
+  not PostgreSQL parsing or execution.
+- `git diff --check`: PASS before this receipt update.
+
+PostgreSQL was not run. This sandbox cannot start it or bind localhost.
+No browser suite, git-writing command, push, PR or external action was run.
+The exact causes of all three reported lp6d-routines binding failures and the
+full set of ten contractor-party NOT_FOUND failures are not established by the
+available summary. The missing-bind-API failures also need exact failing
+historical-schema traces; main does define the three-argument bind API.
+These findings are not declared closed. The coordinator must run the six-file
+probe and whole db suite, retain concrete failure traces, and arrange the
+exact-head RED review. Do not commit this attempt as READY.
+
+## Repair 7 — 11 November 2026 — Claude builder with real PostgreSQL
+
+Starting head `7fa373f9` plus repair 6's uncommitted fixture work. Every result
+below comes from real embedded PostgreSQL 16 on Ben's Mac (coordinator pg-check
+tools, 2 workers, shared slot cap), not source reading.
+
+Production changes (0980 and repositories):
+
+- `require_watchdog_live`, `require_current_job_parties` and `mon8_feature_decision`
+  keep the binding check for every direct call but skip it inside a row trigger
+  (`pg_trigger_depth()>0`). About 30 watched-table insert/update triggers and the
+  0549 operative membership/grant guard reach them with the firing statement's own
+  authority (bound routine, worker or maintenance), which LP-6d must not break.
+- The three row-derived actor guards (`ent3c_record_sor_revision`,
+  `record_repository_command`, `lp5b_prepare_projection`) refuse another actor's
+  existing row; a bound call for a genuinely missing row now reaches the routine's
+  own NOT_FOUND (router ruling: bound + missing keeps P0002).
+- `GRANT UPDATE(expires_at)` on `app.action_authorization` to runtime: runtime's
+  `UPDATE(revoked_at)` stays withdrawn, but the 0112 sink guard's `FOR SHARE OF a`
+  row lock needs one UPDATE-able column; `action_authorization_guard` (0005) refuses
+  every `expires_at` change. Recorded in the proof and the ENT-10b reviewed list.
+- Temporary `CREATE ON SCHEMA app` around the `jobguard_command_writer` ownership
+  transfer (as 0521/0522), so a non-superuser migration owner can apply 0980.
+- `ContractorRepository.startPractice` binds through the new
+  `bindIssuedCredential` (same check as `withTenant`) instead of a raw bind call.
+- `JobSchedulingRepository` reads use the session principal's bound context;
+  `AuditExportRepository` and `SiteVisitRepository` map an unbindable request to
+  their existing refusal (AUDIT_EXPORT_FORBIDDEN / VISIT_FORBIDDEN).
+
+Proof: upgrade routine args use PostgreSQL's identity-argument spelling (measured
+on a real upgrade), and the 43 previously pinned LP-0 definition digests are
+re-pinned to the measured 0980 definitions instead of being dropped to null.
+Nine routines merged after the inventory are classified.
+
+Real PostgreSQL results at this head (NOT READY):
+
+- Targeted: work-order-import 56/56, lp6d-routines, site-extra-authority,
+  contractor-parties, enterprise-identity, serious-b5-upgrade,
+  recovery-cases.workbench and migration-proof-loader pass.
+- Whole db suite (`run.sh WHOLE`, 2 workers, shared 3-slot cap): 165 failed |
+  758 passed files; 640 failed | 7261 passed tests. Was 269 failed files at the
+  r3 recheck. Largest remaining causes: REQUEST_BINDING_REFUSED from direct
+  fixture/probe calls into guarded routines (192), fixture worlds whose context
+  is the owner while the command carries another member's session
+  (EXTRA_FORBIDDEN 34, PERMISSION_DENIED 34), practice worker switch and
+  contractor practice session paths (SWITCH_UNAVAILABLE 28,
+  PRACTICE_SESSION_UNAVAILABLE 16), JOB_SOURCE_FORBIDDEN 12, and runtime
+  EXECUTE withdrawn from apply_recovery_timeline_signal.
+- Known design conflict, not resolved: 0980's contractor_session now binds
+  before returning an actor, so a revoked member's live session is refused at
+  the bridge (lp6d-routines requires this). ENT-10b's "audits the revoked session
+  member's refusal" tests need that bridge to still attribute the member, so they
+  fail (503, no refusal audit). Needs a ruling.

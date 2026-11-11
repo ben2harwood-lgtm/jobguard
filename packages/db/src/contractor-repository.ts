@@ -3,7 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { ContractorError, contractorCommandV1, contractorQueryV1, contractorWorkspaceV1, type ContractorCommand } from "@jobguard/core";
 import { appendAuditBatch } from "./audit.js";
-import { withTenant, type TenantTransaction, type AuthenticatedMembership, verifiedTenantContextFromMembership, type VerifiedTenantContext } from "./tenant-context.js";
+import { bindIssuedCredential, withTenant, type TenantTransaction, type AuthenticatedMembership, verifiedTenantContextFromMembership, type VerifiedTenantContext } from "./tenant-context.js";
 
 const canonical = (v: unknown): string => v === null || typeof v !== "object" ? JSON.stringify(v) : Array.isArray(v) ? `[${v.map(canonical).join(",")}]` : `{${Object.entries(v as Record<string, unknown>).sort(([a],[b])=>a.localeCompare(b)).map(([k,x])=>`${JSON.stringify(k)}:${canonical(x)}`).join(",")}}`;
 const hash = (v: unknown) => createHash("sha256").update(canonical(v)).digest("hex");
@@ -50,7 +50,9 @@ export class ContractorRepository {
    await client.query("BEGIN");
    const tenantId=(await client.query<{tenant_id:string}>("SELECT app.start_contractor_practice($1) tenant_id",[sessionId])).rows[0]!.tenant_id;
    // Bind the issued credential before reading or auditing its tenant state.
-   await client.query("SELECT app.bind_request('contractor_practice',$1,$2)",[sessionId,tenantId]);
+   const issued=(await client.query<{tenant_id:string;membership_id:string;identity_user_id:string}>("SELECT * FROM app.contractor_session($1)",[sessionId])).rows[0];
+   if(!issued||issued.tenant_id!==tenantId) throw new ContractorError("UNAUTHENTICATED");
+   await bindIssuedCredential(client,verifiedTenantContextFromMembership({tenantId,membershipId:issued.membership_id,identityUserId:issued.identity_user_id} as AuthenticatedMembership,{kind:"contractor_practice",credential:sessionId}));
    // start_contractor_practice sets transaction-local context before returning.
    await client.query("SELECT set_config('app.tenant_id',$1,true)",[tenantId]);
    const assignments=(await client.query<{id:string}>("SELECT id FROM app.commercial_track_assignment WHERE tenant_id=$1 AND NOT EXISTS(SELECT 1 FROM app.audit_event a WHERE a.tenant_id=$1 AND a.id=app.commercial_track_assignment.id)",[tenantId])).rows;

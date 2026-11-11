@@ -1,3 +1,4 @@
+import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -24,7 +25,8 @@ async function member(p: AuthenticatedMembership, role: string, scope: { kind: s
 }
 async function asMember(p: AuthenticatedMembership, membershipId: string) {
   const row = (await admin.query<{ identity_user_id: string }>("SELECT identity_user_id FROM app.membership WHERE tenant_id=$1 AND id=$2", [p.tenantId, membershipId])).rows[0]!;
-  return { ...p, membershipId, identityUserId: row.identity_user_id } as AuthenticatedMembership;
+  // LP-6d: the member acts through its own persisted credential, never the owner's bound context.
+  return { ...p, membershipId, identityUserId: row.identity_user_id, context: await testBoundTenantContext(admin, p.tenantId, membershipId) } as AuthenticatedMembership;
 }
 const importOf = (p: AuthenticatedMembership, csv: string, name = "scheduling.csv") => orders.importCsv(p, { commandId: randomUUID(), name, kind: "csv", csv });
 const canary = { name: "Fictional Resident Canary", phone: "00000999888", email: "scheduling-canary@resident-canary.invalid" };

@@ -94,7 +94,8 @@ describe("CH-3b PostgreSQL guarantees", () => {
       const id = randomUUID(), scope = role === "client_approver" ? { kind: "client", id: f.client } : role === "operative" ? { kind: "team", id: f.v.teams[0]!.id } : { kind: "tenant", id: f.p.tenantId };
       await command(f.p, { kind: "member.invite", id, role, email: `${id}@fictional.invalid`, scope, clientId: role === "client_approver" ? f.client : null, contractId: null });
       const row = (await withTenant(runtime, ctx(f.p), db => db.$client.query("SELECT identity_user_id FROM app.membership WHERE id=$1", [id]))).rows[0];
-      const actor = { ...f.p, membershipId: id, identityUserId: row.identity_user_id };
+      // LP-6d: each refused role acts through its own persisted credential, so the refusal is the scope check, not the binding.
+      const actor = { ...f.p, membershipId: id, identityUserId: row.identity_user_id, context: await testBoundTenantContext(admin, f.p.tenantId, id) };
       for (const jobId of [f.job, randomUUID()]) await expect(parties.readResident(actor, jobId)).rejects.toMatchObject({ code: "NOT_FOUND", message: "NOT_FOUND" });
     }
     // ENT-1 refuses to invite an owner (0054:233): the owner row is the practice principal itself, and the refusal is asserted.
@@ -225,7 +226,9 @@ it('denies a job UUID colliding with an ENT-1 team; team membership is not a job
  const member=randomUUID();await command(f.p,{kind:'member.invite',id:member,role:'supervisor',email:'supervisor@example.invalid',scope:{kind:'team',id:job},clientId:null,contractId:null});
  const identity=(await withTenant(runtime,ctx(f.p),db=>db.$client.query('SELECT identity_user_id FROM app.membership WHERE id=$1',[member]))).rows[0].identity_user_id;
  const actor={...f.p,membershipId:member,identityUserId:identity};
- sessions.set(actor, await testBoundTenantContext(admin, actor.tenantId, actor.membershipId));
+ const context = await testBoundTenantContext(admin, actor.tenantId, actor.membershipId);
+ Object.assign(actor, { context });
+ sessions.set(actor, context);
  expect((await withTenant(runtime,ctx(actor),db=>db.$client.query("SELECT app.contractor_allowed($1,'resident.read',$2) allowed",[member,job]))).rows[0].allowed).toBe(true);
  await expect(parties.readResident(actor,job)).rejects.toMatchObject({code:'NOT_FOUND'});
 });
@@ -252,7 +255,9 @@ async function invite(f: Fixture, role: string): Promise<AuthenticatedMembership
   const id = randomUUID(); await command(f.p, { kind: "member.invite", id, role, email: `${id}@fictional.invalid`, scope: { kind: "tenant", id: f.p.tenantId }, clientId: null, contractId: null });
   const row = (await withTenant(runtime, ctx(f.p), db => db.$client.query("SELECT identity_user_id FROM app.membership WHERE id=$1", [id]))).rows[0];
   const actor = { ...f.p, membershipId: id, identityUserId: row.identity_user_id };
-  sessions.set(actor, await testBoundTenantContext(admin, actor.tenantId, id));
+  const context = await testBoundTenantContext(admin, actor.tenantId, id);
+  Object.assign(actor, { context });
+  sessions.set(actor, context);
   return actor;
 }
 async function reviseCustomer(f: Fixture, type: string, name = "Fictional Client") {

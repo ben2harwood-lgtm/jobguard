@@ -67,10 +67,14 @@ $$;
 CREATE OR REPLACE FUNCTION app.require_current_job_parties(p_tenant uuid,p_job uuid) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
+ -- LP6D_TRIGGER_REACHED: a direct call is always bound. Inside a row trigger the
+ -- firing statement's own (bound or worker/maintenance) authority already applies.
+ IF pg_trigger_depth()=0 THEN
  PERFORM app.current_actor();
  IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
   OR p_tenant IS DISTINCT FROM app.current_tenant() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
+ END IF;
  END IF;
 DECLARE snapshot jsonb; BEGIN
  IF p_tenant IS DISTINCT FROM nullif(current_setting('app.tenant_id',true),'')::uuid THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
@@ -88,9 +92,13 @@ CREATE OR REPLACE FUNCTION app.require_watchdog_live(p_job uuid) RETURNS void
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, app AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
+ -- LP6D_TRIGGER_REACHED: a direct call is always bound. Inside a row trigger the
+ -- firing statement's own (bound or worker/maintenance) authority already applies.
+ IF pg_trigger_depth()=0 THEN
  PERFORM app.current_actor();
  IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
+ END IF;
  END IF;
 DECLARE tenant uuid; lifecycle text;
 BEGIN
@@ -683,7 +691,8 @@ BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
  IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
-  OR (SELECT raising_membership_id FROM app.extra_origin WHERE tenant_id=app.current_tenant() AND job_id=p_job AND variation_id=p_variation) IS DISTINCT FROM app.current_actor() THEN
+  -- A genuinely missing row falls through to the routine's own NOT_FOUND; another actor's row is refused here.
+  OR EXISTS(SELECT 1 FROM app.extra_origin WHERE tenant_id=app.current_tenant() AND job_id=p_job AND variation_id=p_variation AND raising_membership_id IS DISTINCT FROM app.current_actor()) THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
 DECLARE tenant uuid; origin_row app.extra_origin; receipt app.command_receipt; variation_row app.variation; baseline app.work_order_revision; item app.sor_item; line app.work_order_line;
@@ -2546,7 +2555,8 @@ BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
  IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
-  OR (SELECT actor_membership_id FROM app.command_receipt WHERE tenant_id=app.current_tenant() AND command_id=p_command) IS DISTINCT FROM app.current_actor() THEN
+  -- A genuinely missing row falls through to the routine's own NOT_FOUND; another actor's row is refused here.
+  OR EXISTS(SELECT 1 FROM app.command_receipt WHERE tenant_id=app.current_tenant() AND command_id=p_command AND actor_membership_id IS DISTINCT FROM app.current_actor()) THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
 DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; c app.command_lifecycle_claim;
@@ -2597,7 +2607,8 @@ BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
  IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
-  OR (SELECT actor_membership_id FROM app.command_receipt WHERE tenant_id=app.current_tenant() AND command_id=p_command) IS DISTINCT FROM app.current_actor() THEN
+  -- A genuinely missing row falls through to the routine's own NOT_FOUND; another actor's row is refused here.
+  OR EXISTS(SELECT 1 FROM app.command_receipt WHERE tenant_id=app.current_tenant() AND command_id=p_command AND actor_membership_id IS DISTINCT FROM app.current_actor()) THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
 DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; c app.command_lifecycle_claim;
@@ -4323,7 +4334,10 @@ BEGIN
   RAISE EXCEPTION 'AUTHORIZATION_INVALID' USING ERRCODE='23514';
  END IF;
 END $$;
+-- Temporary schema CREATE is required for ALTER OWNER (same as 0521/0522), never retained.
+GRANT CREATE ON SCHEMA app TO jobguard_command_writer;
 ALTER FUNCTION app.lp6d_require_revoke_claim(uuid,uuid,uuid,uuid,uuid,uuid,integer) OWNER TO jobguard_command_writer;
+REVOKE CREATE ON SCHEMA app FROM jobguard_command_writer;
 REVOKE ALL ON FUNCTION app.lp6d_require_revoke_claim(uuid,uuid,uuid,uuid,uuid,uuid,integer) FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure;
 GRANT EXECUTE ON FUNCTION app.lp6d_require_revoke_claim(uuid,uuid,uuid,uuid,uuid,uuid,integer) TO jobguard_migration;
 
@@ -4355,6 +4369,10 @@ ALTER FUNCTION app.revoke_recovery_message_authorization(uuid,uuid,uuid,uuid) OW
 REVOKE ALL ON FUNCTION app.revoke_recovery_message_authorization(uuid,uuid,uuid,uuid) FROM PUBLIC,jobguard_identity,jobguard_infrastructure;
 GRANT EXECUTE ON FUNCTION app.revoke_recovery_message_authorization(uuid,uuid,uuid,uuid) TO jobguard_runtime;
 REVOKE UPDATE(revoked_at) ON app.action_authorization FROM PUBLIC,jobguard_runtime;
+-- Row locks still need one UPDATE-able column: the recovery-message sink guard (0112) takes
+-- FOR SHARE OF action_authorization as the runtime invoker. action_authorization_guard (0005)
+-- refuses every expires_at change, so this keeps the lock without granting any update.
+GRANT UPDATE(expires_at) ON app.action_authorization TO jobguard_runtime;
 
 -- Worker/support entry points were never runtime entry points. Preserve their
 -- separate shadow/support execution contracts (including must-surface safety)
@@ -5900,9 +5918,13 @@ CREATE OR REPLACE FUNCTION app.mon8_feature_decision(actor uuid, feature text, p
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
+ -- LP6D_TRIGGER_REACHED: a direct call is always bound. Inside a row trigger (the 0549 operative
+ -- membership/grant guard) the firing statement's own authority already applies.
+ IF pg_trigger_depth()=0 THEN
  PERFORM app.current_actor();
  IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
+ END IF;
  END IF;
 DECLARE t uuid; assignment app.commercial_track_assignment; status app.contractor_agreement_status_revision;
  agreement app.subscription_agreement_revision; entitlement text:='held'; reason text:='agreement_authority_held';

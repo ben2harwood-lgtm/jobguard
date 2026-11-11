@@ -229,8 +229,21 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     ["lp_require_audit|", "lp_require_audit"],
     ["lp_receipt_immutable|", "lp_receipt_immutable"],
   ].map(([identity, name]) => [identity, finishSql.split(`CREATE OR REPLACE FUNCTION app.${name}(`)[1]!.split("AS $$")[1]!.split("$$;")[0]]));
+  // LP-6d (0980) re-creates only the routines it names; each body must be exactly a 0980 body for that name.
+  // Owners, ACLs and other metadata stay checked by the 0980 migration proof.
+  const lp6dBodies = new Map<string, string[]>();
+  for (const m of (await readFile(new URL("../migrations/0980_lp6d_remaining_routines.sql", import.meta.url), "utf8"))
+    .matchAll(/CREATE OR REPLACE FUNCTION ([\w.]+)\((.*?)\)\s*RETURNS\b.*?\bAS\s+(\$\w*\$)(.*?)\3\s*;/gis)) {
+    lp6dBodies.set(m[1]!, [...(lp6dBodies.get(m[1]!) ?? []), m[4]!]);
+  }
   for (const prior of security) {
     const current = live.find(row => row.oid === prior.oid);
+    if (prior.definition !== null && current?.source !== prior.source && lp6dBodies.get(`${prior.nspname}.${prior.proname}`)?.includes(current?.source)) {
+      // The header may change only in LANGUAGE (contractor_session's checked bridge moves from sql to plpgsql).
+      const header = (definition: string) => definition.replace(/^ LANGUAGE \w+$/mu, " LANGUAGE <checked>");
+      expect(header(current!.definition)).toEqual(header(prior.definition.replace(prior.source, () => current!.source)));
+      continue;
+    }
     // 0650 changes only the demo issuer body; keep its metadata and every other definition pinned.
     if (prior.nspname === "app" && prior.proname === "demo_issue_customer_link" &&
       prior.args === "t uuid, j uuid, c uuid, session_digest text, link_digest text, content text") {

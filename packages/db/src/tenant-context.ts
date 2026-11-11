@@ -103,6 +103,15 @@ async function bindRequest(client: PoolClient, context: VerifiedTenantContext): 
   }
 }
 
+/**
+ * A caller-managed transaction that issues its own credential (contractor practice start)
+ * binds it through the same check as withTenant before any guarded read or audit.
+ */
+export async function bindIssuedCredential(client: PoolClient, context: VerifiedTenantContext): Promise<void> {
+  if (!genuineTenantContexts.has(context) || !sessionReferences.has(context)) throw new InvalidTenantContextError();
+  await bindRequest(client, context);
+}
+
 /** Only an active approval transaction may bind after its established locks. */
 export async function bindAfterLocks(database: TenantTransaction, context: VerifiedTenantContext): Promise<void> {
   const binding = lateBindings.get(database)?.get(context);

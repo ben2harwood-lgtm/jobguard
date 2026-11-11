@@ -167,6 +167,9 @@ export async function issueHistoricalInvoice(admin: Pool, tenantId: string, inpu
  const db = await admin.connect();
  try {
   await db.query('BEGIN'); await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenantId]);
+  // LP-6d: the historical body reaches guarded helpers, so the issuing owner's persisted fixture credential is bound.
+  await testBoundTenantContext(admin, tenantId, input.actorMembershipId);
+  await db.query("SELECT app.bind_request('real',$1,$2)", [createHash('sha256').update(`lp6-test:${tenantId}:${input.actorMembershipId}`).digest('hex'), tenantId]);
   await db.query('SELECT * FROM app.historical_issue_practice_customer_invoice($1,$2,$3,$4,$5,$6,$7::date)', [tenantId, input.jobId, input.finalAccountRevisionId, input.actorMembershipId, input.commandId ?? randomUUID(), input.recipient ?? 'allocation@example.invalid', input.issuedOn ?? '2026-10-12']);
   await db.query('COMMIT');
  } catch (error) { await db.query('ROLLBACK'); throw error; } finally { db.release(); }
