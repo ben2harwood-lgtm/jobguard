@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-fc-typed-sources": {
+      "branches": [
+        "codex/sandbox/real-fc-typed-sources"
+      ],
+      "note": "RED: bounded practice typed-text reader in the actual Final Check worker; no migrations or production activation.",
+      "allow": [
+        "apps/web/e2e/real-fc-typed-sources.spec.ts",
+        "docs/contracts/final-check-v1.md",
+        "packages/db/src/final-check-typed-text.test.ts",
+        "packages/db/src/final-check-typed-text.ts",
+        "packages/db/src/shadow-detection-repository.ts",
+        "packages/db/test/real-fc-typed-sources.integration.test.ts",
+        "packages/db/test/real-own-job-promise.integration.test.ts"
+      ]
+    }
+  }
+}
