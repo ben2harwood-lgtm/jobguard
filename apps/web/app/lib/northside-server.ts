@@ -6,7 +6,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { ContractorError } from "@jobguard/core";
-import { ContractorRepository, EvidenceService, ExtraApprovalError, NorthsidePhotoStorage, WatchdogError, contractorSessionContext, northsideRole, type ContractorSessionMembership as AuthenticatedMembership, type VerifiedTenantContext } from "@jobguard/db";
+import { ContractorRepository, EvidenceService, ExtraApprovalError, NorthsidePhotoStorage, WatchdogError, contractorSessionContext, northsideRole, type AuthenticatedMembership, type VerifiedTenantContext } from "@jobguard/db";
 import { syntheticPool } from "./synthetic-server";
 import { isTrustedBrowserOrigin } from "../api/contractor/origin";
 

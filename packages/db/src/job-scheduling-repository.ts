@@ -2,7 +2,7 @@ import type { Pool } from "pg";
 import { z } from "zod";
 import { WorkOrderError, jobAssignmentsV1, jobSiteVisitsV1 } from "@jobguard/core";
 import { assertContractorGate, workOrderFailure } from "./work-order-repository.js";
-import { requireContractorRequestContext, type ContractorSessionMembership } from "./contractor-repository.js";
+import { requireContractorRequestContext } from "./contractor-repository.js";
 import { withTenant, type AuthenticatedMembership, type TenantTransaction } from "./tenant-context.js";
 
 /**
@@ -17,7 +17,7 @@ export class JobSchedulingRepository {
     const allowed = (await db.$client.query<{ allowed: boolean }>("SELECT app.contractor_job_allowed($1,'job.read',$2) allowed", [principal.membershipId, jobId])).rows[0]!.allowed;
     if (!allowed) throw new WorkOrderError("NOT_FOUND");
   }
-  async assignments(principal: ContractorSessionMembership, jobId: string) {
+  async assignments(principal: AuthenticatedMembership, jobId: string) {
     if (!z.string().uuid().safeParse(jobId).success) throw new WorkOrderError("NOT_FOUND");
     try {
       return await withTenant(this.pool, requireContractorRequestContext(principal), async db => {
@@ -34,7 +34,7 @@ export class JobSchedulingRepository {
       });
     } catch (error) { throw workOrderFailure(error); }
   }
-  async siteVisits(principal: ContractorSessionMembership, jobId: string) {
+  async siteVisits(principal: AuthenticatedMembership, jobId: string) {
     if (!z.string().uuid().safeParse(jobId).success) throw new WorkOrderError("NOT_FOUND");
     try {
       return await withTenant(this.pool, requireContractorRequestContext(principal), async db => {

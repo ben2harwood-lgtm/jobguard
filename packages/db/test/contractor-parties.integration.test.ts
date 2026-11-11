@@ -1,3 +1,4 @@
+import { memberSessionPrincipal } from "./contractor-practice-session-fixtures.js";
 import { snapshotRows } from "./upgrade-proof-utils.js";
 import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
@@ -95,7 +96,7 @@ describe("CH-3b PostgreSQL guarantees", () => {
       await command(f.p, { kind: "member.invite", id, role, email: `${id}@fictional.invalid`, scope, clientId: role === "client_approver" ? f.client : null, contractId: null });
       const row = (await withTenant(runtime, ctx(f.p), db => db.$client.query("SELECT identity_user_id FROM app.membership WHERE id=$1", [id]))).rows[0];
       // LP-6d: each refused role acts through its own persisted credential, so the refusal is the scope check, not the binding.
-      const actor = { ...f.p, membershipId: id, identityUserId: row.identity_user_id, context: await testBoundTenantContext(admin, f.p.tenantId, id) };
+      const actor = await memberSessionPrincipal(admin, runtime, f.p.tenantId, id);
       for (const jobId of [f.job, randomUUID()]) await expect(parties.readResident(actor, jobId)).rejects.toMatchObject({ code: "NOT_FOUND", message: "NOT_FOUND" });
     }
     // ENT-1 refuses to invite an owner (0054:233): the owner row is the practice principal itself, and the refusal is asserted.

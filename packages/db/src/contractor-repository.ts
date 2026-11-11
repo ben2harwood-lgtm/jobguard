@@ -28,32 +28,39 @@ function translate(error: unknown): never {
  if ((error as {code?:string}).code === "23503") throw new ContractorError("NOT_FOUND");
  throw error;
 }
-export type ContractorSessionMembership = AuthenticatedMembership & { readonly context?: VerifiedTenantContext };
+// LP-6d: a contractor principal's request context stays private to this module. It is created
+// once, by the one reviewed constructor below, for a persisted contractor practice session, and
+// is never copied onto the principal object (no exported context-bearing alias type).
+const sessionContexts = new WeakMap<AuthenticatedMembership, VerifiedTenantContext>();
+function sessionPrincipal(row: { tenant_id: string; membership_id: string; identity_user_id: string }, sessionId: string): AuthenticatedMembership {
+ const principal = {tenantId:row.tenant_id,membershipId:row.membership_id,identityUserId:row.identity_user_id} as AuthenticatedMembership;
+ const context = verifiedTenantContextFromMembership(principal, {kind:"contractor_practice", credential:sessionId});
+ sessionContexts.set(principal, context);
+ return principal;
+}
 
 /** Legacy principal shapes remain typed, but cannot enter guarded business SQL. */
-export function requireContractorRequestContext(principal: ContractorSessionMembership): VerifiedTenantContext {
- if (!principal.context || principal.context.tenantId !== principal.tenantId) throw new RequestBindingRefusedError("contractor_practice");
- return principal.context;
+export function requireContractorRequestContext(principal: AuthenticatedMembership): VerifiedTenantContext {
+ const context = sessionContexts.get(principal);
+ if (!context || context.tenantId !== principal.tenantId) throw new RequestBindingRefusedError("contractor_practice");
+ return context;
 }
 
 export class ContractorRepository {
  constructor(private readonly pool: Pool) {}
- async resolveSession(sessionId: string): Promise<ContractorSessionMembership> {
+ async resolveSession(sessionId: string): Promise<AuthenticatedMembership> {
   const row=(await this.pool.query<{tenant_id:string;membership_id:string;identity_user_id:string}>("SELECT * FROM app.contractor_session($1)",[sessionId])).rows[0];
   if(!row) throw new ContractorError("UNAUTHENTICATED");
-  const principal = {tenantId:row.tenant_id,membershipId:row.membership_id,identityUserId:row.identity_user_id} as AuthenticatedMembership;
-  return {...principal, context: verifiedTenantContextFromMembership(principal, {kind:"contractor_practice", credential:sessionId})};
+  return sessionPrincipal(row, sessionId);
  }
  /**
   * Refusal-only (router ruling, r8): a live session whose base membership can no longer be bound
   * still names its principal so the caller can record its refusal. Its context only reaches the
   * unbound refusal-audit boundary; every guarded routine still refuses it.
   */
- async refusedSessionPrincipal(sessionId: string): Promise<ContractorSessionMembership | undefined> {
+ async refusedSessionPrincipal(sessionId: string): Promise<AuthenticatedMembership | undefined> {
   const row=(await this.pool.query<{tenant_id:string;membership_id:string;identity_user_id:string}>("SELECT * FROM app.lp6d_refused_contractor_principal($1)",[sessionId])).rows[0];
-  if(!row) return undefined;
-  const principal = {tenantId:row.tenant_id,membershipId:row.membership_id,identityUserId:row.identity_user_id} as AuthenticatedMembership;
-  return {...principal, context: verifiedTenantContextFromMembership(principal, {kind:"contractor_practice", credential:sessionId})};
+  return row ? sessionPrincipal(row, sessionId) : undefined;
  }
  async startPractice(sessionId: string) {
   const client=await this.pool.connect();
@@ -63,7 +70,7 @@ export class ContractorRepository {
    // Bind the issued credential before reading or auditing its tenant state.
    const issued=(await client.query<{tenant_id:string;membership_id:string;identity_user_id:string}>("SELECT * FROM app.contractor_session($1)",[sessionId])).rows[0];
    if(!issued||issued.tenant_id!==tenantId) throw new ContractorError("UNAUTHENTICATED");
-   await bindIssuedCredential(client,verifiedTenantContextFromMembership({tenantId,membershipId:issued.membership_id,identityUserId:issued.identity_user_id} as AuthenticatedMembership,{kind:"contractor_practice",credential:sessionId}));
+   await bindIssuedCredential(client,requireContractorRequestContext(sessionPrincipal(issued,sessionId)));
    // start_contractor_practice sets transaction-local context before returning.
    await client.query("SELECT set_config('app.tenant_id',$1,true)",[tenantId]);
    const assignments=(await client.query<{id:string}>("SELECT id FROM app.commercial_track_assignment WHERE tenant_id=$1 AND NOT EXISTS(SELECT 1 FROM app.audit_event a WHERE a.tenant_id=$1 AND a.id=app.commercial_track_assignment.id)",[tenantId])).rows;
@@ -76,7 +83,7 @@ export class ContractorRepository {
   const row=(await db.$client.query("SELECT 1 FROM app.membership WHERE tenant_id=$1 AND id=$2 AND identity_user_id=$3 AND app.contractor_member_active(id)",[principal.tenantId,principal.membershipId,principal.identityUserId])).rows[0];
   if(!row) throw new ContractorError("FORBIDDEN");
  }
- async command(principal: ContractorSessionMembership, raw: unknown): Promise<ContractorReceipt> {
+ async command(principal: AuthenticatedMembership, raw: unknown): Promise<ContractorReceipt> {
   const parsed=contractorCommandV1.safeParse(raw);
   if(!parsed.success) throw new ContractorError(parsed.error.issues.some(x=>x.path.includes("rules"))?"INVALID_RULE_DOCUMENT":"INVALID_COMMAND");
   const command=parsed.data;
@@ -89,7 +96,7 @@ export class ContractorRepository {
    return result;
   }); } catch(error) {translate(error);}
  }
- async query(principal: ContractorSessionMembership, raw: unknown): Promise<ContractorView> {
+ async query(principal: AuthenticatedMembership, raw: unknown): Promise<ContractorView> {
   const query=contractorQueryV1.parse(raw);
   if(query.tenantId!==principal.tenantId) throw new ContractorError("NOT_FOUND");
   return withTenant(this.pool,requireContractorRequestContext(principal),async db=>{

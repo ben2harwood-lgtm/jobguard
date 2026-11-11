@@ -1,3 +1,4 @@
+import { memberSessionPrincipal } from "./contractor-practice-session-fixtures.js";
 import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -43,7 +44,7 @@ describe("contractor admin owner and grant boundaries (real PostgreSQL)", () => 
   await repo.command(f.p, raw);
   const row = (await c.admin.query("SELECT identity_user_id FROM app.membership WHERE tenant_id=$1 AND id=$2", [f.p.tenantId, raw.id])).rows[0]!;
   // LP-6d: the member acts through its own persisted credential, so refusals come from the owner guard, not the binding.
-  return { ...f.p, membershipId: raw.id, identityUserId: row.identity_user_id, context: await testBoundTenantContext(c.admin, f.p.tenantId, raw.id as string) } as AuthenticatedMembership;
+  return await memberSessionPrincipal(c.admin, c.runtime, f.p.tenantId, raw.id as string) as AuthenticatedMembership;
  }
  async function refused(actor: AuthenticatedMembership, raw: Record<string, unknown>) {
   const before = await writes();

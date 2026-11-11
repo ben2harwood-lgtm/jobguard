@@ -1,5 +1,5 @@
 import { RequestBindingRefusedError } from "./request-binding-error.js";
-import { requireContractorRequestContext, type ContractorSessionMembership } from "./contractor-repository.js";
+import { requireContractorRequestContext } from "./contractor-repository.js";
 import type { Pool } from "pg";
 import { z } from "zod";
 import { ContractorPartyError, contractorPartyErrorCodes, contractorCustomerLinkV1, contractorPartyImportBoundaryV1, contractorPartyResultV1, contractorResidentReadV1, contractorPartyAuditPayload } from "@jobguard/core";
@@ -30,7 +30,7 @@ export class ContractorPartyRepository {
   async resolveSession(sessionId: string) {
     try { return await new ContractorRepository(this.pool).resolveSession(sessionId); } catch (error) { failure(error); }
   }
-  async linkCustomer(principal: ContractorSessionMembership, clientId: string, raw: unknown) {
+  async linkCustomer(principal: AuthenticatedMembership, clientId: string, raw: unknown) {
     const parsed = contractorCustomerLinkV1.safeParse(raw);
     if (!uuid.safeParse(clientId).success) throw new ContractorPartyError("NOT_FOUND");
     if (!parsed.success) throw new ContractorPartyError("INVALID_COMMAND");
@@ -61,7 +61,7 @@ export class ContractorPartyRepository {
       return contractorPartyResultV1.parse(row.result);
     } catch (error) { failure(error); }
   }
-  async bind(principal: ContractorSessionMembership, raw: unknown) {
+  async bind(principal: AuthenticatedMembership, raw: unknown) {
     try {
       return await withTenant(this.pool, requireContractorRequestContext(principal), async db => {
         const result = await this.bindInTransaction(db, principal, raw);
@@ -78,7 +78,7 @@ export class ContractorPartyRepository {
     if (receipt.audited) return;
     await appendAuditBatch(db, [{ id: commandId, version: "audit.v1", actorRef: `membership:${principal.membershipId}`, eventType: `contractor.parties.${action}`, subjectType: action === "bound" ? "job" : "contractor-client", subjectRef: subject, payload: contractorPartyAuditPayload(action, commandId, id, receipt.request_hash) }]);
   }
-  async readResident(principal: ContractorSessionMembership, jobId: string) {
+  async readResident(principal: AuthenticatedMembership, jobId: string) {
     if (!uuid.safeParse(jobId).success) throw new ContractorPartyError("NOT_FOUND");
     try {
       return await withTenant(this.pool, requireContractorRequestContext(principal), async db => {

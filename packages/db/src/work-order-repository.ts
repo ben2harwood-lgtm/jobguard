@@ -1,5 +1,5 @@
 import { RequestBindingRefusedError } from "./request-binding-error.js";
-import { requireContractorRequestContext, type ContractorSessionMembership } from "./contractor-repository.js";
+import { requireContractorRequestContext } from "./contractor-repository.js";
 import { serverEntitlement } from "./plan-entitlement-service.js";
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
@@ -116,7 +116,7 @@ export class WorkOrderRepository {
    * failing row commits no part of its order and is recorded (with a typed error) in its receipt; the batch, its receipts and every audit
    * event are written last. The same command with the same file, or the same file again after a clean import, is replayed and writes nothing.
    */
-  async importCsv(principal: ContractorSessionMembership, input: { commandId: string; name: string; kind: "generated" | "csv"; csv: string }) {
+  async importCsv(principal: AuthenticatedMembership, input: { commandId: string; name: string; kind: "generated" | "csv"; csv: string }) {
     if (!uuidSchema.safeParse(input.commandId).success || typeof input.csv !== "string") throw new WorkOrderError("INVALID_COMMAND");
     if (!uuidSchema.safeParse(principal.tenantId).success) throw new WorkOrderError("NOT_FOUND");
     try {
@@ -311,7 +311,7 @@ export class WorkOrderRepository {
   }
 
   /** Office view: recent import batches and the order register. Resident contact is never part of it (CH-3b). */
-  async overview(principal: ContractorSessionMembership) {
+  async overview(principal: AuthenticatedMembership) {
     try {
       return await withTenant(this.pool, requireContractorRequestContext(principal), async db => {
         await assertContractorGate(db, principal, "retained_import");
@@ -337,7 +337,7 @@ export class WorkOrderRepository {
     } catch (error) { throw workOrderFailure(error); }
   }
 
-  async batch(principal: ContractorSessionMembership, batchId: string) {
+  async batch(principal: AuthenticatedMembership, batchId: string) {
     if (!uuidSchema.safeParse(batchId).success) throw new WorkOrderError("NOT_FOUND");
     try {
       return await withTenant(this.pool, requireContractorRequestContext(principal), async db => {
@@ -349,7 +349,7 @@ export class WorkOrderRepository {
   }
 
   /** Revisions with their diffs and stable line identities. Members who may import for the order's client, or who may read this job through its assignment; any other order is the not-found. */
-  async revisions(principal: ContractorSessionMembership, workOrderId: string) {
+  async revisions(principal: AuthenticatedMembership, workOrderId: string) {
     if (!uuidSchema.safeParse(workOrderId).success) throw new WorkOrderError("NOT_FOUND");
     try {
       return await withTenant(this.pool, requireContractorRequestContext(principal), async db => {

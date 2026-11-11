@@ -1,4 +1,4 @@
-import type { ContractorSessionMembership } from "./contractor-repository.js";
+import type { AuthenticatedMembership } from "./tenant-context.js";
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { encodeWorkOrderCsv, referenceApprovalRulesV1, type WorkOrderSampleId } from "@jobguard/core";
@@ -27,7 +27,7 @@ export type WorkOrderDemo = {
 const contractDocument = (sorVersionId: string) => ({ version: "client-contract.v1", reference: "FICTIONAL-HA-2026", startsOn: "2026-01-01", endsOn: null, sorVersionIds: [sorVersionId], tenderedAdjustment: { numerator: "-35", denominator: "1000" }, photoRule: "required", vatCode: "synthetic-unreviewed", exportedNotBilledAlertDays: 30 });
 
 /** Idempotent per organisation; safe to call from two browsers at once (one tenant-level session lock). */
-export async function prepareWorkOrderDemo(pool: Pool, principal: ContractorSessionMembership, options: { siteCount?: number } = {}): Promise<WorkOrderDemo> {
+export async function prepareWorkOrderDemo(pool: Pool, principal: AuthenticatedMembership, options: { siteCount?: number } = {}): Promise<WorkOrderDemo> {
   const lock = await pool.connect();
   try {
     await lock.query("SELECT pg_advisory_lock(hashtextextended($1,56))", [principal.tenantId]);
@@ -88,7 +88,7 @@ export async function prepareWorkOrderDemo(pool: Pool, principal: ContractorSess
  * `regionId` (default: the organisation's first region). The returned object is a WorkOrderDemo for the second client: build its rows with
  * `assignedMembershipIds: []`, because the demo operative belongs to the first branch's team.
  */
-export async function addBranchClient(pool: Pool, principal: ContractorSessionMembership, demo: WorkOrderDemo, label = "Second", regionId?: string): Promise<WorkOrderDemo> {
+export async function addBranchClient(pool: Pool, principal: AuthenticatedMembership, demo: WorkOrderDemo, label = "Second", regionId?: string): Promise<WorkOrderDemo> {
   const contractors = new ContractorRepository(pool), parties = new ContractorPartyRepository(pool);
   const view = () => contractors.query(principal, { version: "contractor-query.v1", tenantId: principal.tenantId, resource: "organisation" });
   const command = async (fields: Record<string, unknown>) => contractors.command(principal, { version: "contractor-command.v1", environment: "synthetic_demo", commandId: randomUUID(), id: randomUUID(), expectedRevision: (await view()).revision, ...fields });

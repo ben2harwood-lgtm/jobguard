@@ -1,4 +1,5 @@
-import { requireContractorRequestContext, type ContractorSessionMembership } from "./contractor-repository.js";
+import type { AuthenticatedMembership } from "./tenant-context.js";
+import { requireContractorRequestContext } from "./contractor-repository.js";
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { WorkOrderError, sorVersionAuditPayloadV1, sorVersionImportV1, sorVersionListV1, sorVersionResultV1 } from "@jobguard/core";
@@ -12,7 +13,7 @@ import { verifiedTenantContextFromMembership, withTenant } from "./tenant-contex
  */
 export class SorRepository {
   constructor(private readonly pool: Pool) {}
-  async importVersion(principal: ContractorSessionMembership, raw: unknown) {
+  async importVersion(principal: AuthenticatedMembership, raw: unknown) {
     const parsed = sorVersionImportV1.safeParse(raw);
     if (!parsed.success) throw new WorkOrderError("INVALID_COMMAND");
     const command = parsed.data;
@@ -36,7 +37,7 @@ export class SorRepository {
       });
     } catch (error) { throw workOrderFailure(error); }
   }
-  async list(principal: ContractorSessionMembership) {
+  async list(principal: AuthenticatedMembership) {
     try {
       return await withTenant(this.pool, requireContractorRequestContext(principal), async db => {
         // Reading price lists needs a contract-level read grant (owner, admin, commercial_manager, supervisor, surveyor, finance, read_only): the same members who can read contracts.

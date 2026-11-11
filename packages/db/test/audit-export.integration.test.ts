@@ -1,3 +1,4 @@
+import { memberSessionPrincipal } from "./contractor-practice-session-fixtures.js";
 import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
 import { lp5ReadTables, lp5bReadTables } from "./lp5-command-catalog.js";
@@ -12,14 +13,14 @@ import EmbeddedPostgres from "embedded-postgres";
 import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { contractorRoles } from "@jobguard/core";
-import { AuditExportRepository, ContractorRepository, exportAuditCheckpoints, handoffAuditExportCheckpoint, verifyAuditChain, verifySignedAuditExport, migrate, MIGRATION_URLS, verifiedTenantContextFromMembership, withTenant, type AuthenticatedMembership, type VerifiedTenantContext, type AuditCheckpoint, type AuditEvent } from "../src/index.js";
+import { AuditExportRepository, ContractorRepository, requireContractorRequestContext, exportAuditCheckpoints, handoffAuditExportCheckpoint, verifyAuditChain, verifySignedAuditExport, migrate, MIGRATION_URLS, verifiedTenantContextFromMembership, withTenant, type AuthenticatedMembership, type VerifiedTenantContext, type AuditCheckpoint, type AuditEvent } from "../src/index.js";
 import { AuditExportApplication, auditExportHttpFailure } from "../../../apps/api/src/audit-export/audit-export.application.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
 import * as upgradeProof from "./upgrade-proof-utils.js";
 import { compare, type Subject } from "./audit-export-privilege-comparator.js";
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, dir: string, contractor: ContractorRepository, repo: AuditExportRepository;
 // LP-6d: guarded routines need a bound request, so each fixture principal carries its own persisted credential context.
-const context = (p: AuthenticatedMembership) => (p as AuthenticatedMembership & { context?: VerifiedTenantContext }).context ?? verifiedTenantContextFromMembership(p);
+const context = (p: AuthenticatedMembership) => { try { return requireContractorRequestContext(p); } catch { return verifiedTenantContextFromMembership(p); } };
 const actor = (p: AuthenticatedMembership) => ({ membershipId: p.membershipId, identityUserId: p.identityUserId });
 let priorSecurityCatalog: unknown;
 let upgrade: {
@@ -205,8 +206,7 @@ async function invite(p: AuthenticatedMembership, role: string, scopeKind = "ten
   const id = randomUUID(), view = await contractor.query(p, { version: "contractor-query.v1", tenantId: p.tenantId, resource: "organisation" });
   await contractor.command(p, { version: "contractor-command.v1", environment: "synthetic_demo", commandId: randomUUID(), id, expectedRevision: view.revision, kind: "member.invite", role, email: `${id}@fictional.invalid`, scope: { kind: scopeKind, id: scopeId }, clientId: role === "client_approver" ? scopeId : null, contractId: null });
   const row = (await admin.query<{ identity_user_id: string }>("SELECT identity_user_id FROM app.membership WHERE tenant_id=$1 AND id=$2", [p.tenantId, id])).rows[0]!;
-  const bound = await testBoundTenantContext(admin, p.tenantId, id);
-  return { ...p, membershipId: id, identityUserId: row.identity_user_id, context: bound } as AuthenticatedMembership;
+  void row; return await memberSessionPrincipal(admin, runtime, p.tenantId, id);
 }
 describe("ENT-10b PostgreSQL audit exports", () => {
   it("leaves every existing table, policy, routine privilege and runtime role attribute unchanged on upgrade", async () => {

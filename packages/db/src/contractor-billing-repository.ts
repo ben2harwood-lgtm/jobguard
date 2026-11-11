@@ -1,5 +1,5 @@
 import { RequestBindingRefusedError } from "./request-binding-error.js";
-import { ContractorRepository } from "./contractor-repository.js";
+import { ContractorRepository, requireContractorRequestContext } from "./contractor-repository.js";
 import {contractorBillingReconciliation} from "./contractor-billing-projection.js";
 import type { Pool } from "pg";
 import { z } from "zod";
@@ -24,8 +24,7 @@ export class ContractorBillingRepository {
  private async sessionContext(context:VerifiedTenantContext,session:string):Promise<VerifiedTenantContext>{
   const principal=await new ContractorRepository(this.pool).resolveSession(session);
   if(principal.tenantId!==context.tenantId)throw new ContractorBillingError("BILLING_FORBIDDEN");
-  if(!principal.context)throw new ContractorBillingError("BILLING_FORBIDDEN");
-  return principal.context;
+  try { return requireContractorRequestContext(principal); } catch { throw new ContractorBillingError("BILLING_FORBIDDEN"); }
  }
  async finalise(context:VerifiedTenantContext,session:string,job:string,raw:unknown):Promise<ExportResult>{
   const input=parse(billingFinaliseCommandV1,raw);parse(z.string().uuid(),job);parse(z.string().uuid(),session);

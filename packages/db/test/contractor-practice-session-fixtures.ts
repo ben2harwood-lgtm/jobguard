@@ -87,3 +87,11 @@ export async function companyRows(c: Cluster, tenant: string) {
  const tables = ["app.membership", "app.contractor_member", "app.role_grant", "app.role_grant_revocation", "app.team_membership", "app.org_unit", "app.team"];
  return Object.fromEntries(await Promise.all(tables.map(async table => [table, (await c.admin.query(`SELECT row_to_json(x)::text bytes FROM ${table} x WHERE tenant_id=$1 ORDER BY row_to_json(x)::text COLLATE "C"`, [tenant])).rows])));
 }
+
+/** LP-6d: a member's own persisted contractor practice session, resolved like a real request. */
+export async function memberSessionPrincipal(admin: { query: (sql: string, values?: unknown[]) => Promise<{ rows: any[] }> }, runtime: import("pg").Pool, tenantId: string, membershipId: string) {
+ const user = (await admin.query("SELECT identity_user_id FROM app.membership WHERE tenant_id=$1 AND id=$2", [tenantId, membershipId])).rows[0]!.identity_user_id as string;
+ const session = randomUUID();
+ await admin.query("INSERT INTO control_plane.contractor_practice_session(session_id,tenant_id,membership_id,identity_user_id,session_digest,created_at,expires_at) SELECT $1,$2,$3,$4,$5,r.t,r.t+interval '1 day' FROM (SELECT clock_timestamp() t) r", [session, tenantId, membershipId, user, digestOf(session)]);
+ return new ContractorRepository(runtime).resolveSession(session);
+}
