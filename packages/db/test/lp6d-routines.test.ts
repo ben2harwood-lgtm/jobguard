@@ -88,8 +88,8 @@ it("converts the invitation bridge and withdraws direct authorization revocation
   expect(pathCompleteness(inventory, repoFileExists)).toEqual([]);
   expect(inventory.entries.some(e => e.key === "acl|col|app.action_authorization.revoked_at|jobguard_runtime|UPDATE|-")).toBe(false);
   expect(inventory.entries.some(e => e.key.startsWith("acl|col|app.action_authorization.") && e.key.includes("|jobguard_runtime|UPDATE|"))).toBe(false);
-  // r8: the revocation routine, revoke-claim helper and seven runtime lock/refusal/maintenance/probe helpers (owner + EXECUTE each).
-  expect(inventory.entries.filter(e => e.group === "a-lp6d-routine-binding")).toHaveLength(18);
+  // r8: the revocation routine, revoke-claim helper and seven runtime lock/refusal/maintenance/probe helpers (owner + EXECUTE each), plus migration EXECUTE on LP-6c's delegated actor accessor.
+  expect(inventory.entries.filter(e => e.group === "a-lp6d-routine-binding")).toHaveLength(19);
 });
 
 it("leaves the final-lock owner helper exclusively to LP-6c", () => {

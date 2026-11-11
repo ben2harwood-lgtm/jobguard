@@ -1501,6 +1501,7 @@
           "app.current_actor",
           "app.current_tenant",
           "app.lp5_bind_effect",
+          "app.lp6_delegated_actor",
           "app.xa_begin",
           "app.xa_event",
           "app.xa_latest_kind",
@@ -3430,11 +3431,13 @@
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "d854f43006facdc8e02d3e2d0bafd4f5504240c7671b6c86d7e51030fa1c711d",
+        "definitionSha256": "bb81d86c6f940a4cc4cb20989a822714913118b0644d22af0af39fd736434d03",
         "staticWrites": [],
         "staticCalls": [
           "app.current_actor",
           "app.current_tenant",
+          "app.lp6_delegated_actor",
+          "app.lp6d_mon8_feature_decision",
           "app.mon8_require_feature"
         ]
       }
@@ -3471,14 +3474,15 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "533a6acfedede06b166dcdef31d35214d5cceb0e210307e004c212ab4389837c",
+        "definitionSha256": "960e4f4165b89071ebd3a7e1736aa10c65c321459ea0e596b81b5d32b58575d6",
         "staticWrites": [],
         "staticCalls": [
           "app.contractor_job_team",
           "app.contractor_member_active",
           "app.contractor_role_permits",
           "app.current_actor",
-          "app.current_tenant"
+          "app.current_tenant",
+          "app.lp6_delegated_actor"
         ]
       }
     },
@@ -5970,7 +5974,7 @@
           "app.final_lock_canonical",
           "app.lp6_bind_client_approver",
           "app.lp6d_client_view_authority",
-          "app.lp6d_xa_client_decide",
+          "app.xa_client_decide",
           "app.xc_timing",
           "identity.extra_customer_use"
         ]
@@ -6172,6 +6176,14 @@
       "before": null,
       "after": {
         "key": "acl|routine|function:app.lp6d_maintenance_login()|jobguard_runtime|EXECUTE|-",
+        "group": "a-lp6d-routine-binding"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.lp6_delegated_actor(uuid,text,uuid)|jobguard_migration|EXECUTE|-",
         "group": "a-lp6d-routine-binding"
       }
     },
@@ -6865,57 +6877,6 @@
       "section": "routines",
       "before": null,
       "after": {
-        "identity": "function:app.lp6d_xa_begin(uuid,uuid,text[],uuid)",
-        "owner": "jobguard_migration",
-        "securityDefiner": false,
-        "searchPath": "search_path=pg_catalog",
-        "returnsTrigger": false,
-        "extension": null,
-        "reachable": false,
-        "runtimeExecute": false,
-        "publicExecute": false,
-        "otherExecute": [],
-        "definitionSha256": "0f2965e1ab567cedc3f676bf2ba52855bb347efdbd111c8f5138a77a59c1e59a",
-        "staticWrites": [],
-        "staticCalls": [
-          "app.lp6d_mon8_feature_decision"
-        ]
-      }
-    },
-    {
-      "section": "routines",
-      "before": null,
-      "after": {
-        "identity": "function:app.lp6d_xa_client_decide(uuid,uuid,uuid,uuid,text,text,text,bigint,boolean,text,text,text)",
-        "owner": "jobguard_migration",
-        "securityDefiner": true,
-        "searchPath": "search_path=pg_catalog",
-        "returnsTrigger": false,
-        "extension": null,
-        "reachable": false,
-        "runtimeExecute": false,
-        "publicExecute": false,
-        "otherExecute": [],
-        "definitionSha256": "f06c0caa5a5a3c0bc665399896bf2203588dd84f24d3197973543ee825469592",
-        "staticWrites": [
-          "app.extra_approval_outcome",
-          "app.extra_approval_step_fact",
-          "app.extra_client_link_closure"
-        ],
-        "staticCalls": [
-          "app.contractor_member_active",
-          "app.lp5_bind_effect",
-          "app.lp6d_xa_begin",
-          "app.xa_event",
-          "app.xa_latest_kind",
-          "app.xc_link_current"
-        ]
-      }
-    },
-    {
-      "section": "routines",
-      "before": null,
-      "after": {
         "identity": "function:app.lp6d_xa_covers(uuid,text[],uuid,text)",
         "owner": "jobguard_migration",
         "securityDefiner": false,
@@ -7018,6 +6979,48 @@
         "staticCalls": [
           "app.append_final_check_audit",
           "app.lp6d_xc_link_current"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.lp6_delegated_actor(uuid,text,uuid)",
+        "owner": "jobguard_binding_owner",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_command_writer"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.lp6_bound_request"
+        ]
+      },
+      "after": {
+        "identity": "function:app.lp6_delegated_actor(uuid,text,uuid)",
+        "owner": "jobguard_binding_owner",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_command_writer",
+          "jobguard_migration"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.lp6_bound_request"
         ]
       }
     }
@@ -7260,36 +7263,6 @@
         "prosecdef": true,
         "proconfig": [
           "search_path=pg_catalog, pg_temp"
-        ]
-      }
-    },
-    {
-      "section": "routines",
-      "before": null,
-      "after": {
-        "nspname": "app",
-        "proname": "lp6d_xa_begin",
-        "args": "p_job uuid, p_command uuid, p_types text[], p_actor uuid",
-        "proowner": "jobguard_migration",
-        "proacl": "{jobguard_migration=X/jobguard_migration}",
-        "prosecdef": false,
-        "proconfig": [
-          "search_path=pg_catalog"
-        ]
-      }
-    },
-    {
-      "section": "routines",
-      "before": null,
-      "after": {
-        "nspname": "app",
-        "proname": "lp6d_xa_client_decide",
-        "args": "p_job uuid, p_request uuid, p_command uuid, p_actor uuid, p_token_hash text, p_email text, p_hash text, p_net bigint, p_reject boolean, p_reason text, p_role_name text, p_tester text",
-        "proowner": "jobguard_migration",
-        "proacl": "{jobguard_migration=X/jobguard_migration}",
-        "prosecdef": true,
-        "proconfig": [
-          "search_path=pg_catalog"
         ]
       }
     },
