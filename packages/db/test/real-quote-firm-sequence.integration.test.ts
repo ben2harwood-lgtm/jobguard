@@ -48,7 +48,8 @@ async function job(owner: Firm, company?: VerifiedTenantContext) {
  if (company) {
   const jobs=new JobRepository(f.runtime);
   await jobs.create(company,["job:update"],{id,title:"Fictional company painting"});
-  await jobs.transition(company,["job:update"],{jobId:id,expectedRevision:0,to:"quoting",reason:"start_quote"});
+  // Match job.integration's owner-only lifecycle setup; quoting stays on runtime.
+  await new JobRepository(f.admin).transition(company,["job:update"],{jobId:id,expectedRevision:0,to:"quoting",reason:"start_quote"});
  }
  else await f.admin.query("INSERT INTO app.job(id,tenant_id,title,status,practice_session_digest,practice_scenario) VALUES($1,$2,'Fictional painting','quoting',$3,'capture')", [id, tenant, owner.digest]);
  await f.admin.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')", [scope, t, id]);

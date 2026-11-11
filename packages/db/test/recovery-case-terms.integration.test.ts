@@ -74,9 +74,9 @@ async function proofFixture(owner:Pool,j:string){
  });
  }
 }
-async function supplierFixture(){
+async function supplierFixture(owner:Pool){
  const merchant=randomUUID(),sku=randomUUID(),rate=randomUUID(),scope=(await admin.query("SELECT id FROM app.scope_identity WHERE tenant_id=$1 AND job_id=$2 LIMIT 1",[T,job])).rows[0].id,refs=[rate];
- await withTenant(admin,context,async db=>{
+ await withTenant(owner,context,async db=>{
  await db.$client.query("INSERT INTO app.merchant(id,tenant_id,name) VALUES($1,$2,'Fictional supplier')",[merchant,T]);await db.$client.query("INSERT INTO app.merchant_sku(id,tenant_id,merchant_id,sku,description,base_unit) VALUES($1,$2,$3,'CH7-320','Fixture materials','each')",[sku,T,merchant]);await db.$client.query("INSERT INTO app.material_rate_revision(id,tenant_id,merchant_id,sku_id,version,price_pence,currency,price_unit,tax_basis,effective_from,source_label) VALUES($1,$2,$3,$4,1,2000,'GBP','each','net','2026-10-01','CH7 agreement')",[rate,T,merchant,sku]);await db.$client.query("INSERT INTO app.material_requirement(id,tenant_id,job_id,scope_item_id,sku_id,quantity_decimal,unit,revision) VALUES($1,$2,$3,$4,$5,'40','each',1)",[randomUUID(),T,job,scope,sku]);
  for(const type of ["invoice","delivery"]){const id=randomUUID();refs.push(id);await db.$client.query("INSERT INTO app.supplier_document(id,tenant_id,job_id,supplier_context,document_type,document_number,content_hash,status) VALUES($1,$2,$3,'Fictional supplier',$4,$5,$6,'ready')",[id,T,job,type,'CH7-'+type,hash(type)]);await db.$client.query("INSERT INTO app.supplier_document_version(id,tenant_id,job_id,document_id,version,media_type,byte_length,content_hash,page_count) VALUES($1,$2,$3,$4,1,'text/plain',1,$5,1)",[randomUUID(),T,job,id,hash(type)]);}
  });return refs;
@@ -90,13 +90,14 @@ beforeAll(async()=>{
  runtime=new Pool({host:"127.0.0.1",port,user:"terms_login",password:"synthetic",database:"jobguard_synthetic_demo",max:4});
  const session=await issuePracticeSession(runtime),auth=await authenticatePracticeSession(runtime,session);
  context=auth.context;runtime=practiceMaterialPool(runtime,auth.digest);
+ const materialOwner=practiceMaterialPool(admin,auth.digest);
  job=await prepareActivationFixtureV3(admin,context,"CH7 terms",1880000,runtime,1880000,auth.digest);await new PracticeActivationRepository(runtime).start(context,job,{commandId:randomUUID(),scenario:"no_charge"});
- await proofFixture(admin,job);
- supplierRefs=await supplierFixture();
+ await proofFixture(materialOwner,job);
+ supplierRefs=await supplierFixture(materialOwner);
  const final=await new FinalAccountCommandService(runtime).assemble(context,{version:"final-account.assemble.v1",commandId:randomUUID(),jobId:job,actorMembershipId:M});
  await prepareInvoicePrerequisites(admin,runtime,T,job,M,final.id);
  invoice=(await new PracticeInvoiceRepository(runtime).issue(context,{jobId:job,finalAccountRevisionId:final.id,actorMembershipId:M,commandId:randomUUID(),recipient:"practice-customer@example.invalid",issuedOn:"2026-10-12"})).id;
- unbound=await prepareActivationFixtureV3(admin,context,"No-policy control",1880000,runtime,1880000,auth.digest);await new PracticeActivationRepository(runtime).start(context,unbound,{commandId:randomUUID(),scenario:"no_charge"});await proofFixture(admin,unbound);
+ unbound=await prepareActivationFixtureV3(admin,context,"No-policy control",1880000,runtime,1880000,auth.digest);await new PracticeActivationRepository(runtime).start(context,unbound,{commandId:randomUUID(),scenario:"no_charge"});await proofFixture(materialOwner,unbound);
  const controlFinal=await new FinalAccountCommandService(runtime).assemble(context,{version:"final-account.assemble.v1",commandId:randomUUID(),jobId:unbound,actorMembershipId:M});await prepareInvoicePrerequisites(admin,runtime,T,unbound,M,controlFinal.id);unboundInvoice=(await new PracticeInvoiceRepository(runtime).issue(context,{jobId:unbound,finalAccountRevisionId:controlFinal.id,actorMembershipId:M,commandId:randomUUID(),recipient:"practice-customer@example.invalid",issuedOn:"2026-10-12"})).id;
  // Privileged negative-fixture setup only: construct the historical no-policy shape; all pursuit calls below still run as runtime.
  const fixtureClient=await admin.connect();try{await fixtureClient.query("BEGIN");await fixtureClient.query("SET LOCAL session_replication_role=replica");await fixtureClient.query("UPDATE app.job SET fee_policy_version=NULL,baseline_quote_version_id=NULL,accepted_net_value_pence=NULL WHERE tenant_id=$1 AND id=$2",[T,unbound]);await fixtureClient.query("COMMIT");}finally{fixtureClient.release();}

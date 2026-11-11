@@ -54,7 +54,7 @@ export async function historicalAcceptedQuote(
    throw new Error("Historical quote fixture cannot replace current runtime writers");
   await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenant]);
   await db.query(`INSERT INTO app.job(id,tenant_id,title,status,practice_session_digest,practice_scenario)
-   VALUES($1,$2,$3,'quoting',$4,CASE WHEN $4::text IS NULL THEN NULL ELSE 'capture' END)`, [job,tenant,name,practiceDigest]);
+   VALUES($1,$2,$3,'quoting',$4::text,CASE WHEN $4::text IS NULL THEN NULL ELSE 'capture' END)`, [job,tenant,name,practiceDigest]);
   await seedSyntheticPartyFixture(db,tenant,job);
   await db.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')",[scope,tenant,job]);
   await db.query(`INSERT INTO app.scope_revision(id,tenant_id,job_id,scope_item_id,revision,description,quantity_decimal,unit,unit_price_pence,total_pence)
@@ -79,7 +79,7 @@ export async function historicalAcceptedQuote(
    subtotalPence:totals.subtotal.pence,discountPence:totals.discount.pence,netPence:totals.net.pence,taxPence:totals.tax.pence,totalPence:totals.total.pence});
   const pdf=renderQuotePdf(document), contentHash=createHash("sha256").update(pdf).digest("hex");
   await db.query(`INSERT INTO app.quote_document_version(id,tenant_id,job_id,quote_revision_id,document_version,reference,content_hash,object_key,object_version_id,pdf_byte_length,issuer,customer,snapshot)
-   VALUES($1,$2,$3,$4,1,'Q-0001',$5,$6,$5,$7,$8,$9,$10)`,
+   VALUES($1,$2,$3,$4,1,'Q-0001',$5::text,$6,$5::text,$7,$8,$9,$10)`,
   [documentId,tenant,job,revision,contentHash,`historical/quotes/${documentId}.pdf`,pdf.length,document.issuer,document.customer,document]);
   // Exact fictional historical send facts, satisfying the predecessor's real FKs
   // and approval trigger. There is no external executor or provider invocation.
