@@ -155,7 +155,7 @@ it.each([[150, 150, 15000], [150, 200, null]])("coalesced estimates are order in
   }
 });
 it("upgrade preserves historical records and ACLs, rests legacy queued work and does not revive completed work", async () => {
-  const db = await jobDoorsDatabase(true, "1430_final_check_typed_recovery.sql");
+  const db = await jobDoorsDatabase(true, "0732_final_check_typed_recovery.sql");
   try {
     await installLegacySyntheticPartyFixtures(db.owner);
     // Reuse the existing runtime fixture; generated shadow login has no extra business grants.
@@ -189,7 +189,7 @@ it("upgrade preserves historical records and ACLs, rests legacy queued work and 
       const before = await snapshot();
       const acl = async () => (await db.owner.query("SELECT relacl::text,relowner::regrole::text FROM pg_class WHERE oid='infrastructure.final_check_request'::regclass")).rows;
       const grants = await acl();
-      await db.owner.query(await readFile(new URL("../migrations/1430_final_check_typed_recovery.sql", import.meta.url), "utf8"));
+      await db.owner.query(await readFile(new URL("../migrations/0732_final_check_typed_recovery.sql", import.meta.url), "utf8"));
       expect(await snapshot()).toEqual(before); expect(await acl()).toEqual(grants); expect(await certificates()).toEqual(certificateHistory);
       expect((await db.owner.query("SELECT job_id,cycle_state FROM infrastructure.final_check_request ORDER BY job_id")).rows).toEqual(expect.arrayContaining([{ job_id: a.jobId, cycle_state: "completed" }, { job_id: pending.jobId, cycle_state: "failed" }, { job_id: invalidated.jobId, cycle_state: "failed" }, { job_id: unqueued.jobId, cycle_state: "requested" }]));
       const runtimeRepo=new FinalCheckRepository(db.runtime);
@@ -337,7 +337,7 @@ it("pre-manifest concurrent requests replay without replacing the cycle", async 
   expect(await requestRow(a.jobId)).toEqual(original);
 });
 it("restricted lifecycle executors have exact signatures, bodies, owners, search paths and ACLs", async () => {
-  const sql = await readFile(new URL("../migrations/1430_final_check_typed_recovery.sql",import.meta.url),"utf8");
+  const sql = await readFile(new URL("../migrations/0732_final_check_typed_recovery.sql",import.meta.url),"utf8");
   for (const [schema,name,args,executor] of [
     ["app","final_check_cycle_claim","uuid,uuid,uuid,uuid,integer,uuid","jobguard_shadow"],
     ["app","final_check_cycle_finish","uuid,uuid,uuid,uuid,integer,uuid,boolean","jobguard_shadow"],

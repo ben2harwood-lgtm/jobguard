@@ -1,5 +1,5 @@
 {
-  "migration": "1430_final_check_typed_recovery.sql",
+  "migration": "0732_final_check_typed_recovery.sql",
   "lp0": [
     {
       "section": "routines",

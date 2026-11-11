@@ -20,7 +20,7 @@ new post-lock diary/messages; email/photo coalescing and post-lock import are no
 
 ## real-fc-typed-recovery (RED; synthetic only)
 
-Migration 1430 separates a recoverable worker cycle from the immutable manifest
+Migration 0732 separates a recoverable worker cycle from the immutable manifest
 attempt. Each admitted cycle permits at most three executions and Graphile
 `max_attempts := 3`. Exhaustion is durable plain failure. Discovery reconciles
 missing/exhausted queue work, including process death before terminal recording;
@@ -65,13 +65,13 @@ executions, performs a labelled API-driven restart, then loads completion and
 records the displayed invoice balance to Paid. The separate screen piece owns
 Try again, polling, estimates and invoice refresh; it is outside this lane.
 
-Forward upgrade requires old workers drained before installing 1430 and the new
+Forward upgrade requires old workers drained before installing 0732 and the new
 worker. Acknowledged legacy requests remain managed and conservatively failed
 unless exact current checked publication proves completion. Unacknowledged rows
 keep direct semantics. Historical manifests, attempts, certificates, grants and
 commercial records survive. Unfenced legacy deliveries perform no claim, begin,
-processing or publication. Retain 1430 until landing; renumber migration and proof
-together then. Use an additive forward fix for faults. No deployment is authorised;
+processing or publication. Renumbered from build-ahead 1430 to 0732 at landing (migration and proof
+together). Use an additive forward fix for faults. No deployment is authorised;
 D04 and G1–G5 remain closed.
 
 Repair 1 local evidence (10 Nov 2026):
@@ -85,7 +85,7 @@ Repair 1 local evidence (10 Nov 2026):
 - The pnpm three-file API invocation stalled selecting the pinned manager before Vitest and was interrupted; installed Vitest 4.1.12 ran the equivalent commands above without downloading dependencies.
 - `./node_modules/.bin/vitest list test/real-fc-typed-recovery.integration.test.ts --maxWorkers=1` from packages/db collected 18 cases. Collection is not execution.
 
-1430's additive proof retains exact predecessor records. Replacement hashes were
+0732's additive proof retains exact predecessor records. Replacement hashes were
 derived from final source using the established PostgreSQL 16 `pg_get_functiondef`
 rendering method in ais-migration-proof.test.ts; the method reproduced both original
 0698 pins before deriving replacements. Final request hash:

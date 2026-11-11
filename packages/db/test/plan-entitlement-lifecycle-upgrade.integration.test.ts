@@ -99,7 +99,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   expect(abandonedVisitRoutines).toHaveLength(1);
   expect(abandonedVisitRoutines[0]?.definition?.split("$function$")[1]).toEqual(
     abandonedVisit.split("FUNCTION app.ent3b_close_abandoned_visit(")[1]!.split("AS $$")[1]!.split("$$;")[0]);
-  const recoverySql = await readFile(new URL("../migrations/1430_final_check_typed_recovery.sql", import.meta.url), "utf8");
+  const recoverySql = await readFile(new URL("../migrations/0732_final_check_typed_recovery.sql", import.meta.url), "utf8");
   for (const [name,args] of [
     ["final_check_read_authority","t uuid, j uuid, d text, locking boolean"],
     ["admit_final_check_cycle","t uuid, j uuid"],
@@ -174,9 +174,9 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     ["begin_final_check", "t uuid, j uuid, detector text, policy text", "0698_final_check_post_invoice_rerun.sql"],
     ["complete_final_check", "t uuid, j uuid, m uuid, p jsonb", "0698_final_check_post_invoice_rerun.sql"],
     ["guard_final_check_manifest", "", "0698_final_check_post_invoice_rerun.sql"],
-    ["read_final_check_reveal", "t uuid, j uuid, d text", "1430_final_check_typed_recovery.sql"],
+    ["read_final_check_reveal", "t uuid, j uuid, d text", "0732_final_check_typed_recovery.sql"],
     ["read_value_job", "j uuid, digest text", "0698_final_check_post_invoice_rerun.sql"],
-    ["request_final_check_run", "t uuid, j uuid, d text", "1430_final_check_typed_recovery.sql"],
+    ["request_final_check_run", "t uuid, j uuid, d text", "0732_final_check_typed_recovery.sql"],
     ["request_practice_final_check_on_lock", "", "0698_final_check_post_invoice_rerun.sql"],
     ["verify_final_check_run", "p_tenant uuid, p_job uuid, p_run uuid, p_lock uuid, p_cutoff timestamp with time zone", "0698_final_check_post_invoice_rerun.sql"],
     ["retention_records", "t uuid, digest text, j uuid, cid uuid, v jsonb, expected text", "0646_retention_timer_runtime_rules.sql"],
@@ -193,7 +193,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     ["ch4_read_work_facts", "t uuid, j uuid, digest text", "0690_import_ancestry_record_anchor.sql"],
     ["read_job_sources", "t uuid, j uuid, digest text, source text", "0690_import_ancestry_record_anchor.sql"],
     ["ch4_require_command_owner", "t uuid, j uuid, digest text", "0690_import_ancestry_record_anchor.sql"],
-    ["final_check_builder", "t uuid, j uuid, d text, locking boolean", "1430_final_check_typed_recovery.sql"],
+    ["final_check_builder", "t uuid, j uuid, d text, locking boolean", "0732_final_check_typed_recovery.sql"],
     ["evidence_pack_v3_owner", "t uuid, c uuid, d text", "0690_import_ancestry_record_anchor.sql"],
     ["adopt_invoiced_job_v3", "t uuid, source_job uuid, d text, cmd uuid, auth uuid, approved jsonb, request_hash text", "0690_import_ancestry_record_anchor.sql"],
     ["apply_recovery_timeline_signal", "p_tenant uuid, p_signal jsonb", "0690_import_ancestry_record_anchor.sql"],

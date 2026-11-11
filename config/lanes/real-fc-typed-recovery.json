@@ -15,15 +15,17 @@
         "apps/api/src/worker.ts",
         "apps/web/e2e/real-fc-typed-recovery.spec.ts",
         "docs/operations/final-check-recovery.md",
-        "packages/db/migrations/1430_final_check_typed_recovery.sql",
+        "packages/db/migrations/0732_final_check_typed_recovery.sql",
         "packages/db/test/lp-0-grant-freeze.integration.test.ts",
         "packages/db/test/migfix-7-upgrade.integration.test.ts",
-        "packages/db/test/migration-proofs/1430_final_check_typed_recovery.proof.json",
+        "packages/db/test/migration-proofs/0732_final_check_typed_recovery.proof.json",
         "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
         "packages/db/test/real-fc-typed-recovery.integration.test.ts",
         "packages/db/test/serious-b5-upgrade.integration.test.ts",
         "packages/db/test/shadow-catalog.integration.test.ts",
-        "packages/db/test/sv5pre-completion-access.integration.test.ts"
+        "packages/db/test/sv5pre-completion-access.integration.test.ts",
+        "packages/db/migrations/1430_final_check_typed_recovery.sql",
+        "packages/db/test/migration-proofs/1430_final_check_typed_recovery.proof.json"
       ]
     }
   }
