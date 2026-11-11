@@ -12,6 +12,7 @@
         "apps/web/app/api/jobs/[id]/parties/route.ts",
         "apps/web/app/ui/job-parties.test.tsx",
         "apps/web/app/ui/job-parties.tsx",
+        "apps/web/e2e/CH-3a.spec.ts",
         "apps/web/e2e/real-parties-atomic-save.spec.ts",
         "docs/contracts/job-parties-v1.md",
         "packages/core/src/job-parties.test.ts",
