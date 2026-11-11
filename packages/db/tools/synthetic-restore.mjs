@@ -89,7 +89,7 @@ export async function runSyntheticRestoreRehearsal(options = {}, api, fixture) {
   const pool = (port, user = "postgres", database = "jobguard_synthetic_demo") => { const p = new Pool({ host: "127.0.0.1", port, user, password, database, max: 4 }); pools.add(p); return p; };
   const closePools = async () => { await Promise.all([...pools].map(p => p.end())); pools.clear(); await new Promise(ok => setTimeout(ok, 25)); };
   const pass = (id, detail) => checks.push({ id, status: "PASS", detail });
-  const ids = Object.fromEntries(["tenant", "otherTenant", "otherAccount", "otherMember", "identity", "account", "member", "job", "otherJob", "scope", "quote", "draft", "revision", "variation"].map(name => [name, randomUUID()]));
+  const ids = Object.fromEntries(["tenant", "otherTenant", "otherAccount", "otherMember", "identity", "account", "member", "job", "otherJob", "scope", "quote", "draft", "revision", "variation", "linkedJob", "linkedScope", "linkedBinding"].map(name => [name, randomUUID()]));
   const sessionCredential = digest(randomUUID());
   const context = api.verifiedTenantContextFromMembership({ tenantId: ids.tenant, membershipId: ids.member, identityUserId: ids.identity }, {kind: "real", credential: sessionCredential});
   const otherContext = api.verifiedTenantContextFromMembership({ tenantId: ids.otherTenant, membershipId: ids.otherMember, identityUserId: ids.identity }, {kind: "real", credential: sessionCredential});
@@ -138,6 +138,22 @@ export async function runSyntheticRestoreRehearsal(options = {}, api, fixture) {
     } catch (error) { await partyClient.query("ROLLBACK"); throw error; }
     finally { partyClient.release(); }
     await admin.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')", [ids.scope, ids.tenant, ids.job]);
+    // Post-lock builder work belongs on a linked job for the same customer and site,
+    // as production requires. Generated successor: same parties, own scope, live.
+    await admin.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,'Fictional linked restore job','quoting')", [ids.linkedJob, ids.tenant]);
+    const linkedClient = await admin.connect();
+    try {
+      await linkedClient.query("BEGIN");
+      await linkedClient.query("SELECT set_config('app.tenant_id',$1,true)", [ids.tenant]);
+      await linkedClient.query("INSERT INTO app.job_party_binding(tenant_id,id,job_id,revision,customer_id,customer_revision_id,paying_party_id,paying_party_revision_id,site_id,site_revision_id,provenance) SELECT b.tenant_id,$3,$4,(SELECT revision FROM app.job WHERE tenant_id=$1 AND id=$4),b.customer_id,b.customer_revision_id,b.paying_party_id,b.paying_party_revision_id,b.site_id,b.site_revision_id,'backfilled_synthetic_fixture' FROM app.job_party_binding b JOIN app.job_party_current c ON(c.tenant_id,c.job_id,c.binding_id)=(b.tenant_id,b.job_id,b.id) WHERE b.tenant_id=$1 AND b.job_id=$2", [ids.tenant, ids.job, ids.linkedBinding, ids.linkedJob]);
+      await linkedClient.query("INSERT INTO app.job_party_current(tenant_id,job_id,binding_id) VALUES($1,$2,$3)", [ids.tenant, ids.linkedJob, ids.linkedBinding]);
+      await linkedClient.query("SET LOCAL ROLE jobguard_migration");
+      await linkedClient.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance,source_id) VALUES($1,$2,'small_builder','synthetic_demo','legacy_synthetic_live_fixture',$2)", [ids.tenant, ids.linkedJob]);
+      await linkedClient.query("UPDATE app.job SET status='live' WHERE tenant_id=$1 AND id=$2", [ids.tenant, ids.linkedJob]);
+      await linkedClient.query("COMMIT");
+    } catch (error) { await linkedClient.query("ROLLBACK"); throw error; }
+    finally { linkedClient.release(); }
+    await admin.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')", [ids.linkedScope, ids.tenant, ids.linkedJob]);
     await admin.query("INSERT INTO app.scope_progress(tenant_id,job_id,scope_item_id,stage) VALUES($1,$2,$3,'in_progress')", [ids.tenant, ids.job, ids.scope]);
     await admin.query("INSERT INTO app.quote_version(id,tenant_id,job_id,version,content_hash,net_value_pence,status) VALUES($1,$2,$3,1,$4,10000,'accepted')", [ids.quote, ids.tenant, ids.job, fixtureHash]);
     await admin.query("INSERT INTO app.final_account_draft(id,tenant_id,job_id) VALUES($1,$2,$3)", [ids.draft, ids.tenant, ids.job]);
@@ -156,8 +172,8 @@ export async function runSyntheticRestoreRehearsal(options = {}, api, fixture) {
     assert.equal(sourceTrack.length, 1);
     const createBuilderOrigin = (connection, variation) => api.withTenant(connection, context, async db => {
       assert.equal((await db.$client.query("SELECT pg_has_role(current_user,'jobguard_runtime','USAGE') AS runtime_role")).rows[0].runtime_role, true);
-      await db.$client.query("INSERT INTO app.variation(id,tenant_id,job_id,scope_item_id,existing_scope_item_id,capture_kind,capture_text,description) VALUES($1,$2,$3,$4,$4,'text','Fictional restore extra','Fictional restore extra')", [variation, ids.tenant, ids.job, ids.scope]);
-      const origin = (await db.$client.query("SELECT job_track,kind,provenance,raising_role,source_capture_hash FROM app.extra_origin WHERE tenant_id=$1 AND job_id=$2 AND variation_id=$3", [ids.tenant, ids.job, variation])).rows;
+      await db.$client.query("INSERT INTO app.variation(id,tenant_id,job_id,scope_item_id,existing_scope_item_id,capture_kind,capture_text,description) VALUES($1,$2,$3,$4,$4,'text','Fictional restore extra','Fictional restore extra')", [variation, ids.tenant, ids.linkedJob, ids.linkedScope]);
+      const origin = (await db.$client.query("SELECT job_track,kind,provenance,raising_role,source_capture_hash FROM app.extra_origin WHERE tenant_id=$1 AND job_id=$2 AND variation_id=$3", [ids.tenant, ids.linkedJob, variation])).rows;
       assert.deepEqual(origin, [{ job_track: "small_builder", kind: "builder_logged", provenance: "legacy_synthetic_capture", raising_role: "legacy_unrecorded", source_capture_hash: digest("Fictional restore extra") }]);
       return origin;
     });
@@ -221,6 +237,13 @@ export async function runSyntheticRestoreRehearsal(options = {}, api, fixture) {
       }
       actionIds.push(actionId);
     }
+    // The locked job refuses new builder work; link the successor through the production command.
+    const workState = new api.JobWorkStateRepository(runtime), lockedFacts = await workState.read(context, ids.job, ids.member);
+    const predecessorBinding = (await admin.query("SELECT binding_id FROM app.job_party_current WHERE tenant_id=$1 AND job_id=$2", [ids.tenant, ids.job])).rows[0].binding_id;
+    const linked = await workState.command(context, ids.job, ids.member, { version: "job-link-command.v1", action: "link", commandId: randomUUID(),
+      expectedRevision: Math.max(0, ...lockedFacts.events.map(event => event.sequence)) + lockedFacts.links.filter(link => link.predecessorJobId === ids.job).length,
+      successorJobId: ids.linkedJob, predecessorBindingId: predecessorBinding, successorBindingId: ids.linkedBinding });
+    assert.deepEqual(linked.links.map(link => [link.predecessorJobId, link.successorJobId]), [[ids.job, ids.linkedJob]]);
     const sourceOrigin = await createBuilderOrigin(runtime, ids.variation);
     await fixture?.beforeBackup({ admin, postgres: source, directory: sourcePath, pool: (user, database) => pool(sourcePort, user, database) });
     // The snapshot covers every row, including money/audit/control metadata, not only the examples above.
@@ -275,7 +298,7 @@ export async function runSyntheticRestoreRehearsal(options = {}, api, fixture) {
     measured("database");
     await fixture?.afterRestore({ admin, postgres: restored, directory: restoredPath, pool: (user, database) => pool(restoredPort, user, database) });
     assert.deepEqual(await trackRows(runtime), sourceTrack);
-    assert.deepEqual(await api.withTenant(runtime, context, async db => (await db.$client.query("SELECT job_track,kind,provenance,raising_role,source_capture_hash FROM app.extra_origin WHERE tenant_id=$1 AND job_id=$2 AND variation_id=$3", [ids.tenant, ids.job, ids.variation])).rows), sourceOrigin);
+    assert.deepEqual(await api.withTenant(runtime, context, async db => (await db.$client.query("SELECT job_track,kind,provenance,raising_role,source_capture_hash FROM app.extra_origin WHERE tenant_id=$1 AND job_id=$2 AND variation_id=$3", [ids.tenant, ids.linkedJob, ids.variation])).rows), sourceOrigin);
     await createBuilderOrigin(runtime, randomUUID());
     pass("all-rows-restored", `${before.length} application/control tables match their pre-backup row counts and hashes before new capture. The immutable small-builder track and saved origin survive; a subsequent builder origin commits under the runtime role.`);
     const restoredBilling = new api.CustomerBillingCommandService(runtime);
@@ -306,17 +329,18 @@ export async function runSyntheticRestoreRehearsal(options = {}, api, fixture) {
     assert.deepEqual(role, { rolsuper: false, rolbypassrls: false, rolcreaterole: false, rolcreatedb: false });
     assert.deepEqual((await runtime.query("SELECT id FROM app.job")).rows, []);
     const visible = await api.withTenant(runtime, context, async db => (await db.$client.query("SELECT id FROM app.job ORDER BY id")).rows);
-    assert.deepEqual(visible, [{ id: ids.job }]);
+    // Exactly this tenant's locked job and its linked successor; the other tenant's job stays invisible.
+    assert.deepEqual(visible, [ids.job, ids.linkedJob].sort().map(id => ({ id })));
     await assert.rejects(api.withTenant(runtime, context, db => db.$client.query("UPDATE app.job SET title='forbidden' WHERE id=$1", [ids.job])), error => error.code === "42501");
     const isolation = (await admin.query("SELECT relrowsecurity,relforcerowsecurity,pg_get_userbyid(relowner) owner FROM pg_class WHERE oid='app.synthetic_evidence_original'::regclass")).rows[0];
     assert.deepEqual(isolation, { relrowsecurity: true, relforcerowsecurity: true, owner: "jobguard_migration" });
     pass("restored-role-and-tenant-isolation", "Runtime remains non-superuser/non-BYPASSRLS, sees no unscoped rows, cannot update jobs, and retains forced evidence RLS.");
     // This export is the documented fixture slice, not a general privacy/legal export service.
     const exported = await api.withTenant(runtime, context, async db => ({ version: "synthetic-job-export.v1", environment, jobs: (await db.$client.query("SELECT id,title,status FROM app.job ORDER BY id")).rows, evidence: (await db.$client.query("SELECT id,object_version_id,sha256 FROM app.evidence_object ORDER BY id")).rows }));
-    assert.equal(exported.jobs.length, 1); assert.equal(exported.evidence.length, 1);
+    assert.deepEqual(exported.jobs.map(job => job.id), [ids.job, ids.linkedJob].sort()); assert.equal(exported.evidence.length, 1);
     assert.ok(!canonical(exported).includes(ids.otherJob));
     exportReceipt = { format: exported.version, sha256: digest(canonical(exported)), jobCount: exported.jobs.length, evidenceCount: exported.evidence.length };
-    pass("tenant-scoped-export-slice", "The fixture export contains only the selected tenant's job and evidence references; no credentials or other-tenant job are exported.");
+    pass("tenant-scoped-export-slice", "The fixture export contains only the selected tenant's locked job, its linked successor and evidence references; no credentials or other-tenant job are exported.");
     const queue = () => api.withTenant(runtime, context, async db => (await db.$client.query("SELECT id,status FROM app.action_outbox ORDER BY id")).rows);
     const queueBefore = await queue(); let fakeDeliveries = 0;
     const attemptsBefore = (await admin.query("SELECT * FROM app.action_attempt ORDER BY id")).rows;

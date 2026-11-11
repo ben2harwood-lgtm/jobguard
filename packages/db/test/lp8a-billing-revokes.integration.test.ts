@@ -9,6 +9,7 @@ import { createLockFixture, closeLockFixture, seedAccount, prepareInvoicePrerequ
 import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { jobDoorsDatabase, type JobDoorsDatabase } from "./lp-job-doors-fixtures.js";
 import { migrate } from "../src/migrate.js";
+import { installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 
 let f: LockFixture;
 beforeAll(async () => { f = await createLockFixture(); }, 300_000);
@@ -73,6 +74,8 @@ it("applies the cutover to an installed predecessor without changing stored bill
  let old:JobDoorsDatabase|undefined;
  try {
   old=await jobDoorsDatabase(true,"0980_lp8a_billing_revokes.sql");
+  // Same labelled party fixture as the current-schema lock fixture: each seeded job gets its parties before it goes live.
+  await installLegacySyntheticPartyFixtures(old.owner);
   const account=await seedAccount(old.owner,randomUUID(),10000);
   // A real legacy invoice is created using the supported checked issuer before cutover.
   await prepareInvoicePrerequisites(old.owner,old.runtime,account.tenantId,account.jobId,LOCK_OWNER,account.revisionId);
