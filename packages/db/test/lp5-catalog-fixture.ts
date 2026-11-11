@@ -4,6 +4,7 @@ import { lp5ReadTables, lp5bReadTables } from "./lp5-command-catalog.js";
 
 /** Exact LP-5a/5c ACL delta on pre-existing migration-owned relations. */
 export async function lp5RelationAcl(db: Pick<PoolClient,"query">, table: string, original: string): Promise<string> {
+  if (table === "action_attempt") return original.replace("jobguard_runtime=ar/", "jobguard_runtime=r/");
   if (!lp5ReadTables.includes(table)) return original;
   const items = (await db.query<{ items: string[] }>("SELECT $1::aclitem[]::text[] items", [original])).rows[0]!.items;
   expect(items.some(item => item.startsWith("jobguard_command_writer="))).toBe(false);

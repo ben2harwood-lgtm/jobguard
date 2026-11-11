@@ -180,7 +180,7 @@ export class ExtraApprovalRepository {
           if (i.signinDigest) await db.$client.query("SELECT app.xc_bind_link($1,$2,$3)", [linkId, i.signinDigest, member]);
           const replaced = (r.replacedOutboxIds as string[]) ?? [];
           // "Cancel replaced requests": an earlier message that has not gone out never will.
-          if (replaced.length) await db.$client.query("UPDATE app.action_outbox SET status='cancelled',updated_at=clock_timestamp() WHERE tenant_id=$1 AND id=ANY($2::uuid[]) AND status IN('pending','retryable')", [tenant, replaced]);
+          for (const replacedId of replaced) await db.$client.query("SELECT app.cancel_extra_outbox($1::uuid)", [replacedId]);
           return { ...r, outboxActionId: outboxId };
         },
         auditEvents: () => [audit(member, "contractor.extra.client_link_issued", request.variation_id, { command: i.commandId, job: i.jobId, extra: request.variation_id, request: i.requestId, link: linkId, outbox: outboxId }, { message: contentHash })],
@@ -192,7 +192,7 @@ export class ExtraApprovalRepository {
     const i = this.parse(revokeClientApprovalV1, raw);
     return this.run(context, owner, "RevokeClientApproval", i.commandId, `extra-client-revoke:${i.linkId}:${i.commandId}`, { jobId: i.jobId, linkId: i.linkId }, async (db, tenant, m) => {
       const r = await this.call(db, "SELECT app.xa_revoke_link($1,$2,$3,$4) r", [i.jobId, i.linkId, i.commandId, m]);
-      await db.$client.query("UPDATE app.action_outbox SET status='cancelled',updated_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2 AND status IN('pending','retryable')", [tenant, r.outboxActionId]);
+      await db.$client.query("SELECT app.cancel_extra_outbox($1::uuid)", [r.outboxActionId]);
       const extra = (await db.$client.query<{ variation_id: string }>("SELECT variation_id FROM app.extra_client_link WHERE id=$1", [i.linkId])).rows[0]!.variation_id;
       return { result: r, audits: [audit(m, "contractor.extra.client_link_revoked", extra, { command: i.commandId, job: i.jobId, extra, link: i.linkId })] };
     });

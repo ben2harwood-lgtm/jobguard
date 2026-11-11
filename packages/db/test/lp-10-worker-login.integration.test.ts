@@ -43,7 +43,7 @@ async function enqueue(actionType = "send_quote") {
     await client.query(`INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,content_hash,aggregate_revision,policy_version,expires_at)
       VALUES($1,$2,$3,$4,$5,$7,$6,1,'synthetic.v1','2099-01-01')`, [auth, t, decision, resolution, actor, hash, actionType]);
     await client.query(`INSERT INTO app.action_outbox(id,tenant_id,authorization_id,adapter,provider_effect_key,action_type,content_hash,immutable_content,aggregate_revision,policy_version,authorization_expires_at)
-      VALUES($1,$2,$3,'fake_capture',$1::text,$6,$4,$5,1,'synthetic.v1','2099-01-01')`, [id, t, auth, hash, content, actionType]);
+      VALUES($1,$2,$3,'fake_capture',($1::uuid)::text,$6,$4,$5,1,'synthetic.v1','2099-01-01')`, [id, t, auth, hash, content, actionType]);
   });
   return { id, auth };
 }
@@ -103,6 +103,12 @@ describe("LP-10 real login authority", () => {
     for (const sql of ["INSERT INTO app.action_outbox DEFAULT VALUES", "INSERT INTO app.action_authorization DEFAULT VALUES",
       "INSERT INTO app.decision_resolution DEFAULT VALUES", "SET ROLE jobguard_runtime", "SET ROLE jobguard_migration"]) {
       await expect(worker.query(sql)).rejects.toMatchObject({ code: "42501" });
+    }
+  });
+  it("neither login can cancel an extra without a checked closure command", async () => {
+    for (const pool of [web, worker]) {
+      await expect(pool.query("SELECT app.cancel_extra_outbox($1::uuid)", [randomUUID()]))
+        .rejects.toMatchObject({ code: "42501" });
     }
   });
   it("binding derives the author and tenant and is transaction scoped", async () => {

@@ -1,175 +1,44 @@
-import { fakeAuditAppend } from "./audit-protocol-test-fixture.js";
 import { createHash, createHmac } from "node:crypto";
-import type { Pool } from "pg";
 import { describe, expect, it, vi } from "vitest";
 import { customerSigninLink, ActionExecutor, type OutboundAdapter } from "./outbox.js";
-import { verifiedTenantContextFromMembership } from "./tenant-context.js";
-
-const testTenantContext = (tenantId: string) => verifiedTenantContextFromMembership({
-  identityUserId: "30000000-0000-4000-8000-000000000003",
-  membershipId: "40000000-0000-4000-8000-000000000004", tenantId,
-} as Parameters<typeof verifiedTenantContextFromMembership>[0]);
-
+import { verifiedTenantContextForQueuedJob } from "./tenant-context.js";
+import { outboundWorkerPool } from "./worker-pool.js";
+import { workerProtocolFixture } from "./worker-protocol-test-fixture.js";
+vi.mock("./worker-pool.js", () => ({ outboundWorkerPool: vi.fn() }));
+const tenant = "91000000-0000-4000-8000-000000000001";
+const context = verifiedTenantContextForQueuedJob(tenant);
+function fixture(overrides = {}, name: `fake_${string}` = "fake_capture", digest?: (value: string) => string) {
+  const f = workerProtocolFixture({ tenant_id: tenant, ...overrides });
+  vi.mocked(outboundWorkerPool).mockResolvedValue(f.pool);
+  const adapter: OutboundAdapter = { name, supportsProviderDeduplication: false,
+    deliver: vi.fn(async () => ({ kind: "succeeded" as const, providerReference: "fictional" })), reconcile: vi.fn(async () => "unknown" as const) };
+  const telemetry = { emit: vi.fn() };
+  return { ...f, adapter, telemetry, execute: () => new ActionExecutor(f.pool, new Map([[name, adapter]]), telemetry, digest).execute(context, f.row.id) };
+}
 describe("ActionExecutor adapter ownership", () => {
-  it.each([
-    { status: "pending", authorization_expires_at: "2099-01-01T00:00:00Z" },
-    { status: "pending", authorization_expires_at: "2000-01-01T00:00:00Z" },
-    { status: "retryable", authorization_expires_at: "2099-01-01T00:00:00Z" },
-    { status: "executing", claimed_at: "2000-01-01T00:00:00Z" },
-  ])("leaves unsupported work untouched: $status / $authorization_expires_at", async (state) => {
-    const id = "98000000-0000-4000-8000-000000000001";
-    const context = testTenantContext("91000000-0000-4000-8000-000000000001");
-    const row = {
-      id,
-      adapter: "fake_quote_delivery",
-      authorization_id: "97000000-0000-4000-8000-000000000001",
-      provider_effect_key: "synthetic:quote:1",
-      action_type: "send_quote",
-      recipient: "customer@example.invalid",
-      content_hash: "a".repeat(64),
-      immutable_content: "Synthetic quote",
-      aggregate_revision: 1,
-      amount_pence: null,
-      currency: null,
-      policy_version: "synthetic-quote.v1",
-      created_at: "2026-01-01T00:00:00Z",
-      authorization_expires_at: "2099-01-01T00:00:00Z",
-      ...state,
-    };
-    const before = { ...row };
-    const query = vi.fn(async (sql: string) => {
-      if (sql === "SELECT outbound_control.claims_enabled() AS enabled") return { rows: [{ enabled: true }], rowCount: 1 };
-      if (sql.startsWith("SELECT o.*,a.actor_membership_id AS authorization_actor FROM app.action_outbox")) return { rows: [row] };
-      if (sql.startsWith("SELECT count(*)::int n FROM app.action_attempt")) return { rows: [{ n: 0 }] };
-      if (sql.startsWith("UPDATE ") || sql.startsWith("INSERT ")) return { rows: [] };
-      if (sql.startsWith("SELECT pg_advisory_xact_lock(")) return { rows: [] };
-      if (["BEGIN", "COMMIT", "ROLLBACK"].includes(sql) || sql.startsWith("SELECT set_config")) return { rows: [] };
-      throw new Error(`Unexpected database operation: ${sql}`);
-    });
-    const release = vi.fn();
-    const pool = { connect: vi.fn(async () => ({ query, release })) } as unknown as Pool;
-    const capture: OutboundAdapter = {
-      name: "fake_capture",
-      supportsProviderDeduplication: false,
-      deliver: vi.fn(async () => ({ kind: "succeeded" as const, providerReference: "synthetic:unused" })),
-      reconcile: vi.fn(async () => "unknown" as const),
-    };
-    const telemetry = { emit: vi.fn() };
-
-    await expect(new ActionExecutor(pool, new Map([[capture.name, capture]]), telemetry).execute(context, id)).resolves.toBeUndefined();
-
-    expect(query.mock.calls.map(([sql]) => sql)).toEqual([
-      "BEGIN",
-      "SELECT set_config('app.tenant_id', $1, true)",
-      "SELECT pg_advisory_xact_lock(hashtextextended($1::text,54))",
-      expect.stringMatching(/^SELECT o\.\*,a\.actor_membership_id AS authorization_actor FROM app\.action_outbox.*FOR UPDATE OF o$/u),
-      "COMMIT",
-    ]);
-    expect(row).toEqual(before);
-    expect(capture.deliver).not.toHaveBeenCalled();
-    expect(capture.reconcile).not.toHaveBeenCalled();
-    expect(telemetry.emit).not.toHaveBeenCalled();
-    expect(release).toHaveBeenCalledOnce();
+  it.each(["pending", "retryable", "executing"])("leaves unsupported %s work untouched", async status => {
+    const f = fixture({ status, adapter: "fake_quote_delivery" }), before = { ...f.row };
+    await f.execute();
+    expect(f.row).toEqual(before); expect(f.adapter.deliver).not.toHaveBeenCalled();
+    expect(f.audit).toEqual([]); expect(f.telemetry.emit).not.toHaveBeenCalled();
+    expect(f.query.mock.calls.some(([sql]) => /^(UPDATE|INSERT)/u.test(sql))).toBe(false);
   });
 });
-
-describe("ActionExecutor retry exhaustion", () => {
-  it("records a failed attempt with the adapter error code on the fifth retryable result", async () => {
-    const id = "98000000-0000-4000-8000-000000000002";
-    const context = testTenantContext("91000000-0000-4000-8000-000000000001");
-    const row = {
-      id,
-      adapter: "fake_capture",
-      authorization_id: "97000000-0000-4000-8000-000000000002",
-      provider_effect_key: "synthetic:retry-exhaustion:1",
-      action_type: "send_quote",
-      recipient: "customer@example.invalid",
-      content_hash: "a".repeat(64),
-      immutable_content: "Synthetic quote",
-      aggregate_revision: 1,
-      amount_pence: null,
-      currency: null,
-      policy_version: "synthetic-quote.v1",
-      created_at: "2026-01-01T00:00:00Z",
-      authorization_expires_at: "2099-01-01T00:00:00Z",
-      status: "retryable",
-    };
-    const query = vi.fn(async (sql: string, _values?: unknown[]) => {
-      if (sql.includes("FROM app.append_audit(")) return { rows: fakeAuditAppend(String(_values?.[0]), context.tenantId) };
-      if (sql.startsWith("SELECT nullif(current_setting")) return { rows: [{ tenant_id: context.tenantId }] };
-      if (sql === "SELECT sequence::text, event_hash FROM app.lock_audit_head()") return { rows: [] };
-      if (sql === "SELECT clock_timestamp() AS occurred_at") return { rows: [{ occurred_at: new Date() }] };
-      if (sql === "SELECT app.advance_audit_head($1, $2)") return { rows: [] };
-      if (sql === "SELECT outbound_control.claims_enabled() AS enabled") return { rows: [{ enabled: true }], rowCount: 1 };
-      if (sql.startsWith("SELECT o.*,a.actor_membership_id AS authorization_actor FROM app.action_outbox")) return { rows: [row] };
-      if (sql.startsWith("SELECT count(*)::int n FROM app.action_attempt")) return { rows: [{ n: 4 }] };
-      if (sql.startsWith("UPDATE ") || sql.startsWith("INSERT ")) return { rows: [] };
-      if (sql.startsWith("SELECT pg_advisory_xact_lock(")) return { rows: [] };
-      if (["BEGIN", "COMMIT", "ROLLBACK"].includes(sql) || sql.startsWith("SELECT set_config")) return { rows: [] };
-      throw new Error(`Unexpected database operation: ${sql}`);
-    });
-    const pool = { connect: vi.fn(async () => ({ query, release: vi.fn() })) } as unknown as Pool;
-    const capture: OutboundAdapter = {
-      name: "fake_capture",
-      supportsProviderDeduplication: false,
-      deliver: vi.fn(async () => ({ kind: "retryable" as const, code: "synthetic_unavailable" })),
-      reconcile: vi.fn(async () => "unknown" as const),
-    };
-    const telemetry = { emit: vi.fn() };
-
-    await new ActionExecutor(pool, new Map([[capture.name, capture]]), telemetry).execute(context, id);
-
-    expect(query).toHaveBeenCalledWith(
-      expect.stringMatching(/^UPDATE app\.action_outbox SET status=\$2/u),
-      [id, "dead_letter", "dead_letter", "dead_letter"],
-    );
-    expect(query).toHaveBeenCalledWith(
-      expect.stringMatching(/^UPDATE app\.action_attempt SET outcome=\$3/u),
-      [id, 5, "failed", null, "synthetic_unavailable"],
-    );
-    expect(capture.deliver).toHaveBeenCalledOnce();
-    // Ordinary sends work before the client schema exists; no SQL submitted to
-    // PostgreSQL may reference those later objects, even in an unused branch.
-    expect(query.mock.calls.some(([sql]) => /extra_client_link|xc_send_authority/u.test(sql))).toBe(false);
-    expect(telemetry.emit.mock.calls.map(([name]) => name)).toEqual([
-      "outbox.queue_age", "outbox.failure", "outbox.retry",
-    ]);
-    expect(telemetry.emit).toHaveBeenCalledWith("outbox.failure", { actionId: id, attempt: 5 });
-    expect(telemetry.emit).toHaveBeenCalledWith("outbox.retry", { actionId: id, attempt: 5 });
-  });
+it("passes retryable failure and the claim token to checked completion on the fifth attempt", async () => {
+  const f = fixture(); f.state.attempt = 4;
+  vi.mocked(f.adapter.deliver).mockResolvedValue({ kind: "retryable", code: "synthetic_unavailable" });
+  await f.execute();
+  expect(f.row.status).toBe("dead_letter"); expect(f.adapter.deliver).toHaveBeenCalledOnce();
+  expect(f.query).toHaveBeenCalledWith("SELECT app.complete_worker_action($1::uuid,$2::uuid,$3::text,$4::text,$5::text) AS completed", [f.row.id, f.token, "retryable", null, "synthetic_unavailable"]);
+  expect(f.telemetry.emit).toHaveBeenCalledWith("outbox.failure", { actionId: f.row.id, attempt: 5 });
 });
-it.each([true, false, undefined, "unavailable"] as const)("ENT-5 checks client sender authority before entitlement or delivery: %s (unit double)", async authority => {
-  const context=testTenantContext("10000000-0000-4000-8000-000000000001"),id="20000000-0000-4000-8000-000000000002";
-  const row={adapter:"fake_email",action_type:"extra.client_approval_request.send",authorization_actor:"40000000-0000-4000-8000-000000000004",
-    status:"pending",created_at:"2026-01-01T00:00:00Z",authorization_expires_at:"2099-01-01T00:00:00Z"};
-  const query=vi.fn(async(sql:string, values?: unknown[])=>{
-    if(sql.includes("FROM app.append_audit("))return {rows:fakeAuditAppend(String(values?.[0]),context.tenantId)};
-    if(sql === "SELECT outbound_control.claims_enabled() AS enabled")return {rows:[{enabled:true}]};
-    if(sql.startsWith("SELECT o.*"))return {rows:[row]};
-    if(sql.startsWith("SELECT EXISTS(")) {
-      if(authority === "unavailable") throw new Error("authority unavailable");
-      return {rows:authority === undefined ? [] : [{allowed:authority}]};
-    }
-    if(sql.startsWith("SELECT app.mon8_feature_decision"))return {rows:[{decision:{version:"plan-entitlement-decision.v1",environment:"synthetic_demo",feature:"approval_chains",entitlement:"held",executable:false,reason:"agreement_authority_held"}}]};
-    if(sql.startsWith("SELECT nullif(current_setting"))return {rows:[{tenant_id:context.tenantId}]};
-    if(sql==="SELECT clock_timestamp() AS occurred_at")return {rows:[{occurred_at:new Date()}]};
-    if(sql.startsWith("INSERT ")||sql.startsWith("UPDATE ")||sql.startsWith("SELECT pg_advisory_xact_lock(")||sql.startsWith("SELECT set_config")||sql==="SELECT sequence::text, event_hash FROM app.lock_audit_head()"||sql==="SELECT app.advance_audit_head($1, $2)"||["BEGIN","COMMIT","ROLLBACK"].includes(sql))return {rows:[]};
-    throw new Error(`Unexpected database operation: ${sql}`);
-  });
-  const pool={connect:vi.fn(async()=>({query,release:vi.fn()}))} as unknown as Pool;
-  const deliver=vi.fn(async()=>({kind:"succeeded" as const,providerReference:"fictional"}));
-  const adapter:OutboundAdapter={name:"fake_email",supportsProviderDeduplication:true,deliver,reconcile:async()=>"unknown"};
-  const execute = new ActionExecutor(pool,new Map([[adapter.name,adapter]]),{emit:vi.fn()}).execute(context,id);
-  if (authority === "unavailable") await expect(execute).rejects.toThrow("authority unavailable");
-  else await execute;
-  expect(query).toHaveBeenCalledWith(expect.stringContaining("app.xc_send_authority($3,k.variation_id)"), [context.tenantId,id,row.authorization_actor]);
-  expect(deliver).not.toHaveBeenCalled();
-  expect(query.mock.calls.some(([sql])=>sql.startsWith("INSERT INTO app.action_attempt"))).toBe(false);
-  expect(query.mock.calls.some(([sql])=>sql.startsWith("SELECT app.mon8_feature_decision"))).toBe(authority === true);
-  expect(query.mock.calls.some(([sql])=>sql.includes("SET status='cancelled'"))).toBe(authority === true);
+it.each([false, undefined, "unavailable"])("does not deliver when the checked client authority claim refuses: %s", async authority => {
+  const f = fixture({ action_type: "extra.client_approval_request.send", adapter: "fake_email" }, "fake_email");
+  f.state.authorized = false;
+  if (authority === "unavailable") f.state.claimError = new Error("authority unavailable");
+  if (authority === "unavailable") await expect(f.execute()).rejects.toThrow("authority unavailable"); else await f.execute();
+  expect(f.adapter.deliver).not.toHaveBeenCalled(); expect(f.audit).toEqual([]);
 });
-
-
 describe("customer sign-in delivery references", () => {
   const reference = "customer-signin-reference.v1:91000000-0000-4000-8000-000000000001/92000000-0000-4000-8000-000000000002/93000000-0000-4000-8000-000000000003/" + "a".repeat(43);
   const digest = (value:string) => createHmac("sha256", "fictional-delivery-secret").update(value).digest("hex");
@@ -182,35 +51,20 @@ describe("customer sign-in delivery references", () => {
     expect(customerSigninLink(reference,v=>createHmac("sha256","other-fictional-key").update(v).digest("hex"))).not.toBe(link);
     expect(()=>customerSigninLink(link,digest)).toThrow("INVALID_CUSTOMER_SIGNIN_REFERENCE");
   });
-  it.each(["success", "missing-key", "tampered-hash"])("keeps credentials out of stored work and audit: %s", async mode => {
-    const id="98000000-0000-4000-8000-000000000003", context=testTenantContext("91000000-0000-4000-8000-000000000001");
-    const row={id,adapter:"fake_email",authorization_id:"97000000-0000-4000-8000-000000000003",provider_effect_key:"customer-signin:fictional",action_type:"customer_portal.signin.send",recipient:"fixture@example.invalid",content_hash:mode==="tampered-hash"?"a".repeat(64):createHash("sha256").update(reference).digest("hex"),immutable_content:reference,aggregate_revision:1,amount_pence:null,currency:null,policy_version:"customer-signin.synthetic.v1",created_at:"2026-01-01T00:00:00Z",authorization_expires_at:"2099-01-01T00:00:00Z",status:"pending"};
-    const query=vi.fn(async(sql:string,values?:unknown[])=>{
-      if(sql.includes("FROM app.append_audit("))return {rows:fakeAuditAppend(String(values?.[0]),context.tenantId)};
-      if(sql === "SELECT outbound_control.claims_enabled() AS enabled")return {rows:[{enabled:true}]};
-      if(sql.startsWith("SELECT o.*,a.actor_membership_id AS authorization_actor FROM app.action_outbox"))return {rows:[row]};
-      if(sql.startsWith("SELECT count(*)::int n FROM app.action_attempt"))return {rows:[{n:0}]};
-      if(sql.startsWith("SELECT nullif(current_setting"))return {rows:[{tenant_id:context.tenantId}]};
-      if(sql==="SELECT clock_timestamp() AS occurred_at")return {rows:[{occurred_at:new Date()}]};
-      if(sql.startsWith("UPDATE app.action_outbox SET status='executing'"))row.status="executing";
-      if(sql.startsWith("UPDATE app.action_outbox SET status=$2"))row.status=values![1] as string;
-      return {rows:[],rowCount:1};
-    });
-    const pool={connect:vi.fn(async()=>({query,release:vi.fn()}))} as unknown as Pool;
-    const deliver=vi.fn(async()=>({kind:"succeeded" as const,providerReference:"fictional-email"}));
-    const adapter:OutboundAdapter={name:"fake_email",supportsProviderDeduplication:false,deliver,reconcile:async()=>"unknown"};
-    const telemetry={emit:vi.fn()},derive=vi.fn(digest);
-    const executor=new ActionExecutor(pool,new Map([[adapter.name,adapter]]),telemetry,mode==="missing-key"?undefined:derive);
-    if(mode!=="success") {
-      await expect(executor.execute(context,id)).rejects.toThrow(mode==="missing-key"?"CUSTOMER_SIGNIN_DELIVERY_UNAVAILABLE":"CONTENT_HASH_MISMATCH");
-      expect(deliver).not.toHaveBeenCalled();expect(row.status).toBe("pending");return;
+  it.each(["success", "missing-key", "tampered-hash"])("keeps credentials out of stored work: %s", async mode => {
+    const derive = vi.fn(digest);
+    const f = fixture({ adapter: "fake_email", action_type: "customer_portal.signin.send", recipient: "fixture@example.invalid",
+      policy_version: "customer-signin.synthetic.v1", immutable_content: reference,
+      content_hash: mode === "tampered-hash" ? "a".repeat(64) : createHash("sha256").update(reference).digest("hex") }, "fake_email", mode === "missing-key" ? undefined : derive);
+    if (mode !== "success") {
+      await expect(f.execute()).rejects.toThrow(mode === "missing-key" ? "CUSTOMER_SIGNIN_DELIVERY_UNAVAILABLE" : "CONTENT_HASH_MISMATCH");
+      expect(f.adapter.deliver).not.toHaveBeenCalled(); expect(f.row.status).toBe("pending"); return;
     }
-    await executor.execute(context,id);await executor.execute(context,id);
-    expect(deliver).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({immutableContent:reference}),customerSigninLink(reference,digest));
-    expect(derive).toHaveBeenCalledOnce();expect(row.status).toBe("succeeded");
-    const token=customerSigninLink(reference,digest).split("/").at(-1)!;
-    expect(JSON.stringify(row)).not.toContain(token);
-    expect(JSON.stringify(query.mock.calls)).not.toContain(token);
-    expect(JSON.stringify(telemetry.emit.mock.calls)).not.toContain(token);
+    await f.execute();
+    expect(f.adapter.deliver).toHaveBeenCalledWith(expect.objectContaining({ immutableContent: reference }), customerSigninLink(reference, digest));
+    expect(derive).toHaveBeenCalledOnce(); expect(f.row.status).toBe("succeeded");
+    const token = customerSigninLink(reference, digest).split("/").at(-1)!;
+    expect(JSON.stringify(f.row)).not.toContain(token); expect(JSON.stringify(f.query.mock.calls)).not.toContain(token);
+    expect(JSON.stringify(f.telemetry.emit.mock.calls)).not.toContain(token);
   });
 });

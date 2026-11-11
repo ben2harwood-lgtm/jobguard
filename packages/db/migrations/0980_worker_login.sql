@@ -133,7 +133,7 @@ BEGIN
   'eventType','outbox.'||p_event,'subjectType','outbox_action','subjectRef',p_item.id::text,
   'payload',jsonb_build_object('references',jsonb_build_object('authorizingMembership',principal::text,
    'authorization',p_item.authorization_id::text,'executingWorker',session_user) ||
-   (CASE WHEN p_event='authorization_revoked' THEN jsonb_build_object('outcome','cancelled','code','AUTHORIZATION_REVOKED') ELSE '{}'::jsonb END),
+   (CASE WHEN p_event='authorization_revoked' THEN jsonb_build_object('outcome','cancelled','code','AUTHORIZATION_REVOKED') WHEN p_event='cancelled' THEN jsonb_build_object('reason','order_authority_stale') ELSE '{}'::jsonb END),
    'classifications',jsonb_build_object('outcome','operational')))),'checked_operation');
 END $$;
 
@@ -203,7 +203,6 @@ BEGIN
   END IF;
   PERFORM set_config('app.tenant_id',coalesce(saved_tenant,''),true); RETURN NULL; -- Never blindly deliver a lease-expired action again.
  END IF;
- IF item.next_attempt_at>clock_timestamp() THEN PERFORM set_config('app.tenant_id',coalesce(saved_tenant,''),true); RETURN NULL; END IF;
  IF EXISTS(SELECT 1 FROM app.action_authorization a
   JOIN app.contractor_membership_revocation r ON(r.tenant_id,r.membership_id)=(a.tenant_id,a.actor_membership_id)
   WHERE(a.tenant_id,a.id)=(item.tenant_id,item.authorization_id)) THEN
@@ -212,12 +211,19 @@ BEGIN
   PERFORM set_config('app.tenant_id',coalesce(saved_tenant,''),true);
   RETURN jsonb_build_object('refused',true,'code','AUTHORIZATION_REVOKED');
  END IF;
+ IF item.next_attempt_at>clock_timestamp() THEN PERFORM set_config('app.tenant_id',coalesce(saved_tenant,''),true); RETURN NULL; END IF;
  principal:=app.lp10_action_author(item);
  IF item.action_type='extra.client_approval_request.send' AND (app.xc_cancel_authority_loss(item.id) OR NOT EXISTS(SELECT 1 FROM app.extra_client_link k WHERE (k.tenant_id,k.outbox_action_id)=(item.tenant_id,item.id) AND app.xc_send_authority(principal,k.variation_id))) THEN principal:=NULL; END IF;
  IF principal IS NULL THEN
   PERFORM set_config('app.tenant_id',coalesce(saved_tenant,''),true); RETURN NULL;
  END IF;
- IF NOT app.lp10_order_current(item) OR item.authorization_expires_at<=clock_timestamp() THEN
+ IF NOT app.lp10_order_current(item) THEN
+  UPDATE app.action_outbox SET status='cancelled',updated_at=clock_timestamp() WHERE (tenant_id,id)=(item.tenant_id,item.id);
+  PERFORM app.lp10_worker_audit(item,'cancelled');
+  PERFORM set_config('app.tenant_id',coalesce(saved_tenant,''),true);
+  RETURN jsonb_build_object('refused',true,'code','AUTHORIZATION_REVOKED');
+ END IF;
+ IF item.authorization_expires_at<=clock_timestamp() THEN
   UPDATE app.action_outbox SET status='cancelled',updated_at=clock_timestamp() WHERE (tenant_id,id)=(item.tenant_id,item.id);
   PERFORM app.lp10_worker_audit(item,'authorization_revoked');
   PERFORM set_config('app.tenant_id',coalesce(saved_tenant,''),true);
@@ -282,6 +288,73 @@ DO $$ DECLARE sig text; BEGIN
  END LOOP;
 END $$;
 GRANT EXECUTE ON FUNCTION app.worker_action_context(),app.bind_worker_action(uuid),app.claim_worker_action(uuid,text[]),app.complete_worker_action(uuid,uuid,text,text,text) TO jobguard_worker;
+-- The synthetic provider guard retains every source/approval check, but row
+-- locks run as the table owner after runtime UPDATE is withdrawn.
+CREATE OR REPLACE FUNCTION app.guard_recovery_message_sink() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE m app.recovery_message; s record; latest_pack integer; pack_sources jsonb;
+BEGIN
+ PERFORM pg_advisory_xact_lock(hashtext(NEW.tenant_id::text),hashtext(NEW.case_id::text));
+ PERFORM app.lock_recovery_message_sources(NEW.tenant_id);
+ SELECT * INTO m FROM app.recovery_message WHERE tenant_id=NEW.tenant_id AND id=NEW.message_id AND job_id=NEW.job_id AND case_id=NEW.case_id;
+ IF NOT FOUND OR NOT EXISTS (
+  SELECT 1 FROM app.recovery_message_approval ap
+  JOIN app.action_outbox o ON o.tenant_id=ap.tenant_id AND o.id=ap.outbox_action_id
+  JOIN app.action_authorization a ON a.tenant_id=o.tenant_id AND a.id=o.authorization_id
+  JOIN app.decision_resolution r ON r.tenant_id=a.tenant_id AND r.id=a.resolution_id AND r.resolution='approved'
+  JOIN app.membership mem ON mem.tenant_id=a.tenant_id AND mem.id=a.actor_membership_id AND mem.role='owner' AND mem.revoked_at IS NULL
+   AND (mem.expires_at IS NULL OR mem.expires_at>clock_timestamp())
+  WHERE ap.tenant_id=m.tenant_id AND ap.message_id=m.id AND ap.outbox_action_id=NEW.outbox_action_id
+   AND o.status='executing' AND a.revoked_at IS NULL AND a.expires_at>clock_timestamp()
+   AND m.recipient=NEW.recipient AND m.body=NEW.body AND m.content_hash=NEW.content_hash AND m.attachment_hash=NEW.attachment_hash
+  FOR SHARE OF a,mem,o)
+ THEN RAISE EXCEPTION 'RECOVERY_MESSAGE_SINK_INVALID' USING ERRCODE='23514'; END IF;
+ -- M4-6-S: a reminder whose follow-up has stopped (cancelled, or its practice run archived) is never recorded as delivered.
+ IF EXISTS (SELECT 1 FROM app.recovery_follow_up_reminder l WHERE l.tenant_id=m.tenant_id AND l.message_id=m.id
+   AND app.recovery_follow_up_stop_reason(l.tenant_id,l.follow_up_id) IS NOT NULL) THEN
+  RAISE EXCEPTION 'RECOVERY_MESSAGE_CHANGED' USING ERRCODE='23514'; END IF;
+ SELECT * INTO s FROM app.recovery_message_case_snapshot(m.tenant_id,m.job_id,m.case_id);
+ IF NOT FOUND OR s.synthetic IS NOT TRUE OR s.environment<>'synthetic_demo' OR s.case_revision<>m.case_revision OR s.outstanding_pence<>m.amount_pence
+    OR app.recovery_message_source_refs(m.immutable_content) IS DISTINCT FROM s.source_refs THEN
+  RAISE EXCEPTION 'RECOVERY_MESSAGE_CHANGED' USING ERRCODE='23514'; END IF;
+ SELECT max(p.revision) INTO latest_pack FROM app.evidence_pack_revision p WHERE p.tenant_id=m.tenant_id AND p.case_id=m.case_id;
+ SELECT p.sources INTO pack_sources FROM app.evidence_pack_revision p
+  WHERE p.tenant_id=m.tenant_id AND p.job_id=m.job_id AND p.case_id=m.case_id AND p.pack_id=m.pack_id AND p.revision=m.pack_revision
+   AND p.manifest_hash=m.manifest_hash AND p.content_hash=m.attachment_hash
+   AND p.source_omissions='[]'::jsonb AND p.format='TEXT' AND p.artifact_text IS NOT NULL
+   AND encode(sha256(convert_to(p.artifact_text,'UTF8')),'hex')=p.content_hash
+   AND encode(sha256(convert_to(p.canonical_manifest,'UTF8')),'hex')=p.manifest_hash;
+ IF latest_pack IS DISTINCT FROM m.pack_revision OR pack_sources IS NULL
+    OR NOT EXISTS (SELECT 1 FROM app.evidence_pack_attachment_approval x WHERE x.tenant_id=m.tenant_id AND x.id=m.attachment_approval_id AND x.pack_id=m.pack_id
+      AND x.manifest_hash=m.manifest_hash AND x.content_hash=m.attachment_hash)
+    OR NOT app.recovery_message_proofs_current(m.tenant_id,m.job_id,pack_sources)
+    OR NOT app.recovery_message_sources_current(m.tenant_id,m.job_id,m.case_id,pack_sources) THEN
+  RAISE EXCEPTION 'RECOVERY_MESSAGE_CHANGED' USING ERRCODE='23514'; END IF;
+ RETURN NEW;
+END $$;
+REVOKE ALL ON FUNCTION app.guard_recovery_message_sink() FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure,jobguard_worker;
+
+-- A sender can cancel only the exact link closed by their current checked
+-- replace/revoke command. This cannot claim work or report a provider result.
+CREATE FUNCTION app.cancel_extra_outbox(p_action uuid) RETURNS void
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE t uuid:=app.current_tenant(); actor uuid:=app.current_actor();
+BEGIN
+ IF t IS NULL OR t::text IS DISTINCT FROM nullif(current_setting('app.tenant_id',true),'') OR actor IS NULL
+ OR NOT EXISTS(SELECT 1 FROM app.extra_client_link k
+ JOIN app.extra_client_link_closure c ON(c.tenant_id,c.link_id)=(k.tenant_id,k.id)
+ JOIN app.command_receipt r ON(r.tenant_id,r.command_id)=(c.tenant_id,c.command_id)
+ WHERE(k.tenant_id,k.outbox_action_id)=(t,p_action) AND c.actor_membership_id=actor
+ AND r.actor_membership_id=actor AND r.status='processing'
+ AND ((c.kind='replaced' AND r.command_type='IssueClientApproval') OR(c.kind='revoked' AND r.command_type='RevokeClientApproval'))) THEN
+  RAISE EXCEPTION 'OUTBOX_CONTROL_REFUSED' USING ERRCODE='42501';
+ END IF;
+ UPDATE app.action_outbox SET status='cancelled',updated_at=clock_timestamp()
+ WHERE(tenant_id,id)=(t,p_action) AND status IN('pending','retryable');
+END $$;
+ALTER FUNCTION app.cancel_extra_outbox(uuid) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.cancel_extra_outbox(uuid) FROM PUBLIC,jobguard_identity,jobguard_infrastructure,jobguard_worker;
+GRANT EXECUTE ON FUNCTION app.cancel_extra_outbox(uuid) TO jobguard_runtime;
+
 -- User controls cannot supply a success result or create an execution attempt.
 CREATE FUNCTION app.control_outbox(p_action uuid,p_command text) RETURNS boolean
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$

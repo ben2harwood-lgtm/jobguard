@@ -39,6 +39,28 @@ if (testPath?.endsWith(".integration.test.ts")) {
       return workers.get(key)!;
     }};
   });
+  vi.doMock("../src/outbox.js", async () => {
+    const actual = await vi.importActual<typeof import("../src/outbox.js")>("../src/outbox.js");
+    const legacy = await import("./legacy-outbox-fixture.js");
+    const historical = async (pool: Pool) => (await pool.query(
+      `SELECT to_regprocedure('app.claim_worker_action(uuid,text[])') IS NULL
+        AND to_regprocedure('app.control_outbox(uuid,text)') IS NULL
+        AND NOT EXISTS(SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+          WHERE n.nspname='control_plane' AND c.relname='worker_action_binding') AS historical`,
+    )).rows[0]?.historical === true;
+    return { ...actual,
+      ActionExecutor: class {
+        constructor(private pool: Pool, private adapters: Map<string, import("../src/outbox.js").OutboundAdapter>,
+          private telemetry: import("../src/outbox.js").SafeTelemetry, private digest?: (value: string) => string) {}
+        async execute(context: import("../src/tenant-context.js").VerifiedTenantContext, id: string, guard?: (action: string) => void) {
+          const Executor = await historical(this.pool) ? legacy.ActionExecutor : actual.ActionExecutor;
+          return new Executor(this.pool, this.adapters, this.telemetry, this.digest).execute(context, id, guard);
+        }
+      },
+      operateOutbox: (async (pool, ...args) => (await historical(pool) ? legacy.operateOutbox : actual.operateOutbox)(pool, ...args)) as typeof actual.operateOutbox,
+      reconcileOutbox: (async (pool, ...args) => (await historical(pool) ? legacy.reconcileOutbox : actual.reconcileOutbox)(pool, ...args)) as typeof actual.reconcileOutbox,
+    };
+  });
   vi.doMock("../src/tenant-context.js", async () => {
     const actual = await vi.importActual<typeof import("../src/tenant-context.js")>("../src/tenant-context.js");
     const scopes = new WeakMap<object, Map<string, object>>();
@@ -51,7 +73,12 @@ if (testPath?.endsWith(".integration.test.ts")) {
       }) as typeof actual.bindAfterLocks,
       withTenant: (async (pool, context, work, deferred) => {
         const { needsTestRequestBinding, bindTestTenantContext } = await import("./tenant-context-test-utils.js");
-        if (!needsTestRequestBinding(context)) return actual.withTenant(pool, context, work, deferred);
+        const legacyWork: typeof work = async db => {
+          const { historicalOutboxTransaction } = await import("./legacy-outbox-transaction.js");
+          await historicalOutboxTransaction(db);
+          return work(db);
+        };
+        if (!needsTestRequestBinding(context)) return actual.withTenant(pool, context, legacyWork, deferred);
         // Race/loss fixtures expose connect only. Reuse that same connection:
         // acquiring a probe then a second client changes their race barriers.
         const client = typeof pool.query === "function" ? undefined : await pool.connect();
@@ -63,7 +90,7 @@ if (testPath?.endsWith(".integration.test.ts")) {
           }>(`SELECT current_database() AS database, inet_server_port() AS port,
             (SELECT rolsuper FROM pg_roles WHERE rolname=session_user) AS administrative`)).rows[0]!;
           // Owner fixture writes are setup, not authenticated business requests.
-          if (administrative) return await actual.withTenant(requestPool, context, work, deferred);
+          if (administrative) return await actual.withTenant(requestPool, context, legacyWork, deferred);
           const credentials = clusterAdmins.get(Number(port));
           if (!credentials) throw new Error("Missing embedded PostgreSQL admin credentials for request fixture");
           const owner = new Pool({ host: "127.0.0.1", port, database, ...credentials, max: 1 });
@@ -76,7 +103,7 @@ if (testPath?.endsWith(".integration.test.ts")) {
           finally { await owner.end(); }
           return await actual.withTenant(requestPool, bound, async db => {
             deferredContexts.set(db, { original: context, bound });
-            try { return await work(db); }
+            try { return await legacyWork(db); }
             finally { deferredContexts.delete(db); }
           }, deferred);
         } finally { if (client && !delegated) client.release(); }

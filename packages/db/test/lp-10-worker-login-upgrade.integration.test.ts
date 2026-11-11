@@ -17,7 +17,14 @@ it("0980 preserves populated predecessor rows and routine bodies while closing w
   const after = await definitions();
   for (const prior of routines) {
     const current = after.find(row => row.oid === prior.oid);
-    expect(current).toEqual(prior);
+    if (prior.proname === "guard_recovery_message_sink") {
+      const { readFile } = await import("node:fs/promises");
+      const sql = await readFile(new URL("../migrations/0980_worker_login.sql", import.meta.url), "utf8");
+      const body = sql.match(/CREATE OR REPLACE FUNCTION app.guard_recovery_message_sink\(\)[\s\S]*?AS \$\$([\s\S]*?)\$\$;/u)![1];
+      expect(current.definition.split("$function$")[1]).toBe(body);
+      expect(current.definition).toContain("SECURITY DEFINER");
+      expect(current.definition).toContain("SET search_path TO 'pg_catalog', 'pg_temp'");
+    } else expect(current).toEqual(prior);
   }
   expect((await db.query(`SELECT
     has_column_privilege('jobguard_runtime','app.action_outbox','status','UPDATE') web_update,

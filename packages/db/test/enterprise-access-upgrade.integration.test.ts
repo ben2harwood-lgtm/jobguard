@@ -118,7 +118,7 @@ it('emergency_dual_owner/scim2_machine preserve populated identity state, instal
  // 0667 inserts the practice-owner guard into lock_final_account by text replacement; migfix-7 and plan-entitlement pin the body.
  later.add('app.lock_final_account');
  // A later GRANT/REVOKE on a predecessor table may change its ACL only; that migration's proof and LP-0 pin it.
- const laterAcl=new Set<string>();
+ const laterAcl=new Set<string>(["app.action_attempt","app.action_outbox"]);
  for(const url of MIGRATION_URLS.slice(boundary+1))
   for(const m of (await readFile(url,'utf8')).matchAll(/\b(?:GRANT|REVOKE)\b[^;]*?\bON\s+(?:TABLE\s+)?((?:[a-z_]+\.[a-z0-9_]+)(?:\s*,\s*[a-z_]+\.[a-z0-9_]+)*)\s+(?:TO|FROM)\b/gu))
    for(const name of m[1]!.split(','))laterAcl.add(name.trim());
@@ -166,8 +166,34 @@ it('emergency_dual_owner/scim2_machine preserve populated identity state, instal
   columns:(newManifest.columns as {attname:string}[]).filter(c=>!attemptColumns.includes(c.attname)),
   constraints:[...(newManifest.constraints as Con[]).filter(c=>!attemptNames.has(c.name)),oldLockKey].sort((a,b)=>a.name<b.name?-1:a.name>b.name?1:0),
  };
+ // LP-10 withdraws only runtime execution columns and attempt insertion.
+ const outboxBefore=catalogue.relations.find(r=>r.nspname==='app'&&r.relname==='action_outbox')!;
+ const outboxAfter=after.relations.find(r=>r.nspname==='app'&&r.relname==='action_outbox')!;
+ expect(outboxAfter.relacl).toBe(outboxBefore.relacl);
+ const attemptBefore=catalogue.relations.find(r=>r.nspname==='app'&&r.relname==='action_attempt')!;
+ const attemptAfter=after.relations.find(r=>r.nspname==='app'&&r.relname==='action_attempt')!;
+ expect(attemptAfter.relacl).toBe((attemptBefore.relacl as string).replace('jobguard_runtime=ar/','jobguard_runtime=r/'));
+ for(const column of attemptAfter.columns as {attname:string;attacl:unknown}[]) {
+  const prior=(attemptBefore.columns as typeof column[]).find(c=>c.attname===column.attname)!;
+  if(['outcome','provider_reference','error_code','finished_at'].includes(column.attname)) {
+   expect(column.attacl ?? []).toEqual([]);
+   expect(prior.attacl).toEqual(['jobguard_runtime=w/jobguard_migration']);
+  } else expect(column).toEqual(prior);
+ }
+ const executionColumns=['status','next_attempt_at','claimed_at','completed_at','updated_at'];
+ for(const column of outboxAfter.columns as {attname:string;attacl:unknown}[]) {
+  const prior=(outboxBefore.columns as typeof column[]).find(c=>c.attname===column.attname)!;
+  if(executionColumns.includes(column.attname)) {
+   expect(column.attacl ?? []).toEqual([]);
+   expect(prior.attacl).toEqual(['jobguard_runtime=w/jobguard_migration']);
+  } else expect(column).toEqual(prior);
+ }
+ expect((await h.admin.query(`SELECT
+  has_any_column_privilege('jobguard_runtime','app.action_outbox','UPDATE') outbox_update,
+  has_any_column_privilege('jobguard_runtime','app.action_attempt','UPDATE') attempt_update,
+  has_table_privilege('jobguard_runtime','app.action_attempt','INSERT') attempt_insert`)).rows).toEqual([{outbox_update:false,attempt_update:false,attempt_insert:false}]);
  const afterRelations=after.relations.map((r:Relation)=>isLanding(r)?{...r,constraints:(r.constraints as Con[]).filter(c=>c.name!==added)}
-  :isJob(r)?{...r,constraints:(r.constraints as Con[]).map(c=>c.name===shape?priorShape:c)}:isBinding(r)?{...r,columns:bindingBefore.columns,constraints:bindingBefore.constraints}:isManifest(r)?normalizedManifest
+  :isJob(r)?{...r,constraints:(r.constraints as Con[]).map(c=>c.name===shape?priorShape:c)}:isBinding(r)?{...r,columns:bindingBefore.columns,constraints:bindingBefore.constraints}:isManifest(r)?normalizedManifest:r.nspname==='app'&&r.relname==='action_attempt'?{...r,columns:attemptBefore.columns}:r.nspname==='app'&&r.relname==='action_outbox'?{...r,columns:outboxBefore.columns}
   :isOriginal(r)?{...r,columns:(r.columns as Col[]).map(c=>c.attname==='scope_item_id'?{...c,attnotnull:true}:c)}:r);
  expectRelationsUnchanged(catalogue.relations,afterRelations,laterAcl);
  // 0672 lets its migration-owned pack writer read the sealed request binding; only that ACL entry is added.
@@ -187,6 +213,12 @@ it('emergency_dual_owner/scim2_machine preserve populated identity state, instal
    expect(added!.definition.match(/AS \$function\$([\s\S]*?)\$function\$/u)?.[1]?.trim()).toBe(body!.trim());
    // Only the reviewed latest body changes; all owner/ACL/security/settings stay exact.
    expect(added).toEqual({...expected,definition:added!.definition});
+   continue;
+  }
+  if(row.nspname==='app'&&row.proname==='guard_recovery_message_sink') {
+   const current=after.routines.find((r:typeof row)=>r.nspname===row.nspname&&r.proname===row.proname&&r.args===row.args)!;
+   expect(current.definition.split('$function$')[1]).toBe(row.definition.split('$function$')[1]);
+   expect(current).toEqual({...expected,definition:current.definition,prosecdef:true,proconfig:['search_path=pg_catalog, pg_temp']});
    continue;
   }
   if(!later.has(`${row.nspname}.${row.proname}`)){expect(after.routines).toContainEqual(expected);continue;}

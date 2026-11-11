@@ -75,6 +75,8 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
       expect(current.policies).toHaveLength((row.policies?.length ?? 0) + 1);
       for (const policy of row.policies ?? []) expect(current.policies).toContainEqual(policy);
       expect(current.policies.some((policy: { polname: string }) => policy.polname === (row.relname.startsWith("extra_") ? "lp6_client_binding_read" : "lp6_customer_binding_read"))).toBe(true);
+    } else if (row.nspname === 'app' && row.relname === 'action_attempt') {
+      expect(replayCatalog).toContainEqual({...row,relacl:row.relacl.replace('jobguard_runtime=ar/','jobguard_runtime=r/')});
     } else if(row.nspname==='app' && row.relname==='final_check_manifest_tenant_id_job_id_lock_id_key') {
       // 0698 replaces only this index's lock identity with lock+attempt; its relation metadata is in the proof.
       expect(replayCatalog.some(r=>r.nspname===row.nspname && r.relname===row.relname)).toBe(false);

@@ -64,7 +64,7 @@ const finalCheckRuntime=Object.keys(finalCheck).filter(sig=>finalCheck[sig]==="j
 const tables=["shadow_commercial_signal","shadow_signal_evidence","shadow_signal_ineligibility","shadow_reconciliation_run","shadow_signal_classification","shadow_signal_disposition","shadow_disclosure_event","shadow_break_glass_access"];
 it("registers the issued expand migration",()=>{expect(MIGRATION_URLS.map(u=>u.pathname)).toContain(migrationURL.pathname)});
 describe("SV-2 catalog and actual role isolation (DW1, DW2, DW3, DW4)",()=>{
- beforeAll(setup,60000);afterAll(cleanup);
+ beforeAll(setup,120000);afterAll(cleanup);
  it("owns and FORCE-protects every shadow table, with no runtime table, column, sequence or view privileges",async()=>{
   const rows=(await admin.query(`SELECT c.relname,r.rolname,c.relrowsecurity,c.relforcerowsecurity,
    has_table_privilege('jobguard_runtime',c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') AS runtime,

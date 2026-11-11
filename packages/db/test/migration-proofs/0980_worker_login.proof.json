@@ -661,6 +661,93 @@
           "app.lp10_lock_action"
         ]
       }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.guard_recovery_message_sink()",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": null,
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "392e4c1f84d8276682a4204595ee630f9b5798f90e9ca47ed0d8ede7cfc98cb9",
+        "staticWrites": [],
+        "staticCalls": [
+          "app.lock_recovery_message_sources",
+          "app.recovery_follow_up_stop_reason",
+          "app.recovery_message_case_snapshot",
+          "app.recovery_message_proofs_current",
+          "app.recovery_message_source_refs",
+          "app.recovery_message_sources_current"
+        ]
+      },
+      "after": {
+        "identity": "function:app.guard_recovery_message_sink()",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.lock_recovery_message_sources",
+          "app.recovery_follow_up_stop_reason",
+          "app.recovery_message_case_snapshot",
+          "app.recovery_message_proofs_current",
+          "app.recovery_message_source_refs",
+          "app.recovery_message_sources_current"
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.cancel_extra_outbox(uuid)|jobguard_migration",
+        "group": "lp10-worker-actions"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.cancel_extra_outbox(uuid)|jobguard_runtime|EXECUTE|-",
+        "group": "lp10-worker-actions"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.cancel_extra_outbox(uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.action_outbox"
+        ],
+        "staticCalls": [
+          "app.current_actor",
+          "app.current_tenant"
+        ]
+      }
     }
   ],
   "upgrade": [
@@ -896,6 +983,56 @@
       "after": {
         "table": "control_plane.worker_action_binding",
         "data": []
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "control_plane",
+        "relname": "worker_action_binding_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "nspname": "app",
+        "proname": "guard_recovery_message_sink",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": false,
+        "proconfig": null
+      },
+      "after": {
+        "nspname": "app",
+        "proname": "guard_recovery_message_sink",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "cancel_extra_outbox",
+        "args": "p_action uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
       }
     }
   ],

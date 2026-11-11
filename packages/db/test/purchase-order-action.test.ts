@@ -1,3 +1,5 @@
+import { outboundWorkerPool } from "../src/worker-pool.js";
+vi.mock("../src/worker-pool.js", () => ({ outboundWorkerPool: vi.fn() }));
 import { fakeAuditAppend } from "./audit-protocol-fixture.js";
 import { readFileSync } from "node:fs";
 import { combineLp0, proofSchema } from "./migration-proof-loader.js";
@@ -96,20 +98,42 @@ function fixture(claimsEnabled = true) {
       state.audits.push(...events);
       return result(fakeAuditAppend(values[0], tenant));
     }
-    if (sql.startsWith("SELECT o.*")) return result(state.effects.filter(e => e.id === values[0]));
-    if (sql.startsWith("SELECT 1 FROM app.job j")) return result(!locked ? [{}] : []);
-    if (sql.startsWith("SELECT count(*)::int n FROM app.action_attempt")) return result([{ n: state.attempts.length }]);
-    if (sql.startsWith("INSERT INTO app.action_attempt")) { state.attempts.push(values); return result(); }
-    if (sql.startsWith("UPDATE app.action_attempt")) return result();
-    if (sql.startsWith("SELECT status") || sql.startsWith("SELECT provider_effect_key")) return result(state.effects.filter(e => e.id === values[0]).map(e => ({ ...e, revision: e.updated_at })));
-    if (sql.startsWith("UPDATE app.action_outbox")) {
+    if (sql.startsWith("SELECT id FROM app.action_outbox")) return result([], state.effects.some(e => e.id === values[1]) ? 1 : 0);
+    if (sql.includes("app.claim_worker_action")) {
       const effect = state.effects.find(e => e.id === values[0]);
-      effect.status = sql.includes("SET status=$2") ? values[1] : /SET status='([^']+)'/u.exec(sql)![1];
-      effect.updated_at = new Date().toISOString(); return result([], 1);
+      if (!effect || !["pending","retryable"].includes(effect.status) || !owner) return result([{ claim: null }]);
+      if (liveFailure && !["JOB_NOT_LIVE","JOB_NOT_FOUND"].includes(liveFailure.message)) throw liveFailure;
+      if (!current || locked || liveFailure) {
+        effect.status = "cancelled"; state.audits.push({ eventType: "outbox.cancelled", reason: "order_authority_stale" });
+        return result([{ claim: { refused: true, code: "AUTHORIZATION_REVOKED" } }]);
+      }
+      const token = randomUUID(); effect.status = "executing";
+      state.attempts.push({ token });
+      const action = Object.fromEntries(Object.entries(effect).map(([k,v]) => [k, v instanceof Date ? v.toISOString() : v]));
+      return result([{ claim: { action, attempt: state.attempts.length, token } }]);
+    }
+    if (sql.includes("app.complete_worker_action")) {
+      const effect = state.effects.find(e => e.id === values[0]);
+      if (!state.attempts.some(a => a.token === values[1]) || effect.status !== "executing") return result([{ completed: false }]);
+      effect.status = values[2]; effect.updated_at = new Date().toISOString(); return result([{ completed: true }]);
+    }
+    if (sql.includes("app.control_outbox")) {
+      const effect = state.effects.find(e => e.id === values[0]);
+      const changed = effect && ((values[1] === "cancel" && ["pending","retryable","outcome_unknown","dead_letter"].includes(effect.status)) || (values[1] === "retry" && effect.status === "retryable"));
+      if (changed && values[1] === "cancel") effect.status = "cancelled";
+      return result([{ changed: !!changed }]);
+    }
+    if (sql.includes("app.worker_reconciliation")) {
+      const effect = state.effects.find(e => e.id === values[0]);
+      return result([{ effect: effect?.status === "outcome_unknown" ? { adapter: effect.adapter, provider_effect_key: effect.provider_effect_key, revision: effect.updated_at } : null }]);
+    }
+    if (sql.includes("app.reconcile_worker_action")) {
+      const effect = state.effects.find(e => e.id === values[0]); effect.status = values[4] === "succeeded" ? "succeeded" : "retryable"; return result();
     }
     throw new Error(`Unexpected SQL: ${sql}`);
   });
-  const pool = { connect: async () => ({ query, release() {} }) } as unknown as Pool;
+  const pool = { query, connect: async () => ({ query, release() {} }) } as unknown as Pool;
+  vi.mocked(outboundWorkerPool).mockResolvedValue(pool);
   const repo = new PurchaseOrderActionRepository(pool), context = verifiedTenantContextFromMembership({ tenantId: tenant, membershipId: member, identityUserId: randomUUID() } as Parameters<typeof verifiedTenantContextFromMembership>[0]);
   const scope = { version: "merchant-order-scope.v1", jobId: job, revisionId: revision };
   const port = new FakeMerchantOrderPort();
@@ -201,8 +225,8 @@ describe("M2-1 dark exact approved merchant action", () => {
   it("live-mode executor refuses an already queued dark order", async () => {
     const f = fixture(), queued = await f.repo.approve(f.context, f.scope, await f.command());
     vi.stubEnv("JOBGUARD_ENV", "production");
-    await f.executor.execute(f.context, queued.outboxActionId);
-    expect(f.deliver).not.toHaveBeenCalled(); expect(f.state().effects[0].status).toBe("cancelled");
+    await expect(f.executor.execute(f.context, queued.outboxActionId)).rejects.toThrow("SYNTHETIC_MODE_REQUIRED");
+    expect(f.deliver).not.toHaveBeenCalled(); expect(f.state().effects[0].status).toBe("pending");
   });
   it.each([undefined, "production", "pilot_no_charge"])("refuses all entrypoints outside synthetic mode (%s)", async environment => {
     const f = fixture(), command = await f.command(); vi.stubEnv("JOBGUARD_ENV", environment);
