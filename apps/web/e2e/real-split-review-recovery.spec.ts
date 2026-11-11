@@ -6,7 +6,8 @@ test.beforeEach(async ({ page }, info) => {
 });
 const painting = "Paint the hall, stairs and landing for Mr Example at 9 Notreal Road, two coats, woodwork in gloss, should be about 900 quid, four days.";
 const bathroom = "Bathroom refit for Mrs Sample at 4 Madeup Lane. Rip out the old suite and take it away, fit a new bath, basin and toilet, tile the walls and floor, new extractor fan. About 4800 pounds all in, should take two weeks.";
-const hall = "Paint the hall, stairs and landing, two coats";
+// Distinct from the natural-items parser's own first line, so part A never shares the split parent's label.
+const hall = "Paint hall, stairs and landing in two coats";
 const woodwork = "Paint woodwork in gloss";
 const click = (page: Page, name: string) => page.getByRole("button", { name, exact: true }).click();
 const cards = (page: Page) => page.locator(".review-line");
