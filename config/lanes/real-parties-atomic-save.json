@@ -18,7 +18,8 @@
         "packages/core/src/job-parties.test.ts",
         "packages/core/src/job-parties.ts",
         "packages/db/src/job-parties-repository.ts",
-        "packages/db/test/real-parties-atomic-save.integration.test.ts"
+        "packages/db/test/real-parties-atomic-save.integration.test.ts",
+        "apps/web/e2e/real-journey-money-status.spec.ts"
       ]
     }
   }
