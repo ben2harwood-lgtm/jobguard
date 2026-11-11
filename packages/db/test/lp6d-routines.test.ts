@@ -83,8 +83,8 @@ it("converts the invitation bridge and withdraws direct authorization revocation
   expect(pathCompleteness(inventory, repoFileExists)).toEqual([]);
   expect(inventory.entries.some(e => e.key === "acl|col|app.action_authorization.revoked_at|jobguard_runtime|UPDATE|-")).toBe(false);
   expect(inventory.entries.some(e => e.key.startsWith("acl|col|app.action_authorization.") && e.key.includes("|jobguard_runtime|UPDATE|"))).toBe(false);
-  // r8: the revocation routine, revoke-claim helper and five runtime lock/refusal/maintenance/probe helpers (owner + EXECUTE each).
-  expect(inventory.entries.filter(e => e.group === "a-lp6d-routine-binding")).toHaveLength(14);
+  // r8: the revocation routine, revoke-claim helper and seven runtime lock/refusal/maintenance/probe helpers (owner + EXECUTE each).
+  expect(inventory.entries.filter(e => e.group === "a-lp6d-routine-binding")).toHaveLength(18);
 });
 
 it("leaves the final-lock owner helper exclusively to LP-6c", () => {
@@ -175,7 +175,7 @@ it("preserves LP-6c client history and binding through the exact private read bo
   const prior = read("../migrations/0725_lp6c_client_extra_decision.sql")
     .match(/CREATE OR REPLACE FUNCTION identity\.extra_customer_approval\([\s\S]*?\$\$;/u)![0];
   expect(sql.match(/CREATE OR REPLACE FUNCTION identity\.extra_customer_approval\([\s\S]*?\$\$;/u)![0])
-    .toBe(prior.replaceAll("app.xa_client_view_authority(", "app.lp6d_client_view_authority("));
+    .toBe(prior.replaceAll("app.xa_client_view_authority(", "app.lp6d_client_view_authority(").replaceAll("app.xa_client_decide(", "app.lp6d_xa_client_decide("));
   expect(sql).toContain("REVOKE ALL ON FUNCTION app.lp6d_client_view_authority(uuid,uuid,uuid,text) FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure");
 });
 
@@ -207,4 +207,40 @@ it("keeps lifecycle storage private while checking revocation with its existing 
   expect(revoke).not.toContain("FROM app.command_lifecycle_claim");
   expect(sql).toContain("ALTER FUNCTION app.lp6d_require_revoke_claim(uuid,uuid,uuid,uuid,uuid,uuid,integer) OWNER TO jobguard_command_writer");
   expect(sql).not.toMatch(/GRANT .* ON (?:TABLE )?app\.command_lifecycle_claim/u);
+});
+
+it("pins each private unguarded copy to its guarded original minus only the LP-6d binding prefix", () => {
+  const bodyOf = (name: string) => definitions(sql).filter(m => m[1] === name).at(-1)![3]!;
+  // The guarded original is "BEGIN\n <LP6D_BOUND prefix> END IF;\n<original body>;\nEND\n".
+  const unguarded = (name: string) => {
+    const guarded = bodyOf(name), prefix = /^\s*BEGIN\n -- LP6D_BOUND[^\n]*\n(?: --[^\n]*\n)*(?: PERFORM app\.current_actor\(\);\n)?.*?\n END IF;\n/su.exec(guarded);
+    expect(prefix, name).not.toBeNull();
+    return guarded.slice(prefix![0].length).replace(/;\nEND\n$/u, "").trim();
+  };
+  const maintenanceLine = /\n\s*IF NOT app\.lp6d_maintenance_login\(\) THEN RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501'; END IF;/u;
+  for (const [copy, original, adapt] of [
+    ["app.lp6d_mon8_feature_decision", "app.mon8_feature_decision", (b: string) => b],
+    ["app.lp6d_client_view_authority", "app.xa_client_view_authority", (b: string) => b.replaceAll("app.lp6d_xc_link_current(", "app.xc_link_current(")],
+    ["app.lp6d_customer_watchdog_live", "app.require_watchdog_live", (b: string) => b],
+    // Maintenance copies add exactly one refusal of every non-maintenance login.
+    ["app.lp6d_watchdog_live_maintenance", "app.require_watchdog_live", (b: string) => b.replace(maintenanceLine, "")],
+    ["app.lp6d_job_parties_maintenance", "app.require_current_job_parties", (b: string) => b.replace(maintenanceLine, "")],
+    // The SSO bootstrap fixes feature='sso' and purpose='new_work' as constants.
+    ["app.mon8_sso_feature_decision", "app.mon8_feature_decision", (b: string) => b.replace("feature constant text:='sso'; purpose constant text:='new_work'; ", "")],
+    // Customer approval path: only its calls are redirected to the private chain.
+    ["app.lp6d_xa_covers", "app.xa_covers", (b: string) => b],
+    ["app.lp6d_xa_begin", "app.xa_begin", (b: string) => b.replace("IF NOT (app.lp6d_mon8_feature_decision(p_actor,'approval_chains')->>'executable')::boolean THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;", "PERFORM app.mon8_require_feature(p_actor,'approval_chains');")],
+    ["app.lp6d_xa_client_decide", "app.xa_client_decide", (b: string) => b.replaceAll("app.lp6d_xa_begin(", "app.xa_begin(").replaceAll("app.lp6d_xa_covers(", "app.xa_covers(")],
+  ] as const) {
+    expect(adapt(bodyOf(copy)).trim().replace(/;$/u, ""), copy).toBe(unguarded(original).replace(/;$/u, ""));
+  }
+  const latest = (file: string, name: string) => definitions(read(`../migrations/${file}`)).filter(m => m[1] === name).at(-1)![3]!;
+  expect(bodyOf("app.lp6d_xc_send_authority").replace("app.lp6d_xa_covers(", "app.xa_covers(")).toBe(latest("0642_extra_client_send_authority.sql", "app.xc_send_authority"));
+  expect(bodyOf("app.lp6d_xc_link_current").replace("app.lp6d_xc_send_authority(", "app.xc_send_authority(")).toBe(latest("0686_extra_client_authority_loss.sql", "app.xc_link_current"));
+  for (const copy of ["lp6d_xa_covers(uuid,text[],uuid,text)", "lp6d_xc_send_authority(uuid,uuid)", "lp6d_xc_link_current(uuid)", "lp6d_xa_begin(uuid,uuid,text[],uuid)", "lp6d_xa_client_decide(uuid,uuid,uuid,uuid,text,text,text,bigint,boolean,text,text,text)"]) {
+    expect(sql, copy).toContain(`REVOKE ALL ON FUNCTION app.${copy} FROM PUBLIC,jobguard_runtime,jobguard_identity`);
+  }
+  for (const copy of ["lp6d_mon8_feature_decision(uuid,text,text)", "lp6d_client_view_authority(uuid,uuid,uuid,text)", "lp6d_customer_watchdog_live(uuid)", "lp6d_job_parties_maintenance(uuid,uuid)", "mon8_sso_feature_decision(uuid)"]) {
+    expect(sql, copy).toMatch(new RegExp(`REVOKE ALL ON FUNCTION app\\.${copy.replace(/[()]/gu, "\\$&")} FROM PUBLIC,jobguard_runtime,jobguard_identity`, "u"));
+  }
 });

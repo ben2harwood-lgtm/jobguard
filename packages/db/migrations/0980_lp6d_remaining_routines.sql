@@ -104,6 +104,18 @@ END
 $$;
 
 
+
+-- Checker (r9b): the trigger route names the EXACT maintenance login, never inherited role
+-- membership: the migration login itself, or a superuser session (cluster administration).
+-- Any other login, including one granted jobguard_migration, is a request login and must be bound.
+CREATE FUNCTION app.lp6d_maintenance_login() RETURNS boolean
+ LANGUAGE sql STABLE SECURITY INVOKER SET search_path=pg_catalog,pg_temp AS $$
+ SELECT session_user::text='jobguard_migration' OR coalesce((SELECT r.rolsuper FROM pg_catalog.pg_roles r WHERE r.rolname=session_user),false)
+$$;
+ALTER FUNCTION app.lp6d_maintenance_login() OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp6d_maintenance_login() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION app.lp6d_maintenance_login() TO jobguard_runtime,jobguard_migration;
+
 -- Router ruling (r8, binding): no pg_trigger_depth() skip. require_watchdog_live and
 -- require_current_job_parties always refuse an unbound caller, including inside a trigger.
 -- Each row trigger that reaches them now routes at its own entry by the ORIGINAL login
@@ -115,7 +127,7 @@ CREATE FUNCTION app.lp6d_watchdog_live_maintenance(p_job uuid) RETURNS void
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, app AS $$
 DECLARE tenant uuid; lifecycle text;
 BEGIN
-  IF NOT pg_has_role(session_user,'jobguard_migration','USAGE') THEN RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501'; END IF;
+  IF NOT app.lp6d_maintenance_login() THEN RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501'; END IF;
   tenant := nullif(current_setting('app.tenant_id', true), '')::uuid;
   IF tenant IS NULL THEN RAISE EXCEPTION 'JOB_NOT_FOUND' USING ERRCODE='42501'; END IF;
   SELECT status INTO lifecycle FROM app.job WHERE tenant_id=tenant AND id=p_job FOR SHARE;
@@ -128,7 +140,7 @@ REVOKE ALL ON FUNCTION app.lp6d_watchdog_live_maintenance(uuid) FROM PUBLIC,jobg
 GRANT EXECUTE ON FUNCTION app.lp6d_watchdog_live_maintenance(uuid) TO jobguard_runtime;
 CREATE FUNCTION app.lp6d_job_parties_maintenance(p_tenant uuid,p_job uuid) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 DECLARE snapshot jsonb; BEGIN
- IF NOT pg_has_role(session_user,'jobguard_migration','USAGE') THEN RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501'; END IF;
+ IF NOT app.lp6d_maintenance_login() THEN RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501'; END IF;
  IF p_tenant IS DISTINCT FROM nullif(current_setting('app.tenant_id',true),'')::uuid THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
  PERFORM 1 FROM app.job WHERE tenant_id=p_tenant AND id=p_job FOR SHARE;
  IF NOT FOUND THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='P0002'; END IF;
@@ -150,7 +162,7 @@ BEGIN
    SELECT binding_id INTO NEW.party_binding_id FROM app.job_party_current WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id;
    IF NEW.party_binding_id IS NULL THEN RAISE EXCEPTION 'JOB_PARTIES_REQUIRED' USING ERRCODE='22023'; END IF;
  ELSE
-   NEW.parties_snapshot:=CASE WHEN pg_has_role(session_user,'jobguard_migration','USAGE') THEN app.lp6d_job_parties_maintenance(NEW.tenant_id,NEW.job_id) ELSE app.require_current_job_parties(NEW.tenant_id,NEW.job_id) END;
+   NEW.parties_snapshot:=CASE WHEN app.lp6d_maintenance_login() THEN app.lp6d_job_parties_maintenance(NEW.tenant_id,NEW.job_id) ELSE app.require_current_job_parties(NEW.tenant_id,NEW.job_id) END;
    IF TG_TABLE_NAME='quote_document_version' THEN
      IF NEW.snapshot ? 'jobParties' AND NEW.snapshot->'jobParties' IS DISTINCT FROM NEW.parties_snapshot THEN RAISE EXCEPTION 'PARTY_SNAPSHOT_MISMATCH' USING ERRCODE='22023'; END IF;
    END IF;
@@ -185,7 +197,7 @@ BEGIN
           AND m.role='owner' AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp()))
     ) THEN RETURN NEW; END IF;
   END IF;
-  IF pg_has_role(session_user,'jobguard_migration','USAGE') THEN PERFORM app.lp6d_watchdog_live_maintenance(NEW.job_id); ELSE PERFORM app.require_watchdog_live(NEW.job_id); END IF;
+  IF app.lp6d_maintenance_login() THEN PERFORM app.lp6d_watchdog_live_maintenance(NEW.job_id); ELSE PERFORM app.require_watchdog_live(NEW.job_id); END IF;
   RETURN NEW;
 END $$;
 -- Latest body: packages/db/migrations/0720_verified_upload_immutable.sql; only the live check routes.
@@ -202,7 +214,7 @@ BEGIN
   THEN RAISE EXCEPTION 'verified evidence upload is immutable' USING ERRCODE='42501'; END IF;
   IF NEW.state IN ('quarantined','verified') AND
     (NEW.state,NEW.object_version_id,NEW.server_verified_at) IS DISTINCT FROM (OLD.state,OLD.object_version_id,OLD.server_verified_at)
-  THEN IF pg_has_role(session_user,'jobguard_migration','USAGE') THEN PERFORM app.lp6d_watchdog_live_maintenance(NEW.job_id); ELSE PERFORM app.require_watchdog_live(NEW.job_id); END IF; END IF;
+  THEN IF app.lp6d_maintenance_login() THEN PERFORM app.lp6d_watchdog_live_maintenance(NEW.job_id); ELSE PERFORM app.require_watchdog_live(NEW.job_id); END IF; END IF;
   RETURN NEW;
 END $$;
 -- Latest body: packages/db/migrations/0303_job_source_intake.sql; only the live check routes.
@@ -220,7 +232,7 @@ BEGIN
  END IF;
  IF EXISTS(SELECT 1 FROM app.final_account_lock WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id) THEN RAISE EXCEPTION 'POST_LOCK_WORK_REQUIRES_LINKED_JOB'; END IF;
  PERFORM app.ch4_require_open(NEW.tenant_id,NEW.job_id);
- IF pg_has_role(session_user,'jobguard_migration','USAGE') THEN PERFORM app.lp6d_watchdog_live_maintenance(NEW.job_id); ELSE PERFORM app.require_watchdog_live(NEW.job_id); END IF;
+ IF app.lp6d_maintenance_login() THEN PERFORM app.lp6d_watchdog_live_maintenance(NEW.job_id); ELSE PERFORM app.require_watchdog_live(NEW.job_id); END IF;
  RETURN NEW;
 END $$;
 
@@ -4467,6 +4479,34 @@ ALTER FUNCTION app.lp6d_refused_contractor_principal(uuid) OWNER TO jobguard_mig
 REVOKE ALL ON FUNCTION app.lp6d_refused_contractor_principal(uuid) FROM PUBLIC,jobguard_identity,jobguard_infrastructure;
 GRANT EXECUTE ON FUNCTION app.lp6d_refused_contractor_principal(uuid) TO jobguard_runtime;
 
+-- Router ruling (r9): a revoked member's site-visit refusal is still a 403 whose audit is
+-- written FIRST, never through an unbound call into a guarded routine. This private writer
+-- records only the existing ENT-3b refusal event shape (fixed event type, command types and
+-- reasons); attribution names the member only when the exact membership row exists. It grants
+-- nothing append_audit does not already allow the request role.
+CREATE FUNCTION app.lp6d_record_visit_refusal(p_tenant uuid,p_id uuid,p_command uuid,p_actor uuid,p_identity uuid,p_command_type text,p_reason text,p_job uuid)
+ RETURNS void LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE known_member boolean; known_job boolean; refs jsonb;
+BEGIN
+ IF current_database()<>'jobguard_synthetic_demo' OR p_tenant IS NULL OR p_id IS NULL OR p_command IS NULL
+  OR p_tenant IS DISTINCT FROM nullif(current_setting('app.tenant_id',true),'')::uuid
+  OR p_command_type IS NULL OR p_command_type NOT IN('StartSiteVisit','CompleteSiteVisit')
+  OR p_reason IS NULL OR p_reason NOT IN('track_not_contractor','member_inactive','role_not_permitted','job_out_of_scope','visit_out_of_scope') THEN
+  RAISE EXCEPTION 'VISIT_REFUSAL_INVALID' USING ERRCODE='22023'; END IF;
+ IF EXISTS(SELECT 1 FROM app.audit_event WHERE tenant_id=p_tenant AND id=p_id) THEN RETURN; END IF;
+ known_member:=EXISTS(SELECT 1 FROM app.membership WHERE tenant_id=p_tenant AND id=p_actor AND identity_user_id=p_identity);
+ known_job:=EXISTS(SELECT 1 FROM app.job WHERE tenant_id=p_tenant AND id=p_job);
+ refs:=jsonb_build_object('command',p_command::text,'command_type',p_command_type,'reason',p_reason,'environment','synthetic_demo')
+  ||CASE WHEN known_job THEN jsonb_build_object('job',p_job::text) ELSE '{}'::jsonb END;
+ PERFORM app.append_audit(jsonb_build_array(jsonb_build_object('id',p_id::text,'version','audit.v1',
+  'actorRef',CASE WHEN known_member THEN 'membership:'||p_actor::text ELSE 'security:unverified-member' END,
+  'eventType','contractor.visit.refused','subjectType','visit-command','subjectRef',p_command::text,
+  'payload',jsonb_build_object('references',refs,'classifications',jsonb_build_object('action','security')))));
+END $$;
+ALTER FUNCTION app.lp6d_record_visit_refusal(uuid,uuid,uuid,uuid,uuid,text,text,uuid) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp6d_record_visit_refusal(uuid,uuid,uuid,uuid,uuid,text,text,uuid) FROM PUBLIC,jobguard_identity,jobguard_infrastructure;
+GRANT EXECUTE ON FUNCTION app.lp6d_record_visit_refusal(uuid,uuid,uuid,uuid,uuid,text,text,uuid) TO jobguard_runtime;
+
 -- Latest body: packages/db/migrations/0549_contractor_feature_guards.sql
 CREATE OR REPLACE FUNCTION identity.invite_member(session_digest char(64), t uuid, recipient varchar, assigned_role varchar)
  RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,identity AS $$
@@ -4557,6 +4597,14 @@ REVOKE UPDATE(revoked_at) ON app.action_authorization FROM PUBLIC,jobguard_runti
 CREATE FUNCTION app.lp6d_share_sink_authorization(p_tenant uuid,p_outbox uuid) RETURNS void
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
+ -- LP6D_BOUND (checker r9a): as lp6d_lock_action_authorization; the GUC alone is not a tenant proof.
+ IF NOT app.lp6d_maintenance_login() THEN
+  PERFORM app.current_actor();
+  IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+   OR p_tenant IS DISTINCT FROM app.current_tenant() THEN
+   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
+  END IF;
+ END IF;
  IF p_tenant IS NULL OR p_tenant IS DISTINCT FROM nullif(current_setting('app.tenant_id',true),'')::uuid THEN
   RAISE EXCEPTION 'RECOVERY_MESSAGE_SINK_INVALID' USING ERRCODE='23514'; END IF;
  PERFORM 1 FROM app.action_outbox o JOIN app.action_authorization a ON a.tenant_id=o.tenant_id AND a.id=o.authorization_id
@@ -4573,6 +4621,15 @@ GRANT EXECUTE ON FUNCTION app.lp6d_share_sink_authorization(uuid,uuid) TO jobgua
 CREATE FUNCTION app.lp6d_lock_action_authorization(p_tenant uuid,p_authorization uuid,p_exclusive boolean) RETURNS void
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
+ -- LP6D_BOUND (checker r9a): the tenant GUC alone is settable by any session, so a request login
+ -- must be bound to this very tenant; only the exact maintenance login uses the GUC tenant.
+ IF NOT app.lp6d_maintenance_login() THEN
+  PERFORM app.current_actor();
+  IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+   OR p_tenant IS DISTINCT FROM app.current_tenant() THEN
+   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
+  END IF;
+ END IF;
  IF p_tenant IS NULL OR p_tenant IS DISTINCT FROM nullif(current_setting('app.tenant_id',true),'')::uuid THEN
   RAISE EXCEPTION 'AUTHORIZATION_INVALID' USING ERRCODE='23514'; END IF;
  IF p_exclusive THEN
@@ -6431,7 +6488,7 @@ LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
  -- LP-6d: a request login always uses the bound decision. Only the original maintenance
  -- login (row-trigger fixtures/administration, the 0720 convention) uses the private copy.
- IF NOT ((CASE WHEN pg_has_role(session_user,'jobguard_migration','USAGE') THEN app.lp6d_mon8_feature_decision(actor,feature)
+ IF NOT ((CASE WHEN app.lp6d_maintenance_login() THEN app.lp6d_mon8_feature_decision(actor,feature)
   ELSE app.mon8_feature_decision(actor,feature) END)->>'executable')::boolean THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
 END $$;
 
@@ -6717,6 +6774,166 @@ DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; actor uu
  RETURN identity.sso_required_append(t,c,actor,'admin',(p->>'required')::boolean,p->>'reason',(p->>'expectedRevision')::integer);
 END $$;
 
+-- Private unguarded copies for the customer approval path only (identity link use and the
+-- LP-6c delegated client decision). That path has no ordinary request actor: the link use is
+-- the sign-in itself, and the delegated binding deliberately hides its actor from
+-- current_actor(); LP-6c's begin_command verifies the delegated scope. Every ordinary port
+-- keeps its guard. Bodies are the latest originals (0158/0642/0686) with only these calls
+-- redirected to the private chain; lp6d-routines.test.ts pins them.
+CREATE FUNCTION app.lp6d_xa_covers(p_actor uuid, p_roles text[], p_job uuid, p_permission text) RETURNS uuid
+LANGUAGE plpgsql STABLE SECURITY INVOKER SET search_path=pg_catalog AS $$
+DECLARE v_tenant uuid; v_chosen uuid;
+BEGIN
+ BEGIN v_tenant:=nullif(pg_catalog.current_setting('app.tenant_id',true),'')::uuid; EXCEPTION WHEN invalid_text_representation THEN v_tenant:=NULL; END;
+ IF v_tenant IS NULL OR p_actor IS NULL OR NOT coalesce(app.contractor_member_active(p_actor),false) THEN RETURN NULL; END IF;
+ SELECT g.id INTO v_chosen FROM app.role_grant g
+  JOIN app.team t ON t.tenant_id=g.tenant_id AND t.id=app.contractor_job_team(p_job)
+  JOIN app.org_unit b ON(b.tenant_id,b.id)=(t.tenant_id,t.branch_id)
+  JOIN app.membership m ON(m.tenant_id,m.id)=(g.tenant_id,g.membership_id) AND m.role=g.role
+  WHERE g.tenant_id=v_tenant AND g.membership_id=p_actor AND g.role=ANY(p_roles) AND app.contractor_role_permits(g.role,p_permission)
+   AND NOT EXISTS(SELECT 1 FROM app.role_grant_revocation r WHERE(r.tenant_id,r.grant_id)=(g.tenant_id,g.id))
+   AND(g.scope_kind='tenant' AND g.scope_id=v_tenant OR g.scope_kind='team' AND g.scope_id=t.id OR g.scope_kind='branch' AND g.scope_id=b.id OR g.scope_kind='region' AND g.scope_id=b.parent_id)
+  ORDER BY g.id LIMIT 1;
+ RETURN v_chosen;
+END
+$$;
+CREATE FUNCTION app.lp6d_xc_send_authority(p_actor uuid,p_extra uuid) RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog AS $$
+ SELECT coalesce(EXISTS(SELECT 1 FROM app.variation v WHERE v.tenant_id=nullif(current_setting('app.tenant_id',true),'')::uuid AND v.id=p_extra
+ AND app.lp6d_xa_covers(p_actor,ARRAY['surveyor','commercial_manager'],v.job_id,'job.read') IS NOT NULL),false)
+$$;
+CREATE FUNCTION app.lp6d_xc_link_current(p_link uuid) RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog AS $$
+ SELECT EXISTS(
+  SELECT 1 FROM app.extra_client_link k
+  JOIN app.work_order w ON(w.tenant_id,w.job_id)=(k.tenant_id,k.job_id)
+  JOIN app.contractor_member cm ON(cm.tenant_id,cm.membership_id)=(k.tenant_id,k.approver_membership_id)
+  JOIN app.membership m ON(m.tenant_id,m.id)=(cm.tenant_id,cm.membership_id)
+  JOIN app.role_grant g ON(g.tenant_id,g.membership_id)=(m.tenant_id,m.id)
+  JOIN app.action_outbox o ON(o.tenant_id,o.id)=(k.tenant_id,k.outbox_action_id)
+  WHERE k.tenant_id=nullif(current_setting('app.tenant_id',true),'')::uuid AND k.id=p_link
+   AND current_database()='jobguard_synthetic_demo'
+   AND cm.client_id=k.client_id AND w.client_id=k.client_id AND lower(cm.email)=lower(k.recipient)
+   AND m.role='client_approver' AND coalesce(app.contractor_member_active(m.id),false)
+   AND g.role='client_approver' AND g.scope_kind='client' AND g.scope_id=k.client_id
+   AND(g.contract_id IS NULL OR g.contract_id=w.contract_id)
+   AND NOT EXISTS(SELECT 1 FROM app.role_grant_revocation r WHERE(r.tenant_id,r.grant_id)=(g.tenant_id,g.id))
+   AND (EXISTS(SELECT 1 FROM app.extra_client_link_closure c
+         WHERE(c.tenant_id,c.link_id)=(k.tenant_id,k.id) AND c.kind='decided')
+        OR (o.status<>'cancelled' AND app.lp6d_xc_send_authority(k.issued_by_membership_id,k.variation_id)))
+ )
+$$;
+CREATE FUNCTION app.lp6d_xa_begin(p_job uuid, p_command uuid, p_types text[], p_actor uuid) RETURNS uuid LANGUAGE plpgsql SET search_path=pg_catalog AS $$
+DECLARE v_tenant uuid; v_receipt app.command_receipt;
+BEGIN
+ IF p_types IS DISTINCT FROM ARRAY['RevokeClientApproval']::text[] THEN IF NOT (app.lp6d_mon8_feature_decision(p_actor,'approval_chains')->>'executable')::boolean THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF; END IF;
+ IF pg_catalog.current_database()<>'jobguard_synthetic_demo' THEN RAISE EXCEPTION 'MODE_FORBIDDEN' USING ERRCODE='42501'; END IF;
+ BEGIN v_tenant:=nullif(pg_catalog.current_setting('app.tenant_id',true),'')::uuid; EXCEPTION WHEN invalid_text_representation THEN v_tenant:=NULL; END;
+ IF v_tenant IS NULL THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='P0002'; END IF;
+ SELECT r.* INTO v_receipt FROM app.command_receipt r WHERE r.tenant_id=v_tenant AND r.command_id=p_command;
+ IF v_receipt.command_id IS NULL OR v_receipt.status IS DISTINCT FROM 'processing' OR NOT(v_receipt.command_type=ANY(p_types)) OR v_receipt.actor_membership_id IS DISTINCT FROM p_actor THEN
+  RAISE EXCEPTION 'INVALID_COMMAND' USING ERRCODE='23514';
+ END IF;
+ PERFORM pg_catalog.pg_advisory_xact_lock_shared(pg_catalog.hashtextextended(v_tenant::text,54));
+ PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(v_tenant::text||':'||p_job::text,417));
+ IF NOT EXISTS(SELECT 1 FROM app.job_commercial_track t WHERE(t.tenant_id,t.job_id)=(v_tenant,p_job) AND t.job_track='contractor' AND t.environment='synthetic_demo') THEN
+  RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='P0002';
+ END IF;
+ RETURN v_tenant;
+END
+$$;
+CREATE FUNCTION app.lp6d_xa_client_decide(p_job uuid, p_request uuid, p_command uuid, p_actor uuid, p_token_hash text, p_email text, p_hash text, p_net bigint, p_reject boolean, p_reason text, p_role_name text, p_tester text) RETURNS jsonb
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE lp5_result jsonb; v_tenant uuid; v_link app.extra_client_link; v_closure text; v_req app.extra_approval_request; v_wo app.work_order; v_n integer; v_total integer; v_rev uuid; v_grant uuid; v_final boolean;
+BEGIN
+ v_tenant:=app.lp6d_xa_begin(p_job,p_command,ARRAY['ClientDecideExtra'],p_actor);
+ SELECT k.* INTO v_link FROM app.extra_client_link k WHERE k.tenant_id=v_tenant AND k.token_hash=p_token_hash;
+ IF v_link.id IS NULL OR v_link.approver_membership_id<>p_actor THEN RAISE EXCEPTION 'LINK_INVALID' USING ERRCODE='42501'; END IF;
+ SELECT c.kind INTO v_closure FROM app.extra_client_link_closure c WHERE(c.tenant_id,c.link_id)=(v_tenant,v_link.id);
+ IF v_closure='decided' THEN RAISE EXCEPTION 'LINK_REPLAYED' USING ERRCODE='23514'; END IF;
+ IF v_closure IS NOT NULL THEN RAISE EXCEPTION 'LINK_REVOKED' USING ERRCODE='23514'; END IF;
+ IF NOT app.xc_link_current(v_link.id) THEN RAISE EXCEPTION 'PERMISSION_DENIED' USING ERRCODE='42501'; END IF;
+ IF clock_timestamp()>=v_link.expires_at THEN RAISE EXCEPTION 'LINK_EXPIRED' USING ERRCODE='23514'; END IF;
+ IF p_email IS NULL OR lower(p_email)<>lower(v_link.recipient) THEN RAISE EXCEPTION 'EMAIL_MISMATCH' USING ERRCODE='23514'; END IF;
+ SELECT w.* INTO v_wo FROM app.work_order w WHERE w.tenant_id=v_tenant AND w.job_id=p_job;
+ IF v_link.job_id<>p_job OR v_link.request_id<>p_request OR v_wo.client_id IS DISTINCT FROM v_link.client_id THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='P0002'; END IF;
+ SELECT q.* INTO v_req FROM app.extra_approval_request q WHERE(q.tenant_id,q.job_id,q.id)=(v_tenant,p_job,p_request);
+ IF v_req.client_id<>v_link.client_id THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='P0002'; END IF;
+ IF v_req.request_revision<>(SELECT max(q.request_revision) FROM app.extra_approval_request q WHERE q.tenant_id=v_tenant AND q.variation_id=v_req.variation_id) THEN RAISE EXCEPTION 'STALE_REVISION' USING ERRCODE='40001'; END IF;
+ IF EXISTS(SELECT 1 FROM app.extra_approval_outcome o WHERE(o.tenant_id,o.request_id)=(v_tenant,p_request)) OR app.xa_latest_kind(v_tenant,p_job,v_req.variation_id) IS DISTINCT FROM 'awaiting_approval' THEN RAISE EXCEPTION 'ALREADY_DECIDED' USING ERRCODE='23514'; END IF;
+ SELECT g.id INTO v_grant FROM app.contractor_member cm JOIN app.membership m ON(m.tenant_id,m.id)=(cm.tenant_id,cm.membership_id) JOIN app.role_grant g ON(g.tenant_id,g.membership_id)=(cm.tenant_id,cm.membership_id)
+  WHERE cm.tenant_id=v_tenant AND cm.membership_id=p_actor AND cm.client_id=v_req.client_id AND lower(cm.email)=lower(p_email) AND m.role='client_approver' AND coalesce(app.contractor_member_active(p_actor),false)
+   AND g.role='client_approver' AND g.scope_kind='client' AND g.scope_id=v_req.client_id AND(g.contract_id IS NULL OR g.contract_id=v_wo.contract_id)
+   AND NOT EXISTS(SELECT 1 FROM app.role_grant_revocation r WHERE(r.tenant_id,r.grant_id)=(g.tenant_id,g.id)) ORDER BY g.id LIMIT 1;
+ IF v_grant IS NULL THEN RAISE EXCEPTION 'PERMISSION_DENIED' USING ERRCODE='42501'; END IF;
+ SELECT count(*) INTO v_n FROM app.extra_approval_step_fact f WHERE(f.tenant_id,f.request_id)=(v_tenant,p_request);
+ IF v_req.requirement->'steps'->v_n->>'role' IS DISTINCT FROM 'client_approver' THEN RAISE EXCEPTION 'STEP_OUT_OF_ORDER' USING ERRCODE='23514'; END IF;
+ IF v_req.revision_hash::text IS DISTINCT FROM p_hash OR v_req.net_pence IS DISTINCT FROM p_net OR v_req.net_pence IS NULL THEN RAISE EXCEPTION 'HASH_MISMATCH' USING ERRCODE='23514'; END IF;
+ IF p_role_name IS NULL OR p_tester IS NULL THEN RAISE EXCEPTION 'INVALID_COMMAND' USING ERRCODE='23514'; END IF;
+ SELECT b.variation_revision_id INTO v_rev FROM app.extra_approval_revision_binding b WHERE(b.tenant_id,b.id)=(v_tenant,v_req.binding_id);
+ INSERT INTO app.extra_client_link_closure(tenant_id,id,link_id,kind,actor_membership_id,command_id) VALUES(v_tenant,pg_catalog.gen_random_uuid(),v_link.id,'decided',p_actor,p_command);
+ IF p_reject THEN
+  IF p_reason IS NULL OR p_reason !~ '^[a-z][a-z0-9_]{0,39}$' THEN RAISE EXCEPTION 'INVALID_COMMAND' USING ERRCODE='23514'; END IF;
+  INSERT INTO app.extra_approval_outcome(tenant_id,id,job_id,variation_id,request_id,kind,reason_code,actor_kind,actor_membership_id,command_id)
+  VALUES(v_tenant,pg_catalog.gen_random_uuid(),p_job,v_req.variation_id,p_request,'rejected',p_reason,'client_approver',p_actor,p_command);
+  PERFORM app.xa_event(v_tenant,p_job,v_req.variation_id,'rejected',v_rev,p_reason,p_command,p_actor);
+  lp5_result:=jsonb_build_object('requestId',p_request,'state','rejected','stepIndex',v_n); PERFORM app.lp5_bind_effect(p_command,NULL,'extra_chain',jsonb_build_object('result',lp5_result)); RETURN lp5_result;
+ END IF;
+ INSERT INTO app.extra_approval_step_fact(tenant_id,id,job_id,variation_id,request_id,step_index,step_role,actor_kind,actor_membership_id,grant_id,approved_hash,approved_net_pence,fictional_role_name,actual_tester_reference,command_id)
+ VALUES(v_tenant,pg_catalog.gen_random_uuid(),p_job,v_req.variation_id,p_request,v_n,'client_approver','client_approver',p_actor,v_grant,v_req.revision_hash,v_req.net_pence,p_role_name,p_tester,p_command);
+ v_total:=jsonb_array_length(v_req.requirement->'steps'); v_final:=v_n+1=v_total;
+ IF v_final THEN
+  INSERT INTO app.extra_approval_outcome(tenant_id,id,job_id,variation_id,request_id,kind,actor_kind,actor_membership_id,command_id)
+  VALUES(v_tenant,pg_catalog.gen_random_uuid(),p_job,v_req.variation_id,p_request,'approved','client_approver',p_actor,p_command);
+  PERFORM app.xa_event(v_tenant,p_job,v_req.variation_id,'approved',v_rev,NULL,p_command,p_actor);
+ END IF;
+ lp5_result:=jsonb_build_object('requestId',p_request,'state',CASE WHEN v_final THEN 'approved' ELSE 'awaiting_approval' END,'stepIndex',v_n); PERFORM app.lp5_bind_effect(p_command,NULL,'extra_chain',jsonb_build_object('result',lp5_result)); RETURN lp5_result;
+END
+$$;
+ALTER FUNCTION app.lp6d_xa_covers(uuid,text[],uuid,text) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp6d_xa_covers(uuid,text[],uuid,text) FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure,jobguard_command_writer;
+ALTER FUNCTION app.lp6d_xc_send_authority(uuid,uuid) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp6d_xc_send_authority(uuid,uuid) FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure,jobguard_command_writer;
+ALTER FUNCTION app.lp6d_xc_link_current(uuid) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp6d_xc_link_current(uuid) FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure,jobguard_command_writer;
+ALTER FUNCTION app.lp6d_xa_begin(uuid,uuid,text[],uuid) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp6d_xa_begin(uuid,uuid,text[],uuid) FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure,jobguard_command_writer;
+ALTER FUNCTION app.lp6d_xa_client_decide(uuid,uuid,uuid,uuid,text,text,text,bigint,boolean,text,text,text) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp6d_xa_client_decide(uuid,uuid,uuid,uuid,text,text,text,bigint,boolean,text,text,text) FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure,jobguard_command_writer;
+DO $revoke$ DECLARE r record; BEGIN
+ FOR r IN SELECT rolname FROM pg_roles WHERE rolcanlogin LOOP
+  EXECUTE format('REVOKE ALL ON FUNCTION app.lp6d_xa_covers(uuid,text[],uuid,text),app.lp6d_xc_send_authority(uuid,uuid),app.lp6d_xc_link_current(uuid),app.lp6d_xa_begin(uuid,uuid,text[],uuid),app.lp6d_xa_client_decide(uuid,uuid,uuid,uuid,text,text,text,bigint,boolean,text,text,text) FROM %I',r.rolname);
+ END LOOP;
+END $revoke$;
+
+-- Latest body: packages/db/migrations/0686_extra_client_authority_loss.sql. The outbox worker runs
+-- this under the queued job's unbound context to check the ISSUER's current send authority (a third
+-- party, never the caller), so it uses the private link-current chain; it has no other change.
+CREATE OR REPLACE FUNCTION app.xc_cancel_authority_loss(p_action uuid) RETURNS boolean
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; target app.extra_client_link; n integer;
+BEGIN
+ IF current_database()<>'jobguard_synthetic_demo' THEN RETURN false; END IF;
+ PERFORM pg_advisory_xact_lock(hashtextextended(t::text,54));
+ SELECT * INTO target FROM app.extra_client_link WHERE tenant_id=t AND outbox_action_id=p_action;
+ IF target.id IS NULL THEN RETURN false; END IF;
+ UPDATE app.action_outbox o SET status='cancelled',updated_at=clock_timestamp()
+ FROM app.extra_client_link k
+ WHERE k.tenant_id=t AND k.job_id=target.job_id AND k.approver_membership_id=target.approver_membership_id
+  AND(o.tenant_id,o.id)=(k.tenant_id,k.outbox_action_id)
+  AND o.action_type='extra.client_approval_request.send' AND o.adapter='fake_email'
+  AND o.status IN('pending','retryable')
+  AND NOT EXISTS(SELECT 1 FROM app.extra_client_link_closure c WHERE(c.tenant_id,c.link_id)=(k.tenant_id,k.id))
+  AND NOT app.lp6d_xc_link_current(k.id);
+ GET DIAGNOSTICS n=ROW_COUNT;
+ IF n>0 THEN
+  PERFORM app.append_final_check_audit(gen_random_uuid(),'system:outbox',target.job_id,
+   'contractor.extra.client_authority_lost',jsonb_build_object('linkId',target.id,'outboxId',p_action));
+ END IF;
+ RETURN EXISTS(SELECT 1 FROM app.action_outbox WHERE tenant_id=t AND id=p_action AND status='cancelled');
+END $$;
+
+
 -- Latest body: 0549; only the private SSO entitlement edge changes.
 CREATE OR REPLACE FUNCTION identity.oidc_create(s char(64),p jsonb) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; c uuid:=(p->'config'->>'connectionId')::uuid; current_session identity.session; BEGIN
@@ -6749,7 +6966,7 @@ BEGIN
  IF EXISTS(SELECT 1 FROM app.extra_client_link k WHERE k.tenant_id=v_tenant
   AND k.job_id=p_job AND k.request_id=p_request AND k.approver_membership_id=p_actor
   AND NOT EXISTS(SELECT 1 FROM app.extra_client_link_closure c WHERE(c.tenant_id,c.link_id)=(k.tenant_id,k.id))
-  AND NOT app.xc_link_current(k.id)) THEN RAISE EXCEPTION 'PERMISSION_DENIED' USING ERRCODE='42501'; END IF;
+  AND NOT app.lp6d_xc_link_current(k.id)) THEN RAISE EXCEPTION 'PERMISSION_DENIED' USING ERRCODE='42501'; END IF;
 END $$;
 ALTER FUNCTION app.lp6d_client_view_authority(uuid,uuid,uuid,text) OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.lp6d_client_view_authority(uuid,uuid,uuid,text) FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure;
@@ -6776,9 +6993,9 @@ BEGIN
  -- No match delegates to the unchanged customer sign-in implementation.
  IF k.id IS NULL THEN RETURN NULL; END IF;
  IF k.job_id<>j OR k.approver_membership_id<>c THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
- IF NOT app.xc_link_current(k.id) THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
+ IF NOT app.lp6d_xc_link_current(k.id) THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
  PERFORM app.lp6d_client_view_authority(j,k.request_id,c,k.recipient);
- PERFORM app.mon8_require_feature(c,'approval_chains');
+ IF NOT (app.lp6d_mon8_feature_decision(c,'approval_chains')->>'executable')::boolean THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
  SELECT kind INTO closed FROM app.extra_client_link_closure WHERE tenant_id=t AND link_id=k.id;
  IF closed IN('revoked','replaced') THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
  IF operation='redeem' THEN
@@ -6837,7 +7054,7 @@ BEGIN
    jsonb_build_object('tenantId',t,'actorMembershipId',c,'subjectType','job','subjectRef',j),'{}',
    jsonb_build_object('version','repository-command.v1','actorMembershipId',c,'input',legacy,'legacyJson',app.final_lock_canonical(legacy)));
   IF claim->>'kind'='replay' THEN RETURN claim->'result'; END IF;
-  result:=app.xa_client_decide(j,q.id,(input->>'commandId')::uuid,c,k.token_hash,k.recipient,input->>'revisionHash',(input->>'netPence')::bigint,
+  result:=app.lp6d_xa_client_decide(j,q.id,(input->>'commandId')::uuid,c,k.token_hash,k.recipient,input->>'revisionHash',(input->>'netPence')::bigint,
    input->>'decision'='reject',CASE WHEN input->>'decision'='reject' THEN 'not_agreed' ELSE NULL END,'Named fictional client approver','customer-session:'||s.id::text);
   PERFORM app.append_final_check_audit(gen_random_uuid(),'membership:'||c::text,j,'contractor.extra.client_decided',jsonb_build_object('commandId',input->>'commandId','requestId',q.id,'sessionId',s.id));
   result:=app.complete_command((input->>'commandId')::uuid,'{}');

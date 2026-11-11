@@ -27,7 +27,7 @@ async function allocated(){
 it("reads the real £800/£80/£720 chain without allocating or appending on replay",async()=>{
  const x=await allocated();
  // The fixture returns auth digest; its original opaque cookie is not exposed.
- const read=()=>finalCheckTenant(f.runtime,x.context.tenantId,async db=>(await db.query("SELECT app.read_value_job($1,$2) result",[x.jobId,x.auth.digest])).rows[0].result);
+ const read=()=>finalCheckTenant(f.runtime,x.context.tenantId,async db=>(await db.query("SELECT app.read_value_job($1,$2) result",[x.jobId,x.auth.digest])).rows[0].result,{owner:f.admin,membershipId:x.actor.membershipId}); // LP-6d: the owner's own bound request
  const before=(await f.admin.query("SELECT count(*)::int n FROM app.audit_event")).rows;
  const raw=await read();expect(await read()).toEqual(raw);
  const {mapValueReceipt}=await import("@jobguard/core");const receipt=mapValueReceipt(raw);

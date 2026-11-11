@@ -85,8 +85,24 @@ export class SiteVisitRepository {
   return answer.data.reason_code === "allowed" ? null : { code: "NOT_FOUND", reason: "job_out_of_scope" };
  }
  private async recordRefusal(context: VerifiedTenantContext, actor: AuthenticatedMembership, kind: Kind, input: Input, reason: Reason): Promise<void> {
+  // Router ruling (r9): the refusal audit is written first by the private refusal writer, in its own
+  // transaction, so a member who can no longer be bound (revoked/expired) still leaves the record.
+  // No guarded routine is called. Historical schemas without the writer keep the original path.
+  const tenant = context.tenantId.toLowerCase(), id = derivedUuid(`visit-refusal:${tenant}:${input.commandId.toLowerCase()}:${reason}`);
+  const client = await this.pool.connect();
+  try {
+   await client.query("BEGIN");
+   await client.query("SELECT set_config('app.tenant_id',$1,true)", [tenant]);
+   const installed = (await client.query<{ installed: boolean }>("SELECT to_regprocedure('app.lp6d_record_visit_refusal(uuid,uuid,uuid,uuid,uuid,text,text,uuid)') IS NOT NULL installed")).rows[0]?.installed;
+   if (installed) {
+    await client.query("SELECT app.lp6d_record_visit_refusal($1,$2,$3,$4,$5,$6,$7,$8)", [tenant, id, input.commandId, actor.membershipId, actor.identityUserId, kind === "start" ? startCommandType : completeCommandType, reason, input.jobId]);
+    await client.query("COMMIT");
+    return;
+   }
+   await client.query("ROLLBACK");
+  } catch { await client.query("ROLLBACK").catch(() => undefined); return; /* never changes the typed refusal */ }
+  finally { client.release(); }
   try { await withTenant(this.pool, context, async db => {
-   const tenant = context.tenantId.toLowerCase(), id = derivedUuid(`visit-refusal:${tenant}:${input.commandId.toLowerCase()}:${reason}`);
    // At most one per command id and reason; a concurrent duplicate fails on the audit table's unique id and is swallowed below.
    if ((await db.$client.query("SELECT 1 FROM app.audit_event WHERE tenant_id=$1 AND id=$2", [tenant, id])).rowCount) return;
    const member = await db.$client.query("SELECT 1 FROM app.membership WHERE tenant_id=$1 AND id=$2 AND identity_user_id=$3", [tenant, actor.membershipId, actor.identityUserId]);

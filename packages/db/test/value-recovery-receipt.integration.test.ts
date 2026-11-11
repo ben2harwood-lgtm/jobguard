@@ -9,7 +9,7 @@ beforeAll(async()=>{f=await createFinalCheckFixture();},120000);
 afterAll(async()=>{if(f)await closeFinalCheckFixture(f);});
 type Fixture=Awaited<ReturnType<typeof recoveryFeeFixture>>;
 const read=(x:Fixture)=>finalCheckTenant(f.runtime,x.context.tenantId,async db=>
- (await db.query("SELECT app.read_value_job_v2($1,$2) result",[x.jobId,x.auth.digest])).rows[0].result);
+ (await db.query("SELECT app.read_value_job_v2($1,$2) result",[x.jobId,x.auth.digest])).rows[0].result,{owner:f.admin,membershipId:x.actor.membershipId}); // LP-6d: the owner's own bound request
 it("saved allocations reproduce £2820/£282/£2538 then £320/£32/£288, once per window",async()=>{
  const x=await recoveryFeeFixture(f);await x.allocate(0);await x.allocate(1);
  const pending=mapValueReceiptV2(await read(x));expect(pending.withheld.recovered).toBeNull();

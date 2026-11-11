@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/lp-6d-remaining-routines-r4"
       ],
-      "note": "RED LP-6d repair 8 on origin/main 2807f2cb (Claude builder, real PostgreSQL). NOT READY. NOPR.",
+      "note": "RED LP-6d repair 9 on origin/main e3dac41b (Claude builder, real PostgreSQL). NOT READY. NOPR.",
       "allow": [
         "apps/api/src/audit-export/audit-export.application.ts",
         "apps/api/src/workspace/fee-illustration.application.ts",
@@ -45,6 +45,7 @@
         "packages/db/test/enterprise-fee-command-fixtures.integration.test.ts",
         "packages/db/test/extra-duplicate-candidates.integration.test.ts",
         "packages/db/test/fee-illustration-later.integration.test.ts",
+        "packages/db/test/final-check-fixture.ts",
         "packages/db/test/j3-landing-allocation.integration.test.ts",
         "packages/db/test/job-scheduling.integration.test.ts",
         "packages/db/test/job-work-state-sources.integration.test.ts",
@@ -56,9 +57,12 @@
         "packages/db/test/lp6d-routines.json",
         "packages/db/test/lp6d-routines.test.ts",
         "packages/db/test/lp6d-runtime-classification.json",
+        "packages/db/test/m4-23-contractor-acceptance.integration.test.ts",
         "packages/db/test/m4-23-small-builder-acceptance.integration.test.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
         "packages/db/test/migration-proofs/0980_lp6d_remaining_routines.proof.json",
         "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
+        "packages/db/test/post-lock-upload-guard.integration.test.ts",
         "packages/db/test/practice-supplier-credit.integration.test.ts",
         "packages/db/test/recovery-attribution-review.integration.test.ts",
         "packages/db/test/recovery-cases.workbench.integration.test.ts",
@@ -75,6 +79,8 @@
         "packages/db/test/sv5pre-fixtures.ts",
         "packages/db/test/sync-snapshot.integration.test.ts",
         "packages/db/test/tenant-context-test-utils.ts",
+        "packages/db/test/value-recovery-receipt.integration.test.ts",
+        "packages/db/test/value-source.integration.test.ts",
         "packages/db/test/watchdog-fixtures.ts",
         "packages/db/test/work-order-import.integration.test.ts",
         "packages/db/test/worm-command.integration.test.ts"
