@@ -239,7 +239,11 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
       "identity.customer_portal_quote(t uuid, j uuid, c uuid, digest text, cmd jsonb)",
     ];
     if (customerLinkRoutines.includes(`${prior.nspname}.${prior.proname}(${prior.args})`)) {
-      expect({ ...current, definition: prior.definition, source: prior.source }).toEqual(prior);
+      const expected = `${prior.nspname}.${prior.proname}(${prior.args})` ===
+        "identity.customer_portal_use(t uuid, j uuid, c uuid, digest text, session_digest text, operation text)"
+        ? { ...prior, proacl: "{jobguard_migration=X/jobguard_migration,jobguard_identity=X/jobguard_migration,jobguard_binding_owner=X/jobguard_migration}" }
+        : prior;
+      expect({ ...current, definition: prior.definition, source: prior.source }).toEqual(expected);
       const sql = await readFile(new URL("../migrations/0940_real_customer_link_own_quote.sql", import.meta.url), "utf8");
       const body = sql.split(`FUNCTION ${prior.nspname}.${prior.proname}(`)[1]!.split("AS $$")[1]!.split("$$;")[0];
       expect(current?.definition?.split("$function$")[1]).toBe(body);
