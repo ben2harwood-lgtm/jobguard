@@ -102,7 +102,8 @@ test("public catalogue survives failed reads and lost company access without pre
   await page.reload();
   const periods = page.getByRole("region", { name: "Subscription periods", exact: true });
   await expect(periods).toContainText("Hypothetical subscription: £69.00");
-  await expect(billingParagraph).toHaveText(billingSentence);
+  // The fixture backdates the agreement to the 1st of last month, and the page shows the agreement's anchor day.
+  await expect(billingParagraph).toHaveText("Your billing day: the 1st");
   await expect(billingParagraph).toBeVisible();
   await catalogue(page);
   // Abort transport only; all successful identity/subscription responses above use real PostgreSQL.
