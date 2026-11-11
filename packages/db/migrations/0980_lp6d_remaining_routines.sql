@@ -1109,7 +1109,7 @@ BEGIN
   PERFORM app.xa_event(v_tenant,p_job,v_req.variation_id,'approved',v_rev,NULL,p_command,p_actor);
  END IF;
  lp5_result:=jsonb_build_object('requestId',p_request,'state',CASE WHEN v_final THEN 'approved' ELSE 'awaiting_approval' END,'stepIndex',v_n); PERFORM app.lp5_bind_effect(p_command,NULL,'extra_chain',jsonb_build_object('result',lp5_result)); RETURN lp5_result;
-END
+END;
 END
 $$;
 
@@ -1142,7 +1142,7 @@ BEGIN
   AND k.job_id=p_job AND k.request_id=p_request AND k.approver_membership_id=p_actor
   AND NOT EXISTS(SELECT 1 FROM app.extra_client_link_closure c WHERE(c.tenant_id,c.link_id)=(k.tenant_id,k.id))
   AND NOT app.xc_link_current(k.id)) THEN RAISE EXCEPTION 'PERMISSION_DENIED' USING ERRCODE='42501'; END IF;
-END
+END;
 END
 $$;
 
@@ -1176,7 +1176,7 @@ BEGIN
  SELECT coalesce(jsonb_agg(jsonb_build_object('id',s.id,'commandId',s.command_id,'actualTesterMembershipId',s.actor_membership_id,'fictionalCustomer',jsonb_build_object('kind','named_fictional_customer','name',s.fictional_role_name),'text',convert_from(o.bytes,'UTF8'),'evidence',jsonb_build_object('id',s.evidence_id,'objectVersionId',s.object_version_id,'sha256',s.sha256,'serverReceivedAt',to_char(s.source_received_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'))) ORDER BY s.source_received_at,s.id),'[]') INTO records
   FROM app.customer_message_source s JOIN app.job_source_original o ON(o.tenant_id,o.job_id,o.source_kind,o.source_id,o.evidence_id,o.object_version_id,o.sha256,o.source_received_at)=(s.tenant_id,s.job_id,s.source_kind,s.id,s.evidence_id,s.object_version_id,s.sha256,s.source_received_at) WHERE s.tenant_id=t AND s.job_id=j;
  RETURN jsonb_build_object('version','customer-message-read.v1','jobId',j,'messages',records,'environment','synthetic_demo','realExternalActions',0);
-END
+END;
 END
 $$;
 
@@ -1233,7 +1233,7 @@ BEGIN
   IF EXISTS(SELECT 1 FROM app.work_order w JOIN app.work_order_current c ON(c.tenant_id,c.work_order_id)=(w.tenant_id,w.id) JOIN app.work_order_revision r ON(r.tenant_id,r.id)=(c.tenant_id,c.revision_id) WHERE w.tenant_id=t AND w.job_id=p_job AND r.status<>'ordered') THEN RAISE EXCEPTION 'JOB_NOT_LIVE'; END IF;
  END IF;
  RETURN a;
-END
+END;
 END
 $$;
 
@@ -1571,7 +1571,7 @@ BEGIN
  SELECT jsonb_build_object('id',id,'lockedAt',to_char(locked_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"')) INTO lock FROM app.final_account_lock WHERE tenant_id=t AND job_id=j;
  SELECT coalesce(jsonb_agg(jsonb_build_object('id',l.id,'predecessorJobId',l.predecessor_job_id,'successorJobId',l.successor_job_id,'linkedAt',to_char(l.linked_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"')) ORDER BY l.linked_at,l.id),'[]') INTO links FROM app.job_link l JOIN app.job predecessor ON predecessor.tenant_id=t AND predecessor.id=l.predecessor_job_id JOIN app.job successor ON successor.tenant_id=t AND successor.id=l.successor_job_id WHERE l.tenant_id=t AND (l.predecessor_job_id=j OR l.successor_job_id=j) AND predecessor.practice_session_digest=digest AND successor.practice_session_digest=digest;
  RETURN jsonb_build_object('version','job-work-state-read.v1','jobId',j,'events',events,'links',links,'lock',lock,'environment','synthetic_demo','realExternalActions',0);
-END
+END;
 END
 $$;
 
@@ -1818,7 +1818,7 @@ BEGIN
  RETURN jsonb_build_object('state','completed','lockId',l.id,'runId',b.run_id,'items',items,'postLockItems',post_items,
   'lockedLines',(SELECT coalesce(jsonb_agg(jsonb_build_object('id',fl.id,'kind',fl.line_kind,'scopeItemId',fl.scope_item_id,'description',fl.description) ORDER BY fl.line_kind,fl.description,fl.id),'[]')
    FROM app.final_account_line fl WHERE fl.tenant_id=t AND fl.job_id=j AND fl.final_account_revision_id=l.final_account_revision_id));
-END
+END;
 END
 $$;
 
@@ -1978,7 +1978,7 @@ BEGIN
  SELECT * INTO q FROM infrastructure.final_check_request WHERE tenant_id=t AND job_id=j AND lock_id=l.id AND attempt=next_attempt;
  IF NOT FOUND THEN RAISE EXCEPTION 'FINAL_CHECK_FORBIDDEN' USING ERRCODE='42501'; END IF;
  RETURN jsonb_build_object('version','final-check-run-request.v1','lockId',l.id,'attempt',q.attempt,'manifestId',q.manifest_id,'state','requested','environment','synthetic_demo');
-END
+END;
 END
 $$;
 
@@ -2432,7 +2432,7 @@ BEGIN
  INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,result,actor_membership_id,completed_at)
  VALUES((payload->>'commandId')::uuid,t,'contractor.'||k,payload->>'commandId',request_hash,'succeeded',result,actor,clock_timestamp());
  RETURN result;
-END
+END;
 END
 $$;
 
@@ -2766,7 +2766,7 @@ BEGIN
  ELSE RAISE EXCEPTION 'AUTHORIZATION_INVALID' USING ERRCODE='23514';
  END CASE;
  IF allowed IS DISTINCT FROM true THEN RAISE EXCEPTION 'PERMISSION_DENIED' USING ERRCODE='42501'; END IF;
-END
+END;
 END
 $$;
 
@@ -3231,7 +3231,7 @@ BEGIN
  IF NOT owned OR NOT EXISTS(SELECT 1 FROM app.job_commercial_track WHERE tenant_id=t AND job_id=j AND environment='synthetic_demo' AND job_track='small_builder')
  OR NOT EXISTS(SELECT 1 FROM app.final_check_terms_acceptance WHERE tenant_id=t AND terms_version='synthetic_final_check_terms.v1') THEN RAISE EXCEPTION 'NOT_FOUND'; END IF;
  RETURN j;
-END
+END;
 END
 $$;
 
@@ -3272,7 +3272,7 @@ BEGIN
   RAISE EXCEPTION 'WORK_STATE_FORBIDDEN' USING ERRCODE='42501';
  END;
  RETURN actor;
-END
+END;
 END
 $$;
 
@@ -4107,7 +4107,7 @@ BEGIN
   PERFORM app.accounting_export_audit(t,actor,coalesce(decision,attempt),operation,app.final_lock_hash(v),app.final_lock_hash(result));
  END IF;
  RETURN result;
-END
+END;
 END
 $$;
 
@@ -4182,7 +4182,7 @@ BEGIN
  RETURNING generation INTO g;
  IF g IS NULL THEN RAISE EXCEPTION 'SYNC_CHECKPOINT_STALE'; END IF;
  RETURN g;
-END
+END;
 END
 $$;
 
@@ -4866,7 +4866,7 @@ BEGIN
  PERFORM app.append_final_check_audit(gen_random_uuid(),'membership:'||a.membership_id::text,j,'recovery.billability.'||(p->>'action'),
  jsonb_build_object('commandId',p->>'commandId','caseId',c,'sourceHash',s->'binding'->>'evidenceHash'));
  RETURN jsonb_build_object('replay',document);
-END
+END;
 END
 $$;
 
@@ -5422,7 +5422,7 @@ BEGIN
  INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,result,actor_membership_id,completed_at)
  VALUES(p_command,p_tenant,'customer_credit_note.issue','credit-note:'||p_invoice||':'||number,request_digest,'succeeded',jsonb_build_object('creditNoteId',new_id,'creditNumber',number,'pdfSha256',digest,'totalPence',-gross),p_actor,transaction_timestamp());
  RETURN QUERY SELECT new_id,number,digest,-gross;
-END
+END;
 END
 $$;
 
@@ -5677,7 +5677,7 @@ BEGIN
   VALUES(gen_random_uuid(),t,j,cid,rid,(sources->>'creditId')::uuid,(sources->>'invoiceId')::uuid,final_event,30000);
  END IF;
  RETURN jsonb_build_object('id',rid,'revision',revision,'caseRevision',c.revision,'sourceEventId',final_event,'result',result,'payloadHash',payload_hash,'resultHash',encode(sha256(convert_to(result::text,'UTF8')),'hex'),'actorMembershipId',member,'commandId',cmd,'replayed',false);
-END
+END;
 END
 $$;
 
@@ -5720,7 +5720,7 @@ BEGIN
   IF NOT EXISTS(SELECT 1 FROM app.authenticate_practice_session(d,t) s WHERE s.membership_id=a.membership_id AND s.identity_user_id=a.identity_user_id) THEN RAISE EXCEPTION 'FINAL_CHECK_FORBIDDEN' USING ERRCODE='42501'; END IF;
  END IF;
  RETURN QUERY SELECT a.membership_id::uuid,a.identity_user_id::uuid;
-END
+END;
 END
 $$;
 
@@ -5767,7 +5767,7 @@ BEGIN
  RETURN jsonb_build_object('version','success-fee-availability.v1','jobId',p_job,
   'environment','synthetic_demo','state','dependency_bound',
   'dependency','accepted_attribution_source_adapter','productionEnabled',false,'realExternalActions',0);
-END
+END;
 END
 $$;
 
@@ -5850,7 +5850,7 @@ BEGIN
   'checkId',run.run_id,'checkedAt',to_char(run.available_at,'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),'tracked',tracked,'assessments',assessments,
   'foundComplete',NOT EXISTS(SELECT 1 FROM app.recovery_case_current c WHERE c.tenant_id=t AND c.job_id=j AND c.case_type='missed_variation_final_account'
    AND NOT EXISTS(SELECT 1 FROM app.recovery_attribution_revision r WHERE r.tenant_id=t AND r.job_id=j AND r.case_id=c.id)));
-END
+END;
 END
 $$;
 
