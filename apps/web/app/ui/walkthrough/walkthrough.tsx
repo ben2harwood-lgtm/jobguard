@@ -78,6 +78,10 @@ export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: reado
   const instructionOnly = steps.every(step => step.id.startsWith("core-guide-"));
   const [expanded, setExpanded] = useState(instructionOnly), [holding, setHolding] = useState(false);
   const skip = useRef<(() => void) | null>(null);
+  const currentPlaying = useRef(playing);
+  const lastInput = useRef<number | null>(null);
+  const pointers = useRef(new Set<number>()), touches = useRef(new Set<number>());
+  currentPlaying.current = playing;
   const step = steps[index];
   const stop = () => { action.current?.abort(); setPlaying(false); setHolding(false); };
   const stopKey = (event: React.KeyboardEvent) => { if (event.key === " " || event.key === "Enter") stop(); };
@@ -88,7 +92,40 @@ export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: reado
     reserve();
     const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(reserve);
     if (card.current) observer?.observe(card.current);
-    return () => { observer?.disconnect(); action.current?.abort(); document.body.style.paddingBottom = padding; if (previous instanceof HTMLElement && previous.isConnected) previous.focus(); };
+    function pointer(event: PointerEvent) {
+      if (!event.isTrusted) return;
+      if (event.type === "pointerdown") { lastInput.current = performance.now(); pointers.current.add(event.pointerId); }
+      else pointers.current.delete(event.pointerId);
+    }
+    function touch(event: TouchEvent) {
+      if (!event.isTrusted) return;
+      if (event.type === "touchstart") lastInput.current = performance.now();
+      for (const contact of Array.from(event.changedTouches)) {
+        if (event.type === "touchstart") touches.current.add(contact.identifier);
+        else touches.current.delete(contact.identifier);
+      }
+    }
+    function key(event: KeyboardEvent) { if (event.isTrusted) lastInput.current = performance.now(); }
+    const blur = () => { pointers.current.clear(); touches.current.clear(); };
+    document.addEventListener("pointerdown", pointer, true);
+    document.addEventListener("pointerup", pointer, true);
+    document.addEventListener("pointercancel", pointer, true);
+    document.addEventListener("touchstart", touch, true);
+    document.addEventListener("touchend", touch, true);
+    document.addEventListener("touchcancel", touch, true);
+    document.addEventListener("keydown", key, true);
+    window.addEventListener("blur", blur);
+    return () => {
+      document.removeEventListener("pointerdown", pointer, true);
+      document.removeEventListener("pointerup", pointer, true);
+      document.removeEventListener("pointercancel", pointer, true);
+      document.removeEventListener("touchstart", touch, true);
+      document.removeEventListener("touchend", touch, true);
+      document.removeEventListener("touchcancel", touch, true);
+      document.removeEventListener("keydown", key, true);
+      window.removeEventListener("blur", blur); blur();
+      observer?.disconnect(); action.current?.abort(); document.body.style.paddingBottom = padding; if (previous instanceof HTMLElement && previous.isConnected) previous.focus();
+    };
   }, []);
   useEffect(() => {
     if (!step) return;
@@ -97,6 +134,7 @@ export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: reado
     setDone(false); setError(""); setBox(null);
     card.current?.focus({ preventScroll: true });
     let highlighted: HTMLElement | null = null;
+    let hadHighlight = false;
     function update() {
       const root = visibleTarget(step!.target);
       const target = step!.spotlightTarget?.() ?? (root?.matches("button, input, textarea, select, a[href]") ? root : root?.querySelector<HTMLElement>("textarea, input, select, button, a[href]") ?? root);
@@ -104,7 +142,12 @@ export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: reado
         highlighted?.classList.remove(styles.target!);
         highlighted = target;
         highlighted?.classList.add(styles.target!);
-        if (highlighted && card.current) clearPhoneDock(highlighted, card.current);
+        if (highlighted) {
+          const recentInput = lastInput.current !== null && performance.now() - lastInput.current < 1_000;
+          const manualInput = !running.current && !currentPlaying.current && (recentInput || pointers.current.size > 0 || touches.current.size > 0);
+          if (card.current && (!hadHighlight || !manualInput)) clearPhoneDock(highlighted, card.current);
+          hadHighlight = true;
+        }
       }
       if (target) {
         const rect = target.getBoundingClientRect();

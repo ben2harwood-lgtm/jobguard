@@ -193,3 +193,197 @@ describe("completed autoplay results", () => {
     expect(hooks.setters[6]).not.toHaveBeenCalled(); expect(vi.getTimerCount()).toBe(0);
   });
 });
+
+// Handler/component evidence with explicit trusted-event records, not browser trust proof.
+describe("recent human input and spotlight replacements", () => {
+  function fixture(initialIndex = 0, recentAtEntry = false) {
+    vi.useFakeTimers(); vi.stubGlobal("React", React);
+    let now = 0, target: ReturnType<typeof makeTarget> | null;
+    const makeTarget = (top = 700, left = 25) => ({
+      getClientRects: () => [{}], checkVisibility: () => true, matches: () => true,
+      getBoundingClientRect: () => ({ left, top, bottom: top + 44, width: 100, height: 44 }),
+      classList: { add: vi.fn(), remove: vi.fn() }, scrollIntoView: vi.fn(), focus: vi.fn(),
+    });
+    target = makeTarget();
+    const documentHandlers = new Map<string, (event: unknown) => void>();
+    const windowHandlers = new Map<string, () => void>();
+    const add = vi.fn((name: string, handler: (event: unknown) => void, _capture: boolean) => documentHandlers.set(name, handler));
+    const remove = vi.fn(); const removeWindow = vi.fn(); const scrollBy = vi.fn();
+    let poll!: () => void;
+    vi.stubGlobal("performance", { now: () => now });
+    vi.stubGlobal("navigator", { webdriver: false });
+    vi.stubGlobal("matchMedia", () => ({ matches: false }));
+    vi.stubGlobal("document", {
+      activeElement: null, body: { style: { paddingBottom: "" } },
+      querySelectorAll: () => [], querySelector: () => target,
+      addEventListener: add, removeEventListener: remove,
+    });
+    vi.stubGlobal("HTMLElement", class {});
+    vi.stubGlobal("window", {
+      innerWidth: 390, scrollBy, setTimeout, clearTimeout,
+      setInterval: (update: () => void) => { poll = update; return 1; },
+      addEventListener: (name: string, handler: () => void) => windowHandlers.set(name, handler),
+      removeEventListener: removeWindow,
+    });
+    const refs: { current: unknown }[] = [];
+    let refIndex = 0;
+    const refSpy = vi.spyOn(React, "useRef").mockImplementation((current: unknown) => {
+      const index = refIndex++;
+      return (refs[index] ??= { current });
+    });
+    let complete = false;
+    const autoAction = vi.fn(() => { complete = true; });
+    const steps = [0, 1, 2].map(index => ({ id: `step-${index}`, target: "#root", title: "Read", words: "the saved result", isDone: () => complete, autoAction }));
+    let tree: React.ReactNode;
+    const states: unknown[] = [initialIndex, false, false, false, "", { left: 0, top: 0, width: 1, height: 1 }, false, false, false, false];
+    function render() {
+      refIndex = 0; hooks.effects.length = 0; hooks.setters.length = 0; hooks.states = states;
+      tree = Walkthrough({ steps, onClose: () => {}, initialIndex });
+    }
+    function button(label: string): { onClick: () => void } {
+      function find(node: React.ReactNode): { onClick: () => void } | undefined {
+        for (const child of React.Children.toArray(node)) {
+          if (!React.isValidElement<{ children?: React.ReactNode; onClick: () => void }>(child)) continue;
+          if (child.type === "button" && child.props.children === label) return child.props;
+          const found = find(child.props.children); if (found) return found;
+        }
+      }
+      const found = find(tree); if (!found) throw new Error(`Missing ${label}`); return found;
+    }
+    render();
+    refs[0]!.current = { focus: vi.fn(), getBoundingClientRect: () => ({ top: 600, height: 150 }) };
+    const unmount = hooks.effects[0]!();
+    if (recentAtEntry) documentHandlers.get("keydown")?.({ type: "keydown", isTrusted: true });
+    let cleanSpotlight = hooks.effects[1]!();
+    function replace() { target = makeTarget(720, 35); poll(); return target; }
+    function input(name: string, trusted = true, detail: Record<string, unknown> = {}) {
+      documentHandlers.get(name)?.({ type: name, isTrusted: trusted, pointerId: 1, changedTouches: [{ identifier: 1 }], ...detail });
+    }
+    return {
+      states, refs, add, remove, removeWindow, windowHandlers, scrollBy, button, render, input, replace,
+      poll: () => poll(), time: (value: number) => { now = value; },
+      target: () => target!, clear: () => { target = null; poll(); },
+      enter(index: number) {
+        if (typeof cleanSpotlight === "function") cleanSpotlight();
+        states[0] = index; render(); cleanSpotlight = hooks.effects[1]!();
+      },
+      cleanup() {
+        if (typeof cleanSpotlight === "function") cleanSpotlight();
+        if (typeof unmount === "function") unmount();
+        refSpy.mockRestore();
+      },
+    };
+  }
+  it("manual re-target after trusted input keeps the phone still; Show me and step start still clear", async () => {
+    const f = fixture();
+    try {
+      expect(f.scrollBy).toHaveBeenCalledOnce();
+      f.input("keydown");
+      const old = f.target(); const replacement = f.replace();
+      // This is the behavioural old-code failure, even if no input listener is registered.
+      expect(replacement.scrollIntoView).not.toHaveBeenCalled();
+      expect(f.scrollBy).toHaveBeenCalledOnce();
+      expect(old.classList.remove).toHaveBeenCalled(); expect(replacement.classList.add).toHaveBeenCalled();
+      expect(hooks.setters[5]).toHaveBeenLastCalledWith({ left: 35, top: 720, width: 100, height: 44 });
+      expect(hooks.setters[3]).toHaveBeenLastCalledWith(false);
+      f.button("I'll do it").onClick(); expect(hooks.setters[7]).toHaveBeenCalledWith(true);
+      expect(replacement.focus).toHaveBeenCalledOnce();
+      f.states[7] = true; f.render(); f.replace(); expect(f.scrollBy).toHaveBeenCalledOnce();
+      f.clear(); f.replace(); expect(f.scrollBy).toHaveBeenCalledOnce();
+      f.button("Show me").onClick();
+      expect(f.refs[2]!.current).toBe(true); expect(hooks.setters[2]).toHaveBeenCalledWith(true);
+      f.replace(); expect(f.scrollBy).toHaveBeenCalledTimes(2);
+      (f.refs[1]!.current as AbortController).abort(); await vi.advanceTimersByTimeAsync(0);
+      f.input("keydown"); f.enter(1);
+      expect(f.scrollBy).toHaveBeenCalledTimes(3);
+      f.poll(); f.windowHandlers.get("scroll")!(); f.windowHandlers.get("resize")!();
+      expect(f.scrollBy).toHaveBeenCalledTimes(3);
+      f.button("Back").onClick();
+      expect(hooks.setters[7]).toHaveBeenCalledWith(false);
+      expect(hooks.setters[1]).toHaveBeenCalledWith(false);
+      f.enter(0); expect(f.scrollBy).toHaveBeenCalledTimes(4);
+      f.enter(2); expect(f.scrollBy).toHaveBeenCalledTimes(5);
+    } finally { f.cleanup(); }
+  });
+  it.each(["pointerdown", "touchstart", "keydown"])("accepts only trusted %s; exact expiry never defers a skipped target", type => {
+    const f = fixture();
+    try {
+      f.input(type, false); f.time(2000); f.replace(); expect(f.scrollBy).toHaveBeenCalledTimes(2);
+      f.input(type); f.input("pointerup"); f.input("touchend");
+      f.time(2999); const skipped = f.replace(); expect(f.scrollBy).toHaveBeenCalledTimes(2);
+      f.time(3000); f.poll(); expect(skipped.scrollIntoView).not.toHaveBeenCalled();
+      f.replace(); expect(f.scrollBy).toHaveBeenCalledTimes(3);
+    } finally { f.cleanup(); }
+  });
+  it.each([
+    ["pointerdown", "pointerup", "pointercancel"], ["touchstart", "touchend", "touchcancel"],
+  ])("retains multiple %s contacts past expiry until trusted release/cancel or blur", (start, end, cancel) => {
+    const f = fixture();
+    const contact = (id: number) => ({ pointerId: id, changedTouches: [{ identifier: id }] });
+    try {
+      f.input(start, true, contact(1)); f.input(start, true, contact(2)); f.time(2000);
+      f.input(end, false, contact(1)); f.input(cancel, false, contact(2));
+      f.replace(); expect(f.scrollBy).toHaveBeenCalledOnce();
+      f.input(end, true, contact(1)); f.replace(); expect(f.scrollBy).toHaveBeenCalledOnce();
+      f.input(cancel, true, contact(2)); f.poll(); expect(f.scrollBy).toHaveBeenCalledOnce();
+      f.replace(); expect(f.scrollBy).toHaveBeenCalledTimes(2);
+      f.input(start, true); f.time(4000); f.replace(); expect(f.scrollBy).toHaveBeenCalledTimes(2);
+      f.windowHandlers.get("blur")!(); f.poll(); expect(f.scrollBy).toHaveBeenCalledTimes(2);
+      f.replace(); expect(f.scrollBy).toHaveBeenCalledTimes(3);
+      // Both native event streams must finish without a stale contact.
+      f.input("pointerdown"); f.input("touchstart"); f.time(6000);
+      f.input("pointercancel"); f.replace(); expect(f.scrollBy).toHaveBeenCalledTimes(3);
+      f.input("touchcancel"); f.replace(); expect(f.scrollBy).toHaveBeenCalledTimes(4);
+    } finally { f.cleanup(); }
+  });
+  it("reads current Play state in the existing poll and clears throughout the reading hold", async () => {
+    const f = fixture();
+    try {
+      f.input("keydown"); f.button("Play the whole thing").onClick();
+      expect(hooks.setters[1]).toHaveBeenCalledWith(true);
+      f.states[1] = true; f.render();
+      // Poll predates Play's render and action; it must see current playing.
+      f.replace(); expect(f.scrollBy).toHaveBeenCalledTimes(2);
+      hooks.effects[3]!();
+      expect(f.refs[2]!.current).toBe(true);
+      f.replace(); expect(f.scrollBy).toHaveBeenCalledTimes(3);
+      await vi.advanceTimersByTimeAsync(650);
+      expect(hooks.setters[9]).toHaveBeenCalledWith(true);
+      expect(f.refs[2]!.current).toBe(true);
+      expect(hooks.setters[2]).not.toHaveBeenCalledWith(false);
+      f.replace(); expect(f.scrollBy).toHaveBeenCalledTimes(4);
+      const actionSetters = [...hooks.setters];
+      f.states[9] = true; f.render(); f.button("Next").onClick();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(actionSetters[7]).toHaveBeenCalledWith(false);
+      expect(actionSetters[0]).toHaveBeenCalled();
+      expect(f.refs[2]!.current).toBe(false);
+      f.states[1] = false; f.render(); f.input("keydown"); f.replace();
+      expect(f.scrollBy).toHaveBeenCalledTimes(4);
+    } finally { (f.refs[1]!.current as AbortController | null)?.abort(); f.cleanup(); }
+  });
+  it("registers and removes every native capture listener and the blur listener", () => {
+    const f = fixture(); f.cleanup();
+    const names = ["pointerdown", "pointerup", "pointercancel", "touchstart", "touchend", "touchcancel", "keydown"];
+    expect(f.add.mock.calls.map(call => call[0]).sort()).toEqual(names.sort());
+    for (const call of f.add.mock.calls) {
+      expect(call[2]).toBe(true);
+      expect(f.remove).toHaveBeenCalledWith(...call);
+    }
+    expect(f.removeWindow).toHaveBeenCalledWith("blur", f.windowHandlers.get("blur"));
+  });
+
+  it("clears a resumed step's first highlight despite trusted input before highlighting", () => {
+    const f = fixture(1, true);
+    try {
+      // Separate root scroll and first dock-clearance attempt both remain.
+      expect(f.target().scrollIntoView).toHaveBeenCalledTimes(2);
+      expect(f.scrollBy).toHaveBeenCalledOnce();
+      const replacement = f.replace();
+      expect(replacement.scrollIntoView).not.toHaveBeenCalled();
+      f.poll(); f.windowHandlers.get("resize")!();
+      expect(f.scrollBy).toHaveBeenCalledOnce();
+    } finally { f.cleanup(); }
+  });
+
+});
