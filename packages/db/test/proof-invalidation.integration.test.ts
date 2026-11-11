@@ -49,6 +49,10 @@ async function prepared() {
   return { job, evidenceId, completion, invalidation };
 }
 
+// The first proof serialization lock a transaction requests: the job-proof
+// advisory lock (0943), or the upload row lock where that lock is absent.
+const firstProofLock = (sql: string) => sql.includes("'job-proof:'") || sql.includes("FOR UPDATE OF u");
+
 async function expectBlocked(waiter: number, holder: number) {
   await vi.waitFor(async () => {
     const row = (await h.admin.query<{ blockers: number[] }>("SELECT pg_blocking_pids($1) AS blockers", [waiter])).rows[0]!;
@@ -71,8 +75,10 @@ describe("proof invalidation PostgreSQL regressions", () => {
         holder = pid; eligible.resolve(); await resume.promise;
       }
     });
+    // The job-proof advisory lock is the first lock invalidation takes; it now
+    // serializes this race before the upload row lock, so observe that wait.
     const invalidationPool = instrument(async () => {}, (sql, pid) => {
-      if (sql.includes("FOR UPDATE OF u")) { waiter = pid; lockAttempted.resolve(); }
+      if (firstProofLock(sql)) { waiter = pid; lockAttempted.resolve(); }
     });
     const completing = new ProofCommandService(completionPool, h.storage).complete(h.ctx, p.completion);
     await eligible.promise;
@@ -96,8 +102,9 @@ describe("proof invalidation PostgreSQL regressions", () => {
     const storageSpy = vi.spyOn(h.storage, "readExactVersion").mockImplementationOnce(async (key, version) => {
       storageRead.resolve(); await resumeStorage.promise; return read(key, version);
     });
+    // Completion's second transaction first waits on the job-proof advisory lock.
     const completionPool = instrument(async () => {}, (sql, pid) => {
-      if (sql.includes("FOR UPDATE OF u")) { waiter = pid; lockAttempted.resolve(); }
+      if (firstProofLock(sql)) { waiter = pid; lockAttempted.resolve(); }
     });
     const invalidationPool = instrument(async (sql, pid) => {
       if (sql.startsWith("INSERT INTO app.evidence_invalidation")) { holder = pid; inserted.resolve(); await resumeInvalidation.promise; }

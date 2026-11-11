@@ -21,7 +21,36 @@ END $$;
 ALTER FUNCTION app.job_proof_session_digest() OWNER TO jobguard_binding_owner;
 REVOKE ALL ON FUNCTION app.job_proof_session_digest() FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure;
 GRANT EXECUTE ON FUNCTION app.job_proof_session_digest() TO jobguard_migration;
+-- Credential kind only; no binding means a legacy/unbound caller, never practice.
+CREATE FUNCTION app.job_proof_practice_bound() RETURNS boolean
+ LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE b control_plane.request_binding;
+BEGIN
+ b:=app.lp6_bound_request();
+ RETURN b.credential_kind='practice';
+EXCEPTION WHEN insufficient_privilege THEN
+ IF SQLERRM='REQUEST_BINDING_REFUSED' THEN RETURN false; END IF;
+ RAISE;
+END $$;
+ALTER FUNCTION app.job_proof_practice_bound() OWNER TO jobguard_binding_owner;
+REVOKE ALL ON FUNCTION app.job_proof_practice_bound() FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure;
+GRANT EXECUTE ON FUNCTION app.job_proof_practice_bound() TO jobguard_migration;
 REVOKE CREATE ON SCHEMA app FROM jobguard_binding_owner;
+
+-- The synthetic original is FORCE RLS and admits only the runtime role, so the
+-- migration-owned proof guards read it through this one exact-match probe. It
+-- runs under the existing tenant_isolation policy and repeats its tenant
+-- predicate; it returns only a boolean and is executable by the guards' owner.
+CREATE FUNCTION app.job_proof_original_intact(t uuid,j uuid,s uuid,u uuid,k text,v text,h text,n bigint) RETURNS boolean
+ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+ SELECT t IS NOT DISTINCT FROM nullif(pg_catalog.current_setting('app.tenant_id',true),'')::uuid
+  AND EXISTS(SELECT 1 FROM app.synthetic_evidence_original o
+   WHERE (o.tenant_id,o.job_id,o.scope_item_id,o.upload_id,o.object_key,o.object_version_id)=(t,j,s,u,k,v)
+    AND pg_catalog.encode(pg_catalog.sha256(o.bytes),'hex')=h AND pg_catalog.octet_length(o.bytes)=n)
+$$;
+ALTER FUNCTION app.job_proof_original_intact(uuid,uuid,uuid,uuid,text,text,text,bigint) OWNER TO jobguard_runtime;
+REVOKE ALL ON FUNCTION app.job_proof_original_intact(uuid,uuid,uuid,uuid,text,text,text,bigint) FROM PUBLIC,jobguard_identity,jobguard_infrastructure;
+GRANT EXECUTE ON FUNCTION app.job_proof_original_intact(uuid,uuid,uuid,uuid,text,text,text,bigint) TO jobguard_migration;
 
 CREATE FUNCTION app.job_proof_authority(j uuid,locking boolean DEFAULT false) RETURNS void
  LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
@@ -129,6 +158,12 @@ DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid;
 BEGIN
  -- NULL is the internal presence probe, after all object signatures were checked.
  IF j IS NULL AND r IS NULL THEN RETURN 'true'::jsonb; END IF;
+ -- Firm/job authority comes before any read. A practice credential must own the
+ -- job (another blank firm sharing the tenant gets NOT_FOUND); any other caller
+ -- never reaches a practice-owned job through the legacy path.
+ IF app.job_proof_practice_bound() THEN PERFORM app.job_proof_authority(j,false);
+ ELSIF EXISTS(SELECT 1 FROM app.job WHERE tenant_id=t AND id=j AND practice_session_digest IS NOT NULL)
+ THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='42501'; END IF;
  IF EXISTS(SELECT 1 FROM app.job_proof_statement WHERE tenant_id=t AND job_id=j)
   OR EXISTS(SELECT 1 FROM app.final_account_proof_statement WHERE tenant_id=t AND job_id=j AND revision_id=r)
  THEN RETURN app.read_job_proof_statement(j,r); END IF;
@@ -260,9 +295,7 @@ BEGIN
     AND obj.evidence_type=requirement->>'requiredEvidenceType' AND obj.kind='original' AND u.state='verified' AND u.object_version_id=obj.object_version_id
     AND NOT EXISTS(SELECT 1 FROM app.evidence_invalidation i WHERE i.tenant_id=t AND i.evidence_id=obj.id);
   IF e.id IS NULL OR NEW.scope_item_id IS DISTINCT FROM anchor OR NEW.stage IS DISTINCT FROM requirement->>'stage'
-   OR NOT EXISTS(SELECT 1 FROM app.synthetic_evidence_original original
-    WHERE(original.tenant_id,original.job_id,original.scope_item_id,original.upload_id,original.object_key,original.object_version_id)=(e.tenant_id,e.job_id,e.scope_item_id,e.upload_id,e.object_key,e.object_version_id)
-     AND encode(sha256(original.bytes),'hex')=e.sha256 AND octet_length(original.bytes)=e.byte_length)
+   OR NOT app.job_proof_original_intact(e.tenant_id,e.job_id,e.scope_item_id,e.upload_id,e.object_key,e.object_version_id,e.sha256,e.byte_length)
   THEN RAISE EXCEPTION 'PROOF_NOT_FINAL' USING ERRCODE='23514'; END IF;
  END IF;
  RETURN NEW;
@@ -296,7 +329,7 @@ BEGIN
    AND p.mandatory AND e.kind='original' AND e.scope_item_id=anchor AND e.evidence_type=requirement->>'requiredEvidenceType'
    AND c.stage=requirement->>'stage' AND u.state='verified' AND u.object_version_id=e.object_version_id
    AND NOT EXISTS(SELECT 1 FROM app.evidence_invalidation i WHERE i.tenant_id=e.tenant_id AND i.evidence_id=e.id)
-   AND EXISTS(SELECT 1 FROM app.synthetic_evidence_original original WHERE (original.tenant_id,original.job_id,original.scope_item_id,original.upload_id,original.object_key,original.object_version_id)=(e.tenant_id,e.job_id,e.scope_item_id,e.upload_id,e.object_key,e.object_version_id) AND encode(sha256(original.bytes),'hex')=e.sha256 AND octet_length(original.bytes)=e.byte_length)
+   AND app.job_proof_original_intact(e.tenant_id,e.job_id,e.scope_item_id,e.upload_id,e.object_key,e.object_version_id,e.sha256,e.byte_length)
    AND NOT EXISTS(SELECT 1 FROM app.stage_review_event rv WHERE rv.tenant_id=c.tenant_id AND rv.stage_completion_id=c.id)
    AND NOT EXISTS(SELECT 1 FROM app.stage_completion newer WHERE newer.tenant_id=c.tenant_id AND newer.supersedes_completion_id=c.id)
  ) THEN RAISE EXCEPTION 'FINAL_ACCOUNT_SOURCE_CHANGED' USING ERRCODE='23514'; END IF;

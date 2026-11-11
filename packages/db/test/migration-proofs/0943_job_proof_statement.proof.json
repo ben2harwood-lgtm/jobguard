@@ -103,6 +103,82 @@
       }
     },
     {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.job_proof_practice_bound()|jobguard_binding_owner",
+        "group": "a-real-gap-proof-by-trade"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.job_proof_practice_bound()|jobguard_migration|EXECUTE|-",
+        "group": "a-real-gap-proof-by-trade"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.job_proof_practice_bound()",
+        "owner": "jobguard_binding_owner",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_migration"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.lp6_bound_request"
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.job_proof_original_intact(uuid,uuid,uuid,uuid,text,text,text,bigint)|jobguard_runtime",
+        "group": "a-real-gap-proof-by-trade"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.job_proof_original_intact(uuid,uuid,uuid,uuid,text,text,text,bigint)|jobguard_migration|EXECUTE|-",
+        "group": "a-real-gap-proof-by-trade"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.job_proof_original_intact(uuid,uuid,uuid,uuid,text,text,text,bigint)",
+        "owner": "jobguard_runtime",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_migration"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": []
+      }
+    },
+    {
       "section": "routines",
       "before": null,
       "after": {
@@ -194,6 +270,8 @@
         "definitionSha256": null,
         "staticWrites": [],
         "staticCalls": [
+          "app.job_proof_authority",
+          "app.job_proof_practice_bound",
           "app.read_job_proof_statement"
         ]
       }
@@ -282,7 +360,9 @@
         "otherExecute": [],
         "definitionSha256": null,
         "staticWrites": [],
-        "staticCalls": []
+        "staticCalls": [
+          "app.job_proof_original_intact"
+        ]
       }
     },
     {
@@ -302,7 +382,8 @@
         "definitionSha256": null,
         "staticWrites": [],
         "staticCalls": [
-          "app.final_lock_canonical"
+          "app.final_lock_canonical",
+          "app.job_proof_original_intact"
         ]
       }
     },
@@ -514,6 +595,36 @@
         "args": "",
         "proowner": "jobguard_binding_owner",
         "proacl": "{jobguard_binding_owner=X/jobguard_binding_owner,jobguard_migration=X/jobguard_binding_owner}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "job_proof_practice_bound",
+        "args": "",
+        "proowner": "jobguard_binding_owner",
+        "proacl": "{jobguard_binding_owner=X/jobguard_binding_owner,jobguard_migration=X/jobguard_binding_owner}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "job_proof_original_intact",
+        "args": "t uuid, j uuid, s uuid, u uuid, k text, v text, h text, n bigint",
+        "proowner": "jobguard_runtime",
+        "proacl": "{jobguard_runtime=X/jobguard_runtime,jobguard_migration=X/jobguard_runtime}",
         "prosecdef": true,
         "proconfig": [
           "search_path=pg_catalog, pg_temp"

@@ -7,6 +7,20 @@ import { startBlankPracticeCompany } from "../src/blank-practice-company.js";
 import { authenticatePracticeSession } from "../src/practice-session.js";
 import { seedHomeOwner } from "./contractor-practice-session-fixtures.js";
 import { DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID } from "../src/demo-seed.js";
+import { workTenant } from "./job-work-state-fixtures.js";
+
+// Main's work-state helpers: the expected revision is the job's current event head
+// (site evidence may already have appended events), and an owner-only historical
+// upload is a bound-membership import fixture, as in job-work-state-fixtures.insertPhoto.
+async function workRevision(admin: Parameters<typeof workTenant>[0], tenant: string, job: string) {
+ return Number((await admin.query("SELECT coalesce(max(sequence),0) revision FROM app.job_work_state_event WHERE tenant_id=$1 AND job_id=$2",[tenant,job])).rows[0]!.revision);
+}
+async function historicalUpload(admin: Parameters<typeof workTenant>[0], tenant: string, member: string, values: unknown[]) {
+ await workTenant(admin, tenant, async db => {
+  await db.query("SET LOCAL session_replication_role='replica'");
+  await db.query("INSERT INTO app.evidence_upload(id,tenant_id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at) VALUES($1,$2,$3,$4,$5,$6,'image/png',100,'standard_evidence',clock_timestamp()+interval '1 day')", values);
+ }, { membershipId: member });
+}
 
 // Same transaction-bound, exact-shape permit used by practice-session tests.
 async function insertPracticeJob(client: { query: (sql: string, values?: unknown[]) => Promise<unknown> }, owner: Awaited<ReturnType<typeof authenticatePracticeSession>>, job: string, title: string, status: string) {
@@ -146,7 +160,7 @@ describe("explicit job proof statements", () => {
  });
  it("a legacy upload stays usable and freezes a later answer", async () => {
   const job=await h.live(),scope=await h.pre.scope(job);
-  await h.admin.query(`INSERT INTO app.evidence_upload(id,tenant_id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at) VALUES($1,$2,$3,$4,'historical/original',$5,'image/png',100,'standard_evidence',clock_timestamp()+interval '1 day')`,[randomUUID(),h.tenant,job,scope,createHash("sha256").update("fictional").digest("hex")]);
+  await historicalUpload(h.admin,h.tenant,h.member,[randomUUID(),h.tenant,job,scope,"historical/original",createHash("sha256").update("fictional").digest("hex")]);
   expect(await read(job)).toMatchObject({statement:null,canChange:false,requiredEvidenceType:"electrical_certificate",blockage:null});
   await expect(answer(job,false)).rejects.toThrow("PROOF_STATEMENT_FROZEN");
  });
@@ -243,7 +257,7 @@ it("No requires verified completion photo; absent statement preserves legacy has
   expect(invalidated.sourceHash).toBe(createHash("sha256").update(JSON.stringify({source:invalidated.canonicalSource,proofInvalidations:invalidations})).digest("hex"));
   expect(invalidated.sourceHash).not.toBe(first.sourceHash);
   const lockedAccount=await assemble(locked);
-  await new JobWorkStateRepository(c.runtime).finish(locked.context,locked.jobId,locked.actorId,{version:"job-work-state-command.v1",commandId:randomUUID(),action:"finish",expectedRevision:0});
+  await new JobWorkStateRepository(c.runtime).finish(locked.context,locked.jobId,locked.actorId,{version:"job-work-state-command.v1",commandId:randomUUID(),action:"finish",expectedRevision:await workRevision(c.admin,locked.tenantId,locked.jobId)});
   await locks.acceptTerms(locked.context,{actorMembershipId:locked.actorId,commandId:randomUUID(),termsVersion:"synthetic_final_check_terms.v1"});
   await locks.disposition(locked.context,{jobId:locked.jobId,actorMembershipId:locked.actorId,commandId:randomUUID(),scopeItemId:locked.scopeId,disposition:"done"});
   const lockInput={jobId:locked.jobId,actorMembershipId:locked.actorId,commandId:randomUUID(),finalAccountRevisionId:lockedAccount.id,expectedRevision:lockedAccount.revision,declarationVersion:"final_account_declaration.v1" as const};
@@ -420,7 +434,7 @@ async function lockablePhotoAccount() {
  const job=await h.live(),a=await ownedAccount(job),statementCommand=randomUUID(),saved=await answer(job,false,statementCommand),proof=await finish(job,false);
  const account=await a.assembly.assemble(h.ctx,a.command()),locks=new FinalAccountLockRepository(h.runtime);
  expect(account.issueBlocked).toBe(false);
- await new JobWorkStateRepository(h.runtime).finish(h.ctx,job,practice.digest,{version:"job-work-state-command.v1",commandId:randomUUID(),action:"finish",expectedRevision:0});
+ await new JobWorkStateRepository(h.runtime).finish(h.ctx,job,practice.digest,{version:"job-work-state-command.v1",commandId:randomUUID(),action:"finish",expectedRevision:await workRevision(h.admin,h.tenant,job)});
  await locks.acceptTerms(h.ctx,{actorMembershipId:h.member,commandId:randomUUID(),termsVersion:"synthetic_final_check_terms.v1"});
  await locks.disposition(h.ctx,{jobId:job,actorMembershipId:h.member,commandId:randomUUID(),scopeItemId:a.scope,disposition:"done"});
  const input={jobId:job,actorMembershipId:h.member,commandId:randomUUID(),finalAccountRevisionId:account.id,expectedRevision:account.revision,declarationVersion:"final_account_declaration.v1" as const};
@@ -469,6 +483,6 @@ it("statement IDs conflict with evidence IDs in both directions, including histo
  const orphan=randomUUID();
  await expect(withTenant(h.runtime,h.ctx,db=>db.$client.query("INSERT INTO app.watchdog_command_identity(tenant_id,command_id,job_id,command_type,request_hash) VALUES($1,$2,$3,'proof.statement',$4)",[h.tenant,orphan,statementJob,"a".repeat(64)]))).rejects.toThrow("PROOF_STATEMENT_RECEIPT_INVALID");
  const historical=randomUUID(),scope=await h.pre.scope(uploadJob);
- await h.admin.query("INSERT INTO app.evidence_upload(id,tenant_id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at) VALUES($1,$2,$3,$4,$5,$6,'image/png',100,'standard_evidence',clock_timestamp()+interval '1 day')",[historical,h.tenant,uploadJob,scope,`fictional/${historical}`,h.pngHash]);
+ await historicalUpload(h.admin,h.tenant,h.member,[historical,h.tenant,uploadJob,scope,`fictional/${historical}`,h.pngHash]);
  await expect(answer(await h.live(),false,historical)).rejects.toThrow("IDEMPOTENCY_CONFLICT");
 });
