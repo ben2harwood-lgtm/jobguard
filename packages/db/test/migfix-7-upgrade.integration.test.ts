@@ -97,6 +97,8 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   // Exact existing replacements only; all their privileges and unrelated definitions remain frozen.
   const fullBodies = new Map<string, string>();
   for (const [identity, migration, overload = 0] of [
+    ["app.cb_delivery(p_session uuid, p_job uuid, p_command uuid, p_payload jsonb)", "0727_billing_export_delivery_once.sql"],
+    ["app.cb_csv_cell(v text)", "0727_billing_export_delivery_once.sql"],
     ["identity.extra_customer_approval(t uuid, j uuid, c uuid, digest text, input jsonb)", "0725_lp6c_client_extra_decision.sql"],
     ["app.current_actor()", "0724_lp6c_customer_portal_delegation.sql"],
     ["app.current_tenant()", "0724_lp6c_customer_portal_delegation.sql"],
@@ -117,7 +119,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.request_practice_final_check_on_lock()", "0698_final_check_post_invoice_rerun.sql"],
     ["app.verify_final_check_run(p_tenant uuid, p_job uuid, p_run uuid, p_lock uuid, p_cutoff timestamp with time zone)", "0698_final_check_post_invoice_rerun.sql"],
     ["app.lp5_command_result(p_command_id uuid, p_outcome jsonb)", "0634_extra_proceed_statement.sql"],
-    ["app.xa_approve(p_job uuid, p_request uuid, p_command uuid, p_actor uuid, p_step integer, p_hash text, p_net bigint, p_reject boolean, p_reason text)", "0635_extra_same_step.sql"],
+    ["app.xa_approve(p_job uuid, p_request uuid, p_command uuid, p_actor uuid, p_step integer, p_hash text, p_net bigint, p_reject boolean, p_reason text)", "0728_extra_reject_null_step.sql"],
     ["app.xa_withdraw(p_job uuid, p_variation uuid, p_command uuid, p_actor uuid, p_reason text)", "0636_extra_withdraw_roles.sql"],
     ["app.lp5b_contractor_permission(p_type text, p_actor uuid, p_job uuid, p_input jsonb)", "0722_abandoned_visit_authority.sql"],
     ["app.xa_requirement(p_rules jsonb, p_net bigint)", "0637_extra_working_day_wait.sql"],
