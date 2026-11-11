@@ -6855,6 +6855,22 @@ DO $revoke$ DECLARE r record; BEGIN
  END LOOP;
 END $revoke$;
 
+-- The outbox worker's per-send issuer check (outbox.ts), with no request actor: the authorizing
+-- ISSUER of this tenant's own client-approval send must still hold send authority. Migration-owned
+-- definer over the private issuer chain; it derives the issuer and extra itself and returns only
+-- a boolean. Moves to LP-10 worker binding later.
+CREATE FUNCTION app.lp6d_outbox_issuer_authority(p_action uuid) RETURNS boolean
+ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog AS $$
+ SELECT coalesce((SELECT app.lp6d_xc_send_authority(a.actor_membership_id,k.variation_id)
+  FROM app.action_outbox o JOIN app.action_authorization a ON(a.tenant_id,a.id)=(o.tenant_id,o.authorization_id)
+  JOIN app.extra_client_link k ON(k.tenant_id,k.outbox_action_id)=(o.tenant_id,o.id)
+  WHERE o.tenant_id=nullif(current_setting('app.tenant_id',true),'')::uuid AND o.id=p_action
+   AND o.action_type='extra.client_approval_request.send' LIMIT 1),false)
+$$;
+ALTER FUNCTION app.lp6d_outbox_issuer_authority(uuid) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp6d_outbox_issuer_authority(uuid) FROM PUBLIC,jobguard_identity,jobguard_infrastructure;
+GRANT EXECUTE ON FUNCTION app.lp6d_outbox_issuer_authority(uuid) TO jobguard_runtime;
+
 -- Latest body: packages/db/migrations/0686_extra_client_authority_loss.sql. The outbox worker runs
 -- this under the queued job's unbound context to check the ISSUER's current send authority (a third
 -- party, never the caller), so it uses the private link-current chain; it has no other change.

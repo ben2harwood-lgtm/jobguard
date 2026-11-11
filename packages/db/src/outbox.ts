@@ -76,7 +76,8 @@ export class ActionExecutor {
         const authority = await db.$client.query<{ allowed: boolean }>(`SELECT EXISTS(
           SELECT 1 FROM app.extra_client_link k WHERE k.tenant_id=$1 AND k.outbox_action_id=$2
             AND CASE WHEN app.xc_cancel_authority_loss($2) THEN false
-              ELSE app.xc_send_authority($3,k.variation_id) END) AS allowed`, [context.tenantId, id, r.authorization_actor]);
+              ELSE app.lp6d_outbox_issuer_authority($2) END) AS allowed`, [context.tenantId, id]);
+        // LP-6d: the issuer is a third party (no request actor), so the worker asks the private issuer chain.
         if (authority.rows[0]?.allowed !== true) return;
       }
       if (!(await commercialOutboundClaimsEnabled(db))) return;

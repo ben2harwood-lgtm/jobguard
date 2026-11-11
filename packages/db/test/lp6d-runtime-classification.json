@@ -130,6 +130,7 @@
   "app.lp6_delegated_actor(uuid,text,uuid)": "Private LP-6c approved delegation reader; body unchanged",
   "app.lp6_session_authority(text,text,uuid)": "Private to the recorded owner/service roles: 0658_lp6b_effective_session_actor.sql; runtime has no EXECUTE",
   "app.lp6d_lock_action_authorization(uuid,uuid,boolean)": "LP-6d lock-only helper: FOR SHARE/UPDATE on one authorization of the transaction's own tenant, so runtime keeps no UPDATE grant; no read result, no write",
+  "app.lp6d_outbox_issuer_authority(uuid)": "LP-6d worker issuer check (moves to LP-10): boolean send authority of the tenant's own outbox action issuer via the private chain",
   "app.lp6d_record_visit_refusal(uuid,uuid,uuid,uuid,uuid,text,text,uuid)": "LP-6d refusal-only audit writer (router ruling r9): fixed ENT-3b refusal event via append_audit; no business read or write",
   "app.lp6d_refused_contractor_principal(uuid)": "LP-6d refusal-only lookup: names a live session's base principal only when it can no longer be bound; no binding or business read",
   "app.lp6d_request_bound()": "LP-6d boolean probe used only where a Ben-ruled LP-6b skip stays open (read-only integrity GET, holder ending own session); reads no business row",

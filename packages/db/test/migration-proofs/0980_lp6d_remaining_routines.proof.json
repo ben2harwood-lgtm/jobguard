@@ -6188,6 +6188,22 @@
       }
     },
     {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.lp6d_outbox_issuer_authority(uuid)|jobguard_migration",
+        "group": "a-lp6d-routine-binding"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.lp6d_outbox_issuer_authority(uuid)|jobguard_runtime|EXECUTE|-",
+        "group": "a-lp6d-routine-binding"
+      }
+    },
+    {
       "section": "routines",
       "before": null,
       "after": {
@@ -7305,6 +7321,21 @@
         "args": "p_actor uuid, p_extra uuid",
         "proowner": "jobguard_migration",
         "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp6d_outbox_issuer_authority",
+        "args": "p_action uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
         "prosecdef": true,
         "proconfig": [
           "search_path=pg_catalog"

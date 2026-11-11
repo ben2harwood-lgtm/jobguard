@@ -22,6 +22,7 @@
         "packages/db/src/fee-illustration-repository.ts",
         "packages/db/src/job-scheduling-repository.ts",
         "packages/db/src/northside-demo.ts",
+        "packages/db/src/outbox.ts",
         "packages/db/src/payment-fee-collection-repository.test.ts",
         "packages/db/src/payment-fee-collection-repository.ts",
         "packages/db/src/practice-worker-switch-repository.ts",
