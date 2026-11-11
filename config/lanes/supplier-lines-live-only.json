@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "lanes": {
+    "supplier-lines-live-only": {
+      "branches": [
+        "codex/sandbox/supplier-lines-live-only"
+      ],
+      "allow": [
+        "apps/web/app/api/jobs/[id]/supplier-lines/route.ts",
+        "apps/web/app/api/jobs/[id]/supplier-lines/route.test.ts",
+        "apps/web/e2e/m2-lines-review.spec.ts",
+        "packages/core/src/watchdog.ts",
+        "packages/db/test/watchdog-command-harness.ts",
+        "packages/db/test/command-replay-contract.integration.test.ts"
+      ],
+      "note": "Self-contained supplier-lines live-only follow-up. PostgreSQL and browser checks require CI."
+    }
+  }
+}
