@@ -778,3 +778,8 @@ Merged current origin/main (LP-6c landed, 0726-0728). 0980 keeps its number.
 - CH4: a UUID digest is the trusted membership ID (as in the body), not a contractor session.
   Practice-digest guards let an unauthenticated digest reach the body's own refusal code;
   an authenticated digest must still be the bound actor.
+
+Repair 8 whole db at 079f752b (origin/main e3dac41b merged; run.sh WHOLE, 2 workers):
+122 failed | 806 passed files; 330 failed | 7717 passed tests (r7: 165 files / 640 tests;
+after merging main, before r8 fixes: 167 / 647). NOT READY. Fail list and log:
+~/.local/share/full-steam/coordinator/prechecks/lp-6d-remaining-routines-r8-079f752b-whole-*.
