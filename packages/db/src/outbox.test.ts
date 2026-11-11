@@ -1,4 +1,4 @@
-import { fakeAuditAppend } from "./audit-protocol-test-fixture.js";
+import { fakeAuditAppend, fakeOutboxAuditProbe } from "./audit-protocol-test-fixture.js";
 import { createHash, createHmac } from "node:crypto";
 import type { Pool } from "pg";
 import { describe, expect, it, vi } from "vitest";
@@ -95,6 +95,8 @@ describe("ActionExecutor retry exhaustion", () => {
       status: "retryable",
     };
     const query = vi.fn(async (sql: string, _values?: unknown[]) => {
+      const probe = fakeOutboxAuditProbe(sql);
+      if (probe) return probe;
       if (sql.includes("FROM app.append_audit(")) return { rows: fakeAuditAppend(String(_values?.[0]), context.tenantId) };
       if (sql.startsWith("SELECT nullif(current_setting")) return { rows: [{ tenant_id: context.tenantId }] };
       if (sql === "SELECT sequence::text, event_hash FROM app.lock_audit_head()") return { rows: [] };
@@ -143,6 +145,8 @@ it.each([true, false, undefined, "unavailable"] as const)("ENT-5 checks client s
   const row={adapter:"fake_email",action_type:"extra.client_approval_request.send",authorization_actor:"40000000-0000-4000-8000-000000000004",
     status:"pending",created_at:"2026-01-01T00:00:00Z",authorization_expires_at:"2099-01-01T00:00:00Z"};
   const query=vi.fn(async(sql:string, values?: unknown[])=>{
+    const probe = fakeOutboxAuditProbe(sql);
+    if (probe) return probe;
     if(sql.includes("FROM app.append_audit("))return {rows:fakeAuditAppend(String(values?.[0]),context.tenantId)};
     if(sql === "SELECT outbound_control.claims_enabled() AS enabled")return {rows:[{enabled:true}]};
     if(sql.startsWith("SELECT o.*"))return {rows:[row]};
@@ -186,6 +190,8 @@ describe("customer sign-in delivery references", () => {
     const id="98000000-0000-4000-8000-000000000003", context=testTenantContext("91000000-0000-4000-8000-000000000001");
     const row={id,adapter:"fake_email",authorization_id:"97000000-0000-4000-8000-000000000003",provider_effect_key:"customer-signin:fictional",action_type:"customer_portal.signin.send",recipient:"fixture@example.invalid",content_hash:mode==="tampered-hash"?"a".repeat(64):createHash("sha256").update(reference).digest("hex"),immutable_content:reference,aggregate_revision:1,amount_pence:null,currency:null,policy_version:"customer-signin.synthetic.v1",created_at:"2026-01-01T00:00:00Z",authorization_expires_at:"2099-01-01T00:00:00Z",status:"pending"};
     const query=vi.fn(async(sql:string,values?:unknown[])=>{
+      const probe = fakeOutboxAuditProbe(sql);
+      if (probe) return probe;
       if(sql.includes("FROM app.append_audit("))return {rows:fakeAuditAppend(String(values?.[0]),context.tenantId)};
       if(sql === "SELECT outbound_control.claims_enabled() AS enabled")return {rows:[{enabled:true}]};
       if(sql.startsWith("SELECT o.*,a.actor_membership_id AS authorization_actor FROM app.action_outbox"))return {rows:[row]};
@@ -194,7 +200,8 @@ describe("customer sign-in delivery references", () => {
       if(sql==="SELECT clock_timestamp() AS occurred_at")return {rows:[{occurred_at:new Date()}]};
       if(sql.startsWith("UPDATE app.action_outbox SET status='executing'"))row.status="executing";
       if(sql.startsWith("UPDATE app.action_outbox SET status=$2"))row.status=values![1] as string;
-      return {rows:[],rowCount:1};
+      if (/^(BEGIN|COMMIT|ROLLBACK|UPDATE |INSERT |SELECT set_config|SELECT pg_advisory_xact_lock)/u.test(sql)) return {rows:[],rowCount:1};
+      throw new Error(`Unexpected database operation: ${sql}`);
     });
     const pool={connect:vi.fn(async()=>({query,release:vi.fn()}))} as unknown as Pool;
     const deliver=vi.fn(async()=>({kind:"succeeded" as const,providerReference:"fictional-email"}));

@@ -10,11 +10,26 @@
         "docs/contracts/audit-v1.md",
         "packages/db/migrations/0980_lp6e_audit_attribution.sql",
         "packages/db/src/audit-export-repository.ts",
+        "packages/db/src/audit-protocol-test-fixture.ts",
         "packages/db/src/audit.ts",
+        "packages/db/src/later-outbox.test.ts",
         "packages/db/src/lp6e-audit.test.ts",
+        "packages/db/src/outbox.test.ts",
         "packages/db/src/outbox.ts",
+        "packages/db/src/serious-b10.test.ts",
+        "packages/db/test/accounting-export-route-change.integration.test.ts",
+        "packages/db/test/accounting-export.integration.test.ts",
+        "packages/db/test/dunning.integration.test.ts",
+        "packages/db/test/enterprise-access.integration.test.ts",
+        "packages/db/test/lp4-writer-catchup-fixture.ts",
+        "packages/db/test/lp5-commands.integration.test.ts",
         "packages/db/test/lp6e-audit.integration.test.ts",
-        "packages/db/test/migration-proofs/0980_lp6e_audit_attribution.proof.json"
+        "packages/db/test/managed-recovery.integration.test.ts",
+        "packages/db/test/migration-proofs/0980_lp6e_audit_attribution.proof.json",
+        "packages/db/test/offline-risk-test-utils.ts",
+        "packages/db/test/platform-tax-invoice.integration.test.ts",
+        "packages/db/test/privacy-operations.integration.test.ts",
+        "packages/db/test/purchase-order-audit.integration.test.ts"
       ]
     }
   }

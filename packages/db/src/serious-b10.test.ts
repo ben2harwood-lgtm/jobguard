@@ -1,10 +1,13 @@
+import { fakeOutboxAuditProbe } from "./audit-protocol-test-fixture.js";
 import type { Pool } from "pg";
 import { describe, expect, it, vi } from "vitest";
 import { appendAuditBatch } from "./audit.js";
 import { ActionExecutor, type OutboundAdapter } from "./outbox.js";
 import { verifiedTenantContextForQueuedJob } from "./tenant-context.js";
 
-vi.mock("./audit.js", () => ({ appendAuditBatch: vi.fn() }));
+vi.mock("./audit.js", async importOriginal => ({
+  ...await importOriginal<typeof import("./audit.js")>(), appendAuditBatch: vi.fn(),
+}));
 
 const actionId = "98000000-0000-4000-8000-000000000001";
 const context = verifiedTenantContextForQueuedJob("91000000-0000-4000-8000-000000000001");
@@ -13,6 +16,8 @@ function harness(options: { cancelled?: boolean; databaseFailure?: boolean } = {
   const statements: string[] = [];
   const query = vi.fn(async (sql: string, _values?: unknown[]) => {
     statements.push(sql);
+    const probe = fakeOutboxAuditProbe(sql);
+    if (probe) return probe;
     if (sql.startsWith("SELECT o.*,a.actor_membership_id AS authorization_actor FROM app.action_outbox")) {
       if (options.databaseFailure) throw new Error("synthetic authority lookup unavailable");
       return { rows: [] };

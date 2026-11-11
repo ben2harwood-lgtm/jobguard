@@ -1,3 +1,4 @@
+import { fakeOutboxAuditProbe } from "./audit-protocol-test-fixture.js";
 import { createHash } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
 import { expect, it } from "vitest";
@@ -111,4 +112,12 @@ it("accepts v3 command completion without weakening the predecessor's authority 
   const current = readFileSync(new URL("0980_lp6e_audit_attribution.sql", directory), "utf8").match(definition)![1]!;
   expect(previous).toContain("e.version='audit.v2'");
   expect(current).toBe(previous.replace("e.version='audit.v2'", "e.version IN ('audit.v2','audit.v3')"));
+});
+
+it.each([true, false])("answers only the exact outbox capability probe (installed=%s)", installed => {
+  expect(fakeOutboxAuditProbe("SELECT to_regprocedure('app.lp6e_append_outbox_audit(jsonb)') installed", installed))
+    .toEqual({ rows: [{ installed: installed ? "app.lp6e_append_outbox_audit(jsonb)" : null }] });
+  for (const sql of ["SELECT to_regprocedure('app.unknown(jsonb)') installed", "SELECT unexpected", "SELECT * FROM app.lp6e_append_outbox_audit($1::jsonb)"]) {
+    expect(fakeOutboxAuditProbe(sql, installed)).toBeUndefined();
+  }
 });

@@ -1,3 +1,4 @@
+import { assertV3AuditChain } from "./lp4-writer-catchup-fixture.js";
 /** RED CI proof: real PostgreSQL, fictional identities, no real provider. Not runnable in the builder sandbox. */
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
@@ -121,10 +122,14 @@ describe('ENT-10-rest SCIM machine provisioning',()=>{
   const list=await m.call({method:'GET',kind:'Groups'}) as {totalResults:number};expect(list.totalResults).toBe(1);
   await m.call({method:'PATCH',kind:'Users',id:event,eventId:randomUUID(),expectedRevision:1,body:{schemas:['urn:ietf:params:scim:api:messages:2.0:PatchOp'],Operations:[{op:'replace',path:'active',value:false}]}});
   expect(await h.provider.authenticate(linked.sessionToken)).toBeUndefined();
-  const rows=await auditRows(h,m.f.principal.tenantId);const machineEvents=rows.filter(r=>r.actor_ref===`machine:scim:${m.bindingId}`);
-  expect(machineEvents.length).toBeGreaterThan(0);
+  const rows=await auditRows(h,m.f.principal.tenantId);const machineEvents=rows.filter(r=>['sso.scim.post','sso.scim.get','sso.scim.patch','sso.scim.delete'].includes(r.event_type));
+  expect(machineEvents.map(r=>r.event_type)).toEqual(['sso.scim.post','sso.scim.post','sso.scim.get','sso.scim.patch']);
+  await assertV3AuditChain(h.admin, m.f.principal.tenantId);
   for(const event of machineEvents) {
-   expect(event.version).toBe('audit.v2');
+   expect(event.version).toBe('audit.v3');
+   expect(event.actor_ref).toBe('system:database:ent10_rest_machine');
+   expect(event.subject_ref).toBe(m.bindingId);
+   expect(event.payload.references.auditActorKind).toBe('system');
    expect(event.payload.references.auditTrust).toBe('checked_operation');
   }
  });

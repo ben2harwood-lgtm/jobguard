@@ -1,3 +1,4 @@
+import { assertV3AuditChain } from "./lp4-writer-catchup-fixture.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { cluster, type Cluster } from "./extra-fixtures.js";
@@ -35,9 +36,10 @@ it("one document persists once across concurrent approvals, retries and reposito
  expect(await f.push()).toMatchObject({ status: "pushed", attempts: 1 });
  expect(await f.push()).toMatchObject({ status: "pushed", attempts: 1 });
  expect(f.adapter.pushes).toBe(1);
- const audit = (await c.admin.query("SELECT version,payload->'references'->>'auditTrust' trust FROM app.audit_event WHERE tenant_id=$1 AND event_type LIKE 'accounting_export.%'", [f.a.tenantId])).rows;
+ const audit = (await c.admin.query("SELECT version,actor_ref,payload->'references'->>'auditActorKind' actor_kind,payload->'references'->>'auditTrust' trust FROM app.audit_event WHERE tenant_id=$1 AND event_type LIKE 'accounting_export.%'", [f.a.tenantId])).rows;
  expect(audit.length).toBeGreaterThan(0);
- for (const event of audit) expect(event).toEqual({ version: "audit.v2", trust: "checked_operation" });
+ await assertV3AuditChain(c.admin, f.a.tenantId);
+ for (const event of audit) expect(event).toEqual({ version: "audit.v3", actor_ref: `membership:${f.a.actorId}`, actor_kind: "bound_member", trust: "checked_operation" });
  for (const table of ["decision", "ledger", "outbox", "attempt"]) {
   expect((await c.admin.query(`SELECT count(*)::int n FROM app.accounting_export_${table} WHERE tenant_id=$1`, [f.a.tenantId])).rows[0].n).toBe(1);
  }
@@ -179,11 +181,14 @@ it("export audits use the database-owned checked-operation chain", async () => {
  await f.call("approve", f.approval);
  await f.push();
  const events = (await c.admin.query(
-  "SELECT version,event_type,payload FROM app.audit_event WHERE tenant_id=$1 AND event_type LIKE 'accounting_export.%' ORDER BY sequence",
+  "SELECT version,actor_ref,event_type,payload FROM app.audit_event WHERE tenant_id=$1 AND event_type LIKE 'accounting_export.%' ORDER BY sequence",
   [f.a.tenantId])).rows;
  expect(events.map(e => e.event_type)).toEqual(["accounting_export.approve", "accounting_export.claim", "accounting_export.reconcile"]);
+ await assertV3AuditChain(c.admin, f.a.tenantId);
  for (const event of events) {
-  expect(event.version).toBe("audit.v2");
+  expect(event.version).toBe("audit.v3");
+  expect(event.actor_ref).toBe(`membership:${f.a.actorId}`);
+  expect(event.payload.references.auditActorKind).toBe("bound_member");
   expect(event.payload.references.auditTrust).toBe("checked_operation");
   expect(event.payload.hashes).toEqual({ request: expect.stringMatching(/^[a-f0-9]{64}$/), result: expect.stringMatching(/^[a-f0-9]{64}$/) });
  }

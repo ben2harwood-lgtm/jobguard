@@ -1,3 +1,4 @@
+import { assertV3AuditChain } from "./lp4-writer-catchup-fixture.js";
 import { randomUUID } from "node:crypto";
 import { beforeAll, afterAll, describe, it, expect } from "vitest";
 import { cluster, type Cluster } from "./extra-fixtures.js";
@@ -83,8 +84,11 @@ describe("M4-16 durable synthetic dunning",()=>{
   verifyAuditChain(events);
   const dunningEvents=events.filter(event=>event.eventType.startsWith("dunning."));
   expect(dunningEvents).toHaveLength(3);
+  await assertV3AuditChain(c.admin, a.tenantId);
   for(const event of dunningEvents){
-   expect(event.version).toBe("audit.v2");
+   expect(event.version).toBe("audit.v3");
+   expect(event.actorRef).toBe(`membership:${a.actorId}`);
+   expect(event.payload).toMatchObject({references:{auditActorKind:"bound_member"}});
    expect(event.payload).toMatchObject({references:{auditTrust:"checked_operation"}});
    expect(auditEventTrust(event)).toBe("checked_operation");
   }

@@ -37,3 +37,28 @@ export async function assertLp4SealedEvents(owner: Pool, tenant: string, eventTy
   }
   verifyAuditChain(events);
 }
+
+/** Current-schema envelope assertions, in addition to each writer's exact content assertions. */
+export async function assertV3AuditChain(owner: Pool, tenant: string) {
+  const events = (await owner.query<AuditEvent>(`SELECT id,version,tenant_id AS "tenantId",sequence::int,
+    actor_ref AS "actorRef",event_type AS "eventType",subject_type AS "subjectType",subject_ref AS "subjectRef",payload,
+    occurred_at AS "occurredAt",payload_hash AS "payloadHash",previous_hash AS "previousHash",event_hash AS "eventHash"
+    FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence`, [tenant])).rows;
+  expect(events.length).toBeGreaterThan(0);
+  const hash = expect.stringMatching(/^[a-f0-9]{64}$/u);
+  const uuid = expect.stringMatching(/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/u);
+  for (const [index, event] of events.entries()) {
+    expect(event).toEqual({
+      id: uuid, version: "audit.v3", tenantId: tenant, sequence: index + 1,
+      actorRef: expect.stringMatching(/^(membership:[a-f0-9-]{36}|system:database:[A-Za-z0-9_]+)$/u),
+      eventType: expect.any(String), subjectType: expect.any(String), subjectRef: expect.any(String),
+      occurredAt: expect.any(Date), payload: expect.objectContaining({ references: expect.objectContaining({
+        auditActorKind: event.actorRef.startsWith("membership:") ? "bound_member" : "system",
+        auditTrust: expect.stringMatching(/^(checked_operation|lower_trust)$/u),
+      }) }),
+      payloadHash: hash, previousHash: index === 0 ? null : events[index - 1]!.eventHash, eventHash: hash,
+    });
+  }
+  // Independently recomputes the canonical payload/envelope hashes and checks the chain.
+  verifyAuditChain(events);
+}

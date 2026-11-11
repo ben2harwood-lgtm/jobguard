@@ -412,3 +412,44 @@ Checks run again using installed dependencies:
 PostgreSQL and browser suites were NOT RUN. READY is for router commit and CI
 only. LP-6d restack, placeholder migration 0980 renumbering, authorized source-pin
 and catalogue refresh, exact-head CI and independent RED review remain required.
+
+
+### LP-6e repair 2 handoff — READY for router commit (11 November 2026)
+
+Scoped to the two LP-6d-independent precheck items on `b4aad2f9`:
+- Updated eleven current-schema v2 expectations across ten test sources to v3.
+  They assert the exact bound member or database execution principal,
+  `auditActorKind` and existing `auditTrust`, while retaining domain payload,
+  hash, replay, refusal and cardinality assertions. SCIM selects its exact
+  machine-operation event names and checks their ordered sequence; caller-supplied
+  machine actor strings are replaced by the database principal.
+- Reused the existing LP-4 test fixture for full current-schema envelope checks:
+  every selected column, tenant, sequence, previous hash, actor/kind agreement,
+  payload and canonical hash/chain verification. Historical v1/v2 fixture and
+  schema-boundary assertions are unchanged.
+- The shared protocol fixture answers only the exact outbox capability probe,
+  present or absent; unrecognized SQL still reaches the doubles' refusal paths.
+  The cancellation mock preserves the real input schema. Added probe near-miss
+  refusals, installed-bridge routing and rollback on either schema path. These
+  protocol doubles do not prove PostgreSQL authorization, hashes or locking.
+- Extended this piece's lane with the exact additional test/fixture paths.
+  No production code, migration SQL, protected pin or permission was changed.
+
+Local checks using installed dependencies:
+- From packages/db, all 97 `src/*.test.ts` files passed in 33 sequential Vitest
+  4.1.12 runs, each with at most three named files and `--maxWorkers=2` (875 tests
+  at that point; log `/tmp/lp6e-repair2-db-unit.log`). After adding two installed-
+  bridge cases, reran `src/later-outbox.test.ts src/lp6e-audit.test.ts
+  src/serious-b10.test.ts` with `--maxWorkers=2`: 81 passed.
+- From packages/db, `./node_modules/.bin/tsc -p tsconfig.json --noEmit`: PASS.
+- Additional compiler-API check of changed integration sources with DB options,
+  repository rootDir and API legacy-decorator options: no new diagnostics versus
+  HEAD. Both have the same pre-existing TS2353 in purchase-order-audit's forged
+  actor input; that unrelated negative test is unchanged.
+- `LANE_BASE_REF=c2ec9e98adab349f60394b72415f390701ae458e node
+  tools/agent-lane-boundary-lint.mjs`: PASS; `git diff --check`: PASS.
+
+PostgreSQL and browser suites were NOT RUN: this sandbox cannot start PostgreSQL
+or bind localhost. LP-6d-dependent failures remain for the router's restack and CI.
+READY means ready for the router to commit this NOPR/RED repair, not independently
+reviewed or ready to merge. No git writes, push, PR or release was performed.
