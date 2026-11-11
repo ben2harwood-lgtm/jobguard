@@ -20,7 +20,8 @@
         "packages/db/migrations/0836_builder_session_revoked_event.sql",
         "packages/db/test/migration-proofs/0730_builder_session_revoked_event.proof.json",
         "packages/db/test/migration-proofs/0836_builder_session_revoked_event.proof.json",
-        "packages/db/test/enterprise-access-upgrade.integration.test.ts"
+        "packages/db/test/enterprise-access-upgrade.integration.test.ts",
+        "apps/api/openapi.json"
       ]
     }
   }
