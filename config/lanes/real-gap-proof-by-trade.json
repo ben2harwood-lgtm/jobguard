@@ -1,0 +1,35 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-gap-proof-by-trade": {
+      "branches": [
+        "codex/sandbox/real-gap-proof-by-trade"
+      ],
+      "allow": [
+        "apps/api/src/final-account.contracts.ts",
+        "apps/api/src/proof/contracts.ts",
+        "apps/api/src/proof/proof.application.ts",
+        "apps/api/src/proof/real-gap-proof-by-trade.test.ts",
+        "apps/web/app/api/jobs/[id]/proof/route.ts",
+        "apps/web/app/ui/job-final-account.tsx",
+        "apps/web/app/ui/proof-stage.tsx",
+        "apps/web/e2e/real-gap-proof-by-trade.spec.ts",
+        "packages/core/src/decision-checks.ts",
+        "packages/core/src/real-gap-proof-by-trade.test.ts",
+        "packages/core/src/watchdog.ts",
+        "packages/db/migration-notes/0943_job_proof_statement.md",
+        "packages/db/migrations/0943_job_proof_statement.sql",
+        "packages/db/src/decision-repository.ts",
+        "packages/db/src/evidence.ts",
+        "packages/db/src/final-account-repository.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/job-proof-statement.ts",
+        "packages/db/src/proof-repository.ts",
+        "packages/db/test/extra-proceed-upgrade.integration.test.ts",
+        "packages/db/test/later-empty-tables.ts",
+        "packages/db/test/migration-proofs/0943_job_proof_statement.proof.json",
+        "packages/db/test/real-gap-proof-by-trade.integration.test.ts"
+      ]
+    }
+  }
+}
