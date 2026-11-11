@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { expect, it } from "vitest";
 import { loadMigrationProofs } from "./migration-proof-loader.js";
-import { extraProceedRegistryRow, currentCommandRegistryRows } from "./lp5-command-catalog.js";
+import { extraProceedRegistryRow, currentCommandRegistryRows, duplicateDispositionLifecycleRegistryRow } from "./lp5-command-catalog.js";
 const sql = readFileSync(new URL("../migrations/0634_extra_proceed_statement.sql", import.meta.url), "utf8");
 const previous = readFileSync(new URL("../migrations/0606_dark_merchant_order.sql", import.meta.url), "utf8");
 it("extends only the result adapter, preserving all previous branches byte for byte", () => {
@@ -32,9 +32,10 @@ it("registers the operational command, side-table proof and no commercial writer
  const withoutProceed = registry.after!.data.filter(row => (row as { command_type: string }).command_type !== "RecordExtraProceed");
  expect(withoutProceed).toEqual(expect.arrayContaining(registry.before!.data));
  expect(withoutProceed).toHaveLength(registry.before!.data.length);
- const historicalCommandRegistryRows = currentCommandRegistryRows.filter(row => row.command_type !== "CloseAbandonedSiteVisit");
+ const historicalCommandRegistryRows = currentCommandRegistryRows.filter(row => row.command_type !== "CloseAbandonedSiteVisit"
+  && !(row.command_type === duplicateDispositionLifecycleRegistryRow.command_type && row.version === duplicateDispositionLifecycleRegistryRow.version));
  expect(registry.after?.data).toHaveLength(historicalCommandRegistryRows.length);
- // 0634 predates 0722 and 0642: exclude the named successor; client sends still require owner.
+ // 0634 predates 0722, 0729 and 0642: exclude the exact successors; client sends still require owner.
  expect(registry.after?.data).toEqual(expect.arrayContaining(historicalCommandRegistryRows.map(row =>
   row.command_type === "IssueClientApproval" ? { ...row, permission_rule: "owner" } : row)));
  expect(proof.tenancy).toEqual([{ relname: "extra_proceed_statement", before: null, after: { relrowsecurity: true, relforcerowsecurity: true, guarded: true, owner: "jobguard_migration" } }]);
