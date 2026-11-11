@@ -84,6 +84,15 @@ BEGIN
  END IF;
 
  CASE adapter
+ WHEN 'extra_proceed' THEN
+  IF EXISTS(SELECT 1 FROM app.extra_proceed_statement s WHERE s.tenant_id=t AND s.command_id=p_command_id
+   AND s.job_id=subject::uuid AND s.actor_membership_id=c.actor_membership_id
+   AND s.xmin::text=pg_current_xact_id()::text AND r.command_type='RecordExtraProceed'
+   AND s.variation_id=(c.significant_input->'input'->>'extraId')::uuid
+   AND s.request_id=(c.significant_input->'input'->>'requestId')::uuid
+   AND s.reason=btrim(c.significant_input->'input'->>'reason')) THEN
+   value:=app.xa_proceed_view(subject::uuid,(c.significant_input->'input'->>'extraId')::uuid);
+  END IF;
  WHEN 'duplicate_disposition' THEN
   SELECT jsonb_build_object('version','duplicate-disposition-result.v1','factId',d.id,'groupId',d.group_id,
    'fingerprint',d.fingerprint,'disposition',d.disposition) INTO value
