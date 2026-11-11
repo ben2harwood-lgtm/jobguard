@@ -120,22 +120,130 @@ BEGIN
 END $$;
 
 
-DO $migration$ DECLARE body text; changed text; BEGIN
- SELECT pg_get_functiondef('identity.customer_portal_use(uuid,uuid,uuid,text,text,text)'::regprocedure) INTO body;
- changed:=replace(body,' ts:=clock_timestamp();',
-  ' PERFORM 1 FROM app.quote_draft WHERE tenant_id=t AND job_id=j FOR SHARE;
+CREATE OR REPLACE FUNCTION identity.customer_portal_use(t uuid,j uuid,c uuid,digest text,session_digest text,operation text) RETURNS jsonb
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE g app.customer_portal_grant; s app.customer_portal_session; ts timestamptz; sid uuid:=gen_random_uuid();
+BEGIN
+ IF current_database()<>'jobguard_synthetic_demo' OR operation NOT IN('redeem','resolve','signout') OR operation IS NULL THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
+ PERFORM set_config('app.tenant_id',t::text,true);
+ PERFORM pg_advisory_xact_lock(hashtextextended(t::text||':'||j::text,387));
+ IF operation='redeem' THEN
+  SELECT * INTO g FROM app.customer_portal_grant WHERE tenant_id=t AND job_id=j AND customer_id=c AND token_digest=digest FOR UPDATE;
+ ELSE
+  SELECT * INTO s FROM app.customer_portal_session WHERE tenant_id=t AND job_id=j AND customer_id=c AND token_digest=digest FOR UPDATE;
+  SELECT * INTO g FROM app.customer_portal_grant WHERE tenant_id=t AND id=s.grant_id FOR UPDATE;
+ END IF;
+ PERFORM 1 FROM app.job WHERE tenant_id=t AND id=j FOR SHARE;
+ -- Lock current party before the final authority/clock check; stale authority never survives a wait.
+ PERFORM 1 FROM app.job_party_current WHERE tenant_id=t AND job_id=j FOR SHARE;
+ PERFORM 1 FROM app.quote_draft WHERE tenant_id=t AND job_id=j FOR SHARE;
  IF g.quote_document_id IS NOT NULL THEN
   -- Fence a blank-firm reset through commit; recheck expiry/revocation below.
   PERFORM 1 FROM control_plane.practice_session p JOIN app.job own_job ON own_job.practice_session_digest=p.token_digest
    WHERE own_job.tenant_id=t AND own_job.id=j FOR SHARE OF p;
  END IF;
- ts:=clock_timestamp();');
- IF changed=body THEN RAISE EXCEPTION 'customer portal validator patch missing'; END IF;
- EXECUTE changed;
- SELECT pg_get_functiondef('identity.customer_portal_quote(uuid,uuid,uuid,text,jsonb)'::regprocedure) INTO body;
- changed:=replace(body,'WHERE doc.tenant_id=t AND doc.job_id=j',
-  'WHERE doc.tenant_id=t AND doc.job_id=j AND (g.quote_document_id IS NULL OR doc.id=g.quote_document_id)');
- IF changed=body THEN RAISE EXCEPTION 'customer quote binding patch missing'; END IF;
- EXECUTE changed;
-END $migration$;
+ ts:=clock_timestamp();
+ IF g.id IS NULL OR NOT app.customer_portal_current(g) THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
+ IF operation='redeem' THEN
+  IF g.consumed_at IS NOT NULL OR g.expires_at<=ts OR session_digest IS NULL OR session_digest !~ '^[a-f0-9]{64}$' THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
+  UPDATE app.customer_portal_grant SET consumed_at=ts WHERE tenant_id=t AND id=g.id;
+  INSERT INTO app.customer_portal_session(tenant_id,id,job_id,customer_id,grant_id,token_digest,issued_at,expires_at) VALUES(t,sid,j,c,g.id,session_digest,ts,ts+interval '1 hour');
+  PERFORM app.customer_portal_audit(t,sid,'signed_in');
+ ELSIF s.id IS NULL OR s.revoked_at IS NOT NULL OR s.expires_at<=ts THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501';
+ ELSIF operation='signout' THEN
+  UPDATE app.customer_portal_session SET revoked_at=ts WHERE tenant_id=t AND id=s.id;
+  PERFORM app.customer_portal_audit(t,s.id,'signed_out');
+ END IF;
+ RETURN jsonb_build_object('version','customer-session.v1','jobId',j,'customerId',c,'companyId',g.company_id);
+END $$;
+
+CREATE OR REPLACE FUNCTION identity.customer_portal_quote(t uuid,j uuid,c uuid,digest text,cmd jsonb) RETURNS jsonb
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE job app.job; d app.quote_document_version; s app.customer_portal_session; g app.customer_portal_grant;
+ prior app.customer_quote_approval; aid uuid:=gen_random_uuid(); eid uuid:=gen_random_uuid(); previous_id uuid; previous_seq integer;
+ result jsonb; target jsonb; ts timestamptz;
+BEGIN
+ IF current_database()<>'jobguard_synthetic_demo' OR cmd IS NULL OR jsonb_typeof(cmd)<>'object'
+  OR cmd->>'jobId' IS DISTINCT FROM j::text OR cmd->>'version' IS NULL
+  OR cmd->>'version' NOT IN('customer-quote-read.v1','customer-quote-acceptance.v1')
+ THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
+ PERFORM set_config('app.tenant_id',t::text,true);
+ PERFORM pg_advisory_xact_lock(hashtextextended(t::text||':'||j::text,387));
+ -- Authenticate before touching a requested job. Then use 0155's job lock and
+ -- the draft lock used by saveDraft, and recheck authority/clock after any wait.
+ PERFORM identity.customer_portal_use(t,j,c,digest,NULL,'resolve');
+ SELECT * INTO job FROM app.job WHERE tenant_id=t AND id=j FOR UPDATE;
+ PERFORM 1 FROM app.quote_draft WHERE tenant_id=t AND job_id=j FOR SHARE;
+ PERFORM identity.customer_portal_use(t,j,c,digest,NULL,'resolve');
+ SELECT * INTO s FROM app.customer_portal_session WHERE tenant_id=t AND job_id=j AND customer_id=c AND token_digest=digest;
+ SELECT * INTO g FROM app.customer_portal_grant WHERE tenant_id=t AND id=s.grant_id;
+ IF cmd->>'version'='customer-quote-read.v1' THEN
+  IF cmd<>jsonb_build_object('version','customer-quote-read.v1','jobId',j::text) THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
+ ELSE
+  target:=cmd->'target';
+  IF cmd IS DISTINCT FROM jsonb_build_object('version','customer-quote-acceptance.v1','commandId',(cmd->>'commandId')::uuid::text,'jobId',j::text,'expectedJobRevision',(cmd->>'expectedJobRevision')::integer,'target',jsonb_build_object('kind','quote','id',(target->>'id')::uuid::text,'revision',(target->>'revision')::integer,'hash',target->>'hash'))
+   OR (cmd->>'commandId') IS NULL OR cmd->>'expectedJobRevision' IS NULL OR (cmd->>'expectedJobRevision')::integer<1
+   OR target->>'id' IS NULL OR target->>'revision' IS NULL OR (target->>'revision')::integer<1 OR target->>'hash' IS NULL OR target->>'hash' !~ '^[a-f0-9]{64}$'
+  THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
+  PERFORM pg_advisory_xact_lock(hashtextextended(t::text||':'||(cmd->>'commandId'),388));
+  PERFORM identity.customer_portal_use(t,j,c,digest,NULL,'resolve');
+  SELECT * INTO prior FROM app.customer_quote_approval WHERE tenant_id=t AND command_id=(cmd->>'commandId')::uuid;
+  IF prior.command_id IS NOT NULL THEN
+   IF prior.job_id<>j OR prior.customer_id<>c OR prior.command<>cmd THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
+   RETURN prior.result;
+  END IF;
+ END IF;
+ -- Only the latest issued document, from the current quote revision AND current customer binding.
+ SELECT doc.* INTO d FROM app.quote_document_version doc
+ JOIN app.quote_revision qr ON(qr.tenant_id,qr.job_id,qr.id)=(doc.tenant_id,doc.job_id,doc.quote_revision_id)
+ JOIN app.quote_draft draft ON(draft.tenant_id,draft.job_id,draft.current_revision_id)=(qr.tenant_id,qr.job_id,qr.id)
+ WHERE doc.tenant_id=t AND doc.job_id=j AND (g.quote_document_id IS NULL OR doc.id=g.quote_document_id)
+ AND doc.snapshot->'jobParties'->>'bindingId'=g.party_binding_id::text
+ AND doc.snapshot->'jobParties'->>'customerRevisionId'=g.customer_revision_id::text
+ AND EXISTS(SELECT 1 FROM app.quote_send send WHERE send.tenant_id=t AND send.job_id=j AND send.document_id=doc.id AND send.content_hash=doc.content_hash)
+ AND NOT EXISTS(SELECT 1 FROM app.quote_document_version newer WHERE newer.tenant_id=t AND newer.job_id=j AND newer.document_version>doc.document_version)
+ AND NOT EXISTS(SELECT 1 FROM app.acceptance_event e WHERE e.tenant_id=t AND e.job_id=j AND e.document_id=doc.id AND e.kind='superseded')
+ ORDER BY doc.document_version DESC LIMIT 1;
+ IF cmd->>'version'='customer-quote-read.v1' THEN
+  RETURN jsonb_build_object('version','customer-quote-view.v1','jobId',j,'jobRevision',job.revision,'status',job.status,'quote',
+   CASE WHEN d.id IS NULL THEN NULL ELSE jsonb_build_object('id',d.id,'revision',d.document_version,'hash',d.content_hash,'document',d.snapshot) END);
+ END IF;
+ IF d.id IS NULL OR job.status<>'quoting' OR job.revision<>(cmd->>'expectedJobRevision')::integer
+  OR d.id<>(target->>'id')::uuid OR d.document_version<>(target->>'revision')::integer OR d.content_hash<>target->>'hash'
+ THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
+ -- Preserve 0155's cancellation, reacceptance and billing guards, using its latest body.
+ SELECT a.id,coalesce(qs.acceptance_sequence,1) INTO previous_id,previous_seq FROM app.quote_acceptance a
+ LEFT JOIN app.quote_acceptance_sequence qs ON qs.tenant_id=a.tenant_id AND qs.acceptance_id=a.id
+ WHERE a.tenant_id=t AND a.job_id=j AND a.document_id=d.id
+ ORDER BY coalesce(qs.acceptance_sequence,1) DESC,a.recorded_at DESC,a.id DESC LIMIT 1;
+ IF previous_id IS NOT NULL THEN
+  IF NOT EXISTS(SELECT 1 FROM app.acceptance_event e WHERE e.tenant_id=t AND e.job_id=j AND e.document_id=d.id AND e.kind='acceptance_cancelled' AND e.acceptance_id=previous_id)
+   OR EXISTS(SELECT 1 FROM app.customer_invoice WHERE tenant_id=t AND job_id=j)
+   OR EXISTS(SELECT 1 FROM app.customer_credit_note WHERE tenant_id=t AND job_id=j)
+   OR EXISTS(SELECT 1 FROM app.customer_payment WHERE tenant_id=t AND job_id=j)
+  THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
+ END IF;
+ ts:=clock_timestamp();
+ IF NOT EXISTS(SELECT 1 FROM app.quote_version WHERE tenant_id=t AND id=d.id) THEN
+  INSERT INTO app.quote_version(id,tenant_id,job_id,version,content_hash,net_value_pence,status)
+  VALUES(d.id,t,j,d.document_version,d.content_hash,(d.snapshot->>'netPence')::bigint,'accepted');
+ END IF;
+ INSERT INTO app.quote_acceptance(id,tenant_id,job_id,document_id,document_version,document_hash,accepted_total_pence,currency,acceptance_kind,actor_membership_id,stated_customer_name,stated_method,accepted_at,evidence_id)
+ VALUES(aid,t,j,d.id,d.document_version,d.content_hash,(d.snapshot->>'totalPence')::bigint,'GBP','customer_authenticated',NULL,d.snapshot->'customer'->>'name','customer_portal',ts,NULL);
+ INSERT INTO app.quote_acceptance_sequence(tenant_id,job_id,document_id,acceptance_id,acceptance_sequence,replaces_acceptance_id)
+ VALUES(t,j,d.id,aid,coalesce(previous_seq,0)+1,previous_id);
+ INSERT INTO app.acceptance_event(id,tenant_id,job_id,document_id,document_version,document_hash,acceptance_id,kind,actor_membership_id,occurred_at)
+ VALUES(eid,t,j,d.id,d.document_version,d.content_hash,aid,'accepted',NULL,ts);
+ UPDATE app.job SET status='accepted',revision=revision+1,accepted_quote_version_id=d.id,updated_at=ts WHERE tenant_id=t AND id=j;
+ result:=jsonb_build_object('version','customer-quote-accepted.v1','acceptanceId',aid,'jobId',j,'target',target,'method','customer_authenticated');
+ INSERT INTO app.customer_quote_approval(tenant_id,command_id,job_id,acceptance_id,session_id,customer_id,party_binding_id,command,result)
+ VALUES(t,(cmd->>'commandId')::uuid,j,aid,s.id,c,g.party_binding_id,cmd,result);
+ -- Customer session is the actor; only immutable identifiers/hash enter the sealed audit payload.
+ PERFORM app.lp4_seal_audit(jsonb_build_array(jsonb_build_object('id',gen_random_uuid(),'version','audit.v1','actorRef','customer-session:'||s.id::text,
+  'eventType','quote.acceptance.customer_authenticated','subjectType','quote_document','subjectRef',d.id::text,
+  'payload',jsonb_build_object('references',jsonb_build_object('acceptanceId',aid::text,'acceptanceEventId',eid::text),'hashes',jsonb_build_object('documentHash',d.content_hash),'classifications',jsonb_build_object('action','commercial')))),'checked_operation');
+ RETURN result;
+EXCEPTION WHEN invalid_text_representation OR numeric_value_out_of_range THEN
+ RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501';
+END $$;
 COMMIT;

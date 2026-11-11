@@ -13,7 +13,10 @@
         "apps/web/e2e/real-customer-link-own-quote.spec.ts",
         "packages/db/migrations/0940_real_customer_link_own_quote.sql",
         "packages/db/test/migration-proofs/0940_real_customer_link_own_quote.proof.json",
-        "packages/db/test/real-customer-link-own-quote.integration.test.ts"
+        "packages/db/test/real-customer-link-own-quote.integration.test.ts",
+        "packages/db/test/customer-signin.integration.test.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts"
       ]
     }
   }
