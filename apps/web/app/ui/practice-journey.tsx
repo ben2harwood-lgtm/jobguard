@@ -30,12 +30,12 @@ export function PracticeJourney({ jobId, status, onSettled }: { jobId: string; s
  const generation = useRef(0), activeRequest = useRef<AbortController | null>(null);
  const currentJob = useRef({ jobId, status }); currentJob.current = { jobId, status };
  const errorHeading = useRef<HTMLHeadingElement>(null), retryButton = useRef<HTMLButtonElement>(null);
- const load = useCallback(async (userInitiated = false) => {
+ const load = useCallback(async (userInitiated = false, silent = false) => {
   const request = ++generation.current;
   activeRequest.current?.abort();
   const controller = new AbortController(); activeRequest.current = controller;
   const isCurrent = () => request === generation.current && !controller.signal.aborted && currentJob.current.jobId === jobId && currentJob.current.status === status;
-  setState(previous=>previous.jobId===jobId&&previous.status===status&&previous.phase!=="loading"?previous:{ jobId, status, phase: "loading" });
+  setState(previous=>silent&&previous.jobId===jobId&&previous.status===status&&previous.phase!=="loading"?previous:{ jobId, status, phase: "loading" });
   try {
    const path = `/api/jobs/${jobId}`, beforeActivation = ["draft", "quoting", "accepted", "lost"].includes(status);
    const [proofRaw, variationsRaw, invoicesRaw, feeRaw] = await Promise.all([
@@ -59,7 +59,7 @@ export function PracticeJourney({ jobId, status, onSettled }: { jobId: string; s
    if (isCurrent()) setState({ jobId, status, phase: "failed", userInitiated });
   }
  }, [jobId, status]);
- useJobFactsRefresh(load);useEffect(() => { void load(); return () => { generation.current++; activeRequest.current?.abort(); }; }, [load]);
+ useJobFactsRefresh(() => void load(false, true));useEffect(() => { void load(); return () => { generation.current++; activeRequest.current?.abort(); }; }, [load]);
  const phase = state.jobId === jobId && state.status === status ? state.phase : "loading";
  useEffect(() => {
   // Automatic reads announce through the alert without taking focus. A requested

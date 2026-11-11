@@ -1,15 +1,15 @@
-// This direct-component harness has no workspace provider. Navigation refresh is covered in job-final-account.test.tsx.
-vi.mock("./job-facts-refresh",()=>({useJobFactsRefresh:()=>undefined}));
+// Capture reads so a navigation refresh can be exercised during the first load.
+vi.mock("./job-facts-refresh",()=>({useJobFactsRefresh:(fn: () => void)=>{ fixture.refresh = fn; }}));
 import * as React from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { SupplierDocuments } from "./supplier-documents";
-const fixture = vi.hoisted(() => ({ state: null as any }));
+const fixture = vi.hoisted(() => ({ state: null as any, refresh: () => {}, mount: () => {} }));
 vi.mock("react", async importOriginal => ({ ...await importOriginal<typeof React>(),
   useState: (initial: unknown) => [initial === null ? fixture.state : initial, vi.fn()],
-  useEffect: vi.fn(), useCallback: (fn: unknown) => fn,
+  useRef: (initial: unknown) => ({ current: initial }), useEffect: (fn: () => void) => { fixture.mount = fn; }, useCallback: (fn: unknown) => fn,
 }));
-vi.mock("./materials-command", () => ({ materialsCommandFor: () => ({}),
+vi.mock("./materials-command", () => ({ materialsCommandFor: () => ({ read: async (_key: string, read: () => Promise<unknown>, apply: (value: unknown) => void) => apply(await read()) }),
   useMaterialsCommand: () => ({ busy: false, run: async (fn: () => Promise<void>) => fn() }),
 }));
 vi.stubGlobal("React", React);
@@ -48,4 +48,17 @@ it("labels each delivery quantity separately", () => {
   for (const label of ["Ordered", "Delivered", "Rejected", "Missing", "Later delivered"])
     expect(html).toContain(`<dt>${label}</dt>`);
   expect(html).toContain('data-testid="delivery-later-delivered">1 each');
+});
+
+it("coalesces silent supplier refreshes with the first read and the next refresh", async () => {
+  let release!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  const fetcher = vi.fn().mockImplementation(async () => { await held; return { ok: true, json: async () => ({ state: fixture.state }) }; });
+  vi.stubGlobal("fetch", fetcher);
+  panel(); fixture.mount(); fixture.refresh(); fixture.refresh();
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  release(); await new Promise<void>(resolve => setImmediate(resolve));
+  fixture.refresh(); fixture.refresh();
+  expect(fetcher).toHaveBeenCalledTimes(2);
+  await new Promise<void>(resolve => setImmediate(resolve));
 });

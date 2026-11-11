@@ -57,7 +57,25 @@ const apply=useCallback((t:Ticket,next:Case[],affectedCaseId?:string)=>{shown.cu
 // It stops quietly if the job changed while it was out, so it can never offer a delivery of another job.
 const refreshDeliveries=useCallback(async(lookupWorld:number)=>{if(lookupWorld!==world.current)return;let ready:Delivery[]=[];try{const r=await fetch(`/api/jobs/${jobId}/supplier-documents`,{cache:"no-store"});const rows=r.ok?parseDocuments(await r.json().catch(()=>undefined)):undefined;if(rows)ready=readyDeliveries(rows)}catch{ready=[]}if(lookupWorld!==world.current)return;setDeliveries(ready);setDeliveryId(old=>ready.some(row=>row.id===old)?old:"")},[jobId]);
 // Reading the register has three outcomes and only one of them is "empty": loading, failed (announced and focused, with a retry), or read successfully. An answer that is not the versioned response is a failed read.
-const load=useCallback(async(silent=false)=>{const t=ticket();if(!silent)setStatus("loading");setError("");let next:RecoveryCaseResponse|undefined;try{const r=await fetch(`/api/jobs/${jobId}/recovery-cases`,{cache:"no-store"});const body:unknown=await r.json();next=r.ok?readList(body):undefined}catch{next=undefined}if(!newest(t))return;if(next)apply(t,next.cases);else{setStatus("failed");fail(readFailure)}},[jobId,apply,fail]);
+const registerRead = useRef<Promise<void> | null>(null);
+const load = useCallback((silent = false) => {
+ // Navigation shares the pending read; it must not restart the register or its delivery lookup.
+ if (silent && registerRead.current) return registerRead.current;
+ const read = (async () => {
+  const t = ticket(); if (!silent) setStatus("loading"); setError("");
+  let next: RecoveryCaseResponse | undefined;
+  try {
+   const r = await fetch(`/api/jobs/${jobId}/recovery-cases`, { cache: "no-store" });
+   const body: unknown = await r.json(); next = r.ok ? readList(body) : undefined;
+  } catch { next = undefined; }
+  if (!newest(t)) return;
+  if (next) apply(t, next.cases); else { setStatus("failed"); fail(readFailure); }
+ })();
+ registerRead.current = read;
+ const clear = () => { if (registerRead.current === read) registerRead.current = null; };
+ void read.then(clear, clear);
+ return read;
+}, [jobId, apply, fail]);
 // An attempt whose outcome is UNKNOWN. A command is one attempt, with one command id, from the moment it is built until the outcome is certain: saved, or explicitly refused with the original result established. A retry refusal settles it only if the same command is permanently barred or its id has a recorded conflict; replay absence alone cannot stop a delayed original. If the answer is
 // lost or cannot be read, the command may have been saved, so the attempt is kept exactly as it was sent and the only way on is to send that same request again: the server recognises the
 // command id and answers with what it already holds, so a repeat can never create a second case. Nothing else can be sent meanwhile. A new job drops it (it belongs to the job that went).

@@ -1,5 +1,6 @@
-// This direct-component harness has no workspace provider. Navigation refresh is covered in job-final-account.test.tsx.
-vi.mock("./job-facts-refresh",()=>({useJobFactsRefresh:()=>undefined}));
+// Capture navigation refresh so held reads can exercise the real panel load.
+const factsRefresh = vi.hoisted(() => ({ current: () => {} }));
+vi.mock("./job-facts-refresh",()=>({useJobFactsRefresh:(refresh: () => void)=>{ factsRefresh.current = refresh; }}));
 import * as React from "react";
 import { renderToString } from "react-dom/server";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -1063,4 +1064,15 @@ it("M4-1 prevention on the existing identity leaves no landing or further preven
  expect(w.screen().button("Prevent before payment").props.disabled).toBe(true);
  expect(w.screen().button("Record a landed recovery").props.disabled).toBe(true);
  expect(w.screen().testId("case-landed-net")).toBe("£0.00");
+});
+
+it("coalesces navigation refreshes with an in-flight register read", async () => {
+  const panel = start();
+  factsRefresh.current(); factsRefresh.current();
+  expect(reads()).toHaveLength(1);
+  reads()[0]!.json(answerBody([]));
+  await new Promise<void>(resolve => setImmediate(resolve));
+  factsRefresh.current(); factsRefresh.current();
+  expect(reads()).toHaveLength(2);
+  panel.unmount();
 });
