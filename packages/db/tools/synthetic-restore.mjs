@@ -356,7 +356,11 @@ export async function runSyntheticRestoreRehearsal(options = {}, api, fixture) {
     assert.equal(await api.reconcileOutbox(runtime, context, actionIds[1], adapter), "unknown");
     assert.equal((await queue()).find(row => row.id === actionIds[2]).status, "succeeded");
     const resumeRequest = randomUUID(), reconciliationReceipt = randomUUID();
-    const requested = await control(operatorA, "request_resume", pauseRevision, null, resumeRequest);
+    // A fixture sharing this practice database may pause again in afterRestore; resume from the current paused revision.
+    const pausedState = (await operatorA.query("SELECT paused,revision FROM outbound_control.state")).rows[0];
+    assert.equal(pausedState.paused, true); assert.ok(BigInt(pausedState.revision) >= BigInt(pauseRevision));
+    if (!fixture) assert.equal(String(pausedState.revision), String(pauseRevision));
+    const requested = await control(operatorA, "request_resume", pausedState.revision, null, resumeRequest);
     await assert.rejects(control(operatorB, "approve_resume", requested, resumeRequest), /OUTBOUND_RECONCILIATION_REQUIRED/);
     await operatorA.query("SELECT outbound_control.record_reconciliation($1,$2)", [resumeRequest, reconciliationReceipt]);
     await assert.rejects(control(operatorA, "approve_resume", requested, resumeRequest), /OUTBOUND_SECOND_PERSON_REQUIRED/);

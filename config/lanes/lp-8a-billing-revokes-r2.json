@@ -15,6 +15,7 @@
         "packages/db/test/audit-api-file-final-account.test.ts",
         "packages/db/test/audit-dbsrc-03.integration.test.ts",
         "packages/db/test/enterprise-access-upgrade.integration.test.ts",
+        "packages/db/test/financial-restore-proof.integration.test.ts",
         "packages/db/test/invoice-later.integration.test.ts",
         "packages/db/test/lp-0-authority-paths.integration.test.ts",
         "packages/db/test/lp-0-grant-freeze.integration.test.ts",
