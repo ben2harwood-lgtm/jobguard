@@ -1,3 +1,4 @@
+import { testTenantContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { beforeAll,afterAll,describe,it,expect } from "vitest";
 import { createWorkFixture,closeWorkFixture,meterCompany,verifyBusiness,requestCard,recordCard,resultFixture,workTenant,type WorkFixture } from "./free-first-job-admission-fixtures.js";
@@ -16,14 +17,14 @@ describe("MON-3 END source persistence, company isolation and races",()=>{
    const before=await repo.read(a.context,a.digest,a.jobId);expect(before.timeline?.active).toBe(true);
    const row=(await f.admin.query("SELECT to_char(activated_at AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') at FROM app.job_activation WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows[0];
    expect(before.start?.startedAt).toBe(row.at);
-   const id=randomUUID();await workTenant(f.admin,a.tenantId,async db=>{await db.query("SET LOCAL ROLE jobguard_migration");await db.query("INSERT INTO app.trial_end_source(tenant_id,trial_id,source_id,job_id,kind,effective_at,recorded_at) VALUES($1,$2,$3,$4,'close',clock_timestamp(),clock_timestamp())",[a.tenantId,a.trialId,id,a.jobId]);});
+   const id=randomUUID();await workTenant(f.admin,a.tenantId,async db=>{await db.query("SET LOCAL ROLE jobguard_migration");await db.query("INSERT INTO app.trial_end_source(tenant_id,trial_id,source_id,job_id,kind,effective_at,recorded_at) VALUES($1,$2,$3,$4,'close',clock_timestamp(),clock_timestamp())",[a.tenantId,a.trialId,id,a.jobId]);}, { membershipId: a.actorId, bindRequest: false });
    expect((await repo.read(a.context,a.digest,a.jobId)).timeline?.sourceIds).toEqual([id]);
    expect(Number((await f.admin.query("SELECT count(*) n FROM app.trial_identity_key_claim WHERE tenant_id=$1",[a.tenantId])).rows[0].n)).toBe(2);
-   await expect(workTenant(f.runtime,a.tenantId,db=>db.query("DELETE FROM app.trial_start WHERE tenant_id=$1",[a.tenantId]))).rejects.toThrow();
+   await expect(workTenant(f.runtime,a.tenantId,db=>db.query("DELETE FROM app.trial_start WHERE tenant_id=$1",[a.tenantId]), { membershipId: a.actorId, bindRequest: false })).rejects.toThrow();
    const b=await meterCompany(f);
    await expect(repo.read(b.context,b.digest,a.jobId)).rejects.toThrow('FREE_FIRST_JOB_ACCESS_DENIED');
    await f.admin.query("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE id=$1",[a.sessionId]);
-   await expect(repo.read(a.context,a.digest,a.jobId)).rejects.toThrow('FREE_FIRST_JOB_ACCESS_DENIED');
+   await expect(repo.read(testTenantContext(a.tenantId,{membershipId:a.actorId,bindRequest:false}),a.digest,a.jobId)).rejects.toThrow('FREE_FIRST_JOB_ACCESS_DENIED');
   }finally{if(old===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=old;}
  });
  it("real lock and close triggers capture exact trial sources once; reopen cannot restore the free trial",async()=>{
@@ -62,7 +63,7 @@ describe("MON-3 END source persistence, company isolation and races",()=>{
   }finally{if(old===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=old;}
   // Reopening cannot mutate the bill the lock bound, nor can it reverse an end fact.
   expect((await lockRepo.read(a.context,a.jobId)).lock).toEqual(locked);
-  await expect(workTenant(f.runtime,a.tenantId,db=>db.query("DELETE FROM app.trial_end_source WHERE tenant_id=$1",[a.tenantId]))).rejects.toThrow();
+  await expect(workTenant(f.runtime,a.tenantId,db=>db.query("DELETE FROM app.trial_end_source WHERE tenant_id=$1",[a.tenantId]), { membershipId: a.actorId, bindRequest: false })).rejects.toThrow();
   for(const table of ['platform_statement','journal','recovery_fee_journal','action_outbox']){
    expect((await f.admin.query(`SELECT count(*)::int n FROM app.${table} WHERE tenant_id=$1`,[a.tenantId])).rows[0].n).toBe(0);
   }
@@ -81,21 +82,21 @@ describe("MON-3 END source persistence, company isolation and races",()=>{
   const results=await Promise.allSettled(snaps.map(s=>workTenant(f.admin,a.tenantId,async db=>{
    const command=randomUUID();await db.query("INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id,result,completed_at) VALUES($1,$2::uuid,'ch4.fixture',($2::uuid)::text,$3,'succeeded',$4,'{}',clock_timestamp())",[a.tenantId,command,'a'.repeat(64),a.actorId]);await db.query("SET LOCAL ROLE jobguard_migration");
    await db.query("INSERT INTO app.trial_admission(tenant_id,job_id,activation_id,snapshot_id,verification_id,command_id,admission_kind) VALUES($1,$2,$3,$4,$5,$6,'first')",[a.tenantId,s.jobId,s.activationId,s.id,verification,command]);
-  })));
+  }, { membershipId: a.actorId, bindRequest: false })));
   expect(results.filter(r=>r.status==='fulfilled')).toHaveLength(1);expect(Number((await f.admin.query("SELECT count(*) n FROM app.trial_start WHERE tenant_id=$1",[a.tenantId])).rows[0].n)).toBe(1);
  });
  it("skip then concurrent second-job attempts refuse before any activation or end; card replay is company-bound",async()=>{
   const a=await first(f),targets=await Promise.all([seedWorkJob(f,a.tenantId),seedWorkJob(f,a.tenantId)]);
   const before=(await f.admin.query("SELECT count(*)::int n FROM app.job_activation WHERE tenant_id=$1",[a.tenantId])).rows[0].n;
-  const attempt=(jobId:string)=>workTenant(f.runtime,a.tenantId,db=>db.query("SELECT app.mon3_activate($1,$2,$3,$4::jsonb)",[a.tenantId,a.digest,randomUUID(),JSON.stringify({version:'trial-admission.v1',activationId:randomUUID(),termsId:randomUUID(),jobId,acceptedDocumentId:randomUUID(),acceptedDocumentVersion:1,acceptedDocumentHash:'a'.repeat(64),expectedJobRevision:1,authorizationId:randomUUID()})]));
+  const attempt=(jobId:string)=>workTenant(f.runtime,a.tenantId,db=>db.query("SELECT app.mon3_activate($1,$2,$3,$4::jsonb)",[a.tenantId,a.digest,randomUUID(),JSON.stringify({version:'trial-admission.v1',activationId:randomUUID(),termsId:randomUUID(),jobId,acceptedDocumentId:randomUUID(),acceptedDocumentVersion:1,acceptedDocumentHash:'a'.repeat(64),expectedJobRevision:1,authorizationId:randomUUID()})]), { membershipId: a.actorId, bindRequest: false });
   for(const target of targets)await expect(attempt(target.jobId)).rejects.toThrow('TRIAL_COMPLETED_CARD_REQUIRED');
   const concurrent=await Promise.allSettled(targets.map(target=>attempt(target.jobId)));expect(concurrent.every(r=>r.status==='rejected')).toBe(true);
   expect((await f.admin.query("SELECT count(*)::int n FROM app.job_activation WHERE tenant_id=$1",[a.tenantId])).rows[0].n).toBe(before);
   expect((await f.admin.query("SELECT count(*)::int n FROM app.trial_end_source WHERE tenant_id=$1",[a.tenantId])).rows[0].n).toBe(0);
   const command=randomUUID();await requestCard(f,a,command);
-  const simulate=()=>workTenant(f.runtime,a.tenantId,db=>db.query("SELECT app.mon3_simulate_card($1,$2,$3,'{\"version\":\"trial-card-simulate.v1\"}')",[a.tenantId,a.digest,command]));
+  const simulate=()=>workTenant(f.runtime,a.tenantId,db=>db.query("SELECT app.mon3_simulate_card($1,$2,$3,'{\"version\":\"trial-card-simulate.v1\"}')",[a.tenantId,a.digest,command]), { membershipId: a.actorId, bindRequest: false });
   await Promise.all([simulate(),simulate()]);expect((await f.admin.query("SELECT count(*)::int n FROM app.trial_card_result WHERE tenant_id=$1",[a.tenantId])).rows[0].n).toBe(1);
-  const b=await meterCompany(f);await expect(workTenant(f.runtime,b.tenantId,db=>db.query("SELECT app.mon3_simulate_card($1,$2,$3,'{\"version\":\"trial-card-simulate.v1\"}')",[b.tenantId,b.digest,command]))).rejects.toThrow('TRIAL_CARD_ATTEMPT_REQUIRED');
+  const b=await meterCompany(f);await expect(workTenant(f.runtime,b.tenantId,db=>db.query("SELECT app.mon3_simulate_card($1,$2,$3,'{\"version\":\"trial-card-simulate.v1\"}')",[b.tenantId,b.digest,command]), { membershipId: b.actorId, bindRequest: false })).rejects.toThrow('TRIAL_CARD_ATTEMPT_REQUIRED');
  });
  it("new tables are owner-only, FORCE RLS and immutable; private helpers have no runtime execute",async()=>{
   for(const table of ['trial_start','trial_end_source','trial_subscription_source']){
@@ -119,11 +120,11 @@ const outcomes=await Promise.allSettled([run(0),run(1)]);
    expect(outcomes.filter(result=>result.status==='rejected').map(result=>result.status==='rejected'?(result.reason as Error).message:'')).toEqual(['TRIAL_COMPLETED_CARD_REQUIRED']);
    expect((await f.admin.query("SELECT count(*)::int n FROM app.trial_start WHERE tenant_id=$1",[a.tenantId])).rows[0].n).toBe(1);
    const firstCard=randomUUID();await requestCard(f,a,firstCard);
-   await workTenant(f.runtime,a.tenantId,db=>db.query("SELECT app.mon3_simulate_card($1,$2,$3,'{\"version\":\"trial-card-simulate.v1\"}')",[a.tenantId,a.digest,firstCard]));
+   await workTenant(f.runtime,a.tenantId,db=>db.query("SELECT app.mon3_simulate_card($1,$2,$3,'{\"version\":\"trial-card-simulate.v1\"}')",[a.tenantId,a.digest,firstCard]), { membershipId: a.actorId, bindRequest: false });
    const phone=(await f.admin.query("SELECT normalized_phone FROM app.trial_business_verification WHERE tenant_id=$1",[a.tenantId])).rows[0].normalized_phone;
    const b=await meterCompany(f);await verifyBusiness(f,b,`fictional_${randomUUID()}`,phone);await exactTarget(f,b);
    const nextCard=randomUUID();await requestCard(f,b,nextCard);
-   await workTenant(f.runtime,b.tenantId,db=>db.query("SELECT app.mon3_simulate_card($1,$2,$3,'{\"version\":\"trial-card-simulate.v1\"}')",[b.tenantId,b.digest,nextCard]));
+   await workTenant(f.runtime,b.tenantId,db=>db.query("SELECT app.mon3_simulate_card($1,$2,$3,'{\"version\":\"trial-card-simulate.v1\"}')",[b.tenantId,b.digest,nextCard]), { membershipId: b.actorId, bindRequest: false });
    const target=await repo.read(b.context,b.digest,b.jobId);
    await expect(repo.activate(b.context,b.digest,b.actorId,{version:'trial-switch-live.v1',commandId:randomUUID(),jobId:b.jobId,...target.target})).rejects.toThrow('TRIAL_IDENTITY_CONFLICT');
    expect((await f.admin.query("SELECT count(*)::int n FROM app.trial_start WHERE tenant_id=$1",[b.tenantId])).rows[0].n).toBe(0);
@@ -142,7 +143,7 @@ const outcomes=await Promise.allSettled([run(0),run(1)]);
    const ends=async()=>(await f.admin.query("SELECT kind FROM app.trial_end_source WHERE tenant_id=$1",[a.tenantId])).rows;
    await expect(activate(second.jobId)).rejects.toThrow('TRIAL_COMPLETED_CARD_REQUIRED');
    const card=randomUUID();await requestCard(f,a,card);
-   await workTenant(f.runtime,a.tenantId,db=>db.query("SELECT app.mon3_simulate_card($1,$2,$3,'{\"version\":\"trial-card-simulate.v1\"}')",[a.tenantId,a.digest,card]));
+   await workTenant(f.runtime,a.tenantId,db=>db.query("SELECT app.mon3_simulate_card($1,$2,$3,'{\"version\":\"trial-card-simulate.v1\"}')",[a.tenantId,a.digest,card]), { membershipId: a.actorId, bindRequest: false });
    await expect(activate(second.jobId)).rejects.toThrow('TRIAL_SUBSCRIPTION_TERMS_REQUIRED');
    expect(await ends()).toEqual([]);
    await historicalAgreement(f,a);const before=await keys();
@@ -161,7 +162,7 @@ const outcomes=await Promise.allSettled([run(0),run(1)]);
    await db.query("SET LOCAL session_replication_role='replica'");
    await db.query("INSERT INTO app.job_activation(id,tenant_id,job_id,accepted_document_id,accepted_document_version,accepted_document_hash,mode,activation_terms_version,fee_policy_version,actor_membership_id,activated_at) VALUES($1,$2,$3,$4,1,$5,'synthetic_demo','synthetic_demo_activation.v3','reference_fee_policy_v3',$6,clock_timestamp())",[randomUUID(),a.tenantId,a.jobId,randomUUID(),'a'.repeat(64),a.actorId]);
    await db.query("SELECT set_config('app.tenant_id',$1,true)",[randomUUID()]);
-  })).rejects.toThrow('TRIAL_CHECKED_ACTIVATION_REQUIRED');
+  }, { membershipId: a.actorId, bindRequest: false })).rejects.toThrow('TRIAL_CHECKED_ACTIVATION_REQUIRED');
   expect((await f.admin.query("SELECT count(*)::int n FROM app.job_activation WHERE tenant_id=$1",[a.tenantId])).rows[0].n).toBe(0);
  });
 

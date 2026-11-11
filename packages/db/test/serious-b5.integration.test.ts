@@ -9,7 +9,7 @@ import { DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID, prepareActiv
 import { PracticeActivationRepository } from "../src/activation-repository.js";
 import { migrate } from "../src/migrate.js";
 import { withTenant } from "../src/tenant-context.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { addFixtureCapture, asFixtureTenant, closeLockFixture, createLockFixture, LOCK_HASH, LOCK_OWNER, prepareLock, seedAccount, type LockFixture } from "./final-account-lock.integration.test.js";
 import { publishFixtureCompletion } from "./sv5pre-fixtures.js";
 import { readInvoicePdf } from "./serious-b5-pdf-reader.js";
@@ -22,7 +22,7 @@ afterAll(async () => {
  if (f) await closeLockFixture(f);
 });
 async function approve(tenantId: string, variationId: string, actor = LOCK_OWNER, pool = f.runtime) {
- return withTenant(pool, testTenantContext(tenantId), async db => {
+ return withTenant(pool, testTenantContext(tenantId, { membershipId: actor }), async db => {
   const row = (await db.$client.query("SELECT r.* FROM app.variation v JOIN app.variation_revision r ON(r.tenant_id,r.id)=(v.tenant_id,v.current_revision_id) WHERE v.tenant_id=$1 AND v.id=$2", [tenantId, variationId])).rows[0];
   const approval = { id: randomUUID(), revisionId: row.id, revision: row.revision, contentHash: row.content_hash,
    signedDeltaPence: Number(row.signed_delta_pence), method: "builder_attestation" as const, actorMembershipId: actor, evidenceId: null, approvedAt: new Date() };
@@ -32,7 +32,7 @@ async function approve(tenantId: string, variationId: string, actor = LOCK_OWNER
 }
 async function reprice(tenantId: string, variation: any, pence: number) {
  const id = randomUUID();
- await withTenant(f.runtime, testTenantContext(tenantId), db => insertPricedVariation(db, tenantId, {
+ await withTenant(f.runtime, testTenantContext(tenantId, { membershipId: variation.confirmed_by_membership_id }), db => insertPricedVariation(db, tenantId, {
   id, variationId: variation.variation_id, revision: variation.revision + 1, previousRevisionId: variation.id,
   scopeItemId: variation.scope_item_id, description: "Fictional repriced extra", quantity: "1", unit: "item",
   unitRatePence: Math.abs(pence), signedDeltaPence: pence, contentHash: "b".repeat(64), confirmedByMembershipId: variation.confirmed_by_membership_id,
@@ -76,7 +76,7 @@ describe("SERIOUS-B5 final accounts and invoice artifacts", () => {
   await seedAccount(f.admin, DEMO_TENANT_ID, 10000);
   await f.admin.query("INSERT INTO identity.identity_user(id) VALUES($1) ON CONFLICT DO NOTHING", [DEMO_IDENTITY_USER_ID]);
   await f.admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) SELECT $1,tenant_id,account_id,$2,'owner' FROM app.membership WHERE tenant_id=$3 AND id=$4 ON CONFLICT DO NOTHING", [DEMO_MEMBERSHIP_ID, DEMO_IDENTITY_USER_ID, DEMO_TENANT_ID, LOCK_OWNER]);
-  const context = testTenantContext(DEMO_TENANT_ID), service = new FinalAccountCommandService(f.runtime);
+  const context = await testBoundTenantContext(f.admin,DEMO_TENANT_ID,DEMO_MEMBERSHIP_ID), service = new FinalAccountCommandService(f.runtime);
   const jobId = await prepareActivationFixtureV3(f.admin, context, "Fictional B5 baseline", 10000, f.runtime);
   await new PracticeActivationRepository(f.runtime).start(context, jobId, { commandId: randomUUID(), scenario: "no_charge" });
   const variationId = randomUUID();
@@ -105,7 +105,7 @@ describe("SERIOUS-B5 final accounts and invoice artifacts", () => {
   const variation = await addFixtureCapture(f, a, 5000), approved = await approve(a.tenantId, variation);
   const auditBefore = (await f.admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1", [a.tenantId])).rows[0].n;
   await expect(repo.lock(a.context, a.input)).rejects.toMatchObject({ code: "STALE_REVISION" });
-  await expect(asFixtureTenant(f.runtime, a.tenantId, db => db.query("SELECT app.lock_final_account($1,$2,$3,$4,$5,$6,$7)", [a.tenantId,a.jobId,LOCK_OWNER,a.input.commandId,a.revisionId,1,a.input.declarationVersion]))).rejects.toThrow("STALE_OR_BLOCKED_FINAL_ACCOUNT");
+  await expect(withTenant(f.runtime, a.context, transaction => transaction.$client.query("SELECT app.lock_final_account($1,$2,$3,$4,$5,$6,$7)", [a.tenantId,a.jobId,LOCK_OWNER,a.input.commandId,a.revisionId,1,a.input.declarationVersion]))).rejects.toThrow("STALE_OR_BLOCKED_FINAL_ACCOUNT");
   expect((await f.admin.query("SELECT count(*)::int n FROM app.final_account_lock WHERE tenant_id=$1", [a.tenantId])).rows[0].n).toBe(0);
   expect((await f.admin.query("SELECT count(*)::int n FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [a.tenantId,a.input.commandId])).rows[0].n).toBe(0);
   expect((await f.admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1", [a.tenantId])).rows[0].n).toBe(auditBefore);

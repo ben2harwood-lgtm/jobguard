@@ -30,14 +30,14 @@
   {
     "file": "packages/db/src/quote-delivery-repository.ts",
     "line": 43,
-    "fingerprint": "2cead0e0b611ce6d4d66d5b7b040ac089c10a4a4c0f52876a899599a0323d5e2",
+    "fingerprint": "b4e916ec4fcee91265657a785634ae4bd66e3c14a2619fccb368173a2119a37e",
     "reason": "Business ActionExecutor.execute(context,id) is a terminal execute call; its first argument is not static SQL.",
     "code": "UNRESOLVED_COVERED_EDGE"
   },
   {
     "file": "packages/db/src/quote-delivery-repository.ts",
     "line": 44,
-    "fingerprint": "b45a28a9a69b397d36834ff45ccde77734ae8d992c8b2b32f69b69df07b5e046",
+    "fingerprint": "aa8a24c18eeb1b0d5db6fd07917687dca8474aebbcbb8c12dd8c38d4f6b7595a",
     "reason": "Second business ActionExecutor.execute(context,id) call has the same unresolved syntactic boundary.",
     "code": "UNRESOLVED_COVERED_EDGE"
   },

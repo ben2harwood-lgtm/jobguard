@@ -1,3 +1,4 @@
+import { testActorContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { ExtraApprovalRepository, ExtraRepository } from "../src/index.js";
@@ -14,11 +15,11 @@ beforeAll(async () => {
 afterAll(async () => { await c?.close(); vi.unstubAllEnvs(); });
 
 async function linked(approved = false, net = 40000, partial = false) {
- const s = await submitted(c, w, net), ctx = await w.ctx, actor = w.members.supervisor.member;
+ const s = await submitted(c, w, net), ctx = await testActorContext(c.admin, await w.ctx, w.members.supervisor.member), actor = w.members.supervisor.member;
  if (approved || partial) await approvals.approveExtraStep(ctx, actor, approveInput(s, 0));
  const canonicalId = await raiseOn(c, w, s.jobId);
  // An approved duplicate must point at an approved canonical extra (LS-111).
- await approvals.priceExtra(ctx, w.members.surveyor.member, { version: "price-extra.v1", commandId: randomUUID(), jobId: s.jobId, extraId: canonicalId, netPence: 40000 });
+ await approvals.priceExtra(await testActorContext(c.admin, ctx, w.members.surveyor.member), w.members.surveyor.member, { version: "price-extra.v1", commandId: randomUUID(), jobId: s.jobId, extraId: canonicalId, netPence: 40000 });
  const canonical = await approvals.submitExtra(ctx, actor, { version: "submit-extra.v1", commandId: randomUUID(), jobId: s.jobId, extraId: canonicalId });
  await approvals.approveExtraStep(ctx, actor, approveInput({ jobId: s.jobId, requestId: String(canonical.requestId), hash: String(canonical.revisionHash), net: 40000 }, 0));
  const link = await approvals.markDuplicate(ctx, actor, {
@@ -79,9 +80,9 @@ it("restarts a partially approved chain without copying earlier approvals", asyn
  await extras.unlinkDuplicate(ctx, unlink);
  const fresh = (await requests(s.extraId))[1]!;
  expect(await history(s.requestId)).toEqual(before);
- await expect(approvals.approveExtraStep(ctx, w.supervisor2.member, approveInput({ ...s, requestId: fresh.id }, 1))).rejects.toMatchObject({ code: "STEP_OUT_OF_ORDER" });
+ await expect(approvals.approveExtraStep(await testActorContext(c.admin, ctx, w.supervisor2.member), w.supervisor2.member, approveInput({ ...s, requestId: fresh.id }, 1))).rejects.toMatchObject({ code: "STEP_OUT_OF_ORDER" });
  await approvals.approveExtraStep(ctx, actor, approveInput({ ...s, requestId: fresh.id }, 0));
- await expect(approvals.approveExtraStep(ctx, w.supervisor2.member, approveInput({ ...s, requestId: fresh.id }, 1))).resolves.toMatchObject({ state: "approved" });
+ await expect(approvals.approveExtraStep(await testActorContext(c.admin, ctx, w.supervisor2.member), w.supervisor2.member, approveInput({ ...s, requestId: fresh.id }, 1))).resolves.toMatchObject({ state: "approved" });
 });
 
 it("scratch mutation: disabling the fix reproduces ALREADY_DECIDED; the trigger is restored in finally", async () => {

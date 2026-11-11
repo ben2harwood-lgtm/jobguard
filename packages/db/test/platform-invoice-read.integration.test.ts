@@ -28,9 +28,9 @@ it("refuses removed members, revoked members, non-owners, expired memberships an
   const user = (await f.admin.query("SELECT identity_user_id FROM app.membership WHERE id=$1", [t.a.actorId])).rows[0].identity_user_id;
   await f.admin.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3)", [user, t.a.tenantId, t.a.actorId]);
   for (const patch of ["revoked_at=clock_timestamp()", "role='admin'", "role='read_only'", "expires_at=clock_timestamp()-interval '1 second'"]) {
-    await workTenant(f.admin, t.a.tenantId, db => db.query(`UPDATE app.membership SET ${patch} WHERE tenant_id=$1 AND id=$2`, [t.a.tenantId, t.a.actorId]));
+    await workTenant(f.admin, t.a.tenantId, db => db.query(`UPDATE app.membership SET ${patch} WHERE tenant_id=$1 AND id=$2`, [t.a.tenantId, t.a.actorId]), { membershipId: t.a.actorId });
     await expect(reader().read(t.a.context, t.a.digest)).rejects.toThrow("PLATFORM_INVOICE_FORBIDDEN");
-    await workTenant(f.admin, t.a.tenantId, db => db.query("UPDATE app.membership SET role='owner',revoked_at=NULL,expires_at=NULL WHERE tenant_id=$1 AND id=$2", [t.a.tenantId, t.a.actorId]));
+    await workTenant(f.admin, t.a.tenantId, db => db.query("UPDATE app.membership SET role='owner',revoked_at=NULL,expires_at=NULL WHERE tenant_id=$1 AND id=$2", [t.a.tenantId, t.a.actorId]), { membershipId: t.a.actorId });
   }
   await expect(reader().read(t.a.context, "0".repeat(64))).rejects.toThrow("PLATFORM_INVOICE_FORBIDDEN");
   await f.admin.query("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE token_digest=$1", [t.a.digest]);
@@ -59,7 +59,7 @@ it("reads issued D02 examples and credits without starting collection or changin
   expect(await counts()).toEqual(before);
   expect(t.invoice).toMatchObject({ principalPence: 2900, taxPence: 580, grossPence: 3480, collectionStarted: false });
   for (const table of ["platform_invoice_document", "platform_invoice_source", "platform_invoice_issuer"]) {
-    await expect(workTenant(f.runtime, t.a.tenantId, db => db.query(`SELECT * FROM app.${table}`))).rejects.toMatchObject({ code: "42501" });
+    await expect(workTenant(f.runtime, t.a.tenantId, db => db.query(`SELECT * FROM app.${table}`), { membershipId: t.a.actorId })).rejects.toMatchObject({ code: "42501" });
     expect((await f.admin.query("SELECT has_table_privilege('jobguard_runtime',$1,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE') allowed", [`app.${table}`])).rows[0].allowed).toBe(false);
   }
   const routine = (await f.admin.query("SELECT prosecdef,proconfig FROM pg_proc WHERE oid='app.platform_invoice_read(uuid,text)'::regprocedure")).rows[0];

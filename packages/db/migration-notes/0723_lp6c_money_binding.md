@@ -1,0 +1,208 @@
+# LP-6c — protected identity for money and commitments (RED)
+
+Current fixture repair (7 Nov 2026) targets origin/main `e86164424c9ade677d963ed3d9f0d56ccc7faf8b` as merged by the launcher. Migration 0659 has moved by stem only to 1217, above main and every numeric reservation in coordinator/MIGRATIONS.txt (highest recorded reservation: 1216). SQL bytes are unchanged. The proof stem, contract references, test pins and lane move with it. The resolved MIGFIX-7 conflict keeps both the 28 LP-6c overload pins and main's four ancestry pins and content assertion. Router staging must complete the pending merge because this sandbox cannot write the Git index. Earlier dated entries below describe their historical heads/numbers; this paragraph supersedes them.
+
+The migration replaces 28 existing definitions, copying their latest predecessor bodies and adding identity comparisons before business access, locks and replay returns. Retained overloads and argument lists preserve compatibility; LP-3's withdrawn overloads stay withdrawn. Existing permission checks, exact approvals, resource checks, audit, money formulas and approval-time rules are preserved. In particular this does not change CH-7-TERMS clocks. The body-preservation test detects accidental edits to those controls against the actual predecessor files.
+
+Coverage includes the four old/new LP-3 routine pairs, v3 activation, both surviving invoice ports, invoice owner helpers and number reservation, financial posting/authorization ports, recovery terms/payer/allocations, receipt allocation scope/writes, and command begin/effect/completion. Financial ports without an actor argument compare the financial authorization's membership with the binding. Command helpers compare the supplied resource or persisted claim actor. A bound owner is still subject to permission and exact-approval checks. Historical fee derivation and remaining credential-bearing contractor/evidence paths retain their separately inventoried LP-6d/LP-8 scope; this is not whole-track closure.
+
+The meter's `mon1_company_actor` retains its real-session synthetic-environment check, prohibited shared tenant and live owner/admin permission, then uses `bind_request` and `current_actor` instead of a second SSO actor-selection bridge. A conflicting established binding fails. Five narrowly listed EXECUTE grants let existing migration/command definer owners access the binding; runtime gets no new grants or owner-role membership.
+
+No table/data migration or backfill. Apply transactionally after LP-6b. Forward-fix by retaining the identity guards and repairing affected callers; rolling back to argument-only authority is not a safe operational rollback. Business records and approval formats are unchanged. Existing owner-connected fixture transactions must also obtain a valid binding; there is no owner/session bypass for them.
+
+Builder validation is recorded in the supplied commit message. PostgreSQL integration, fresh/upgrade migrations, full catalog/grant checks and the whole PostgreSQL suite must run in CI; this sandbox cannot start PostgreSQL or bind localhost. Two exact-head security checks (including the second check required by Ben’s LP-6c approval) and green CI remain merge gates. No release, provider call, real customer data or live money is involved.
+
+The MON-8 upgrade test names every replaced overload explicitly and compares its exact new body while preserving the old header, ACL, owner and configuration checks; other routines retain full definition equality. The proof grants only five owner EXECUTEs and uses identity-form arguments without defaults. Source-derived proof expectations still require PostgreSQL confirmation.
+
+
+LP-6b opt-out inspection: the exact nine retained call sites are three enterprise-identity methods, OIDC create, three SSO-required methods, shadow persistence and audit-export refusal, as enforced by `lp6b-deferred-binding.test.ts`. None is a money, activation, acceptance or invoice routine. They stay with their named later cards; no new opt-out is introduced here. The settlement overload starts from 0567 and keeps its repaired payload-hash approval comparison, rather than restoring 0519's self-comparison.
+
+Local validation (4 Nov 2026): the installed Vitest runner passed two runs of at most three files and two workers: LP-6c + deferred-binding + migration-proof-loader (82 tests), then LP-6c + withTenant + LP-0 comparator (52 tests). The five LP-6c tests occur in both runs. Database package TypeScript typecheck passed. PL/pgSQL CASE-in-IF lint and money-arithmetic lint passed; diff whitespace check passed. The pnpm wrapper stalled before starting Vitest and was interrupted; the same installed runner was invoked directly. PostgreSQL integration/upgrade/catalog execution and browser checks were not attempted in this sandbox.
+
+Named holds for landing: full fresh/upgrade PostgreSQL CI, populated-row/body/ACL preservation and old/new-signature adversarial execution; current-main green CI; two independent security checks on the exact head; router staging/completion of the resolved merge; final migration-number availability. No additional scanner or source-pin edit was found necessary for this slice. Any later CI finding requiring a pin/scanner edit outside LP-6c's authorization must be routed to its owner. These gates do not prevent READY for the NOPR branch.
+
+Repair round 1 (6 Nov 2026), addressing `coordinator/prechecks/lp-6c-money-routines.md`: synthetic bootstrap now inserts a short-lived practice session under the existing migration role, then calls `bind_request('practice', …)` as runtime before the first seed command. The fixed practice resolver maps it to `DEMO_MEMBERSHIP_ID`. Commands and replay completion keep their identity checks. The credential stays internal and is revoked before commit; a binding refusal rolls back the seed transaction before any command. No additional grants, bypasses, opt-outs, migration bodies or other pieces' migrations changed. Proof changes are ordering only; there are no policy-role rows in this fragment.
+
+Customer messages remain an explicit joint-landing dependency: use the pre-check's option (b), landing LP-6c and the repaired `lp-6d-customer-proof` work in the same PR. LP-6c must not land alone. That customer piece must first fix its own pre-check finding by preserving 0375's `jobguard_catch` filter. Its 1000 migration is not copied into this branch. CI on the combined candidate must prove `demo-bootstrap.integration.test.ts` and `customer-portal-message.integration.test.ts` on real PostgreSQL, plus the seed consumers named by the check (`sandbox`, `migfix-8`, `lp1-seed`, audit-checkpoint handoff) and existing LP-6c refusal, upgrade and catalogue suites. Catch-up onto current LP-6b and renumbering remain later router work.
+
+Local repair validation: installed Vitest 4.1.12, explicit maxWorkers at most 2 and at most two named files per invocation. LP-6c and migration-proof-loader unit tests passed (81 tests). The existing bootstrap SQL-trace group passed (8 tests, 3 real PostgreSQL cases excluded by name); this includes first seed, replay, and the new binding-refusal regression. This is protocol evidence, not PostgreSQL execution. Database `tsc -p tsconfig.json --noEmit` (the package's typecheck and lint command), CASE-in-IF lint and money-arithmetic lint passed. All pre-existing refusal assertions remain. No database, browser, provider, release, git write, catch-up or renumbering was attempted.
+
+Commands: from `packages/db`, `./node_modules/.bin/vitest run --maxWorkers=2 test/lp6c-money-routines.test.ts test/migration-proof-loader.test.ts` (81 passed, repeated after proof sorting), `./node_modules/.bin/vitest run --maxWorkers=1 test/demo-bootstrap.integration.test.ts -t 'bootstrap SQL trace'` (8 passed), and `./node_modules/.bin/tsc -p tsconfig.json --noEmit` (passed). From the root, `node tools/plpgsql-case-in-if-lint.mjs`, `node tools/money-arithmetic-lint.mjs` and `git diff --check` passed. The first `node tools/lint.mjs` used its default comparison and refused inherited LP-6b paths. With the check's exact branch base, `LANE_BASE_REF=ca05fd9240627059cbbd19f4104fa5e8b690b96d node tools/lint.mjs` passed all boundary lints. This uses the existing base-selection interface; no lint rule or permission was changed. The lane's nine non-lane paths match the entire diff from that base, and the proof fragment's records are unchanged apart from sorting.
+
+READY for NOPR router handoff, subject to the joint-landing and CI/security gates above.
+
+Repair round 2 (last, 6 Nov 2026): addressed the real-PostgreSQL re-check `coordinator/prechecks/lp-6c-money-routines-pg-recheck.md` and LP-8b's lower-layer watchdog finding. The shared test-only `testBoundTenantContext` persists a synthetic identity session plus its email/membership locator and returns the existing session-bearing context. Commands, LP-5 commands, quote and quote-reacceptance now use it after identity setup; replay-contract uses it through its shared watchdog harness. Alternate replay actors have their own bound sessions, preserving the original conflict assertions. Contractor-parties uses its existing contractor-practice session for the owner and persisted real sessions for invited actors. Watchdog import also binds its exact newly created membership before dispatch. No guard or refusal assertion is weakened.
+
+Bootstrap now uses a short-lived real identity session in the synthetic database, with explicit email/locator setup, instead of inserting a practice session. This uses the existing binding path without firing 0109's `saved_v1_sample_on_session`; it neither disables the trigger nor adds a seed bypass. The digest stays internal, is revoked before commit, and binding refusal still rolls back the transaction. Existing PostgreSQL assertions retain the exact job list across two bootstraps. The SQL-trace regression now also asserts no practice-session insert occurs.
+
+Restored `search_path=pg_catalog,app,pg_temp` on the four legacy acceptance/disposition/activation/settlement overloads; their authorized overloads already retained it. Added a regression assertion for all eight. All 27 copied routine bodies, after removing only LP-6c's identity guards, were compared with the latest definition for each signature in locally available `origin/main` b0ae55c4686861e61af7b6b2b759ecdcb425205e: no body differences. Search paths match those definitions except the four requested legacy hardenings; no routine was rebuilt from an older body. The existing proof fragment already declares pg_temp for these overloads and requires no change.
+
+Local round-2 validation: Node 24.17.0 and installed Vitest 4.1.12; no downloads. `node packages/db/node_modules/vitest/vitest.mjs run --root packages/db --maxWorkers=2 test/lp6c-money-routines.test.ts test/migration-proof-loader.test.ts src/commands-replay.test.ts`: 85 passed. `node packages/db/node_modules/vitest/vitest.mjs run --root packages/db --maxWorkers=1 test/demo-bootstrap.integration.test.ts -t 'bootstrap SQL trace'`: 8 passed, 3 database tests excluded. Database TypeScript `--noEmit` passed. `LANE_BASE_REF=ca05fd9240627059cbbd19f4104fa5e8b690b96d node tools/lint.mjs` passed (existing computed-import reports are non-refusing). `git diff --check` passed. Two additional Vitest collection-only runs (three named files each, two workers) imported commands/replay/LP-5 and quote/reacceptance/contractor-parties; every database test was deliberately skipped. Collection and SQL-trace tests are not PostgreSQL proof.
+
+CI must run the re-check's exact suites on embedded PostgreSQL after hydrate-symlinks and through pg-slot.sh, at most two workers and at most three named files per run: `demo-bootstrap.integration`, `customer-portal-message.integration`, `commands.integration`, `command-replay-contract.integration`, `lp5-commands.integration`, `src/commands-replay.test`, `migration-proof-loader`, `lp-0-grant-freeze.integration`, `lp-0-authority-paths.integration`, `quote.integration`, `quote-reacceptance.integration`, and `contractor-parties.integration` (plus the re-check's control `enterprise-identity.integration`). Also run `lp6c-money-routines.integration`, `plan-entitlement-lifecycle-upgrade.integration`, the seed consumers named above, and the affected watchdog consumers `evidence.integration`, `proof-replay.integration`, `serious-b4-evidence-proof.integration`, `watchdog-legacy-identities.integration`, `watchdog-lock-order.integration`, `audit-fix-dbsrc-04.integration`, `proof-application-records.integration`, `lp5b-writers.integration`, `proof-invalidation.integration`, `job-work-state-post-lock.integration` and LP-8b's own evidence suite on its combined candidate. Full required typecheck/lint/test/build, fresh/upgrade/catalog and affected browser checks remain CI gates. PostgreSQL cannot start and localhost cannot bind in this sandbox, so no database/browser run was attempted, and no hydration/download was necessary for the installed local runners.
+
+READY for NOPR router handoff. This is implementation/local-check readiness, not independent review, PostgreSQL verification, acceptance or merge. Land only with repaired LP-6d customer-proof after LP-6b; retain the migration-number clash/catch-up hold and exact-head independent RED review/security checks and green CI. No git write, commit, push, PR, deployment, provider or real-data action was performed.
+
+LP-6C-CATCHUP (6 Nov 2026): resolved the sole content conflict in `plan-entitlement-lifecycle-upgrade.integration.test.ts` as the union of main's named successor checks and LP-6c's 28 exact overload checks. The 0567 settlement payload-hash assertion is retained before adding the binding replacement; MON-8's intentional body exclusion also excludes its source field, and main's demo-issuer metadata comparison excludes that newly selected source field while its complete body remains checked. No business behaviour or refusal expectation changed. MIGFIX-7 now lists all 28 exact LP-6c successor identities, with explicit overload positions for the four overload pairs; its delimiter reader accepts the existing `$$ ;` terminator without truncating a body. Both tests retain main's independent metadata/ACL assertions and all unrelated body checks. No additional list-style full-body successor table was found in the upgrade tests.
+
+Verified all 323 main migrations are byte-identical to `origin/main`; the renamed LP-6c SQL is byte-identical to accepted HEAD. The body-preservation regression checks all 27 copied bodies against the latest predecessors through 0658. No recreated routine needed a body update. The lane lists exactly the 18 existing changed non-lane paths against main, including the three renamed artifacts, and never lists itself. The missing external `coordinator/prechecks/lp-6c-money-routines-r2-pg-recheck.md` was not treated as new verification: retain its eight named test-only holds and the previously recorded joint-landing conditions.
+
+Catch-up local validation: `node packages/db/node_modules/vitest/vitest.mjs run --root packages/db --maxWorkers=2 test/lp6c-money-routines.test.ts test/migration-proof-loader.test.ts src/commands-replay.test.ts` passed 86 tests. `node packages/db/node_modules/vitest/vitest.mjs run --root packages/db --maxWorkers=1 test/demo-bootstrap.integration.test.ts -t 'bootstrap SQL trace'` passed 8 tests, with 3 database tests excluded. `node node_modules/typescript/bin/tsc -p packages/db/tsconfig.json --noEmit` passed. `node tools/plpgsql-case-in-if-lint.mjs` and `node tools/money-arithmetic-lint.mjs` passed. Collection-only imports of `plan-entitlement-lifecycle-upgrade.integration`, `migfix-7-upgrade.integration` and `lp6c-money-routines.integration` succeeded with all 10 tests deliberately skipped; this is not database proof. A static check confirmed each of MIGFIX-7's 28 exact successor rows selects the complete correct overload body. `git diff --check` passed. The pnpm typecheck wrapper and direct Turbo equivalent stalled before compiler execution and were interrupted; only the direct database compiler is claimed as passed.
+
+`LANE_BASE_REF=origin/main node tools/lint.mjs` reached the lane check, which refused old 0591 deletions and inherited main paths because the Git index still represents the unfinished merge. This sandbox cannot stage or complete it. Do not widen the lane to those inherited paths: rerun the real lint after router staging/merge completion. CI must prove full required typecheck/lint/test/build, fresh and populated upgrades, exact routine bodies and ACL/catalog preservation (especially MON-8 and MIGFIX-7), all bound/forged/replay money paths and the earlier named PostgreSQL/seed/watchdog suites, plus affected browser journeys. Keep database/browser runs in CI, at most two workers and at most three named Vitest files per run. Exact-head independent RED review/security checks, the existing eight test-only holds and previously recorded joint-landing conditions remain; local checks do not close them.
+
+READY for router staging, commit and CI handoff. No Git write, commit, push, PR, database startup, localhost bind, download, deployment, provider, live-money or real-data action was performed.
+
+
+7 Nov fixture repair / READY for router commit and CI (RED)
+
+Repaired watchdog duplicate declarations and the loaded-module actor path, shared the real attestation digest with the replay harness and removed duplicate identity inserts, used literal replacement callbacks for SQL bodies, and added an exact three-function ACL expectation with focused negative coverage. Main's bodies/pins are retained. Positive money fixtures now carry real persisted request credentials: work jobs and meter companies, both final-account helpers and the invoice suite's direct call, activation/acceptance, recovery allocations with a context per practice session, review confirmation, evidence/proof actors, invoice prerequisites and direct receipt-fact attacks. Historical schemas retain their pre-binding setup until bind_request exists. No product implementation or SQL-body edit was made in this repair; no assertion was removed or relaxed.
+
+Local checks: direct installed Vitest, <=2 workers and <=3 named files per invocation: LP-6c + LP4 writer (25 passed), LP-6b deferred-binding + withTenant + migration-proof-loader (94 passed), enterprise-access focused policy/ACL comparisons (3 passed, DB case skipped). Core build and database tsc --noEmit passed; PL/pgSQL CASE lint and money arithmetic lint passed. Suite imports of 15 named database files succeeded with 316 tests deliberately excluded, not PostgreSQL execution. An initial replay-suite import failed against stale core dist; rebuilding the installed core package resolved it. The pnpm wrapper stalled before Vitest and was interrupted; no package download is required or claimed. TypeScript transpilation checked every changed test/fixture for syntax. A broader ad hoc test-file semantic scan also reported existing fixture typing issues; it is not the repository typecheck gate.
+
+Source-inspected refusal-code holds, with assertions unchanged (CI must report the actual results): accounting-export-route-change's wrong-tenant/actor test, FORCE-RLS/session-boundary test and checked-read/cross-tenant test; notice-fixture-records' stale/revoked/foreign decision and forged-actor test; UIWIRE-12's revoked-membership replay (expects raw 42501, while a revoked bound credential fails earlier with public FORBIDDEN); LP3 activation's settlement SQL actor attack (expects FORBIDDEN, while the SQL identity guard returns 42501/REQUEST_BINDING_REFUSED); recovery-case-terms' direct forged-exact-input revoked/expired owner cases (binding refuses before the old RECOVERY_TERMS_AUTHORIZATION_INVALID assertion). Those deliberately invalid credentials/actors cannot honestly acquire the valid binding needed to reach the former error site. Product error translation is outside this fixture-only repair. The earlier eight fixture gaps have been repaired in source; they are not declared PostgreSQL green.
+
+All full PostgreSQL/catalog/fresh-and-upgrade suites and affected browser journeys (including m4-4-evidence-holds) remain CI-only. Current-head green CI, independent RED review/security checks, joint-landing conditions and router completion of the merge remain gates. READY means ready for that handoff, not accepted, merged or released.
+
+Final checks: another collection-only group (final-account-lock-invoice, lp5-commands, proof-replay) loaded with 39 tests excluded; no PostgreSQL was started. Syntax transpilation passed for all 32 changed TypeScript files. SQL SHA-256 remains e0ec950aa4e49c9c079e4303098c1bb0d20c7053a20cf7f62c21275695d10708; all 329 origin/main migration files are byte-identical. The lane lists the exact 36 non-lane paths changed against origin/main, including the three moved artifacts. `git diff --check` passed. `LANE_BASE_REF=origin/main node tools/lint.mjs` passed core purity but failed lane validation because the read-only Git index still includes the pre-merge LP-6c deletions and inherited main changes; router staging/merge completion and rerunning lint are required. The lane is deliberately not expanded to inherited main paths.
+
+LATER / SIMPLICITY: packages/db/test/meter-persistence-fixtures.ts and job-work-state-fixtures.ts could share one session issuance call for the meter fixture; that would remove duplicate credential setup and reduce uniqueness maintenance. Deferred to keep this repair focused.
+
+7 Nov coordinator FIX follow-up at b9b7aca8
+
+READY for router assessment with the following named holds. The commit-message file says do not commit while these remain unresolved.
+
+Fixture repairs now bind persisted LP-6b credentials for customer quote setup, serious quote fixtures, raw recovery-allocation acceptance, recovery allocation races, final-check/catch fixtures, contractor evidence fixtures, historical LP-5/reacceptance/terms contexts after upgrade, watchdog negative-path owners and direct positive final-lock calls. Historical schemas retain sessionless contexts until the binding foundation exists. The CH-1 0108 upgrade fixture uses its own historical context because that database has no bind_request function. Raw binding calls added here use text/text/uuid casts.
+
+Work-state fixtures bind the exact practice membership through a separate real identity credential. This additional credential lets the existing practice-session revocation races revoke the practice credential while a command waits on its job lock. Binding the practice credential itself there would hold its session row FOR SHARE and obstruct the revocation being tested. Direct command/link/invoice race paths use the same real credential. The assertions are retained.
+
+The lock observer excludes only credential/request-binding row locks acquired by the bind_request statement when finding the first business lock. Advisory locks, app business rows, later credential lock upgrades and strong table locks remain visible. Source inspection of 0562, identity.sso_session_memberships and authenticate_practice_session found credential/session locking and request-binding insertion, with no business-row lock on the real-session path used by this harness. Regression tests exercise both allowed setup locks and forbidden business/advisory/post-audit locks.
+
+Repository adapters recognize the exact SQLSTATE 42501 / REQUEST_BINDING_REFUSED pair and the sanitized LP-6b wrapper. Accounting export, platform invoice, VAT, notice, manual order, final lock, receipt and recovery terms retain their specific refusal surfaces. Pay-now and retention distinguish a sanitized initial binding failure from a raw later meter binding refusal. Interim draft already preserves its existing UNAVAILABLE refusal. AIS already defaults binding refusals to AIS_FORBIDDEN. Neither existing default resolves the database/environment distinction described below.
+
+Actual local results
+
+- node packages/db/node_modules/vitest/vitest.mjs run --root packages/db --maxWorkers=2 test/lp6c-fixture-compatibility.test.ts test/lp6c-money-routines.test.ts src/platform-invoice-read-repository.test.ts passed 16 tests.
+- The separate run of lp6b-deferred-binding, lp6b-withtenant and migration-proof-loader passed 94 tests with two workers.
+- The separate run of lp6c-fixture-compatibility, platform-invoice-read-repository and customer-practice-pay-now-fixtures passed 12 tests with two workers.
+- lp6b-caller-compatibility alone has 5 passed and 1 failed. The failed assertion is unchanged and is named below.
+- node node_modules/typescript/bin/tsc -p packages/db/tsconfig.json --noEmit passed. Syntax transpilation checked all 30 changed TypeScript files with zero errors.
+- Collection-only runs loaded the three work-state command suites with 50 tests excluded and recovery-allocation, recovery-case-terms-upgrade and job-activation-terms with 33 tests excluded. These are import checks.
+- LANE_BASE_REF=origin/main node tools/lint.mjs passed, including core purity, lane boundary, money, commercial, AI-provider and PL/pgSQL checks. git diff --check passed.
+- The pnpm launcher failed its version-signature verification after registry fetch failures. Installed Node/TypeScript/Vitest entry points supplied the results above.
+
+Named holds
+
+- LOCAL_RETENTION_COMPAT is an executed failure at test/lp6b-caller-compatibility.test.ts line 58. It expects RETENTION_UNAVAILABLE for an initial binding refusal. The requested retention mapping returns RETENTION_UNAUTHENTICATED. Its expectation has been preserved.
+- PAY_NOW_AUTH_SPLIT is source-inspected. A revoked membership and an expired identity session both produce the same sanitized initial binding exception, so pay-now cannot recover their previous distinct FORBIDDEN/UNAUTHENTICATED codes from that exception alone. The unchanged raw-SQL revoked-membership assertion additionally expects METER_FORBIDDEN, while 1217 propagates REQUEST_BINDING_REFUSED before an adapter can map it. No PostgreSQL result is claimed for this hold.
+- AIS_DATABASE_DARK is source-inspected. A session-bearing context against the alternate postgres database fails binding before dark_ais can return AIS_DARK_ONLY, leaving AIS_FORBIDDEN. Repository refusal mapping alone cannot infer that database distinction from the shared binding exception.
+- LP3_SQL_ACTOR is source-inspected. The unchanged direct settlement actor attack expects FORBIDDEN, while the immutable 1217 identity guard raises SQLSTATE 42501 / REQUEST_BINDING_REFUSED. This is a raw SQL assertion.
+- TERMS_RAW_OWNER is source-inspected. The unchanged direct forged-exact-input revoked/expired-owner cases fail the binding before their older RECOVERY_TERMS_AUTHORIZATION_INVALID check. The repository terms adapter does not intercept those direct SQL calls.
+- POSTGRES_BROWSER_PROOF remains pending. The checker's 38 failing database files, all cascades, fresh/populated upgrades, catalog/grant checks and browser journeys require execution in GitHub CI with at most two workers. Current-head independent RED/security checks remain required.
+
+Migration 1217 SHA-256 is e0ec950aa4e49c9c079e4303098c1bb0d20c7053a20cf7f62c21275695d10708, matching the accepted SQL. The lane records all 69 non-lane differences against the current local origin/main c2c00dd32fa6b7832a34d77dc0f7c8c67ce5d5a0, including inherited branch differences and the new focused regression test. Existing assertions and migration bodies are preserved. Local passing runs do not clear the named holds.
+
+7 Nov repair 3 — READY for router commit and CI (RED)
+
+Extra-work calls now bind a persisted LP-6b identity credential for the actual operative, surveyor, supervisor, approver or owner used by each command. The shared actor helper retains historical-schema contexts and preserves the original caller context for foreign-tenant attacks. It uses the existing session fixture writer, rather than granting runtime any new authority. The pre-0141 evidence tests query the historical cluster, not the current cluster, when choosing compatibility behavior. Extra raw owner setup also binds a persisted owner. Every existing success, conflict, refusal, isolation and nothing-written assertion remains, with the refusal expectation changes named below.
+
+Final-check builder contexts remain credential-bound. Shadow worker calls now use the existing queued-job context: the shadow role intentionally cannot execute bind_request and must pass its existing SQL worker/tenant/lock gates. This fixes the final-check/catch and post-lock evidence-pack fixtures without adding shadow grants or impersonating a builder. Recovery bundle reads bind the actual seeded membership. Positive raw CH-4 owner commands, imported watchdog party corrections and the purchase-order other-owner session/replay now bind their exact actors.
+
+Named direct-SQL changes: PAY_NOW_AUTH_SPLIT accepts REQUEST_BINDING_REFUSED only for the raw revoked-membership meter attack; raw revoked/expired sessions retain PAY_NOW_UNAUTHENTICATED/28000. LP3_SQL_ACTOR accepts 42501/REQUEST_BINDING_REFUSED for its hand-written settlement actor substitution. TERMS_RAW_OWNER explicitly binds inside the raw SQL transaction: revoked/expired owners accept 42501/REQUEST_BINDING_REFUSED; the active non-owner still reaches RECOVERY_TERMS_AUTHORIZATION_INVALID. WORK_STATE_PRELIVE_REVOKED_SQL, WORK_STATE_NORMAL_OWNER_SQL (revoked/expired branches only) and WORK_STATE_REVOKED_EXPIRED_SQL accept the raw binding refusal. Existing rollback/nothing-written checks remain. No generic alternative-code matcher was added.
+
+The other named cases are repository/positive fixture paths, not direct-SQL exceptions. AIS_DATABASE_DARK now supplies an actual credential stored in the alternate database, so its dark-only assertion can reach the database-name gate. ORDER_OTHER_OWNER_BINDING and WATCHDOG_PARTY_ACTOR fix positive actor binding and retain their assertions. INTERIM_READ_AFTER_REVOCATION adds the missing read refusal assertion, then restores only the fictional session before comparing stored facts. LOCAL_RETENTION_COMPAT expects the already-built RETENTION_UNAUTHENTICATED public response. ALLOCATION_REVOKED_EXPIRED_REPOSITORY and the repository portion of PAY_NOW_AUTH_SPLIT expect their already-built public FORBIDDEN and UNAUTHENTICATED responses respectively. These public calls are never relabelled as raw REQUEST_BINDING_REFUSED. Purchase-order raw wrapper refusal assertions remain ORDER_ACTION_INVALID because that SQL wrapper already translates insufficient_privilege. No production repository implementation or public refusal mapping changed.
+
+Actual local verification:
+- Installed Vitest: `node packages/db/node_modules/vitest/vitest.mjs run --root packages/db --maxWorkers=2 test/lp6c-fixture-compatibility.test.ts test/lp6c-money-routines.test.ts test/lp6b-caller-compatibility.test.ts`: 21 passed, including new actor-credential, historical-schema and foreign-actor fixture regression checks.
+- Installed TypeScript: `node node_modules/typescript/bin/tsc -p packages/db/tsconfig.json --noEmit`: passed. Transpilation of all 29 changed TypeScript files: zero syntax errors. An additional semantic scan of changed lines reported zero diagnostics; this is not a full test-file typecheck gate.
+- Seven collection-only Vitest invocations, at most two workers and three named files each, loaded the 20 named database suites (401 test exclusions across invocations, including the repeated interim suite). Groups: site-extra-evidence/extra-evidence-packs/extra-evidence-pack-timing; evidence-pack-v3-post-lock/customer-practice-pay-now/evidence-bundle; purchase-order-audit/job-work-state-commands/command-replay-contract; site-extra-priced-evidence/site-extra-evidence-routines/enterprise-live-prompt-commands; pay-now-preview/ais/lp3-activation-acceptance; recovery-case-terms/recovery-allocation/interim-draft-screen; evidence-bundle-screen/watchdog/interim-draft-screen. Each used `-t '^LP6C_COLLECTION_ONLY$'`. No PostgreSQL hook or database assertion ran.
+- `LANE_BASE_REF=origin/main node tools/lint.mjs`: passed, including lane, core purity, money, commercial, provider and PL/pgSQL checks. `git diff --check`: passed.
+
+1217 remains byte-identical to f8777e74 with SHA-256 e0ec950aa4e49c9c079e4303098c1bb0d20c7053a20cf7f62c21275695d10708. The lane contains all non-lane differences against the observed origin/main 1718270296ff6f54f9a9da8b7f2ce0970aaf1e11 (105 paths, including inherited differences), excludes config/lanes paths and does not list itself. No Git write, database startup, localhost bind, package download, provider or real-data action occurred. READY is a commit/CI handoff only: the router must run real PostgreSQL/fresh-and-upgrade/browser suites with at most two workers, obtain green current-head CI and independent exact-head RED review before landing. Earlier local or coordinator results are not claimed for this repair's uncommitted head.
+
+7 Nov repair 5 — security body correction and scoped fixture repair (RED)
+
+1217 now copies `final_check_require_invoice_actor(uuid,uuid,uuid)` from
+0667_final_check_practice_owner_check.sql statement for statement, inserting only
+its existing LP-6c identity block immediately after BEGIN. The import-edge-aware
+`final_check_practice_owns_job` check, owner, signature and REVOKE are preserved.
+All other 1217 bytes are unchanged apart from this routine's predecessor comment.
+SHA-256: be4153ae2e5af0bed809bdb5c0e4d7def322c8b398e23472256d7e330b0b80f5.
+
+Latest-body audit against origin/main 4d563c5d860a6130c2b82546343c9641cffd844b:
+all 28 recreated routines were searched past their named predecessors. Only the
+invoice-actor helper had fallen behind its latest same-signature body (0667).
+Later definitions of builder acceptance and quote disposition (0519), switch-live
+(0519), and simulated settlement (0519/0567) are separate overloads already copied
+separately in 1217. No other same-signature body needs replacement. The unchanged
+source-preservation regression confirms all 27 guarded copied bodies match their
+latest predecessor after removing only the LP-6c blocks; the meter bridge retains
+its separately tested credential-binding change. The supplied routine list's
+bind_request/current_actor references are grants/calls, not recreated bodies.
+The proof records the additional ownership-helper call before and after 1217;
+its predecessor pg_get_functiondef hash is null pending real PostgreSQL capture,
+rather than retaining the obsolete pre-0667 hash. No ACL or grant changed.
+
+The router had already started the requested main merge before this session.
+The one textual conflict in migfix-7-upgrade keeps main's 0665/0668 entries and
+all LP-6c entries and tuple typing. Git's index remains unmerged until the router
+stages this resolution; this sandbox performed no Git writes.
+
+The synthetic context helper records exactly the membership passed to its
+constructor (including its existing default id). Binding queries only that id
+in the context's tenant, with live-membership predicates. Missing/foreign/dead
+members remain unbound. The owner-role fallback is removed. Session reuse and
+explicit bound:false / bindRequest:false opt-outs remain. The setup wrapper now
+handles connect-only race/loss facades through their actual client and reuses
+that client for withTenant, preserving connection barriers and release ownership.
+Owner-only setup still follows its existing path.
+
+The mechanical sweep adds named actors to 217 type-inspected calls plus the
+explicit recovery/invoice/migration/helper fixture contexts. It changes no
+expectation. Step 4 is not complete: additional explicit-actor repository calls
+still pass an owner fixture context (for example contractor-billing-allocation's
+supervisor approval and site-extra-authority's role matrix). They need individual
+actor contexts while preserving any intentionally revoked/expired credentials.
+No blanket actor substitution or new test bypass was added.
+
+There is also a concrete scope conflict with the required unchanged
+final-check-practice-owner.integration.test.ts: its scoped() helper issues BEGIN
+and tenant configuration directly through practiceMaterialPool without calling
+withTenant or bind_request. Its mutation proof also sets tenant/digest directly
+after SET LOCAL ROLE, then expects an invoice write with only the ownership guard
+removed. The surviving LP-6c actor guard still refuses that unbound write. Keeping
+the test byte-identical, keeping the production pool/binding code unchanged, and
+requiring this test to pass cannot all be established by steps 1-4. This repair
+preserves both the guard and every test assertion. Real PostgreSQL execution is
+still required; this is a source-inspected conflict, not a reported database run.
+
+Actual repair-5 local verification:
+- Installed Vitest, 2 workers, three named files: lp6c-fixture-compatibility,
+  lp6c-money-routines and lp6b-caller-compatibility: 23 passed. This includes new
+  exact-member/no-owner-fallback and existing-session/no-refresh fixture checks.
+- 34 collection-only invocations loaded 100 selected suites with zero failures
+  (1,225 excluded tests), at most three named files and two workers per invocation.
+  The three named raw-SQL suites were loaded again after their binding opt-outs
+  were made explicit (79 exclusions). The final setup wrapper was loaded through
+  audit-fix-dbsrc-08, practice-invoice-audit and unchanged practice-owner (16
+  exclusions). These are import/collection checks, never PostgreSQL passes.
+- Installed TypeScript package typecheck passed. A test-file changed-line semantic
+  scan reported zero diagnostics across 107 files. git diff --check passed.
+- Core purity, money arithmetic, commercial boundary, AI-provider boundary and
+  PL/pgSQL CASE-in-IF checks passed (334 migrations). Full tools/lint.mjs stopped
+  at the lane gate: the pre-existing, unfinished main merge leaves staged main
+  paths visible as local changes, including other lanes' registration files.
+  The lane was not granted those unrelated paths or lane-registration authority.
+- Every existing expectation is unchanged, including the named direct-SQL cases.
+  PAY_NOW_AUTH_SPLIT, TERMS_RAW_OWNER and WORK_STATE_NORMAL_OWNER_SQL explicitly
+  retain unbound setup before their own binding/guard calls; their comments and
+  nothing-written checks remain. No test was deleted, weakened or skipped in code.
+
+NOT READY / do not commit the complete repair. Step 4 remains incomplete, the
+unchanged raw-SQL practice-owner test needs a scoped resolution, and the router
+must finish/stage its merge before the lane gate can be assessed on the final
+commit. The security correction is separately identifiable in the 1217 diff for
+priority handling. PostgreSQL, fresh/upgrade/catalog/migration suites, whole-db
+comparison with main, pg_dump restore proof, browsers, CI and independent exact-
+head RED review were not run here. No packages were downloaded, no database or
+browser was started, no provider was used and no Git write occurred.

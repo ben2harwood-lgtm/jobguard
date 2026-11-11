@@ -87,3 +87,16 @@ describe("DEMO-I repository boundary (no PostgreSQL proof)",()=>{
   await expect(f.repo.execute(f.context,digest,"report",id,{snapshotId:id,facts:run})).rejects.toThrow("INVALID_DEMO_INPUT");
  });
 });
+
+it.each([
+ ["42501", "REQUEST_BINDING_REFUSED", "DEMO_FORBIDDEN"],
+ ["XX000", "REQUEST_BINDING_REFUSED", "DEMO_UNAVAILABLE"],
+ ["42501", "unrelated permission denial", "DEMO_UNAVAILABLE"],
+])("maps only the exact binding refusal (%s, %s) and rolls back", async (sqlstate, message, expected) => {
+ const error = Object.assign(new Error(message), { code: sqlstate });
+ const f = fixture(undefined, error);
+ await expect(f.repo.execute(f.context,digest,"create",null,command)).rejects.toThrow(expected);
+ expect(f.query).toHaveBeenLastCalledWith("ROLLBACK");
+ expect(f.query.mock.calls.some(([sql]) => sql === "COMMIT")).toBe(false);
+ expect(f.release).toHaveBeenCalledOnce();
+});

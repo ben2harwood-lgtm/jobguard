@@ -41,6 +41,7 @@ export class ConnectorPromotionRepository {
       const context: VerifiedTenantContext = await contractorSessionContext(this.pool, sessionId);
       const principal = await new ContractorRepository(this.pool).resolveSession(sessionId);
       return await withTenant(this.pool, context, async db => {
+        if (principal.tenantId !== context.tenantId) throw new WorkOrderError("NOT_FOUND");
         const input = parsed.data;
         const event = (await this.events(db, sessionId, input.namespace, input.eventId))[0]!;
         if (event.kind === "billing_status") {

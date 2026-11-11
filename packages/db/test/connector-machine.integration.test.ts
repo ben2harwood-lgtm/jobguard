@@ -13,7 +13,7 @@ const version = "connector-machine-command.v1";
 const input = {version:"connector-input.v1",eventId:"fixture:event",subject:"fixture:order",revision:1,kind:"work_order",document:"fixture:doc"};
 const own = "0621_connector_machine.sql";
 const manage = (a:Company,c:string,op:string,v:unknown,command=randomUUID()) => workTenant(f.runtime,a.tenantId,async db =>
-  (await db.query("SELECT app.connector_machine_command($1,$2,$3,$4,$5,$6::jsonb) value",[a.tenantId,a.digest,command,c,op,JSON.stringify(v)])).rows[0]!.value);
+  (await db.query("SELECT app.connector_machine_command($1,$2,$3,$4,$5,$6::jsonb) value",[a.tenantId,a.digest,command,c,op,JSON.stringify(v)])).rows[0]!.value, { membershipId: a.actorId, bindRequest: false });
 const authority = async(c:string,secret=token) => (await machine.query("SELECT connector.machine_authority($1,$2) value",[c,secret])).rows[0]!.value;
 async function setup() {
   const a=await meterCompany(f),c=randomUUID(),command=randomUUID();
