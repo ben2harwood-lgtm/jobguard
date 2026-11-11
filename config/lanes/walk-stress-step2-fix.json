@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "walk-stress-step2-fix": {
+      "branches": [
+        "codex/sandbox/walk-stress-step2-fix"
+      ],
+      "note": "Main-red fix after #728: step-2 tour spotlight targets Save draft revision so the phone dock no longer scrolls mid double-tap (WALK-stress:76 mobile). One line. No migrations.",
+      "allow": [
+        "apps/web/app/practice-company/walkthrough/voice-journey.tsx",
+        "config/lanes/walk-stress-step2-fix.json"
+      ]
+    }
+  }
+}
