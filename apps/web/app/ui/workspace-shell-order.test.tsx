@@ -39,7 +39,7 @@ function workspace(status: CaptureWorkspaceResponse["status"], fragment = "") {
   status, source: { text: "Fictional room", version: 1, kind: "text", acquisition: null, audioByteLength: 0 },
   proposal: { title: "Fictional decorating job", lines: [], questions: [] }, review: null,
  };
- state.live = status === "live";
+ state.live = ["live", "invoiced", "paid"].includes(status);
  state.effects = [];
  state.values = [null, capture, null, false, fragment];
  return WorkspaceShell({ jobId });
@@ -133,7 +133,7 @@ it("keeps the review key stable when a command advances a plain job URL", () => 
 it.each(["live", "invoiced", "paid"] as const)("keeps independent job controls on a plain saved %s job and scope anchor", status => {
  for (const fragment of ["", "#scope"]) {
   const html = renderToStaticMarkup(workspace(status, fragment));
-  for (const marker of ['id="site-work"', 'id="job-diary"', 'id="customer-messages"', 'id="final-check"']) {
+  for (const marker of ['id="site-work"', 'id="job-diary"', 'id="customer-messages"', 'id="final-account-title"', 'data-testid="final-account-lock"', 'id="final-check"']) {
    expect(html, `${status}${fragment}: ${marker}`).toContain(marker);
    expect(html.indexOf(marker)).toBeLessThan(html.indexOf('id="practice-tools"'));
   }
@@ -184,4 +184,21 @@ it.each(["#scope", "#quote", "#job-diary", "#work-proof", "#final-account-title"
   return review(node.props.children);
  }
  expect(review(workspace("live",fragment))!.key).toBe(review(workspace("live"))!.key);
+});
+
+
+it.each(["", "#scope", "#quote", "#final-account-title", "#recovery-cases"])("keeps one final-account panel outside pricing navigation at %s", fragment => {
+ const tree = workspace("live", fragment);
+ function find(node: React.ReactNode, name: string): React.ReactElement<{children?:React.ReactNode;finalAccount?:React.ReactNode}> | undefined {
+  if (!React.isValidElement<{children?:React.ReactNode;finalAccount?:React.ReactNode}>(node)) return;
+  if (typeof node.type === "function" && node.type.name === name) return node;
+  return React.Children.toArray(node.props.children).map(child => find(child, name)).find(Boolean);
+ }
+ const review = find(tree, "ReviewProposal")!;
+ expect(review.props.finalAccount).toBeNull();
+ expect(find(review, "JobFinalAccount")).toBeUndefined();
+ expect(find(tree, "JobFinalAccount")).toBeDefined();
+ const html = renderToStaticMarkup(tree);
+ expect(html.match(/data-testid="final-account-lock"/gu)).toHaveLength(1);
+ expect(html.indexOf('id="final-account-title"')).toBeLessThan(html.indexOf('id="practice-tools"'));
 });

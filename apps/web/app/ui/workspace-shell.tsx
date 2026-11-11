@@ -26,6 +26,7 @@ import { PracticeReceipts } from "./practice-receipts";
 import { PaymentFeeStatements } from "./payment-fee-statements";
 import { CustomerMessages, JobDiary } from "./job-sources";
 import { JobWorkState } from "./job-work-state";
+import { JobFinalAccount } from "./job-final-account";
 import { FinalCheckReveal } from "./final-check-reveal";
 const stages=["Scope","Quote","Work","Final account","Payment"];
 
@@ -98,7 +99,9 @@ export function WorkspaceShell({jobId}:{jobId:string}){
    <nav className="workspace-stages" aria-label="Saved job sections"><a href="#scope">Scope</a>{mayOpenSavedQuote(capture.status)&&<a href="#quote">Quote</a>}{hasStartedWork(capture.status)&&<><a href="#work-proof">Work and proof</a><a href="#final-account-title">Final account and invoices</a></>}</nav>
    <PracticeJourney jobId={jobId} status={capture.status} onSettled={journeySettled}/>
    <JobParties jobId={jobId} onSettled={setSettledParties}/>
-   <section id="scope" tabIndex={-1}><div id="quote" tabIndex={-1}><ReviewProposal layoutReady={settledJourney===jobId&&settledParties===jobId} key={jobId} result={capture} initialPricing={pricing} fragment={fragment} beforeProof={<><JobWorkState jobId={jobId}/><JobDiary key={`diary:${jobId}`} jobId={jobId}/><CustomerMessages key={`messages:${jobId}`} jobId={jobId}/></>} beforeInvoices={<FinalCheckReveal jobId={jobId}/>} practiceTools={null} onSnapshot={acceptSnapshot} onScope={snapshot=>{if(snapshot.jobId!==currentJobId.current)return;acceptSnapshot(snapshot);setFragment("#scope");history.replaceState(null,"",`${location.pathname}${location.search}#scope`);}} back={()=>location.assign("/classic")}/></div></section>
+   <section id="scope" tabIndex={-1}><div id="quote" tabIndex={-1}><ReviewProposal layoutReady={settledJourney===jobId&&settledParties===jobId} key={jobId} result={capture} initialPricing={pricing} fragment={fragment} beforeProof={<><JobWorkState jobId={jobId}/><JobDiary key={`diary:${jobId}`} jobId={jobId}/><CustomerMessages key={`messages:${jobId}`} jobId={jobId}/></>} finalAccount={null} practiceTools={null} onSnapshot={acceptSnapshot} onScope={snapshot=>{if(snapshot.jobId!==currentJobId.current)return;acceptSnapshot(snapshot);setFragment("#scope");history.replaceState(null,"",`${location.pathname}${location.search}#scope`);}} back={()=>location.assign("/classic")}/></div></section>
+   {/* Keep the lock mounted through scope/pricing navigation, including phone taps. */}
+   {hasStartedWork(capture.status)&&<JobFinalAccount jobId={jobId} beforeInvoices={<FinalCheckReveal jobId={jobId}/>}/>}
    {!hasStartedWork(capture.status)&&<WatchdogPanel disableControls={false}><ProofStage jobId={jobId}/></WatchdogPanel>}
    <hr/>
    <h2 id="practice-tools">Practice tools — demo only, not part of your job</h2>
