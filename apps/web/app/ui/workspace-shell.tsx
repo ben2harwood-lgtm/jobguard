@@ -85,7 +85,9 @@ export function WorkspaceShell({jobId}:{jobId:string}){
  // These independent reads can expand above pricing after its own quote read.
  const[settledJourney,setSettledJourney]=useState("");
  const[settledParties,setSettledParties]=useState("");
- const journeySettled=useCallback((id:string,status:string)=>setSettledJourney(`${id}:${status}`),[]);
+ // Once this job's layout has settled, status refreshes must not disable the
+ // focused editor control. A different job still waits for its own first read.
+ const journeySettled=useCallback((id:string)=>setSettledJourney(id),[]);
  if(loading)return <main className="workspace-page" aria-live="polite"><p>Loading your job…</p></main>;
  if(error)return <main className="workspace-page"><section className="workspace-error" role="alert"><h1 ref={errorRef} tabIndex={-1}>{error==="forbidden"?"You cannot open this job":"Your job could not load"}</h1><p>{error==="forbidden"?"Use a job available to this practice session.":"Nothing was changed. Try loading the saved job again."}</p>{error==="unavailable"&&<button className="primary" onClick={()=>void load()}>Try again</button>}<Link href="/classic">Back to Jobs</Link></section></main>;
  if(capture)return <WatchdogStatusProvider jobId={jobId} initialStatus={capture.status}>
@@ -96,7 +98,7 @@ export function WorkspaceShell({jobId}:{jobId:string}){
    <nav className="workspace-stages" aria-label="Saved job sections"><a href="#scope">Scope</a>{mayOpenSavedQuote(capture.status)&&<a href="#quote">Quote</a>}{hasStartedWork(capture.status)&&<><a href="#work-proof">Work and proof</a><a href="#final-account-title">Final account and invoices</a></>}</nav>
    <PracticeJourney jobId={jobId} status={capture.status} onSettled={journeySettled}/>
    <JobParties jobId={jobId} onSettled={setSettledParties}/>
-   <section id="scope" tabIndex={-1}><div id="quote" tabIndex={-1}><ReviewProposal layoutReady={settledJourney===`${jobId}:${capture.status}`&&settledParties===jobId} key={jobId} result={capture} initialPricing={pricing} fragment={fragment} beforeProof={<><JobWorkState jobId={jobId}/><JobDiary key={`diary:${jobId}`} jobId={jobId}/><CustomerMessages key={`messages:${jobId}`} jobId={jobId}/></>} beforeInvoices={<FinalCheckReveal jobId={jobId}/>} practiceTools={null} onSnapshot={acceptSnapshot} onScope={snapshot=>{if(snapshot.jobId!==currentJobId.current)return;acceptSnapshot(snapshot);setFragment("#scope");history.replaceState(null,"",`${location.pathname}${location.search}#scope`);}} back={()=>location.assign("/classic")}/></div></section>
+   <section id="scope" tabIndex={-1}><div id="quote" tabIndex={-1}><ReviewProposal layoutReady={settledJourney===jobId&&settledParties===jobId} key={jobId} result={capture} initialPricing={pricing} fragment={fragment} beforeProof={<><JobWorkState jobId={jobId}/><JobDiary key={`diary:${jobId}`} jobId={jobId}/><CustomerMessages key={`messages:${jobId}`} jobId={jobId}/></>} beforeInvoices={<FinalCheckReveal jobId={jobId}/>} practiceTools={null} onSnapshot={acceptSnapshot} onScope={snapshot=>{if(snapshot.jobId!==currentJobId.current)return;acceptSnapshot(snapshot);setFragment("#scope");history.replaceState(null,"",`${location.pathname}${location.search}#scope`);}} back={()=>location.assign("/classic")}/></div></section>
    {!hasStartedWork(capture.status)&&<WatchdogPanel disableControls={false}><ProofStage jobId={jobId}/></WatchdogPanel>}
    <hr/>
    <h2 id="practice-tools">Practice tools — demo only, not part of your job</h2>
