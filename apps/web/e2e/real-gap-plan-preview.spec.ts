@@ -59,15 +59,41 @@ test("public catalogue survives failed reads and lost company access without pre
   await page.getByRole("button", { name: "Verify code", exact: true }).click();
   await expect(page.getByRole("heading", { name: "You're signed in.", exact: true })).toBeVisible();
   const tenant = await page.getByTestId("identity-tenant").textContent();
+  const currentResponse = page.waitForResponse(response =>
+    new URL(response.url()).pathname === "/api/subscriptions/current" && response.ok());
   await page.goto("/plans");
-  await expect(page.getByRole("region", { name: "Your subscription", exact: true })).toContainText("No accepted subscription agreement.");
+  const { billingDay } = await (await currentResponse).json() as { billingDay: number };
+  const expectedDays = [
+    "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th",
+    "11th", "12th", "13th", "14th", "15th", "16th", "17th", "18th", "19th", "20th",
+    "21st", "22nd", "23rd", "24th", "25th", "26th", "27th", "28th", "29th", "30th", "31st",
+  ];
+  expect(Number.isInteger(billingDay)).toBe(true);
+  expect(billingDay).toBeGreaterThanOrEqual(1);
+  expect(billingDay).toBeLessThanOrEqual(31);
+  const billingSentence = `Your billing day: the ${expectedDays[billingDay - 1]}`;
+  const subscription = page.getByRole("region", { name: "Your subscription", exact: true });
+  const billingParagraph = subscription.locator("p").filter({ hasText: "Your billing day:" });
+  await expect(billingParagraph).toHaveText(billingSentence);
+  await expect(billingParagraph).toBeVisible();
+  await expect(subscription).toContainText("No accepted subscription agreement.");
   await catalogue(page);
+  const originalViewport = page.viewportSize()!;
+  try {
+    await page.setViewportSize({ width: 390, height: originalViewport.height });
+    await expect(billingParagraph).toHaveText(billingSentence);
+    await expect(billingParagraph).toBeVisible();
+    await catalogue(page);
+  } finally {
+    await page.setViewportSize(originalViewport);
+  }
   const consent = page.getByRole("checkbox", { name: /I accept these monthly terms/ });
   const accept = page.getByRole("button", { name: "Accept monthly terms", exact: true });
   await expect(accept).toBeDisabled();
   await consent.check(); await accept.click();
-  const subscription = page.getByRole("region", { name: "Your subscription", exact: true });
   await expect(subscription).toContainText("Solo · monthly");
+  await expect(billingParagraph).toHaveText(billingSentence);
+  await expect(billingParagraph).toBeVisible();
   await page.getByRole("combobox", { name: "Plan", exact: true }).selectOption("Builder");
   await consent.check(); await page.getByRole("button", { name: "Approve upgrade to Builder", exact: true }).click();
   await expect(subscription).toContainText("Builder · monthly");
@@ -76,6 +102,8 @@ test("public catalogue survives failed reads and lost company access without pre
   await page.reload();
   const periods = page.getByRole("region", { name: "Subscription periods", exact: true });
   await expect(periods).toContainText("Hypothetical subscription: £69.00");
+  await expect(billingParagraph).toHaveText(billingSentence);
+  await expect(billingParagraph).toBeVisible();
   await catalogue(page);
   // Abort transport only; all successful identity/subscription responses above use real PostgreSQL.
   let releaseRead!: () => void;
