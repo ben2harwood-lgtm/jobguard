@@ -14,7 +14,7 @@ import { closeTestPools, freePort } from "./pool-test-utils.js";
 // Supplier-match create and correction, and inbox dismissal: a replay returns what the command first returned, a
 // successful no-op keeps its command identity, and the id is bound to its job and payload.
 const tenant = randomUUID(), job = randomUUID(), otherJob = randomUUID(), scope = randomUUID(), member = randomUUID();
-const ctx = testTenantContext(tenant);
+const ctx = testTenantContext(tenant, { membershipId: member });
 let pg: EmbeddedPostgres, admin: Pool, runtime: Pool, dir: string, match: SupplierMatchRepository, inbox: InboxRelevanceRepository;
 const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const count = async (table: string, jobId: string) => Number((await admin.query(`SELECT count(*) n FROM app.${table} WHERE job_id=$1`, [jobId])).rows[0].n);

@@ -38,7 +38,11 @@ it("validates an optional import identity without accepting money or authority",
 });
 it("sends only the selected import identity to SQL and rechecks SQL even on replay", async () => {
   const { ContractorRepository } = await import("./contractor-repository.js");
-  const principal = vi.spyOn(ContractorRepository.prototype,"resolveSession").mockResolvedValue({} as Awaited<ReturnType<InstanceType<typeof ContractorRepository>["resolveSession"]>>);
+  const principal = vi.spyOn(ContractorRepository.prototype,"resolveSession").mockResolvedValue({
+    tenantId: f.context.tenantId,
+    membershipId: "00000000-0000-4000-8000-000000000002",
+    identityUserId: "00000000-0000-4000-8000-000000000003",
+  } as Awaited<ReturnType<InstanceType<typeof ContractorRepository>["resolveSession"]>>);
   const billingImport = "00000000-0000-4000-8000-000000000001", result = {version:"connector-billing-status-link.v1",billingImport};
   try {
     f.query.mockResolvedValueOnce({rows:[{value:[{...good,kind:"billing_status",result,hold:"BILLING_COMPOSITION_REQUIRED"}]}]})
@@ -50,7 +54,11 @@ it("sends only the selected import identity to SQL and rechecks SQL even on repl
 });
 it("keeps the missing-import refusal and rejects imports supplied for other event kinds", async () => {
   const { ContractorRepository } = await import("./contractor-repository.js");
-  const principal = vi.spyOn(ContractorRepository.prototype,"resolveSession").mockResolvedValue({} as Awaited<ReturnType<InstanceType<typeof ContractorRepository>["resolveSession"]>>);
+  const principal = vi.spyOn(ContractorRepository.prototype,"resolveSession").mockResolvedValue({
+    tenantId: f.context.tenantId,
+    membershipId: "00000000-0000-4000-8000-000000000002",
+    identityUserId: "00000000-0000-4000-8000-000000000003",
+  } as Awaited<ReturnType<InstanceType<typeof ContractorRepository>["resolveSession"]>>);
   try {
     const input = {version:"connector-promotion.v1",namespace:good.namespace,eventId:good.eventId};
     f.query.mockResolvedValue({rows:[{value:[{...good,kind:"billing_status"}]}]});

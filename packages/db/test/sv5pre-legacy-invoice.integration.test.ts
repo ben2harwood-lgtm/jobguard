@@ -1,3 +1,5 @@
+import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
+import { withTenant } from "../src/tenant-context.js";
 import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { PracticeInvoiceRepository } from "../src/practice-invoice-repository.js";
@@ -17,7 +19,7 @@ describe("SV5PRE legacy final invoice gate", () => {
  it("[PRE-Q4-01/PRE-Q4-08] new legacy final issue requires the immutable lock; invoice gate refusal leaves every commercial effect unchanged", async () => {
   const a = await seedAccount(f.admin), c = input(a), before = await effects(a.tenantId);
   await expect(new GuardedPracticeInvoiceRepository(f.runtime).issue(a.context,c)).rejects.toMatchObject({code:"FINAL_ACCOUNT_LOCK_REQUIRED"});
-  await expect(asFixtureTenant(f.runtime,a.tenantId,db=>db.query("SELECT * FROM app.issue_practice_customer_invoice($1,$2,$3,$4,$5,$6,$7::date)",[a.tenantId,c.jobId,c.finalAccountRevisionId,c.actorMembershipId,c.commandId,c.recipient,c.issuedOn]))).rejects.toThrow("FINAL_ACCOUNT_LOCK_REQUIRED");
+  await expect(withTenant(f.runtime,a.context,db=>db.$client.query("SELECT * FROM app.issue_practice_customer_invoice($1,$2,$3,$4,$5,$6,$7::date)",[a.tenantId,c.jobId,c.finalAccountRevisionId,c.actorMembershipId,c.commandId,c.recipient,c.issuedOn]))).rejects.toThrow("FINAL_ACCOUNT_LOCK_REQUIRED");
   expect(await effects(a.tenantId)).toEqual(before);
  });
  it("[PRE-Q4-02] both invoice paths enforce pending failed and uncertified completion", async () => {
@@ -45,10 +47,10 @@ describe("SV5PRE legacy final invoice gate", () => {
   const replayBefore=await effects(a.tenantId); await invoices.issue(a.context,c);expect(await effects(a.tenantId)).toEqual(replayBefore);
   for(const changed of [{...c,recipient:"changed@example.invalid"},{...c,jobId:randomUUID()}]) await expect(invoices.issue(a.context,changed)).rejects.toThrow();
   await f.admin.query("UPDATE app.membership SET expires_at=clock_timestamp()-interval '1 second' WHERE tenant_id=$1 AND id=$2",[a.tenantId,LOCK_OWNER]);
-  await expect(invoices.issue(a.context,c)).rejects.toMatchObject({code:"42501"});
+  await expect(invoices.issue(testTenantContext(a.tenantId,{membershipId:LOCK_OWNER,bindRequest:false}),c)).rejects.toMatchObject({code:"42501"});
   await f.admin.query("UPDATE app.membership SET expires_at=NULL WHERE tenant_id=$1 AND id=$2",[a.tenantId,LOCK_OWNER]);
   await f.admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2",[a.tenantId,LOCK_OWNER]);
-  await expect(invoices.issue(a.context,c)).rejects.toMatchObject({code:"42501"});
+  await expect(invoices.issue(testTenantContext(a.tenantId,{membershipId:LOCK_OWNER,bindRequest:false}),c)).rejects.toMatchObject({code:"42501"});
   expect((await f.admin.query("SELECT count(*)::int n FROM app.customer_invoice WHERE tenant_id=$1",[a.tenantId])).rows[0].n).toBe(1);
  });
  it("[PRE-Q4-05] legacy replay rechecks persisted session expiry and session job access", async () => {
@@ -60,6 +62,7 @@ describe("SV5PRE legacy final invoice gate", () => {
   // Own synthetic fixture binds its already-created job before any commercial action.
   await asFixtureTenant(f.admin,tenant,async db=>{await db.query("SET LOCAL session_replication_role='replica'");await db.query("UPDATE app.job SET practice_session_digest=$1,practice_scenario='home' WHERE tenant_id=$2 AND id=$3",[digest,tenant,a.jobId]);});
   const repo=await prepareLock(f,a);await repo.lock(a.context,a.input);await publishEmptyCompletion(f,a);
+  a.context=await testBoundTenantContext(f.admin,tenant,actor);
   const invoices=new GuardedPracticeInvoiceRepository(f.runtime,sessionId),c={...input(a),actorMembershipId:actor};await invoices.issue(a.context,c);
   await expect(new GuardedPracticeInvoiceRepository(f.runtime).issue(a.context,c)).rejects.toMatchObject({code:'42501'});
   await expect(invoices.issue(a.context,{...c,actorMembershipId:LOCK_OWNER})).rejects.toMatchObject({code:'42501'});

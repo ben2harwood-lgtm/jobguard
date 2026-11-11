@@ -65,7 +65,7 @@ it("refuses manifest evidence as soon as the locked manifest exists, before comp
   const a = await seedFinalCheckJob(f), evidenceId = await insertFinalCheckEvidence(f, a);
   await a.lock();
   const { FinalCheckRepository } = await import("../src/final-check-repository.js");
-  await new FinalCheckRepository(f.shadow).begin(a.context, a.jobId);
+  await new FinalCheckRepository(f.shadow).begin(a.workerContext, a.jobId);
   await expectLocked(a, evidenceId);
 });
 

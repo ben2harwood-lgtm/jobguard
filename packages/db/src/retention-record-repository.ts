@@ -1,3 +1,4 @@
+import { isRequestBindingRefusal, RequestBindingRefusedError } from "./request-binding-error.js";
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
@@ -34,6 +35,8 @@ export class RetentionRecordRepository {
   constructor(private readonly pool: Pool) {}
   private async guarded<T>(work: () => Promise<T>): Promise<T> {
     try { return await work(); } catch (error) {
+      if (error instanceof RequestBindingRefusedError) throw new RetentionRecordRepositoryError("RETENTION_UNAUTHENTICATED");
+      if (isRequestBindingRefusal(error)) throw new RetentionRecordRepositoryError("RETENTION_FORBIDDEN");
       if (error instanceof RetentionError || error instanceof RetentionRecordRepositoryError) throw error;
       if ((error as { code?: string } | null)?.code === "23505") throw new RetentionRecordRepositoryError("RETENTION_CONFLICT");
       if (error instanceof z.ZodError) throw new RetentionRecordRepositoryError("RETENTION_CONFLICT");

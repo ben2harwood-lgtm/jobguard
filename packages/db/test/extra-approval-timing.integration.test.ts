@@ -1,3 +1,4 @@
+import { testActorContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { ExtraApprovalRepository, ExtraRepository, SiteExtraRepository, SiteVisitRepository, siteExtraAuthoritySeam, withTenant } from "../src/index.js";
@@ -14,29 +15,29 @@ it.each(["not_started", undefined, "under_way", "finished"] as const)("ENT-5 sha
   const jobId = await newJob(c, w);
   const expected = workStatus === "under_way" || workStatus === "finished" ? true : "uncertain";
   const operative = w.members.operative.member;
-  const visit = await visits.startVisit(context, operative, { commandId: randomUUID(), jobId });
-  const raise = () => workStatus
-    ? new SiteExtraRepository(c.runtime).logSiteExtra(context, operative, { version: "log-site-extra.v4", commandId: randomUUID(), jobId, siteVisitId: visit.visitId,
+  const visit = await visits.startVisit(await testActorContext(c.admin, context, operative), operative, { commandId: randomUUID(), jobId });
+  const raise = async () => workStatus
+    ? new SiteExtraRepository(c.runtime).logSiteExtra(await testActorContext(c.admin, context, operative), operative, { version: "log-site-extra.v4", commandId: randomUUID(), jobId, siteVisitId: visit.visitId,
         note: "Fictional timing evidence", description: "Fictional extra", workStatus })
-    : new ExtraRepository(c.runtime).raiseExtra(context, direct(w, w.members.operative, { jobId, siteVisitId: visit.visitId }), siteExtraAuthoritySeam);
+    : new ExtraRepository(c.runtime).raiseExtra(await testActorContext(c.admin, context, w.members.operative.member), direct(w, w.members.operative, { jobId, siteVisitId: visit.visitId }), siteExtraAuthoritySeam);
   const extra = await raise(); await raise(); // Several extras share these bounds; neither has an exact work time.
-  await approvals.priceExtra(context, w.members.surveyor.member, { version: "price-extra.v1", commandId: randomUUID(), jobId, extraId: extra.variationId, netPence: 150000 });
-  const request = await approvals.submitExtra(context, w.members.supervisor.member, { version: "submit-extra.v1", commandId: randomUUID(), jobId, extraId: extra.variationId });
+  await approvals.priceExtra(await testActorContext(c.admin, context, w.members.surveyor.member), w.members.surveyor.member, { version: "price-extra.v1", commandId: randomUUID(), jobId, extraId: extra.variationId, netPence: 150000 });
+  const request = await approvals.submitExtra(await testActorContext(c.admin, context, w.members.supervisor.member), w.members.supervisor.member, { version: "submit-extra.v1", commandId: randomUUID(), jobId, extraId: extra.variationId });
   const s = { jobId, requestId: request.requestId as string, hash: request.revisionHash as string, net: 150000 };
-  await approvals.approveExtraStep(context, w.members.supervisor.member, approveInput(s, 0));
-  await approvals.approveExtraStep(context, w.supervisor2.member, approveInput(s, 1));
+  await approvals.approveExtraStep(await testActorContext(c.admin, context, w.members.supervisor.member), w.members.supervisor.member, approveInput(s, 0));
+  await approvals.approveExtraStep(await testActorContext(c.admin, context, w.supervisor2.member), w.supervisor2.member, approveInput(s, 1));
   const token = newToken(), email = await emailOf(c, w, w.members.client_approver.member.membershipId);
-  await approvals.issueClientApproval(context, w.members.surveyor.member, { version: "issue-client-approval.v1", commandId: randomUUID(), jobId, requestId: s.requestId,
+  await approvals.issueClientApproval(await testActorContext(c.admin, context, w.members.surveyor.member), w.members.surveyor.member, { version: "issue-client-approval.v1", commandId: randomUUID(), jobId, requestId: s.requestId,
     approverMembershipId: w.members.client_approver.member.membershipId, recipient: email, linkToken: token, expiresAt: new Date(Date.now() + 3600_000) });
-  const view = () => approvals.clientApprovalView(context, w.members.client_approver.member, { version: "client-approval-view.v1", jobId, requestId: s.requestId, linkToken: token, email });
+  const view = async () => approvals.clientApprovalView(await testActorContext(c.admin, context, w.members.client_approver.member), w.members.client_approver.member, { version: "client-approval-view.v1", jobId, requestId: s.requestId, linkToken: token, email });
   expect(await view()).toMatchObject({ doneWithoutRequiredPreapproval: "uncertain", workTiming: { source: "site_visit", visitId: visit.visitId, startedAt: visit.startedAt, finishedAt: null, uncertainty: "during_this_visit" },
     approvalTimings: [{ stepIndex: 0, timing: "uncertain" }, { stepIndex: 1, timing: "uncertain" }] });
-  const foreign = await chainWorld(c), foreignVisit = await visits.startVisit(await foreign.ctx, foreign.members.operative.member, { commandId: randomUUID(), jobId: foreign.jobId });
+  const foreign = await chainWorld(c), foreignVisit = await visits.startVisit(await testActorContext(c.admin, await foreign.ctx, foreign.members.operative.member), foreign.members.operative.member, { commandId: randomUUID(), jobId: foreign.jobId });
   const anotherJob = await newJob(c, w), siteExtras = new SiteExtraRepository(c.runtime);
   for (const [attackJob, siteVisitId] of [[anotherJob, visit.visitId], [jobId, foreignVisit.visitId]]) {
-    await expect(siteExtras.logSiteExtra(context, operative, { commandId: randomUUID(), jobId: attackJob, siteVisitId, note: "Fictional timing refusal", description: "Fictional extra" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(siteExtras.logSiteExtra(await testActorContext(c.admin, context, operative), operative, { commandId: randomUUID(), jobId: attackJob, siteVisitId, note: "Fictional timing refusal", description: "Fictional extra" })).rejects.toMatchObject({ code: "NOT_FOUND" });
   }
-  await visits.completeVisit(context, operative, { commandId: randomUUID(), jobId, visitId: visit.visitId, closeoutAnswer: "yes" });
+  await visits.completeVisit(await testActorContext(c.admin, context, operative), operative, { commandId: randomUUID(), jobId, visitId: visit.visitId, closeoutAnswer: "yes" });
   expect(await view()).toMatchObject({ doneWithoutRequiredPreapproval: expected });
   await expect(approvals.clientApprovalView(await foreign.ctx, foreign.members.client_approver.member, { version: "client-approval-view.v1", jobId, requestId: s.requestId, linkToken: token, email })).rejects.toMatchObject({ code: "LINK_INVALID" });
   await expect(c.runtime.query("SELECT * FROM app.site_extra_work_status")).rejects.toMatchObject({ code: "42501" });
@@ -48,7 +49,7 @@ it.each(["not_started", undefined, "under_way", "finished"] as const)("ENT-5 sha
   expect(wrongJob).toMatchObject({ doneWithoutRequiredPreapproval: "not_derived", workTiming: null, approvalTimings: [] });
   const wrongTenant = await withTenant(c.runtime, await foreign.ctx, db => readExtraApprovalTiming(db, w.p.tenantId, jobId, extra.variationId, s.requestId));
   expect(wrongTenant).toMatchObject({ doneWithoutRequiredPreapproval: "not_derived", workTiming: null, approvalTimings: [] });
-  await approvals.decideClientApproval(context, w.members.client_approver.member, { version: "decide-client-approval.v1", commandId: randomUUID(), jobId, requestId: s.requestId,
+  await approvals.decideClientApproval(await testActorContext(c.admin, context, w.members.client_approver.member), w.members.client_approver.member, { version: "decide-client-approval.v1", commandId: randomUUID(), jobId, requestId: s.requestId,
     linkToken: token, email, revisionHash: s.hash, netPence: s.net, decision: "approve", fictionalRoleName: "Fictional client", actualTesterReference: "tester:fictional" });
   const after = await withTenant(c.runtime, context, db => readExtraApprovalTiming(db, w.p.tenantId, jobId, extra.variationId, s.requestId));
   expect(after.doneWithoutRequiredPreapproval).toBe(expected);

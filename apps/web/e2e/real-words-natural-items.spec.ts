@@ -6,6 +6,15 @@ const decorating = "Paint the hall, stairs and landing for Mr Example at 9 Notre
 const bathroom = "Bathroom refit for Mrs Sample at 4 Madeup Lane. Rip out the old suite and take it away, fit a new bath, basin and toilet, tile the walls and floor, new extractor fan. About 4800 pounds all in, should take two weeks.";
 const fallback = "Check this line. Use Split to make separate work items, then edit and accept each one.";
 
+// Since #719 the draft review page shows no job-title header, so read the saved title
+// through the same proposal route the workspace loads.
+async function savedTitle(page: Page) {
+  const jobId = await page.getByTestId("workspace-job-id").getAttribute("data-job-id");
+  const response = await page.request.get(`/api/jobs/${jobId}/proposal`);
+  expect(response.ok()).toBe(true);
+  return (await response.json()).proposal.title as string;
+}
+
 async function draft(page: Page, text: string) {
   await page.goto("/");
   await page.getByRole("link", { name: "Start my own practice firm", exact: true }).click();
@@ -23,16 +32,16 @@ async function draft(page: Page, text: string) {
   expect(result.source.text).toBe(text);
   await page.getByRole("button", { name: "Check and edit my draft", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Check the work items", exact: true })).toBeVisible();
-  await expect(page.locator("#captured-job-workspace > header h1")).toHaveText(result.proposal.title);
+  expect(await savedTitle(page)).toBe(result.proposal.title);
   return result as CaptureWorkspaceResponse;
 }
 
 async function savedReview(page: Page, text: string, descriptions: string[], questions: string[]) {
-  const title = await page.locator("#captured-job-workspace > header h1").textContent();
+  const title = await savedTitle(page);
   for (const reload of [false, true]) {
     if (reload) await page.reload();
-    await expect(page.locator("#captured-job-workspace > header h1")).toHaveText(title!);
     await expect(page.locator(".review-line")).toHaveCount(descriptions.length);
+    expect(await savedTitle(page)).toBe(title);
     for (const description of descriptions) {
       await expect(page.getByRole("textbox", { name: `Description ${description}`, exact: true })).toHaveValue(description);
     }
