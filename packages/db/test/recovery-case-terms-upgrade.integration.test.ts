@@ -1,6 +1,6 @@
 import { applyOutboundPause } from "./outbound-pause-fixture.js";
 import { jobDoorsDatabase } from "./lp-job-doors-fixtures.js";
-import { seedLegacySandbox } from "./lp-legacy-sandbox-fixture.js";
+import { seedLegacySandbox, historicalAcceptedQuote } from "./lp-legacy-sandbox-fixture.js";
 import { practiceMaterialPool } from "../src/practice-session.js";
 import { prepareInvoicePrerequisites } from "./sv5pre-fixtures.js";
 // Written first; NOT RUN (sandbox cannot start PostgreSQL / a browser).
@@ -13,7 +13,7 @@ import EmbeddedPostgres from "embedded-postgres";
 import { Pool, type PoolClient } from "pg";
 import { beforeAll, afterAll, expect, it } from "vitest";
 import { recoveryCaseTermsHash } from "@jobguard/core";
-import { DEMO_TENANT_ID as T, DEMO_MEMBERSHIP_ID as M, DEMO_IDENTITY_USER_ID as U, MIGRATION_URLS, migrate, withTenant, prepareActivationFixtureV3, PracticeActivationRepository, FinalAccountCommandService, PracticeInvoiceRepository, RecoveryCaseRepository, EvidencePackRepository, RecoveryMessageRepository, RecoveryCaseTermsRepository, QuoteRepository, QuoteDeliveryRepository, issuePracticeSession, SandboxRepository, RecoveryFollowUpRepository } from "../src/index.js";
+import { DEMO_TENANT_ID as T, DEMO_MEMBERSHIP_ID as M, DEMO_IDENTITY_USER_ID as U, MIGRATION_URLS, migrate, withTenant, prepareActivationFixtureV3, PracticeActivationRepository, FinalAccountCommandService, PracticeInvoiceRepository, RecoveryCaseRepository, EvidencePackRepository, RecoveryMessageRepository, RecoveryCaseTermsRepository, QuoteRepository, QuoteDeliveryRepository, issuePracticeSession, authenticatePracticeSession, SandboxRepository, RecoveryFollowUpRepository } from "../src/index.js";
 import { freePort, closeTestPools } from "./pool-test-utils.js";
 import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 let context=testTenantContext(T);
@@ -39,11 +39,18 @@ async function parties(owner:Pool,j:string){
 async function seed(owner:Pool,run:Pool){
  await owner.query("INSERT INTO control_plane.tenant(id) VALUES($1)",[T]);await owner.query("INSERT INTO identity.identity_user(id) VALUES($1)",[U]);const account=randomUUID();await owner.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional builder')",[account,T]);await owner.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')",[M,T,account,U]);
  context=(await owner.query("SELECT to_regprocedure('app.bind_request(text,text,uuid)') installed")).rows[0].installed ? await testBoundTenantContext(owner,T,M) : testTenantContext(T);
- const sessionId=await issuePracticeSession(run),digest=createHash("sha256").update(sessionId).digest("hex"),j=randomUUID(),scope=randomUUID(),revision=randomUUID();
+ const sessionId=await issuePracticeSession(run),digest=createHash("sha256").update(sessionId).digest("hex");
+ const hasAllocator=(await owner.query("SELECT to_regprocedure('app.allocate_quote_job_reference(uuid)') installed")).rows[0].installed;
+ let j:string;
+ if (!hasAllocator) j=await historicalAcceptedQuote(owner,context,"Before terms migration",1880000,digest);
+ else {
+ context=(await authenticatePracticeSession(run,sessionId)).context;
+ j=randomUUID();const scope=randomUUID(),revision=randomUUID();
  await withTenant(owner,context,async db=>{await db.$client.query("INSERT INTO app.job(id,tenant_id,title,status,practice_session_digest,practice_scenario) VALUES($1,$2,'Before terms migration','quoting',$3,'capture')",[j,T,digest]);await db.$client.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')",[scope,T,j]);await db.$client.query("INSERT INTO app.scope_revision(id,tenant_id,job_id,scope_item_id,revision,description,quantity_decimal,unit,unit_price_pence,total_pence) VALUES($1,$2,$3,$4,1,'Fictional work','1','item',1880000,1880000)",[revision,T,j,scope]);});
  await parties(owner,j);
  const quotes=new QuoteRepository(run),delivery=new QuoteDeliveryRepository(run);await quotes.saveDraft(context,{jobId:j,draftId:randomUUID(),expectedRevision:0,currency:"GBP",taxPolicyVersion:"candidate_m1_standard_v1",blockingQuestions:[],effectiveAt:new Date(),lines:[{id:randomUUID(),scopeItemId:scope,scopeRevisionId:revision,description:"Fictional work",origin:"captured",included:true,exclusionReason:null,quantity:"1",unit:"item",unitRatePence:1880000,discountPercent:"0",taxTreatment:"standard_rate_20",rateProvenance:"entered",category:"Work",region:null}]});
  const document=await delivery.preview(context,j,"practice-customer@example.invalid");await delivery.issue(context,j,{commandId:randomUUID(),documentId:document.documentId,contentHash:document.hash,recipient:"practice-customer@example.invalid"});await delivery.execute(context,j,document.documentId,"success");await withTenant(owner,context,async db=>{const row=(await db.$client.query(`SELECT revision FROM app.job WHERE tenant_id=$1 AND id=$2`,[T,j])).rows[0];await db.$client.query(`SELECT app.record_builder_attested_acceptance($1,$2,$3,$4,$5,$6,$7,2256000,$8,$9,'Fictional customer','email',clock_timestamp(),NULL)`,[T,randomUUID(),randomUUID(),j,document.documentId,document.document.documentVersion,document.hash,row.revision,M]);});
+ }
  await new PracticeActivationRepository(run).start(context,j,{commandId:randomUUID(),scenario:"no_charge"});
  await proofFixture(owner,j);
  // Setup: carry this fixture's already-issued session into the unchanged invoice call.

@@ -121,7 +121,7 @@ beforeAll(async () => {
  f = await createWorkFixture(false);
  // Install the exact predecessor schema; the normal migrator still owns setup.
  await f.admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
- await f.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)", [migration]);
+ await f.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1),($2)", [migration, "0944_quote_company_sequence.sql"]);
  await migrate(f.admin);
  await installLegacySyntheticPartyFixtures(f.admin);
  await f.admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [tenant]);
@@ -171,6 +171,8 @@ beforeAll(async () => {
  oldArtifacts = await artifactRows(); oldAuthority = await authorityRows();
  oldPdfs = (oldArtifacts as { snapshot: unknown }[]).map(row => renderQuotePdf(quoteDocumentV1.parse(row.snapshot)));
  await f.admin.query("DELETE FROM public.jobguard_schema_migration WHERE migration_name=$1", [migration]);
+ await migrate(f.admin);
+ await f.admin.query("DELETE FROM public.jobguard_schema_migration WHERE migration_name=$1", ["0944_quote_company_sequence.sql"]);
  await migrate(f.admin);
 }, 120_000);
 afterAll(async () => {

@@ -11,7 +11,7 @@ import EmbeddedPostgres from "embedded-postgres";
 import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { recoveryCaseTermsHash } from "@jobguard/core";
-import { DEMO_TENANT_ID as T, DEMO_MEMBERSHIP_ID as M, DEMO_IDENTITY_USER_ID as U, RecoveryCaseTermsRepository, RecoveryCaseRepository, RecoveryMessageRepository, EvidencePackRepository, PracticeActivationRepository, PracticeInvoiceRepository, FinalAccountCommandService, prepareActivationFixtureV3, migrate, withTenant, verifyAuditChain, executeAuthorizedCommercialAction } from "../src/index.js";
+import { DEMO_TENANT_ID as T, DEMO_MEMBERSHIP_ID as M, DEMO_IDENTITY_USER_ID as U, issuePracticeSession, authenticatePracticeSession, practiceMaterialPool, RecoveryCaseTermsRepository, RecoveryCaseRepository, RecoveryMessageRepository, EvidencePackRepository, PracticeActivationRepository, PracticeInvoiceRepository, FinalAccountCommandService, prepareActivationFixtureV3, migrate, withTenant, verifyAuditChain, executeAuthorizedCommercialAction } from "../src/index.js";
 import { freePort, closeTestPools } from "./pool-test-utils.js";
 import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 let context=testTenantContext(T, { membershipId: M });
@@ -88,14 +88,15 @@ beforeAll(async()=>{
  await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)",[T]);await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)",[U]);const account=randomUUID();await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional builder')",[account,T]);await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')",[M,T,account,U]);
  await admin.query("CREATE ROLE terms_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOBYPASSRLS; GRANT jobguard_runtime TO terms_login");
  runtime=new Pool({host:"127.0.0.1",port,user:"terms_login",password:"synthetic",database:"jobguard_synthetic_demo",max:4});
- context=await testBoundTenantContext(admin,T,M);
- job=await prepareActivationFixtureV3(admin,context,"CH7 terms",1880000,runtime);await new PracticeActivationRepository(runtime).start(context,job,{commandId:randomUUID(),scenario:"no_charge"});
+ const session=await issuePracticeSession(runtime),auth=await authenticatePracticeSession(runtime,session);
+ context=auth.context;runtime=practiceMaterialPool(runtime,auth.digest);
+ job=await prepareActivationFixtureV3(admin,context,"CH7 terms",1880000,runtime,1880000,auth.digest);await new PracticeActivationRepository(runtime).start(context,job,{commandId:randomUUID(),scenario:"no_charge"});
  await proofFixture(admin,job);
  supplierRefs=await supplierFixture();
  const final=await new FinalAccountCommandService(runtime).assemble(context,{version:"final-account.assemble.v1",commandId:randomUUID(),jobId:job,actorMembershipId:M});
  await prepareInvoicePrerequisites(admin,runtime,T,job,M,final.id);
  invoice=(await new PracticeInvoiceRepository(runtime).issue(context,{jobId:job,finalAccountRevisionId:final.id,actorMembershipId:M,commandId:randomUUID(),recipient:"practice-customer@example.invalid",issuedOn:"2026-10-12"})).id;
- unbound=await prepareActivationFixtureV3(admin,context,"No-policy control",1880000,runtime);await new PracticeActivationRepository(runtime).start(context,unbound,{commandId:randomUUID(),scenario:"no_charge"});await proofFixture(admin,unbound);
+ unbound=await prepareActivationFixtureV3(admin,context,"No-policy control",1880000,runtime,1880000,auth.digest);await new PracticeActivationRepository(runtime).start(context,unbound,{commandId:randomUUID(),scenario:"no_charge"});await proofFixture(admin,unbound);
  const controlFinal=await new FinalAccountCommandService(runtime).assemble(context,{version:"final-account.assemble.v1",commandId:randomUUID(),jobId:unbound,actorMembershipId:M});await prepareInvoicePrerequisites(admin,runtime,T,unbound,M,controlFinal.id);unboundInvoice=(await new PracticeInvoiceRepository(runtime).issue(context,{jobId:unbound,finalAccountRevisionId:controlFinal.id,actorMembershipId:M,commandId:randomUUID(),recipient:"practice-customer@example.invalid",issuedOn:"2026-10-12"})).id;
  // Privileged negative-fixture setup only: construct the historical no-policy shape; all pursuit calls below still run as runtime.
  const fixtureClient=await admin.connect();try{await fixtureClient.query("BEGIN");await fixtureClient.query("SET LOCAL session_replication_role=replica");await fixtureClient.query("UPDATE app.job SET fee_policy_version=NULL,baseline_quote_version_id=NULL,accepted_net_value_pence=NULL WHERE tenant_id=$1 AND id=$2",[T,unbound]);await fixtureClient.query("COMMIT");}finally{fixtureClient.release();}

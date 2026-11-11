@@ -1,0 +1,199 @@
+{
+  "migration": "0944_quote_company_sequence.sql",
+  "lp0": [
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.quote_binding_owner_matches(uuid,text)",
+        "owner": "jobguard_binding_owner",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_migration"
+        ],
+        "definitionSha256": "733c74995de1ef6aedc3b5cb8ff5d30931214e284c1f58af2edc1f559d03b9e6",
+        "staticWrites": [],
+        "staticCalls": [
+          "app.lp6_bound_request"
+        ]
+      },
+      "after": {
+        "identity": "function:app.quote_binding_owner_matches(uuid,text)",
+        "owner": "jobguard_binding_owner",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_migration"
+        ],
+        "definitionSha256": "71c51901b7babd2c044a12006f471f2e3eb3b50001d37e022f0ff6fa23645ea0",
+        "staticWrites": [],
+        "staticCalls": [
+          "app.lp6_bound_request"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.allocate_quote_job_reference(uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "e5b9bb1419216d5200c076ed62e4ca6e11424633425f3baf561c1f3826a9dc76",
+        "staticWrites": [
+          "app.quote_firm_counter",
+          "app.quote_job_reference"
+        ],
+        "staticCalls": [
+          "app.bound_context_reader",
+          "app.quote_binding_owner_matches",
+          "app.quote_practice_owners"
+        ]
+      },
+      "after": {
+        "identity": "function:app.allocate_quote_job_reference(uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "503d9b0345c989983d7a190358e82ec0e88095c4558b34d9f35cac716340c12e",
+        "staticWrites": [
+          "app.quote_firm_counter",
+          "app.quote_job_reference"
+        ],
+        "staticCalls": [
+          "app.bound_context_reader",
+          "app.quote_binding_owner_matches",
+          "app.quote_practice_owners"
+        ]
+      }
+    },
+    {
+      "section": "authorityPaths",
+      "before": {
+        "id": "ap-quote-firm-sequence",
+        "title": "Bound quote firm number allocation",
+        "description": "Derive immutable practice ownership, validate the private binding and allocate a job reference inside its first preview transaction.",
+        "cards": [
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-12": "Review private binding predicate, durable firm allocation, controlled writes and exact-head PostgreSQL evidence."
+        },
+        "sources": [
+          "packages/db/migrations/0941_quote_firm_sequence.sql"
+        ],
+        "tests": [
+          "packages/db/test/real-quote-firm-sequence-db.integration.test.ts"
+        ],
+        "gaps": [
+          "Dormant foundation. Independent RED review and real PostgreSQL CI pending; successor must integrate allocator before all preview reads."
+        ]
+      },
+      "after": {
+        "id": "ap-quote-firm-sequence",
+        "title": "Bound quote firm number allocation",
+        "description": "Authorize unscoped company or canonical practice binding, revalidate after firm/job lock waits and persist the immutable reference with its preview.",
+        "cards": [
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-12": "Review private binding predicate, durable firm allocation, controlled writes and exact-head PostgreSQL evidence."
+        },
+        "sources": [
+          "packages/db/migrations/0941_quote_firm_sequence.sql",
+          "packages/db/migrations/0944_quote_company_sequence.sql"
+        ],
+        "tests": [
+          "packages/db/test/real-quote-firm-sequence-db.integration.test.ts",
+          "packages/db/test/real-quote-firm-sequence.integration.test.ts"
+        ],
+        "gaps": [
+          "Exact-head PostgreSQL catalogue and independent RED review pending. Real customer data and launch remain closed."
+        ]
+      }
+    },
+    {
+      "section": "groups",
+      "before": {
+        "id": "a-quote-firm-sequence",
+        "title": "Bound quote firm number allocation",
+        "kind": "authority",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Synthetic foundation only; exact-head independent RED review and PostgreSQL CI required before landing."
+        },
+        "downstream": "No repository activation, artifact rewrite, ownership rewrite, commercial send, fee, or provider authority.",
+        "path": "ap-quote-firm-sequence",
+        "cards": [
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-12": "Review private binding predicate, durable firm allocation, controlled writes and exact-head PostgreSQL evidence."
+        },
+        "sources": [
+          "packages/db/migrations/0941_quote_firm_sequence.sql"
+        ],
+        "tests": [
+          "packages/db/test/real-quote-firm-sequence-db.integration.test.ts"
+        ],
+        "gaps": [
+          "Dormant foundation. Independent RED review and real PostgreSQL CI pending; successor must integrate allocator before all preview reads."
+        ]
+      },
+      "after": {
+        "id": "a-quote-firm-sequence",
+        "title": "Bound quote firm number allocation",
+        "kind": "authority",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Synthetic foundation only; exact-head independent RED review and PostgreSQL CI required before landing."
+        },
+        "downstream": "No repository activation, artifact rewrite, ownership rewrite, commercial send, fee, or provider authority.",
+        "path": "ap-quote-firm-sequence",
+        "cards": [
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-12": "Review private binding predicate, durable firm allocation, controlled writes and exact-head PostgreSQL evidence."
+        },
+        "sources": [
+          "packages/db/migrations/0941_quote_firm_sequence.sql",
+          "packages/db/migrations/0944_quote_company_sequence.sql"
+        ],
+        "tests": [
+          "packages/db/test/real-quote-firm-sequence-db.integration.test.ts",
+          "packages/db/test/real-quote-firm-sequence.integration.test.ts"
+        ],
+        "gaps": [
+          "Exact-head PostgreSQL catalogue and independent RED review pending. Real customer data and launch remain closed."
+        ]
+      }
+    }
+  ],
+  "upgrade": [],
+  "tenancy": []
+}
