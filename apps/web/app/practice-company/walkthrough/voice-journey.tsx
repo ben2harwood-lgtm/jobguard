@@ -8,7 +8,7 @@ import { WalkIt } from "../../ui/jobguard-app";
 import { ReviewProposal, type ReviewCaptureResult } from "../../ui/review-proposal";
 import { WorkspaceShell } from "../../ui/workspace-shell";
 import { ValuePage } from "../../ui/job-value";
-import { Walkthrough, type WalkthroughStep } from "../../ui/walkthrough/walkthrough";
+import { Walkthrough, viewerPlayback, type WalkthroughStep } from "../../ui/walkthrough/walkthrough";
 import { recoverCapture } from "../../demo-s/journey-launch";
 import { core1000Source } from "../../demo-s/core-1000/journey-model";
 import styles from "./voice-journey.module.css";
@@ -18,13 +18,13 @@ import { click, fill, reviewAndPrice, screen, text, until } from "./screen-actio
 export const stages = [
   ["Record a quote", "Talk through a made-up job using on-device voice. Type it in, or press Show me to see a sample. No real names or addresses. Show me uses labelled sample text; it does not record your microphone."],
   ["Check the quote lines", "Check the source excerpts and fix a line. Accept the lines, answer the questions, confirm scope and save a priced draft. Show me changes one description before saving."],
-  ["Send the quote", "This part uses a prepared example job. Your own draft stays saved. Customer invitation before final-account lock is a prerequisite still to build. This example simulates delivery; nothing is sent."],
-  ["Customer says yes", "This part uses a prepared example job. The existing control records builder-attested practice acceptance, not an authenticated customer response. Record it and start the practice job."],
+  ["Send the quote", "Continue on your own saved job. Customer invitation is still to build. Delivery is simulated; nothing is sent."],
+  ["Customer says yes", "The existing control records builder-attested practice acceptance, not an authenticated customer response. Record it and start the practice job."],
   ["Add on-site evidence", "Attach the generated fictional photo, check file integrity and complete the stage. The customer asks for one more thing. You do it, but forget to add it to the bill. Save the fictional loft-hatch diary note as evidence, not a priced extra. Never upload a real site photo in this exercise."],
-  ["Price extra work", "Add a £125 fictional extra and approve its exact revision. Approval here is a builder's practice attestation; authenticated customer approval is not available on this pre-lock example."],
-  ["Lock and run Final Check", "This part uses a prepared example job. Build the final bill, mark the baseline work done, accept the terms and lock. JobGuard checks your records against the bill. Run Final Check and load its saved result; it may take a few minutes. Inspect the fitted loft hatch and the answers before continuing."],
+  ["Price extra work", "Add a £125 fictional extra and approve its exact revision. Approval here is a builder's practice attestation; authenticated customer approval is not available in this practice job."],
+  ["Lock and run Final Check", "Build the final bill, mark the baseline work done, accept the terms and lock. JobGuard checks your records against the bill. Run Final Check and load its saved result; it may take a few minutes. Inspect the fitted loft hatch and the answers before continuing."],
   ["Invoice and simulated payment", "Answer Yes — this was extra work and price the draft catch at £300. It stays a proposal awaiting customer approval, outside the locked bill; no supplementary invoice is issued here. Issue the invoice from the checked bill. Record its full amount as a fictional practice receipt. A recorded receipt is not bank-confirmed payment and cannot earn a recovery fee."],
-  ["Read the end report", "Open the report in pounds and follow its saved source links. These are the prepared job's figures, not savings on your own draft. The report does not guess money protected."],
+  ["Read the end report", "Open the report in pounds and follow its saved source links. These are your practice job's recorded figures. The report does not guess money protected."],
 ] as const;
 
 const progressSchema = z.object({ jobId: z.uuid(), prepared: z.union([z.uuid(), z.literal("")]), priced: z.boolean() });
@@ -51,7 +51,13 @@ export async function restoreProgress(raw: string | null) {
         }
       } catch { /* An unverified flag is dropped, never assumed complete. */ }
     }
-    if (priced) initialStep = 2;
+    if (priced) {
+      initialStep = 2;
+      if (["accepted", "live", "invoiced", "paid"].includes(capture.status)) {
+        const resumed = await resumeWalkthrough(new URLSearchParams({ walkJob: saved.jobId, ...(saved.prepared ? { walkExample: saved.prepared } : {}) }));
+        return { capture, priced, prepared: resumed.prepared, initialStep: resumed.index };
+      }
+    }
     if (saved.prepared && priced) {
       try {
         const example = await proposal(saved.prepared);
@@ -104,6 +110,8 @@ export async function priceFoundExtra(_: HTMLElement, signal: AbortSignal) {
     row!.scrollIntoView({ block: "center", behavior: "instant" });
     signal.throwIfAborted(); button!.click();
   }
+  const latest = row!.querySelectorAll(".variation-revision");
+  if (latest[latest.length - 1]?.querySelector("strong")?.textContent?.endsWith("· £300.00")) return;
   await press("Change price");
   await until(() => !!screen().querySelector('[aria-label="New price fitted loft hatch"]'), signal);
   await fill('[aria-label="New price fitted loft hatch"]', "300.00");
@@ -129,13 +137,35 @@ export async function addOnSiteEvidence(_: HTMLElement, signal: AbortSignal) {
 
 export const finalCheckDone = () => text("final-check-status").startsWith("JobGuard's final check found");
 
+export function stageWords(index: number, prepared: string) {
+  const words = stages[index]![1];
+  if (!prepared || ![2, 3, 6, 8].includes(index)) return words;
+  return `This part uses a prepared example job. ${index === 8 ? "These are the prepared job's figures. " : ""}${words.replace("Continue on your own saved job. ", "").replace("These are your practice job's recorded figures. ", "")}`;
+}
+
+/** A failed own-job control ends that attempt; fallback starts separately at sending. */
+export async function ownJobAction(action: (signal: AbortSignal) => Promise<void>, signal: AbortSignal, fallback: () => Promise<void>, timeoutMs: number) {
+  const controller = new AbortController();
+  const bounded = AbortSignal.any([signal, controller.signal]);
+  if (viewerPlayback.has(signal)) viewerPlayback.add(bounded);
+  const timer = setTimeout(() => controller.abort(new Error("The own-job control stayed unavailable.")), timeoutMs);
+  try { await action(bounded); }
+  catch (reason) {
+    if (signal.aborted) throw reason;
+    await fallback();
+    throw reason;
+  } finally { clearTimeout(timer); }
+}
+
 export function VoiceJourney() {
   const [tenantId, setTenantId] = useState(""), [capture, setCapture] = useState<ReviewCaptureResult | null>(null);
   const [screenVersion, setScreenVersion] = useState(0);
   const [resumeIndex, setResumeIndex] = useState(0);
+  const [ownWorkspace, setOwnWorkspace] = useState(false), [fallbackNeeded, setFallbackNeeded] = useState(false);
   const [prepared, setPrepared] = useState(""), [report, setReport] = useState(false), [tour, setTour] = useState(true);
   const [error, setError] = useState(""), [preparing, setPreparing] = useState(false);
-  const current = useRef({ capture, prepared, report, tenantId }); current.current = { capture, prepared, report, tenantId };
+  const [ownChosen, setOwnChosen] = useState(false), [tourVersion, setTourVersion] = useState("");
+  const current = useRef({ capture, prepared, report, tenantId, ownChosen }); current.current = { capture, prepared, report, tenantId, ownChosen };
   const ownPriced = useRef(false), preparingRef = useRef(false);
   useEffect(() => {
     // WALK-2 owns creation and privacy. Reading this route alone never creates example jobs.
@@ -145,12 +175,17 @@ export function VoiceJourney() {
       const response = await fetch("/api/session", { cache: "no-store" });
       if (!response.ok) throw new Error("The practice session could not load.");
       const session = sessionResponseV1.parse(await response.json());
-      const saved = await resumeWalkthrough(new URLSearchParams(location.search));
-      setCapture(saved.capture); setPrepared(saved.prepared); setResumeIndex(saved.index);
+      const params = new URLSearchParams(location.search);
+      const saved = await resumeWalkthrough(params);
+      const chosen = params.get("walkOwn") === "1";
+      setOwnChosen(chosen);
+      setCapture(saved.capture); setPrepared(saved.prepared);
+      setResumeIndex(saved.prepared || chosen ? saved.index : Math.min(saved.index, 2));
       ownPriced.current = saved.index >= 2;
-      if (saved.prepared) {
+      setOwnWorkspace(saved.index >= 2);
+      if (saved.index >= 2) {
         const url = new URL(location.href);
-        url.hash = saved.index >= 6 ? "final-account-title" : "quote";
+        url.hash = saved.index >= 6 ? "final-account-title" : saved.index >= 4 ? "work-proof" : "quote";
         history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
       }
       setTenantId(session.tenants[0]!.id);
@@ -162,25 +197,36 @@ export function VoiceJourney() {
     try { sessionStorage.setItem(progressKey(current.current.tenantId), JSON.stringify({ jobId: capture.jobId, prepared, priced })); } catch { /* The journey also works without storage. */ }
   }
   useEffect(() => { if (tenantId) remember(); }, [tenantId, capture, prepared]);
-  async function prepare() {
+  async function prepare(restartTour = true) {
     if (preparingRef.current || current.current.prepared) return;
     preparingRef.current = true; setPreparing(true); setError("");
     try {
       // Keep the same capture request on retry, including after an unknown outcome.
-      const key = `walk-3.prepared:${tenantId}:${current.current.capture?.jobId}`;
+      const key = `walk-3.prepared:${current.current.tenantId}:${current.current.capture?.jobId}`;
       let id = sessionStorage.getItem(key);
       if (!id) { id = crypto.randomUUID(); sessionStorage.setItem(key, id); }
       const jobId = await recoverCapture(id, core1000Source);
+      // A different job must not inherit the own job's open quote view.
+      const url = new URL(location.href);
+      history.replaceState(null, "", `${url.pathname}${url.search}`);
       rememberWalkJob("walkExample", jobId);
-      setPrepared(jobId);
+      current.current.prepared = jobId;
+      setResumeIndex(2); setPrepared(jobId); setReport(false);
+      if (restartTour) setTourVersion(jobId);
     } catch (reason) { setError((reason as Error).message); }
     finally { preparingRef.current = false; setPreparing(false); }
   }
   const steps = useMemo<WalkthroughStep[]>(() => {
     const done = [
       () => !!current.current.capture,
-      () => { if (!ownPriced.current && !current.current.prepared && Number(text("quote-revision")) > 0) { ownPriced.current = true; remember(true); } return ownPriced.current; },
-      () => !!current.current.prepared && text("quote-delivery") === "Simulated delivery — nothing sent",
+      () => {
+        if (!ownPriced.current && !current.current.prepared && Number(text("quote-revision")) > 0) {
+          ownPriced.current = true; remember(true); setOwnWorkspace(true);
+          history.replaceState(null, "", `${location.pathname}${location.search}#quote`);
+        }
+        return ownPriced.current;
+      },
+      () => text("quote-delivery") === "Simulated delivery — nothing sent",
       () => !!screen()?.querySelector('[data-testid="activation-policy"]'),
       () => evidenceDone() && missedWorkSaved(),
       approvedExtraDone,
@@ -206,14 +252,19 @@ export function VoiceJourney() {
         await reviewAndPrice(signal);
       },
       async (_, signal) => {
-        if (!current.current.prepared) document.getElementById("walk-prepare")?.click();
-        await until(() => !!current.current.prepared, signal);
-        // The prepared example uses the existing real job screens, never inserted end-state facts.
+        if (!current.current.prepared && !ownPriced.current) throw new Error("The own job has no saved priced revision.");
+        // Both paths use the existing real job screens, never inserted end-state facts.
         if (screen().querySelector(".review-line")) await reviewAndPrice(signal);
         else {
           await until(() => !!screen().querySelector(".review-line, .quote-editor, .confirmed-scope"), signal);
           if (screen().querySelector(".review-line")) await reviewAndPrice(signal);
           else if (!screen().querySelector(".quote-editor")) await click("Price the work", signal);
+        }
+        // An open editor can still be loading or have no saved revision.
+        await until(() => screen().querySelector(".quote-editor")?.getAttribute("data-quote-ready") === "true", signal);
+        if (!(Number(text("quote-revision")) > 0)) {
+          await click("Save draft revision", signal);
+          await until(() => Number(text("quote-revision")) > 0, signal);
         }
         if (!text("party-customer")) await click("Save customer and site", signal);
         await until(() => !!text("party-customer"), signal);
@@ -221,7 +272,21 @@ export function VoiceJourney() {
         await click("Simulate sending this quote", signal);
         await click("Continue fake worker", signal);
       },
-      async (_, signal) => { await click("Record practice acceptance", signal); await click("Start this practice job", signal); },
+      async (_, signal) => {
+        if (!screen().querySelector('[data-testid="activation-policy"]')) {
+          // The real acceptance control disappears once acceptance is saved.
+          const accept = [...screen().querySelectorAll("button")].some(button => button.textContent === "Record practice acceptance");
+          if (accept) await click("Record practice acceptance", signal);
+          await click("Start this practice job", signal);
+          // The control returns before its request. Remount only after the saved
+          // activation is rendered, so the workspace reload sees a started job.
+          await until(() => !!screen()?.querySelector('[data-testid="activation-policy"]'), signal);
+        }
+        // The prepared example starts without a fragment. Select work before
+        // remounting so the live proof controls are rendered instead of scope.
+        history.replaceState(null, "", `${location.pathname}${location.search}#work-proof`);
+        setScreenVersion(value => value + 1);
+      },
       async (target, signal) => { await addOnSiteEvidence(target, signal); await saveMissedWork(signal); },
       async (_, signal) => {
         if (!screen().querySelector(".variation-list article")) {
@@ -233,7 +298,12 @@ export function VoiceJourney() {
       },
       async (_, signal) => {
         await until(() => [...screen().querySelectorAll("button")].some(button => ["Build final account", "Rebuild from approved sources"].includes(button.textContent ?? "")), signal);
-        if (!text("final-gross")) await click("Build final account", signal);
+        if (text("lock-state") !== "Final account completed") {
+          if (text("work-state") !== "Finished on site") await click("Finished on site", signal);
+          await until(() => text("work-state") === "Finished on site", signal);
+          if (!text("final-gross")) await click("Build final account", signal);
+          else await click("Rebuild from approved sources", signal);
+        }
         await until(() => !!text("lock-state"), signal);
         if (text("lock-state") !== "Final account completed") {
           const selects = [...screen().querySelectorAll<HTMLSelectElement>('select[aria-label^="Disposition "]')];
@@ -244,6 +314,8 @@ export function VoiceJourney() {
           }
           const terms = [...screen().querySelectorAll<HTMLButtonElement>("button")].find(b => b.textContent === "Accept final check terms");
           if (terms && !terms.disabled) await click("Accept final check terms", signal);
+          await click("Rebuild from approved sources", signal);
+          await until(() => screen().querySelector('[data-testid="final-account-lock"]')?.getAttribute("aria-busy") === "false", signal);
           await click("Complete final account", signal);
         }
         // Reload the existing screen's read models after the immutable lock commits.
@@ -285,21 +357,37 @@ export function VoiceJourney() {
         screen().querySelector<HTMLElement>(".value-page h1")?.scrollIntoView({ block: "start", behavior: "instant" });
       },
     ];
-    return stages.map(([title, words], index) => ({ id: `walk-${index + 1}`, title, words, target: index === 2 ? "#walk-prepare, #walk-screen" : index === 6 || index === 7 ? "#final-check" : "#walk-screen", spotlightTarget: () => (index === 8 ? screen()?.querySelector<HTMLElement>(".value-page h1") : screen()?.querySelector<HTMLElement>("[data-walk-action]")) ?? (index === 2 ? document.getElementById("walk-prepare") : null), isDone: done[index]!, autoAction: actions[index]!, timeoutMs: index === 6 ? 240_000 : 30_000 }));
-  }, []);
+    return stages.map(([title], index) => ({ id: `walk-${index + 1}`, title, words: stageWords(index, prepared), target: index === 2 ? "#walk-prepare, #walk-screen" : index === 6 || index === 7 ? "#final-check" : "#walk-screen", spotlightTarget: () => (index === 8 ? screen()?.querySelector<HTMLElement>(".value-page h1") : screen()?.querySelector<HTMLElement>("[data-walk-action]")) ?? (index === 2 ? document.getElementById("walk-prepare") : null), isDone: () => (index < 2 || !!current.current.prepared || current.current.ownChosen) && done[index]!(), autoAction: async (target, signal) => {
+      // No choice means the prepared tour, including autoplay and old resume URLs.
+      if (index >= 2 && !current.current.prepared && !current.current.ownChosen) {
+        await prepare(false);
+        if (!current.current.prepared) throw new Error("The prepared example could not load. Try again.");
+        await until(() => screen()?.querySelector('[data-testid="workspace-job-id"]')?.getAttribute("data-job-id") === current.current.prepared, signal);
+      }
+      if (done[index]!()) return;
+      const action = async (bounded: AbortSignal) => { await actions[index]!(target, bounded); if (index !== 8) await until(done[index]!, bounded); };
+      if (index < 2 || current.current.prepared) return action(signal);
+      await ownJobAction(action, signal, async () => { setFallbackNeeded(true); await prepare(); }, index === 6 ? 237_000 : 27_000);
+    }, timeoutMs: index === 6 ? 240_000 : 30_000 }));
+  }, [prepared]);
+  const activeJob = prepared || (ownWorkspace ? capture?.jobId : "");
   return <>
     <header className="workspace-page"><a href="/practice-company">Back to your practice firm and reset</a><h1>Walk your first practice job</h1>
       <p>Made-up data only. Do not enter real customer names or addresses. Nothing is sent or charged.</p>
       <p>Show me and Play the whole thing use sample text instead of recording audio. Voice, when available, stays on your device.</p>
       {!tour && <button onClick={() => setTour(true)}>Open guided walkthrough</button>}
-      {capture && <p>Your own draft: <a href={`/jobs/${capture.jobId}`}>Open your saved job</a>. It is kept separately from the prepared example.</p>}
-      {capture && !prepared && <section><h2>Continue with the prepared example</h2><p>This part uses a prepared example job. Sending to a simulated customer and customer acceptance are not yet supported for your own draft before lock. The example uses simulated sending and builder-recorded practice acceptance.</p><button id="walk-prepare" disabled={preparing} onClick={() => void prepare()}>Use the prepared example job</button></section>}
-      {prepared && <aside aria-label="Simulated customer"><h2>Prepared example · simulated customer</h2><p>This part uses a prepared example job. No invitation is sent. The customer view is not connected here; acceptance and extra approval use explicit builder practice attestations.</p><p>Use the quote preview below to inspect the exact fictional document.</p><button id="walk-refresh" onClick={() => setScreenVersion(value => value + 1)}>Refresh the prepared job</button><button id="walk-report" onClick={() => setReport(true)}>Open the saved end report</button>{report && <button onClick={() => setReport(false)}>Return to the prepared job</button>}</aside>}
+      {capture && <p>Your own draft: <a href={`/jobs/${capture.jobId}`}>Open your saved job</a>.</p>}
+      {capture && !prepared && (ownWorkspace || fallbackNeeded) && <section><h2>Continue with the prepared example</h2><p>{fallbackNeeded ? "A control on your own job could not continue. " : "The tour uses the prepared example unless you choose your own saved job. "}The example uses simulated sending and builder-recorded practice acceptance.</p><button id="walk-prepare" disabled={preparing} onClick={() => void prepare()}>Use the prepared example job</button><button disabled={preparing} aria-pressed={ownChosen} onClick={() => {
+        const url = new URL(location.href); url.searchParams.set("walkOwn", "1");
+        history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+        current.current.ownChosen = true; setOwnChosen(true);
+      }}>Continue on my own saved job</button></section>}
+      {activeJob && <aside aria-label="Simulated customer"><h2>{prepared ? "Prepared example · simulated customer" : "Your own job · simulated customer"}</h2><p>{prepared ? "This part uses a prepared example job. " : ""} No invitation is sent. The customer view is not connected here; acceptance and extra approval use explicit builder practice attestations.</p><p>Use the quote preview below to inspect the exact fictional document.</p><button id="walk-refresh" onClick={() => setScreenVersion(value => value + 1)}>{prepared ? "Refresh the prepared job" : "Refresh the saved job"}</button><button id="walk-report" onClick={() => setReport(true)}>Open the saved end report</button>{report && <button onClick={() => setReport(false)}>{prepared ? "Return to the prepared job" : "Return to the saved job"}</button>}</aside>}
       {error && <p role="alert">{error}</p>}
     </header>
     <div id="walk-screen" className={styles.screen} tabIndex={-1}>
-      {!tenantId ? <p role="status">Loading your private practice firm…</p> : prepared ? report ? <ValuePage jobId={prepared} /> : <WorkspaceShell key={`${prepared}:${screenVersion}`} jobId={prepared} /> : capture ? <ReviewProposal result={capture} back={() => location.assign("/practice-company")} /> : <WalkIt tenantId={tenantId} initialText="" close={() => location.assign("/practice-company")} onCaptured={result => { rememberWalkJob("walkJob", result.jobId); setCapture(result); }} />}
+      {!tenantId ? <p role="status">Loading your private practice firm…</p> : activeJob ? report ? <ValuePage jobId={activeJob} /> : <WorkspaceShell key={`${activeJob}:${screenVersion}`} jobId={activeJob} /> : capture ? <ReviewProposal result={capture} back={() => location.assign("/practice-company")} /> : <WalkIt tenantId={tenantId} initialText="" close={() => location.assign("/practice-company")} onCaptured={result => { rememberWalkJob("walkJob", result.jobId); setCapture(result); }} />}
     </div>
-    {tenantId && tour && <Walkthrough steps={steps} initialIndex={resumeIndex} onClose={() => setTour(false)} />}
+    {tenantId && tour && <Walkthrough key={tourVersion || "own"} steps={steps} initialIndex={resumeIndex} onClose={() => setTour(false)} />}
   </>;
 }
