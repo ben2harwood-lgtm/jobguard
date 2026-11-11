@@ -56,3 +56,72 @@ it("M0-13a paused contractor delivery keeps its queued artifact and records no a
  expect(calls).toBe(1);
  expect((await w.repo.read(w.ctx,w.session,w.s.jobId)).deliveries[0]).toMatchObject({status:"succeeded"});
 });
+
+it("LATER-SAFETY-81 refuses another delivery for every sendable or uncertain outbox state without writes",async()=>{
+ const {withTenant}=await import("../src/index.js");
+ const own=await world(c),batch=await own.exported(),view=await own.repo.read(own.ctx,own.session,own.s.jobId);
+ const input={version:"billing-approve-delivery.v1",commandId:randomUUID(),batchId:batch.batchId,channel:"fake_api",destination:"fictional.invalid",contentHash:view.exports[0]!.jsonHash,expiresAt:new Date(Date.now()+3600000).toISOString()};
+ const action=await own.repo.approveDelivery(own.ctx,own.session,own.s.jobId,input);
+ const snapshot=async()=>{
+  const tenant=own.w.p.tenantId;
+  return (await c.admin.query(`SELECT
+   (SELECT count(*)::int FROM app.action_outbox WHERE tenant_id=$1) outbox,
+   (SELECT count(*)::int FROM app.billing_export_delivery WHERE tenant_id=$1) deliveries,
+   (SELECT count(*)::int FROM app.command_receipt WHERE tenant_id=$1) commands,
+   (SELECT count(*)::int FROM app.action_authorization WHERE tenant_id=$1) authorizations,
+   (SELECT count(*)::int FROM app.decision WHERE tenant_id=$1) decisions`,[tenant])).rows;
+ };
+ for(const status of ["pending","executing","succeeded","retryable","outcome_unknown"]){
+  // Owner-only fixture: exercise the authoritative outbox state, not a delivery projection.
+  await c.admin.query("UPDATE app.action_outbox SET status=$1 WHERE tenant_id=$2 AND id=$3",[status,own.w.p.tenantId,action.outboxActionId]);
+  const before=await snapshot(),next={...input,commandId:randomUUID(),channel:"fake_sftp",destination:"another.invalid"};
+  await expect(withTenant(c.runtime,own.ctx,db=>db.$client.query("SELECT app.cb_delivery($1,$2,$3,$4::jsonb)",[own.session,own.s.jobId,next.commandId,JSON.stringify(next)]))).rejects.toMatchObject({message:"EXPORT_ALREADY_QUEUED",code:"23505"});
+  expect(await own.repo.approveDelivery(own.ctx,own.session,own.s.jobId,input)).toEqual(action);
+  expect(await snapshot()).toEqual(before);
+ }
+});
+it.each(["dead_letter","cancelled"])("LATER-SAFETY-81 %s allows a fresh command while both command replays retain their results",async(status)=>{
+ const own=await world(c),batch=await own.exported(),view=await own.repo.read(own.ctx,own.session,own.s.jobId);
+ const input={version:"billing-approve-delivery.v1",commandId:randomUUID(),batchId:batch.batchId,channel:"fake_api",destination:"fictional.invalid",contentHash:view.exports[0]!.jsonHash,expiresAt:new Date(Date.now()+3600000).toISOString()};
+ const first=await own.repo.approveDelivery(own.ctx,own.session,own.s.jobId,input);
+ await c.admin.query("UPDATE app.action_outbox SET status=$3 WHERE tenant_id=$1 AND id=$2",[own.w.p.tenantId,first.outboxActionId,status]);
+ const retryInput={...input,commandId:randomUUID()},retry=await own.repo.approveDelivery(own.ctx,own.session,own.s.jobId,retryInput);
+ expect(retry.outboxActionId).not.toBe(first.outboxActionId);
+ expect(await own.repo.approveDelivery(own.ctx,own.session,own.s.jobId,input)).toEqual(first);
+ expect(await own.repo.approveDelivery(own.ctx,own.session,own.s.jobId,retryInput)).toEqual(retry);
+ expect(await code(own.repo.approveDelivery(own.ctx,own.session,own.s.jobId,{...input,commandId:randomUUID()}))).toBe("BILLING_CONFLICT");
+ expect((await own.repo.read(own.ctx,own.session,own.s.jobId)).deliveries).toHaveLength(2);
+ expect((await c.admin.query("SELECT count(*)::int n FROM app.action_outbox WHERE tenant_id=$1 AND action_type='billing_export'",[own.w.p.tenantId])).rows).toEqual([{n:2}]);
+});
+it("LATER-SAFETY-81 racing delivery approvals queue exactly one outbox action",async()=>{
+ const own=await world(c),batch=await own.exported(),view=await own.repo.read(own.ctx,own.session,own.s.jobId);
+ const input={version:"billing-approve-delivery.v1",batchId:batch.batchId,channel:"fake_api",destination:"fictional.invalid",contentHash:view.exports[0]!.jsonHash,expiresAt:new Date(Date.now()+3600000).toISOString()};
+ const results=await Promise.all([code(own.repo.approveDelivery(own.ctx,own.session,own.s.jobId,{...input,commandId:randomUUID()})),code(own.repo.approveDelivery(own.ctx,own.session,own.s.jobId,{...input,commandId:randomUUID()}))]);
+ expect(results.sort()).toEqual(["BILLING_CONFLICT","ok"]);
+ expect((await own.repo.read(own.ctx,own.session,own.s.jobId)).deliveries).toHaveLength(1);
+ expect((await c.admin.query("SELECT count(*)::int n FROM app.action_outbox WHERE tenant_id=$1 AND action_type='billing_export'",[own.w.p.tenantId])).rows).toEqual([{n:1}]);
+});
+
+it.each(["pending","retryable"])("LATER-SAFETY-81 lapsed %s approval allows fresh delivery but remains unclaimable",async(status)=>{
+ const own=await world(c),batch=await own.exported(),view=await own.repo.read(own.ctx,own.session,own.s.jobId);
+ const input={version:"billing-approve-delivery.v1",commandId:randomUUID(),batchId:batch.batchId,channel:"fake_api",destination:"fictional.invalid",contentHash:view.exports[0]!.jsonHash,expiresAt:new Date(Date.now()+2500).toISOString()};
+ const first=await own.repo.approveDelivery(own.ctx,own.session,own.s.jobId,input);
+ let calls=0;
+ const adapter:OutboundAdapter={name:"fake_api",supportsProviderDeduplication:true,async deliver(){calls++;return status==="retryable"&&calls===1?{kind:"retryable",code:"FICTIONAL_RETRY"}:{kind:"succeeded",providerReference:"fictional-renewed"};},async reconcile(){return "unknown";}};
+ const executor=new ContractorBillingDelivery(c.runtime,new Map([[adapter.name,adapter]]));
+ if(status==="retryable")await executor.execute(own.ctx,own.session,own.s.jobId,first.outboxActionId);
+ // Wait on the persisted approval's actual deadline, without changing its authorization or status.
+ await c.admin.query("SELECT pg_sleep(GREATEST(0,extract(epoch FROM authorization_expires_at-clock_timestamp()))::double precision+0.05) FROM app.action_outbox WHERE id=$1",[first.outboxActionId]);
+ const before=calls;
+ expect(await code(executor.execute(own.ctx,own.session,own.s.jobId,first.outboxActionId))).toBe("BILLING_FORBIDDEN");
+ expect(calls).toBe(before);
+ const renewed=await own.repo.approveDelivery(own.ctx,own.session,own.s.jobId,{...input,commandId:randomUUID(),expiresAt:new Date(Date.now()+3600000).toISOString()});
+ expect(renewed.outboxActionId).not.toBe(first.outboxActionId);
+ expect(await own.repo.approveDelivery(own.ctx,own.session,own.s.jobId,input)).toEqual(first);
+ expect(await code(executor.execute(own.ctx,own.session,own.s.jobId,first.outboxActionId))).toBe("BILLING_FORBIDDEN");
+ expect(calls).toBe(before);
+ await executor.execute(own.ctx,own.session,own.s.jobId,renewed.outboxActionId);
+ expect(calls).toBe(before+1);
+ expect((await c.admin.query("SELECT status FROM app.action_outbox WHERE id=$1",[first.outboxActionId])).rows).toEqual([{status}]);
+ expect((await c.admin.query("SELECT status FROM app.action_outbox WHERE id=$1",[renewed.outboxActionId])).rows).toEqual([{status:"succeeded"}]);
+});
