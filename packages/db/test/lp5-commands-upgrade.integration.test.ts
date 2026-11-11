@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { migrate } from "../src/migrate.js";
 import { UserCommandDispatcher } from "../src/commands.js";
 import { jobDoorsActor, jobDoorsDatabase } from "./lp-job-doors-fixtures.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 // The exact historical dispatcher codec; Date has no enumerable fields. Preserve
 // its stored digest only for pre-cutover rows, never for new checked claims.
 const legacyCanonical = (v: unknown): string => v === null || typeof v !== "object" ? JSON.stringify(v) : Array.isArray(v)
@@ -13,7 +13,7 @@ const legacyCanonical = (v: unknown): string => v === null || typeof v !== "obje
 it("LP-5a preserves historical receipts and refuses stale processing claims without timeout takeover", async () => {
  const db=await jobDoorsDatabase(true,"0521_lp5a_commands.sql");
  try {
-  const actor=await jobDoorsActor(db.owner),context=testTenantContext(actor.tenant);
+  const actor=await jobDoorsActor(db.owner);
   const make=()=>({version:"command.v1",commandId:randomUUID(),commandType:"job.switch_live",semanticKey:randomUUID(),actorMembershipId:actor.member,
    subjectType:"job",subjectRef:randomUUID(),action:{actionType:"job.switch_live",recipient:null,contentHash:"a".repeat(64),aggregateRevision:1,
     amountPence:null,currency:null,policyVersion:"synthetic_demo_activation.v3",expiresAt:new Date("2099-01-01T00:00:00Z")}});
@@ -26,6 +26,7 @@ it("LP-5a preserves historical receipts and refuses stale processing claims with
   }
   const before=(await db.owner.query("SELECT row_to_json(r)::text data FROM app.command_receipt r WHERE tenant_id=$1 ORDER BY command_id",[actor.tenant])).rows;
   await migrate(db.owner);await migrate(db.owner);
+  const context=await testBoundTenantContext(db.owner,actor.tenant,actor.member);
   const dispatcher=new UserCommandDispatcher(db.runtime),handler={mutate:async()=>{throw new Error("must not resume or repeat a historical effect");}};
   await expect(dispatcher.dispatch(context,completed,handler)).resolves.toEqual({historical:true});
   await expect(dispatcher.dispatch(context,processing,handler)).rejects.toMatchObject({code:"COMMAND_CONFLICT"});

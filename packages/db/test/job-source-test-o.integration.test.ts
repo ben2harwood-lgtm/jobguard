@@ -18,7 +18,7 @@ it("SV7A-INT-O Test O: an outside-tap diary note omitted from the locked bill is
  expect(Number((await f.admin.query("SELECT count(*) n FROM app.variation WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows[0].n)).toBe(0);
  const diaryBefore=await new JobSourceRepository(f.runtime).read(a.context,a.jobId,a.digest,"diary");
  await a.lock();
- const m=await new FinalCheckRepository(f.shadow).begin(a.context,a.jobId);
+ const m=await new FinalCheckRepository(f.shadow).begin(a.workerContext,a.jobId);
  expect(m.sources.some(s=>s.sourceKind==="builder_capture_not_scanned")).toBe(false);
  const source=m.sources.find(s=>s.evidenceId===note.record.evidence.id)!;
  expect(source).toBeDefined();
@@ -29,8 +29,8 @@ it("SV7A-INT-O Test O: an outside-tap diary note omitted from the locked bill is
  const observation={version:"observation.v1",tenantId:a.tenantId,jobId:a.jobId,kind:"note_or_voice",
   evidence:{id:source.evidenceId,objectVersionId:source.objectVersionId,sha256:source.sha256,serverReceivedAt:source.receivedAt},...decoded};
  const worker=createFinalCheckWorker(f.shadow,[observation],"synthetic_demo"),task={version:"final-check.task.v1",jobId:a.jobId,manifestId:m.id};
- const first=await worker.execute(a.context,task);
- expect(await worker.execute(a.context,task)).toEqual(first);
+ const first=await worker.execute(a.workerContext,task);
+ expect(await worker.execute(a.workerContext,task)).toEqual(first);
  const view=await new FinalCheckRepository(f.runtime).read(a.context,a.jobId,a.digest);
  expect(await new JobSourceRepository(f.runtime).read(a.context,a.jobId,a.digest,"diary")).toEqual(diaryBefore);
  expect(view.state).toBe("completed");

@@ -4,7 +4,8 @@ import { randomUUID } from "node:crypto";
 import { detectShadowObservations, groupShadowProposals, observationMustSurface, observationV1, reconcileFinalCheck, shadowProposalV1, shadowCaptureV1, shadowDetectionId, type DetectionGroup } from "@jobguard/core";
 import { FinalCheckRepository, type FinalCheckManifest, type FinalCheckSourceResult } from "./final-check-repository.js";
 import { decodePracticePhoto } from "./practice-photo-observation.js";
-import { decodeFinalCheckSourceFixture, decodeJobSourceFixture } from "./job-source-fixtures.js";
+import { decodeFinalCheckSourceFixture } from "./job-source-fixtures.js";
+import { readFinalCheckTypedText } from "./final-check-typed-text.js";
 import { readPracticeStructuredSource } from "./final-check-practice-readers.js";
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 import { finalCheckPersistenceErrorCodes, FinalCheckPersistenceError, type FinalCheckPersistenceErrorCode, type FinalCheckManifestView } from "./final-check-completion-repository.js";
@@ -152,21 +153,14 @@ export class FinalCheckCompletionRepository {
 }
 
 /** SV-5 Q6 practice run (Ben, 28 Oct). Worker-only ports for FinalCheckWorker. Each frozen source is examined
- * honestly: diary/message originals through the reviewed fixture decoder (read with the runtime login), the
- * generated practice proof photo through a practice-only reader, and anything else is "unsupported", never a
- * claimed zero result. Reconciliation is the same pure rule as the test harness. */
+ * honestly: verified diary/message originals through the bounded practice reader (runtime login), the
+ * generated practice proof photo through a practice-only reader; verified readable typed text may yield
+ * an examined zero. Other unsupported evidence never becomes a claimed zero result. Reconciliation is the same pure rule as the test harness. */
 export function practiceFinalCheckPorts(shadowPool: Pool, runtimePool: Pool, practicePhotoSha256: string, drainagePhotoSha256?: string) {
   const repo = new FinalCheckRepository(shadowPool), sink = new ShadowDetectionRepository(shadowPool);
   async function observe(context: VerifiedTenantContext, m: FinalCheckManifest, s: FinalCheckManifest["sources"][number]) {
     const base = { version: "observation.v1", tenantId: context.tenantId, jobId: m.comparisons.jobId,
       evidence: { id: s.evidenceId, objectVersionId: s.objectVersionId, sha256: s.sha256, serverReceivedAt: s.receivedAt } };
-    if (s.sourceKind === "job_diary_text" || s.sourceKind === "customer_message_text") {
-      const kind = s.sourceKind === "job_diary_text" ? "note_or_voice" : "customer_request";
-      const row = await withTenant(runtimePool, context, async db => (await db.$client.query<{ text: string; ref: string | null }>(
-        "SELECT convert_from(bytes,'UTF8') text,synthetic_fixture_ref ref FROM app.job_source_original WHERE tenant_id=$1 AND evidence_id=$2", [context.tenantId, s.evidenceId])).rows[0]);
-      const decoded = row ? decodeJobSourceFixture(row.ref, row.text, kind) : null;
-      return decoded ? observationV1.parse({ ...base, kind, ...decoded }) : null;
-    }
     const fixture = s.sha256 ? decodeFinalCheckSourceFixture(s.sourceKind,s.sha256) : null;
     if(fixture)return observationV1.parse({...base,kind:s.sourceKind==="completion_photo"?"completion_photo":"note_or_voice",...fixture});
     const photo = s.sha256 ? decodePracticePhoto(s.sha256, practicePhotoSha256, drainagePhotoSha256) : null;
@@ -176,12 +170,33 @@ export function practiceFinalCheckPorts(shadowPool: Pool, runtimePool: Pool, pra
   return {
     read: (context: VerifiedTenantContext, task: { jobId: string; manifestId: string }) => repo.manifest(context, task.jobId, task.manifestId),
     async process(context: VerifiedTenantContext, m: FinalCheckManifest, s: FinalCheckManifest["sources"][number]): Promise<FinalCheckSourceResult> {
+      const typedKinds = ["job_diary_text", "customer_message_text"];
+      if (typedKinds.includes(s.sourceKind) || (typeof s.input === "object" && s.input !== null &&
+        "evidence_type" in s.input && typedKinds.includes(String(s.input.evidence_type)))) {
+        const frozenManifest = await repo.manifest(context, m.comparisons.jobId, m.id);
+        const frozen = frozenManifest.sources.find(source => source.id === s.id);
+        const { status: _status, ...binding } = s;
+        const { status: _frozenStatus, ...frozenBinding } = frozen ?? s;
+        if (!frozen || frozenManifest.hash !== m.hash || frozenManifest.cutoff !== m.cutoff || frozenManifest.lockId !== m.lockId ||
+          frozenManifest.detectorVersion !== m.detectorVersion || frozenManifest.policyVersion !== m.policyVersion ||
+          frozenManifest.comparisons.tenantId !== context.tenantId || JSON.stringify(frozenManifest.comparisons) !== JSON.stringify(m.comparisons) ||
+          JSON.stringify(binding) !== JSON.stringify(frozenBinding))
+          return { version: "final-check.source-result.v1", inputHash: s.inputHash, status: "unsupported", failureCode: "SOURCE_INVALID", signalIds: [] };
+      }
       if (s.evidenceId === null && s.processable) {
         const decoded = await readPracticeStructuredSource(runtimePool, context, m, s);
         return { version: "final-check.source-result.v1", inputHash: s.inputHash,
           status: decoded ? "zero_result" : "unsupported", failureCode: decoded ? null : "UNSUPPORTED_SOURCE", signalIds: [] };
       }
-      const observation = s.processable ? await observe(context, m, s) : null;
+      let observation;
+      if (s.sourceKind === "job_diary_text" || s.sourceKind === "customer_message_text") {
+        const read = await readFinalCheckTypedText(runtimePool, context, m, s);
+        if (read.status !== "proposal") return { version: "final-check.source-result.v1", inputHash: s.inputHash,
+          status: read.status === "readable" ? "zero_result" : "unsupported", failureCode: read.status === "readable" ? null : "SOURCE_INVALID", signalIds: [] };
+        observation = observationV1.parse({ version: "observation.v1", tenantId: context.tenantId, jobId: m.comparisons.jobId,
+          kind: s.sourceKind === "job_diary_text" ? "note_or_voice" : "customer_request", ...read.proposal,
+          evidence: { id: s.evidenceId, objectVersionId: s.objectVersionId, sha256: s.sha256, serverReceivedAt: s.receivedAt } });
+      } else observation = s.processable ? await observe(context, m, s) : null;
       if (!observation || observationMustSurface(observation).firedRules.length)
         return { version: "final-check.source-result.v1", inputHash: s.inputHash, status: "unsupported", failureCode: s.processable ? "UNSUPPORTED_SOURCE" : "SOURCE_INVALID", signalIds: [] };
       const captures = m.comparisons.captures.map(c => shadowCaptureV1.parse(c));

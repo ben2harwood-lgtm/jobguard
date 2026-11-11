@@ -158,3 +158,20 @@ describe("LP-5a parties-import result contract", () => {
     expect(query.mock.calls.filter(([sql]) => sql.includes("app.begin_command("))).toHaveLength(1);
   });
 });
+
+describe("atomic form error transport", () => {
+  it.each(["ZZ1 1ZZ", "SW1A 1AA"])("Nest preserves bounded field errors for postcode/email after ownership: %s", async postcode => {
+    vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
+    const { pool, query } = accessPool("owner");
+    const request = { version: "job-parties-command.v1", commandId: job, action: "save_form", expectedJobRevision: 0, expectedBindingId: null,
+      customer: { version: "customer.v1", name: "Mrs Sample", type: "person", email: "sample@example.com" }, customerRef: null,
+      site: { version: "site.v1", addressLines: ["4 Madeup Lane"], town: "London", postcode }, savedSiteRevisionId: null,
+      reuseSiteId: null, expectedReuseRevisionId: null, confirmSamePlace: false, payingPartyRevisionId: null, expectedPayerRevisionId: null, correct: false };
+    const failure = await new JobPartiesController(pool).command({ headers: { cookie: `jg_session=${token}` } }, job, request).catch(error => error);
+    expect(failure.getStatus()).toBe(400);
+    expect(failure.getResponse()).toEqual({ code: "INVALID_PARTIES", fields: [{ field: postcode === "ZZ1 1ZZ" ? "postcode" : "email", message: postcode === "ZZ1 1ZZ"
+      ? "Check UK postcode. Use a valid-format practice postcode, such as SW1A 1AA. Nothing was saved." : "Check Practice email (.invalid only). Nothing was saved." }] });
+    expectAccessQueries(query.mock.calls);
+    expect(JSON.stringify(failure.getResponse())).not.toContain("sample@example.com");
+  });
+});

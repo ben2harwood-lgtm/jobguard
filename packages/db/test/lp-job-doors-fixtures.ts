@@ -180,8 +180,8 @@ export async function callAdoption(client: PoolClient, f: Awaited<ReturnType<typ
 export async function reviewFixture(db: Pick<JobDoorsDatabase, "owner" | "runtime">) {
   const { CaptureRepository } = await import("../src/capture-repository.js");
   const { ProposalReviewRepository, reviewContentHash } = await import("../src/review-repository.js");
-  const { testTenantContext } = await import("./tenant-context-test-utils.js");
-  const actor = await jobDoorsActor(db.owner), context = testTenantContext(actor.tenant), captureId = randomUUID();
+  const { testBoundTenantContext } = await import("./tenant-context-test-utils.js");
+  const actor = await jobDoorsActor(db.owner), context = await testBoundTenantContext(db.owner, actor.tenant, actor.member), captureId = randomUUID();
   const source = "Fit fictional cabinets", provenance = { kind: "extracted" as const,
     span: { sourceId: captureId, sourceVersion: 1 as const, start: 0, end: source.length } };
   const captured = await new CaptureRepository(db.runtime).persist(context, { captureId, text: source,

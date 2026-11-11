@@ -55,7 +55,8 @@ it("uses a sessionless tenant context only for the infrastructure timer; human r
   expect(f.query).toHaveBeenCalledWith("SELECT app.retention_timer($1,NULL,NULL,NULL) result", [f.member.tenantId]);
   expect(f.query.mock.calls.some(([sql]) => sql.includes("bind_request"))).toBe(false);
   f.query.mockClear();
-  await expect(repo.read(f.context, { sessionDigest: "a".repeat(64) }, randomUUID())).rejects.toMatchObject({ code: "RETENTION_UNAVAILABLE" });
+  // LOCAL_RETENTION_COMPAT: repository API keeps its built public authentication refusal.
+  await expect(repo.read(f.context, { sessionDigest: "a".repeat(64) }, randomUUID())).rejects.toMatchObject({ code: "RETENTION_UNAUTHENTICATED" });
   expect(f.query.mock.calls.map(([sql]) => sql)).toEqual(["BEGIN", "SELECT app.bind_request($1, $2, $3)", "ROLLBACK"]);
 });
 

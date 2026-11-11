@@ -41,23 +41,19 @@ export function viewerPacing() {
   return !(typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches);
 }
 
-/** Deadlines, target readiness, user input and cancellation all release the hold. */
-export function readingPause(ms: number, reduced: boolean, signal: AbortSignal, registerSkip: (skip: () => void) => void, ready?: () => boolean) {
+/** Only explicit Next or cancellation releases reading before its timer.
+ * Callers requesting a reduced-motion manual hold still wait for Next. */
+export function readingPause(ms: number, reduced: boolean, signal: AbortSignal, registerSkip: (skip: () => void) => void) {
   return new Promise<void>(resolve => {
-    let timer: ReturnType<typeof setTimeout> | undefined, poll: ReturnType<typeof setInterval> | undefined;
-    const events = ["pointerdown", "keydown", "input", "click", "wheel"] as const;
-    const input = () => finish();
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const finish = () => {
-      clearTimeout(timer); clearInterval(poll); signal.removeEventListener("abort", finish);
-      if (typeof document !== "undefined") for (const event of events) document.removeEventListener?.(event, input, true);
+      clearTimeout(timer); signal.removeEventListener("abort", finish);
       resolve();
     };
     registerSkip(finish);
-    if (signal.aborted || ready?.()) finish();
+    if (signal.aborted) finish();
     else {
       signal.addEventListener("abort", finish, { once: true });
-      if (typeof document !== "undefined") for (const event of events) document.addEventListener?.(event, input, true);
-      if (ready) poll = setInterval(() => { if (ready()) finish(); }, 50);
       if (!reduced) timer = setTimeout(finish, ms);
     }
   });
@@ -82,6 +78,10 @@ export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: reado
   const instructionOnly = steps.every(step => step.id.startsWith("core-guide-"));
   const [expanded, setExpanded] = useState(instructionOnly), [holding, setHolding] = useState(false);
   const skip = useRef<(() => void) | null>(null);
+  const currentPlaying = useRef(playing);
+  const lastInput = useRef<number | null>(null);
+  const pointers = useRef(new Set<number>()), touches = useRef(new Set<number>());
+  currentPlaying.current = playing;
   const step = steps[index];
   const stop = () => { action.current?.abort(); setPlaying(false); setHolding(false); };
   const stopKey = (event: React.KeyboardEvent) => { if (event.key === " " || event.key === "Enter") stop(); };
@@ -92,7 +92,40 @@ export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: reado
     reserve();
     const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(reserve);
     if (card.current) observer?.observe(card.current);
-    return () => { observer?.disconnect(); action.current?.abort(); document.body.style.paddingBottom = padding; if (previous instanceof HTMLElement && previous.isConnected) previous.focus(); };
+    function pointer(event: PointerEvent) {
+      if (!event.isTrusted) return;
+      if (event.type === "pointerdown") { lastInput.current = performance.now(); pointers.current.add(event.pointerId); }
+      else pointers.current.delete(event.pointerId);
+    }
+    function touch(event: TouchEvent) {
+      if (!event.isTrusted) return;
+      if (event.type === "touchstart") lastInput.current = performance.now();
+      for (const contact of Array.from(event.changedTouches)) {
+        if (event.type === "touchstart") touches.current.add(contact.identifier);
+        else touches.current.delete(contact.identifier);
+      }
+    }
+    function key(event: KeyboardEvent) { if (event.isTrusted) lastInput.current = performance.now(); }
+    const blur = () => { pointers.current.clear(); touches.current.clear(); };
+    document.addEventListener("pointerdown", pointer, true);
+    document.addEventListener("pointerup", pointer, true);
+    document.addEventListener("pointercancel", pointer, true);
+    document.addEventListener("touchstart", touch, true);
+    document.addEventListener("touchend", touch, true);
+    document.addEventListener("touchcancel", touch, true);
+    document.addEventListener("keydown", key, true);
+    window.addEventListener("blur", blur);
+    return () => {
+      document.removeEventListener("pointerdown", pointer, true);
+      document.removeEventListener("pointerup", pointer, true);
+      document.removeEventListener("pointercancel", pointer, true);
+      document.removeEventListener("touchstart", touch, true);
+      document.removeEventListener("touchend", touch, true);
+      document.removeEventListener("touchcancel", touch, true);
+      document.removeEventListener("keydown", key, true);
+      window.removeEventListener("blur", blur); blur();
+      observer?.disconnect(); action.current?.abort(); document.body.style.paddingBottom = padding; if (previous instanceof HTMLElement && previous.isConnected) previous.focus();
+    };
   }, []);
   useEffect(() => {
     if (!step) return;
@@ -101,6 +134,7 @@ export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: reado
     setDone(false); setError(""); setBox(null);
     card.current?.focus({ preventScroll: true });
     let highlighted: HTMLElement | null = null;
+    let hadHighlight = false;
     function update() {
       const root = visibleTarget(step!.target);
       const target = step!.spotlightTarget?.() ?? (root?.matches("button, input, textarea, select, a[href]") ? root : root?.querySelector<HTMLElement>("textarea, input, select, button, a[href]") ?? root);
@@ -108,7 +142,12 @@ export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: reado
         highlighted?.classList.remove(styles.target!);
         highlighted = target;
         highlighted?.classList.add(styles.target!);
-        if (highlighted && card.current) clearPhoneDock(highlighted, card.current);
+        if (highlighted) {
+          const recentInput = lastInput.current !== null && performance.now() - lastInput.current < 1_000;
+          const manualInput = !running.current && !currentPlaying.current && (recentInput || pointers.current.size > 0 || touches.current.size > 0);
+          if (card.current && (!hadHighlight || !manualInput)) clearPhoneDock(highlighted, card.current);
+          hadHighlight = true;
+        }
       }
       if (target) {
         const rect = target.getBoundingClientRect();
@@ -131,6 +170,8 @@ export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: reado
   }
   async function show() {
     if (!step || running.current) return;
+    // The input requesting tour execution must not outlive it as a manual hold.
+    lastInput.current = null;
     running.current = true; setBusy(true); setError("");
     const controller = new AbortController(); action.current = controller;
     const timeout = window.setTimeout(() => controller.abort(), step.timeoutMs ?? 12_000);
@@ -153,10 +194,9 @@ export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: reado
       while (!controller.signal.aborted && !step.isDone()) await new Promise(resolve => window.setTimeout(resolve, 100));
       if (!controller.signal.aborted && visibleTarget(step.target)) {
         clearTimeout(timeout);
-        if (viewerPlayback.has(controller.signal) && steps[index + 1]) {
+        if (viewerPlayback.has(controller.signal)) {
           setHolding(true);
-          await readingPause(readingTime(step.title, step.words), false, controller.signal, next => { skip.current = next; },
-            () => !!steps[index + 1] && !!visibleTarget(steps[index + 1]!.target));
+          await readingPause(readingTime(step.title, step.words), false, controller.signal, next => { skip.current = next; });
           skip.current = null; setHolding(false);
         }
         if (!controller.signal.aborted) advance();

@@ -1,3 +1,4 @@
+import { testActorContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { ExtraApprovalRepository, escalateOverdueExtrasTask, verifiedTenantContextForQueuedJob, withTenant } from "../src/index.js";
@@ -12,9 +13,9 @@ it("ENT-5 worker discovery, crash rollback, concurrent restart, tenant confineme
   const overdue = await submitted(c, a, 40000), other = await submitted(c, b, 40000);
   const decided = await submitted(c, a, 40000);
   const repository = new ExtraApprovalRepository(c.runtime), context = await a.ctx;
-  await repository.approveExtraStep(context, a.members.supervisor.member, approveInput(decided, 0));
+  await repository.approveExtraStep(await testActorContext(c.admin, context, a.members.supervisor.member), a.members.supervisor.member, approveInput(decided, 0));
   const doneStep = await submitted(c, a, 150000);
-  await repository.approveExtraStep(context, a.members.supervisor.member, approveInput(doneStep, 0));
+  await repository.approveExtraStep(await testActorContext(c.admin, context, a.members.supervisor.member), a.members.supervisor.member, approveInput(doneStep, 0));
   await submitted(c, a, null); // unpriced requests are not discovery candidates
   const discover = () => withTenant(c.admin, context, async db => {
     await db.$client.query("SET LOCAL ROLE jobguard_infrastructure");
@@ -56,12 +57,12 @@ it("ENT-5 worker discovery, crash rollback, concurrent restart, tenant confineme
   expect((await escalateOverdueExtrasTask(c.runtime, verifiedTenantContextForQueuedJob(b.p.tenantId))).map(row => row.request_id)).toEqual([other.requestId]);
   expect(await discover()).toEqual([]);
   expect((await repository.queue(context, a.members.surveyor.member.membershipId)).some(row => row.request_id === overdue.requestId)).toBe(true);
-  await expect(repository.approveExtraStep(context, a.members.finance.member, approveInput(overdue, 0))).rejects.toMatchObject({code: "PERMISSION_DENIED"});
+  await expect(repository.approveExtraStep(await testActorContext(c.admin, context, a.members.finance.member), a.members.finance.member, approveInput(overdue, 0))).rejects.toMatchObject({code: "PERMISSION_DENIED"});
   await command(c, a, {kind: "grant.revoke", grantId: a.members.surveyor.grant});
-  await expect(repository.approveExtraStep(context, a.members.surveyor.member, approveInput(overdue, 0))).rejects.toMatchObject({code: "PERMISSION_DENIED"});
+  await expect(repository.approveExtraStep(await testActorContext(c.admin, context, a.members.surveyor.member), a.members.surveyor.member, approveInput(overdue, 0))).rejects.toMatchObject({code: "PERMISSION_DENIED"});
   expect((await repository.queue(context, a.members.surveyor.member.membershipId)).some(row => row.request_id === overdue.requestId)).toBe(false);
   // The original approver retains authority; a decided request cannot fire again.
-  await repository.approveExtraStep(context, a.members.supervisor.member, approveInput(overdue, 0, {commandId: randomUUID()}));
+  await repository.approveExtraStep(await testActorContext(c.admin, context, a.members.supervisor.member), a.members.supervisor.member, approveInput(overdue, 0, {commandId: randomUUID()}));
   expect(await run()).toEqual([]);
   const source = (await c.admin.query("SELECT prosrc FROM pg_proc WHERE oid='infrastructure.discover_extra_escalations()'::regprocedure")).rows[0].prosrc as string;
   expect(source).not.toMatch(/finding|suppress|advisory/iu);
