@@ -28,30 +28,31 @@ export async function resumeWalkthrough(params: URLSearchParams) {
   const ownId = params.get("walkJob"), preparedId = params.get("walkExample");
   if (!ownId && !preparedId) return { capture: null, prepared: "", index: 0 };
   const capture = await read(uuid.parse(ownId), "proposal", captureWorkspaceResponseV1);
-  if (!preparedId) {
-    const quote = capture.status === "draft" ? null : await read(capture.jobId, "quotes", quoteWorkspaceResponseV1);
-    return { capture, prepared: "", index: quote?.revisions.length ? 2 : 1 };
+  const prepared = preparedId ? uuid.parse(preparedId) : "";
+  const active = prepared || capture.jobId;
+  const example = prepared ? await read(active, "proposal", captureWorkspaceResponseV1) : capture;
+  if (!prepared) {
+    const quote = capture.status === "draft" ? null : await read(active, "quotes", quoteWorkspaceResponseV1);
+    if (!quote?.revisions.some(revision => revision.revision > 0)) return { capture, prepared, index: 1 };
   }
-  const prepared = uuid.parse(preparedId);
-  const example = await read(prepared, "proposal", captureWorkspaceResponseV1);
   let index = 2;
   if (example.status !== "draft") {
-    const delivery = await read(prepared, "quotes/delivery", deliveryViewV1);
+    const delivery = await read(active, "quotes/delivery", deliveryViewV1);
     if (delivery?.status === "simulated_delivery") index = 3;
   }
   if (hasStartedWork(example.status)) {
     index = 4;
-    const proof = await read(prepared, "proof", proofViewV1);
+    const proof = await read(active, "proof", proofViewV1);
     if (proof.completion && !proof.completion.reviewRequired) {
       index = 5;
-      const extras = await read(prepared, "variations", variationWorkspaceResponseV1);
+      const extras = await read(active, "variations", variationWorkspaceResponseV1);
       if (extras.approvedAdditionsPence === 12500) {
         index = 6;
         // Before the lock and Final Check run, the read is refused (403): that is "not done", not a failure.
-        const check = await read(prepared, "final-check", finalCheckReadV1, [403, 404]);
+        const check = await read(active, "final-check", finalCheckReadV1, [403, 404]);
         if (check?.state === "completed") {
           index = 7;
-          const invoices = await read(prepared, "customer-invoices", practiceInvoiceResponseV1);
+          const invoices = await read(active, "customer-invoices", practiceInvoiceResponseV1);
           if (invoices.invoices.some(invoice => invoice.balancePence === 0)) index = 8;
         }
       }
