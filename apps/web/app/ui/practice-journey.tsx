@@ -1,4 +1,5 @@
 "use client";
+import { useJobFactsRefresh } from "./job-facts-refresh";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { practiceInvoiceResponseV1 } from "@jobguard/api/customer-invoice-contracts";
@@ -34,7 +35,7 @@ export function PracticeJourney({ jobId, status, onSettled }: { jobId: string; s
   activeRequest.current?.abort();
   const controller = new AbortController(); activeRequest.current = controller;
   const isCurrent = () => request === generation.current && !controller.signal.aborted && currentJob.current.jobId === jobId && currentJob.current.status === status;
-  setState({ jobId, status, phase: "loading" });
+  setState(previous=>previous.jobId===jobId&&previous.status===status&&previous.phase!=="loading"?previous:{ jobId, status, phase: "loading" });
   try {
    const path = `/api/jobs/${jobId}`, beforeActivation = ["draft", "quoting", "accepted", "lost"].includes(status);
    const [proofRaw, variationsRaw, invoicesRaw, feeRaw] = await Promise.all([
@@ -58,7 +59,7 @@ export function PracticeJourney({ jobId, status, onSettled }: { jobId: string; s
    if (isCurrent()) setState({ jobId, status, phase: "failed", userInitiated });
   }
  }, [jobId, status]);
- useEffect(() => { void load(); return () => { generation.current++; activeRequest.current?.abort(); }; }, [load]);
+ useJobFactsRefresh(load);useEffect(() => { void load(); return () => { generation.current++; activeRequest.current?.abort(); }; }, [load]);
  const phase = state.jobId === jobId && state.status === status ? state.phase : "loading";
  useEffect(() => {
   // Automatic reads announce through the alert without taking focus. A requested

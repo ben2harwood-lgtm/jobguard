@@ -1,4 +1,5 @@
 "use client";
+import { useJobFactsRefresh } from "./job-facts-refresh";
 import { jobPageFetch as fetch } from "./job-page-fetch";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { parsePoundsToPence, type RecoveryAllocationCommand } from "@jobguard/core";
@@ -30,7 +31,7 @@ export function RecoveryAllocations({ jobId }: { jobId: string }) {
     catch { if (current === generation.current && !controller.signal.aborted) { setUnknown(true); setError("Saved allocations could not load. Changes stay paused until they are read."); setErrorSequence(value => value + 1); } }
     finally { if (current === generation.current) setBusy(false); }
   }, [path]);
-  useEffect(() => { setView(null); setReversalSources({}); setRemittanceEvidenceId(""); setEvidenceId(""); setCaseId(""); setPaymentId(""); setAmount(""); setUnknown(false); void load(); return () => { generation.current++; active.current?.abort(); }; }, [load]);
+  useJobFactsRefresh(load);useEffect(() => { setView(null); setReversalSources({}); setRemittanceEvidenceId(""); setEvidenceId(""); setCaseId(""); setPaymentId(""); setAmount(""); setUnknown(false); void load(); return () => { generation.current++; active.current?.abort(); }; }, [load]);
   useEffect(() => { if (error) alert.current?.focus(); }, [error, errorSequence]);
   async function send(command: RecoveryAllocationCommand) {
     if (busy || unknown || !view) return;

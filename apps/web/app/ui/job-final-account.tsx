@@ -1,10 +1,11 @@
 "use client";
+import { useJobFactsRefresh } from "./job-facts-refresh";
 import { jobPageFetch as fetch } from "./job-page-fetch";
 import{useCallback,useEffect,useRef,useState,type ReactNode}from"react";import{finalAccountResponseV1,type FinalAccountResponse}from"@jobguard/api/final-account-contracts";
 import { FinalAccountLock } from "./final-account-lock";
 import{CustomerInvoices}from"./customer-invoices";
 const pounds=(p:number)=>`${p<0?"−":""}£${(Math.abs(p)/100).toLocaleString("en-GB",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
-export function JobFinalAccount({jobId,beforeInvoices}:{jobId:string;beforeInvoices?:ReactNode}){const[view,setView]=useState<FinalAccountResponse|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState(false),[notice,setNotice]=useState("");const buildingRef=useRef(false);const[building,setBuilding]=useState(false);const load=useCallback(async()=>{setLoading(true);setError(false);for(let attempt=0;attempt<6;attempt++){try{const response=await fetch(`/api/jobs/${jobId}/final-account`,{cache:"no-store"});if(response.ok){setView(finalAccountResponseV1.parse(await response.json()));setLoading(false);return}}catch{}await new Promise(resolve=>setTimeout(resolve,300))}setError(true);setLoading(false)},[jobId]);useEffect(()=>{void load()},[load]);async function build(){
+export function JobFinalAccount({jobId,beforeInvoices}:{jobId:string;beforeInvoices?:ReactNode}){const[view,setView]=useState<FinalAccountResponse|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState(false),[notice,setNotice]=useState("");const buildingRef=useRef(false),readGeneration=useRef(0);const[building,setBuilding]=useState(false);const load=useCallback(async()=>{const generation=++readGeneration.current;setError(false);for(let attempt=0;attempt<6;attempt++){if(generation!==readGeneration.current)return;try{const response=await fetch(`/api/jobs/${jobId}/final-account`,{cache:"no-store"});if(response.ok){const next=finalAccountResponseV1.parse(await response.json());if(generation!==readGeneration.current)return;setView(next);setLoading(false);return}}catch{}await new Promise(resolve=>setTimeout(resolve,300))}if(generation===readGeneration.current){setError(true);setLoading(false)}},[jobId]);useJobFactsRefresh(load);useEffect(()=>{void load();return()=>{readGeneration.current++;}},[load]);async function build(){
  if(buildingRef.current)return;
  buildingRef.current=true;
  setBuilding(true);

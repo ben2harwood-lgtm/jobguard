@@ -1,3 +1,4 @@
+vi.mock("./job-facts-refresh",()=>({useJobFactsRefresh:()=>undefined}));
 import * as React from "react";
 import { createHash } from "node:crypto";
 import { renderToStaticMarkup } from "react-dom/server";

@@ -23,7 +23,7 @@ const hooks = vi.hoisted(() => {
     },
   };
 });
-vi.mock("react", async original => ({ ...await original<typeof React>(), ...hooks }));
+vi.mock("react", async original => ({ ...await original<typeof React>(), useContext: () => 0, ...hooks }));
 type Node = React.ReactElement<Record<string, any>>;
 function all(tree: React.ReactNode, match: (node: Node) => boolean): Node[] {
   if (Array.isArray(tree)) return tree.flatMap(child => all(child, match));

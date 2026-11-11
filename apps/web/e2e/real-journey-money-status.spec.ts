@@ -30,14 +30,18 @@ async function createJob(page: Page, text: string, net: number, customer: string
   await click(page, "Save customer and site");
   await expect(page.getByTestId("party-customer")).toHaveText(customer);
   if (split) {
-    await page.locator(".review-line").first().getByRole("button", { name: /^Split /u }).click();
-    const parts = page.locator(".review-line").filter({ has: page.getByText("accepted", { exact: true }) });
+    // The natural-items parser already separates this walk into two work items; older output was one line to Split.
+    const lines = page.locator(".review-line");
+    const separated = await lines.count() > 1;
+    if (!separated) await lines.first().getByRole("button", { name: /^Split /u }).click();
+    const parts = separated ? lines : lines.filter({ has: page.getByText("accepted", { exact: true }) });
     await expect(parts).toHaveCount(2);
     for (let i = 0; i < 2; i++) {
       const part = parts.nth(i);
       await part.getByRole("textbox", { name: /^Description /u }).fill(i === 0 ? "Paint hall stairs and landing" : "Gloss woodwork");
       await part.getByRole("textbox", { name: /^Quantity /u }).fill("1");
       await part.getByRole("textbox", { name: /^Unit /u }).fill("item");
+      if (separated) await part.getByRole("button", { name: /^Accept /u }).click();
     }
   } else {
     const lines = page.locator(".review-line");

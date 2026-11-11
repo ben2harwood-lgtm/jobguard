@@ -10,7 +10,7 @@ import { CustomerInvoices } from "./customer-invoices";
 
 const hooks = vi.hoisted(() => ({ values: [] as unknown[] }));
 vi.mock("react", async original => ({
- ...await original<typeof React>(),
+ ...await original<typeof React>(), useContext: () => 0,
  useState: (initial: unknown) => [hooks.values.length ? hooks.values.shift() : typeof initial === "function" ? initial() : initial, vi.fn()],
  useRef: (current: unknown) => ({ current }),
  useCallback: (fn: unknown) => fn,

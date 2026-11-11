@@ -32,7 +32,7 @@ const hooks = vi.hoisted(() => {
     },
   };
 });
-vi.mock("react", async importOriginal => ({ ...await importOriginal<typeof React>(), ...hooks }));
+vi.mock("react", async importOriginal => ({ ...await importOriginal<typeof React>(), useContext: () => 0, ...hooks }));
 afterEach(() => { hooks.reset(); vi.unstubAllGlobals(); });
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;

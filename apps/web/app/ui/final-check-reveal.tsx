@@ -1,4 +1,5 @@
 "use client";
+import { useJobFactsRefresh } from "./job-facts-refresh";
 import { jobPageFetch as fetch } from "./job-page-fetch";
 import {lateSourceReceiptV1} from "@jobguard/core";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -23,7 +24,7 @@ export function FinalCheckReveal({ jobId }: { jobId: string }) {
   } catch (e) { if (currentJob.current === jobId && epoch.current === requestEpoch) setError(e instanceof Error ? e.message : "The final check could not load."); }
   finally { if (epoch.current === requestEpoch) setBusy(false); }
  }, [jobId]);
- useEffect(() => { setRead(null); void load(); return () => { epoch.current++; }; }, [load]);
+useJobFactsRefresh(load); useEffect(() => { setRead(null); void load(); return () => { epoch.current++; }; }, [load]);
  // Practice only: the worker runs the check; this page just asks and then re-reads.
  const requestRun = async () => {
   if (busy) return;
@@ -102,6 +103,7 @@ function HistoricalEvidence({jobId,onSaved}:{jobId:string;onSaved:()=>Promise<vo
   if(!Array.isArray(raw))throw new Error("Imported evidence could not load.");
   setSaved(raw.map(row=>lateSourceReceiptV1.parse(row)));
  },[jobId]);
+ useJobFactsRefresh(()=>void loadHistory().catch(()=>setMessage("Imported evidence could not load.")));
  useEffect(()=>{setSaved([]);void loadHistory().catch(()=>setMessage("Imported evidence could not load."));},[loadHistory]);
  const pending=useRef<{key:string;commandId:string}|null>(null);
  const save=async()=>{

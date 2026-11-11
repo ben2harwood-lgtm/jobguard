@@ -1,4 +1,5 @@
 "use client";
+import { useJobFactsRefresh } from "./job-facts-refresh";
 import { jobPageFetch as fetch } from "./job-page-fetch";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { customerTypes, jobPartiesCommandResultV1, jobPartiesImportResultV1, jobPartiesWorkspaceV1, siteMatchKey, type JobPartiesCommandV1 } from "@jobguard/core";
@@ -47,7 +48,7 @@ export function JobParties({ jobId, onSettled }: { jobId: string; onSettled?: (j
   const baseline = useRef<View | null>(null), draftRefs = useRef({ customerId: "", payer: "", reuse: "" });
   draftRefs.current = { customerId, payer, reuse };
   const load = useCallback(async () => { const snapshot = await fetchView(); setView(snapshot); if (baseline.current === null) { baseline.current = snapshot; resetDraft(snapshot); } return snapshot; }, [fetchView]);
-  useEffect(() => {
+useJobFactsRefresh(()=>void load().catch(e=>setError(e.message)));  useEffect(() => {
     const refresh = (event: Event) => {
       if ((event as CustomEvent).detail !== jobId) return;
       void fetchView().then(latest => {

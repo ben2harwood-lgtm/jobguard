@@ -8,7 +8,7 @@ async function expandPhoneControls(page: import("@playwright/test").Page) {
 }
 // Both mobile-360 and desktop run these against real synthetic routes and workers.
 for (const mode of ["Play the whole thing", "Show me"] as const) {
-test(`WALK-3 ${mode} saves its own draft then honestly completes a prepared example`, async ({ page }) => {
+test(`WALK-3 ${mode} completes the builder’s own job without a second job`, async ({ page }) => {
   // Exercise the invoice/receipt mount race: an issued invoice is visible while
   // the separate receipt-history read is still in flight. Keep the real response.
   await page.route(/\/api\/jobs\/[^/]+\/customer-invoices\/[^/]+\/receipts$/, async route => {
@@ -20,8 +20,10 @@ test(`WALK-3 ${mode} saves its own draft then honestly completes a prepared exam
     if (request.method() === "POST" && /\/final-check\/catches$/.test(request.url())) catchReplay = { url: request.url(), data: request.postDataJSON() };
   });
   const revealed: string[] = [];
+  const checkedJobs = new Set<string>();
   page.on("response", async response => {
     if (response.request().method() === "GET" && /\/api\/jobs\/[^/]+\/final-check$/.test(response.url()) && response.ok()) {
+      checkedJobs.add(new URL(response.url()).pathname.split("/")[3]!);
       const body = await response.json();
       for (const item of body.items ?? []) revealed.push(item.description);
     }
@@ -35,24 +37,38 @@ test(`WALK-3 ${mode} saves its own draft then honestly completes a prepared exam
   await expect(tour).toContainText("Step 1 of 9");
   await expect(page.getByLabel("Work details")).toHaveValue("Practice decorating. Protect room £200.00. Prepare walls £200.00. Paint walls £200.00. Finish trim £200.00. Clean site £100.00. Replace shelves");
   expect((await page.context().cookies()).find(cookie => cookie.name === "jg_session")!.value).toBe(practiceToken);
-  await tour.getByRole("button", { name: mode, exact: true }).click();
-  if (mode === "Show me") {
-    await expect(tour).toContainText("Step 2 of 9");
-    await tour.getByRole("button", { name: mode, exact: true }).click();
-  }
+  await tour.getByRole("button", { name: "Show me", exact: true }).click();
+  await expect(tour).toContainText("Step 2 of 9");
+  await tour.getByRole("button", { name: "Show me", exact: true }).click();
   await expect(tour).toContainText("Step 3 of 9", { timeout: 40_000 });
-  await expect(tour).toContainText("This part uses a prepared example job");
-  await expect(tour).toContainText("prerequisite still to build");
+  await expect(page.locator("body")).not.toContainText("This part uses a prepared example job");
+  await expect(tour).toContainText("Customer invitation is still to build");
+  await page.getByRole("button", { name: "Continue on my own saved job", exact: true }).click();
+  if (mode !== "Show me") await tour.getByRole("button", { name: mode, exact: true }).click();
   const ownHref = await page.getByRole("link", { name: "Open your saved job", exact: true }).getAttribute("href");
   if (mode === "Show me") {
     for (let step = 3; step <= 9; step++) {
       await expect(tour).toContainText(`Step ${step} of 9`, { timeout: 300_000 });
+      await expect(page.getByTestId("workspace-job-id")).toHaveAttribute("data-job-id", ownHref!.split("/").at(-1)!);
+      await expect(page.locator("body")).not.toContainText("This part uses a prepared example job");
       if (step === 8) {
         const result = page.getByTestId("final-check-item");
         await expect(result).toContainText("fitted loft hatch");
         await expect(result.getByRole("button", { name: "Yes — this was extra work", exact: true })).toBeVisible();
         await expect(result.getByLabel("Or answer", { exact: true })).toBeVisible();
         await expect(result.getByRole("button", { name: "Save answer", exact: true })).toBeVisible();
+      }
+      if (step === 9) {
+        // Replay the already paid step: no extra, invoice, receipt or diary mutation.
+        const writes: string[] = [];
+        const record = (request: import("@playwright/test").Request) => { if (request.method() === "POST" && request.url().includes("/api/jobs/")) writes.push(request.url()); };
+        page.on("request", record);
+        await expandPhoneControls(page);
+        await tour.getByRole("button", { name: "Back", exact: true }).click();
+        await expect(tour).toContainText("Step 8 of 9");
+        await tour.getByRole("button", { name: mode, exact: true }).click();
+        await expect(tour).toContainText("Step 9 of 9");
+        expect(writes).toEqual([]); page.off("request", record);
       }
       await tour.getByRole("button", { name: mode, exact: true }).click();
     }
@@ -61,6 +77,7 @@ test(`WALK-3 ${mode} saves its own draft then honestly completes a prepared exam
   await expect(tour).toContainText("That's the whole job", { timeout: 300_000 });
   await expect(page).toHaveURL(/#final-account-title$/);
   expect(revealed).toContain("fitted loft hatch");
+  expect([...checkedJobs]).toEqual([ownHref!.split("/").at(-1)]);
   await expect(page.getByTestId("value-found-after-lock")).toContainText("Found after your bill was complete: £300.00 — from JobGuard's final check");
   await expect(page.getByTestId("value-found-after-lock")).toContainText("awaiting approval");
   await expect(page.getByTestId("value-found-after-lock").getByRole("link", { name: "fitted loft hatch" })).toHaveAttribute("href", /#variation-/);
@@ -70,14 +87,18 @@ test(`WALK-3 ${mode} saves its own draft then honestly completes a prepared exam
   await expect(page.getByTestId("value-recorded-gross")).toHaveText("£1,230.00");
   await expect(page.getByTestId("value-outstanding-gross")).toHaveText("£0.00");
   const preparedHref = await page.locator('.value-page a[href^="/jobs/"]').first().getAttribute("href");
-  expect(ownHref).not.toBe(preparedHref);
+  expect(preparedHref!.split("#")[0]).toBe(ownHref);
+  expect(new URL(page.url()).searchParams.has("walkExample")).toBe(false);
+  const session = await (await page.request.get("/api/session")).json();
+  const jobs = await (await page.request.get(`/api/jobs?tenantId=${session.tenants[0].id}`)).json();
+  expect(jobs.jobs.map((job: { id: string }) => job.id)).toEqual([ownHref!.split("/").at(-1)]);
   const own = await (await page.request.get(`/api${ownHref}/proposal`)).json();
-  expect(own.status).toBe("quoting");
+  expect(["live", "invoiced", "paid"]).toContain(own.status);
   expect(own.review.lines[0].description).toContain("carefully");
-  expect((await (await page.request.get(`/api${ownHref}/value`)).json()).foundAfterLock).toEqual([]);
+  expect((await (await page.request.get(`/api${ownHref}/final-check`)).json()).items).toEqual(expect.arrayContaining([expect.objectContaining({ description: "fitted loft hatch" })]));
   expect(catchReplay).toBeDefined();
   expect((await page.request.post(catchReplay!.url, { data: catchReplay!.data })).ok()).toBe(true);
-  const savedValue = await (await page.request.get(`/api${preparedHref}/value`)).json();
+  const savedValue = await (await page.request.get(`/api${ownHref}/value`)).json();
   expect(savedValue.foundAfterLock).toHaveLength(1);
   expect(savedValue.foundAfterLock[0]).toMatchObject({ description: "fitted loft hatch", pence: 30000, approved: false });
   await tour.getByRole("button", { name: "Close walkthrough" }).click();
@@ -101,7 +122,8 @@ test("WALK-3 waits for real typed capture, supports keyboard close and reduced m
   await expect(tour.getByRole("button", { name: "Next", exact: true })).toBeDisabled();
   await tour.getByRole("button", { name: "Show me", exact: true }).click();
   await expect(tour).toContainText("Step 3 of 9");
-  await expect(page.getByRole("button", { name: "Use the prepared example job" })).toBeVisible();
+  await expect(page.getByTestId("workspace-job-id")).toBeVisible();
+  await expect(page.locator("body")).not.toContainText("This part uses a prepared example job");
   await page.keyboard.press("Escape");
   await expect(tour).toHaveCount(0);
   expect((await new AxeBuilder({ page }).analyze()).violations.filter(v => ["serious", "critical"].includes(v.impact ?? ""))).toEqual([]);
@@ -256,3 +278,47 @@ test("390px collapsed bar leaves every step's first highlighted control clear", 
   await expect(tour).toHaveCount(0);
   await expect(page.getByTestId("value-recorded-gross")).toBeVisible();
 });
+
+
+for (const refusal of ["refused", "disabled"] as const) {
+  test(`WALK-3 own-job ${refusal} control switches honestly without completing the own job`, async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/practice-company/walkthrough");
+    const tour = page.getByRole("region", { name: "Guided walkthrough" });
+    for (let step = 1; step <= 2; step++) {
+      await expect(tour).toContainText(`Step ${step} of 9`);
+      await tour.getByRole("button", { name: "Show me", exact: true }).click();
+    }
+    await expect(tour).toContainText("Step 3 of 9");
+    await page.getByRole("button", { name: "Continue on my own saved job", exact: true }).click();
+    const own = new URL(page.url()).searchParams.get("walkJob")!;
+    await expect(page.getByTestId("workspace-job-id")).toHaveAttribute("data-job-id", own);
+    let attempts = 0;
+    if (refusal === "refused") {
+      // Fault injection at the HTTP boundary; all saved state still uses the real DB.
+      await page.route(`**/api/jobs/${own}/quotes/preview`, async route => {
+        attempts++;
+        await route.fulfill({ status: 409, json: { code: "STALE_QUOTE" } });
+      });
+    } else {
+      await page.getByLabel(/^Unit rate /u).first().fill("");
+      await expect(page.getByRole("button", { name: "Preview immutable quote", exact: true })).toBeDisabled();
+    }
+    await tour.getByRole("button", { name: "Show me", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Prepared example · simulated customer" })).toBeVisible({ timeout: 40_000 });
+    await expect(tour).toContainText("This part uses a prepared example job");
+    await expect(tour).toContainText("Step 3 of 9");
+    const example = new URL(page.url()).searchParams.get("walkExample");
+    expect(example).toBeTruthy(); expect(example).not.toBe(own);
+    expect(attempts).toBe(refusal === "refused" ? 1 : 0);
+    const ownState = await (await page.request.get(`/api/jobs/${own}/proposal`)).json();
+    expect(ownState.status).toBe("quoting");
+    expect((await (await page.request.get(`/api/jobs/${own}/customer-invoices`)).json()).invoices).toEqual([]);
+    await tour.getByRole("button", { name: "Show me", exact: true }).click();
+    await expect(tour).toContainText("Step 4 of 9", { timeout: 30_000 });
+    await page.reload();
+    await expect(tour).toContainText("Step 4 of 9", { timeout: 30_000 });
+    await expect(tour).toContainText("This part uses a prepared example job");
+    await expect(page.getByTestId("workspace-job-id")).toHaveAttribute("data-job-id", example!);
+  });
+}

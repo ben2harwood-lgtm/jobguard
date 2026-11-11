@@ -4,7 +4,7 @@ import { WorkspaceShell } from "./workspace-shell";
 import { RecoveryCases } from "./recovery-cases";
 const state = vi.hoisted(() => ({ values: [] as unknown[] }));
 vi.mock("react", async original => ({
- ...await original<typeof import("react")>(),
+ ...await original<typeof import("react")>(), useContext: () => 0,
  useState: () => [state.values.shift(), vi.fn()],
  useRef: (current: unknown) => ({ current }),
  useCallback: (fn: unknown) => fn,

@@ -1,4 +1,5 @@
 "use client";
+import { JobFactsGeneration } from "./job-facts-refresh";
 import { SimulationFeeStatements } from "./simulation-fee-statements";
 import { PracticeFacts } from "./practice-facts";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -35,10 +36,11 @@ export function WorkspaceShell({jobId}:{jobId:string}){
  const[capture,setCapture]=useState<CaptureWorkspaceResponse|null>(null);
  const[error,setError]=useState<"forbidden"|"unavailable"|null>(null);
  const[loading,setLoading]=useState(true),[fragment,setFragment]=useState("");
+ const[factsGeneration,setFactsGeneration]=useState(0);
  const errorRef=useRef<HTMLHeadingElement>(null),generation=useRef(0),activeRequest=useRef<AbortController|null>(null);
  const currentJobId=useRef(jobId);currentJobId.current=jobId;
  // The job whose captured review is mounted in this render, if any.
- const shownJobId=useRef<string|null>(null);shownJobId.current=!loading&&!error&&capture?.jobId===jobId?jobId:null;
+ const shownJobId=useRef<string|null>(null);shownJobId.current=!loading&&!error&&(capture?.jobId===jobId||job?.id===jobId)?jobId:null;
  const acceptSnapshot=useCallback((snapshot:CaptureWorkspaceResponse)=>{
   if(snapshot.jobId!==currentJobId.current)return;
   // A newer post-command read supersedes any pre-command navigation request.
@@ -65,7 +67,7 @@ export function WorkspaceShell({jobId}:{jobId:string}){
   finally{if(current===generation.current)setLoading(false);}
  },[jobId]);
  useEffect(()=>{void load();return()=>{generation.current++;activeRequest.current?.abort();}},[load]);
- useEffect(()=>{setFragment(window.location.hash);const changed=()=>{setFragment(window.location.hash);};window.addEventListener("hashchange",changed);return()=>window.removeEventListener("hashchange",changed);},[load]);
+ useEffect(()=>{setFragment(window.location.hash);const changed=()=>{setFragment(window.location.hash);void load();setFactsGeneration(value=>value+1);};window.addEventListener("hashchange",changed);return()=>window.removeEventListener("hashchange",changed);},[load]);
  useEffect(()=>{if(error)errorRef.current?.focus();},[error]);
  const section=capture?requestedWorkspaceSection(capture.status,fragment==="#variations-title"?"#work-proof":fragment):"scope";
  // Plain saved-job URLs retain the confirmed-scope step. Explicit job anchors
@@ -91,7 +93,7 @@ export function WorkspaceShell({jobId}:{jobId:string}){
  const journeySettled=useCallback((id:string)=>setSettledJourney(id),[]);
  if(loading)return <main className="workspace-page" aria-live="polite"><p>Loading your job…</p></main>;
  if(error)return <main className="workspace-page"><section className="workspace-error" role="alert"><h1 ref={errorRef} tabIndex={-1}>{error==="forbidden"?"You cannot open this job":"Your job could not load"}</h1><p>{error==="forbidden"?"Use a job available to this practice session.":"Nothing was changed. Try loading the saved job again."}</p>{error==="unavailable"&&<button className="primary" onClick={()=>void load()}>Try again</button>}<Link href="/classic">Back to Jobs</Link></section></main>;
- if(capture)return <WatchdogStatusProvider jobId={jobId} initialStatus={capture.status}>
+ if(capture)return <JobFactsGeneration.Provider value={factsGeneration}><WatchdogStatusProvider jobId={jobId} initialStatus={capture.status}>
   <main className="workspace-page" id="captured-job-workspace" data-testid="workspace-job-id" data-job-id={jobId}>
    <header><h1>{capture.proposal.title}</h1><p className="status">{jobStatusLabels[capture.status]}</p></header>
    {/* The section links come first and never change identity, so the first control
@@ -124,7 +126,7 @@ export function WorkspaceShell({jobId}:{jobId:string}){
    <Link href={`/jobs/${jobId}/trial`} prefetch={false}>First job trial and card</Link>{" "}
    <Link href={`/jobs/${jobId}/recovery-journey`} prefetch={false}>Recovery practice guide</Link>
   </main>
- </WatchdogStatusProvider>;
+ </WatchdogStatusProvider></JobFactsGeneration.Provider>;
  if(!job)return null;
- return <WatchdogStatusProvider jobId={jobId} initialStatus={job.status}><main className="workspace-page"><Link href="/classic">← Jobs</Link><Link href={`/jobs/${jobId}/trial`} prefetch={false}>First job trial and card</Link><JobParties jobId={jobId}/><header><p className="eyebrow">Saved practice job</p><h1>{job.title}</h1><p className="status" data-testid="job-status">{jobStatusLabels[job.status]}</p><p>Server revision <strong data-testid="job-revision">{job.revision}</strong></p></header><nav className="workspace-stages" aria-label="Job stages">{stages.map((stage,index)=><a href={`#stage-${index}`} key={stage}>{stage}</a>)}</nav><PreventionChecks jobId={jobId}/><section id="stage-0"><h2>Scope</h2><p>Persistent job ID <code data-testid="job-id">{job.id}</code></p><p>Practice sandbox — synthetic data; nothing is sent or charged</p></section><WatchdogPanel><PurchaseOrder jobId={jobId}/></WatchdogPanel><WatchdogPanel><SupplierDocuments jobId={jobId}/></WatchdogPanel><WatchdogPanel><SupplierMatch jobId={jobId}/></WatchdogPanel><WatchdogPanel><ThingsToCheck jobId={jobId}/></WatchdogPanel><WatchdogPanel><Readiness jobId={jobId}/></WatchdogPanel><WatchdogPanel disableControls={false}><RelevanceInbox jobId={jobId}/></WatchdogPanel><WatchdogPanel disableControls={false}><ProofStage jobId={jobId}/></WatchdogPanel>{stages.slice(1).map((stage,index)=><section id={`stage-${index+1}`} key={stage}><h2>{stage}</h2><p>Illustration — not yet connected to this job</p></section>)}<RecoveryCases jobId={jobId}/><PaymentFeeStatements key={jobId} jobId={jobId}/>{hasStartedWork(job.status)&&<SimulationFeeStatements key={`statements-${jobId}`} jobId={jobId}/>}</main></WatchdogStatusProvider>;
+ return <JobFactsGeneration.Provider value={factsGeneration}><WatchdogStatusProvider jobId={jobId} initialStatus={job.status}><main className="workspace-page"><Link href="/classic">← Jobs</Link><Link href={`/jobs/${jobId}/trial`} prefetch={false}>First job trial and card</Link><JobParties jobId={jobId}/><header><p className="eyebrow">Saved practice job</p><h1>{job.title}</h1><p className="status" data-testid="job-status">{jobStatusLabels[job.status]}</p><p>Server revision <strong data-testid="job-revision">{job.revision}</strong></p></header><nav className="workspace-stages" aria-label="Job stages">{stages.map((stage,index)=><a href={`#stage-${index}`} key={stage}>{stage}</a>)}</nav><PreventionChecks jobId={jobId}/><section id="stage-0"><h2>Scope</h2><p>Persistent job ID <code data-testid="job-id">{job.id}</code></p><p>Practice sandbox — synthetic data; nothing is sent or charged</p></section><WatchdogPanel><PurchaseOrder jobId={jobId}/></WatchdogPanel><WatchdogPanel><SupplierDocuments jobId={jobId}/></WatchdogPanel><WatchdogPanel><SupplierMatch jobId={jobId}/></WatchdogPanel><WatchdogPanel><ThingsToCheck jobId={jobId}/></WatchdogPanel><WatchdogPanel><Readiness jobId={jobId}/></WatchdogPanel><WatchdogPanel disableControls={false}><RelevanceInbox jobId={jobId}/></WatchdogPanel><WatchdogPanel disableControls={false}><ProofStage jobId={jobId}/></WatchdogPanel>{stages.slice(1).map((stage,index)=><section id={`stage-${index+1}`} key={stage}><h2>{stage}</h2><p>Illustration — not yet connected to this job</p></section>)}<RecoveryCases jobId={jobId}/><PaymentFeeStatements key={jobId} jobId={jobId}/>{hasStartedWork(job.status)&&<SimulationFeeStatements key={`statements-${jobId}`} jobId={jobId}/>}</main></WatchdogStatusProvider></JobFactsGeneration.Provider>;
 }

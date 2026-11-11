@@ -9,11 +9,13 @@ vi.mock("./customer-invoices", () => ({ CustomerInvoices: () => null }));
 
 // Reuse the job-parties test's hook runtime to press real handlers before a rerender.
 const hooks = vi.hoisted(() => {
-  let cursor = 0;
+  let cursor = 0, generation = 0;
   const slots: { value?: unknown; current?: unknown; deps?: readonly unknown[]; cleanup?: (() => void) | undefined }[] = [];
   const effects: (() => void)[] = [];
   return {
-    reset() { cursor = 0; slots.length = 0; effects.length = 0; },
+    setGeneration(value: number) { generation=value; },
+    useContext() { return generation; },
+    reset() { generation=0;cursor = 0; slots.length = 0; effects.length = 0; },
     render() { cursor = 0; },
     effects() { while (effects.length) effects.shift()!(); },
     useState(initial: unknown) {
@@ -53,7 +55,7 @@ function findButton(node: React.ReactNode): Node | undefined {
 function text(node: React.ReactNode): string {
   if (Array.isArray(node)) return node.map(text).join(" ");
   if (React.isValidElement<Record<string, unknown>>(node)) return text(node.props.children as React.ReactNode);
-  return typeof node === "string" ? node : "";
+  return typeof node === "string" || typeof node === "number" ? String(node) : "";
 }
 async function setup() {
   vi.stubGlobal("React", React);
@@ -111,4 +113,21 @@ it.each(["network", "http", "invalid-json"])("releases the guard after %s failur
   (findButton(tree)!.props.onClick as () => void)();
   await tick();
   expect(fetch).toHaveBeenCalledTimes(3);
+});
+
+it("re-reads final-account facts on navigation without replacing the displayed panel", async () => {
+ const {fetch,render}=await setup();
+ let resolve!: (response: unknown)=>void;
+ fetch.mockImplementationOnce(()=>new Promise(done=>{resolve=done;}));
+ hooks.setGeneration(1);
+ render();
+ expect(fetch).toHaveBeenCalledTimes(2);
+ // No loading branch: the existing account controls remain mounted while reading.
+ expect(findButton(render())).toBeDefined();
+ const account={id:jobId,revision:1,sourceHash:"a".repeat(64),taxPolicyVersion:"reference",lines:[],pending:[],proof:[],findings:[],issueBlocked:false,totals:{net:{pence:1000,currency:"GBP"},tax:{pence:200,currency:"GBP"},total:{pence:1200,currency:"GBP"}}};
+ resolve({ok:true,json:async()=>({...view,account})});await tick();
+ const tree=render();
+ expect(text(tree)).toContain("Rebuild from approved sources");
+ expect(text(tree).replace(/\s+/gu," ")).toContain("Draft revision 1");
+ expect(fetch).toHaveBeenCalledTimes(2);
 });

@@ -36,7 +36,7 @@ const hooks = vi.hoisted(() => {
     },
   };
 });
-vi.mock("react", async importOriginal => ({ ...await importOriginal<typeof React>(), ...hooks }));
+vi.mock("react", async importOriginal => ({ ...await importOriginal<typeof React>(), useContext: () => 0, ...hooks }));
 afterEach(() => { hooks.reset(); vi.unstubAllGlobals(); });
 
 

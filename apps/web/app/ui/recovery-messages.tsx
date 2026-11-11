@@ -1,4 +1,5 @@
 "use client";
+import { useJobFactsRefresh } from "./job-facts-refresh";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import {
@@ -110,7 +111,7 @@ export function RecoveryMessages({ caseId, caseRevision, evidenceTick = 0 }: { c
     finally { if (own === generation.current) setLoading(false); }
   }, [endpoint, caseId, adopt]);
   // The case revision changes when a claim moves, so the saved preview is re-read and its change state recomputed.
-  useEffect(() => { void load(); return () => { generation.current++; }; }, [load, caseRevision, evidenceTick]);
+  useJobFactsRefresh(load);useEffect(() => { void load(); return () => { generation.current++; }; }, [load, caseRevision, evidenceTick]);
   useEffect(() => { if (error) errorRef.current?.focus(); }, [error]);
 
   async function act(action: Action) {

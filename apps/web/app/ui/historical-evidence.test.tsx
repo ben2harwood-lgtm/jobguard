@@ -2,7 +2,7 @@ import React from "react";
 import {afterEach,expect,it,vi} from "vitest";
 import {FinalCheckReveal} from "./final-check-reveal";
 const state=vi.hoisted(()=>({values:[] as unknown[],set:vi.fn()}));
-vi.mock("react",async original=>({...await original<typeof import("react")>(),
+vi.mock("react",async original=>({...await original<typeof import("react")>(), useContext: () => 0,
  useState:()=>[state.values.shift(),state.set],useRef:(current:unknown)=>({current}),
  useCallback:(fn:unknown)=>fn,useEffect:()=>undefined,
 }));

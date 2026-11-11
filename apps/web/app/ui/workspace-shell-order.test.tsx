@@ -4,10 +4,10 @@ import { afterEach, expect, it, vi } from "vitest";
 import { WorkspaceShell } from "./workspace-shell";
 import type { CaptureWorkspaceResponse } from "@jobguard/api/capture-contracts";
 
-const state = vi.hoisted(() => ({ values: [] as unknown[], effects: [] as (() => unknown)[], live: false, editor: null as React.ReactNode }));
+const state = vi.hoisted(() => ({ values: [] as unknown[], effects: [] as (() => unknown)[], setters: [] as ReturnType<typeof vi.fn>[], live: false, editor: null as React.ReactNode }));
 vi.mock("react", async original => ({
- ...await original<typeof React>(),
- useState: (initial: unknown) => [state.values.length ? state.values.shift() : typeof initial === "function" ? initial() : initial, vi.fn()],
+ ...await original<typeof React>(), useContext: () => 0,
+ useState: (initial: unknown) => { const setter=vi.fn();state.setters.push(setter);return [state.values.length ? state.values.shift() : typeof initial === "function" ? initial() : initial,setter]; },
  useRef: (current: unknown) => ({ current }),
  useCallback: (fn: unknown) => fn,
  useEffect: (effect: () => unknown) => { state.effects.push(effect); },
@@ -40,8 +40,8 @@ function workspace(status: CaptureWorkspaceResponse["status"], fragment = "") {
   proposal: { title: "Fictional decorating job", lines: [], questions: [] }, review: null,
  };
  state.live = ["live", "invoiced", "paid"].includes(status);
- state.effects = [];
- state.values = [null, capture, null, false, fragment];
+ state.effects = [];state.setters=[];
+ state.values = [null, capture, null, false, fragment, 0];
  return WorkspaceShell({ jobId });
 }
 function ids(html: string, attribute: string) {
@@ -160,10 +160,10 @@ it("does not put live job controls inside the quote fieldset or sidebar", () => 
  expect(activationFound).toBe(true);
 });
 
-it("handles fragment navigation without fetching or unmounting the workspace", () => {
+it("handles fragment navigation by re-reading without remounting the workspace", () => {
  workspace("quoting");
  const listeners = new Map<string, () => void>();
- const fetch = vi.fn();
+ const fetch = vi.fn(()=>new Promise(()=>{}));
  vi.stubGlobal("fetch", fetch);
  vi.stubGlobal("window", {
   location: {hash:"#quote"},
@@ -173,7 +173,9 @@ it("handles fragment navigation without fetching or unmounting the workspace", (
  // The second shell effect installs navigation; the initial-load effect is separate.
  const cleanup = state.effects[1]!() as () => void;
  listeners.get("hashchange")!();
- expect(fetch).not.toHaveBeenCalled();
+ expect(fetch).toHaveBeenCalledWith(`/api/jobs/${jobId}/proposal`, expect.objectContaining({cache:"no-store"}));
+ expect(state.setters[5]).toHaveBeenCalledWith(expect.any(Function));
+ expect(state.setters[3]).not.toHaveBeenCalledWith(true); // keep the workspace and editor mounted
  cleanup();
 });
 it.each(["#scope", "#quote", "#job-diary", "#work-proof", "#final-account-title"])("keeps component identity across %s navigation", fragment => {

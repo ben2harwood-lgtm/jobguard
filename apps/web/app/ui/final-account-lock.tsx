@@ -1,4 +1,5 @@
 "use client";
+import { useJobFactsRefresh } from "./job-facts-refresh";
 import { jobPageFetch as fetch } from "./job-page-fetch";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { z } from "zod";
@@ -40,7 +41,7 @@ export function FinalAccountLock({ jobId, account, onChanged }: {
       if (!controller.signal.aborted) { setView(next); setError(""); }
     } catch (failure) { if (!controller.signal.aborted) setError(failure instanceof Error ? failure.message : "DATABASE_UNAVAILABLE"); }
   }, [jobId]);
-  useEffect(() => { void load(); return () => active.current?.abort(); }, [load, account.id]);
+  useJobFactsRefresh(load);useEffect(() => { void load(); return () => active.current?.abort(); }, [load, account.id]);
   async function command(route: string, body: unknown, after?: () => void) {
     if (writing.current) return;
     writing.current = true; setBusy(true); setError("");

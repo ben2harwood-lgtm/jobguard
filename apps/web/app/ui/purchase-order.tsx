@@ -1,4 +1,5 @@
 "use client";
+import { useJobFactsRefresh } from "./job-facts-refresh";
 import { jobPageFetch as fetch } from "./job-page-fetch";
 
 import { useCallback, useEffect, useState } from "react";
@@ -54,7 +55,7 @@ export function PurchaseOrder({ jobId }: { jobId: string }) {
   const form = { quantity, unitPrice, recipient, requiredDate };
   const mayApprove = canApproveOrder(order, form, busy);
 
-  useEffect(() => {
+  useJobFactsRefresh(()=>void load().catch(e=>setError(e.message)));useEffect(() => {
     void load().catch(() => setError("Could not refresh purchase order"));
   }, [load]);
   useEffect(() => {

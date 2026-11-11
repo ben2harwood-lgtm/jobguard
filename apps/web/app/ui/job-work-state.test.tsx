@@ -5,7 +5,7 @@ import { JOB_SAVED_EVENT, jobPageFetch } from "./job-page-fetch";
 
 // Exercise the panel's actual read and command handlers with persistent hook slots.
 const hooks = vi.hoisted(() => ({ values: [] as unknown[], slot: 0, effects: [] as Array<() => void | (() => void)>, collecting: true }));
-vi.mock("react", async original => ({ ...(await original<typeof import("react")>()),
+vi.mock("react", async original => ({ ...(await original<typeof import("react")>()), useContext: () => 0,
   useState: (initial: unknown) => {
     const slot = hooks.slot++;
     if (!(slot in hooks.values)) hooks.values[slot] = initial;

@@ -1,4 +1,5 @@
 "use client";
+import { useJobFactsRefresh } from "./job-facts-refresh";
 import { jobPageFetch as fetch } from "./job-page-fetch";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { preventionViewV1, EXPOSURE_CURVE_ENABLED, type PreventionViewV1, type PreventionResultV1 } from "@jobguard/core";
@@ -30,7 +31,7 @@ export function PreventionChecks({jobId}:{jobId:string}) {
       const value=preventionViewV1.parse(await response.json());if(value.jobId!==jobId)throw new Error("Unexpected job response");if(requestGeneration===generation.current)setView(value);
     } catch { if(requestGeneration===generation.current){setView(null);setError("Prevention facts could not load. Try again.");} }
   },[jobId]);
-  useEffect(()=>{setView(null);setError("");void load();const changed=()=>{setView(null);void load();};window.addEventListener("job-parties-saved",changed);return()=>{generation.current++;window.removeEventListener("job-parties-saved",changed);};},[load]);
+useJobFactsRefresh(load);  useEffect(()=>{setView(null);setError("");void load();const changed=()=>{setView(null);void load();};window.addEventListener("job-parties-saved",changed);return()=>{generation.current++;window.removeEventListener("job-parties-saved",changed);};},[load]);
   useEffect(()=>{if(error)errorRef.current?.focus();},[error]);
   async function command(action:"property"|"company"|"start_watch"|"stop_watch"|"evaluate_watch") {
     if(inFlight.current||!view?.parties)return;

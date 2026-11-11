@@ -1,4 +1,5 @@
 "use client";
+import { useJobFactsRefresh } from "./job-facts-refresh";
 import { jobPageFetch as fetch } from "./job-page-fetch";
 import { SimulationMoneyCheck } from "./simulation-money-check";
 import { useEffect, useState } from "react";
@@ -19,7 +20,7 @@ export function SimulationFeeStatements({jobId}:{jobId:string}) {
  const [available,setAvailable]=useState(false),[records,setRecords]=useState<{document:IssuedSimulationFeeStatement;documentHash:string}[]>([]),[error,setError]=useState(""),[busy,setBusy]=useState(false),[approved,setApproved]=useState<string|null>(null);
  const url=`/api/jobs/${jobId}/success-fees/statements`;
  async function load(){const view=await readSimulationFeeStatements(jobId);setAvailable(view.available);setRecords(view.statements);}
- useEffect(()=>{setRecords([]);setApproved(null);setError("");void load().catch(()=>setError("Statements could not be loaded."));},[jobId]);
+useJobFactsRefresh(()=>void load().catch(()=>setError("Statements could not be loaded."))); useEffect(()=>{setRecords([]);setApproved(null);setError("");void load().catch(()=>setError("Statements could not be loaded."));},[jobId]);
  async function command(action:"issue"|"approve",record?:typeof records[number]){
   setBusy(true);setError("");
   try{

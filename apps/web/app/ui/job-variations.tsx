@@ -1,4 +1,5 @@
 "use client";
+import { useJobFactsRefresh } from "./job-facts-refresh";
 import { jobPageFetch as fetch } from "./job-page-fetch";
 import {useCallback,useEffect,useRef,useState} from "react";
 import {variationWorkspaceResponseV1,type VariationWorkspaceResponse} from "@jobguard/api/variation-contracts";
@@ -18,7 +19,7 @@ export function JobVariations({jobId,legacyPricing=true}:{jobId:string;legacyPri
   }
   setLoadFailed(true);
  },[jobId]);
- useEffect(()=>{void load();},[load]);
+ useJobFactsRefresh(load);useEffect(()=>{void load();},[load]);
  async function command(body:unknown,afterSave?:()=>void){
   if(writing.current)return false;
   writing.current=true;setBusy(true);setNotice("");
