@@ -783,3 +783,11 @@ Repair 8 whole db at 079f752b (origin/main e3dac41b merged; run.sh WHOLE, 2 work
 122 failed | 806 passed files; 330 failed | 7717 passed tests (r7: 165 files / 640 tests;
 after merging main, before r8 fixes: 167 / 647). NOT READY. Fail list and log:
 ~/.local/share/full-steam/coordinator/prechecks/lp-6d-remaining-routines-r8-079f752b-whole-*.
+
+Repair 9 whole db at 73a64c04 (run.sh WHOLE, 2 workers, 1 hook timeout): 124 failed | 804 passed
+files; 301 failed | 7747 passed tests (r8: 122 files / 330 tests). NOT READY. Four files newly fail
+because the lock helpers now require a bound request (checker r9a): signed-evidence-export-store,
+recovery-messages (raw held-open runtime clients), commands (an unbound direct probe now refuses
+with REQUEST_BINDING_REFUSED before AUTHORIZATION_INVALID) and meter-source-command-races. Their
+fixtures need their own bound contexts. Fail list and log:
+~/.local/share/full-steam/coordinator/prechecks/lp-6d-remaining-routines-r9-73a64c04-whole-*.
