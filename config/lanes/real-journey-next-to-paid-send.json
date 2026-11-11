@@ -9,6 +9,7 @@
         "apps/api/src/quote/quote.application.ts",
         "apps/api/src/quote/quote.application.test.ts",
         "packages/db/test/real-journey-practice-send.integration.test.ts",
+        "packages/db/src/quote-delivery-repository.ts",
         "apps/web/e2e/real-journey-next-to-paid-send.spec.ts"
       ]
     }

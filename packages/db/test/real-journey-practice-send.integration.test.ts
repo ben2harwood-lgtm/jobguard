@@ -86,7 +86,12 @@ it("refuses changed hash, document, recipient and payload without a send effect"
   expect(await effects(f)).toEqual([]);
   await f.app.issue(f.jobId, f.input);
   const before = await effects(f);
-  await expect(f.app.issue(f.jobId, { ...f.input, recipient: "other@fictional.invalid" })).rejects.toBeDefined();
+  for (const commandId of [f.input.commandId, randomUUID()]) {
+    for (const patch of [{ recipient: "other@fictional.invalid" }, { contentHash: "0".repeat(64) }])
+      await expect(f.app.issue(f.jobId, { ...f.input, commandId, ...patch })).rejects.toMatchObject({ code: "COMMAND_CONFLICT" });
+    expect(await effects(f)).toEqual(before);
+  }
+  expect(await f.app.issue(f.jobId, f.input)).toMatchObject({ status: "simulated_delivery", attempts: 1, receiptCount: 1 });
   expect(await effects(f)).toEqual(before);
 });
 it("refuses another blank firm's job, revoked and reset credentials", async () => {

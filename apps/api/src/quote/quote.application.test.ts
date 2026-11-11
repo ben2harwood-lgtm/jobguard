@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { afterEach, expect, it, vi } from "vitest";
-import { QuoteDeliveryRepository, type QuoteDeliveryView } from "@jobguard/db";
+import { CommandError, QuoteDeliveryRepository, type QuoteDeliveryView } from "@jobguard/db";
 import { PracticeAccess } from "../practice-access.js";
 import { QuoteApplication } from "./quote.application.js";
 
@@ -71,4 +71,15 @@ it("rejects client flags and changed command versions before issuing", async () 
   for (const extra of [{ blank: true }, { tenantId: randomUUID() }, { version: "v2" }])
     await expect(f.app.issue(jobId, { ...input, ...extra })).rejects.toThrow("INVALID_QUOTE");
   expect(f.issue).not.toHaveBeenCalled(); expect(f.execute).not.toHaveBeenCalled();
+});
+
+it.each([{ recipient: "other@fictional.invalid" }, { contentHash: "0".repeat(64) }])("propagates issued replay conflict for %j without reporting delivery", async patch => {
+  const f = fixture();
+  expect(await f.app.issue(jobId, input)).toEqual(f.delivered);
+  f.execute.mockClear(); f.query.mockClear();
+  const conflict = new CommandError("COMMAND_CONFLICT");
+  f.issue.mockRejectedValueOnce(conflict);
+  await expect(f.app.issue(jobId, { ...input, ...patch })).rejects.toBe(conflict);
+  expect(f.execute).not.toHaveBeenCalled();
+  expect(f.query).not.toHaveBeenCalled();
 });
