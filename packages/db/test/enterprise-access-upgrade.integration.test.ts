@@ -55,6 +55,30 @@ it('ACL comparison permits only named-table permissions and rejects column chang
  expect(()=>expectRelationsUnchanged(before,[{...tightened,columns:[...named.columns,{attname:'stray'}]},unnamed],laterAcl)).toThrow();
  expect(()=>expectRelationsUnchanged(before,[tightened,{...unnamed,relacl:['runtime=arw']}],laterAcl)).toThrow();
 });
+type RoutineAcl = { nspname: string; proname: string; args: string; proacl: string | null };
+function lp6cRoutineAcl(row: RoutineAcl) {
+ const identity=`${row.nspname}.${row.proname}(${row.args})`;
+ const grants = identity==='app.bind_request(p_kind text, p_credential text, p_tenant uuid)'
+   ? ['jobguard_migration']
+   : ['app.current_actor()', 'app.current_tenant()'].includes(identity)
+     ? ['jobguard_migration', 'jobguard_command_writer'] : [];
+ if (!grants.length) return row.proacl;
+ if (row.proacl===null) throw new Error('LP-6c predecessor must have an explicit ACL');
+ const entries = row.proacl.slice(1,-1).split(',');
+ for(const role of grants) {
+  const entry=`${role}=X/jobguard_binding_owner`;
+  if(!entries.includes(entry)) entries.push(entry);
+ }
+ return `{${entries.join(',')}}`;
+}
+it('1217 LP-6c permits only its exact three named function grants',()=>{
+ const base={nspname:'app',proname:'current_actor',args:'',proacl:'{jobguard_binding_owner=X/jobguard_binding_owner,jobguard_runtime=X/jobguard_binding_owner}'};
+ expect(lp6cRoutineAcl(base)).toBe('{jobguard_binding_owner=X/jobguard_binding_owner,jobguard_runtime=X/jobguard_binding_owner,jobguard_migration=X/jobguard_binding_owner,jobguard_command_writer=X/jobguard_binding_owner}');
+ expect(lp6cRoutineAcl({...base,proname:'current_tenant'})).toBe(lp6cRoutineAcl(base));
+ expect(lp6cRoutineAcl({...base,proname:'bind_request',args:'p_kind text, p_credential text, p_tenant uuid'})).toBe('{jobguard_binding_owner=X/jobguard_binding_owner,jobguard_runtime=X/jobguard_binding_owner,jobguard_migration=X/jobguard_binding_owner}');
+ for(const other of [{proname:'other'}, {nspname:'identity'}, {args:'unexpected uuid'}])
+  expect(lp6cRoutineAcl({...base,...other})).toBe(base.proacl);
+});
 let h:ScimHarness|undefined;
 afterAll(async()=>{await h?.close();});
 it('emergency_dual_owner/scim2_machine preserve populated identity state, installed routines and old ACLs; new capabilities start empty and default OFF',async()=>{
@@ -65,6 +89,24 @@ it('emergency_dual_owner/scim2_machine preserve populated identity state, instal
  await migrate(h.admin);await migrate(h.admin);
  expect(await Promise.all(tables.map(t=>canonicalRows(h!,t)))).toEqual(before);
  const after=await predecessorCatalogue(h.admin);
+ const delegationSql=await readFile(new URL('../migrations/0724_lp6c_customer_portal_delegation.sql',import.meta.url),'utf8');
+ const delegationProof=JSON.parse(await readFile(new URL('./migration-proofs/0724_lp6c_customer_portal_delegation.proof.json',import.meta.url),'utf8'));
+ // Pin the exact new scope shape while retaining every raw predecessor attribute.
+ const isBinding=(r:Relation)=>r.nspname==='control_plane'&&r.relname==='request_binding';
+ type Column={attname:string;attnum:number;attnotnull:boolean;[key:string]:unknown};
+ const bindingBefore=catalogue.relations.find(isBinding)!;
+ const bindingAfter=after.relations.find(isBinding)!;
+ const bindingColumns=bindingBefore.columns as Column[];
+ const uuidColumn=bindingColumns.find(c=>c.attname==='tenant_id')!;
+ const textColumn=bindingColumns.find(c=>c.attname==='credential_kind')!;
+ expect(bindingAfter.columns).toEqual([...bindingColumns,
+  {...uuidColumn,attname:'scope_job_id',attnum:8,attnotnull:false},
+  {...textColumn,attname:'scope_command_type',attnum:9,attnotnull:false}]);
+ const bindingChecks=bindingBefore.constraints as {name:string;definition:string}[];
+ expect(bindingAfter.constraints).toEqual([
+  {name:'request_binding_credential_kind_check',definition:"CHECK ((credential_kind = ANY (ARRAY['real'::text, 'practice'::text, 'contractor_practice'::text, 'customer_portal_delegated'::text])))"},
+  {name:'request_binding_delegated_scope_check',definition:"CHECK (((NOT ((scope_job_id IS NOT NULL) IS DISTINCT FROM (NOT (credential_kind IS DISTINCT FROM 'customer_portal_delegated'::text)))) AND (NOT ((scope_command_type IS NOT NULL) IS DISTINCT FROM (NOT (credential_kind IS DISTINCT FROM 'customer_portal_delegated'::text))))))"},
+  bindingChecks.find(c=>c.name==='request_binding_pkey')!]);
  // Later migrations pin their own replacement bodies; owner, ACL, security and settings must still match.
  const boundary=MIGRATION_URLS.findIndex(u=>u.pathname.endsWith('/0613_scim2_machine.sql'));
  expect(boundary).toBeGreaterThanOrEqual(0);
@@ -133,20 +175,30 @@ it('emergency_dual_owner/scim2_machine preserve populated identity state, instal
   constraints:[...(newManifest.constraints as Con[]).filter(c=>!attemptNames.has(c.name)),oldLockKey].sort((a,b)=>a.name<b.name?-1:a.name>b.name?1:0),
  };
  const afterRelations=after.relations.map((r:Relation)=>isLanding(r)?{...r,constraints:(r.constraints as Con[]).filter(c=>c.name!==added)}
-  :isJob(r)?{...r,constraints:(r.constraints as Con[]).map(c=>c.name===shape?priorShape:c)}:isManifest(r)?normalizedManifest
+  :isJob(r)?{...r,constraints:(r.constraints as Con[]).map(c=>c.name===shape?priorShape:c)}:isBinding(r)?{...r,columns:bindingBefore.columns,constraints:bindingBefore.constraints}:isManifest(r)?normalizedManifest
   :isOriginal(r)?{...r,columns:(r.columns as Col[]).map(c=>c.attname==='scope_item_id'?{...c,attnotnull:true}:c)}:r).map(withoutKinds);
  expectRelationsUnchanged(catalogue.relations.map(withoutKinds),afterRelations,laterAcl);
  // 0672 lets its migration-owned pack writer read the sealed request binding; only that ACL entry is added.
  const bindingReaders=new Set(['app.current_actor','app.current_tenant']);
  for(const row of catalogue.routines){
+  const expected={...row,proacl:lp6cRoutineAcl(row)};
+  if(row.nspname==='identity'&&row.proname==='customer_portal_use') {
+   const change=delegationProof.upgrade.find((entry:{section:string;after?:{nspname:string;proname:string}})=>entry.section==='routines'&&entry.after?.nspname==='identity'&&entry.after.proname==='customer_portal_use');
+   expect(row.proacl).toBe(change.before.proacl);
+   expected.proacl=change.after.proacl;
+  }
   if(bindingReaders.has(`${row.nspname}.${row.proname}`)){
    const added=after.routines.find((r:typeof row)=>r.nspname===row.nspname&&r.proname===row.proname&&r.args===row.args);
-   expect({...added,proacl:row.proacl}).toEqual(row);
-   expect(added.proacl).toBe(row.proacl.replace(/\}$/u,',jobguard_migration=X/jobguard_binding_owner}'));
+   const declaration=`CREATE OR REPLACE FUNCTION app.${row.proname}() RETURNS uuid`;
+   const body=delegationSql.slice(delegationSql.indexOf(declaration)).match(/AS \$\$([\s\S]*?)\$\$;/u)?.[1];
+   expect(body).toBeDefined();
+   expect(added!.definition.match(/AS \$function\$([\s\S]*?)\$function\$/u)?.[1]?.trim()).toBe(body!.trim());
+   // Only the reviewed latest body changes; all owner/ACL/security/settings stay exact.
+   expect(added).toEqual({...expected,definition:added!.definition});
    continue;
   }
-  if(!later.has(`${row.nspname}.${row.proname}`)){expect(after.routines).toContainEqual(row);continue;}
-  const {definition:_d,...kept}=row;
+  if(!later.has(`${row.nspname}.${row.proname}`)){expect(after.routines).toContainEqual(expected);continue;}
+  const {definition:_d,...kept}=expected;
   expect(after.routines.map(({definition:_x,...r}:typeof row)=>r)).toContainEqual(kept);
  }
  for(const table of ['emergency_request','emergency_approval','emergency_session','emergency_action','scim2_binding','scim2_resource','scim2_receipt']) {

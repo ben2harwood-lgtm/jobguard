@@ -1,4 +1,5 @@
 // Synthetic repository probe only; reuses the merged runtime-role cluster and fixture boundary.
+import { testTenantContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { expect } from "vitest";
@@ -22,7 +23,7 @@ export type Intent = ReturnType<typeof intent>;
 export function submit(pool: Pool, f: Fixture, actor: AuthenticatedMembership, raw: Intent) {
  const converted = toLogSiteExtraV1(parseOfflineIntentV1(JSON.parse(JSON.stringify(raw))));
  const { version: _version, ...body } = converted.body;
- return new SiteExtraRepository(pool).logSiteExtra(f.ctx, actor, { jobId: converted.jobId, ...body });
+ return new SiteExtraRepository(pool).logSiteExtra(actor.tenantId === f.ctx.tenantId ? testTenantContext(f.ctx.tenantId, { membershipId: actor.membershipId }) : f.ctx, actor, { jobId: converted.jobId, ...body });
 }
 export async function freshRuntime<T>(c: Cluster, work: (pool: Pool) => Promise<T>) {
  // pg-pool makes options.password non-enumerable; a spread alone loses authentication.

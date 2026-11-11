@@ -27,26 +27,26 @@ it("lock and exact command replay create one durable request; request-role acces
  await expect(f.runtime.query("SELECT app.request_practice_final_check_on_lock()")).rejects.toThrow();
 });
 it("actual worker completion and redelivery preserve one classification run and one certificate",async()=>{
- const a=await seedFinalCheckJob(f);await a.lock();const {repo,ports}=runner(),m=await repo.begin(a.context,a.jobId);
+ const a=await seedFinalCheckJob(f);await a.lock();const {repo,ports}=runner(),m=await repo.begin(a.workerContext,a.jobId);
  const task={version:"final-check-task.v1",tenantId:a.tenantId,jobId:a.jobId,lockId:m.lockId,manifestId:m.id,executionId:randomUUID()};
- await executeFinalCheckTask(a.context,task,ports,"synthetic_demo");
- await executeFinalCheckTask(a.context,{...task,executionId:randomUUID()},ports,"synthetic_demo");
- const fresh=await repo.manifest(a.context,a.jobId,m.id);
+ await executeFinalCheckTask(a.workerContext,task,ports,"synthetic_demo");
+ await executeFinalCheckTask(a.workerContext,{...task,executionId:randomUUID()},ports,"synthetic_demo");
+ const fresh=await repo.manifest(a.workerContext,a.jobId,m.id);
  expect(fresh.result).toMatchObject({zeroResult:true,lockId:m.lockId});
  expect(await new FinalCheckRepository(f.runtime).read(a.context,a.jobId,a.digest)).toMatchObject({state:"completed",items:[]});
  expect((await f.admin.query("SELECT id,run_id FROM app.final_account_lock_check WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows).toEqual([{id:m.id,run_id:fresh.result!.runId}]);
  expect((await f.admin.query("SELECT 1 FROM app.shadow_final_check_completion WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rowCount).toBe(1);
  const before=JSON.stringify(fresh.result);
  await expect(executeFinalCheckTask(testTenantContext(randomUUID()),task,ports,"synthetic_demo")).rejects.toThrow("FINAL_CHECK_TASK_TENANT_MISMATCH");
- for(const forged of [{jobId:randomUUID()},{lockId:randomUUID()},{manifestId:randomUUID()}])await expect(executeFinalCheckTask(a.context,{...task,...forged},ports,"synthetic_demo")).rejects.toThrow("FINAL_CHECK_FORBIDDEN");
- expect(JSON.stringify((await repo.manifest(a.context,a.jobId,m.id)).result)).toBe(before);
+ for(const forged of [{jobId:randomUUID()},{lockId:randomUUID()},{manifestId:randomUUID()}])await expect(executeFinalCheckTask(a.workerContext,{...task,...forged},ports,"synthetic_demo")).rejects.toThrow("FINAL_CHECK_FORBIDDEN");
+ expect(JSON.stringify((await repo.manifest(a.workerContext,a.jobId,m.id)).result)).toBe(before);
 });
 it("an unknown source stays unsupported on retry, cannot certify a zero or unblock invoice authority",async()=>{
  const a=await seedFinalCheckJob(f);await insertFinalCheckEvidence(f,a);await a.lock();
- const {repo,ports}=runner(),m=await repo.begin(a.context,a.jobId);
+ const {repo,ports}=runner(),m=await repo.begin(a.workerContext,a.jobId);
  const task={version:"final-check-task.v1",tenantId:a.tenantId,jobId:a.jobId,lockId:m.lockId,manifestId:m.id,executionId:randomUUID()};
- for(let retry=0;retry<2;retry++)await expect(executeFinalCheckTask(a.context,task,ports,"synthetic_demo")).rejects.toThrow("FINAL_CHECK_PENDING");
- const fresh=await repo.manifest(a.context,a.jobId,m.id);
+ for(let retry=0;retry<2;retry++)await expect(executeFinalCheckTask(a.workerContext,task,ports,"synthetic_demo")).rejects.toThrow("FINAL_CHECK_PENDING");
+ const fresh=await repo.manifest(a.workerContext,a.jobId,m.id);
  expect(fresh.sources[0]).toMatchObject({status:"unsupported"});expect(fresh.result).toBeNull();
  expect((await f.admin.query("SELECT 1 FROM app.final_account_lock_check WHERE job_id=$1",[a.jobId])).rowCount).toBe(0);
  await expect(finalCheckTenant(f.admin,a.tenantId,db=>db.query("SELECT * FROM app.require_authoritative_final_check($1,$2)",[a.tenantId,a.jobId]))).rejects.toThrow("FINAL_CHECK_NOT_COMPLETE");

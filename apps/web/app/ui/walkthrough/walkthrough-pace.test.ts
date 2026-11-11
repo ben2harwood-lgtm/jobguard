@@ -1,15 +1,23 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { clearPhoneDock, readingPause, readingTime, viewerPacing, Walkthrough } from "./walkthrough";
+import { clearPhoneDock, readingPause, readingTime, viewerPacing, viewerPlayback, Walkthrough } from "./walkthrough";
 import { coreGuideSteps } from "../../demo-s/core-1000/instruction-tour";
-const hooks = vi.hoisted(() => ({ effects: [] as (() => void | (() => void))[], refs: [] as { current: unknown }[] }));
-vi.mock("react", async original => ({
-  ...await original<typeof React>(),
-  useEffect: (effect: () => void | (() => void)) => { hooks.effects.push(effect); },
-  useRef: (current: unknown) => { const ref = { current }; hooks.refs.push(ref); return ref; },
-}));
-afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); hooks.effects.length = 0; hooks.refs.length = 0; });
+const hooks = vi.hoisted(() => ({ effects: [] as (() => void | (() => void))[], refs: [] as { current: unknown }[], states: null as unknown[] | null, setters: [] as ReturnType<typeof vi.fn>[] }));
+vi.mock("react", async original => {
+  const actual = await original<typeof React>();
+  return {
+    ...actual,
+    useState: (initial: unknown) => {
+      if (!hooks.states) return actual.useState(initial);
+      const index = hooks.setters.length, setter = vi.fn(); hooks.setters.push(setter);
+      return [hooks.states[index] ?? initial, setter];
+    },
+    useEffect: (effect: () => void | (() => void)) => { hooks.effects.push(effect); },
+    useRef: (current: unknown) => { const ref = { current }; hooks.refs.push(ref); return ref; },
+  };
+});
+afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); hooks.effects.length = 0; hooks.refs.length = 0; hooks.states = null; hooks.setters.length = 0; });
 describe("REAL-WALK-PACE reading pause", () => {
   it.each([
     ["", "", 4000], ["Check", "the saved result", 5000], ["Long card", "word ".repeat(100), 15000],
@@ -33,25 +41,24 @@ describe("REAL-WALK-PACE reading pause", () => {
     await vi.advanceTimersByTimeAsync(60000); expect(advanced).not.toHaveBeenCalled();
     next(); await pause; expect(advanced).toHaveBeenCalledOnce();
   });
-  it("ends a hold as soon as the next target is ready", async () => {
-    vi.useFakeTimers(); let ready = false; const advanced = vi.fn();
-    const pause = readingPause(15000, false, new AbortController().signal, () => {}, () => ready).then(advanced);
-    await vi.advanceTimersByTimeAsync(100); expect(advanced).not.toHaveBeenCalled();
-    ready = true; await vi.advanceTimersByTimeAsync(50); await pause;
+  it("next-target readiness cannot end the completed-result hold", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("document", { querySelector: () => ({ getClientRects: () => [{}], checkVisibility: () => true }) });
+    const advanced = vi.fn();
+    const pause = readingPause(15000, false, new AbortController().signal, () => {}).then(advanced);
+    await vi.advanceTimersByTimeAsync(14999); expect(advanced).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1); await pause;
     expect(advanced).toHaveBeenCalledOnce(); expect(vi.getTimerCount()).toBe(0);
   });
-  it("uses no timer when the next target is already ready", async () => {
-    vi.useFakeTimers();
-    await readingPause(15000, false, new AbortController().signal, () => {}, () => true);
-    expect(vi.getTimerCount()).toBe(0);
-  });
-  it.each(["pointerdown", "keydown", "input", "click", "wheel"])("releases a hold on %s and cleans up listeners", async event => {
+  it.each(["pointerdown", "keydown", "input", "click", "wheel", "scroll"])("%s cannot consume completed-result reading", async event => {
     vi.useFakeTimers(); const listeners = new Map<string, () => void>();
-    const removeEventListener = vi.fn((name: string) => listeners.delete(name));
-    vi.stubGlobal("document", { addEventListener: (name: string, handler: () => void) => listeners.set(name, handler), removeEventListener });
-    const pause = readingPause(15000, false, new AbortController().signal, () => {});
-    listeners.get(event)!(); await pause;
-    expect(listeners.size).toBe(0); expect(vi.getTimerCount()).toBe(0);
+    vi.stubGlobal("document", { addEventListener: (name: string, handler: () => void) => listeners.set(name, handler), removeEventListener: (name: string) => listeners.delete(name) });
+    let next!: () => void; const advanced = vi.fn();
+    const pause = readingPause(15000, false, new AbortController().signal, skip => { next = skip; }).then(advanced);
+    listeners.get(event)?.();
+    await vi.advanceTimersByTimeAsync(100); expect(advanced).not.toHaveBeenCalled();
+    next(); await pause;
+    expect(advanced).toHaveBeenCalledOnce(); expect(listeners.size).toBe(0); expect(vi.getTimerCount()).toBe(0);
   });
   it.each([[false, true], [true, false]])("viewer pacing: reduced motion %s", (reduced, paced) => {
     vi.stubGlobal("matchMedia", () => ({ matches: reduced }));
@@ -113,5 +120,76 @@ describe("390px dock geometry", () => {
   it("leaves desktop scrolling alone", () => {
     const scrollBy = vi.fn(); vi.stubGlobal("window", { innerWidth: 1280, scrollBy });
     clearPhoneDock({} as HTMLElement, {} as HTMLElement); expect(scrollBy).not.toHaveBeenCalled();
+  });
+});
+
+// Execute the component's real autoplay effect without a browser or a DOM renderer.
+describe("completed autoplay results", () => {
+  function playback({ reduced = false, done = true, visible = true, reject = false, webdriver = false, nextTarget = false } = {}) {
+    vi.useFakeTimers(); vi.stubGlobal("React", React);
+    vi.stubGlobal("navigator", { webdriver });
+    vi.stubGlobal("matchMedia", () => ({ matches: reduced }));
+    const target = { getClientRects: () => [{}], checkVisibility: () => true };
+    vi.stubGlobal("document", { querySelector: () => visible ? target : null });
+    vi.stubGlobal("window", { setTimeout, clearTimeout });
+    // index, playing, busy, done, error, box, finished, waiting, expanded, holding
+    hooks.states = [0, true];
+    const autoAction = vi.fn(() => { if (reject) throw new Error("Rejected action"); });
+    renderToStaticMarkup(React.createElement(Walkthrough, {
+      steps: [{ id: "last", timeoutMs: 1000, target: "#last", title: "Check", words: "the saved result", isDone: () => done, autoAction }, ...(nextTarget ? [{ id: "next", target: "#next", title: "Next", words: "Ready", isDone: () => true, autoAction }] : [])], onClose: () => {},
+    }));
+    hooks.effects[3]!();
+    return { autoAction, controller: hooks.refs[1]!.current as AbortController };
+  }
+  it("reads the viewer's final step outside its action deadline", async () => {
+    const { controller } = playback();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(viewerPacing()).toBe(true); expect(viewerPlayback.has(controller.signal)).toBe(true);
+    expect(hooks.setters[9]).toHaveBeenCalledWith(true);
+    await vi.advanceTimersByTimeAsync(readingTime("Check", "the saved result") - 1);
+    expect(hooks.setters[6]).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(hooks.setters[6]).toHaveBeenCalledWith(true); expect(vi.getTimerCount()).toBe(0);
+  });
+  it.each([false, true])("webdriver has no completed-result reading pause (reduced motion %s)", async reduced => {
+    const { controller } = playback({ webdriver: true, reduced });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(viewerPacing()).toBe(false); expect(viewerPlayback.has(controller.signal)).toBe(false);
+    expect(hooks.setters[9]).not.toHaveBeenCalledWith(true);
+    expect(hooks.setters[6]).toHaveBeenCalledWith(true); expect(vi.getTimerCount()).toBe(0);
+  });
+  it("reduced motion opts out of viewer autoplay reading holds", async () => {
+    const { controller } = playback({ reduced: true });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(viewerPacing()).toBe(false); expect(viewerPlayback.has(controller.signal)).toBe(false);
+    expect(hooks.setters[9]).not.toHaveBeenCalledWith(true);
+    expect(hooks.setters[6]).toHaveBeenCalledWith(true); expect(vi.getTimerCount()).toBe(0);
+    // Existing explicit reduced-motion manual holds are tested above: time never releases them.
+  });
+  it("aborting playback cancels reading without advancing or another action", async () => {
+    const { controller, autoAction } = playback();
+    await vi.advanceTimersByTimeAsync(0);
+    controller.abort(); await vi.advanceTimersByTimeAsync(60000);
+    expect(hooks.setters[6]).not.toHaveBeenCalled(); expect(autoAction).not.toHaveBeenCalled(); expect(vi.getTimerCount()).toBe(0);
+  });
+  it("explicit Next releases the component hold and cleans its timer", async () => {
+    playback(); await vi.advanceTimersByTimeAsync(100);
+    (hooks.refs[3]!.current as () => void)();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(hooks.setters[6]).toHaveBeenCalledWith(true); expect(vi.getTimerCount()).toBe(0);
+    expect(hooks.refs[3]!.current).toBeNull();
+  });
+  it("a visible next target cannot shortcut reading when pointer pacing is enabled", async () => {
+    const { controller } = playback({ webdriver: false, nextTarget: true });
+    expect(viewerPlayback.has(controller.signal)).toBe(true);
+    await vi.advanceTimersByTimeAsync(4999);
+    expect(hooks.setters[0]).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(hooks.setters[0]).toHaveBeenCalledOnce(); expect(vi.getTimerCount()).toBe(0);
+  });
+  it.each([{ visible: false }, { done: false, reject: true }, { done: false }])("never advances an unavailable, rejected or unconfirmed result: %j", async options => {
+    playback(options); await vi.advanceTimersByTimeAsync(30000);
+    expect(hooks.setters[9]).not.toHaveBeenCalledWith(true);
+    expect(hooks.setters[6]).not.toHaveBeenCalled(); expect(vi.getTimerCount()).toBe(0);
   });
 });

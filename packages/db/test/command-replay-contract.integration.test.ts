@@ -1,3 +1,4 @@
+import { testActorContext } from "./tenant-context-test-utils.js";
 import { createHash, randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { ExtraApprovalRepository } from "../src/extra-approval-chain-repository.js";
@@ -15,16 +16,17 @@ import { direct } from "./site-extra-fixtures.js";
 import { digestOf } from "./contractor-practice-session-fixtures.js";
 import { ExtraRepository, readExtraDuplicateCandidates, resolveExtraDuplicateCandidates } from "../src/index.js";
 import { createWatchdogHarness } from "./watchdog-command-harness.js";
+import { JobRepository } from "../src/job-repository.js";
 
 // CH-2 Done-when, applied to EVERY watchdog_live_only command: once a command succeeds, replaying its id returns the first
 // result (never the job's current state), the same id with a changed payload conflicts, the same id on another job conflicts,
 // and a successful no-op keeps its identity. The command list is generated from the registry: a live-only registry key or a
 // guarded command that no case covers fails this file, so a new or missed command cannot pass unnoticed.
-const h = createWatchdogHarness("replay-contract", 61000);
+const attestationDigest = createHash("sha256").update(randomUUID()).digest("hex");
+const h = createWatchdogHarness("replay-contract", 61000, attestationDigest);
 const { caseKeys, live, probeJob, norm, CONFLICT } = h;
 // These dark commands have no source guard entry. Exercise their real repository
 // boundaries here without adding post-0606 facts to the pre-0096 legacy-id harness.
-const attestationDigest = createHash("sha256").update(randomUUID()).digest("hex");
 const darkCases: typeof h.cases = [
   { key: "purchase-order-action-repository.ts#attestManual", registry: ["command:purchase_order.attest_manual"],
     prepare: async job => { await h.pre.order(job); },
@@ -57,12 +59,10 @@ const cases = [...h.cases, ...darkCases];
 // This route uses credential-bound client commands and needs the complete contractor
 // schema, rather than the legacy-id watchdog harness. Its executable case is below.
 const clientReplayCase = { key: "/api/customer-portal/extra-approvals", registry: ["/api/customer-portal/extra-approvals"] };
+// Supplier-line snapshots/corrections use their own synthetic replay store. The
+// executable case below covers both mutations behind this route with the live guard.
+const supplierLineReplayCase = { key: "/api/jobs/[id]/supplier-lines", registry: ["/api/jobs/[id]/supplier-lines"] };
 beforeAll(async () => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); await h.boot();
-  const user = (await h.admin.query("SELECT identity_user_id FROM app.membership WHERE tenant_id=$1 AND id=$2", [h.tenant,h.member])).rows[0].identity_user_id;
-  await h.admin.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3)", [user,h.tenant,h.member]);
-  await h.admin.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", [`${user}@fictional.invalid`,user]);
-  await h.admin.query(`INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at)
-    VALUES($1,$2,'synthetic_demo',$3,$4,clock_timestamp()+interval '1 hour')`, [randomUUID(),user,attestationDigest,randomUUID()]);
 }, 120000);
 afterAll(async () => { await h.stop(); vi.unstubAllEnvs(); });
 
@@ -80,7 +80,7 @@ describe("every watchdog_live_only command is covered by this contract", () => {
   });
   it("covers every watchdog_live_only registry key (web routes, dynamic actions, commands and Nest routes), and no stale key", () => {
     const liveOnly = Object.entries(jobMutationRegistry).filter(([, phase]) => phase === "watchdog_live_only").map(([key]) => key).sort();
-    const covered = new Set([...cases, clientReplayCase].flatMap(c => c.registry));
+    const covered = new Set([...cases, clientReplayCase, supplierLineReplayCase].flatMap(c => c.registry));
     expect(liveOnly.filter(key => !covered.has(key))).toEqual([]);
     expect([...covered].filter(key => !liveOnly.includes(key)).sort()).toEqual([]);
   });
@@ -135,6 +135,39 @@ describe("CH-2 replay contract for each watchdog_live_only command", () => {
   }, 240000);
 });
 
+it(`${supplierLineReplayCase.key}: live confirmation and correction replay historical results and refuse changed intent and pre-live writes`, async () => {
+  const a = await h.supplierLines(await live()), b = await h.supplierLines(await live());
+  const first = norm(await a.confirm());
+  expect(first).toMatchObject({ snapshotId: a.input.snapshotId, revision: 0, history: [] });
+  const corrected = norm(await a.correct());
+  expect(corrected).toMatchObject({ revision: 1, history: [expect.anything()] });
+  await a.correct({ ...a.correction, commandId: randomUUID(), expectedRevision: 1, orderVersionId: null });
+  expect((await a.read()).revision).toBe(2);
+  expect(norm(await a.confirm())).toEqual(first);
+  expect(norm(await a.correct())).toEqual(corrected);
+  await expect(a.confirm({ ...a.input, facts: { ...a.input.facts, merchantId: randomUUID() } })).rejects.toThrow(CONFLICT);
+  await expect(a.correct({ ...a.correction, orderVersionId: null })).rejects.toThrow(CONFLICT);
+  await expect(b.confirm({ ...b.input, commandId: a.input.commandId })).rejects.toThrow(CONFLICT);
+  await b.confirm();
+  await expect(b.correct({ ...b.correction, commandId: a.correction.commandId })).rejects.toThrow(CONFLICT);
+  await expect(a.correct({ ...a.correction, commandId: a.input.commandId })).rejects.toThrow(CONFLICT);
+
+  const draft = await new JobRepository(h.runtime).create(h.ctx, ["job:update"], { title: "Fictional pre-live supplier lines" });
+  const preLive = await h.supplierLines(draft.id);
+  const counts = async () => (await h.admin.query(`SELECT
+    (SELECT count(*) FROM app.supplier_line_match_snapshot WHERE tenant_id=$1) snapshots,
+    (SELECT count(*) FROM app.supplier_line_match_correction WHERE tenant_id=$1) corrections,
+    (SELECT count(*) FROM app.audit_event WHERE tenant_id=$1) audits,
+    (SELECT count(*) FROM app.action_outbox WHERE tenant_id=$1) actions,
+    (SELECT count(*) FROM app.command_receipt WHERE tenant_id=$1) receipts`, [h.tenant])).rows[0];
+  const before = await counts();
+  await expect(preLive.confirm()).rejects.toMatchObject({ code: "JOB_NOT_LIVE" });
+  await expect(preLive.correct()).rejects.toMatchObject({ code: "JOB_NOT_LIVE" });
+  expect(await counts()).toEqual(before);
+  expect(norm(await a.confirm())).toEqual(first);
+  expect(norm(await a.correct())).toEqual(corrected);
+}, 120_000);
+
 // Dedicated synthetic seam: LP-5 cross-family identity remains held in the rate contract.
 it("rate acceptance replays the stored result after new evidence and rejects changed intent", async () => {
   const f = await createWorkFixture();
@@ -152,7 +185,7 @@ it("rate acceptance replays the stored result after new evidence and rejects cha
         await db.query(`INSERT INTO app.rate_book_observation(tenant_id,job_id,scope_item_id,id,source_scope_revision_id,unit,rate_principal_pence,currency,tax_basis,category,region,effective_at,provenance)
           VALUES($1,$2,$3,$4,$5,'each',100,'GBP','standard_rate_20','paint','london','2026-10-30','entered')`,
         [a.tenantId,a.jobId,scope,randomUUID(),revision]);
-      });
+      }, { membershipId: a.actorId });
       return { scope, revision };
     }
     const target = await sample(); await sample(); await sample();
@@ -179,12 +212,13 @@ it(`${clientReplayCase.key}: client decision replays the first result and confli
       .toEqual([{ session_user: "jobguard_identity", current_user: "jobguard_identity", app_usage: false }]);
     const w = await chainWorld(c), repo = new ExtraApprovalRepository(c.runtime), ctx = await w.ctx;
     const actor = w.members.client_approver.member.membershipId;
+    await identity.query("SELECT set_config('app.tenant_id',$1,false)", [w.p.tenantId]);
     async function client() {
       const s = await submitted(c, w, 150000);
-      await repo.approveExtraStep(ctx, w.members.supervisor.member, approveInput(s, 0));
-      await repo.approveExtraStep(ctx, w.supervisor2.member, approveInput(s, 1));
+      await repo.approveExtraStep(await testActorContext(c.admin, ctx, w.members.supervisor.member), w.members.supervisor.member, approveInput(s, 0));
+      await repo.approveExtraStep(await testActorContext(c.admin, ctx, w.supervisor2.member), w.supervisor2.member, approveInput(s, 1));
       const signin = randomUUID().replaceAll("-", "").repeat(2), digest = randomUUID().replaceAll("-", "").repeat(2);
-      await repo.issueClientApproval(ctx, w.members.surveyor.member, {
+      await repo.issueClientApproval(await testActorContext(c.admin, ctx, w.members.surveyor.member), w.members.surveyor.member, {
         version: "issue-client-approval.v1", commandId: randomUUID(), jobId: s.jobId, requestId: s.requestId,
         approverMembershipId: actor, recipient: await emailOf(c, w, actor), linkToken: newToken(),
         signinDigest: signin, expiresAt: new Date(Date.now() + 7 * 86400000),
@@ -192,8 +226,11 @@ it(`${clientReplayCase.key}: client decision replays the first result and confli
       await identity!.query("SELECT identity.extra_customer_use($1,$2,$3,$4,$5,'redeem')", [w.p.tenantId, s.jobId, actor, signin, digest]);
       const input = { version: "extra-customer.v1", action: "decide", jobId: s.jobId, requestId: s.requestId,
         commandId: randomUUID(), revisionHash: s.hash, netPence: s.net, decision: "approve" };
-      const run = (command = input) => identity!.query("SELECT identity.extra_customer_approval($1,$2,$3,$4,$5::jsonb) result",
-        [w.p.tenantId, s.jobId, actor, digest, command]).then(r => r.rows[0].result);
+      // Match the production identity login: the decision routine creates its own request binding.
+      const run = async (command = input) => (await identity!.query(
+        "SELECT identity.extra_customer_approval($1,$2,$3,$4,$5::jsonb) result",
+        [w.p.tenantId,s.jobId,actor,digest,command],
+      )).rows[0].result;
       return { s, input, run };
     }
     const a = await client(), b = await client(), first = await a.run();
@@ -204,10 +241,10 @@ it(`${clientReplayCase.key}: client decision replays the first result and confli
     await expect(b.run({ ...b.input, commandId: a.input.commandId })).rejects.toThrow(CONFLICT);
     // Both directions share tenant-wide command identity with a real other command kind.
     const other = await submitted(c, w, 150000);
-    await expect(repo.approveExtraStep(ctx, w.members.supervisor.member,
+    await expect(repo.approveExtraStep(await testActorContext(c.admin, ctx, w.members.supervisor.member), w.members.supervisor.member,
       approveInput(other, 0, { commandId: a.input.commandId }))).rejects.toThrow(CONFLICT);
     const otherId = randomUUID();
-    await repo.approveExtraStep(ctx, w.members.supervisor.member, approveInput(other, 0, { commandId: otherId }));
+    await repo.approveExtraStep(await testActorContext(c.admin, ctx, w.members.supervisor.member), w.members.supervisor.member, approveInput(other, 0, { commandId: otherId }));
     await expect(b.run({ ...b.input, commandId: otherId })).rejects.toThrow(CONFLICT);
     expect(await a.run()).toEqual(first);
     expect((await c.admin.query("SELECT count(*)::int n FROM app.extra_approval_step_fact WHERE tenant_id=$1 AND request_id=$2 AND actor_kind='client_approver'",
@@ -222,10 +259,10 @@ it("ResolveDuplicateCandidates replays one stored result and refuses changed int
   try {
     const w = await world(c), actor = w.w.members.supervisor.member;
     const extras = new ExtraRepository(c.runtime);
-    for (let i = 0; i < 2; i++) await extras.raiseExtra(w.ctx, direct(w.w, w.w.members.operative, {
+    for (let i = 0; i < 2; i++) await extras.raiseExtra(await testActorContext(c.admin, w.ctx, w.w.members.operative.member), direct(w.w, w.w.members.operative, {
       jobId: w.s.jobId, sorItem: { versionId: w.w.demo.sorVersionId, code: "CLEAR-GUTTER" },
     }));
-    const group = (await readExtraDuplicateCandidates(c.runtime, w.ctx, actor, w.s.jobId)).groups[0]!;
+    const group = (await readExtraDuplicateCandidates(c.runtime, await testActorContext(c.admin, w.ctx, actor), actor, w.s.jobId)).groups[0]!;
     expect(group).toBeDefined();
     const session = randomUUID();
     await c.admin.query(`INSERT INTO control_plane.contractor_practice_session
@@ -234,7 +271,7 @@ it("ResolveDuplicateCandidates replays one stored result and refuses changed int
     [session, actor.tenantId, actor.membershipId, actor.identityUserId, digestOf(session)]);
     const input = { version: "duplicate-disposition.v1", commandId: randomUUID(), groupId: group.id,
       fingerprint: group.fingerprint, disposition: "not_duplicates", reasonCode: "different_work" };
-    const run = (raw: unknown) => resolveExtraDuplicateCandidates(c.runtime, w.ctx, session, w.s.jobId, raw);
+    const run = async (raw: unknown) => resolveExtraDuplicateCandidates(c.runtime, await testActorContext(c.admin, w.ctx, actor), session, w.s.jobId, raw);
     const results = await Promise.all([run(input), run(input)]);
     expect(results[1]).toEqual(results[0]);
     const counts = async () => (await c.admin.query(`SELECT

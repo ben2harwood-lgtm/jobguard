@@ -90,20 +90,27 @@ describe("MON-1B real PostgreSQL synthetic persistence",()=>{
    await f.admin.query("UPDATE app.membership SET role=$1 WHERE tenant_id=$2 AND id=$3",[role,a.tenantId,a.actorId]);
    if(role==="admin")expect((await readMeter(f,a,id)).computationId).toBe(id);else await expect(readMeter(f,a,id)).rejects.toThrow("METER_FORBIDDEN");
   }
+  // The SQL routine binds its supplied credential before checking membership expiry.
   await f.admin.query("UPDATE app.membership SET role='owner',expires_at=clock_timestamp()-interval '1 second' WHERE tenant_id=$1 AND id=$2",[a.tenantId,a.actorId]);
-  await expect(readMeter(f,a,id)).rejects.toThrow("METER_FORBIDDEN");
+  const persisted = async () => Promise.all(["meter_input_event","meter_computation","meter_day_ledger","meter_correction","meter_projection_alert","audit_event"].map(async table =>
+   (await f.admin.query(`SELECT to_jsonb(r) AS row FROM app.${table} r WHERE tenant_id=$1 ORDER BY to_jsonb(r)::text`,[a.tenantId])).rows));
+  const beforeExpiryRead = await persisted();
+  await expect(workTenant(f.runtime,a.tenantId,db=>db.query("SELECT app.mon1_read($1,$2,$3)",[a.tenantId,a.digest,id]), { membershipId: a.actorId, bindRequest: false })).rejects.toMatchObject({code:"42501",message:"REQUEST_BINDING_REFUSED"});
+  expect(await persisted()).toEqual(beforeExpiryRead);
   await expect(workTenant(f.runtime,"invalid",db=>db.query("SELECT app.mon1_read($1,$2,$3)",[a.tenantId,a.digest,id]))).rejects.toThrow();
-  const shared={...a,tenantId:"11111111-1111-4111-8111-111111111111"};await expect(readMeter(f,shared,id)).rejects.toThrow("METER_FORBIDDEN");
+  const shared={...a,tenantId:"11111111-1111-4111-8111-111111111111"};await expect(workTenant(f.runtime,shared.tenantId,db=>db.query("SELECT app.mon1_read($1,$2,$3)",[shared.tenantId,shared.digest,id]), { membershipId: shared.actorId, bindRequest: false })).rejects.toThrow("METER_FORBIDDEN");
   expect((await f.runtime.query("SELECT nullif(current_setting('app.tenant_id',true),'') tenant")).rows[0].tenant).toBeNull();
  });
  it("MON1-A29 MON1-A30 MON1-A33 authority is checked before lookup and before replay",async()=>{
   const a=await meterCompany(f),b=await meterCompany(f);await storeMeter(f,a,meterInput(a.tenantId));const id=await refreshMeter(f,a);
   for(const target of [id,randomUUID()])await expect(readMeter(f,b,target)).rejects.toThrow("METER_FORBIDDEN");
+  // Exercise the routine's revoked-credential guard without an earlier transport binding.
   await f.admin.query("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE id=$1",[a.sessionId]);
-  await expect(refreshMeter(f,a)).rejects.toThrow("METER_FORBIDDEN");await expect(readMeter(f,a,id)).rejects.toThrow("METER_FORBIDDEN");
+  await expect(workTenant(f.runtime,a.tenantId,db=>db.query("SELECT app.mon1_rebuild($1,$2,$3::date)",[a.tenantId,a.digest,"2026-09-01"]), { membershipId: a.actorId, bindRequest: false })).rejects.toThrow("METER_FORBIDDEN");
+  await expect(workTenant(f.runtime,a.tenantId,db=>db.query("SELECT app.mon1_read($1,$2,$3)",[a.tenantId,a.digest,id]), { membershipId: a.actorId, bindRequest: false })).rejects.toThrow("METER_FORBIDDEN");
   for(const table of ["meter_input_event","meter_computation","meter_day_ledger","meter_correction","meter_projection_alert"]){
-   expect((await workTenant(f.runtime,a.tenantId,db=>db.query(`SELECT * FROM app.${table}`))).rows).toEqual([]);
-   await expect(workTenant(f.runtime,a.tenantId,db=>db.query(`DELETE FROM app.${table}`))).rejects.toMatchObject({code:"42501"});
+   expect((await workTenant(f.runtime,a.tenantId,db=>db.query(`SELECT * FROM app.${table}`), { membershipId: a.actorId })).rows).toEqual([]);
+   await expect(workTenant(f.runtime,a.tenantId,db=>db.query(`DELETE FROM app.${table}`), { membershipId: a.actorId })).rejects.toMatchObject({code:"42501"});
   }
  });
  it("MON1-A28 MON1-A29 meter roles retain safe posture and cannot access shadow data; runtime cannot assume them or load fixture facts",async()=>{

@@ -1,3 +1,4 @@
+import { testActorContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { buildExtraSourcePack, inspectExtraSourcePack, residentConfirmationStatementV1, verifyExtraSourcePack } from "@jobguard/core";
@@ -78,19 +79,19 @@ it("requirement, step actors and outcome are exact persisted versioned sources",
   const before = await loadPackSources(ctx, s.jobId, s.extraId);
   expect(before.omissions.join(" ")).toContain("pending; 0/3");
   const frozen = buildExtraSourcePack(s.jobId, s.extraId, before.sources, before.omissions);
-  await repo.approveExtraStep(ctx, w.members.supervisor.member, approveInput(s, 0));
-  await repo.approveExtraStep(ctx, w.supervisor2.member, approveInput(s, 1));
+  await repo.approveExtraStep(await testActorContext(c.admin, ctx, w.members.supervisor.member), w.members.supervisor.member, approveInput(s, 0));
+  await repo.approveExtraStep(await testActorContext(c.admin, ctx, w.supervisor2.member), w.supervisor2.member, approveInput(s, 1));
   const token = newToken(), recipient = await emailOf(c, w, w.members.client_approver.member.membershipId);
-  const sent = await repo.issueClientApproval(ctx, w.members.surveyor.member, { version: "issue-client-approval.v1", commandId: randomUUID(), jobId: s.jobId, requestId: s.requestId,
+  const sent = await repo.issueClientApproval(await testActorContext(c.admin, ctx, w.members.surveyor.member), w.members.surveyor.member, { version: "issue-client-approval.v1", commandId: randomUUID(), jobId: s.jobId, requestId: s.requestId,
     approverMembershipId: w.members.client_approver.member.membershipId, recipient, linkToken: token, expiresAt: new Date(Date.now() + 3600_000) });
-  await repo.revokeClientApproval(ctx, w.members.owner.member, { version: "revoke-client-approval.v1", commandId: randomUUID(), jobId: s.jobId, linkId: sent.linkId });
-  const decide = (linkToken: string) => repo.decideClientApproval(ctx, w.members.client_approver.member, { version: "decide-client-approval.v1", commandId: randomUUID(), jobId: s.jobId, requestId: s.requestId,
+  await repo.revokeClientApproval(await testActorContext(c.admin, ctx, w.members.owner.member), w.members.owner.member, { version: "revoke-client-approval.v1", commandId: randomUUID(), jobId: s.jobId, linkId: sent.linkId });
+  const decide = async (linkToken: string) => repo.decideClientApproval(await testActorContext(c.admin, ctx, w.members.client_approver.member), w.members.client_approver.member, { version: "decide-client-approval.v1", commandId: randomUUID(), jobId: s.jobId, requestId: s.requestId,
     linkToken, email: recipient, revisionHash: s.hash, netPence: s.net, decision: "approve", fictionalRoleName: "Fictional Approver", actualTesterReference: "synthetic-tester" });
   await expect(decide(token)).rejects.toMatchObject({ code: "LINK_REVOKED" });
   const revoked = await loadPackSources(ctx, s.jobId, s.extraId);
   expect(revoked.omissions.join(" ")).toContain("pending; 2/3");
   const replacement = newToken();
-  await repo.issueClientApproval(ctx, w.members.surveyor.member, { version: "issue-client-approval.v1", commandId: randomUUID(), jobId: s.jobId, requestId: s.requestId,
+  await repo.issueClientApproval(await testActorContext(c.admin, ctx, w.members.surveyor.member), w.members.surveyor.member, { version: "issue-client-approval.v1", commandId: randomUUID(), jobId: s.jobId, requestId: s.requestId,
     approverMembershipId: w.members.client_approver.member.membershipId, recipient, linkToken: replacement, expiresAt: new Date(Date.now() + 3600_000) });
   await decide(replacement);
   const approved = await loadPackSources(ctx, s.jobId, s.extraId);
@@ -113,7 +114,7 @@ it("requirement, step actors and outcome are exact persisted versioned sources",
     expect(verifyExtraSourcePack(JSON.stringify(removed)).findings).toContain("Missing original source");
   }
   // A later revision has a new request identity; it cannot satisfy the earlier manifest.
-  await repo.reviseExtra(ctx, w.members.surveyor.member, { version: "revise-extra.v1", commandId: randomUUID(), jobId: s.jobId, extraId: s.extraId, netPence: 160000 });
+  await repo.reviseExtra(await testActorContext(c.admin, ctx, w.members.surveyor.member), w.members.surveyor.member, { version: "revise-extra.v1", commandId: randomUUID(), jobId: s.jobId, extraId: s.extraId, netPence: 160000 });
   const revised = await loadPackSources(ctx, s.jobId, s.extraId);
   expect(inspectExtraSourcePack(pack, revised.sources).findings).toContain("Missing original source");
   expect(revised.omissions.join(" ")).toContain("pending; 0/3");
@@ -123,9 +124,9 @@ it("withdrawn and rejected requests remain explicit and cannot acquire a later a
   const w = await chainWorld(c), ctx = await w.ctx, repo = new ExtraApprovalRepository(c.runtime);
   for (const kind of ["withdrawn", "rejected"] as const) {
     const s = await submitted(c, w, 40000);
-    if (kind === "withdrawn") await repo.withdrawExtra(ctx, w.supervisor2.member, { version: "withdraw-extra.v1", commandId: randomUUID(), jobId: s.jobId, extraId: s.extraId, reasonCode: "not_done" });
-    else await repo.rejectExtra(ctx, w.supervisor2.member, { ...approveInput(s, 0), version: "reject-extra.v1", reasonCode: "not_done" });
-    await expect(repo.approveExtraStep(ctx, w.members.supervisor.member, approveInput(s, 0))).rejects.toMatchObject({ code: "ALREADY_DECIDED" });
+    if (kind === "withdrawn") await repo.withdrawExtra(await testActorContext(c.admin, ctx, w.supervisor2.member), w.supervisor2.member, { version: "withdraw-extra.v1", commandId: randomUUID(), jobId: s.jobId, extraId: s.extraId, reasonCode: "not_done" });
+    else await repo.rejectExtra(await testActorContext(c.admin, ctx, w.supervisor2.member), w.supervisor2.member, { ...approveInput(s, 0), version: "reject-extra.v1", reasonCode: "not_done" });
+    await expect(repo.approveExtraStep(await testActorContext(c.admin, ctx, w.members.supervisor.member), w.members.supervisor.member, approveInput(s, 0))).rejects.toMatchObject({ code: "ALREADY_DECIDED" });
     const loaded = await loadPackSources(ctx, s.jobId, s.extraId);
     expect(loaded.omissions.join(" ")).toContain(`is ${kind}; 0/1`);
     expect(JSON.parse(loaded.sources.find(x => x.sourceId.startsWith("extra_approval_outcome:"))!.content).kind).toBe(kind);
@@ -138,7 +139,7 @@ it("foreign step sources cannot replace a bound fact, and missing required facts
   const repo = new ExtraApprovalRepository(c.runtime);
   const s = await submitted(c, w, 40000), sameTenant = await submitted(c, w, 40000), foreign = await submitted(c, other, 40000);
   for (const [world, item] of [[w, s], [w, sameTenant], [other, foreign]] as const)
-    await repo.approveExtraStep(await world.ctx, world.supervisor2.member, approveInput(item, 0));
+    await repo.approveExtraStep(await testActorContext(c.admin, await world.ctx, world.supervisor2.member), world.supervisor2.member, approveInput(item, 0));
   const loaded = await loadPackSources(ctx, s.jobId, s.extraId);
   const pack = buildExtraSourcePack(s.jobId, s.extraId, loaded.sources, loaded.omissions);
   const bound = loaded.sources.find(x => x.sourceId.startsWith("extra_approval_step_fact:"))!;

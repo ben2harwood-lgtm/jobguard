@@ -1,3 +1,4 @@
+import { testActorContext } from "./tenant-context-test-utils.js";
 // Real PostgreSQL tests, NOT RUN in the restricted builder sandbox.
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -26,10 +27,10 @@ describe("ENT-8A-P atomic commands",()=>{
   const f=await promptFixture(c),p=await surfaced(f); await repo.confirm(f.sessions.supervisor!,confirmation(f,p));
   const before=(await c.admin.query("SELECT variation_id,origin_hash FROM app.extra_origin WHERE tenant_id=$1",[f.p.tenantId])).rows[0]!;
   const approvals=new ExtraApprovalRepository(c.runtime);
-  await approvals.priceExtra(f.ctx,f.members.surveyor.member,{version:"price-extra.v1",commandId:randomUUID(),jobId:f.jobId,extraId:before.variation_id,netPence:1000});
-  const submitted=await approvals.submitExtra(f.ctx,f.members.surveyor.member,{version:"submit-extra.v1",commandId:randomUUID(),jobId:f.jobId,extraId:before.variation_id});
+  await approvals.priceExtra(await testActorContext(c.admin, f.ctx, f.members.surveyor.member),f.members.surveyor.member,{version:"price-extra.v1",commandId:randomUUID(),jobId:f.jobId,extraId:before.variation_id,netPence:1000});
+  const submitted=await approvals.submitExtra(await testActorContext(c.admin, f.ctx, f.members.surveyor.member),f.members.surveyor.member,{version:"submit-extra.v1",commandId:randomUUID(),jobId:f.jobId,extraId:before.variation_id});
   expect(submitted.state).toBe("awaiting_approval");
-  await approvals.approveExtraStep(f.ctx,f.named.member,{version:"approve-extra-step.v1",commandId:randomUUID(),jobId:f.jobId,requestId:submitted.requestId,stepIndex:0,revisionHash:submitted.revisionHash,netPence:1000});
+  await approvals.approveExtraStep(await testActorContext(c.admin, f.ctx, f.named.member),f.named.member,{version:"approve-extra-step.v1",commandId:randomUUID(),jobId:f.jobId,requestId:submitted.requestId,stepIndex:0,revisionHash:submitted.revisionHash,netPence:1000});
   expect((await c.admin.query("SELECT kind FROM app.extra_event WHERE tenant_id=$1 ORDER BY sequence DESC LIMIT 1",[f.p.tenantId])).rows).toEqual([{kind:"approved"}]);
   expect((await c.admin.query("SELECT origin_hash FROM app.extra_origin WHERE tenant_id=$1",[f.p.tenantId])).rows).toEqual([{origin_hash:before.origin_hash}]);
  });
@@ -43,7 +44,7 @@ describe("ENT-8A-P atomic commands",()=>{
  });
  it("raw confirmation still raises PROMPT_ORIGIN_HELD",async()=>{
   const f=await promptFixture(c);
-  await expect(new ExtraRepository(c.runtime).raiseExtra(f.ctx,{version:"raise-extra.v1",commandId:randomUUID(),commandType:"ConfirmPrompt",jobId:f.jobId,actorMembershipId:f.members.supervisor.member.membershipId,grantId:f.members.supervisor.grant,note:"Fictional unbound prompt",description:"Fictional extra"})).rejects.toMatchObject({code:"PROMPT_ORIGIN_HELD"});
+  await expect(new ExtraRepository(c.runtime).raiseExtra(await testActorContext(c.admin, f.ctx, { tenantId: f.ctx.tenantId, membershipId: f.members.supervisor.member.membershipId }),{version:"raise-extra.v1",commandId:randomUUID(),commandType:"ConfirmPrompt",jobId:f.jobId,actorMembershipId:f.members.supervisor.member.membershipId,grantId:f.members.supervisor.grant,note:"Fictional unbound prompt",description:"Fictional extra"})).rejects.toMatchObject({code:"PROMPT_ORIGIN_HELD"});
  });
  it("dismissal is immutable and exact prompt hash is required",async()=>{
   const f=await promptFixture(c),p=await surfaced(f),before=await counts(f);
