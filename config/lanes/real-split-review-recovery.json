@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-split-review-recovery": {
+      "branches": [
+        "codex/sandbox/real-split-review-recovery"
+      ],
+      "allow": [
+        "apps/web/app/ui/review-proposal.tsx",
+        "apps/web/app/ui/review-proposal.test.tsx",
+        "apps/web/e2e/review-confirm.spec.ts",
+        "apps/web/e2e/real-split-review-recovery.spec.ts"
+      ]
+    }
+  }
+}
