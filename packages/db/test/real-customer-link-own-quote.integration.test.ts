@@ -16,7 +16,7 @@ import { UserCommandDispatcher } from "../src/commands.js";
 import { verifiedTenantContextFromMembership, withTenant, type AuthenticatedMembership } from "../src/tenant-context.js";
 import { seedSyntheticPartyFixture } from "../src/synthetic-party-fixture.js";
 
-const own = "0940_real_customer_link_own_quote.sql";
+const own = "0733_real_customer_link_own_quote.sql";
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 const refused = { code: "42501", message: "CUSTOMER_REFUSED" };
 let c: Cluster;
