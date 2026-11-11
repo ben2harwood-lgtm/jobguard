@@ -7,9 +7,12 @@
       ],
       "note": "LATER-SAFETY-49 RED: legacy receipt replay coverage and fail-closed unknown rejection steps. NOPR; follows batch-34.",
       "allow": [
+        "packages/db/migration-notes/0804_extra_reject_null_step.md",
+        "packages/db/migrations/0728_extra_reject_null_step.sql",
         "packages/db/migrations/0804_extra_reject_null_step.sql",
         "packages/db/test/extra-approval-chain.integration.test.ts",
         "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/0728_extra_reject_null_step.proof.json",
         "packages/db/test/migration-proofs/0804_extra_reject_null_step.proof.json",
         "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts"
       ]

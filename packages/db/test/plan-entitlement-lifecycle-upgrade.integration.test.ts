@@ -209,7 +209,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   const ent5Replacements = [
     ["identity.provision_verified_challenge(challenge_id uuid)", "0703_invitation_issuer_recheck.sql"],
     ["app.xa_approve(p_job uuid,p_request uuid,p_command uuid,p_actor uuid,p_step integer,p_hash text,p_net bigint,p_reject boolean,p_reason text)", "0635_extra_same_step.sql"],
-    ["app.xa_approve(p_job uuid,p_request uuid,p_command uuid,p_actor uuid,p_step integer,p_hash text,p_net bigint,p_reject boolean,p_reason text)", "0804_extra_reject_null_step.sql"],
+    ["app.xa_approve(p_job uuid,p_request uuid,p_command uuid,p_actor uuid,p_step integer,p_hash text,p_net bigint,p_reject boolean,p_reason text)", "0728_extra_reject_null_step.sql"],
     ["app.xa_withdraw(p_job uuid,p_variation uuid,p_command uuid,p_actor uuid,p_reason text)", "0636_extra_withdraw_roles.sql"],
     ["app.xa_requirement(p_rules jsonb,p_net bigint)", "0637_extra_working_day_wait.sql"],
     ["app.xa_escalate()", "0637_extra_working_day_wait.sql"],
