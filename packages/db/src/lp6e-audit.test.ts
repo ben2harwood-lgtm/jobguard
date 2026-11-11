@@ -101,3 +101,14 @@ it("uses exactly the same legacy exceptions in SQL and the verifier", () => {
   const verifierNames = [...source.match(/legacyLowerTrustEventTypes = new Set\(\[([\s\S]*?)\]\)/u)![1]!.matchAll(/"([^"]+)"/gu)].map(match => match[1]);
   expect(sqlNames).toEqual(verifierNames);
 });
+
+it("accepts v3 command completion without weakening the predecessor's authority checks", () => {
+  const directory = new URL("../migrations/", import.meta.url);
+  const definition = /FUNCTION app\.lp5_check_command_completion\(\) RETURNS trigger([\s\S]*?END \$\$;)/u;
+  const predecessors = readdirSync(directory).filter(name => name.endsWith(".sql") && name < "0980")
+    .sort().filter(name => definition.test(readFileSync(new URL(name, directory), "utf8")));
+  const previous = readFileSync(new URL(predecessors.at(-1)!, directory), "utf8").match(definition)![1]!;
+  const current = readFileSync(new URL("0980_lp6e_audit_attribution.sql", directory), "utf8").match(definition)![1]!;
+  expect(previous).toContain("e.version='audit.v2'");
+  expect(current).toBe(previous.replace("e.version='audit.v2'", "e.version IN ('audit.v2','audit.v3')"));
+});

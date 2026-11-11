@@ -386,3 +386,29 @@ Local validation for the LP-6c repair (10 November 2026):
 
 READY for router commit and CI only. LP-6d restack and authorized protected-pin
 refresh remain landing requirements, along with exact-head independent RED review.
+
+### LP-6e router handoff revalidation (11 November 2026)
+
+The supplied worktree was already at `cb7167ea469072b14b68f7c3a79f3461b1ffc4e6`,
+containing the repair above on the passed LP-6c base `c2ec9e98`. No git writes or
+fetch were performed. Read all five earlier precheck/recheck records; no matching
+LP-6e handoff was found in coordinator/handoffs-1109. The earlier legacy-name,
+payload-key, v3 completion and queued-worker findings are addressed in the
+existing repair. Added a focused source regression to preserve the newest
+predecessor completion body with only v2/v3 acceptance changed. This is source
+validation; product-path PostgreSQL tests remain required in CI.
+
+Checks run again using installed dependencies:
+- DB and web `tsc --noEmit`: PASS; integration-source compiler-API typecheck:
+  PASS, zero diagnostics.
+- Vitest 4.1.12 `--maxWorkers=2` with src/lp6e-audit.test.ts,
+  src/lp4-audit.test.ts and src/audit-fix-dbsrc-08.test.ts: 75 PASS.
+- Vitest `--maxWorkers=1 test/migration-proof-loader.test.ts`: 77 PASS.
+- Lane lint: PASS against available main and explicitly with
+  `LANE_BASE_REF=c2ec9e98adab349f60394b72415f390701ae458e`; this piece's lane is
+  judged against LP-6c, not against main's inclusion of predecessor work.
+- `git diff --check`: PASS. Existing main specs and protected pins unchanged.
+
+PostgreSQL and browser suites were NOT RUN. READY is for router commit and CI
+only. LP-6d restack, placeholder migration 0980 renumbering, authorized source-pin
+and catalogue refresh, exact-head CI and independent RED review remain required.
