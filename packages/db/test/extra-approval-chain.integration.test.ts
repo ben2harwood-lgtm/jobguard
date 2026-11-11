@@ -87,6 +87,69 @@ it("E5B-02 stale revision, wrong hash/net, unpriced and replay semantics", async
   expect(await sql("SELECT 1 FROM app.extra_approval_step_fact WHERE request_id=$1", [un.requestId])).toEqual([]);
 });
 
+it("LATER-SAFETY-49 reuses a succeeded legacy command-id receipt only for its person, request and step", async () => {
+  const { beginRepositoryCommand, completeRepositoryCommand } = await import("../src/repository-command.js");
+  const s = await submitted(c, w, 60000), first = approveInput(s, 0);
+  const legacyKey = `extra-step:${s.requestId}:0:${first.commandId}`;
+  // Seed the old key format through the real command lifecycle and guarded mutation.
+  const approved = await withTenant(c.runtime, await testActorContext(c.admin, ctx, sup()), async db => {
+    expect(await beginRepositoryCommand(db, { tenantId: ctx.tenantId, actorMembershipId: sup().membershipId,
+      commandId: first.commandId, commandType: "ApproveExtraStep", semanticKey: legacyKey, jobId: s.jobId,
+      legacyJson: canonicalJson({ type: "ApproveExtraStep", actor: sup().membershipId, content: {
+        jobId: s.jobId, requestId: s.requestId, stepIndex: 0, hash: s.hash, net: s.net, reasonCode: null,
+      } }),
+    })).toEqual({ kind: "claim", decisionId: null, resolutionId: null, authorizationId: null });
+    await db.$client.query("SELECT app.xa_approve($1,$2,$3,$4,0,$5,$6,false,NULL)", [s.jobId, s.requestId, first.commandId, sup().membershipId, s.hash, s.net]);
+    return completeRepositoryCommand(db, first.commandId);
+  });
+  expect(approved).toMatchObject({ requestId: s.requestId, stepIndex: 0, state: "awaiting_approval" });
+  expect(await sql("SELECT semantic_key,status FROM app.command_receipt WHERE command_id=$1", [first.commandId])).toEqual([{ semantic_key: legacyKey, status: "succeeded" }]);
+  const replay = approveInput(s, 0);
+  expect(replay.commandId).not.toBe(first.commandId);
+  expect(await repo.approveExtraStep(await testActorContext(c.admin, ctx, sup()), sup(), replay)).toEqual(approved);
+  expect(await sql("SELECT command_id,semantic_key FROM app.command_receipt WHERE tenant_id=$1 AND starts_with(semantic_key,$2)", [ctx.tenantId, `extra-step:${s.requestId}:0:`])).toEqual([{ command_id: first.commandId, semantic_key: legacyKey }]);
+  expect(await sql("SELECT step_index,command_id FROM app.extra_approval_step_fact WHERE request_id=$1", [s.requestId])).toEqual([{ step_index: 0, command_id: first.commandId }]);
+  expect(await sql("SELECT 1 FROM app.command_receipt WHERE command_id=$1", [replay.commandId])).toEqual([]);
+  // Same person, different step: do not return step zero's legacy receipt.
+  expect(await code(repo.approveExtraStep(await testActorContext(c.admin, ctx, sup()), sup(), approveInput(s, 1)))).toBe("REUSED_APPROVER");
+  expect(await sql("SELECT 1 FROM app.extra_approval_step_fact WHERE request_id=$1 AND step_index=1", [s.requestId])).toEqual([]);
+  // Same person and step, different request: execute a new approval instead.
+  const other = await submitted(c, w, 60000), next = approveInput(other, 0);
+  expect(await repo.approveExtraStep(await testActorContext(c.admin, ctx, sup()), sup(), next)).toMatchObject({ requestId: other.requestId, stepIndex: 0 });
+  expect(await sql("SELECT semantic_key FROM app.command_receipt WHERE command_id=$1", [next.commandId])).toEqual([{ semantic_key: `extra-step:${other.requestId}:0:${sup().membershipId}` }]);
+  expect(await sql("SELECT command_id FROM app.extra_approval_step_fact WHERE request_id=$1 AND step_index=0", [other.requestId])).toEqual([{ command_id: next.commandId }]);
+});
+
+it("LATER-SAFETY-49 refuses another step after a legacy rejection with an unknown step", async () => {
+  const { ownerTx, receipt, terminalizeFixtureReceipt } = await import("./extra-fixtures.js");
+  const s = await submitted(c, w, 60000), rejectedCommand = randomUUID();
+  // Historical owner fixture: keep all receipt/fact guards enabled. Old rejection
+  // results did not name their step; do not rewrite a managed command's result.
+  await ownerTx(c, ctx.tenantId, async db => {
+    await receipt(db, ctx.tenantId, s.jobId, s.extraId, sup().membershipId, "RejectExtra", rejectedCommand,
+      { semanticKey: `extra-step:${s.requestId}:0:${rejectedCommand}` });
+    await db.$client.query("INSERT INTO app.extra_approval_outcome(tenant_id,id,job_id,variation_id,request_id,kind,reason_code,actor_kind,actor_membership_id,command_id) VALUES($1,$2,$3,$4,$5,'rejected','price_not_agreed','member',$6,$7)",
+      [ctx.tenantId, randomUUID(), s.jobId, s.extraId, s.requestId, sup().membershipId, rejectedCommand]);
+    await db.$client.query("SELECT app.xa_event($1,$2,$3,'rejected',b.variation_revision_id,'price_not_agreed',$5,$6) FROM app.extra_approval_request q JOIN app.extra_approval_revision_binding b ON(b.tenant_id,b.id)=(q.tenant_id,q.binding_id) WHERE q.tenant_id=$1 AND q.id=$4",
+      [ctx.tenantId, s.jobId, s.extraId, s.requestId, rejectedCommand, sup().membershipId]);
+    await db.$client.query("SELECT app.xa_resolve_decision($1,$2,0,'rejected',$3)", [ctx.tenantId, s.requestId, sup().membershipId]);
+    await terminalizeFixtureReceipt(db, ctx.tenantId, rejectedCommand, { requestId: s.requestId, state: "rejected" });
+  });
+  expect(await sql("SELECT status,result->>'stepIndex' step_index FROM app.command_receipt WHERE command_id=$1", [rejectedCommand])).toEqual([{ status: "succeeded", step_index: null }]);
+  expect(await code(repo.approveExtraStep(await testActorContext(c.admin, ctx, sup()), sup(), approveInput(s, 1)))).toBe("ALREADY_DECIDED");
+  // A rejection closes its request. A new revision of the SAME extra is the
+  // reachable path to another step; the old rejection must still separate people.
+  const revised = await repo.reviseExtra(await testActorContext(c.admin, ctx, surveyor()), surveyor(), { version: "revise-extra.v1", commandId: randomUUID(), jobId: s.jobId, extraId: s.extraId, netPence: 60001 });
+  const next = { ...s, requestId: revised.requestId as string, hash: revised.revisionHash as string, net: 60001 };
+  await repo.approveExtraStep(await testActorContext(c.admin, ctx, sup2()), sup2(), approveInput(next, 0));
+  const attempt = approveInput(next, 1);
+  // On 0634 alone NULL <> 1 is NULL, so this incorrectly returns approved.
+  expect(await code(repo.approveExtraStep(await testActorContext(c.admin, ctx, sup()), sup(), attempt))).toBe("REUSED_APPROVER");
+  expect(await sql("SELECT step_index,actor_membership_id FROM app.extra_approval_step_fact WHERE request_id=$1", [next.requestId])).toEqual([{ step_index: 0, actor_membership_id: sup2().membershipId }]);
+  expect(await outcome(next.requestId)).toEqual([]);
+  expect(await sql("SELECT 1 FROM app.command_receipt WHERE command_id=$1", [attempt.commandId])).toEqual([]);
+});
+
 it("E5B-03 thresholds exact at pence equality, SQL snapshot equals the pure evaluator", async () => {
   const doc = demoRules, hash = sha256Hex(JSON.stringify(doc));
   for (const net of [1, 25000, 25001, 49999, 50000, 50001, 99999, 100000, 100001, 149999, 150000, 150001, null]) {
