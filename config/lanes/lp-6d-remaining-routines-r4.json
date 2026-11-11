@@ -37,6 +37,8 @@
         "packages/db/test/administrative-role-setup.ts",
         "packages/db/test/audit-export.integration.test.ts",
         "packages/db/test/commands.integration.test.ts",
+        "packages/db/test/commercial-integrity-v3-fixtures.ts",
+        "packages/db/test/commercial-integrity-v3-review.integration.test.ts",
         "packages/db/test/contractor-admin-owner-guard.integration.test.ts",
         "packages/db/test/contractor-billing-fixtures.ts",
         "packages/db/test/contractor-owner-grant.integration.test.ts",

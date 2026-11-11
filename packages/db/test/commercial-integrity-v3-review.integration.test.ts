@@ -26,7 +26,7 @@ it("CI-P10 later evaluation preserves hash; changed ordinary horizon refuses new
 it("CI-P04 SQL independently refuses an invented source, omitted fact, changed policy or hash",async()=>{
  const {transaction}=await import("./commercial-integrity-v3-fixtures.js"),{job}=await seedIntegrityJob(f),review=await reviewFor(f,job),view=await f.repo.read(f.auth.context,actor,f.auth.digest,job),snapshot=view.result.findings[0]!.sourceSnapshot;
  for(const change of [{facts:[]},{facts:[{...snapshot.facts[0],source:{...snapshot.facts[0]!.source,sourceId:randomUUID()}}]},{profile:{...snapshot.profile,won:{delayMicroseconds:"1"}}},{scopeId:f.other.digest},{compared:{lockState:"present",activityKind:"invoice"}}]){
-  await expect(transaction(f.runtime,db=>db.query("SELECT app.ch6_record_integrity_review($1,$2,$3,$4::jsonb,$5::jsonb)",[tenant,job,f.auth.digest,JSON.stringify({...review,commandId:randomUUID()}),JSON.stringify({...snapshot,...change})]))).rejects.toThrow("INTEGRITY_SOURCE_CHANGED");
+  await expect(transaction(f.runtime,db=>db.query("SELECT app.ch6_record_integrity_review($1,$2,$3,$4::jsonb,$5::jsonb)",[tenant,job,f.auth.digest,JSON.stringify({...review,commandId:randomUUID()}),JSON.stringify({...snapshot,...change})]),f.auth.digest)).rejects.toThrow("INTEGRITY_SOURCE_CHANGED");
  }
 });
 it("CI-P07 appended SQL audit hashes verify with the installed canonical audit verifier",async()=>{
