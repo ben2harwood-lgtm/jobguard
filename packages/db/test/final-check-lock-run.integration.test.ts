@@ -5,7 +5,7 @@ import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { FinalCheckRepository } from "../src/final-check-repository.js";
 import { FinalCheckCompletionRepository, practiceFinalCheckPorts } from "../src/shadow-detection-repository.js";
 import { FinalAccountLockRepository } from "../src/final-account-lock-repository.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { createFinalCheckFixture, closeFinalCheckFixture, seedFinalCheckJob, insertFinalCheckEvidence, finalCheckTenant, FINAL_CHECK_ACTOR, type FinalCheckFixture } from "./final-check-fixture.js";
 import { FinalCheckWorker } from "../../../apps/api/src/final-check.worker.js";
 import { executeFinalCheckTask } from "../../../apps/api/src/final-check-task-executor.js";
@@ -60,7 +60,14 @@ it("a job without a practice session does not auto-request work",async()=>{
   await db.query("UPDATE app.job SET practice_session_digest=NULL,practice_scenario=NULL WHERE tenant_id=$1 AND id=$2",[a.tenantId,a.jobId]);
  });
  expect((await f.admin.query("SELECT practice_session_digest,practice_scenario FROM app.job WHERE tenant_id=$1 AND id=$2",[a.tenantId,a.jobId])).rows).toEqual([{practice_session_digest:null,practice_scenario:null}]);
- await a.lock();expect((await f.admin.query("SELECT 1 FROM infrastructure.final_check_request WHERE job_id=$1",[a.jobId])).rowCount).toBe(0);
+ // 1401: a firmless job is unattributed; only an unscoped member using unattributed
+ // (pre-1401) acceptance history can lock it. Privileged fixture writes that history.
+ await finalCheckTenant(f.admin,a.tenantId,async db=>{
+  await db.query("SET LOCAL session_replication_role='replica'");
+  await db.query("INSERT INTO app.final_check_terms_acceptance(tenant_id,id,terms_version,accepting_membership_id,accepted_at,command_id,audit_event_id) VALUES($1,$2,'synthetic_final_check_terms.v1',$3,clock_timestamp(),$4,$5)",[a.tenantId,randomUUID(),FINAL_CHECK_ACTOR,randomUUID(),randomUUID()]);
+ });
+ await new FinalAccountLockRepository(f.runtime).lock(await testBoundTenantContext(f.admin,a.tenantId,FINAL_CHECK_ACTOR),{jobId:a.jobId,actorMembershipId:FINAL_CHECK_ACTOR,commandId:randomUUID(),finalAccountRevisionId:a.revisionId,expectedRevision:1,declarationVersion:"final_account_declaration.v1"});
+ expect((await f.admin.query("SELECT 1 FROM infrastructure.final_check_request WHERE job_id=$1",[a.jobId])).rowCount).toBe(0);
 });
 
 it("0381 upgrades without changing existing locks or privileges and migrate replays safely",async()=>{

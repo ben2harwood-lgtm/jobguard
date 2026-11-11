@@ -125,7 +125,7 @@ export async function detectMessages(admin: Pool, job: string, member: string, u
   const context = db.verifiedTenantContextFromMembership({identityUserId:user,tenantId:portalTenant,membershipId:member} as Parameters<typeof db.verifiedTenantContextFromMembership>[0], {kind:"real",credential});
   await db.withTenant(admin,context, tx => tx.$client.query("SELECT app.accept_final_check_terms($1,$2,$3,$4)",[portalTenant,member,randomUUID(),"synthetic_final_check_terms.v1"]));
   const reader = new db.ShadowObservationReader(admin,new db.FixtureObservationSources([]));
-  expect(await reader.hasAcceptedTerms(context)).toBe(true);
+  expect(await reader.hasAcceptedTerms(context,job)).toBe(true);
   const observations = await reader.read(context,{version:"shadow-observation-read.v1",jobId:job});
   await new db.ShadowDetectionRepository(admin).persist(context,{version:"shadow-detection-batch.v1",jobId:job,...observations,
     proposals:core.detectShadowObservations(observations.observations,observations.captures,new Date().toISOString())});

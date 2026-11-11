@@ -36,8 +36,8 @@ async function unaccepted(page: Page) {
 }
 test("Final Check practice wording belongs to each blank firm, including after reset",async ({browser,baseURL})=>{
  test.setTimeout(600_000);
- const a=await browser.newContext({baseURL,viewport:{width:390,height:844}});
- const b=await browser.newContext({baseURL,viewport:{width:390,height:844}});
+ const a=await browser.newContext({...(baseURL?{baseURL}:{}),viewport:{width:390,height:844}});
+ const b=await browser.newContext({...(baseURL?{baseURL}:{}),viewport:{width:390,height:844}});
  try {
   const ap=await a.newPage(),bp=await b.newPage();
   const aj=await ownJob(ap),bj=await ownJob(bp);

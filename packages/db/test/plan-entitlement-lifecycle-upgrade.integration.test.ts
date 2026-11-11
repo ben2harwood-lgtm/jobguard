@@ -182,11 +182,17 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     ["ch4_read_work_facts", "t uuid, j uuid, digest text", "0690_import_ancestry_record_anchor.sql"],
     ["read_job_sources", "t uuid, j uuid, digest text, source text", "0690_import_ancestry_record_anchor.sql"],
     ["ch4_require_command_owner", "t uuid, j uuid, digest text", "0690_import_ancestry_record_anchor.sql"],
-    ["final_check_builder", "t uuid, j uuid, d text, locking boolean", "0690_import_ancestry_record_anchor.sql"],
-    ["evidence_pack_v3_owner", "t uuid, c uuid, d text", "0690_import_ancestry_record_anchor.sql"],
+    ["final_check_builder", "t uuid, j uuid, d text, locking boolean", "1401_per_firm_final_check_terms.sql"],
+    ["evidence_pack_v3_owner", "t uuid, c uuid, d text", "1401_per_firm_final_check_terms.sql"],
     ["adopt_invoiced_job_v3", "t uuid, source_job uuid, d text, cmd uuid, auth uuid, approved jsonb, request_hash text", "0690_import_ancestry_record_anchor.sql"],
     ["apply_recovery_timeline_signal", "p_tenant uuid, p_signal jsonb", "0690_import_ancestry_record_anchor.sql"],
     ["guard_watchdog_upload_update", "", "0720_verified_upload_immutable.sql"],
+    // 1401 re-creates these with full latest bodies that check the job's own firm acceptance.
+    ["final_check_require_worker", "p_tenant uuid, p_job uuid", "1401_per_firm_final_check_terms.sql"],
+    ["final_check_worker", "t uuid, j uuid", "1401_per_firm_final_check_terms.sql"],
+    ["accept_final_check_terms", "p_tenant uuid, p_actor uuid, p_command uuid, p_version text", "1401_per_firm_final_check_terms.sql"],
+    ["guard_final_lock_disclosure_terms", "", "1401_per_firm_final_check_terms.sql"],
+    ["surface_shadow_signal_early", "p_tenant uuid, p_job uuid, p_signal uuid, p_firing uuid, p_decision uuid, p_disclosure uuid, p_rule text, p_version text, p_source uuid, p_object_version text, p_facts jsonb", "1401_per_firm_final_check_terms.sql"],
   ].map(async ([name, args, migration]) => {
     const sql = await readFile(new URL(`../migrations/${migration}`, import.meta.url), "utf8");
     if (name === "decision_check_command") expect(sql).toContain("rv.result->>'sourceJobId'=source.id::text");
@@ -256,9 +262,13 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
       const owner = await readFile(new URL("../migrations/0667_final_check_practice_owner_check.sql", import.meta.url), "utf8");
       const anchor = "BEGIN\n PERFORM app.final_lock_require_owner(p_tenant,p_actor);";
       expect(prior.definition?.split(anchor)).toHaveLength(2);
-      const expectedDefinition=prior.definition?.replace(anchor, anchor + "\n" + owner.split("$guard$")[1]!);
-      expect(current?.definition).toBe(expectedDefinition);
-      expect(current?.source).toBe(expectedDefinition?.split("$function$")[1]);
+      // 1401 then re-creates the full latest body; 0667's guard stays verbatim after the first owner check.
+      const perFirm = await readFile(new URL("../migrations/1401_per_firm_final_check_terms.sql", import.meta.url), "utf8");
+      const body = perFirm.split("CREATE OR REPLACE FUNCTION app.lock_final_account(")[1]!.split("AS $$")[1]!.split("$$;")[0]!;
+      expect(body).toContain(anchor);
+      expect(body).toContain("\n" + owner.split("$guard$")[1]!);
+      expect(current?.definition?.split("$function$")[1]).toBe(body);
+      expect(current?.source).toBe(body);
       continue;
     }
     if (prior.nspname === "app" && prior.proname === "final_check_require_invoice_actor" && prior.args === "p_tenant uuid, p_job uuid, p_actor uuid") {
@@ -295,8 +305,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     }
     // 0632 changes only these exact shadow routines; MIGFIX-7's upgrade test binds their full bodies and unchanged ACLs.
     if (prior.nspname === "app" && (
-      (prior.proname === "record_shadow_disclosure" && prior.args === "p_tenant uuid, p_job uuid, p_signal uuid, p_event uuid, p_route text") ||
-      (prior.proname === "surface_shadow_signal_early" && prior.args === "p_tenant uuid, p_job uuid, p_signal uuid, p_firing uuid, p_decision uuid, p_disclosure uuid, p_rule text, p_version text, p_source uuid, p_object_version text, p_facts jsonb")
+      (prior.proname === "record_shadow_disclosure" && prior.args === "p_tenant uuid, p_job uuid, p_signal uuid, p_event uuid, p_route text")
     )) {
       const own = await readFile(new URL("../migrations/0632_shadow_group_disclosure.sql", import.meta.url), "utf8");
       expect(current?.definition?.split("$function$")[1]).toBe(own.split(`FUNCTION app.${prior.proname}(`)[1]!.split("AS $$")[1]!.split("$$;")[0]);

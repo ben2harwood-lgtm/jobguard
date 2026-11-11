@@ -301,6 +301,7 @@
           "app.append_final_lock_audit",
           "app.final_check_job_scope",
           "app.final_check_job_terms",
+          "app.final_check_practice_owns_job",
           "app.final_check_request_scope",
           "app.final_lock_hash",
           "app.final_lock_require_owner",
@@ -555,6 +556,18 @@
   ],
   "upgrade": [
     {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "final_check_terms_firm",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
       "section": "routines",
       "before": null,
       "after": {
@@ -605,7 +618,7 @@
       "after": {
         "nspname": "app",
         "proname": "final_check_job_terms",
-        "args": "t uuid, j uuid, v text, cutoff timestamp with time zone DEFAULT 'infinity'::timestamp with time zone",
+        "args": "t uuid, j uuid, v text, cutoff timestamp with time zone",
         "proowner": "jobguard_migration",
         "proacl": "{jobguard_migration=X/jobguard_migration}",
         "prosecdef": true,
@@ -624,7 +637,7 @@
         "permissive": "RESTRICTIVE",
         "roles": "{jobguard_runtime}",
         "cmd": "SELECT",
-        "qual": "((tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid) AND CASE WHEN (tenant_id = '11111111-1111-4111-8111-111111111111'::uuid) THEN ((practice_session_digest)::text = app.final_check_request_scope(tenant_id)) ELSE (practice_session_digest IS NULL) END)",
+        "qual": "((tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid) AND\nCASE\n    WHEN (tenant_id = '11111111-1111-4111-8111-111111111111'::uuid) THEN ((practice_session_digest)::text = app.final_check_request_scope(tenant_id))\n    ELSE (practice_session_digest IS NULL)\nEND)",
         "with_check": null
       }
     },

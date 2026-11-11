@@ -101,14 +101,14 @@ async function combinedReceiptFixture(f:FinalCheckFixture,lateCatch=false){
  for(const index of lateCatch?[0]:[0,1])await confirmCatch(index);
  drafted=await assembly.assemble(context,{version:"final-account.assemble.v1",commandId:randomUUID(),jobId,actorMembershipId:actor.membershipId,expectedRevision:drafted.revision});
  const issue={jobId,actorMembershipId:actor.membershipId,commandId:randomUUID(),finalAccountRevisionId:drafted.id,expectedSourceHash:drafted.sourceHash,invoiceKind:"final" as const,recipient:"practice-customer@example.invalid",issuedOn:"2026-10-28"};
- let invoice=await locks.issueInvoice(context,issue);
+ let invoice=await locks.issueInvoice(auth.context,issue);
  const combinedInvoice=invoice;
  expect(invoice).toMatchObject(lateCatch?{netPence:3410000,totalPence:4092000}:{netPence:3440000,totalPence:4128000});
- expect(await locks.issueInvoice(context,issue)).toEqual(invoice);
+ expect(await locks.issueInvoice(auth.context,issue)).toEqual(invoice);
  if(lateCatch){
   await confirmCatch(1);
   drafted=await assembly.assemble(context,{version:"final-account.assemble.v1",commandId:randomUUID(),jobId,actorMembershipId:actor.membershipId,expectedRevision:drafted.revision});
-  invoice=await locks.issueInvoice(context,{...issue,commandId:randomUUID(),finalAccountRevisionId:drafted.id,expectedSourceHash:drafted.sourceHash,invoiceKind:"supplementary"});
+  invoice=await locks.issueInvoice(auth.context,{...issue,commandId:randomUUID(),finalAccountRevisionId:drafted.id,expectedSourceHash:drafted.sourceHash,invoiceKind:"supplementary"});
   expect(invoice).toMatchObject({netPence:32000,totalPence:38400});
  }
  const invoices=new PracticeInvoiceRepository(scoped);
