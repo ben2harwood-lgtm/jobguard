@@ -7,6 +7,7 @@
       ],
       "note": "RED practice-only bounded recovery; serialize overlapping catalogue successor changes.",
       "allow": [
+        "apps/api/src/contractor/full-demo-package-sales.test.ts",
         "apps/api/src/final-check-practice-run.test.ts",
         "apps/api/src/final-check-practice-run.ts",
         "apps/api/src/final-check.application.test.ts",

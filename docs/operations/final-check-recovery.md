@@ -121,6 +121,42 @@ commands were not run here under the relevant-local-checks-only instruction; the
 pnpm lane command is replaced locally by the successful exact node command above.
 No independent review, self-merge, release or deployment is claimed.
 
+CI repair try 1 (11 Nov 2026, PR #736 at ffb5a601):
+
+- Read CI run 42966170013 through the connected GitHub tool after `gh pr view`
+  could not connect. All four database shards passed. `core`, `web` and `checks`
+  failed as aggregate gates, with no additional root failures.
+- Both failed browser shards (2/mobile and 5/desktop) timed out at the review
+  Accept loop. Accepted cards retain their Accept buttons, so the count never
+  reaches zero. Visit each existing review card once and assert its accepted
+  state; preserve all recovery, invoice and payment assertions and timeouts.
+- `core-checks` timed out in A09 of `full-demo-package-sales.test.ts` at the
+  unchanged five-second limit. It synchronously walked both Git histories for
+  every evidence item. Read each ancestor set once per validation instead,
+  retaining exact membership in both HEAD and origin/main plus every source
+  content and rejection assertion. Public claims and their evidence are unchanged.
+- From apps/api, `./node_modules/.bin/vitest run --maxWorkers=1 src/contractor/full-demo-package-sales.test.ts src/final-check-practice-run.test.ts src/sv5pre-worker-registration.test.ts`
+  passed all 20 tests. The original sales suite also passed locally before the
+  repair (4 tests; 3.61 seconds of test execution); the repaired three-file run
+  used 2.61 seconds of test execution. This supports the repeated-history-read
+  diagnosis but does not prove CI timing.
+- `node_modules/.bin/tsc -p apps/api/tsconfig.json --noEmit`,
+  `node_modules/.bin/tsc -p apps/web/tsconfig.json --noEmit`,
+  `node tools/lint.mjs`, the explicit lane boundary check and `git diff --check`
+  passed. Installed Vitest is 4.1.12; all local Vitest invocations used one worker.
+- From apps/web, `./node_modules/.bin/playwright test --list e2e/real-fc-typed-recovery.spec.ts`
+  collected both viewport cases; this is not browser execution.
+- An additional apps/web Vitest invocation naming `app/ui/review-proposal.test.tsx`
+  and `app/ui/review-proposal-papercuts.test.tsx` could not import
+  `@jobguard/api/capture-contracts`: the required API dist output is absent locally.
+  Only the first named file exists and was collected; zero tests executed.
+  No component or resolver changes were made for this local prerequisite.
+- The pnpm typecheck invocation stalled in the local package-manager wrapper
+  before starting checks and was interrupted; installed tsc was used directly.
+  Database/browser execution remains with CI after the router pushes. No migration,
+  production behavior, timeout or test assertion was weakened. The new head still
+  requires green CI and independent RED review.
+
 LATER / SIMPLICITY (initial inspection, retained): apps/api/src/worker.ts constructs
 similar generic and practice execution ports. A later scoped change can share a
 pool-parameterised factory, preserving the pinned connection, to reduce drift.

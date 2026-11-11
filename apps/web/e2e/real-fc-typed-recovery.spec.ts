@@ -36,8 +36,12 @@ test("ordinary typed job retains its bill through bounded worker recovery", asyn
     await page.getByLabel("Customer name", { exact: true }).fill("Mr Example");
     await page.getByLabel("Premises address", { exact: true }).fill("9 Notreal Road");
     await click("Save customer and site");
-    const accept = page.getByRole("button", { name: /^Accept /u });
-    while (await accept.count()) await accept.first().click();
+    const reviewLines = page.locator(".review-line");
+    await expect(reviewLines.first()).toBeVisible();
+    for (const line of await reviewLines.all()) {
+      await line.getByRole("button", { name: /^Accept /u }).click();
+      await expect(line.locator(".review-line-head strong")).toHaveText("accepted");
+    }
     await click("Confirm scope"); await click("Price the work");
     const rates = page.getByRole("textbox", { name: /^Unit rate /u });
     await expect(rates.first()).toBeVisible();
