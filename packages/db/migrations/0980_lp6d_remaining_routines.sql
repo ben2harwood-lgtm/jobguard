@@ -1198,7 +1198,12 @@ BEGIN
  PERFORM app.current_actor();
  IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
   OR p_actor IS DISTINCT FROM app.current_actor() THEN
-  RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
+  -- LP6D_DELEGATED (checker r10): LP-6c's customer binding hides its actor from current_actor();
+  -- only that delegated approver, scoped to this job and ClientDecideExtra (<=1 minute), may proceed.
+  IF app.current_actor() IS NOT NULL THEN RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
+  ELSIF p_actor IS DISTINCT FROM app.lp6_delegated_actor(nullif(current_setting('app.tenant_id',true),'')::uuid,'ClientDecideExtra',p_job) THEN
+   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
+  END IF;
  END IF;
 DECLARE lp5_result jsonb; v_tenant uuid; v_link app.extra_client_link; v_closure text; v_req app.extra_approval_request; v_wo app.work_order; v_n integer; v_total integer; v_rev uuid; v_grant uuid; v_final boolean;
 BEGIN
@@ -3306,11 +3311,17 @@ BEGIN
  PERFORM app.current_actor();
  IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
   OR p_actor IS DISTINCT FROM app.current_actor() THEN
-  RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
+  -- LP6D_DELEGATED (checker r10): LP-6c's customer binding hides its actor from current_actor();
+  -- only that delegated approver, scoped to this job and ClientDecideExtra (<=1 minute), may proceed.
+  IF app.current_actor() IS NOT NULL THEN RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
+  ELSIF p_actor IS DISTINCT FROM app.lp6_delegated_actor(nullif(current_setting('app.tenant_id',true),'')::uuid,'ClientDecideExtra',p_job) THEN
+   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
+  END IF;
  END IF;
 DECLARE v_tenant uuid; v_receipt app.command_receipt;
 BEGIN
- IF p_types IS DISTINCT FROM ARRAY['RevokeClientApproval']::text[] THEN PERFORM app.mon8_require_feature(p_actor,'approval_chains'); END IF;
+ -- LP6D_DELEGATED_FEATURE: the delegated customer (already scoped above) takes the same decision privately.
+ IF p_types IS DISTINCT FROM ARRAY['RevokeClientApproval']::text[] THEN IF app.current_actor() IS NULL THEN IF NOT (app.lp6d_mon8_feature_decision(p_actor,'approval_chains')->>'executable')::boolean THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF; ELSE PERFORM app.mon8_require_feature(p_actor,'approval_chains'); END IF; END IF;
  IF pg_catalog.current_database()<>'jobguard_synthetic_demo' THEN RAISE EXCEPTION 'MODE_FORBIDDEN' USING ERRCODE='42501'; END IF;
  BEGIN v_tenant:=nullif(pg_catalog.current_setting('app.tenant_id',true),'')::uuid; EXCEPTION WHEN invalid_text_representation THEN v_tenant:=NULL; END;
  IF v_tenant IS NULL THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='P0002'; END IF;
@@ -3336,7 +3347,12 @@ BEGIN
  PERFORM app.current_actor();
  IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
   OR p_actor IS DISTINCT FROM app.current_actor() THEN
-  RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
+  -- LP6D_DELEGATED (checker r10): LP-6c's customer binding hides its actor from current_actor();
+  -- only that delegated approver, scoped to this job and ClientDecideExtra (<=1 minute), may proceed.
+  IF app.current_actor() IS NOT NULL THEN RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
+  ELSIF p_actor IS DISTINCT FROM app.lp6_delegated_actor(nullif(current_setting('app.tenant_id',true),'')::uuid,'ClientDecideExtra',p_job) THEN
+   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
+  END IF;
  END IF;
 DECLARE v_tenant uuid; v_chosen uuid;
 BEGIN
@@ -6774,12 +6790,16 @@ DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; actor uu
  RETURN identity.sso_required_append(t,c,actor,'admin',(p->>'required')::boolean,p->>'reason',(p->>'expectedRevision')::integer);
 END $$;
 
--- Private unguarded copies for the customer approval path only (identity link use and the
--- LP-6c delegated client decision). That path has no ordinary request actor: the link use is
--- the sign-in itself, and the delegated binding deliberately hides its actor from
--- current_actor(); LP-6c's begin_command verifies the delegated scope. Every ordinary port
--- keeps its guard. Bodies are the latest originals (0158/0642/0686) with only these calls
--- redirected to the private chain; lp6d-routines.test.ts pins them.
+-- Checker r10: guarded customer-path routines (migration-owned) read LP-6c's delegated actor,
+-- exactly as begin_command/lp5_bind_effect do. EXECUTE only; no write grant.
+GRANT EXECUTE ON FUNCTION app.lp6_delegated_actor(uuid,text,uuid) TO jobguard_migration;
+
+-- Private unguarded copies ONLY for the issuer-authority check, a step with no possible request
+-- actor: it asks whether the link's ISSUER (a third party) still holds send authority, from the
+-- outbox worker (xc_cancel_authority_loss) and the customer's pre-binding link use. Revoked from
+-- PUBLIC/runtime/identity, reachable only from those migration-owned definers, drift-pinned in
+-- lp6d-routines.test.ts. They move to the LP-10 worker binding later. The customer decision
+-- itself is bound (LP-6c delegated actor), not copied.
 CREATE FUNCTION app.lp6d_xa_covers(p_actor uuid, p_roles text[], p_job uuid, p_permission text) RETURNS uuid
 LANGUAGE plpgsql STABLE SECURITY INVOKER SET search_path=pg_catalog AS $$
 DECLARE v_tenant uuid; v_chosen uuid;
@@ -6823,86 +6843,15 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog AS $$
         OR (o.status<>'cancelled' AND app.lp6d_xc_send_authority(k.issued_by_membership_id,k.variation_id)))
  )
 $$;
-CREATE FUNCTION app.lp6d_xa_begin(p_job uuid, p_command uuid, p_types text[], p_actor uuid) RETURNS uuid LANGUAGE plpgsql SET search_path=pg_catalog AS $$
-DECLARE v_tenant uuid; v_receipt app.command_receipt;
-BEGIN
- IF p_types IS DISTINCT FROM ARRAY['RevokeClientApproval']::text[] THEN IF NOT (app.lp6d_mon8_feature_decision(p_actor,'approval_chains')->>'executable')::boolean THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF; END IF;
- IF pg_catalog.current_database()<>'jobguard_synthetic_demo' THEN RAISE EXCEPTION 'MODE_FORBIDDEN' USING ERRCODE='42501'; END IF;
- BEGIN v_tenant:=nullif(pg_catalog.current_setting('app.tenant_id',true),'')::uuid; EXCEPTION WHEN invalid_text_representation THEN v_tenant:=NULL; END;
- IF v_tenant IS NULL THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='P0002'; END IF;
- SELECT r.* INTO v_receipt FROM app.command_receipt r WHERE r.tenant_id=v_tenant AND r.command_id=p_command;
- IF v_receipt.command_id IS NULL OR v_receipt.status IS DISTINCT FROM 'processing' OR NOT(v_receipt.command_type=ANY(p_types)) OR v_receipt.actor_membership_id IS DISTINCT FROM p_actor THEN
-  RAISE EXCEPTION 'INVALID_COMMAND' USING ERRCODE='23514';
- END IF;
- PERFORM pg_catalog.pg_advisory_xact_lock_shared(pg_catalog.hashtextextended(v_tenant::text,54));
- PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(v_tenant::text||':'||p_job::text,417));
- IF NOT EXISTS(SELECT 1 FROM app.job_commercial_track t WHERE(t.tenant_id,t.job_id)=(v_tenant,p_job) AND t.job_track='contractor' AND t.environment='synthetic_demo') THEN
-  RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='P0002';
- END IF;
- RETURN v_tenant;
-END
-$$;
-CREATE FUNCTION app.lp6d_xa_client_decide(p_job uuid, p_request uuid, p_command uuid, p_actor uuid, p_token_hash text, p_email text, p_hash text, p_net bigint, p_reject boolean, p_reason text, p_role_name text, p_tester text) RETURNS jsonb
-LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog AS $$
-DECLARE lp5_result jsonb; v_tenant uuid; v_link app.extra_client_link; v_closure text; v_req app.extra_approval_request; v_wo app.work_order; v_n integer; v_total integer; v_rev uuid; v_grant uuid; v_final boolean;
-BEGIN
- v_tenant:=app.lp6d_xa_begin(p_job,p_command,ARRAY['ClientDecideExtra'],p_actor);
- SELECT k.* INTO v_link FROM app.extra_client_link k WHERE k.tenant_id=v_tenant AND k.token_hash=p_token_hash;
- IF v_link.id IS NULL OR v_link.approver_membership_id<>p_actor THEN RAISE EXCEPTION 'LINK_INVALID' USING ERRCODE='42501'; END IF;
- SELECT c.kind INTO v_closure FROM app.extra_client_link_closure c WHERE(c.tenant_id,c.link_id)=(v_tenant,v_link.id);
- IF v_closure='decided' THEN RAISE EXCEPTION 'LINK_REPLAYED' USING ERRCODE='23514'; END IF;
- IF v_closure IS NOT NULL THEN RAISE EXCEPTION 'LINK_REVOKED' USING ERRCODE='23514'; END IF;
- IF NOT app.xc_link_current(v_link.id) THEN RAISE EXCEPTION 'PERMISSION_DENIED' USING ERRCODE='42501'; END IF;
- IF clock_timestamp()>=v_link.expires_at THEN RAISE EXCEPTION 'LINK_EXPIRED' USING ERRCODE='23514'; END IF;
- IF p_email IS NULL OR lower(p_email)<>lower(v_link.recipient) THEN RAISE EXCEPTION 'EMAIL_MISMATCH' USING ERRCODE='23514'; END IF;
- SELECT w.* INTO v_wo FROM app.work_order w WHERE w.tenant_id=v_tenant AND w.job_id=p_job;
- IF v_link.job_id<>p_job OR v_link.request_id<>p_request OR v_wo.client_id IS DISTINCT FROM v_link.client_id THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='P0002'; END IF;
- SELECT q.* INTO v_req FROM app.extra_approval_request q WHERE(q.tenant_id,q.job_id,q.id)=(v_tenant,p_job,p_request);
- IF v_req.client_id<>v_link.client_id THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='P0002'; END IF;
- IF v_req.request_revision<>(SELECT max(q.request_revision) FROM app.extra_approval_request q WHERE q.tenant_id=v_tenant AND q.variation_id=v_req.variation_id) THEN RAISE EXCEPTION 'STALE_REVISION' USING ERRCODE='40001'; END IF;
- IF EXISTS(SELECT 1 FROM app.extra_approval_outcome o WHERE(o.tenant_id,o.request_id)=(v_tenant,p_request)) OR app.xa_latest_kind(v_tenant,p_job,v_req.variation_id) IS DISTINCT FROM 'awaiting_approval' THEN RAISE EXCEPTION 'ALREADY_DECIDED' USING ERRCODE='23514'; END IF;
- SELECT g.id INTO v_grant FROM app.contractor_member cm JOIN app.membership m ON(m.tenant_id,m.id)=(cm.tenant_id,cm.membership_id) JOIN app.role_grant g ON(g.tenant_id,g.membership_id)=(cm.tenant_id,cm.membership_id)
-  WHERE cm.tenant_id=v_tenant AND cm.membership_id=p_actor AND cm.client_id=v_req.client_id AND lower(cm.email)=lower(p_email) AND m.role='client_approver' AND coalesce(app.contractor_member_active(p_actor),false)
-   AND g.role='client_approver' AND g.scope_kind='client' AND g.scope_id=v_req.client_id AND(g.contract_id IS NULL OR g.contract_id=v_wo.contract_id)
-   AND NOT EXISTS(SELECT 1 FROM app.role_grant_revocation r WHERE(r.tenant_id,r.grant_id)=(g.tenant_id,g.id)) ORDER BY g.id LIMIT 1;
- IF v_grant IS NULL THEN RAISE EXCEPTION 'PERMISSION_DENIED' USING ERRCODE='42501'; END IF;
- SELECT count(*) INTO v_n FROM app.extra_approval_step_fact f WHERE(f.tenant_id,f.request_id)=(v_tenant,p_request);
- IF v_req.requirement->'steps'->v_n->>'role' IS DISTINCT FROM 'client_approver' THEN RAISE EXCEPTION 'STEP_OUT_OF_ORDER' USING ERRCODE='23514'; END IF;
- IF v_req.revision_hash::text IS DISTINCT FROM p_hash OR v_req.net_pence IS DISTINCT FROM p_net OR v_req.net_pence IS NULL THEN RAISE EXCEPTION 'HASH_MISMATCH' USING ERRCODE='23514'; END IF;
- IF p_role_name IS NULL OR p_tester IS NULL THEN RAISE EXCEPTION 'INVALID_COMMAND' USING ERRCODE='23514'; END IF;
- SELECT b.variation_revision_id INTO v_rev FROM app.extra_approval_revision_binding b WHERE(b.tenant_id,b.id)=(v_tenant,v_req.binding_id);
- INSERT INTO app.extra_client_link_closure(tenant_id,id,link_id,kind,actor_membership_id,command_id) VALUES(v_tenant,pg_catalog.gen_random_uuid(),v_link.id,'decided',p_actor,p_command);
- IF p_reject THEN
-  IF p_reason IS NULL OR p_reason !~ '^[a-z][a-z0-9_]{0,39}$' THEN RAISE EXCEPTION 'INVALID_COMMAND' USING ERRCODE='23514'; END IF;
-  INSERT INTO app.extra_approval_outcome(tenant_id,id,job_id,variation_id,request_id,kind,reason_code,actor_kind,actor_membership_id,command_id)
-  VALUES(v_tenant,pg_catalog.gen_random_uuid(),p_job,v_req.variation_id,p_request,'rejected',p_reason,'client_approver',p_actor,p_command);
-  PERFORM app.xa_event(v_tenant,p_job,v_req.variation_id,'rejected',v_rev,p_reason,p_command,p_actor);
-  lp5_result:=jsonb_build_object('requestId',p_request,'state','rejected','stepIndex',v_n); PERFORM app.lp5_bind_effect(p_command,NULL,'extra_chain',jsonb_build_object('result',lp5_result)); RETURN lp5_result;
- END IF;
- INSERT INTO app.extra_approval_step_fact(tenant_id,id,job_id,variation_id,request_id,step_index,step_role,actor_kind,actor_membership_id,grant_id,approved_hash,approved_net_pence,fictional_role_name,actual_tester_reference,command_id)
- VALUES(v_tenant,pg_catalog.gen_random_uuid(),p_job,v_req.variation_id,p_request,v_n,'client_approver','client_approver',p_actor,v_grant,v_req.revision_hash,v_req.net_pence,p_role_name,p_tester,p_command);
- v_total:=jsonb_array_length(v_req.requirement->'steps'); v_final:=v_n+1=v_total;
- IF v_final THEN
-  INSERT INTO app.extra_approval_outcome(tenant_id,id,job_id,variation_id,request_id,kind,actor_kind,actor_membership_id,command_id)
-  VALUES(v_tenant,pg_catalog.gen_random_uuid(),p_job,v_req.variation_id,p_request,'approved','client_approver',p_actor,p_command);
-  PERFORM app.xa_event(v_tenant,p_job,v_req.variation_id,'approved',v_rev,NULL,p_command,p_actor);
- END IF;
- lp5_result:=jsonb_build_object('requestId',p_request,'state',CASE WHEN v_final THEN 'approved' ELSE 'awaiting_approval' END,'stepIndex',v_n); PERFORM app.lp5_bind_effect(p_command,NULL,'extra_chain',jsonb_build_object('result',lp5_result)); RETURN lp5_result;
-END
-$$;
 ALTER FUNCTION app.lp6d_xa_covers(uuid,text[],uuid,text) OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.lp6d_xa_covers(uuid,text[],uuid,text) FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure,jobguard_command_writer;
 ALTER FUNCTION app.lp6d_xc_send_authority(uuid,uuid) OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.lp6d_xc_send_authority(uuid,uuid) FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure,jobguard_command_writer;
 ALTER FUNCTION app.lp6d_xc_link_current(uuid) OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.lp6d_xc_link_current(uuid) FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure,jobguard_command_writer;
-ALTER FUNCTION app.lp6d_xa_begin(uuid,uuid,text[],uuid) OWNER TO jobguard_migration;
-REVOKE ALL ON FUNCTION app.lp6d_xa_begin(uuid,uuid,text[],uuid) FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure,jobguard_command_writer;
-ALTER FUNCTION app.lp6d_xa_client_decide(uuid,uuid,uuid,uuid,text,text,text,bigint,boolean,text,text,text) OWNER TO jobguard_migration;
-REVOKE ALL ON FUNCTION app.lp6d_xa_client_decide(uuid,uuid,uuid,uuid,text,text,text,bigint,boolean,text,text,text) FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure,jobguard_command_writer;
 DO $revoke$ DECLARE r record; BEGIN
  FOR r IN SELECT rolname FROM pg_roles WHERE rolcanlogin LOOP
-  EXECUTE format('REVOKE ALL ON FUNCTION app.lp6d_xa_covers(uuid,text[],uuid,text),app.lp6d_xc_send_authority(uuid,uuid),app.lp6d_xc_link_current(uuid),app.lp6d_xa_begin(uuid,uuid,text[],uuid),app.lp6d_xa_client_decide(uuid,uuid,uuid,uuid,text,text,text,bigint,boolean,text,text,text) FROM %I',r.rolname);
+  EXECUTE format('REVOKE ALL ON FUNCTION app.lp6d_xa_covers(uuid,text[],uuid,text),app.lp6d_xc_send_authority(uuid,uuid),app.lp6d_xc_link_current(uuid) FROM %I',r.rolname);
  END LOOP;
 END $revoke$;
 
@@ -7054,7 +7003,7 @@ BEGIN
    jsonb_build_object('tenantId',t,'actorMembershipId',c,'subjectType','job','subjectRef',j),'{}',
    jsonb_build_object('version','repository-command.v1','actorMembershipId',c,'input',legacy,'legacyJson',app.final_lock_canonical(legacy)));
   IF claim->>'kind'='replay' THEN RETURN claim->'result'; END IF;
-  result:=app.lp6d_xa_client_decide(j,q.id,(input->>'commandId')::uuid,c,k.token_hash,k.recipient,input->>'revisionHash',(input->>'netPence')::bigint,
+  result:=app.xa_client_decide(j,q.id,(input->>'commandId')::uuid,c,k.token_hash,k.recipient,input->>'revisionHash',(input->>'netPence')::bigint,
    input->>'decision'='reject',CASE WHEN input->>'decision'='reject' THEN 'not_agreed' ELSE NULL END,'Named fictional client approver','customer-session:'||s.id::text);
   PERFORM app.append_final_check_audit(gen_random_uuid(),'membership:'||c::text,j,'contractor.extra.client_decided',jsonb_build_object('commandId',input->>'commandId','requestId',q.id,'sessionId',s.id));
   result:=app.complete_command((input->>'commandId')::uuid,'{}');

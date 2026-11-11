@@ -180,7 +180,7 @@ export class SiteVisitRepository {
   }
  }
  private async executeVisit<T extends StartedVisit | CompletedVisit>(context: VerifiedTenantContext, actor: AuthenticatedMembership, kind: Kind, input: Input, schema: z.ZodType<T>): Promise<T> {
-  let refusal: Refusal | undefined;
+  let refusal: Refusal | undefined, unstamped = false;
   try {
    if (!context || typeof context.tenantId !== "string") throw new InvalidTenantContextError();
    if (!same(actor.tenantId, context.tenantId)) refusal = { code: "VISIT_FORBIDDEN", reason: "member_inactive" };
@@ -198,14 +198,15 @@ export class SiteVisitRepository {
     }
    }
   } catch (error) {
-   if (error instanceof InvalidTenantContextError) refusal = { code: "NOT_FOUND", reason: "job_out_of_scope" };
+   // An unstamped context never connects; it gets the uniform refusal with no refusal record (as before LP-6d).
+   if (error instanceof InvalidTenantContextError) { unstamped = true; refusal = { code: "NOT_FOUND", reason: "job_out_of_scope" }; }
    // LP-6d: a member whose request can no longer be bound (revoked or expired) is the inactive-member refusal.
    else if (error instanceof RequestBindingRefusedError) refusal = { code: "VISIT_FORBIDDEN", reason: "member_inactive" };
    else if (error instanceof SiteVisitError) throw error;
    else throw new SiteVisitError("SITE_VISIT_UNAVAILABLE");
   }
   if (!refusal) throw new SiteVisitError("SITE_VISIT_UNAVAILABLE");
-  await this.recordRefusal(context, actor, kind, input, refusal.reason);
+  if (!unstamped) await this.recordRefusal(context, actor, kind, input, refusal.reason);
   throw new SiteVisitError(refusal.code);
  }
  async startVisit(context: VerifiedTenantContext, actor: AuthenticatedMembership, raw: unknown): Promise<StartedVisit> {

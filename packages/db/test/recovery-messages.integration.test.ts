@@ -1242,9 +1242,12 @@ describe('source writes serialize with the final effect check (P2-1)', () => {
       const sink = await runtime.connect(), writer = await runtime.connect();
       try {
         await sink.query('BEGIN'); await sink.query("SELECT set_config('app.tenant_id',$1,true)", [fixture.tenantId]);
+        // LP-6d: both held-open transactions are the owner's own bound requests.
+        await bindTestClient(admin, sink, fixture.tenantId, fixture.memberId);
         await sink.query("SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))", [fixture.tenantId, caseId]);
         await sink.query("SELECT app.lock_recovery_message_sources($1)", [fixture.tenantId]);
         await writer.query('BEGIN'); await writer.query("SELECT set_config('app.tenant_id',$1,true)", [fixture.tenantId]);
+        await bindTestClient(admin, writer, fixture.tenantId, fixture.memberId);
         let completed = false;
         const invalidation = writer.query("INSERT INTO app.evidence_invalidation(id,tenant_id,evidence_id,actor_membership_id,reason_code) VALUES($1,$2,$3,$4,'object_revoked')", [randomUUID(), fixture.tenantId, fixture.proofId, fixture.memberId]).then(() => { completed = true; });
         await until(async () => (await admin.query("SELECT 1 FROM pg_stat_activity WHERE query LIKE 'INSERT INTO app.evidence_invalidation%' AND wait_event='advisory'")).rowCount !== 0, 'source writer held at the effect boundary');

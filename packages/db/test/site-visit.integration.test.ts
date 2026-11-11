@@ -412,7 +412,7 @@ describe("ENT-3b repair round 2 authority races (real PostgreSQL)", () => {
    return authority;
   });
   let error: SiteVisitError;
-  try { error = await errorOf(async () => kind === "start" ? repo.startVisit(testTenantContext(f.p.tenantId,{membershipId:a.member.membershipId,bindRequest:false}), a.member, raw) : repo.completeVisit(testTenantContext(f.p.tenantId,{membershipId:a.member.membershipId,bindRequest:false}), a.member, raw)); } finally { spy.mockRestore(); }
+  try { error = await errorOf(async () => kind === "start" ? repo.startVisit(await testActorContext(c.admin, f.ctx, a.member), a.member, raw) : repo.completeVisit(await testActorContext(c.admin, f.ctx, a.member), a.member, raw)); } finally { spy.mockRestore(); }
   expect(checks).toBe(2); expect(before).toBeDefined();
   expect(plain(error)).toEqual({ name: "SiteVisitError", message: "VISIT_FORBIDDEN", code: "VISIT_FORBIDDEN" });
   expect({ status: siteVisitHttpStatus(error.code), body: siteVisitFailureV1.parse({ version: "site-visit-error.v1", code: error.code }) }).toEqual({ status: 403, body: { version: "site-visit-error.v1", code: "VISIT_FORBIDDEN" } });
@@ -609,7 +609,8 @@ describe("ENT-3b the refusal record", () => {
    wrapped.add(client);
    const original = client.query.bind(client);
    vi.spyOn(client, "query").mockImplementation((async (sql: any, params?: any) => {
-    if (String(sql).includes("FROM app.append_audit(")) { reached++; throw new Error("injected failure"); }
+    // r9 ruling: the refusal audit is appended by the private refusal writer (app.lp6d_record_visit_refusal).
+    if (String(sql).includes("FROM app.append_audit(") || String(sql).includes("app.lp6d_record_visit_refusal(")) { reached++; throw new Error("injected failure"); }
     return original(sql, params);
    }) as any);
    return client;

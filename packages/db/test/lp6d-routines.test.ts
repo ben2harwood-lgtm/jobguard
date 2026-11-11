@@ -24,6 +24,11 @@ it("keeps every predecessor body and permission rule behind an early binding che
         .replace("'finish','cancel_finish','close','reopen','link'", "'finish','cancel_finish','close','reopen','link','resume'")
         .replace("IF action='finish' THEN\n  IF marker.kind", "IF action='resume' THEN\n  PERFORM app.ch4_require_open(t,j);\n  PERFORM app.ch4_admit_place(t,j,action);\n  event_kind:='resumed';\n ELSIF action='finish' THEN\n  IF marker.kind");
     }
+    if (routine.name === "app.xa_begin") {
+      // r10: a delegated customer (scoped by the prefix) takes the same feature decision privately.
+      previous = previous.replace(" IF p_types IS DISTINCT FROM ARRAY['RevokeClientApproval']::text[] THEN PERFORM app.mon8_require_feature(p_actor,'approval_chains'); END IF;",
+        " -- LP6D_DELEGATED_FEATURE: the delegated customer (already scoped above) takes the same decision privately.\n IF p_types IS DISTINCT FROM ARRAY['RevokeClientApproval']::text[] THEN IF app.current_actor() IS NULL THEN IF NOT (app.lp6d_mon8_feature_decision(p_actor,'approval_chains')->>'executable')::boolean THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF; ELSE PERFORM app.mon8_require_feature(p_actor,'approval_chains'); END IF; END IF;");
+    }
     if (routine.name === "app.xa_issue_link") {
       // 0642 patches pg_get_functiondef rather than declaring another CREATE.
       previous = previous.replace("IF NOT EXISTS(SELECT 1 FROM app.membership m WHERE m.tenant_id=v_tenant AND m.id=p_actor AND m.role='owner' AND m.revoked_at IS NULL AND(m.expires_at IS NULL OR m.expires_at>clock_timestamp())) THEN",
@@ -175,7 +180,7 @@ it("preserves LP-6c client history and binding through the exact private read bo
   const prior = read("../migrations/0725_lp6c_client_extra_decision.sql")
     .match(/CREATE OR REPLACE FUNCTION identity\.extra_customer_approval\([\s\S]*?\$\$;/u)![0];
   expect(sql.match(/CREATE OR REPLACE FUNCTION identity\.extra_customer_approval\([\s\S]*?\$\$;/u)![0])
-    .toBe(prior.replaceAll("app.xa_client_view_authority(", "app.lp6d_client_view_authority(").replaceAll("app.xa_client_decide(", "app.lp6d_xa_client_decide("));
+    .toBe(prior.replaceAll("app.xa_client_view_authority(", "app.lp6d_client_view_authority("));
   expect(sql).toContain("REVOKE ALL ON FUNCTION app.lp6d_client_view_authority(uuid,uuid,uuid,text) FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure");
 });
 
@@ -229,18 +234,25 @@ it("pins each private unguarded copy to its guarded original minus only the LP-6
     ["app.mon8_sso_feature_decision", "app.mon8_feature_decision", (b: string) => b.replace("feature constant text:='sso'; purpose constant text:='new_work'; ", "")],
     // Customer approval path: only its calls are redirected to the private chain.
     ["app.lp6d_xa_covers", "app.xa_covers", (b: string) => b],
-    ["app.lp6d_xa_begin", "app.xa_begin", (b: string) => b.replace("IF NOT (app.lp6d_mon8_feature_decision(p_actor,'approval_chains')->>'executable')::boolean THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;", "PERFORM app.mon8_require_feature(p_actor,'approval_chains');")],
-    ["app.lp6d_xa_client_decide", "app.xa_client_decide", (b: string) => b.replaceAll("app.lp6d_xa_begin(", "app.xa_begin(").replaceAll("app.lp6d_xa_covers(", "app.xa_covers(")],
   ] as const) {
     expect(adapt(bodyOf(copy)).trim().replace(/;$/u, ""), copy).toBe(unguarded(original).replace(/;$/u, ""));
   }
   const latest = (file: string, name: string) => definitions(read(`../migrations/${file}`)).filter(m => m[1] === name).at(-1)![3]!;
   expect(bodyOf("app.lp6d_xc_send_authority").replace("app.lp6d_xa_covers(", "app.xa_covers(")).toBe(latest("0642_extra_client_send_authority.sql", "app.xc_send_authority"));
   expect(bodyOf("app.lp6d_xc_link_current").replace("app.lp6d_xc_send_authority(", "app.xc_send_authority(")).toBe(latest("0686_extra_client_authority_loss.sql", "app.xc_link_current"));
-  for (const copy of ["lp6d_xa_covers(uuid,text[],uuid,text)", "lp6d_xc_send_authority(uuid,uuid)", "lp6d_xc_link_current(uuid)", "lp6d_xa_begin(uuid,uuid,text[],uuid)", "lp6d_xa_client_decide(uuid,uuid,uuid,uuid,text,text,text,bigint,boolean,text,text,text)"]) {
+  for (const copy of ["lp6d_xa_covers(uuid,text[],uuid,text)", "lp6d_xc_send_authority(uuid,uuid)", "lp6d_xc_link_current(uuid)"]) {
     expect(sql, copy).toContain(`REVOKE ALL ON FUNCTION app.${copy} FROM PUBLIC,jobguard_runtime,jobguard_identity`);
   }
   for (const copy of ["lp6d_mon8_feature_decision(uuid,text,text)", "lp6d_client_view_authority(uuid,uuid,uuid,text)", "lp6d_customer_watchdog_live(uuid)", "lp6d_job_parties_maintenance(uuid,uuid)", "mon8_sso_feature_decision(uuid)"]) {
     expect(sql, copy).toMatch(new RegExp(`REVOKE ALL ON FUNCTION app\\.${copy.replace(/[()]/gu, "\\$&")} FROM PUBLIC,jobguard_runtime,jobguard_identity`, "u"));
   }
+});
+
+it("accepts the LP-6c delegated customer only for its own job and ClientDecideExtra scope (checker r10)", () => {
+  for (const name of ["app.xa_covers", "app.xa_begin", "app.xa_client_decide"]) {
+    const b = definitions(sql).filter(m => m[1] === name).at(-1)![3]!;
+    expect(b, name).toContain("ELSIF p_actor IS DISTINCT FROM app.lp6_delegated_actor(nullif(current_setting('app.tenant_id',true),'')::uuid,'ClientDecideExtra',p_job) THEN");
+    expect(b.indexOf("LP6D_DELEGATED"), name).toBeLessThan(b.indexOf("\nDECLARE"));
+  }
+  expect(sql).not.toMatch(/FUNCTION app\.lp6d_xa_(begin|client_decide)\(/u);
 });
