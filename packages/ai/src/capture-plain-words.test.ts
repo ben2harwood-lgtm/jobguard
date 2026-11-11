@@ -70,7 +70,7 @@ describe("plain words draft helper", () => {
     expect(result.lines).toHaveLength(1);
     expect(result.lines[0]?.description.value).toBe(text);
     expect(result.lines[0]?.unitPricePence.value).toBeNull();
-    expect(result.questions.map(q => q.question.value)).toEqual(["Please turn these words into work items"]);
+    expect(result.questions.map(q => q.question.value)).toEqual(["Check this line. Use Split to make separate work items, then edit and accept each one."]);
   });
   it("never routes any ITEM: record through the plain splitter (generated prefixes and suffixes)", () => {
     const structured = "JOB: Fixed title\nITEM: Fit bath | £450.00\nITEM: Paint walls | £200.00";
@@ -99,4 +99,47 @@ describe("plain words draft helper", () => {
     expect(() => parseCaptureFixture("source", Array(101).fill("Fit bath").join("; "))).toThrowError(new CaptureFixtureError("FIXTURE_STRUCTURE_REQUIRED"));
     expect(() => parseCaptureFixture("source", "a".repeat(50_001))).toThrowError(new CaptureFixtureError("INVALID_FIXTURE_SOURCE"));
   });
+});
+
+it.each(["900 quid", "900 pounds", "£900"])("walk 2 decorating separates work, parties and overall details: %s", amount => {
+  const text = `Paint the hall, stairs and landing for Mr Example at 9 Notreal Road, two coats, woodwork in gloss, should be about ${amount}, four days.`;
+  const result = citations(text);
+  expect(result.title.value).toBe("Paint the hall, stairs and landing");
+  expect(result.lines.map(line => line.description.value)).toEqual(["Paint the hall, stairs and landing, two coats", "woodwork in gloss"]);
+  expect(result.lines[0]?.description.provenance.kind).toBe("inferred");
+  expect(result.lines.map(line => line.unitPricePence.value)).toEqual([null, null]);
+  expect(result.questions.map(q => q.question.value).join("\n")).toContain(amount);
+  expect(result.questions.map(q => q.question.value).join("\n")).toContain("four days");
+});
+
+it("keeps combined Unicode descriptions inferred and untouched descriptions exactly cited", () => {
+  const text = "Paint café 🧱 for Mr Éxample at 9 Notreal Road, two coats and woodwork in gloss, should be about £1,200.50, four days.";
+  const result = citations(text);
+  expect(result.lines.map(line => line.description.value)).toEqual(["Paint café 🧱, two coats", "woodwork in gloss"]);
+  expect(result.lines[0]?.description.provenance.kind).toBe("inferred");
+  expect(result.lines[1]?.description.provenance.kind).toBe("extracted");
+  expect(result.lines.every(line => line.unitPricePence.value === null)).toBe(true);
+});
+it.each(["should be about £900 or £1000", "around 900 pounds", "about £1,200.50", "approximately £900"])("overall price stays a question: %s", price => {
+  const result = citations(`Paint walls, woodwork in gloss, ${price}, four days.`);
+  expect(result.lines.map(line => line.description.value)).toEqual(["Paint walls", "woodwork in gloss"]);
+  expect(result.lines.every(line => line.unitPricePence.value === null)).toBe(true);
+  expect(result.questions.some(q => q.question.value.includes(price))).toBe(true);
+});
+
+it("keeps exact per-item money cited after removing an intervening party clause", () => {
+  const text = "Paint walls for Mr Example at 9 Notreal Road, two coats £900.25; woodwork in gloss £200";
+  const result = citations(text);
+  expect(result.lines.map(line => line.description.value)).toEqual(["Paint walls, two coats", "woodwork in gloss"]);
+  expect(result.lines.map(line => line.unitPricePence.value)).toEqual([90025, 20000]);
+  for (const line of result.lines) {
+    const provenance = line.unitPricePence.provenance;
+    expect(provenance.kind).toBe("extracted");
+    if (provenance.kind === "extracted") expect(text.slice(provenance.span.start, provenance.span.end)).toBe(line === result.lines[0] ? "£900.25" : "£200");
+  }
+});
+it("keeps an all-in amount attached to work unallocated and questioned", () => {
+  const result = citations("Fit bath £900 all in; paint walls");
+  expect(result.lines.every(line => line.unitPricePence.value === null)).toBe(true);
+  expect(result.questions.some(q => q.question.value.includes("£900 all in"))).toBe(true);
 });
