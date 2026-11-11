@@ -11,6 +11,8 @@
         "packages/core/src/tax.test.ts",
         "packages/db/src/final-account-lock-repository.ts",
         "packages/db/test/final-account-lock-invoice.integration.test.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
         "packages/db/migrations/1400_combined_invoice_signed_vat.sql",
         "packages/db/test/migration-proofs/1400_combined_invoice_signed_vat.proof.json"
       ]

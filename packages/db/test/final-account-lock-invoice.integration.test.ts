@@ -78,7 +78,7 @@ describe("SV-4 DW7 lock-bound final and supplementary issue",()=>{
   const pdf=(await f.admin.query("SELECT convert_from(pdf_bytes,'UTF8') pdf FROM app.customer_invoice WHERE tenant_id=$1 AND id=$2",[a.tenantId,first.invoiceId])).rows[0].pdf;
   expect(pdf).toContain('Net GBP: -5.00');expect(pdf).toContain('Total GBP: 6.00');
   await expect(direct(a,{...input,expectedSourceHash:LOCK_HASH})).rejects.toThrow('IDEMPOTENCY_PAYLOAD_CONFLICT');
-  await expect(repo.issueInvoice(a.context,{...input,commandId:randomUUID(),expectedSourceHash:LOCK_HASH})).rejects.toThrow('STALE_OR_BLOCKED_FINAL_ACCOUNT');
+  await expect(repo.issueInvoice(a.context,{...input,commandId:randomUUID(),expectedSourceHash:LOCK_HASH})).rejects.toThrow('STALE_REVISION');
   await expect(direct(a,{...input,jobId:randomUUID()})).rejects.toThrow('FORBIDDEN');
   const foreign=await seedAccount(f.admin);
   await expect(direct(foreign,input)).rejects.toThrow();

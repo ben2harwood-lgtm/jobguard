@@ -170,7 +170,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.issue_practice_customer_invoice(p_tenant uuid, p_job uuid, p_final_revision uuid, p_actor uuid, p_command uuid, p_recipient text, p_issued_on date)", "0723_lp6c_money_binding.sql"],
     ["app.switch_job_live_v3(p_tenant uuid, p_activation uuid, p_terms uuid, p_job uuid, p_document uuid, p_version integer, p_hash character, p_expected integer, p_actor uuid, p_command uuid, p_authorization uuid)", "0723_lp6c_money_binding.sql"],
     ["app.final_lock_require_owner(p_tenant uuid, p_actor uuid)", "0723_lp6c_money_binding.sql"],
-    ["app.issue_lock_bound_customer_invoice(p_tenant uuid, p_job uuid, p_revision uuid, p_actor uuid, p_command uuid, p_kind text, p_recipient text, p_issued_on date, p_source_hash text)", "0723_lp6c_money_binding.sql"],
+    ["app.issue_lock_bound_customer_invoice(p_tenant uuid, p_job uuid, p_revision uuid, p_actor uuid, p_command uuid, p_kind text, p_recipient text, p_issued_on date, p_source_hash text)", "1400_combined_invoice_signed_vat.sql"],
     ["app.approve_recovery_case_terms(p_tenant uuid, p_id uuid, p_job uuid, p_case uuid, p_actor uuid, p_command uuid, p_authorization uuid)", "0723_lp6c_money_binding.sql"],
     ["app.write_recovery_allocation(p_tenant uuid, p_job uuid, p_session text, p_command jsonb, p_artifact jsonb)", "0723_lp6c_money_binding.sql"],
     ["app.lock_recovery_payer_job(p_tenant uuid, p_job uuid, p_actor uuid)", "0723_lp6c_money_binding.sql"],
