@@ -7,7 +7,7 @@ import { SimulationFeeCollectionRepository } from "../src/simulation-fee-collect
 import { SimulationFeeStatementRepository } from "../src/simulation-fee-statement-repository.js";
 import { catchFeeFixture } from "./success-fee-catch-fixture.js";
 import { createFinalCheckFixture,closeFinalCheckFixture,finalCheckTenant,type FinalCheckFixture } from "./final-check-fixture.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { bindTestClient, testTenantContext } from "./tenant-context-test-utils.js";
 let f:FinalCheckFixture,repo:SimulationFeeCollectionRepository,statements:SimulationFeeStatementRepository;
 beforeAll(async()=>{f=await createFinalCheckFixture();repo=new SimulationFeeCollectionRepository(f.runtime);statements=new SimulationFeeStatementRepository(f.runtime);},120000);
 afterAll(async()=>{if(f)await closeFinalCheckFixture(f);});
@@ -20,6 +20,8 @@ async function setup(collection282=false){
  // Only the CI fake-rail operator connection supplies terminal outcomes. No HTTP path.
  const rail=(raw:unknown)=>finalCheckTenant(f.admin,x.context.tenantId,async db=>{
   await db.query("SELECT set_config('app.practice_material_digest',$1,true)",[x.auth.digest]);
+  // LP-6d: the rail outcome is written in the practice owner's own bound request.
+  await bindTestClient(f.admin,db,x.context.tenantId,x.actor.membershipId);
   return (await db.query("SELECT app.write_platform_fee_collection($1,$2,$3::jsonb) result",[x.jobId,x.auth.digest,raw])).rows[0].result;
  });
  const run=(raw:unknown)=> {

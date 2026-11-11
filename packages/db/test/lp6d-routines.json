@@ -156,7 +156,7 @@
   {
     "name": "app.xa_approve",
     "arguments": "p_job uuid, p_request uuid, p_command uuid, p_actor uuid, p_step integer, p_hash text, p_net bigint, p_reject boolean, p_reason text",
-    "source": "packages/db/migrations/0635_extra_same_step.sql",
+    "source": "packages/db/migrations/0728_extra_reject_null_step.sql",
     "actor": "p_actor",
     "tenant": null
   },
@@ -820,5 +820,12 @@
     "actor": null,
     "tenant": null,
     "subjectActor": true
+  },
+  {
+    "name": "app.apply_recovery_timeline_signal",
+    "arguments": "p_tenant uuid,p_signal jsonb",
+    "source": "packages/db/migrations/0690_import_ancestry_record_anchor.sql",
+    "actor": null,
+    "tenant": "p_tenant"
   }
 ]

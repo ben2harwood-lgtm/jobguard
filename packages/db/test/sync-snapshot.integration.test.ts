@@ -80,7 +80,8 @@ const scoped = (tenant: string, u = user, r = 1, s = 1, h = hash) =>
   });
 
 describe("M3-3 durable checkpoint SQL", () => {
-  // Direct runtime SQL bypasses the adapter: SQL must enforce the binding itself.
+  // Direct runtime SQL bypasses the adapter: SQL must enforce the binding itself (LP-6d refuses an unbound,
+  // foreign or expired binding with REQUEST_BINDING_REFUSED before the sync authority check).
   it.each([false, true])("refuses unbound direct SQL (forged settings: %s) without inserting a checkpoint", async forged => {
     expect((await admin.query("SELECT * FROM app.sync_snapshot_checkpoint WHERE tenant_id=$1 AND user_id=$2", [a, secondUser])).rows).toEqual([]);
     await expect(withTenant(runtime, testTenantContext(a), async db => {
@@ -88,7 +89,7 @@ describe("M3-3 durable checkpoint SQL", () => {
       expect((await db.$client.query("SELECT current_user AS role")).rows[0].role).toBe("jobguard_runtime");
       if (forged) await db.$client.query("SELECT set_config('app.actor_id',$1,true),set_config('app.tenant_id',$2,true)", [id(24), a]);
       return advance(db.$client, secondUser, 99);
-    })).rejects.toThrow("SYNC_AUTHORITY_REQUIRED");
+    })).rejects.toThrow("REQUEST_BINDING_REFUSED");
     expect((await admin.query("SELECT * FROM app.sync_snapshot_checkpoint WHERE tenant_id=$1 AND user_id=$2", [a, secondUser])).rows).toEqual([]);
   });
 
@@ -99,7 +100,7 @@ describe("M3-3 durable checkpoint SQL", () => {
       await bind(db.$client, a);
       await db.$client.query("SET LOCAL ROLE jobguard_runtime");
       return advance(db.$client, secondUser, 99);
-    })).rejects.toThrow("SYNC_AUTHORITY_REQUIRED");
+    })).rejects.toThrow("REQUEST_BINDING_REFUSED");
     expect((await admin.query("SELECT * FROM app.sync_snapshot_checkpoint ORDER BY tenant_id,user_id")).rows).toEqual(before);
   });
 
@@ -110,7 +111,7 @@ describe("M3-3 durable checkpoint SQL", () => {
       await db.$client.query("SELECT set_config('app.tenant_id',$1,true)", [b]);
       await db.$client.query("SET LOCAL ROLE jobguard_runtime");
       return advance(db.$client, user, 99);
-    })).rejects.toThrow("SYNC_AUTHORITY_REQUIRED");
+    })).rejects.toThrow("REQUEST_BINDING_REFUSED");
     expect((await admin.query("SELECT * FROM app.sync_snapshot_checkpoint ORDER BY tenant_id,user_id")).rows).toEqual(before);
   });
 
@@ -126,7 +127,7 @@ describe("M3-3 durable checkpoint SQL", () => {
       await client.query("UPDATE control_plane.request_binding SET expires_at=clock_timestamp()-interval '1 second' WHERE transaction_id=pg_current_xact_id()");
       await client.query("SET LOCAL ROLE jobguard_runtime");
       expect((await client.query("SELECT current_user AS role")).rows[0].role).toBe("jobguard_runtime");
-      await expect(advance(client, user, 99)).rejects.toThrow("SYNC_AUTHORITY_REQUIRED");
+      await expect(advance(client, user, 99)).rejects.toThrow("REQUEST_BINDING_REFUSED");
     } finally { await client.query("ROLLBACK"); client.release(); }
     expect((await admin.query("SELECT * FROM app.sync_snapshot_checkpoint ORDER BY tenant_id,user_id")).rows).toEqual(before);
   });

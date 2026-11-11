@@ -99,11 +99,11 @@ describe("CH-4 verified proof and stage command sources",()=>{
   const a=await seedWorkJob(f),id=randomUUID(),version=randomUUID(),key=`synthetic/ch4/${id}`;
   // Persist the upload before lock so this exercises the evidence-object guard itself.
   await workTenant(f.runtime,a.tenantId,db=>db.query(`INSERT INTO app.evidence_upload(id,tenant_id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at,state,object_version_id,server_verified_at)
-   VALUES($1,$2,$3,$4,$5,$6,'image/png',100,'standard_evidence',clock_timestamp()+interval '1 day','verified',$7,clock_timestamp())`,[id,a.tenantId,a.jobId,a.scopeId,key,CH4_HASH,version]));
+   VALUES($1,$2,$3,$4,$5,$6,'image/png',100,'standard_evidence',clock_timestamp()+interval '1 day','verified',$7,clock_timestamp())`,[id,a.tenantId,a.jobId,a.scopeId,key,CH4_HASH,version]),{membershipId:a.actorId}); // LP-6d: the owner's own bound request
   await boundaryLock(f,a);
   const before=await workEvents(f,a),uploadBefore=(await f.admin.query("SELECT row_to_json(u)::text row FROM app.evidence_upload u WHERE id=$1",[id])).rows;
   await expect(workTenant(f.runtime,a.tenantId,db=>db.query(`INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)
-   SELECT u.id,u.tenant_id,u.id,u.job_id,u.scope_item_id,'original',$2,u.object_key,u.object_version_id,u.expected_sha256,80,'image/png',u.retention_class,u.server_received_at,u.server_verified_at FROM app.evidence_upload u WHERE u.id=$1`,[id,evidenceType]))).rejects.toThrow("POST_LOCK_WORK_REQUIRES_LINKED_JOB");
+   SELECT u.id,u.tenant_id,u.id,u.job_id,u.scope_item_id,'original',$2,u.object_key,u.object_version_id,u.expected_sha256,80,'image/png',u.retention_class,u.server_received_at,u.server_verified_at FROM app.evidence_upload u WHERE u.id=$1`,[id,evidenceType]),{membershipId:a.actorId})).rejects.toThrow("POST_LOCK_WORK_REQUIRES_LINKED_JOB");
   expect((await f.admin.query("SELECT id FROM app.evidence_object WHERE upload_id=$1",[id])).rows).toEqual([]);
   expect((await f.admin.query("SELECT id FROM app.job_site_source_receipt WHERE upload_id=$1",[id])).rows).toEqual([]);
   expect(await workEvents(f,a)).toEqual(before);

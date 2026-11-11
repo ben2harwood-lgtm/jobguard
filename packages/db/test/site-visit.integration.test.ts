@@ -158,7 +158,7 @@ describe("ENT-3b the close-out answer", () => {
   const f = await visitFixture(c), operative = f.members.operative.member, visit = await ownerVisit(c, f, operative.membershipId);
   const before = await snapshot(c, f.p.tenantId);
   for (const answer of [null, "maybe", "", "Yes"]) {
-   await expect(withTenant(c.admin, f.ctx, async db => {
+   await expect(withTenant(c.admin, await testActorContext(c.admin, f.ctx, operative), async db => {
     const command = randomUUID();
     await db.$client.query("INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,'CompleteSiteVisit',$3,$4,'processing',$5)", [f.p.tenantId, command, `direct:${command}`, "a".repeat(64), operative.membershipId]);
     await db.$client.query("SET LOCAL ROLE jobguard_runtime");

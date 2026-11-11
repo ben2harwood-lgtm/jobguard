@@ -61,6 +61,7 @@ it("refuses every callable remaining entry point before business validation when
   const callable = rows.filter(row => guarded.has(row.name));
   expect(callable.length).toBeGreaterThanOrEqual(routines.length + 2);
   const subjectActors = new Set(routines.filter(r => r.subjectActor).map(r => r.name));
+  const ruledSkips = new Set(["app.revoke_contractor_practice_session", "app.ch6_integrity_sources"]);
   for (const row of callable) {
     const types = row.types ? row.types.split(", ") as string[] : [];
     const names = row.names as string[] | null;
@@ -74,7 +75,15 @@ it("refuses every callable remaining entry point before business validation when
       // the explicit runtime permission refusal above remains mandatory.
       continue;
     }
-    await request(actor.tenant, null, c => failure(c, expression, values));
+    if (ruledSkips.has(row.name)) {
+      // Ben's LP-6b named skips (holder ends own session; read-only integrity GET) stay reachable
+      // unbound, so their own credential/scope authentication must still refuse a forged call.
+      await request(actor.tenant, null, async c => {
+        await c.query("SAVEPOINT attack");
+        try { await expect(c.query(expression, values), expression).rejects.toBeInstanceOf(Error); }
+        finally { await c.query("ROLLBACK TO attack; RELEASE attack"); }
+      });
+    } else await request(actor.tenant, null, c => failure(c, expression, values));
     await request(actor.tenant, digest, async c => {
       await c.query("SELECT set_config('app.tenant_id',$1,true)", [randomUUID()]);
       await failure(c, expression, values);

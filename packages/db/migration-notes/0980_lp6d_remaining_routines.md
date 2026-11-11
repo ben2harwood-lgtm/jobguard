@@ -745,3 +745,36 @@ Real PostgreSQL results at this head (NOT READY):
   the bridge (lp6d-routines requires this). ENT-10b's "audits the revoked session
   member's refusal" tests need that bridge to still attribute the member, so they
   fail (503, no refusal audit). Needs a ruling.
+
+## Repair 8 (Claude builder, real PostgreSQL, on origin/main 2807f2cb)
+
+Merged current origin/main (LP-6c landed, 0726-0728). 0980 keeps its number.
+
+- `xa_approve` now starts from main's latest body (0728 `IS DISTINCT FROM`). `xa_issue_link`
+  re-applies 0642's in-place functiondef patch (surveyor/commercial-manager send authority,
+  7-day expiry) that r1-r7 had silently reverted by recreating the 0158 body.
+- Router ruling (a): runtime has no UPDATE on `action_authorization` at all. r7's
+  `UPDATE(expires_at)` grant is gone; the 0112 sink guard takes its authorization row lock
+  through the migration-owned definer `lp6d_share_sink_authorization` (lock only).
+- Router ruling (b): no `pg_trigger_depth()` skip. `require_watchdog_live`,
+  `require_current_job_parties` and `mon8_feature_decision` always require a bound request.
+  The row triggers that reach them (`guard_watchdog_input`, `guard_watchdog_upload_update`,
+  `job_source_insert_guard`, `require_job_parties`) and `mon8_require_feature` route at their
+  own entry by the original login (`session_user`, the 0720 maintenance convention): the
+  migration/maintenance login uses private inner checks that refuse every other login; all
+  request logins go through the guarded routine. Invitation provisioning and the customer's
+  link use (identity sign-in, no request yet) call private copies, like the SSO bootstrap.
+- Router ruling (contractor_session): the bridge still refuses a revoked base owner. The
+  audit-export application then writes the ENT-10b refusal audit through the refusal-only
+  lookup `lp6d_refused_contractor_principal` and answers 403 (never 503).
+- `apply_recovery_timeline_signal` keeps runtime EXECUTE (0506): its real caller is the API
+  `RecoveryTimelineStore`, inside `withTenant` on the practice session's own bound context. It
+  now has the LP-6d binding check instead of being withdrawn.
+- `PracticeWorkerSwitchRepository.switchOff` now binds (closes the LP-6b skip). The two other
+  ruled skips that LP-6d cannot close without a Ben decision stay usable: the holder ending
+  their own session after revocation (`revoke_contractor_practice_session`) and the read-only
+  integrity GET (`ch6_integrity_sources`) check binding when bound, and keep their original
+  authentication when reached through the named skip.
+- CH4: a UUID digest is the trusted membership ID (as in the body), not a contractor session.
+  Practice-digest guards let an unauthenticated digest reach the body's own refusal code;
+  an authenticated digest must still be the bound actor.

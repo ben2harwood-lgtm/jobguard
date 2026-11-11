@@ -69,3 +69,11 @@ export async function testActorContext(owner: Pool, context: ReturnType<typeof t
   const installed = (await owner.query("SELECT to_regprocedure('app.bind_request(text,text,uuid)') installed")).rows[0].installed;
   return installed ? testBoundTenantContext(owner, context.tenantId, actor.membershipId) : context;
 }
+
+/** Bind one fixture actor's real persisted credential into a caller-managed transaction
+ * (a raw client that already ran BEGIN), exactly as withTenant binds it. */
+export async function bindTestClient(owner: Pool, client: { query: Pool["query"] }, tenantId: string, membershipId: string) {
+  const credential = createHash("sha256").update(`lp6-test:${tenantId}:${membershipId}`).digest("hex");
+  await testBoundTenantContext(owner, tenantId, membershipId, credential);
+  await client.query("SELECT app.bind_request('real',$1,$2)", [credential, tenantId]);
+}

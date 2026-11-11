@@ -78,8 +78,10 @@ export const resolvers = (c: Cluster) => [
  (session: string) => contractorSessionContext(c.runtime, session),
 ];
 export async function currentCommand(c: Cluster, f: SessionFixture, fields: Record<string, unknown>) {
- const view = await new ContractorRepository(c.runtime).query(f.p, { version: "contractor-query.v1", tenantId: f.p.tenantId, resource: "organisation" });
- return { version: "contractor-command.v1", environment: "synthetic_demo", commandId: randomUUID(), id: randomUUID(), expectedRevision: view.revision, ...fields };
+ // LP-6d: while a switch is acting, the owner's session binds as the worker, so the owner cannot
+ // read its own workspace. The fixture reads the same tenant command revision through the harness owner.
+ const revision = Number((await c.admin.query("SELECT count(*) n FROM app.command_receipt WHERE tenant_id=$1 AND command_type LIKE 'contractor.%'", [f.p.tenantId])).rows[0].n);
+ return { version: "contractor-command.v1", environment: "synthetic_demo", commandId: randomUUID(), id: randomUUID(), expectedRevision: revision, ...fields };
 }
 export async function companyRows(c: Cluster, tenant: string) {
  const tables = ["app.membership", "app.contractor_member", "app.role_grant", "app.role_grant_revocation", "app.team_membership", "app.org_unit", "app.team"];

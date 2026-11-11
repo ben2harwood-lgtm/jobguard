@@ -273,10 +273,8 @@ describe("ENT-10b PostgreSQL audit exports", () => {
     const customerStageFacts = ["stage_completion","evidence_link","stage_review_event","evidence_invalidation"]
       .filter(table => oldTables.has(`app.${table}`))
       .map(table => `policy app.${table}.customer_stage_source: permissive policy added`);
-    // LP-6d (0980): runtime keeps row locks on authorizations through one always-refused column; revoked_at UPDATE is withdrawn.
-    const lp6dFacts = oldTables.has("app.action_authorization") ? ["table app.action_authorization: + column expires_at grant jobguard_runtime UPDATE"] : [];
     expect(upgrade.afterAllDifferences, "[MO5-e] exact reviewed meter, LP-4, LP-5a and MON-5 source additions on predecessor objects")
-      .toEqual([...reviewedMeterSources, ...writerFacts, ...customerStageFacts, ...lp6dFacts,
+      .toEqual([...reviewedMeterSources, ...writerFacts, ...customerStageFacts,
         ...["identity.session", "control_plane.practice_session", "control_plane.contractor_practice_session"]
           .filter(table => oldTables.has(table))
           .map(table => `table ${table}: + grant jobguard_binding_owner SELECT`)].sort());

@@ -1,4 +1,4 @@
-import { testBoundTenantContext } from "./tenant-context-test-utils.js";
+import { bindTestClient, testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { beginRepositoryCommand, completeRepositoryCommand } from "../src/repository-command.js";
 import { testTenantContext } from './tenant-context-test-utils.js';
 import { createHash, randomUUID } from 'node:crypto';
@@ -657,7 +657,8 @@ describe('raw runtime SQL stays fail-closed', () => {
     const grants = (await admin.query(`SELECT table_name::text AS table_name,array_agg(privilege_type::text ORDER BY privilege_type::text) privileges FROM information_schema.role_table_grants WHERE grantee='jobguard_runtime' AND table_schema='app' AND table_name=ANY($1) GROUP BY table_name ORDER BY table_name`, [tables])).rows;
     expect(grants).toEqual(tables.map(table_name => ({ table_name, privileges: ['INSERT', 'SELECT'] })));
     const definers = (await admin.query(`SELECT p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='app' AND p.prosecdef AND p.proname LIKE '%recovery_message%'`)).rows;
-    expect(definers).toEqual([]);
+    // LP-6d's one checked revocation routine replaces runtime's direct UPDATE on action_authorization.revoked_at.
+    expect(definers).toEqual([{ proname: 'revoke_recovery_message_authorization' }]);
   });
 });
 
@@ -1676,6 +1677,8 @@ describe('a message states the one current case figures, approved landings inclu
       const landing = await runtime.connect();
       try {
         await landing.query('BEGIN'); await landing.query("SELECT set_config('app.tenant_id',$1,true)", [fixture.tenantId]);
+        // LP-6d: this held-open landing transaction is the owner's own bound request.
+        await bindTestClient(admin, landing, fixture.tenantId, fixture.memberId);
         await landing.query('SELECT app.approve_synthetic_landing($1::jsonb) id', [await landingCommand(first.caseId, 12000)]);
         const running = executorWith(practiceAdapter()).execute(context, first.view.approval!.outboxActionId);
         await until(() => waitingForCaseLock(first.caseId), 'the delivery held behind the landing routine');

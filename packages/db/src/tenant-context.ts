@@ -108,7 +108,8 @@ async function bindRequest(client: PoolClient, context: VerifiedTenantContext): 
  * binds it through the same check as withTenant before any guarded read or audit.
  */
 export async function bindIssuedCredential(client: PoolClient, context: VerifiedTenantContext): Promise<void> {
-  if (!genuineTenantContexts.has(context) || !sessionReferences.has(context)) throw new InvalidTenantContextError();
+  // Only the stamped constructor records a session reference, so this needs no second stamp-list read.
+  if (!sessionReferences.has(context)) throw new InvalidTenantContextError();
   await bindRequest(client, context);
 }
 

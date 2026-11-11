@@ -15,7 +15,7 @@ function fixture(state = "approved") {
     if (sql.includes("payment_fee_actor")) return { rows: [{ actor }] };
     if (sql.includes("SELECT document,decision_id")) return { rows: present ? [{ document, decision_id: id(7) }] : [] };
     if (sql.includes("payment_fee_current")) return { rows: [{ state }] };
-    if (sql.includes("FOR SHARE OF a")) return { rows: authorized && values?.[4] === approval.actor_membership_id ? [approval] : [] };
+    if (sql.includes("a.id,a.actor_membership_id,a.decision_id,a.expires_at,a.revoked_at")) return { rows: authorized && values?.[4] === approval.actor_membership_id ? [approval] : [] };
     if (sql.includes("expires_at<=clock_timestamp()")) return { rows: [{ expired }] };
     if (sql.includes("payment_fee_review_deadline") && reviewError) throw reviewError;
     return { rows: [] };
@@ -41,7 +41,7 @@ it.each([["disputed", "AUTHORITY_DISPUTED"], ["approval_revoked", "AUTHORITY_REV
   ["awaiting_approval", "AUTHORITY_STALE"]])("pauses %s without returning an authority", async (state, reason) => {
   const f = fixture(state); await expect(f.run()).rejects.toMatchObject({ reason });
   expect(f.query).toHaveBeenCalledWith("ROLLBACK", undefined);
-  expect(f.query.mock.calls.some(([sql]) => sql.includes("FOR SHARE OF a"))).toBe(false);
+  expect(f.query.mock.calls.some(([sql]) => sql.includes("lp6d_lock_action_authorization"))).toBe(false);
 });
 it("refuses missing/foreign statements, misbound documents and missing exact approval", async () => {
   const f = fixture(); f.missing(); await expect(f.run()).rejects.toMatchObject({ reason: "AUTHORITY_STALE" });
@@ -62,7 +62,7 @@ it("rechecks expiry with the database clock after the authorization lock wait", 
   await expect(f.run()).rejects.toMatchObject({ reason: "AUTHORITY_EXPIRED" });
   const queries = f.query.mock.calls.map(([sql]) => sql);
   expect(queries.findIndex(sql => sql.includes("expires_at<=clock_timestamp()")))
-    .toBeGreaterThan(queries.findIndex(sql => sql.includes("FOR SHARE OF a")));
+    .toBeGreaterThan(queries.findIndex(sql => sql.includes("lp6d_lock_action_authorization")));
   expect(f.query).toHaveBeenCalledWith("ROLLBACK", undefined);
 });
 it("requires the shared current review check before releasing collection sources", async () => {
@@ -74,7 +74,7 @@ it("rejects a forged statement hash before returning an authority", async () => 
   const f = fixture();
   await expect(f.repo.withReader(context, hash, read => read(id(2), id(3), "b".repeat(64))))
     .rejects.toMatchObject({ reason: "AUTHORITY_STALE" });
-  expect(f.query.mock.calls.some(([sql]) => sql.includes("FOR SHARE OF a"))).toBe(false);
+  expect(f.query.mock.calls.some(([sql]) => sql.includes("lp6d_lock_action_authorization"))).toBe(false);
 });
 
 it("refuses an approval bound to another actor", async () => {

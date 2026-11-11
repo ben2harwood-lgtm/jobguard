@@ -6,7 +6,7 @@ import {createFinalCheckFixture,closeFinalCheckFixture,finalCheckTenant,type Fin
 import {realReceiptFixture} from "./stored-receipt-case-fixture.js";
 import {StoredReceiptCaseAllocationRepository} from "../src/stored-receipt-case-allocation-repository.js";
 import {RecoveryAttributionRepository} from "../src/recovery-attribution-repository.js";
-import {testTenantContext} from "./tenant-context-test-utils.js";
+import {bindTestClient,testTenantContext} from "./tenant-context-test-utils.js";
 let f:FinalCheckFixture;
 beforeAll(async()=>{f=await createFinalCheckFixture();},120000);
 afterAll(async()=>{if(f)await closeFinalCheckFixture(f);});
@@ -97,6 +97,8 @@ it.each(attributionPredicates)("failed stored conjunct %s cannot acquire review 
  const x=await prepared();
  // Corruption attack, rolled back: even a forged eligible flag cannot hide a false conjunct.
  await expect(finalCheckTenant(f.admin,x.context.tenantId,async db=>{
+  // LP-6d: each direct runtime probe is the practice owner's own bound request (bound before any change it makes).
+  await bindTestClient(f.admin,db,x.context.tenantId,x.actor.membershipId);
   const document=structuredClone(x.assessment) as unknown as RecoveryAttributionRevisionV1;
   const raw=JSON.parse(JSON.stringify(document));raw.facts.facts[predicate].holds=false;
   await db.query("ALTER TABLE app.recovery_attribution_revision DISABLE TRIGGER attribution_immutable");
@@ -110,6 +112,8 @@ it.each(attributionPredicates)("failed stored conjunct %s cannot acquire review 
 it.each(["member","revoked","expired"])("%s owner membership cannot review or replay",async state=>{
  const x=await prepared();await x.approve();
  await expect(finalCheckTenant(f.admin,x.context.tenantId,async db=>{
+  // LP-6d: each direct runtime probe is the practice owner's own bound request (bound before any change it makes).
+  await bindTestClient(f.admin,db,x.context.tenantId,x.actor.membershipId);
   if(state==="member")await db.query("UPDATE app.membership SET role='member' WHERE tenant_id=$1 AND id=$2",[x.context.tenantId,x.actor.membershipId]);
   else await db.query(`UPDATE app.membership SET ${state==="revoked"?"revoked_at":"expires_at"}=clock_timestamp()-interval '1 second' WHERE tenant_id=$1 AND id=$2`,[x.context.tenantId,x.actor.membershipId]);
   await db.query("SET LOCAL ROLE jobguard_runtime");await db.query("SELECT app.assess_recovery_attribution($1,$2,$3::jsonb)",[x.jobId,x.auth.digest,x.intent]);
@@ -134,6 +138,8 @@ it("a successor assessment supersedes the exact earlier review target",async()=>
 it.each(["cap","locked_bill"] as const)("review independently preserves the %s source guard",async attack=>{
  const x=await prepared();
  await expect(finalCheckTenant(f.admin,x.context.tenantId,async db=>{
+  // LP-6d: each direct runtime probe is the practice owner's own bound request (bound before any change it makes).
+  await bindTestClient(f.admin,db,x.context.tenantId,x.actor.membershipId);
   if(attack==="cap"){
    await db.query("ALTER TABLE app.stored_receipt_case_allocation DISABLE TRIGGER USER");
    await db.query("UPDATE app.stored_receipt_case_allocation SET net_numerator='80001' WHERE tenant_id=$1 AND job_id=$2",[x.context.tenantId,x.jobId]);

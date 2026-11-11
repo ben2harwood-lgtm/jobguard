@@ -24,6 +24,12 @@ it("keeps every predecessor body and permission rule behind an early binding che
         .replace("'finish','cancel_finish','close','reopen','link'", "'finish','cancel_finish','close','reopen','link','resume'")
         .replace("IF action='finish' THEN\n  IF marker.kind", "IF action='resume' THEN\n  PERFORM app.ch4_require_open(t,j);\n  PERFORM app.ch4_admit_place(t,j,action);\n  event_kind:='resumed';\n ELSIF action='finish' THEN\n  IF marker.kind");
     }
+    if (routine.name === "app.xa_issue_link") {
+      // 0642 patches pg_get_functiondef rather than declaring another CREATE.
+      previous = previous.replace("IF NOT EXISTS(SELECT 1 FROM app.membership m WHERE m.tenant_id=v_tenant AND m.id=p_actor AND m.role='owner' AND m.revoked_at IS NULL AND(m.expires_at IS NULL OR m.expires_at>clock_timestamp())) THEN",
+        "IF app.xa_covers(p_actor,ARRAY['surveyor','commercial_manager'],p_job,'job.read') IS NULL THEN")
+        .replace("p_expires_at>clock_timestamp()+interval '31 days'", "p_expires_at>clock_timestamp()+interval '7 days'");
+    }
     if (routine.name === "app.sv7a_intake_job_source") {
       previous = previous.replace("PERFORM app.ch4_admit_place(t,j,'restart');", "IF EXISTS(SELECT 1 FROM app.job x WHERE x.tenant_id=t AND x.id=j AND x.practice_session_digest IS NULL) THEN PERFORM app.ch4_admit_place(t,j,'restart'); END IF;")
         .replaceAll("app.ch4_require_command_owner(t,j,digest)", "app.sv7a_require_source_owner(t,j,digest,source)")
@@ -32,7 +38,7 @@ it("keeps every predecessor body and permission rule behind an early binding che
     // This additional comparison precedes hidden billability source reads.
     const changed = body(sql, routine)
       .replace(/ IF a\.membership_id IS DISTINCT FROM app\.current_actor\(\) OR a\.tenant_id IS DISTINCT FROM app\.current_tenant\(\) THEN\n  RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';\n END IF;\n/u, "")
-      .replace(/ -- LP6D_DERIVED_ACTOR\n IF (?:a|actor|principal)\.(?:membership_id|member_id) IS DISTINCT FROM app\.current_actor\(\) THEN\n  RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';\n END IF;\n/gu, "");
+      .replace(/ -- LP6D_DERIVED_ACTOR[^\n]*\n(?: --[^\n]*\n)? IF (?:(?:a|actor|principal)\.(?:membership_id|member_id) IS NOT NULL AND )?(?:a|actor|principal)\.(?:membership_id|member_id) IS DISTINCT FROM app\.current_actor\(\) THEN\n  RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';\n END IF;\n/gu, "");
     expect(changed, routine.name).toContain(previous);
     expect(changed.indexOf("PERFORM app.current_actor()"), routine.name).toBeLessThan(changed.indexOf(previous));
     expect(changed).toContain("IS DISTINCT FROM app.current_tenant()::text");
@@ -76,7 +82,9 @@ it("converts the invitation bridge and withdraws direct authorization revocation
   const { inventory } = await loadReviewedInventory();
   expect(pathCompleteness(inventory, repoFileExists)).toEqual([]);
   expect(inventory.entries.some(e => e.key === "acl|col|app.action_authorization.revoked_at|jobguard_runtime|UPDATE|-")).toBe(false);
-  expect(inventory.entries.filter(e => e.group === "a-lp6d-routine-binding")).toHaveLength(4);
+  expect(inventory.entries.some(e => e.key.startsWith("acl|col|app.action_authorization.") && e.key.includes("|jobguard_runtime|UPDATE|"))).toBe(false);
+  // r8: the revocation routine, revoke-claim helper and five runtime lock/refusal/maintenance/probe helpers (owner + EXECUTE each).
+  expect(inventory.entries.filter(e => e.group === "a-lp6d-routine-binding")).toHaveLength(14);
 });
 
 it("leaves the final-lock owner helper exclusively to LP-6c", () => {
@@ -118,7 +126,7 @@ it("binds new evidence authority, payload actors and source readers without rela
   expect(reader.indexOf("PERFORM app.current_actor()")).toBeLessThan(reader.indexOf("RETURN ("));
   for (const name of ["app.final_check_builder", "app.read_success_fee_v3", "app.pf1b_review_supplier_credit", "app.read_value_job"]) {
     const checkedBody = body(sql, routines.find(r => r.name === name)!);
-    expect(checkedBody, name).toMatch(/-- LP6D_DERIVED_ACTOR\n IF (?:a|actor|principal)\.(?:membership_id|member_id) IS DISTINCT FROM app\.current_actor\(\)/u);
+    expect(checkedBody, name).toMatch(/-- LP6D_DERIVED_ACTOR[^\n]*\n(?: --[^\n]*\n)? IF (?:((?:a|actor|principal)\.(?:membership_id|member_id)) IS NOT NULL AND \1|(?:a|actor|principal)\.(?:membership_id|member_id)) IS DISTINCT FROM app\.current_actor\(\)/u);
   }
 });
 
@@ -148,7 +156,7 @@ it("records private and request identities, and omits owners of runtime-inaccess
     expect(inventory.recorded.routines.filter(r => r.identity === `function:app.${signature}`)).toHaveLength(1);
   }
   expect(inventory.entries.some(e => e.key === "owner|routine|function:app.revoke_recovery_message_authorization(uuid,uuid,uuid,uuid)|jobguard_migration")).toBe(true);
-  for (const signature of ["lp6d_contractor_session_identity(uuid)", "apply_recovery_timeline_signal(uuid,jsonb)", "mon8_sso_feature_decision(uuid)"]) {
+  for (const signature of ["lp6d_contractor_session_identity(uuid)", "mon8_sso_feature_decision(uuid)"]) {
     expect(inventory.entries.some(e => e.key === `owner|routine|function:app.${signature}|jobguard_migration`)).toBe(false);
   }
 });
@@ -179,7 +187,7 @@ it("replaces existing routines and rejects a delegated NULL actor on ordinary po
   }
   const value = body(sql, routines.find(r => r.name === "app.read_value_job")!);
   expect(value).toContain("IF actor.member_id IS DISTINCT FROM app.current_actor()");
-  expect(value).toContain("IF actor.membership_id IS DISTINCT FROM app.current_actor()");
+  expect(value).toContain("IF actor.membership_id IS NOT NULL AND actor.membership_id IS DISTINCT FROM app.current_actor()");
 });
 it("preserves the exact delegated writer body behind private credential-scoped ports", () => {
   const pattern = /CREATE OR REPLACE FUNCTION identity\.customer_portal_message\([\s\S]*?\$\$;/u;

@@ -44,6 +44,17 @@ export class ContractorRepository {
   const principal = {tenantId:row.tenant_id,membershipId:row.membership_id,identityUserId:row.identity_user_id} as AuthenticatedMembership;
   return {...principal, context: verifiedTenantContextFromMembership(principal, {kind:"contractor_practice", credential:sessionId})};
  }
+ /**
+  * Refusal-only (router ruling, r8): a live session whose base membership can no longer be bound
+  * still names its principal so the caller can record its refusal. Its context only reaches the
+  * unbound refusal-audit boundary; every guarded routine still refuses it.
+  */
+ async refusedSessionPrincipal(sessionId: string): Promise<ContractorSessionMembership | undefined> {
+  const row=(await this.pool.query<{tenant_id:string;membership_id:string;identity_user_id:string}>("SELECT * FROM app.lp6d_refused_contractor_principal($1)",[sessionId])).rows[0];
+  if(!row) return undefined;
+  const principal = {tenantId:row.tenant_id,membershipId:row.membership_id,identityUserId:row.identity_user_id} as AuthenticatedMembership;
+  return {...principal, context: verifiedTenantContextFromMembership(principal, {kind:"contractor_practice", credential:sessionId})};
+ }
  async startPractice(sessionId: string) {
   const client=await this.pool.connect();
   try {

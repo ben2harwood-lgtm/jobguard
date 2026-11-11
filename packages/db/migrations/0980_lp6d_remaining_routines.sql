@@ -67,14 +67,10 @@ $$;
 CREATE OR REPLACE FUNCTION app.require_current_job_parties(p_tenant uuid,p_job uuid) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
- -- LP6D_TRIGGER_REACHED: a direct call is always bound. Inside a row trigger the
- -- firing statement's own (bound or worker/maintenance) authority already applies.
- IF pg_trigger_depth()=0 THEN
  PERFORM app.current_actor();
  IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
   OR p_tenant IS DISTINCT FROM app.current_tenant() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
- END IF;
  END IF;
 DECLARE snapshot jsonb; BEGIN
  IF p_tenant IS DISTINCT FROM nullif(current_setting('app.tenant_id',true),'')::uuid THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
@@ -92,13 +88,9 @@ CREATE OR REPLACE FUNCTION app.require_watchdog_live(p_job uuid) RETURNS void
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, app AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
- -- LP6D_TRIGGER_REACHED: a direct call is always bound. Inside a row trigger the
- -- firing statement's own (bound or worker/maintenance) authority already applies.
- IF pg_trigger_depth()=0 THEN
  PERFORM app.current_actor();
  IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
- END IF;
  END IF;
 DECLARE tenant uuid; lifecycle text;
 BEGIN
@@ -110,6 +102,127 @@ BEGIN
 END;
 END
 $$;
+
+
+-- Router ruling (r8, binding): no pg_trigger_depth() skip. require_watchdog_live and
+-- require_current_job_parties always refuse an unbound caller, including inside a trigger.
+-- Each row trigger that reaches them now routes at its own entry by the ORIGINAL login
+-- (session_user, never current_user or trigger depth; the 0720 maintenance convention):
+-- the migration/maintenance login uses the private, unguarded inner check below; every
+-- other login (runtime, worker, identity) goes through the guarded routine, so its
+-- statement must be bound. The inner checks refuse any non-maintenance login themselves.
+CREATE FUNCTION app.lp6d_watchdog_live_maintenance(p_job uuid) RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, app AS $$
+DECLARE tenant uuid; lifecycle text;
+BEGIN
+  IF NOT pg_has_role(session_user,'jobguard_migration','USAGE') THEN RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501'; END IF;
+  tenant := nullif(current_setting('app.tenant_id', true), '')::uuid;
+  IF tenant IS NULL THEN RAISE EXCEPTION 'JOB_NOT_FOUND' USING ERRCODE='42501'; END IF;
+  SELECT status INTO lifecycle FROM app.job WHERE tenant_id=tenant AND id=p_job FOR SHARE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'JOB_NOT_FOUND' USING ERRCODE='42501'; END IF;
+  IF lifecycle <> 'live' THEN RAISE EXCEPTION 'JOB_NOT_LIVE' USING ERRCODE='P0001'; END IF;
+END $$;
+ALTER FUNCTION app.lp6d_watchdog_live_maintenance(uuid) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp6d_watchdog_live_maintenance(uuid) FROM PUBLIC,jobguard_identity,jobguard_infrastructure;
+-- Two of the guards are SECURITY INVOKER (a maintenance fixture may SET LOCAL ROLE jobguard_runtime).
+GRANT EXECUTE ON FUNCTION app.lp6d_watchdog_live_maintenance(uuid) TO jobguard_runtime;
+CREATE FUNCTION app.lp6d_job_parties_maintenance(p_tenant uuid,p_job uuid) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
+DECLARE snapshot jsonb; BEGIN
+ IF NOT pg_has_role(session_user,'jobguard_migration','USAGE') THEN RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501'; END IF;
+ IF p_tenant IS DISTINCT FROM nullif(current_setting('app.tenant_id',true),'')::uuid THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
+ PERFORM 1 FROM app.job WHERE tenant_id=p_tenant AND id=p_job FOR SHARE;
+ IF NOT FOUND THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='P0002'; END IF;
+ SELECT s.snapshot INTO snapshot FROM app.job_party_snapshot s JOIN app.job_party_current x ON(x.tenant_id,x.binding_id)=(s.tenant_id,s.binding_id) WHERE s.tenant_id=p_tenant AND s.job_id=p_job;
+ IF snapshot IS NULL THEN RAISE EXCEPTION 'JOB_PARTIES_REQUIRED' USING ERRCODE='22023'; END IF;
+ RETURN snapshot;
+END $$;
+ALTER FUNCTION app.lp6d_job_parties_maintenance(uuid,uuid) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp6d_job_parties_maintenance(uuid,uuid) FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure;
+
+-- Latest body: packages/db/migrations/0095_job_parties.sql (definer trigger); only the parties call routes.
+CREATE OR REPLACE FUNCTION app.require_job_parties() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
+BEGIN
+ IF TG_TABLE_NAME='job' THEN
+   IF NEW.status='live' AND (TG_OP='INSERT' OR OLD.status IS DISTINCT FROM NEW.status) AND NOT EXISTS(SELECT 1 FROM app.job_party_current WHERE tenant_id=NEW.tenant_id AND job_id=NEW.id) THEN
+     RAISE EXCEPTION 'JOB_PARTIES_REQUIRED' USING ERRCODE='22023';
+   END IF;
+ ELSIF TG_TABLE_NAME IN('job_activation','imported_job_baseline') THEN
+   SELECT binding_id INTO NEW.party_binding_id FROM app.job_party_current WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id;
+   IF NEW.party_binding_id IS NULL THEN RAISE EXCEPTION 'JOB_PARTIES_REQUIRED' USING ERRCODE='22023'; END IF;
+ ELSE
+   NEW.parties_snapshot:=CASE WHEN pg_has_role(session_user,'jobguard_migration','USAGE') THEN app.lp6d_job_parties_maintenance(NEW.tenant_id,NEW.job_id) ELSE app.require_current_job_parties(NEW.tenant_id,NEW.job_id) END;
+   IF TG_TABLE_NAME='quote_document_version' THEN
+     IF NEW.snapshot ? 'jobParties' AND NEW.snapshot->'jobParties' IS DISTINCT FROM NEW.parties_snapshot THEN RAISE EXCEPTION 'PARTY_SNAPSHOT_MISMATCH' USING ERRCODE='22023'; END IF;
+   END IF;
+   IF NEW.parties_snapshot IS NULL THEN RAISE EXCEPTION 'JOB_PARTIES_REQUIRED' USING ERRCODE='22023'; END IF;
+ END IF;
+ RETURN NEW;
+END $$;
+-- Latest body: packages/db/migrations/0201_job_work_state_commands.sql; only the live check routes.
+CREATE OR REPLACE FUNCTION app.guard_watchdog_input() RETURNS trigger
+LANGUAGE plpgsql SECURITY INVOKER SET search_path = pg_catalog, app AS $$
+BEGIN
+  IF NEW.tenant_id IS DISTINCT FROM nullif(current_setting('app.tenant_id',true),'')::uuid
+  THEN RAISE EXCEPTION 'JOB_NOT_FOUND' USING ERRCODE='42501'; END IF;
+  -- These tables also hold non-watchdog bank evidence from the already
+  -- controlled synthetic recovery routine. Only its migration-role execution
+  -- may write its exact generated PDF class after live. Runtime cannot assume
+  -- this role or gain the exception by forging a content type/key/mode.
+  IF current_user='jobguard_migration' AND (to_jsonb(NEW)->>'scope_item_id') IS NULL
+    AND (to_jsonb(NEW)->>'object_key') LIKE 'synthetic/recovery/%'
+    AND ((TG_TABLE_NAME='evidence_upload' AND to_jsonb(NEW)->>'expected_content_type'='application/pdf' AND to_jsonb(NEW)->>'state'='verified')
+      OR (TG_TABLE_NAME='evidence_object' AND to_jsonb(NEW)->>'evidence_type'='synthetic_bank_receipt' AND to_jsonb(NEW)->>'content_type'='application/pdf'))
+  THEN RETURN NEW; END IF;
+  -- Only migration-owned checked CH-4 administration can claim a pre-live ID.
+  -- No GUC, caller-supplied mode or direct runtime write grants this exception.
+  IF current_user='jobguard_migration' AND TG_TABLE_SCHEMA='app' AND TG_TABLE_NAME='watchdog_command_identity' THEN
+    IF NEW.command_type IN('WorkState.close','WorkState.reopen','WorkState.link') AND EXISTS(
+      SELECT 1 FROM app.command_receipt r JOIN app.job_commercial_track c ON c.tenant_id=r.tenant_id AND c.job_id=NEW.job_id
+      WHERE r.tenant_id=NEW.tenant_id AND r.command_id=NEW.command_id AND r.command_type=NEW.command_type
+        AND r.semantic_key=NEW.command_id::text AND r.request_hash=NEW.request_hash AND r.status='processing'
+        AND c.job_track='small_builder' AND c.environment='synthetic_demo'
+        AND EXISTS(SELECT 1 FROM app.membership m WHERE m.tenant_id=r.tenant_id AND m.id=r.actor_membership_id
+          AND m.role='owner' AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp()))
+    ) THEN RETURN NEW; END IF;
+  END IF;
+  IF pg_has_role(session_user,'jobguard_migration','USAGE') THEN PERFORM app.lp6d_watchdog_live_maintenance(NEW.job_id); ELSE PERFORM app.require_watchdog_live(NEW.job_id); END IF;
+  RETURN NEW;
+END $$;
+-- Latest body: packages/db/migrations/0720_verified_upload_immutable.sql; only the live check routes.
+CREATE OR REPLACE FUNCTION app.guard_watchdog_upload_update() RETURNS trigger
+LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog,app AS $$
+BEGIN
+  IF (NEW.id,NEW.tenant_id,NEW.job_id,NEW.scope_item_id,NEW.object_key,NEW.expected_sha256,NEW.expected_content_type,NEW.maximum_bytes)
+    IS DISTINCT FROM (OLD.id,OLD.tenant_id,OLD.job_id,OLD.scope_item_id,OLD.object_key,OLD.expected_sha256,OLD.expected_content_type,OLD.maximum_bytes)
+  THEN RAISE EXCEPTION 'evidence upload identity is immutable' USING ERRCODE='42501'; END IF;
+  -- Check the original login, never current_user: a product caller inside a
+  -- migration-owned SECURITY DEFINER routine still has no maintenance authority.
+  -- USAGE preserves the existing inherited migration-login fixture convention.
+  IF OLD.state='verified' AND NOT pg_has_role(session_user,'jobguard_migration','USAGE')
+  THEN RAISE EXCEPTION 'verified evidence upload is immutable' USING ERRCODE='42501'; END IF;
+  IF NEW.state IN ('quarantined','verified') AND
+    (NEW.state,NEW.object_version_id,NEW.server_verified_at) IS DISTINCT FROM (OLD.state,OLD.object_version_id,OLD.server_verified_at)
+  THEN IF pg_has_role(session_user,'jobguard_migration','USAGE') THEN PERFORM app.lp6d_watchdog_live_maintenance(NEW.job_id); ELSE PERFORM app.require_watchdog_live(NEW.job_id); END IF; END IF;
+  RETURN NEW;
+END $$;
+-- Latest body: packages/db/migrations/0303_job_source_intake.sql; only the live check routes.
+CREATE OR REPLACE FUNCTION app.job_source_insert_guard() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+BEGIN
+ IF NEW.tenant_id IS DISTINCT FROM nullif(current_setting('app.tenant_id',true),'')::uuid
+  OR NOT EXISTS(SELECT 1 FROM app.job_commercial_track WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id AND job_track='small_builder' AND environment='synthetic_demo')
+ THEN RAISE EXCEPTION 'JOB_SOURCE_FORBIDDEN' USING ERRCODE='42501'; END IF;
+ IF TG_TABLE_NAME<>'job_source_original' THEN
+  IF NOT EXISTS(SELECT 1 FROM app.membership WHERE tenant_id=NEW.tenant_id AND id=NEW.actor_membership_id AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp())) THEN RAISE EXCEPTION 'JOB_SOURCE_FORBIDDEN' USING ERRCODE='42501'; END IF;
+ END IF;
+ PERFORM 1 FROM app.job WHERE tenant_id=NEW.tenant_id AND id=NEW.job_id FOR SHARE;
+ IF TG_TABLE_NAME<>'job_source_original' THEN
+  IF NOT EXISTS(SELECT 1 FROM app.membership WHERE tenant_id=NEW.tenant_id AND id=NEW.actor_membership_id AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp())) THEN RAISE EXCEPTION 'JOB_SOURCE_FORBIDDEN' USING ERRCODE='42501'; END IF;
+ END IF;
+ IF EXISTS(SELECT 1 FROM app.final_account_lock WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id) THEN RAISE EXCEPTION 'POST_LOCK_WORK_REQUIRES_LINKED_JOB'; END IF;
+ PERFORM app.ch4_require_open(NEW.tenant_id,NEW.job_id);
+ IF pg_has_role(session_user,'jobguard_migration','USAGE') THEN PERFORM app.lp6d_watchdog_live_maintenance(NEW.job_id); ELSE PERFORM app.require_watchdog_live(NEW.job_id); END IF;
+ RETURN NEW;
+END $$;
 
 -- Latest body: packages/db/migrations/0548_server_plan_entitlements.sql
 CREATE OR REPLACE FUNCTION app.link_contractor_customer(actor uuid,client uuid,payload jsonb) RETURNS jsonb
@@ -855,7 +968,7 @@ END;
 END
 $$;
 
--- Latest body: packages/db/migrations/0635_extra_same_step.sql
+-- Latest body: packages/db/migrations/0728_extra_reject_null_step.sql
 CREATE OR REPLACE FUNCTION app.xa_approve(p_job uuid, p_request uuid, p_command uuid, p_actor uuid, p_step integer, p_hash text, p_net bigint, p_reject boolean, p_reason text) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
@@ -898,7 +1011,7 @@ BEGIN
     AND o.kind='rejected' AND r.status='succeeded'
  ) h ORDER BY (h.step_index<>v_n) DESC,h.step_index LIMIT 1;
  IF v_prior.request_id IS NOT NULL THEN
-  IF v_prior.step_index<>v_n THEN RAISE EXCEPTION 'REUSED_APPROVER' USING ERRCODE='23514'; END IF;
+  IF v_prior.step_index IS DISTINCT FROM v_n THEN RAISE EXCEPTION 'REUSED_APPROVER' USING ERRCODE='23514'; END IF;
   -- Same person may approve the same slot of a new request revision.
   -- Same-request repeats are resolved by the durable command receipt before this routine.
  END IF;
@@ -993,6 +1106,7 @@ END
 $$;
 
 -- Latest body: packages/db/migrations/0158_extra_approval_chain.sql
+-- plus 0642_extra_client_send_authority.sql's in-place functiondef patch (send authority, 7-day expiry).
 CREATE OR REPLACE FUNCTION app.xa_issue_link(p_job uuid, p_request uuid, p_command uuid, p_actor uuid, p_link uuid, p_approver uuid, p_recipient text, p_token_hash text, p_expires_at timestamptz, p_authorization uuid, p_outbox uuid) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
@@ -1006,7 +1120,7 @@ DECLARE v_tenant uuid; v_req app.extra_approval_request; v_auth app.action_autho
 BEGIN
  v_tenant:=app.xa_begin(p_job,p_command,ARRAY['IssueClientApproval'],p_actor);
  -- Ben decision 18: only OWNER-approved sends go out. The exact authorization and its outbox row must already exist for this very request, recipient and amount.
- IF NOT EXISTS(SELECT 1 FROM app.membership m WHERE m.tenant_id=v_tenant AND m.id=p_actor AND m.role='owner' AND m.revoked_at IS NULL AND(m.expires_at IS NULL OR m.expires_at>clock_timestamp())) THEN RAISE EXCEPTION 'PERMISSION_DENIED' USING ERRCODE='42501'; END IF;
+ IF app.xa_covers(p_actor,ARRAY['surveyor','commercial_manager'],p_job,'job.read') IS NULL THEN RAISE EXCEPTION 'PERMISSION_DENIED' USING ERRCODE='42501'; END IF;
  SELECT q.* INTO v_req FROM app.extra_approval_request q WHERE(q.tenant_id,q.job_id,q.id)=(v_tenant,p_job,p_request);
  IF v_req.id IS NULL THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='P0002'; END IF;
  IF v_req.request_revision<>(SELECT max(q.request_revision) FROM app.extra_approval_request q WHERE q.tenant_id=v_tenant AND q.variation_id=v_req.variation_id) THEN RAISE EXCEPTION 'STALE_REVISION' USING ERRCODE='40001'; END IF;
@@ -1020,7 +1134,7 @@ BEGIN
   OR v_out.authorization_id<>p_authorization OR v_out.recipient IS DISTINCT FROM p_recipient OR v_out.action_type<>v_auth.action_type OR v_out.status<>'pending' THEN
   RAISE EXCEPTION 'SEND_NOT_AUTHORISED' USING ERRCODE='42501';
  END IF;
- IF p_expires_at<=clock_timestamp() OR p_expires_at>clock_timestamp()+interval '31 days' THEN RAISE EXCEPTION 'INVALID_COMMAND' USING ERRCODE='23514'; END IF;
+ IF p_expires_at<=clock_timestamp() OR p_expires_at>clock_timestamp()+interval '7 days' THEN RAISE EXCEPTION 'INVALID_COMMAND' USING ERRCODE='23514'; END IF;
  SELECT w.* INTO v_wo FROM app.work_order w WHERE w.tenant_id=v_tenant AND w.job_id=p_job;
  IF NOT EXISTS(SELECT 1 FROM app.contractor_member cm JOIN app.membership m ON(m.tenant_id,m.id)=(cm.tenant_id,cm.membership_id) JOIN app.role_grant g ON(g.tenant_id,g.membership_id)=(cm.tenant_id,cm.membership_id)
   WHERE cm.tenant_id=v_tenant AND cm.membership_id=p_approver AND cm.client_id=v_req.client_id AND cm.email=p_recipient AND m.role='client_approver' AND coalesce(app.contractor_member_active(p_approver),false)
@@ -1162,7 +1276,8 @@ BEGIN
  PERFORM app.current_actor();
  IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
   OR t IS DISTINCT FROM app.current_tenant()
-  OR (CASE WHEN digest ~ '^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$' THEN (SELECT membership_id FROM app.contractor_session(digest::uuid)) ELSE (SELECT membership_id FROM app.authenticate_practice_session(digest,app.current_tenant())) END) IS DISTINCT FROM app.current_actor() THEN
+  -- LP6D_DIGEST: a digest that authenticates must be the bound actor; an unauthenticated one keeps the body's own refusal.
+  OR coalesce((CASE WHEN digest ~ '^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$' THEN (SELECT membership_id FROM app.contractor_session(digest::uuid)) ELSE (SELECT membership_id FROM app.authenticate_practice_session(digest,app.current_tenant())) END),app.current_actor()) IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
 DECLARE records jsonb;
@@ -1557,7 +1672,9 @@ BEGIN
  PERFORM app.current_actor();
  IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
   OR t IS DISTINCT FROM app.current_tenant()
-  OR (CASE WHEN digest ~ '^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$' THEN (SELECT membership_id FROM app.contractor_session(digest::uuid)) ELSE (SELECT membership_id FROM app.authenticate_practice_session(digest,app.current_tenant())) END) IS DISTINCT FROM app.current_actor() THEN
+ -- LP6D_CH4_MEMBERSHIP: as in the body, a UUID digest is the trusted server membership ID.
+  -- LP6D_DIGEST: a digest that authenticates must be the bound actor; an unauthenticated one keeps the body's own refusal.
+  OR coalesce((CASE WHEN digest ~ '^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$' THEN digest::uuid ELSE (SELECT membership_id FROM app.authenticate_practice_session(digest,app.current_tenant())) END),app.current_actor()) IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
 DECLARE events jsonb; links jsonb; lock jsonb;
@@ -1838,7 +1955,8 @@ BEGIN
  PERFORM app.current_actor();
  IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
   OR t IS DISTINCT FROM app.current_tenant()
-  OR (CASE WHEN d ~ '^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$' THEN (SELECT membership_id FROM app.contractor_session(d::uuid)) ELSE (SELECT membership_id FROM app.authenticate_practice_session(d,app.current_tenant())) END) IS DISTINCT FROM app.current_actor() THEN
+  -- LP6D_DIGEST: a digest that authenticates must be the bound actor; an unauthenticated one keeps the body's own refusal.
+  OR coalesce((CASE WHEN d ~ '^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$' THEN (SELECT membership_id FROM app.contractor_session(d::uuid)) ELSE (SELECT membership_id FROM app.authenticate_practice_session(d,app.current_tenant())) END),app.current_actor()) IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
 DECLARE actor record;prior app.command_receipt;proof app.final_check_reveal_proof;sig app.shadow_commercial_signal;l app.final_account_lock;cid uuid;ref uuid;kind text;
@@ -1914,7 +2032,8 @@ BEGIN
  PERFORM app.current_actor();
  IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
   OR t IS DISTINCT FROM app.current_tenant()
-  OR (CASE WHEN d ~ '^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$' THEN (SELECT membership_id FROM app.contractor_session(d::uuid)) ELSE (SELECT membership_id FROM app.authenticate_practice_session(d,app.current_tenant())) END) IS DISTINCT FROM app.current_actor() THEN
+  -- LP6D_DIGEST: a digest that authenticates must be the bound actor; an unauthenticated one keeps the body's own refusal.
+  OR coalesce((CASE WHEN d ~ '^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$' THEN (SELECT membership_id FROM app.contractor_session(d::uuid)) ELSE (SELECT membership_id FROM app.authenticate_practice_session(d,app.current_tenant())) END),app.current_actor()) IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
 DECLARE actor record;prior app.command_receipt;proof app.final_check_reveal_proof;sig app.shadow_commercial_signal;l app.final_account_lock;cid uuid;
@@ -2181,7 +2300,8 @@ BEGIN
  IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
   OR p_actor IS DISTINCT FROM app.current_actor()
   OR p_tenant IS DISTINCT FROM app.current_tenant()
-  OR (CASE WHEN p_digest ~ '^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$' THEN (SELECT membership_id FROM app.contractor_session(p_digest::uuid)) ELSE (SELECT membership_id FROM app.authenticate_practice_session(p_digest,app.current_tenant())) END) IS DISTINCT FROM app.current_actor() THEN
+  -- LP6D_DIGEST: a digest that authenticates must be the bound actor; an unauthenticated one keeps the body's own refusal.
+  OR coalesce((CASE WHEN p_digest ~ '^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$' THEN (SELECT membership_id FROM app.contractor_session(p_digest::uuid)) ELSE (SELECT membership_id FROM app.authenticate_practice_session(p_digest,app.current_tenant())) END),app.current_actor()) IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
 BEGIN
@@ -2207,7 +2327,8 @@ BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
  IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
-  OR (CASE WHEN p_digest ~ '^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$' THEN (SELECT membership_id FROM app.contractor_session(p_digest::uuid)) ELSE (SELECT membership_id FROM app.authenticate_practice_session(p_digest,app.current_tenant())) END) IS DISTINCT FROM app.current_actor() THEN
+  -- LP6D_DIGEST: a digest that authenticates must be the bound actor; an unauthenticated one keeps the body's own refusal.
+  OR coalesce((CASE WHEN p_digest ~ '^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$' THEN (SELECT membership_id FROM app.contractor_session(p_digest::uuid)) ELSE (SELECT membership_id FROM app.authenticate_practice_session(p_digest,app.current_tenant())) END),app.current_actor()) IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
 DECLARE t uuid; j uuid; c uuid; actor uuid; owned boolean; prior app.command_receipt;
@@ -2918,11 +3039,19 @@ $$;
 -- Latest body: packages/db/migrations/0138_practice_session_hardening.sql
 CREATE OR REPLACE FUNCTION app.revoke_contractor_practice_session(s uuid) RETURNS jsonb
  LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE lp6d_bound boolean;
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
- PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
-  OR NOT EXISTS(SELECT 1 FROM app.contractor_session(s) bound_session WHERE bound_session.tenant_id=app.current_tenant() AND bound_session.membership_id=app.current_actor()) THEN
+ -- Ben's LP-6b ruling (5 Nov) keeps ContractorPracticeSessionRepository.revoke as the named
+ -- "contractor-session-revoke" skip: the holder must still be able to end their own session
+ -- after membership revocation, which no binding can express (a revoked base never binds).
+ -- So a BOUND caller must be this very session's actor; the unbound skip path keeps the body's
+ -- own live-credential and tenant authentication below, exactly as before LP-6d.
+ BEGIN PERFORM app.current_actor(); lp6d_bound:=true;
+ EXCEPTION WHEN insufficient_privilege THEN lp6d_bound:=false; END;
+ IF NOT lp6d_bound THEN NULL;
+ ELSIF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+  OR NOT EXISTS(SELECT 1 FROM app.lp6d_contractor_session_identity(s) bound_session WHERE bound_session.tenant_id=app.current_tenant() AND bound_session.membership_id=app.current_actor()) THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
 DECLARE requested uuid; target control_plane.contractor_practice_session; reading timestamptz;
@@ -3254,7 +3383,9 @@ BEGIN
  PERFORM app.current_actor();
  IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
   OR t IS DISTINCT FROM app.current_tenant()
-  OR (CASE WHEN digest ~ '^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$' THEN (SELECT membership_id FROM app.contractor_session(digest::uuid)) ELSE (SELECT membership_id FROM app.authenticate_practice_session(digest,app.current_tenant())) END) IS DISTINCT FROM app.current_actor() THEN
+ -- LP6D_CH4_MEMBERSHIP: as in the body, a UUID digest is the trusted server membership ID.
+  -- LP6D_DIGEST: a digest that authenticates must be the bound actor; an unauthenticated one keeps the body's own refusal.
+  OR coalesce((CASE WHEN digest ~ '^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$' THEN digest::uuid ELSE (SELECT membership_id FROM app.authenticate_practice_session(digest,app.current_tenant())) END),app.current_actor()) IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
 DECLARE actor uuid;
@@ -3418,12 +3549,30 @@ END;
 END
 $$;
 
+
+-- Non-raising probe used only where a Ben-ruled LP-6b skip remains open (a read-only GET or the
+-- holder ending their own session): a bound request must match; an unbound one is the named skip.
+CREATE FUNCTION app.lp6d_request_bound() RETURNS boolean
+ LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+BEGIN
+ PERFORM app.current_actor(); RETURN true;
+EXCEPTION WHEN insufficient_privilege THEN RETURN false;
+END $$;
+ALTER FUNCTION app.lp6d_request_bound() OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp6d_request_bound() FROM PUBLIC,jobguard_identity,jobguard_infrastructure;
+-- The integrity readers below are SECURITY INVOKER, so the request role runs this boolean probe itself.
+GRANT EXECUTE ON FUNCTION app.lp6d_request_bound() TO jobguard_runtime;
+
 -- Latest body: packages/db/migrations/0660_baseline_ancestry_audit_trust.sql
 CREATE OR REPLACE FUNCTION app.ch6_integrity_sources(t uuid,j uuid,d text) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog STABLE AS $$BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
- PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ -- Ben's LP-6b ruling (5 Nov) keeps CommercialIntegrityV3Repository.read/readFamily as the named
+ -- read-only "commercial-integrity-read" skips: no session-binding write enters that advisory GET.
+ -- A BOUND caller (review) must be the digest's own actor; the unbound skip keeps the body's
+ -- own practice-session scope authorization, exactly as before LP-6d.
+ IF NOT app.lp6d_request_bound() THEN NULL;
+ ELSIF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
   OR t IS DISTINCT FROM app.current_tenant()
   OR (SELECT membership_id FROM app.authenticate_practice_session(d,app.current_tenant())) IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
@@ -3605,8 +3754,10 @@ $$;
 CREATE OR REPLACE FUNCTION app.ch6_integrity_authority(t uuid,j uuid,digest text) RETURNS uuid
 LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog AS $$BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
- PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ -- Reached by Ben's read-only "commercial-integrity-read" skip (see ch6_integrity_sources): a bound
+ -- caller must be the digest's own actor; the unbound skip keeps the original scope authorization.
+ IF NOT app.lp6d_request_bound() THEN NULL;
+ ELSIF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
   OR t IS DISTINCT FROM app.current_tenant()
   OR (SELECT membership_id FROM app.authenticate_practice_session(digest,app.current_tenant())) IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
@@ -3633,8 +3784,10 @@ $$;
 CREATE OR REPLACE FUNCTION app.ch6_integrity_published(t uuid,j uuid,d text) RETURNS jsonb
 LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog STABLE AS $$BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
- PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ -- Reached by Ben's read-only "commercial-integrity-read" skip (see ch6_integrity_sources): a bound
+ -- caller must be the digest's own actor; the unbound skip keeps the original scope authorization.
+ IF NOT app.lp6d_request_bound() THEN NULL;
+ ELSIF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
   OR t IS DISTINCT FROM app.current_tenant()
   OR (SELECT membership_id FROM app.authenticate_practice_session(d,app.current_tenant())) IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
@@ -3718,8 +3871,10 @@ $$;
 CREATE OR REPLACE FUNCTION app.ch6_integrity_source_fingerprint(t uuid,j uuid,digest text,source_snapshot jsonb) RETURNS text
 LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog STABLE AS $$BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
- PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ -- Reached by Ben's read-only "commercial-integrity-read" skip (see ch6_integrity_sources): a bound
+ -- caller must be the digest's own actor; the unbound skip keeps the original scope authorization.
+ IF NOT app.lp6d_request_bound() THEN NULL;
+ ELSIF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
   OR t IS DISTINCT FROM app.current_tenant()
   OR (SELECT membership_id FROM app.authenticate_practice_session(digest,app.current_tenant())) IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
@@ -4286,6 +4441,32 @@ BEGIN
   WHERE effective.tenant_id=app.current_tenant() AND effective.membership_id=app.current_actor();
 END $$;
 
+-- Router ruling (r8): contractor_session keeps refusing a revoked base owner. That
+-- refusal is still a recorded 403, never an outage. This refusal-only lookup names the
+-- live session's base principal ONLY when that principal can no longer be bound, so
+-- the caller can write the existing ENT-10b refusal audit before refusing. It grants
+-- no binding, no business read and returns nothing for an active or unknown session.
+CREATE FUNCTION app.lp6d_refused_contractor_principal(s uuid)
+ RETURNS TABLE(tenant_id uuid,membership_id uuid,identity_user_id uuid)
+ LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE l record; saved text:=current_setting('app.tenant_id',true); active boolean;
+BEGIN
+ IF current_database()<>'jobguard_synthetic_demo' OR s IS NULL THEN RETURN; END IF;
+ SELECT x.tenant_id,x.membership_id,x.identity_user_id INTO l FROM app.contractor_practice_session_live(s) x LIMIT 1;
+ IF l.tenant_id IS NULL THEN RETURN; END IF;
+ PERFORM set_config('app.tenant_id',l.tenant_id::text,true);
+ active:=EXISTS(SELECT 1 FROM app.membership base
+  WHERE (base.tenant_id,base.id,base.identity_user_id)=(l.tenant_id,l.membership_id,l.identity_user_id)
+   AND base.revoked_at IS NULL AND (base.expires_at IS NULL OR base.expires_at>clock_timestamp())
+   AND NOT EXISTS(SELECT 1 FROM app.contractor_membership_revocation r WHERE (r.tenant_id,r.membership_id)=(base.tenant_id,base.id)));
+ PERFORM set_config('app.tenant_id',coalesce(saved,''),true);
+ IF active THEN RETURN; END IF;
+ RETURN QUERY SELECT l.tenant_id,l.membership_id,l.identity_user_id;
+END $$;
+ALTER FUNCTION app.lp6d_refused_contractor_principal(uuid) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp6d_refused_contractor_principal(uuid) FROM PUBLIC,jobguard_identity,jobguard_infrastructure;
+GRANT EXECUTE ON FUNCTION app.lp6d_refused_contractor_principal(uuid) TO jobguard_runtime;
+
 -- Latest body: packages/db/migrations/0549_contractor_feature_guards.sql
 CREATE OR REPLACE FUNCTION identity.invite_member(session_digest char(64), t uuid, recipient varchar, assigned_role varchar)
  RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,identity AS $$
@@ -4369,10 +4550,135 @@ ALTER FUNCTION app.revoke_recovery_message_authorization(uuid,uuid,uuid,uuid) OW
 REVOKE ALL ON FUNCTION app.revoke_recovery_message_authorization(uuid,uuid,uuid,uuid) FROM PUBLIC,jobguard_identity,jobguard_infrastructure;
 GRANT EXECUTE ON FUNCTION app.revoke_recovery_message_authorization(uuid,uuid,uuid,uuid) TO jobguard_runtime;
 REVOKE UPDATE(revoked_at) ON app.action_authorization FROM PUBLIC,jobguard_runtime;
--- Row locks still need one UPDATE-able column: the recovery-message sink guard (0112) takes
--- FOR SHARE OF action_authorization as the runtime invoker. action_authorization_guard (0005)
--- refuses every expires_at change, so this keeps the lock without granting any update.
-GRANT UPDATE(expires_at) ON app.action_authorization TO jobguard_runtime;
+-- LP-0 grant freeze: runtime keeps no UPDATE on action_authorization at all. The recovery-message
+-- sink guard (latest body 0112) took FOR SHARE OF action_authorization as the runtime invoker,
+-- which needs a column UPDATE grant. That one row lock now runs inside this migration-owned
+-- definer; it locks only the authorization named by the tenant's own outbox action.
+CREATE FUNCTION app.lp6d_share_sink_authorization(p_tenant uuid,p_outbox uuid) RETURNS void
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+BEGIN
+ IF p_tenant IS NULL OR p_tenant IS DISTINCT FROM nullif(current_setting('app.tenant_id',true),'')::uuid THEN
+  RAISE EXCEPTION 'RECOVERY_MESSAGE_SINK_INVALID' USING ERRCODE='23514'; END IF;
+ PERFORM 1 FROM app.action_outbox o JOIN app.action_authorization a ON a.tenant_id=o.tenant_id AND a.id=o.authorization_id
+  WHERE o.tenant_id=p_tenant AND o.id=p_outbox FOR SHARE OF a;
+END $$;
+ALTER FUNCTION app.lp6d_share_sink_authorization(uuid,uuid) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp6d_share_sink_authorization(uuid,uuid) FROM PUBLIC,jobguard_identity,jobguard_infrastructure;
+GRANT EXECUTE ON FUNCTION app.lp6d_share_sink_authorization(uuid,uuid) TO jobguard_runtime;
+
+-- The same rule for every other runtime row lock on action_authorization (the commercial
+-- grant executor, payment-fee collection and the 0555 signed-export guard): a migration-owned
+-- definer takes FOR SHARE / FOR UPDATE on one authorization of the transaction's own tenant.
+-- It returns nothing and writes nothing; callers re-read the row after the lock.
+CREATE FUNCTION app.lp6d_lock_action_authorization(p_tenant uuid,p_authorization uuid,p_exclusive boolean) RETURNS void
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+BEGIN
+ IF p_tenant IS NULL OR p_tenant IS DISTINCT FROM nullif(current_setting('app.tenant_id',true),'')::uuid THEN
+  RAISE EXCEPTION 'AUTHORIZATION_INVALID' USING ERRCODE='23514'; END IF;
+ IF p_exclusive THEN
+  PERFORM 1 FROM app.action_authorization a WHERE a.tenant_id=p_tenant AND a.id=p_authorization FOR UPDATE;
+ ELSE
+  PERFORM 1 FROM app.action_authorization a WHERE a.tenant_id=p_tenant AND a.id=p_authorization FOR SHARE;
+ END IF;
+END $$;
+ALTER FUNCTION app.lp6d_lock_action_authorization(uuid,uuid,boolean) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp6d_lock_action_authorization(uuid,uuid,boolean) FROM PUBLIC,jobguard_identity,jobguard_infrastructure;
+GRANT EXECUTE ON FUNCTION app.lp6d_lock_action_authorization(uuid,uuid,boolean) TO jobguard_runtime;
+
+-- Latest body: packages/db/migrations/0555_signed_evidence_export_store.sql; only the authorization row lock moves.
+CREATE OR REPLACE FUNCTION app.guard_signed_evidence_export() RETURNS trigger
+LANGUAGE plpgsql SET search_path=pg_catalog,app AS $$
+BEGIN
+ IF TG_WHEN='AFTER' THEN
+   IF NOT EXISTS(SELECT 1 FROM app.audit_event e WHERE e.tenant_id=NEW.tenant_id AND e.id=NEW.audit_event_id
+     AND e.event_type='evidence_export.stored' AND e.subject_type='audit-export' AND e.subject_ref=NEW.id::text
+     AND e.actor_ref='membership:'||NEW.actor_membership_id::text
+     AND e.payload->'hashes'->>'bundle'=NEW.bundle_hash
+     AND e.payload->'hashes'->>'recipient'=encode(sha256(convert_to(NEW.recipient,'UTF8')),'hex')
+     AND e.payload->'references'->>'authorizationId'=NEW.authorization_id::text
+     AND e.payload->'references'->>'jobId'=NEW.job_id::text
+     AND e.payload->'references'->>'caseId'=NEW.case_id::text
+     AND e.payload->'references'->>'signerId'=NEW.signer_id
+     AND e.payload->'references'->>'keyVersion'=NEW.key_version)
+   THEN RAISE EXCEPTION 'SIGNED_EXPORT_AUDIT_REQUIRED' USING ERRCODE='23514'; END IF;
+   RETURN NEW;
+ END IF;
+ -- Freeze membership and approval before the audit head is acquired.
+ PERFORM pg_advisory_xact_lock(hashtextextended(NEW.tenant_id::text,54));
+ PERFORM 1 FROM app.membership m WHERE m.tenant_id=NEW.tenant_id AND m.id=NEW.actor_membership_id FOR SHARE;
+ -- LP6D_NO_RUNTIME_AUTHORIZATION_UPDATE: the authorization row lock runs in the migration-owned definer.
+ PERFORM app.lp6d_lock_action_authorization(NEW.tenant_id,NEW.authorization_id,false);
+ IF NOT EXISTS (
+   SELECT 1 FROM app.action_authorization a
+   JOIN app.decision d ON (d.tenant_id,d.id)=(a.tenant_id,a.decision_id)
+   JOIN app.decision_resolution r ON (r.tenant_id,r.id,r.decision_id)=(a.tenant_id,a.resolution_id,a.decision_id)
+   JOIN app.membership m ON (m.tenant_id,m.id)=(a.tenant_id,a.actor_membership_id)
+   JOIN app.evidence_export_signer_key k ON k.tenant_id=a.tenant_id
+     AND k.signer_id=NEW.signer_id AND k.key_version=NEW.key_version
+   WHERE a.tenant_id=NEW.tenant_id AND a.id=NEW.authorization_id
+     AND a.actor_membership_id=NEW.actor_membership_id AND r.actor_membership_id=NEW.actor_membership_id
+     AND a.action_type='evidence_export.store' AND d.subject_type='recovery_case'
+     AND d.subject_ref=NEW.case_id::text AND r.resolution='approved'
+     AND a.recipient=NEW.recipient AND a.content_hash=NEW.bundle_hash
+     AND a.policy_version='signed-evidence-export-store.v1' AND a.aggregate_revision=0
+     AND a.amount_pence IS NULL AND a.currency IS NULL AND a.revoked_at IS NULL
+     AND a.expires_at>clock_timestamp() AND m.revoked_at IS NULL
+     AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp())
+     AND NOT EXISTS(SELECT 1 FROM app.contractor_membership_revocation v WHERE v.tenant_id=m.tenant_id AND v.membership_id=m.id)
+     AND m.role='owner' AND k.record=NEW.bundle_text::jsonb->'signer'
+     AND (k.record->>'revoked')::boolean=false
+ ) THEN RAISE EXCEPTION 'SIGNED_EXPORT_AUTHORIZATION_INVALID' USING ERRCODE='42501'; END IF;
+ RETURN NEW;
+END $$;
+ALTER FUNCTION app.guard_signed_evidence_export() OWNER TO jobguard_migration;
+
+-- Latest body: packages/db/migrations/0112_recovery_follow_up.sql; only the authorization row lock moves.
+CREATE OR REPLACE FUNCTION app.guard_recovery_message_sink() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE m app.recovery_message; s record; latest_pack integer; pack_sources jsonb;
+BEGIN
+ PERFORM pg_advisory_xact_lock(hashtext(NEW.tenant_id::text),hashtext(NEW.case_id::text));
+ PERFORM app.lock_recovery_message_sources(NEW.tenant_id);
+ SELECT * INTO m FROM app.recovery_message WHERE tenant_id=NEW.tenant_id AND id=NEW.message_id AND job_id=NEW.job_id AND case_id=NEW.case_id;
+ -- LP6D_NO_RUNTIME_AUTHORIZATION_UPDATE: a migration-owned definer takes the authorization row lock,
+ -- so this invoker needs no UPDATE grant on action_authorization. The check below re-reads the row.
+ PERFORM app.lp6d_share_sink_authorization(NEW.tenant_id,NEW.outbox_action_id);
+ IF NOT FOUND OR NOT EXISTS (
+  SELECT 1 FROM app.recovery_message_approval ap
+  JOIN app.action_outbox o ON o.tenant_id=ap.tenant_id AND o.id=ap.outbox_action_id
+  JOIN app.action_authorization a ON a.tenant_id=o.tenant_id AND a.id=o.authorization_id
+  JOIN app.decision_resolution r ON r.tenant_id=a.tenant_id AND r.id=a.resolution_id AND r.resolution='approved'
+  JOIN app.membership mem ON mem.tenant_id=a.tenant_id AND mem.id=a.actor_membership_id AND mem.role='owner' AND mem.revoked_at IS NULL
+   AND (mem.expires_at IS NULL OR mem.expires_at>clock_timestamp())
+  WHERE ap.tenant_id=m.tenant_id AND ap.message_id=m.id AND ap.outbox_action_id=NEW.outbox_action_id
+   AND o.status='executing' AND a.revoked_at IS NULL AND a.expires_at>clock_timestamp()
+   AND m.recipient=NEW.recipient AND m.body=NEW.body AND m.content_hash=NEW.content_hash AND m.attachment_hash=NEW.attachment_hash
+  FOR SHARE OF mem,o)
+ THEN RAISE EXCEPTION 'RECOVERY_MESSAGE_SINK_INVALID' USING ERRCODE='23514'; END IF;
+ -- M4-6-S: a reminder whose follow-up has stopped (cancelled, or its practice run archived) is never recorded as delivered.
+ IF EXISTS (SELECT 1 FROM app.recovery_follow_up_reminder l WHERE l.tenant_id=m.tenant_id AND l.message_id=m.id
+   AND app.recovery_follow_up_stop_reason(l.tenant_id,l.follow_up_id) IS NOT NULL) THEN
+  RAISE EXCEPTION 'RECOVERY_MESSAGE_CHANGED' USING ERRCODE='23514'; END IF;
+ SELECT * INTO s FROM app.recovery_message_case_snapshot(m.tenant_id,m.job_id,m.case_id);
+ IF NOT FOUND OR s.synthetic IS NOT TRUE OR s.environment<>'synthetic_demo' OR s.case_revision<>m.case_revision OR s.outstanding_pence<>m.amount_pence
+    OR app.recovery_message_source_refs(m.immutable_content) IS DISTINCT FROM s.source_refs THEN
+  RAISE EXCEPTION 'RECOVERY_MESSAGE_CHANGED' USING ERRCODE='23514'; END IF;
+ SELECT max(p.revision) INTO latest_pack FROM app.evidence_pack_revision p WHERE p.tenant_id=m.tenant_id AND p.case_id=m.case_id;
+ SELECT p.sources INTO pack_sources FROM app.evidence_pack_revision p
+  WHERE p.tenant_id=m.tenant_id AND p.job_id=m.job_id AND p.case_id=m.case_id AND p.pack_id=m.pack_id AND p.revision=m.pack_revision
+   AND p.manifest_hash=m.manifest_hash AND p.content_hash=m.attachment_hash
+   AND p.source_omissions='[]'::jsonb AND p.format='TEXT' AND p.artifact_text IS NOT NULL
+   AND encode(sha256(convert_to(p.artifact_text,'UTF8')),'hex')=p.content_hash
+   AND encode(sha256(convert_to(p.canonical_manifest,'UTF8')),'hex')=p.manifest_hash;
+ IF latest_pack IS DISTINCT FROM m.pack_revision OR pack_sources IS NULL
+    OR NOT EXISTS (SELECT 1 FROM app.evidence_pack_attachment_approval x WHERE x.tenant_id=m.tenant_id AND x.id=m.attachment_approval_id AND x.pack_id=m.pack_id
+      AND x.manifest_hash=m.manifest_hash AND x.content_hash=m.attachment_hash)
+    OR NOT app.recovery_message_proofs_current(m.tenant_id,m.job_id,pack_sources)
+    OR NOT app.recovery_message_sources_current(m.tenant_id,m.job_id,m.case_id,pack_sources) THEN
+  RAISE EXCEPTION 'RECOVERY_MESSAGE_CHANGED' USING ERRCODE='23514'; END IF;
+ RETURN NEW;
+END $$;
+ALTER FUNCTION app.guard_recovery_message_sink() OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.guard_recovery_message_sink() FROM PUBLIC;
 
 -- Worker/support entry points were never runtime entry points. Preserve their
 -- separate shadow/support execution contracts (including must-surface safety)
@@ -4383,9 +4689,102 @@ REVOKE ALL ON FUNCTION app.record_shadow_disclosure(uuid,uuid,uuid,uuid,text),
  app.prepare_evidence_pack_v3(uuid,uuid),app.complete_evidence_pack_v3_check(uuid,uuid,text),
  app.finish_evidence_pack_v3(uuid,uuid,jsonb,text,text) FROM PUBLIC,jobguard_runtime;
 
--- Worker signal delivery has no user session; keep it explicitly unavailable to
--- the request role until LP-10 supplies its distinct worker authority.
-REVOKE ALL ON FUNCTION app.apply_recovery_timeline_signal(uuid,jsonb) FROM PUBLIC,jobguard_runtime;
+-- Latest body: packages/db/migrations/0690_import_ancestry_record_anchor.sql
+-- Runtime EXECUTE stays (0506): the real caller is the API RecoveryTimelineStore, which runs
+-- inside withTenant on the practice session's own bound context (PracticeAccess). It is a
+-- bound request path, not a session-less worker, so it gets the binding check instead.
+CREATE OR REPLACE FUNCTION app.apply_recovery_timeline_signal(p_tenant uuid,p_signal jsonb)
+RETURNS text LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+BEGIN
+ -- LP6D_BOUND: run before original DECLARE initializers and business locks.
+ PERFORM app.current_actor();
+ IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+  OR p_tenant IS DISTINCT FROM app.current_tenant() THEN
+  RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
+ END IF;
+DECLARE
+ f app.recovery_follow_up%ROWTYPE;
+ incoming_signal_id uuid; event_id uuid; signal_kind text; fingerprint text; previous_hash text; next_state text;
+ session_digest text := nullif(current_setting('app.practice_material_digest',true),'');
+BEGIN
+ IF current_database()<>'jobguard_synthetic_demo' OR p_tenant IS NULL
+    OR p_tenant IS DISTINCT FROM nullif(current_setting('app.tenant_id',true),'')::uuid THEN
+  RAISE EXCEPTION 'RECOVERY_TIMELINE_FORBIDDEN' USING ERRCODE='42501';
+ END IF;
+ -- No fingerprint, state or arbitrary extra field is an input to this boundary.
+ IF p_signal IS NULL OR jsonb_typeof(p_signal) IS DISTINCT FROM 'object'
+    OR NOT (p_signal ?& ARRAY['version','signalId','eventId','kind','ref'])
+    OR p_signal - ARRAY['version','signalId','eventId','kind','ref'] <> '{}'::jsonb
+    OR EXISTS(SELECT 1 FROM jsonb_each(p_signal - 'ref') e WHERE jsonb_typeof(e.value)<>'string')
+    OR p_signal->>'version' NOT IN ('recovery-timeline-signal.v1','recovery-timeline-signal.v2')
+    OR p_signal->>'kind' NOT IN ('timer','builder_response','evidence_complete','cancel','close')
+    OR jsonb_typeof(p_signal->'ref') IS DISTINCT FROM 'object'
+    OR NOT ((p_signal->'ref') ?& ARRAY['tenantId','jobId','caseId','runId','followUpId'])
+    OR (p_signal->'ref') - ARRAY['tenantId','jobId','caseId','runId','followUpId'] <> '{}'::jsonb
+    OR EXISTS(SELECT 1 FROM jsonb_each(p_signal->'ref') e WHERE jsonb_typeof(e.value)<>'string') THEN
+  RAISE EXCEPTION 'RECOVERY_TIMELINE_FORBIDDEN' USING ERRCODE='42501';
+ END IF;
+ incoming_signal_id := (p_signal->>'signalId')::uuid;
+ event_id := (p_signal->>'eventId')::uuid;
+ signal_kind := p_signal->>'kind';
+ IF incoming_signal_id IS NULL OR event_id IS NULL OR signal_kind IS NULL THEN
+  RAISE EXCEPTION 'RECOVERY_TIMELINE_FORBIDDEN' USING ERRCODE='42501';
+ END IF;
+ PERFORM pg_advisory_xact_lock(hashtextextended('recovery-timeline:'||p_tenant||':signal:'||incoming_signal_id,0));
+ PERFORM pg_advisory_xact_lock(hashtextextended('recovery-timeline:'||p_tenant||':intent:'||(p_signal->'ref'->>'followUpId')::uuid,0));
+ SELECT * INTO f FROM app.recovery_follow_up
+ WHERE tenant_id=p_tenant AND id=(p_signal->'ref'->>'followUpId')::uuid;
+ IF NOT FOUND OR f.environment<>'synthetic_demo'
+    OR (p_signal->'ref'->>'tenantId')::uuid IS DISTINCT FROM f.tenant_id
+    OR (p_signal->'ref'->>'jobId')::uuid IS DISTINCT FROM f.job_id
+    OR (p_signal->'ref'->>'caseId')::uuid IS DISTINCT FROM f.case_id
+    OR (p_signal->'ref'->>'runId')::uuid IS DISTINCT FROM f.run_id THEN
+  RAISE EXCEPTION 'RECOVERY_TIMELINE_NOT_FOUND' USING ERRCODE='42501';
+ END IF;
+ -- Reuse the existing persisted practice-session and immutable ownership checks.
+ -- A tenant setting or an invented digest alone cannot authorize a history write.
+ IF session_digest IS NULL OR NOT EXISTS(SELECT 1 FROM app.authenticate_practice_session(session_digest,p_tenant))
+    OR NOT EXISTS(
+     WITH RECURSIVE owned_job AS (
+      SELECT j.id FROM app.job j WHERE j.tenant_id=p_tenant AND j.practice_session_digest=session_digest
+      UNION
+      SELECT j.id FROM owned_job source
+      JOIN app.audit_event e ON e.tenant_id=p_tenant AND e.subject_type='job'
+       AND e.event_type='job.imported_baseline_attested' AND e.payload->'references'->>'sourceJobId'=source.id::text
+      JOIN app.job j ON j.tenant_id=e.tenant_id AND j.id::text=e.subject_ref
+       AND j.provenance='imported' AND j.practice_session_digest IS NULL
+    AND (EXISTS (SELECT 1 FROM app.job_import_v3 iv WHERE iv.tenant_id=p_tenant AND iv.job_id=j.id AND iv.source_job_id=source.id)
+     OR EXISTS (SELECT 1 FROM app.command_receipt rv WHERE rv.tenant_id=p_tenant AND rv.command_type='job.adopt_in_flight' AND rv.status='succeeded'
+      AND rv.semantic_key='import:'||j.id::text AND rv.result->>'jobId'=j.id::text AND rv.result->>'sourceJobId'=source.id::text))
+     ) SELECT 1 FROM owned_job WHERE id=f.job_id
+    ) THEN
+  RAISE EXCEPTION 'RECOVERY_TIMELINE_FORBIDDEN' USING ERRCODE='42501';
+ END IF;
+ -- References come from the immutable follow-up, not a caller-supplied run/hash/state.
+ fingerprint := encode(sha256(convert_to(jsonb_build_object(
+  'version','recovery-timeline-signal.v2','signalId',incoming_signal_id,'eventId',event_id,'kind',signal_kind,
+  'ref',jsonb_build_object('tenantId',f.tenant_id,'jobId',f.job_id,'caseId',f.case_id,
+    'runId',f.run_id,'followUpId',f.id))::text,'UTF8')),'hex');
+ SELECT s.fingerprint INTO previous_hash FROM app.recovery_timeline_signal s
+ WHERE s.tenant_id=p_tenant AND s.signal_id=incoming_signal_id;
+ IF previous_hash IS NOT NULL AND previous_hash<>fingerprint THEN
+  RAISE EXCEPTION 'RECOVERY_TIMELINE_CONFLICT' USING ERRCODE='23514';
+ END IF;
+ next_state := CASE
+  WHEN app.recovery_follow_up_stop_reason(p_tenant,f.id) IS NOT NULL THEN 'stopped'
+  WHEN EXISTS(SELECT 1 FROM app.recovery_follow_up_due d WHERE d.tenant_id=p_tenant AND d.follow_up_id=f.id) THEN 'review'
+  ELSE 'waiting' END;
+ INSERT INTO app.recovery_timeline_run AS r(tenant_id,follow_up_id,job_id,case_id,run_id,state)
+ VALUES(p_tenant,f.id,f.job_id,f.case_id,f.run_id,next_state)
+ ON CONFLICT(tenant_id,follow_up_id) DO UPDATE SET state=CASE WHEN r.state='stopped' THEN 'stopped' ELSE excluded.state END
+ RETURNING state INTO next_state;
+ IF previous_hash IS NULL THEN
+  PERFORM app.record_recovery_timeline_signal(p_tenant,incoming_signal_id,f.id,fingerprint);
+ END IF;
+ RETURN next_state;
+END;
+END
+$$;
 
 -- Latest body: packages/db/migrations/0566_managed_recovery_election.sql
 CREATE OR REPLACE FUNCTION app.mon9_session(digest text,actor uuid) RETURNS uuid
@@ -5612,8 +6011,9 @@ BEGIN
  OR digest IS NULL OR digest !~ '^[a-f0-9]{64}$'
  THEN RAISE EXCEPTION 'ELIGIBILITY_REVIEWER_FORBIDDEN' USING ERRCODE='42501';END IF;
  SELECT * INTO principal FROM app.authenticate_practice_session(digest,t);
- -- LP6D_DERIVED_ACTOR
- IF principal.membership_id IS DISTINCT FROM app.current_actor() THEN
+ -- LP6D_DERIVED_ACTOR: a digest that authenticates must be the bound actor; one that does not
+ -- keeps the body's own refusal code just below.
+ IF principal.membership_id IS NOT NULL AND principal.membership_id IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
  IF principal.membership_id IS NULL THEN RAISE EXCEPTION 'ELIGIBILITY_REVIEWER_FORBIDDEN' USING ERRCODE='42501';END IF;
@@ -5715,8 +6115,9 @@ BEGIN
  IF NOT pg_has_role(session_user,'jobguard_runtime','USAGE') THEN RAISE EXCEPTION 'FINAL_CHECK_FORBIDDEN' USING ERRCODE='42501'; END IF;
  IF locking THEN PERFORM 1 FROM control_plane.practice_session WHERE token_digest=d FOR SHARE; END IF;
  SELECT * INTO a FROM app.authenticate_practice_session(d,t);
- -- LP6D_DERIVED_ACTOR
- IF a.membership_id IS DISTINCT FROM app.current_actor() THEN
+ -- LP6D_DERIVED_ACTOR: a digest that authenticates must be the bound actor; one that does not
+ -- keeps the body's own refusal code just below.
+ IF a.membership_id IS NOT NULL AND a.membership_id IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
  IF NOT FOUND THEN RAISE EXCEPTION 'FINAL_CHECK_FORBIDDEN' USING ERRCODE='42501'; END IF;
@@ -5762,8 +6163,9 @@ BEGIN
  END IF;
  t:=nullif(current_setting('app.tenant_id',true),'')::uuid;
  SELECT * INTO actor FROM app.authenticate_practice_session(p_session,t);
- -- LP6D_DERIVED_ACTOR
- IF actor.membership_id IS DISTINCT FROM app.current_actor() THEN
+ -- LP6D_DERIVED_ACTOR: a digest that authenticates must be the bound actor; one that does not
+ -- keeps the body's own refusal code just below.
+ IF actor.membership_id IS NOT NULL AND actor.membership_id IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
  IF actor.membership_id IS NULL OR NOT EXISTS(
@@ -5805,14 +6207,15 @@ BEGIN
  IF current_database()<>'jobguard_synthetic_demo' THEN RAISE EXCEPTION 'VALUE_FORBIDDEN' USING ERRCODE='42501'; END IF;
  IF t<>'11111111-1111-4111-8111-111111111111'::uuid THEN
   SELECT app.mon1_company_actor(t,digest) member_id INTO actor;
- -- LP6D_DERIVED_ACTOR
+ -- LP6D_DERIVED_ACTOR (the company branch has no later NULL refusal, so a NULL actor is refused here)
  IF actor.member_id IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
  ELSE
   SELECT * INTO actor FROM app.authenticate_practice_session(digest,t);
- -- LP6D_DERIVED_ACTOR
- IF actor.membership_id IS DISTINCT FROM app.current_actor() THEN
+ -- LP6D_DERIVED_ACTOR: a digest that authenticates must be the bound actor; one that does not
+ -- keeps the body's own refusal code just below.
+ IF actor.membership_id IS NOT NULL AND actor.membership_id IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
   IF NOT EXISTS(SELECT 1 FROM app.membership WHERE tenant_id=t AND id=actor.membership_id AND role='owner' AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp()))
@@ -5918,13 +6321,9 @@ CREATE OR REPLACE FUNCTION app.mon8_feature_decision(actor uuid, feature text, p
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
- -- LP6D_TRIGGER_REACHED: a direct call is always bound. Inside a row trigger (the 0549 operative
- -- membership/grant guard) the firing statement's own authority already applies.
- IF pg_trigger_depth()=0 THEN
  PERFORM app.current_actor();
  IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
- END IF;
  END IF;
 DECLARE t uuid; assignment app.commercial_track_assignment; status app.contractor_agreement_status_revision;
  agreement app.subscription_agreement_revision; entitlement text:='held'; reason text:='agreement_authority_held';
@@ -5969,6 +6368,141 @@ BEGIN
 END;
 END
 $$;
+
+
+-- Private copy of the latest 0548 decision body, owned by the migration role and executable
+-- by no login. Like mon8_sso_feature_decision, it serves only callers that are not bound
+-- requests by design: email-code invitation provisioning (the identity sign-in itself) and
+-- the maintenance-login route in mon8_require_feature. The public decision stays bound.
+CREATE FUNCTION app.lp6d_mon8_feature_decision(actor uuid, feature text, purpose text DEFAULT 'new_work') RETURNS jsonb
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE t uuid; assignment app.commercial_track_assignment; status app.contractor_agreement_status_revision;
+ agreement app.subscription_agreement_revision; entitlement text:='held'; reason text:='agreement_authority_held';
+ contractor_feature boolean; today date;
+BEGIN
+ IF current_database()<>'jobguard_synthetic_demo' OR current_setting('transaction_isolation')<>'read committed' THEN RAISE EXCEPTION 'MODE_FORBIDDEN' USING ERRCODE='42501'; END IF;
+ BEGIN t:=nullif(current_setting('app.tenant_id',true),'')::uuid; EXCEPTION WHEN invalid_text_representation THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END;
+ IF t IS NULL OR actor IS NULL OR feature IS NULL OR purpose IS NULL
+ OR feature NOT IN('watchdog','final_check','invoices','recovery_cases','pay_now','accounting_export','operative_roles','site_origin_capture','approval_chains','work_orders','sso')
+ OR purpose NOT IN('new_work','retained_read') THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
+ -- Organisation/status before subscription/lifecycle before business locks before audit.
+ contractor_feature:=feature IN('operative_roles','site_origin_capture','approval_chains','work_orders','sso');
+ PERFORM pg_advisory_xact_lock_shared(hashtextextended(t::text,54));
+ IF NOT contractor_feature AND purpose='new_work' THEN PERFORM pg_advisory_xact_lock_shared(hashtextextended(t::text,184)); END IF;
+ -- Read after both waits. The actor belongs to this transaction's verified tenant.
+ IF NOT EXISTS(SELECT 1 FROM app.membership m WHERE m.tenant_id=t AND m.id=actor AND m.revoked_at IS NULL
+ AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp())
+ AND NOT EXISTS(SELECT 1 FROM app.contractor_membership_revocation r WHERE r.tenant_id=t AND r.membership_id=m.id)) THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
+ IF purpose='retained_read' THEN
+  -- Availability only: each reader must still enforce its exact role/resource/export permissions.
+  entitlement:='included'; reason:='available';
+ ELSE
+  SELECT * INTO assignment FROM app.commercial_track_assignment WHERE tenant_id=t ORDER BY revision DESC LIMIT 1;
+  today:=(clock_timestamp() AT TIME ZONE 'Europe/London')::date;
+  IF NOT contractor_feature THEN SELECT * INTO agreement FROM app.subscription_agreement_revision WHERE tenant_id=t AND effective_date<=today ORDER BY effective_date DESC,revision DESC LIMIT 1; END IF;
+  IF assignment.commercial_track='contractor' THEN
+   IF contractor_feature THEN
+    SELECT * INTO status FROM app.contractor_agreement_status_revision WHERE tenant_id=t AND assignment_id=assignment.id ORDER BY revision DESC LIMIT 1;
+    IF status.status='active' THEN entitlement:='included'; reason:='available'; END IF;
+   ELSE entitlement:='excluded'; reason:='track_forbidden'; END IF;
+  ELSIF assignment.commercial_track='small_builder' OR (assignment.id IS NULL AND (agreement.id IS NOT NULL OR contractor_feature)) THEN
+   IF contractor_feature THEN entitlement:='excluded'; reason:='track_forbidden';
+   ELSIF agreement.id IS NOT NULL AND agreement.plan IN('Solo','Builder') THEN
+    entitlement:='included';
+    -- Live payment/accounting readiness and persisted MON-3 trial authority are not on main.
+    reason:=CASE WHEN feature IN('pay_now','accounting_export') THEN 'feature_disabled' ELSE 'available' END;
+   END IF;
+  END IF;
+ END IF;
+ RETURN jsonb_build_object('version','plan-entitlement-decision.v1','environment','synthetic_demo','feature',feature,
+  'entitlement',entitlement,'executable',reason='available','reason',reason);
+END $$;
+ALTER FUNCTION app.lp6d_mon8_feature_decision(uuid,text,text) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp6d_mon8_feature_decision(uuid,text,text) FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure;
+DO $revoke$ DECLARE r record; BEGIN
+ FOR r IN SELECT rolname FROM pg_roles WHERE rolcanlogin LOOP
+  EXECUTE format('REVOKE ALL ON FUNCTION app.lp6d_mon8_feature_decision(uuid,text,text) FROM %I',r.rolname);
+ END LOOP;
+END $revoke$;
+
+-- Latest body: packages/db/migrations/0548_server_plan_entitlements.sql; only the decision call routes by login.
+CREATE OR REPLACE FUNCTION app.mon8_require_feature(actor uuid,feature text) RETURNS void
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog AS $$
+BEGIN
+ -- LP-6d: a request login always uses the bound decision. Only the original maintenance
+ -- login (row-trigger fixtures/administration, the 0720 convention) uses the private copy.
+ IF NOT ((CASE WHEN pg_has_role(session_user,'jobguard_migration','USAGE') THEN app.lp6d_mon8_feature_decision(actor,feature)
+  ELSE app.mon8_feature_decision(actor,feature) END)->>'executable')::boolean THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
+END $$;
+
+-- Latest body: packages/db/migrations/0703_invitation_issuer_recheck.sql; only the issuer's feature
+-- decision uses the private copy (the sign-in has no bound request yet).
+CREATE OR REPLACE FUNCTION identity.provision_verified_challenge(challenge_id uuid) RETURNS uuid
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,identity AS $$
+DECLARE c identity.challenge; i identity.invitation; l identity.membership_locator; u uuid; t uuid; a uuid; m uuid; issuer uuid;
+BEGIN
+ SELECT * INTO c FROM identity.challenge WHERE id=challenge_id FOR UPDATE;
+ IF NOT FOUND OR NOT c.verified OR c.consumed_at IS NULL OR c.expires_at<=clock_timestamp() THEN
+  RAISE EXCEPTION 'invalid challenge' USING ERRCODE='22023';
+ END IF;
+ -- Consume the authorization latch on every outcome, including unknown signin/invitation.
+ UPDATE identity.challenge SET verified=false WHERE id=c.id;
+ SELECT user_id INTO u FROM identity.user_email WHERE email=c.email;
+ IF c.purpose='signin' AND u IS NULL THEN RETURN NULL; END IF;
+ IF c.purpose='invitation' THEN
+  -- Match the contractor command lock before checking membership reuse.
+  SELECT tenant_id INTO t FROM identity.invitation WHERE id=c.invitation_id AND email=c.email;
+  IF t IS NOT NULL THEN PERFORM pg_advisory_xact_lock(hashtextextended(t::text,54)); END IF;
+  SELECT * INTO i FROM identity.invitation WHERE id=c.invitation_id AND email=c.email
+   AND accepted_at IS NULL AND expires_at>clock_timestamp() FOR UPDATE;
+  IF NOT FOUND THEN RETURN NULL; END IF;
+  PERFORM set_config('app.tenant_id',i.tenant_id::text,true);
+  SELECT member_row.id INTO issuer FROM app.membership member_row WHERE member_row.tenant_id=i.tenant_id AND member_row.identity_user_id=i.issuer_user_id AND member_row.account_id=i.account_id
+   AND member_row.role='owner' AND member_row.revoked_at IS NULL AND(member_row.expires_at IS NULL OR member_row.expires_at>clock_timestamp())
+   AND NOT EXISTS(SELECT 1 FROM app.contractor_membership_revocation r WHERE r.tenant_id=i.tenant_id AND r.membership_id=member_row.id)
+   ORDER BY member_row.id LIMIT 1;
+  IF issuer IS NULL THEN RETURN NULL; END IF;
+  IF i.role='operative' THEN
+   IF NOT (app.lp6d_mon8_feature_decision(issuer,'operative_roles')->>'executable')::boolean OR c.expires_at<=clock_timestamp() THEN RETURN NULL; END IF;
+  END IF;
+ END IF;
+ IF u IS NULL THEN
+  u:=gen_random_uuid();
+  INSERT INTO identity.identity_user(id) VALUES(u);
+  INSERT INTO identity.user_email(email,user_id) VALUES(c.email,u);
+  IF c.purpose='signup' THEN
+   t:=gen_random_uuid(); a:=gen_random_uuid(); m:=gen_random_uuid();
+   INSERT INTO control_plane.tenant(id) VALUES(t);
+   PERFORM set_config('app.tenant_id',t::text,true);
+   INSERT INTO app.account(id,tenant_id,name) VALUES(a,t,'New business');
+   INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES(m,t,a,u,'owner');
+   INSERT INTO identity.membership_locator VALUES(u,t,m);
+  END IF;
+ END IF;
+ IF c.purpose='invitation' THEN
+  PERFORM set_config('app.tenant_id',i.tenant_id::text,true); m:=gen_random_uuid();
+  -- The locator outlives revocation and expiry, so it is not itself a reason to refuse. Lock it, then lock the linked
+  -- membership: only a currently ACTIVE membership blocks a fresh invitation (the invitation then stays unused).
+  SELECT * INTO l FROM identity.membership_locator WHERE user_id=u AND tenant_id=i.tenant_id FOR UPDATE;
+  IF FOUND THEN
+   PERFORM 1 FROM app.membership WHERE tenant_id=l.tenant_id AND id=l.membership_id AND identity_user_id=u
+    AND revoked_at IS NULL AND(expires_at IS NULL OR expires_at>clock_timestamp())
+    AND NOT EXISTS(SELECT 1 FROM app.contractor_membership_revocation r
+     WHERE r.tenant_id=l.tenant_id AND r.membership_id=l.membership_id) FOR SHARE;
+   IF FOUND THEN RETURN NULL; END IF;
+   -- Inactive: add the invitation-bound replacement and repoint the locator atomically. The revoked or expired
+   -- membership row is kept untouched as history (audit rows keep referring to it).
+   INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES(m,i.tenant_id,i.account_id,u,i.role);
+   UPDATE identity.membership_locator SET membership_id=m WHERE user_id=u AND tenant_id=i.tenant_id;
+  ELSE
+   INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES(m,i.tenant_id,i.account_id,u,i.role);
+   INSERT INTO identity.membership_locator VALUES(u,i.tenant_id,m);
+  END IF;
+  UPDATE identity.invitation SET accepted_at=clock_timestamp() WHERE id=i.id;
+ END IF;
+ INSERT INTO identity.security_event VALUES(gen_random_uuid(),'identity.verified',c.id,clock_timestamp());
+ RETURN u;
+END $$;
 
 -- Private SSO bootstrap: the validated sign-in path supplies the member and tenant.
 CREATE OR REPLACE FUNCTION app.mon8_sso_feature_decision(actor uuid) RETURNS jsonb
@@ -6219,6 +6753,48 @@ BEGIN
 END $$;
 ALTER FUNCTION app.lp6d_client_view_authority(uuid,uuid,uuid,text) OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.lp6d_client_view_authority(uuid,uuid,uuid,text) FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure;
+
+-- Latest body: packages/db/migrations/0686_extra_client_authority_loss.sql. The customer's link
+-- use is the identity sign-in itself (no bound request yet), so like extra_customer_approval it
+-- uses the private view-authority copy; xa_client_view_authority stays bound for request callers.
+CREATE OR REPLACE FUNCTION identity.extra_customer_use(t uuid,j uuid,c uuid,digest text,session_digest text,operation text) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE k app.extra_client_link; s app.extra_client_session; closed text; sid uuid:=gen_random_uuid();
+BEGIN
+ IF current_database()<>'jobguard_synthetic_demo' OR operation IS NULL OR operation NOT IN('redeem','resolve','signout') THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
+ PERFORM set_config('app.tenant_id',t::text,true);
+ -- Same order as approval/withdraw: shared tenant lock, then job lock, then audit.
+ PERFORM pg_advisory_xact_lock_shared(hashtextextended(t::text,54));
+ PERFORM pg_advisory_xact_lock(hashtextextended(t::text||':'||j::text,417));
+ IF operation='redeem' THEN
+  SELECT l.* INTO k FROM app.extra_client_signin b JOIN app.extra_client_link l ON(l.tenant_id,l.id)=(b.tenant_id,b.link_id)
+   WHERE b.tenant_id=t AND b.signin_digest=digest;
+ ELSE
+  SELECT * INTO s FROM app.extra_client_session WHERE tenant_id=t AND token_digest=digest;
+  SELECT * INTO k FROM app.extra_client_link WHERE tenant_id=t AND id=s.link_id;
+ END IF;
+ -- No match delegates to the unchanged customer sign-in implementation.
+ IF k.id IS NULL THEN RETURN NULL; END IF;
+ IF k.job_id<>j OR k.approver_membership_id<>c THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
+ IF NOT app.xc_link_current(k.id) THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
+ PERFORM app.lp6d_client_view_authority(j,k.request_id,c,k.recipient);
+ PERFORM app.mon8_require_feature(c,'approval_chains');
+ SELECT kind INTO closed FROM app.extra_client_link_closure WHERE tenant_id=t AND link_id=k.id;
+ IF closed IN('revoked','replaced') THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
+ IF operation='redeem' THEN
+  IF closed IS NOT NULL OR clock_timestamp()>=k.expires_at OR session_digest IS NULL OR session_digest !~ '^[a-f0-9]{64}$'
+   OR EXISTS(SELECT 1 FROM app.extra_client_session WHERE tenant_id=t AND link_id=k.id) THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
+  INSERT INTO app.extra_client_session(tenant_id,id,link_id,token_digest,expires_at) VALUES(t,sid,k.id,session_digest,clock_timestamp()+interval '1 hour');
+  PERFORM app.append_final_check_audit(gen_random_uuid(),'membership:'||c::text,j,'contractor.extra.client_signed_in',jsonb_build_object('sessionId',sid,'linkId',k.id));
+ ELSE
+  IF s.id IS NULL OR s.revoked_at IS NOT NULL OR s.expires_at<=clock_timestamp() THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
+  IF operation='signout' THEN
+   UPDATE app.extra_client_session SET revoked_at=clock_timestamp() WHERE tenant_id=t AND id=s.id;
+   PERFORM app.append_final_check_audit(gen_random_uuid(),'membership:'||c::text,j,'contractor.extra.client_signed_out',jsonb_build_object('sessionId',s.id));
+  END IF;
+ END IF;
+ RETURN jsonb_build_object('version','customer-session.v1','jobId',j,'customerId',c,'extraApprover',true);
+END $$;
 
 CREATE OR REPLACE FUNCTION identity.extra_customer_approval(t uuid,j uuid,c uuid,digest text,input jsonb) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
