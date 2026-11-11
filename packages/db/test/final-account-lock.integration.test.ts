@@ -10,9 +10,10 @@ import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createLockSnapshot, hashLockCaptureRegister, hashLockLineSet, hashLockScopeDispositions, verifyFinalAccountLockSnapshot, captureRegisterNetPence, candidateM1TaxPolicy, money, addMoney } from "@jobguard/core";
 import { migrate } from "../src/migrate.js";
+import { withTenant } from "../src/tenant-context.js";
 import { FinalAccountLockRepository } from "../src/final-account-lock-repository.js";
 import { approvePricedVariation, VariationRepository } from "../src/variation-repository.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 
 export const LOCK_OWNER = "40000000-0000-4000-8000-000000000004";
@@ -51,13 +52,14 @@ export async function seedAccount(admin: Pool, tenantId = randomUUID(), net = 33
  const account = randomUUID();
  await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Synthetic SV-4')", [account, tenantId]);
  await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner') ON CONFLICT DO NOTHING", [LOCK_OWNER, tenantId, account, LOCK_USER]);
+ const context=(await admin.query("SELECT to_regprocedure('app.bind_request(text,text,uuid)') installed")).rows[0].installed ? await testBoundTenantContext(admin,tenantId,LOCK_OWNER) : testTenantContext(tenantId);
  await asFixtureTenant(admin, tenantId, async db => {
   await db.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,'Fictional final account','live')", [jobId, tenantId]);
   await db.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')", [scopeItemId, tenantId, jobId]);
   await db.query("INSERT INTO app.quote_version(id,tenant_id,job_id,version,content_hash,net_value_pence,status) VALUES($1,$2,$3,1,$4,$5,'accepted')", [baselineId, tenantId, jobId, LOCK_HASH, net]);
  });
  // Some fixtures approve captures first, so the initial account includes their immutable terms.
- await beforeFinalAccount?.({ tenantId, jobId, context: testTenantContext(tenantId) });
+ await beforeFinalAccount?.({ tenantId, jobId, context });
  await asFixtureTenant(admin, tenantId, async db => {
   await db.query("INSERT INTO app.final_account_draft(id,tenant_id,job_id) VALUES($1,$2,$3)", [draftId, tenantId, jobId]);
   await db.query(`INSERT INTO app.final_account_revision(id,tenant_id,job_id,final_account_draft_id,revision,source_hash,baseline_quote_version_id,currency,tax_policy_version,net_pence,tax_pence,total_pence,issue_blocked,findings)
@@ -70,7 +72,7 @@ export async function seedAccount(admin: Pool, tenantId = randomUUID(), net = 33
    WHERE a.tenant_id=$1 AND a.job_id=$2`, [tenantId, jobId, revisionId]);
   await db.query("UPDATE app.final_account_draft SET current_revision_id=$1,revision=1 WHERE tenant_id=$2 AND id=$3", [revisionId, tenantId, draftId]);
  });
- return { tenantId, jobId, scopeItemId, baselineId, draftId, revisionId, lineId, context: testTenantContext(tenantId), input: { jobId, actorMembershipId: LOCK_OWNER, commandId: randomUUID(), finalAccountRevisionId: revisionId, expectedRevision: 1, declarationVersion: "final_account_declaration.v1" as const } };
+ return { tenantId, jobId, scopeItemId, baselineId, draftId, revisionId, lineId, context, input: { jobId, actorMembershipId: LOCK_OWNER, commandId: randomUUID(), finalAccountRevisionId: revisionId, expectedRevision: 1, declarationVersion: "final_account_declaration.v1" as const } };
 }
 export async function prepareLock(f: LockFixture, a: Awaited<ReturnType<typeof seedAccount>>) {
  const digest=(await f.admin.query("SELECT practice_session_digest FROM app.job WHERE tenant_id=$1 AND id=$2",[a.tenantId,a.jobId])).rows[0].practice_session_digest;
@@ -189,13 +191,13 @@ if (expect.getState().testPath === fileURLToPath(import.meta.url)) describe("SV-
  });
  it("DW2 refuses missing dispositions and terms through repository and runtime routine without side effects", async () => {
   const a = await seedAccount(f.admin), repo = new FinalAccountLockRepository(f.runtime);
-  const direct = () => asFixtureTenant(f.runtime, a.tenantId, db => db.query("SELECT * FROM app.lock_final_account($1,$2,$3,$4,$5,$6,$7)", [a.tenantId, a.jobId, LOCK_OWNER, a.input.commandId, a.revisionId, 1, a.input.declarationVersion]));
+  const direct = () => withTenant(f.runtime, a.context, db => db.$client.query("SELECT * FROM app.lock_final_account($1,$2,$3,$4,$5,$6,$7)", [a.tenantId, a.jobId, LOCK_OWNER, a.input.commandId, a.revisionId, 1, a.input.declarationVersion]));
   await repo.acceptTerms(a.context, { actorMembershipId: LOCK_OWNER, commandId: randomUUID(), termsVersion: "synthetic_final_check_terms.v1" });
   await expect(repo.lock(a.context, a.input)).rejects.toMatchObject({ code: "SCOPE_DISPOSITION_MISSING" });
   await expect(direct()).rejects.toThrow("SCOPE_DISPOSITION_MISSING");
   const b = await seedAccount(f.admin); await repo.disposition(b.context, { jobId: b.jobId, actorMembershipId: LOCK_OWNER, commandId: randomUUID(), scopeItemId: b.scopeItemId, disposition: "done" });
   await expect(repo.lock(b.context, b.input)).rejects.toMatchObject({ code: "DISCLOSURE_TERMS_NOT_ACCEPTED" });
-  await expect(asFixtureTenant(f.runtime, b.tenantId, db => db.query("SELECT * FROM app.lock_final_account($1,$2,$3,$4,$5,$6,$7)", [b.tenantId, b.jobId, LOCK_OWNER, b.input.commandId, b.revisionId, 1, b.input.declarationVersion]))).rejects.toThrow("DISCLOSURE_TERMS_NOT_ACCEPTED");
+  await expect(withTenant(f.runtime, b.context, db => db.$client.query("SELECT * FROM app.lock_final_account($1,$2,$3,$4,$5,$6,$7)", [b.tenantId, b.jobId, LOCK_OWNER, b.input.commandId, b.revisionId, 1, b.input.declarationVersion]))).rejects.toThrow("DISCLOSURE_TERMS_NOT_ACCEPTED");
   expect((await f.admin.query("SELECT count(*)::int n FROM app.final_account_lock WHERE tenant_id=ANY($1)", [[a.tenantId,b.tenantId]])).rows[0].n).toBe(0);
   expect((await f.admin.query("SELECT count(*)::int n FROM app.command_receipt WHERE command_id=ANY($1)", [[a.input.commandId,b.input.commandId]])).rows[0].n).toBe(0);
  });

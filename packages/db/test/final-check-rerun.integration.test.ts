@@ -1,4 +1,3 @@
-import { verifiedTenantContextForQueuedJob } from "../src/tenant-context.js";
 import {randomUUID} from 'node:crypto';
 import {beforeAll,afterAll,it,expect,vi} from 'vitest';
 import {FinalCheckRepository} from '../src/final-check-repository.js';
@@ -21,7 +20,7 @@ function runner(redetect?:()=>Promise<unknown>){
   record:(c,m,s,r)=>repo.record(c,m.comparisons.jobId,m.id,s.id,randomUUID(),r),
   reconcile:(c,m)=>repo.reconcile(c,m.comparisons.jobId,m.id,m.signals.map(s=>({signalId:s.signalId,expectedRevision:s.revision,outcome:s.permanentExclusion?'not_enough_evidence':'reveal',references:[],comparisons:{baselineItemIds:[...m.comparisons.baselineItemIds],captureIds:[],lockedLineIds:m.comparisons.lines.map(x=>x.id)}}))),
  },'synthetic_demo');
- return {repo,run:async(a:FinalCheckJob,id?:string)=>{const m=await repo.begin(verifiedTenantContextForQueuedJob(a.tenantId),a.jobId,'shadow-detection.v1',id);await executeFinalCheckTask(verifiedTenantContextForQueuedJob(a.tenantId),{version:'final-check-task.v1',tenantId:a.tenantId,jobId:a.jobId,manifestId:m.id,lockId:m.lockId,executionId:m.id},{read:repo.manifest.bind(repo),execute:worker.execute.bind(worker),publish:completion.publish.bind(completion)},'synthetic_demo');return repo.manifest(verifiedTenantContextForQueuedJob(a.tenantId),a.jobId,m.id);}};
+ return {repo,run:async(a:FinalCheckJob,id?:string)=>{const m=await repo.begin(a.workerContext,a.jobId,'shadow-detection.v1',id);await executeFinalCheckTask(a.workerContext,{version:'final-check-task.v1',tenantId:a.tenantId,jobId:a.jobId,manifestId:m.id,lockId:m.lockId,executionId:m.id},{read:repo.manifest.bind(repo),execute:worker.execute.bind(worker),publish:completion.publish.bind(completion)},'synthetic_demo');return repo.manifest(a.workerContext,a.jobId,m.id);}};
 }
 const request=(a:FinalCheckJob)=>new FinalCheckRepository(f.runtime).requestRun(a.context,a.jobId,a.digest) as Promise<{manifestId:string;attempt:number}>;
 const gate=(a:FinalCheckJob)=>tx(a,db=>db.query('SELECT * FROM app.require_authoritative_final_check($1,$2)',[a.tenantId,a.jobId]));
@@ -47,7 +46,7 @@ it('post-final withdrawal -> refusal -> new current-evidence attempt -> suppleme
  const {a,e,r,m}=await ready();const old=await history(a,m.id);await withdraw(a,e);await expect(gate(a)).rejects.toThrow('FINAL_CHECK_NOT_COMPLETE');const beforeMoney=await money(a);
  const q=await request(a);expect(q.attempt).toBe(2);expect(await request(a)).toEqual(q);
  const newer=await r.run(a,q.manifestId);expect(newer.id).not.toBe(m.id);expect(newer.lockId).toBe(m.lockId);expect(newer.cutoff).toBe(m.cutoff);expect(newer.sources).toEqual([]);
- await r.run(a,q.manifestId);await gate(a);expect((await r.repo.begin(verifiedTenantContextForQueuedJob(a.tenantId),a.jobId,"shadow-detection.v1",undefined,1)).id).toBe(m.id);expect(await history(a,m.id)).toEqual(old);expect(await money(a)).toEqual(beforeMoney);
+ await r.run(a,q.manifestId);await gate(a);expect((await r.repo.begin(a.workerContext,a.jobId,"shadow-detection.v1",undefined,1)).id).toBe(m.id);expect(await history(a,m.id)).toEqual(old);expect(await money(a)).toEqual(beforeMoney);
  const rows=(await f.admin.query('SELECT attempt,predecessor_manifest_id,withdrawn_predecessor_source_ids FROM app.final_check_manifest WHERE id=$1',[newer.id])).rows;
  const source=(await f.admin.query('SELECT id FROM app.final_check_manifest_source WHERE manifest_id=$1',[m.id])).rows[0].id;
  expect(rows).toEqual([{attempt:2,predecessor_manifest_id:m.id,withdrawn_predecessor_source_ids:[source]}]);
@@ -67,7 +66,7 @@ it('post-final withdrawal -> refusal -> new current-evidence attempt -> suppleme
 it('refuses still-verifying and in-progress attempts without writes',async()=>{
  const {a,e,r,m}=await ready();const before=await history(a,m.id),requests=(await f.admin.query('SELECT * FROM infrastructure.final_check_request WHERE job_id=$1',[a.jobId])).rows;
  await expect(request(a)).rejects.toThrow('FINAL_CHECK_SOURCE_CHANGED');expect(await history(a,m.id)).toEqual(before);expect((await f.admin.query('SELECT * FROM infrastructure.final_check_request WHERE job_id=$1',[a.jobId])).rows).toEqual(requests);
- await withdraw(a,e);const q=await request(a);const next=await r.repo.begin(verifiedTenantContextForQueuedJob(a.tenantId),a.jobId,'shadow-detection.v1',q.manifestId);const frozen=await history(a,next.id),qBefore=(await f.admin.query('SELECT * FROM infrastructure.final_check_request WHERE job_id=$1',[a.jobId])).rows;
+ await withdraw(a,e);const q=await request(a);const next=await r.repo.begin(a.workerContext,a.jobId,'shadow-detection.v1',q.manifestId);const frozen=await history(a,next.id),qBefore=(await f.admin.query('SELECT * FROM infrastructure.final_check_request WHERE job_id=$1',[a.jobId])).rows;
  await expect(request(a)).rejects.toThrow('FINAL_CHECK_PENDING');expect(await history(a,next.id)).toEqual(frozen);expect((await f.admin.query('SELECT * FROM infrastructure.final_check_request WHERE job_id=$1',[a.jobId])).rows).toEqual(qBefore);
 });
 
@@ -76,7 +75,7 @@ it('re-detected prior catch retains stable signal and cannot create a second cat
  const receipt=(await f.admin.query(`SELECT object_version_id,sha256,to_char(server_received_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') received FROM app.evidence_object WHERE id=$1`,[e])).rows[0];
  const observation=parseObservation({version:'observation.v1',tenantId:a.tenantId,jobId:a.jobId,kind:'completion_photo',evidence:{id:e,objectVersionId:receipt.object_version_id,sha256:receipt.sha256,serverReceivedAt:receipt.received},text:'Fitted outside tap.',citations:[{start:0,end:19,quote:'Fitted outside tap.'}],facts:{workReference:randomUUID(),scopeArea:'job',description:'outside tap',status:'completed',estimatedValuePence:null,safetyImplication:false,customerClearlyRequested:false,needsPriorWrittenAgreement:false,significantWork:null,activeDispute:false,silenceMateriallyWorsensDispute:false,disclosureDuty:false}});
  const sink=new ShadowDetectionRepository(f.shadow),batch={version:'shadow-detection-batch.v1' as const,jobId:a.jobId,observations:[observation],captures:[],proposals:detectShadowObservations([observation],[],new Date().toISOString())};
- const redetect=()=>sink.persist(verifiedTenantContextForQueuedJob(a.tenantId),batch);await redetect();const signal=(await f.admin.query('SELECT id FROM app.shadow_commercial_signal WHERE job_id=$1 AND coalesced_into_signal_id IS NULL',[a.jobId])).rows[0].id;
+ const redetect=()=>sink.persist(a.workerContext,batch);await redetect();const signal=(await f.admin.query('SELECT id FROM app.shadow_commercial_signal WHERE job_id=$1 AND coalesced_into_signal_id IS NULL',[a.jobId])).rows[0].id;
  await a.lock();const r=runner(redetect),m=await r.run(a);
  const builder=new FinalCheckRepository(f.runtime),body={version:'final-check.catch.v1',commandId:randomUUID(),lockId:m.lockId,runId:m.result!.runId,signalId:signal,expectedSignalRevision:m.signals.find(s=>s.signalId===signal)!.revision};
  await builder.confirmCatch(a.context,a.jobId,a.digest,body);await invoice(a);await withdraw(a,other);const before=await money(a),q=await request(a),next=await r.run(a,q.manifestId);
@@ -93,18 +92,18 @@ it('stranger, other practice, closed job, wrong lock and wrong cutoff refuse wit
  await expect(new FinalCheckRepository(f.runtime).requestRun(a.context,a.jobId,other.digest)).rejects.toThrow('FINAL_CHECK_FORBIDDEN');expect(await counts()).toEqual(before);
  const q=await request(a);before=await counts();
  const another=(await f.admin.query('SELECT id FROM app.final_account_lock WHERE job_id=$1',[other.jobId])).rows[0].id;
- await expect(r.repo.begin(verifiedTenantContextForQueuedJob(a.tenantId),a.jobId,'shadow-detection.v1',q.manifestId,2,another)).rejects.toThrow('FINAL_CHECK_PENDING');expect(await counts()).toEqual(before);
+ await expect(r.repo.begin(a.workerContext,a.jobId,'shadow-detection.v1',q.manifestId,2,another)).rejects.toThrow('FINAL_CHECK_PENDING');expect(await counts()).toEqual(before);
  for(const [lock,cutoff] of [[another,m.cutoff],[m.lockId,'2000-01-01T00:00:00Z']]){
   await expect(finalCheckTenant(f.shadow,a.tenantId,db=>db.query("INSERT INTO app.final_check_manifest(tenant_id,job_id,id,lock_id,evidence_cutoff_at,attempt,predecessor_manifest_id,detector_version,reconciliation_version) VALUES($1,$2,$3,$4,$5,2,$6,'shadow-detection.v1','final-check.reconciliation.v1')",[a.tenantId,a.jobId,q.manifestId,lock,cutoff,m.id]))).rejects.toThrow('FINAL_CHECK_LOCK_BINDING_INVALID');
   expect(await counts()).toEqual(before);
  }
- await expect(r.repo.begin(verifiedTenantContextForQueuedJob(a.tenantId),other.jobId,'shadow-detection.v1',q.manifestId)).rejects.toThrow('FINAL_CHECK_SOURCE_CHANGED');expect(await counts()).toEqual(before);
+ await expect(r.repo.begin(a.workerContext,other.jobId,'shadow-detection.v1',q.manifestId)).rejects.toThrow('FINAL_CHECK_SOURCE_CHANGED');expect(await counts()).toEqual(before);
  await tx(a,async db=>{
   await db.query("SET LOCAL session_replication_role='replica'");
   await db.query("INSERT INTO app.job_work_state_event(tenant_id,job_id,id,sequence,kind,fact_at,actor_membership_id,command_id,close_reason,close_note,request_hash,audit_event_id) SELECT $1,$2,$3,coalesce(max(sequence),0)+1,'closed',clock_timestamp(),$4,$5,'other','Synthetic closed-job refusal',repeat('a',64),$6 FROM app.job_work_state_event WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId,randomUUID(),FINAL_CHECK_ACTOR,randomUUID(),randomUUID()]);
  });
  before=await counts();await expect(request(a)).rejects.toThrow('JOB_WORK_CLOSED');expect(await counts()).toEqual(before);
- await expect(r.repo.begin(verifiedTenantContextForQueuedJob(a.tenantId),a.jobId,'shadow-detection.v1',q.manifestId)).rejects.toThrow('JOB_WORK_CLOSED');expect(await counts()).toEqual(before);
+ await expect(r.repo.begin(a.workerContext,a.jobId,'shadow-detection.v1',q.manifestId)).rejects.toThrow('JOB_WORK_CLOSED');expect(await counts()).toEqual(before);
 });
 
 it('rolled-back mutations prove the no-longer-verifies predicate and predecessor snapshot are load-bearing',async()=>{

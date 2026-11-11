@@ -1,4 +1,3 @@
-import { verifiedTenantContextForQueuedJob } from "../src/tenant-context.js";
 import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
@@ -66,7 +65,7 @@ it("refuses manifest evidence as soon as the locked manifest exists, before comp
   const a = await seedFinalCheckJob(f), evidenceId = await insertFinalCheckEvidence(f, a);
   await a.lock();
   const { FinalCheckRepository } = await import("../src/final-check-repository.js");
-  await new FinalCheckRepository(f.shadow).begin(verifiedTenantContextForQueuedJob(a.tenantId), a.jobId);
+  await new FinalCheckRepository(f.shadow).begin(a.workerContext, a.jobId);
   await expectLocked(a, evidenceId);
 });
 

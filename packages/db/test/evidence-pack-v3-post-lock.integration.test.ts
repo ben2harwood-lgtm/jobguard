@@ -36,9 +36,9 @@ it("shadow-30000 traces exact source, lock, catch revision, supplementary invoic
   const generate = async () => {
     const view = await runtime.read(x.context, x.caseId, x.auth.digest), commandId = randomUUID();
     await runtime.request(x.context, x.caseId, x.auth.digest, { version: "evidence-pack-command.v3", commandId, format: "TEXT", expectedVisibleSourceRevision: view.visibleSourceRevision });
-    const prepared = await worker.prepare(x.context, commandId);
-    await expect(worker.finish(x.context, commandId, { ...(prepared.material as object), jobId: randomUUID() })).rejects.toThrow("EVIDENCE_PACK_V3_SOURCE_CONFLICT");
-    await worker.finish(x.context, commandId, prepared.material);
+    const prepared = await worker.prepare(x.workerContext, commandId);
+    await expect(worker.finish(x.workerContext, commandId, { ...(prepared.material as object), jobId: randomUUID() })).rejects.toThrow("EVIDENCE_PACK_V3_SOURCE_CONFLICT");
+    await worker.finish(x.workerContext, commandId, prepared.material);
     return (await runtime.read(x.context, x.caseId, x.auth.digest)).packs.find(p => p.id === commandId)!;
   };
   // Allocation capacity cannot be reopened by creating another pack or interpretation.
@@ -65,8 +65,8 @@ it("shadow-30000 traces exact source, lock, catch revision, supplementary invoic
   await runtime.request(x.context, x.caseId, x.auth.digest, approval);
   await x.invoices.reverseReceipt(x.context, { jobId: x.jobId, invoiceId: x.invoiceId, paymentId: x.paymentId, actorMembershipId: x.actor.membershipId, commandId: randomUUID(), reason: "Fictional reversal" });
   await x.assess(1);
-  const changed = await worker.prepare(x.context, approval.commandId);
-  await expect(worker.finish(x.context, approval.commandId, changed.material)).rejects.toThrow("EVIDENCE_PACK_STALE_APPROVAL");
+  const changed = await worker.prepare(x.workerContext, approval.commandId);
+  await expect(worker.finish(x.workerContext, approval.commandId, changed.material)).rejects.toThrow("EVIDENCE_PACK_STALE_APPROVAL");
   const next = await generate();
   expect(next.sources.some(s => s.sourceId.startsWith("customer_payment_reversal:"))).toBe(true);
   expect(next.sources.filter(s => s.kind === "attribution_revision")).toHaveLength(2);
@@ -100,13 +100,13 @@ it("a case pack excludes unrevealed findings and the second catch in the same co
   expect(proofs).toContainEqual({ signal_id: x.otherCatchSignal, outcome: "reveal" });
   const before = await runtime.read(x.context, x.caseId, x.auth.digest), commandId = randomUUID();
   await runtime.request(x.context, x.caseId, x.auth.digest, { version: "evidence-pack-command.v3", commandId, format: "TEXT", expectedVisibleSourceRevision: before.visibleSourceRevision });
-  const prepared = await worker.prepare(x.context, commandId);
+  const prepared = await worker.prepare(x.workerContext, commandId);
   const material = evidencePackMaterialV3.parse(prepared.material);
   const ownProof = material.records.find(r => r.kind === "reveal")!;
-  await expect(worker.finish(x.context, commandId, { ...material, records: [...material.records,
+  await expect(worker.finish(x.workerContext, commandId, { ...material, records: [...material.records,
     { ...ownProof, sourceId: `final_check_reveal_proof:${x.hiddenSignal}`, content: "attempted hidden proof injection" },
   ] })).rejects.toThrow("EVIDENCE_PACK_V3_SOURCE_CONFLICT");
-  await worker.finish(x.context, commandId, prepared.material);
+  await worker.finish(x.workerContext, commandId, prepared.material);
   const pack = (await runtime.read(x.context, x.caseId, x.auth.digest)).packs[0]!;
   expect(pack.sources.filter(s => s.kind === "reveal").map(s => JSON.parse(s.content).signal_id)).toEqual([x.signal]);
   expect(pack.sources.filter(s => s.kind === "disposition").map(s => JSON.parse(s.content).signal_id)).toEqual([x.signal]);
@@ -129,8 +129,8 @@ it("a case pack excludes unrevealed findings and the second catch in the same co
   }, x.actor);
   const ordinaryBefore = await runtime.read(x.context, ordinaryCase.id, x.auth.digest), ordinaryCommand = randomUUID();
   await runtime.request(x.context, ordinaryCase.id, x.auth.digest, { version: "evidence-pack-command.v3", commandId: ordinaryCommand, format: "TEXT", expectedVisibleSourceRevision: ordinaryBefore.visibleSourceRevision });
-  const ordinaryPrepared = await worker.prepare(x.context, ordinaryCommand);
-  await worker.finish(x.context, ordinaryCommand, ordinaryPrepared.material);
+  const ordinaryPrepared = await worker.prepare(x.workerContext, ordinaryCommand);
+  await worker.finish(x.workerContext, ordinaryCommand, ordinaryPrepared.material);
   const ordinaryPack = (await runtime.read(x.context, ordinaryCase.id, x.auth.digest)).packs[0]!;
   expect(ordinaryPack.sources.filter(s => ["reveal", "disposition"].includes(s.kind))).toEqual([]);
   for (const id of [x.signal, x.hiddenSignal, x.otherCatchSignal]) expect(ordinaryPack.artifactText).not.toContain(id);

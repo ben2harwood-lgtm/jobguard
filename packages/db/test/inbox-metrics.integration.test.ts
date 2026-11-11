@@ -27,7 +27,8 @@ import { installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 
 let db: Lp0Database, runtime: Pool;
 const tenant = randomUUID(), other = randomUUID(), job = randomUUID(), otherJob = randomUUID();
-const context = testTenantContext(tenant), foreign = testTenantContext(other);
+let context: ReturnType<typeof testTenantContext>;
+const foreign = testTenantContext(other);
 const connect = () => new Pool({ host: "127.0.0.1", port: db.port, database: db.databaseName,
   user: "jobguard_runtime", password: RUNTIME_TEST_PASSWORD, max: 2 });
 let actor: { membershipId: string; identityUserId: string };
@@ -56,6 +57,7 @@ beforeAll(async () => {
   await importWatchdogFixtureJob(db.admin, tenant, otherJob);
   const member = (await db.admin.query("SELECT id,identity_user_id FROM app.membership WHERE tenant_id=$1 AND role='owner' LIMIT 1",[tenant])).rows[0]!;
   actor={membershipId:member.id,identityUserId:member.identity_user_id};
+  context=testTenantContext(tenant, { membershipId: actor.membershipId });
   await db.admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [DEMO_TENANT_ID]);
   await db.admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [DEMO_IDENTITY_USER_ID]);
   await db.admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional metric owner')", [DEMO_ACCOUNT_ID, DEMO_TENANT_ID]);
@@ -170,7 +172,7 @@ it("refuses hidden or absent finding identifiers without receipts, plus invalid 
  for(const patch of [{identityUserId:randomUUID()},{membershipId:randomUUID()}])
   await expect(repo().record(context,{...actor,...patch},input)).rejects.toThrow("INVALID_METRICS_INPUT");
  await db.admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2",[tenant,actor.membershipId]);
- await expect(repo().record(context,actor,input)).rejects.toThrow("INVALID_METRICS_INPUT");
+ await expect(repo().record(testTenantContext(tenant, { membershipId: actor.membershipId, bindRequest: false }),actor,input)).rejects.toThrow("INVALID_METRICS_INPUT");
 });
 
 // No fixture writes metric events: the production dismissal route is the sole writer here.

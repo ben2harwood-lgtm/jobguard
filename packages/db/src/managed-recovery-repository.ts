@@ -1,3 +1,4 @@
+import { isRequestBindingRefusal } from "./request-binding-error.js";
 import { createHash } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
@@ -121,6 +122,9 @@ export class ManagedRecoveryRepository {
         version: "managed-recovery-invoice-preview.v1", environment: "synthetic_demo", tenantId: context.tenantId,
         jobId: job, caseId: c, cumulativeQualifyingPrincipal: { numerator: row.principal, denominator: "1" },
       });
+    }).catch(error => {
+      if (isRequestBindingRefusal(error)) return forbidden();
+      throw error;
     });
   }
 }

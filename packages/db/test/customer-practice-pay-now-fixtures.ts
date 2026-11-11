@@ -7,7 +7,7 @@ import { FinalCheckRepository } from "../src/final-check-repository.js";
 import { practiceMaterialPool } from "../src/practice-session.js";
 import { PracticeInvoiceRepository } from "../src/practice-invoice-repository.js";
 import { approvePricedVariation, insertPricedVariation } from "../src/variation-repository.js";
-import { verifiedTenantContextForQueuedJob, withTenant } from "../src/tenant-context.js";
+import { withTenant } from "../src/tenant-context.js";
 import { availableFinalCheck, seedFinalCheckJob, FINAL_CHECK_ACTOR, type FinalCheckFixture } from "./final-check-fixture.js";
 import { workTenant } from "./job-work-state-fixtures.js";
 
@@ -33,7 +33,7 @@ export async function issueApprovedCatchInvoice(
   const invoicePool=practiceMaterialPool(f.runtime,a.digest);
   const locks=new FinalAccountLockRepository(invoicePool), repo=new FinalCheckRepository(f.runtime);
   const revealed=await availableFinalCheck(fixture,job);
-  await new FinalCheckCompletionRepository(shadow).publish(verifiedTenantContextForQueuedJob(a.tenantId),{version:"final-check-publication.v1",jobId:a.jobId,runId:revealed.runId,checkId:revealed.manifest.id});
+  await new FinalCheckCompletionRepository(shadow).publish(a.workerContext,{version:"final-check-publication.v1",jobId:a.jobId,runId:revealed.runId,checkId:revealed.manifest.id});
   const invoices=new PracticeInvoiceRepository(invoicePool);
   const digest=a.digest;
   const confirmed=await repo.confirmCatch(a.context,a.jobId,digest,{version:"final-check.catch.v1",commandId:randomUUID(),

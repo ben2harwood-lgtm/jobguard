@@ -1,3 +1,4 @@
+import { testActorContext } from "./tenant-context-test-utils.js";
 // PostgreSQL suite NOT RUN locally. Exercises the real persisted office-origin writer.
 import { randomUUID } from "node:crypto";
 import { afterAll,beforeAll,describe,expect,it } from "vitest";
@@ -12,7 +13,7 @@ afterAll(async()=>{await c?.close();});
 async function office(f:PromptFixture){
  const line=(await c.admin.query("SELECT l.scope_item_id,l.sor_version_id FROM app.work_order_line l JOIN app.work_order_current w ON(w.tenant_id,w.revision_id)=(l.tenant_id,l.revision_id) WHERE l.tenant_id=$1 AND l.job_id=$2 AND l.sor_code='REPAIR-DOOR'",[f.p.tenantId,f.jobId])).rows[0]!;
  const cmd={version:"raise-extra.v1",commandId:randomUUID(),commandType:"RecordOfficeExtra",jobId:f.jobId,actorMembershipId:f.members.finance.member.membershipId,grantId:f.members.finance.grant,note:"Fictional office extra",description:"Fictional door excess",sorItem:{versionId:line.sor_version_id,code:"REPAIR-DOOR"},excessOfScopeItemId:line.scope_item_id};
- const extra=new ExtraRepository(c.runtime);const result=await extra.raiseExtra(f.ctx,cmd);expect(await extra.raiseExtra(f.ctx,cmd)).toEqual(result);return result;
+ const extra=new ExtraRepository(c.runtime),context=await testActorContext(c.admin,f.ctx,f.members.finance.member);const result=await extra.raiseExtra(context,cmd);expect(await extra.raiseExtra(context,cmd)).toEqual(result);return result;
 }
 describe("ENT-8A-P office advisory",()=>{
  for(const state of ["surfaced","dismissed"] as const) it(`real office creation matching ${state} prompts emits one advisory and preserves zero fee eligibility`,async()=>{

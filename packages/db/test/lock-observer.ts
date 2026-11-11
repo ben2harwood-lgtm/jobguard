@@ -161,8 +161,19 @@ export interface OrderAnalysis {
 export function analyseLockOrder(transaction: ObservedTransaction, ownership: Ownership): OrderAnalysis {
   const steps = transaction.statements;
   let firstIndex = -1;
-  for (let i = 0; i < steps.length; i++) if (steps[i]!.footprint.rows.size || steps[i]!.footprint.advisory.size) { firstIndex = i; break; }
-  const firstLocks = firstIndex < 0 ? [] : added(undefined, steps[firstIndex]!.footprint);
+  for (let i = 0; i < steps.length; i++) {
+    const step = steps[i]!;
+    const fresh = added(steps[i - 1]?.footprint, step.footprint);
+    // 0562's bind_request and its session-authority helpers lock credentials only.
+    // Never exempt an app business row, an advisory lock, or a later lock upgrade.
+    const binding = /^SELECT app\.bind_request\(/u.test(step.sql);
+    const business = fresh.filter(lock => !binding || lock.advisory || ![
+      "identity.session", "control_plane.practice_session", "control_plane.contractor_practice_session",
+      "control_plane.request_binding",
+    ].includes(tableOf(lock.key)));
+    if (business.length) { firstIndex = i; break; }
+  }
+  const firstLocks = firstIndex < 0 ? [] : added(steps[firstIndex - 1]?.footprint, steps[firstIndex]!.footprint);
   const auditIndex = steps.findIndex(step => [...step.footprint.rows.keys()].some(isAuditHead));
   const afterAudit: LockViolation[] = [], tolerated: string[] = [];
   if (auditIndex >= 0) for (let i = auditIndex + 1; i < steps.length; i++) {

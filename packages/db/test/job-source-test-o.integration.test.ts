@@ -1,4 +1,3 @@
-import { verifiedTenantContextForQueuedJob } from "../src/tenant-context.js";
 // BUILD_PLAN 10.2.11 Test O: diary note "fitted outside tap"; no Log an extra; omitted at lock → eligible catch.
 // Real PostgreSQL; CI only. The note goes through the checked SV-7A writer; the Final Check runs through the
 // existing worker harness, decoding only the server-chosen reviewed fixture reference.
@@ -19,7 +18,7 @@ it("SV7A-INT-O Test O: an outside-tap diary note omitted from the locked bill is
  expect(Number((await f.admin.query("SELECT count(*) n FROM app.variation WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows[0].n)).toBe(0);
  const diaryBefore=await new JobSourceRepository(f.runtime).read(a.context,a.jobId,a.digest,"diary");
  await a.lock();
- const m=await new FinalCheckRepository(f.shadow).begin(verifiedTenantContextForQueuedJob(a.tenantId),a.jobId);
+ const m=await new FinalCheckRepository(f.shadow).begin(a.workerContext,a.jobId);
  expect(m.sources.some(s=>s.sourceKind==="builder_capture_not_scanned")).toBe(false);
  const source=m.sources.find(s=>s.evidenceId===note.record.evidence.id)!;
  expect(source).toBeDefined();
@@ -30,8 +29,8 @@ it("SV7A-INT-O Test O: an outside-tap diary note omitted from the locked bill is
  const observation={version:"observation.v1",tenantId:a.tenantId,jobId:a.jobId,kind:"note_or_voice",
   evidence:{id:source.evidenceId,objectVersionId:source.objectVersionId,sha256:source.sha256,serverReceivedAt:source.receivedAt},...decoded};
  const worker=createFinalCheckWorker(f.shadow,[observation],"synthetic_demo"),task={version:"final-check.task.v1",jobId:a.jobId,manifestId:m.id};
- const first=await worker.execute(verifiedTenantContextForQueuedJob(a.tenantId),task);
- expect(await worker.execute(verifiedTenantContextForQueuedJob(a.tenantId),task)).toEqual(first);
+ const first=await worker.execute(a.workerContext,task);
+ expect(await worker.execute(a.workerContext,task)).toEqual(first);
  const view=await new FinalCheckRepository(f.runtime).read(a.context,a.jobId,a.digest);
  expect(await new JobSourceRepository(f.runtime).read(a.context,a.jobId,a.digest,"diary")).toEqual(diaryBefore);
  expect(view.state).toBe("completed");
