@@ -203,3 +203,79 @@ it("lists invalid descriptions, quantities, units and dismissal reasons without 
   for (const phrase of ["Description", "Quantity", "Unit", "Dismissal reason for ‘Excluded work’", "REVIEW_INCOMPLETE"]) expect(notice).toContain(phrase);
   expect(fetch).not.toHaveBeenCalled();
 });
+
+it.each(["Save review", "Confirm scope"])("starts the first %s activation and ignores a second activation before render", async action => {
+  const result = validFixture(), respond = server(result);
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const fetch = vi.fn(async (url: string, options: RequestInit) => {
+    await gate;
+    return respond(url, options);
+  });
+  vi.stubGlobal("fetch", fetch);
+  const p = panel(result), tree = p.render();
+  const activate = p.button(tree, action).props.onClick;
+  activate();
+  expect(fetch).toHaveBeenCalledTimes(1); // The first click starts its request immediately.
+  activate();
+  p.button(tree, action === "Save review" ? "Confirm scope" : "Save review").props.onClick();
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(p.button(p.render(), action).props.disabled).toBe(true);
+  release(); await settle();
+  expect(fetch.mock.calls.map(call => call[0].split("/").at(-1))).toEqual(action === "Save review" ? ["review"] : ["review", "confirm"]);
+  if (action === "Confirm scope") expect(text(p.render())).toContain("Scope confirmed");
+  else expect(p.button(p.render(), action).props.disabled).toBe(false);
+});
+
+it("keeps the guard through review response rendering and the confirmation request", async () => {
+  const result = validFixture(), respond = server(result);
+  let releaseReview!: () => void, releaseConfirm!: () => void;
+  const reviewGate = new Promise<void>(resolve => { releaseReview = resolve; });
+  const confirmGate = new Promise<void>(resolve => { releaseConfirm = resolve; });
+  const p = panel(result);
+  const fetch = vi.fn(async (url: string, options: RequestInit) => {
+    if (url.endsWith("/review")) {
+      await reviewGate;
+      const response = await respond(url, options);
+      return { ...response, json: async () => {
+        const snapshot = await response.json();
+        // Render the newly saved review before confirm's continuation runs.
+        queueMicrotask(() => p.render());
+        return snapshot;
+      } };
+    }
+    await confirmGate;
+    return respond(url, options);
+  });
+  vi.stubGlobal("fetch", fetch);
+  const staleSave = p.button(p.render(), "Save review").props.onClick;
+  p.button(p.render(), "Confirm scope").props.onClick();
+  releaseReview(); await settle();
+  expect(fetch.mock.calls.map(call => call[0].split("/").at(-1))).toEqual(["review", "confirm"]);
+  expect(p.button(p.render(), "Save review").props.disabled).toBe(true);
+  staleSave();
+  p.button(p.render(), "Confirm scope").props.onClick();
+  expect(fetch).toHaveBeenCalledTimes(2);
+  releaseConfirm(); await settle();
+  expect(text(p.render())).toContain("Scope confirmed");
+});
+
+it.each(["conflict", "network"])("releases the guard after a %s so a new save can succeed", async failure => {
+  const result = validFixture(), respond = server(result);
+  const fetch = vi.fn(async (url: string, options: RequestInit) => {
+    if (fetch.mock.calls.length === 1) {
+      if (failure === "network") throw new Error("Connection lost");
+      return { ok: false, status: 409, json: async () => ({ code: "REVIEW_REVISION_CONFLICT" }) };
+    }
+    return respond(url, options);
+  });
+  vi.stubGlobal("fetch", fetch);
+  const p = panel(result);
+  p.button(p.render(), "Confirm scope").props.onClick(); await settle();
+  const tree = p.render();
+  expect(p.button(tree, "Save review").props.disabled).toBe(false);
+  expect(text(all(tree, n => n.props.role === "alert"))).toContain(failure === "conflict" ? "This draft changed" : "Connection lost");
+  p.button(tree, "Save review").props.onClick(); await settle();
+  expect(fetch).toHaveBeenCalledTimes(2);
+  expect(text(all(p.render(), n => n.props.role === "alert"))).toContain("Review saved.");
+});
