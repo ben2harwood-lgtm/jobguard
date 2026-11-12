@@ -173,6 +173,14 @@ export function practiceFinalCheckPorts(shadowPool: Pool, runtimePool: Pool, pra
   return {
     read: (context: VerifiedTenantContext, task: { jobId: string; manifestId: string }) => repo.manifest(context, task.jobId, task.manifestId),
     async process(context: VerifiedTenantContext, m: FinalCheckManifest, s: FinalCheckManifest["sources"][number]): Promise<FinalCheckSourceResult> {
+      const structured = s.evidenceId === null && s.processable &&
+        ["unlinked_supplier_version", "unlinked_supplier_document", "unlinked_purchase_order"].includes(s.sourceKind);
+      const decoded = structured ? await readPracticeStructuredSource(runtimePool, context, m, s) : null;
+      // Preserve the structured reader's typed refusal (including a changed
+      // commercial track). A successful read still requires every frozen check
+      // below; no authorization or other exception is caught or converted.
+      if (structured && !decoded) return { version: "final-check.source-result.v1", inputHash: s.inputHash,
+        status: "unsupported", failureCode: "UNSUPPORTED_SOURCE", signalIds: [] };
       {
         const frozenManifest = await repo.manifest(context, m.comparisons.jobId, m.id);
         const frozen = frozenManifest.sources.find(source => source.id === s.id);
@@ -184,10 +192,9 @@ export function practiceFinalCheckPorts(shadowPool: Pool, runtimePool: Pool, pra
           JSON.stringify(binding) !== JSON.stringify(frozenBinding))
           return { version: "final-check.source-result.v1", inputHash: s.inputHash, status: "unsupported", failureCode: "SOURCE_INVALID", signalIds: [] };
       }
-      if (s.evidenceId === null && s.processable) {
-        const decoded = await readPracticeStructuredSource(runtimePool, context, m, s);
+      if (structured) {
         return { version: "final-check.source-result.v1", inputHash: s.inputHash,
-          status: decoded ? "zero_result" : "unsupported", failureCode: decoded ? null : "UNSUPPORTED_SOURCE", signalIds: [] };
+          status: "zero_result", failureCode: null, signalIds: [] };
       }
       // The generated proof PNG is also used for certificates. Purpose comes
       // from the frozen verified evidence, never from a filename or hash alone.

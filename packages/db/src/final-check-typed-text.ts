@@ -20,7 +20,7 @@ export function decodeFinalCheckTypedText(text: string, reference: string | null
   // Grammar (all rows consume the whole statement; articles and terminal punctuation are optional):
   // legacy       [please|can you] [I] [also] ACTION ITEM [as an extra] [customer asked/requested]
   // extra noun   extra|additional|added ITEM [Fitted|Installed it today]
-  // extra action ACTION ITEM as an extra|as well|on top
+  // extra action [please] ACTION ITEM as an extra|as well|on top
   // site diary   Customer asked for an extra ITEM while we were on site. [PRICE.] COMPLETED it today.
   // message      [Hi, yes] please go ahead and ACTION ITEM as well. [PRICE.] [Thanks.]
   // PRICE        Agreed MONEY | MONEY is fine | Estimated extra: MONEY | attached MONEY
@@ -43,7 +43,7 @@ export function decodeFinalCheckTypedText(text: string, reference: string | null
   }
   work = work.replace(/(?:[.!?]\s*)+/gu, ". ").replace(/(?:[.!?]\s*)+$/u, "");
   const legacy = new RegExp(`^(?:(?:please|can you)\\s+)?(?:i\\s+)?(?:also\\s+)?${actionPattern}\\s+${articleItem}(?:\\s+as an extra)?(?:\\s*[,;]\\s*customer (?:asked|requested)(?: for it)?|\\s+as (?:asked|requested)(?: by (?:the )?customer)?)?$`, "u").exec(work);
-  const extraAction = new RegExp(`^(?:(?:hi,? yes[, ]+)?please go ahead and\\s+)?${actionPattern}\\s+${articleItem}\\s+(?:as an extra|as well|on top)(?:[.!?]\\s*)?(?:thanks)?$`, "u").exec(work);
+  const extraAction = new RegExp(`^(?:(?:hi,? yes[, ]+)?please go ahead and\\s+|please\\s+)?${actionPattern}\\s+${articleItem}\\s+(?:as an extra|as well|on top)(?:[.!?]\\s*)?(?:thanks)?$`, "u").exec(work);
   const site = new RegExp(`^customer asked for an extra\\s+${articleItem} while we were on site(?:[.!?]\\s*(painted|fitted|installed) it today)?$`, "u").exec(work);
   const noun = new RegExp(`^(?:extra|additional|added)\\s+${articleItem}(?:[.!?]\\s*(painted|fitted|installed) it today)?$`, "u").exec(work);
   const match = extraAction ?? legacy;
