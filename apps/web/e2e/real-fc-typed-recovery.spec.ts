@@ -4,7 +4,6 @@ import { Pool } from "pg";
 import { E2E_ADMIN_DATABASE_URL } from "./global-setup";
 import { startWatchdogJob } from "./helpers/capture-journey";
 
-test.use({ viewport: { width: 390, height: 844 } });
 test("ordinary typed job retains its bill through bounded worker recovery", async ({ page }) => {
   test.setTimeout(420000);
   const admin = new Pool({ connectionString: E2E_ADMIN_DATABASE_URL, max: 1 });
@@ -35,7 +34,17 @@ test("ordinary typed job retains its bill through bounded worker recovery", asyn
     for (let i = 0; i < await questions.count(); i++) await questions.nth(i).fill("Fictional decorating job, four days, £900 for the agreed work; builder removes waste.");
     await page.getByLabel("Customer name", { exact: true }).fill("Mr Example");
     await page.getByLabel("Premises address", { exact: true }).fill("9 Notreal Road");
+    await page.getByLabel("Town", { exact: true }).fill("Exampleton");
+    await page.getByLabel("UK postcode", { exact: true }).fill("SW1A 1AA");
     await click("Save customer and site");
+    await expect(page.getByTestId("party-customer")).toHaveText("Mr Example");
+    await expect(page.getByTestId("party-site")).toHaveText("9 Notreal Road, Exampleton, SW1A 1AA");
+    const parties = await page.request.get(`/api/jobs/${jobId}/parties`);
+    expect(parties.ok()).toBe(true);
+    expect((await parties.json()).current).toMatchObject({
+      bindingId: expect.any(String), customer: { name: "Mr Example" },
+      site: { addressLines: ["9 Notreal Road"], town: "Exampleton", postcode: "SW1A 1AA" },
+    });
     const reviewLines = page.locator(".review-line");
     await expect(reviewLines.first()).toBeVisible();
     for (const line of await reviewLines.all()) {
