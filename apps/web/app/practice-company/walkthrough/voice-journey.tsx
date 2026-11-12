@@ -357,7 +357,9 @@ export function VoiceJourney() {
         screen().querySelector<HTMLElement>(".value-page h1")?.scrollIntoView({ block: "start", behavior: "instant" });
       },
     ];
-    return stages.map(([title], index) => ({ id: `walk-${index + 1}`, title, words: stageWords(index, prepared), target: index === 2 ? "#walk-prepare, #walk-screen" : index === 6 || index === 7 ? "#final-check" : "#walk-screen", // After steps 4 and 6 the pressed button is gone (step 4 also remounts); spotlight the saved
+    // Proof renders after the step-4 remount's saved activation read. Wait for
+    // its next control (or saved status), never the workspace's first control.
+    return stages.map(([title], index) => ({ id: `walk-${index + 1}`, title, words: stageWords(index, prepared), target: index === 2 ? "#walk-prepare, #walk-screen" : index === 4 ? '#work-proof .proof-actions button:not(:disabled), #work-proof [data-testid="stage-status"]' : index === 6 || index === 7 ? "#final-check" : "#walk-screen", // After steps 4 and 6 the pressed button is gone (step 4 also remounts); spotlight the saved
       // result so the reading hold never falls back to a control far up the page.
       spotlightTarget: () => (index === 8 ? screen()?.querySelector<HTMLElement>(".value-page h1") : screen()?.querySelector<HTMLElement>("[data-walk-action]")) ?? (index === 1 ? [...(screen()?.querySelectorAll<HTMLButtonElement>(".quote-editor button") ?? [])].find(button => button.textContent === "Save draft revision") ?? null : index === 2 ? document.getElementById("walk-prepare") : index === 3 ? screen()?.querySelector<HTMLElement>('[aria-label="Live activation"] h2') ?? null : index === 5 ? screen()?.querySelector<HTMLElement>('[data-testid="approved-additions"]') ?? null : null), isDone: () => (index < 2 || !!current.current.prepared || current.current.ownChosen) && done[index]!(), autoAction: async (target, signal) => {
       // No choice means the prepared tour, including autoplay and old resume URLs.

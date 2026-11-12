@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { recoverCapture } from "../../demo-s/journey-launch";
 import * as screenActions from "./screen-actions";
 import { requestedWorkspaceSection } from "../../ui/workspace-lifecycle";
+import { visibleTarget } from "../../ui/walkthrough/walkthrough";
 import { missedWorkDiary, missedWorkSaved, saveMissedWork, priceFoundExtra, addOnSiteEvidence, evidenceDone, approvedExtraDone, finalCheckDone, restoreProgress, stageWords, ownJobAction, stages, VoiceJourney } from "./voice-journey";
 const memo = vi.hoisted(() => ({ steps: [] as import("../../ui/walkthrough/walkthrough").WalkthroughStep[], states: null as unknown[] | null, cursor: 0, setState: vi.fn() }));
 vi.mock("react", async original => {
@@ -114,6 +115,25 @@ it.each([["accepted", 3], ["live", 4], ["invoiced", 4], ["paid", 4]])("resumes %
 
 
 describe("step 5 saved evidence", () => {
+  it("waits for deferred proof instead of targeting an unrelated workspace control", () => {
+    const unrelated = { getClientRects: () => [{}], checkVisibility: () => true };
+    let proof: typeof unrelated | null = null;
+    const proofSelector = '#work-proof .proof-actions button:not(:disabled), #work-proof [data-testid="stage-status"]';
+    vi.stubGlobal("document", {
+      getElementById: () => ({ querySelector: () => null }),
+      querySelector: (selector: string) => selector === proofSelector ? proof : unrelated,
+    });
+    renderToStaticMarkup(<VoiceJourney />);
+    const step = memo.steps[4]!;
+    expect(step.spotlightTarget!()).toBeNull();
+    expect(visibleTarget(step.target)).toBeNull();
+    // A proof control can mount before it is visible; keep waiting in that case.
+    proof = { getClientRects: () => [{}], checkVisibility: () => false };
+    expect(visibleTarget(step.target)).toBeNull();
+    proof = { getClientRects: () => [{}], checkVisibility: () => true };
+    expect(visibleTarget(step.target)).toBe(proof);
+    expect(step.isDone()).toBe(false); // Target readiness cannot establish saved completion.
+  });
   function proofScreen(initial: number) {
     let state = initial;
     const names = ["Attach generated practice image", "Check file integrity", "Complete this stage"];
