@@ -44,9 +44,11 @@ describe("SV5PRE final-check registration", () => {
     const loadJobPlans = vi.fn(async (..._args: unknown[]) => [candidate]);
     const recordProposal = vi.fn(async (..._args: unknown[]) => undefined);
     vi.doMock("./readiness-store.js", () => ({ DurableReadinessStore: class { load = load; loadJobPlans = loadJobPlans; recordProposal = recordProposal; } }));
-    const queries = vi.fn(async () => ({ rows: [{ safe: true }] }));
+    const queries = vi.fn(async (..._args: unknown[]) => ({ rows: [{ safe: true }] }));
+    const pinnedQuery = vi.fn(async (..._args: unknown[]) => ({ rows: [{ claimed: true }] }));
+    const release = vi.fn();
     const begin = vi.fn(async (..._args: unknown[]) => { throw new Error("FINAL_CHECK_FORBIDDEN"); });
-    vi.doMock("pg", () => ({ Pool: class { query = queries; end = async () => undefined; } }));
+    vi.doMock("pg", () => ({ Pool: class { query = queries; connect = async () => ({ query: pinnedQuery, release }); end = async () => undefined; } }));
     vi.doMock("graphile-worker", async () => ({ ...await vi.importActual<Record<string, unknown>>("graphile-worker"), run: registered }));
     vi.doMock("@jobguard/db", async () => ({
       ...await vi.importActual<Record<string, unknown>>("@jobguard/db"),
@@ -70,12 +72,23 @@ describe("SV5PRE final-check registration", () => {
       await expect(handler(task, helpers)).rejects.toThrow("FINAL_CHECK_FORBIDDEN");
       const practice=options.taskList.final_check_practice_run!;
       const original={version:"final-check-practice-run.v1",tenantId:task.tenantId,jobId:task.jobId,lockId:task.lockId};
-      await expect(practice(original,helpers)).rejects.toThrow("FINAL_CHECK_FORBIDDEN");
-      expect(begin.mock.calls.at(-1)?.slice(1)).toEqual([task.jobId,"shadow-detection.v1",undefined,1,task.lockId]);
-      await expect(practice({...original,manifestId:task.manifestId,attempt:2},helpers)).rejects.toThrow("FINAL_CHECK_FORBIDDEN");
-      expect(begin.mock.calls.at(-1)?.slice(1)).toEqual([task.jobId,"shadow-detection.v1",task.manifestId,2,task.lockId]);
+      await practice(original,helpers);
+      await practice({...original,manifestId:task.manifestId,attempt:2},helpers);
+      expect(begin).not.toHaveBeenCalled();
+      expect(pinnedQuery).not.toHaveBeenCalled();
+      expect(unavailablePorts.execute).not.toHaveBeenCalled();
+      expect(unavailablePorts.publish).not.toHaveBeenCalled();
       await expect(practice({...original,attempt:2},helpers)).rejects.toThrow();
-      expect(begin).toHaveBeenCalledTimes(2);
+      const cycleId=task.executionId;
+      await expect(practice({...original,manifestId:task.manifestId,attempt:2,cycleId},helpers)).rejects.toThrow("FINAL_CHECK_FORBIDDEN");
+      expect(begin).toHaveBeenCalledTimes(1);
+      expect(begin.mock.calls[0]?.[0]).toMatchObject({tenantId:task.tenantId});
+      expect(begin.mock.calls[0]?.slice(1)).toEqual([task.jobId,"shadow-detection.v1",task.manifestId,2,task.lockId]);
+      expect(pinnedQuery.mock.calls.find(([sql])=>String(sql).includes("cycle_claim"))?.[1]).toEqual([task.tenantId,task.jobId,task.lockId,task.manifestId,2,cycleId]);
+      expect(pinnedQuery.mock.calls.find(([sql])=>String(sql).includes("cycle_finish"))?.[0]).toContain("false");
+      expect(release).toHaveBeenCalledTimes(1);
+      expect(unavailablePorts.execute).not.toHaveBeenCalled();
+      expect(unavailablePorts.publish).not.toHaveBeenCalled();
       // Execute the real worker's schedule/evaluate composition, rather than a test binding.
       const addJob = vi.fn(async (..._args: unknown[]) => ({}));
       await options.taskList.readiness_schedule!({ version: "readiness-schedule-task.v1", scope },
@@ -90,18 +103,29 @@ describe("SV5PRE final-check registration", () => {
         status: "proposal", programmeChanged: false, feeEligible: false, recoveryFeePence: 0,
       }));
       const discovery=options.taskList.discover_final_check_requests!;
-      const request={lock_id:task.lockId,tenant_id:task.tenantId,job_id:task.jobId,manifest_id:task.manifestId,attempt:2};
+      const request={lock_id:task.lockId,tenant_id:task.tenantId,job_id:task.jobId,manifest_id:task.manifestId,attempt:2,cycle_id:task.executionId,executions:0,enqueued_at:null};
       for(const fail of [false,true]){
         const statements:string[]=[];
         const query=vi.fn(async(sql:string,_values?:unknown[])=>{
           statements.push(sql);
-          if(sql.startsWith("SELECT lock_id"))return {rows:[request]};
+          if(sql.includes("FROM infrastructure.final_check_request"))return {rows:[request]};
+          if(sql.includes("pg_try_advisory"))return {rows:[{locked:true}]};
           if(fail&&sql.includes("graphile_worker.add_job"))throw new Error("QUEUE_UNAVAILABLE");
           return {rows:[]};
         });
         const discoveryHelpers={withPgClient:async(fn:(client:unknown)=>Promise<unknown>)=>fn({query})} as unknown as Parameters<typeof discovery>[1];
         if(fail){await expect(discovery({},discoveryHelpers)).rejects.toThrow("QUEUE_UNAVAILABLE");expect(statements.at(-1)).toBe("ROLLBACK");expect(statements.some(sql=>sql.startsWith("UPDATE"))).toBe(false);}
-        else{await discovery({},discoveryHelpers);expect(statements[0]).toBe("BEGIN");expect(statements.at(-1)).toBe("COMMIT");expect(statements[2]).toContain("graphile_worker.add_job");expect(statements[3]).toContain("UPDATE infrastructure.final_check_request");expect(query.mock.calls[2]?.[1]).toEqual([JSON.stringify({version:"final-check-practice-run.v1",tenantId:task.tenantId,jobId:task.jobId,lockId:task.lockId,manifestId:task.manifestId,attempt:2}),`final-check-practice:${task.manifestId}`]);expect(query.mock.calls[3]?.[1]).toEqual([task.lockId,2,task.manifestId]);}
+        else{
+          await discovery({},discoveryHelpers);
+          expect(statements[0]).toBe("BEGIN");expect(statements.at(-1)).toBe("COMMIT");
+          const add=query.mock.calls.find(([sql])=>sql.includes("graphile_worker.add_job"))!;
+          const ack=query.mock.calls.find(([sql])=>sql.startsWith("UPDATE infrastructure.final_check_request"))!;
+          expect(add[0]).toContain("max_attempts := 3");
+          expect(add[1]).toEqual([JSON.stringify({version:"final-check-practice-run.v1",tenantId:task.tenantId,jobId:task.jobId,lockId:task.lockId,manifestId:task.manifestId,attempt:2,cycleId:task.executionId}),`final-check-practice:${task.manifestId}:${task.executionId}`]);
+          expect(ack[0]).toContain("manifest_id=$2 AND cycle_id=$3 AND enqueued_at IS NULL");
+          expect(ack[1]).toEqual([task.lockId,task.manifestId,task.executionId]);
+          expect(statements.indexOf(add[0])).toBeLessThan(statements.indexOf(ack[0]));
+        }
       }
     } finally {
       vi.useRealTimers(); vi.doUnmock("./readiness-store.js");
