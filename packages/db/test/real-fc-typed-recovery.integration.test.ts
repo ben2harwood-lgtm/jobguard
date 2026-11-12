@@ -213,6 +213,7 @@ it("company routine path permits a fixed unlocked read without terms, then bound
   const { verifiedTenantContextFromMembership } = await import("../src/tenant-context.js");
   const { testTenantContext } = await import("./tenant-context-test-utils.js");
   const a = await preparedTrialFixture({ ...f, waitForConnectionEnds: async () => undefined });
+  expect((await f.admin.query("SELECT practice_session_digest FROM app.job WHERE tenant_id=$1 AND id=$2", [a.tenantId,a.jobId])).rows[0].practice_session_digest).toBeNull();
   const user = (await f.admin.query("SELECT identity_user_id FROM app.membership WHERE tenant_id=$1 AND id=$2", [a.tenantId, a.actorId])).rows[0].identity_user_id;
   const context = verifiedTenantContextFromMembership({ tenantId: a.tenantId, membershipId: a.actorId, identityUserId: user } as AuthenticatedMembership, { kind: "real", credential: a.digest });
   const company = new CompanyFinalCheckRepository(f.runtime), job = { version: "company-final-check.v1" as const, jobId: a.jobId };
@@ -234,8 +235,14 @@ it("company routine path permits a fixed unlocked read without terms, then bound
   expect((await f.admin.query("SELECT count(*)::int n FROM app.final_check_manifest WHERE id=$1", [task.manifestId])).rows[0].n).toBe(0);
   await Promise.all([company.requestRun(context, job), company.requestRun(context, job)]); await discover();
   await executePracticeFinalCheck(recoveryContext((await payload(a.jobId)).tenantId), await payload(a.jobId), f.shadow, factory(() => false), "synthetic_demo");
-  expect((await company.reveal(context, job)).state).toBe("completed");
-  expect((await new FinalCheckRepository(f.shadow).manifest(testTenantContext(a.tenantId), a.jobId, task.manifestId)).id).toBe(task.manifestId);
+  expect(await company.reveal(context, job)).toMatchObject({ state: "completed", items: [] });
+  const completed = await new FinalCheckRepository(f.shadow).manifest(testTenantContext(a.tenantId), a.jobId, task.manifestId);
+  expect(completed.id).toBe(task.manifestId);
+  const certificates = completed.sources.filter(source => source.sourceKind === "electrical_certificate");
+  expect(certificates).toHaveLength(a.proofs.length);
+  expect(certificates.length).toBeGreaterThan(0);
+  expect(certificates.every(source => source.status === "zero_result" && source.sha256 === a.proofs[0]!.sha256)).toBe(true);
+  expect(completed.signals).toEqual([]);
 });
 
 it("keeps completed-invalidated reruns under separate manifest-attempt authority", async () => {

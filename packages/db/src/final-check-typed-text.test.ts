@@ -4,11 +4,35 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { decodeFinalCheckTypedText } from "./final-check-typed-text.js";
 import { FinalCheckRepository, type FinalCheckManifest } from "./final-check-repository.js";
 import * as structuredReader from "./final-check-practice-readers.js";
-import { practiceFinalCheckPorts } from "./shadow-detection-repository.js";
+import { practiceFinalCheckPorts, ShadowDetectionRepository } from "./shadow-detection-repository.js";
 import { verifiedTenantContextFromMembership, type AuthenticatedMembership } from "./tenant-context.js";
 
 const diary = "also painted the hallway ceiling, customer asked";
 const request = "Please paint the hallway ceiling as an extra.";
+it.each([".", "!", "?"])("keeps a bounded duration/estimate diary and its same-work request after terminal punctuation %s", punctuation => {
+  const text = `Painted the hallway ceiling as asked, three hours extra, about 150 pounds${punctuation}`;
+  const result = decodeFinalCheckTypedText(text, null, "note_or_voice");
+  const requested = decodeFinalCheckTypedText("can you also paint the hallway ceiling? Happy to pay extra", null, "customer_request");
+  expect(result).toMatchObject({ status: "proposal", ambiguousPrice: false, proposal: { text,
+    facts: { status: "completed", estimatedValuePence: 15000 }, citations: [{ start: 0, end: text.length, quote: text }] } });
+  expect(requested.status).toBe("proposal");
+  if (result.status === "proposal" && requested.status === "proposal")
+    expect(result.proposal.facts.workReference).toBe(requested.proposal.facts.workReference);
+});
+it.each(["£150 or £200", "150 pounds and 150 pounds", "150.001 pounds", "-150 pounds", "3 hours"])("keeps ambiguous duration-tail money unknown: %s", amount => {
+  expect(decodeFinalCheckTypedText(`Painted the hallway ceiling as asked, three hours extra, about ${amount}.`, null, "note_or_voice"))
+    .toMatchObject({ status: "proposal", ambiguousPrice: true, proposal: { facts: { estimatedValuePence: null } } });
+});
+it.each(["There is a safety risk", "Written agreement is legally required", "There is an active dispute", "Do not proceed", "No extra charge"])("refuses unsafe or unsupported duration-tail clauses: %s", clause => {
+  const text = `Painted the hallway ceiling as asked, three hours extra, about 150 pounds. ${clause}.`;
+  expect(decodeFinalCheckTypedText(text, null, "note_or_voice").status).not.toBe("proposal");
+});
+it("does not use a duration-tail match to bypass a fixture reference or reconcile conflicting estimates", () => {
+  const text = "Painted the hallway ceiling as asked, three hours extra, about 150 pounds.";
+  expect(decodeFinalCheckTypedText(text, "unknown-fixture", "note_or_voice")).toEqual({ status: "invalid" });
+  expect(decodeFinalCheckTypedText(`${text} Estimated extra £200.`, null, "note_or_voice"))
+    .toMatchObject({ status: "proposal", ambiguousPrice: true, proposal: { facts: { estimatedValuePence: null } } });
+});
 it.each([diary, "ALSO PAINTED THE HALLWAY CEILING, CUSTOMER ASKED!", "Painted hallway ceiling.", "I also painted the hallway ceiling as requested."])("recognises bounded completion with original citations: %s", text => {
   const result = decodeFinalCheckTypedText(text, null, "note_or_voice");
   expect(result).toMatchObject({ status: "proposal", proposal: { text, facts: { workReference: "practice:hallway-ceiling", status: "completed", estimatedValuePence: null }, citations: [{ start: 0, end: text.length, quote: text }] } });
@@ -103,6 +127,81 @@ it("both verbatim towel-rail originals keep one stable identity and their own ex
   expect(results.every(r=>r.status === "proposal")).toBe(true);
   if (results[0]!.status === "proposal" && results[1]!.status === "proposal")
     expect(results[0]!.proposal.facts.workReference).toBe(results[1]!.proposal.facts.workReference);
+});
+
+describe("generated certificate result binding (unit doubles, not PostgreSQL proof)", () => {
+  afterEach(() => vi.restoreAllMocks());
+  function certificate(baselineDescription?: string, existing = false, firm: "legacy" | "blank" | "company" = "legacy") {
+    const id = (n: number) => `10000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+    const at = "2026-11-11T10:00:00Z", sha = "f".repeat(64);
+    const context = verifiedTenantContextFromMembership({ tenantId: id(1), membershipId: id(2), identityUserId: id(3) } as AuthenticatedMembership);
+    const source: FinalCheckManifest["sources"][number] = { id: id(4), evidenceId: id(5), sourceKind: "electrical_certificate",
+      sourceRef: id(5), objectVersionId: "verified-v1", sha256: sha, receivedAt: at, inputHash: "a".repeat(64), processable: true, input: {}, status: "pending" };
+    const manifest: FinalCheckManifest = { version: "final-check.manifest.v1", id: id(6), lockId: id(7), cutoff: at, hash: "b".repeat(64),
+      detectorVersion: "synthetic.v1", policyVersion: "final-check.reconciliation.v1", sources: [source], result: null, signals: [],
+      comparisons: { tenantId: id(1), jobId: id(8), captures: [], baselineItemIds: [id(9)], lines: [{ id: id(10), scopeItemId: id(9) }], baselineRecordedAt: at,
+        baseline: baselineDescription === undefined ? [] : [{ id: id(10), scope_item_id: id(9), commercial_revision_id: id(11), description: baselineDescription }] } };
+    let linked = existing ? [id(12)] : [];
+    const runtimeQuery = vi.fn(async (sql: string) => ({ rows: sql.includes("FROM app.evidence_object") ? [{ legacy_photo: firm === "legacy" }] : [], rowCount: sql.includes("FROM app.evidence_object") ? 1 : 0 }));
+    const shadowQuery = vi.fn(async (sql: string, _values?: unknown[]) => ({ rows: sql.includes("FROM app.shadow_signal_evidence") ? linked.map(signal_id => ({ signal_id })) : [] }));
+    const pool = (query: unknown) => ({ connect: async () => ({ query, release: vi.fn() }) }) as unknown as Pool;
+    const read = vi.spyOn(FinalCheckRepository.prototype, "manifest").mockResolvedValue(manifest);
+    const persist = vi.spyOn(ShadowDetectionRepository.prototype, "persist").mockImplementation(async () => { linked = [id(12)]; return []; });
+    const ports = practiceFinalCheckPorts(pool(shadowQuery), pool(runtimeQuery), sha);
+    return { context, source, manifest, runtimeQuery, shadowQuery, read, persist, ports, signalId: id(12) };
+  }
+  it("retains exact already-linked signal IDs after validation without generating a certificate detection", async () => {
+    const f = certificate(undefined, true);
+    expect(await f.ports.process(f.context, f.manifest, f.source)).toMatchObject({ status: "detected", signalIds: [f.signalId], failureCode: null });
+    expect(f.runtimeQuery.mock.calls.some(([sql]) => sql.includes("FROM app.evidence_object"))).toBe(true);
+    expect(f.shadowQuery.mock.calls.find(([sql]) => sql.includes("FROM app.shadow_signal_evidence"))?.[1])
+      .toEqual([f.context.tenantId, f.manifest.comparisons.jobId, f.source.evidenceId, f.source.objectVersionId, f.source.sha256, f.source.receivedAt]);
+    expect(f.persist).not.toHaveBeenCalled();
+  });
+  it.each([undefined, "Fictional electrical installation"])("keeps an ordinary unmatched certificate zero without creating a signal: %s", async description => {
+    const f = certificate(description);
+    expect(await f.ports.process(f.context, f.manifest, f.source)).toMatchObject({ status: "zero_result", signalIds: [] });
+    expect(f.persist).not.toHaveBeenCalled();
+  });
+  it("uses the canonical frozen baseline comparison for the historical included-photo result", async () => {
+    const f = certificate("Paint walls");
+    expect(await f.ports.process(f.context, f.manifest, f.source)).toMatchObject({ status: "detected", signalIds: [f.signalId] });
+    expect(f.persist).toHaveBeenCalledTimes(1);
+    expect(f.persist.mock.calls[0]?.[1]).toMatchObject({ observations: [{ facts: { description: "painted walls" } }] });
+    f.manifest.signals = [{ signalId: f.signalId, revision: 0, description: "painted walls", scopeItemId: null,
+      coalescedIntoSignalId: null, permanentExclusion: false, evidenceIds: [f.source.evidenceId!] }];
+    const reconcile = vi.spyOn(FinalCheckRepository.prototype, "reconcile").mockResolvedValue({});
+    await f.ports.reconcile(f.context, f.manifest);
+    expect(reconcile.mock.calls[0]?.[3]).toMatchObject([{ outcome: "already_in_original_scope" }]);
+  });
+  it.each(["blank", "company"] as const)("keeps the %s firm's certificate zero even with a matching Paint walls baseline", async firm => {
+    const f = certificate("Paint walls", false, firm);
+    expect(await f.ports.process(f.context, f.manifest, f.source)).toMatchObject({ status: "zero_result", signalIds: [] });
+    expect(f.persist).not.toHaveBeenCalled();
+  });
+  it.each(["blank", "company"] as const)("retains the %s firm's already-linked certificate detection without creating another", async firm => {
+    const f = certificate("Paint walls", true, firm);
+    expect(await f.ports.process(f.context, f.manifest, f.source)).toMatchObject({ status: "detected", signalIds: [f.signalId] });
+    expect(f.persist).not.toHaveBeenCalled();
+  });
+  it("does not let an existing detection or matching baseline bypass current source verification", async () => {
+    const f = certificate("Paint walls", true);
+    f.runtimeQuery.mockResolvedValue({ rows: [], rowCount: 0 });
+    expect(await f.ports.process(f.context, f.manifest, f.source)).toMatchObject({ status: "unsupported", failureCode: "SOURCE_INVALID", signalIds: [] });
+    expect(f.shadowQuery).not.toHaveBeenCalled(); expect(f.persist).not.toHaveBeenCalled();
+  });
+  it("refuses source substitution before reading linked signals", async () => {
+    const f = certificate("Paint walls", true);
+    expect(await f.ports.process(f.context, f.manifest, { ...f.source, objectVersionId: "substituted" }))
+      .toMatchObject({ status: "unsupported", failureCode: "SOURCE_INVALID", signalIds: [] });
+    expect(f.runtimeQuery).not.toHaveBeenCalled(); expect(f.shadowQuery).not.toHaveBeenCalled(); expect(f.persist).not.toHaveBeenCalled();
+  });
+  it("keeps an unknown certificate recipe unsupported even with a matching baseline", async () => {
+    const f = certificate("Paint walls");
+    f.source.sha256 = "e".repeat(64);
+    expect(await f.ports.process(f.context, f.manifest, f.source)).toMatchObject({ status: "unsupported", failureCode: "UNSUPPORTED_SOURCE" });
+    expect(f.persist).not.toHaveBeenCalled();
+  });
 });
 
 describe("structured-source port refusal and frozen validation (unit doubles, not PostgreSQL proof)", () => {

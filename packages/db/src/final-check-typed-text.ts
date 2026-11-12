@@ -36,6 +36,12 @@ export function decodeFinalCheckTypedText(text: string, reference: string | null
   let work = normalized.replace(priceSentence, (_all, agreed: string, estimated: string, fine: string) => {
     prices.push((agreed ?? estimated ?? fine).trim()); return ". ";
   }).trim();
+  // A bounded diary tail separates time spent from the money estimate. Keep
+  // whole-input matching and count its price alongside every other price slot.
+  const durationEstimate = new RegExp(`,\\s*(?:one|two|three|four|five|six|seven|eight|nine|ten|\\d+(?:\\.\\d+)?)\\s+hours?\\s+extra,\\s*about\\s+(${priceBody})$`, "u").exec(work);
+  if (durationEstimate) {
+    prices.push(durationEstimate[1]!.trim()); work = work.slice(0, durationEstimate.index).trim();
+  }
   // Directly attached amounts are allowed only at the end of the work clause.
   const attached = new RegExp(`\\s+(?:for\\s+)?(${priceBody})$`, "u").exec(work);
   if (attached && /£|\b(?:pounds|quid)\b/u.test(attached[1]!)) {
