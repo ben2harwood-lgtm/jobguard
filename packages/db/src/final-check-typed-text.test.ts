@@ -1,5 +1,11 @@
-import { expect, it } from "vitest";
+import type { Pool } from "pg";
+import { FinalCheckError } from "@jobguard/core";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { decodeFinalCheckTypedText } from "./final-check-typed-text.js";
+import { FinalCheckRepository, type FinalCheckManifest } from "./final-check-repository.js";
+import * as structuredReader from "./final-check-practice-readers.js";
+import { practiceFinalCheckPorts } from "./shadow-detection-repository.js";
+import { verifiedTenantContextFromMembership, type AuthenticatedMembership } from "./tenant-context.js";
 
 const diary = "also painted the hallway ceiling, customer asked";
 const request = "Please paint the hallway ceiling as an extra.";
@@ -49,6 +55,7 @@ const ordinaryGrammar = [
   ["Customer asked for an extra heated towel rail while we were on site. Agreed £180.", "customer_request", 18000],
   ["Customer asked for an extra heated towel rail while we were on site. Installed it today.", "note_or_voice", null],
   ["Please go ahead and install the towel rail as well.", "customer_request", null],
+  ["Please fit the heated towel rail as well.", "customer_request", null],
   ["Hi, yes, please go ahead and paint the kitchen ceiling as well. Thanks.", "customer_request", null],
   ["additional towel rail", "customer_request", null],
   ["added towel rail. Installed it today.", "note_or_voice", null],
@@ -70,7 +77,7 @@ it.each(["£180 or £180", "£180 or £200", "£180.001", "-180 pounds", "£1000
   expect(decodeFinalCheckTypedText(`Fitted the towel rail as an extra. Agreed ${amount}.`, null, "note_or_voice"))
     .toMatchObject({ status: "proposal", ambiguousPrice: true, proposal: { facts: { estimatedValuePence: null } } });
 });
-const refusals = ["The agreed job price is £180", "added 180 pounds", "12/11/2026", "07123456789", "3 hours", "2 items", "no extra charge", "included in the agreed price", "not extra", "cancelled work", "Do not fit the towel rail as an extra", "Please do not go ahead and fit the towel rail as well"];
+const refusals = ["The agreed job price is £180", "added 180 pounds", "12/11/2026", "07123456789", "3 hours", "2 items", "no extra charge", "included in the agreed price", "not extra", "cancelled work", "Do not fit the towel rail as an extra", "Please do not go ahead and fit the towel rail as well", "Please do not fit the heated towel rail as well."];
 it.each(refusals)("refuses alone and beside a work noun: %s", text => {
   for (const statement of [text, `${text}. Heated towel rail.`, `Fitted the heated towel rail as an extra. ${text}.`])
     for (const kind of ["note_or_voice", "customer_request"] as const)
@@ -80,7 +87,7 @@ it.each(["There is a safety risk", "Written agreement is legally required", "The
   expect(decodeFinalCheckTypedText(`Fitted the towel rail as an extra. Agreed £180. ${clause}.`, null, "note_or_voice").status).not.toBe("proposal");
 });
 it("pronouns stay local, diary work needs completion, and towel descriptions stay distinct", () => {
-  for (const text of ["Fitted it today. Agreed £180.", "Customer asked for an extra heated towel rail while we were on site.", "extra towel rail", "added towel rail"])
+  for (const text of ["Fitted it today. Agreed £180.", "Customer asked for an extra heated towel rail while we were on site.", "extra towel rail", "added towel rail", "Please fit the heated towel rail as well."])
     expect(decodeFinalCheckTypedText(text, null, "note_or_voice").status).not.toBe("proposal");
   const refs = ["heated towel rail", "towel rail"].map(item => decodeFinalCheckTypedText(`Fitted the ${item} as an extra.`, null, "note_or_voice"));
   expect(refs.every(r => r.status === "proposal")).toBe(true);
@@ -96,4 +103,54 @@ it("both verbatim towel-rail originals keep one stable identity and their own ex
   expect(results.every(r=>r.status === "proposal")).toBe(true);
   if (results[0]!.status === "proposal" && results[1]!.status === "proposal")
     expect(results[0]!.proposal.facts.workReference).toBe(results[1]!.proposal.facts.workReference);
+});
+
+describe("structured-source port refusal and frozen validation (unit doubles, not PostgreSQL proof)", () => {
+  afterEach(() => vi.restoreAllMocks());
+  function fixture() {
+    const id = "10000000-0000-4000-8000-000000000001", at = "2026-11-11T10:00:00Z";
+    const context = verifiedTenantContextFromMembership({ tenantId: id, membershipId: id, identityUserId: id } as AuthenticatedMembership,
+      { kind: "real", credential: "a".repeat(64) });
+    const source: FinalCheckManifest["sources"][number] = { id, evidenceId: null, sourceKind: "unlinked_supplier_version",
+      sourceRef: id, objectVersionId: null, sha256: null, receivedAt: at, inputHash: "a".repeat(64), processable: true, input: {}, status: "pending" };
+    const manifest: FinalCheckManifest = { version: "final-check.manifest.v1", id, lockId: id, cutoff: at, hash: "a".repeat(64),
+      detectorVersion: "synthetic.v1", policyVersion: "final-check.reconciliation.v1", sources: [source], result: null, signals: [],
+      comparisons: { tenantId: id, jobId: id, captures: [], baselineItemIds: [], lines: [], baselineRecordedAt: at, baseline: [] } };
+    const ports = practiceFinalCheckPorts({} as Pool, {} as Pool, "f".repeat(64));
+    return { context, source, manifest, ports };
+  }
+  it("returns the structured reader's refusal before a forbidden manifest read", async () => {
+    const f = fixture();
+    vi.spyOn(structuredReader, "readPracticeStructuredSource").mockResolvedValue(null);
+    const read = vi.spyOn(FinalCheckRepository.prototype, "manifest").mockRejectedValue(new FinalCheckError("FINAL_CHECK_FORBIDDEN"));
+    await expect(f.ports.process(f.context, f.manifest, f.source)).resolves.toMatchObject({ status: "unsupported", failureCode: "UNSUPPORTED_SOURCE", signalIds: [] });
+    expect(read).not.toHaveBeenCalled();
+  });
+  it("requires frozen validation after a successful structured decode", async () => {
+    const f = fixture();
+    vi.spyOn(structuredReader, "readPracticeStructuredSource").mockResolvedValue({ text: "Fictional material document" });
+    vi.spyOn(FinalCheckRepository.prototype, "manifest").mockResolvedValue(f.manifest);
+    await expect(f.ports.process(f.context, f.manifest, f.source)).resolves.toMatchObject({ status: "zero_result", failureCode: null });
+    for (const source of [{ ...f.source, input: { forged: true } }, { ...f.source, inputHash: "b".repeat(64) }])
+      await expect(f.ports.process(f.context, f.manifest, source)).resolves.toMatchObject({ status: "unsupported", failureCode: "SOURCE_INVALID" });
+    await expect(f.ports.process(f.context, { ...f.manifest, cutoff: "2026-11-12T10:00:00Z" }, f.source))
+      .resolves.toMatchObject({ status: "unsupported", failureCode: "SOURCE_INVALID" });
+    await expect(f.ports.process({ ...f.context, tenantId: "20000000-0000-4000-8000-000000000002" }, f.manifest, f.source))
+      .resolves.toMatchObject({ status: "unsupported", failureCode: "SOURCE_INVALID" });
+  });
+  it("does not swallow unrelated structured-reader or manifest errors", async () => {
+    const f = fixture(), error = new Error("Source connection failed");
+    const decode = vi.spyOn(structuredReader, "readPracticeStructuredSource").mockRejectedValue(error);
+    await expect(f.ports.process(f.context, f.manifest, f.source)).rejects.toBe(error);
+    decode.mockResolvedValue({ text: "Fictional material document" });
+    vi.spyOn(FinalCheckRepository.prototype, "manifest").mockRejectedValue(error);
+    await expect(f.ports.process(f.context, f.manifest, f.source)).rejects.toBe(error);
+  });
+  it.each(["job_diary_text", "customer_message_text", "completion_photo", "electrical_certificate"])("preserves the %s manifest authorization failure", async sourceKind => {
+    const f = fixture(), error = new FinalCheckError("FINAL_CHECK_FORBIDDEN");
+    const decode = vi.spyOn(structuredReader, "readPracticeStructuredSource").mockResolvedValue(null);
+    vi.spyOn(FinalCheckRepository.prototype, "manifest").mockRejectedValue(error);
+    await expect(f.ports.process(f.context, f.manifest, { ...f.source, sourceKind, evidenceId: f.source.id })).rejects.toBe(error);
+    expect(decode).not.toHaveBeenCalled();
+  });
 });
