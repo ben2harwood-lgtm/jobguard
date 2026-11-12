@@ -245,6 +245,48 @@ it("company routine path permits a fixed unlocked read without terms, then bound
   expect(completed.signals).toEqual([]);
 });
 
+it("company intake originals retain both evidence identities and the price through the checked worker", async () => {
+  const { preparedTrialFixture } = await import("./free-first-job-lifecycle-fixtures.js");
+  const { CompanyFinalCheckRepository } = await import("../src/company-final-check-repository.js");
+  const { FinalAccountCommandService } = await import("../src/final-account-repository.js");
+  const a = await preparedTrialFixture({ ...f, waitForConnectionEnds: async () => undefined });
+  expect((await f.admin.query("SELECT practice_session_digest FROM app.job WHERE tenant_id=$1 AND id=$2", [a.tenantId,a.jobId])).rows[0].practice_session_digest).toBeNull();
+  const sources = new JobSourceRepository(f.runtime);
+  const noteText = "also painted the hallway ceiling, customer asked. Estimated extra 150 pounds.";
+  const messageText = "Please paint the hallway ceiling as an extra.";
+  const note = await sources.intake(a.context, a.jobId, a.actorId, "diary", {
+    version: "job-diary-input.v1", commandId: randomUUID(), entryMode: "typed", onSite: false, text: noteText,
+  });
+  const message = await sources.intake(a.context, a.jobId, a.actorId, "customer_message", {
+    version: "customer-message-input.v1", commandId: randomUUID(),
+    fictionalCustomer: { kind: "named_fictional_customer", name: "Fictional Example" }, text: messageText,
+  });
+  const originalIds = [note.record.evidence.id, message.record.evidence.id].sort();
+  expect(new Set(originalIds).size).toBe(2);
+  expect(note.record.actualTesterMembershipId).toBe(a.actorId);
+  expect(message.record.actualTesterMembershipId).toBe(a.actorId);
+  const company = new CompanyFinalCheckRepository(f.runtime), job = { version: "company-final-check.v1" as const, jobId: a.jobId };
+  const draft = await new FinalAccountCommandService(f.runtime).assemble(a.context, {
+    version: "final-account.assemble.v1", commandId: randomUUID(), jobId: a.jobId, actorMembershipId: a.actorId, expectedRevision: 0,
+  });
+  await company.acceptTerms(a.context, { ...job, commandId: randomUUID(), termsVersion: "synthetic_final_check_terms.v1" });
+  for (const scope of (await f.admin.query("SELECT id FROM app.scope_identity WHERE tenant_id=$1 AND job_id=$2 AND state='confirmed'", [a.tenantId,a.jobId])).rows)
+    await company.disposition(a.context, { ...job, commandId: randomUUID(), scopeItemId: scope.id, disposition: "done" });
+  await company.lock(a.context, { ...job, commandId: randomUUID(), finalAccountRevisionId: draft.id,
+    expectedRevision: Number(draft.revision), declarationVersion: "final_account_declaration.v1" });
+  await company.requestRun(a.context, job); await discover();
+  const task = await payload(a.jobId);
+  await executePracticeFinalCheck(recoveryContext(task.tenantId), task, f.shadow, factory(() => false), "synthetic_demo");
+  const view = await company.reveal(a.context, job);
+  expect(view).toMatchObject({ state: "completed", items: [{ description: "hallway ceiling", estimatedValuePence: 15000 }] });
+  const items = view.items as { evidence: { id: string }[] }[];
+  expect(items).toHaveLength(1);
+  expect(items[0]!.evidence.map(evidence => evidence.id).sort()).toEqual(originalIds);
+  const originals = (await f.admin.query("SELECT evidence_id,bytes FROM app.job_source_original WHERE tenant_id=$1 AND job_id=$2 ORDER BY evidence_id", [a.tenantId,a.jobId])).rows;
+  expect(originals.map(row => row.evidence_id)).toEqual(originalIds);
+  expect(originals.map(row => row.bytes.toString("utf8")).sort()).toEqual([noteText,messageText].sort());
+});
+
 it("keeps completed-invalidated reruns under separate manifest-attempt authority", async () => {
   const a = await setup(), originalTask = await payload(a.jobId);
   await executePracticeFinalCheck(recoveryContext((originalTask).tenantId), originalTask, f.shadow, factory(() => false), "synthetic_demo");

@@ -99,7 +99,8 @@ export async function readFinalCheckTypedText(pool: Pool, context: VerifiedTenan
         AND o.source_kind=CASE WHEN $4='job_diary_text' THEN 'diary' ELSE 'customer_message' END
         AND o.environment='synthetic_demo' AND tr.job_track='small_builder' AND tr.environment='synthetic_demo'
         AND current_database()='jobguard_synthetic_demo' AND j.provenance<>'imported'
-        AND EXISTS(SELECT 1 FROM app.authenticate_practice_session(j.practice_session_digest::text,j.tenant_id))
+        AND (j.practice_session_digest IS NULL OR EXISTS(
+          SELECT 1 FROM app.authenticate_practice_session(j.practice_session_digest::text,j.tenant_id)))
         AND e.kind='original' AND e.scope_item_id IS NULL AND e.server_verified_at IS NOT NULL
         AND e.object_key=o.object_key AND e.content_type=o.content_type AND e.byte_length=o.byte_length
         AND u.state='verified' AND u.server_verified_at IS NOT NULL AND u.scope_item_id IS NULL
