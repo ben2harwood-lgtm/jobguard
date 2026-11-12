@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-144-main": {
+      "branches": [
+        "codex/sandbox/later-safety-144-main"
+      ],
+      "note": "LATER-SAFETY-144; RED: money. Forward-only signed combined-invoice VAT, rebuilt on main.",
+      "allow": [
+        "packages/core/src/tax.ts",
+        "packages/core/src/tax.test.ts",
+        "packages/db/src/final-account-lock-repository.ts",
+        "packages/db/test/final-account-lock-invoice.integration.test.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
+        "packages/db/migrations/0731_combined_invoice_signed_vat.sql",
+        "packages/db/test/migration-proofs/0731_combined_invoice_signed_vat.proof.json",
+        "packages/db/migrations/1400_combined_invoice_signed_vat.sql",
+        "packages/db/test/migration-proofs/1400_combined_invoice_signed_vat.proof.json"
+      ]
+    }
+  }
+}
