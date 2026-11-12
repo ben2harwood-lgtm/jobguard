@@ -6,7 +6,7 @@ import { decodeJobSourceFixture } from "./job-source-fixtures.js";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 
 type Proposal = Pick<Observation, "text" | "facts" | "citations">;
-export type TypedTextResult = { status: "invalid" } | { status: "readable" } | { status: "proposal"; proposal: Proposal };
+export type TypedTextResult = { status: "invalid" } | { status: "readable" } | { status: "proposal"; proposal: Proposal; ambiguousPrice?: boolean };
 
 /** A deliberately small practice grammar, not a trade/language or D13 classifier.
  * Whole-input matching prevents unexamined trailing assertions becoming safe facts.
@@ -17,34 +17,54 @@ export function decodeFinalCheckTypedText(text: string, reference: string | null
   if (fixture) return { status: "proposal", proposal: fixture };
   if (reference !== null) return { status: "invalid" };
   const normalized = text.toLowerCase().trim();
-  // Estimates are separate sentences, never approved prices. Reject an entire
-  // malformed/ambiguous estimate rather than extracting a convenient substring.
-  const parts = normalized.split(/\s+estimated extra\s*:?\s*/u);
-  const work = parts.shift()!;
-  const estimates: number[] = [];
-  let unknownEstimate = false;
-  for (const part of parts) {
-    // Only amount/unit ambiguity is accepted as an unknown estimate. An extra
-    // sentence or instruction stays outside the grammar, including safety/legal
-    // assertions; never discard that text and manufacture negative D13 facts.
-    if (!/^(?:[£0-9.,+\-!?\s]|\b(?:pounds|quid|hours|or|and)\b)+$/u.test(part.trim())) return { status: "readable" };
-    const match = /^(?:£\s*(\d+(?:\.\d{1,2})?)|(\d+(?:\.\d{1,2})?)\s+(?:pounds|quid))[.!?]*$/u.exec(part.trim());
-    try {
-      if (!match) unknownEstimate = true;
-      else estimates.push(parsePoundsToPence(match[1] ?? match[2]!));
-    } catch { unknownEstimate = true; }
+  // Grammar (all rows consume the whole statement; articles and terminal punctuation are optional):
+  // legacy       [please|can you] [I] [also] ACTION ITEM [as an extra] [customer asked/requested]
+  // extra noun   extra|additional|added ITEM [Fitted|Installed it today]
+  // extra action [please] ACTION ITEM as an extra|as well|on top
+  // site diary   Customer asked for an extra ITEM while we were on site. [PRICE.] COMPLETED it today.
+  // message      [Hi, yes] please go ahead and ACTION ITEM as well. [PRICE.] [Thanks.]
+  // PRICE        Agreed MONEY | MONEY is fine | Estimated extra: MONEY | attached MONEY
+  // MONEY        £decimal | decimal pounds|quid; ambiguity is retained as an unknown estimate.
+  const item = "(?:(?:hallway|kitchen|bedroom|bathroom|living room|outside|loft)\\s+)?(?:heated towel rail|towel rail|ceiling|walls?|door|tap|hatch|shel(?:f|ves)|cupboard|skirting)";
+  const articleItem = `(?:(?:the|a|an)\\s+)?(${item})`;
+  const actionPattern = "(paint(?:ed)?|fit(?:ted)?|install(?:ed)?)";
+  // Only this bounded alphabet may occupy a price slot. It cannot swallow a
+  // safety, dispute, legal or negation clause. Money is counted across all slots.
+  const priceBody = "(?:[£0-9.,+\\-!?\\s]|\\b(?:pounds|quid|hours|or|and)\\b)+";
+  const priceSentence = new RegExp(`(?:^|[.!,;]\\s*|\\s+)(?:agreed\\s+(${priceBody})|estimated extra\\s*:?\\s*(${priceBody})|(${priceBody})\\s+is fine)(?=[.!?]*(?:\\s|$))`, "gu");
+  const prices: string[] = [];
+  let work = normalized.replace(priceSentence, (_all, agreed: string, estimated: string, fine: string) => {
+    prices.push((agreed ?? estimated ?? fine).trim()); return ". ";
+  }).trim();
+  // Directly attached amounts are allowed only at the end of the work clause.
+  const attached = new RegExp(`\\s+(?:for\\s+)?(${priceBody})$`, "u").exec(work);
+  if (attached && /£|\b(?:pounds|quid)\b/u.test(attached[1]!)) {
+    prices.push(attached[1]!.trim()); work = work.slice(0, attached.index).trim();
   }
-  const match = /^(?:(?:please|can you)\s+)?(?:i\s+)?(?:also\s+)?(paint(?:ed)?|fit(?:ted)?|install(?:ed)?)\s+(?:(?:the|a|an)\s+)?((?:(?:hallway|kitchen|bedroom|bathroom|living room|outside|loft)\s+)?(?:ceiling|walls?|door|tap|hatch|shel(?:f|ves)|cupboard|skirting))(?:\s+as an extra)?(?:\s*[,;]\s*customer (?:asked|requested)(?: for it)?|\s+as (?:asked|requested)(?: by (?:the )?customer)?)?[.!?]*$/u.exec(work.trim());
-  if (!match) return { status: "readable" };
-  const completed = ["painted", "fitted", "installed"].includes(match[1]!);
+  work = work.replace(/(?:[.!?]\s*)+/gu, ". ").replace(/(?:[.!?]\s*)+$/u, "");
+  const legacy = new RegExp(`^(?:(?:please|can you)\\s+)?(?:i\\s+)?(?:also\\s+)?${actionPattern}\\s+${articleItem}(?:\\s+as an extra)?(?:\\s*[,;]\\s*customer (?:asked|requested)(?: for it)?|\\s+as (?:asked|requested)(?: by (?:the )?customer)?)?$`, "u").exec(work);
+  const extraAction = new RegExp(`^(?:(?:hi,? yes[, ]+)?please go ahead and\\s+|please\\s+)?${actionPattern}\\s+${articleItem}\\s+(?:as an extra|as well|on top)(?:[.!?]\\s*)?(?:thanks)?$`, "u").exec(work);
+  const site = new RegExp(`^customer asked for an extra\\s+${articleItem} while we were on site(?:[.!?]\\s*(painted|fitted|installed) it today)?$`, "u").exec(work);
+  const noun = new RegExp(`^(?:extra|additional|added)\\s+${articleItem}(?:[.!?]\\s*(painted|fitted|installed) it today)?$`, "u").exec(work);
+  const match = extraAction ?? legacy;
+  const verb = match?.[1] ?? site?.[2] ?? noun?.[2];
+  const description = match?.[2] ?? site?.[1] ?? noun?.[1];
+  if (!description || (description.includes("towel rail") && legacy !== null && match === legacy && !/\bas an extra\b/u.test(work))) return { status: "readable" };
+  const completed = ["painted", "fitted", "installed"].includes(verb ?? "");
   if (!completed && kind !== "customer_request") return { status: "readable" };
-  const action = match[1]!.startsWith("paint") ? "paint" : "fit";
-  const description = match[2]!;
+  const action = verb?.startsWith("paint") ? "paint" : "fit";
+  let estimatedValuePence: number | null = null;
+  // An entire price slot must be exactly one money token. Two equal amounts are
+  // still ambiguous; dates, durations and numbers without currency never qualify.
+  if (prices.length === 1) {
+    const money = /^(?:£\s*(\d+(?:\.\d{1,2})?)|(\d+(?:\.\d{1,2})?)\s+(?:pounds|quid))[.!?]*$/u.exec(prices[0]!);
+    if (money) try { estimatedValuePence = parsePoundsToPence(money[1] ?? money[2]!); } catch { /* bounded unknown */ }
+  }
   // Legacy hallway fixtures use this reference. Other actions stay distinct.
   const workReference = action === "paint" && description === "hallway ceiling" ? "practice:hallway-ceiling" : `practice:typed:${action}:${description}`;
-  return { status: "proposal", proposal: { text, citations: [{ start: 0, end: text.length, quote: text }], facts: {
+  return { status: "proposal", ambiguousPrice: prices.length > 0 && estimatedValuePence === null, proposal: { text, citations: [{ start: 0, end: text.length, quote: text }], facts: {
     workReference, scopeArea: "job", description, status: completed ? "completed" : "requested",
-    estimatedValuePence: !unknownEstimate && estimates.length && new Set(estimates).size === 1 ? estimates[0]! : null,
+    estimatedValuePence,
     safetyImplication: false, customerClearlyRequested: !completed, needsPriorWrittenAgreement: false, significantWork: null,
     activeDispute: false, silenceMateriallyWorsensDispute: false, disclosureDuty: false,
   } } };
@@ -86,6 +106,9 @@ export async function readFinalCheckTypedText(pool: Pool, context: VerifiedTenan
     let text: string;
     try { text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(row.bytes); } catch { return { status: "invalid" }; }
     if (!Buffer.from(text, "utf8").equals(row.bytes)) return { status: "invalid" };
-    return decodeFinalCheckTypedText(text, row.synthetic_fixture_ref, s.sourceKind === "job_diary_text" ? "note_or_voice" : "customer_request");
+    const result = decodeFinalCheckTypedText(text, row.synthetic_fixture_ref, s.sourceKind === "job_diary_text" ? "note_or_voice" : "customer_request");
+    // Unsupported extra-bearing originals remain pending, including unsafe
+    // trailing clauses. Readability alone is not evidence of commercial absence.
+    return result.status === "readable" && /\b(extra|additional|added|as well|on top)\b/iu.test(text) ? { status: "invalid" } : result;
   });
 }
