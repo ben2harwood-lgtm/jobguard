@@ -30,6 +30,7 @@
         "packages/db/test/later-empty-tables.ts",
         "packages/db/test/migration-proofs/0943_job_proof_statement.proof.json",
         "packages/db/test/proof-invalidation.integration.test.ts",
+        "packages/db/test/proof-invalidation.test.ts",
         "packages/db/test/real-gap-proof-by-trade.integration.test.ts"
       ]
     }
