@@ -2145,10 +2145,12 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "c3d4e9218f4b66d4eba2c08376d5116d5cae1c2981e733ea8c4c76453a35112f",
+        "definitionSha256": "ae4fcf69bcbd955fce9e535241c0a94f3f9bfb9a1b731b64e066b0894dfa8940",
         "staticWrites": [],
         "staticCalls": [
-          "app.final_check_builder"
+          "app.final_check_builder",
+          "app.final_check_read_authority",
+          "app.require_authoritative_final_check"
         ]
       },
       "after": {
@@ -2162,12 +2164,14 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "1f824d1cf93fe7051bdfb0c09d00e846675acbfa32559130368ec3441171e9a1",
+        "definitionSha256": "81e6f454f5013afa3ad682a9bb92926f62adcb20eb52eff8d4664f5ce293cd48",
         "staticWrites": [],
         "staticCalls": [
           "app.current_actor",
           "app.current_tenant",
-          "app.final_check_builder"
+          "app.final_check_builder",
+          "app.final_check_read_authority",
+          "app.require_authoritative_final_check"
         ]
       }
     },
@@ -2332,15 +2336,12 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "d190b483f6a60837ad32b3a3e3bbb7f95c0798776c2d4767cd6a6feff304bda7",
-        "staticWrites": [
-          "infrastructure.final_check_request"
-        ],
+        "definitionSha256": "7b01a37185c80be397c9947f0d837b49fe81dcf17a08899241c3b29d1f415bcd",
+        "staticWrites": [],
         "staticCalls": [
-          "app.ch4_require_open",
+          "app.admit_final_check_cycle",
           "app.final_check_builder",
-          "app.final_check_practice_owns_job",
-          "app.require_final_check_rerun"
+          "app.final_check_practice_owns_job"
         ]
       },
       "after": {
@@ -2354,17 +2355,14 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "291f201a0d4fcada529eea0478294dddb201527a7e40600e9ad5c7857fabf5e8",
-        "staticWrites": [
-          "infrastructure.final_check_request"
-        ],
+        "definitionSha256": "84c77c2d25126cca07deecce89ffb884519cd42da26463b47154985449bde239",
+        "staticWrites": [],
         "staticCalls": [
-          "app.ch4_require_open",
+          "app.admit_final_check_cycle",
           "app.current_actor",
           "app.current_tenant",
           "app.final_check_builder",
-          "app.final_check_practice_owns_job",
-          "app.require_final_check_rerun"
+          "app.final_check_practice_owns_job"
         ]
       }
     },
@@ -5437,8 +5435,7 @@
         "definitionSha256": null,
         "staticWrites": [],
         "staticCalls": [
-          "app.authenticate_practice_session",
-          "app.final_check_context"
+          "app.final_check_read_authority"
         ]
       },
       "after": {
@@ -5452,13 +5449,13 @@
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "8a5eca2d5d1988e4a0ba2b14e1e65c25a4f8d12e9ef4451f1a2a84794cc17d1b",
         "staticWrites": [],
         "staticCalls": [
           "app.authenticate_practice_session",
           "app.current_actor",
           "app.current_tenant",
-          "app.final_check_context"
+          "app.final_check_read_authority"
         ]
       }
     },
@@ -7037,6 +7034,27 @@
         "staticWrites": [],
         "staticCalls": [
           "app.lp6_bound_request"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp6d_outbox_issuer_authority(uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "32dd9cfd31de60ac7bb777e9d201f6caf787db125d13bd712c2103060f1c01bd",
+        "staticWrites": [],
+        "staticCalls": [
+          "app.lp6d_xc_send_authority"
         ]
       }
     }
