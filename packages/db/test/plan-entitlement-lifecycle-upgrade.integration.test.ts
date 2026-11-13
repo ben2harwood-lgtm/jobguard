@@ -256,13 +256,23 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   ].map(([identity, name]) => [identity, finishSql.split(`CREATE OR REPLACE FUNCTION app.${name}(`)[1]!.split("AS $$")[1]!.split("$$;")[0]]));
   for (const prior of security) {
     const current = live.find(row => row.oid === prior.oid);
-    // 0650 changes only the demo issuer body; keep its metadata and every other definition pinned.
-    if (prior.nspname === "app" && prior.proname === "demo_issue_customer_link" &&
-      prior.args === "t uuid, j uuid, c uuid, session_digest text, link_digest text, content text") {
-      expect({ ...current, definition: prior.definition, source: prior.source }).toEqual(prior);
-      const sql = await readFile(new URL("../migrations/0650_demo_customer_link_reference.sql", import.meta.url), "utf8");
-      expect(current?.definition?.split("$function$")[1]).toBe(sql.split("FUNCTION app.demo_issue_customer_link(")[1]!.split("AS $$")[1]!.split("$$;")[0]);
-      expect(current?.source).toBe(sql.split("FUNCTION app.demo_issue_customer_link(")[1]!.split("AS $$")[1]!.split("$$;")[0]);
+    // 0733 changes these exact bodies; retain every routine's security metadata.
+    const customerLinkRoutines = [
+      "app.customer_portal_current(g app.customer_portal_grant)",
+      "app.demo_issue_customer_link(t uuid, j uuid, c uuid, session_digest text, link_digest text, content text)",
+      "identity.customer_portal_use(t uuid, j uuid, c uuid, digest text, session_digest text, operation text)",
+      "identity.customer_portal_quote(t uuid, j uuid, c uuid, digest text, cmd jsonb)",
+    ];
+    if (customerLinkRoutines.includes(`${prior.nspname}.${prior.proname}(${prior.args})`)) {
+      const expected = `${prior.nspname}.${prior.proname}(${prior.args})` ===
+        "identity.customer_portal_use(t uuid, j uuid, c uuid, digest text, session_digest text, operation text)"
+        ? { ...prior, proacl: "{jobguard_migration=X/jobguard_migration,jobguard_identity=X/jobguard_migration,jobguard_binding_owner=X/jobguard_migration}" }
+        : prior;
+      expect({ ...current, definition: prior.definition, source: prior.source }).toEqual(expected);
+      const sql = await readFile(new URL("../migrations/0733_real_customer_link_own_quote.sql", import.meta.url), "utf8");
+      const body = sql.split(`FUNCTION ${prior.nspname}.${prior.proname}(`)[1]!.split("AS $$")[1]!.split("$$;")[0];
+      expect(current?.definition?.split("$function$")[1]).toBe(body);
+      expect(current?.source).toBe(body);
       continue;
     }
     // 0667 inserts only the practice-owner guard into lock_final_account and replaces the invoice actor check's end.

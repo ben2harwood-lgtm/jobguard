@@ -6,6 +6,11 @@ import { migrate, MIGRATION_URLS } from '../src/migrate.js';
 import { predecessorCatalogue } from './contractor-entitlement-fixtures.js';
 type Relation = { nspname:string; relname:string; relacl:unknown; [key:string]:unknown };
 function expectRelationsUnchanged(before:Relation[],after:Relation[],laterAcl:Set<string>) {
+ // 0733 adds only these quote bindings; retain every other predecessor attribute.
+ after=after.map(row=>row.nspname==='app'&&row.relname==='customer_portal_grant'?{...row,
+  columns:(row.columns as {attname:string}[]).filter(c=>!['quote_document_id','quote_document_version','quote_document_hash'].includes(c.attname)),
+  constraints:(row.constraints as {name:string}[]).filter(c=>!['customer_portal_grant_quote_complete','customer_portal_grant_quote_document_fk'].includes(c.name)),
+ }:row);
  for(const row of before){
   if(!laterAcl.has(`${row.nspname}.${row.relname}`)){expect(after).toContainEqual(row);continue;}
   const {relacl:_a,...kept}=row;
