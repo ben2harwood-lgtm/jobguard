@@ -62,6 +62,10 @@ const clientReplayCase = { key: "/api/customer-portal/extra-approvals", registry
 // Supplier-line snapshots/corrections use their own synthetic replay store. The
 // executable case below covers both mutations behind this route with the live guard.
 const supplierLineReplayCase = { key: "/api/jobs/[id]/supplier-lines", registry: ["/api/jobs/[id]/supplier-lines"] };
+// The practice proof statement has a dedicated owner/session writer outside the
+// generic dispatcher. Its exact replay, changed-request conflict and cross-kind ID
+// conflicts execute in real-gap-proof-by-trade.integration.test.ts.
+const proofStatementReplayCase = { key: "proof.statement", registry: ["/api/jobs/[id]/proof#answer_statement", "command:proof.statement"] };
 beforeAll(async () => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); await h.boot();
 }, 120000);
 afterAll(async () => { await h.stop(); vi.unstubAllEnvs(); });
@@ -80,7 +84,7 @@ describe("every watchdog_live_only command is covered by this contract", () => {
   });
   it("covers every watchdog_live_only registry key (web routes, dynamic actions, commands and Nest routes), and no stale key", () => {
     const liveOnly = Object.entries(jobMutationRegistry).filter(([, phase]) => phase === "watchdog_live_only").map(([key]) => key).sort();
-    const covered = new Set([...cases, clientReplayCase, supplierLineReplayCase].flatMap(c => c.registry));
+    const covered = new Set([...cases, clientReplayCase, supplierLineReplayCase, proofStatementReplayCase].flatMap(c => c.registry));
     expect(liveOnly.filter(key => !covered.has(key))).toEqual([]);
     expect([...covered].filter(key => !liveOnly.includes(key)).sort()).toEqual([]);
   });
