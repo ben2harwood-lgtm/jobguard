@@ -128,6 +128,8 @@ it("the fee writer itself refuses changed proof rebounding below the original ap
  const x=await catchFeeFixture(f);await x.execute(approve(await x.execute()));
  await rolledBack(f.admin,async db=>{
   await db.query("SELECT set_config('app.tenant_id',$1,true)",[x.context.tenantId]);
+  // LP-6d: the practice owner's own request, so the writer (not the binding) answers.
+  await bindOwnSession(db,x.auth.digest);
   const a=x.assessment;
   const live=(await db.query("SELECT app.recovery_attribution_sources($1,$2,$3,$4) source",[x.context.tenantId,x.jobId,{caseId:a.caseId,workId:a.workId,lineId:a.lineId,lockId:a.lockId},x.actor.membershipId])).rows[0].source;
   // Isolate the writer from the allocator's separate refusal. Only this rollback
