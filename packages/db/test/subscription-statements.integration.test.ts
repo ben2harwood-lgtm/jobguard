@@ -7,7 +7,11 @@ import { approvedSimulation, calendarInput, command, correctionPeriod, count, hi
 // Multi-period/correction scenarios below have bounded 120s budgets for real PostgreSQL CI.
 // Their full month inputs, deferred integrity checks and assertions remain enabled.
 describe("MON-2A-P hypothetical statements and simulated outcomes", () => {
- let f: WorkFixture; beforeAll(async () => { f = await createWorkFixture(); }, 60000); afterAll(async () => closeWorkFixture(f));
+ let f: WorkFixture; beforeAll(async () => { f = await createWorkFixture();
+  // Admin-only issuance clock: all fixture periods through December 2026 have ended.
+  // This isolated cluster exposes no runtime clock override or new grant.
+  const definition = (await f.admin.query("SELECT pg_get_functiondef('app.mon2_issue(uuid,text,date,integer)'::regprocedure) definition")).rows[0].definition as string;
+  await f.admin.query(definition.replaceAll("clock_timestamp()", "'2027-01-01T12:00:00Z'::timestamptz")); }, 60000); afterAll(async () => closeWorkFixture(f));
  it("correction-inclusive issue never exceeds maximum", async () => {
   for (const places of [7, 8, 11, 12, 17]) {
    const { a, issued } = await correctionPeriod(f, places);

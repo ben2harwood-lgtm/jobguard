@@ -15,6 +15,7 @@ describe("final check reveal view", () => {
  it("states each phase, including the exact zero-result sentence", () => {
   expect(revealStatus(finalCheckReadV1.parse({ state: "pending", items: [] }))).toBe(FINAL_CHECK_RUNNING_TEXT);
   expect(revealStatus(finalCheckReadV1.parse({ state: "completed", lockId: id(7), runId: id(8), items: [] }))).toBe(FINAL_CHECK_EMPTY_TEXT);
+  expect(revealStatus(finalCheckReadV1.parse({ state: "failed", items: [] }))).toBe("The final check could not finish, so nothing is shown and this job's bill stays locked.");
   expect(revealStatus(completed)).toBe("JobGuard's final check found 1 thing that may be missing from your bill.");
  });
  it("already included offers every locked line; original quote offers baseline scope items only", () => {

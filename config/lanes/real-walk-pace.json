@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-walk-pace": {
+      "branches": ["codex/sandbox/real-walk-pace"],
+      "note": "REAL-WALK-PACE: walkthrough pacing, compact phone bar and completion wording; no domain changes.",
+      "allow": [
+        "apps/web/app/ui/walkthrough/walkthrough.tsx",
+        "apps/web/app/ui/walkthrough/walkthrough.module.css",
+        "apps/web/app/ui/walkthrough/walkthrough-pace.test.ts",
+        "apps/web/app/practice-company/walkthrough/screen-actions.ts",
+        "apps/web/app/practice-company/walkthrough/screen-actions.test.ts",
+        "apps/web/e2e/WALK-3.spec.ts",
+        "apps/web/e2e/WALK-stress.spec.ts"
+      ]
+    }
+  }
+}

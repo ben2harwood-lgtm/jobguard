@@ -57,7 +57,7 @@ test("real company session persists a fictional pull and rejects replay and cros
     await tab.getByRole("button", { name: "Request code", exact: true }).click();
     await tab.getByLabel("Eight-digit code").fill((await tab.getByTestId("fixture-code").innerText()).trim());
     await tab.getByRole("button", { name: "Verify code", exact: true }).click();
-    await expect(tab.getByRole("heading", { name: "Signed in", exact: true })).toBeVisible();
+    await expect(tab.getByRole("heading", { name: "You're signed in.", exact: true })).toBeVisible();
   };
   const bankCall = (tab: typeof page, operation?: string, connectionId?: string) => tab.evaluate(async ({ operation, connectionId }) => {
     const auth = await (await fetch("/api/auth/session", { cache: "no-store" })).json();

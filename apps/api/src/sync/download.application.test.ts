@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { SyntheticSyncDownloadApplication } from "./download.application.js";
+import { SyncServerError, SyntheticSyncDownloadApplication } from "./download.application.js";
 
 const id = (n: number) => `00000000-0000-4000-8000-${n.toString().padStart(12, "0")}`;
 const tenant = id(1), otherTenant = id(2), user = id(3), job = id(4), otherJob = id(5);
@@ -193,6 +193,19 @@ describe("M3-3 dark server download streams (without RLS)", () => {
     const rebuilt = await f.download(issued.token, query);
     expect(rebuilt.cleanup.tombstones).toEqual([{ jobId: jobs[0] }]);
     expect(rebuilt.page.rows.some(r => r.jobId === jobs[0])).toBe(false);
+  });
+
+  it("requires cleanup of every delivered job when the store reports lost authority", async () => {
+    const f = fixture(); const issued = await f.subscribe();
+    f.readCurrentSession.mockRejectedValueOnce(new SyncServerError("SYNC_AUTHORITY_REQUIRED"));
+    const result = await f.download(issued.token, { delivered: [job, otherJob] });
+    expect(result.page.outcome).toBe("refused");
+    expect(result.page.rows).toEqual([]);
+    expect(result.page.cleanup).toBe("required");
+    expect(result.resync).toBe("required");
+    expect(result.cleanup.outcome).toBe("cleanup_required");
+    expect(result.cleanup.tombstones).toEqual([{ jobId: job }, { jobId: otherJob }]);
+    expect(result.cleanup.keep).toEqual([]);
   });
 
   it("sanitizes store failures, denies malformed snapshots, and rejects invalid cursors", async () => {

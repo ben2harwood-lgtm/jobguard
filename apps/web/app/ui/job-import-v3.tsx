@@ -1,4 +1,5 @@
 "use client";
+import { jobPageFetch as fetch } from "./job-page-fetch";
 import { useEffect, useState } from "react";
 import { z } from "zod";
 import { adoptJobV3, jobImportResultV3, jobImportSourceV1, type AdoptJobV3, type JobImportResultV3 } from "@jobguard/core";

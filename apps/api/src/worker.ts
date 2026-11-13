@@ -2,6 +2,7 @@ import { RetentionRecordRepository } from "@jobguard/db";
 import { registerRetentionReviewTasks } from "./retention-review-task.js";
 import { registerExtraEscalationTasks } from "./extra-escalation-task.js";
 import { escalateOverdueExtrasTask } from "@jobguard/db";
+import { readinessTasks } from "./readiness-task.js";
 import { executeEvidencePackV3 } from "./evidence-pack-v3.worker.js";
 import { EvidencePackV3WorkerRepository } from "@jobguard/db";
 import { readLateSourceObservations } from "@jobguard/db";
@@ -18,6 +19,7 @@ import { ActionExecutor, type OutboundAdapter, type SafeTelemetry, verifiedTenan
 import { run, type TaskList } from "graphile-worker";
 import { Pool } from "pg";
 import { z } from "zod";
+import { registerPracticeFinalCheckTasks, executePracticeFinalCheck, availabilitySafeFinalCheckPorts } from "./final-check-practice-run.js";
 import { registerFinalCheckTask } from "./worker-task-extensions.js";
 import { executeFinalCheckTask, type FinalCheckExecutionPorts } from "./final-check-task-executor.js";
 import { requireOutboxSettlementEligibility } from "./production-settlement-guard.js";
@@ -63,30 +65,11 @@ const finalCheckExecutionPorts:FinalCheckExecutionPorts={
  publish:completionRepository.publish.bind(completionRepository),
 };
 registerFinalCheckTask(tasks,async parsed=>{await executeFinalCheckTask(queueContext({tenantId:parsed.tenantId}),parsed,finalCheckExecutionPorts,finalCheckEnvironment);});
-const practiceTaskV1=z.object({version:z.literal("final-check-practice-run.v1"),tenantId:z.guid({ error: "Invalid uuid" }),jobId:z.guid({ error: "Invalid uuid" }),lockId:z.guid({ error: "Invalid uuid" })}).strict();
-tasks.discover_final_check_requests=async(_payload,helpers)=>{
- await helpers.withPgClient(async client=>{
-  await client.query("BEGIN");
-  try{
-   const rows=await client.query<{lock_id:string;tenant_id:string;job_id:string}>(
-    "SELECT lock_id,tenant_id,job_id FROM infrastructure.final_check_request WHERE enqueued_at IS NULL ORDER BY requested_at LIMIT 100 FOR UPDATE SKIP LOCKED");
-   for(const row of rows.rows){
-    // Queue insert and request acknowledgment commit together. A crash cannot re-enqueue completed work.
-    await client.query("SELECT graphile_worker.add_job('final_check_practice_run',$1::json,job_key := $2)",[
-     JSON.stringify({version:"final-check-practice-run.v1",tenantId:row.tenant_id,jobId:row.job_id,lockId:row.lock_id}),`final-check-practice:${row.lock_id}`]);
-    await client.query("UPDATE infrastructure.final_check_request SET enqueued_at=clock_timestamp() WHERE lock_id=$1",[row.lock_id]);
-   }
-   await client.query("COMMIT");
-  }catch(error){await client.query("ROLLBACK");throw error;}
- });
-};
-tasks.final_check_practice_run=async payload=>{
- const task=practiceTaskV1.parse(payload),context=queueContext({tenantId:task.tenantId});
- const manifest=await finalCheckRepository.begin(context,task.jobId);
- if(manifest.lockId!==task.lockId)throw new FinalCheckError("FINAL_CHECK_FORBIDDEN");
- await executeFinalCheckTask(context,{version:"final-check-task.v1",tenantId:task.tenantId,jobId:task.jobId,
-  lockId:task.lockId,manifestId:manifest.id,executionId:manifest.id},finalCheckExecutionPorts,finalCheckEnvironment);
-};
+registerPracticeFinalCheckTasks(tasks,async parsed=>executePracticeFinalCheck(queueContext({tenantId:parsed.tenantId}),parsed,shadowPool,pinned=>{
+ const repository=new FinalCheckRepository(pinned),completion=new FinalCheckCompletionRepository(pinned);
+ const worker=new FinalCheckWorker(availabilitySafeFinalCheckPorts(practiceFinalCheckPorts(pinned,runtimePool,createHash("sha256").update(generatePracticePng()).digest("hex"),createHash("sha256").update(generatePracticePng("j3-drainage-photo")).digest("hex"))),finalCheckEnvironment);
+ return {read:repository.manifest.bind(repository),execute:worker.execute.bind(worker),publish:completion.publish.bind(completion)};
+},finalCheckEnvironment));
 // Demo-only DEMO-J3 guide step: the practice builder asks, this worker holds signals from saved sources before lock.
 const practicePhotoHash=(fixture:"completion-photo"|"j3-drainage-photo")=>createHash("sha256").update(generatePracticePng(fixture)).digest("hex");
 const practiceHoldReader=new ShadowObservationReader(runtimePool,{async decode(source){return source.kind==="completion_photo"?decodePracticePhoto(source.sha256,practicePhotoHash("completion-photo"),practicePhotoHash("j3-drainage-photo")):null;}});
@@ -142,6 +125,11 @@ tasks.build_evidence_pack_v3 = async payload => {
 };
 // Browser-test isolation: the e2e worker runs only the practice final-check tasks, so queued outbox actions
 // that existing journeys advance by hand are never delivered behind their backs.
+const readiness = readinessTasks(runtimePool, finalCheckEnvironment, (store, scope) => {
+ const context = queueContext({tenantId:scope.tenantId});
+ return {load: raw => store.load(context, raw), loadJobPlans: raw => store.loadJobPlans(context, raw), recordProposal: raw => store.recordProposal(context, raw)};
+});
+Object.assign(tasks, readiness.tasks);
 const extraEscalationCrontab=registerExtraEscalationTasks(tasks,finalCheckEnvironment,parsed=>
  escalateOverdueExtrasTask(runtimePool,queueContext({tenantId:parsed.tenantId})));
 const extraEscalationTasks=extraEscalationCrontab?{discover_extra_escalations:tasks.discover_extra_escalations!,escalate_overdue_extras:tasks.escalate_overdue_extras!}:{};
@@ -153,8 +141,8 @@ const retentionCrontab=registerRetentionReviewTasks(tasks,process.env.JOBGUARD_E
 const practiceOnly=process.env.JOBGUARD_WORKER_PRACTICE_FINAL_CHECK_ONLY==="1";
 const runner=await run({connectionString:environment.GRAPHILE_DATABASE_URL,
  logger:redactingWorkerLogger(logger),
- taskList:redactingTasks(practiceOnly?{...extraEscalationTasks,discover_final_check_requests:tasks.discover_final_check_requests!,final_check_practice_run:tasks.final_check_practice_run!,discover_evidence_pack_requests:tasks.discover_evidence_pack_requests!,build_evidence_pack_v3:tasks.build_evidence_pack_v3!,discover_demo_source_holds:tasks.discover_demo_source_holds!,hold_demo_sources:tasks.hold_demo_sources!}:tasks),
- crontab:[retentionCrontab && !practiceOnly ? retentionCrontab : "",practiceOnly?"*/1 * * * * discover_final_check_requests\n*/1 * * * * discover_evidence_pack_requests\n*/1 * * * * discover_demo_source_holds":"*/1 * * * * discover_outbox\n*/1 * * * * discover_final_check_requests\n*/1 * * * * discover_evidence_pack_requests\n*/1 * * * * discover_demo_source_holds",extraEscalationCrontab].filter(Boolean).join("\n")});
+ taskList:redactingTasks(practiceOnly?{...extraEscalationTasks,...readiness.tasks,discover_final_check_requests:tasks.discover_final_check_requests!,final_check_practice_run:tasks.final_check_practice_run!,discover_evidence_pack_requests:tasks.discover_evidence_pack_requests!,build_evidence_pack_v3:tasks.build_evidence_pack_v3!,discover_demo_source_holds:tasks.discover_demo_source_holds!,hold_demo_sources:tasks.hold_demo_sources!}:tasks),
+ crontab:[retentionCrontab && !practiceOnly ? retentionCrontab : "",practiceOnly?"*/1 * * * * discover_final_check_requests\n*/1 * * * * discover_evidence_pack_requests\n*/1 * * * * discover_demo_source_holds":"*/1 * * * * discover_outbox\n*/1 * * * * discover_final_check_requests\n*/1 * * * * discover_evidence_pack_requests\n*/1 * * * * discover_demo_source_holds",practiceOnly?readiness.crontab:"",extraEscalationCrontab].filter(Boolean).join("\n")});
 for(const signal of ["SIGINT","SIGTERM"] as const)process.once(signal,()=>{
  void (async()=>{await runner.stop();await runtimePool.end();await shadowPool.end();})()
   .catch(()=>{logger.error("WORKER_TASK_FAILED");process.exitCode=1;});

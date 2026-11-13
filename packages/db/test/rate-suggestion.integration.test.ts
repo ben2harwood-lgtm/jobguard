@@ -17,7 +17,7 @@ async function sample(a: Company, pence = 100, unit = "each", traced = true) {
       VALUES($1,$2,$3,$4,1,'Fictional paint','1',$5,$6,$6)`, [a.tenantId, a.jobId, scope, revision, unit, traced ? pence : pence + 1]);
     await db.query(`INSERT INTO app.rate_book_observation(tenant_id,job_id,scope_item_id,id,source_scope_revision_id,unit,rate_principal_pence,currency,tax_basis,category,region,effective_at,provenance)
       VALUES($1,$2,$3,$4,$5,$6,$7,'GBP','standard_rate_20','paint','london','2026-10-30T00:00:00Z','entered')`, [a.tenantId, a.jobId, scope, id, revision, unit, pence]);
-  });
+  }, { membershipId: a.actorId });
   return { scope, revision, id };
 }
 async function unchangedTables(a: Company) {
@@ -47,7 +47,7 @@ it("M5-6 real PostgreSQL: provenance, races, replay, stale data, isolation and a
   for (const forged of [{ ...sqlInput, acceptedRatePence: 999 }, { ...sqlInput, enabled: true }, { ...sqlInput, actorId: b.actorId },
     { ...sqlInput, acceptedRatePence: null }, { ...sqlInput, query: { ...sqlInput.query, unit: null } }]) {
     await expect(workTenant(f.runtime, a.tenantId, db => db.query("SELECT app.accept_rate_suggestion($1,$2,$3::jsonb)",
-      [a.tenantId, a.digest, JSON.stringify(forged)]))).rejects.toThrow("INVALID_ACCEPTANCE");
+      [a.tenantId, a.digest, JSON.stringify(forged)]), { membershipId: a.actorId, bindRequest: false })).rejects.toThrow("INVALID_ACCEPTANCE");
   }
   expect((await f.admin.query("SELECT count(*)::int n FROM app.rate_suggestion_acceptance WHERE tenant_id=$1", [a.tenantId])).rows[0].n).toBe(0);
   const before = await unchangedTables(a);
@@ -75,17 +75,17 @@ it("M5-6 real PostgreSQL: provenance, races, replay, stale data, isolation and a
   for (const badActor of [{ kind: "system", sessionDigest: a.digest }, { kind: "human", sessionDigest: b.digest }])
     await expect(repo.accept(a.context, badActor, next)).rejects.toThrow();
   for (const mutation of ["UPDATE app.rate_suggestion_acceptance SET accepted_pence=1", "DELETE FROM app.rate_suggestion_acceptance"])
-    await expect(workTenant(f.admin, a.tenantId, db => db.query(mutation))).rejects.toThrow("immutable");
+    await expect(workTenant(f.admin, a.tenantId, db => db.query(mutation), { membershipId: a.actorId })).rejects.toThrow("immutable");
   for (const mutation of ["INSERT INTO app.rate_suggestion_acceptance SELECT * FROM app.rate_suggestion_acceptance", "UPDATE app.rate_suggestion_acceptance SET accepted_pence=1", "DELETE FROM app.rate_suggestion_acceptance", "TRUNCATE app.rate_suggestion_acceptance"])
-    await expect(workTenant(f.runtime, a.tenantId, db => db.query(mutation))).rejects.toThrow("permission denied");
+    await expect(workTenant(f.runtime, a.tenantId, db => db.query(mutation), { membershipId: a.actorId })).rejects.toThrow("permission denied");
   expect((await f.admin.query("SELECT count(*)::int n FROM app.rate_suggestion_acceptance WHERE tenant_id=$1", [a.tenantId])).rows[0].n).toBe(2);
   const duplicates = await meterCompany(f), dup = await sample(duplicates);
   await expect(workTenant(f.admin, duplicates.tenantId, db => db.query(`INSERT INTO app.rate_book_observation
     SELECT $1,tenant_id,job_id,scope_item_id,source_scope_revision_id,unit,rate_principal_pence,currency,tax_basis,category,region,effective_at,provenance,created_at
-    FROM app.rate_book_observation WHERE tenant_id=$2 AND id=$3`, [randomUUID(), duplicates.tenantId, dup.id]))).rejects.toThrow(/unique|duplicate/);
+    FROM app.rate_book_observation WHERE tenant_id=$2 AND id=$3`, [randomUUID(), duplicates.tenantId, dup.id]), { membershipId: duplicates.actorId })).rejects.toThrow(/unique|duplicate/);
   await workTenant(f.admin, duplicates.tenantId, db => db.query(`INSERT INTO app.rate_book_observation
     SELECT $1,tenant_id,job_id,scope_item_id,source_scope_revision_id,unit,rate_principal_pence,currency,'zero_rate',category,region,effective_at,provenance,created_at
-    FROM app.rate_book_observation WHERE tenant_id=$2 AND id=$3`, [randomUUID(), duplicates.tenantId, dup.id]));
+    FROM app.rate_book_observation WHERE tenant_id=$2 AND id=$3`, [randomUUID(), duplicates.tenantId, dup.id]), { membershipId: duplicates.actorId });
   const conflicting = await repo.read(duplicates.context, query);
   expect(conflicting).toMatchObject({ status: "unknown", rate: null, sampleCount: 0 });
   expect(conflicting.exclusions.map(row => row.reason)).toEqual(["conflicting_source_revision", "conflicting_source_revision"]);

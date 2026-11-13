@@ -33,6 +33,13 @@ test("stored practice acceptance survives reload with actor and sources", async 
     const query = new URLSearchParams({ version: "rate-query.v1", asOf: "2026-11-01T00:00:00.000Z", unit: "each", taxBasis: "standard_rate_20", category: "paint", region: "london" });
     await page.goto(`/jobs/${job}/rate-suggestions?${query}`);
     const main = page.getByRole("main");
+    for (const csrf of [undefined, "wrong"]) {
+      const headers: Record<string, string> = { origin: baseURL! };
+      if (csrf) headers["x-csrf-token"] = csrf;
+      const refused = await page.request.post(`/api/jobs/${job}/rate-suggestions`, { headers, data: {} });
+      expect(refused.status()).toBe(403);
+    }
+    expect((await client.query("SELECT count(*)::int n FROM app.rate_suggestion_acceptance WHERE tenant_id=$1", [tenant])).rows[0].n).toBe(0);
     await expect(main.getByRole("heading", { name: "Suggested rate: 100 GBP pence" })).toBeVisible();
     await main.getByLabel("Target scope item ID").fill(scope);
     await main.getByLabel("Current target revision ID").fill(revision);

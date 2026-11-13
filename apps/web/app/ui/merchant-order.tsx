@@ -1,4 +1,5 @@
 "use client";
+import { jobPageFetch as fetch } from "./job-page-fetch";
 import React, { useRef, useState } from "react";
 import type { MerchantOrderPreview } from "@jobguard/api/merchant-order-contracts";
 

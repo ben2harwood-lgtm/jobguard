@@ -187,6 +187,7 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "/api/jobs/[id]/supplier-documents/facts/confirm": "watchdog_live_only",
   "/api/jobs/[id]/supplier-documents/intake": "watchdog_live_only",
   "/api/jobs/[id]/supplier-documents/receipts": "watchdog_live_only",
+  "/api/jobs/[id]/supplier-lines": "watchdog_live_only",
   "/api/jobs/[id]/supplier-matches/corrections": "watchdog_live_only",
   "/api/jobs/[id]/supplier-matches": "watchdog_live_only",
   "/api/jobs/[id]/things-to-check/[action]": "watchdog_live_only",
@@ -207,6 +208,7 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "/api/recovery-cases/[id]/follow-ups/[followUpId]/commands": "post_live_billing",
   "/api/jobs/[id]/proof#select_generated": "watchdog_live_only",
   "/api/jobs/[id]/proof#finalize": "watchdog_live_only",
+  "/api/jobs/[id]/proof#answer_statement": "watchdog_live_only",
   "/api/jobs/[id]/proof#complete": "watchdog_live_only",
   "/api/jobs/[id]/proof#invalidate": "post_live_billing",
   "/api/jobs/[id]/relevance-inbox/[action]#seed": "watchdog_live_only",
@@ -269,6 +271,7 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   // LP-5b classifications preserve the existing variation/parties routes.
   "command:LogBuilderExtra": "post_live_billing",
   "command:job.parties": "pre_live_allowed",
+  "command:proof.statement": "watchdog_live_only",
   "command:proof.complete": "watchdog_live_only",
   "command:purchase_order.simulate": "watchdog_live_only",
   "command:purchase_order.place": "watchdog_live_only",
@@ -304,6 +307,8 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "nest:/jobs/:id/final-check/dispositions": "post_live_billing",
   "/api/jobs/[id]/final-check/catches": "post_live_billing",
   "nest:/jobs/:id/final-check/catches": "post_live_billing",
+  // Synthetic company-session adapter; SQL routines retain lock and job authority.
+  "/api/jobs/[id]/trial-final-check": "post_live_billing",
   "/api/jobs/[id]/final-check/runs": "post_live_billing",
   "nest:/jobs/:id/final-check/runs": "post_live_billing",
   "command:RecordFinalCheckDisposition": "post_live_billing",

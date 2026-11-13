@@ -54,8 +54,8 @@ it("matches the old list for own/other team, branch and region grants, every rol
  for (const [label, actor] of Object.entries(actors)) {
   const rows = await compare(actor.member);
   sizes[label] = rows.length;
-  const actual = await new SiteVisitRepository(c.runtime).assignedJobs(f.ctx, actor.member);
-  expect(actual).toEqual({ truncated: false, jobs: rows.map(r => ({ jobId: r.job_id, workOrderId: r.work_order_id, reference: r.reference, priority: r.priority, issuedOn: r.issued_on, dueOn: r.due_on, openVisitId: r.open_visit })) });
+  const actual = await new SiteVisitRepository(c.runtime).assignedJobs(f.ctx, actor.member, { includeLastCompletedVisit: true });
+  expect(actual).toEqual({ truncated: false, jobs: rows.map(r => ({ jobId: r.job_id, workOrderId: r.work_order_id, reference: r.reference, priority: r.priority, issuedOn: r.issued_on, dueOn: r.due_on, openVisitId: r.open_visit, lastCompletedVisit: r.last_completed_visit })) });
  }
  expect(sizes.ownTeam).toBeGreaterThan(1);
  expect(sizes.otherTeam).toBeGreaterThan(1);

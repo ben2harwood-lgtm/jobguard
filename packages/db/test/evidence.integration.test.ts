@@ -1,7 +1,7 @@
 import { syntheticSpeechAudio } from "@jobguard/core";
 import { rolledBack } from "./upgrade-proof-utils.js";
 import { verifiedTenantContextFromMembership } from "../src/tenant-context.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { importWatchdogFixtureJob } from "./watchdog-fixtures.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { createHash, randomUUID } from "node:crypto";
@@ -11,14 +11,14 @@ import { join } from "node:path";
 import { deflateSync } from "node:zlib";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { PrivateVersionedStorage, StoredObject } from "@jobguard/storage";
 import { EvidenceError, EvidenceService, ProofCommandService, migrate, withTenant } from "../src/index.js";
 
 const TENANT="71000000-0000-4000-8000-000000000001", OTHER="71000000-0000-4000-8000-000000000002";
 const MEMBER="74000000-0000-4000-8000-000000000001";
 const JOB="72000000-0000-4000-8000-000000000001", SCOPE="73000000-0000-4000-8000-000000000001";
-const context=testTenantContext(TENANT), otherContext=testTenantContext(OTHER);
+let context=testTenantContext(TENANT), otherContext=testTenantContext(OTHER);
 const hash=(bytes:Uint8Array)=>createHash("sha256").update(bytes).digest("hex");
 function validPng(){const crc=(bytes:Buffer)=>{let value=0xffffffff;for(const byte of bytes){value^=byte;for(let i=0;i<8;i++)value=(value>>>1)^((value&1)?0xedb88320:0)}return(value^0xffffffff)>>>0};const chunk=(type:string,data:Buffer)=>{const name=Buffer.from(type),out=Buffer.alloc(data.length+12);out.writeUInt32BE(data.length);name.copy(out,4);data.copy(out,8);out.writeUInt32BE(crc(Buffer.concat([name,data])),8+data.length);return out};const header=Buffer.alloc(13);header.writeUInt32BE(1,0);header.writeUInt32BE(1,4);header[8]=8;header[9]=2;return Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]),chunk("IHDR",header),chunk("IDAT",deflateSync(Buffer.from([0,20,30,40]))),chunk("IEND",Buffer.alloc(0))])}
 
@@ -32,11 +32,35 @@ class MemoryVersionedStorage implements PrivateVersionedStorage {
 }
 let postgres:EmbeddedPostgres,admin:Pool,runtime:Pool,dir:string;const storage=new MemoryVersionedStorage();let service:EvidenceService,proof:ProofCommandService;
 beforeAll(async()=>{dir=await mkdtemp(join(tmpdir(),"jobguard-evidence-pg16-"));const port=await freePort(56500,300);postgres=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic-test-only",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});await postgres.initialise();await postgres.start();admin=new Pool({host:"127.0.0.1",port,database:"postgres",user:"postgres",password:"synthetic-test-only"});await migrate(admin);await installLegacySyntheticPartyFixtures(admin);await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1),($2)",[TENANT,OTHER]);await admin.query("INSERT INTO identity.identity_user(id) VALUES('75000000-0000-4000-8000-000000000001')");await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES('76000000-0000-4000-8000-000000000001',$1,'Synthetic')",[TENANT]);await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($2,$1,'76000000-0000-4000-8000-000000000001','75000000-0000-4000-8000-000000000001','owner')",[TENANT,MEMBER]);await importWatchdogFixtureJob(admin,TENANT,JOB,"Synthetic stage");await admin.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($3,$1,$2,'confirmed')",[TENANT,JOB,SCOPE]);await admin.query("INSERT INTO app.scope_progress(tenant_id,job_id,scope_item_id,stage) VALUES($1,$2,$3,'in_progress')",[TENANT,JOB,SCOPE]);await admin.query(`CREATE ROLE jobguard_evidence_login LOGIN PASSWORD 'synthetic-runtime-only' NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOBYPASSRLS`);await admin.query("GRANT jobguard_runtime TO jobguard_evidence_login");runtime=new Pool({host:"127.0.0.1",port,database:"postgres",user:"jobguard_evidence_login",password:"synthetic-runtime-only"});service=new EvidenceService(runtime,storage);proof=new ProofCommandService(runtime,storage);},60_000);
+beforeAll(async()=>{
+ context=await testBoundTenantContext(admin,TENANT,MEMBER);
+ const user=randomUUID(),account=randomUUID(),member=randomUUID();
+ await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)",[user]);
+ await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional evidence peer')",[account,OTHER]);
+ await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')",[member,OTHER,account,user]);
+ otherContext=await testBoundTenantContext(admin,OTHER,member);
+});
 afterAll(async()=>{await closeTestPools(runtime,admin);await postgres?.stop();await rm(dir,{recursive:true,force:true});});
 
 async function begin(bytes:Uint8Array,overrides:Record<string,unknown>={}){return service.beginUpload(context,{jobId:JOB,scopeItemId:SCOPE,expectedSha256:hash(bytes),contentType:"image/png",maximumBytes:100,expiresAt:new Date(Date.now()+60_000),...overrides});}
 
 describe("verified evidence lifecycle",()=>{
+ it("refuses preview keys from another tenant or original before reading storage or inserting a preview",async()=>{
+  const bytes=validPng();const upload=await begin(bytes);
+  storage.put(upload.objectKey,"v1",bytes);
+  await service.finalize(context,{uploadId:upload.id,objectVersionId:"v1",evidenceType:"site_photo"});
+  const otherUpload=await begin(bytes);
+  const keys=[`tenants/${OTHER}/uploads/${upload.id}/original/preview`,`${otherUpload.objectKey}/preview`];
+  for(const objectKey of keys){
+   const id=randomUUID();storage.put(objectKey,"pv1",bytes);
+   const read=vi.spyOn(storage,"readExactVersion");
+   try{
+    await expect(service.registerPreview(context,{id,originalEvidenceId:upload.id,objectKey,objectVersionId:"pv1",contentType:"image/png",maximumBytes:100})).rejects.toMatchObject({name:"EvidenceError",code:"OBJECT_INVALID",message:"invalid_preview"});
+    expect(read).not.toHaveBeenCalled();
+    expect((await admin.query("SELECT id FROM app.evidence_object WHERE id=$1 OR (tenant_id=$2 AND original_evidence_id=$3)",[id,TENANT,upload.id])).rows).toEqual([]);
+   }finally{read.mockRestore();}
+  }
+ });
  it("forces RLS and forbids mutation of DB-backed synthetic originals",async()=>{const catalogs=await admin.query(`SELECT relrowsecurity,relforcerowsecurity,pg_get_userbyid(relowner) owner FROM pg_class WHERE oid='app.synthetic_evidence_original'::regclass`);expect(catalogs.rows[0]).toEqual({relrowsecurity:true,relforcerowsecurity:true,owner:"jobguard_migration"});await expect(withTenant(runtime,context,db=>db.$client.query("UPDATE app.synthetic_evidence_original SET bytes=$1 WHERE tenant_id=$2",[Buffer.from([1]),TENANT]))).rejects.toMatchObject({code:"42501"});await expect(withTenant(runtime,context,db=>db.$client.query(`INSERT INTO app.synthetic_evidence_original(tenant_id,upload_id,job_id,scope_item_id,object_key,object_version_id,environment,content_type,bytes) VALUES($1,$2,$3,$4,'x','v','synthetic_demo','image/png',$5)`,[TENANT,randomUUID(),randomUUID(),SCOPE,Buffer.from([1])]))).rejects.toBeTruthy()});
  it("registers one immutable exact version across finalization retries and overwrites",async()=>{const original=validPng();const upload=await begin(original,{deviceCapturedAt:new Date("2026-01-01T00:00:00Z")});storage.put(upload.objectKey,"v1",original);const first=await service.finalize(context,{uploadId:upload.id,objectVersionId:"v1",evidenceType:"site_photo"});storage.put(upload.objectKey,"v2",new Uint8Array([9,9,9]));const second=await service.finalize(context,{uploadId:upload.id,objectVersionId:"v1",evidenceType:"site_photo"});expect(second.id).toBe(first.id);expect(first.object_version_id).toBe("v1");expect(first.sha256.trim()).toBe(hash(original));expect((await storage.readExactVersion(upload.objectKey,"v1")).bytes).toEqual(original);expect(first.device_captured_at).toEqual(new Date("2026-01-01T00:00:00Z"));expect(first.server_received_at).not.toEqual(first.device_captured_at);expect(first.server_verified_at).toBeInstanceOf(Date);const previewBytes=new Uint8Array([3,2,1]);const previewKey=`${upload.objectKey}/preview`;storage.put(previewKey,"pv1",previewBytes);const preview=await service.registerPreview(context,{id:randomUUID(),originalEvidenceId:upload.id,objectKey:previewKey,objectVersionId:"pv1",contentType:"image/png",maximumBytes:10});expect(preview.kind).toBe("preview");expect(preview.original_evidence_id).toBe(upload.id);expect(preview.sha256.trim()).toBe(hash(previewBytes));expect(preview.sha256.trim()).not.toBe(first.sha256.trim());expect(first.object_version_id).toBe("v1");await expect(withTenant(runtime,context,db=>db.$client.query("UPDATE app.evidence_object SET sha256=$1",["0".repeat(64)]))).rejects.toMatchObject({code:"42501"});});
  it.each([{name:"hash",bytes:[1],opts:{expectedSha256:"0".repeat(64)},type:"image/png",max:100,version:"v1",error:"wrong_hash"},{name:"type",bytes:[2],opts:{},type:"image/jpeg",max:100,version:"v1",error:"wrong_type"},{name:"size",bytes:[1,2,3],opts:{maximumBytes:2},type:"image/png",max:2,version:"v1",error:"size_exceeded"},{name:"version",bytes:[4],opts:{},type:"image/png",max:100,version:"missing",error:"missing_version"}])("rejects wrong $name and it cannot prove work",async({bytes,opts,type,version,error})=>{const data=new Uint8Array(bytes);const upload=await begin(data,opts);if(version!=="missing")storage.put(upload.objectKey,version,data,type);await expect(service.finalize(context,{uploadId:upload.id,objectVersionId:version,evidenceType:"site_photo"})).rejects.toThrow(error);await expect(service.linkAndAssertProof(context,{id:randomUUID(),evidenceId:upload.id,jobId:JOB,scopeItemId:SCOPE,requiredEvidenceType:"site_photo"})).rejects.toBeInstanceOf(EvidenceError);});
@@ -52,7 +76,6 @@ describe("verified evidence lifecycle",()=>{
 describe("dark resumable evidence", () => {
  const member = { tenantId: TENANT, membershipId: MEMBER,
   identityUserId: "75000000-0000-4000-8000-000000000001" } as Parameters<typeof verifiedTenantContextFromMembership>[0];
- const context = verifiedTenantContextFromMembership(member);
  const actor = { membershipId: member.membershipId, identityUserId: member.identityUserId };
  async function transfer() {
   const { ResumableEvidenceService } = await import("../src/resumable-evidence.js");

@@ -72,7 +72,7 @@ async function persistence(page: Page, browser: Browser, jobId: string, caseId: 
     await assertLayout(target, ["Refresh saved messages", "Preview factual message"]);
   };
   await page.reload(); await assert(page);
-  await page.goto("/"); await expect(page.getByRole("heading", { name: "Jobs in this demo", exact: true })).toBeVisible();
+  await page.goto("/classic"); await expect(page.getByRole("heading", { name: "Jobs in this demo", exact: true })).toBeVisible();
   await page.goto(`/jobs/${jobId}#recovery-cases`); await assert(page);
   const second = await browser.newContext({ storageState: await page.context().storageState() });
   try { const other = await second.newPage(); await other.goto(`/jobs/${jobId}#recovery-cases`); await assert(other); }
@@ -163,7 +163,7 @@ test("previews, approves and simulates one factual customer message that is deli
   await V(page, "pursuit-content-hash", saved.message.contentHash);
   // A captured practice job has no card on the Jobs home to click (it lists only the seeded fixtures), so leave through Jobs
   // and reopen the saved job by a fresh navigation, then read it from a separate browser context as well.
-  await page.goto("/"); await expect(page.getByRole("heading", { name: "Jobs in this demo", exact: true })).toBeVisible();
+  await page.goto("/classic"); await expect(page.getByRole("heading", { name: "Jobs in this demo", exact: true })).toBeVisible();
   await page.goto(`/jobs/${source.jobId}#recovery-cases`);
   await V(page, "pursuit-delivery", "Simulated delivery — nothing sent"); await V(page, "pursuit-sink-count", "1");
   const second = await browser.newContext({ storageState: await page.context().storageState() });

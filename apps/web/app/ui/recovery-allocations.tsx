@@ -1,4 +1,5 @@
 "use client";
+import { jobPageFetch as fetch } from "./job-page-fetch";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { parsePoundsToPence, type RecoveryAllocationCommand } from "@jobguard/core";
 import { recoveryAllocationRefusalV1, recoveryAllocationViewV1, type RecoveryAllocationView } from "../../../api/src/recovery-allocation.contracts";

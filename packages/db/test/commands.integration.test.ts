@@ -1,4 +1,5 @@
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { randomUUID } from "node:crypto";
+import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures, syntheticOwnerPool } from "./pool-test-utils.js";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -12,7 +13,7 @@ import { ObservedPool, analyseLockOrder, mutableTables } from "./lock-observer.j
 const TENANT="81000000-0000-4000-8000-000000000001", ACCOUNT="82000000-0000-4000-8000-000000000001";
 const USER="83000000-0000-4000-8000-000000000001", MEMBER="84000000-0000-4000-8000-000000000001";
 const JOB="85000000-0000-4000-8000-000000000001", QUOTE="86000000-0000-4000-8000-000000000001";
-const HASH="a".repeat(64), context=testTenantContext(TENANT);
+const HASH="a".repeat(64); let context=testTenantContext(TENANT);
 let postgres:EmbeddedPostgres,admin:Pool,runtime:Pool,dir:string;
 beforeAll(async()=>{dir=await mkdtemp(join(tmpdir(),"jobguard-commands-"));const port=await freePort(57000,500);postgres=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"test-only",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});await postgres.initialise();await postgres.start();admin=await syntheticOwnerPool({host:"127.0.0.1",port,user:"postgres",password:"test-only"});admin.on("error",()=>undefined);await migrate(admin);await installLegacySyntheticPartyFixtures(admin);await admin.query(`
  INSERT INTO control_plane.tenant(id) VALUES('${TENANT}'); INSERT INTO identity.identity_user(id) VALUES('${USER}');
@@ -22,11 +23,27 @@ beforeAll(async()=>{dir=await mkdtemp(join(tmpdir(),"jobguard-commands-"));const
  INSERT INTO app.quote_version(id,tenant_id,job_id,version,content_hash,net_value_pence,status) VALUES('${QUOTE}','${TENANT}','${JOB}',1,'${HASH}',10000,'accepted');
  UPDATE app.job SET accepted_quote_version_id='${QUOTE}' WHERE tenant_id='${TENANT}' AND id='${JOB}';
  CREATE ROLE command_test LOGIN PASSWORD 'runtime-only' NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOBYPASSRLS; GRANT jobguard_runtime TO command_test;`);
+context = await testBoundTenantContext(admin, TENANT, MEMBER);
  runtime=new Pool({host:"127.0.0.1",port,database:"jobguard_synthetic_demo",user:"command_test",password:"runtime-only",max:5});runtime.on("error",()=>undefined);
 },60_000);
 afterAll(async()=>{await closeTestPools(runtime,admin);await postgres?.stop();await rm(dir,{recursive:true,force:true})});
 const command=(commandId:string,overrides:Record<string,unknown>={})=>({version:"command.v1",commandId,commandType:"job.switch_live",semanticKey:`job:${JOB}:switch_live`,actorMembershipId:MEMBER,subjectType:"job",subjectRef:JOB,action:{actionType:"switch_live",recipient:null,contentHash:HASH,aggregateRevision:1,amountPence:10000,currency:"GBP",policyVersion:"pilot-no-charge-v1",expiresAt:new Date("2099-01-01T00:00:00Z")},...overrides});
 const transition={mutate:async(d:any)=>{const row=(await d.$client.query(`SELECT * FROM app.transition_job($1,$2,1,'live','switch_live',$3,10000,'pilot-no-charge-v1',0)`,[TENANT,JOB,QUOTE])).rows[0];return{jobId:JOB,revision:row.revision,status:row.status}}};
+
+// Explicit owner fixture: runtime cannot mint decision resolutions or grants.
+async function commercialGrant() {
+ const decision=randomUUID(), resolution=randomUUID(), authorization=randomUUID();
+ const requested=command(randomUUID()).action;
+ await withTenant(admin,context,async d=>{
+  await d.$client.query("INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES($1,$2,'job',$3,$4)",[decision,TENANT,JOB,requested.actionType]);
+  await d.$client.query("INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'approved',$4)",[resolution,TENANT,decision,MEMBER]);
+  await d.$client.query(`INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,
+   recipient,content_hash,aggregate_revision,amount_pence,currency,policy_version,expires_at)
+   VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,[authorization,TENANT,decision,resolution,MEMBER,
+   requested.actionType,requested.recipient,requested.contentHash,requested.aggregateRevision,requested.amountPence,requested.currency,requested.policyVersion,requested.expiresAt]);
+ });
+ return {authorization,requested};
+}
 
 describe("consequential command authorization",()=>{
  it("keeps aggregate locking before audit while two competing commands produce one atomic inline approval, mutation, audit, and receipt",async()=>{
@@ -63,6 +80,52 @@ describe("consequential command authorization",()=>{
     const decision=x.rows[0].id,resolution="89000000-0000-4000-8000-000000000001";await d.$client.query("INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'dismissed',$4)",[resolution,TENANT,decision,MEMBER]);
     await expect(d.$client.query(`INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,content_hash,aggregate_revision,policy_version,expires_at) VALUES(gen_random_uuid(),$1,$2,$3,$4,'send',$5,1,'v1',clock_timestamp()+interval '1 hour')`,[TENANT,decision,resolution,MEMBER,HASH])).rejects.toMatchObject({code:"23514"});
    });
+  });
+ });
+ it("refuses a second use of a committed grant and invokes exactly once",async()=>{
+  const {authorization,requested}=await commercialGrant(); let calls=0;
+  const execute=()=>withTenant(runtime,context,d=>executeAuthorizedCommercialAction(d,authorization,requested,async()=>++calls));
+  await expect(execute()).resolves.toBe(1);
+  await expect(execute()).rejects.toMatchObject({code:"AUTHORIZATION_INVALID"});
+  expect(calls).toBe(1);
+  await withTenant(runtime,context,async d=>{
+   expect((await d.$client.query("SELECT count(*)::int n FROM app.commercial_grant_use WHERE authorization_id=$1",[authorization])).rows[0].n).toBe(1);
+  });
+ });
+ it("serializes concurrent uses of one grant across transactions and invokes exactly once",async()=>{
+  const {authorization,requested}=await commercialGrant(); let calls=0;
+  const execute=()=>withTenant(runtime,context,d=>executeAuthorizedCommercialAction(d,authorization,requested,async()=>{
+   calls++; await d.$client.query("SELECT pg_sleep(0.05)"); return "sent";
+  }));
+  const results=await Promise.allSettled([execute(),execute()]);
+  expect(results.filter(result=>result.status==="fulfilled")).toEqual([{status:"fulfilled",value:"sent"}]);
+  expect(results.filter(result=>result.status==="rejected")).toEqual([{status:"rejected",reason:expect.objectContaining({code:"AUTHORIZATION_INVALID"})}]);
+  expect(calls).toBe(1);
+ });
+ it("refuses a different requested expiry without consuming the valid grant",async()=>{
+  const {authorization,requested}=await commercialGrant(); let calls=0;
+  for(const offset of [-1,1]) {
+   await expect(withTenant(runtime,context,d=>executeAuthorizedCommercialAction(d,authorization,
+    {...requested,expiresAt:new Date(requested.expiresAt.getTime()+offset)},async()=>++calls)))
+    .rejects.toMatchObject({code:"AUTHORIZATION_INVALID"});
+  }
+  expect(calls).toBe(0);
+  await expect(withTenant(runtime,context,d=>executeAuthorizedCommercialAction(d,authorization,requested,async()=>++calls))).resolves.toBe(1);
+ });
+ it("keeps grant-use records tenant isolated and append-only for runtime",async()=>{
+  const {authorization,requested}=await commercialGrant();
+  await withTenant(runtime,context,d=>executeAuthorizedCommercialAction(d,authorization,requested,async()=>undefined));
+  for(const sql of ["UPDATE app.commercial_grant_use SET used_at=clock_timestamp() WHERE authorization_id=$1",
+   "DELETE FROM app.commercial_grant_use WHERE authorization_id=$1"]) {
+   await expect(withTenant(runtime,context,d=>d.$client.query(sql,[authorization]))).rejects.toMatchObject({code:"42501"});
+  }
+  const other=testTenantContext("81000000-0000-4000-8000-000000000002");
+  await withTenant(runtime,other,async d=>{
+   expect((await d.$client.query("SELECT authorization_id FROM app.commercial_grant_use WHERE authorization_id=$1",[authorization])).rows).toEqual([]);
+   await expect(executeAuthorizedCommercialAction(d,authorization,requested,async()=>{throw new Error("cross-tenant invocation")})).rejects.toMatchObject({code:"AUTHORIZATION_INVALID"});
+  });
+  await withTenant(runtime,context,async d=>{
+   expect((await d.$client.query("SELECT count(*)::int n FROM app.commercial_grant_use WHERE authorization_id=$1",[authorization])).rows[0].n).toBe(1);
   });
  });
  it("rolls back approval, mutation, audit, and receipt when mutation fails",async()=>{

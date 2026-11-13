@@ -11,7 +11,7 @@ import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from ".
 import { testTenantContext } from "./tenant-context-test-utils.js";
 
 const T = randomUUID(), A = randomUUID(), U = randomUUID(), M = randomUUID(), H = "a".repeat(64);
-const context = testTenantContext(T);
+const context = testTenantContext(T, { membershipId: M });
 let pg: EmbeddedPostgres | undefined, admin: Pool, runtime: Pool, writer: Pool, dir: string;
 let repo: PracticeInvoiceRepository;
 type Fixture = { jobId: string; invoiceId: string; draftId: string; revisionId: string; quoteId: string; command: ReturnType<typeof issue> };

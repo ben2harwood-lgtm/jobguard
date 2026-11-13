@@ -78,7 +78,7 @@ WITH actor AS MATERIALIZED (
  LEFT JOIN LATERAL(
   SELECT jsonb_agg(jsonb_build_object('id',coalesce(f.id,app.xa_decision_id(q.id,(step->>'index')::integer)),
    'sourceIds',jsonb_build_array(q.id)||CASE WHEN previous.id IS NULL THEN '[]'::jsonb ELSE jsonb_build_array(previous.id) END,
-   'dueAt',CASE WHEN step->>'timeLimitMinutes' IS NOT NULL THEN to_char((coalesce(previous.server_recorded_at,q.server_recorded_at)+((step->>'timeLimitMinutes')::integer*interval '1 minute')) AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') END,
+   'dueAt',to_char(app.xa_wait_deadline(coalesce(previous.server_recorded_at,q.server_recorded_at),step) AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
    'completedAt',to_char(f.server_recorded_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
    'outcome',CASE WHEN f.id IS NOT NULL THEN 'approved' WHEN outcome.kind IS NOT NULL THEN outcome.kind ELSE 'pending' END) ORDER BY (step->>'index')::integer) content
   FROM jsonb_array_elements(q.requirement->'steps') step

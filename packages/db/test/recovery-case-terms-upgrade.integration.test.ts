@@ -15,8 +15,9 @@ import { beforeAll, afterAll, expect, it } from "vitest";
 import { recoveryCaseTermsHash } from "@jobguard/core";
 import { DEMO_TENANT_ID as T, DEMO_MEMBERSHIP_ID as M, DEMO_IDENTITY_USER_ID as U, MIGRATION_URLS, migrate, withTenant, prepareActivationFixtureV3, PracticeActivationRepository, FinalAccountCommandService, PracticeInvoiceRepository, RecoveryCaseRepository, EvidencePackRepository, RecoveryMessageRepository, RecoveryCaseTermsRepository, QuoteRepository, QuoteDeliveryRepository, issuePracticeSession, SandboxRepository, RecoveryFollowUpRepository } from "../src/index.js";
 import { freePort, closeTestPools } from "./pool-test-utils.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
-const context=testTenantContext(T),actor={membershipId:M,identityUserId:U},messageActor={membershipId:M,actorRef:`membership:${M}`},name="0134_recovery_case_terms.sql",original=process.env.JOBGUARD_ENV;
+import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
+let context=testTenantContext(T);
+const actor={membershipId:M,identityUserId:U},messageActor={membershipId:M,actorRef:`membership:${M}`},name="0134_recovery_case_terms.sql",original=process.env.JOBGUARD_ENV;
 let pg:EmbeddedPostgres,admin:Pool,upgrade:Pool,runtime:Pool,dir:string,port:number,job:string,caseId:string,packId:string,session:string;
 const compared=["app.recovery_case","app.recovery_message","app.recovery_message_event","app.recovery_message_approval","app.recovery_message_sink","app.action_authorization","app.command_receipt","app.audit_event"];
 const command=(c:string,id=randomUUID())=>({version:"recovery-case-terms-command.v1",action:"approve",commandId:id,caseId:c,termsVersion:"synthetic_recovery_fee_terms.v1",feePolicyVersion:"reference_fee_policy_v3",eligibilityPolicyVersion:"reference_recovery_eligibility_policy_v3",termsHash:recoveryCaseTermsHash(c)});
@@ -37,6 +38,7 @@ async function parties(owner:Pool,j:string){
 }
 async function seed(owner:Pool,run:Pool){
  await owner.query("INSERT INTO control_plane.tenant(id) VALUES($1)",[T]);await owner.query("INSERT INTO identity.identity_user(id) VALUES($1)",[U]);const account=randomUUID();await owner.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional builder')",[account,T]);await owner.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')",[M,T,account,U]);
+ context=(await owner.query("SELECT to_regprocedure('app.bind_request(text,text,uuid)') installed")).rows[0].installed ? await testBoundTenantContext(owner,T,M) : testTenantContext(T);
  const sessionId=await issuePracticeSession(run),digest=createHash("sha256").update(sessionId).digest("hex"),j=randomUUID(),scope=randomUUID(),revision=randomUUID();
  await withTenant(owner,context,async db=>{await db.$client.query("INSERT INTO app.job(id,tenant_id,title,status,practice_session_digest,practice_scenario) VALUES($1,$2,'Before terms migration','quoting',$3,'capture')",[j,T,digest]);await db.$client.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')",[scope,T,j]);await db.$client.query("INSERT INTO app.scope_revision(id,tenant_id,job_id,scope_item_id,revision,description,quantity_decimal,unit,unit_price_pence,total_pence) VALUES($1,$2,$3,$4,1,'Fictional work','1','item',1880000,1880000)",[revision,T,j,scope]);});
  await parties(owner,j);
@@ -103,6 +105,7 @@ it("[T11] populated before N, apply N alone, compare canonical named columns, th
  expect(await rolledBack(async db=>{await db.query("ALTER TABLE app.recovery_message ADD COLUMN ch7_nullable text");return differences(db,proof);})).toEqual([]);
  expect(await rolledBack(async db=>{const fn=(await db.query("SELECT pg_get_functiondef('app.half_even_ratio(bigint,bigint,bigint)'::regprocedure) def")).rows[0].def as string;await db.query(fn.replace("$function$","$function$/* later function control */"));return differences(db,proof);})).toEqual([]);
  expect(await rolledBack(async db=>{await db.query("SET LOCAL session_replication_role=replica");await db.query("INSERT INTO app.recovery_message SELECT gen_random_uuid(),tenant_id,job_id,case_id,case_sequence+1,pack_id,pack_revision,manifest_hash,attachment_hash,attachment_approval_id,gen_random_uuid(),request_hash,case_type,case_revision,amount_pence,currency,sender,recipient,body,policy_version,content_hash,immutable_content,actor_membership_id,environment,created_at FROM app.recovery_message WHERE tenant_id=$1 AND case_id=$2 LIMIT 1",[T,caseId]);return differences(db,proof);})).toEqual([]);
+ context=await testBoundTenantContext(upgrade,T,M);
  // The due follow-up permits a new reminder preview while preserving the delivered message.
  await expect(preview()).rejects.toMatchObject({code:"RECOVERY_TERMS_NOT_APPROVED"});await new RecoveryCaseTermsRepository(runtime).approve(context,job,command(caseId),actor);expect((await preview()).latest!.status).toBe("previewed");
 });

@@ -1,3 +1,4 @@
+import { isRequestBindingRefusal, RequestBindingRefusedError } from "./request-binding-error.js";
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
@@ -6,7 +7,7 @@ import {
   retentionProfileV1, retentionReviewV1, retentionResolutionV1, retentionReleaseV1,
   retentionReceiptV1, retentionReversalV1, RetentionError, RETENTION_REVIEW_OWNER,
 } from "@jobguard/core";
-import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
+import { verifiedTenantContextForQueuedJob, withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 
 const id = z.guid().transform(value => value.toLowerCase());
 const omitted = { id: true, tenantId: true, jobId: true } as const;
@@ -34,6 +35,8 @@ export class RetentionRecordRepository {
   constructor(private readonly pool: Pool) {}
   private async guarded<T>(work: () => Promise<T>): Promise<T> {
     try { return await work(); } catch (error) {
+      if (error instanceof RequestBindingRefusedError) throw new RetentionRecordRepositoryError("RETENTION_UNAUTHENTICATED");
+      if (isRequestBindingRefusal(error)) throw new RetentionRecordRepositoryError("RETENTION_FORBIDDEN");
       if (error instanceof RetentionError || error instanceof RetentionRecordRepositoryError) throw error;
       if ((error as { code?: string } | null)?.code === "23505") throw new RetentionRecordRepositoryError("RETENTION_CONFLICT");
       if (error instanceof z.ZodError) throw new RetentionRecordRepositoryError("RETENTION_CONFLICT");
@@ -47,15 +50,19 @@ export class RetentionRecordRepository {
       throw new RetentionRecordRepositoryError("RETENTION_UNAVAILABLE");
     }
   }
-  /** Runtime timer port: no actor, arbitrary record or date input. */
+  /** Infrastructure-only timer port: no actor, arbitrary record or date input. */
   async raiseTimerReviews(context: VerifiedTenantContext, onRefused: (refusal: { jobId: string; code: string }) => void = () => {}) {
-    const jobs = await this.guarded(() => withTenant(this.pool, context, async db =>
+    // Ben's 6 Nov 2026 router-chat "yes": this named sessionless port only.
+    // Sessionless by design: the infrastructure timer login cannot bind a human session.
+    // Hold: the break-glass identity design goes to Ben before real data.
+    const scoped = verifiedTenantContextForQueuedJob(context.tenantId);
+    const jobs = await this.guarded(() => withTenant(this.pool, scoped, async db =>
       z.array(id).parse((await db.$client.query(
         "SELECT app.retention_timer($1,NULL,NULL,NULL) result", [context.tenantId],
       )).rows[0]?.result)));
     let appended = 0, refused = 0;
     for (const jobId of jobs) {
-     try { appended += await this.guarded(() => withTenant(this.pool, context, async db => {
+     try { appended += await this.guarded(() => withTenant(this.pool, scoped, async db => {
       const invoke = async (record: unknown, expected: string | null) => (await db.$client.query(
         "SELECT app.retention_timer($1,$2,$3::jsonb,$4) result",
         [context.tenantId, jobId, record === null ? null : JSON.stringify(record), expected],

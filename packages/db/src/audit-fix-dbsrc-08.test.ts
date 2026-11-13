@@ -127,7 +127,8 @@ describe("AUDIT-FIX-DBSRC-08 blocking regressions (SQL protocol doubles)", () =>
             await bothReads.promise;
           }
           return { rows };
-        } else if (sql.startsWith("INSERT INTO app.merchant(")) staged.merchant.push(values);
+        } else if (sql.startsWith("SELECT r.id,r.version")) return { rows: [] };
+        else if (sql.startsWith("INSERT INTO app.merchant(")) staged.merchant.push(values);
         else if (sql.startsWith("INSERT INTO app.merchant_sku(")) staged.sku.push(values);
         else if (sql.startsWith("INSERT INTO app.material_rate_revision(")) staged.rate.push(values);
         else if (sql === "COMMIT") {
@@ -142,7 +143,8 @@ describe("AUDIT-FIX-DBSRC-08 blocking regressions (SQL protocol doubles)", () =>
       return { query, release: () => undefined };
     } } as unknown as Pool;
     const repo = new MaterialRepository(pool);
-    const results = await Promise.allSettled([repo.addRate(context, rate), repo.addRate(context, rate)]);
+    // LATER-SAFETY-138: identical retries are reused, so the racer differs in price to stay stale.
+    const results = await Promise.allSettled([repo.addRate(context, rate), repo.addRate(context, { ...rate, pricePence: rate.pricePence + 500 })]);
     expect(results.filter(r => r.status === "fulfilled")).toHaveLength(1);
     const failure = results.find(r => r.status === "rejected");
     expect(failure).toMatchObject({ status: "rejected", reason: new Error("STALE_MATERIAL_RATE_REVISION") });

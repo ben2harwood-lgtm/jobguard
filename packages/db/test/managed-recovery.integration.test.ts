@@ -1,3 +1,4 @@
+import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 // Real PostgreSQL regressions, executed in CI; builder sandbox cannot bind localhost.
 import { createHash, randomUUID } from "node:crypto";
 import { electManagedRecovery } from "@jobguard/core";
@@ -206,7 +207,7 @@ it('requires session ownership even with a matching processing receipt and appro
  const h=createHash('sha256').update(['managed-recovery-election-command.v1',f.job,id,
   input.selection.service,input.selection.points,input.termsVersion].join('\n')).digest('hex');
  let elected: Record<string,unknown> | undefined;
- const completed=await new UserCommandDispatcher(c.admin).dispatch(f.context,{
+ const completed=await new UserCommandDispatcher(c.admin).dispatch(await testBoundTenantContext(c.admin,f.tenant,f.actor.membershipId),{
   version:'command.v1',commandId:input.commandId,commandType:'managed_recovery.elect',
   semanticKey:`managed-recovery:${f.job}:${id}`,actorMembershipId:f.actor.membershipId,
   subjectType:'recovery_case',subjectRef:id,

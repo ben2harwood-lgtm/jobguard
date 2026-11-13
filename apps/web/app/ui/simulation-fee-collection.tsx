@@ -1,4 +1,5 @@
 "use client";
+import { jobPageFetch as fetch } from "./job-page-fetch";
 import { useEffect,useState } from "react";
 import { readPaymentFeeView } from "./payment-fee-statements";
 import { simulationFeeCollectionViewV1,type SimulationFeeCollectionView } from "@jobguard/core";

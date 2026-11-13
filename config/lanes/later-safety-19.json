@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-19": {
+      "branches": [
+        "codex/sandbox/later-safety-19",
+        "codex/sandbox/later-safety-19-main"
+      ],
+      "note": "LATER-SAFETY-19 RED customer sign-in reference derivation; catch-up on main, retaining passed source and tests. Migration already on main as 0650; no duplicate migration.",
+      "allow": [
+        "apps/api/src/shadow-demo-guide.application.test.ts",
+        "apps/api/src/shadow-demo-guide.application.ts",
+        "packages/db/src/shadow-demo-guide-repository.ts",
+        "packages/db/test/shadow-demo-guide.integration.test.ts"
+      ]
+    }
+  }
+}

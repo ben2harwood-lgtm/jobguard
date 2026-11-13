@@ -11,7 +11,7 @@ const app = new RetentionRecordApplication(identity, { read, command });
 beforeEach(() => {
   vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
   session.mockResolvedValue({ memberships: [{ tenantId: tenant }] });
-  authenticate.mockResolvedValue({ identityUserId: tenant, sessionId: tenant, csrfToken: credentials.csrfToken });
+  authenticate.mockResolvedValue(Object.defineProperty({ identityUserId: tenant, sessionId: tenant, csrfToken: credentials.csrfToken }, "sessionCredential", { value: "a".repeat(64), enumerable: false }));
   findMembership.mockResolvedValue({ id: tenant, identityUserId: tenant, tenantId: tenant, role: "owner", email: "fictional@company.invalid" });
   read.mockResolvedValue({}); command.mockResolvedValue({});
 });
@@ -31,7 +31,7 @@ it("rechecks authentication, membership, origin and CSRF before repository acces
   }
   authenticate.mockResolvedValue(undefined);
   await expect(app.read(credentials, job)).rejects.toThrow("UNAUTHENTICATED");
-  authenticate.mockResolvedValue({ csrfToken: credentials.csrfToken }); findMembership.mockResolvedValue(undefined);
+  authenticate.mockResolvedValue(Object.defineProperty({ identityUserId: tenant, sessionId: tenant, csrfToken: credentials.csrfToken }, "sessionCredential", { value: "a".repeat(64), enumerable: false })); findMembership.mockResolvedValue(undefined);
   await expect(app.read(credentials, job)).rejects.toThrow("TENANT_FORBIDDEN");
   expect(read).not.toHaveBeenCalled(); expect(command).not.toHaveBeenCalled();
 });

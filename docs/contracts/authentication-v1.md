@@ -109,3 +109,33 @@ use the same authenticated scope. Legacy/unbound catalogues remain available to
 non-practice repository callers and cannot be claimed by a practice session.
 As with tenant RLS, a compromised runtime credential able to select a false
 session setting lies outside this application authentication guarantee.
+
+### LATER-SAFETY-133 — request rate limits
+
+RED, synthetic only. Ben approved landing on 7 Nov 2026 ("Yes, land both").
+That approval does not authorize release or live use.
+
+The Next code-request adapter uses `CF-Connecting-IP` only when the server-selected
+`JOBGUARD_HOSTING=cloudflare` identifies the Workers deployment (as configured in
+`apps/web/wrangler.jsonc`). A missing or invalid single IP falls back to the existing
+`web-bootstrap` bucket. All other deployments retain that shared bucket even if a
+caller sends CF headers. `X-Forwarded-For` is never used. IPv6 spellings are
+canonicalized before choosing the bucket.
+
+Persisted limits are ten accepted requests per client bucket and ten per
+normalized email across all purposes per rolling ten minutes, plus a higher ceiling
+of 100 accepted requests across the identity service per ten minutes. The existing
+sixty-second email/purpose cooldown remains. Refused requests roll back without
+recording a challenge or dispatching a fixture code. Verification, invitations,
+provisioning and session authority otherwise retain their existing contracts.
+
+The global transaction advisory lock is acquired before the existing IP and email
+locks; counts, request-window insert and challenge insert commit atomically. The
+existing tables/grants suffice; there is no migration. All persisted-provider
+callers share the backstop and email limit, including Nest callers using the socket
+address. Deployment configuration is trusted operator authority, never a request
+field. The Workers route must stay behind Cloudflare ingress; same-zone Worker
+scripts that can rewrite client headers are part of that trusted deployment.
+See [Cloudflare's header semantics](https://developers.cloudflare.com/fundamentals/reference/http-headers/),
+including its Worker-subrequest qualifications. This change does not verify a
+live deployment's ingress configuration.

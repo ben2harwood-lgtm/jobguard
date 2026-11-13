@@ -78,7 +78,7 @@ async function secondContextReads(browser: Browser, context: BrowserContext, tes
 // C7 asks to "open the job from Jobs". Captured practice jobs are by design not listed on the Jobs home, so (Ben's decision) this is met by
 // going to Jobs and reopening the saved job on a fresh navigation, plus the second browser context above.
 async function reopenFromJobs(page: Page, jobId: string) {
-  await page.goto("/"); await expect(page.getByRole("heading", { name: "Jobs", exact: true })).toBeVisible();
+  await page.goto("/classic"); await expect(page.getByRole("heading", { name: "Jobs", exact: true })).toBeVisible();
   await page.goto(`/jobs/${jobId}`); await expect(page.locator("#captured-job-workspace")).toHaveAttribute("data-job-id", jobId); await ready(page);
 }
 

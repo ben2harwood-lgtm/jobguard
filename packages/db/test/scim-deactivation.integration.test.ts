@@ -25,15 +25,15 @@ async function historyFixture(f:ScimFixture) {
  await h.admin.query("INSERT INTO app.ledger_book(id,tenant_id,code,currency,chart_status) VALUES($1,$2,'scim-history','GBP','synthetic')",[book,tenant]);
  await h.admin.query("INSERT INTO app.ledger_account(id,tenant_id,book_id,currency,code,class,mapping_status) VALUES($1,$2,$3,'GBP','AR','receivable','synthetic'),($4,$2,$3,'GBP','DEF','deferred_income','synthetic')",[receivable,tenant,book,deferred]);
  await h.admin.query("INSERT INTO app.financial_authorization(id,tenant_id,membership_id,purpose,amount_pence,currency,artifact_hash,status) VALUES($1,$2,$3,'plan_obligation',1000,'GBP',$4,'approved')",[authorizationId,tenant,f.principal.membershipId,artifactHash]);
- await new LedgerRepository(h.runtime).postPlanObligation(testTenantContext(tenant),{authorizationId,actorRef:"operations:synthetic-history",permission:"finance:approve"},{schemaVersion:1,journalId,bookId:book,amountPence:1000,currency:"GBP",sourceEventId:`history:${journalId}`,provenanceRef:"synthetic:history-fixture",artifactHash,authorizationId,actorRef:"operations:synthetic-history",receivableAccountId:receivable,deferredIncomeAccountId:deferred,provenanceKind:"synthetic_authorized_plan"});
+ await new LedgerRepository(h.runtime).postPlanObligation(testTenantContext(tenant,{membershipId:f.principal.membershipId}),{authorizationId,actorRef:"operations:synthetic-history",permission:"finance:approve"},{schemaVersion:1,journalId,bookId:book,amountPence:1000,currency:"GBP",sourceEventId:`history:${journalId}`,provenanceRef:"synthetic:history-fixture",artifactHash,authorizationId,actorRef:"operations:synthetic-history",receivableAccountId:receivable,deferredIncomeAccountId:deferred,provenanceKind:"synthetic_authorized_plan"});
  const jobId=randomUUID();await importWatchdogFixtureJob(h.admin,tenant,jobId,"Fictional retained history");
  const bytes=new Uint8Array([255,216,0,0,255,217]);let objectKey="";
  const service=new EvidenceService(h.runtime,{
   createUploadUrl:async()=>"synthetic-upload",createDownloadUrl:async()=>"synthetic-download",
   readExactVersion:async()=>({key:objectKey,versionId:"synthetic-history-v1",bytes,byteLength:bytes.length,contentType:"image/jpeg"}),deleteExactVersion:async()=>undefined,
  });
- const upload=await service.beginUpload(testTenantContext(tenant),{jobId,scopeItemId:null,expectedSha256:createHash("sha256").update(bytes).digest("hex"),contentType:"image/jpeg",maximumBytes:100,expiresAt:new Date(Date.now()+600000)});
- objectKey=upload.objectKey;await service.finalize(testTenantContext(tenant),{uploadId:upload.id,objectVersionId:"synthetic-history-v1",evidenceType:"site_photo"});
+ const upload=await service.beginUpload(testTenantContext(tenant,{membershipId:f.principal.membershipId}),{jobId,scopeItemId:null,expectedSha256:createHash("sha256").update(bytes).digest("hex"),contentType:"image/jpeg",maximumBytes:100,expiresAt:new Date(Date.now()+600000)});
+ objectKey=upload.objectKey;await service.finalize(testTenantContext(tenant,{membershipId:f.principal.membershipId}),{uploadId:upload.id,objectVersionId:"synthetic-history-v1",evidenceType:"site_photo"});
 }
 async function refusalCount() {return Number((await h.admin.query("SELECT count(*) n FROM identity.sso_refusal_event")).rows[0].n);}
 async function record(f:ScimFixture,eventId:string) {return (await h.admin.query("SELECT * FROM identity.scim_event WHERE tenant_id=$1 AND connection_id=$2 AND source_event_id=$3",[f.principal.tenantId,f.connectionId,eventId])).rows[0];}

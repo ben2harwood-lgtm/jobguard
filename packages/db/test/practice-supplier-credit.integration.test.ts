@@ -28,7 +28,7 @@ beforeAll(async()=>{
 afterAll(async()=>{await closeTestPools(runtime,admin);if(postgres)await postgres.stop();if(previousEnvironment===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=previousEnvironment;});
 // Administrative setup supplies identity, parties and captured scope only. Commercial lifecycle
 // uses the real quote, acceptance and no-charge switch-live command implementations.
-const context = testTenantContext(T), actor = {membershipId:M,identityUserId:U};
+const context = testTenantContext(T, { membershipId: M }), actor = {membershipId:M,identityUserId:U};
 async function seedIdentity(pool: Pool) {
   await pool.query("INSERT INTO control_plane.tenant(id) VALUES($1)",[T]);
   await pool.query("INSERT INTO identity.identity_user(id) VALUES($1)",[U]);

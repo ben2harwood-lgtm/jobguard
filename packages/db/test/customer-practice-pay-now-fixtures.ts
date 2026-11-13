@@ -33,7 +33,7 @@ export async function issueApprovedCatchInvoice(
   const invoicePool=practiceMaterialPool(f.runtime,a.digest);
   const locks=new FinalAccountLockRepository(invoicePool), repo=new FinalCheckRepository(f.runtime);
   const revealed=await availableFinalCheck(fixture,job);
-  await new FinalCheckCompletionRepository(shadow).publish(a.context,{version:"final-check-publication.v1",jobId:a.jobId,runId:revealed.runId,checkId:revealed.manifest.id});
+  await new FinalCheckCompletionRepository(shadow).publish(a.workerContext,{version:"final-check-publication.v1",jobId:a.jobId,runId:revealed.runId,checkId:revealed.manifest.id});
   const invoices=new PracticeInvoiceRepository(invoicePool);
   const digest=a.digest;
   const confirmed=await repo.confirmCatch(a.context,a.jobId,digest,{version:"final-check.catch.v1",commandId:randomUUID(),

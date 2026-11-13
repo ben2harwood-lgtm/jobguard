@@ -68,7 +68,13 @@ describe("SV-7A source storage/read authority",()=>{
  });
  it("SV7A-07 revoked session cannot read existing records",async()=>{
   await f.admin.query("UPDATE control_plane.practice_session SET revoked_at=clock_timestamp() WHERE token_digest=$1",[f.practice.auth.digest]);
-  await expect(withTenant(f.runtime,f.practice.auth.context,db=>db.$client.query("SELECT app.read_job_sources($1,$2,$3,'diary')",[f.practice.auth.context.tenantId,f.practice.jobId,f.practice.auth.digest]))).rejects.toMatchObject({message:"JOB_SOURCE_FORBIDDEN"});
+  // Public code belongs to the repository boundary; a refused bind never runs its callback.
+  await expect(f.repository.read(f.practice.auth.context,f.practice.jobId,f.practice.auth.digest,"diary")).rejects.toMatchObject({message:"JOB_SOURCE_FORBIDDEN"});
+  // Retain the original SQL-level revoked-session proof independently of the earlier bind.
+  await expect(rolledBack(f.runtime,async db=>{
+   await db.query("SELECT set_config('app.tenant_id',$1,true)",[f.practice.auth.context.tenantId]);
+   return db.query("SELECT app.read_job_sources($1,$2,$3,'diary')",[f.practice.auth.context.tenantId,f.practice.jobId,f.practice.auth.digest]);
+  })).rejects.toMatchObject({message:"JOB_SOURCE_FORBIDDEN",code:"42501"});
  });
  it("SV7A-07 persisted expired sessions and inactive actors fail the SQL read boundary",async()=>{
   const {auth,jobId}=f.practice;

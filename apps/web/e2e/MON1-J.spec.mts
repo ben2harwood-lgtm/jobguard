@@ -41,7 +41,7 @@ test("MON1-J: Builder's five distinct started jobs show the next job included af
   // Another company's reference must never appear in this company list.
   const other = await meterCompany(f);
   await historicalAgreement(f, other, "Builder"); await activateMeterJob(f, other); await insertPhoto(f, other, "now");
-  await page.goto("/");
+  await page.goto("/classic");
   const line = page.getByTestId("jobs-on-the-go-line");
   await expect(line).toHaveText("5 of 7 jobs on the go");
   await expect(line.locator("..")).toContainText("Next job included");
@@ -55,7 +55,7 @@ test("MON1-J: Builder's five distinct started jobs show the next job included af
   await expectMeter(page,"5 of 7 jobs on the go","Next job included");
   // Authenticated read failure leaves the rest of the home page usable.
   await page.route("**/api/meter/current", route => route.fulfill({ status: 503, json: { code: "METER_UNAVAILABLE" } }));
-  await page.goto("/");
+  await page.goto("/classic");
   await expect(page.getByTestId("jobs-on-the-go-line")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Start the demo", exact: true })).toBeVisible();
  } finally { await runtime.end(); await admin.end(); }
@@ -137,7 +137,7 @@ test("MON1-J: real starts, finish tail, London stop, restart, Solo grace and cap
 
 test("MON1-J: practice and failed meter reads leave the jobs page usable without a figure", async ({ page }) => {
  await page.request.post("/api/session");
- await page.goto("/");
+ await page.goto("/classic");
  await expect(page.getByRole("heading", { name: "Jobs", exact: true })).toBeVisible();
  await expect(page.getByTestId("jobs-on-the-go-line")).toHaveCount(0);
  await page.route("**/api/meter/current", route => route.fulfill({ status: 503, json: { code: "METER_UNAVAILABLE" } }));

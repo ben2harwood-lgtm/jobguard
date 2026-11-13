@@ -26,8 +26,8 @@ describe("MON-5 customer messages through checked SV-7A",()=>{
   shadow=new Pool({...f.admin.options,user:login,password,max:2});
  },120000);
  afterAll(async()=>{await shadow?.end();await closeWorkFixture(f);});
- async function identityQuery(sql:string,args:unknown[]){
-  const db=await f.admin.connect();try{await db.query("BEGIN");await db.query("SET LOCAL ROLE jobguard_identity");const r=await db.query(sql,args);await db.query("COMMIT");return r;}catch(e){await db.query("ROLLBACK");throw e;}finally{db.release();}
+ async function identityQuery(sql:string,args:unknown[],binding?:{tenantId:string;digest:string}){
+  const db=await f.admin.connect();try{await db.query("BEGIN");if(binding) await db.query("SELECT app.bind_request('real',$1,$2)",[binding.digest,binding.tenantId]);await db.query("SET LOCAL ROLE jobguard_identity");const r=await db.query(sql,args);await db.query("COMMIT");return r;}catch(e){await db.query("ROLLBACK");throw e;}finally{db.release();}
  }
  async function customer(practice=f.practice){
   const {auth,jobId}=practice,t=auth.context.tenantId,digest=hash(randomUUID());
@@ -39,7 +39,7 @@ describe("MON-5 customer messages through checked SV-7A",()=>{
   const reference=`customer-signin-reference.v1:${t}/${jobId}/${c}/${"a".repeat(43)}`,linkDigest=hash(randomUUID()),sessionDigest=hash(randomUUID());
   const grant=(await identityQuery("SELECT identity.customer_portal_issue($1,$2,$3,$4,$5,$6) id",[t,digest,jobId,c,linkDigest,reference])).rows[0].id;
   await identityQuery("SELECT identity.customer_portal_use($1,$2,$3,$4,$5,'redeem')",[t,jobId,c,linkDigest,sessionDigest]);
-  return {t,j:jobId,c,digest:sessionDigest,grant,practice};
+  return {t,j:jobId,c,digest:sessionDigest,sponsorDigest:digest,grant,practice};
  }
  type Customer=Awaited<ReturnType<typeof customer>>;
  const send=async(w:Customer,raw=input(w.j))=>(await identityQuery("SELECT identity.customer_portal_message($1,$2,$3,$4,$5::jsonb) result",[w.t,w.j,w.c,w.digest,JSON.stringify(raw)])).rows[0].result;

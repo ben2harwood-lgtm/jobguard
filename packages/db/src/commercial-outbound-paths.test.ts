@@ -21,8 +21,10 @@ function fixture(enabled = false) {
       ...Object.fromEntries(["agreements","changes","changeOutcomes","periods","statements","reviews","work","attempts","results","corrections","alerts","onboarding","periodLines","placeBindings","places","statementLines","operationsCards"].map(key => [key, []])),
     } }] };
     if (sql.startsWith("SELECT app.mon2_command")) throw new Error("claim reached");
-    if (sql.startsWith("SELECT a.*")) return { rows: [{ action_type: "quote.send", recipient: null,
-      content_hash: "a".repeat(64), aggregate_revision: 1, amount_pence: null, currency: null, policy_version: "synthetic.v1" }] };
+    if (sql.startsWith("SELECT a.*")) return { rows: [{ tenant_id: context.tenantId, action_type: "quote.send", recipient: null,
+      content_hash: "a".repeat(64), aggregate_revision: 1, amount_pence: null, currency: null, policy_version: "synthetic.v1",
+      expires_at: new Date("2099-01-01") }] };
+    if (sql.startsWith("INSERT INTO app.commercial_grant_use")) { expect(inTransaction).toBe(true); return { rows: [{ authorization_id: "synthetic" }], rowCount: 1 }; }
     if (["BEGIN", "COMMIT", "ROLLBACK"].includes(sql) || sql.startsWith("SELECT set_config")) return { rows: [] };
     throw new Error(`Unexpected SQL: ${sql}`);
   });

@@ -1,3 +1,4 @@
+import { testActorContext } from "./tenant-context-test-utils.js";
 // Synthetic PostgreSQL proofs. CI only: this sandbox cannot start PostgreSQL.
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
@@ -28,23 +29,23 @@ it("Q04 first receipt wins a same-person repeat, with no second fact or audit, a
   const w = await chainWorld(c), ctx = await w.ctx, repo = new ExtraApprovalRepository(c.runtime);
   const s = await submitted(c, w, 40000), actor = w.members.supervisor.member;
   const input = approveInput(s, 0);
-  const first = await repo.approveExtraStep(ctx, actor, input);
+  const first = await repo.approveExtraStep(await testActorContext(c.admin, ctx, actor), actor, input);
   const count = async () => (await c.admin.query("SELECT (SELECT count(*) FROM app.extra_approval_step_fact WHERE request_id=$1)::int facts,(SELECT count(*) FROM app.audit_event WHERE tenant_id=$2)::int audits", [s.requestId, w.p.tenantId])).rows[0];
   const before = await count();
-  expect(await repo.approveExtraStep(ctx, actor, { ...input, commandId: randomUUID() })).toEqual(first);
+  expect(await repo.approveExtraStep(await testActorContext(c.admin, ctx, actor), actor, { ...input, commandId: randomUUID() })).toEqual(first);
   expect(await count()).toEqual(before);
-  await expect(repo.approveExtraStep(ctx, actor, { ...input, commandId: randomUUID(), netPence: s.net + 1 })).rejects.toMatchObject({ code: "COMMAND_CONFLICT" });
+  await expect(repo.approveExtraStep(await testActorContext(c.admin, ctx, actor), actor, { ...input, commandId: randomUUID(), netPence: s.net + 1 })).rejects.toMatchObject({ code: "COMMAND_CONFLICT" });
   await command(c, w, { kind: "grant.revoke", grantId: w.members.supervisor.grant });
-  await expect(repo.approveExtraStep(ctx, actor, { ...input, commandId: randomUUID() })).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
+  await expect(repo.approveExtraStep(await testActorContext(c.admin, ctx, actor), actor, { ...input, commandId: randomUUID() })).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
   expect(await count()).toMatchObject({ facts: before.facts });
 });
 it.each(["surveyor", "commercial_manager"] as const)("Q11 covered %s can withdraw an open request, but cannot change its final outcome", async role => {
   const w = await chainWorld(c), repo = new ExtraApprovalRepository(c.runtime), ctx = await w.ctx;
   const s = await submitted(c, w, 40000), actor = w.members[role].member;
   const input = { version: "withdraw-extra.v1", commandId: randomUUID(), jobId: s.jobId, extraId: s.extraId, reasonCode: "not_done" };
-  expect(await repo.withdrawExtra(ctx, actor, input)).toMatchObject({ state: "withdrawn", requestId: s.requestId });
-  expect(await repo.withdrawExtra(ctx, actor, input)).toMatchObject({ state: "withdrawn" });
-  await expect(repo.approveExtraStep(ctx, w.members.supervisor.member, approveInput(s, 0))).rejects.toMatchObject({ code: "ALREADY_DECIDED" });
+  expect(await repo.withdrawExtra(await testActorContext(c.admin, ctx, actor), actor, input)).toMatchObject({ state: "withdrawn", requestId: s.requestId });
+  expect(await repo.withdrawExtra(await testActorContext(c.admin, ctx, actor), actor, input)).toMatchObject({ state: "withdrawn" });
+  await expect(repo.approveExtraStep(await testActorContext(c.admin, ctx, w.members.supervisor.member), w.members.supervisor.member, approveInput(s, 0))).rejects.toMatchObject({ code: "ALREADY_DECIDED" });
   expect((await c.admin.query("SELECT kind FROM app.extra_approval_outcome WHERE request_id=$1", [s.requestId])).rows).toEqual([{ kind: "withdrawn" }]);
 });
 it("Q06 thresholds are frozen per rule version; Q16 pricing alone never submits", async () => {
@@ -55,7 +56,7 @@ it("Q06 thresholds are frozen per rule version; Q16 pricing alone never submits"
   expect((await c.admin.query("SELECT requirement,comparisons FROM app.extra_approval_request WHERE id=$1", [s.requestId])).rows).toEqual(before);
   const { newJob, raiseOn } = await import("./extra-approval-chain-fixtures.js");
   const jobId = await newJob(c, w), extraId = await raiseOn(c, w, jobId);
-  await repo.priceExtra(ctx, w.members.surveyor.member, { version: "price-extra.v1", commandId: randomUUID(), jobId, extraId, netPence: 100000 });
+  await repo.priceExtra(await testActorContext(c.admin, ctx, w.members.surveyor.member), w.members.surveyor.member, { version: "price-extra.v1", commandId: randomUUID(), jobId, extraId, netPence: 100000 });
   expect((await c.admin.query("SELECT id FROM app.extra_approval_request WHERE variation_id=$1", [extraId])).rows).toEqual([]);
 });
 it("Q08 without a backup the mandatory queue stays waiting and overdue, without an escalation fact", async () => {

@@ -74,3 +74,48 @@ test("reviews a cited above-rate order and confirms exactly one practice effect"
   expect(retry.ok, JSON.stringify(retry.body)).toBe(true);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 });
+
+test("records and replays a practice manual placement attestation through the screen", async ({ page }, info) => {
+  await openReview(page);
+  for (const name of ["Protect room", "Prepare walls", "Paint walls", "Finish trim", "Clean site"])
+    await page.getByRole("button", { name: `Accept ${name}`, exact: true }).click();
+  await page.getByRole("button", { name: "Dismiss Replace shelves", exact: true }).click();
+  await page.getByLabel("Dismissal reason Replace shelves").fill("Not needed");
+  await page.getByLabel(/Answer Confirm disposal/u).fill("Builder removes waste");
+  await page.getByRole("button", { name: "Confirm scope", exact: true }).click();
+  await page.getByRole("button", { name: "Price the work", exact: true }).click();
+  await startWatchdogJob(page);
+  const jobId = (await page.locator(".quote-editor").getAttribute("data-job-id"))!;
+  await page.getByLabel("SKU", { exact: true }).fill(`MANUAL-${info.project.name}`);
+  await page.getByRole("button", { name: "Save agreed price and material", exact: true }).click();
+  await expect(page.getByTestId("required-material-net")).toHaveText("£200.00");
+  await page.getByRole("button", { name: "Preview proposed order", exact: true }).click();
+  await expect(page.getByTestId("order-preview-revision")).toHaveText("1");
+  const screen = page.getByRole("region", { name: "Practice merchant order", exact: true });
+  await screen.getByRole("button", { name: "Review current merchant order" }).click();
+  const supplierReference = `synthetic-manual-${info.project.name}`;
+  await screen.getByLabel("Practice supplier reference").fill(supplierReference);
+  const route = `/api/jobs/${jobId}/purchase-orders/merchant-order`;
+  const responsePromise = page.waitForResponse(response => response.url().endsWith(route)
+    && response.request().method() === "POST" && response.request().postDataJSON().kind === "manual");
+  const manual = screen.getByRole("button", { name: "Record practice manual attestation" });
+  await manual.click();
+  const response = await responsePromise;
+  expect(response.status()).toBe(200);
+  const attestation = await response.json();
+  expect(attestation).toEqual({
+    attestationId: expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u),
+    fact: "owner_attestation", providerConfirmed: false, realExternalActions: 0,
+  });
+  await expect(screen.getByRole("status")).toHaveText("Separate fact: owner manual placement attestation recorded for practice. Provider confirmation: none. No order is really sent.");
+  await expect(screen.getByRole("alert")).toHaveCount(0);
+  await expect(manual).toBeDisabled();
+  await expect(screen.getByRole("button", { name: "Confirm this exact practice order" })).toBeDisabled();
+  const request = response.request().postDataJSON();
+  expect(request).toMatchObject({ version: "merchant-order-screen.v1", kind: "manual", supplierReference });
+  // Replay reads the persisted command result: the attestation must keep its identity.
+  const replay = await sessionRequest(page, route, request);
+  expect(replay.status, JSON.stringify(replay.body)).toBe(200);
+  expect(replay.body).toEqual(attestation);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+});

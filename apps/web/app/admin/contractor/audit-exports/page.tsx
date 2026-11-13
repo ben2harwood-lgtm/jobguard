@@ -39,7 +39,7 @@ export default function Page() {
   };
   return <main style={{ maxWidth: 900, margin: "auto", padding: 16, overflowWrap: "anywhere" }}>
     <style>{`.audit-export-action {display:inline-block;min-height:44px;min-width:44px;padding:12px;margin:4px;} .audit-export-action:focus-visible {outline:3px solid #1746a2;outline-offset:3px}`}</style>
-    <Link className="audit-export-action" href="/">Back to Jobs</Link><Link className="audit-export-action" href="/admin/contractor">Contractor organisation practice</Link>
+    <Link className="audit-export-action" href="/classic">Back to Jobs</Link><Link className="audit-export-action" href="/admin/contractor">Contractor organisation practice</Link>
     <h1>Audit exports</h1><p>Use the generated fictional contractor only. Do not enter real people or documents.</p>
     <p>The signature proves export integrity only</p><p>It does not prove that a commercial claim is true. A bundled public key needs independent trust. Checkpoints come from the restricted assurance path; no external timestamp is asserted.</p>
     <p>Creation in other modes is HELD until a founder key decision. Key rotation and long-term verification remain HELD under M5-9.</p>

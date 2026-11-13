@@ -48,7 +48,7 @@ export function NorthsideHub() {
   }
   const f = summary?.facts;
   return <main className={styles.page}>
-    <Link href="/">Back to Jobs</Link>
+    <Link href="/classic">Back to Jobs</Link>
     <h1>{f?.companyName ?? "Northside Property Services"} <span className={styles.pill}>generated, fictional</span></h1>
     <p className={styles.note} data-testid="northside-label">Practice data only. Every address ends in .invalid and nothing is sent. A reset starts a new run and keeps the earlier audit records.</p>
     <p role="status" data-testid="northside-status">{status}</p>

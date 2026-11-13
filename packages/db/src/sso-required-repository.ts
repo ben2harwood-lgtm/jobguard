@@ -30,13 +30,13 @@ export class SsoRequiredRepository {
     return withTenant(this.pool,context,async db=>{
       const raw=(await db.$client.query<{result:unknown}>("SELECT identity.sso_required_view($1,$2) result",[sessionDigest,context.tenantId])).rows[0]?.result;
       return ssoRequiredStateV1.parse(raw);
-    });
+    }, "identity-sso-required");
   }
   async detail(context:VerifiedTenantContext,sessionDigest:string):Promise<SsoRequiredDetail> {
     return withTenant(this.pool,context,async db=>{
       const raw=(await db.$client.query<{result:unknown}>("SELECT identity.sso_required_detail($1,$2) result",[sessionDigest,context.tenantId])).rows[0]?.result;
       return ssoRequiredDetailV1.parse(raw);
-    });
+    }, "identity-sso-required");
   }
   async refusalTarget(context:VerifiedTenantContext,sessionDigest:string):Promise<string|null> {
     return (await this.view(context,sessionDigest)).auditConnectionId;
@@ -48,7 +48,7 @@ export class SsoRequiredRepository {
       const state=ssoRequiredStateV1.parse((await db.$client.query<{result:unknown}>("SELECT identity.sso_required_view($1,$2) result",[sessionDigest,context.tenantId])).rows[0]?.result);
       await this.enterprise.audit(db.$client,result.connectionId,result.required?"sso.required.enabled":"sso.required.disabled",`membership:${result.actorMembershipId}`,undefined,hash(input.reason));
       return state;
-    });
+    }, "identity-sso-required");
   }
   async emergency(userId:string,input:Record<string,unknown>,windowMinutes?:number|"invalid"):Promise<SsoEmergencyOutcome> {
     return this.enterprise.transaction(async client=>{

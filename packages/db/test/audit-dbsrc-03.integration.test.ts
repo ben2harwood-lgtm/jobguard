@@ -42,7 +42,7 @@ afterAll(async () => {
   vi.unstubAllEnvs(); await closeTestPools(runtime, admin); await postgres?.stop();
   if (directory) await rm(directory, { recursive: true, force: true });
 });
-const context = testTenantContext(DEMO_TENANT_ID);
+const context = testTenantContext(DEMO_TENANT_ID, { membershipId: DEMO_MEMBERSHIP_ID });
 async function invoiceFixture() {
   const jobId = randomUUID(), scope = randomUUID(), quote = randomUUID(), draft = randomUUID(), revision = randomUUID(), hash = "b".repeat(64);
   await admin.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,'Fictional invoice audit','live')", [jobId, DEMO_TENANT_ID]);
@@ -121,7 +121,7 @@ it("command-service credits remain readable", async () => {
   expect(stored.source_invoice_hash.trim()).toBe(before[0].pdf_sha256.trim());
   expect((await admin.query("SELECT * FROM app.customer_invoice WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, f.invoiceId])).rows).toEqual(before);
   await expect(f.service.credit(context, input)).resolves.toEqual(issued);
-  await expect(new PracticeInvoiceRepository(runtime).creditView(testTenantContext(DEMO_EMPTY_TENANT_ID), f.jobId, f.invoiceId)).rejects.toThrow("INVOICE_NOT_FOUND");
+  await expect(new PracticeInvoiceRepository(runtime).creditView(testTenantContext(DEMO_EMPTY_TENANT_ID, { membershipId: DEMO_EMPTY_MEMBERSHIP_ID }), f.jobId, f.invoiceId)).rejects.toThrow("INVOICE_NOT_FOUND");
 });
 
 it("allows separate receipts sharing a bank reference", async () => {
@@ -175,4 +175,86 @@ it("home read survives unrelated workspace revocation", async () => {
     await expect(authenticatePracticeSession(runtime, session)).resolves.toMatchObject({ context: { tenantId: DEMO_TENANT_ID } });
     expect((await runtime.query("SELECT id FROM app.job")).rows).toEqual([]);
   } finally { await admin.query("UPDATE app.membership SET revoked_at=NULL WHERE tenant_id=$1 AND id=$2", [DEMO_EMPTY_TENANT_ID, DEMO_EMPTY_MEMBERSHIP_ID]); }
+});
+
+async function reversalFixture() {
+  const f = await invoiceFixture();
+  const receipt = await f.service.recordPayment(context, {
+    version: "customer-payment.record.v1", commandId: randomUUID(), actorMembershipId: DEMO_MEMBERSHIP_ID,
+    jobId: f.jobId, invoiceId: f.invoiceId, paidOn: "2026-11-06", amountPence: 5000, currency: "GBP",
+    method: "bank_transfer", reference: "Fictional reversal test", builderAttestsReceived: true,
+  });
+  const input = { version: "customer-payment.reverse.v1", commandId: randomUUID(), actorMembershipId: DEMO_MEMBERSHIP_ID,
+    jobId: f.jobId, paymentId: receipt.paymentId, reason: "Fictional payment correction" };
+  return { ...f, input };
+}
+
+it("reverses through the runtime routine with the same financial facts and balance as the practice path", async () => {
+  expect((await runtime.query("SELECT current_user,rolsuper,rolbypassrls FROM pg_roles WHERE rolname=current_user")).rows[0])
+    .toEqual({ current_user: "jobguard_runtime", rolsuper: false, rolbypassrls: false });
+  const servicePath = await reversalFixture(), practicePath = await reversalFixture();
+  const reversed = await servicePath.service.reversePayment(context, servicePath.input);
+  expect(reversed.invoiceId).toBe(servicePath.invoiceId);
+  const practice = await new PracticeInvoiceRepository(runtime).reverseReceipt(context, {
+    ...practicePath.input, invoiceId: practicePath.invoiceId,
+  });
+  const facts = async (id: string) => (await admin.query(`SELECT x.reason,p.amount_pence,p.provenance,
+    a.action_type,a.policy_version,a.actor_membership_id,r.resolution
+    FROM app.customer_payment_reversal x
+    JOIN app.customer_payment p ON(p.tenant_id,p.id)=(x.tenant_id,x.payment_id)
+    JOIN app.action_authorization a ON(a.tenant_id,a.id)=(x.tenant_id,x.authorization_id)
+    JOIN app.decision_resolution r ON(r.tenant_id,r.id)=(a.tenant_id,a.resolution_id)
+    WHERE x.tenant_id=$1 AND x.id=$2`, [DEMO_TENANT_ID, id])).rows;
+  expect(await facts(reversed.reversalId)).toEqual(await facts(practice.reversalId));
+  expect(await facts(reversed.reversalId)).toHaveLength(1);
+  const balance = await servicePath.service.balance(context, servicePath.invoiceId);
+  expect(balance).toEqual(await practicePath.service.balance(context, practicePath.invoiceId));
+  expect(balance).toMatchObject({ balance: { pence: 12000 } });
+  const stored = (await admin.query("SELECT result FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2",
+    [DEMO_TENANT_ID, servicePath.input.commandId])).rows[0].result;
+  expect(stored).toEqual({ reversalId: reversed.reversalId });
+  await expect(servicePath.service.reversePayment(context, servicePath.input)).resolves.toEqual(reversed);
+  await expect(new PracticeInvoiceRepository(runtime).reverseReceipt(context, {
+    ...servicePath.input, invoiceId: servicePath.invoiceId,
+  })).resolves.toEqual({ reversalId: reversed.reversalId });
+  await expect(practicePath.service.reversePayment(context, practicePath.input)).resolves.toEqual({
+    reversalId: practice.reversalId, invoiceId: practicePath.invoiceId,
+  });
+  expect((await admin.query(`SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1
+    AND event_type='command.succeeded' AND payload->'references'->>'commandId'=$2`,
+  [DEMO_TENANT_ID, servicePath.input.commandId])).rows[0].n).toBe(1);
+});
+
+it.each(["member", "revoked", "expired"])("refuses a %s actor without a reversal or command receipt", async state => {
+  const f = await reversalFixture(), actor = randomUUID();
+  await admin.query(`INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role,revoked_at,expires_at)
+    VALUES($1,$2,$3,$4,$5,CASE WHEN $6 THEN clock_timestamp() ELSE NULL END,
+      CASE WHEN $7 THEN clock_timestamp()-interval '1 minute' ELSE NULL END)`,
+  [actor, DEMO_TENANT_ID, DEMO_ACCOUNT_ID, DEMO_IDENTITY_USER_ID, state === "member" ? "member" : "owner", state === "revoked", state === "expired"]);
+  const input = { ...f.input, actorMembershipId: actor };
+  await expect(f.service.reversePayment(context, input)).rejects.toThrow("FORBIDDEN");
+  expect((await admin.query("SELECT count(*)::int n FROM app.customer_payment_reversal WHERE tenant_id=$1 AND payment_id=$2",
+    [DEMO_TENANT_ID, input.paymentId])).rows[0].n).toBe(0);
+  expect((await admin.query("SELECT count(*)::int n FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2",
+    [DEMO_TENANT_ID, input.commandId])).rows[0].n).toBe(0);
+  expect(await f.service.balance(context, f.invoiceId)).toMatchObject({ balance: { pence: 7000 } });
+});
+
+it("uses routine conflict semantics for changed replay and a second reversal command", async () => {
+  const f = await reversalFixture();
+  const reversed = await f.service.reversePayment(context, f.input);
+  await expect(f.service.reversePayment(context, { ...f.input, reason: "Different fictional correction" }))
+    .rejects.toThrow("IDEMPOTENCY_PAYLOAD_CONFLICT");
+  await expect(f.service.reversePayment(context, { ...f.input, commandId: randomUUID() }))
+    .rejects.toThrow("PAYMENT_ALREADY_REVERSED");
+  expect((await admin.query("SELECT id FROM app.customer_payment_reversal WHERE tenant_id=$1 AND payment_id=$2",
+    [DEMO_TENANT_ID, f.input.paymentId])).rows).toEqual([{ id: reversed.reversalId }]);
+});
+
+it("cannot resolve the payment invoice from another job or tenant", async () => {
+  const f = await reversalFixture();
+  await expect(f.service.reversePayment(context, { ...f.input, jobId: randomUUID() })).rejects.toThrow("PAYMENT_NOT_FOUND");
+  await expect(f.service.reversePayment(testTenantContext(DEMO_EMPTY_TENANT_ID, { membershipId: DEMO_EMPTY_MEMBERSHIP_ID }), { ...f.input, actorMembershipId: DEMO_EMPTY_MEMBERSHIP_ID })).rejects.toThrow("PAYMENT_NOT_FOUND");
+  expect((await admin.query("SELECT count(*)::int n FROM app.customer_payment_reversal WHERE tenant_id=$1 AND payment_id=$2",
+    [DEMO_TENANT_ID, f.input.paymentId])).rows[0].n).toBe(0);
 });

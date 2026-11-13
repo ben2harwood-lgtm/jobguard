@@ -1,5 +1,5 @@
 import type { TenantTransaction } from "../src/tenant-context.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -9,13 +9,14 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AdoptInFlightJobMutation, appendAuditBatch, authenticatePracticeSession, authorizePracticeJob, issuePracticeSession, DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID, DEMO_IDENTITY_USER_ID, MIGRATION_URLS, migrate, JobPartiesRepository, UserCommandDispatcher, withTenant } from "../src/index.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
+import { JobPartiesApplication } from "../../../apps/api/src/job-parties.application.js";
 
 // The shared integration setup selects the actual pre-LP4 audit client for
 // this deliberately frozen 0095 schema; fully migrated fixtures stay sealed.
 const tenant = randomUUID(), foreignTenant = randomUUID(), member = randomUUID();
 const migrationURL=MIGRATION_URLS.find(url=>url.pathname.endsWith("0095_job_parties.sql"))!;
-const context = testTenantContext(tenant);
-const foreignContext = testTenantContext(foreignTenant);
+const context = testTenantContext(tenant, { membershipId: member });
+const foreignContext = testTenantContext(foreignTenant, { membershipId: member });
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, repository: JobPartiesRepository, dir: string;
 let legacyInvoice: Record<string,unknown>;
 const legacyJobs: string[] = [], legacySnapshot = JSON.stringify({ name: "Earlier synthetic customer", address: ["Earlier address"] });
@@ -367,14 +368,22 @@ describe("CH-3a adoption authorization boundary (round 2)",()=>{
     return id;
   }
   // Everything the dispatcher does in one transaction: the routine, the audit events and the receipt completion.
-  const executeDirect=(a:{job:string;hash:string;customer:string;site:string;command:string;authorization:string},steps:{audit?:boolean;receipt?:boolean;auditedAuthorization?:string}={})=>withTenant(admin,context,async db=>{
+  const executeDirect=async(a:{job:string;hash:string;customer:string;site:string;command:string;authorization:string},steps:{audit?:boolean;receipt?:boolean;auditedAuthorization?:string}={})=>withTenant(admin,await testBoundTenantContext(admin,tenant,member),async db=>{
     await materializeAuthority(db,a.command,a.authorization);
+    // The direct owner fixture names the same actor in the lifecycle claim as
+    // the bound request, while retaining each deliberately missing audit/result.
+    const significant = { ...commandFor(a.job,a.hash), commandId: a.command };
+    await db.$client.query(`INSERT INTO app.command_lifecycle_claim(tenant_id,command_id,actor_membership_id,version,resource,expected_revisions,significant_input,authorization_id)
+      VALUES($1,$2,$3,'command.v1',$4,$5,$6,$7)`,[tenant,a.command,member,{tenantId:tenant,actorMembershipId:member,subjectType:'job',subjectRef:a.job},{aggregateRevision:0},significant,a.authorization]);
     const baseline=randomUUID();
     await db.$client.query(`SELECT app.adopt_in_flight_job($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,[tenant,a.job,baseline,"Fictional import","live",a.hash,"Fictional baseline",100000,1500,"reference_fee_policy_v1",OWNER_POLICY,member,new Date(0),a.customer,a.site,null,a.command,a.authorization]);
-    if(steps.audit!==false)await appendAuditBatch(db,[
+    if(steps.audit!==false)await db.$client.query("SELECT app.lp4_seal_audit($1::jsonb,'checked_operation')",[JSON.stringify([
       {id:randomUUID(),version:"audit.v1",actorRef:`membership:${member}`,eventType:"job.imported_baseline_attested",subjectType:"job",subjectRef:a.job,payload:{references:{baselineId:baseline,attestedByMembershipId:member},classifications:{action:"commercial"}}},
-      {id:randomUUID(),version:"audit.v1",actorRef:`membership:${member}`,eventType:"command.succeeded",subjectType:"job",subjectRef:a.job,payload:{references:{commandId:a.command,authorizationId:steps.auditedAuthorization??a.authorization},classifications:{action:"commercial"}}}]);
-    if(steps.receipt!==false)await db.$client.query(`UPDATE app.command_receipt SET status='succeeded',result='{"ok":true}'::jsonb,completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2`,[tenant,a.command]);
+      {id:randomUUID(),version:"audit.v1",actorRef:`membership:${member}`,eventType:"command.succeeded",subjectType:"job",subjectRef:a.job,payload:{references:{commandId:a.command,authorizationId:steps.auditedAuthorization??a.authorization},classifications:{action:"commercial"}}}])]);
+    if(steps.receipt!==false){
+      await db.$client.query("UPDATE app.command_lifecycle_claim SET outcome='{}'::jsonb WHERE tenant_id=$1 AND command_id=$2",[tenant,a.command]);
+      await db.$client.query(`UPDATE app.command_receipt r SET status='succeeded',result=app.lp5_command_result(c.command_id,c.outcome),completed_at=clock_timestamp() FROM app.command_lifecycle_claim c WHERE r.tenant_id=$1 AND r.command_id=$2 AND (c.tenant_id,c.command_id)=(r.tenant_id,r.command_id)`,[tenant,a.command]);
+    }
   });
   const exists=async(job:string)=>(await admin.query(`SELECT 1 FROM app.job WHERE tenant_id=$1 AND id=$2`,[tenant,job])).rowCount===1;
   const revisions=async()=>{const {c,s}=await saveParties(await createJob());return{customer:c.revisionId as string,site:s.revisionId as string};};
@@ -635,23 +644,10 @@ describe("CH-3a SBOX-SESSION-1 registry ownership on real PostgreSQL", () => {
       expect(await repository.view(stranger.context, stranger.membershipId, strangerJob, stranger.digest)).toEqual(strangerBefore);
       expect((await repository.view(owner.context, owner.membershipId, ownedJob, owner.digest)).current?.customer.name).toBe(customer.name);
 
-      // Exercise the unchanged controlled routine/dispatcher and immutable source audit reference.
-      const imported = randomUUID(), baseline = randomUUID();
-      const baselineHash = createHash("sha256").update("Fictional inherited ownership").digest("hex");
-      const mutation = new AdoptInFlightJobMutation(DEMO_TENANT_ID, "synthetic_candidate", {
-        version: "adopt-job.v1", jobId: imported, baselineId: baseline, title: "Fictional owned import", lifecyclePoint: "live",
-        provenance: "imported", lineageStrength: "builder_attested_weaker", baselineHash, baselineDescription: "Fictional baseline",
-        acceptedNetValuePence: 100000, recoveryCapPence: 1500, acceptedValueSource: "builder_attestation", attestedByMembershipId: DEMO_MEMBERSHIP_ID,
-        attestedAt: new Date(0), importTermsVersion: "synthetic_import_terms_candidate.v1", feePolicyVersion: "reference_fee_policy_v1", mode: "synthetic_candidate", parties,
+      // The real import binds source ownership in the durable command receipt.
+      const { jobId: imported } = await new JobPartiesApplication(runtime).adopt({ sessionId: ownerToken }, ownedJob, {
+        version: "job-parties-import.v1", commandId: randomUUID(), expectedBindingId: saved.id,
       });
-      await new UserCommandDispatcher(runtime).dispatch(owner.context, {
-        version: "command.v1", commandId: randomUUID(), commandType: "job.adopt_in_flight", semanticKey: `import:${imported}`,
-        actorMembershipId: owner.membershipId, subjectType: "job", subjectRef: imported,
-        action: { actionType: "job.adopt_in_flight", recipient: null, contentHash: baselineHash, aggregateRevision: 0, amountPence: 100000,
-          currency: "GBP", policyVersion: "synthetic_import_terms_candidate.v1", expiresAt: new Date(Date.now() + 300000) },
-      }, { mutate: mutation.mutate.bind(mutation), auditEvents: (result, cmd) => mutation.auditEvents(result, cmd).map(event => ({
-        ...event, payload: { ...event.payload, references: { ...event.payload.references, sourceJobId: ownedJob } },
-      })) });
       expect((await authorizePracticeJob(runtime, ownerToken, imported)).digest).toBe(owner.digest);
       await expect(authorizePracticeJob(runtime, strangerToken, imported)).rejects.toThrow("NOT_FOUND");
       await expect(authorizePracticeJob(runtime, undefined, imported)).rejects.toThrow("UNAUTHENTICATED");
@@ -678,7 +674,7 @@ describe("CH-3a round 13 generated practice entry", () => {
   async function session() {
     const digest = createHash("sha256").update(randomUUID()).digest("hex");
     await runtime.query("SELECT app.issue_practice_session($1)", [digest]);
-    return { digest, context: testTenantContext(DEMO_TENANT_ID) };
+    return { digest, context: testTenantContext(DEMO_TENANT_ID, { membershipId: DEMO_MEMBERSHIP_ID }) };
   }
   it("issues the three home scenarios and saved v1 sample with a bound live example, empty quoting suggestions and isolated reusable identities", async () => {
     const owner = await session(), stranger = await session();

@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-review-buttons": {
+      "branches": ["codex/sandbox/real-review-buttons"],
+      "allow": [
+        "apps/web/app/ui/review-proposal.tsx",
+        "apps/web/app/ui/review-proposal.test.tsx"
+      ]
+    }
+  }
+}

@@ -49,6 +49,19 @@ describe("DARK M3-4 upload application", () => {
   }
   expect(command).not.toHaveBeenCalled(); expect(site).not.toHaveBeenCalled();
  });
+ it.each([
+  ["STALE_REVISION", "STALE_REVISION"], ["PHOTO_NOT_ACCEPTED", "COMPLETION_CONFLICT"],
+  ["CONFIRMATION_MISMATCH", "COMPLETION_CONFLICT"], ["INVALID_COMMAND", "COMPLETION_CONFLICT"],
+  ["MODE_FORBIDDEN", "COMPLETION_CONFLICT"], ["UNAVAILABLE", "UNAVAILABLE"],
+ ])("maps site-extra %s to the appropriate offline result", async (code, expected) => {
+  const { app, site } = setup(); site.mockRejectedValue({ code });
+  const jobId = randomUUID(), commandId = randomUUID();
+  const body = { version: "log-site-extra.v1" as const, commandId, note: "Fictional offline note", description: "Fictional extra" };
+  expect(await app.upload({ version: "offline-upload.v1", commandId, jobId, expectedRevision: null, body, payloadHash: offlineUploadPayloadHash(jobId, body) })).toEqual({
+   version: "offline-upload-result.v1", commandId, state: code === "UNAVAILABLE" ? "retryable" : "conflict", code: expected, realExternalActions: 0,
+  });
+  expect(site).toHaveBeenCalledOnce();
+ });
  it("unknown commit outcomes are retryable and poison items do not block the next independent item", async () => {
   const { app, command } = setup(); command.mockRejectedValueOnce(new Error("secret provider details"));
   expect(await app.upload(request())).toMatchObject({ state: "retryable", code: "UNAVAILABLE" });

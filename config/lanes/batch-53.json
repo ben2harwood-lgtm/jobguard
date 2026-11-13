@@ -1,0 +1,35 @@
+{
+  "version": 2,
+  "lanes": {
+    "batch-53": {
+      "branches": [
+        "codex/sandbox/batch-53"
+      ],
+      "note": "Batch 53: later-safety-88, 89, 91, 92, 96, 97 and 98; RED; no migrations.",
+      "allow": [
+        "apps/api/src/effects/policy-gates.test.ts",
+        "apps/api/src/sync/download.application.test.ts",
+        "apps/api/src/sync/download.application.ts",
+        "apps/api/src/sync/snapshot.adapter.test.ts",
+        "apps/api/src/sync/snapshot.adapter.ts",
+        "apps/api/src/value/value.application.test.ts",
+        "apps/api/src/value/value.application.ts",
+        "apps/web/app/api/northside/extras/[extraId]/[action]/route.ts",
+        "apps/web/app/api/northside/extras/[extraId]/[action]/send-expiry.test.ts",
+        "apps/web/app/api/test-support/drain/route.test.ts",
+        "apps/web/app/api/test-support/drain/route.ts",
+        "packages/config/src/policy-gates.ts",
+        "packages/db/src/evidence-bundle-sources.ts",
+        "packages/db/src/northside-demo.ts",
+        "packages/db/src/quote-repository.ts",
+        "packages/db/src/review-repository.ts",
+        "packages/db/test/audit-api-value.integration.test.ts",
+        "packages/db/test/evidence-bundle.integration.test.ts",
+        "packages/db/test/extra-unlink-rule-parity.test.ts",
+        "packages/db/test/quote.integration.test.ts",
+        "packages/db/test/review.integration.test.ts",
+        "packages/db/test/sync-snapshot.integration.test.ts"
+      ]
+    }
+  }
+}

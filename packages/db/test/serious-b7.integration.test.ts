@@ -21,8 +21,8 @@ beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), "jg-serious-b7-"));
   const port = await freePort(59000, 200);
   postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: "synthetic", persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
-  await postgres.initialise(); await postgres.start();
-  admin = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "postgres", password: "synthetic" });
+  await postgres.initialise(); await postgres.start(); await postgres.createDatabase("jobguard_synthetic_demo");
+  admin = new Pool({ host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "postgres", password: "synthetic" });
   // An actual previous schema, with populated pack sources, before applying 0166.
   await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
   for (const url of MIGRATION_URLS) {
@@ -44,7 +44,7 @@ beforeAll(async () => {
   // The runner also sees the already-applied expand-compatible definition safely.
   await migrate(admin);
   await admin.query("CREATE ROLE serious_b7_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOBYPASSRLS; GRANT jobguard_runtime TO serious_b7_login");
-  runtime = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "serious_b7_login", password: "synthetic" });
+  runtime = new Pool({ host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "serious_b7_login", password: "synthetic" });
 }, 120_000);
 afterAll(async () => {
   if (oldEnvironment === undefined) delete process.env.JOBGUARD_ENV; else process.env.JOBGUARD_ENV = oldEnvironment;

@@ -1,4 +1,4 @@
-import { lp5ReadTables, lp5bReadTables, lp5RegistryRows, lp5Signatures, lp5bRoutines, lp5bReadViews } from "./lp5-command-catalog.js";
+import { lp5ReadTables, lp5bReadTables, lp5RegistryRows, abandonedSiteVisitRegistryRow, lp5Signatures, lp5bRoutines, lp5bReadViews } from "./lp5-command-catalog.js";
 import { applyUpgradeProofs, loadMigrationProofs } from "./migration-proof-loader.js";
 import { catalogueAdditions } from "./upgrade-proof-utils.js";
 // Dispatcher/CI only: upgrade/data/catalogue evidence requires real PostgreSQL.
@@ -1690,6 +1690,12 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  }
  const owners = (await f.admin.query("SELECT rolname, oid FROM pg_roles")).rows;
  const withProofs = applyUpgradeProofs(expected, proofs, Object.fromEntries(owners.map(r => [r.rolname, r.oid])));
+ // snapshot() never covers the infrastructure schema; 0732's infrastructure.final_check_cycle_exhausted
+ // proof row is pinned exactly (owner, ACL, body) by real-fc-typed-recovery instead, as migfix-7 does.
+ withProofs.routines = withProofs.routines.filter(row => row.nspname !== "infrastructure");
+ // 0722 is a named later successor, composed from its exact committed upgrade proof.
+ expect((withProofs.rows["app.command_type_registry"] as { command_type: string }[])
+  .filter(row => row.command_type === "CloseAbandonedSiteVisit")).toEqual([abandonedSiteVisitRegistryRow]);
  // Sort only committed expected values using the server collation, never select live objects as allowances.
  if (proofs.length) for (const [section, fields] of [
   ["routines", ["nspname", "proname", "args"]], ["relations", ["nspname", "relname"]],

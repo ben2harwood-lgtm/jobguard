@@ -19,7 +19,7 @@ const priorEnvironment = process.env.JOBGUARD_ENV;
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, directory: string;
 const password = "synthetic-feed-test-only";
 const membership = { identityUserId: DEMO_IDENTITY_USER_ID, membershipId: DEMO_MEMBERSHIP_ID, tenantId: DEMO_TENANT_ID };
-const context = verifiedTenantContextFromMembership(membership as Parameters<typeof verifiedTenantContextFromMembership>[0]);
+const context = testTenantContext(membership.tenantId, { membershipId: membership.membershipId });
 const actor = { membershipId: DEMO_MEMBERSHIP_ID, identityUserId: DEMO_IDENTITY_USER_ID };
 const previousJob = randomUUID(), otherTenant = randomUUID();
 const command = (expectedRevision: number, extra: Record<string, unknown>) => ({ version: "practice-feed-command.v1", commandId: randomUUID(), expectedRevision, ...extra });
@@ -329,8 +329,8 @@ describe("M4-7-S real PostgreSQL practice feed", () => {
     for (const field of ["revoked_at", "expires_at"]) {
       await admin.query(`UPDATE app.membership SET ${field}=now()-interval '1 hour' WHERE id=$1`, [DEMO_MEMBERSHIP_ID]);
       try {
-        await expect(view(f)).rejects.toMatchObject({ code: "PRACTICE_FEED_FORBIDDEN" });
-        await expect(cmd(repo(), f, command(1, { action: "disconnect" }))).rejects.toMatchObject({ code: "PRACTICE_FEED_FORBIDDEN" });
+        await expect(repo().view(testTenantContext(membership.tenantId,{membershipId:membership.membershipId,bindRequest:false}), actor, digestOf(f.sessionId), f.jobId)).rejects.toMatchObject({ code: "PRACTICE_FEED_FORBIDDEN" });
+        await expect(repo().command(testTenantContext(membership.tenantId,{membershipId:membership.membershipId,bindRequest:false}), actor, digestOf(f.sessionId), f.jobId, command(1, { action: "disconnect" }))).rejects.toMatchObject({ code: "PRACTICE_FEED_FORBIDDEN" });
       } finally { await admin.query(`UPDATE app.membership SET ${field}=NULL WHERE id=$1`, [DEMO_MEMBERSHIP_ID]); }
     }
     expect(await count("SELECT count(*) n FROM app.practice_feed_event WHERE job_id=$1", [f.jobId])).toBe(0);

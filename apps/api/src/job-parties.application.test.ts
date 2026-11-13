@@ -38,7 +38,14 @@ describe("CH-3a application boundary", () => {
 
 function expectAccessQueries(calls: Array<[string, (unknown[] | undefined)?]>) {
   for (const [sql] of calls) {
-    expect(sql).toMatch(/authenticate_practice_session|^(BEGIN|COMMIT|ROLLBACK)$|set_config|practice_session_digest/);
+    expect(sql).toMatch(/authenticate_practice_session|^(BEGIN|COMMIT|ROLLBACK|SELECT app\.bind_request\(\$1, \$2, \$3\)|SELECT app\.current_actor\(\) actor, app\.current_tenant\(\) tenant)$|set_config|practice_session_digest/);
+  }
+  const bind = calls.findIndex(([sql]) => sql === "SELECT app.bind_request($1, $2, $3)");
+  if (bind !== -1) {
+    expect(calls[bind - 1]?.[0]).toBe("BEGIN");
+    expect(calls[bind]?.[1]).toEqual(["practice", createHash("sha256").update(token).digest("hex"), DEMO_TENANT_ID]);
+    expect(calls[bind + 1]?.[0]).toBe("SELECT app.current_actor() actor, app.current_tenant() tenant");
+    expect(calls.slice(bind + 2).find(([sql]) => sql === "COMMIT" || sql === "ROLLBACK")?.[0]).toBe("COMMIT");
   }
 }
 
@@ -48,6 +55,8 @@ function accessPool(scenario: "missing" | "invalid" | "invented" | "stranger" | 
   const query = vi.fn(async (sql: string, _values?: unknown[]) => ({ rows:
     sql.includes("authenticate_practice_session") && (scenario === "stranger" || scenario === "owner")
       ? [{ tenant_id: DEMO_TENANT_ID, membership_id: DEMO_MEMBERSHIP_ID, identity_user_id: DEMO_IDENTITY_USER_ID }]
+      : sql === "SELECT app.current_actor() actor, app.current_tenant() tenant"
+      ? [{ actor: DEMO_MEMBERSHIP_ID, tenant: DEMO_TENANT_ID }]
       : sql.includes("practice_session_digest=$3") && scenario === "owner" ? [{ id: job }] : [],
   }));
   const connect = vi.fn(async () => ({ query, release: vi.fn() }));
@@ -121,6 +130,8 @@ describe("LP-5a parties-import result contract", () => {
     // Database boundary double; CI exercises the actual SQL projection and proof.
     const query = vi.fn(async (sql: string, values: unknown[] = []) => {
       if (/^(BEGIN|COMMIT|ROLLBACK)$/.test(sql) || sql.includes("set_config")) return { rows: [] };
+      if (sql === "SELECT app.bind_request($1, $2, $3)") return { rows: [] };
+      if (sql === "SELECT app.current_actor() actor, app.current_tenant() tenant") return { rows: [{ actor: DEMO_MEMBERSHIP_ID, tenant: DEMO_TENANT_ID }] };
       if (sql.includes("authenticate_practice_session")) return { rows: [{ tenant_id: DEMO_TENANT_ID, membership_id: DEMO_MEMBERSHIP_ID, identity_user_id: DEMO_IDENTITY_USER_ID }] };
       if (sql.includes("practice_session_digest=$3")) return { rows: [{ id: job }] };
       if (sql.includes("SELECT status,result FROM app.command_receipt")) return { rows: stored ? [{ status: "succeeded", result: stored }] : [] };
@@ -145,5 +156,22 @@ describe("LP-5a parties-import result contract", () => {
     expect(await app.adopt({ sessionId: token }, job, request)).toEqual(first);
     expect(mutate).toHaveBeenCalledTimes(1);
     expect(query.mock.calls.filter(([sql]) => sql.includes("app.begin_command("))).toHaveLength(1);
+  });
+});
+
+describe("atomic form error transport", () => {
+  it.each(["ZZ1 1ZZ", "SW1A 1AA"])("Nest preserves bounded field errors for postcode/email after ownership: %s", async postcode => {
+    vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
+    const { pool, query } = accessPool("owner");
+    const request = { version: "job-parties-command.v1", commandId: job, action: "save_form", expectedJobRevision: 0, expectedBindingId: null,
+      customer: { version: "customer.v1", name: "Mrs Sample", type: "person", email: "sample@example.com" }, customerRef: null,
+      site: { version: "site.v1", addressLines: ["4 Madeup Lane"], town: "London", postcode }, savedSiteRevisionId: null,
+      reuseSiteId: null, expectedReuseRevisionId: null, confirmSamePlace: false, payingPartyRevisionId: null, expectedPayerRevisionId: null, correct: false };
+    const failure = await new JobPartiesController(pool).command({ headers: { cookie: `jg_session=${token}` } }, job, request).catch(error => error);
+    expect(failure.getStatus()).toBe(400);
+    expect(failure.getResponse()).toEqual({ code: "INVALID_PARTIES", fields: [{ field: postcode === "ZZ1 1ZZ" ? "postcode" : "email", message: postcode === "ZZ1 1ZZ"
+      ? "Check UK postcode. Use a valid-format practice postcode, such as SW1A 1AA. Nothing was saved." : "Check Practice email (.invalid only). Nothing was saved." }] });
+    expectAccessQueries(query.mock.calls);
+    expect(JSON.stringify(failure.getResponse())).not.toContain("sample@example.com");
   });
 });

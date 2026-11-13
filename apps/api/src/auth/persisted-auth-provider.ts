@@ -1,3 +1,4 @@
+import type { PoolClient } from "pg";
 import { createHmac, randomBytes, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
 import { EnterpriseIdentityRepository, IdentityRepository } from "@jobguard/db";
 import { AuthError, roles, type ActiveMembership, type AuthPrincipal, type AuthProvider, type ChallengeRequest, type Role, type VerificationResult } from "./auth-provider.js";
@@ -24,13 +25,18 @@ export class PersistedAuthProvider implements AuthProvider {
   async requestCode(raw: ChallengeRequest): Promise<{ accepted: true; fixtureCode?: string }> {
     const input = challengeRequestV1.parse(raw), email = input.email.trim().toLowerCase();
     this.assertRecipient(email);
-    const time = this.now(), id = randomUUID(), code = this.makeCode();
+    const id = randomUUID(), code = this.makeCode();
     await this.repository.transaction(async client => {
+      // Serialize the backstop across processes before the existing IP/email locks.
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", ["identity-request-global"]);
       const ipDigest = this.digest(`ip:${input.ip}`);
       await this.repository.lock(client, email, ipDigest);
+      const time = this.now(), since = new Date(time - 600_000);
       const latest = await this.repository.latest(client, email, input.purpose);
-      const count = (await client.query<{ count: number }>("SELECT count(*)::int count FROM identity.request_window WHERE ip_digest=$1 AND requested_at>$2", [ipDigest, new Date(time - 600_000)])).rows[0]!.count;
-      if ((latest && time - latest.requested_at.getTime() < 60_000) || count >= 10) throw new AuthError("RATE_LIMITED");
+      const count = (await client.query<{ count: number }>("SELECT count(*)::int count FROM identity.request_window WHERE ip_digest=$1 AND requested_at>$2", [ipDigest, since])).rows[0]!.count;
+      const emailCount = (await client.query<{ count: number }>("SELECT count(*)::int count FROM identity.challenge WHERE email=$1 AND requested_at>$2", [email, since])).rows[0]!.count;
+      const globalCount = (await client.query<{ count: number }>("SELECT count(*)::int count FROM identity.request_window WHERE requested_at>$1", [since])).rows[0]!.count;
+      if ((latest && time - latest.requested_at.getTime() < 60_000) || count >= 10 || emailCount >= 10 || globalCount >= 100) throw new AuthError("RATE_LIMITED");
       await client.query("INSERT INTO identity.request_window VALUES($1,$2)", [ipDigest, new Date(time)]);
       await client.query(`INSERT INTO identity.challenge(id,email,purpose,invitation_id,digest,requested_at,expires_at)
         VALUES($1,$2,$3,$4,$5,$6,$7)`, [id,email,input.purpose,input.invitationId ?? null,this.digest(`${id}:${code}`),new Date(time),new Date(time+600_000)]);
@@ -46,7 +52,7 @@ export class PersistedAuthProvider implements AuthProvider {
     }
     return { accepted: true, ...(this.environment === "synthetic_demo" ? { fixtureCode: code } : {}) };
   }
-  async verifyCode(emailInput: string, purpose: ChallengeRequest["purpose"], code: string, invitationId?: string): Promise<VerificationResult> {
+  async verifyCode(emailInput: string, purpose: ChallengeRequest["purpose"], code: string, invitationId?: string, previousSessionToken?: string): Promise<VerificationResult> {
     const input = verifyCodeV1.parse({ email: emailInput, purpose, code, ...(invitationId ? { invitationId } : {}) });
     const email = input.email.trim().toLowerCase();
     this.assertRecipient(email);
@@ -76,6 +82,10 @@ export class PersistedAuthProvider implements AuthProvider {
         for (const connectionId of targets.length?targets:["identity"]) refusals.push({connectionId,code:"SSO_REQUIRED_CODE_SIGNIN"});
         return undefined;
       }
+      if (purpose === "invitation" && previousSessionToken) {
+        const previous = (await client.query<{user_id:string}>("SELECT user_id FROM identity.session WHERE token_digest=$1", [this.digest(`session:${previousSessionToken}`)])).rows[0];
+        if (previous && previous.user_id !== userId) await this.revokeSessionInTransaction(client, previousSessionToken);
+      }
       const sessionToken = randomBytes(32).toString("base64url"), csrfToken = randomBytes(24).toString("base64url"), sessionId=randomUUID();
       await client.query("INSERT INTO identity.session(id,user_id,token_digest,csrf_token,expires_at,environment) VALUES($1,$2,$3,$4,$5,$6)", [sessionId,userId,this.digest(`session:${sessionToken}`),csrfToken,new Date(this.now()+86_400_000),this.environment]);
       await client.query("INSERT INTO identity.security_event(id,event_type,subject_id) VALUES($1,'session.issued',$2)", [randomUUID(),sessionId]);
@@ -92,10 +102,19 @@ export class PersistedAuthProvider implements AuthProvider {
     if (!result) throw invalidCode;
     return result;
   }
+  private async revokeSessionInTransaction(client: PoolClient, sessionToken: string): Promise<void> {
+    const revoked = await client.query<{id:string}>("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE token_digest=$1 AND revoked_at IS NULL RETURNING id", [this.digest(`session:${sessionToken}`)]);
+    for (const row of revoked.rows) {
+      await client.query("INSERT INTO identity.security_event(id,event_type,subject_id) VALUES($1,'session.revoked',$2)", [randomUUID(),row.id]);
+    }
+  }
+  async revokeSession(sessionToken: string): Promise<void> {
+    await this.repository.transaction(client => this.revokeSessionInTransaction(client, sessionToken));
+  }
   async authenticate(sessionToken: string): Promise<AuthPrincipal | undefined> {
     const row = (await this.repository.pool.query<{id:string;user_id:string;csrf_token:string}>("SELECT id,user_id,csrf_token FROM identity.session WHERE token_digest=$1 AND revoked_at IS NULL AND expires_at>$2 AND environment=$3", [this.digest(`session:${sessionToken}`),new Date(this.now()),this.environment])).rows[0];
     if (!row || (await this.enterpriseIdentity.sessionScope(row.id))?.revoked) return undefined;
-    return {sessionId:row.id,identityUserId:row.user_id,csrfToken:row.csrf_token};
+    return Object.defineProperty({sessionId:row.id,identityUserId:row.user_id,csrfToken:row.csrf_token}, "sessionCredential", {value:this.digest(`session:${sessionToken}`)});
   }
   async memberships(principal: AuthPrincipal): Promise<(ActiveMembership & { name: string })[]> {
     const scope = await this.enterpriseIdentity.sessionScope(principal.sessionId);

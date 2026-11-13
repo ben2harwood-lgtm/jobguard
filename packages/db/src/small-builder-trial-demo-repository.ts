@@ -23,7 +23,7 @@ export function trialDemoReport(tenantId:string,runId:string,raw:unknown){
  // Each gap is derived from saved sources; none is cleared by a flag or a clock from the caller.
  const missing=[
   ...(start?[]:["First activation: no trial start is saved yet."]),
-  ...(lockedFirst?[]:["Final Check: a company job has no public final account route yet, so lock and Final Check cannot end a trial from this guide."]),
+  ...(lockedFirst?[]:["Final Check: open the first job final account, set dispositions, accept final check terms and complete it, then run and load the saved Final Check."]),
   ...(value.subscription.periods.length?[]:["Pro-ration: no billing period is issued yet. A period can only be issued after it ends; conversion rules stay on the accepted terms."]),
  ];
  return {...value,first,second,deadlinePreview:atDeadline,status:(missing.length?"incomplete":"complete") as "incomplete"|"complete",missing,

@@ -6,7 +6,7 @@ const tenantId = randomUUID(), membershipId = randomUUID(), userId = randomUUID(
 function fixture() {
   vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
   const member = { id: membershipId, tenantId, identityUserId: userId, role: "owner", email: "fictional@example.invalid" };
-  const provider = { authenticate: vi.fn(async () => ({ identityUserId: userId, sessionId: randomUUID(), csrfToken: "c".repeat(32) })),
+  const provider = { authenticate: vi.fn(async () => ({ identityUserId: userId, sessionId: randomUUID(), sessionCredential: "d".repeat(64), csrfToken: "c".repeat(32) })),
     findMembership: vi.fn(async () => member), digest: vi.fn(() => "d".repeat(64)) };
   const identity = { provider, allowedOrigin: "https://practice.invalid", session: vi.fn(async () => ({ csrfToken: "c".repeat(32), memberships: [member] })) };
   const repository = { readAcceptances: vi.fn(async () => []), read: vi.fn(), accept: vi.fn() };
@@ -15,7 +15,8 @@ function fixture() {
 afterEach(() => vi.unstubAllEnvs());
 it("binds session membership and checks job authority before baseline or acceptance", async () => {
   const f = fixture(), token = "s".repeat(40), query = { version: "rate-query.v1" };
-  await f.application.read(token, jobId, query);
+  const screen = await f.application.read(token, jobId, query);
+  expect(screen.csrfToken).toBe("c".repeat(32));
   expect(f.repository.readAcceptances).toHaveBeenCalledWith(expect.objectContaining({ tenantId }), { kind: "human", sessionDigest: "d".repeat(64) }, jobId);
   expect(f.repository.read).toHaveBeenCalledWith(expect.objectContaining({ tenantId }), query);
   const command = { jobId };

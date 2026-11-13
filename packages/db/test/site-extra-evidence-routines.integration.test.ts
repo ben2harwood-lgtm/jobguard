@@ -1,3 +1,4 @@
+import { testActorContext } from "./tenant-context-test-utils.js";
 // ENT-3d routines: parity, totality, the writer's own refusals, the guard, the catalogue and the upgrade proof (rule 9).
 import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
@@ -89,7 +90,7 @@ describe("ENT-3d routines", () => {
   expect(await record(x, { confirmation, note: "Fictional other note", shown: shownFor(x, null, { note: "Fictional other note" }) })).toEqual([{ outcome: "conflict", reason_code: "conflict", content_sha256: null, document_sha256: null }]);
   expect(await evidenceCounts(c, x)).toEqual(afterFirst);
   // a command id that already has a receipt and no document conflicts
-  const used = randomUUID(); await new SiteExtraRepository(c.runtime).logSiteExtra(x.ctx, x.members.supervisor.member, { commandId: used, jobId: x.jobId, note, description });
+  const used = randomUUID(); await new SiteExtraRepository(c.runtime).logSiteExtra(await testActorContext(c.admin, x.ctx, x.members.supervisor.member), x.members.supervisor.member, { commandId: used, jobId: x.jobId, note, description });
   const afterUsed = await evidenceCounts(c, x);
   expect(await record(x, { command: used })).toEqual([{ outcome: "conflict", reason_code: "conflict", content_sha256: null, document_sha256: null }]);
   expect(await evidenceCounts(c, x)).toEqual(afterUsed);
@@ -99,7 +100,7 @@ describe("ENT-3d routines", () => {
   expect(await record(x, { confirmation: half })).toEqual([{ outcome: "conflict", reason_code: "conflict", content_sha256: null, document_sha256: null }]);
  });
  it("[E23] routine 5 fails closed for an absent, empty or malformed tenant setting, a missing origin and a missing variation, and passes for a note-only extra", async () => {
-  const x = await siteFixture(c), made = await new SiteExtraRepository(c.runtime).logSiteExtra(x.ctx, x.members.supervisor.member, v3(x));
+  const x = await siteFixture(c), made = await new SiteExtraRepository(c.runtime).logSiteExtra(await testActorContext(c.admin, x.ctx, x.members.supervisor.member), x.members.supervisor.member, v3(x));
   const sql = "SELECT app.ent3d_require_site_extra_evidence($1,$2)";
   for (const setting of [null, "", "not-a-uuid", UNSET]) await expect(call(sql, [x.jobId, made.variationId], setting), String(setting)).rejects.toMatchObject({ code: "23514", message: "INVALID_ORIGIN" });
   await expect(call(sql, [x.jobId, randomUUID()])).rejects.toMatchObject({ code: "23514", message: "INVALID_ORIGIN" });
@@ -184,7 +185,7 @@ describe("ENT-3d upgrade proof (rule 9)", () => {
     expect(Number(saved.byte_length)).toBe(bytes.length);
     return { id, sha256, objectKey };
    });
-   await extras.raiseExtra(x.ctx, direct(x, x.members.supervisor)); await extras.raiseExtra(x.ctx, direct(x, x.members.supervisor, { evidenceId: p.id }));
+   await extras.raiseExtra(await testActorContext(up.admin, x.ctx, x.members.supervisor.member), direct(x, x.members.supervisor)); await extras.raiseExtra(await testActorContext(up.admin, x.ctx, x.members.supervisor.member), direct(x, x.members.supervisor, { evidenceId: p.id }));
    const run: Run = (sql, values) => up.admin.query(sql, values);
    const preColumns: Record<string, string[]> = {}, preKeys: Record<string, string[]> = {};
    for (const t of tables) {

@@ -25,3 +25,14 @@ it("has a discoverable body-only proof and adds no columns, grants, routines or 
   expect(sql).not.toMatch(/\b(?:GRANT|REVOKE|ADD COLUMN|CREATE TABLE|SET app\.)\b/u);
   expect(sql.match(/CREATE OR REPLACE FUNCTION/g)).toHaveLength(2);
 });
+it("LATER-SAFETY-30 preserves the latest reversal money rules, adding only payload replay guards", () => {
+  const predecessor = routine(read("../migrations/0654_synthetic_reversal_money_rules.sql"), "reverse_synthetic_landing");
+  const current = routine(read("../migrations/0682_synthetic_reversal_replay_match.sql"), "reverse_synthetic_landing");
+  const reasonGuard = " OR existing.reason IS DISTINCT FROM p_reason";
+  const replayGuard = "IF replay IS NULL OR replay IS DISTINCT FROM p_derivation OR EXISTS(\n" +
+    "   SELECT 1 FROM app.recovery_fee_journal WHERE tenant_id=t AND derivation_id=replay AND kind='compensation' AND id IS DISTINCT FROM p_journal\n" +
+    "  ) THEN";
+  expect(current).toContain(reasonGuard);
+  expect(current).toContain(replayGuard);
+  expect(current.replace(reasonGuard, "").replace(replayGuard, "IF replay IS NULL THEN")).toBe(predecessor);
+});

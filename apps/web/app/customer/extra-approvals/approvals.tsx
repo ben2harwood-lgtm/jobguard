@@ -27,10 +27,15 @@ export default function ExtraApprovals() {
     setBusy(true); setError("");
     try {
       await call(job, pending.current); pending.current = null;
-      setStatus("Your decision is recorded."); await refresh(job);
+      setStatus("Your decision is recorded.");
     } catch (e) {
       const code = (e as Error).message;
+      if (["STALE_REVISION", "HASH_MISMATCH", "ALREADY_DECIDED", "LINK_REPLAYED"].includes(code)) pending.current = null;
       setError(code === "STALE_REVISION" ? "This revision is stale. Ask the contractor for a new request." : code === "HASH_MISMATCH" ? "The revision or amount did not match. No decision was recorded." : "Decision could not be confirmed. Retry the same decision or sign in again.");
+      setBusy(false); return;
+    }
+    try { await refresh(job); } catch {
+      setError("Your decision is recorded, but the list could not be reloaded. Reload the page.");
     } finally { setBusy(false); }
   }
   return <main style={{overflowWrap:"anywhere"}}><h1>Client extra approvals</h1><p>Fictional practice only. Your own current job grant controls access. Nothing is sent to a real recipient or charged.</p>

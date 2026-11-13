@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-141": {
+      "branches": ["codex/sandbox/later-safety-141"],
+      "allow": [
+        "apps/web/app/lib/synthetic-server.ts",
+        "apps/web/app/lib/cloudflare-pools.test.ts",
+        "packages/db/test/cloudflare-northside-pool.integration.test.ts"
+      ]
+    }
+  }
+}

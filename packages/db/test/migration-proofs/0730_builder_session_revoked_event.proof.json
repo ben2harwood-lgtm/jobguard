@@ -1,0 +1,6 @@
+{
+  "migration": "0730_builder_session_revoked_event.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}

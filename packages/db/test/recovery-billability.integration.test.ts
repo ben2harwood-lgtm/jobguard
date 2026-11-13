@@ -201,7 +201,11 @@ it("repository refuses a second line approval, preserves exact replay and refuse
   const firstCommand = approval(command), first = await send(x, firstCommand, reviewer.digest);
   await expect(send(x, approval(secondReview), otherOwner.digest)).rejects.toThrow("BILLABILITY_LINE_ALREADY_APPROVED");
   expect(await send(x, firstCommand, reviewer.digest)).toEqual(first);
-  await expect(repo().command(testTenantContext(randomUUID()), x.jobId, reviewer.digest, firstCommand)).rejects.toThrow();
+  const wrongTenantId = randomUUID(), tenantIds = [x.context.tenantId, wrongTenantId];
+  const commandCounts = "SELECT tenant_id, count(*)::int n FROM app.recovery_billability_command WHERE tenant_id=ANY($1::uuid[]) GROUP BY tenant_id ORDER BY tenant_id";
+  const beforeWrongTenant = (await f.admin.query(commandCounts, [tenantIds])).rows;
+  await expect(repo().command(testTenantContext(wrongTenantId), x.jobId, reviewer.digest, firstCommand)).rejects.toThrow(/^BILLABILITY_FORBIDDEN$/);
+  expect((await f.admin.query(commandCounts, [tenantIds])).rows).toEqual(beforeWrongTenant);
   await expect(send(x, { ...approval(secondReview), actorMembershipId: reviewer.member }, otherOwner.digest)).rejects.toThrow("INVALID_BILLABILITY_INPUT");
   await expect(send(x, approval(secondReview), x.auth.digest)).rejects.toThrow("BILLABILITY_FORBIDDEN");
   expect((await f.admin.query("SELECT count(*)::int n FROM app.recovery_billability_command WHERE tenant_id=$1 AND job_id=$2 AND action='approve'", [x.context.tenantId, x.jobId])).rows[0].n).toBe(1);

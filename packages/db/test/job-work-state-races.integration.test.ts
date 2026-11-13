@@ -46,7 +46,7 @@ describe("CH-4 actual final-account lock routine race",()=>{
    repo.lock(a.context,{jobId:a.jobId,actorMembershipId:a.actorId,commandId:randomUUID(),finalAccountRevisionId:account.revisionId,expectedRevision:1,declarationVersion:"final_account_declaration.v1"}),
   ]);
   expect(lock.status).toBe("fulfilled");
-  const docs=await workTenant(f.runtime,a.tenantId,async db=>(await db.query("SELECT id FROM app.supplier_document WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows);
+  const docs=await workTenant(f.runtime,a.tenantId,async db=>(await db.query("SELECT id FROM app.supplier_document WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows, { membershipId: a.actorId });
   if(source.status==="fulfilled")expect(docs).toHaveLength(1);else {expect(source.reason.message).toBe("POST_LOCK_WORK_REQUIRES_LINKED_JOB");expect(docs).toHaveLength(0)}
   await expect(new SupplierDocumentRepository(f.runtime).intake(a.context,a.jobId,{version:"supplier-document-intake.v1",commandId:randomUUID(),fixtureId:"materials-B-revised-invoice",channel:"picker",expectedRevision:docs.length})).rejects.toThrow("POST_LOCK_WORK_REQUIRES_LINKED_JOB");
  });

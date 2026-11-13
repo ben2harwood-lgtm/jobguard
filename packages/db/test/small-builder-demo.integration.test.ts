@@ -1,3 +1,4 @@
+import { testTenantContext } from "./tenant-context-test-utils.js";
 import { assertLp4SealedEvents } from "./lp4-writer-catchup-fixture.js";
 import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
@@ -18,7 +19,7 @@ describe("DEMO-I PostgreSQL lifecycle and adversaries",()=>{
  afterAll(async()=>{await c?.close();});
  const company=(tenantId?:string)=>meterCompany(c as unknown as WorkFixture,tenantId);
  type Company=Awaited<ReturnType<typeof company>>;
- const call=(a:Company,op:Parameters<SmallBuilderDemoRepository["execute"]>[2],id:string|null,raw:unknown={})=>repo.execute(a.context,a.digest,op,id,raw);
+ const call=(a:Company,op:Parameters<SmallBuilderDemoRepository["execute"]>[2],id:string|null,raw:unknown={})=>repo.execute(testTenantContext(a.tenantId, { membershipId: a.actorId, bindRequest: false }),a.digest,op,id,raw);
  const runId=(value:Awaited<ReturnType<typeof call>>)=>"runId" in value ? value.runId : value.facts.runId;
  it.each(["core-1000","recovery-18800","shadow-30000","meter","trial"])("persists %s refusal and resumes after repository recreation",async scenario=>{
   const a=await company(),cmd=create(scenario),run=await call(a,"create",null,cmd),id=runId(run);
@@ -104,13 +105,13 @@ describe("DEMO-I PostgreSQL lifecycle and adversaries",()=>{
   await expect(call(otherUser,"create",null,cmd)).rejects.toThrow("DEMO_COMMAND_CONFLICT");
   // Command IDs are company-scoped: another company gets its own run, never the saved result.
   const foreignRun=await call(b,"create",null,cmd);expect(runId(foreignRun)).not.toBe(id);
-  await expect(repo.execute(b.context,a.digest,"read",id,{})).rejects.toThrow("DEMO_FORBIDDEN");
+  await expect(repo.execute(testTenantContext(b.tenantId, { membershipId: b.actorId, bindRequest: false }),a.digest,"read",id,{})).rejects.toThrow("DEMO_FORBIDDEN");
   // Even the owning user with valid membership in another company cannot cross the tenant key.
   const user=(await c.admin.query("SELECT user_id FROM identity.session WHERE id=$1",[a.sessionId])).rows[0].user_id;
   const membership=randomUUID();
   await c.admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) SELECT $1,tenant_id,account_id,$2,'owner' FROM app.membership WHERE tenant_id=$3 AND id=$4",[membership,user,b.tenantId,b.actorId]);
   await c.admin.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3)",[user,b.tenantId,membership]);
-  for(const op of ["read","report","reset","snapshot"] as const) await expect(repo.execute(b.context,a.digest,op,id,op==="reset"?resetCommand:op==="snapshot"?snap:op==="report"?{snapshotId:report.snapshotId}:{})).rejects.toThrow("DEMO_NOT_FOUND");
+  for(const op of ["read","report","reset","snapshot"] as const) await expect(repo.execute(testTenantContext(b.tenantId, { membershipId: membership, bindRequest: false }),a.digest,op,id,op==="reset"?resetCommand:op==="snapshot"?snap:op==="report"?{snapshotId:report.snapshotId}:{})).rejects.toThrow("DEMO_NOT_FOUND");
   await expect(call(a,"report",randomUUID())).rejects.toThrow("DEMO_NOT_FOUND");
   await expect(call(a,"report",id,{snapshotId:randomUUID()})).rejects.toThrow("DEMO_NOT_FOUND");
  });
@@ -130,36 +131,88 @@ describe("DEMO-I PostgreSQL lifecycle and adversaries",()=>{
   if(!("snapshotId" in report))throw new Error("Expected report");
   await expect(call(a,"report",id,{snapshotId:report.snapshotId})).rejects.toThrow("DEMO_NOT_FOUND");
  });
- it("revocation while waiting on lifecycle lock prevents create and writes nothing",async()=>{
-  const a=await company(),lock=await c.admin.connect();
-  await lock.query("BEGIN");await lock.query("SELECT pg_advisory_xact_lock(hashtextextended($1,313))",[a.tenantId]);
-  const pending=call(a,"create",null,create()),rejected=expect(pending).rejects.toThrow("DEMO_FORBIDDEN");
+ it("serializes session revocation behind an authorized lifecycle waiter and refuses subsequent work without duplicate effects",async()=>{
+  const a=await company(),lock=await c.admin.connect(),revoker=await c.admin.connect(),cmd=create();
+  const snapshotEffects=async()=>({
+   runs:(await c.admin.query("SELECT to_jsonb(r) row FROM app.small_builder_demo_run r WHERE tenant_id=$1 ORDER BY id",[a.tenantId])).rows,
+   receipts:(await c.admin.query("SELECT to_jsonb(r) row FROM app.small_builder_demo_receipt r WHERE tenant_id=$1 ORDER BY command_id",[a.tenantId])).rows,
+   reports:(await c.admin.query("SELECT to_jsonb(r) row FROM app.small_builder_demo_report r WHERE tenant_id=$1 ORDER BY id",[a.tenantId])).rows,
+   audits:(await c.admin.query("SELECT to_jsonb(r) row FROM app.audit_event r WHERE tenant_id=$1 ORDER BY sequence",[a.tenantId])).rows,
+  });
+  let pending:Promise<Awaited<ReturnType<typeof call>>>|undefined,revocation:Promise<unknown>|undefined;
+  let lifecycleReleased=false;
+  const releaseLifecycle=async()=>{
+   if(lifecycleReleased)return;
+   try{await lock.query("ROLLBACK");}finally{lifecycleReleased=true;lock.release();}
+  };
   try {
-   let waiting=false;
+  const before=await snapshotEffects();expect(before.runs).toEqual([]);expect(before.receipts).toEqual([]);expect(before.reports).toEqual([]);
+  await lock.query("BEGIN");await lock.query("SELECT pg_advisory_xact_lock(hashtextextended($1,313))",[a.tenantId]);
+  const lockPid=(await lock.query("SELECT pg_backend_pid() pid")).rows[0].pid as number;
+  const revokerPid=(await revoker.query("SELECT pg_backend_pid() pid")).rows[0].pid as number;
+  let created=false,revoked=false,requestPid:number|undefined;
+  pending=call(a,"create",null,cmd).then(result=>{created=true;return result;});
+  void pending.catch(()=>undefined);
+  try {
    for(let i=0;i<100;i++){
-    waiting=(await c.admin.query("SELECT EXISTS(SELECT 1 FROM pg_locks WHERE locktype='advisory' AND NOT granted) waiting")).rows[0].waiting;
-    if(waiting)break;
+    requestPid=(await c.admin.query("SELECT pid FROM pg_locks WHERE locktype='advisory' AND NOT granted AND $1=ANY(pg_blocking_pids(pid))",[lockPid])).rows[0]?.pid as number|undefined;
+    if(requestPid)break;
     await new Promise(resolve=>setTimeout(resolve,10));
    }
-   expect(waiting).toBe(true);
-   await c.admin.query("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE id=$1",[a.sessionId]);
-  }finally{await lock.query("ROLLBACK");lock.release();}
-  await rejected;
-  expect((await c.admin.query("SELECT * FROM app.small_builder_demo_run WHERE tenant_id=$1",[a.tenantId])).rows).toEqual([]);
+   expect(requestPid).toBeTypeOf("number");expect(created).toBe(false);
+   // The real request is already waiting on its lifecycle lock. LP6c keeps its
+   // credential SHARE lock until commit, so actual revocation must serialize behind it.
+   revocation=revoker.query("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE id=$1",[a.sessionId]).then(result=>{revoked=true;return result;});
+   void revocation.catch(()=>undefined);
+   let authorityWait=false;
+   for(let i=0;i<100;i++){
+    authorityWait=(await c.admin.query("SELECT $1=ANY(pg_blocking_pids($2)) blocked",[requestPid,revokerPid])).rows[0].blocked;
+    if(authorityWait)break;
+    await new Promise(resolve=>setTimeout(resolve,10));
+   }
+   expect(authorityWait).toBe(true);expect(revoked).toBe(false);expect(created).toBe(false);
+   expect((await c.admin.query("SELECT EXISTS(SELECT 1 FROM pg_locks WHERE pid=$1 AND relation='identity.session'::regclass AND mode='RowShareLock' AND granted) held",[requestPid])).rows[0].held).toBe(true);
+   expect(await snapshotEffects()).toEqual(before);
+  }finally{await releaseLifecycle();}
+  const run=await pending;await revocation;
+  expect(created).toBe(true);expect(revoked).toBe(true);
+  expect(run).toMatchObject({status:"blocked",revision:1,scenario:"core-1000"});
+  const id=runId(run),after=await snapshotEffects();
+  expect(after.runs).toHaveLength(1);expect(after.receipts).toHaveLength(1);expect(after.reports).toEqual([]);
+  expect(after.runs[0]!.row).toMatchObject({id,revision:1,owner_membership_id:a.actorId});
+  expect(after.receipts[0]!.row).toMatchObject({command_id:cmd.commandId,run_id:id,result:run});
+  expect(after.audits).toHaveLength(before.audits.length+1);
+  expect(after.audits.slice(0,before.audits.length)).toEqual(before.audits);
+  expect(after.audits.slice(before.audits.length).map(row=>row.row.event_type)).toEqual(["small_builder_demo.create"]);
+  expect((await c.admin.query("SELECT revoked_at IS NOT NULL revoked FROM identity.session WHERE id=$1",[a.sessionId])).rows[0].revoked).toBe(true);
+  for(const op of ["create","read","report","reset","snapshot"] as const)
+   await expect(call(a,op,op==="create"?null:id,op==="create"?cmd:op==="reset"?reset():op==="snapshot"?snapshot():{})).rejects.toThrow("DEMO_FORBIDDEN");
+  expect(await snapshotEffects()).toEqual(after);
+  // A fresh sign-in can replay the committed command, returning its exact result
+  // without creating another run, receipt, report or audit event.
+  const digest=createHash("sha256").update(randomUUID()).digest("hex"),sessionId=randomUUID();
+  await c.admin.query("INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at) SELECT $1,user_id,environment,$2,$3,clock_timestamp()+interval '1 hour' FROM identity.session WHERE id=$4",[sessionId,digest,randomUUID(),a.sessionId]);
+  expect(await call({...a,digest,sessionId},"create",null,cmd)).toEqual(run);
+  expect(await snapshotEffects()).toEqual(after);
+  }finally{
+   try{await releaseLifecycle();}finally{
+    try{await Promise.allSettled([pending,revocation]);}finally{revoker.release();}
+   }
+  }
  });
  it("runtime cannot query or mutate tables; RLS is forced; pooled missing context fails closed",async()=>{
   const a=await company();
   for(const name of ["run","receipt","report"]){
    const table=`app.small_builder_demo_${name}`;
    expect((await c.admin.query("SELECT relrowsecurity,relforcerowsecurity,has_table_privilege('jobguard_runtime',oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE') allowed FROM pg_class WHERE oid=$1::regclass",[table])).rows[0]).toEqual({relrowsecurity:true,relforcerowsecurity:true,allowed:false});
-   await expect(workTenant(c.runtime,a.tenantId,db=>db.query(`SELECT * FROM ${table}`))).rejects.toMatchObject({code:"42501"});
+   await expect(workTenant(c.runtime,a.tenantId,db=>db.query(`SELECT * FROM ${table}`), { membershipId: a.actorId })).rejects.toMatchObject({code:"42501"});
   }
   await expect(c.runtime.query("SELECT app.small_builder_demo($1,$2,'create',NULL,$3::jsonb)",[a.tenantId,a.digest,JSON.stringify(create())])).rejects.toThrow();
   expect((await c.runtime.query("SELECT nullif(current_setting('app.tenant_id',true),'') tenant")).rows[0].tenant).toBeNull();
  });
  it("SQL rejects injected business facts and keeps report history immutable",async()=>{
   const a=await company(),run=await call(a,"create",null,create()),id=runId(run);
-  for(const extra of [{tenantId:a.tenantId},{facts:[]},{completed:true},{releaseTrialKey:true}]) await expect(workTenant(c.runtime,a.tenantId,db=>db.query("SELECT app.small_builder_demo($1,$2,'reset',$3,$4::jsonb)",[a.tenantId,a.digest,id,JSON.stringify({...reset(),...extra})]))).rejects.toThrow("INVALID_DEMO_INPUT");
+  for(const extra of [{tenantId:a.tenantId},{facts:[]},{completed:true},{releaseTrialKey:true}]) await expect(workTenant(c.runtime,a.tenantId,db=>db.query("SELECT app.small_builder_demo($1,$2,'reset',$3,$4::jsonb)",[a.tenantId,a.digest,id,JSON.stringify({...reset(),...extra})]), { membershipId: a.actorId, bindRequest: false })).rejects.toThrow("INVALID_DEMO_INPUT");
   await call(a,"snapshot",id,snapshot());
   await expect(c.admin.query("UPDATE app.small_builder_demo_report SET facts='{}' WHERE tenant_id=$1",[a.tenantId])).rejects.toThrow("DEMO_IMMUTABLE");
   const before=(await c.admin.query("SELECT to_jsonb(r) v FROM app.small_builder_demo_report r WHERE tenant_id=$1",[a.tenantId])).rows;

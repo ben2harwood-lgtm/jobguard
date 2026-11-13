@@ -15,6 +15,7 @@ const base = {
 export const connectorInputV1 = z.discriminatedUnion("kind", [
   z.object({ ...base, kind: z.literal("work_order"), document: fixtureRef }).strict(),
   z.object({ ...base, kind: z.literal("materials_issue"), document: fixtureRef }).strict(),
+  z.object({ ...base, kind: z.literal("export_delivery"), outcome: z.enum(["received", "rejected"]) }).strict(),
   z.object({ ...base, kind: z.literal("billing_status"), status: z.enum(["billed", "paid", "reversed"]) }).strict(),
 ]);
 export type ConnectorInput = z.infer<typeof connectorInputV1>;

@@ -8,9 +8,10 @@ import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createLockSnapshot, hashLockCaptureRegister, hashLockLineSet, hashLockScopeDispositions, verifyFinalAccountLockSnapshot, captureRegisterNetPence, candidateM1TaxPolicy, money, addMoney } from "@jobguard/core";
 import { migrate } from "../src/migrate.js";
+import { withTenant } from "../src/tenant-context.js";
 import { FinalAccountLockRepository } from "../src/final-account-lock-repository.js";
-import { VariationRepository } from "../src/variation-repository.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { approvePricedVariation, VariationRepository } from "../src/variation-repository.js";
+import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 
 export const LOCK_OWNER = "40000000-0000-4000-8000-000000000004";
@@ -40,7 +41,8 @@ export async function asFixtureTenant<T>(pool: Pool, tenantId: string, work: (db
  try { await db.query("BEGIN"); await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenantId]); const result = await work(db); await db.query("COMMIT"); return result; }
  catch (error) { await db.query("ROLLBACK"); throw error; } finally { db.release(); }
 }
-export async function seedAccount(admin: Pool, tenantId = randomUUID(), net = 3360000) {
+type CaptureAccount = { tenantId: string; jobId: string; context: ReturnType<typeof testTenantContext> };
+export async function seedAccount(admin: Pool, tenantId = randomUUID(), net = 3360000, beforeFinalAccount?: (a: CaptureAccount) => Promise<void>) {
  const tax=candidateM1TaxPolicy.calculateGroup(money(net),"standard_rate_20"),gross=addMoney(money(net),tax);
  const jobId = randomUUID(), scopeItemId = randomUUID(), baselineId = randomUUID(), draftId = randomUUID(), revisionId = randomUUID(), lineId = randomUUID();
  await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1) ON CONFLICT DO NOTHING", [tenantId]);
@@ -48,18 +50,27 @@ export async function seedAccount(admin: Pool, tenantId = randomUUID(), net = 33
  const account = randomUUID();
  await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Synthetic SV-4')", [account, tenantId]);
  await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner') ON CONFLICT DO NOTHING", [LOCK_OWNER, tenantId, account, LOCK_USER]);
+ const context=(await admin.query("SELECT to_regprocedure('app.bind_request(text,text,uuid)') installed")).rows[0].installed ? await testBoundTenantContext(admin,tenantId,LOCK_OWNER) : testTenantContext(tenantId);
  await asFixtureTenant(admin, tenantId, async db => {
   await db.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,'Fictional final account','live')", [jobId, tenantId]);
   await db.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')", [scopeItemId, tenantId, jobId]);
   await db.query("INSERT INTO app.quote_version(id,tenant_id,job_id,version,content_hash,net_value_pence,status) VALUES($1,$2,$3,1,$4,$5,'accepted')", [baselineId, tenantId, jobId, LOCK_HASH, net]);
+ });
+ // Some fixtures approve captures first, so the initial account includes their immutable terms.
+ await beforeFinalAccount?.({ tenantId, jobId, context });
+ await asFixtureTenant(admin, tenantId, async db => {
   await db.query("INSERT INTO app.final_account_draft(id,tenant_id,job_id) VALUES($1,$2,$3)", [draftId, tenantId, jobId]);
   await db.query(`INSERT INTO app.final_account_revision(id,tenant_id,job_id,final_account_draft_id,revision,source_hash,baseline_quote_version_id,currency,tax_policy_version,net_pence,tax_pence,total_pence,issue_blocked,findings)
    VALUES($1,$2,$3,$4,1,$5,$6,'GBP','candidate_m1_standard_v1',$7,$8,$9,false,'[]')`, [revisionId, tenantId, jobId, draftId, LOCK_HASH, baselineId, net, tax.pence, gross.pence]);
   await db.query(`INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,description,net_pence,ordinal)
    VALUES($1,$2,$3,$4,'baseline',$5,$6,$5,'Fictional baseline',$7,1)`, [lineId, tenantId, jobId, revisionId, baselineId, scopeItemId, net]);
+  await db.query(`INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,approval_id,description,net_pence,ordinal)
+   SELECT gen_random_uuid(),r.tenant_id,r.job_id,$3,'variation',r.id,r.scope_item_id,r.id,a.id,r.description,r.signed_delta_pence,1+row_number() OVER (ORDER BY r.id)
+   FROM app.variation_approval a JOIN app.variation_revision r ON(r.tenant_id,r.id)=(a.tenant_id,a.revision_id)
+   WHERE a.tenant_id=$1 AND a.job_id=$2`, [tenantId, jobId, revisionId]);
   await db.query("UPDATE app.final_account_draft SET current_revision_id=$1,revision=1 WHERE tenant_id=$2 AND id=$3", [revisionId, tenantId, draftId]);
  });
- return { tenantId, jobId, scopeItemId, baselineId, draftId, revisionId, lineId, context: testTenantContext(tenantId), input: { jobId, actorMembershipId: LOCK_OWNER, commandId: randomUUID(), finalAccountRevisionId: revisionId, expectedRevision: 1, declarationVersion: "final_account_declaration.v1" as const } };
+ return { tenantId, jobId, scopeItemId, baselineId, draftId, revisionId, lineId, context, input: { jobId, actorMembershipId: LOCK_OWNER, commandId: randomUUID(), finalAccountRevisionId: revisionId, expectedRevision: 1, declarationVersion: "final_account_declaration.v1" as const } };
 }
 export async function prepareLock(f: LockFixture, a: Awaited<ReturnType<typeof seedAccount>>) {
  const repo = new FinalAccountLockRepository(f.runtime);
@@ -67,7 +78,7 @@ export async function prepareLock(f: LockFixture, a: Awaited<ReturnType<typeof s
  await repo.disposition(a.context, { jobId: a.jobId, actorMembershipId: LOCK_OWNER, commandId: randomUUID(), scopeItemId: a.scopeItemId, disposition: "done" });
  return repo;
 }
-export async function addFixtureCapture(f: LockFixture, a: Awaited<ReturnType<typeof seedAccount>>, net: number | null, review = false) {
+export async function addFixtureCapture(f: LockFixture, a: CaptureAccount, net: number | null, review = false) {
  const proposal={version:"variation-proposal.v1",id:randomUUID(),jobId:a.jobId,scopeItemId:randomUUID(),existingScopeItemId:null,lineageParentScopeItemId:null,captureKind:"text",captureText:"Fictional captured extra",description:"Fictional captured extra",suggestion:null};
  const price=net===null?null:{quantity:"1",unit:"item",unitRatePence:net,direction:"addition",confirmedByMembershipId:LOCK_OWNER,rateProvenance:{kind:"human_entered",sourceRef:"synthetic-sv4",sourceHash:LOCK_HASH,rateVersion:"synthetic.v1"}};
  const repo=new VariationRepository(f.runtime);
@@ -140,16 +151,28 @@ if (expect.getState().testPath === fileURLToPath(import.meta.url)) describe("SV-
  let f: LockFixture;
  beforeAll(async () => { f = await createLockFixture(); }, 60000); afterAll(async () => closeLockFixture(f));
  it("DW1 capture includes every state, £3,200 logged and £400 reviewed; post-lock review writes nothing",async()=>{
-  const a=await seedAccount(f.admin),repo=await prepareLock(f,a),variations=new VariationRepository(f.runtime);
-  const logged=await addFixtureCapture(f,a,320000),reviewed=await addFixtureCapture(f,a,40000,true);
-  const ids: string[]=[];
-  for(const state of ['draft','priced','approved','rejected','withdrawn']){
-   const id=await addFixtureCapture(f,a,null); ids.push(id);
-   if(state==='withdrawn')await variations.recordWithdrawal(a.context,{version:'variation-withdrawal.v1',id:randomUUID(),jobId:a.jobId,variationId:id,actorMembershipId:LOCK_OWNER,reasonCode:'builder_withdrawn'});
-   else if(state!=='draft')await f.admin.query("UPDATE app.variation SET state=$1 WHERE tenant_id=$2 AND id=$3",[state,a.tenantId,id]);
-  }
+  const variations=new VariationRepository(f.runtime),ids: string[]=[];
+  let logged!: string,reviewed!: string;
+  const a=await seedAccount(f.admin,randomUUID(),3360000,async a=>{
+   logged=await addFixtureCapture(f,a,320000);reviewed=await addFixtureCapture(f,a,40000,true);
+   for(const state of ['draft','priced','approved','rejected','withdrawn']){
+    // Zero-value revisions preserve the capture-total assertion while using real pricing.
+    const id=await addFixtureCapture(f,a,['priced','approved','rejected'].includes(state)?0:null); ids.push(id);
+    if(state==='withdrawn')await variations.recordWithdrawal(a.context,{version:'variation-withdrawal.v1',id:randomUUID(),jobId:a.jobId,variationId:id,actorMembershipId:LOCK_OWNER,reasonCode:'builder_withdrawn'});
+    else if(state==='approved'||state==='rejected'){
+     const current=(await variations.read(a.context,a.jobId)).variations.find(v=>v.id===id)!;
+     const revision=current.revisions.find(r=>r.id===current.currentRevisionId)!;
+     await variations.transact(a.context,async db=>{
+      if(state==='approved')await approvePricedVariation(db,a.tenantId,id,{id:randomUUID(),revisionId:revision.id,revision:revision.revision,contentHash:revision.contentHash,signedDeltaPence:revision.signedDeltaPence,method:'builder_attestation',actorMembershipId:LOCK_OWNER,evidenceId:null,approvedAt:new Date()});
+      else await variations.reject(db,a.tenantId,{id:randomUUID(),variationId:id,revisionId:revision.id,actorMembershipId:LOCK_OWNER});
+     });
+    }
+   }
+  });
+  const repo=await prepareLock(f,a);
   expect((await repo.read(a.context,a.jobId)).captures.map(c=>c.id)).toEqual(expect.arrayContaining([logged,reviewed,...ids]));
-  await repo.lock(a.context,a.input);const row=await lockRow(f,a.tenantId,a.jobId),captures=createLockSnapshot(row.snapshot).snapshot.captureRegister;
+  const head=await asFixtureTenant(f.runtime,a.tenantId,async db=>(await db.query("SELECT current_revision_id,revision FROM app.final_account_draft WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows[0]!);
+  await repo.lock(a.context,{...a.input,finalAccountRevisionId:head.current_revision_id,expectedRevision:Number(head.revision)});const row=await lockRow(f,a.tenantId,a.jobId),captures=createLockSnapshot(row.snapshot).snapshot.captureRegister;
   const extras=captures.filter(c=>c.kind!=='baseline'); expect(extras.reduce((n,c)=>n+(c.valuePence??0),0)).toBe(360000);
   expect(captures.every(c=>c.kind!=='baseline')).toBe(true);expect(captureRegisterNetPence(row.snapshot)).toBe(360000);
   expect(extras.map(c=>c.id)).toEqual(expect.arrayContaining([logged,reviewed,...ids]));
@@ -161,13 +184,13 @@ if (expect.getState().testPath === fileURLToPath(import.meta.url)) describe("SV-
  });
  it("DW2 refuses missing dispositions and terms through repository and runtime routine without side effects", async () => {
   const a = await seedAccount(f.admin), repo = new FinalAccountLockRepository(f.runtime);
-  const direct = () => asFixtureTenant(f.runtime, a.tenantId, db => db.query("SELECT * FROM app.lock_final_account($1,$2,$3,$4,$5,$6,$7)", [a.tenantId, a.jobId, LOCK_OWNER, a.input.commandId, a.revisionId, 1, a.input.declarationVersion]));
+  const direct = () => withTenant(f.runtime, a.context, db => db.$client.query("SELECT * FROM app.lock_final_account($1,$2,$3,$4,$5,$6,$7)", [a.tenantId, a.jobId, LOCK_OWNER, a.input.commandId, a.revisionId, 1, a.input.declarationVersion]));
   await repo.acceptTerms(a.context, { actorMembershipId: LOCK_OWNER, commandId: randomUUID(), termsVersion: "synthetic_final_check_terms.v1" });
   await expect(repo.lock(a.context, a.input)).rejects.toMatchObject({ code: "SCOPE_DISPOSITION_MISSING" });
   await expect(direct()).rejects.toThrow("SCOPE_DISPOSITION_MISSING");
   const b = await seedAccount(f.admin); await repo.disposition(b.context, { jobId: b.jobId, actorMembershipId: LOCK_OWNER, commandId: randomUUID(), scopeItemId: b.scopeItemId, disposition: "done" });
   await expect(repo.lock(b.context, b.input)).rejects.toMatchObject({ code: "DISCLOSURE_TERMS_NOT_ACCEPTED" });
-  await expect(asFixtureTenant(f.runtime, b.tenantId, db => db.query("SELECT * FROM app.lock_final_account($1,$2,$3,$4,$5,$6,$7)", [b.tenantId, b.jobId, LOCK_OWNER, b.input.commandId, b.revisionId, 1, b.input.declarationVersion]))).rejects.toThrow("DISCLOSURE_TERMS_NOT_ACCEPTED");
+  await expect(withTenant(f.runtime, b.context, db => db.$client.query("SELECT * FROM app.lock_final_account($1,$2,$3,$4,$5,$6,$7)", [b.tenantId, b.jobId, LOCK_OWNER, b.input.commandId, b.revisionId, 1, b.input.declarationVersion]))).rejects.toThrow("DISCLOSURE_TERMS_NOT_ACCEPTED");
   expect((await f.admin.query("SELECT count(*)::int n FROM app.final_account_lock WHERE tenant_id=ANY($1)", [[a.tenantId,b.tenantId]])).rows[0].n).toBe(0);
   expect((await f.admin.query("SELECT count(*)::int n FROM app.command_receipt WHERE command_id=ANY($1)", [[a.input.commandId,b.input.commandId]])).rows[0].n).toBe(0);
  });

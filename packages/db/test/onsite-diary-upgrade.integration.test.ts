@@ -1,3 +1,4 @@
+import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { afterAll, beforeAll, expect, it } from "vitest";
@@ -52,11 +53,12 @@ it("0505 preserves off-site receipts, all predecessor privileges, rows and unrel
  await migrate(f.admin);
  expect(await proofDifferences(f.admin, upgradedRows)).toEqual({ rows: [], types: [] });
  expect(await catalogue()).toEqual(upgradedCatalogue);
- expect(await repo.intake(a.context, a.jobId, a.actorId, "diary", input)).toEqual(saved);
+ const upgradedContext = await testBoundTenantContext(f.admin, a.tenantId, a.actorId);
+ expect(await repo.intake(upgradedContext, a.jobId, a.actorId, "diary", input)).toEqual(saved);
  expect((await f.admin.query("SELECT count(*)::int n FROM public.jobguard_schema_migration WHERE migration_name=$1", [name])).rows[0].n).toBe(1);
  // The successor installs above preserve the old receipt; 0523 keeps
  // 0505's admission while taking over checked completion.
  expect(await proofDifferences(f.admin, before)).toEqual({ rows: [], types: [] });
- expect(await repo.intake(a.context, a.jobId, a.actorId, "diary", input)).toEqual(saved);
+ expect(await repo.intake(upgradedContext, a.jobId, a.actorId, "diary", input)).toEqual(saved);
  expect((await f.admin.query("SELECT count(*)::int n FROM app.command_lifecycle_claim WHERE command_id=$1", [input.commandId])).rows[0].n).toBe(0);
 });

@@ -187,7 +187,9 @@ it("the non-practice material path retains tenant-wide revisions and description
  const input={merchantName:"M",sku:"S",description:"Original tenant description",pricePence:2000,priceUnit:"each" as const,taxBasis:"net" as const,effectiveFrom:"2026-10-01",sourceLabel:"synthetic fixture",expectedVersion:0};
  const first=await repo.addRate(context,input);
  await repo.addRequirement(context,{jobId,scopeItemId,skuId:first.skuId,quantity:"2",unit:"each",expectedRevision:0});
- await expect(repo.addRate(context,input)).rejects.toThrow("STALE_MATERIAL_RATE_REVISION");
+ // LATER-SAFETY-138: an identical retry reuses the latest agreement; a changed one is still stale.
+ expect(await repo.addRate(context,input)).toEqual(first);
+ await expect(repo.addRate(context,{...input,pricePence:2500})).rejects.toThrow("STALE_MATERIAL_RATE_REVISION");
  const next=await repo.addRate(context,{...input,description:"Later description",pricePence:3000,effectiveFrom:"2026-10-08",expectedVersion:1});
  expect(next).toMatchObject({version:2,merchantId:first.merchantId,skuId:first.skuId});
  expect(await repo.view(context,jobId,"2026-10-07")).toMatchObject([{description:input.description,rateVersion:1,status:"applicable",netPence:4000}]);

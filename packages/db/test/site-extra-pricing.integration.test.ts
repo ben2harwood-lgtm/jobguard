@@ -1,3 +1,4 @@
+import { testActorContext, testTenantContext } from "./tenant-context-test-utils.js";
 // ENT-3c: the priced log (LogSiteExtra with a schedule item), against real PostgreSQL. Written before the repository methods it proves.
 import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -14,11 +15,11 @@ beforeAll(async () => { c = await cluster(); repo = new SiteExtraRepository(c.ru
 afterAll(async () => { await c?.close(); });
 afterEach(() => vi.restoreAllMocks());
 
-const log = (f: SiteFixture, who: { member: SiteFixture["p"] }, jobId: string, fields: Record<string, unknown> = {}) => repo.logSorSiteExtra(f.ctx, who.member, sorInput(jobId, fields));
+const log = async (f: SiteFixture, who: { member: SiteFixture["p"] }, jobId: string, fields: Record<string, unknown> = {}) => repo.logSorSiteExtra(await testActorContext(c.admin, f.ctx, who.member), who.member, sorInput(jobId, fields));
 /** A refusal: the typed SorSiteExtraError, nothing written (the three access refusals may add ENT-3a's own refusal audit event only), chain still valid. */
 async function refused(f: SiteFixture, member: SiteFixture["p"], raw: Record<string, unknown>, code: string, context: VerifiedTenantContext = f.ctx) {
   const before = await written(c, f.p.tenantId);
-  const error = await repo.logSorSiteExtra(context, member, raw).then(() => { throw new Error("unexpected success"); }, e => e as SorSiteExtraError);
+  const error = await repo.logSorSiteExtra(context === f.ctx ? await testActorContext(c.admin, context, member) : context, member, raw).then(() => { throw new Error("unexpected success"); }, e => e as SorSiteExtraError);
   expect(error).toBeInstanceOf(SorSiteExtraError); expect(error.code).toBe(code); expect(error.message).toBe(code);
   expect(JSON.stringify(error)).not.toContain(noteText);
   expect(await written(c, f.p.tenantId)).toEqual(before); await chainHead(c, f.p.tenantId); return error;
@@ -47,8 +48,8 @@ describe("ENT-3c priced log: success, money and the excess only", () => {
     it(`[C5] ${role} logs a ${coverage} schedule-item extra: one transaction, server-derived facts only`, async () => {
       const f = await siteFixture(c), who = f.members[role], lineFacts = await lineIds(c, f.p.tenantId, f.revisionId);
       const raw = coverage === "new" ? sorInput(f.jobId, { sorCode: "CLEAR-GUTTER", quantity: "1" }) : sorInput(f.jobId, { sorCode: "REPAIR-DOOR", quantity: "3" });
-      const free = await repo.logSiteExtra(f.ctx, who.member, { commandId: randomUUID(), jobId: f.jobId, note: "free text", description: "free text extra" });
-      const result = await repo.logSorSiteExtra(f.ctx, who.member, raw);
+      const free = await repo.logSiteExtra(await testActorContext(c.admin, f.ctx, who.member), who.member, { commandId: randomUUID(), jobId: f.jobId, note: "free text", description: "free text extra" });
+      const result = await repo.logSorSiteExtra(await testActorContext(c.admin, f.ctx, who.member), who.member, raw);
       const rows = (await c.admin.query(`${originSql} WHERE tenant_id=$1 AND variation_id=$2`, [f.p.tenantId, result.variationId])).rows, origin = rows[0]!;
       expect(rows).toHaveLength(1);
       expect(origin).toMatchObject({ kind: "site_user", command_type: "LogSiteExtra", raising_membership_id: who.member.membershipId, raising_role: role, work_order_revision_id: f.revisionId });
@@ -93,10 +94,10 @@ describe("ENT-3c priced log: success, money and the excess only", () => {
       const order = row.id.startsWith("M12a") ? plus : row.id.startsWith("M12b") ? zero : row.id.startsWith("M14") ? big : row.order === "carries" ? withLines : plain;
       const raw = sorInput(order.jobId, { sorCode: row.code, quantity: row.claimed }), before = await written(c, tenant);
       if (row.refusal) {
-        const error = await repo.logSorSiteExtra(f.ctx, who.member, raw).then(() => { throw new Error(`${row.id}: unexpected success`); }, e => e as SorSiteExtraError);
+        const error = await repo.logSorSiteExtra(await testActorContext(c.admin, f.ctx, who.member), who.member, raw).then(() => { throw new Error(`${row.id}: unexpected success`); }, e => e as SorSiteExtraError);
         expect(error.code, row.id).toBe(row.refusal); expect(await written(c, tenant), row.id).toEqual(before); report.push(`${row.id} refused ${row.refusal}`); continue;
       }
-      const result = await repo.logSorSiteExtra(f.ctx, who.member, raw), { revision } = await stored(c, tenant, result.variationId);
+      const result = await repo.logSorSiteExtra(await testActorContext(c.admin, f.ctx, who.member), who.member, raw), { revision } = await stored(c, tenant, result.variationId);
       expect(revision.quantity, `${row.id} quantity`).toBe(row.quantity); expect(revision.net_pence, `${row.id} pence`).toBe(row.pence);
       expect(revision.claimed_quantity, `${row.id} claimed`).toBe(row.claimed); expect(revision.instructed_quantity, `${row.id} instructed`).toBe(row.instructed);
       expect(result).toMatchObject({ coverage: row.instructed === null ? "new" : "excess", extraQuantity: row.quantity, instructedQuantity: row.instructed });
@@ -141,7 +142,7 @@ describe("ENT-3c priced log: success, money and the excess only", () => {
     for (const quantity of ["1", "0.5", "1.0"]) await refused(f, who.member, sorInput(f.jobId, { commandId, sorCode: "REPAIR-DOOR", quantity }), "ALREADY_ON_ORDER");
     expect((await c.admin.query("SELECT 1 FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [f.p.tenantId, commandId])).rowCount).toBe(0);
     expect((await c.admin.query("SELECT 1 FROM app.audit_event WHERE tenant_id=$1 AND event_type='contractor.extra.refused'", [f.p.tenantId])).rowCount).toBe(0);
-    const result = await repo.logSorSiteExtra(f.ctx, who.member, sorInput(f.jobId, { commandId, sorCode: "REPAIR-DOOR", quantity: "3" }));
+    const result = await repo.logSorSiteExtra(await testActorContext(c.admin, f.ctx, who.member), who.member, sorInput(f.jobId, { commandId, sorCode: "REPAIR-DOOR", quantity: "3" }));
     expect((await stored(c, f.p.tenantId, result.variationId)).revision).toMatchObject({ quantity: "2", net_pence: "19300" });
   });
 });
@@ -236,7 +237,7 @@ describe("ENT-3c access: the same refusals as every command, decided by the data
     await cancel(c, f); errors.push(await refused(f, f.members.supervisor.member, probe(f.jobId), "NOT_FOUND"));
     for (const error of errors) expect(error).toEqual(errors[0]);
     await command(c, f, { kind: "membership.revoke", membershipId: f.members.surveyor.member.membershipId });
-    await refused(f, f.members.surveyor.member, probe(f.otherJob), "EXTRA_FORBIDDEN");
+    await refused(f, f.members.surveyor.member, probe(f.otherJob), "EXTRA_FORBIDDEN", testTenantContext(f.p.tenantId,{membershipId:f.members.surveyor.member.membershipId,bindRequest:false}));
   }, 60_000);
 
   it("[C11] another tenant: nothing crosses, nothing of tenant B is read, searched, priced or written", async () => {
@@ -278,13 +279,13 @@ describe("ENT-3c access: the same refusals as every command, decided by the data
 describe("ENT-3c replay, conflict and the six properties the coordinator named (B-prime)", () => {
   it("[C12] replaying a command id returns the first result, never the job's current state", async () => {
     const f = await siteFixture(c), who = f.members.supervisor, raw = sorInput(f.jobId, { sorCode: "REPAIR-DOOR", quantity: "3" }), tenant = f.p.tenantId;
-    const first = await repo.logSorSiteExtra(f.ctx, who.member, raw), snapshot = await rowText(c, tenant, "extra_sor_revision");
+    const first = await repo.logSorSiteExtra(await testActorContext(c.admin, f.ctx, who.member), who.member, raw), snapshot = await rowText(c, tenant, "extra_sor_revision");
     // [C12] (a) the order now instructs the item in full, (b) a newer price list exists, (c) the member has a second covering grant.
     await reviseOrder(c, f, { n: 1, reference: "WO-DEMO-0001", jobId: f.jobId, orderId: f.orderId, revisionId: f.revisionId, contractId: f.demo.contractId, revision: 1 }, lines(["L1", "REPAIR-DOOR", "5"], ["L2", "FIT-LOCK", "2"]));
     await newPriceList(c, f, [["REPAIR-DOOR", "each", 99999]], "2026-10-07", f.demo.scheduleId);
     await command(c, f, { kind: "grant.create", membershipId: who.member.membershipId, role: "supervisor", scope: { kind: "branch", id: f.demo.branchId }, contractId: null });
     const before = await written(c, tenant), head = await chainHead(c, tenant); // after the world moved on: the replay itself must add nothing
-    expect(await repo.logSorSiteExtra(f.ctx, who.member, raw)).toEqual(first);
+    expect(await repo.logSorSiteExtra(await testActorContext(c.admin, f.ctx, who.member), who.member, raw)).toEqual(first);
     expect(await written(c, tenant)).toEqual(before); expect(await rowText(c, tenant, "extra_sor_revision")).toEqual(snapshot); expect(await chainHead(c, tenant)).toBe(head);
     expect((await c.admin.query("SELECT result FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [tenant, raw.commandId])).rows).toEqual([{ result: { variationId: first.variationId } }]);
   }, 60_000);
@@ -292,37 +293,37 @@ describe("ENT-3c replay, conflict and the six properties the coordinator named (
   it("[C12] the same command id with a changed payload conflicts", async () => {
     const f = await siteFixture(c), raw = sorInput(f.jobId, { sorCode: "CLEAR-GUTTER", quantity: "2" }), me = f.members.supervisor.member, tenant = f.p.tenantId;
     const invitedAgain = await invite(c, f, "supervisor", { kind: "tenant", id: tenant });
-    const first = await repo.logSorSiteExtra(f.ctx, me, raw), before = await written(c, tenant), snapshot = await rowText(c, tenant, "extra_sor_revision");
+    const first = await repo.logSorSiteExtra(await testActorContext(c.admin, f.ctx, me), me, raw), before = await written(c, tenant), snapshot = await rowText(c, tenant, "extra_sor_revision");
     const changes: Array<[string, Record<string, unknown>, SiteFixture["p"]]> = [["quantity", { quantity: "3" }, me], ["code", { sorCode: "PAINT-ROOM" }, me], ["note", { note: "a different note" }, me], ["named line", { orderLineScopeItemId: randomUUID() }, me], ["member", {}, invitedAgain.member]];
     for (const [name, change, member] of changes) {
-      const error = await repo.logSorSiteExtra(f.ctx, member, { ...raw, ...change }).then(() => undefined, e => e as SorSiteExtraError);
+      const error = await repo.logSorSiteExtra(await testActorContext(c.admin, f.ctx, member), member, { ...raw, ...change }).then(() => undefined, e => e as SorSiteExtraError);
       expect(error, name).toBeInstanceOf(SorSiteExtraError); expect(error!.code, name).toBe("IDEMPOTENCY_CONFLICT");
     }
     expect(await written(c, tenant)).toEqual(before); expect(await rowText(c, tenant, "extra_sor_revision")).toEqual(snapshot);
-    expect(await repo.logSorSiteExtra(f.ctx, me, raw)).toEqual(first);
+    expect(await repo.logSorSiteExtra(await testActorContext(c.admin, f.ctx, me), me, raw)).toEqual(first);
     expect((await written(c, tenant)).extra_sor_revision).toBe(1);
     // Free text and priced logs refuse each other's command ids.
     const textual = { commandId: randomUUID(), jobId: f.jobId, note: "free", description: "free extra" };
-    await repo.logSiteExtra(f.ctx, me, textual);
-    await expect(repo.logSorSiteExtra(f.ctx, me, sorInput(f.jobId, { commandId: textual.commandId, sorCode: "CLEAR-GUTTER" }))).rejects.toMatchObject({ code: "IDEMPOTENCY_CONFLICT" });
-    await expect(repo.logSiteExtra(f.ctx, me, { commandId: raw.commandId, jobId: f.jobId, note: noteText, description: "Clear gutters" })).rejects.toMatchObject({ code: "COMMAND_CONFLICT" });
+    await repo.logSiteExtra(await testActorContext(c.admin, f.ctx, me), me, textual);
+    await expect(repo.logSorSiteExtra(await testActorContext(c.admin, f.ctx, me), me, sorInput(f.jobId, { commandId: textual.commandId, sorCode: "CLEAR-GUTTER" }))).rejects.toMatchObject({ code: "IDEMPOTENCY_CONFLICT" });
+    await expect(repo.logSiteExtra(await testActorContext(c.admin, f.ctx, me), me, { commandId: raw.commandId, jobId: f.jobId, note: noteText, description: "Clear gutters" })).rejects.toMatchObject({ code: "COMMAND_CONFLICT" });
   }, 60_000);
 
   it("[C12] the same command id on another job conflicts", async () => {
     const f = await siteFixture(c), both = (await invite(c, f, "supervisor", { kind: "tenant", id: f.p.tenantId })).member, raw = sorInput(f.jobId, { sorCode: "CLEAR-GUTTER" });
     for (const jobId of [f.jobId, f.otherJob]) expect((await decision(c, f, both, "LogSiteExtra", jobId))[0]!.decision).toBe("allowed");
-    const first = await repo.logSorSiteExtra(f.ctx, both, raw), before = await written(c, f.p.tenantId);
-    await expect(repo.logSorSiteExtra(f.ctx, both, { ...raw, jobId: f.otherJob })).rejects.toMatchObject({ code: "IDEMPOTENCY_CONFLICT" });
+    const first = await repo.logSorSiteExtra(await testActorContext(c.admin, f.ctx, both), both, raw), before = await written(c, f.p.tenantId);
+    await expect(repo.logSorSiteExtra(await testActorContext(c.admin, f.ctx, both), both, { ...raw, jobId: f.otherJob })).rejects.toMatchObject({ code: "IDEMPOTENCY_CONFLICT" });
     expect(await written(c, f.p.tenantId)).toEqual(before);
-    expect(await repo.logSorSiteExtra(f.ctx, both, raw)).toEqual(first);
+    expect(await repo.logSorSiteExtra(await testActorContext(c.admin, f.ctx, both), both, raw)).toEqual(first);
   });
 
   it("[C12] a successful no-op keeps its identity", async () => {
     // The first successful call is not a no-op. The property applies as follows: (1) a replay of the same id and body after success returns the same extra id, the same revision
     // and the same basis and writes nothing new; (2) the draft's "already on the order" outcome logs nothing, so asking again leaves nothing and gives the same refusal each time.
     const f = await siteFixture(c), who = f.members.operative, raw = sorInput(f.jobId, { sorCode: "CLEAR-GUTTER", quantity: "1.5" }), tenant = f.p.tenantId;
-    const first = await repo.logSorSiteExtra(f.ctx, who.member, raw), { revision, basis } = await stored(c, tenant, first.variationId), before = await written(c, tenant), head = await chainHead(c, tenant);
-    const again = await repo.logSorSiteExtra(f.ctx, who.member, raw), after = await stored(c, tenant, again.variationId);
+    const first = await repo.logSorSiteExtra(await testActorContext(c.admin, f.ctx, who.member), who.member, raw), { revision, basis } = await stored(c, tenant, first.variationId), before = await written(c, tenant), head = await chainHead(c, tenant);
+    const again = await repo.logSorSiteExtra(await testActorContext(c.admin, f.ctx, who.member), who.member, raw), after = await stored(c, tenant, again.variationId);
     expect(again.variationId).toBe(first.variationId); expect(after.revision.id).toBe(revision.id); expect(after.revision.revision).toBe(1); expect(after.revision.content_hash).toBe(revision.content_hash); expect(after.basis.id).toBe(basis.id);
     expect(await written(c, tenant)).toEqual(before); expect(await chainHead(c, tenant)).toBe(head);
     const within = sorInput(f.jobId, { sorCode: "REPAIR-DOOR", quantity: "1" });
@@ -335,7 +336,7 @@ describe("ENT-3c replay, conflict and the six properties the coordinator named (
     const before = await written(c, f.p.tenantId), head = await chainHead(c, f.p.tenantId);
     // The caller is an allowed member (so authority passes): a supervisor on the demo team.
     expect((await decision(c, f, f.members.supervisor.member, "LogSiteExtra", order.jobId))[0]!.decision).toBe("allowed");
-    const error = await repo.logSorSiteExtra(f.ctx, f.members.supervisor.member, raw).then(() => undefined, e => e as SorSiteExtraError);
+    const error = await repo.logSorSiteExtra(await testActorContext(c.admin, f.ctx, f.members.supervisor.member), f.members.supervisor.member, raw).then(() => undefined, e => e as SorSiteExtraError);
     expect(error).toBeInstanceOf(SorSiteExtraError); expect(error!.code).toBe("JOB_NOT_LIVE");
     expect(await written(c, f.p.tenantId)).toEqual(before); expect(await chainHead(c, f.p.tenantId)).toBe(head);
     expect((await written(c, f.p.tenantId))).toMatchObject({ extra_sor_revision: 0, extra_pricing_basis: 0, variation: 0, command_receipt: before.command_receipt });
@@ -364,9 +365,9 @@ describe("ENT-3c replay, conflict and the six properties the coordinator named (
 describe("ENT-3c live only, races, atomic audit and the immutable record", () => {
   it("[C17] a replay of a command that succeeded while the job was live still returns its first answer after the job has left live; a caller who may not log never learns the job is not live", async () => {
     const f = await siteFixture(c), order = await newOrder(c, f, lines(["L1", "FIT-LOCK", "1"])), me = f.members.supervisor.member, raw = sorInput(order.jobId, { sorCode: "CLEAR-GUTTER" });
-    const first = await repo.logSorSiteExtra(f.ctx, me, raw); await leaveLive(c, f, order.jobId);
+    const first = await repo.logSorSiteExtra(await testActorContext(c.admin, f.ctx, me), me, raw); await leaveLive(c, f, order.jobId);
     const before = await written(c, f.p.tenantId);
-    expect(await repo.logSorSiteExtra(f.ctx, me, raw)).toEqual(first); expect(await written(c, f.p.tenantId)).toEqual(before);
+    expect(await repo.logSorSiteExtra(await testActorContext(c.admin, f.ctx, me), me, raw)).toEqual(first); expect(await written(c, f.p.tenantId)).toEqual(before);
     await refused(f, me, sorInput(order.jobId, { sorCode: "PAINT-ROOM" }), "JOB_NOT_LIVE");
     await refused(f, f.members.owner.member, sorInput(order.jobId), "EXTRA_FORBIDDEN");
     await refused(f, f.unassigned.member, sorInput(order.jobId), "NOT_FOUND");
@@ -374,11 +375,11 @@ describe("ENT-3c live only, races, atomic audit and the immutable record", () =>
 
   it("[C14] races: the same command twice at once is one extra with two equal answers; an order revision between the pre-check and the command ends typed or wholly consistent", async () => {
     const f = await siteFixture(c), who = f.members.supervisor, tenant = f.p.tenantId, raw = sorInput(f.jobId, { sorCode: "CLEAR-GUTTER", quantity: "2" });
-    const [a, b] = await Promise.all([repo.logSorSiteExtra(f.ctx, who.member, raw), repo.logSorSiteExtra(f.ctx, who.member, raw)]);
+    const [a, b] = await Promise.all([repo.logSorSiteExtra(await testActorContext(c.admin, f.ctx, who.member), who.member, raw), repo.logSorSiteExtra(await testActorContext(c.admin, f.ctx, who.member), who.member, raw)]);
     expect(a).toEqual(b); expect(await written(c, tenant)).toMatchObject({ extra_sor_revision: 1, extra_pricing_basis: 1, variation: 1, extra_origin: 1, raised: 1 });
     // The same id with a different quantity at the same moment: one wins, the other is a conflict, never two rows.
     const racing = sorInput(f.jobId, { sorCode: "CLEAR-GUTTER", quantity: "1" });
-    const settled = await Promise.allSettled([repo.logSorSiteExtra(f.ctx, who.member, racing), repo.logSorSiteExtra(f.ctx, who.member, { ...racing, quantity: "3" })]);
+    const settled = await Promise.allSettled([repo.logSorSiteExtra(await testActorContext(c.admin, f.ctx, who.member), who.member, racing), repo.logSorSiteExtra(await testActorContext(c.admin, f.ctx, who.member), who.member, { ...racing, quantity: "3" })]);
     expect(settled.filter(s => s.status === "fulfilled")).toHaveLength(1); expect(settled.filter(s => s.status === "rejected").map(s => (s as PromiseRejectedResult).reason.code)).toEqual(["IDEMPOTENCY_CONFLICT"]);
     expect((await written(c, tenant)).extra_sor_revision).toBe(2);
 
@@ -398,17 +399,17 @@ describe("ENT-3c live only, races, atomic audit and the immutable record", () =>
     // (i) the compared line's quantity is raised to cover the claim
     let order = await newOrder(c, f, lines(["L1", "REPAIR-DOOR", "1"], ["L2", "FIT-LOCK", "2"]));
     between(() => reviseOrder(c, f, order, lines(["L1", "REPAIR-DOOR", "5"], ["L2", "FIT-LOCK", "2"])));
-    await expect(repo.logSorSiteExtra(f.ctx, who.member, sorInput(order.jobId, { sorCode: "REPAIR-DOOR", quantity: "3" }))).rejects.toMatchObject({ code: "ALREADY_ON_ORDER" });
+    await expect(repo.logSorSiteExtra(await testActorContext(c.admin, f.ctx, who.member), who.member, sorInput(order.jobId, { sorCode: "REPAIR-DOOR", quantity: "3" }))).rejects.toMatchObject({ code: "ALREADY_ON_ORDER" });
     expect(await written(c, tenant)).toEqual(moved); await consistent(order.jobId, order);
     // (ii) the compared line is removed
     order = await newOrder(c, f, lines(["L1", "REPAIR-DOOR", "1"], ["L2", "FIT-LOCK", "2"]));
     between(() => reviseOrder(c, f, order, lines(["L2", "FIT-LOCK", "2"])));
-    await expect(repo.logSorSiteExtra(f.ctx, who.member, sorInput(order.jobId, { sorCode: "REPAIR-DOOR", quantity: "3" }))).rejects.toMatchObject({ code: "SITE_PRICING_UNAVAILABLE" });
+    await expect(repo.logSorSiteExtra(await testActorContext(c.admin, f.ctx, who.member), who.member, sorInput(order.jobId, { sorCode: "REPAIR-DOOR", quantity: "3" }))).rejects.toMatchObject({ code: "SITE_PRICING_UNAVAILABLE" });
     expect(await written(c, tenant)).toEqual(moved); await consistent(order.jobId, order);
     // (iii) a line with the code is added where there was none
     order = await newOrder(c, f, lines(["L2", "FIT-LOCK", "2"]));
     between(() => reviseOrder(c, f, order, lines(["L2", "FIT-LOCK", "2"], ["L3", "CLEAR-GUTTER", "4"])));
-    await expect(repo.logSorSiteExtra(f.ctx, who.member, sorInput(order.jobId, { sorCode: "CLEAR-GUTTER", quantity: "1" }))).rejects.toMatchObject({ code: "SITE_PRICING_UNAVAILABLE" });
+    await expect(repo.logSorSiteExtra(await testActorContext(c.admin, f.ctx, who.member), who.member, sorInput(order.jobId, { sorCode: "CLEAR-GUTTER", quantity: "1" }))).rejects.toMatchObject({ code: "SITE_PRICING_UNAVAILABLE" });
     expect(await written(c, tenant)).toEqual(moved); await consistent(order.jobId, order);
   }, 90_000);
 
@@ -426,7 +427,7 @@ describe("ENT-3c live only, races, atomic audit and the immutable record", () =>
       }) as any); return client;
     }) as any);
     const revocation = command(c, f, { kind: "grant.revoke", grantId: a.grant }), pid = await reached;
-    const logging = repo.logSorSiteExtra(f.ctx, a.member, raw).then(v => ({ value: v }), e => ({ error: e as SorSiteExtraError }));
+    const logging = repo.logSorSiteExtra(await testActorContext(c.admin, f.ctx, a.member), a.member, raw).then(v => ({ value: v }), e => ({ error: e as SorSiteExtraError }));
     try { let blocked = false; for (let i = 0; i < 1000 && !blocked; i++) blocked = (await c.admin.query("SELECT 1 FROM pg_stat_activity WHERE $1::int=ANY(pg_blocking_pids(pid))", [pid])).rowCount! > 0; expect(blocked).toBe(true); } finally { resume(); }
     const [, outcome] = await Promise.all([revocation, logging]); vi.restoreAllMocks();
     expect((outcome as { error?: SorSiteExtraError }).error).toMatchObject({ code: "NOT_FOUND" });
@@ -447,7 +448,7 @@ describe("ENT-3c live only, races, atomic audit and the immutable record", () =>
         return value;
       }) as any); return client;
     }) as any);
-    const logging = repo.logSorSiteExtra(f.ctx, a.member, raw).then(v => ({ value: v }), e => ({ error: e as SorSiteExtraError })), pid = await reached;
+    const logging = repo.logSorSiteExtra(await testActorContext(c.admin, f.ctx, a.member), a.member, raw).then(v => ({ value: v }), e => ({ error: e as SorSiteExtraError })), pid = await reached;
     const leaving = leaveLive(c, f, order.jobId);
     try { let blocked = false; for (let i = 0; i < 1000 && !blocked; i++) blocked = (await c.admin.query("SELECT 1 FROM pg_stat_activity WHERE $1::int=ANY(pg_blocking_pids(pid))", [pid])).rowCount! > 0; expect(blocked).toBe(true); } finally { resume(); }
     const [outcome] = await Promise.all([logging, leaving]); vi.restoreAllMocks();
@@ -469,7 +470,7 @@ describe("ENT-3c live only, races, atomic audit and the immutable record", () =>
           return client; }) as any);
         try { return await original.call(this, context, input, seam); } finally { spy.mockRestore(); }
       });
-      const error = await repo.logSorSiteExtra(f.ctx, who.member, raw).then(() => undefined, e => e as SorSiteExtraError);
+      const error = await repo.logSorSiteExtra(await testActorContext(c.admin, f.ctx, who.member), who.member, raw).then(() => undefined, e => e as SorSiteExtraError);
       expect(error, fragment).toBeInstanceOf(SorSiteExtraError); expect(JSON.stringify(error)).not.toContain(noteText);
       expect(await written(c, tenant), fragment).toEqual(before); expect(await chainHead(c, tenant), fragment).toBe(head);
       expect((await c.admin.query("SELECT 1 FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [tenant, raw.commandId])).rowCount, fragment).toBe(0);
@@ -477,7 +478,7 @@ describe("ENT-3c live only, races, atomic audit and the immutable record", () =>
     }
     // No business lock is taken after the audit append (the merged lock observer, real PostgreSQL).
     const observed = new ObservedPool(c.runtime, c.admin), ownership = { mutable: await mutableTables(c.admin) }, observedRepo = new SiteExtraRepository(observed.pool);
-    const { transactions } = await observed.record(() => observedRepo.logSorSiteExtra(f.ctx, who.member, sorInput(f.jobId, { sorCode: "CLEAR-GUTTER", quantity: "2" })));
+    const { transactions } = await observed.record(async () => observedRepo.logSorSiteExtra(await testActorContext(c.admin, f.ctx, who.member), who.member, sorInput(f.jobId, { sorCode: "CLEAR-GUTTER", quantity: "2" })));
     const committed = transactions.filter(t => t.outcome === "commit" && t.statements.some(s => s.sql.includes("ent3c_record_sor_revision")));
     expect(committed).toHaveLength(1);
     const analysis = analyseLockOrder(committed[0]!, ownership); expect(analysis.auditIndex).toBeDefined(); expect(analysis.afterAudit).toEqual([]);
@@ -490,7 +491,7 @@ describe("ENT-3c live only, races, atomic audit and the immutable record", () =>
       await terminalizeFixtureReceipt(db,tenant,raw.commandId,{variationId:raw.variationId});
       await db.$client.query("SET CONSTRAINTS ALL IMMEDIATE");
     })).rejects.toMatchObject({ message: "PRICING_AUDIT_REQUIRED" });
-    const earlier = await repo.logSorSiteExtra(f.ctx, who.member, sorInput(f.jobId, { sorCode: "CLEAR-GUTTER", quantity: "3" }));
+    const earlier = await repo.logSorSiteExtra(await testActorContext(c.admin, f.ctx, who.member), who.member, sorInput(f.jobId, { sorCode: "CLEAR-GUTTER", quantity: "3" }));
     await expect(ownerTx(c, tenant, async db => {
       const o = (await db.$client.query("SELECT * FROM app.extra_origin WHERE tenant_id=$1 AND variation_id=$2", [tenant, earlier.variationId])).rows[0]!;
       const raw = { variationId: earlier.variationId, commandId: o.command_id as string, scopeId: "", originHash: o.origin_hash as string, jobId: f.jobId };
@@ -579,7 +580,7 @@ describe("ENT-3c live only, races, atomic audit and the immutable record", () =>
       await db.$client.query("ROLLBACK TO SAVEPOINT second");
     }).catch(error => { if (!/PRICING_AUDIT_REQUIRED|INVALID_ORIGIN/u.test(String(error?.message))) throw error; });
     // The routine called directly as the runtime role: committed extra, free-text extra, NULL, zero and malformed arguments.
-    const free = await repo.logSiteExtra(f.ctx, who.member, { commandId: randomUUID(), jobId: f.jobId, note: "free", description: "free extra" });
+    const free = await repo.logSiteExtra(await testActorContext(c.admin, f.ctx, who.member), who.member, { commandId: randomUUID(), jobId: f.jobId, note: "free", description: "free extra" });
     const direct = (variation: string, quantity: string | null, hash: string | null) => withTenant(c.runtime, f.ctx, db => db.$client.query("SELECT app.ent3c_record_sor_revision($1,$2,$3,$4)", [f.jobId, variation, quantity, hash]));
     const before = await written(c, tenant);
     await expect(direct(result.variationId, "2", "a".repeat(64))).rejects.toMatchObject({ message: "INVALID_COMMAND" });

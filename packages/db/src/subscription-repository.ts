@@ -39,7 +39,7 @@ export const subscriptionCommandResultV1=z.union([
 ]);
 
 export class SubscriptionPersistenceError extends Error {
- constructor(readonly code:"INVALID_SUBSCRIPTION_INPUT"|"SUBSCRIPTION_FORBIDDEN"|"SUBSCRIPTION_UNAVAILABLE"|"SUBSCRIPTION_SYNTHETIC_ONLY"|"SUBSCRIPTION_PROJECTION_MISMATCH"|"SUBSCRIPTION_ANCHOR_NOT_ACCEPTANCE_DAY"|"SUBSCRIPTION_PERIOD_BEFORE_ACCEPTANCE"){super(code);this.name="SubscriptionPersistenceError";}
+ constructor(readonly code:"INVALID_SUBSCRIPTION_INPUT"|"SUBSCRIPTION_FORBIDDEN"|"SUBSCRIPTION_UNAVAILABLE"|"SUBSCRIPTION_SYNTHETIC_ONLY"|"SUBSCRIPTION_PROJECTION_MISMATCH"|"SUBSCRIPTION_ANCHOR_NOT_ACCEPTANCE_DAY"|"SUBSCRIPTION_PERIOD_BEFORE_ACCEPTANCE"|"SUBSCRIPTION_STATEMENT_ALREADY_APPROVED"){super(code);this.name="SubscriptionPersistenceError";}
 }
 export function parseSubscriptionCommand(raw:unknown):SubscriptionCommand {
  const parsed=subscriptionCommandV1.safeParse(raw);
@@ -81,6 +81,7 @@ export class SubscriptionRepository implements SubscriptionRepositoryPort {
   try{return await withTenant(this.pool,context,fn);}
   catch(error){
    if(error instanceof SubscriptionPersistenceError)throw error;
+   if(error instanceof Error && "code" in error && error.code === "23505" && "constraint" in error && error.constraint === "subscription_simulated_work_tenant_id_statement_id_key")throw new SubscriptionPersistenceError("SUBSCRIPTION_STATEMENT_ALREADY_APPROVED");
    if(error instanceof Error&&["METER_FORBIDDEN","SUBSCRIPTION_FORBIDDEN"].includes(error.message))throw new SubscriptionPersistenceError("SUBSCRIPTION_FORBIDDEN");
    if(error instanceof Error && error.message === "SUBSCRIPTION_ANCHOR_NOT_ACCEPTANCE_DAY")throw new SubscriptionPersistenceError("SUBSCRIPTION_ANCHOR_NOT_ACCEPTANCE_DAY");
    if(error instanceof Error && error.message === "SUBSCRIPTION_PERIOD_BEFORE_ACCEPTANCE")throw new SubscriptionPersistenceError("SUBSCRIPTION_PERIOD_BEFORE_ACCEPTANCE");

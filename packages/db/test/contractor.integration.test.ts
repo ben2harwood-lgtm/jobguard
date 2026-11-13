@@ -1,3 +1,4 @@
+import { testTenantContext } from "./tenant-context-test-utils.js";
 import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
 import { randomUUID, createHash } from "node:crypto";
 import { readFile, mkdtemp, rm } from "node:fs/promises";
@@ -339,7 +340,7 @@ it('CH-3b client customer link requires organisation.manage on the exact client'
  const otherRegion=(await command(p,{kind:'unit.create',unitKind:'region',parentId:p.tenantId,name:'Fictional distant region'})).id;
  const distantBranch=(await command(p,{kind:'unit.create',unitKind:'branch',parentId:otherRegion,name:'Fictional distant branch'})).id;
  const job=(await jobs.create(verifiedTenantContextFromMembership(p),['job:update'],{title:'Fictional client registry command anchor'})).id;
- const customer=await registry.command(verifiedTenantContextFromMembership(p),p.membershipId,job,{version:'job-parties-command.v1',commandId:randomUUID(),action:'create_customer',customer:{version:'customer.v1',name:'Fictional insurer',type:'insurer'}});
+ const customer=await registry.command(testTenantContext(p.tenantId, { membershipId: p.membershipId }),p.membershipId,job,{version:'job-parties-command.v1',commandId:randomUUID(),action:'create_customer',customer:{version:'customer.v1',name:'Fictional insurer',type:'insurer'}});
  const clientForApprover=(await command(p,{kind:'client.create',branchId:branch,name:'Fictional approver client',clientType:'insurer'})).id;
  for(const role of contractorRoles)for(const scope of ['tenant','region','branch','team'] as const){
   // ENT-1 refuses to invite an owner (0054:233): the owner row is the practice principal at tenant scope, and the refusal is asserted below.

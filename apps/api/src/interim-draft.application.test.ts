@@ -14,6 +14,7 @@ function fixture() {
     lineage: "fixture_lineage_not_authority" as const, reconciliation: reconcileInterimDraftBook(book) };
   const repository = { read: vi.fn().mockResolvedValue(result), command: vi.fn().mockResolvedValue(result) };
   const principal = { identityUserId: randomUUID(), sessionId: randomUUID(), csrfToken: "c".repeat(24) };
+  Object.defineProperty(principal, "sessionCredential", { value: "a".repeat(64), enumerable: false });
   const provider = { authenticate: vi.fn().mockResolvedValue(principal),
     findMembership: vi.fn().mockResolvedValue({ id: randomUUID(), tenantId, identityUserId: principal.identityUserId }),
     digest: vi.fn().mockReturnValue("a".repeat(64)) };
@@ -32,7 +33,7 @@ it("binds the session company directly and uses the digest, ignoring untrusted t
   expect(view?.issueRefusal).toContain("D06/D02");
   expect(view?.issueBlockerMessages).toContain("Interim issue is disabled. Nothing can be issued, sent or posted.");
   await f.app.read({ sessionToken: "s".repeat(32) }, jobId);
-  expect(f.repository.read).toHaveBeenCalledWith(expect.objectContaining({ tenantId }), jobId);
+  expect(f.repository.read).toHaveBeenCalledWith(expect.objectContaining({ tenantId }), jobId, "a".repeat(64));
 });
 it.each([undefined, "https://evil.invalid"])("refuses missing/foreign browser origin %s before persistence", async origin => {
   const f = fixture();
@@ -63,4 +64,19 @@ it.each(["production", "pilot_no_charge", ""])("returns not-found outside synthe
     expect(interimDraftFailure(error)).toMatchObject({ status: 404 });
   }
   expect(f.identity.session).not.toHaveBeenCalled(); expect(f.repository.read).not.toHaveBeenCalled();
+});
+it.each([{ memberships: [] }, { memberships: [{ tenantId }, { tenantId: randomUUID() }] }])("refuses ambiguous or absent company selection before persistence: %j", async ({ memberships }) => {
+  const f = fixture();
+  f.identity.session.mockResolvedValue({ csrfToken: "c".repeat(24), memberships });
+  for (const work of [() => f.app.read(f.credentials, jobId), () => f.app.command(f.credentials, jobId, { jobId })]) {
+    expect(interimDraftFailure(await work().catch(error => error))).toMatchObject({ status: 404 });
+  }
+  expect(f.repository.read).not.toHaveBeenCalled(); expect(f.repository.command).not.toHaveBeenCalled();
+});
+it.each([["FORBIDDEN",403],["UNAUTHENTICATED",401],["JOB_NOT_LIVE",409],["UNAVAILABLE",503]] as const)("maps %s honestly", (code, status) => {
+  const failure = interimDraftFailure(new InterimDraftRepositoryError(code));
+  expect(failure.status).toBe(status);
+  if (status !== 503) expect(failure.body.message).not.toMatch(/retry/iu);
+  if (status === 403) expect(failure.body.message).toBe("You don't have permission.");
+  if (code === "JOB_NOT_LIVE") expect(failure.body.code).toBe("JOB_NOT_LIVE");
 });

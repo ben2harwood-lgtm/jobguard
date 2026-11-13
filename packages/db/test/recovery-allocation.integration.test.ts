@@ -22,7 +22,6 @@ import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from ".
 import { permitPracticeHomeJob } from "./lp-practice-home-job-fixture.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 
-const context = testTenantContext(DEMO_TENANT_ID);
 const actor = { membershipId: DEMO_MEMBERSHIP_ID, identityUserId: DEMO_IDENTITY_USER_ID };
 const priorEnvironment = process.env.JOBGUARD_ENV;
 const passphrase = randomUUID();
@@ -72,12 +71,15 @@ afterAll(async () => {
 
 async function fixture({ claim1 = 32_000, claim2 = 250_000, settle = true }: { claim1?: number; claim2?: number; settle?: boolean } = {}) {
   const session = await issuePracticeSession(runtime), auth = await authenticatePracticeSession(runtime, session), digest = auth.digest;
+  const context = auth.context;
   const jobId = randomUUID(), quoteId = randomUUID(), quoteDraftId = randomUUID(), quoteRevisionId = randomUUID();
   const draftId = randomUUID(), revisionId = randomUUID(), scopeId = randomUUID(), lineId = randomUUID();
   const scoped = practiceMaterialPool(runtime, digest), invoices = new PracticeInvoiceRepository(scoped);
   const db = await admin.connect();
   try {
-    await db.query("BEGIN"); await db.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
+    await db.query("BEGIN");
+    await db.query("SELECT app.bind_request($1::text,$2::text,$3::uuid)", ["practice", digest, DEMO_TENANT_ID]);
+    await db.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
     await permitPracticeHomeJob(db, { tenantId: DEMO_TENANT_ID, jobId, title: "Recovery £18,800 allocation fixture", practiceSessionDigest: digest, actorMembershipId: DEMO_MEMBERSHIP_ID });
     await db.query("INSERT INTO app.job(id,tenant_id,title,practice_session_digest,practice_scenario) VALUES($1,$2,'Recovery £18,800 allocation fixture',$3,'home')", [jobId, DEMO_TENANT_ID, digest]);
     await db.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')", [scopeId, DEMO_TENANT_ID, jobId]);
@@ -143,7 +145,7 @@ async function fixture({ claim1 = 32_000, claim2 = 250_000, settle = true }: { c
     feedView = await feed.command(context, actor, digest, jobId, { version: "practice-feed-command.v1", action: "advance", commandId: randomUUID(), expectedRevision: feedView.revision, movement, step: "settled" });
     feedView = await feed.command(context, actor, digest, jobId, { version: "practice-feed-command.v1", action: "match_receipt", commandId: randomUUID(), expectedRevision: feedView.revision, movement, paymentId });
   }
-  return { session, jobId, digest, invoiceId: invoice.id, invoices, cases, packs, feed, feedView, scopeId, lineId, revisionId,
+  return { context, session, jobId, digest, invoiceId: invoice.id, invoices, cases, packs, feed, feedView, scopeId, lineId, revisionId,
     case1: views[0]!, case2: views[1]!, payment1: payments[0]!, payment2: payments[1]!, evidence1: evidenceIds[0]!, evidence2: evidenceIds[1]! };
 }
 
@@ -152,12 +154,12 @@ const allocationInput = (f: Fixture, which = 1, grossPence = which === 1 ? 38_40
   caseId: which === 1 ? f.case1.id : f.case2.id, paymentId: which === 1 ? f.payment1 : f.payment2,
   evidenceId: which === 1 ? f.evidence1 : f.evidence2, expectedCaseRevision: which === 1 ? f.case1.revision : f.case2.revision, grossPence });
 async function reviewed(f: Fixture, input = allocationInput(f)) {
-  const view = await repo().command(context, actor, f.digest, f.jobId, input);
+  const view = await repo().command(f.context, actor, f.digest, f.jobId, input);
   expect(view.review).not.toBeNull();
   return { ...input, action: "allocate", commandId: randomUUID(), approvalHash: view.review!.approvalHash };
 }
-const read = (f: Fixture) => repo().view(context, actor, f.digest, f.jobId);
-const run = (f: Fixture, raw: unknown) => repo().command(context, actor, f.digest, f.jobId, raw);
+const read = (f: Fixture) => repo().view(f.context, actor, f.digest, f.jobId);
+const run = (f: Fixture, raw: unknown) => repo().command(f.context, actor, f.digest, f.jobId, raw);
 async function countRows(f: Fixture) {
   return (await admin.query(`SELECT
     (SELECT count(*)::int FROM app.recovery_case_allocation WHERE tenant_id=$1 AND job_id=$2) allocations,
@@ -181,7 +183,7 @@ it("M4-8: matching suggestions read settled facts and approved cases without cre
   expect(await countRows(f)).toEqual(before);
   expect((await read(await fixture({ settle: false }))).suggestions).toEqual([]);
   const other = await issuePracticeSession(runtime), auth = await authenticatePracticeSession(runtime, other);
-  await expect(repo().view(context, actor, auth.digest, f.jobId)).rejects.toMatchObject({ code: "ALLOCATION_NOT_FOUND" });
+  await expect(repo().view(f.context, actor, auth.digest, f.jobId)).rejects.toMatchObject({ code: "ALLOCATION_NOT_FOUND" });
   await run(f, await reviewed(f));
   expect((await read(f)).suggestions?.every(row => row.caseId !== f.case1.id && row.paymentId !== f.payment1)).toBe(true);
 });
@@ -190,11 +192,11 @@ it("M4-8: partial refund replays append once, retain the locked bill and reopen 
   const f = await fixture(); await run(f, await reviewed(f));
   const before = await originals(f), allocation = (await read(f)).allocations[0]!;
   const creditInput = { jobId: f.jobId, invoiceId: f.invoiceId, netPence: 5000, reason: "Fictional partial refund" };
-  const preview = await f.invoices.previewCredit(context, creditInput);
-  const credit = await f.invoices.issueCredit(context, { ...creditInput, actorMembershipId: actor.membershipId,
+  const preview = await f.invoices.previewCredit(f.context, creditInput);
+  const credit = await f.invoices.issueCredit(f.context, { ...creditInput, actorMembershipId: actor.membershipId,
     commandId: randomUUID(), previewHash: preview.previewHash });
   expect((await read(f)).paused).toBe(true);
-  const current = (await f.cases.listForMember(context, f.jobId, actor)).find(row => row.id === f.case1.id)!;
+  const current = (await f.cases.listForMember(f.context, f.jobId, actor)).find(row => row.id === f.case1.id)!;
   const input = { version, action: "review_reverse", commandId: randomUUID(), allocationId: allocation.id,
     creditNoteId: credit.creditNoteId, expectedCaseRevision: current.revision, grossPence: 6000 };
   const review = await run(f, input);
@@ -214,12 +216,12 @@ it("paid-invoice credit remains readable and reversible", async () => {
   const f = await fixture();
   await run(f, await reviewed(f));
   const allocation = (await read(f)).allocations.find(row => row.paymentId === f.payment1)!;
-  await f.invoices.recordReceipt(context, { jobId: f.jobId, invoiceId: f.invoiceId, actorMembershipId: actor.membershipId,
+  await f.invoices.recordReceipt(f.context, { jobId: f.jobId, invoiceId: f.invoiceId, actorMembershipId: actor.membershipId,
     commandId: randomUUID(), paidOn: "2026-10-12", amountPence: 2256000 - 38400 - 300000,
     method: "bank_transfer", reference: "Fictional remaining invoice payment" });
   const creditInput = { jobId: f.jobId, invoiceId: f.invoiceId, netPence: 32000, reason: "Fictional post-payment credit" };
-  const preview = await f.invoices.previewCredit(context, creditInput);
-  const credit = await f.invoices.issueCredit(context, { ...creditInput, actorMembershipId: actor.membershipId,
+  const preview = await f.invoices.previewCredit(f.context, creditInput);
+  const credit = await f.invoices.issueCredit(f.context, { ...creditInput, actorMembershipId: actor.membershipId,
     commandId: randomUUID(), previewHash: preview.previewHash });
   // Credit document totals are signed corrections; allocation sources use the
   // separately stored positive amount, as established by UIWIRE-11.
@@ -236,7 +238,7 @@ it("paid-invoice credit remains readable and reversible", async () => {
     invoiceBalancePence: -38400,
     reversalSources: [{ allocationId: allocation.id, sourceId: credit.creditNoteId, kind: "credit_note", availableGrossPence: 38400 }],
   });
-  const current = (await f.cases.listForMember(context, f.jobId, actor)).find(row => row.id === f.case1.id)!;
+  const current = (await f.cases.listForMember(f.context, f.jobId, actor)).find(row => row.id === f.case1.id)!;
   const input = { version, action: "review_reverse", commandId: randomUUID(), allocationId: allocation.id,
     creditNoteId: credit.creditNoteId, expectedCaseRevision: current.revision, grossPence: 38400 };
   const review = await controller.reverse(request, f.jobId, input);
@@ -274,7 +276,7 @@ it("DW1: approved £384 and £3,000 persist integer splits, provenance, Decision
     expect(approval).toMatchObject({ resolution: "approved", amount_pence: String(item.grossPence), actor_membership_id: actor.membershipId });
   }
   expect(await read(f)).toEqual(view);
-  expect(await new RecoveryAllocationRepository(runtime, "synthetic_demo").view(context, actor, f.digest, f.jobId)).toEqual(view);
+  expect(await new RecoveryAllocationRepository(runtime, "synthetic_demo").view(f.context, actor, f.digest, f.jobId)).toEqual(view);
   expect((await admin.query("SELECT count(*)::int n FROM app.recovery_fee_derivation WHERE tenant_id=$1 AND job_id=$2", [DEMO_TENANT_ID, f.jobId])).rows).toEqual([{ n: 0 }]);
 });
 
@@ -293,7 +295,7 @@ it("DW3: excess settled cash, claim limits, reuse and stale approvals fail witho
   const now = await countRows(f);
   await expect(run(f, { ...command, commandId: randomUUID() })).rejects.toBeTruthy();
   expect(await countRows(f)).toEqual(now);
-  const latest = (await f.cases.listForMember(context, f.jobId, actor)).find(c => c.id === f.case1.id)!;
+  const latest = (await f.cases.listForMember(f.context, f.jobId, actor)).find(c => c.id === f.case1.id)!;
   await expect(run(f, { ...allocationInput(f), expectedCaseRevision: latest.revision })).rejects.toBeTruthy();
   expect(await countRows(f)).toEqual(now);
 });
@@ -311,9 +313,9 @@ it("DW4: approved merged receipt reversal appends linked reversals, reopens case
   const f = await fixture();
   for (const which of [1, 2]) await run(f, await reviewed(f, allocationInput(f, which)));
   const before = await originals(f), allocation = (await read(f)).allocations.find(a => a.paymentId === f.payment2)!;
-  await f.invoices.reverseReceipt(context, { jobId: f.jobId, invoiceId: f.invoiceId, paymentId: f.payment2, actorMembershipId: actor.membershipId, commandId: randomUUID(), reason: "Synthetic £3,000 reversed" });
+  await f.invoices.reverseReceipt(f.context, { jobId: f.jobId, invoiceId: f.invoiceId, paymentId: f.payment2, actorMembershipId: actor.membershipId, commandId: randomUUID(), reason: "Synthetic £3,000 reversed" });
   expect((await read(f)).paused).toBe(true);
-  const current = (await f.cases.listForMember(context, f.jobId, actor)).find(c => c.id === f.case2.id)!;
+  const current = (await f.cases.listForMember(f.context, f.jobId, actor)).find(c => c.id === f.case2.id)!;
   const reviewInput = { version, action: "review_reverse", commandId: randomUUID(), allocationId: allocation.id, expectedCaseRevision: current.revision, grossPence: 300000 };
   const review = await run(f, reviewInput);
   await run(f, { ...reviewInput, action: "reverse", commandId: randomUUID(), approvalHash: review.review!.approvalHash });
@@ -334,7 +336,7 @@ it("DW5: invalidating only allocation 2 evidence holds that allocation and leave
   const f = await fixture();
   for (const which of [1, 2]) await run(f, await reviewed(f, allocationInput(f, which)));
   const before = await originals(f);
-  await withTenant(runtime, context, db => db.$client.query("INSERT INTO app.evidence_invalidation(id,tenant_id,evidence_id,actor_membership_id,reason_code) VALUES($1,$2,$3,$4,'verification_invalid')", [randomUUID(), DEMO_TENANT_ID, f.evidence2, actor.membershipId]));
+  await withTenant(runtime, f.context, db => db.$client.query("INSERT INTO app.evidence_invalidation(id,tenant_id,evidence_id,actor_membership_id,reason_code) VALUES($1,$2,$3,$4,'verification_invalid')", [randomUUID(), DEMO_TENANT_ID, f.evidence2, actor.membershipId]));
   const view = await read(f);
   expect(view).toMatchObject({ grossMovementsPence: 338400, invoiceBalancePence: 1917600, paused: true });
   expect(view.allocations.find(a => a.caseId === f.case1.id)!.held).toBe(false);
@@ -350,21 +352,21 @@ it("boundaries: strict clients cannot assert split, rule, fraction, settlement o
     await expect(run(f, { ...allocationInput(f), ...extra })).rejects.toMatchObject({ code: "INVALID_COMMAND" });
     expect(await countRows(f)).toEqual(before);
   }
-  await expect(repo("production").command(context, actor, f.digest, f.jobId, allocationInput(f))).rejects.toMatchObject({ code: "ALLOCATION_SYNTHETIC_ONLY" });
-  await expect(repo("pilot_no_charge").command(context, actor, f.digest, f.jobId, allocationInput(f))).rejects.toMatchObject({ code: "ALLOCATION_SYNTHETIC_ONLY" });
+  await expect(repo("production").command(f.context, actor, f.digest, f.jobId, allocationInput(f))).rejects.toMatchObject({ code: "ALLOCATION_SYNTHETIC_ONLY" });
+  await expect(repo("pilot_no_charge").command(f.context, actor, f.digest, f.jobId, allocationInput(f))).rejects.toMatchObject({ code: "ALLOCATION_SYNTHETIC_ONLY" });
   await expect(repo().command(testTenantContext(randomUUID()), actor, f.digest, f.jobId, allocationInput(f))).rejects.toBeTruthy();
   const nonOwner = { membershipId: randomUUID(), identityUserId: randomUUID() };
   await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [nonOwner.identityUserId]);
   await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'member')", [nonOwner.membershipId, DEMO_TENANT_ID, DEMO_ACCOUNT_ID, nonOwner.identityUserId]);
-  await expect(repo().command(context, nonOwner, f.digest, f.jobId, allocationInput(f))).rejects.toMatchObject({ code: "ALLOCATION_FORBIDDEN" });
+  await expect(repo().command(f.context, nonOwner, f.digest, f.jobId, allocationInput(f))).rejects.toMatchObject({ code: "ALLOCATION_FORBIDDEN" });
 });
 
 it("pending and unresolved possible-duplicate movement cannot be allocated", async () => {
   const f = await fixture({ settle: false });
-  let feed = await f.feed.command(context, actor, f.digest, f.jobId, { version: "practice-feed-command.v1", action: "advance", commandId: randomUUID(), expectedRevision: f.feedView.revision, movement: "receipt-384", step: "pending" });
+  let feed = await f.feed.command(f.context, actor, f.digest, f.jobId, { version: "practice-feed-command.v1", action: "advance", commandId: randomUUID(), expectedRevision: f.feedView.revision, movement: "receipt-384", step: "pending" });
   await expect(run(f, allocationInput(f))).rejects.toBeTruthy();
-  feed = await f.feed.command(context, actor, f.digest, f.jobId, { version: "practice-feed-command.v1", action: "advance", commandId: randomUUID(), expectedRevision: feed.revision, movement: "receipt-384", step: "settled" });
-  await f.feed.command(context, actor, f.digest, f.jobId, { version: "practice-feed-command.v1", action: "advance", commandId: randomUUID(), expectedRevision: feed.revision, movement: "receipt-384", step: "unknown_duplicate" });
+  feed = await f.feed.command(f.context, actor, f.digest, f.jobId, { version: "practice-feed-command.v1", action: "advance", commandId: randomUUID(), expectedRevision: feed.revision, movement: "receipt-384", step: "settled" });
+  await f.feed.command(f.context, actor, f.digest, f.jobId, { version: "practice-feed-command.v1", action: "advance", commandId: randomUUID(), expectedRevision: feed.revision, movement: "receipt-384", step: "unknown_duplicate" });
   await expect(run(f, allocationInput(f))).rejects.toBeTruthy();
   expect((await countRows(f)).allocations).toBe(0);
 });
@@ -401,7 +403,7 @@ it("C4/new build standard: every new table is tenant safe, FORCE RLS, migration 
     expect(keys.some(key => key.startsWith("PRIMARY KEY (tenant_id,")), `${name}: tenant-qualified primary key`).toBe(true);
     expect(keys.some(key => key.includes("FOREIGN KEY (tenant_id, job_id) REFERENCES app.job(tenant_id, id)")), `${name}: qualified job link`).toBe(true);
     for (const statement of [`INSERT INTO app.${name} DEFAULT VALUES`, `UPDATE app.${name} SET tenant_id=tenant_id`, `DELETE FROM app.${name}`, `TRUNCATE app.${name}`]) {
-      await expect(withTenant(runtime, context, db => db.$client.query(statement))).rejects.toMatchObject({ code: "42501" });
+      await expect(withTenant(runtime, f.context, db => db.$client.query(statement))).rejects.toMatchObject({ code: "42501" });
     }
     expect((await withTenant(runtime, testTenantContext(randomUUID()), db => db.$client.query(`SELECT * FROM app.${name}`))).rows).toEqual([]);
     expect((await admin.query("SELECT count(*)::int n FROM pg_trigger WHERE tgrelid=$1::regclass AND NOT tgisinternal AND (tgtype&8)>0 AND (tgtype&16)>0", [`app.${name}`])).rows[0]!.n).toBeGreaterThan(0);
@@ -430,7 +432,7 @@ it("DW3: direct checked SQL runtime calls refuse overcash, exhausted claim/evide
   const f = await fixture(), other = await fixture();
   const input = allocationInput(f), view = await run(f, input);
   const saved = (await admin.query("SELECT artifact FROM app.recovery_allocation_review WHERE tenant_id=$1 AND job_id=$2 AND approval_hash=$3", [DEMO_TENANT_ID, f.jobId, view.review!.approvalHash])).rows[0]!.artifact;
-  const direct = (command: Record<string, unknown>, artifact: unknown) => withTenant(practiceMaterialPool(runtime, f.digest), context, async db => {
+  const direct = (command: Record<string, unknown>, artifact: unknown) => withTenant(practiceMaterialPool(runtime, f.digest), f.context, async db => {
     await db.$client.query("SELECT set_config('app.recovery_allocation_environment','synthetic_demo',true)");
     return db.$client.query("SELECT app.write_recovery_allocation($1,$2,$3,$4::jsonb,$5::jsonb)", [DEMO_TENANT_ID, f.jobId, f.digest, command, artifact]);
   });
@@ -460,7 +462,7 @@ it("DW3: evidenced amount below the claim prevents both repository and direct Po
   const before = await countRows(f);
   const eligibilityId = (await admin.query("SELECT id FROM app.recovery_eligibility_revision WHERE tenant_id=$1 AND case_id=$2 ORDER BY revision DESC LIMIT 1", [DEMO_TENANT_ID, f.case1.id])).rows[0]!.id;
   await expect(run(f, { ...input, commandId: randomUUID() })).rejects.toMatchObject({ code: "ALLOCATION_EXCEEDS_EVIDENCE" });
-  await expect(withTenant(practiceMaterialPool(runtime, f.digest), context, async db => {
+  await expect(withTenant(practiceMaterialPool(runtime, f.digest), f.context, async db => {
     await db.$client.query("SELECT set_config('app.recovery_allocation_environment','synthetic_demo',true)");
     return db.$client.query("SELECT app.write_recovery_allocation($1,$2,$3,$4::jsonb,$5::jsonb)", [DEMO_TENANT_ID, f.jobId, f.digest, { ...input, commandId: randomUUID() }, { ...saved, eligibilityId }]);
   })).rejects.toThrow("ALLOCATION_EXCEEDS_EVIDENCE");
@@ -470,12 +472,14 @@ it("DW3: evidenced amount below the claim prevents both repository and direct Po
 it("persisted owner authorization is checked again before every approval and replay", async () => {
   const f = await fixture(), command = await reviewed(f), before = await countRows(f);
   await admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, actor.membershipId]);
-  try { await expect(run(f, command)).rejects.toMatchObject({ code: "ALLOCATION_FORBIDDEN" }); }
+  // ALLOCATION_REVOKED_EXPIRED_REPOSITORY: initial binding keeps its public FORBIDDEN code.
+  try { await expect(run(f, command)).rejects.toMatchObject({ code: "FORBIDDEN" }); }
   finally { await admin.query("UPDATE app.membership SET revoked_at=NULL WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, actor.membershipId]); }
   expect(await countRows(f)).toEqual(before);
   await run(f, command); const saved = await countRows(f);
   await admin.query("UPDATE app.membership SET expires_at=clock_timestamp()-interval '1 second' WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, actor.membershipId]);
-  try { await expect(run(f, command)).rejects.toMatchObject({ code: "ALLOCATION_FORBIDDEN" }); }
+  // ALLOCATION_REVOKED_EXPIRED_REPOSITORY: initial binding keeps its public FORBIDDEN code.
+  try { await expect(run(f, command)).rejects.toMatchObject({ code: "FORBIDDEN" }); }
   finally { await admin.query("UPDATE app.membership SET expires_at=NULL WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, actor.membershipId]); }
   expect(await countRows(f)).toEqual(saved);
 });

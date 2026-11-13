@@ -54,7 +54,9 @@ it("refuses malformed or production reads and propagates network failure", async
 it("renders a loading state and synthetic notice before authenticated figures arrive", () => {
   const html = renderToStaticMarkup(createElement(PlanScreen));
   expect(html).toContain('role="status"'); expect(html).toContain("No real payments are taken");
-  expect(html).not.toContain("£");
+  for (const label of ["Solo", "Builder", "£29.00", "£69.00", "£49.00", "£169.00", "excluding VAT"]) expect(html).toContain(label);
+  expect(html.match(/aria-label="Plans"/g)).toHaveLength(1);
+  for (const label of ['aria-label="Your subscription"', 'aria-label="Subscription periods"', 'aria-label="Manage subscription"', 'aria-label="Company"', "No accepted subscription agreement", "No issued subscription periods", "<button", "<input"]) expect(html).not.toContain(label);
 });
 it("renders only Solo/Builder monthly options, with explicit empty agreement and periods", () => {
   const html = renderToStaticMarkup(createElement(PlanDetails, { view: subscriptionPlanView(empty, "2026-04-30") }));
@@ -73,7 +75,7 @@ it("renders the engine's exact amount, period maximum and simulated redirect wor
     results: [{ tenant_id, id: id(7), work_id: id(5), outcome: "redirect", environment: "synthetic_demo" }],
   }, "2026-04-20");
   const html = renderToStaticMarkup(createElement(PlanDetails, { view }));
-  for (const label of ["£79.00", "£169.00", "Your billing day: the 31", "2026-03-31", "2026-04-30", "end date excluded", "Simulated redirect — not settled"]) expect(html).toContain(label);
+  for (const label of ["£79.00", "£169.00", "Your billing day: the 31st", "2026-03-31", "2026-04-30", "end date excluded", "Simulated redirect — not settled"]) expect(html).toContain(label);
 });
 
 it("does not request company data without a valid current session and membership", async () => {
@@ -136,7 +138,7 @@ it("shows the server billing day before acceptance without an anchor input", asy
   const view = await loadSubscriptionPlan(fetcher);
   expect(view.billingDay).toBe(15);
   const html = renderToStaticMarkup(createElement(PlanDetails, { view }));
-  expect(html).toContain("Your billing day: the 15");
+  expect(html).toContain("Your billing day: the 15th");
   expect(html).not.toContain('<input');
   expect(subscriptionPlanView(empty, "2026-06-01").billingDay).toBeNull();
 });
@@ -148,4 +150,23 @@ it("preserves a separate executor warning without rejecting a saved approval", a
   const result = await submitSubscriptionAction(session.memberships[0]!.tenantId, "same-id", {kind: "approve_simulation"}, fetcher);
   expect(result).toEqual(answer);
   expect(subscriptionActionMessage(result)).toContain("Approval saved. Simulated payment is pending.");
+});
+
+it("renders every billing day as an ordinal without changing the saved day", () => {
+  const expectedDays = [
+    "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th",
+    "11th", "12th", "13th", "14th", "15th", "16th", "17th", "18th", "19th", "20th",
+    "21st", "22nd", "23rd", "24th", "25th", "26th", "27th", "28th", "29th", "30th", "31st",
+  ];
+  for (const [index, expected] of expectedDays.entries()) {
+    const billingDay = index + 1;
+    const view = subscriptionPlanView({ ...empty, billingDay }, "2026-06-01");
+    const html = renderToStaticMarkup(createElement(PlanDetails, { view }));
+    expect(html).toContain(`<p>Your billing day: the ${expected}</p>`);
+    expect(view.billingDay).toBe(billingDay);
+  }
+  const view = subscriptionPlanView(empty, "2026-06-01");
+  const html = renderToStaticMarkup(createElement(PlanDetails, { view }));
+  expect(view.billingDay).toBeNull();
+  expect(html).not.toContain("Your billing day:");
 });

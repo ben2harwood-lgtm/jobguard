@@ -11,7 +11,7 @@ export type FinalCheckSourceResult=z.infer<typeof finalCheckSourceResultV1>;
 export type FinalCheckClassification={signalId:string;expectedRevision:number;outcome:FinalCheckOutcome;references:readonly string[];comparisons:{baselineItemIds:readonly string[];captureIds:readonly string[];lockedLineIds:readonly string[]}};
 export type FinalCheckView=z.infer<typeof viewV1>;
 const viewV1=z.object({state:z.enum(["unlocked","pending","failed","completed"]),lockId:uuid.optional(),runId:uuid.optional(),items:z.array(z.record(z.string(),z.unknown())),postLockItems:z.array(z.record(z.string(),z.unknown())).optional(),lockedLines:z.array(z.object({id:uuid,kind:z.enum(["baseline","variation"]),scopeItemId:uuid,description:z.string()}).strict()).optional()}).strict();
-const codes=new Set(["INVALID_FINAL_CHECK_INPUT","FINAL_CHECK_FORBIDDEN","FINAL_CHECK_PENDING","FINAL_CHECK_SOURCE_CHANGED","FINAL_CHECK_FAILED","IDEMPOTENCY_CONFLICT","STALE_REVISION","FINAL_ACCOUNT_LOCK_REQUIRED"]);
+const codes=new Set(["INVALID_FINAL_CHECK_INPUT","FINAL_CHECK_FORBIDDEN","FINAL_CHECK_PENDING","FINAL_CHECK_SOURCE_CHANGED","FINAL_CHECK_FAILED","IDEMPOTENCY_CONFLICT","STALE_REVISION","FINAL_ACCOUNT_LOCK_REQUIRED","JOB_WORK_CLOSED"]);
 const prerequisitePending=new Set(["FINAL_CHECK_NOT_COMPLETE","FINAL_CHECK_INVENTORY_INCOMPLETE","FINAL_CHECK_INPUT_UNAVAILABLE","FINAL_CHECK_INPUT_MISMATCH","FINAL_CHECK_DETECTION_REQUIRED","FINAL_CHECK_SIGNAL_BINDING_INVALID","FINAL_CHECK_LOCK_BINDING_INVALID","FINAL_CHECK_SOURCE_IDENTITY_CHANGED","FINAL_CHECK_RESULT_UNAVAILABLE"]);
 function typed(e:unknown):never{
  const error=e as {message?:string;code?:string};
@@ -26,7 +26,12 @@ function typed(e:unknown):never{
 export class FinalCheckRepository{
  constructor(private readonly pool:Pool){}
  private async call(context:VerifiedTenantContext,sql:string,values:readonly unknown[]):Promise<unknown>{try{return await withTenant(this.pool,context,async db=>(await db.$client.query<{result:unknown}>(sql,[context.tenantId,...values])).rows[0]?.result);}catch(e){return typed(e);}}
- async begin(context:VerifiedTenantContext,jobId:string,detector="shadow-detection.v1"):Promise<FinalCheckManifest>{return manifestV1.parse(await this.call(context,"SELECT app.begin_final_check($1,$2,$3,$4) result",[uuid.parse(jobId),detector,"final-check.reconciliation.v1"]));}
+ async begin(context:VerifiedTenantContext,jobId:string,detector="shadow-detection.v1",manifestId?:string,attempt?:number,lockId?:string):Promise<FinalCheckManifest>{
+  try{return await withTenant(this.pool,context,async db=>{
+   await db.$client.query("SELECT set_config('app.final_check_attempt_id',$1,true),set_config('app.final_check_attempt_number',$2,true),set_config('app.final_check_lock_id',$3,true)",[manifestId===undefined?"":uuid.parse(manifestId),attempt===undefined?"":String(z.number().int().positive().parse(attempt)),lockId===undefined?"":uuid.parse(lockId)]);
+   return manifestV1.parse((await db.$client.query("SELECT app.begin_final_check($1,$2,$3,$4) result",[context.tenantId,uuid.parse(jobId),detector,"final-check.reconciliation.v1"])).rows[0]?.result);
+  });}catch(e){return typed(e);}
+ }
  async manifest(context:VerifiedTenantContext,jobId:string,manifestId:string):Promise<FinalCheckManifest>{return manifestV1.parse(await this.call(context,"SELECT app.read_final_check_manifest($1,$2,$3) result",[uuid.parse(jobId),uuid.parse(manifestId)]));}
  async record(context:VerifiedTenantContext,jobId:string,manifestId:string,sourceId:string,attemptId:string,raw:FinalCheckSourceResult){const p=finalCheckSourceResultV1.safeParse(raw);if(!p.success)throw new FinalCheckError("INVALID_FINAL_CHECK_INPUT");return this.call(context,"SELECT app.record_final_check_source_result($1,$2,$3,$4,$5,$6::jsonb) result",[uuid.parse(jobId),uuid.parse(manifestId),uuid.parse(sourceId),uuid.parse(attemptId),JSON.stringify(p.data)]);}
  async reconcile(context:VerifiedTenantContext,jobId:string,manifestId:string,classifications:readonly FinalCheckClassification[]){return this.call(context,"SELECT app.complete_final_check($1,$2,$3,$4::jsonb) result",[uuid.parse(jobId),uuid.parse(manifestId),JSON.stringify(classifications)]);}

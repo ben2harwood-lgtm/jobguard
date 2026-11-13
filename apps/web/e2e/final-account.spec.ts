@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 test("shows an unissued draft final account with exact totals and a synthetic issue action", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/classic");
   await page.getByRole("button", { name: "Start the demo" }).click();
   await page.getByRole("button", { name: "Skip tour" }).click();
   await page.getByRole("button", { name: "Prepare the final bill" }).click();

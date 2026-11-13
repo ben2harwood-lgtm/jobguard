@@ -18,9 +18,9 @@ import { withTenant } from "../src/tenant-context.js";
 import { DEMO_ACCOUNT_ID, DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID } from "../src/demo-seed.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { permitPracticeHomeJob } from "./lp-practice-home-job-fixture.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 
-const context = testTenantContext(DEMO_TENANT_ID);
+let context = testTenantContext(DEMO_TENANT_ID);
 const actor = { membershipId: DEMO_MEMBERSHIP_ID, identityUserId: DEMO_IDENTITY_USER_ID };
 const priorEnvironment = process.env.JOBGUARD_ENV;
 const passphrase = randomUUID();
@@ -61,6 +61,7 @@ beforeAll(async () => {
   await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Allocation fictional builder')", [DEMO_ACCOUNT_ID, DEMO_TENANT_ID]);
   await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID, DEMO_ACCOUNT_ID, DEMO_IDENTITY_USER_ID]);
   await admin.query(`CREATE ROLE allocation_races_login LOGIN PASSWORD '${passphrase}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_runtime TO allocation_races_login`);
+  context = await testBoundTenantContext(admin, DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID);
   runtime = new Pool({ ...options, user: "allocation_races_login", max: 10 });
 }, 90_000);
 afterAll(async () => {
@@ -75,7 +76,9 @@ async function fixture({ claim1 = 32_000, claim2 = 250_000, settle = true }: { c
   const scoped = practiceMaterialPool(runtime, digest), invoices = new PracticeInvoiceRepository(scoped);
   const db = await admin.connect();
   try {
-    await db.query("BEGIN"); await db.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
+    await db.query("BEGIN");
+    await db.query("SELECT app.bind_request($1::text,$2::text,$3::uuid)", ["practice", digest, DEMO_TENANT_ID]);
+    await db.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
     await permitPracticeHomeJob(db, { tenantId: DEMO_TENANT_ID, jobId, title: "Recovery £18,800 allocation fixture", practiceSessionDigest: digest, actorMembershipId: DEMO_MEMBERSHIP_ID });
     await db.query("INSERT INTO app.job(id,tenant_id,title,practice_session_digest,practice_scenario) VALUES($1,$2,'Recovery £18,800 allocation fixture',$3,'home')", [jobId, DEMO_TENANT_ID, digest]);
     await db.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')", [scopeId, DEMO_TENANT_ID, jobId]);

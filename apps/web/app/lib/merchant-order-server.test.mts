@@ -100,3 +100,48 @@ it("keeps schema validation errors generic and rejects unclassified thrown value
     expect(await response.json()).toEqual({ code });
   }
 });
+
+// These refusals originate in MerchantOrderApplication, requireLiveJob, command identity and dispatcher checks.
+it.each([
+  ["SYNTHETIC_MODE_REQUIRED", 403], ["JOB_NOT_LIVE", 409], ["JOB_NOT_FOUND", 404],
+  ["IDEMPOTENCY_CONFLICT", 409], ["FORBIDDEN", 403], ["COMMAND_CONFLICT", 409], ["AUTHORIZATION_INVALID", 400],
+] as const)("returns the definite merchant refusal %s as %s", async (code, status) => {
+  const f = await fixture();
+  // The application mode guard deliberately has a human message rather than its code.
+  for (const error of [new Error(code), Object.assign(new Error("Practice only"), { code })]) {
+    f.execute.mockRejectedValue(error);
+    const response = await f.reply(new Request("https://practice.invalid/api", { method: "POST", headers: { origin: "https://practice.invalid" }, body: "{}" }), "job");
+    expect(response.status).toBe(status);
+    expect(await response.json()).toEqual({ code });
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(f.log).not.toHaveBeenCalled();
+  }
+});
+it("hides an unexpected typed driver code and logs its private detail", async () => {
+  const f = await fixture(), error = Object.assign(new Error("private connection detail"), { code: "08006" });
+  f.execute.mockRejectedValue(error);
+  const response = await f.reply(new Request("https://practice.invalid/api", { method: "POST", headers: { origin: "https://practice.invalid" }, body: "{}" }), "job");
+  expect(response.status).toBe(503);
+  expect(await response.json()).toEqual({ code: "UNAVAILABLE" });
+  expect(response.headers.get("cache-control")).toBe("no-store");
+  expect(f.log).toHaveBeenCalledWith("Merchant order unavailable", error);
+});
+
+it("uses the known trigger message when PostgreSQL supplies an unclassified SQLSTATE", async () => {
+  const f = await fixture(), error = Object.assign(new Error("ORDER_ALREADY_COMMITTED"), { code: "P0001" });
+  f.execute.mockRejectedValue(error);
+  const response = await f.reply(new Request("https://practice.invalid/api", { method: "POST", headers: { origin: "https://practice.invalid" }, body: "{}" }), "job");
+  expect(response.status).toBe(409);
+  expect(await response.json()).toEqual({ code: "ORDER_ALREADY_COMMITTED" });
+  expect(response.headers.get("cache-control")).toBe("no-store");
+  expect(f.log).not.toHaveBeenCalled();
+});
+
+it("keeps a known typed code ahead of a different known message", async () => {
+  const f = await fixture();
+  f.execute.mockRejectedValue(Object.assign(new Error("ORDER_ALREADY_COMMITTED"), { code: "FORBIDDEN" }));
+  const response = await f.reply(new Request("https://practice.invalid/api", { method: "POST", headers: { origin: "https://practice.invalid" }, body: "{}" }), "job");
+  expect(response.status).toBe(403);
+  expect(await response.json()).toEqual({ code: "FORBIDDEN" });
+  expect(f.log).not.toHaveBeenCalled();
+});

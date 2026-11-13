@@ -1,3 +1,4 @@
+import { testTenantContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -9,7 +10,7 @@ import { migrate, MIGRATION_URLS } from "../src/migrate.js";
 import { withTenant, verifiedTenantContextFromMembership } from "../src/tenant-context.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 const T=randomUUID(), O=randomUUID(), J=randomUUID(), K=randomUUID(), L=randomUUID(), M=randomUUID(), U=randomUUID(), H="a".repeat(64);
-const context=(tenantId:string=T)=>verifiedTenantContextFromMembership({tenantId,membershipId:M,identityUserId:U} as Parameters<typeof verifiedTenantContextFromMembership>[0]);
+const context=(tenantId:string=T)=>testTenantContext(tenantId,{membershipId:M});
 let postgres:EmbeddedPostgres, admin:Pool, runtime:Pool, shadow:Pool, emergency:Pool, directory:string, port:number;
 const migrationURL=new URL("../migrations/0128_shadow_persistence.sql",import.meta.url);
 // CH-3a/CH-2 row-level guards read the tenant from the session: fixture writes that touch live-job state run in a

@@ -132,7 +132,7 @@ async function paint(page: Page) {
 async function reloadAndReopen(page: Page, jobId: string, snapshot: JobValueResponse) {
   await nextRealResponse(page, jobId, () => page.reload());
   await ready(page, snapshot);
-  await page.goto("/");
+  await page.goto("/classic");
   await page.locator(`.job-card a[href="/jobs/${jobId}"]`).click();
   await expect(page.getByTestId("workspace-job-id")).toHaveAttribute("data-job-id", jobId);
   const fresh = await nextRealResponse(page, jobId, () => page.goto(`/jobs/${jobId}/value`));

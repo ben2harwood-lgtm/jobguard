@@ -1,3 +1,4 @@
+import { verifiedTenantContextForQueuedJob } from "../src/tenant-context.js";
 // M4-23-SB, RED. Real PostgreSQL; synthetic data and existing writers only.
 // Coverage limits are executable TODOs below. A withheld-payment recovery is
 // deliberately not described as the plan's merchant-overcharge Chain A.
@@ -300,7 +301,7 @@ describe("M4-23-SB integrated sandbox outcomes", () => {
     const x = source!, worker = new FinalCheckRepository(f.shadow);
     const manifestId = (await f.admin.query("SELECT id FROM app.final_check_manifest WHERE tenant_id=$1 AND job_id=$2",
       [x.context.tenantId, x.jobId])).rows[0].id as string;
-    const manifest = await worker.manifest(x.context, x.jobId, manifestId);
+    const manifest = await worker.manifest(verifiedTenantContextForQueuedJob(x.context.tenantId), x.jobId, manifestId);
     expect(manifest.signals.map(signal => signal.signalId)).toContain(x.signalId);
     expect(manifest.sources.some(s => s.evidenceId !== null && s.status === "detected")).toBe(true);
     const captureIds = manifest.comparisons.captures.map(c => (c as { id: string }).id);
@@ -310,9 +311,9 @@ describe("M4-23-SB integrated sandbox outcomes", () => {
     const expectedRevision = manifest.signals.find(s => s.signalId === x.signalId)!.revision;
     // Valid comparisons remove the setup refusal: this now reaches the actual
     // matched-variation-in-capture-register guard against a forged reveal.
-    await expect(worker.reconcile(x.context, x.jobId, manifest.id, [{ signalId: x.signalId, expectedRevision,
+    await expect(worker.reconcile(verifiedTenantContextForQueuedJob(x.context.tenantId), x.jobId, manifest.id, [{ signalId: x.signalId, expectedRevision,
       outcome: "reveal", references: [], comparisons }])).rejects.toThrow("FINAL_CHECK_SOURCE_CHANGED");
-    const result = await worker.reconcile(x.context, x.jobId, manifest.id, [{ signalId: x.signalId, expectedRevision,
+    const result = await worker.reconcile(verifiedTenantContextForQueuedJob(x.context.tenantId), x.jobId, manifest.id, [{ signalId: x.signalId, expectedRevision,
       outcome: "builder_captured", references: [captureId], comparisons }]) as { runId: string; lockId: string };
     await expect(new FinalCheckRepository(practiceMaterialPool(f.runtime, x.auth.digest)).confirmCatch(x.context, x.jobId, x.auth.digest, {
       version: "final-check.catch.v1", commandId: randomUUID(), lockId: result.lockId, runId: result.runId,

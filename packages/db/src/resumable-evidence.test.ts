@@ -58,6 +58,26 @@ function beginRequest() {
 }
 beforeEach(() => { vi.restoreAllMocks(); vi.mocked(refuseLockedNewSource).mockReset(); });
 describe("dark resumable transfer orchestration (SQL isolation is tested in CI)", () => {
+  it("maps only a typed bind refusal to NOT_FOUND across every request-bound entry", async () => {
+    const bound = verifiedTenantContextFromMembership({ tenantId: tenant, ...actor } as Parameters<typeof verifiedTenantContextFromMembership>[0],
+      { kind: "practice", credential: "a".repeat(64) });
+    const statements: string[] = [], release = vi.fn();
+    const query = vi.fn(async (sql: string) => {
+      statements.push(sql);
+      if (sql === "SELECT app.bind_request($1, $2, $3)") throw Object.assign(new Error("private binding detail"), { code: "42501" });
+      return { rows: [] };
+    });
+    const pool = { connect: async () => ({ query, release }) } as unknown as Pool;
+    const service = new ResumableEvidenceService(pool, true);
+    await expect(service.begin(bound, actor, beginRequest())).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(service.status(bound, actor, input)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(service.append(bound, actor, { ...input, offset: 0, bytes: Buffer.from("data") })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(service.finalize(bound, actor, { ...input, commandId: randomUUID(), evidenceType: "site_voice" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(service.storageForProof(bound, actor, input).readExactVersion("synthetic-original", "synthetic-version"))
+      .rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(statements).toEqual(Array.from({ length: 5 }, () => ["BEGIN", "SELECT app.bind_request($1, $2, $3)", "ROLLBACK"]).flat());
+    expect(release).toHaveBeenCalledTimes(5);
+  });
   it("refuses every default-off entry before touching a pool", async () => {
     const f=fixture(), service=new ResumableEvidenceService(f.pool);
     for (const method of ["begin", "append", "status", "finalize"] as const)

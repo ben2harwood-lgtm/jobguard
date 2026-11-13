@@ -31,7 +31,7 @@ const actor = { membershipId, actorRef: `membership:${membershipId}` };
 describe("recovery follow-up API boundaries", () => {
   beforeEach(() => {
     vi.clearAllMocks(); vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
-    repository.membership.mockResolvedValue({ rows: [{ id: membershipId }] });
+    repository.membership.mockImplementation(async (sql: string) => ({ rows: sql === "SELECT app.current_actor() actor, app.current_tenant() tenant" ? [{ actor: membershipId, tenant: id(10) }] : [{ id: membershipId }] }));
     sessionQuery.mockImplementation(async (_sql, values) => ({ rows: values[0] === createHash("sha256").update(sessionId).digest("hex") || values[0] === createHash("sha256").update(strangerId).digest("hex")
       ? [{ tenant_id: id(10), membership_id: membershipId, identity_user_id: id(11) }] : [] }));
     for (const method of [repository.read, repository.schedule, repository.advanceTime, repository.openReview, repository.approveReminder, repository.cancel]) method.mockResolvedValue(state);
@@ -116,7 +116,7 @@ describe("SBOX recovery-follow-up ownership for every action", () => {
   };
   it.each(actions)("%s hides another session's case just like a missing case", async action => {
     sessionQuery.mockResolvedValue({ rows: [{ tenant_id: id(10), membership_id: membershipId, identity_user_id: id(11) }] });
-    repository.membership.mockResolvedValue({ rows: [] }); // immutable ownership lookup has no match
+    repository.membership.mockImplementation(async (sql: string) => ({ rows: sql === "SELECT app.current_actor() actor, app.current_tenant() tenant" ? [{ actor: membershipId, tenant: id(10) }] : [] })); // immutable ownership lookup has no match
     await expect(invoke(action, strangerId)).rejects.toEqual(new PracticeAccessError("NOT_FOUND"));
     for (const method of [repository.read, repository.schedule, repository.advanceTime, repository.openReview, repository.approveReminder, repository.cancel, repository.sandboxAdvance]) expect(method).not.toHaveBeenCalled();
     expect(repository.membership).toHaveBeenCalledWith(expect.stringContaining("practice_session_digest=$3"), [id(10), caseId, createHash("sha256").update(strangerId).digest("hex")]);

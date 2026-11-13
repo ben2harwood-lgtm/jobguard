@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-5-pack-writer": {
+      "branches": [
+        "codex/sandbox/ent-5-pack-writer"
+      ],
+      "note": "ENT-5-PACK-WRITER; RED; NOPR synthetic snapshots.",
+      "allow": [
+        "docs/contracts/extra-evidence-pack-writer-v1.md",
+        "packages/db/migrations/0672_extra_pack_artifact_store.sql",
+        "packages/db/src/extra-evidence-pack-writer.ts",
+        "packages/db/src/index.ts",
+        "packages/db/test/enterprise-access-upgrade.integration.test.ts",
+        "packages/db/test/extra-evidence-pack-writer.integration.test.ts",
+        "packages/db/test/extra-proceed-upgrade.integration.test.ts",
+        "packages/db/test/later-empty-tables.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/0672_extra_pack_artifact_store.proof.json"
+      ]
+    }
+  }
+}

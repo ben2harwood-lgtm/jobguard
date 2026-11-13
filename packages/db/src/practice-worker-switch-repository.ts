@@ -1,3 +1,4 @@
+import { RequestBindingRefusedError } from "./request-binding-error.js";
 import type { Pool } from "pg";
 import { z } from "zod";
 import { PracticeWorkerSwitchError, practiceWorkerSwitchOnV1, practiceWorkerSwitchOffV1, practiceWorkerSwitchStateV1, type PracticeWorkerSwitchErrorCode } from "@jobguard/core";
@@ -13,6 +14,7 @@ const publicState = (facts: Record<string, unknown>) => practiceWorkerSwitchStat
 const routineCodes: readonly PracticeWorkerSwitchErrorCode[] = ["MODE_FORBIDDEN", "UNAUTHENTICATED", "INVALID_COMMAND", "SWITCH_FORBIDDEN", "SWITCH_OPEN", "NOT_ACTING", "NOT_FOUND", "COMMAND_CONFLICT"];
 function translated(error: unknown) {
  if (error instanceof PracticeWorkerSwitchError) return error;
+ if (error instanceof RequestBindingRefusedError) return new PracticeWorkerSwitchError("UNAUTHENTICATED");
  const message = error instanceof Error ? error.message : "";
  if (message === "FORBIDDEN" && (error as {code?:string}).code === "42501") return new PracticeWorkerSwitchError("SWITCH_FORBIDDEN");
  return new PracticeWorkerSwitchError(routineCodes.find(code => code === message) ?? "SWITCH_UNAVAILABLE");
@@ -33,7 +35,13 @@ export class PracticeWorkerSwitchRepository {
     return publicState({ state: result.state, switchId: result.switch, workerMembershipId: result.worker, startedAt: result.startedAt, expiresAt: result.expiresAt });
    });
   } catch (error) {
-   const failure = translated(error);
+   // A valid session whose membership binding was refused is still a caller refusal,
+   // never permission to run the switch callback. Ended sessions keep their 401 code.
+   let failure = translated(error);
+   if (error instanceof RequestBindingRefusedError) {
+    const session = (await this.pool.query<{ tenant_id: string }>("SELECT * FROM app.contractor_session($1)", [sessionId])).rows[0];
+    if (session?.tenant_id === context.tenantId) failure = new PracticeWorkerSwitchError("SWITCH_FORBIDDEN");
+   }
    if (failure.code === "SWITCH_FORBIDDEN" || failure.code === "NOT_FOUND") await this.refusal(context, actor, command.data.commandId, target.data.workerId, failure.code);
    throw failure;
   }
@@ -48,7 +56,7 @@ export class PracticeWorkerSwitchRepository {
     const result = parsed.data;
     if (!result.replayed) await appendAuditBatch(db, [{ id: result.endEvent, version: "audit.v1", eventType: "practice.worker_switch.ended", subjectType: "practice-worker-switch", subjectRef: result.switch, actorRef: `membership:${result.owner}`, payload: { references: { switch: result.switch, session: result.session, command: command.data.commandId, owner: result.owner, worker: result.worker, reason: result.endReason, environment: "synthetic_demo" }, classifications: { action: "security" } } }]);
     return publicState({ state: result.state, switchId: result.switch, workerMembershipId: result.worker, endedAt: result.endedAt, endReason: result.endReason });
-   });
+   }, "practice-switch-off");
   } catch (error) { throw translated(error); }
  }
  async state(context: VerifiedTenantContext, sessionId: string) {

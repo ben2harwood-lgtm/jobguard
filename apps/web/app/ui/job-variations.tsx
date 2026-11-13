@@ -1,4 +1,5 @@
 "use client";
+import { jobPageFetch as fetch } from "./job-page-fetch";
 import {useCallback,useEffect,useRef,useState} from "react";
 import {variationWorkspaceResponseV1,type VariationWorkspaceResponse} from "@jobguard/api/variation-contracts";
 const ATT="Builder-recorded practice acceptance — not an authenticated customer signature";

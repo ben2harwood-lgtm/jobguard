@@ -41,16 +41,32 @@ export class SyntheticSyncSnapshotAdapter implements SyntheticSyncStore {
         const snapshot = parsed.data;
         if (snapshot.authority && (snapshot.authority.userId !== snapshot.userId
           || snapshot.authority.tenantId !== snapshot.activeTenantId)) throw new SyncServerError("SYNC_AUTHORITY_REQUIRED");
-        const context = await transaction.query<{ tenant_id: string | null }>(
-          "SELECT nullif(current_setting('app.tenant_id',true),'') AS tenant_id");
-        if (context.rows[0]?.tenant_id !== snapshot.activeTenantId) throw new SyncServerError("SYNC_AUTHORITY_REQUIRED");
+        try {
+          const context = await transaction.query<{ tenant_id: string; user_id: string }>(`
+            SELECT app.current_tenant() AS tenant_id, m.identity_user_id AS user_id
+            FROM app.membership m
+            WHERE m.tenant_id=app.current_tenant() AND m.id=app.current_actor()
+              AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp())
+              AND NOT EXISTS (SELECT 1 FROM app.contractor_membership_revocation v
+                WHERE v.tenant_id=m.tenant_id AND v.membership_id=m.id)`);
+          if (context.rows.length !== 1 || context.rows[0]?.tenant_id !== snapshot.activeTenantId
+            || context.rows[0]?.user_id !== snapshot.userId) throw new SyncServerError("SYNC_AUTHORITY_REQUIRED");
+        } catch {
+          throw new SyncServerError("SYNC_AUTHORITY_REQUIRED");
+        }
         const authority = snapshot.authority ? { ...snapshot.authority,
           assignedJobIds: [...new Set(snapshot.authority.assignedJobIds)].sort() } : null;
         // No source values, hidden data, token or session identifier enters the checkpoint hash.
         const scopeHash = createHash("sha256").update(JSON.stringify(authority)).digest("hex");
         const result = await transaction.query<{ generation: string }>(
           "SELECT app.sync_snapshot_generation($1::uuid,$2::bigint,$3::bigint,$4::text,$5::text) AS generation",
-          [snapshot.userId, snapshot.authorityRevision, schemaVersion.data, scopeHash, "synthetic_demo"]);
+          [snapshot.userId, snapshot.authorityRevision, schemaVersion.data, scopeHash, "synthetic_demo"]).catch((error: unknown) => {
+            // All routine arguments and tenant context were validated above. At this call,
+            // INVALID means membership was lost; stale checkpoints have their own STALE code.
+            if (error instanceof Error && "code" in error && error.code === "P0001"
+              && error.message === "SYNC_CHECKPOINT_INVALID") throw new SyncServerError("SYNC_AUTHORITY_REQUIRED");
+            throw error;
+          });
         const generation = revision.safeParse(Number(result.rows[0]?.generation));
         if (!generation.success || generation.data < 1) throw new SyncServerError("SYNC_UNAVAILABLE");
         return { version: "sync-server-snapshot.v1", environment: "synthetic_demo",

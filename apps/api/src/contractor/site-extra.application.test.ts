@@ -87,7 +87,8 @@ describe("ENT-3a service and Nest boundary", () => {
   // An existing refusal audit models a retry; real PostgreSQL revocation coverage remains mandatory in CI.
   const query = vi.fn(async (sql: string) => ({
    // Eligibility is positive so this test still reaches the independent active-member gate.
-   rows: sql.includes("app.mon8_feature_decision") ? [{ decision: { version: "plan-entitlement-decision.v1", environment: "synthetic_demo", feature: "site_origin_capture", entitlement: "included", executable: true, reason: "available" } }] : [],
+   rows: sql === "SELECT app.current_actor() actor, app.current_tenant() tenant" ? [{ actor: m.membershipId, tenant: m.tenantId }]
+    : sql.includes("app.mon8_feature_decision") ? [{ decision: { version: "plan-entitlement-decision.v1", environment: "synthetic_demo", feature: "site_origin_capture", entitlement: "included", executable: true, reason: "available" } }] : [],
    rowCount: sql.startsWith("SELECT 1 FROM app.audit_event") ? 1 : 0,
   }));
   const release = vi.fn(), connect = vi.spyOn(pool, "connect").mockImplementation(async () => ({ query, release }) as unknown as PoolClient);
@@ -96,6 +97,26 @@ describe("ENT-3a service and Nest boundary", () => {
   expect(observe).toHaveBeenCalledExactlyOnceWith(pool, sessionId); expect(lookup.mock.calls).toEqual([[sessionId], [sessionId]]);
   expect(connect).toHaveBeenCalledTimes(2); expect(release).toHaveBeenCalledTimes(2); expect(raise).not.toHaveBeenCalled();
   expect(query.mock.calls.filter(([sql]) => sql === "COMMIT")).toHaveLength(2); await pool.end();
+ });
+ it("[A17] binding revocation after the entitlement check refuses the extra before business SQL", async () => {
+  const pool = new Pool(), m = member(), sessionId = crypto.randomUUID(), jobId = crypto.randomUUID();
+  const context = bridge.verifiedTenantContextFromMembership(m, { kind: "contractor_practice", credential: sessionId });
+  const query = vi.fn(async (sql: string) => {
+   if (sql === "SELECT app.bind_request($1, $2, $3)") throw Object.assign(new Error("private binding detail"), { code: "42501" });
+   return { rows: [] };
+  });
+  const release = vi.fn();
+  vi.spyOn(pool, "connect").mockImplementation(async () => ({ query, release }) as unknown as PoolClient);
+  const failure = await new SiteExtraRepository(pool).logSiteExtra(context, m, {
+   commandId: crypto.randomUUID(), jobId, note: "Fictional note", description: "Fictional extra",
+  }).then(() => undefined, siteExtraHttpFailure);
+  expect(failure).toEqual({ status: 403, body: { version: "site-extra-error.v1", code: "EXTRA_FORBIDDEN" } });
+  expect(query.mock.calls.map(([sql]) => sql)).toEqual([
+   "BEGIN", "SELECT app.bind_request($1, $2, $3)", "ROLLBACK",
+   "BEGIN", "SELECT app.bind_request($1, $2, $3)", "ROLLBACK",
+  ]);
+  expect(release).toHaveBeenCalledTimes(2);
+  await pool.end();
  });
  it.each(["pilot_no_charge", "production_billing", ""])("[A15] %s mode refuses before any database access", async mode => {
   vi.stubEnv("JOBGUARD_ENV", mode); const pool = new Pool(), connect = vi.spyOn(pool, "connect"), lookup = vi.spyOn(ContractorRepository.prototype, "resolveSession");

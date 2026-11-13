@@ -15,7 +15,7 @@ import { SwitchJobLiveMutation } from "../src/activation-repository.js";
 import { UserCommandDispatcher } from "../src/commands.js";
 import { AdoptInFlightJobMutation } from "../src/job-import-repository.js";
 const T=randomUUID(), OTHER=randomUUID(), M=randomUUID(), OTHER_M=randomUUID(), J=randomUUID(), V=randomUUID(), S=randomUUID(), R=randomUUID(), H="a".repeat(64);
-const ctx=(tenantId:string=T)=>testTenantContext(tenantId);
+const ctx=(tenantId:string=T)=>testTenantContext(tenantId,{membershipId:M});
 let pg:EmbeddedPostgres, admin:Pool, runtime:Pool, dir:string, port:number;
 const migrationURL=MIGRATION_URLS.find(url=>url.pathname.endsWith("0053_shared_money_origin.sql"))!;
 async function seedIdentity(tenant:string,member:string) {

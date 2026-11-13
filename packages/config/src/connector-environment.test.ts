@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ConnectorConfigurationError, parseConnectorEnvironment } from "./connector-environment.js";
+import { ConnectorConfigurationError, parseConnectorEnvironment, machineRegistrationEnabled } from "./connector-environment.js";
 
 const fixture = () => ({
   CONNECTOR_CONFIG_VERSION: "connector-environment.v1",
@@ -69,5 +69,19 @@ describe("E13-A24 independent configuration proof (application/HTTP held)", () =
     expect(`${String(failure)} ${JSON.stringify(failure)}`).not.toContain(canary);
     expect(failure).not.toHaveProperty("cause");
     expect(failure).not.toHaveProperty("issues");
+  });
+});
+
+describe("machine registration environment", () => {
+  it("defaults off in every environment", () => {
+    for (const JOBGUARD_ENV of [undefined, "synthetic_demo", "pilot_no_charge", "production"])
+      expect(machineRegistrationEnabled({ JOBGUARD_ENV })).toBe(false);
+  });
+  it("permits only the explicit synthetic switch in the existing synthetic environment", () => {
+    expect(machineRegistrationEnabled({ JOBGUARD_ENV: "synthetic_demo", JOBGUARD_CONNECTOR_MACHINE: "synthetic" })).toBe(true);
+    for (const JOBGUARD_ENV of [undefined, "pilot_no_charge", "production", "provider_sandbox"])
+      expect(() => machineRegistrationEnabled({ JOBGUARD_ENV, JOBGUARD_CONNECTOR_MACHINE: "synthetic" })).toThrow(ConnectorConfigurationError);
+    for (const JOBGUARD_CONNECTOR_MACHINE of ["", "off", "true", true, null, "synthetic\n"])
+      expect(() => machineRegistrationEnabled({ JOBGUARD_ENV: "synthetic_demo", JOBGUARD_CONNECTOR_MACHINE })).toThrow(ConnectorConfigurationError);
   });
 });

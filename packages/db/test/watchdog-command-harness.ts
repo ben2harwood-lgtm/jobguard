@@ -1,4 +1,4 @@
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -7,9 +7,10 @@ import { deflateSync } from "node:zlib";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import type { PrivateVersionedStorage, StoredObject } from "@jobguard/storage";
+import type { SupplierLineMatchInput } from "@jobguard/core";
 import {
   DiscrepancyRepository, EvidenceService, InboxRelevanceRepository, MaterialRepository, ProofCommandService, PurchaseOrderRepository, ReadinessRepository,
-  SupplierDocumentRepository, SupplierMatchRepository, JobWorkStateRepository, JobSourceRepository, migrate,
+  SupplierDocumentRepository, SupplierMatchRepository, SupplierLineCorrectionRepository, JobWorkStateRepository, JobSourceRepository, migrate, requireLiveJob, withTenant,
 } from "../src/index.js";
 import { importWatchdogFixtureJob } from "./watchdog-fixtures.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
@@ -18,9 +19,9 @@ import { ObservedPool } from "./lock-observer.js";
 // One table of the 17 watchdog_live_only commands, built from the real repositories over a real PostgreSQL 16 and the real runtime
 // role. Several suites are driven by it (replay contract, lock order, legacy command ids), so a command added to or missing from
 // the registry fails each of them, not just one.
-export function createWatchdogHarness(label: string, portBase: number) {
+export function createWatchdogHarness(label: string, portBase: number, credential?: string) {
 const tenant = randomUUID(), member = randomUUID(), otherMember = randomUUID();
-const ctx = testTenantContext(tenant);
+let ctx = testTenantContext(tenant), otherCtx = testTenantContext(tenant);
 const RULE = "supplier-overcharge.v1", DAY = "2026-03-27T09:00:00.000Z", NEXT = "2026-03-30T08:00:00.000Z";
 const CONFLICT = /IDEMPOTENCY_CONFLICT|COMMAND_CONFLICT/u;
 const sha = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
@@ -176,9 +177,9 @@ const cases: Case[] = [
     noop: async (job, id, variant) => readiness.advance(ctx, job, { commandId: id, scenarioNow: variant === "changed" ? "2026-03-31T08:00:00.000Z" : NEXT }) },
   { key: "inbox-relevance-repository.ts#seed", registry: ["/api/jobs/[id]/relevance-inbox/[action]", "/api/jobs/[id]/relevance-inbox/[action]#seed", "nest:/jobs/:id/relevance-inbox/seed", "command:inbox.seed"],
     prepare: async () => {},
-    run: async (job, id, variant) => inbox.seed(ctx, job, id, variant === "changed" ? otherMember : member),
+    run: async (job, id, variant) => inbox.seed(variant === "changed" ? otherCtx : ctx, job, id, variant === "changed" ? otherMember : member),
     later: async job => { const ids = await pre.inbox(job); await inbox.dismiss(ctx, job, ids[0], { commandId: randomUUID() }, member); },
-    noop: async (job, id, variant) => inbox.seed(ctx, job, id, variant === "changed" ? otherMember : member) },
+    noop: async (job, id, variant) => inbox.seed(variant === "changed" ? otherCtx : ctx, job, id, variant === "changed" ? otherMember : member) },
   { key: "inbox-relevance-repository.ts#dismiss", registry: ["/api/jobs/[id]/relevance-inbox/decisions/[decisionId]", "nest:/jobs/:id/relevance-inbox/:decisionId/dismiss"],
     prepare: async job => { await pre.inbox(job); },
     run: async (job, id, variant) => inbox.dismiss(ctx, job, st(job).inbox[variant === "changed" ? 1 : 0], { commandId: id }, member),
@@ -207,6 +208,33 @@ const cases: Case[] = [
 ];
 const caseKeys = cases.map(c => c.key);
 
+// The supplier-lines route holds this guard while its repository transaction commits.
+// Keep this post-0624 seam out of the pre-0096 legacy command-id cases.
+async function supplierLines(jobId: string) {
+  const identityUserId = (await admin.query("SELECT identity_user_id FROM app.membership WHERE tenant_id=$1 AND id=$2", [tenant, member])).rows[0].identity_user_id as string;
+  const actor = { membershipId: member, identityUserId }, repo = new SupplierLineCorrectionRepository(runtime);
+  const line = () => ({ lineId: randomUUID(), versionId: randomUUID(), documentVersionId: randomUUID(),
+    sourceHash: pngHash, page: 1, sku: "TIMBER", orderReference: "FICTIONAL-PO", unit: "each", baseUnit: "each", unitsPerPack: "1" });
+  const facts: SupplierLineMatchInput = { version: "supplier-line-match-input.v1", environment: "synthetic_demo",
+    tenantId: tenant, jobId, merchantId: randomUUID(),
+    orders: [{ ...line(), quantity: "10", unitNetPence: 100, discountBps: 0, rateVersionId: randomUUID(), validFrom: "2030-01-01", validTo: "2030-01-31" }],
+    receipts: [{ ...line(), acceptedQuantity: "8" }],
+    bills: [{ ...line(), kind: "invoice", documentReference: "FICTIONAL-INV", quantity: "10", netPence: 1000,
+      taxBasis: "net", supplyDate: "2030-01-02", creditsInvoiceVersionId: null }], aliases: [], mappings: [] };
+  const input = { version: "supplier-line-snapshot.v1", commandId: randomUUID(), snapshotId: randomUUID(), facts };
+  const correction = { version: "supplier-line-correction.v1", commandId: randomUUID(), snapshotId: input.snapshotId,
+    expectedRevision: 0, sourceVersionId: facts.bills[0]!.versionId, orderVersionId: facts.orders[0]!.versionId };
+  const guarded = <T>(run: () => Promise<T>) => withTenant(runtime, ctx, async db => {
+    await requireLiveJob(db, jobId);
+    return run();
+  });
+  return { input, correction,
+    confirm: (raw: unknown = input) => guarded(() => repo.create(ctx, actor, raw)),
+    correct: (raw: unknown = correction) => guarded(() => repo.correct(ctx, actor, jobId, raw)),
+    read: () => repo.read(ctx, actor, { version: "supplier-line-match-read.v1", jobId, snapshotId: input.snapshotId }),
+  };
+}
+
 async function boot() {
   dir = await mkdtemp(join(tmpdir(), `jg-${label}-`));
   const port = await freePort(portBase, 400);
@@ -216,10 +244,12 @@ async function boot() {
   admin = new Pool({ host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "postgres", password: "synthetic", max: 4 });
   await migrate(admin);
   await admin.query("INSERT INTO control_plane.tenant(id)VALUES($1)", [tenant]);
-  const user = randomUUID(), account = randomUUID();
-  await admin.query("INSERT INTO identity.identity_user(id)VALUES($1)", [user]);
+  const user = randomUUID(), otherUser = randomUUID(), account = randomUUID();
+  await admin.query("INSERT INTO identity.identity_user(id)VALUES($1),($2)", [user, otherUser]);
   await admin.query("INSERT INTO app.account(id,tenant_id,name)VALUES($1,$2,'Fictional builder')", [account, tenant]);
-  for (const id of [member, otherMember]) await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)VALUES($1,$2,$3,$4,'owner')", [id, tenant, account, user]);
+  for (const id of [member, otherMember]) await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)VALUES($1,$2,$3,$4,'owner')", [id, tenant, account, id === member ? user : otherUser]);
+  ctx = await testBoundTenantContext(admin, tenant, member, credential);
+  otherCtx = await testBoundTenantContext(admin, tenant, otherMember);
   await admin.query("CREATE ROLE replay_contract_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;GRANT jobguard_runtime TO replay_contract_login");
   runtime = new Pool({ host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "replay_contract_login", password: "synthetic", max: 8 });
   observed = new ObservedPool(runtime, admin); const pool = observed.pool;
@@ -235,7 +265,7 @@ const probeJob = async (c: Case) => { let job = probes.get(c.key); if (!job) { j
 
 
   return {
-    label, tenant, member, otherMember, ctx, RULE, DAY, NEXT, CONFLICT, cases, caseKeys, live, probeJob, norm, pre, st, confirm, correction, orderInput, placeCommand, png, pngHash, storage,
+    label, tenant, member, otherMember, get ctx() { return ctx; }, RULE, DAY, NEXT, CONFLICT, cases, caseKeys, live, probeJob, norm, pre, st, confirm, correction, orderInput, placeCommand, png, pngHash, storage, supplierLines,
     get admin() { return admin; }, get runtime() { return runtime; }, get observed() { return observed; },
     get repos() { return { po, docs, match, checks, readiness, inbox, evidence, proof, materials }; },
     get skuId() { return skuId; }, boot, stop,

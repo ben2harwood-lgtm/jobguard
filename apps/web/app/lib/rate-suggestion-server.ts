@@ -1,6 +1,7 @@
 import "server-only";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { resolveVerifiedTenantContext } from "@jobguard/api/identity";
 import { RateSuggestionApplication } from "@jobguard/api/workspace";
 import { RateSuggestionRepository, storedRateQueryV1 } from "@jobguard/db";
 import { identityApplication } from "./identity-server";
@@ -14,10 +15,26 @@ export function rateQuery(params: URLSearchParams) {
   if (new Set(entries.map(([key]) => key)).size !== entries.length) throw new Error("INVALID_ACCEPTANCE");
   return storedRateQueryV1.parse(Object.fromEntries(entries));
 }
-export async function rateSession() {
+export async function rateSession(request?: Request) {
   if (process.env.JOBGUARD_ENV !== "synthetic_demo") throw new Error("SYNTHETIC_ONLY");
   const token = (await cookies()).get("jobguard_session")?.value;
-  const application = new RateSuggestionApplication(identityApplication(), new RateSuggestionRepository(syntheticPool()));
+  const identity = identityApplication();
+  if (request) {
+    const session = await identity.session(token);
+    if (session.memberships.length !== 1 || session.memberships[0]?.role !== "owner") throw new Error("FORBIDDEN");
+    // Match the mandate boundary: a mutation uses browser-supplied CSRF and origin.
+    // A malformed CSRF or origin header is a refused mutation (403), not a bad acceptance body (400).
+    try {
+      const context = await resolveVerifiedTenantContext(identity.provider, {
+        sessionToken: token, requestedTenantId: session.memberships[0].tenantId,
+        origin: request.headers.get("origin") ?? undefined,
+        csrfToken: request.headers.get("x-csrf-token") ?? undefined,
+      }, identity.allowedOrigin);
+    } catch (error) {
+      throw (error as { name?: string } | null)?.name === "ZodError" ? new Error("ORIGIN_FORBIDDEN") : error;
+    }
+  }
+  const application = new RateSuggestionApplication(identity, new RateSuggestionRepository(syntheticPool()));
   return { token, application };
 }
 export function rateOrigin(request: Request) {

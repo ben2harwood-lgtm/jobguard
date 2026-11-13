@@ -10,7 +10,7 @@ import type { AuthenticatedMembership } from "../src/tenant-context.js";
 import * as bridge from "../src/contractor-session-context.js";
 
 function recordingPool() {
-  const query = vi.fn(async (_sql: string, _values?: unknown[]) => ({ rows: [] }));
+  const query = vi.fn(async (_sql: string, _values?: unknown[]) => ({ rows: [] as Record<string, string>[] }));
   const release = vi.fn();
   const connect = vi.fn(async () => ({ query, release }));
   return { pool: { connect, query } as unknown as Pool, connect, query, release };
@@ -46,13 +46,14 @@ describe("contractor session boundary tests", () => {
     }
   });
   it("[B4] returns the frozen stamped context and rejects a frozen look-alike before connecting", async () => {
-    const member = membership(), { pool, connect, query, release } = recordingPool();
+    const member = membership(), session = randomUUID(), { pool, connect, query, release } = recordingPool();
+    query.mockImplementation(async sql => ({ rows: sql.includes("app.current_actor()") ? [{ actor: member.membershipId, tenant: member.tenantId }] : [] }));
     vi.spyOn(ContractorRepository.prototype, "resolveSession").mockResolvedValue(member);
-    const context = await bridge.contractorSessionContext(pool, randomUUID());
+    const context = await bridge.contractorSessionContext(pool, session);
     expect(Object.isFrozen(context)).toBe(true);
     expect(Reflect.ownKeys(context)).toEqual(["tenantId"]); expect(context.tenantId).toBe(member.tenantId);
     await tenantContext.withTenant(pool, context, async () => undefined);
-    expect(query.mock.calls).toEqual([["BEGIN"], ["SELECT set_config('app.tenant_id', $1, true)", [member.tenantId]], ["COMMIT"]]);
+    expect(query.mock.calls).toEqual([["BEGIN"], ["SELECT app.bind_request($1, $2, $3)", ["contractor_practice", session, member.tenantId]], ["SELECT app.current_actor() actor, app.current_tenant() tenant"], ["SELECT set_config('app.tenant_id', $1, true)", [member.tenantId]], ["COMMIT"]]);
     expect(release).toHaveBeenCalledOnce(); connect.mockClear(); query.mockClear();
     await expect(Reflect.apply(tenantContext.withTenant, undefined, [pool, Object.freeze({ tenantId: member.tenantId }), async () => undefined]))
       .rejects.toBeInstanceOf(tenantContext.InvalidTenantContextError);
@@ -64,7 +65,7 @@ describe("contractor session boundary tests", () => {
     const maker = vi.spyOn(tenantContext, "verifiedTenantContextFromMembership");
     const context = await bridge.contractorSessionContext(pool, session);
     expect(lookup.mock.calls).toEqual([[session]]);
-    expect(maker).toHaveBeenCalledExactlyOnceWith(member); expect(maker.mock.calls[0]![0]).toBe(member);
+    expect(maker).toHaveBeenCalledExactlyOnceWith(member, { kind: "contractor_practice", credential: session }); expect(maker.mock.calls[0]![0]).toBe(member);
     expect(context).toBe(maker.mock.results[0]!.value);
     expect(connect).not.toHaveBeenCalled(); expect(query).not.toHaveBeenCalled();
   });
@@ -92,7 +93,7 @@ describe("contractor session boundary tests", () => {
     const text = source(), parsed = ts.createSourceFile("bridge.ts", text, ts.ScriptTarget.Latest, true);
     expect(text.match(/verifiedTenantContextFromMembership\(/gu)).toHaveLength(1);
     expect(text).not.toMatch(/\bas VerifiedTenantContext|verifiedTenantContextForQueuedJob|function\s+verifiedTenantContextFromMembership|(?:verifiedTenantContextFromMembership|VerifiedTenantContext)\s+as\s/u);
-    expect(text).toContain("return verifiedTenantContextFromMembership(member);");
+    expect(text).toContain('return verifiedTenantContextFromMembership(member, { kind: "contractor_practice", credential: sessionId });');
     expect(text).toContain("const member = await new ContractorRepository(pool).resolveSession(sessionId);");
     const casts: ts.Node[] = [];
     function inspect(node: ts.Node) {

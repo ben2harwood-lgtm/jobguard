@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-44": {
+      "branches": [
+        "codex/sandbox/later-safety-44"
+      ],
+      "note": "LATER-SAFETY-44: RED practice purchase-order session refusal regressions; test only, no migration.",
+      "allow": [
+        "packages/db/test/purchase-order-audit.integration.test.ts"
+      ]
+    }
+  }
+}

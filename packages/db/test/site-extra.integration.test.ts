@@ -1,3 +1,4 @@
+import { testActorContext } from "./tenant-context-test-utils.js";
 // Written before the repository. NOT RUN (sandbox cannot start PostgreSQL / a browser).
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, afterEach, describe, expect, it, vi } from "vitest";
@@ -11,7 +12,7 @@ afterAll(async () => { await c?.close(); });
 afterEach(() => vi.restoreAllMocks());
 async function refused(f: SiteFixture, member: SiteFixture["p"], raw: { commandId: string; jobId: string; note: string; description: string } = input(f), code = "NOT_FOUND") {
  const before = await counts(c, f);
- const error = await repo.logSiteExtra(f.ctx, member, raw).then(() => { throw new Error("unexpected success"); }, e => e as SiteExtraError);
+ const error = await repo.logSiteExtra(await testActorContext(c.admin, f.ctx, member), member, raw).then(() => { throw new Error("unexpected success"); }, e => e as SiteExtraError);
  expect(error).toBeInstanceOf(SiteExtraError); expect(error.code).toBe(code); expect(error.message).toBe(code); expect(JSON.stringify(error)).not.toContain(note); expect(JSON.stringify(error)).not.toContain(description);
  expect(await counts(c, f)).toEqual(before); await chain(c, f); return error;
 }
@@ -19,7 +20,7 @@ describe("ENT-3a governed path", () => {
  for (const role of ["operative", "supervisor", "surveyor"] as const) it(`[A2] ${role} logs only server-derived facts atomically`, async () => {
   const f = await siteFixture(c), a = f.members[role], raw = input(f), grant = (await decision(c, f, a.member, "LogSiteExtra"))[0]!.raising_grant;
   const before = (await c.admin.query("SELECT clock_timestamp()::text value")).rows[0]!.value;
-  const result = await repo.logSiteExtra(f.ctx, a.member, raw);
+  const result = await repo.logSiteExtra(await testActorContext(c.admin, f.ctx, a.member), a.member, raw);
   const after = (await c.admin.query("SELECT clock_timestamp()::text value")).rows[0]!.value;
   const rows = (await c.admin.query(`${originSql} WHERE tenant_id=$1 AND variation_id=$2`, [f.p.tenantId, result.variationId])).rows;
   expect(rows).toHaveLength(1); const row = rows[0]!;
@@ -58,25 +59,25 @@ describe("ENT-3a governed path", () => {
   for (const error of errors) expect(error).toEqual(errors[0]);
  });
  for (const kind of ["grant", "membership"] as const) it(`[A5] ${kind} revocation refuses new work and earlier replay`, async () => {
-  const f = await siteFixture(c), a = f.members.supervisor, raw = input(f); await repo.logSiteExtra(f.ctx, a.member, raw);
+  const f = await siteFixture(c), a = f.members.supervisor, raw = input(f); await repo.logSiteExtra(await testActorContext(c.admin, f.ctx, a.member), a.member, raw);
   await command(c, f, kind === "grant" ? { kind: "grant.revoke", grantId: a.grant } : { kind: "membership.revoke", membershipId: a.member.membershipId });
   for (const request of [input(f), raw]) await refused(f, a.member, request, kind === "grant" ? "NOT_FOUND" : "EXTRA_FORBIDDEN");
  });
  it("[A6] seam alone refuses owner, permits supervisor and refuses an unchosen covering grant", async () => {
   const f = await siteFixture(c), extras = new ExtraRepository(c.runtime), before = await counts(c, f), head = await chain(c, f);
-  await expect(extras.raiseExtra(f.ctx, direct(f, f.members.owner), siteExtraAuthoritySeam)).rejects.toMatchObject({ code: "NOT_FOUND" });
+  await expect(extras.raiseExtra(await testActorContext(c.admin, f.ctx, f.members.owner.member), direct(f, f.members.owner), siteExtraAuthoritySeam)).rejects.toMatchObject({ code: "NOT_FOUND" });
   expect(await counts(c, f)).toEqual(before); expect(await chain(c, f)).toBe(head);
-  await extras.raiseExtra(f.ctx, direct(f, f.members.supervisor), siteExtraAuthoritySeam);
+  await extras.raiseExtra(await testActorContext(c.admin, f.ctx, f.members.supervisor.member), direct(f, f.members.supervisor), siteExtraAuthoritySeam);
   const second = (await command(c, f, { kind: "grant.create", membershipId: f.members.supervisor.member.membershipId, role: "supervisor", scope: { kind: "branch", id: f.demo.branchId }, contractId: null })).id;
   const chosen = (await decision(c, f, f.members.supervisor.member, "LogSiteExtra"))[0]!.raising_grant;
   const unchosen = [f.members.supervisor.grant, second].find(id => id !== chosen)!;
   const now = await counts(c, f), currentHead = await chain(c, f);
-  await expect(extras.raiseExtra(f.ctx, direct(f, f.members.supervisor, { grantId: unchosen }), siteExtraAuthoritySeam)).rejects.toMatchObject({ code: "NOT_FOUND" });
+  await expect(extras.raiseExtra(await testActorContext(c.admin, f.ctx, f.members.supervisor.member), direct(f, f.members.supervisor, { grantId: unchosen }), siteExtraAuthoritySeam)).rejects.toMatchObject({ code: "NOT_FOUND" });
   expect(await counts(c, f)).toEqual(now); expect(await chain(c, f)).toBe(currentHead);
  });
  it("[A7] two concurrent commands on independent pooled connections have one effect", async () => {
   const f = await siteFixture(c), raw = input(f), before = await counts(c, f);
-  const [a, b] = await Promise.all([repo.logSiteExtra(f.ctx, f.members.supervisor.member, raw), repo.logSiteExtra(f.ctx, f.members.supervisor.member, raw)]);
+  const [a, b] = await Promise.all([repo.logSiteExtra(await testActorContext(c.admin, f.ctx, f.members.supervisor.member), f.members.supervisor.member, raw), repo.logSiteExtra(await testActorContext(c.admin, f.ctx, f.members.supervisor.member), f.members.supervisor.member, raw)]);
   expect(a).toEqual(b); const after = await counts(c, f);
   for (const t of ["command_receipt", "scope_identity", "variation", "extra_origin", "extra_event", "raised"]) expect(after[t]! - before[t]!).toBe(1); await chain(c, f);
  });
@@ -95,7 +96,7 @@ describe("ENT-3a governed path", () => {
    }) as any); return client;
   }) as any);
   const revocation = () => command(c, f, { kind: "grant.revoke", grantId: a.grant });
-  const logging = () => repo.logSiteExtra(f.ctx, a.member, raw).then(v => ({ value: v }), e => ({ error: e as SiteExtraError }));
+  const logging = async () => repo.logSiteExtra(await testActorContext(c.admin, f.ctx, a.member), a.member, raw).then(v => ({ value: v }), e => ({ error: e as SiteExtraError }));
   const leading = first === "revoke" ? revocation() : logging();
   const pid = await reached;
   const trailing = first === "revoke" ? logging() : revocation();
@@ -115,14 +116,14 @@ describe("ENT-3a governed path", () => {
  });
  it("[A9] exact replay, conflicting note/member/grant and equal text with separate IDs", async () => {
   const f = await siteFixture(c), raw = input(f), a = f.members.supervisor.member, b = f.members.surveyor.member;
-  const result = await repo.logSiteExtra(f.ctx, a, raw), before = await counts(c, f), head = await chain(c, f);
-  expect(await repo.logSiteExtra(f.ctx, a, raw)).toEqual(result); expect(await counts(c, f)).toEqual(before); expect(await chain(c, f)).toBe(head);
-  for (const [member, request] of [[a, { ...raw, note: "Fictional different note" }], [b, raw]] as const) await expect(repo.logSiteExtra(f.ctx, member, request)).rejects.toMatchObject({ code: "COMMAND_CONFLICT" });
-  const another = await repo.logSiteExtra(f.ctx, b, { ...raw, commandId: randomUUID() }); expect(another).not.toEqual(result);
+  const result = await repo.logSiteExtra(await testActorContext(c.admin, f.ctx, a), a, raw), before = await counts(c, f), head = await chain(c, f);
+  expect(await repo.logSiteExtra(await testActorContext(c.admin, f.ctx, a), a, raw)).toEqual(result); expect(await counts(c, f)).toEqual(before); expect(await chain(c, f)).toBe(head);
+  for (const [member, request] of [[a, { ...raw, note: "Fictional different note" }], [b, raw]] as const) await expect(repo.logSiteExtra(await testActorContext(c.admin, f.ctx, member), member, request)).rejects.toMatchObject({ code: "COMMAND_CONFLICT" });
+  const another = await repo.logSiteExtra(await testActorContext(c.admin, f.ctx, b), b, { ...raw, commandId: randomUUID() }); expect(another).not.toEqual(result);
   expect((await counts(c, f)).extra_duplicate_link).toBe(0);
   await command(c, f, { kind: "grant.revoke", grantId: f.members.supervisor.grant });
   await command(c, f, { kind: "grant.create", membershipId: a.membershipId, role: "supervisor", scope: { kind: "team", id: f.demo.teamId }, contractId: null });
-  const last = await counts(c, f); await expect(repo.logSiteExtra(f.ctx, a, raw)).rejects.toMatchObject({ code: "COMMAND_CONFLICT" }); expect(await counts(c, f)).toEqual(last);
+  const last = await counts(c, f); await expect(repo.logSiteExtra(await testActorContext(c.admin, f.ctx, a), a, raw)).rejects.toMatchObject({ code: "COMMAND_CONFLICT" }); expect(await counts(c, f)).toEqual(last);
   for (const t of ["variation", "extra_origin", "extra_event"]) expect(last[t]).toBe(2); expect(last.raised).toBe(2);
  });
  it("[A10] tenant mismatch, foreign job, missing/unstamped contexts cannot touch tenant B", async () => {
@@ -182,7 +183,7 @@ for (const when of ["before precheck", "between precheck and raiseExtra"] as con
  }
  const before = await counts(c, f), head = await chain(c, f);
  const auditCount = (await c.admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1", [f.p.tenantId])).rows[0]!.n;
- const error = await repo.logSiteExtra(f.ctx, f.members.supervisor.member, raw).catch(error => error);
+ const error = await repo.logSiteExtra(await testActorContext(c.admin, f.ctx, f.members.supervisor.member), f.members.supervisor.member, raw).catch(error => error);
  expect(error).toBeInstanceOf(WatchdogError); expect(error).toMatchObject({ code: "JOB_NOT_LIVE" });
  expect(await counts(c, f)).toEqual(before); expect(await chain(c, f)).toBe(head);
  expect((await c.admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1", [f.p.tenantId])).rows[0]!.n).toBe(auditCount);
@@ -190,9 +191,9 @@ for (const when of ["before precheck", "between precheck and raiseExtra"] as con
 });
 it("[R3] the same command id with a changed payload conflicts", async () => {
  const f = await siteFixture(c), raw = input(f), actor = f.members.supervisor.member, initial = await counts(c, f);
- const first = await repo.logSiteExtra(f.ctx, actor, raw), before = await counts(c, f), head = await chain(c, f);
- expect(await repo.logSiteExtra(f.ctx, actor, raw)).toEqual(first);
- await expect(repo.logSiteExtra(f.ctx, actor, { ...raw, note: "Fictional changed request" })).rejects.toMatchObject({ code: "COMMAND_CONFLICT" });
+ const first = await repo.logSiteExtra(await testActorContext(c.admin, f.ctx, actor), actor, raw), before = await counts(c, f), head = await chain(c, f);
+ expect(await repo.logSiteExtra(await testActorContext(c.admin, f.ctx, actor), actor, raw)).toEqual(first);
+ await expect(repo.logSiteExtra(await testActorContext(c.admin, f.ctx, actor), actor, { ...raw, note: "Fictional changed request" })).rejects.toMatchObject({ code: "COMMAND_CONFLICT" });
  expect(await counts(c, f)).toEqual(before); expect(await chain(c, f)).toBe(head);
  expect((await c.admin.query("SELECT result FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [f.p.tenantId, raw.commandId])).rows).toEqual([{ result: first }]);
  for (const table of ["variation", "extra_origin", "extra_event", "command_receipt"]) expect(before[table]! - initial[table]!).toBe(1);
@@ -202,23 +203,23 @@ it("a successful no-op keeps its identity", async () => {
  // LogSiteExtra has no distinct no-op: this property applies to an identical successful retry,
  // which keeps the first extra id and creates no new business, command or audit rows.
  const f = await siteFixture(c), raw = input(f), actor = f.members.supervisor.member;
- const first = await repo.logSiteExtra(f.ctx, actor, raw), before = await counts(c, f), head = await chain(c, f);
- const replay = await repo.logSiteExtra(f.ctx, actor, raw);
+ const first = await repo.logSiteExtra(await testActorContext(c.admin, f.ctx, actor), actor, raw), before = await counts(c, f), head = await chain(c, f);
+ const replay = await repo.logSiteExtra(await testActorContext(c.admin, f.ctx, actor), actor, raw);
  expect(replay).toEqual(first); expect(replay.variationId).toBe(first.variationId); expect(await counts(c, f)).toEqual(before); expect(await chain(c, f)).toBe(head);
  expect((await c.admin.query("SELECT result FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [f.p.tenantId, raw.commandId])).rows).toEqual([{ result: first }]);
 });
 
 it("replaying a command id returns the first result, never the job's current state", async () => {
  const f = await siteFixture(c), raw = input(f), actor = f.members.supervisor.member;
- const first = await repo.logSiteExtra(f.ctx, actor, raw);
+ const first = await repo.logSiteExtra(await testActorContext(c.admin, f.ctx, actor), actor, raw);
  // Move the live job's work-order baseline on through the real import command.
  await new WorkOrderRepository(c.runtime).importCsv(f.p, { commandId: randomUUID(), name: "fictional-later.csv", kind: "csv", csv: demoFile([demoRow(f.demo, 1, { expectedRevision: 1, priority: "emergency" })]) });
  const current = (await c.admin.query("SELECT r.id,r.revision,j.status FROM app.work_order_current k JOIN app.work_order_revision r ON(r.tenant_id,r.work_order_id,r.id)=(k.tenant_id,k.work_order_id,k.revision_id) JOIN app.work_order w ON(w.tenant_id,w.id)=(k.tenant_id,k.work_order_id) JOIN app.job j ON(j.tenant_id,j.id)=(w.tenant_id,w.job_id) WHERE k.tenant_id=$1 AND k.work_order_id=$2", [f.p.tenantId, f.orderId])).rows[0]!;
  expect(current).toMatchObject({ revision: 2, status: "live" }); expect(current.id).not.toBe(f.revisionId);
- const later = await repo.logSiteExtra(f.ctx, actor, input(f)); expect(later.variationId).not.toBe(first.variationId);
+ const later = await repo.logSiteExtra(await testActorContext(c.admin, f.ctx, actor), actor, input(f)); expect(later.variationId).not.toBe(first.variationId);
  expect((await c.admin.query("SELECT variation_id,work_order_revision_id FROM app.extra_origin WHERE tenant_id=$1 AND variation_id=ANY($2::uuid[])", [f.p.tenantId, [first.variationId, later.variationId]])).rows).toEqual(expect.arrayContaining([{ variation_id: first.variationId, work_order_revision_id: f.revisionId }, { variation_id: later.variationId, work_order_revision_id: current.id }]));
  const before = await counts(c, f), head = await chain(c, f);
- expect(await repo.logSiteExtra(f.ctx, actor, raw)).toEqual(first);
+ expect(await repo.logSiteExtra(await testActorContext(c.admin, f.ctx, actor), actor, raw)).toEqual(first);
  expect(await counts(c, f)).toEqual(before); expect(await chain(c, f)).toBe(head);
  expect((await c.admin.query("SELECT result FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [f.p.tenantId, raw.commandId])).rows).toEqual([{ result: first }]);
 });
@@ -227,10 +228,10 @@ it("the same command id on another job conflicts", async () => {
  const f = await siteFixture(c), actor = (await invite(c, f, "supervisor", { kind: "tenant", id: f.p.tenantId })).member, raw = input(f);
  // Both jobs are in scope: this must reach the command conflict rather than an authority refusal.
  for (const jobId of [f.jobId, f.otherJob]) expect((await decision(c, f, actor, "LogSiteExtra", jobId))[0]!.decision).toBe("allowed");
- const initial = await counts(c, f), first = await repo.logSiteExtra(f.ctx, actor, raw), before = await counts(c, f), head = await chain(c, f);
- await expect(repo.logSiteExtra(f.ctx, actor, { ...raw, jobId: f.otherJob })).rejects.toMatchObject({ code: "COMMAND_CONFLICT" });
+ const initial = await counts(c, f), first = await repo.logSiteExtra(await testActorContext(c.admin, f.ctx, actor), actor, raw), before = await counts(c, f), head = await chain(c, f);
+ await expect(repo.logSiteExtra(await testActorContext(c.admin, f.ctx, actor), actor, { ...raw, jobId: f.otherJob })).rejects.toMatchObject({ code: "COMMAND_CONFLICT" });
  expect(await counts(c, f)).toEqual(before); expect(await chain(c, f)).toBe(head);
  expect((await c.admin.query("SELECT result FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [f.p.tenantId, raw.commandId])).rows).toEqual([{ result: first }]);
  for (const table of ["variation", "extra_origin", "extra_event", "command_receipt"]) expect(before[table]! - initial[table]!).toBe(1);
- expect(await repo.logSiteExtra(f.ctx, actor, raw)).toEqual(first); expect(await counts(c, f)).toEqual(before); expect(await chain(c, f)).toBe(head);
+ expect(await repo.logSiteExtra(await testActorContext(c.admin, f.ctx, actor), actor, raw)).toEqual(first); expect(await counts(c, f)).toEqual(before); expect(await chain(c, f)).toBe(head);
 });

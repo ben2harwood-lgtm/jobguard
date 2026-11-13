@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { HttpException } from "@nestjs/common";
-import { PracticeAccessError, RecoveryFollowUpError, WatchdogError } from "@jobguard/db";
+import { PracticeAccessError, RequestBindingRefusedError, RecoveryFollowUpError, WatchdogError } from "@jobguard/db";
 import { PracticeErrorsFilter } from "./practice-errors.filter.js";
 import { WatchdogExceptionFilter } from "./watchdog.filter.js";
 import { recoveryFollowUpFailure } from "./recovery-follow-up.application.js";
@@ -80,7 +80,7 @@ it.each(["read", "schedule", "command"] as const)("Next %s maps practice failure
   const adapters: Record<string, unknown> = {
     "server-only": {}, "next/headers": { cookies: async () => ({ get: () => token ? { value: token } : undefined }) },
     "next/server": { NextResponse: { json: (body: unknown, options?: ResponseInit) => Response.json(body, options) } },
-    "@jobguard/db": { PracticeAccessError }, "@jobguard/api/workspace": {}, "pg": {},
+    "@jobguard/db": { PracticeAccessError, RequestBindingRefusedError }, "@jobguard/api/workspace": {}, "pg": {},
   };
   function load(path: string): Record<string, (...args: any[]) => Promise<Response>> {
     const exports = {};

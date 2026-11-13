@@ -1,4 +1,5 @@
 "use client";
+import { jobPageFetch as fetch } from "./job-page-fetch";
 import * as React from "react";
 import { useEffect, useRef, useState } from "react";
 import { z } from "zod";

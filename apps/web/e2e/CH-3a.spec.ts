@@ -54,7 +54,7 @@ test("CH-3a a new practice session cannot read, change, import or list another s
     expect(await ownParties.text()).not.toContain(customer); expect(await ownParties.text()).not.toContain(site);
     const stolen = await stranger.request.post(`/api/jobs/${ownJob}/parties`, { data: mutation });
     expect(stolen.status(), await stolen.text()).toBe(404);
-    const other = await stranger.newPage(); await other.goto("/");
+    const other = await stranger.newPage(); await other.goto("/classic");
     await expect(other.getByLabel("Search jobs")).toBeVisible();
     await other.getByLabel("Search jobs").fill(customer); await expect(other.locator(".job-card")).toHaveCount(0);
     const reused = await returning.request.get(`/api/jobs/${jobId}/parties`);
@@ -102,7 +102,7 @@ test("CH-3a captures structured parties, gates live, and preserves authoritative
   await B(page,"Preview immutable quote").click();await B(page,"Simulate sending this quote").click();await B(page,"Continue fake worker").click();await B(page,"Record practice acceptance").click();await B(page,"Start this practice job").click();
   await expect(page.getByRole("heading",{name:"Live · baseline frozen",exact:true})).toBeVisible();
   await page.reload();await expect(page.getByTestId("party-binding-id")).toHaveText(binding);
-  await page.goto("/");await page.getByLabel("Search jobs").fill("Fictional Lettings");const card=page.locator(".job-card").filter({has:page.locator(`a[href="/jobs/${jobId}"]`)});await expect(card).toContainText("SW1A 1AA");await card.getByRole("link").click();await expect(page.getByTestId("party-binding-id")).toHaveText(binding);
+  await page.goto("/classic");await page.getByLabel("Search jobs").fill("Fictional Lettings");const card=page.locator(".job-card").filter({has:page.locator(`a[href="/jobs/${jobId}"]`)});await expect(card).toContainText("SW1A 1AA");await card.getByRole("link").click();await expect(page.getByTestId("party-binding-id")).toHaveText(binding);
   const other=await browser.newContext();await other.addCookies(await page.context().cookies());const second=await other.newPage();await second.goto(`/jobs/${jobId}`);await expect(second.getByTestId("party-binding-id")).toHaveText(binding);await expect(second.getByTestId("party-customer")).toHaveText("Fictional Lettings");await other.close();
   const importCommand={version:"job-parties-import.v1",commandId:crypto.randomUUID(),expectedBindingId:binding};
   const imports=await Promise.all([page.request.post(`/api/jobs/${jobId}/parties/import`,{data:importCommand}),page.request.post(`/api/jobs/${jobId}/parties/import`,{data:importCommand})]);
@@ -116,7 +116,7 @@ test("CH-3a captures structured parties, gates live, and preserves authoritative
 
 test("CH-3a makes reuse explicit, leaves different flats separate, and rejects stale bindings",async({page,browser})=>{
   test.setTimeout(180000);const jobId=await quotingJob(page);
-  await page.getByLabel("UK postcode").fill("invalid");await B(page,"Save customer and site").click();const error=page.getByRole("alert").filter({hasText:"INVALID_PARTIES"});await expect(error).toBeVisible();await expect(error).toBeFocused();
+  await page.getByLabel("UK postcode").fill("invalid");await B(page,"Save customer and site").click();const error=page.getByRole("alert").filter({hasText:"INVALID_PARTIES"});await expect(error).toBeVisible();await expect(page.getByLabel("UK postcode")).toBeFocused();
   await page.getByLabel("UK postcode").fill("SW1A 1AA");await B(page,"Save customer and site").click();await expect(page.getByTestId("party-customer")).toHaveText("Practice Customer");
   const before=await (await page.request.get(`/api/jobs/${jobId}/parties`)).json();
   await page.getByLabel("Choose a customer").selectOption(before.customers.find((c:{revisionId:string})=>c.revisionId===before.current.customerRevisionId).id);
@@ -134,7 +134,7 @@ test("CH-3a makes reuse explicit, leaves different flats separate, and rejects s
   const outcomes=await Promise.all([page.request.post(`/api/jobs/${jobId}/parties`,{data:{...race,commandId:crypto.randomUUID()}}),other.request.post(`/api/jobs/${jobId}/parties`,{data:{...race,commandId:crypto.randomUUID()}})]);
   expect(outcomes.map(r=>r.status()).sort()).toEqual([200,409]);expect((await outcomes.find(r=>r.status()===409)!.json()).code).toBe("REVISION_CONFLICT");await other.close();
   await page.reload();await expect(page.getByTestId("party-site")).toContainText("Flat 2");
-  await page.goto("/");await page.locator(".job-card").filter({has:page.locator(`a[href="/jobs/${jobId}"]`)}).getByRole("link").click();await expect(page.getByTestId("party-site")).toContainText("Flat 2");
+  await page.goto("/classic");await page.locator(".job-card").filter({has:page.locator(`a[href="/jobs/${jobId}"]`)}).getByRole("link").click();await expect(page.getByTestId("party-site")).toContainText("Flat 2");
   await expect(page.locator(".sandbox-banner")).toHaveText("Practice sandbox — synthetic data; nothing is sent or charged");expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
 });
 
@@ -314,7 +314,7 @@ for (const [label, field, value] of [["Town", "town", "Fictional Borough"], ["UK
     if (field !== "postcode") await expect(page.getByLabel("Possible existing places")).toHaveValue("");
     await saveAndWait(page);
     const saved = await partiesView(page, jobId);
-    expect(actions).toEqual(["create_site", "bind"]);
+    expect(actions).toEqual(["save_form"]);
     expect(saved.current.site[field!]).toBe(value);
     expect(saved.currentIds.siteId).not.toBe(before.currentIds.siteId);
     expect(saved.current.siteRevisionId).not.toBe(before.current.siteRevisionId);
@@ -343,7 +343,7 @@ test("CH-3a rejects embedded address-line CR/LF before persistence and preserves
   await page.reload(); await expect(page.getByLabel(MORE_LINES)).toHaveValue(before.current.site.addressLines.slice(1).join("\n"));
   const actions = partyActions(page, jobId); await saveAndWait(page);
   const saved = await partiesView(page, jobId);
-  expect(actions).toEqual(["bind"]); expect(saved.sites).toEqual(before.sites);
+  expect(actions).toEqual(["save_form"]); expect(saved.sites).toEqual(before.sites);
   expect(saved.current.siteRevisionId).toBe(before.current.siteRevisionId); expect(saved.currentIds.siteId).toBe(before.currentIds.siteId);
   expect(saved.current.site.addressLines).toEqual(before.current.site.addressLines);
   const { context, other } = await secondWriter(page, browser, jobId);
@@ -372,7 +372,7 @@ test("CH-3a reopening shows the saved details, and saving them unchanged creates
   await expect(page.getByLabel("Choose a customer")).toHaveValue(first.currentIds.customerId); await expect(page.getByLabel("Who pays?")).toHaveValue("");
   await saveAndWait(page);
   // Two saves of unchanged details wrote two bindings and nothing else: no customer or site was created.
-  expect(actions).toEqual(["bind", "bind"]);
+  expect(actions).toEqual(["save_form", "save_form"]);
   const after = await partiesView(page, jobId);
   expect(after.customers).toHaveLength(first.customers.length); expect(after.sites).toHaveLength(first.sites.length);
   expect(after.currentIds.customerId).toBe(first.currentIds.customerId); expect(after.currentIds.siteId).toBe(first.currentIds.siteId);
@@ -386,13 +386,13 @@ test("CH-3a a changed customer revises the same customer and a changed site is a
   const base = await partiesView(page, jobId); const actions = partyActions(page, jobId);
   await page.getByLabel("Customer name", { exact: true }).fill("Renamed once"); await saveAndWait(page);
   const renamed = await partiesView(page, jobId);
-  expect(actions).toEqual(["revise_customer", "bind"]);
+  expect(actions).toEqual(["save_form"]);
   expect(renamed.customers).toHaveLength(base.customers.length); expect(renamed.sites).toHaveLength(base.sites.length);
   expect(renamed.currentIds.customerId).toBe(base.currentIds.customerId); expect(renamed.currentIds.siteId).toBe(base.currentIds.siteId);
   expect(renamed.customers.find((c: { id: string }) => c.id === base.currentIds.customerId).revision).toBe(2);
   await page.getByLabel("Town").fill("Elsewhere"); await saveAndWait(page);
   const moved = await partiesView(page, jobId);
-  expect(actions).toEqual(["revise_customer", "bind", "create_site", "bind"]);
+  expect(actions).toEqual(["save_form", "save_form"]);
   expect(moved.customers).toHaveLength(base.customers.length); expect(moved.sites).toHaveLength(base.sites.length + 1);
   expect(moved.currentIds.customerId).toBe(base.currentIds.customerId); expect(moved.currentIds.siteId).not.toBe(base.currentIds.siteId);
   expect(moved.current.site.town).toBe("Elsewhere"); expect(moved.current.customer.name).toBe("Renamed once");
@@ -426,7 +426,7 @@ test("CH-3a refuses a fifth address line in words before anything is written", a
   await expect(page.getByLabel(MORE_LINES)).toBeVisible();
   await page.getByLabel(MORE_LINES).fill("Line two\nLine three\nLine four\nLine five");
   await B(page, "Save customer and site").click();
-  const alert = page.getByRole("alert").filter({ hasText: "at most four lines" }); await expect(alert).toBeVisible(); await expect(alert).toBeFocused();
+  const alert = page.getByRole("alert").filter({ hasText: "at most four lines" }); await expect(alert).toBeVisible(); await expect(page.getByLabel("Premises address")).toBeFocused();
   expect(actions).toEqual([]); const view = await partiesView(page, jobId); expect(view.current).toBeNull(); expect(view.sites).toHaveLength(before.sites.length); expect(view.customers).toHaveLength(before.customers.length);
   const box = await page.getByLabel(MORE_LINES).boundingBox(); expect(box!.height).toBeGreaterThanOrEqual(44);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
@@ -445,7 +445,7 @@ for (const party of ["customer", "payer"] as const) {
       expect(bound.ok(), await bound.text()).toBe(true); before = await partiesView(page, first);
     }
     // A second real job in the same practice session shares and then revises this party.
-    await page.goto("/"); await B(page, "＋ Start a new job").click();
+    await page.goto("/classic"); await B(page, "＋ Start a new job").click();
     await B(page, "Make my draft").click(); await B(page, "Check and edit my draft").click();
     await expect(page.getByRole("heading", { name: "Check the work items" })).toBeVisible();
     const second = new URL(page.url()).pathname.split("/").pop()!; const secondView = await partiesView(page, second);
@@ -468,7 +468,7 @@ for (const party of ["customer", "payer"] as const) {
     if (party === "payer") await expect(page.getByLabel("Who pays?").locator("option:checked")).toHaveText("Fictional separate payer (saved revision)");
     const actions = partyActions(page, first); await saveAndWait(page);
     const saved = await partiesView(page, first);
-    expect(actions).toEqual(["bind"]); expect(saved.customers).toEqual((await partiesView(page, second)).customers);
+    expect(actions).toEqual(["save_form"]); expect(saved.customers).toEqual((await partiesView(page, second)).customers);
     expect(saved.current.customerRevisionId).toBe(before.current.customerRevisionId);
     expect(saved.current.payingPartyRevisionId).toBe(before.current.payingPartyRevisionId);
     expect(saved.current.siteRevisionId).toBe(before.current.siteRevisionId);

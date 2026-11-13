@@ -2,6 +2,7 @@ import { beginRepositoryCommand, completeRepositoryCommand } from "./repository-
 import type { TenantTransaction } from "./tenant-context.js";
 import { seedSyntheticPartyFixture } from "./synthetic-party-fixture.js";
 import { Pool, type PoolClient } from "pg";
+import { randomBytes } from "node:crypto";
 import { migrate } from "./migrate.js";
 import {
   DEMO_ACCOUNT_ID, DEMO_EMPTY_ACCOUNT_ID, DEMO_EMPTY_MEMBERSHIP_ID, DEMO_EMPTY_TENANT_ID, DEMO_IDENTITY_USER_ID, DEMO_JOB_ID, DEMO_MEMBERSHIP_ID,
@@ -176,6 +177,11 @@ async function seedDatabase(client: PoolClient) {
     await client.query("INSERT INTO identity.identity_user(id) VALUES($1) ON CONFLICT DO NOTHING", [DEMO_IDENTITY_USER_ID]);
     await client.query("SET LOCAL ROLE jobguard_migration");
     await client.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'JobGuard synthetic demo') ON CONFLICT DO NOTHING", [DEMO_ACCOUNT_ID, DEMO_TENANT_ID]);
+    // app.account's key is id alone, so a demo account left by an older demo tenant (before 15 Sep 2026 the demo
+    // tenant was d1500000-...-0015) makes the insert above a silent no-op. Refuse clearly instead of failing on the FK.
+    if (!(await client.query("SELECT 1 FROM app.account WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, DEMO_ACCOUNT_ID])).rowCount) {
+      throw new DemoBootstrapSafetyError("The demo account id already belongs to an older demo tenant in this database. It is not the database the current demo was set up on; use that database's address instead.");
+    }
     await client.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner') ON CONFLICT DO NOTHING", [DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID, DEMO_ACCOUNT_ID, DEMO_IDENTITY_USER_ID]);
     await client.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_EMPTY_TENANT_ID]);
     await client.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Empty Workshop') ON CONFLICT DO NOTHING", [DEMO_EMPTY_ACCOUNT_ID, DEMO_EMPTY_TENANT_ID]);
@@ -193,7 +199,16 @@ async function seedDatabase(client: PoolClient) {
       VALUES($1,'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','small_builder','synthetic_demo','legacy_synthetic_live_fixture','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')
       ON CONFLICT(tenant_id,job_id) DO NOTHING`, [DEMO_TENANT_ID]);
     await client.query("UPDATE app.job SET status='live' WHERE tenant_id=$1 AND id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' AND status='quoting'",[DEMO_TENANT_ID]);
+    // Seed through a protected real session in the synthetic environment. This
+    // internal credential is revoked before commit; no practice sample trigger fires.
+    const seedDigest = randomBytes(32).toString("hex");
+    await client.query("INSERT INTO identity.user_email(email,user_id) VALUES('synthetic-seed@example.invalid',$1) ON CONFLICT DO NOTHING", [DEMO_IDENTITY_USER_ID]);
+    await client.query(`INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id)
+      VALUES($1,$2,$3) ON CONFLICT(user_id,tenant_id) DO NOTHING`, [DEMO_IDENTITY_USER_ID, DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID]);
+    await client.query(`INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at)
+      VALUES(gen_random_uuid(),$2,'synthetic_demo',$1,'synthetic-seed',clock_timestamp()+interval '1 hour')`, [seedDigest, DEMO_IDENTITY_USER_ID]);
     await client.query("SET LOCAL ROLE jobguard_runtime");
+    await client.query("SELECT app.bind_request('real',$1,$2)", [seedDigest, DEMO_TENANT_ID]);
     const pendingSeedCommands: string[] = [];
     await seedDemo("synthetic_demo", { execute: async (command: DemoSeedCommand) => {
       const db = { $client: client } as TenantTransaction;
@@ -207,6 +222,8 @@ async function seedDatabase(client: PoolClient) {
 
     }});
     for(const commandId of pendingSeedCommands)await completeRepositoryCommand({$client:client} as TenantTransaction,commandId);
+    await client.query("SET LOCAL ROLE jobguard_migration");
+    await client.query("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE token_digest=$1", [seedDigest]);
     await client.query("COMMIT");
   } catch (error) { await client.query("ROLLBACK"); throw error; }
 }

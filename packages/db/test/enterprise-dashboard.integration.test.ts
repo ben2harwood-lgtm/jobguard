@@ -1,3 +1,4 @@
+import { testActorContext } from "./tenant-context-test-utils.js";
 // Real PostgreSQL acceptance. NOT RUN in the builder sandbox: localhost/PostgreSQL unavailable.
 import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -25,15 +26,116 @@ async function read(s: string, q: unknown = query) {
   return new EnterpriseDashboardRepository(c.runtime).read(context, s, q);
 }
 describe("ENT-9B scoped persisted reads", () => {
+  it("[LATER-SAFETY-58] Friday working-day waits show Tuesday at the same London time, matching the queue deadline", async () => {
+    const { demoRules, reviseRules } = await import("./extra-approval-chain-fixtures.js");
+    const w = await chainWorld(c), s = await session(w), rules = structuredClone(demoRules);
+    rules.bands[0]!.steps[0]!.waitWorkingDays = 2;
+    await reviseRules(c, w, rules);
+    const pending = await submitted(c, w, 10000);
+    // Owner-only clock fixture: Friday 14:00 London crosses the spring DST weekend.
+    const owner = await c.admin.connect();
+    try {
+      await owner.query("BEGIN");
+      await owner.query("ALTER TABLE app.extra_approval_request DISABLE TRIGGER immutable");
+      await owner.query("UPDATE app.extra_approval_request SET server_recorded_at='2026-03-27T14:00:00Z' WHERE id=$1", [pending.requestId]);
+      await owner.query("ALTER TABLE app.extra_approval_request ENABLE TRIGGER immutable");
+      await owner.query("COMMIT");
+    } catch (error) { await owner.query("ROLLBACK"); throw error; } finally { owner.release(); }
+    expect((await c.runtime.query("SELECT has_function_privilege(current_user,'app.xa_wait_deadline(timestamptz,jsonb)','EXECUTE') allowed")).rows[0].allowed).toBe(true);
+    const context = await contractorSessionContext(c.runtime, s);
+    await withTenant(c.runtime, context, async db => {
+      await db.$client.query(enterpriseDashboardScopeLockSql, [context.tenantId]);
+      const facts = dashboardFactsV1.parse((await db.$client.query(enterpriseDashboardSourceSql, [s, context.tenantId])).rows[0].facts);
+      const expected = (await db.$client.query(`SELECT requirement->'steps'->0 step,
+        to_char(app.xa_wait_deadline(server_recorded_at,requirement->'steps'->0) AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') deadline
+        FROM app.extra_approval_request WHERE id=$1`, [pending.requestId])).rows[0];
+      expect(expected.step.waitWorkingDays).toBe(2);
+      expect(expected.deadline).toBe("2026-03-31T13:00:00.000000Z");
+      expect(facts.extras.find(extra => extra.extraId === pending.extraId)!.steps).toMatchObject([{ dueAt: expected.deadline, outcome: "pending" }]);
+    });
+  });
+  it("[LATER-SAFETY-58] old snapshots without working-day waits retain their elapsed-minute deadline", async () => {
+    const w = await chainWorld(c), s = await session(w), pending = await submitted(c, w, 10000);
+    // Owner-only predecessor snapshot and clock fixture; runtime cannot rewrite immutable requests.
+    const owner = await c.admin.connect();
+    try {
+      await owner.query("BEGIN");
+      await owner.query("ALTER TABLE app.extra_approval_request DISABLE TRIGGER immutable");
+      await owner.query(`UPDATE app.extra_approval_request SET server_recorded_at='2026-03-27T14:00:00Z',
+        requirement=requirement #- '{steps,0,waitWorkingDays}' WHERE id=$1`, [pending.requestId]);
+      await owner.query("ALTER TABLE app.extra_approval_request ENABLE TRIGGER immutable");
+      await owner.query("COMMIT");
+    } catch (error) { await owner.query("ROLLBACK"); throw error; } finally { owner.release(); }
+    const context = await contractorSessionContext(c.runtime, s);
+    await withTenant(c.runtime, context, async db => {
+      await db.$client.query(enterpriseDashboardScopeLockSql, [context.tenantId]);
+      const facts = dashboardFactsV1.parse((await db.$client.query(enterpriseDashboardSourceSql, [s, context.tenantId])).rows[0].facts);
+      const expected = (await db.$client.query(`SELECT requirement->'steps'->0 step,
+        to_char((server_recorded_at+((requirement->'steps'->0->>'timeLimitMinutes')::integer*interval '1 minute')) AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') deadline
+        FROM app.extra_approval_request WHERE id=$1`, [pending.requestId])).rows[0];
+      expect(expected.step).not.toHaveProperty("waitWorkingDays");
+      expect(expected.step.timeLimitMinutes).toBe(1);
+      expect(expected.deadline).toBe("2026-03-27T14:01:00.000000Z");
+      expect(facts.extras.find(extra => extra.extraId === pending.extraId)!.steps).toMatchObject([{ dueAt: expected.deadline, outcome: "pending" }]);
+    });
+  });
+  it.each([false, true])("[LATER-SAFETY-22] dashboard and xa_queue share weekend deadlines (legacy snapshot: %s)", async legacy => {
+    const w = await chainWorld(c), s = await session(w);
+    const { demoRules, reviseRules } = await import("./extra-approval-chain-fixtures.js");
+    const rules = structuredClone(demoRules);
+    // An absent field in a new rule defaults to two working days in xa_requirement.
+    for (const band of rules.bands) for (const step of band.steps) delete step.waitWorkingDays;
+    await reviseRules(c, w, rules);
+    const pending = await submitted(c, w, 10000);
+    // Owner-only historical clock/snapshot fixture; runtime cannot edit immutable requests.
+    const owner = await c.admin.connect();
+    try {
+      await owner.query("BEGIN");
+      await owner.query("ALTER TABLE app.extra_approval_request DISABLE TRIGGER immutable");
+      await owner.query(`UPDATE app.extra_approval_request SET server_recorded_at='2026-11-06T14:00:00Z',
+        requirement=CASE WHEN $2 THEN jsonb_set(requirement,'{steps,0}',(requirement->'steps'->0)-'waitWorkingDays') ELSE requirement END
+        WHERE id=$1`, [pending.requestId, legacy]);
+      await owner.query("ALTER TABLE app.extra_approval_request ENABLE TRIGGER immutable");
+      await owner.query("COMMIT");
+    } catch (error) { await owner.query("ROLLBACK"); throw error; } finally { owner.release(); }
+    const context = await contractorSessionContext(c.runtime, s);
+    const facts = await withTenant(c.runtime, context, async db => {
+      await db.$client.query(enterpriseDashboardScopeLockSql, [context.tenantId]);
+      const row = (await db.$client.query(enterpriseDashboardSourceSql, [s, context.tenantId])).rows[0];
+      expect(row.authorized).toBe(true);
+      return dashboardFactsV1.parse(row.facts);
+    });
+    const extra = facts.extras.find(extra => extra.extraId === pending.extraId)!;
+    const deadline = (await c.admin.query(`SELECT app.xa_wait_deadline(server_recorded_at,requirement->'steps'->0) due
+      FROM app.extra_approval_request WHERE id=$1`, [pending.requestId])).rows[0].due.toISOString();
+    expect(deadline).toBe(legacy ? "2026-11-06T14:01:00.000Z" : "2026-11-10T14:00:00.000Z");
+    expect(extra.steps).toHaveLength(1);
+    expect(new Date(extra.steps[0]!.dueAt!).toISOString()).toBe(deadline);
+    const queued = await withTenant(c.runtime, context, async db => (await db.$client.query(
+      "SELECT q.*,clock_timestamp()>=$2::timestamptz expected_overdue FROM app.xa_queue($1) q WHERE request_id=$3",
+      [w.members.supervisor.member.membershipId, deadline, pending.requestId])).rows);
+    expect(queued).toHaveLength(1);
+    expect(queued[0].overdue).toBe(queued[0].expected_overdue);
+    // Replay the SQL deadline at fixed observation times with a matching synthetic capture clock.
+    const clockedFacts = { ...facts, extras: [{ ...extra, capturedAt: "2026-11-06T13:00:00Z" }] };
+    // Between the old minute deadline and Tuesday, only the old snapshot is overdue.
+    const weekend = projectEnterpriseDashboard({ ...clockedFacts, cutoff: "2026-11-07T14:00:00Z" }, query);
+    expect(weekend.totals.overdue.count).toBe(legacy ? 1 : 0);
+    const afterDeadline = projectEnterpriseDashboard({ ...clockedFacts, cutoff: "2026-11-10T14:01:00Z" }, query);
+    expect(afterDeadline.totals.overdue.count).toBe(1);
+    const other = await chainWorld(c);
+    const foreignContext = await contractorSessionContext(c.runtime, await session(other));
+    await expect(new EnterpriseDashboardRepository(c.runtime).read(foreignContext, s, query)).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
   it("[E9-02] counts command-created active duplicate groups once and restores two captures after an authorized unlink", async () => {
     const w = await chainWorld(c), s = await session(w), repo = new ExtraRepository(c.runtime);
-    const a = await repo.raiseExtra(w.ctx, direct(w, w.members.operative)), b = await repo.raiseExtra(w.ctx, direct(w, w.members.operative));
+    const a = await repo.raiseExtra(await testActorContext(c.admin, w.ctx, w.members.operative.member), direct(w, w.members.operative)), b = await repo.raiseExtra(await testActorContext(c.admin, w.ctx, w.members.operative.member), direct(w, w.members.operative));
     expect((await read(s)).report.totals.captured.count).toBe(2);
-    const link = await new ExtraApprovalRepository(c.runtime).markDuplicate(w.ctx, w.members.supervisor.member, { version: "mark-duplicate.v1", commandId: randomUUID(), jobId: w.jobId, duplicateId: b.variationId, canonicalId: a.variationId });
+    const link = await new ExtraApprovalRepository(c.runtime).markDuplicate(await testActorContext(c.admin, w.ctx, w.members.supervisor.member), w.members.supervisor.member, { version: "mark-duplicate.v1", commandId: randomUUID(), jobId: w.jobId, duplicateId: b.variationId, canonicalId: a.variationId });
     const grouped = await read(s);
     expect(grouped.report.totals.captured.count).toBe(1);
     expect(grouped.report.contributions.find(c => c.stage === "captured")?.extraIds.slice().sort()).toEqual([a.variationId, b.variationId].sort());
-    await repo.unlinkDuplicate(w.ctx, { version: "extra-duplicate-unlink.v1", commandId: randomUUID(), jobId: w.jobId, actorMembershipId: w.members.supervisor.member.membershipId, linkId: link.linkId, expectedRevision: 1, reasonCode: "linked_in_error" });
+    await repo.unlinkDuplicate(await testActorContext(c.admin,w.ctx,w.members.supervisor.member), { version: "extra-duplicate-unlink.v1", commandId: randomUUID(), jobId: w.jobId, actorMembershipId: w.members.supervisor.member.membershipId, linkId: link.linkId, expectedRevision: 1, reasonCode: "linked_in_error" });
     expect((await read(s)).report.totals.captured.count).toBe(2);
   });
   it("[E9-01 E9-03 E9-07] reads command-created captures, current approvals and immutable deadlines; billing stays held", async () => {
@@ -41,7 +143,7 @@ describe("ENT-9B scoped persisted reads", () => {
     const before = await read(s);
     expect(before.report.totals.captured.count).toBeGreaterThan(0);
     expect(before.report.totals.backlog.count).toBeGreaterThan(0);
-    await new ExtraApprovalRepository(c.runtime).approveExtraStep(w.ctx, w.members.supervisor.member, approveInput(pending, 0));
+    await new ExtraApprovalRepository(c.runtime).approveExtraStep(await testActorContext(c.admin, w.ctx, w.members.supervisor.member), w.members.supervisor.member, approveInput(pending, 0));
     const after = await read(s);
     expect(after.report.totals.approved.known.pence).toBe(10000);
     expect(after.report.contributions.some(row => row.extraIds.includes(pending.extraId) && row.stage === "approved")).toBe(true);
@@ -50,8 +152,8 @@ describe("ENT-9B scoped persisted reads", () => {
   });
   it("[E9-09 E9-10 E9-11 E9-13] applies covering dashboard grants and tenant scope before all output", async () => {
     const a = await chainWorld(c), b = await chainWorld(c);
-    const ae = await new ExtraRepository(c.runtime).raiseExtra(a.ctx, direct(a, a.members.operative));
-    const be = await new ExtraRepository(c.runtime).raiseExtra(b.ctx, direct(b, b.members.operative));
+    const ae = await new ExtraRepository(c.runtime).raiseExtra(await testActorContext(c.admin, a.ctx, a.members.operative.member), direct(a, a.members.operative));
+    const be = await new ExtraRepository(c.runtime).raiseExtra(await testActorContext(c.admin, b.ctx, b.members.operative.member), direct(b, b.members.operative));
     const sa = await session(a), sb = await session(b);
     const [ar, br] = await Promise.all([read(sa), read(sb)]);
     expect(JSON.stringify(ar)).toContain(ae.variationId);
@@ -74,7 +176,7 @@ describe("ENT-9B scoped persisted reads", () => {
   });
   it("[E9-10 E9-12] a reassigned operative disappears even while the old job remains in scope; unrelated grants cannot supply scope", async () => {
     const w = await chainWorld(c), s = await session(w);
-    const extra = await new ExtraRepository(c.runtime).raiseExtra(w.ctx, direct(w, w.members.operative));
+    const extra = await new ExtraRepository(c.runtime).raiseExtra(await testActorContext(c.admin, w.ctx, w.members.operative.member), direct(w, w.members.operative));
     expect(JSON.stringify(await read(s))).toContain(extra.variationId);
     await command(c, w, { kind: "team.move", membershipId: w.members.operative.member.membershipId, fromTeamId: w.demo.teamId, toTeamId: w.otherDemo.teamId });
     expect(JSON.stringify(await read(s))).not.toContain(extra.variationId);
@@ -83,9 +185,9 @@ describe("ENT-9B scoped persisted reads", () => {
   });
   it("[E9-08] derives close-out answers from visit commands and does not change job state", async () => {
     const w = await chainWorld(c), s = await session(w), visits = new SiteVisitRepository(c.runtime), actor = w.members.operative.member;
-    const started = await visits.startVisit(w.ctx, actor, { commandId: randomUUID(), jobId: w.jobId });
+    const started = await visits.startVisit(await testActorContext(c.admin, w.ctx, actor), actor, { commandId: randomUUID(), jobId: w.jobId });
     const before = (await c.admin.query("SELECT status FROM app.job WHERE tenant_id=$1 AND id=$2", [w.p.tenantId, w.jobId])).rows;
-    await visits.completeVisit(w.ctx, actor, { commandId: randomUUID(), jobId: w.jobId, visitId: started.visitId, closeoutAnswer: "yes" });
+    await visits.completeVisit(await testActorContext(c.admin, w.ctx, actor), actor, { commandId: randomUUID(), jobId: w.jobId, visitId: started.visitId, closeoutAnswer: "yes" });
     expect((await read(s)).report.closeoutRate).toMatchObject({ status: "computed", numerator: 1, denominator: 1 });
     expect((await c.admin.query("SELECT status FROM app.job WHERE tenant_id=$1 AND id=$2", [w.p.tenantId, w.jobId])).rows).toEqual(before);
   });
@@ -93,8 +195,8 @@ describe("ENT-9B scoped persisted reads", () => {
     const w = await chainWorld(c), other = await chainWorld(c), s = await session(w), visits = new SiteVisitRepository(c.runtime);
     for (const subject of [w, other]) for (let i = 0; i < 5; i++) {
       const actor = subject.members.operative.member;
-      const started = await visits.startVisit(subject.ctx, actor, { commandId: randomUUID(), jobId: subject.jobId });
-      await visits.completeVisit(subject.ctx, actor, { commandId: randomUUID(), jobId: subject.jobId, visitId: started.visitId, closeoutAnswer: "no" });
+      const started = await visits.startVisit(await testActorContext(c.admin, subject.ctx, actor), actor, { commandId: randomUUID(), jobId: subject.jobId });
+      await visits.completeVisit(await testActorContext(c.admin, subject.ctx, actor), actor, { commandId: randomUUID(), jobId: subject.jobId, visitId: started.visitId, closeoutAnswer: "no" });
     }
     const first = (await read(s)).signals;
     expect(first.observations.filter(o => o.kind === "no_closeout_observation")).toHaveLength(1);
@@ -110,7 +212,7 @@ describe("ENT-9B scoped persisted reads", () => {
   });
   it("[E9-14 E9-26 E9-28 E9-31] reads and observations preserve canonical business rows and give runtime no new privilege", async () => {
     const w = await chainWorld(c), s = await session(w);
-    await new SiteExtraRepository(c.runtime).logSorSiteExtra(w.ctx, w.members.operative.member, { commandId: randomUUID(), jobId: w.jobId, sorCode: "REPAIR-DOOR", quantity: "3", note: "Fictional ENT3A note canary" });
+    await new SiteExtraRepository(c.runtime).logSorSiteExtra(await testActorContext(c.admin, w.ctx, w.members.operative.member), w.members.operative.member, { commandId: randomUUID(), jobId: w.jobId, sorCode: "REPAIR-DOOR", quantity: "3", note: "Fictional ENT3A note canary" });
     const snapshot = async () => {
       const out: Record<string, unknown> = {};
       const tables = (await c.admin.query<{ table_name: string }>(`SELECT p.tablename table_name FROM pg_tables p JOIN information_schema.columns c

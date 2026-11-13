@@ -27,7 +27,22 @@ export function JobMappedValue({jobId}:{jobId:string}){
  const [revision,refresh]=useState(0);
  const [receipt,setReceipt]=useState<MappedValueReceipt|null>(null),[state,setState]=useState("Loading…");
  useEffect(()=>{setReceipt(null);setState("Loading…");const abort=new AbortController();void(async()=>{try{
-  const response=await fetch(`/api/jobs/${jobId}/value/v3${window.location.search}`,{cache:"no-store",signal:abort.signal});
+  // Practice authority is checked by its own endpoint; company-only reads need CSRF and tenant headers.
+  const practice = await fetch("/api/session", { cache: "no-store", credentials: "same-origin", signal: abort.signal });
+  let headers: Record<string, string> = {};
+  if (!practice.ok) {
+   if (practice.status !== 401) throw new Error();
+   const response = await fetch("/api/auth/session", { cache: "no-store", credentials: "same-origin", signal: abort.signal });
+   // 401 means no company session either: read as before so the server answers UNAUTHENTICATED.
+   if (response.status !== 401) {
+    const session = await response.json() as { csrfToken?: string; memberships?: { tenantId: string }[] };
+    const tenant = session.memberships?.[0]?.tenantId;
+    if (!response.ok || !session.csrfToken || !tenant) throw new Error();
+    headers = { "x-csrf-token": session.csrfToken, "x-tenant-id": tenant };
+   }
+  }
+  if (abort.signal.aborted) return;
+  const response=await fetch(`/api/jobs/${jobId}/value/v3${window.location.search}`,{cache:"no-store",credentials:"same-origin",headers,signal:abort.signal});
   const raw=await response.json();const parsed=mappedValueReceipt.safeParse(raw.receipt);
   if(!response.ok||raw.jobId!==jobId||raw.status!=="mapped"||!parsed.success)throw new Error();
   if(!abort.signal.aborted)setReceipt(parsed.data);

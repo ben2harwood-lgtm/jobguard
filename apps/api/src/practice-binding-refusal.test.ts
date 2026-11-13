@@ -1,0 +1,88 @@
+import { Controller, Get, type INestApplication } from "@nestjs/common";
+import { Test } from "@nestjs/testing";
+import { afterAll, afterEach, beforeAll, expect, it, vi } from "vitest";
+import type { Pool } from "pg";
+import { get } from "node:http";
+import { PracticeAccessError, RequestBindingRefusedError } from "@jobguard/db";
+import { AppModule } from "./app.module.js";
+import { ApplicationAuthGuard } from "./auth/application-auth.guard.js";
+import { Pool as PoolProvider } from "pg";
+import { PracticeAccess } from "./practice-access.js";
+
+let operation: () => Promise<unknown> = async () => undefined;
+@Controller("binding-refusal")
+class Probe {
+ @Get() run() { return operation(); }
+}
+let app: INestApplication, url: string;
+beforeAll(async () => {
+ // Stub the unrelated HTTP authentication guard; the probe executes the real
+ // practice access bridge and the real AppModule exception-filter registrations.
+ vi.spyOn(ApplicationAuthGuard.prototype, "canActivate").mockResolvedValue(true);
+ const module = await Test.createTestingModule({ imports: [AppModule], controllers: [Probe] }).overrideProvider(PoolProvider).useValue({}).compile();
+ app = module.createNestApplication(); app.useLogger(false);
+ await app.listen(0, "127.0.0.1"); url = `${await app.getUrl()}/binding-refusal`;
+});
+afterAll(async () => { await app?.close(); vi.restoreAllMocks(); });
+afterEach(() => { vi.unstubAllEnvs(); operation = async () => undefined; });
+function response(): Promise<{ status: number | undefined; body: unknown }> {
+ return new Promise((resolve, reject) => {
+  get(url, result => {
+   let body = ""; result.setEncoding("utf8");
+   result.on("data", chunk => { body += chunk; });
+   result.on("end", () => {
+    try { resolve({ status: result.statusCode, body: JSON.parse(body) }); }
+    catch { reject(new Error(`HTTP ${result.statusCode}: ${body.slice(0, 500)}`)); }
+   });
+   result.on("error", reject);
+  }).on("error", reject);
+ });
+}
+it("returns the existing 401 after a practice credential is refused between authentication and ownership lookup", async () => {
+ vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
+ const tenant = "11111111-1111-4111-8111-111111111111", member = "18000000-0000-4000-8000-000000000002";
+ const token = "18000000-0000-4000-8000-000000000001", calls: string[] = [], release = vi.fn();
+ const query = vi.fn(async (sql: string) => {
+  calls.push(sql);
+  if (sql === "SELECT app.bind_request($1, $2, $3)") throw Object.assign(new Error("private database marker"), { code: "42501", detail: token });
+  return { rows: [] };
+ });
+ const pool = { query: async () => ({ rows: [{ tenant_id: tenant, membership_id: member, identity_user_id: "18000000-0000-4000-8000-000000000003" }] }), connect: async () => ({ query, release }) } as unknown as Pool;
+ operation = () => new PracticeAccess(pool, token).job(member);
+ const result = await response();
+ expect(result).toEqual({ status: 401, body: { code: "UNAUTHENTICATED" } });
+ expect(JSON.stringify(result)).not.toContain(token);
+ expect(calls).toEqual(["BEGIN", "SELECT app.bind_request($1, $2, $3)", "ROLLBACK"]);
+ expect(release).toHaveBeenCalledOnce();
+});
+it("returns 401 when the subject transaction is refused after the ownership transaction succeeds", async () => {
+ vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
+ const tenant = "11111111-1111-4111-8111-111111111111", member = "18000000-0000-4000-8000-000000000002";
+ let binds = 0; const release = vi.fn();
+ const query = vi.fn(async (sql: string) => {
+  if(sql === "SELECT app.bind_request($1, $2, $3)" && ++binds === 2)throw Object.assign(new Error("private refusal"), {code:"42501"});
+  if(sql === "SELECT app.current_actor() actor, app.current_tenant() tenant")return {rows:[{actor:member,tenant}]};
+  return {rows:sql.includes("WITH RECURSIVE practice_owned_job")?[{id:member}]:[]};
+ });
+ const pool = {query:async()=>({rows:[{tenant_id:tenant,membership_id:member,identity_user_id:"18000000-0000-4000-8000-000000000003"}]}),connect:async()=>({query,release})} as unknown as Pool;
+ operation = () => new PracticeAccess(pool, "18000000-0000-4000-8000-000000000001").subject(member,"upload",member);
+ expect(await response()).toEqual({status:401,body:{code:"UNAUTHENTICATED"}});
+ expect(binds).toBe(2); expect(release).toHaveBeenCalledTimes(2);
+ expect(query.mock.calls.some(([sql])=>sql.startsWith("SELECT id FROM app.evidence_upload"))).toBe(false);
+ expect(query.mock.calls.at(-1)?.[0]).toBe("ROLLBACK");
+});
+it.each(["practice", "real", "contractor_practice"] as const)("maps a generic %s binding refusal to its established public code", async kind => {
+ operation = async () => { throw new RequestBindingRefusedError(kind); };
+ expect(await response()).toEqual({ status: kind === "practice" ? 401 : 403, body: { code: kind === "practice" ? "UNAUTHENTICATED" : "FORBIDDEN" } });
+});
+it.each(["UNAUTHENTICATED", "NOT_FOUND"] as const)("preserves the existing typed practice error %s", async code => {
+ operation = async () => { throw new PracticeAccessError(code); };
+ expect(await response()).toEqual({ status: code === "NOT_FOUND" ? 404 : 401, body: { code } });
+});
+it.each([
+ Object.assign(new Error("private business SQL marker"), { code: "42501" }),
+ Object.assign(new Error("private forged error marker"), { code: "FORBIDDEN", name: "RequestBindingRefusedError" }),
+])("does not treat a business SQL error or a forged error name as a binding refusal", async error => {
+ operation = async () => { throw error; };
+ expect(await response()).toEqual({ status: 500, body: { statusCode: 500, message: "Internal server error" } });
+});

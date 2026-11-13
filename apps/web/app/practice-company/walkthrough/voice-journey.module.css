@@ -1,0 +1,2 @@
+.screen { box-sizing: border-box; width: calc(100% - 16px); margin: 8px auto; min-height: 200px; max-height: 52dvh; overflow: auto; scroll-margin-block: 24px 360px; border: 1px solid #175db0; border-radius: 8px; background: white; }
+.screen :global(main), .screen :global(section) { min-width: 0; }

@@ -1,4 +1,4 @@
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { readFile, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -19,7 +19,7 @@ import { importWatchdogFixtureJob } from "./watchdog-fixtures.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
 
 const tenant = randomUUID(), otherTenant = randomUUID(), member = randomUUID();
-const context = testTenantContext(tenant);
+let context = testTenantContext(tenant);
 const states = ["draft", "quoting", "accepted", "invoiced", "paid", "lost"];
 const legacy = Object.fromEntries(states.map(status => [status, { jobId: randomUUID(), uploadId: randomUUID() }]));
 const tables = ["purchase_order_manual_attestation", "purchase_order_draft", "purchase_order_revision", "purchase_order_placement", "supplier_document", "supplier_document_version", "supplier_document_intake", "goods_receipt", "supplier_fact_proposal", "supplier_fact_revision", "supplier_match_proposal", "supplier_match_revision", "supplier_match_allocation", "discrepancy_finding_revision", "discrepancy_review_outcome", "supplier_bill_supersession", "planned_work_revision", "readiness_snapshot", "readiness_decision", "inbox_finding_revision", "inbox_decision_revision", "inbox_outcome_event", "evidence_upload", "evidence_object", "evidence_link", "synthetic_evidence_original", "stage_completion", "watchdog_command_identity"];
@@ -40,7 +40,10 @@ beforeAll(async () => {
   const port = await freePort(60400, 100);
   postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: "synthetic", persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
   await postgres.initialise(); await postgres.start();
-  admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password: "synthetic", max: 4 });
+  // 0678 admits manual attestations only in the synthetic demo database; run CH-2 there so every
+  // direct insert reaches the live guard. The outside-database refusal is asserted at the end.
+  await postgres.createDatabase("jobguard_synthetic_demo");
+  admin = new Pool({ host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "postgres", password: "synthetic", max: 4 });
   // Upgrade fixture: these rows existed in the preceding supported schema, where
   // proof uploads were possible before/after live. No guard is bypassed/disabled.
   await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
@@ -60,12 +63,13 @@ beforeAll(async () => {
     await admin.query("INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at)VALUES($1,$2,$3,$4,repeat('a',64),'image/png',100,'standard_evidence','2099-01-01')", [ids.uploadId, tenant, ids.jobId, `legacy/${ids.uploadId}`]);
   }
   await migrate(admin); await migrate(admin);
+  context = await testBoundTenantContext(admin,tenant,member);
   // These predecessor jobs use the same active owner and an explicit synthetic
   // small-builder binding; finish/cancel must reach the live guard, not fail auth.
   for (const { jobId } of Object.values(legacy)) await admin.query(
     "INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance,source_id) VALUES($1,$2,'small_builder','synthetic_demo','backfilled_synthetic_fixture',$2) ON CONFLICT DO NOTHING", [tenant, jobId]);
   await admin.query("CREATE ROLE ch2_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;GRANT jobguard_runtime TO ch2_login");
-  runtime = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "ch2_login", password: "synthetic", max: 4 });
+  runtime = new Pool({ host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "ch2_login", password: "synthetic", max: 4 });
 }, 60000);
 afterAll(async () => { await closeTestPools(runtime, admin); await postgres?.stop(); if (directory) await rm(directory, { recursive: true, force: true }); });
 
@@ -169,6 +173,8 @@ describe("CH-2 actual PostgreSQL enforcement", () => {
   it("round 16: live party corrections preserve the imported binding and allow watchdog inputs before and after", async () => {
     const jobId = randomUUID(); await importWatchdogFixtureJob(admin, tenant, jobId);
     const baseline = (await admin.query("SELECT party_binding_id,attested_by_membership_id FROM app.imported_job_baseline WHERE tenant_id=$1 AND job_id=$2", [tenant, jobId])).rows[0];
+    // WATCHDOG_PARTY_ACTOR: bind the imported baseline's real attesting member for its checked correction.
+    const context = await testBoundTenantContext(admin, tenant, baseline.attested_by_membership_id);
     const parties = new JobPartiesRepository(runtime), readiness = new ReadinessRepository(runtime);
     const before = await parties.view(context, baseline.attested_by_membership_id, jobId);
     expect(before).toMatchObject({ status: "live", jobRevision: 1, currentIds: { bindingId: baseline.party_binding_id } });
@@ -212,5 +218,27 @@ describe("CH-2 actual PostgreSQL enforcement", () => {
         }
       } finally { await a.query("ROLLBACK"); await b.query("ROLLBACK"); a.release(); b.release(); }
     }
+  });
+});
+describe("CH-2 outside the synthetic demo database", () => {
+  it("a direct manual attestation is refused MODE_FORBIDDEN before the live guard; other tables still reach JOB_NOT_LIVE", async () => {
+    const { host, port, password } = (admin as unknown as { options: { host: string; port: number; password: string } }).options;
+    await closeTestPools(runtime, admin);
+    const control = new Pool({ host, port, password, user: "postgres", database: "postgres", max: 1 });
+    try { await control.query("CREATE DATABASE jobguard_ch2_outside TEMPLATE jobguard_synthetic_demo"); }
+    finally {
+      await control.end();
+      admin = new Pool({ host, port, password, user: "postgres", database: "jobguard_synthetic_demo", max: 4 });
+      runtime = new Pool({ host, port, password, user: "ch2_login", database: "jobguard_synthetic_demo", max: 4 });
+    }
+    const outside = new Pool({ host, port, password, user: "ch2_login", database: "jobguard_ch2_outside", max: 1 });
+    try {
+      expect((await outside.query("SELECT current_database() name")).rows[0].name).toBe("jobguard_ch2_outside");
+      for (const status of states) {
+        const insert = (table: string) => withTenant(outside, context, db => db.$client.query(`INSERT INTO app.${table}(tenant_id,job_id)VALUES($1,$2)`, [tenant, legacy[status]!.jobId]));
+        await expect(insert("purchase_order_manual_attestation"), status).rejects.toMatchObject({ message: "MODE_FORBIDDEN", code: "42501" });
+        await expect(insert("purchase_order_draft"), status).rejects.toThrow("JOB_NOT_LIVE");
+      }
+    } finally { await closeTestPools(outside); }
   });
 });

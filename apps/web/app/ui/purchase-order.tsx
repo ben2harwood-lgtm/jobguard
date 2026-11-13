@@ -1,4 +1,5 @@
 "use client";
+import { jobPageFetch as fetch } from "./job-page-fetch";
 
 import { useCallback, useEffect, useState } from "react";
 import { parsePoundsToPence } from "@jobguard/core";

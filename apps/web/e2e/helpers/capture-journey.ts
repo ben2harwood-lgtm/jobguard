@@ -9,7 +9,7 @@ export async function openCapture(page: Page) {
       start: () => ({ stop() {}, cancel() {} }),
     };
   });
-  await page.goto("/");
+  await page.goto("/classic");
   const start = page.getByRole("button", { name: "Start the demo" });
   await start.waitFor({ state: "visible" });
   await start.click();

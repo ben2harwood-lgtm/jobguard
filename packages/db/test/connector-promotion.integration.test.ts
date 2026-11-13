@@ -1,6 +1,6 @@
 // Real PostgreSQL only; intentionally not executed in the restricted builder sandbox.
 import { createHash, randomUUID } from "node:crypto";
-import { afterAll, beforeAll, expect, it } from "vitest";
+import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { ConnectorPromotionRepository, ContractorRepository, WorkOrderRepository, generateWorkOrderSample, prepareWorkOrderDemo, withTenant, derivedUuid } from "../src/index.js";
 import { cluster } from "./extra-fixtures.js";
 import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
@@ -44,6 +44,30 @@ it("uses the existing ENT-2 revision rules and never reimports a prior event aft
  const later=await stage(f.p.tenantId,"work_order","fixture:revised_orders",2);
  expect(await repo.promote(f.session,later.selection)).toMatchObject({counts:{revised:3,unchanged:1,rejected:0}});
  const before=await counts(f.p.tenantId);expect(await repo.promote(f.session,e.selection)).toEqual(first);expect(await counts(f.p.tenantId)).toEqual(before);
+});
+it("refuses a tenant-B principal in a tenant-A promotion transaction before importing or writing either tenant",async()=>{
+ const a=await organisation(),b=await organisation(),e=await stage(a.p.tenantId);
+ const snapshot=async(tenant:string)=>({
+  ...await counts(tenant),
+  imports:(await c.admin.query("SELECT count(*)::int n FROM app.import_batch WHERE tenant_id=$1",[tenant])).rows[0].n,
+  receipts:(await c.admin.query("SELECT count(*)::int n FROM app.import_row_receipt WHERE tenant_id=$1",[tenant])).rows[0].n,
+ });
+ const beforeA=await snapshot(a.p.tenantId),beforeB=await snapshot(b.p.tenantId);
+ const resolve=ContractorRepository.prototype.resolveSession;
+ const session=vi.spyOn(ContractorRepository.prototype,"resolveSession")
+  .mockImplementationOnce(function(this: ContractorRepository,id:string){return resolve.call(this,id);})
+  .mockResolvedValueOnce(b.p);
+ const importer=vi.spyOn(WorkOrderRepository.prototype,"importCsvInTransaction");
+ try {
+  await expect(repo.promote(a.session,e.selection)).rejects.toMatchObject({code:"NOT_FOUND"});
+  expect(session).toHaveBeenCalledTimes(2);
+  expect(importer).not.toHaveBeenCalled();
+  expect(await snapshot(a.p.tenantId)).toEqual(beforeA);
+  expect(await snapshot(b.p.tenantId)).toEqual(beforeB);
+ } finally {session.mockRestore();importer.mockRestore();}
+ await expect(repo.promote(a.session,e.selection)).resolves.toMatchObject({counts:{created:5,rejected:0}});
+ expect((await snapshot(a.p.tenantId)).connector_promotion).toBe(beforeA.connector_promotion+1);
+ expect(await snapshot(b.p.tenantId)).toEqual(beforeB);
 });
 it("imports one materials fact through the existing authority, without confirming a prompt",async()=>{
  const f=await organisation();await repo.promote(f.session,(await stage(f.p.tenantId)).selection);

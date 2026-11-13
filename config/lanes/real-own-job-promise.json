@@ -1,0 +1,60 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-own-job-promise": {
+      "branches": [
+        "codex/sandbox/real-own-job-promise"
+      ],
+      "allow": [
+        "packages/db/src/job-source-fixtures.ts",
+        "packages/db/test/job-source-fixtures.test.ts",
+        "packages/db/test/real-own-job-promise.integration.test.ts",
+        "apps/web/app/ui/final-check-reveal-view.ts",
+        "apps/web/app/ui/final-check-reveal-view.test.ts",
+        "apps/web/e2e/real-own-job-promise.spec.ts",
+        "apps/web/app/ui/customer-credit-notes.tsx",
+        "apps/web/app/ui/commercial-integrity-v3.tsx",
+        "apps/web/app/ui/recovery-journey.tsx",
+        "apps/web/app/ui/review-proposal.tsx",
+        "apps/web/app/ui/supplier-documents.tsx",
+        "apps/web/app/ui/job-exposure-curve.tsx",
+        "apps/web/app/ui/readiness.tsx",
+        "apps/web/app/ui/proof-stage.tsx",
+        "apps/web/app/ui/shadow-journey.tsx",
+        "apps/web/app/ui/job-parties.tsx",
+        "apps/web/app/ui/recovery-allocations.tsx",
+        "apps/web/app/ui/practice-receipts.tsx",
+        "apps/web/app/ui/job-sources.tsx",
+        "apps/web/app/ui/prevention-checks.tsx",
+        "apps/web/app/ui/job-variations.tsx",
+        "apps/web/app/ui/recovery-guard.tsx",
+        "apps/web/app/ui/simulation-fee-statements.tsx",
+        "apps/web/app/ui/job-import-v3.tsx",
+        "apps/web/app/ui/simulation-fee-collection.tsx",
+        "apps/web/app/ui/quote-editor.tsx",
+        "apps/web/app/ui/fee-statement.tsx",
+        "apps/web/app/ui/customer-receipts.tsx",
+        "apps/web/app/ui/final-check-reveal.tsx",
+        "apps/web/app/ui/customer-invoices.tsx",
+        "apps/web/app/ui/jobguard-app.tsx",
+        "apps/web/app/ui/practice-facts.tsx",
+        "apps/web/app/ui/payment-fee-statements.tsx",
+        "apps/web/app/ui/supplier-fact-editor.tsx",
+        "apps/web/app/ui/simulation-money-check.tsx",
+        "apps/web/app/ui/final-account-lock.tsx",
+        "apps/web/app/ui/job-final-account.tsx",
+        "apps/web/app/ui/purchase-order.tsx",
+        "apps/web/app/ui/relevance-inbox.tsx",
+        "apps/web/app/ui/recovery-cases.tsx",
+        "apps/web/app/ui/things-to-check.tsx",
+        "apps/web/app/ui/supplier-match.tsx",
+        "apps/web/app/ui/materials.tsx",
+        "apps/web/app/ui/merchant-order.tsx",
+        "apps/web/app/ui/job-work-state.tsx",
+        "apps/web/app/ui/job-page-fetch.ts",
+        "apps/web/app/ui/job-page-fetch.test.ts",
+        "apps/web/app/ui/job-work-state.test.tsx"
+      ]
+    }
+  }
+}

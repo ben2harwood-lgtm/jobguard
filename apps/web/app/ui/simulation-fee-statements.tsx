@@ -1,4 +1,5 @@
 "use client";
+import { jobPageFetch as fetch } from "./job-page-fetch";
 import { SimulationMoneyCheck } from "./simulation-money-check";
 import { useEffect, useState } from "react";
 import { simulationFeeStatementViewV1, type IssuedSimulationFeeStatement } from "@jobguard/core";

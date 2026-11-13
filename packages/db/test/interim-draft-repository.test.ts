@@ -39,7 +39,7 @@ describe("M4-18 dark durable draft boundary",()=>{
     expect(first.watermark).toBe("SYNTHETIC DRAFT - NOT FOR ISSUE");
     expect(first.rows[0]?.lineage).toBe("fixture_lineage_not_authority");
     expect(await f.repo.command(f.context,digest,input)).toEqual(first);
-    expect(await f.repo.read(f.context,jobId)).toEqual(first);
+    expect(await f.repo.read(f.context,jobId,digest)).toEqual(first);
     await expect(f.repo.command(f.context,digest,{...input,record:{...schedule,jurisdiction:"changed"}})).rejects.toMatchObject({code:"CONFLICT"});
     await expect(f.repo.command(f.context,digest,{...input,commandId:id(11)})).rejects.toMatchObject({code:"CONFLICT"});
     expect(INTERIM_APPLICATIONS_ENABLED).toBe(false);
@@ -56,13 +56,31 @@ describe("M4-18 dark durable draft boundary",()=>{
   it("rejects altered stored records, malformed actors and forged contexts",async()=>{
     const f=fixture(),first=await f.repo.command(f.context,digest,input);
     f.setRows([{...first.rows[0],record:{...first.book.records[0],jurisdiction:"altered"}}]);
-    await expect(f.repo.read(f.context,jobId)).rejects.toMatchObject({code:"UNAVAILABLE"});
+    await expect(f.repo.read(f.context,jobId,digest)).rejects.toMatchObject({code:"UNAVAILABLE"});
     await expect(f.repo.command(f.context,"bad",input)).rejects.toMatchObject({code:"INVALID_INPUT"});
-    await expect(f.repo.read({...f.context},jobId)).rejects.toMatchObject({code:"UNAVAILABLE"});
+    await expect(f.repo.read({...f.context},jobId,digest)).rejects.toMatchObject({code:"UNAVAILABLE"});
+  });
+  it.each([["METER_FORBIDDEN","FORBIDDEN"],["INTERIM_DRAFT_UNAUTHENTICATED","UNAUTHENTICATED"],["JOB_NOT_LIVE","JOB_NOT_LIVE"]] as const)("preserves SQL refusal %s on read and append",async(message,code)=>{
+    const f=fixture();f.query.mockImplementation(async sql=>{if(sql.includes("interim_draft_records"))throw new Error(message);return {rows:[]};});
+    await expect(f.repo.read(f.context,jobId,digest)).rejects.toMatchObject({code});
+    await expect(f.repo.command(f.context,digest,input)).rejects.toMatchObject({code});
+    expect(f.release).toHaveBeenCalledTimes(2);
   });
   it("redacts database errors, rolls back and releases the client",async()=>{
     const f=fixture();f.query.mockImplementation(async sql=>{if(sql.includes("interim_draft_records"))throw new Error("private row");return {rows:[]};});
-    await expect(f.repo.read(f.context,jobId)).rejects.toThrow("INTERIM_DRAFT_UNAVAILABLE");
+    await expect(f.repo.read(f.context,jobId,digest)).rejects.toThrow("INTERIM_DRAFT_UNAVAILABLE");
     expect(f.query).toHaveBeenLastCalledWith("ROLLBACK");expect(f.release).toHaveBeenCalledOnce();
   });
+});
+
+it("passes the session digest on reads so SQL rechecks the write role", async () => {
+ const f = fixture();
+ await f.repo.read(f.context, jobId, digest);
+ expect(f.query).toHaveBeenCalledWith(expect.stringContaining("interim_draft_records"), [tenantId, digest, jobId, "{}"]);
+});
+it("maps METER_FORBIDDEN to a refusal, rolls back and releases", async () => {
+ const f = fixture();
+ f.query.mockImplementation(async sql => { if (sql.includes("interim_draft_records")) throw new Error("METER_FORBIDDEN"); return { rows: [] }; });
+ await expect(f.repo.command(f.context, digest, input)).rejects.toMatchObject({ code: "FORBIDDEN" });
+ expect(f.query).toHaveBeenLastCalledWith("ROLLBACK"); expect(f.release).toHaveBeenCalledOnce();
 });

@@ -63,7 +63,7 @@ test("DW1 persists exact approved allocations and source identities across reloa
   await page.reload(); await readyAllocations(page); await value(page, "eligible-net", "£2,820.00");
   expect((await readAllocations(page, fixture.jobId)).allocations).toEqual(saved.allocations);
   // Captured jobs use the previously accepted Jobs substitute: Jobs, then a new saved-job URL navigation.
-  await page.goto("/"); await expect(page.getByRole("heading", { name: "Jobs", exact: true })).toBeVisible();
+  await page.goto("/classic"); await expect(page.getByRole("heading", { name: "Jobs", exact: true })).toBeVisible();
   await page.goto(`/jobs/${fixture.jobId}#recovery-allocations`); await readyAllocations(page);
   await value(page, "allocated-tax", "£564.00");
   const options = {

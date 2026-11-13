@@ -1,3 +1,4 @@
+import { RequestBindingRefusedError } from "./request-binding-error.js";
 import type { Pool } from "pg";
 import { privacyCommand, privacyQueryV1, privacyErrorCodes, PrivacyOperationsError } from "@jobguard/core";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
@@ -18,6 +19,7 @@ export class PrivacyOperationsRepository {
     try {
       return await withTenant(this.pool, context, async db => (await db.$client.query(sql, [context.tenantId, digest, value])).rows[0].result);
     } catch (error) {
+      if (error instanceof RequestBindingRefusedError) throw new PrivacyOperationsError("PRIVACY_FORBIDDEN");
       const e = error as { code?: string; message?: string };
       const known = privacyErrorCodes.find(code => code === e.message);
       throw new PrivacyOperationsError(known ?? (e.code === "42501" ? "PRIVACY_FORBIDDEN" : ["22P02", "22023", "22003"].includes(e.code ?? "") ? "PRIVACY_INVALID" : "PRIVACY_UNAVAILABLE"));

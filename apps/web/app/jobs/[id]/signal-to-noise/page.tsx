@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {
   if (process.env.JOBGUARD_ENV !== "synthetic_demo") notFound();
   const sessionId = (await cookies()).get("jg_session")?.value;
-  if (!sessionId) redirect("/");
+  if (!sessionId) redirect("/classic");
   let view;
   try { view = await readInboxDashboard(syntheticPool(), sessionId, (await params).id); }
   catch (error) {

@@ -1,5 +1,5 @@
 export type FindingClassification = "mandatory" | "advisory";
-export type ProofRule = "plastering" | "electrical" | "groundwork";
+export type ProofRule = "plastering" | "electrical" | "groundwork" | "completion_photo";
 export type FindingKind = "unresolved_question" | "required_proof" | "materials_bill_review";
 
 export interface JobFactSnapshot {
@@ -19,7 +19,7 @@ export interface Finding {
 export interface SuppressionPolicy { readonly minimumAdvisoryValuePence: number; readonly minimumSuggestionConfidence: number; readonly dailyAdvisoryBudget: number }
 
 const proof: Record<ProofRule, readonly string[]> = {
-  plastering: ["pre_cover_photo", "completion_photo"], electrical: ["electrical_certificate"], groundwork: ["excavation_photo", "completion_photo"],
+  completion_photo: ["completion_photo"], plastering: ["pre_cover_photo", "completion_photo"], electrical: ["electrical_certificate"], groundwork: ["excavation_photo", "completion_photo"],
 };
 const canonical=(value:unknown):string=>value===null||typeof value!=="object"?JSON.stringify(value):Array.isArray(value)?`[${value.map(canonical).join(",")}]`:`{${Object.entries(value as Record<string,unknown>).sort(([a],[b])=>a.localeCompare(b)).map(([key,item])=>`${JSON.stringify(key)}:${canonical(item)}`).join(",")}}`;
 function fnv(input:string,seed:bigint){let hash=seed;for(let index=0;index<input.length;index++){hash^=BigInt(input.charCodeAt(index));hash=BigInt.asUintN(64,hash*1099511628211n);}return hash.toString(16).padStart(16,"0");}

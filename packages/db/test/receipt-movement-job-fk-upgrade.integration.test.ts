@@ -1,6 +1,7 @@
+import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { applyOutboundPause } from "./outbound-pause-fixture.js";
 // CI ONLY: synthetic real-writer upgrade and adversarial storage/producer tests.
-import {randomUUID} from "node:crypto";
+import {createHash,randomUUID} from "node:crypto";
 import {readFile} from "node:fs/promises";
 import {afterAll,beforeAll,expect,it} from "vitest";
 import {migrate,MIGRATION_URLS} from "../src/migrate.js";
@@ -83,9 +84,12 @@ it("latest producer cannot persist a cross-job movement supplied by its proposal
   actorMembershipId:x.actor.membershipId,commandId:randomUUID(),reason:"Fictional refund"});
  const reversal=(await f.admin.query("SELECT id FROM app.customer_payment_reversal WHERE tenant_id=$1 AND payment_id=$2",[x.context.tenantId,x.paymentId])).rows[0].id as string;
  const current=await x.producer.readCurrent(x.context,x.actor,x.auth.digest,{jobId:x.jobId});
+ const credential=createHash("sha256").update(`lp6-test:${x.context.tenantId}:${x.actor.membershipId}`).digest("hex");
+ await testBoundTenantContext(f.admin,x.context.tenantId,x.actor.membershipId,credential);
  await rolledBack(f.admin,async db=>{
   await db.query("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE");
   await db.query("SELECT set_config('app.tenant_id',$1,true),set_config('app.receipt_line_environment','synthetic_demo',true)",[x.context.tenantId]);
+  await db.query("SELECT app.bind_request('real',$1,$2)",[credential,x.context.tenantId]);
   // Fault injection uses the installed latest definition, never a stale copied
   // producer. Only the proposal's movement ID changes; rollback restores it.
   const definition=(await db.query("SELECT pg_get_functiondef('app.receipt_fact_proposal(uuid,uuid,jsonb)'::regprocedure) definition")).rows[0].definition as string;

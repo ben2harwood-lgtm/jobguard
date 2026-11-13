@@ -1,5 +1,5 @@
 import { syntheticOwnerPool } from "./pool-test-utils.js";
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { lp3NewSignatures } from "./lp3-catalog-fixtures.js";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -9,11 +9,12 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { migrate, DEMO_TENANT_ID as T, DEMO_MEMBERSHIP_ID as M, QuoteAcceptanceRepository, PracticeActivationRepository, prepareActivationFixtureV3 } from "../src/index.js";
 import { freePort, closeTestPools } from "./pool-test-utils.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { rolledBack } from "./upgrade-proof-utils.js";
 
 // QUOTE-REACCEPT (audit finding 5; founder decisions 21-23, 14 Oct 2026). Synthetic data only, real PostgreSQL, runtime login, demo owner.
-const context = testTenantContext(T), original = process.env.JOBGUARD_ENV;
+const bindingDigest=randomBytes(32).toString("hex");
+let context=testTenantContext(T); const original = process.env.JOBGUARD_ENV;
 let pg: EmbeddedPostgres, admin: Pool, runtime: Pool, dir: string, acceptance: QuoteAcceptanceRepository;
 beforeAll(async () => {
   process.env.JOBGUARD_ENV = "synthetic_demo";
@@ -24,6 +25,7 @@ beforeAll(async () => {
   admin = await syntheticOwnerPool({ host: "127.0.0.1", port, user: "postgres", password: "synthetic" });
   await migrate(admin);
   await admin.query(`INSERT INTO control_plane.tenant(id)VALUES('${T}');INSERT INTO identity.identity_user(id)VALUES('d1550000-0000-4000-8000-000000000001');INSERT INTO app.account(id,tenant_id,name)VALUES('d1550000-0000-4000-8000-000000000002','${T}','Synthetic');INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)VALUES('${M}','${T}','d1550000-0000-4000-8000-000000000002','d1550000-0000-4000-8000-000000000001','owner');CREATE ROLE rq_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOBYPASSRLS;GRANT jobguard_runtime TO rq_login;`);
+context = await testBoundTenantContext(admin, T, M, bindingDigest);
   runtime = new Pool({ host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "rq_login", password: "synthetic", max: 6 });
   acceptance = new QuoteAcceptanceRepository(runtime);
 }, 90_000);
@@ -165,6 +167,7 @@ describe("quote re-acceptance after cancellation", () => {
       await cancel(d);
       const before = await acceptances(d.job);
       await rolledBack(admin, async db => {
+        await db.query("SELECT app.bind_request('real',$1,$2)", [bindingDigest,T]);
         await db.query("SELECT set_config('app.tenant_id',$1,true)", [T]);
         await db.query("SET LOCAL session_replication_role=replica");
         await db.query("INSERT INTO app.customer_invoice(id,tenant_id,job_id,final_account_revision_id,authorization_id,invoice_number,issued_on,issuer_details,tax_policy_version,currency,net_pence,tax_pence,total_pence,source_hash,pdf_sha256,pdf_bytes,synthetic,watermark) VALUES($1,$2,$3,$4,$5,$6,'2026-10-01','{}','candidate_m1_standard_v1','GBP',100,20,120,$7,$7,'\\x00',true,'SYNTHETIC - NOT A REAL INVOICE')", [invoice, T, kind === "invoice" ? d.job : randomUUID(), randomUUID(), authorization, `RQ-${kind}`, "a".repeat(64)]);

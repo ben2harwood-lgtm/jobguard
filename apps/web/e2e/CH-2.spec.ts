@@ -117,7 +117,7 @@ const seededJobs = [
   { title: "Loft conversion", label: "Quote being prepared", status: "quoting" },
 ] as const;
 async function signIn(page: Page) {
-  await page.goto("/");
+  await page.goto("/classic");
   await page.getByRole("button", { name: "Start the demo", exact: true }).click();
   const skip = page.getByRole("button", { name: "Skip tour", exact: true });
   await skip.waitFor({ state: "visible" }); await skip.click();

@@ -63,7 +63,7 @@ describe("stamped tenant context boundary", () => {
 
   it("exports only two stamped constructors and no arbitrary-object registrar", () => {
     expect(Object.keys(tenantContext).sort()).toEqual([
-      "InvalidTenantContextError", "verifiedTenantContextForQueuedJob",
+      "InvalidTenantContextError", "bindAfterLocks", "verifiedTenantContextForQueuedJob",
       "verifiedTenantContextFromMembership", "withTenant",
     ]);
   });

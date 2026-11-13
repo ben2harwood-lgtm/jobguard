@@ -585,6 +585,77 @@ describe("ENT-2 per-order authority: a manager scoped to one branch has no reach
     };
   };
 
+  it("requires an exact expectedRevision for revise, including cancellation, as the runtime role", async () => {
+    const s = await seed(80), before = await counts(fixture.p.tenantId);
+    const stale = { ok: false, code: "40001", message: "STALE_REVISION" };
+    for (const payload of [commitPayloads(s.a).revise(), commitPayloads(s.a).cancel()]) {
+      for (const expectedRevision of [undefined, null, 0, 2]) {
+        expect(await probe(adminAll, commitSql, [adminAll.membershipId, JSON.stringify({ ...payload, expectedRevision })]), `revise ${payload.status}, expectedRevision=${expectedRevision}`).toEqual(stale);
+        expect(await stateOf(s.a.id)).toEqual({ revision: 1, status: "ordered" });
+        expect(await revisionCount(s.a.id)).toBe(1);
+        expect(await counts(fixture.p.tenantId)).toEqual(before);
+      }
+      expect(await probe(adminAll, commitSql, [adminAll.membershipId, JSON.stringify(payload)]), `correct revision, ${payload.status}`).toMatchObject({ ok: true, value: { result: { revision: 2 } } });
+    }
+  });
+
+  it("requires expectedRevision zero for create, refusing missing, null and wrong values without writing an order", async () => {
+    const s = await seed(82), row = rowB(83), jobId = randomUUID(), workOrderId = randomUUID();
+    const rollback = new Error("roll expected-revision create probe back");
+    await expect(withTenant(runtime, ctx(adminAll), async db => {
+      const c = db.$client;
+      await c.query("SET LOCAL ROLE jobguard_runtime");
+      await c.query("SELECT app.work_order_begin($1,$2,'Expected revision probe')", [adminAll.membershipId, jobId]);
+      await parties.bindInTransaction(db, adminAll, { version: "contractor-party-import.v1", environment: "synthetic_demo", commandId: randomUUID(), jobId, workOrderId, expectedJobRevision: 0, clientId: demoB.clientId, contractId: demoB.contractId, siteRevisionId: row.siteRevisionId, resident: { kind: "contact", contact: (row.resident as { contact: unknown }).contact } });
+      const payload = { ...commitPayloads(s.b).revise(), kind: "create", jobId, workOrderId, reference: "WO-EXPECTED-REVISION" };
+      const before = (await c.query("SELECT status,revision FROM app.job WHERE tenant_id=$1 AND id=$2", [fixture.p.tenantId, jobId])).rows;
+      for (const expectedRevision of [undefined, null, 1, 0]) {
+        await c.query("SAVEPOINT expected_revision_create");
+        let outcome: unknown;
+        try { outcome = { ok: true, result: (await c.query(commitSql, [adminAll.membershipId, JSON.stringify({ ...payload, expectedRevision })])).rows[0].result }; }
+        catch (error) { outcome = { ok: false, code: (error as { code?: string }).code, message: (error as Error).message }; }
+        finally { await c.query("ROLLBACK TO SAVEPOINT expected_revision_create"); }
+        expect(outcome, `create expectedRevision=${expectedRevision}`).toMatchObject(expectedRevision === 0
+          ? { ok: true, result: { revision: 1 } }
+          : { ok: false, code: "40001", message: "STALE_REVISION" });
+        expect((await c.query("SELECT id FROM app.work_order WHERE tenant_id=$1 AND id=$2", [fixture.p.tenantId, workOrderId])).rows).toEqual([]);
+        expect((await c.query("SELECT status,revision FROM app.job WHERE tenant_id=$1 AND id=$2", [fixture.p.tenantId, jobId])).rows).toEqual(before);
+      }
+      throw rollback;
+    })).rejects.toBe(rollback);
+  });
+
+  it("detects the old missing-revision bypass in a transactional scratch routine and restores it", async () => {
+    const s = await seed(84), c = await admin.connect();
+    const comparison = "cur.revision IS DISTINCT FROM (payload->>'expectedRevision')::integer";
+    const definition = (await c.query("SELECT pg_get_functiondef('app.work_order_commit(uuid,jsonb)'::regprocedure) definition")).rows[0].definition as string;
+    expect(definition.split(comparison)).toHaveLength(2);
+    const payload: Record<string, unknown> = { ...commitPayloads(s.a).revise() };
+    delete payload.expectedRevision;
+    const attempt = async () => {
+      await c.query("SAVEPOINT expected_revision_mutation");
+      try {
+        await c.query("SET LOCAL ROLE jobguard_runtime");
+        return { ok: true, result: (await c.query(commitSql, [adminAll.membershipId, JSON.stringify(payload)])).rows[0].result };
+      } catch (error) { return { ok: false, code: (error as { code?: string }).code, message: (error as Error).message }; }
+      finally { await c.query("ROLLBACK TO SAVEPOINT expected_revision_mutation"); }
+    };
+    try {
+      await c.query("BEGIN");
+      await c.query("SELECT set_config('app.tenant_id',$1,true)", [fixture.p.tenantId]);
+      expect(await attempt()).toEqual({ ok: false, code: "40001", message: "STALE_REVISION" });
+      await c.query(definition.replace(comparison, "cur.revision<>(payload->>'expectedRevision')::integer"));
+      // Restoring <> makes the missing-key refusal assertion fail: the revision succeeds.
+      expect(await attempt()).toMatchObject({ ok: true, result: { revision: 2 } });
+    } finally {
+      await c.query("ROLLBACK");
+      c.release();
+    }
+    expect((await admin.query("SELECT pg_get_functiondef('app.work_order_commit(uuid,jsonb)'::regprocedure) definition")).rows[0].definition).toBe(definition);
+    expect(await stateOf(s.a.id)).toEqual({ revision: 1, status: "ordered" });
+    expect(await revisionCount(s.a.id)).toBe(1);
+  });
+
   it("answers a branch-A admin's party check on a branch-B order with the not-found whatever is guessed: the check is no yes/no oracle on another branch's resident contact", async () => {
     const s = await seed(40), row = rowB(41), resident = { kind: "contact", contact: (row.resident as { contact: unknown }).contact }, wrong = JSON.stringify({ kind: "none", reason: "void_property" });
     const check = "SELECT app.work_order_parties_unchanged($1,$2,$3,$4,$5,$6::jsonb) same", args = [s.b.id, demoB.clientId, demoB.contractId, row.siteRevisionId];
@@ -636,6 +707,77 @@ describe("ENT-2 per-order authority: a manager scoped to one branch has no reach
     expect(await revisedBy(adminA, [row1(demo, 50, { expectedRevision: 2, priority: "emergency" })], "own-a.csv")).toEqual([["revised", null]]);
     expect(await revisedBy(adminB, [rowB(51, { expectedRevision: 2, priority: "emergency" })], "own-b.csv")).toEqual([["revised", null]]);
     expect([await stateOf(s.a.id), await stateOf(s.b.id), await stateOf(t.a.id), await stateOf(t.b.id)]).toEqual([{ revision: 3, status: "ordered" }, { revision: 3, status: "ordered" }, { revision: 2, status: "cancelled" }, { revision: 2, status: "cancelled" }]);
+  });
+
+  it("refuses a branch admin importing their own client's order onto another branch's team without writing an assignment", async () => {
+    const { p, demo } = fixture;
+    const before = await counts(p.tenantId, ["job_assignment", "work_order", "work_order_revision", "job", "contractor_party_binding"]);
+    const result = await importOf(adminA, demoFile([row1(demo, 70, { teamId: demoB.teamId, assignedMembershipIds: [] })]), "cross-team-create.csv");
+    expect(result.rows.map(r => [r.outcome, r.errorCode])).toEqual([["rejected", "ASSIGNMENT_INVALID"]]);
+    expect(await counts(p.tenantId, Object.keys(before))).toEqual(before);
+    expect((await admin.query("SELECT id FROM app.work_order WHERE tenant_id=$1 AND client_id=$2 AND reference=$3", [p.tenantId, demo.clientId, "WO-DEMO-0070"])).rows).toEqual([]);
+  });
+
+  it("refuses a branch admin revising their own client's order onto another branch's team and preserves the current assignment", async () => {
+    const { p, demo } = fixture;
+    const created = (await importOf(adminA, demoFile([row1(demo, 71)]), "own-team-create.csv")).rows[0]!;
+    expect(created).toMatchObject({ outcome: "created" });
+    const assignments = async () => (await admin.query("SELECT * FROM app.job_assignment WHERE tenant_id=$1 AND work_order_id=$2 ORDER BY id", [p.tenantId, created.workOrderId])).rows;
+    const before = await assignments();
+    expect(before.length).toBeGreaterThan(0);
+    expect(before.every(r => r.team_id === demo.teamId)).toBe(true);
+    const result = await importOf(adminA, demoFile([row1(demo, 71, { expectedRevision: 1, teamId: demoB.teamId, assignedMembershipIds: [] })]), "cross-team-revise.csv");
+    expect(result.rows.map(r => [r.outcome, r.errorCode])).toEqual([["rejected", "ASSIGNMENT_INVALID"]]);
+    expect(await assignments()).toEqual(before);
+    expect(await stateOf(created.workOrderId!)).toEqual({ revision: 1, status: "ordered" });
+    expect(await revisionCount(created.workOrderId!)).toBe(1);
+    const currentTeam = await withTenant(runtime, ctx(adminA), db => db.$client.query("SELECT app.contractor_job_team(job_id) team_id FROM app.work_order WHERE tenant_id=$1 AND id=$2", [p.tenantId, created.workOrderId]));
+    expect(currentTeam.rows[0].team_id).toBe(demo.teamId);
+  });
+
+  it("detects a scratch mutation removing the destination-team guard and rolls the mutation back", async () => {
+    const s = await seed(75), c = await admin.connect();
+    const guard = "  IF NOT coalesce(app.contractor_allowed(actor,'organisation.manage',team_value) OR app.contractor_allowed(actor,'data.import',t),false) THEN RAISE EXCEPTION 'ASSIGNMENT_INVALID' USING ERRCODE='22023'; END IF;";
+    const definition = (await c.query("SELECT pg_get_functiondef('app.work_order_commit(uuid,jsonb)'::regprocedure) definition")).rows[0].definition as string;
+    expect(definition.split(guard)).toHaveLength(2);
+    try {
+      await c.query("BEGIN");
+      await c.query("SELECT set_config('app.tenant_id',$1,true)", [fixture.p.tenantId]);
+      const payload = { ...commitPayloads(s.a).revise(), team: { teamId: demoB.teamId, membershipIds: [] } };
+      const attempt = async () => {
+        await c.query("SAVEPOINT team_scope_probe");
+        try { return { ok: true, result: (await c.query(commitSql, [adminA.membershipId, JSON.stringify(payload)])).rows[0].result }; }
+        catch (error) { return { ok: false, code: (error as { code?: string }).code, message: (error as Error).message }; }
+        finally { await c.query("ROLLBACK TO SAVEPOINT team_scope_probe"); }
+      };
+      expect(await attempt()).toEqual({ ok: false, code: "22023", message: "ASSIGNMENT_INVALID" });
+      await c.query(definition.replace(guard, ""));
+      // The same rejection assertion would now fail: the unauthorized revision succeeds.
+      expect(await attempt()).toMatchObject({ ok: true, result: { revision: 2 } });
+    } finally {
+      await c.query("ROLLBACK");
+      c.release();
+    }
+    expect((await admin.query("SELECT pg_get_functiondef('app.work_order_commit(uuid,jsonb)'::regprocedure) definition")).rows[0].definition).toBe(definition);
+    expect(await stateOf(s.a.id)).toEqual({ revision: 1, status: "ordered" });
+  });
+
+  it("keeps managed-team imports and revisions working and lets tenant-wide data.import assign either branch's team", async () => {
+    const { p, demo } = fixture;
+    const authority = await withTenant(runtime, ctx(finance), db => db.$client.query("SELECT app.contractor_allowed($1,'data.import',$2) importer, app.contractor_allowed($1,'organisation.manage',$3) manager", [finance.membershipId, p.tenantId, demoB.teamId]));
+    expect(authority.rows[0]).toEqual({ importer: true, manager: false });
+    for (const [actor, n, initialTeam, revisedTeam] of [
+      [adminA, 72, demo.teamId, demo.teamId],
+      [finance, 73, demoB.teamId, demo.teamId],
+      [finance, 74, demo.teamId, demoB.teamId],
+    ] as const) {
+      const created = (await importOf(actor, demoFile([row1(demo, n, { teamId: initialTeam, assignedMembershipIds: [] })]), `allowed-team-${n}.csv`)).rows[0]!;
+      expect(created).toMatchObject({ outcome: "created", errorCode: null });
+      const revised = (await importOf(actor, demoFile([row1(demo, n, { expectedRevision: 1, priority: "emergency", teamId: revisedTeam, assignedMembershipIds: [] })]), `allowed-team-revise-${n}.csv`)).rows[0]!;
+      expect(revised).toMatchObject({ outcome: "revised", errorCode: null });
+      const team = await withTenant(runtime, ctx(actor), db => db.$client.query("SELECT app.contractor_job_team(job_id) team_id FROM app.work_order WHERE tenant_id=$1 AND id=$2", [p.tenantId, created.workOrderId]));
+      expect(team.rows[0].team_id).toBe(revisedTeam);
+    }
   });
 });
 

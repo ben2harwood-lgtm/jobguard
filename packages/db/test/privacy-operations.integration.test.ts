@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createWorkFixture, closeWorkFixture, workTenant, type WorkFixture } from "./job-work-state-fixtures.js";
 import { meterCompany } from "./meter-persistence-fixtures.js";
 import { PrivacyOperationsRepository } from "../src/privacy-operations-repository.js";
+import { verifiedTenantContextFromMembership, type AuthenticatedMembership } from "../src/tenant-context.js";
 import { MIGRATION_URLS, migrate } from "../src/migrate.js";
 import { readFile } from "node:fs/promises";
 let f: WorkFixture, repo: PrivacyOperationsRepository;
@@ -13,7 +14,7 @@ async function subject(a: Company, kind = "resident") {
   await workTenant(f.admin, a.tenantId, async db => {
     await db.query("INSERT INTO app.privacy_subject(tenant_id,id,kind) VALUES($1,$2,$3)", [a.tenantId, id, kind]);
     for (const category of categories) await db.query("INSERT INTO app.privacy_artifact(tenant_id,subject_id,id,category,payload) VALUES($1,$2,$3,$4,$5)", [a.tenantId,id,randomUUID(),category,JSON.stringify({ fictional: `${a.tenantId}:${category}` })]);
-  }); return id;
+  }, { membershipId: a.actorId }); return id;
 }
 const command = (a: Company, value: Record<string, unknown>) => repo.command(a.context, a.digest, { version: "privacy-command.v1", commandId: randomUUID(), ...value });
 const read = (a: Company, requestId: unknown) => repo.read(a.context, a.digest, { version: "privacy-query.v1", requestId });
@@ -90,11 +91,26 @@ describe("M0-13c synthetic PostgreSQL privacy rehearsal", () => {
       await expect(f.runtime.query(`SELECT * FROM app.${table}`)).rejects.toMatchObject({code:"42501"});
       expect((await f.admin.query("SELECT has_table_privilege('jobguard_runtime',$1,'INSERT,UPDATE,DELETE,TRUNCATE') allowed", [`app.${table}`])).rows[0].allowed).toBe(false);
     }
-    await expect(workTenant(f.runtime,a.tenantId, db => db.query("SELECT app.privacy_command($1,$2,$3)",[a.tenantId,a.digest,{version:"privacy-command.v1",commandId:randomUUID(),action:"open",subjectId:id,operation:"export",approved:true}]))).rejects.toMatchObject({code:"22023"});
+    await expect(workTenant(f.runtime,a.tenantId, db => db.query("SELECT app.privacy_command($1,$2,$3)",[a.tenantId,a.digest,{version:"privacy-command.v1",commandId:randomUUID(),action:"open",subjectId:id,operation:"export",approved:true}]), { membershipId: a.actorId, bindRequest: false })).rejects.toMatchObject({code:"22023"});
     const req = await open(a,id); await f.admin.query("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE id=$1",[a.sessionId]);
     await expect(read(a,req.requestId)).rejects.toMatchObject({code:"PRIVACY_FORBIDDEN"});
-    await workTenant(f.admin,b.tenantId,db=>db.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE id=$1",[b.actorId]));
+    await workTenant(f.admin,b.tenantId,db=>db.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE id=$1",[b.actorId]), { membershipId: b.actorId });
     await expect(open(b,await subject(b))).rejects.toMatchObject({code:"PRIVACY_FORBIDDEN"});
+  });
+  it("keeps the forbidden public code when genuine request binding refuses a revoked session or member", async () => {
+    for (const revoked of ["session", "member"] as const) {
+      const a = await meterCompany(f), id = await subject(a);
+      const user = (await f.admin.query("SELECT identity_user_id FROM app.membership WHERE tenant_id=$1 AND id=$2", [a.tenantId,a.actorId])).rows[0].identity_user_id as string;
+      const context = verifiedTenantContextFromMembership({ tenantId:a.tenantId, membershipId:a.actorId, identityUserId:user } as AuthenticatedMembership, { kind:"real", credential:a.digest });
+      const req = await repo.command(context,a.digest,{ version:"privacy-command.v1", commandId:randomUUID(), action:"open", subjectId:id, operation:"export" });
+      if (revoked === "session") await f.admin.query("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE id=$1", [a.sessionId]);
+      else await workTenant(f.admin,a.tenantId,db=>db.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE id=$1", [a.actorId]), { membershipId: a.actorId });
+      const unchanged = async () => (await f.admin.query("SELECT (SELECT count(*) FROM app.privacy_request WHERE tenant_id=$1) requests,(SELECT count(*) FROM app.audit_event WHERE tenant_id=$1) events", [a.tenantId])).rows;
+      const before = await unchanged();
+      await expect(repo.read(context,a.digest,{ version:"privacy-query.v1", requestId:req.requestId })).rejects.toMatchObject({ code:"PRIVACY_FORBIDDEN" });
+      await expect(repo.command(context,a.digest,{ version:"privacy-command.v1", commandId:randomUUID(), action:"open", subjectId:id, operation:"delete" })).rejects.toMatchObject({ code:"PRIVACY_FORBIDDEN" });
+      expect(await unchanged()).toEqual(before);
+    }
   });
   it("upgrades the immediately preceding schema without changing existing rows and can rerun migrate", async () => {
     const upgrade = await createWorkFixture(false, "postgres");

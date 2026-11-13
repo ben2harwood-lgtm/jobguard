@@ -2,7 +2,7 @@ import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixtu
 import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { expect } from "vitest";
-import { ContractorRepository, PracticeWorkerSwitchRepository, WorkOrderRepository, prepareWorkOrderDemo, demoFile, demoRow, withTenant } from "../src/index.js";
+import { ContractorRepository, PracticeWorkerSwitchRepository, WorkOrderRepository, prepareWorkOrderDemo, demoFile, demoRow, withTenant, contractorSessionContext } from "../src/index.js";
 import { startSession, seedHomeOwner, currentCommand, type Cluster, type SessionFixture } from "./contractor-practice-session-fixtures.js";
 export { cluster, ownerTx, startBeforeMigration, applyMigration, startSession, makeSessionExpired, endHomeRecord, digestOf, resolvers, companyRows } from "./contractor-practice-session-fixtures.js";
 export async function startSessionWithHomeRecord(c: Cluster) {
@@ -37,9 +37,14 @@ export async function company(c: Cluster) {
 }
 export type Company = Awaited<ReturnType<typeof company>>;
 export const repo = (c: Cluster) => new PracticeWorkerSwitchRepository(c.runtime);
-export const start = (c: Cluster, f: Company, role = "operative", command = on()) => repo(c).switchOn(f.context, f.p, f.session, { ...command, workerId: f.members[role]! });
-export const end = (c: Cluster, f: SessionFixture, command = off()) => repo(c).switchOff(f.context, f.p, f.session, command);
-export const state = (c: Cluster, f: SessionFixture) => repo(c).state(f.context, f.session);
+// Each HTTP request resolves the session again; an old owner context must not survive a switch.
+export async function requestContext(c: Cluster, f: SessionFixture) {
+ const installed = (await c.admin.query("SELECT to_regprocedure('app.bind_request(text,text,uuid)') IS NOT NULL AS installed")).rows[0].installed;
+ return installed ? contractorSessionContext(c.runtime, f.session) : f.context;
+}
+export const start = async (c: Cluster, f: Company, role = "operative", command = on()) => repo(c).switchOn(await requestContext(c, f), f.p, f.session, { ...command, workerId: f.members[role]! });
+export const end = async (c: Cluster, f: SessionFixture, command = off()) => repo(c).switchOff(await requestContext(c, f), f.p, f.session, command);
+export const state = async (c: Cluster, f: SessionFixture) => repo(c).state(await requestContext(c, f), f.session);
 export const lookup = (c: Cluster, f: SessionFixture) => new ContractorRepository(c.runtime).resolveSession(f.session);
 export async function text(c: Cluster, table: string, tenant?: string) {
  return (await c.admin.query(`SELECT row_to_json(t)::text bytes FROM ${table} t ${tenant ? "WHERE tenant_id=$1" : ""} ORDER BY row_to_json(t)::text COLLATE "C"`, tenant ? [tenant] : [])).rows.map(r => r.bytes);
@@ -52,7 +57,7 @@ export async function expireSwitch(c: Cluster, f: Company, minutes = 31) {
  } catch(error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
 }
 export async function raw(c: Cluster, f: Company, sql: string, args: unknown[] = []) {
- return withTenant(c.runtime, f.context, db => db.$client.query(sql, args));
+ return withTenant(c.runtime, await requestContext(c, f), db => db.$client.query(sql, args));
 }
 export async function refusedCode(work: Promise<unknown>, code: string) { await expect(work).rejects.toMatchObject({ code }); }
 export async function savepoint(db: PoolClient, work: () => Promise<unknown>, code: string) {

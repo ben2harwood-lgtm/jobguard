@@ -10,6 +10,7 @@ describe("DEMO-J5 browser bundle", () => {
  it("bundles the trial guide and chooser without server application exports", async () => {
   const result = await build({
    entryPoints: [fileURLToPath(new URL("./journey.tsx", import.meta.url)),
+    fileURLToPath(new URL("./final-account/screen.tsx", import.meta.url)),
     fileURLToPath(new URL("../chooser.tsx", import.meta.url))],
    bundle: true, platform: "browser", write: false, outdir: "trial-browser-check",
    metafile: true, logLevel: "silent",

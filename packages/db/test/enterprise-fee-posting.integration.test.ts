@@ -282,3 +282,49 @@ it("fresh-key accrual replays append one bound audit per command; same-key retri
   expect(await events()).toEqual(after);
   expect(await t.repo.readPostings(t.w.ctx, t.w.session, approved.statementId)).toHaveLength(1);
 });
+
+// LATER-SAFETY-76: future February/March cutoffs include every server-recorded fictional fact.
+// Choose the year from PostgreSQL, as the fee kernel uses server receipt time rather than effectiveAt.
+const orderedPeriods = async () => {
+  const year = Number((await thisMonth()).slice(0, 4)) + 1;
+  return { february: `${year}-02`, march: `${year}-03`, april: `${year}-04` };
+};
+
+it("refuses preparing February after the same agreement has a posted March fee", async () => {
+  const t = await setUp(), { february, march } = await orderedPeriods();
+  const approved = await t.approvedStatement(march);
+  expect(await t.post(approved.statementId, approved.authorizationId)).toMatchObject({ journals: 1 });
+  await t.repo.derive(t.w.ctx, t.w.session, { version: "enterprise-fee-derive.v1", commandId: randomUUID(), agreementVersionId: t.id, period: february });
+  expect(await code(t.repo.prepareStatement(t.w.ctx, t.w.session, {
+    version: "enterprise-fee-prepare-statement.v1", commandId: randomUUID(), period: february,
+  }))).toBe("COMMAND_CONFLICT");
+  expect((await c.admin.query("SELECT count(*)::int n FROM app.enterprise_fee_statement WHERE tenant_id=$1 AND period=$2", [t.w.w.p.tenantId, february])).rows[0].n).toBe(0);
+});
+
+it("refuses posting an approved February after March posts, without writing a fee or receipt", async () => {
+  const t = await setUp(), { february, march } = await orderedPeriods();
+  const older = await t.approvedStatement(february), newer = await t.approvedStatement(march);
+  expect(await t.post(newer.statementId, newer.authorizationId)).toMatchObject({ journals: 1 });
+  const before = await proofBefore(c.admin, ["app.platform_enterprise_fee", "app.platform_enterprise_fee_line", "app.command_receipt", "app.audit_event"]);
+  expect(await code(t.post(older.statementId, older.authorizationId))).toBe("COMMAND_CONFLICT");
+  expect(await t.repo.readPostings(t.w.ctx, t.w.session, older.statementId)).toEqual([]);
+  expect(await proofDifferences(c.admin, before)).toEqual({ rows: [], types: [] });
+});
+
+it("still posts February then March in order, replays the latest month and posts a later month", async () => {
+  const t = await setUp(), { february, march, april } = await orderedPeriods();
+  const first = await t.approvedStatement(february);
+  expect(await t.post(first.statementId, first.authorizationId)).toMatchObject({ journals: 1 });
+  await t.w.repo.import(t.w.ctx, t.w.session, t.w.s.jobId, t.w.importInput([t.w.event("paid", {
+    effectiveAt: "2026-10-04T12:00:00Z", reconciliationId: `r-${randomUUID()}`,
+    amount: { netPence: 16667, vatPence: 3333, grossPence: 20000 },
+  })]));
+  const second = await t.approvedStatement(march);
+  expect(second.statement.totalDeltaPence).toBeGreaterThan(0);
+  expect(await t.post(second.statementId, second.authorizationId)).toMatchObject({ journals: 1 });
+  // The ordering guard permits a latest-period replay and a later-period zero statement.
+  expect(await t.post(second.statementId, second.authorizationId)).toMatchObject({ replayed: true, journals: 1 });
+  const third = await t.approvedStatement(april);
+  expect(third.statement.totalDeltaPence).toBe(0);
+  expect(await t.post(third.statementId, third.authorizationId)).toMatchObject({ journals: 0 });
+});

@@ -4,7 +4,7 @@ const tenant="00000000-0000-4000-8000-000000000001", actor="00000000-0000-4000-8
 const credentials={sessionToken:"s".repeat(32),csrfToken:"c".repeat(24),tenantHeader:tenant,origin:"https://company.invalid"};
 function fixture() {
  const command=vi.fn(async()=>({saved:true})), read=vi.fn(async()=>({saved:true}));
- const authenticate=vi.fn(async(token:string)=>token===credentials.sessionToken?{identityUserId:tenant,sessionId:tenant,csrfToken:credentials.csrfToken}:undefined);
+ const authenticate=vi.fn(async(token:string)=>token===credentials.sessionToken?{identityUserId:tenant,sessionId:tenant,csrfToken:credentials.csrfToken,sessionCredential:"a".repeat(64)}:undefined);
  const findMembership=vi.fn(async(_:unknown,id:string)=>id===tenant?{id:actor,identityUserId:tenant,tenantId:tenant,role:"owner"}:undefined);
  return {command,read,authenticate,findMembership,app:new MeterWorkStateApplication({allowedOrigin:credentials.origin,provider:{authenticate,findMembership}} as never,{command,read} as never)};
 }
@@ -27,7 +27,7 @@ it("rechecks membership and session; refuses production",async()=>{
  f.findMembership.mockResolvedValueOnce({id:actor,identityUserId:tenant,tenantId:tenant,role:"owner"}).mockResolvedValueOnce(undefined);
  await expect(f.app.command(credentials,tenant,{})).rejects.toThrow("METER_FORBIDDEN");expect(f.command).not.toHaveBeenCalled();
  const revoked=fixture();
- revoked.authenticate.mockResolvedValueOnce({identityUserId:tenant,sessionId:tenant,csrfToken:credentials.csrfToken}).mockResolvedValueOnce(undefined);
+ revoked.authenticate.mockResolvedValueOnce({identityUserId:tenant,sessionId:tenant,csrfToken:credentials.csrfToken,sessionCredential:"a".repeat(64)}).mockResolvedValueOnce(undefined);
  await expect(revoked.app.command(credentials,tenant,{})).rejects.toThrow("METER_FORBIDDEN");expect(revoked.command).not.toHaveBeenCalled();
  vi.stubEnv("JOBGUARD_ENV","production");await expect(f.app.command(credentials,tenant,{})).rejects.toThrow("METER_FORBIDDEN");
 });

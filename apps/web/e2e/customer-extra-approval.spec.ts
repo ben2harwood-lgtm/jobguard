@@ -25,7 +25,7 @@ test("customer reviews and approves one exact signed extra; builder history reco
   await page.goto("/sign-in");await page.getByLabel("Fictional email address").fill(`extras-builder-${randomUUID()}@practice.invalid`);
   await page.getByRole("button",{name:"Request code",exact:true}).click();const code=await page.getByTestId("fixture-code").textContent();
   await page.getByLabel("Eight-digit code").fill(code!);await page.getByRole("button",{name:"Verify code",exact:true}).click();
-  await expect(page.getByRole("heading",{name:"Signed in",exact:true})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"You're signed in.",exact:true})).toBeVisible();
   const session=await page.evaluate(async()=>(await fetch("/api/auth/session")).json());
   const tenant=session.memberships[0].tenantId as string,fixture=await seedJob(admin,tenant),variation=randomUUID(),revision=randomUUID(),scope=randomUUID(),contentHash="c".repeat(64);
   const actor=(await admin.query("SELECT id FROM app.membership WHERE tenant_id=$1 AND role='owner' AND revoked_at IS NULL",[tenant])).rows[0].id;

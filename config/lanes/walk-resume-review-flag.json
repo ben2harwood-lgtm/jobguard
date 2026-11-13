@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "walk-resume-review-flag": {
+      "branches": [
+        "codex/sandbox/walk-resume-review-flag"
+      ],
+      "allow": [
+        "apps/web/app/practice-company/walkthrough/resume.test.ts",
+        "apps/web/app/practice-company/walkthrough/resume.ts",
+        "apps/web/e2e/WALK-resume.spec.ts"
+      ],
+      "note": "walk-resume-review-flag: practice walkthrough resumes at proof review after invalidation. No migrations. Browser checks at both widths run in CI."
+    }
+  }
+}

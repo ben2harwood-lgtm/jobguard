@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { extraOriginHashV1, extraSorRevisionHashV1, residentConfirmationDocumentV1, residentConfirmationStatementV1, siteExtraContentSha256V1, sha256, type EvidenceSource } from "@jobguard/core";
+import { readExtraApprovalTiming } from "./extra-approval-timing.js";
 import type { TenantTransaction } from "./tenant-context.js";
 
 export class ExtraSourceError extends Error {
@@ -126,5 +127,12 @@ export async function loadExtraEvidenceSources(db: TenantTransaction, raw: unkno
     const status = outcome ? text(outcome.record, "kind") : "pending";
     if (status !== "approved" || !allSteps) omissions.push(`Approval not complete: request ${requestId} is ${status}; ${steps.length}/${requirement.data.steps.length} required steps recorded`);
   }
+  // Use exactly the already-selected request, including its earlier frozen requirements.
+  // With no request, the projection still supplies visit bounds without inventing a work time.
+  const requestId = approval ? text(JSON.parse(approval.request) as Record<string, unknown>, "id") : "00000000-0000-0000-0000-000000000000";
+  const timing = await readExtraApprovalTiming(db, tenant, input.jobId, input.extraId, requestId);
+  sources.push({ sourceId: `extra_approval_timing:${input.extraId}`, version: 2, kind: "approval",
+    label: "Server-derived visit interval and approval timing; not exact extra work times", jobId: input.jobId,
+    content: JSON.stringify({ version: "extra-pack-timing.v1", ...timing }) });
   return { jobId: input.jobId, extraId: input.extraId, sources, omissions, originalObjects };
 }

@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { closeoutQuestionText, siteOrderLinesV1, siteSorItemsV1, siteSorRecentItemsV1, siteVisitStartedV1, siteVisitCompletedV1, type SiteSorItems } from "@jobguard/core";
+import { closeoutQuestionText, siteOrderLinesV1, siteSorItemsV1, siteSorRecentItemsV1, siteVisitStartedV1, siteVisitCompletedV1, type SiteSorItems, type CloseoutAnswer } from "@jobguard/core";
 import styles from "../../northside/northside.module.css";
 
 async function read(response: Response) {
@@ -10,11 +10,12 @@ async function read(response: Response) {
 }
 
 /** Keyed by job: changing jobs discards the previous job's data and command identities. */
-export function SiteVisit({ jobId, openVisitId, onSelect, onVisitChange, locked = false }: { jobId: string; openVisitId: string | null; onSelect?: (item: SiteSorItems["items"][number]) => void; onVisitChange?: (id: string | null) => void; locked?: boolean }) {
+export function SiteVisit({ jobId, openVisitId, onSelect, onVisitChange, lastCompletedVisit, locked = false }: { jobId: string; openVisitId: string | null; lastCompletedVisit?: { visitId: string; closeoutAnswer: CloseoutAnswer } | null; onSelect?: (item: SiteSorItems["items"][number]) => void; onVisitChange?: (id: string | null) => void; locked?: boolean }) {
   const [visitId, setVisitId] = useState(openVisitId), [answer, setAnswer] = useState<"" | "yes" | "no">("");
   const [lines, setLines] = useState<ReturnType<typeof siteOrderLinesV1.parse> | null>(null), [items, setItems] = useState<SiteSorItems | null>(null);
   const [recent, setRecent] = useState<ReturnType<typeof siteSorRecentItemsV1.parse> | null>(null);
   const [query, setQuery] = useState(""), [error, setError] = useState(""), [busy, setBusy] = useState(false), [completed, setCompleted] = useState(false);
+  const [savedAnswer, setSavedAnswer] = useState<CloseoutAnswer | null>(lastCompletedVisit?.closeoutAnswer ?? null);
   const command = useRef(crypto.randomUUID());
   const pending = useRef(false);
   // Bind the exact body across an uncertain outcome. Editing an answer after a failed request must not reuse its ID.
@@ -62,11 +63,11 @@ export function SiteVisit({ jobId, openVisitId, onSelect, onVisitChange, locked 
       if (visitId) {
         const result = siteVisitCompletedV1.parse(body);
         if (result.jobId !== jobId || result.visitId !== visitId) throw new Error("Visit response mismatch.");
-        setCompleted(true); onVisitChange?.(null);
+        setSavedAnswer(result.closeoutAnswer); setCompleted(true); onVisitChange?.(null);
       } else {
         const result = siteVisitStartedV1.parse(body);
         if (result.jobId !== jobId) throw new Error("Job response mismatch.");
-        setVisitId(result.visitId); onVisitChange?.(result.visitId);
+        setSavedAnswer(null); setVisitId(result.visitId); onVisitChange?.(result.visitId);
       }
       attempt.current = null; command.current = crypto.randomUUID();
     } catch { setError("Visit request could not be confirmed. Retry sends the same answer and command."); }
@@ -75,6 +76,7 @@ export function SiteVisit({ jobId, openVisitId, onSelect, onVisitChange, locked 
   return <section className={styles.card} aria-label="Site visit">
     <h2>Site visit</h2>
     {error && <p role="alert">{error}</p>}
+    {savedAnswer && (!visitId || completed) && <p data-testid="saved-closeout-answer">{closeoutQuestionText} Saved answer: {savedAnswer === "yes" ? "Yes" : "No"}.</p>}
     {completed ? <p role="status">Visit completed. Your answer has been recorded.</p> : visitId ? <>
       <div className={styles.row}><label htmlFor="closeout">{closeoutQuestionText}</label>
         <select id="closeout" value={answer} disabled={busy || attempt.current !== null} onChange={e => setAnswer(e.target.value as "" | "yes" | "no")}>

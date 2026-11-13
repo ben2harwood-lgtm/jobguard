@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-journey-next-state": {
+      "branches": ["codex/sandbox/real-journey-next-state"],
+      "note": "RED pure saved-practice next step and customer-payment calculation; NOPR. Screen integration belongs to real-journey-next-to-paid.",
+      "allow": [
+        "apps/web/app/ui/practice-next-step.ts",
+        "apps/web/app/ui/practice-next-step.test.ts",
+        "apps/web/e2e/real-journey-next-state.spec.ts"
+      ]
+    }
+  }
+}

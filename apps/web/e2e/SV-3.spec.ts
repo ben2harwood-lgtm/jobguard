@@ -85,7 +85,7 @@ test("I: mandatory must-surface Decision survives reload and return through Jobs
   });
   await withTenant(shadow,testTenantContext(T),db=>db.$client.query("SELECT app.surface_shadow_signal_early($1,$2,$3,$4,$5,$6,'prior_written_agreement','shadow_attribution_policy_v3',$7,'synthetic-v1',$8::jsonb)",
    [T,jobId,signal,firing,decision,disclosure,evidence,JSON.stringify({workReference:"synthetic:I",scopeArea:"job",description:"Fictional significant extra",status:"requested",estimatedValuePence:800000,safetyImplication:false,customerClearlyRequested:true,needsPriorWrittenAgreement:true,significantWork:{basis:"synthetic_fixture",sourceRef:"synthetic:I",significant:true},activeDispute:false,silenceMateriallyWorsensDispute:false,disclosureDuty:false})]));
-  async function verify(){await page.goto('/');await page.getByRole('button',{name:/Decisions/u}).first().click();const primary=page.getByRole('button',{name:/Fictional significant extra/u});await primary.focus();await expect(primary).toBeFocused();const target=await primary.boundingBox();expect(target!.height).toBeGreaterThanOrEqual(44);expect(target!.width).toBeGreaterThanOrEqual(44);await page.keyboard.press('Enter');await expect(page.getByTestId('decision-source-ref')).toHaveText(signal);await expect(page.locator('.decision-detail .decision-kind')).toHaveText('mandatory');await expect(page.getByRole('button',{name:'Dismiss suggestion',exact:true})).toHaveCount(0);
+  async function verify(){await page.goto('/classic');await page.getByRole('button',{name:/Decisions/u}).first().click();const primary=page.getByRole('button',{name:/Fictional significant extra/u});await primary.focus();await expect(primary).toBeFocused();const target=await primary.boundingBox();expect(target!.height).toBeGreaterThanOrEqual(44);expect(target!.width).toBeGreaterThanOrEqual(44);await page.keyboard.press('Enter');await expect(page.getByTestId('decision-source-ref')).toHaveText(signal);await expect(page.locator('.decision-detail .decision-kind')).toHaveText('mandatory');await expect(page.getByRole('button',{name:'Dismiss suggestion',exact:true})).toHaveCount(0);
    const response=await page.request.get(`/api/decisions?tenantId=${T}&jobId=${jobId}`);expect(response.status()).toBe(200);expect((await response.json()).decisions).toContainEqual(expect.objectContaining({id:decision,classification:'mandatory',source:expect.objectContaining({subjectRef:signal})}));}
   await verify();await page.reload();await verify();await page.getByRole('button',{name:'← Jobs',exact:true}).click();await verify();
   await expect(page.getByText('Practice sandbox — synthetic data; nothing is sent or charged',{exact:true})).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
@@ -207,7 +207,7 @@ test("Q: every visible count/badge/error, cache key, storage and notification su
     if(failures.length)throw failures[0];
    }
    const views:Array<{responseShape:string;counts:(string|null)[];badges:(string|null)[];errors:(string|null)[];cacheKeys:string[];notifications:unknown[];analytics:unknown[];storage:Array<Array<Array<string|null>>>}>=[];
-   try{await drain();for(const route of ['/',`/jobs/${jobId}`]){
+   try{await drain();for(const route of ['/classic',`/jobs/${jobId}`]){
     await stopAndDrain(page,drain);
     navigation={departingRequests:new Set([...inFlight].filter(request=>request.frame()===page.mainFrame())),committed:false};
     try{
@@ -216,7 +216,7 @@ test("Q: every visible count/badge/error, cache key, storage and notification su
      expect(destination!.status(),'Q destination document returned HTTP 200').toBe(200);
      expect(destination!.url(),'Q destination response is the requested page').toBe(new URL(route,page.url()).href);
     }finally{navigation=undefined}
-    if(route==='/'){await expect(page.getByRole('button',{name:/Decisions/u}).first()).toBeVisible();await page.getByRole('button',{name:/Decisions/u}).first().click();await expect(page.getByRole('heading',{name:'Decision Inbox'})).toBeVisible()}
+    if(route==='/classic'){await expect(page.getByRole('button',{name:/Decisions/u}).first()).toBeVisible();await page.getByRole('button',{name:/Decisions/u}).first().click();await expect(page.getByRole('heading',{name:'Decision Inbox'})).toBeVisible()}
     else{const price=page.getByRole('button',{name:'Price the work',exact:true});await expect(price).toBeVisible();await price.click();await expect(page.locator('.quote-editor')).toBeVisible()} // a fresh load of the job shows the scope summary first; the quote editor opens from this button, as in startWatchdogJob
     await drain();
     const view=await page.evaluate(()=>{

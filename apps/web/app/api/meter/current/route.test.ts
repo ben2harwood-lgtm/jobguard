@@ -15,7 +15,7 @@ describe.each([{ name: "count", GET: countGET }, { name: "drill-down", GET: jobs
 beforeEach(() => {
   vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
   state.credentials = { sessionToken: "s".repeat(32), csrfToken: "c".repeat(24), tenantHeader: tenant };
-  state.authenticate.mockImplementation(async (token: string) => token === "s".repeat(32) ? { identityUserId: tenant, sessionId: tenant, csrfToken: "c".repeat(24) } : undefined);
+  state.authenticate.mockImplementation(async (token: string) => token === "s".repeat(32) ? { identityUserId: tenant, sessionId: tenant, sessionCredential: "a".repeat(64), csrfToken: "c".repeat(24) } : undefined);
   state.findMembership.mockImplementation(async (_: unknown, id: string) => id === tenant ? { id: tenant, tenantId: tenant, identityUserId: tenant, role: "owner", email: "owner@fictional.invalid" } : undefined);
   state.read.mockResolvedValue({ version: "meter-today-read.v1", hypothetical: true, date: "2026-10-28", plan: "Builder", countedPlaces: 5, freeSmallPlaces: 0 });
 });

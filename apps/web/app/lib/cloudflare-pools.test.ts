@@ -23,7 +23,7 @@ describe("Cloudflare demo database lifetime", () => {
     vi.stubEnv("DATABASE_URL", "postgresql://runtime:fictional@db.invalid/jobguard_synthetic_demo");
     const first = syntheticPool(), second = syntheticPool();
     expect(first).not.toBe(second);
-    expect(first.options).toMatchObject({ max: 1, maxUses: 1, connectionString: process.env.DATABASE_URL });
+    for (const pool of [first, second]) expect(pool.options).toMatchObject({ max: 3, maxUses: 1, connectionTimeoutMillis: 10_000, connectionString: process.env.DATABASE_URL });
     expect((globalThis as { __jobguardSyntheticPool?: unknown }).__jobguardSyntheticPool).toBeUndefined();
     await Promise.all([first.end(), second.end()]);
   });

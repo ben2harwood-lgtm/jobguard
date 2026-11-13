@@ -1,3 +1,4 @@
+import { verifiedTenantContextForQueuedJob } from "../src/tenant-context.js";
 /** ENT-10a2 D2. NOT RUN (sandbox cannot start PostgreSQL / a browser). */
 import { randomUUID } from "node:crypto";
 import { afterAll,beforeAll,describe,expect,it } from "vitest";
@@ -75,7 +76,7 @@ describe("[D2] ENT-10a2 immediate request refusal",()=>{
   const f=await fixture(h),p=await person(f,"commercial_manager"),work=await worker(f,p),action=await approvedAction(f,p);await f.app.checkWorkerAction(work.context,work.action);await deactivate(f,p);
   await expect(f.app.checkWorkerAction(work.context,work.action)).rejects.toMatchObject({code:"SSO_FORBIDDEN"});let calls=0;
   const adapter:OutboundAdapter={name:"fake_capture",supportsProviderDeduplication:false,deliver:async()=>{calls++;return {kind:"succeeded",providerReference:"synthetic:unexpected"};},reconcile:async()=>"unknown"};
-  await new ActionExecutor(h.runtime,new Map([[adapter.name,adapter]]),{emit:()=>undefined}).execute(work.context,action.id);
+  await new ActionExecutor(h.runtime,new Map([[adapter.name,adapter]]),{emit:()=>undefined}).execute(verifiedTenantContextForQueuedJob(work.context.tenantId),action.id);
   expect(calls).toBe(0);expect((await h.admin.query("SELECT status FROM app.action_outbox WHERE tenant_id=$1 AND id=$2",[f.principal.tenantId,action.id])).rows[0].status).toBe("pending");expect((await h.admin.query("SELECT count(*)::int n FROM app.action_attempt WHERE tenant_id=$1 AND action_id=$2",[f.principal.tenantId,action.id])).rows[0].n).toBe(0);
  });
  it("[G6] provider cannot re-sign-in or relink by address and a fresh code session lists nothing",async()=>{
@@ -90,7 +91,7 @@ describe("[D2] ENT-10a2 immediate request refusal",()=>{
   expect(await h.provider.authenticate(p.bound.sessionToken)).toBeUndefined();await expect(h.identityApp.context({...p.bound,requestedTenantId:f.principal.tenantId})).rejects.toMatchObject({code:"UNAUTHENTICATED"});
   expect(await h.provider.authenticate(p.ordinary.sessionToken)).toBeDefined();expect((await h.identityApp.session(p.ordinary.sessionToken)).memberships).toEqual([]);await expect(h.identityApp.context({...p.ordinary,requestedTenantId:f.principal.tenantId})).rejects.toMatchObject({code:"TENANT_FORBIDDEN"});
   await expect(f.app.checkWorkerAction(work.context,work.action)).rejects.toMatchObject({code:"SSO_FORBIDDEN"});let calls=0;
-  const adapter:OutboundAdapter={name:"fake_capture",supportsProviderDeduplication:false,deliver:async()=>{calls++;return {kind:"succeeded",providerReference:"synthetic:unexpected"};},reconcile:async()=>"unknown"};await new ActionExecutor(h.runtime,new Map([[adapter.name,adapter]]),{emit:()=>undefined}).execute(work.context,action.id);expect(calls).toBe(0);
+  const adapter:OutboundAdapter={name:"fake_capture",supportsProviderDeduplication:false,deliver:async()=>{calls++;return {kind:"succeeded",providerReference:"synthetic:unexpected"};},reconcile:async()=>"unknown"};await new ActionExecutor(h.runtime,new Map([[adapter.name,adapter]]),{emit:()=>undefined}).execute(verifiedTenantContextForQueuedJob(work.context.tenantId),action.id);expect(calls).toBe(0);
   expect((await h.admin.query("SELECT status FROM app.action_outbox WHERE tenant_id=$1 AND id=$2",[f.principal.tenantId,action.id])).rows[0].status).toBe("pending");expect((await h.admin.query("SELECT count(*)::int n FROM app.action_attempt WHERE tenant_id=$1 AND action_id=$2",[f.principal.tenantId,action.id])).rows[0].n).toBe(0);
   await expect(f.signin(p.email,p.subject,false,["commercial_manager"])).rejects.toMatchObject({code:"MEMBERSHIP_REVOKED"});await expect(f.signin(p.email,randomUUID(),false,["commercial_manager"])).rejects.toMatchObject({code:"LINK_REQUIRED"});
   const request=await h.provider.requestCode({email:p.email,purpose:"signin",ip:randomUUID()}),credentials={...await h.provider.verifyCode(p.email,"signin",request.fixtureCode!),origin:f.ordinary.origin};expect((await h.identityApp.session(credentials.sessionToken)).memberships).toEqual([]);await expect(h.identityApp.context({...credentials,requestedTenantId:f.principal.tenantId})).rejects.toMatchObject({code:"TENANT_FORBIDDEN"});
@@ -118,7 +119,7 @@ describe("[D2] ENT-10a2 immediate request refusal",()=>{
    }
    await expect(company.service.command(company.command(false,0),member.bound)).resolves.toMatchObject({required:false});
    for(const permission of permissions.admin)expect((await runtimeCheck(company,member,permission)).allowed).toBe(true);await expect(company.app.checkWorkerAction(work.context,work.action)).resolves.toBeUndefined();let calls=0;
-   const adapter:OutboundAdapter={name:"fake_capture",supportsProviderDeduplication:false,deliver:async()=>{calls++;return {kind:"succeeded",providerReference:"synthetic:retained"};},reconcile:async()=>"unknown"};await new ActionExecutor(h.runtime,new Map([[adapter.name,adapter]]),{emit:()=>undefined}).execute(work.context,action.id);expect(calls).toBe(0);
+   const adapter:OutboundAdapter={name:"fake_capture",supportsProviderDeduplication:false,deliver:async()=>{calls++;return {kind:"succeeded",providerReference:"synthetic:retained"};},reconcile:async()=>"unknown"};await new ActionExecutor(h.runtime,new Map([[adapter.name,adapter]]),{emit:()=>undefined}).execute(verifiedTenantContextForQueuedJob(work.context.tenantId),action.id);expect(calls).toBe(0);
   }
   await auditRows(h,f.principal.tenantId);await auditRows(h,other.principal.tenantId);
  });
