@@ -121,6 +121,8 @@ it("preserves LP-6b's entire latest session helper except its private projection
 });
 
 it("binds new evidence authority, payload actors and source readers without relaxing the original permissions", () => {
+  // 0732 moved Final Check authority into the private final_check_read_authority; the builder binds the digest in its prefix.
+  expect(body(sql, routines.find(r => r.name === "app.final_check_builder")!)).toContain("LP6D_DIGEST");
   expect(sql).toContain("(c->>'actorMembershipId')::uuid IS DISTINCT FROM app.current_actor()");
   const billability = routines.find(r => r.name === "app.recovery_billability")!;
   const checked = body(sql, billability);
@@ -129,7 +131,7 @@ it("binds new evidence authority, payload actors and source readers without rela
   const original = /CREATE FUNCTION app\.ent3_extra_work_status\([\s\S]*?\$\$([\s\S]*?)\$\$;/u.exec(read("../migrations/0574_site_extra_work_status.sql"))![1]!.trim();
   expect(reader).toContain(`RETURN (${original});`);
   expect(reader.indexOf("PERFORM app.current_actor()")).toBeLessThan(reader.indexOf("RETURN ("));
-  for (const name of ["app.final_check_builder", "app.read_success_fee_v3", "app.pf1b_review_supplier_credit", "app.read_value_job"]) {
+  for (const name of ["app.read_success_fee_v3", "app.pf1b_review_supplier_credit", "app.read_value_job"]) {
     const checkedBody = body(sql, routines.find(r => r.name === name)!);
     expect(checkedBody, name).toMatch(/-- LP6D_DERIVED_ACTOR[^\n]*\n(?: --[^\n]*\n)? IF (?:((?:a|actor|principal)\.(?:membership_id|member_id)) IS NOT NULL AND \1|(?:a|actor|principal)\.(?:membership_id|member_id)) IS DISTINCT FROM app\.current_actor\(\)/u);
   }

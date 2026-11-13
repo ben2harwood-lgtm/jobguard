@@ -297,7 +297,7 @@
   {
     "name": "app.read_final_check_reveal",
     "arguments": "t uuid,j uuid,d text",
-    "source": "packages/db/migrations/0698_final_check_post_invoice_rerun.sql",
+    "source": "packages/db/migrations/0732_final_check_typed_recovery.sql",
     "actor": null,
     "tenant": "t"
   },
@@ -325,7 +325,7 @@
   {
     "name": "app.request_final_check_run",
     "arguments": "t uuid,j uuid,d text",
-    "source": "packages/db/migrations/0698_final_check_post_invoice_rerun.sql",
+    "source": "packages/db/migrations/0732_final_check_typed_recovery.sql",
     "actor": null,
     "tenant": "t"
   },
@@ -781,7 +781,7 @@
   {
     "name": "app.final_check_builder",
     "arguments": "t uuid,j uuid,d text,locking boolean DEFAULT false",
-    "source": "packages/db/migrations/0690_import_ancestry_record_anchor.sql",
+    "source": "packages/db/migrations/0732_final_check_typed_recovery.sql",
     "actor": null,
     "tenant": "t"
   },

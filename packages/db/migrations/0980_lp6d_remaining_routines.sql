@@ -1923,7 +1923,7 @@ END;
 END
 $$;
 
--- Latest body: packages/db/migrations/0698_final_check_post_invoice_rerun.sql
+-- Latest body: packages/db/migrations/0732_final_check_typed_recovery.sql
 CREATE OR REPLACE FUNCTION app.read_final_check_reveal(t uuid,j uuid,d text) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
@@ -1932,18 +1932,32 @@ BEGIN
   OR t IS DISTINCT FROM app.current_tenant() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
-DECLARE l app.final_account_lock;b app.final_check_run_binding;items jsonb;post_items jsonb;
+DECLARE l app.final_account_lock;b app.final_check_run_binding;items jsonb;post_items jsonb;q infrastructure.final_check_request;checked boolean:=false;
 BEGIN
- PERFORM app.final_check_builder(t,j,d);
+ PERFORM app.final_check_read_authority(t,j,d);
  SELECT * INTO l FROM app.final_account_lock WHERE tenant_id=t AND job_id=j;
  -- Fixed pre-lock branch never reads a shadow or final_check fact relation.
  IF NOT FOUND THEN RETURN jsonb_build_object('state','unlocked','items','[]'::jsonb); END IF;
+ PERFORM app.final_check_builder(t,j,d);
  SELECT coalesce(jsonb_agg(jsonb_build_object('signalId',s.id,'description',s.description,'evidenceAfterLock',true,'evidence',
   (SELECT jsonb_agg(jsonb_build_object('id',e.evidence_id,'objectVersionId',e.object_version_id,'sha256',e.sha256,'receivedAt',to_char(e.source_received_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),'source',o.evidence_type) ORDER BY e.evidence_id)
    FROM app.shadow_signal_evidence e JOIN app.evidence_object o ON(o.tenant_id,o.job_id,o.id,o.object_version_id,o.sha256,o.server_received_at)=(e.tenant_id,e.job_id,e.evidence_id,e.object_version_id,e.sha256,e.source_received_at)
    WHERE e.tenant_id=t AND e.job_id=j AND e.signal_id=s.id AND e.source_received_at>l.locked_at AND NOT EXISTS(SELECT 1 FROM app.evidence_invalidation i WHERE i.tenant_id=t AND i.evidence_id=e.evidence_id))) ORDER BY s.id),'[]') INTO post_items
  FROM app.shadow_commercial_signal s WHERE s.tenant_id=t AND s.job_id=j AND s.coalesced_into_signal_id IS NULL
  AND EXISTS(SELECT 1 FROM app.shadow_signal_evidence e WHERE e.tenant_id=t AND e.job_id=j AND e.signal_id=s.id AND e.source_received_at>l.locked_at AND NOT EXISTS(SELECT 1 FROM app.evidence_invalidation i WHERE i.tenant_id=t AND i.evidence_id=e.evidence_id));
+ SELECT * INTO q FROM infrastructure.final_check_request WHERE tenant_id=t AND job_id=j AND lock_id=l.id ORDER BY attempt DESC LIMIT 1;
+ IF q.enqueued_at IS NOT NULL OR jsonb_array_length(q.cycle_history)>0 THEN
+  BEGIN
+   checked:=EXISTS(SELECT 1 FROM app.require_authoritative_final_check(t,j) proof
+   JOIN app.shadow_final_check_completion cert ON(cert.tenant_id,cert.job_id,cert.check_id,cert.run_id,cert.lock_id)=(t,j,proof.check_id,proof.run_id,proof.lock_id)
+   JOIN app.final_check_run_binding binding ON(binding.tenant_id,binding.job_id,binding.run_id,binding.lock_id,binding.manifest_id)=(t,j,cert.run_id,cert.lock_id,cert.manifest_id)
+   WHERE (cert.lock_id,cert.manifest_id)=(q.lock_id,q.manifest_id));
+  EXCEPTION WHEN raise_exception THEN checked:=false;
+  END;
+  IF NOT checked THEN
+   RETURN jsonb_build_object('state',CASE WHEN q.cycle_state IN('failed','completed') THEN 'failed' ELSE 'pending' END,'lockId',l.id,'items','[]'::jsonb,'postLockItems',post_items);
+  END IF;
+ END IF;
  SELECT b0.* INTO b FROM app.final_check_run_binding b0 JOIN app.final_check_manifest m0 ON(m0.tenant_id,m0.job_id,m0.id)=(b0.tenant_id,b0.job_id,b0.manifest_id) WHERE b0.tenant_id=t AND b0.job_id=j AND b0.lock_id=l.id AND b0.evidence_cutoff_at=l.locked_at AND EXISTS(SELECT 1 FROM app.shadow_reconciliation_run r0 WHERE (r0.tenant_id,r0.job_id,r0.id,r0.status)=(t,j,b0.run_id,'completed')) ORDER BY m0.attempt DESC LIMIT 1;
  IF NOT FOUND THEN
   RETURN jsonb_build_object('state',CASE WHEN EXISTS(SELECT 1 FROM app.final_check_source_attempt a JOIN app.final_check_manifest m ON(m.tenant_id,m.job_id,m.id)=(a.tenant_id,a.job_id,a.manifest_id) WHERE a.tenant_id=t AND a.job_id=j AND m.lock_id=l.id AND m.attempt=(SELECT max(latest.attempt) FROM app.final_check_manifest latest WHERE latest.tenant_id=t AND latest.job_id=j AND latest.lock_id=l.id) AND a.status IN('failed','unsupported') AND a.sequence=(SELECT max(x.sequence) FROM app.final_check_source_attempt x WHERE (x.tenant_id,x.job_id,x.manifest_id,x.source_id)=(a.tenant_id,a.job_id,a.manifest_id,a.source_id))) THEN 'failed' ELSE 'pending' END,'lockId',l.id,'items','[]'::jsonb,'postLockItems',post_items);
@@ -1951,7 +1965,7 @@ BEGIN
  IF EXISTS(SELECT 1 FROM app.final_check_processing_source s WHERE s.tenant_id=t AND s.job_id=j AND s.manifest_id=b.manifest_id AND EXISTS(SELECT 1 FROM app.evidence_invalidation i WHERE i.tenant_id=t AND i.evidence_id=s.evidence_id)) THEN
   RETURN jsonb_build_object('state','failed','lockId',l.id,'items','[]'::jsonb,'postLockItems',post_items);
  END IF;
- SELECT coalesce(jsonb_agg(jsonb_build_object('signalId',p.signal_id,'signalRevision',p.signal_revision,'description',p.description,'evidence',p.evidence,'comparisons',p.comparisons,
+ SELECT coalesce(jsonb_agg(jsonb_build_object('signalId',p.signal_id,'signalRevision',p.signal_revision,'description',p.description,'estimatedValuePence',(SELECT CASE WHEN count(DISTINCT v.estimated_value_pence)=1 AND bool_and(v.estimated_value_pence BETWEEN 0 AND 1000000000000) THEN min(v.estimated_value_pence) ELSE NULL END FROM app.shadow_commercial_signal v JOIN app.shadow_commercial_signal primary_signal ON primary_signal.tenant_id=v.tenant_id AND primary_signal.job_id=v.job_id AND primary_signal.work_id=v.work_id WHERE primary_signal.tenant_id=t AND primary_signal.job_id=j AND primary_signal.id=p.signal_id AND EXISTS(SELECT 1 FROM app.shadow_signal_evidence ve JOIN app.final_check_processing_source ps ON(ps.tenant_id,ps.job_id,ps.evidence_id,ps.manifest_id)=(ve.tenant_id,ve.job_id,ve.evidence_id,b.manifest_id) WHERE ve.tenant_id=t AND ve.job_id=j AND ve.signal_id=v.id AND ve.source_received_at<=l.locked_at)),'evidence',p.evidence,'comparisons',p.comparisons,
   'baselineHash',p.baseline_hash,'captureRegisterHash',p.capture_register_hash,'lineSetHash',p.line_set_hash,'evidenceSetHash',p.evidence_set_hash,'disposition',s.disposition,'answer',db.answer,'dispositionId',db.disposition_id) ORDER BY p.signal_id),'[]') INTO items
  FROM app.final_check_reveal_proof p JOIN app.shadow_signal_classification c ON(c.tenant_id,c.job_id,c.run_id,c.signal_id)=(p.tenant_id,p.job_id,p.run_id,p.signal_id)
  LEFT JOIN app.final_check_disposition_binding db ON(db.tenant_id,db.job_id,db.run_id,db.signal_id)=(p.tenant_id,p.job_id,p.run_id,p.signal_id)
@@ -2097,7 +2111,7 @@ END;
 END
 $$;
 
--- Latest body: packages/db/migrations/0698_final_check_post_invoice_rerun.sql
+-- Latest body: packages/db/migrations/0732_final_check_typed_recovery.sql
 CREATE OR REPLACE FUNCTION app.request_final_check_run(t uuid,j uuid,d text) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app,infrastructure AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
@@ -2106,23 +2120,13 @@ BEGIN
   OR t IS DISTINCT FROM app.current_tenant() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
-DECLARE actor record;l app.final_account_lock;m app.final_check_manifest;q infrastructure.final_check_request;next_attempt integer:=1;
+DECLARE actor record;
 BEGIN
+ PERFORM pg_advisory_xact_lock(hashtextextended('final-check-cycle:'||t::text||':'||j::text,1430));
  -- Same owner, practice-session, synthetic small-builder and accepted-terms authority as the builder reads.
  SELECT * INTO actor FROM app.final_check_builder(t,j,d,true);
  IF NOT app.final_check_practice_owns_job(t,j,d) THEN RAISE EXCEPTION 'FINAL_CHECK_FORBIDDEN' USING ERRCODE='42501'; END IF;
- PERFORM app.ch4_require_open(t,j);
- SELECT * INTO l FROM app.final_account_lock WHERE tenant_id=t AND job_id=j;
- IF NOT FOUND THEN RAISE EXCEPTION 'FINAL_ACCOUNT_LOCK_REQUIRED'; END IF;
- SELECT * INTO m FROM app.final_check_manifest WHERE tenant_id=t AND job_id=j AND lock_id=l.id ORDER BY attempt DESC LIMIT 1;
- IF FOUND THEN
-  PERFORM app.require_final_check_rerun(t,j,m.id);
-  next_attempt:=m.attempt+1;
- END IF;
- INSERT INTO infrastructure.final_check_request(lock_id,tenant_id,job_id,attempt) VALUES(l.id,t,j,next_attempt) ON CONFLICT DO NOTHING;
- SELECT * INTO q FROM infrastructure.final_check_request WHERE tenant_id=t AND job_id=j AND lock_id=l.id AND attempt=next_attempt;
- IF NOT FOUND THEN RAISE EXCEPTION 'FINAL_CHECK_FORBIDDEN' USING ERRCODE='42501'; END IF;
- RETURN jsonb_build_object('version','final-check-run-request.v1','lockId',l.id,'attempt',q.attempt,'manifestId',q.manifest_id,'state','requested','environment','synthetic_demo');
+ RETURN app.admit_final_check_cycle(t,j);
 END;
 END
 $$;
@@ -6172,46 +6176,22 @@ END;
 END
 $$;
 
--- Latest body: packages/db/migrations/0690_import_ancestry_record_anchor.sql
+-- Latest body: packages/db/migrations/0732_final_check_typed_recovery.sql
 CREATE OR REPLACE FUNCTION app.final_check_builder(t uuid,j uuid,d text,locking boolean DEFAULT false)
  RETURNS TABLE(member_id uuid,user_id uuid) LANGUAGE plpgsql SET search_path=pg_catalog,app AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
  IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
-  OR t IS DISTINCT FROM app.current_tenant() THEN
+  OR t IS DISTINCT FROM app.current_tenant()
+  -- LP6D_DIGEST: since 0732 the body delegates to the private final_check_read_authority; a digest that
+  -- authenticates must be the bound actor, an unauthenticated one keeps that body's own refusal.
+  OR coalesce((SELECT membership_id FROM app.authenticate_practice_session(d,app.current_tenant())),app.current_actor()) IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
-DECLARE a record; owned boolean;
 BEGIN
- PERFORM app.final_check_context(t);
- IF NOT pg_has_role(session_user,'jobguard_runtime','USAGE') THEN RAISE EXCEPTION 'FINAL_CHECK_FORBIDDEN' USING ERRCODE='42501'; END IF;
- IF locking THEN PERFORM 1 FROM control_plane.practice_session WHERE token_digest=d FOR SHARE; END IF;
- SELECT * INTO a FROM app.authenticate_practice_session(d,t);
- -- LP6D_DERIVED_ACTOR: a digest that authenticates must be the bound actor; one that does not
- -- keeps the body's own refusal code just below.
- IF a.membership_id IS NOT NULL AND a.membership_id IS DISTINCT FROM app.current_actor() THEN
-  RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
- END IF;
- IF NOT FOUND THEN RAISE EXCEPTION 'FINAL_CHECK_FORBIDDEN' USING ERRCODE='42501'; END IF;
- IF locking THEN PERFORM 1 FROM app.membership WHERE tenant_id=t AND id=a.membership_id AND identity_user_id=a.identity_user_id FOR SHARE; END IF;
- IF NOT EXISTS(SELECT 1 FROM app.membership WHERE tenant_id=t AND id=a.membership_id AND identity_user_id=a.identity_user_id AND role='owner' AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp())) THEN RAISE EXCEPTION 'FINAL_CHECK_FORBIDDEN' USING ERRCODE='42501'; END IF;
- WITH RECURSIVE owned_jobs AS (
-  SELECT id FROM app.job WHERE tenant_id=t AND practice_session_digest=d
-  UNION SELECT child.id FROM owned_jobs source JOIN app.audit_event e ON e.tenant_id=t AND e.subject_type='job' AND e.event_type='job.imported_baseline_attested' AND e.payload->'references'->>'sourceJobId'=source.id::text
-  JOIN app.job child ON child.tenant_id=e.tenant_id AND child.id::text=e.subject_ref AND child.provenance='imported' AND child.practice_session_digest IS NULL
-    AND (EXISTS (SELECT 1 FROM app.job_import_v3 iv WHERE iv.tenant_id=t AND iv.job_id=child.id AND iv.source_job_id=source.id)
-     OR EXISTS (SELECT 1 FROM app.command_receipt rv WHERE rv.tenant_id=t AND rv.command_type='job.adopt_in_flight' AND rv.status='succeeded'
-      AND rv.semantic_key='import:'||child.id::text AND rv.result->>'jobId'=child.id::text AND rv.result->>'sourceJobId'=source.id::text))
- ) SELECT EXISTS(SELECT 1 FROM owned_jobs WHERE id=j) INTO owned;
+ RETURN QUERY SELECT * FROM app.final_check_read_authority(t,j,d,locking);
  IF NOT EXISTS(SELECT 1 FROM app.final_check_terms_acceptance WHERE tenant_id=t AND terms_version='synthetic_final_check_terms.v1') THEN RAISE EXCEPTION 'FINAL_CHECK_FORBIDDEN' USING ERRCODE='42501'; END IF;
- IF NOT owned OR NOT EXISTS(SELECT 1 FROM app.job_commercial_track WHERE tenant_id=t AND job_id=j AND job_track='small_builder' AND environment='synthetic_demo') THEN RAISE EXCEPTION 'FINAL_CHECK_FORBIDDEN' USING ERRCODE='42501'; END IF;
- IF locking THEN
-  PERFORM 1 FROM app.job WHERE tenant_id=t AND id=j FOR UPDATE;
-  -- Recheck deadlines after every wait before replay or effects.
-  IF NOT EXISTS(SELECT 1 FROM app.authenticate_practice_session(d,t) s WHERE s.membership_id=a.membership_id AND s.identity_user_id=a.identity_user_id) THEN RAISE EXCEPTION 'FINAL_CHECK_FORBIDDEN' USING ERRCODE='42501'; END IF;
- END IF;
- RETURN QUERY SELECT a.membership_id::uuid,a.identity_user_id::uuid;
 END;
 END
 $$;
