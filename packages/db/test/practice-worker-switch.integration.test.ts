@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { PracticeWorkerSwitchError } from "@jobguard/core";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { ContractorRepository, ContractorPracticeSessionRepository, JobSchedulingRepository, contractorSessionContext, withTenant, type VerifiedTenantContext } from "../src/index.js";
+import { ContractorRepository, ContractorPracticeSessionRepository, JobSchedulingRepository, WorkOrderRepository, workOrderFailure, contractorSessionContext, withTenant, type VerifiedTenantContext } from "../src/index.js";
 import { currentCommand, memberSessionPrincipal, type Cluster } from "./contractor-practice-session-fixtures.js";
 import { cluster, company, start, end, state, lookup, repo, on, off, text, expireSwitch, makeSessionExpired, startSessionWithHomeRecord, endHomeRecord, resolvers, raw, requestContext } from "./practice-worker-switch-fixtures.js";
 let c: Cluster;
@@ -227,7 +227,14 @@ it("[PW32] decision 39 grants stay with the member and revocation removes job ac
  await expect(contracts.command(f.p, await currentCommand(c, f, { kind: "grant.create", membershipId: f.members.operative, role: "operative", scope: { kind: "team", id: f.demo.teamId }, contractId: null }))).rejects.toMatchObject({ code: "FORBIDDEN" });
  for (const role of ["operative", "supervisor", "surveyor"]) await contracts.command(owner, await currentCommand(c, f, { kind: "grant.create", membershipId: f.members.operative, role, scope: { kind: "team", id: f.demo.teamId }, contractId: null }));
  await contracts.command(owner, await currentCommand(c, f, { kind: "membership.revoke", membershipId: f.members.operative }));
- await expect(new JobSchedulingRepository(c.runtime).assignments(await lookup(c, f), f.jobId)).rejects.toMatchObject({ code: "NOT_FOUND" });
+ // Router ruling (decision 39): the revoked worker's acting session is refused at the first gate (contractor_session),
+ // which counts as "job access removed": no assignment is returned and nothing is written. The caller-visible code
+ // on the scheduling path stays main's NOT_FOUND (workOrderFailure, exactly as the API scheduling route maps it).
+ const writes = async () => (await c.admin.query("SELECT count(*)::int n FROM app.command_receipt WHERE tenant_id=$1", [f.p.tenantId])).rows[0].n as number;
+ const before = await writes();
+ const scheduling = async () => new JobSchedulingRepository(c.runtime).assignments(await new WorkOrderRepository(c.runtime).resolveSession(f.session), f.jobId);
+ await expect(scheduling().catch(error => { throw workOrderFailure(error); })).rejects.toMatchObject({ code: "NOT_FOUND" });
+ expect(await writes()).toBe(before);
  await end(c, f); await expect(start(c, f)).rejects.toMatchObject({ code: "NOT_FOUND" });
 });
 it("[PW23] catalogue-wide scan stores neither session values nor extra digests", async () => {
