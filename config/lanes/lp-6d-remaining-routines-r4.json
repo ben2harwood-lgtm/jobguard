@@ -134,6 +134,7 @@
         "packages/db/test/value-recovery-receipt.integration.test.ts",
         "packages/db/test/value-source.integration.test.ts",
         "packages/db/test/watchdog-fixtures.ts",
+        "packages/db/test/watchdog.integration.test.ts",
         "packages/db/test/work-order-import.integration.test.ts",
         "packages/db/test/worm-command.integration.test.ts"
       ]

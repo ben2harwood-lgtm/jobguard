@@ -153,7 +153,9 @@ describe("M3-3 durable checkpoint SQL", () => {
       }
       await db.$client.query("SET LOCAL ROLE jobguard_runtime");
       return advance(db.$client, u, 99);
-    })).rejects.toThrow("SYNC_AUTHORITY_REQUIRED");
+      // Raw, class (a): once the membership row is gone the bound request can no longer hold, so the binding check
+      // refuses first; the other states still reach the routine's own refusal. Nothing is written either way.
+    })).rejects.toThrow(status === "removed" ? "REQUEST_BINDING_REFUSED" : "SYNC_AUTHORITY_REQUIRED");
     expect((await admin.query("SELECT * FROM app.sync_snapshot_checkpoint ORDER BY tenant_id,user_id")).rows).toEqual(before);
   });
 
@@ -188,8 +190,15 @@ describe("M3-3 durable checkpoint SQL", () => {
       VALUES($1,$2,$3,$4,'owner')`, [id(22), a, id(20), user]);
     guardRuntime = new Pool({ ...runtime.options, password: "synthetic-runtime", database });
     // Valid tenant, active member and synthetic environment: only the database name differs.
-    await expect(withTenant(guardRuntime, testTenantContext(a), db => advance(db.$client)))
-      .rejects.toThrow("SYNC_CHECKPOINT_INVALID");
+    // LP-6d: the active owner signs in as itself in this database too, so only the database name differs.
+    const credential = randomBytes(32).toString("hex");
+    await guardAdmin.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", [`${user}@fictional.invalid`, user]);
+    await guardAdmin.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3)", [user, a, id(22)]);
+    await guardAdmin.query("INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at) VALUES($1,$2,'synthetic_demo',$3,'fictional',clock_timestamp()+interval '1 hour')", [randomUUID(), user, credential]);
+    await expect(withTenant(guardRuntime, testTenantContext(a, { bindRequest: false }), async db => {
+      await db.$client.query("SELECT app.bind_request('real',$1,$2)", [credential, a]);
+      return advance(db.$client);
+    })).rejects.toThrow("SYNC_CHECKPOINT_INVALID");
     expect((await guardAdmin.query("SELECT * FROM app.sync_snapshot_checkpoint")).rows).toEqual([]);
   });
 
@@ -348,7 +357,8 @@ describe("M3-3 durable checkpoint SQL", () => {
   });
 
   it("fails closed without context, live environment, valid bounds, or controlled write permission", async () => {
-    await expect(advance(runtime)).rejects.toThrow("SYNC_CHECKPOINT_INVALID");
+    // Raw, class (a): with no context there is no bound request, so the binding check refuses first; nothing is written.
+    await expect(advance(runtime)).rejects.toThrow("REQUEST_BINDING_REFUSED");
     for (const [r, s, h, e] of [[-1, 1, hash, "synthetic_demo"], [1, 0, hash, "synthetic_demo"],
       [1, 1, "bad", "synthetic_demo"], [1, 1, hash, "production"], [9007199254740992, 1, hash, "synthetic_demo"]] as const) {
       await expect(withTenant(runtime, testTenantContext(b), async db => {
