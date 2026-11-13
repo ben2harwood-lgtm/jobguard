@@ -13,7 +13,7 @@ export class JobProofStatementError extends Error {
 /** Inspect object presence and signatures on each transaction. Never cache across upgrades. */
 async function installed(db: TenantTransaction): Promise<boolean> {
  const objects = ["app.job_proof_statement", "app.final_account_proof_statement"];
- const signatures = ["app.read_job_proof_statement(uuid,uuid)", "app.answer_job_proof_statement(uuid,jsonb)", "app.job_proof_authority(uuid,boolean)", "app.job_proof_session_digest()", "app.job_proof_practice_bound()", "app.job_proof_original_intact(uuid,uuid,uuid,uuid,text,text,text,bigint)", "app.job_proof_requirement(uuid,uuid)", "app.bind_final_account_proof_statement()", "app.guard_job_proof_source()", "app.guard_final_lock_proof_statement()", "app.guard_job_proof_receipt()", "app.validate_job_proof_receipt(uuid,uuid)", "app.require_completed_job_proof_statement()", "app.retire_replaced_job_proof_findings(uuid,uuid)", "app.retired_job_proof_findings(uuid)"];
+ const signatures = ["app.read_job_proof_statement(uuid,uuid)", "app.answer_job_proof_statement(uuid,jsonb)", "app.job_proof_authority(uuid,boolean)", "app.job_proof_session_digest()", "app.job_proof_practice_bound()", "app.job_proof_requirement(uuid,uuid)", "app.bind_final_account_proof_statement()", "app.guard_job_proof_source()", "app.guard_final_lock_proof_statement()", "app.guard_job_proof_receipt()", "app.validate_job_proof_receipt(uuid,uuid)", "app.require_completed_job_proof_statement()", "app.retire_replaced_job_proof_findings(uuid,uuid)", "app.retired_job_proof_findings(uuid)"];
  const present = (await db.$client.query<{ name: string }>("SELECT name FROM unnest($1::text[]) source(name) WHERE pg_catalog.to_regclass(name) IS NOT NULL", [objects])).rows;
  const routines = (await db.$client.query<{ name: string }>("SELECT name FROM unnest($1::text[]) source(name) WHERE pg_catalog.to_regprocedure(name) IS NOT NULL", [signatures])).rows;
  if (!present.length && !routines.length) return false;
@@ -35,7 +35,17 @@ export async function readJobProofStatement(db: TenantTransaction, jobId: string
 /** Serialization only: the private credential bridge is exclusive to statement reads/writes. */
 export async function lockJobProofAuthority(db: TenantTransaction, jobId: string): Promise<void> {
  if (!await installed(db)) return;
+ // The job share lock precedes proof serialization, matching the live writers and
+ // avoiding inversion with Final Check's existing job update lock.
+ await db.$client.query("SELECT 1 FROM app.job WHERE tenant_id=current_setting('app.tenant_id')::uuid AND id=$1 FOR SHARE", [jobId]);
  await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended('job-proof:'||current_setting('app.tenant_id')::uuid::text||':'||$1::uuid::text,0))", [jobId]);
+}
+
+/** Invalidation names evidence, not a job: resolve its job only once the statement objects exist. */
+export async function lockJobProofAuthorityForEvidence(db: TenantTransaction, evidenceId: string): Promise<void> {
+ if (!await installed(db)) return;
+ const target = (await db.$client.query<{ job_id: string }>("SELECT job_id FROM app.evidence_object WHERE tenant_id=current_setting('app.tenant_id')::uuid AND id=$1", [evidenceId])).rows[0];
+ if (target) await lockJobProofAuthority(db, target.job_id);
 }
 
 export class JobProofStatementService {

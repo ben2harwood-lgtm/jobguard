@@ -44,7 +44,6 @@ function harness() {
       // The job-proof statement objects are absent in this double: the per-transaction
       // presence probe finds nothing, so no job-proof lock is taken.
       if (sql.includes("pg_catalog.to_regclass(name)") || sql.includes("pg_catalog.to_regprocedure(name)")) return result();
-      if (sql.startsWith("SELECT job_id FROM app.evidence_object WHERE")) return result([{ job_id: job }]);
       if (sql.includes("FROM app.membership")) return result([{}]);
       // This fixture is a live job without a final-account lock; merged lifecycle
       // guards run normally, before the proof race being exercised.

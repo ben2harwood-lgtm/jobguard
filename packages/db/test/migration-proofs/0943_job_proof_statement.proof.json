@@ -142,43 +142,6 @@
       }
     },
     {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "owner|routine|function:app.job_proof_original_intact(uuid,uuid,uuid,uuid,text,text,text,bigint)|jobguard_runtime",
-        "group": "a-real-gap-proof-by-trade"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.job_proof_original_intact(uuid,uuid,uuid,uuid,text,text,text,bigint)|jobguard_migration|EXECUTE|-",
-        "group": "a-real-gap-proof-by-trade"
-      }
-    },
-    {
-      "section": "routines",
-      "before": null,
-      "after": {
-        "identity": "function:app.job_proof_original_intact(uuid,uuid,uuid,uuid,text,text,text,bigint)",
-        "owner": "jobguard_runtime",
-        "securityDefiner": true,
-        "searchPath": "search_path=pg_catalog, pg_temp",
-        "returnsTrigger": false,
-        "extension": null,
-        "reachable": true,
-        "runtimeExecute": false,
-        "publicExecute": false,
-        "otherExecute": [
-          "jobguard_migration"
-        ],
-        "definitionSha256": null,
-        "staticWrites": [],
-        "staticCalls": []
-      }
-    },
-    {
       "section": "routines",
       "before": null,
       "after": {
@@ -348,49 +311,6 @@
       "section": "routines",
       "before": null,
       "after": {
-        "identity": "function:app.guard_job_proof_source()",
-        "owner": "jobguard_migration",
-        "securityDefiner": true,
-        "searchPath": "search_path=pg_catalog, pg_temp",
-        "returnsTrigger": true,
-        "extension": null,
-        "reachable": false,
-        "runtimeExecute": false,
-        "publicExecute": false,
-        "otherExecute": [],
-        "definitionSha256": null,
-        "staticWrites": [],
-        "staticCalls": [
-          "app.job_proof_original_intact"
-        ]
-      }
-    },
-    {
-      "section": "routines",
-      "before": null,
-      "after": {
-        "identity": "function:app.guard_final_lock_proof_statement()",
-        "owner": "jobguard_migration",
-        "securityDefiner": true,
-        "searchPath": "search_path=pg_catalog, pg_temp",
-        "returnsTrigger": true,
-        "extension": null,
-        "reachable": false,
-        "runtimeExecute": false,
-        "publicExecute": false,
-        "otherExecute": [],
-        "definitionSha256": null,
-        "staticWrites": [],
-        "staticCalls": [
-          "app.final_lock_canonical",
-          "app.job_proof_original_intact"
-        ]
-      }
-    },
-    {
-      "section": "routines",
-      "before": null,
-      "after": {
         "identity": "function:app.guard_job_proof_receipt()",
         "owner": "jobguard_migration",
         "securityDefiner": false,
@@ -527,6 +447,11 @@
     {
       "section": "policies",
       "before": null,
+      "after": "app.synthetic_evidence_original|job_proof_source_read|PERMISSIVE|SELECT|jobguard_migration|33ffa1233cb73808"
+    },
+    {
+      "section": "policies",
+      "before": null,
       "after": "app.job_proof_statement|tenant_owner|PERMISSIVE|ALL|jobguard_migration|6fa387f2f629fba6"
     },
     {
@@ -610,21 +535,6 @@
         "args": "",
         "proowner": "jobguard_binding_owner",
         "proacl": "{jobguard_binding_owner=X/jobguard_binding_owner,jobguard_migration=X/jobguard_binding_owner}",
-        "prosecdef": true,
-        "proconfig": [
-          "search_path=pg_catalog, pg_temp"
-        ]
-      }
-    },
-    {
-      "section": "routines",
-      "before": null,
-      "after": {
-        "nspname": "app",
-        "proname": "job_proof_original_intact",
-        "args": "t uuid, j uuid, s uuid, u uuid, k text, v text, h text, n bigint",
-        "proowner": "jobguard_runtime",
-        "proacl": "{jobguard_runtime=X/jobguard_runtime,jobguard_migration=X/jobguard_runtime}",
         "prosecdef": true,
         "proconfig": [
           "search_path=pg_catalog, pg_temp"
@@ -812,6 +722,20 @@
         "proconfig": [
           "search_path=pg_catalog, pg_temp"
         ]
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "synthetic_evidence_original",
+        "policyname": "job_proof_source_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "((tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid) AND (current_setting('app.job_proof_source_read'::text, true) = 'on'::text))",
+        "with_check": null
       }
     },
     {

@@ -37,20 +37,11 @@ REVOKE ALL ON FUNCTION app.job_proof_practice_bound() FROM PUBLIC,jobguard_runti
 GRANT EXECUTE ON FUNCTION app.job_proof_practice_bound() TO jobguard_migration;
 REVOKE CREATE ON SCHEMA app FROM jobguard_binding_owner;
 
--- The synthetic original is FORCE RLS and admits only the runtime role, so the
--- migration-owned proof guards read it through this one exact-match probe. It
--- runs under the existing tenant_isolation policy and repeats its tenant
--- predicate; it returns only a boolean and is executable by the guards' owner.
-CREATE FUNCTION app.job_proof_original_intact(t uuid,j uuid,s uuid,u uuid,k text,v text,h text,n bigint) RETURNS boolean
- LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
- SELECT t IS NOT DISTINCT FROM nullif(pg_catalog.current_setting('app.tenant_id',true),'')::uuid
-  AND EXISTS(SELECT 1 FROM app.synthetic_evidence_original o
-   WHERE (o.tenant_id,o.job_id,o.scope_item_id,o.upload_id,o.object_key,o.object_version_id)=(t,j,s,u,k,v)
-    AND pg_catalog.encode(pg_catalog.sha256(o.bytes),'hex')=h AND pg_catalog.octet_length(o.bytes)=n)
-$$;
-ALTER FUNCTION app.job_proof_original_intact(uuid,uuid,uuid,uuid,text,text,text,bigint) OWNER TO jobguard_runtime;
-REVOKE ALL ON FUNCTION app.job_proof_original_intact(uuid,uuid,uuid,uuid,text,text,text,bigint) FROM PUBLIC,jobguard_identity,jobguard_infrastructure;
-GRANT EXECUTE ON FUNCTION app.job_proof_original_intact(uuid,uuid,uuid,uuid,text,text,text,bigint) TO jobguard_migration;
+-- The synthetic original admits only the runtime role. Like 0546's
+-- customer_stage_source, the migration-owned proof guards get a SELECT-only,
+-- tenant-scoped read that is closed unless they open it for one statement.
+CREATE POLICY job_proof_source_read ON app.synthetic_evidence_original FOR SELECT TO jobguard_migration
+ USING(tenant_id=nullif(current_setting('app.tenant_id',true),'')::uuid AND current_setting('app.job_proof_source_read',true)='on');
 
 CREATE FUNCTION app.job_proof_authority(j uuid,locking boolean DEFAULT false) RETURNS void
  LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
@@ -158,12 +149,10 @@ DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid;
 BEGIN
  -- NULL is the internal presence probe, after all object signatures were checked.
  IF j IS NULL AND r IS NULL THEN RETURN 'true'::jsonb; END IF;
- -- Firm/job authority comes before any read. A practice credential must own the
- -- job (another blank firm sharing the tenant gets NOT_FOUND); any other caller
- -- never reaches a practice-owned job through the legacy path.
- IF app.job_proof_practice_bound() THEN PERFORM app.job_proof_authority(j,false);
- ELSIF EXISTS(SELECT 1 FROM app.job WHERE tenant_id=t AND id=j AND practice_session_digest IS NOT NULL)
- THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='42501'; END IF;
+ -- Firm/job authority comes before any read: a practice credential must own the
+ -- job, so another blank firm sharing the tenant gets NOT_FOUND. Real and unbound
+ -- callers keep the existing tenant-scoped legacy path.
+ IF app.job_proof_practice_bound() THEN PERFORM app.job_proof_authority(j,false); END IF;
  IF EXISTS(SELECT 1 FROM app.job_proof_statement WHERE tenant_id=t AND job_id=j)
   OR EXISTS(SELECT 1 FROM app.final_account_proof_statement WHERE tenant_id=t AND job_id=j AND revision_id=r)
  THEN RETURN app.read_job_proof_statement(j,r); END IF;
@@ -267,7 +256,7 @@ CREATE TRIGGER bind_proof_statement AFTER INSERT ON app.final_account_revision F
 
 CREATE FUNCTION app.guard_job_proof_source() RETURNS trigger
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
-DECLARE j uuid; t uuid:=NEW.tenant_id; requirement jsonb; anchor uuid; e app.evidence_object; prior_read text;
+DECLARE j uuid; t uuid:=NEW.tenant_id; requirement jsonb; anchor uuid; e app.evidence_object; prior_read text; prior_original text; intact boolean;
 BEGIN
  IF (SELECT rolsuper FROM pg_roles WHERE rolname=session_user) THEN RETURN NEW; END IF;
  IF TG_TABLE_NAME='evidence_invalidation' THEN
@@ -291,7 +280,7 @@ BEGIN
   IF NEW.scope_item_id IS DISTINCT FROM anchor THEN RETURN NEW; END IF;
   -- evidence_link is runtime-only except for 0546's existing tenant-scoped,
   -- flag-gated owner read policy; open it for this one read, then restore it.
-  prior_read:=current_setting('app.customer_stage_read',true);
+  prior_read:=current_setting('app.customer_stage_read',true); prior_original:=current_setting('app.job_proof_source_read',true);
   PERFORM set_config('app.customer_stage_read','on',true);
   SELECT obj.* INTO e FROM app.evidence_link l JOIN app.evidence_object obj ON(obj.tenant_id,obj.job_id,obj.id)=(l.tenant_id,l.job_id,l.evidence_id)
    JOIN app.evidence_upload u ON(u.tenant_id,u.job_id,u.id,u.scope_item_id)=(obj.tenant_id,obj.job_id,obj.upload_id,obj.scope_item_id)
@@ -299,8 +288,12 @@ BEGIN
     AND obj.evidence_type=requirement->>'requiredEvidenceType' AND obj.kind='original' AND u.state='verified' AND u.object_version_id=obj.object_version_id
     AND NOT EXISTS(SELECT 1 FROM app.evidence_invalidation i WHERE i.tenant_id=t AND i.evidence_id=obj.id);
   PERFORM set_config('app.customer_stage_read',coalesce(prior_read,''),true);
-  IF e.id IS NULL OR NEW.scope_item_id IS DISTINCT FROM anchor OR NEW.stage IS DISTINCT FROM requirement->>'stage'
-   OR NOT app.job_proof_original_intact(e.tenant_id,e.job_id,e.scope_item_id,e.upload_id,e.object_key,e.object_version_id,e.sha256,e.byte_length)
+  PERFORM set_config('app.job_proof_source_read','on',true);
+  SELECT EXISTS(SELECT 1 FROM app.synthetic_evidence_original original
+   WHERE(original.tenant_id,original.job_id,original.scope_item_id,original.upload_id,original.object_key,original.object_version_id)=(e.tenant_id,e.job_id,e.scope_item_id,e.upload_id,e.object_key,e.object_version_id)
+    AND encode(sha256(original.bytes),'hex')=e.sha256 AND octet_length(original.bytes)=e.byte_length) INTO intact;
+  PERFORM set_config('app.job_proof_source_read',coalesce(prior_original,''),true);
+  IF e.id IS NULL OR NEW.scope_item_id IS DISTINCT FROM anchor OR NEW.stage IS DISTINCT FROM requirement->>'stage' OR NOT intact
   THEN RAISE EXCEPTION 'PROOF_NOT_FINAL' USING ERRCODE='23514'; END IF;
  END IF;
  RETURN NEW;
@@ -313,7 +306,7 @@ CREATE TRIGGER "A00_job_proof_authority" BEFORE INSERT ON app.evidence_invalidat
 
 CREATE FUNCTION app.guard_final_lock_proof_statement() RETURNS trigger
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
-DECLARE s app.job_proof_statement; binding app.final_account_proof_statement; requirement jsonb; anchor uuid; canonical_source text; invalidations text; expected_hash text; prior_read text; current_proof boolean;
+DECLARE s app.job_proof_statement; binding app.final_account_proof_statement; requirement jsonb; anchor uuid; canonical_source text; invalidations text; expected_hash text; prior_read text; prior_original text; current_proof boolean;
 BEGIN
  PERFORM pg_advisory_xact_lock(hashtextextended('job-proof:'||NEW.tenant_id::text||':'||NEW.job_id::text,0));
  SELECT * INTO s FROM app.job_proof_statement WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id ORDER BY revision DESC LIMIT 1;
@@ -325,8 +318,8 @@ BEGIN
  requirement:=jsonb_build_object('requiredEvidenceType',CASE WHEN s.includes_electrical_work THEN 'electrical_certificate' ELSE 'completion_photo' END,'stage',CASE WHEN s.includes_electrical_work THEN 'electrical-stage' ELSE 'completion-photo-stage' END);
  SELECT id INTO anchor FROM app.scope_identity WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id AND state='confirmed' ORDER BY created_at,id LIMIT 1;
  -- Links, completions and reviews use 0546's tenant-scoped, flag-gated owner read; restore the flag after.
- prior_read:=current_setting('app.customer_stage_read',true);
- PERFORM set_config('app.customer_stage_read','on',true);
+ prior_read:=current_setting('app.customer_stage_read',true); prior_original:=current_setting('app.job_proof_source_read',true);
+ PERFORM set_config('app.customer_stage_read','on',true); PERFORM set_config('app.job_proof_source_read','on',true);
  SELECT EXISTS(
   SELECT 1 FROM app.final_account_proof p
   JOIN app.evidence_object e ON(e.tenant_id,e.job_id,e.id,e.scope_item_id,e.evidence_type,e.object_version_id,e.sha256)=(p.tenant_id,p.job_id,p.evidence_id,p.scope_item_id,p.evidence_type,p.object_version_id,p.sha256)
@@ -337,11 +330,11 @@ BEGIN
    AND p.mandatory AND e.kind='original' AND e.scope_item_id=anchor AND e.evidence_type=requirement->>'requiredEvidenceType'
    AND c.stage=requirement->>'stage' AND u.state='verified' AND u.object_version_id=e.object_version_id
    AND NOT EXISTS(SELECT 1 FROM app.evidence_invalidation i WHERE i.tenant_id=e.tenant_id AND i.evidence_id=e.id)
-   AND app.job_proof_original_intact(e.tenant_id,e.job_id,e.scope_item_id,e.upload_id,e.object_key,e.object_version_id,e.sha256,e.byte_length)
+   AND EXISTS(SELECT 1 FROM app.synthetic_evidence_original original WHERE (original.tenant_id,original.job_id,original.scope_item_id,original.upload_id,original.object_key,original.object_version_id)=(e.tenant_id,e.job_id,e.scope_item_id,e.upload_id,e.object_key,e.object_version_id) AND encode(sha256(original.bytes),'hex')=e.sha256 AND octet_length(original.bytes)=e.byte_length)
    AND NOT EXISTS(SELECT 1 FROM app.stage_review_event rv WHERE rv.tenant_id=c.tenant_id AND rv.stage_completion_id=c.id)
    AND NOT EXISTS(SELECT 1 FROM app.stage_completion newer WHERE newer.tenant_id=c.tenant_id AND newer.supersedes_completion_id=c.id)
  ) INTO current_proof;
- PERFORM set_config('app.customer_stage_read',coalesce(prior_read,''),true);
+ PERFORM set_config('app.customer_stage_read',coalesce(prior_read,''),true); PERFORM set_config('app.job_proof_source_read',coalesce(prior_original,''),true);
  IF NOT current_proof THEN RAISE EXCEPTION 'FINAL_ACCOUNT_SOURCE_CHANGED' USING ERRCODE='23514'; END IF;
  -- Recompute the explicit source from immutable revision rows; a forged binding
  -- or issue_blocked=false flag never substitutes for the original source bytes.
