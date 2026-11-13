@@ -1,3 +1,4 @@
+import { ContractorRepository, requireContractorRequestContext } from "../src/index.js";
 // CI only: real PostgreSQL, runtime privileges and persisted contractor finance sessions.
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";
@@ -29,6 +30,8 @@ async function setup() {
  const run = (input = command()) => repo.run(w.ctx, w.session, input);
  return { w, repo, scope, invoiceId, revision, payment, snapshot, command, run };
 }
+// LP-6d: each finance session acts in its own bound request (the route derives context and session together).
+const ctxFor = async (session: string) => requireContractorRequestContext(await new ContractorRepository(c.runtime).resolveSession(session));
 async function secondSession(w: World) {
  // Existing fixture's real second identity. Provision finance through the existing
  // owner-only fixture boundary; never a caller-supplied approver flag.
@@ -69,9 +72,9 @@ it("refuses self-approval including a second session for the same identity; a di
  await c.admin.query("INSERT INTO control_plane.contractor_practice_session(session_id,tenant_id,membership_id,identity_user_id,session_digest,created_at,expires_at) SELECT $1,tenant_id,membership_id,identity_user_id,$2,r.t,r.t+interval '7 days' FROM control_plane.contractor_practice_session,(SELECT clock_timestamp() t) r WHERE session_id=$3",[alias,digestOf(alias),a.w.session]);
  await expect(a.repo.approve(a.w.ctx,alias,approve)).rejects.toThrow("RECONCILIATION_SELF_APPROVAL");
  const second = await secondSession(a.w);
- await expect(a.repo.approve(a.w.ctx,second,{...approve,contentHash:'0'.repeat(64)})).rejects.toThrow("RECONCILIATION_CONFLICT");
- const accepted = await a.repo.approve(a.w.ctx,second,approve);
- expect(await a.repo.approve(a.w.ctx,second,approve)).toEqual(accepted);
+ await expect(a.repo.approve(await ctxFor(second),second,{...approve,contentHash:'0'.repeat(64)})).rejects.toThrow("RECONCILIATION_CONFLICT");
+ const accepted = await a.repo.approve(await ctxFor(second),second,approve);
+ expect(await a.repo.approve(await ctxFor(second),second,approve)).toEqual(accepted);
  expect((await a.repo.read(a.w.ctx,a.w.session,a.scope.jobId,run.runId))?.report).toEqual(run.report); // approval never posts a journal
  expect((await c.admin.query("SELECT event_type FROM app.audit_event WHERE tenant_id=$1 AND event_type LIKE 'financial_reconciliation.%' ORDER BY sequence",[a.scope.tenantId])).rows.map(r=>r.event_type)).toEqual(["financial_reconciliation.run","financial_reconciliation.propose","financial_reconciliation.approve"]);
 });
