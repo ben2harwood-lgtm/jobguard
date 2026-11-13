@@ -20,6 +20,9 @@ describe("SV-4 DW6 / SB-26: SV-2 deferred locked-job reveal half",()=>{
   expect((await reveal(a.tenantId,b.jobId)).rows).toEqual([{id:ids.get(b.jobId)![0],state:'revealed',tenant_id:b.tenantId,job_id:b.jobId}]);
   expect((await reveal(a.tenantId,unlocked.jobId)).rows).toEqual([]);
   expect((await reveal(a.tenantId,other.jobId)).rows).toEqual([]);
+  // Control (checker r16): the SAME bound owner, same call shape, still reveals its OWN tenant's job, so the
+  // cross-tenant refusal below cannot come from a broken binding.
+  expect((await asFixtureTenant(f.runtime,a.tenantId,db=>db.query("SELECT id FROM app.reveal_shadow_signals($1,$2)",[a.tenantId,a.jobId]),{owner:f.admin,membershipId:LOCK_OWNER})).rows).toEqual([{id:ids.get(a.jobId)![0]}]);
   // Raw direct SQL, class (a) (router rulings): a bound owner naming another tenant is a forged request, so the
   // LP-6d binding check refuses before the body's own 'tenant context mismatch'; nothing is revealed.
   await expect(asFixtureTenant(f.runtime,a.tenantId,db=>db.query("SELECT * FROM app.reveal_shadow_signals($1,$2)",[other.tenantId,other.jobId]),{owner:f.admin,membershipId:LOCK_OWNER})).rejects.toThrow('REQUEST_BINDING_REFUSED');
