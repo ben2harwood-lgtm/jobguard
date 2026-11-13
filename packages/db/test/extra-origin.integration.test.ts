@@ -273,7 +273,8 @@ describe("ENT-4b origin persistence", () => {
    // renewed caller review 4 Nov 2026 (Ben: 'Yes, update S9')
    // Renewed caller source review 6 Nov 2026, later-safety-108 repair 4: v1 ownership now requires the succeeded import receipt.
    // Persisted-session authentication, synthetic-only gate and the sole context constructor are unchanged; RED review remains required.
-   "packages/db/src/practice-session.ts": "49c6c2dadcaa0412208dbce6585c0e30a283b4d4c3b98b50179eec3bad054729",
+   // 13 Nov 2026: refreshed for REAL-WAYIN-LINKED-PRACTICE (0734) at the coordinator-reviewed e76c9b33 file; Ben: "Yes, land it" (card jobguard-wayin-direct-yes-2026-11-11).
+   "packages/db/src/practice-session.ts": "8a5e227e4ca2224ac8f288feb53394e31d0be062dee015c14fab9394e0ef9031",
    "packages/db/src/contractor-repository.ts": "56b95b80360434f0cf58376ef2ec44d0354b194e5080bcfd9414ac283971006c",
    "packages/db/src/contractor-party-repository.ts": "e5852288e5355b53f7548c4d5741aef54ee55a2b8a66dd56a54b08963cd1fdb0",
    // Renewed caller review 5 Nov 2026: Ben approved batch-41 ("Yes, all three") in the router chat.

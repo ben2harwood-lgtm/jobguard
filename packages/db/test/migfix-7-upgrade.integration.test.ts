@@ -101,6 +101,14 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   // Exact existing replacements only; all their privileges and unrelated definitions remain frozen.
   const fullBodies = new Map<string, string>();
   for (const [identity, migration, overload = 0] of [
+    // 0734 recreates these exact bodies; never pin their pre-linked predecessors.
+    ["app.issue_practice_session(digest text)", "0734_identity_linked_practice.sql"],
+    ["app.start_blank_practice_company(digest text, previous_digest text)", "0734_identity_linked_practice.sql"],
+    ["app.start_blank_practice_company_v2(new_token text, previous_token text)", "0734_identity_linked_practice.sql"],
+    ["app.seed_saved_v1_sample()", "0734_identity_linked_practice.sql"],
+    ["app.authenticate_practice_session(digest text, requested_tenant uuid)", "0734_identity_linked_practice.sql"],
+    ["app.lp6_session_authority(p_kind text, p_credential text, p_tenant uuid)", "0734_identity_linked_practice.sql"],
+    ["app.is_blank_practice_company(digest text)", "0734_identity_linked_practice.sql"],
     ["app.company_final_check_request_run(j uuid)", "0732_final_check_typed_recovery.sql"],
     ["app.company_final_check_reveal(j uuid)", "0732_final_check_typed_recovery.sql"],
     ["app.cb_delivery(p_session uuid, p_job uuid, p_command uuid, p_payload jsonb)", "0727_billing_export_delivery_once.sql"],
@@ -138,8 +146,6 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.demo_issue_customer_link(t uuid, j uuid, c uuid, session_digest text, link_digest text, content text)", "0650_demo_customer_link_reference.sql"],
     ["identity.dark_emergency(s text, csrf text, t uuid, p jsonb)", "0655_emergency_token_minted.sql"],
     ["app.replace_fee_reservation_book(p_tenant uuid, p_book jsonb, p_result jsonb)", "0708_fee_result_json_errors.sql"],
-    ["app.start_blank_practice_company(digest text, previous_digest text)", "0657_blank_practice_company.sql"],
-    ["app.lp6_session_authority(p_kind text, p_credential text, p_tenant uuid)", "0658_lp6b_effective_session_actor.sql"],
     ["app.ch6_integrity_authority(t uuid, j uuid, digest text)", "0660_baseline_ancestry_audit_trust.sql"],
     ["app.ch6_integrity_sources(t uuid, j uuid, d text)", "0660_baseline_ancestry_audit_trust.sql"],
     ["app.ch6_record_integrity_review(t uuid, j uuid, digest text, review jsonb, source_snapshot jsonb)", "0660_baseline_ancestry_audit_trust.sql"],
