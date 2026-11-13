@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "demo-shadow-guide-one-source": {
+      "branches": [
+        "codex/sandbox/demo-shadow-guide-one-source"
+      ],
+      "note": "DEMO-S: remove unused duplicate shadow guide text and its redundant static assertion; rendered guide and parsers unchanged. No migration.",
+      "allow": [
+        "apps/web/app/demo-s/shadow-30000/journey-model.ts",
+        "apps/web/app/demo-s/shadow-30000/journey.test.tsx"
+      ]
+    }
+  }
+}
