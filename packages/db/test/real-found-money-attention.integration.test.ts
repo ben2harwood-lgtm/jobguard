@@ -1,7 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
-import { startBlankPracticeCompany, authenticatePracticeSession, prepareActivationFixtureV3, PracticeActivationRepository, FinalAccountLockRepository, FinalCheckRepository, JobSourceRepository, FinalCheckCompletionRepository, practiceFinalCheckPorts, EvidenceService } from "../src/index.js";
-import { MemoryStorage } from "./site-extra-evidence-fixtures.js";
+import { startBlankPracticeCompany, authenticatePracticeSession, prepareActivationFixtureV3, PracticeActivationRepository, FinalAccountLockRepository, FinalCheckRepository, JobSourceRepository, FinalCheckCompletionRepository, practiceFinalCheckPorts } from "../src/index.js";
 import { ValueApplication } from "../../../apps/api/src/value/value.application.js";
 import { VariationApplication } from "../../../apps/api/src/variation/variation.application.js";
 import { FinalAccountLockApplication } from "../../../apps/api/src/final-account-lock.application.js";
@@ -20,24 +19,21 @@ afterAll(async () => { await closeFinalCheckFixture(f); vi.unstubAllEnvs(); });
 async function setup(extraNote?: string) {
  const session = await startBlankPracticeCompany(f.runtime, { version: "blank-practice-company.v1", action: "start" });
  const auth = await authenticatePracticeSession(f.runtime, session);
- // Existing fixture prepares only the accepted baseline. All proof, lock, catch,
+ // Existing fixture prepares only the accepted baseline; seed its missing progress below.
+ // All proof, lock, catch,
  // variation, descendant assembly, invoice and receipt effects use application commands.
  const jobId = await prepareActivationFixtureV3(f.admin, auth.context, "Fictional decorating", 20000, f.runtime, 20000, auth.digest);
  await new PracticeActivationRepository(f.runtime).start(auth.context, jobId, { commandId: randomUUID(), scenario: "no_charge" });
  const value = new ValueApplication(f.runtime, session), variations = new VariationApplication(f.runtime, session);
  const accounts = new FinalAccountApplication(f.runtime, session), invoices = new CustomerInvoiceApplication(f.runtime, session);
- const proof = new ProofApplication(f.runtime, session), requirement = await proof.get(jobId), scope = requirement.scopeItemId;
+ const proof = new ProofApplication(f.runtime, session), scope = (await proof.get(jobId)).scopeItemId;
+ // Match the proof integration harness: completion transitions existing progress.
+ await finalCheckTenant(f.admin, auth.context.tenantId, db => db.query(
+  "INSERT INTO app.scope_progress(tenant_id,job_id,scope_item_id,stage)VALUES($1,$2,$3,'in_progress')",
+  [auth.context.tenantId, jobId, scope]));
  const selected = await proof.command(jobId, { version: "practice-proof-command.v1", commandId: randomUUID(), action: "select_generated", scopeItemId: scope, fixture: "completion-photo" });
  const upload = selected.upload!;
- // The generated image supplies synthetic bytes; its evidence kind comes from
- // the job's proof requirement, not from the image fixture's name.
- const storage = new MemoryStorage();
- const original = (await f.admin.query<{ object_key: string; bytes: Buffer; content_type: string }>(
-  "SELECT object_key,bytes,content_type FROM app.synthetic_evidence_original WHERE tenant_id=$1 AND job_id=$2 AND upload_id=$3 AND object_version_id=$4",
-  [auth.context.tenantId, jobId, upload.id, upload.objectVersionId])).rows[0]!;
- storage.put(original.object_key, upload.objectVersionId, original.bytes, original.content_type);
- await new EvidenceService(f.runtime, storage).finalize(auth.context, { commandId: randomUUID(), uploadId: upload.id, objectVersionId: upload.objectVersionId, evidenceType: requirement.requiredEvidenceType });
- const verified = await proof.get(jobId);
+ const verified = await proof.command(jobId, { version: "practice-proof-command.v1", commandId: randomUUID(), action: "finalize", uploadId: upload.id, objectVersionId: upload.objectVersionId });
  await proof.command(jobId, { version: "practice-proof-command.v1", commandId: randomUUID(), action: "complete", scopeItemId: scope, evidenceId: verified.upload!.evidenceId });
  await new JobSourceRepository(f.runtime).intake(auth.context, jobId, auth.digest, "diary", { version: "job-diary-input.v1", commandId: randomUUID(), entryMode: "typed", onSite: false, text: "Painted the kitchen ceiling as an extra, customer asked for it. Estimated extra: £150" });
  if (extraNote) await new JobSourceRepository(f.runtime).intake(auth.context, jobId, auth.digest, "diary", { version: "job-diary-input.v1", commandId: randomUUID(), entryMode: "typed", onSite: false, text: extraNote });
