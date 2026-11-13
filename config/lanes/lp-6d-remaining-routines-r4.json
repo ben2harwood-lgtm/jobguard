@@ -19,6 +19,7 @@
         "packages/db/migrations/0980_lp6d_remaining_routines.sql",
         "packages/db/src/audit-export-repository.ts",
         "packages/db/src/commands.ts",
+        "packages/db/src/commercial-integrity-v3-repository.ts",
         "packages/db/src/commercial-outbound-paths.test.ts",
         "packages/db/src/contractor-billing-repository.ts",
         "packages/db/src/contractor-party-repository.ts",

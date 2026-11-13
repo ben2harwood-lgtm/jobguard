@@ -78,7 +78,9 @@ export class CommercialIntegrityV3Repository {
     return feedbackSchema.parse(row.result);
    } catch(error) {
     const code=(error as Error).message;
-    if(code === "NOT_FOUND")throw new PracticeAccessError("NOT_FOUND");
+    // LP-6d (repair 13, flagged): a binding that stops holding mid-command (membership revoked while
+    // waiting for its row) answers like any other lost authority, never with the binding's own code.
+    if(code === "NOT_FOUND"||(code === "REQUEST_BINDING_REFUSED"&&(error as {code?:string}).code==="42501"))throw new PracticeAccessError("NOT_FOUND");
     if(["40P01","40001"].includes((error as {code?:string}).code??""))throw new CommercialIntegrityPersistenceError("INTEGRITY_RETRY_REQUIRED");
     if(["INTEGRITY_FAMILY_UNAVAILABLE","INTEGRITY_SOURCE_CHANGED","INTEGRITY_SOURCE_UNAVAILABLE","IDEMPOTENCY_CONFLICT","INVALID_INTEGRITY_REVIEW"].includes(code))throw new CommercialIntegrityPersistenceError(code as ConstructorParameters<typeof CommercialIntegrityPersistenceError>[0]);
     throw error;

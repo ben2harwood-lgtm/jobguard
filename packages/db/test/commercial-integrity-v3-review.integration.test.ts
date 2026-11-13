@@ -52,7 +52,7 @@ it("CI-P04 revocation while waiting for the membership row rolls back receipt an
 });
 it("CI-P08 SQL strict review schema refuses extra keys, UTF-16 overflow and untrimmed explanations",async()=>{
  const {transaction}=await import("./commercial-integrity-v3-fixtures.js"),{job}=await seedIntegrityJob(f),review=await reviewFor(f,job),snapshot=(await f.repo.read(f.auth.context,actor,f.auth.digest,job)).result.findings[0]!.sourceSnapshot;
- for(const change of [{tenantId:tenant},{outcome:"approved"},{version:"commercial-integrity-review.v1"},{explanation:"😀".repeat(251)},{explanation:"\u00a0hidden whitespace\u00a0"}])await expect(transaction(f.runtime,db=>db.query("SELECT app.ch6_record_integrity_review($1,$2,$3,$4::jsonb,$5::jsonb)",[tenant,job,f.auth.digest,JSON.stringify({...review,...change,commandId:randomUUID()}),JSON.stringify(snapshot)]))).rejects.toThrow("INVALID_INTEGRITY_REVIEW");
+ for(const change of [{tenantId:tenant},{outcome:"approved"},{version:"commercial-integrity-review.v1"},{explanation:"😀".repeat(251)},{explanation:"\u00a0hidden whitespace\u00a0"}])await expect(transaction(f.runtime,db=>db.query("SELECT app.ch6_record_integrity_review($1,$2,$3,$4::jsonb,$5::jsonb)",[tenant,job,f.auth.digest,JSON.stringify({...review,...change,commandId:randomUUID()}),JSON.stringify(snapshot)]),f.auth.digest)).rejects.toThrow("INVALID_INTEGRITY_REVIEW");
 });
 
 it("CH-6 cross-customer attack refuses another tenant's sources, feedback and exact receipt replay", async () => {
@@ -67,7 +67,9 @@ it("CH-6 cross-customer attack refuses another tenant's sources, feedback and ex
  await expect(f.repo.review(foreignContext,actor,f.auth.digest,job,review)).rejects.toThrow("NOT_FOUND");
  await expect(withTenant(f.runtime,foreignContext,db=>db.$client.query(
   "SELECT app.ch6_record_integrity_review($1,$2,$3,$4::jsonb,NULL::jsonb)",
-  [foreignTenant,job,f.auth.digest,JSON.stringify(review)]))).rejects.toThrow("NOT_FOUND");
+  [foreignTenant,job,f.auth.digest,JSON.stringify(review)]))).rejects.toThrow("REQUEST_BINDING_REFUSED");
+ // Router ruling (a): a forged foreign-tenant context binds no request, so the binding check refuses first
+ // (same 42501 shape; the repository paths above still answer NOT_FOUND) and nothing is written (below).
  const rows = await withTenant(f.runtime,foreignContext,db=>db.$client.query(
   "SELECT result FROM app.command_receipt WHERE command_id=$1",[review.commandId]));
  expect(rows.rows).toEqual([]);
