@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { PracticeWorkerSwitchError } from "@jobguard/core";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { ContractorRepository, ContractorPracticeSessionRepository, JobSchedulingRepository, contractorSessionContext, withTenant, type VerifiedTenantContext } from "../src/index.js";
-import { currentCommand, type Cluster } from "./contractor-practice-session-fixtures.js";
+import { currentCommand, memberSessionPrincipal, type Cluster } from "./contractor-practice-session-fixtures.js";
 import { cluster, company, start, end, state, lookup, repo, on, off, text, expireSwitch, makeSessionExpired, startSessionWithHomeRecord, endHomeRecord, resolvers, raw, requestContext } from "./practice-worker-switch-fixtures.js";
 let c: Cluster;
 beforeAll(async () => { process.env.JOBGUARD_ENV = "synthetic_demo"; c = await cluster(); }, 120000);
@@ -221,8 +221,12 @@ it("[PW9] home record ending during a current switch leaves both session and swi
 it("[PW32] decision 39 grants stay with the member and revocation removes job access", async () => {
  const f = await company(c), contracts = new ContractorRepository(c.runtime);
  await start(c, f);
- for (const role of ["operative", "supervisor", "surveyor"]) await contracts.command(f.p, await currentCommand(c, f, { kind: "grant.create", membershipId: f.members.operative, role, scope: { kind: "team", id: f.demo.teamId }, contractId: null }));
- await contracts.command(f.p, await currentCommand(c, f, { kind: "membership.revoke", membershipId: f.members.operative }));
+ // Router ruling (PW32): the owner administers during a switch only through a request bound to the owner (its own
+ // owner session), never through the acting session; the acting (worker-bound) session is refused.
+ const owner = await memberSessionPrincipal(c.admin, c.runtime, f.p.tenantId, f.p.membershipId);
+ await expect(contracts.command(f.p, await currentCommand(c, f, { kind: "grant.create", membershipId: f.members.operative, role: "operative", scope: { kind: "team", id: f.demo.teamId }, contractId: null }))).rejects.toMatchObject({ code: "FORBIDDEN" });
+ for (const role of ["operative", "supervisor", "surveyor"]) await contracts.command(owner, await currentCommand(c, f, { kind: "grant.create", membershipId: f.members.operative, role, scope: { kind: "team", id: f.demo.teamId }, contractId: null }));
+ await contracts.command(owner, await currentCommand(c, f, { kind: "membership.revoke", membershipId: f.members.operative }));
  await expect(new JobSchedulingRepository(c.runtime).assignments(await lookup(c, f), f.jobId)).rejects.toMatchObject({ code: "NOT_FOUND" });
  await end(c, f); await expect(start(c, f)).rejects.toMatchObject({ code: "NOT_FOUND" });
 });
@@ -317,9 +321,14 @@ it("[PW32] team move and grant revocation remain available while acting", async 
  const f = await company(c), contractors = new ContractorRepository(c.runtime);
  const team = await contractors.command(f.p, await currentCommand(c, f, { kind: "team.create", branchId: f.demo.branchId, name: "Fictional second team" }));
  await start(c, f);
- await contractors.command(f.p, await currentCommand(c, f, { kind: "team.move", membershipId: f.members.operative, fromTeamId: f.demo.teamId, toTeamId: team.id }));
+ // Router ruling (PW32): available while acting, but only in a separate request bound to the owner; the same admin
+ // commands through the acting (worker-bound) session are refused.
+ const owner = await memberSessionPrincipal(c.admin, c.runtime, f.p.tenantId, f.p.membershipId);
+ await expect(contractors.command(f.p, await currentCommand(c, f, { kind: "team.move", membershipId: f.members.operative, fromTeamId: f.demo.teamId, toTeamId: team.id }))).rejects.toMatchObject({ code: "FORBIDDEN" });
+ await contractors.command(owner, await currentCommand(c, f, { kind: "team.move", membershipId: f.members.operative, fromTeamId: f.demo.teamId, toTeamId: team.id }));
  const grant = (await c.admin.query("SELECT g.id FROM app.role_grant g WHERE g.tenant_id=$1 AND g.membership_id=$2 AND g.scope_id=$3 AND NOT EXISTS(SELECT 1 FROM app.role_grant_revocation r WHERE r.tenant_id=g.tenant_id AND r.grant_id=g.id)", [f.p.tenantId, f.members.operative, team.id])).rows[0]!.id;
- await contractors.command(f.p, await currentCommand(c, f, { kind: "grant.revoke", grantId: grant }));
+ await expect(contractors.command(f.p, await currentCommand(c, f, { kind: "grant.revoke", grantId: grant }))).rejects.toMatchObject({ code: "FORBIDDEN" });
+ await contractors.command(owner, await currentCommand(c, f, { kind: "grant.revoke", grantId: grant }));
  await expect(new JobSchedulingRepository(c.runtime).assignments(await lookup(c, f), f.jobId)).rejects.toMatchObject({ code: "NOT_FOUND" });
  await end(c, f);
 });
