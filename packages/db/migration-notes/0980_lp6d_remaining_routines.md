@@ -865,3 +865,8 @@ recovery-terms-timing (the known environmental timing case). NOT READY. Fail lis
 Repair 17 ([PW32] owner administers during a switch only through an owner-bound request). Whole db
 at 58ff4bc2 (run.sh WHOLE, 2 workers): 63 failed | 867 passed (930); 125 failed | 8156 passed | 16 skipped | 19 todo (8316) (r16 at 5f743a26: 64 files / 127 tests). NOT READY.
 Fail list and log: ~/.local/share/full-steam/coordinator/prechecks/lp-6d-remaining-routines-r17-58ff4bc2-whole-*.
+
+Repair 18-19 (decision 39 per ruling; PRODUCT CHANGE, flagged: practice_worker_switch_off lets the
+switch's recorded owner end it, or replay that end, through an owner-bound request). Whole db at
+be421f81 (run.sh WHOLE, 2 workers): 63 failed | 867 passed (930); 124 failed | 8158 passed | 16 skipped | 19 todo (8317) (r17 at 58ff4bc2: 63 files / 125 tests). NOT READY.
+Fail list and log: ~/.local/share/full-steam/coordinator/prechecks/lp-6d-remaining-routines-r19-be421f81-whole-*.
