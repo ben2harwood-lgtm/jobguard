@@ -293,6 +293,8 @@ for (const refusal of ["refused", "disabled"] as const) {
     await page.getByRole("button", { name: "Continue on my own saved job", exact: true }).click();
     const own = new URL(page.url()).searchParams.get("walkJob")!;
     await expect(page.getByTestId("workspace-job-id")).toHaveAttribute("data-job-id", own);
+    let alternativeCaptures = 0;
+    page.on("request", request => { if (request.method() === "POST" && new URL(request.url()).pathname === "/api/jobs/capture") alternativeCaptures++; });
     let attempts = 0;
     if (refusal === "refused") {
       // Fault injection at the HTTP boundary; all saved state still uses the real DB.
@@ -305,7 +307,15 @@ for (const refusal of ["refused", "disabled"] as const) {
       await expect(page.getByRole("button", { name: "Preview immutable quote", exact: true })).toBeDisabled();
     }
     await tour.getByRole("button", { name: "Show me", exact: true }).click();
+    await expect(page.getByText("Your own job could not continue.", { exact: false })).toBeVisible({ timeout: 40_000 });
+    await expect(tour.getByRole("button", { name: "Show me", exact: true })).toBeEnabled();
+    expect(new URL(page.url()).searchParams.has("walkExample")).toBe(false);
+    expect(alternativeCaptures).toBe(0);
+    await expect(page.getByTestId("workspace-job-id")).toHaveAttribute("data-job-id", own);
+    const alternative = page.getByRole("button", { name: "Use the prepared example job", exact: true });
+    await alternative.evaluate(button => { (button as HTMLButtonElement).click(); (button as HTMLButtonElement).click(); });
     await expect(page.getByRole("heading", { name: "Prepared example · simulated customer" })).toBeVisible({ timeout: 40_000 });
+    expect(alternativeCaptures).toBe(1);
     await expect(tour).toContainText("This part uses a prepared example job");
     await expect(tour).toContainText("Step 3 of 9");
     const example = new URL(page.url()).searchParams.get("walkExample");

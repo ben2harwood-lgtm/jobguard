@@ -12,7 +12,7 @@ export type WalkthroughStep = {
   title: string;
   words: string;
   isDone: () => boolean;
-  autoAction: (target: HTMLElement, signal: AbortSignal) => void | Promise<void>;
+  autoAction: (target: HTMLElement, signal: AbortSignal, present?: (title: string, words: string) => Promise<void>) => void | Promise<void>;
 };
 type Box = { left: number; top: number; width: number; height: number };
 export function visibleTarget(selector: string): HTMLElement | null {
@@ -145,7 +145,9 @@ export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: reado
         if (highlighted) {
           const recentInput = lastInput.current !== null && performance.now() - lastInput.current < 1_000;
           const manualInput = !running.current && !currentPlaying.current && (recentInput || pointers.current.size > 0 || touches.current.size > 0);
-          if (card.current && (!hadHighlight || !manualInput)) clearPhoneDock(highlighted, card.current);
+          // Saving parties changes the target to preview. Only explicit navigation
+          // or playback may move this hand step, even after a slow save response.
+          if (card.current && (!hadHighlight || !manualInput) && !(hadHighlight && step!.id === "walk-3" && !running.current && !currentPlaying.current)) clearPhoneDock(highlighted, card.current);
           hadHighlight = true;
         }
       }
@@ -174,7 +176,17 @@ export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: reado
     lastInput.current = null;
     running.current = true; setBusy(true); setError("");
     const controller = new AbortController(); action.current = controller;
-    const timeout = window.setTimeout(() => controller.abort(), step.timeoutMs ?? 12_000);
+    let remaining = step.timeoutMs ?? 12_000, started = performance.now();
+    let timeout = window.setTimeout(() => controller.abort(), remaining);
+    const present = async (title: string, words: string) => {
+      if (navigator.webdriver || controller.signal.aborted) return;
+      clearTimeout(timeout); remaining -= performance.now() - started;
+      setHolding(true);
+      await readingPause(readingTime(title, words), matchMedia("(prefers-reduced-motion: reduce)").matches, controller.signal, next => { skip.current = next; });
+      skip.current = null; setHolding(false);
+      controller.signal.throwIfAborted();
+      started = performance.now(); timeout = window.setTimeout(() => controller.abort(), Math.max(0, remaining));
+    };
     if (playing && viewerPacing()) viewerPlayback.add(controller.signal);
     try {
       let target = visibleTarget(step.target);
@@ -194,7 +206,7 @@ export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: reado
         });
         if (controller.signal.aborted) return;
         await Promise.race([
-          step.autoAction(target, controller.signal),
+          step.autoAction(target, controller.signal, present),
           new Promise<void>(resolve => controller.signal.addEventListener("abort", () => resolve(), { once: true })),
         ]);
       }
@@ -234,7 +246,13 @@ export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: reado
       {!box && !finished && <p role="status">Waiting for this step's control to become visible.</p>}
       {!finished && <div className={styles.controls}>
         <button className={styles.secondary} disabled={index === 0 || busy || playing} onClick={() => { stop(); setWaiting(false); setIndex(value => value - 1); }}>Back</button>
-        <button className={styles.secondary} disabled={busy || playing || !box} onClick={() => { setWaiting(true); visibleTarget(step.target)?.focus(); }}>I'll do it</button>
+        {step.id === "walk-3" && <button className={styles.secondary} disabled={busy || playing || !box} onClick={() => {
+          const target = step.spotlightTarget?.();
+          target?.scrollIntoView({ block: "center", behavior: "instant" });
+          if (target && card.current) clearPhoneDock(target, card.current);
+          target?.focus({ preventScroll: true });
+        }}>Go to customer/site or quote preview</button>}
+        <button className={styles.secondary} disabled={busy || playing || !box} onClick={() => { setWaiting(true); visibleTarget(step.target)?.focus({ preventScroll: true }); }}>I'll do it</button>
         <button className={holding ? styles.secondary : undefined} disabled={busy || playing || !box} onClick={() => void show()}>Show me</button>
         <button className={holding ? undefined : styles.secondary} disabled={!holding && (!done || busy || playing)} onClick={() => holding ? skip.current?.() : advance()}>Next</button>
         <button className={playing || busy ? styles.secondary : undefined} disabled={playing || busy || !box} onClick={() => setPlaying(true)}>Play the whole thing</button>

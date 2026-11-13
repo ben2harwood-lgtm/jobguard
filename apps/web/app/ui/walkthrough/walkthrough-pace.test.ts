@@ -125,7 +125,7 @@ describe("390px dock geometry", () => {
 
 // Execute the component's real autoplay effect without a browser or a DOM renderer.
 describe("completed autoplay results", () => {
-  function playback({ reduced = false, done = true, visible = true, reject = false, webdriver = false, nextTarget = false } = {}) {
+  function playback({ reduced = false, done = true, visible = true, reject = false, webdriver = false, nextTarget = false, presentation = false } = {}) {
     vi.useFakeTimers(); vi.stubGlobal("React", React);
     vi.stubGlobal("navigator", { webdriver });
     vi.stubGlobal("matchMedia", () => ({ matches: reduced }));
@@ -134,13 +134,50 @@ describe("completed autoplay results", () => {
     vi.stubGlobal("window", { setTimeout, clearTimeout });
     // index, playing, busy, done, error, box, finished, waiting, expanded, holding
     hooks.states = [0, true];
-    const autoAction = vi.fn(() => { if (reject) throw new Error("Rejected action"); });
+    const autoAction = vi.fn(async (_: HTMLElement, signal: AbortSignal, present?: (title: string, words: string) => Promise<void>) => {
+      if (reject) throw new Error("Rejected action");
+      if (presentation) {
+        await present!("Read", "sample words");
+        signal.throwIfAborted(); done = true;
+      }
+    });
     renderToStaticMarkup(React.createElement(Walkthrough, {
       steps: [{ id: "last", timeoutMs: 1000, target: "#last", title: "Check", words: "the saved result", isDone: () => done, autoAction }, ...(nextTarget ? [{ id: "next", target: "#next", title: "Next", words: "Ready", isDone: () => true, autoAction }] : [])], onClose: () => {},
     }));
     hooks.effects[3]!();
     return { autoAction, controller: hooks.refs[1]!.current as AbortController, reveal: () => { visible = true; } };
   }
+  it("sample presentation holds outside the business deadline and Next cannot complete capture", async () => {
+    const { controller } = playback({ done: false, presentation: true });
+    await vi.advanceTimersByTimeAsync(650);
+    expect(hooks.setters[9]).toHaveBeenCalledWith(true);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(controller.signal.aborted).toBe(false);
+    expect(hooks.setters[0]).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(readingTime("Read", "sample words") - 2000);
+    expect(controller.signal.aborted).toBe(false);
+    // Saved completion is followed by the existing completed-result hold.
+    expect(hooks.setters[6]).not.toHaveBeenCalled();
+    controller.abort(); await vi.advanceTimersByTimeAsync(0);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+  it.each([false, true])("sample presentation cancellation leaves capture incomplete (reduced: %s)", async reduced => {
+    const { controller } = playback({ done: false, presentation: true, reduced });
+    await vi.advanceTimersByTimeAsync(650);
+    if (reduced) await vi.advanceTimersByTimeAsync(60000);
+    expect(controller.signal.aborted).toBe(false);
+    controller.abort(); await vi.advanceTimersByTimeAsync(0);
+    expect(hooks.setters[0]).not.toHaveBeenCalled();
+    expect(hooks.setters[6]).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+  it("webdriver bypasses sample presentation as well as result reading", async () => {
+    playback({ done: false, presentation: true, webdriver: true });
+    await vi.advanceTimersByTimeAsync(650);
+    expect(hooks.setters[9]).not.toHaveBeenCalledWith(true);
+    expect(hooks.setters[6]).toHaveBeenCalledWith(true);
+    expect(vi.getTimerCount()).toBe(0);
+  });
   it("waits for a deferred visible control before executing autoplay and confirming completion", async () => {
     const { autoAction, reveal } = playback({ visible: false, done: false, reduced: true });
     await vi.advanceTimersByTimeAsync(300);
