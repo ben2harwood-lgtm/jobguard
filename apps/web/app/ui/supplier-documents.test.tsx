@@ -50,15 +50,16 @@ it("labels each delivery quantity separately", () => {
   expect(html).toContain('data-testid="delivery-later-delivered">1 each');
 });
 
-it("coalesces silent supplier refreshes with the first read and the next refresh", async () => {
-  let release!: () => void;
-  const held = new Promise<void>(resolve => { release = resolve; });
-  const fetcher = vi.fn().mockImplementation(async () => { await held; return { ok: true, json: async () => ({ state: fixture.state }) }; });
+it("finishes a held supplier read before one coalesced navigation reread", async () => {
+  const releases: Array<() => void> = [];
+  const fetcher = vi.fn().mockImplementation(() => new Promise(resolve => {
+    releases.push(() => resolve({ ok: true, json: async () => ({ state: fixture.state }) }));
+  }));
   vi.stubGlobal("fetch", fetcher);
   panel(); fixture.mount(); fixture.refresh(); fixture.refresh();
   expect(fetcher).toHaveBeenCalledTimes(1);
-  release(); await new Promise<void>(resolve => setImmediate(resolve));
-  fixture.refresh(); fixture.refresh();
+  releases.shift()!(); await new Promise<void>(resolve => setImmediate(resolve));
   expect(fetcher).toHaveBeenCalledTimes(2);
-  await new Promise<void>(resolve => setImmediate(resolve));
+  releases.shift()!(); await new Promise<void>(resolve => setImmediate(resolve));
+  expect(fetcher).toHaveBeenCalledTimes(2);
 });

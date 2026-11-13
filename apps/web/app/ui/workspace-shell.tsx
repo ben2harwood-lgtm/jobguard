@@ -84,7 +84,8 @@ export function WorkspaceShell({jobId}:{jobId:string}){
   observer=new MutationObserver(()=>{focus();});observer.observe(root,{childList:true,subtree:true});
   const timeout=window.setTimeout(()=>observer?.disconnect(),15000);
   return()=>{observer?.disconnect();window.clearTimeout(timeout);};
- },[capture,loading,section,fragment]);
+ // A fresh snapshot of the same destination must not steal control focus.
+ },[capture?.jobId,loading,section,fragment]);
  // These independent reads can expand above pricing after its own quote read.
  const[settledJourney,setSettledJourney]=useState("");
  const[settledParties,setSettledParties]=useState("");

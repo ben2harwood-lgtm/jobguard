@@ -176,3 +176,21 @@ it("re-reads quote and customer facts on navigation while keeping edited prices"
  expect(fetch.mock.calls.some(([url])=>String(url).endsWith("/parties"))).toBe(true);
  expect(elements(render()).find(element=>element.props["aria-label"]===rate.props["aria-label"])!.props.value).toBe(before);
 });
+
+it("ignores a pre-save parties answer after the saved binding has refreshed", async () => {
+ let release!: (value: Response) => void;
+ const fetcher=vi.mocked(globalThis.fetch);
+ const original=fetcher.getMockImplementation()!;
+ let parties=0;
+ fetcher.mockImplementation((...args:any[])=>{
+  if(String(args[0]).endsWith("/parties")&&++parties===1)return new Promise(resolve=>{release=resolve;});
+  return original(...args as Parameters<typeof fetch>);
+ });
+ render();
+ events.dispatchEvent(new Event("job-parties-saved"));await settle();
+ expect(input(render(),"Stated customer").props.value).toBe("Fictional saved customer");
+ release(new Response(JSON.stringify({current:null}),{status:200}));await settle();
+ const tree=render();
+ expect(input(tree,"Stated customer").props.value).toBe("Fictional saved customer");
+ expect(elements(tree).some(element=>element.type==="p"&&element.props.children==="Customer and site are required before this job can switch live.")).toBe(false);
+});

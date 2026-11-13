@@ -4,14 +4,22 @@ import { jobPageFetch as fetch } from "./job-page-fetch";
 import{receiptQuantityMicros,formatReceiptQuantity}from"@jobguard/core";import{materialsCommandFor,useMaterialsCommand}from"./materials-command";import{useCallback,useEffect,useRef,useState}from"react";import{SupplierFactEditor}from"./supplier-fact-editor";
 type State={facts:Array<any>;documents:Array<{id:string;document_type:string;status:string;hold_reason:string|null;recognizedDebtPence:number;version_count:number}>;lastIntake:{result:string;reason:string|null}|null;receipt:{revision:number;ordered:string;delivered:string;accepted:string;rejected:string;missing:string;laterDelivered:string}|null;intakeRevision:number;realExternalActions:number};
 export function SupplierDocuments({jobId}:{jobId:string}){const[state,setState]=useState<State|null>(null),[fixture,setFixture]=useState("materials-B-delivery"),[channel,setChannel]=useState("picker"),[error,setError]=useState("");const flow=materialsCommandFor(jobId);const supplierRead = useRef<Promise<void> | null>(null);
+const supplierRefresh=useRef(0);
 const load = useCallback((silent = false) => {
+ if(silent)supplierRefresh.current++;
  // Commands still start a fresh read; navigation shares one already in flight.
  if (silent && supplierRead.current) return supplierRead.current;
- const read = flow.read("supplier-documents", async () => {
-  const r = await fetch(`/api/jobs/${jobId}/supplier-documents`, { cache: "no-store" });
-  if (!r.ok) throw new Error("Could not refresh supplier-documents");
-  return (await r.json()).state;
- }, setState, () => setState(null));
+ const read = (async()=>{
+  let observed:number;
+  do {
+   observed=supplierRefresh.current;
+   await flow.read("supplier-documents", async () => {
+    const r = await fetch(`/api/jobs/${jobId}/supplier-documents`, { cache: "no-store" });
+    if (!r.ok) throw new Error("Could not refresh supplier-documents");
+    return (await r.json()).state;
+   }, setState, () => setState(null));
+  }while(observed!==supplierRefresh.current);
+ })();
  supplierRead.current = read;
  const clear = () => { if (supplierRead.current === read) supplierRead.current = null; };
  void read.then(clear, clear);

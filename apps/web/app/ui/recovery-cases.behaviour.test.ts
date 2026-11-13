@@ -1076,3 +1076,29 @@ it("coalesces navigation refreshes with an in-flight register read", async () =>
   expect(reads()).toHaveLength(2);
   panel.unmount();
 });
+
+it("keeps the held delivery lookup and Open controls through coalesced navigation refreshes", async () => {
+ const panel=start();
+ const held=holdLookups();
+ reads()[0]!.json(answerBody([]));await panel.settle();
+ expect(lookupRequests.filter(url=>url.endsWith("/supplier-documents"))).toHaveLength(1);
+ factsRefresh.current();factsRefresh.current();await panel.settle();
+ expect(reads()).toHaveLength(1);
+ expect(lookupRequests).toHaveLength(1);
+ expect(panel.screen().button("Open £2,500 withheld payment").props.disabled).toBe(false);
+ held.release();await panel.settle();
+ expect(lookupRequests.filter(url=>url.endsWith("/supplier-documents"))).toHaveLength(2);
+ expect(reads()).toHaveLength(1);
+ expect(panel.screen().button("Open £2,500 withheld payment").props.disabled).toBe(false);
+ panel.unmount();
+});
+
+it("keeps ready Open controls on a failed silent register refresh", async()=>{
+ const panel=start();reads()[0]!.json(answerBody([]));await panel.settle();
+ factsRefresh.current();await panel.settle();
+ expect(reads()).toHaveLength(2);
+ reads()[1]!.reject();await panel.settle();
+ expect(panel.screen().button("Open £2,500 withheld payment").props.disabled).toBe(false);
+ expect(panel.screen().text()).toContain("Recovery cases could not be loaded");
+ panel.unmount();
+});

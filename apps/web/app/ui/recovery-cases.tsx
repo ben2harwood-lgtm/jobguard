@@ -55,7 +55,25 @@ const alive=async<T,>(t:Ticket,work:Promise<T>):Promise<T>=>{const value=await w
 const apply=useCallback((t:Ticket,next:Case[],affectedCaseId?:string)=>{shown.current=t.order;setCases(next);setStatus("ready");setSelected(old=>selectedCaseAfterResponse({previous:old,cases:next,selectAffected:affectedCaseId!==undefined,...(affectedCaseId===undefined?{}:{affectedCaseId})}))},[]);
 // The ready deliveries offered by the picker. A lookup that cannot be had or read offers none (the choice falls back to "No delivery selected"); opening a case checks the chosen delivery again against a fresh answer.
 // It stops quietly if the job changed while it was out, so it can never offer a delivery of another job.
-const refreshDeliveries=useCallback(async(lookupWorld:number)=>{if(lookupWorld!==world.current)return;let ready:Delivery[]=[];try{const r=await fetch(`/api/jobs/${jobId}/supplier-documents`,{cache:"no-store"});const rows=r.ok?parseDocuments(await r.json().catch(()=>undefined)):undefined;if(rows)ready=readyDeliveries(rows)}catch{ready=[]}if(lookupWorld!==world.current)return;setDeliveries(ready);setDeliveryId(old=>ready.some(row=>row.id===old)?old:"")},[jobId]);
+const deliveryRead=useRef<{world:number;promise:Promise<void>}|null>(null),deliveryRefresh=useRef(0);
+const refreshDeliveries=useCallback((lookupWorld:number, invalidate=false):Promise<void>=>{
+ if(lookupWorld!==world.current)return Promise.resolve();
+ if(invalidate)deliveryRefresh.current++;
+ if(deliveryRead.current?.world===lookupWorld)return deliveryRead.current.promise;
+ const read=(async()=>{
+  let observed:number;
+  do {
+   observed=deliveryRefresh.current;
+   let ready:Delivery[]=[];
+   try{const r=await fetch(`/api/jobs/${jobId}/supplier-documents`,{cache:"no-store"});const rows=r.ok?parseDocuments(await r.json().catch(()=>undefined)):undefined;if(rows)ready=readyDeliveries(rows)}catch{ready=[]}
+   if(lookupWorld!==world.current)return;
+   setDeliveries(ready);setDeliveryId(old=>ready.some(row=>row.id===old)?old:"");
+  }while(observed!==deliveryRefresh.current);
+ })();
+ deliveryRead.current={world:lookupWorld,promise:read};
+ void read.finally(()=>{if(deliveryRead.current?.promise===read)deliveryRead.current=null;});
+ return read;
+},[jobId]);
 // Reading the register has three outcomes and only one of them is "empty": loading, failed (announced and focused, with a retry), or read successfully. An answer that is not the versioned response is a failed read.
 const registerRead = useRef<Promise<void> | null>(null);
 const load = useCallback((silent = false) => {
@@ -69,7 +87,9 @@ const load = useCallback((silent = false) => {
    const body: unknown = await r.json(); next = r.ok ? readList(body) : undefined;
   } catch { next = undefined; }
   if (!newest(t)) return;
-  if (next) apply(t, next.cases); else { setStatus("failed"); fail(readFailure); }
+  if (next) apply(t, next.cases);
+  else if(silent)setError(readFailure);
+  else { setStatus("failed"); fail(readFailure); }
  })();
  registerRead.current = read;
  const clear = () => { if (registerRead.current === read) registerRead.current = null; };
@@ -82,7 +102,14 @@ const load = useCallback((silent = false) => {
 const held=useRef<Attempt|undefined>(undefined),[unsure,setUnsure]=useState(false),[needsReload,setNeedsReload]=useState(false);const hold=useCallback((next?:Attempt)=>{held.current=next;setUnsure(next!==undefined)},[]);
 // A new job starts from nothing (no cases of the previous job stay on screen), and leaving it makes every answer still in flight for it stale.
 // The optional delivery lookup is separate from the register read: it owns only the picker, never register status, busy, selection or focus. Pack ticks refresh only RecoveryMessages below.
-useJobFactsRefresh(()=>void load(true));useEffect(()=>{setCases([]);setSelected(undefined);setDeliveries([]);setDeliveryId("");setBusy(false);setNeedsReload(false);hold(undefined);void load();return()=>{world.current+=1}},[load,hold]);
+useJobFactsRefresh(()=>{
+ // A held picker owns its read until settlement. Navigation queues one fresh
+ // lookup without touching register status, selection, controls or focus.
+ if(status==="ready"){
+  if(!deliveryRead.current)void load(true);
+  void refreshDeliveries(world.current,true);
+ }else void load(true);
+});useEffect(()=>{setCases([]);setSelected(undefined);setDeliveries([]);setDeliveryId("");setBusy(false);setNeedsReload(false);hold(undefined);void load();return()=>{world.current+=1}},[load,hold]);
 // Start the optional lookup only after the register has settled. It must not compete with that first read or restart it when the picker changes.
 // Capture the world at render: the register effect's cleanup changes it before this effect runs on a job switch, making the previous ready state stale.
 const lookupWorld=world.current;
