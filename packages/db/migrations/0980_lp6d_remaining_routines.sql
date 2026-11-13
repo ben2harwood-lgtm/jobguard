@@ -3006,8 +3006,18 @@ CREATE OR REPLACE FUNCTION app.practice_worker_switch_off(p_session uuid,p_comma
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
-  OR NOT EXISTS(SELECT 1 FROM app.contractor_session(p_session) bound_session WHERE bound_session.tenant_id=app.current_tenant() AND bound_session.membership_id=app.current_actor()) THEN
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text THEN
+  RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
+ -- LP6D_SWITCH_OWNER (router/checker ruling r19, product change): the switch's own recorded owner may END a
+ -- live switch through a request bound to that owner (its own owner session), e.g. after the worker was
+ -- revoked. End-only; it reads the base session row, never the acting session as the worker, and binds nothing.
+ ELSIF EXISTS(SELECT 1 FROM app.contractor_practice_session_live(p_session) base
+   -- the live switch, or (idempotent replay) the switch this exact end command already ended
+   JOIN control_plane.practice_worker_switch s ON s.session_ref=base.session_ref AND (s.ended_at IS NULL OR s.end_command_id=p_command)
+  WHERE base.tenant_id=app.current_tenant() AND s.tenant_id=app.current_tenant()
+   AND base.membership_id=app.current_actor() AND s.owner_membership_id=app.current_actor()) THEN
+  NULL;
+ ELSIF NOT EXISTS(SELECT 1 FROM app.contractor_session(p_session) bound_session WHERE bound_session.tenant_id=app.current_tenant() AND bound_session.membership_id=app.current_actor()) THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
 DECLARE t uuid; live record; saved control_plane.practice_worker_switch; reading timestamptz; replay boolean:=false;

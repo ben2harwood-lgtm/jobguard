@@ -3090,7 +3090,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "8c34b6831c52cf1b24cf0226915b9147e1c78c17da8ce2066c16c53a66f854d8",
+        "definitionSha256": "8471f879400d247efab57f1cf87caade308babb5f453acf69ce9704c61e4e01f",
         "staticWrites": [
           "control_plane.practice_worker_switch"
         ],

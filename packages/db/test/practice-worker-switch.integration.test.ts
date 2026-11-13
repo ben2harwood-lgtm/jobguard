@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { PracticeWorkerSwitchError } from "@jobguard/core";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { ContractorRepository, ContractorPracticeSessionRepository, JobSchedulingRepository, WorkOrderRepository, workOrderFailure, contractorSessionContext, withTenant, type VerifiedTenantContext } from "../src/index.js";
-import { currentCommand, memberSessionPrincipal, type Cluster } from "./contractor-practice-session-fixtures.js";
+import { ContractorRepository, ContractorPracticeSessionRepository, JobSchedulingRepository, WorkOrderRepository, workOrderFailure, requireContractorRequestContext, contractorSessionContext, withTenant, type VerifiedTenantContext } from "../src/index.js";
+import { currentCommand, memberSessionPrincipal, companyRows, type Cluster } from "./contractor-practice-session-fixtures.js";
 import { cluster, company, start, end, state, lookup, repo, on, off, text, expireSwitch, makeSessionExpired, startSessionWithHomeRecord, endHomeRecord, resolvers, raw, requestContext } from "./practice-worker-switch-fixtures.js";
 let c: Cluster;
 beforeAll(async () => { process.env.JOBGUARD_ENV = "synthetic_demo"; c = await cluster(); }, 120000);
@@ -235,7 +235,36 @@ it("[PW32] decision 39 grants stay with the member and revocation removes job ac
  const scheduling = async () => new JobSchedulingRepository(c.runtime).assignments(await new WorkOrderRepository(c.runtime).resolveSession(f.session), f.jobId);
  await expect(scheduling().catch(error => { throw workOrderFailure(error); })).rejects.toMatchObject({ code: "NOT_FOUND" });
  expect(await writes()).toBe(before);
- await end(c, f); await expect(start(c, f)).rejects.toMatchObject({ code: "NOT_FOUND" });
+ // Router ruling r19: the recorded owner ends the switch through its own owner-bound request; main's next assertion stays.
+ await repo(c).switchOff(requireContractorRequestContext(owner), owner, f.session, off());
+ await expect(start(c, f)).rejects.toMatchObject({ code: "NOT_FOUND" });
+});
+it("[PW32] the recorded owner alone ends a switch after the worker is revoked, end-only and idempotent (r19)", async () => {
+ const f = await company(c), b = await company(c), contracts = new ContractorRepository(c.runtime);
+ await start(c, f);
+ const owner = await memberSessionPrincipal(c.admin, c.runtime, f.p.tenantId, f.p.membershipId);
+ const sameFirm = await memberSessionPrincipal(c.admin, c.runtime, f.p.tenantId, f.members.admin!);
+ const otherFirmOwner = await memberSessionPrincipal(c.admin, c.runtime, b.p.tenantId, b.p.membershipId);
+ await contracts.command(owner, await currentCommand(c, f, { kind: "membership.revoke", membershipId: f.members.operative }));
+ const live = async () => (await c.admin.query("SELECT ended_at,end_reason FROM control_plane.practice_worker_switch WHERE tenant_id=$1 ORDER BY started_at DESC LIMIT 1", [f.p.tenantId])).rows[0];
+ const ended = async () => (await c.admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1 AND event_type='practice.worker_switch.ended'", [f.p.tenantId])).rows[0].n as number;
+ const before = await companyRows(c, f.p.tenantId), endedBefore = await ended();
+ const refusedUnchanged = async () => { expect((await live()).ended_at).toBeNull(); expect(await ended()).toBe(endedBefore); expect(await companyRows(c, f.p.tenantId)).toEqual(before); };
+ // The revoked acting session stays refused, and nothing is written.
+ await expect(end(c, f)).rejects.toBeDefined(); await refusedUnchanged();
+ // A non-owner member of the same firm is refused.
+ await expect(repo(c).switchOff(requireContractorRequestContext(sameFirm), sameFirm, f.session, off())).rejects.toBeInstanceOf(PracticeWorkerSwitchError); await refusedUnchanged();
+ // Another firm's owner is refused.
+ await expect(repo(c).switchOff(requireContractorRequestContext(otherFirmOwner), otherFirmOwner, f.session, off())).rejects.toBeInstanceOf(PracticeWorkerSwitchError); await refusedUnchanged();
+ // The recorded owner ends it through its own owner-bound request: one end event, actorRef the owner.
+ const command = off(), first = await repo(c).switchOff(requireContractorRequestContext(owner), owner, f.session, command);
+ expect(first).toMatchObject({ state: "owner", endReason: "switched_back" });
+ expect((await live()).end_reason).toBe("switched_back"); // existing reason values only (no new schema)
+ expect(await ended()).toBe(endedBefore + 1);
+ expect((await c.admin.query("SELECT actor_ref FROM app.audit_event WHERE tenant_id=$1 AND event_type='practice.worker_switch.ended' ORDER BY sequence DESC LIMIT 1", [f.p.tenantId])).rows[0].actor_ref).toBe(`membership:${f.p.membershipId}`);
+ // Replay returns the same end and writes no second end event.
+ expect(await repo(c).switchOff(requireContractorRequestContext(owner), owner, f.session, command)).toEqual(first);
+ expect(await ended()).toBe(endedBefore + 1);
 });
 it("[PW23] catalogue-wide scan stores neither session values nor extra digests", async () => {
  const { digestOf } = await import("./practice-worker-switch-fixtures.js");
