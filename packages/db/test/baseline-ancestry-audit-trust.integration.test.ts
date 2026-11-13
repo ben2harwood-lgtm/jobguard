@@ -1,3 +1,4 @@
+import { bindOwnSession } from "./tenant-context-test-utils.js";
 // Synthetic PostgreSQL regression coverage; no live providers or customer data.
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -59,6 +60,8 @@ describe("trusted imported-baseline ancestry (real PostgreSQL)", () => {
     try {
       await db.query("BEGIN");
       await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenant]);
+      // LP-6d: the reviewing session binds its own request, so the ancestry rule (not the binding) answers.
+      await bindOwnSession(db, f.auth.digest);
       return await db.query("SELECT app.decision_check_command($1,$2,'begin') result", [f.auth.digest,
         JSON.stringify({ version: "finding-evaluation-command.v1", commandId: randomUUID(), tenantId: tenant, jobId: child })]);
     } finally { await db.query("ROLLBACK"); db.release(); }
@@ -83,21 +86,21 @@ describe("trusted imported-baseline ancestry (real PostgreSQL)", () => {
     const { root, child: orphan } = await family();
     let child = orphan;
     await attest(root, child);
-    const authority = () => transaction(f.admin, db => db.query("SELECT app.ch6_integrity_authority($1,$2,$3) actor", [tenant, child, f.auth.digest]));
+    const authority = () => transaction(f.admin, async db => { await bindOwnSession(db, f.auth.digest); return db.query("SELECT app.ch6_integrity_authority($1,$2,$3) actor", [tenant, child, f.auth.digest]); });
     await expect(authority()).rejects.toMatchObject({ code: "42501", message: "NOT_FOUND" });
     await expect(decision(child)).rejects.toMatchObject({ code: "42501", message: "NOT_FOUND" });
-    await expect(transaction(f.runtime, db => db.query("SELECT app.ch6_integrity_sources($1,$2,$3)", [tenant, child, f.auth.digest])))
+    await expect(transaction(f.runtime, async db => { await bindOwnSession(db, f.auth.digest); return db.query("SELECT app.ch6_integrity_sources($1,$2,$3)", [tenant, child, f.auth.digest]); }))
       .rejects.toMatchObject({ code: "42501", message: "NOT_FOUND" });
-    await expect(transaction(f.runtime, db => db.query("SELECT app.ch6_record_integrity_review($1,$2,$3,$4,$5)", [tenant, child, f.auth.digest, "{}", "{}"])))
+    await expect(transaction(f.runtime, async db => { await bindOwnSession(db, f.auth.digest); return db.query("SELECT app.ch6_record_integrity_review($1,$2,$3,$4,$5)", [tenant, child, f.auth.digest, "{}", "{}"]); }))
       .rejects.toMatchObject({ code: "42501", message: "NOT_FOUND" });
     child = await adopted(root);
     expect((await authority()).rows[0].actor).toBe(member);
     expect((await decision(child)).rows[0].result).toEqual({ replay: false });
     // Ownership now succeeds; the unchanged family policy still refuses CH-6
     // v3 processing of an imported job itself.
-    await expect(transaction(f.runtime, db => db.query("SELECT app.ch6_integrity_sources($1,$2,$3)", [tenant, child, f.auth.digest])))
+    await expect(transaction(f.runtime, async db => { await bindOwnSession(db, f.auth.digest); return db.query("SELECT app.ch6_integrity_sources($1,$2,$3)", [tenant, child, f.auth.digest]); }))
       .rejects.toThrow("INTEGRITY_FAMILY_UNAVAILABLE");
-    await expect(transaction(f.runtime, db => db.query("SELECT app.ch6_record_integrity_review($1,$2,$3,$4,$5)", [tenant, child, f.auth.digest, "{}", "{}"])))
+    await expect(transaction(f.runtime, async db => { await bindOwnSession(db, f.auth.digest); return db.query("SELECT app.ch6_record_integrity_review($1,$2,$3,$4,$5)", [tenant, child, f.auth.digest, "{}", "{}"]); }))
       .rejects.toThrow("INTEGRITY_FAMILY_UNAVAILABLE");
   });
   it("the stored source-candidate walk filters forged ancestry and retains a real import", async () => {
@@ -127,6 +130,7 @@ describe("trusted imported-baseline ancestry (real PostgreSQL)", () => {
       try {
         await reviewer.query("BEGIN");
         await reviewer.query("SELECT set_config('app.tenant_id',$1,true)", [tenant]);
+        await bindOwnSession(reviewer, f.auth.digest);
         const result = await reviewer.query("SELECT app.ch6_record_integrity_review($1,$2,$3,$4,$5) result", [tenant, root, f.auth.digest, JSON.stringify(body), JSON.stringify(finding.sourceSnapshot)]);
         expect(result.rows[0].result.commandId).toBe(body.commandId);
         const competing = () => transaction(f.admin, db => db.query("SELECT 1 FROM app.job WHERE tenant_id=$1 AND id=$2 FOR UPDATE NOWAIT", [tenant, child]));
