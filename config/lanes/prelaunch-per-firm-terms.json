@@ -6,6 +6,9 @@
         "codex/sandbox/prelaunch-per-firm-terms"
       ],
       "allow": [
+        "apps/web/e2e/SV-4.spec.ts",
+        "apps/web/e2e/CH-5.spec.ts",
+        "apps/web/e2e/SV-3.spec.ts",
         "apps/api/src/final-account-lock.application.test.ts",
         "apps/api/src/final-account-lock.application.ts",
         "apps/api/src/final-account-lock.isolation.test.ts",
