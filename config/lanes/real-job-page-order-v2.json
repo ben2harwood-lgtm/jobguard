@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/real-job-page-order-v2"
       ],
-      "note": "REAL-JOB-PAGE-ORDER v2 repair 8: job journey order and anchor focus on main\u2019s hashchange/load/remount path; NOPR.",
+      "note": "REAL-JOB-PAGE-ORDER v2 repair 10: settle the initial tour spotlight after layout changes without overriding manual input; NOPR.",
       "allow": [
         "apps/web/app/ui/workspace-shell.tsx",
         "apps/web/app/ui/practice-journey.tsx",
@@ -63,7 +63,9 @@
         "apps/web/app/ui/workspace-shell-ch8.test.tsx",
         "apps/web/app/ui/workspace-shell-statements.test.tsx",
         "apps/web/app/ui/payment-fee-statements.test.ts",
-        "apps/web/app/ui/recovery-cases.behaviour.test.ts"
+        "apps/web/app/ui/recovery-cases.behaviour.test.ts",
+        "apps/web/app/ui/walkthrough/walkthrough.tsx",
+        "apps/web/app/ui/walkthrough/walkthrough-pace.test.ts"
       ]
     }
   }
