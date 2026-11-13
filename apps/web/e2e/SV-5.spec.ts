@@ -106,7 +106,7 @@ test("K (existing proposal, real run): Already included must name a locked line 
   expect(JSON.stringify((await jsonResult(page.request.get(`/api/jobs/${jobId}/final-account`), "Re-read lock")).lock)).toBe(lock);
 });
 
-/** Live job with its required certificate and baseline work note, final account, terms, dispositions and lock, all through the app. */
+/** Live job with its generated proof, final account, terms, dispositions and lock, all through the app. */
 async function lockedPracticeJob(page: Page, capturedExtra = false, beforeLock?: (tenantId:string,jobId:string)=>Promise<void>) {
   await openLiveWatchdogJob(page);
   const jobId = (await page.locator(".quote-editor").getAttribute("data-job-id"))!, tenantId = "11111111-1111-4111-8111-111111111111";
@@ -116,7 +116,8 @@ async function lockedPracticeJob(page: Page, capturedExtra = false, beforeLock?:
   const selected = await proof({ action: "select_generated", scopeItemId: initial.scopeItemId, fixture: "completion-photo" });
   const finalized = await proof({ action: "finalize", uploadId: selected.upload.id, objectVersionId: selected.upload.objectVersionId });
   await proof({ action: "complete", evidenceId: finalized.upload.evidenceId, scopeItemId: initial.scopeItemId });
-  await saveBaselineWorkNote(page, jobId);
+  // The legacy demo proof already supplies the included baseline signal for D/O.
+  // A second work note would create a second classification; B saves its own source.
   if (capturedExtra) {
     await page.goto(`/jobs/${jobId}#job-diary`);
     const diary = page.getByTestId("job-diary");
@@ -150,7 +151,7 @@ async function lockedPracticeJob(page: Page, capturedExtra = false, beforeLock?:
   return { jobId, tenantId };
 }
 
-test("D (practice run): a diary note of work in the original quote is reconciled, never revealed", async ({ page }) => {
+test("D (practice run): a photo of work in the original quote is reconciled, never revealed", async ({ page }) => {
   test.setTimeout(240_000);
   const { jobId, tenantId } = await lockedPracticeJob(page);
   await page.goto(`/jobs/${jobId}#final-check`);
@@ -218,7 +219,7 @@ test("O (real run): zero-result wording survives reload and replay creates no du
     const classifications = () => admin.query("SELECT * FROM app.shadow_signal_classification WHERE tenant_id=$1 AND job_id=$2 ORDER BY id", [tenantId, jobId]);
     const runs = () => admin.query("SELECT * FROM app.shadow_reconciliation_run WHERE tenant_id=$1 AND job_id=$2 ORDER BY id", [tenantId, jobId]);
     const before = (await classifications()).rows;
-    // This is an examined baseline work note, not an empty fixture that could pass without classifying anything.
+    // This is an examined baseline photo, not an empty fixture that could pass without classifying anything.
     expect(before).toEqual([expect.objectContaining({ run_id: completed.runId, outcome: "already_in_original_scope" })]);
     const originalRuns = (await runs()).rows;
     expect(originalRuns).toEqual([expect.objectContaining({ id: completed.runId })]);
