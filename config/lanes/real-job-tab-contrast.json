@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-job-tab-contrast": {
+      "branches": ["codex/sandbox/real-job-tab-contrast"],
+      "note": "REAL-JOB-TAB-CONTRAST: inactive job-tab contrast hardening only; NOPR.",
+      "allow": ["apps/web/app/(designed)/design.css"]
+    }
+  }
+}
