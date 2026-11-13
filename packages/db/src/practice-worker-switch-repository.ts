@@ -39,7 +39,9 @@ export class PracticeWorkerSwitchRepository {
    // A valid session whose membership binding was refused is still a caller refusal,
    // never permission to run the switch callback. Ended sessions keep their 401 code.
    let failure = translated(error);
-   if (error instanceof RequestBindingRefusedError) {
+   // LP-6d repair 16 (flagged): the same holds when the routine itself refuses a named session this request is
+   // not bound to (a second live session of this company): main's visible answer for it is SWITCH_FORBIDDEN.
+   if (isRequestBindingRefusal(error)) {
     const session = (await this.pool.query<{ tenant_id: string }>("SELECT * FROM app.contractor_session($1)", [sessionId])).rows[0];
     if (session?.tenant_id === context.tenantId) failure = new PracticeWorkerSwitchError("SWITCH_FORBIDDEN");
    }
