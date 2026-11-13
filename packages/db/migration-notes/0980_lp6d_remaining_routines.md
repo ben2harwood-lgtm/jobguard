@@ -835,3 +835,10 @@ app.lp6d_visit_authority_of (moves to LP-10). Whole db at 6d98e265 (run.sh WHOLE
 80 failed | 850 passed files; 167 failed | 8114 passed tests (r12 at 6e629b62: 87 / 191).
 No newly failing file. NOT READY. Fail list and log:
 ~/.local/share/full-steam/coordinator/prechecks/lp-6d-remaining-routines-r12b-6d98e265-whole-*.
+
+Repair 13 (test-only tail plus one flagged repository mapping: CommercialIntegrityV3Repository.review
+maps a mid-command REQUEST_BINDING_REFUSED to NOT_FOUND). Whole db at b2db76f4 (run.sh WHOLE,
+2 workers): 78 failed | 852 passed files; 161 failed | 8120 passed tests (r12b at 6d98e265:
+80 / 167). Only newly listed file: recovery-terms-timing (the known environmental timing case).
+NOT READY. Fail list and log:
+~/.local/share/full-steam/coordinator/prechecks/lp-6d-remaining-routines-r13-b2db76f4-whole-*.
