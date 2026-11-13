@@ -90,6 +90,11 @@ describe("CH-4 own-migration upgrade",()=>{
    name:"app.final_check_terms_acceptance.firm_read",permissive:"RESTRICTIVE",roles:["jobguard_runtime"],cmd:"SELECT",
    qual:"((tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid) AND\nCASE\n    WHEN (tenant_id = '11111111-1111-4111-8111-111111111111'::uuid) THEN ((practice_session_digest)::text = app.final_check_request_scope(tenant_id))\n    ELSE (practice_session_digest IS NULL)\nEND)",with_check:null,
   }]:[];
+  // 0734 adds the same shape of flag-gated owner read for the proof guards.
+  if(oldPolicyTables.has("app.synthetic_evidence_original"))customerStagePolicies.push({
+   name:"app.synthetic_evidence_original.job_proof_source_read",permissive:"PERMISSIVE",roles:["jobguard_migration"],cmd:"SELECT",
+   qual:"((tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid) AND (current_setting('app.job_proof_source_read'::text, true) = 'on'::text))",with_check:null,
+  });
   await migrate(f.admin);await migrate(f.admin);await compare(f.admin,before);await compareOldPolicies(f.admin,[...meterSourcePolicies,...customerStagePolicies,...perFirmPolicies,...lp5Policies().filter(policy=>oldPolicyTables.has(policy.name.split(".").slice(0,2).join("."))),{
    ...originalPolicies.find(policy=>policy.name==="app.audit_event.tenant_isolation")!,
    name:"app.audit_event.lp4_audit_writer",roles:["jobguard_audit_writer"],
