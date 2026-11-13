@@ -101,8 +101,11 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   const abandonedVisitRoutines = live.filter(row => row.nspname === "app" && row.proname === "ent3b_close_abandoned_visit"
     && row.args === "p_actor uuid, p_command uuid, p_job uuid, p_visit uuid, p_reason text");
   expect(abandonedVisitRoutines).toHaveLength(1);
+  // LP-6d repair 12 (0980): the only change reads the visit operative's (third-party) authority through the private copy.
   expect(abandonedVisitRoutines[0]?.definition?.split("$function$")[1]).toEqual(
-    abandonedVisit.split("FUNCTION app.ent3b_close_abandoned_visit(")[1]!.split("AS $$")[1]!.split("$$;")[0]);
+    abandonedVisit.split("FUNCTION app.ent3b_close_abandoned_visit(")[1]!.split("AS $$")[1]!.split("$$;")[0]!
+      .replace(" IF EXISTS(SELECT 1 FROM app.ent3b_visit_authority(visit_row.membership_id,p_job)",
+        " -- LP6D_THIRD_PARTY (repair 12): the visit's operative is a third party with no request of its own; its\n -- current visit authority is read through the private copy, never through the caller's binding.\n IF EXISTS(SELECT 1 FROM app.lp6d_visit_authority_of(visit_row.membership_id,p_job)"));
   const recoverySql = await readFile(new URL("../migrations/0732_final_check_typed_recovery.sql", import.meta.url), "utf8");
   for (const [name,args] of [
     ["final_check_read_authority","t uuid, j uuid, d text, locking boolean"],

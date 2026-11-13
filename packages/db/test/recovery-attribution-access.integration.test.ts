@@ -18,9 +18,14 @@ it("SV6-20 tenant context and composite bindings fail closed (private storage)",
 it("SV6-20 malformed session digests cannot reach the checked writer; digest shape alone grants no authority",async()=>{
  const {p,command}=await storedAttributionFixture(f);
  const attempt=(digest:string|null)=>asFixtureTenant(f.runtime,p.tenantId,db=>db.query("SELECT app.assess_recovery_attribution($1,$2,$3)",[p.jobId,digest,command]));
+ const receipts=async()=>(await asFixtureTenant(f.owner,p.tenantId,db=>db.query("SELECT count(*)::int n FROM app.command_receipt WHERE tenant_id=$1",[p.tenantId]))).rows[0].n;
+ const before=await receipts();
  for(const digest of [null,"","forged","a".repeat(63),"a".repeat(65),"g".repeat(64),"A".repeat(64)])await expect(attempt(digest)).rejects.toThrow("DEPENDENCY_BOUND");
- await expect(attempt("a".repeat(64))).rejects.toThrow("FINAL_CHECK_FORBIDDEN");
+ // Router ruling (a), LP-6d: a well-formed but forged session binds no request, so the binding check refuses
+ // first (same 42501 shape, no existence disclosed) and nothing is written.
+ await expect(attempt("a".repeat(64))).rejects.toThrow("REQUEST_BINDING_REFUSED");
  expect((await asFixtureTenant(f.owner,p.tenantId,db=>db.query("SELECT document FROM app.recovery_attribution_revision WHERE job_id=$1",[p.jobId]))).rows).toEqual([]);
+ expect(await receipts()).toBe(before);
 });
 it("SV6-19 runtime history refuses unowned fixture jobs without disclosing stored sources",async()=>{
  const {p,document,command}=await storedAttributionFixture(f);

@@ -263,6 +263,20 @@ it("pins the actor-less escalation copy to app.xa_escalate minus only its bindin
   expect(read("../src/extra-approval-chain-repository.ts")).toContain("SELECT * FROM app.lp6d_escalate_overdue_worker()");
 });
 
+it("reads the abandoned visit's operative through a pinned third-party copy; the closer is otherwise its 0722 body", () => {
+  const bodyOf = (name: string) => definitions(sql).filter(m => m[1] === name).at(-1)![3]!;
+  const guarded = bodyOf("app.ent3b_visit_authority");
+  const prefix = /^\s*BEGIN\n -- LP6D_BOUND[^\n]*\n PERFORM app\.current_actor\(\);\n.*?\n END IF;\n/su.exec(guarded)!;
+  expect(bodyOf("app.lp6d_visit_authority_of").trim()).toBe(guarded.slice(prefix[0].length).replace(/;\nEND\n$/u, "").trim());
+  expect(guarded).toContain("OR p_actor IS DISTINCT FROM app.current_actor() THEN"); // the original keeps its binding check
+  expect(sql).toContain("REVOKE ALL ON FUNCTION app.lp6d_visit_authority_of(uuid,uuid) FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure;");
+  expect(sql).not.toMatch(/GRANT [^;]*app\.lp6d_visit_authority_of\(/u);
+  expect(sql.match(/app\.lp6d_visit_authority_of\(visit_row/gu)).toHaveLength(1); // the closer is its only caller
+  const latest = definitions(read("../migrations/0722_abandoned_visit_authority.sql")).filter(m => m[1] === "app.ent3b_close_abandoned_visit").at(-1)![3]!;
+  expect(bodyOf("app.ent3b_close_abandoned_visit")).toBe(latest.replace(" IF EXISTS(SELECT 1 FROM app.ent3b_visit_authority(visit_row.membership_id,p_job)",
+    " -- LP6D_THIRD_PARTY (repair 12): the visit's operative is a third party with no request of its own; its\n -- current visit authority is read through the private copy, never through the caller's binding.\n IF EXISTS(SELECT 1 FROM app.lp6d_visit_authority_of(visit_row.membership_id,p_job)"));
+});
+
 it("pins each private unguarded copy to its guarded original minus only the LP-6d binding prefix", () => {
   const bodyOf = (name: string) => definitions(sql).filter(m => m[1] === name).at(-1)![3]!;
   // The guarded original is "BEGIN\n <LP6D_BOUND prefix> END IF;\n<original body>;\nEND\n".
@@ -305,7 +319,11 @@ it("accepts the LP-6c delegated customer only for its own job and ClientDecideEx
     expect(b.indexOf("LP6D_DELEGATED"), name).toBeLessThan(b.indexOf("\nDECLARE"));
   }
   // The LP-5b permission check admits the delegated customer only for ClientDecideExtra.
-  expect(definitions(sql).filter(m => m[1] === "app.lp5b_contractor_permission").at(-1)![3]!).toContain("IF app.current_actor() IS NOT NULL OR p_type IS DISTINCT FROM 'ClientDecideExtra' THEN RAISE EXCEPTION 'REQUEST_BINDING_REFUSED'");
+  const lp5b = definitions(sql).filter(m => m[1] === "app.lp5b_contractor_permission").at(-1)![3]!;
+  expect(lp5b).toContain("ELSIF app.current_actor() IS NOT NULL OR p_type IS DISTINCT FROM 'ClientDecideExtra' THEN RAISE EXCEPTION 'REQUEST_BINDING_REFUSED'");
+  // Router ruling (b): only CloseAbandonedSiteVisit, whose body itself refuses a named actor other than the bound one, reaches the body.
+  expect(lp5b).toContain("IF app.current_actor() IS NOT NULL AND p_type='CloseAbandonedSiteVisit'");
+  expect(lp5b).toContain("IF current_database()<>'jobguard_synthetic_demo' OR p_actor IS DISTINCT FROM app.current_actor()");
   expect(sql).not.toMatch(/FUNCTION app\.lp6d_xa_(begin|client_decide)\(/u);
   // LP-6c keeps the delegated actor reader away from jobguard_migration: only a yes/no match runs, as the command writer.
   expect(sql).not.toMatch(/GRANT EXECUTE ON FUNCTION app\.lp6_delegated_actor\([^)]*\) TO jobguard_migration/u);

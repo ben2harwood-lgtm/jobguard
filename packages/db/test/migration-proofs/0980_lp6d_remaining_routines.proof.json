@@ -2992,7 +2992,7 @@
         "otherExecute": [
           "jobguard_command_writer"
         ],
-        "definitionSha256": "0805b3829d8f85153aa25cca6ed5515fc97464f665af2865a608294f3ed97586",
+        "definitionSha256": "c552969761ff83c307e135e27538e86367c323b5e4b20848b45fe615d7349099",
         "staticWrites": [],
         "staticCalls": [
           "app.contractor_allowed",
@@ -7189,6 +7189,78 @@
           "app.xa_wait_deadline"
         ]
       }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.ent3b_close_abandoned_visit(uuid,uuid,uuid,uuid,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.closeout_answer",
+          "app.site_visit"
+        ],
+        "staticCalls": [
+          "app.append_audit",
+          "app.ent3b_visit_authority",
+          "app.lp5_bind_effect",
+          "app.lp5b_contractor_permission"
+        ]
+      },
+      "after": {
+        "identity": "function:app.ent3b_close_abandoned_visit(uuid,uuid,uuid,uuid,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "aeeece87de84a33c69e4dd2b56b6d6b16ae455a8dd600dff926d0be4b7505700",
+        "staticWrites": [
+          "app.closeout_answer",
+          "app.site_visit"
+        ],
+        "staticCalls": [
+          "app.append_audit",
+          "app.lp5_bind_effect",
+          "app.lp5b_contractor_permission",
+          "app.lp6d_visit_authority_of"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp6d_visit_authority_of(uuid,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "15e9946eafad654e99166ea42525327edd8342c7506668264dffecb3442f293d",
+        "staticWrites": [],
+        "staticCalls": [
+          "app.contractor_job_assigned",
+          "app.contractor_member_active",
+          "app.ent3a_extra_authority"
+        ]
+      }
     }
   ],
   "upgrade": [
@@ -7562,6 +7634,21 @@
         "proowner": "jobguard_migration",
         "proacl": "{jobguard_migration=X/jobguard_migration}",
         "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp6d_visit_authority_of",
+        "args": "p_actor uuid, p_job uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": false,
         "proconfig": [
           "search_path=pg_catalog"
         ]

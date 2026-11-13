@@ -2835,7 +2835,11 @@ BEGIN
   OR p_actor IS DISTINCT FROM app.current_actor() THEN
   -- LP6D_DELEGATED (checker r10): LP-6c's customer binding hides its actor from current_actor();
   -- only that delegated approver, scoped to this job and ClientDecideExtra (<=1 minute), may proceed.
-  IF app.current_actor() IS NOT NULL OR p_type IS DISTINCT FROM 'ClientDecideExtra' THEN RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
+  -- LP6D_BODY_ACTOR (repair 12, router ruling b): CloseAbandonedSiteVisit's body already refuses a named
+  -- actor other than the bound one with PERMISSION_DENIED; a bound request of this tenant reaches it.
+  IF app.current_actor() IS NOT NULL AND p_type='CloseAbandonedSiteVisit'
+   AND lower(nullif(current_setting('app.tenant_id',true),'')) IS NOT DISTINCT FROM app.current_tenant()::text THEN NULL;
+  ELSIF app.current_actor() IS NOT NULL OR p_type IS DISTINCT FROM 'ClientDecideExtra' THEN RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
   ELSIF NOT app.lp6d_is_delegated_actor(p_actor,'ClientDecideExtra',p_job) THEN
    RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
   END IF;
@@ -3267,6 +3271,94 @@ BEGIN
 END;
 END
 $$;
+
+-- Repair 12 (raw-fixture tail found an unbound real path): ent3b_close_abandoned_visit asks whether the
+-- VISIT'S OPERATIVE (a third party, never the caller) still holds visit authority. That question is read
+-- through a private pinned copy of app.ent3b_visit_authority minus only its binding prefix (drift-pinned in
+-- lp6d-routines.test.ts), revoked from PUBLIC, runtime, identity and infrastructure, reachable only from the
+-- closer below. The closer itself is LP-6d bound through lp5b_contractor_permission. Moves to LP-10.
+CREATE FUNCTION app.lp6d_visit_authority_of(p_actor uuid, p_job uuid)
+RETURNS TABLE(decision text, reason_code text)
+LANGUAGE plpgsql STABLE SECURITY INVOKER SET search_path=pg_catalog AS $$
+DECLARE tenant uuid; member_role text; answers integer; answered text;
+BEGIN
+ BEGIN
+  tenant:=nullif(pg_catalog.current_setting('app.tenant_id',true),'')::uuid;
+ EXCEPTION WHEN invalid_text_representation THEN tenant:=NULL;
+ END;
+ IF tenant IS NULL OR p_actor IS NULL OR NOT coalesce(app.contractor_member_active(p_actor),false) THEN
+  RETURN QUERY SELECT 'forbidden'::text,'member_inactive'::text; RETURN;
+ END IF;
+ SELECT m.role INTO member_role FROM app.membership m WHERE m.tenant_id=tenant AND m.id=p_actor;
+ IF member_role IS NULL OR member_role NOT IN('operative','supervisor') THEN
+  RETURN QUERY SELECT 'forbidden'::text,'role_not_permitted'::text; RETURN;
+ END IF;
+ -- Site staff who may log a site extra on the job (active member, work-order job of this tenant, order not cancelled, covering grant of their own role) ...
+ SELECT count(*)::integer, min(x.decision) INTO answers, answered FROM app.ent3a_extra_authority(p_actor,'LogSiteExtra',p_job) x;
+ IF answers IS DISTINCT FROM 1 OR answered IS DISTINCT FROM 'allowed' THEN
+  RETURN QUERY SELECT 'not_found'::text,'job_out_of_scope'::text; RETURN;
+ END IF;
+ -- ... and who are named on the job's current revision.
+ IF NOT coalesce(app.contractor_job_assigned(p_actor,p_job),false) THEN
+  RETURN QUERY SELECT 'not_found'::text,'job_out_of_scope'::text; RETURN;
+ END IF;
+ RETURN QUERY SELECT 'allowed'::text,'allowed'::text;
+END
+$$;
+ALTER FUNCTION app.lp6d_visit_authority_of(uuid,uuid) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp6d_visit_authority_of(uuid,uuid) FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure;
+DO $$ DECLARE login record; BEGIN
+ FOR login IN SELECT rolname FROM pg_roles WHERE rolcanlogin AND NOT rolsuper LOOP
+  EXECUTE format('REVOKE ALL ON FUNCTION app.lp6d_visit_authority_of(uuid,uuid) FROM %I',login.rolname);
+ END LOOP;
+END $$;
+-- Latest body: packages/db/migrations/0722_abandoned_visit_authority.sql; only the operative's authority read changes.
+CREATE OR REPLACE FUNCTION app.ent3b_close_abandoned_visit(p_actor uuid, p_command uuid, p_job uuid, p_visit uuid, p_reason text) RETURNS uuid
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE tenant uuid; visit_row app.site_visit;
+ answer_id uuid:=gen_random_uuid(); recorded timestamptz;
+BEGIN
+ IF pg_catalog.current_database()<>'jobguard_synthetic_demo' THEN RAISE EXCEPTION 'MODE_FORBIDDEN' USING ERRCODE='42501'; END IF;
+ BEGIN
+  tenant:=nullif(pg_catalog.current_setting('app.tenant_id',true),'')::uuid;
+ EXCEPTION WHEN invalid_text_representation THEN tenant:=NULL;
+ END;
+ IF tenant IS NULL THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='P0002'; END IF;
+ PERFORM pg_catalog.pg_advisory_xact_lock_shared(pg_catalog.hashtextextended(tenant::text,54));
+ PERFORM app.lp5b_contractor_permission('CloseAbandonedSiteVisit',p_actor,p_job,jsonb_build_object('jobId',p_job));
+ IF p_command IS NULL OR p_job IS NULL OR p_visit IS NULL OR p_reason IS NULL OR length(btrim(p_reason)) NOT BETWEEN 1 AND 1000 THEN
+  RAISE EXCEPTION 'INVALID_COMMAND' USING ERRCODE='23514'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM app.command_receipt r WHERE r.tenant_id=tenant AND r.command_id=p_command
+  AND r.status='processing' AND r.command_type='CloseAbandonedSiteVisit' AND r.actor_membership_id=p_actor) THEN
+  RAISE EXCEPTION 'INVALID_COMMAND' USING ERRCODE='23514'; END IF;
+ -- The private binder requires this transaction's begin_command claim and exact input.
+ PERFORM app.lp5_bind_effect(p_command,NULL,'site_visit',jsonb_build_object('visitId',p_visit,'jobId',p_job,
+  'closeKind','abandoned','reasonHash',encode(sha256(convert_to(p_reason,'UTF8')),'hex')));
+ PERFORM 1 FROM app.job WHERE tenant_id=tenant AND id=p_job FOR SHARE;
+ PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(tenant::text||':'||p_visit::text,3102));
+ SELECT * INTO visit_row FROM app.site_visit v WHERE v.tenant_id=tenant AND v.id=p_visit AND v.job_id=p_job;
+ IF visit_row.id IS NULL OR visit_row.completed_at IS NOT NULL THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='P0002'; END IF;
+ -- LP6D_THIRD_PARTY (repair 12): the visit's operative is a third party with no request of its own; its
+ -- current visit authority is read through the private copy, never through the caller's binding.
+ IF EXISTS(SELECT 1 FROM app.lp6d_visit_authority_of(visit_row.membership_id,p_job) a WHERE a.decision='allowed') THEN
+  RAISE EXCEPTION 'VISIT_NOT_ABANDONED' USING ERRCODE='55000'; END IF;
+ recorded:=pg_catalog.clock_timestamp();
+ UPDATE app.site_visit SET completed_at=recorded WHERE tenant_id=tenant AND id=p_visit;
+ -- Preserve the visit member, question version, one-answer invariant and server time.
+ -- This administrative 'no' is distinguished from an operative answer by its receipt/audit.
+ INSERT INTO app.closeout_answer(tenant_id,id,job_id,work_order_id,site_visit_id,membership_id,question_version,answer,command_id,server_recorded_at)
+ VALUES(tenant,answer_id,p_job,visit_row.work_order_id,p_visit,visit_row.membership_id,'closeout-question.v1','no',p_command,recorded);
+ -- Last contending lock is the audit head. Never put free-text reasons in audit.
+ PERFORM app.append_audit(jsonb_build_array(jsonb_build_object('id',answer_id,'version','audit.v1',
+  'actorRef','membership:'||p_actor::text,'eventType','contractor.visit.completed','subjectType','site-visit','subjectRef',p_visit::text,
+  'payload',jsonb_build_object('references',jsonb_build_object('command',p_command::text,'job',p_job::text,'visit',p_visit::text,
+   'closeoutAnswer',answer_id::text,'closeKind','abandoned','environment','synthetic_demo'),
+   'hashes',jsonb_build_object('reason',encode(sha256(convert_to(p_reason,'UTF8')),'hex'))))));
+ RETURN answer_id;
+END $$;
+ALTER FUNCTION app.ent3b_close_abandoned_visit(uuid,uuid,uuid,uuid,text) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.ent3b_close_abandoned_visit(uuid,uuid,uuid,uuid,text) FROM PUBLIC,jobguard_identity,jobguard_infrastructure;
+GRANT EXECUTE ON FUNCTION app.ent3b_close_abandoned_visit(uuid,uuid,uuid,uuid,text) TO jobguard_runtime;
 
 -- Latest body: packages/db/migrations/0548_server_plan_entitlements.sql
 CREATE OR REPLACE FUNCTION app.ent3a_extra_authority(p_actor uuid, p_command_type text, p_job uuid)
