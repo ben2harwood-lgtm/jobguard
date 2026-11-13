@@ -827,3 +827,11 @@ Repair 12 (raw-fixture tail; each actor binds its own session; no product change
 6e629b62 (run.sh WHOLE, 2 workers): Test Files  87 failed | 843 passed (930); 191 failed | 8089 passed tests (r11 at 42549b17:
 94 files / 213 tests). No newly failing file. NOT READY. Fail list and log:
 ~/.local/share/full-steam/coordinator/prechecks/lp-6d-remaining-routines-r12-6e629b62-whole-*.
+
+Repair 12b (router ruling: forged/malformed credentials accept the earlier binding refusal with
+a nothing-written assertion; a real other actor keeps its business refusal). Abandoned-visit
+closing reads the visit operative's (third-party) authority through the pinned private copy
+app.lp6d_visit_authority_of (moves to LP-10). Whole db at 6d98e265 (run.sh WHOLE, 2 workers):
+80 failed | 850 passed files; 167 failed | 8114 passed tests (r12 at 6e629b62: 87 / 191).
+No newly failing file. NOT READY. Fail list and log:
+~/.local/share/full-steam/coordinator/prechecks/lp-6d-remaining-routines-r12b-6d98e265-whole-*.
