@@ -210,7 +210,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   // ENT-5 changes only these exact routine bodies; preserve every predecessor check.
   const clientAuthority = await readFile(new URL("../migrations/0642_extra_client_send_authority.sql", import.meta.url), "utf8");
   const clientAttribution = await readFile(new URL("../migrations/0644_extra_customer_approval.sql", import.meta.url), "utf8");
-  const practiceProof = await readFile(new URL("../migrations/0946_proof_keeps_finished.sql", import.meta.url), "utf8");
+  const practiceProof = await readFile(new URL("../migrations/0736_proof_keeps_finished.sql", import.meta.url), "utf8");
   const replacements = (source: string) => [...source.matchAll(/changed:=replace\((?:original|changed),'((?:[^']|'')*)',\s*'((?:[^']|'')*)'\);/g)]
     .map(match => [match[1]!.replaceAll("''", "'"), match[2]!.replaceAll("''", "'")] as const);
   const authorityChanges = replacements(clientAuthority), attributionChanges = replacements(clientAttribution);

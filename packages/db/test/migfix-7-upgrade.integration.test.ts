@@ -94,7 +94,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   }
   const authority = await readFile(new URL("../migrations/0642_extra_client_send_authority.sql", import.meta.url), "utf8");
   const attribution = await readFile(new URL("../migrations/0644_extra_customer_approval.sql", import.meta.url), "utf8");
-  const practiceProof = await readFile(new URL("../migrations/0946_proof_keeps_finished.sql", import.meta.url), "utf8");
+  const practiceProof = await readFile(new URL("../migrations/0736_proof_keeps_finished.sql", import.meta.url), "utf8");
   const replacements = (source: string) => [...source.matchAll(/changed:=replace\((?:original|changed),'((?:[^']|'')*)',\s*'((?:[^']|'')*)'\);/g)]
     .map(match => [match[1]!.replaceAll("''", "'"), match[2]!.replaceAll("''", "'")] as const);
   const authorityChanges = replacements(authority), attributionChanges = replacements(attribution);

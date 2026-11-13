@@ -122,7 +122,7 @@ it('emergency_dual_owner/scim2_machine preserve populated identity state, instal
  for(const name of ['app.xa_issue_link','app.lp5b_contractor_permission','app.northside_capture_action'])later.add(name);
  // 0667 inserts the practice-owner guard into lock_final_account by text replacement; migfix-7 and plan-entitlement pin the body.
  later.add('app.lock_final_account');
- // 0946 patches only the practice-proof cancellation body; migfix-7 and plan-entitlement pin both exact replacements.
+ // 0736 patches only the practice-proof cancellation body; migfix-7 and plan-entitlement pin both exact replacements.
  later.add('app.ch4_capture_site_source');
  // A later GRANT/REVOKE on a predecessor table may change its ACL only; that migration's proof and LP-0 pin it.
  const laterAcl=new Set<string>();
