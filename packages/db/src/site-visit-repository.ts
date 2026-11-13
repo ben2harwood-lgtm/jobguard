@@ -260,6 +260,10 @@ export class SiteVisitRepository {
   } catch (error) {
    if (error instanceof SiteVisitError) throw error;
    if (error instanceof InvalidTenantContextError) throw new SiteVisitError("NOT_FOUND");
+   // LP-6d (repair 14, flagged): a member whose request can no longer be bound (revoked or expired) gets the
+   // same inactive-member refusal as the visit commands above, never an unavailable error.
+   if (error instanceof RequestBindingRefusedError || ((error as { code?: string; message?: string }).code === "42501"
+    && (error as { message?: string }).message === "REQUEST_BINDING_REFUSED")) throw new SiteVisitError("VISIT_FORBIDDEN");
    throw new SiteVisitError("SITE_VISIT_UNAVAILABLE");
   }
  }
