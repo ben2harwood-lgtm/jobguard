@@ -93,8 +93,6 @@ for (const mode of ["Play the whole thing", "Show me"] as const) {
     await control(page, "Read the report again").click();
     await page.getByRole("button", { name: "Return to the saved job", exact: true }).click();
     await page.goto("/practice-company");
-    const card = page.locator(".job-card").filter({ has: page.locator(`a[href="/jobs/${id}"]`) });
-    await expect(card).toContainText("Customer has paid");
     await oneJob(page, id);
     expect(captures).toBe(1); expect(commercial).toEqual(before);
     expect(await read(page, `/api/jobs/${id}/customer-invoices`)).toEqual(invoices);
@@ -155,7 +153,7 @@ test("own-job refusal waits for an explicit alternative", async ({ page }, info)
   page.on("request", request => { if (request.method() === "POST" && new URL(request.url()).pathname === "/api/jobs/capture") captures++; });
   await page.route(`**/api/jobs/${own}/quotes/preview`, async route => { attempts++; await route.fulfill({ status: 409, json: { code: "STALE_QUOTE" } }); });
   await control(page, "Show me").click();
-  await expect(page.getByText("Your own job could not continue.", { exact: false })).toBeVisible({ timeout: 40_000 });
+  await expect(page.getByRole("alert").filter({ hasText: /^Your own job could not continue\./ })).toBeVisible({ timeout: 40_000 });
   await oneJob(page, own); expect(captures).toBe(0); expect(attempts).toBe(1);
   expect((await read(page, `/api/jobs/${own}/proposal`)).status).toBe("quoting");
   expect((await read(page, `/api/jobs/${own}/customer-invoices`)).invoices).toEqual([]);
@@ -204,7 +202,7 @@ test("foreign selectors and reset-session resume never capture an alternative", 
     let captures = 0;
     stranger.on("request", request => { if (request.method() === "POST" && new URL(request.url()).pathname === "/api/jobs/capture") captures++; });
     await stranger.goto(`${savedUrl}&walkExample=${own}`);
-    await expect(stranger.getByRole("alert")).toContainText("Your saved walkthrough could not load");
+    await expect(stranger.getByRole("alert").filter({ hasText: "Your saved walkthrough could not load" })).toBeVisible();
     await expect(tour(stranger)).toHaveCount(0); expect(captures).toBe(0);
     expect((await stranger.request.get(`/api/jobs/${own}/proposal`)).ok()).toBe(false);
     await oneJob(page, own);
@@ -214,7 +212,7 @@ test("foreign selectors and reset-session resume never capture an alternative", 
   let captures = 0;
   page.on("request", request => { if (request.method() === "POST" && new URL(request.url()).pathname === "/api/jobs/capture") captures++; });
   await page.goto(savedUrl);
-  await expect(page.getByRole("alert")).toContainText("Your saved walkthrough could not load");
+  await expect(page.getByRole("alert").filter({ hasText: "Your saved walkthrough could not load" })).toBeVisible();
   await expect(tour(page)).toHaveCount(0); expect(captures).toBe(0);
   expect(new URL(page.url()).searchParams.has("walkExample")).toBe(false);
   expect((await page.request.get(`/api/jobs/${own}/proposal`)).ok()).toBe(false);

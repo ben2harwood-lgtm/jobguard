@@ -307,7 +307,7 @@ for (const refusal of ["refused", "disabled"] as const) {
       await expect(page.getByRole("button", { name: "Preview immutable quote", exact: true })).toBeDisabled();
     }
     await tour.getByRole("button", { name: "Show me", exact: true }).click();
-    await expect(page.getByText("Your own job could not continue.", { exact: false })).toBeVisible({ timeout: 40_000 });
+    await expect(page.getByRole("alert").filter({ hasText: /^Your own job could not continue\./ })).toBeVisible({ timeout: 40_000 });
     await expect(tour.getByRole("button", { name: "Show me", exact: true })).toBeEnabled();
     expect(new URL(page.url()).searchParams.has("walkExample")).toBe(false);
     expect(alternativeCaptures).toBe(0);
