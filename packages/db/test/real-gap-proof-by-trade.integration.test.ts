@@ -4,7 +4,7 @@ import { createWatchdogHarness } from "./watchdog-command-harness.js";
 import { JobProofStatementService, readJobProofStatement } from "../src/job-proof-statement.js";
 import { withTenant } from "../src/tenant-context.js";
 import { startBlankPracticeCompany } from "../src/blank-practice-company.js";
-import { authenticatePracticeSession } from "../src/practice-session.js";
+import { authenticatePracticeSession, practiceMaterialPool } from "../src/practice-session.js";
 import { seedHomeOwner } from "./contractor-practice-session-fixtures.js";
 import { DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID } from "../src/demo-seed.js";
 import { workTenant } from "./job-work-state-fixtures.js";
@@ -432,7 +432,7 @@ async function lockablePhotoAccount() {
  const {FinalAccountLockRepository}=await import("../src/final-account-lock-repository.js");
  const {JobWorkStateRepository}=await import("../src/job-work-state-repository.js");
  const job=await h.live(),a=await ownedAccount(job),statementCommand=randomUUID(),saved=await answer(job,false,statementCommand),proof=await finish(job,false);
- const account=await a.assembly.assemble(h.ctx,a.command()),locks=new FinalAccountLockRepository(h.runtime);
+ const account=await a.assembly.assemble(h.ctx,a.command()),locks=new FinalAccountLockRepository(practiceMaterialPool(h.runtime,practice.digest));
  expect(account.issueBlocked).toBe(false);
  await new JobWorkStateRepository(h.runtime).finish(h.ctx,job,practice.digest,{version:"job-work-state-command.v1",commandId:randomUUID(),action:"finish",expectedRevision:await workRevision(h.admin,h.tenant,job)});
  await locks.acceptTerms(h.ctx,{actorMembershipId:h.member,commandId:randomUUID(),termsVersion:"synthetic_final_check_terms.v1"});
@@ -465,7 +465,7 @@ describe("explicit lock enforcement and invalidation serialization",()=>{
  it("lock-first retains its immutable lock when invalidation subsequently requires proof review",async()=>{
   const {FinalAccountLockRepository}=await import("../src/final-account-lock-repository.js");
   const p=await lockablePhotoAccount(),pause=pauseStatement("FROM app.lock_final_account");
-  const locking=new FinalAccountLockRepository(pause.pool).lock(h.ctx,p.input);
+  const locking=new FinalAccountLockRepository(practiceMaterialPool(pause.pool,practice.digest)).lock(h.ctx,p.input);
   await pause.ready;const invalidating=h.repos.proof.invalidate(h.ctx,{version:"proof.invalidate.v1",commandId:randomUUID(),actorMembershipId:h.member,evidenceId:p.proof.u.id,reasonCode:"verification_invalid"});
   pause.release();const locked=await locking;
   await invalidating;
