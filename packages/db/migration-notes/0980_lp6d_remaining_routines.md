@@ -861,3 +861,7 @@ repository's usual code). Whole db at 5f743a26 (run.sh WHOLE, 2 workers): 64 fai
 files; 127 failed | 8154 passed tests (r15 at 6672ecc8: 66 / 136). Only newly listed file:
 recovery-terms-timing (the known environmental timing case). NOT READY. Fail list and log:
 ~/.local/share/full-steam/coordinator/prechecks/lp-6d-remaining-routines-r16-5f743a26-whole-*.
+
+Repair 17 ([PW32] owner administers during a switch only through an owner-bound request). Whole db
+at 58ff4bc2 (run.sh WHOLE, 2 workers): 63 failed | 867 passed (930); 125 failed | 8156 passed | 16 skipped | 19 todo (8316) (r16 at 5f743a26: 64 files / 127 tests). NOT READY.
+Fail list and log: ~/.local/share/full-steam/coordinator/prechecks/lp-6d-remaining-routines-r17-58ff4bc2-whole-*.
