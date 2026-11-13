@@ -110,9 +110,10 @@ it("shows complete only for the server's complete status and never for an incomp
  const html = renderToStaticMarkup(<ShadowSavedReport report={parseShadowReport(completeReport(), jobId)} />);
  expect(html).toContain("Complete. All nine steps are saved on this job."); expect(html).not.toContain("Incomplete");
  expect(html).not.toMatch(/\bRED\b|verdict|observations|0 of 2|SV-6/i);
- expect(html).toContain("an approved pack proves"); expect(html).toContain("Settlement");
+ expect(html).toContain("Supporting evidence packs: approved packs are saved with records linked to each extra."); expect(html).toContain("Settlement");
  const incomplete = renderToStaticMarkup(<ShadowSavedReport report={parseShadowReport(report(), jobId)} />);
- expect(incomplete).not.toContain("Complete."); expect(incomplete).toContain("not all approved yet");
+ expect(incomplete).not.toContain("Complete."); expect(incomplete).toContain("Supporting evidence packs: not all approved yet.");
+ expect(incomplete).not.toContain("approved packs are saved with records linked to each extra");
 });
 it("refuses a complete status that contradicts its own saved parts", () => {
  const good = completeReport();
