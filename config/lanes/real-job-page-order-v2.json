@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/real-job-page-order-v2"
       ],
-      "note": "REAL-JOB-PAGE-ORDER v2 repair 10: settle the initial tour spotlight after layout changes without overriding manual input; NOPR.",
+      "note": "REAL-JOB-PAGE-ORDER v2 repair 11: open tour pricing without fragment scrolling and gate proof stages on the same saved status; NOPR.",
       "allow": [
         "apps/web/app/ui/workspace-shell.tsx",
         "apps/web/app/ui/practice-journey.tsx",
@@ -65,7 +65,9 @@
         "apps/web/app/ui/payment-fee-statements.test.ts",
         "apps/web/app/ui/recovery-cases.behaviour.test.ts",
         "apps/web/app/ui/walkthrough/walkthrough.tsx",
-        "apps/web/app/ui/walkthrough/walkthrough-pace.test.ts"
+        "apps/web/app/ui/walkthrough/walkthrough-pace.test.ts",
+        "apps/web/app/practice-company/walkthrough/voice-journey.tsx",
+        "apps/web/app/practice-company/walkthrough/voice-journey.test.tsx"
       ]
     }
   }

@@ -32,7 +32,7 @@ vi.mock("./job-final-account", async original => {
 });
 afterEach(() => vi.unstubAllGlobals());
 const jobId = "11111111-1111-4111-8111-111111111112";
-function workspace(status: CaptureWorkspaceResponse["status"], fragment = "") {
+function workspace(status: CaptureWorkspaceResponse["status"], fragment = "", initialPricing = false) {
  vi.stubGlobal("React", React);
  const capture: CaptureWorkspaceResponse = {
   version: 1, environment: "synthetic_demo", captureId: jobId, jobId, proposalId: jobId, reviewId: jobId,
@@ -42,7 +42,7 @@ function workspace(status: CaptureWorkspaceResponse["status"], fragment = "") {
  state.live = ["live", "invoiced", "paid"].includes(status);
  state.effects = [];state.setters=[];
  state.values = [null, capture, null, false, fragment];
- return WorkspaceShell({ jobId });
+ return WorkspaceShell({ jobId, initialPricing });
 }
 function ids(html: string, attribute: string) {
  return [...new Set([...html.matchAll(new RegExp(`(?:^|\\s)${attribute}="([^"]+)"`, "gu"))].map(match => match[1]))].sort();
@@ -205,4 +205,29 @@ it.each(["", "#scope", "#quote", "#final-account-title", "#recovery-cases"])("us
  expect(html.match(/data-testid="final-account-lock"/gu) ?? []).toHaveLength(pricing ? 1 : 0);
  expect(html.match(/data-testid="final-check-reveal"/gu)).toHaveLength(1);
  if (pricing) expect(html.indexOf('id="final-account-title"')).toBeLessThan(html.indexOf('id="practice-tools"'));
+});
+
+
+it("opens tour pricing without running the shell fragment scroll", () => {
+ const tree = workspace("quoting", "", true);
+ vi.stubGlobal("document", { getElementById: vi.fn() });
+ // The fragment-focus effect must exit before looking for an anchor.
+ state.effects[3]!();
+ expect(document.getElementById).not.toHaveBeenCalled();
+ const html = renderToStaticMarkup(tree);
+ expect(html).toContain('class="quote-editor"');
+ expect(html.match(/Attach generated practice image/gu)).toHaveLength(1);
+});
+
+it.each(["accepted", "live", "invoiced", "paid"] as const)("renders one proof stage when activation loads before the %s shell snapshot", status => {
+ const tree = workspace(status, "#quote");
+ // The editor has received activation; the shell can still have its pre-live snapshot.
+ state.live = true;
+ const html = renderToStaticMarkup(tree);
+ expect(html).toContain('aria-label="Live activation"');
+ expect(html.match(/id="work-proof"/gu)).toHaveLength(1);
+ expect(html.match(/Attach generated practice image/gu)).toHaveLength(1);
+ const proof = html.indexOf('id="work-proof"');
+ const editor = html.indexOf('class="quote-editor"');
+ expect(proof < editor).toBe(status === "accepted");
 });

@@ -29,7 +29,8 @@ import { JobWorkState } from "./job-work-state";
 import { FinalCheckReveal } from "./final-check-reveal";
 const stages=["Scope","Quote","Work","Final account","Payment"];
 
-export function WorkspaceShell({jobId}:{jobId:string}){
+// Tours can open pricing directly without triggering ordinary fragment navigation.
+export function WorkspaceShell({jobId,initialPricing=false}:{jobId:string;initialPricing?:boolean}){
  const[job,setJob]=useState<JobWorkspaceResponse["job"]|null>(null);
  const[capture,setCapture]=useState<CaptureWorkspaceResponse|null>(null);
  const[error,setError]=useState<"forbidden"|"unavailable"|null>(null);
@@ -64,7 +65,7 @@ export function WorkspaceShell({jobId}:{jobId:string}){
  const section=capture?requestedWorkspaceSection(capture.status,fragment==="#variations-title"?"#work-proof":fragment):"scope";
  // Plain saved-job URLs retain the confirmed-scope step. Explicit job anchors
  // open the editor, including diary/customer panels nested inside the live journey.
- const pricing=section!=="scope"||Boolean(capture&&hasStartedWork(capture.status)&&fragment&&fragment!=="#scope");
+ const pricing=initialPricing||section!=="scope"||Boolean(capture&&hasStartedWork(capture.status)&&fragment&&fragment!=="#scope");
  useEffect(()=>{
   if(loading||!capture||!fragment)return;
   const root=document.getElementById("captured-job-workspace");if(!root)return;
@@ -87,7 +88,8 @@ export function WorkspaceShell({jobId}:{jobId:string}){
    <nav className="workspace-stages" aria-label="Saved job sections"><a href="#scope">Scope</a>{mayOpenSavedQuote(capture.status)&&<a href="#quote">Quote</a>}{hasStartedWork(capture.status)&&<><a href="#work-proof">Work and proof</a><a href="#final-account-title">Final account and invoices</a></>}</nav>
    <PracticeJourney jobId={jobId} status={capture.status}/>
    <JobParties jobId={jobId}/>
-   <section id="scope" tabIndex={-1}><div id="quote" tabIndex={-1}><ReviewProposal key={`${jobId}:${section==="scope"?"scope":"editor"}`} result={capture} initialPricing={pricing} beforeProof={<><JobWorkState jobId={jobId}/><JobDiary key={`diary:${jobId}`} jobId={jobId}/><CustomerMessages key={`messages:${jobId}`} jobId={jobId}/></>} beforeInvoices={<FinalCheckReveal jobId={jobId}/>} practiceTools={null} onSnapshot={acceptSnapshot} onScope={snapshot=>{if(snapshot.jobId!==currentJobId.current)return;acceptSnapshot(snapshot);setFragment("#scope");history.replaceState(null,"",`${location.pathname}${location.search}#scope`);}} back={()=>location.assign("/classic")}/></div></section>
+   {/* The same saved status removes pre-live proof and enables the editor proof slot. */}
+   <section id="scope" tabIndex={-1}><div id="quote" tabIndex={-1}><ReviewProposal key={`${jobId}:${section==="scope"?"scope":"editor"}`} result={capture} initialPricing={pricing} proofStage={hasStartedWork(capture.status)?undefined:null} beforeProof={<><JobWorkState jobId={jobId}/><JobDiary key={`diary:${jobId}`} jobId={jobId}/><CustomerMessages key={`messages:${jobId}`} jobId={jobId}/></>} beforeInvoices={<FinalCheckReveal jobId={jobId}/>} practiceTools={null} onSnapshot={acceptSnapshot} onScope={snapshot=>{if(snapshot.jobId!==currentJobId.current)return;acceptSnapshot(snapshot);setFragment("#scope");history.replaceState(null,"",`${location.pathname}${location.search}#scope`);}} back={()=>location.assign("/classic")}/></div></section>
    <hr/>
    <h2 id="practice-tools">Practice tools — demo only, not part of your job</h2>
    <p>These tools use fictional examples to explore JobGuard; they are separate from your job’s next steps.</p>
