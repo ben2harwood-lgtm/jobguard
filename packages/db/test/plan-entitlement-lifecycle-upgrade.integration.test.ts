@@ -76,6 +76,10 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     expect(signature.split("(")[0]).toBe(`app.${body[1]}`);
     lp6cReplacements.set(oid, body[4]!);
   }
+  // LATER-SAFETY-144 replaces only this exact writer body; retain its metadata checks.
+  const signedInvoiceSql = await readFile(new URL("../migrations/0731_combined_invoice_signed_vat.sql", import.meta.url), "utf8");
+  const signedInvoiceOid = (await c.admin.query("SELECT 'app.issue_lock_bound_customer_invoice(uuid,uuid,uuid,uuid,uuid,text,text,date,text)'::regprocedure::oid oid")).rows[0].oid;
+  lp6cReplacements.set(signedInvoiceOid, signedInvoiceSql.split("FUNCTION app.issue_lock_bound_customer_invoice(")[1]!.split("AS $$")[1]!.split(/\$\$\s*;/u)[0]!);
   // Only these six exact identities receive their latest 0724 bodies. Their
   // owners, ACLs and all other metadata remain checked by successor proofs.
   const delegationSql = await readFile(new URL("../migrations/0724_lp6c_customer_portal_delegation.sql", import.meta.url), "utf8");
@@ -99,6 +103,17 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   expect(abandonedVisitRoutines).toHaveLength(1);
   expect(abandonedVisitRoutines[0]?.definition?.split("$function$")[1]).toEqual(
     abandonedVisit.split("FUNCTION app.ent3b_close_abandoned_visit(")[1]!.split("AS $$")[1]!.split("$$;")[0]);
+  const recoverySql = await readFile(new URL("../migrations/0732_final_check_typed_recovery.sql", import.meta.url), "utf8");
+  for (const [name,args] of [
+    ["final_check_read_authority","t uuid, j uuid, d text, locking boolean"],
+    ["admit_final_check_cycle","t uuid, j uuid"],
+    ["final_check_cycle_claim","t uuid, j uuid, l uuid, m uuid, a integer, c uuid"],
+    ["final_check_cycle_finish","t uuid, j uuid, l uuid, m uuid, a integer, c uuid, succeeded boolean"],
+  ]) {
+    const routines = live.filter(row => row.nspname === "app" && row.proname === name && row.args === args);
+    expect(routines).toHaveLength(1);
+    expect(routines[0]?.definition?.split("$function$")[1]).toBe(recoverySql.split(`FUNCTION app.${name}(`)[1]!.split("AS $$")[1]!.split("$$;")[0]);
+  }
   // 0692 adds one owner-only helper; pin its complete body as well as successor metadata.
   const receiptGate = await readFile(new URL("../migrations/0692_final_check_post_invoice_receipt_gate.sql", import.meta.url), "utf8");
   const receiptHelpers = live.filter(row => row.nspname === "app" && row.proname === "require_receipt_final_check"
@@ -163,9 +178,9 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     ["begin_final_check", "t uuid, j uuid, detector text, policy text", "0698_final_check_post_invoice_rerun.sql"],
     ["complete_final_check", "t uuid, j uuid, m uuid, p jsonb", "0698_final_check_post_invoice_rerun.sql"],
     ["guard_final_check_manifest", "", "0698_final_check_post_invoice_rerun.sql"],
-    ["read_final_check_reveal", "t uuid, j uuid, d text", "0698_final_check_post_invoice_rerun.sql"],
+    ["read_final_check_reveal", "t uuid, j uuid, d text", "0732_final_check_typed_recovery.sql"],
     ["read_value_job", "j uuid, digest text", "0698_final_check_post_invoice_rerun.sql"],
-    ["request_final_check_run", "t uuid, j uuid, d text", "0698_final_check_post_invoice_rerun.sql"],
+    ["request_final_check_run", "t uuid, j uuid, d text", "0732_final_check_typed_recovery.sql"],
     ["request_practice_final_check_on_lock", "", "0698_final_check_post_invoice_rerun.sql"],
     ["verify_final_check_run", "p_tenant uuid, p_job uuid, p_run uuid, p_lock uuid, p_cutoff timestamp with time zone", "0698_final_check_post_invoice_rerun.sql"],
     ["retention_records", "t uuid, digest text, j uuid, cid uuid, v jsonb, expected text", "0646_retention_timer_runtime_rules.sql"],
@@ -182,17 +197,17 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     ["ch4_read_work_facts", "t uuid, j uuid, digest text", "0690_import_ancestry_record_anchor.sql"],
     ["read_job_sources", "t uuid, j uuid, digest text, source text", "0690_import_ancestry_record_anchor.sql"],
     ["ch4_require_command_owner", "t uuid, j uuid, digest text", "0690_import_ancestry_record_anchor.sql"],
-    ["final_check_builder", "t uuid, j uuid, d text, locking boolean", "1401_per_firm_final_check_terms.sql"],
-    ["evidence_pack_v3_owner", "t uuid, c uuid, d text", "1401_per_firm_final_check_terms.sql"],
+    ["final_check_builder", "t uuid, j uuid, d text, locking boolean", "0736_per_firm_final_check_terms.sql"],
+    ["evidence_pack_v3_owner", "t uuid, c uuid, d text", "0736_per_firm_final_check_terms.sql"],
     ["adopt_invoiced_job_v3", "t uuid, source_job uuid, d text, cmd uuid, auth uuid, approved jsonb, request_hash text", "0690_import_ancestry_record_anchor.sql"],
     ["apply_recovery_timeline_signal", "p_tenant uuid, p_signal jsonb", "0690_import_ancestry_record_anchor.sql"],
     ["guard_watchdog_upload_update", "", "0720_verified_upload_immutable.sql"],
-    // 1401 re-creates these with full latest bodies that check the job's own firm acceptance.
-    ["final_check_require_worker", "p_tenant uuid, p_job uuid", "1401_per_firm_final_check_terms.sql"],
-    ["final_check_worker", "t uuid, j uuid", "1401_per_firm_final_check_terms.sql"],
-    ["accept_final_check_terms", "p_tenant uuid, p_actor uuid, p_command uuid, p_version text", "1401_per_firm_final_check_terms.sql"],
-    ["guard_final_lock_disclosure_terms", "", "1401_per_firm_final_check_terms.sql"],
-    ["surface_shadow_signal_early", "p_tenant uuid, p_job uuid, p_signal uuid, p_firing uuid, p_decision uuid, p_disclosure uuid, p_rule text, p_version text, p_source uuid, p_object_version text, p_facts jsonb", "1401_per_firm_final_check_terms.sql"],
+    // 0736 re-creates these with full latest bodies that check the job's own firm acceptance.
+    ["final_check_require_worker", "p_tenant uuid, p_job uuid", "0736_per_firm_final_check_terms.sql"],
+    ["final_check_worker", "t uuid, j uuid", "0736_per_firm_final_check_terms.sql"],
+    ["accept_final_check_terms", "p_tenant uuid, p_actor uuid, p_command uuid, p_version text", "0736_per_firm_final_check_terms.sql"],
+    ["guard_final_lock_disclosure_terms", "", "0736_per_firm_final_check_terms.sql"],
+    ["surface_shadow_signal_early", "p_tenant uuid, p_job uuid, p_signal uuid, p_firing uuid, p_decision uuid, p_disclosure uuid, p_rule text, p_version text, p_source uuid, p_object_version text, p_facts jsonb", "0736_per_firm_final_check_terms.sql"],
   ].map(async ([name, args, migration]) => {
     const sql = await readFile(new URL(`../migrations/${migration}`, import.meta.url), "utf8");
     if (name === "decision_check_command") expect(sql).toContain("rv.result->>'sourceJobId'=source.id::text");
@@ -247,13 +262,23 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   ].map(([identity, name]) => [identity, finishSql.split(`CREATE OR REPLACE FUNCTION app.${name}(`)[1]!.split("AS $$")[1]!.split("$$;")[0]]));
   for (const prior of security) {
     const current = live.find(row => row.oid === prior.oid);
-    // 0650 changes only the demo issuer body; keep its metadata and every other definition pinned.
-    if (prior.nspname === "app" && prior.proname === "demo_issue_customer_link" &&
-      prior.args === "t uuid, j uuid, c uuid, session_digest text, link_digest text, content text") {
-      expect({ ...current, definition: prior.definition, source: prior.source }).toEqual(prior);
-      const sql = await readFile(new URL("../migrations/0650_demo_customer_link_reference.sql", import.meta.url), "utf8");
-      expect(current?.definition?.split("$function$")[1]).toBe(sql.split("FUNCTION app.demo_issue_customer_link(")[1]!.split("AS $$")[1]!.split("$$;")[0]);
-      expect(current?.source).toBe(sql.split("FUNCTION app.demo_issue_customer_link(")[1]!.split("AS $$")[1]!.split("$$;")[0]);
+    // 0733 changes these exact bodies; retain every routine's security metadata.
+    const customerLinkRoutines = [
+      "app.customer_portal_current(g app.customer_portal_grant)",
+      "app.demo_issue_customer_link(t uuid, j uuid, c uuid, session_digest text, link_digest text, content text)",
+      "identity.customer_portal_use(t uuid, j uuid, c uuid, digest text, session_digest text, operation text)",
+      "identity.customer_portal_quote(t uuid, j uuid, c uuid, digest text, cmd jsonb)",
+    ];
+    if (customerLinkRoutines.includes(`${prior.nspname}.${prior.proname}(${prior.args})`)) {
+      const expected = `${prior.nspname}.${prior.proname}(${prior.args})` ===
+        "identity.customer_portal_use(t uuid, j uuid, c uuid, digest text, session_digest text, operation text)"
+        ? { ...prior, proacl: "{jobguard_migration=X/jobguard_migration,jobguard_identity=X/jobguard_migration,jobguard_binding_owner=X/jobguard_migration}" }
+        : prior;
+      expect({ ...current, definition: prior.definition, source: prior.source }).toEqual(expected);
+      const sql = await readFile(new URL("../migrations/0733_real_customer_link_own_quote.sql", import.meta.url), "utf8");
+      const body = sql.split(`FUNCTION ${prior.nspname}.${prior.proname}(`)[1]!.split("AS $$")[1]!.split("$$;")[0];
+      expect(current?.definition?.split("$function$")[1]).toBe(body);
+      expect(current?.source).toBe(body);
       continue;
     }
     // 0667 inserts only the practice-owner guard into lock_final_account and replaces the invoice actor check's end.
@@ -262,10 +287,10 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
       const owner = await readFile(new URL("../migrations/0667_final_check_practice_owner_check.sql", import.meta.url), "utf8");
       const anchor = "BEGIN\n PERFORM app.final_lock_require_owner(p_tenant,p_actor);";
       expect(prior.definition?.split(anchor)).toHaveLength(2);
-      // 1401 then re-creates the full latest body. The INSTALLED definition must equal the
+      // 0736 then re-creates the full latest body. The INSTALLED definition must equal the
       // predecessor definition with exactly that body, and 0667's guard must stay verbatim in
-      // the installed source, right after the first owner check and 1401's scope refusal.
-      const perFirm = await readFile(new URL("../migrations/1401_per_firm_final_check_terms.sql", import.meta.url), "utf8");
+      // the installed source, right after the first owner check and 0736's scope refusal.
+      const perFirm = await readFile(new URL("../migrations/0736_per_firm_final_check_terms.sql", import.meta.url), "utf8");
       const body = perFirm.split("CREATE OR REPLACE FUNCTION app.lock_final_account(")[1]!.split("AS $$")[1]!.split("$$;")[0]!;
       const parts = prior.definition!.split("$function$"); parts[1] = body;
       const expectedDefinition = parts.join("$function$");
@@ -485,5 +510,5 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   }
   const logicalPreFoundation = applyUpgradeProofs(stagedBaseline, [inverseFoundation], ownerOids);
   const expected = applyUpgradeProofs(logicalPreFoundation, successors, ownerOids);
-  expect(privileges(live)).toEqual(privileges(expected.routines as typeof security));
+  expect(privileges(live)).toEqual(privileges(expected.routines.filter(row => row.nspname !== "infrastructure") as typeof security));
 }, 120000);

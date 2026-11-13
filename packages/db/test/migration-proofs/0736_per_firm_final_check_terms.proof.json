@@ -1,5 +1,5 @@
 {
-  "migration": "1401_per_firm_final_check_terms.sql",
+  "migration": "0736_per_firm_final_check_terms.sql",
   "lp0": [
     {
       "section": "groups",
@@ -21,7 +21,7 @@
         },
         "downstream": "Per-firm practice Final Check acceptance",
         "sources": [
-          "packages/db/migrations/1401_per_firm_final_check_terms.sql"
+          "packages/db/migrations/0736_per_firm_final_check_terms.sql"
         ],
         "tests": [
           "packages/db/test/per-firm-final-check-terms.integration.test.ts"
@@ -46,7 +46,7 @@
           "LP-12": "Scope practice acceptance and reads to the authenticated firm; retain tenant-separated company authority and immutable history."
         },
         "sources": [
-          "packages/db/migrations/1401_per_firm_final_check_terms.sql"
+          "packages/db/migrations/0736_per_firm_final_check_terms.sql"
         ],
         "tests": [
           "packages/db/test/per-firm-final-check-terms.integration.test.ts"
@@ -401,8 +401,7 @@
         "definitionSha256": null,
         "staticWrites": [],
         "staticCalls": [
-          "app.authenticate_practice_session",
-          "app.final_check_context"
+          "app.final_check_read_authority"
         ]
       },
       "after": {
@@ -419,9 +418,8 @@
         "definitionSha256": null,
         "staticWrites": [],
         "staticCalls": [
-          "app.authenticate_practice_session",
-          "app.final_check_context",
-          "app.final_check_job_terms"
+          "app.final_check_job_terms",
+          "app.final_check_read_authority"
         ]
       }
     },

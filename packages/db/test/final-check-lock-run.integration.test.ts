@@ -61,8 +61,8 @@ it("a job without a practice session does not auto-request work",async()=>{
   await db.query("UPDATE app.job SET practice_session_digest=NULL,practice_scenario=NULL WHERE tenant_id=$1 AND id=$2",[a.tenantId,a.jobId]);
  });
  expect((await f.admin.query("SELECT practice_session_digest,practice_scenario FROM app.job WHERE tenant_id=$1 AND id=$2",[a.tenantId,a.jobId])).rows).toEqual([{practice_session_digest:null,practice_scenario:null}]);
- // 1401: a firm-less job is unattributed; only an unscoped member using unattributed
- // (pre-1401) acceptance history can lock it. The privileged fixture writes that history.
+ // 0736: a firm-less job is unattributed; only an unscoped member using unattributed
+ // (pre-0736) acceptance history can lock it. The privileged fixture writes that history.
  expect(await unattributedTermsHistory(f.admin,a.tenantId,a.jobId,FINAL_CHECK_ACTOR)).toBe(true);
  await new FinalAccountLockRepository(f.runtime).lock(await testBoundTenantContext(f.admin,a.tenantId,FINAL_CHECK_ACTOR),{jobId:a.jobId,actorMembershipId:FINAL_CHECK_ACTOR,commandId:randomUUID(),finalAccountRevisionId:a.revisionId,expectedRevision:1,declarationVersion:"final_account_declaration.v1"});
  expect((await f.admin.query("SELECT 1 FROM infrastructure.final_check_request WHERE job_id=$1",[a.jobId])).rowCount).toBe(0);

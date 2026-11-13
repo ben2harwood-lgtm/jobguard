@@ -1,0 +1,38 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-fc-typed-recovery": {
+      "branches": [
+        "codex/sandbox/real-fc-typed-recovery"
+      ],
+      "note": "RED practice-only bounded recovery; serialize overlapping catalogue successor changes.",
+      "allow": [
+        "apps/api/src/contractor/full-demo-package-sales.test.ts",
+        "apps/api/src/final-check-practice-run.test.ts",
+        "apps/api/src/final-check-practice-run.ts",
+        "apps/api/src/final-check.application.test.ts",
+        "apps/api/src/final-check.application.ts",
+        "apps/api/src/sv5pre-worker-registration.test.ts",
+        "apps/api/src/worker.ts",
+        "apps/web/e2e/real-fc-typed-recovery.spec.ts",
+        "apps/web/e2e/real-fc-ordinary-words.spec.ts",
+        "packages/db/src/final-check-typed-text.test.ts",
+        "packages/db/src/final-check-typed-text.ts",
+        "packages/db/src/shadow-detection-repository.ts",
+        "packages/db/test/real-fc-ordinary-words.integration.test.ts",
+        "docs/operations/final-check-recovery.md",
+        "packages/db/migrations/0732_final_check_typed_recovery.sql",
+        "packages/db/test/lp-0-grant-freeze.integration.test.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/0732_final_check_typed_recovery.proof.json",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
+        "packages/db/test/real-fc-typed-recovery.integration.test.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
+        "packages/db/test/shadow-catalog.integration.test.ts",
+        "packages/db/test/sv5pre-completion-access.integration.test.ts",
+        "packages/db/migrations/1430_final_check_typed_recovery.sql",
+        "packages/db/test/migration-proofs/1430_final_check_typed_recovery.proof.json"
+      ]
+    }
+  }
+}

@@ -84,7 +84,7 @@ describe("LATER-SAFETY-109 import ancestry — real PostgreSQL", () => {
         await db.query(`INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance)
           VALUES($1,$2,'small_builder','synthetic_demo','backfilled_synthetic_fixture')`, [auth.context.tenantId, id]);
       }
-      // 1401: practice acceptance belongs to the accepting firm (this fixture's own session).
+      // 0736: practice acceptance belongs to the accepting firm (this fixture's own session).
       const perFirm = (await db.query("SELECT to_regprocedure('app.final_check_job_scope(uuid,uuid)') IS NOT NULL installed")).rows[0].installed;
       await db.query(`INSERT INTO app.final_check_terms_acceptance(tenant_id,id,terms_version,accepting_membership_id,accepted_at,command_id,audit_event_id${perFirm ? ",practice_session_digest" : ""})
         VALUES($1,$2,'synthetic_final_check_terms.v1',$3,clock_timestamp(),$4,$5${perFirm ? ",$6" : ""})`,

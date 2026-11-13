@@ -43,7 +43,7 @@ describe("CH-5 positive invoiced import — PostgreSQL CI", () => {
     // No new fee, invoice, ledger payment, quote acceptance, or customer lock was fabricated.
     for (const table of ["customer_invoice", "synthetic_obligation", "quote_acceptance", "final_account_lock", "recovery_fee_journal"])
       expect((await f.admin.query(`SELECT count(*)::int n FROM app.${table} WHERE tenant_id=$1 AND job_id=$2`, [auth.context.tenantId, a.jobId])).rows[0].n).toBe(0);
-    // 1401: the importing firm accepts Final Check terms and locks through its own practice scope.
+    // 0736: the importing firm accepts Final Check terms and locks through its own practice scope.
     const firmLocks = new FinalAccountLockRepository(practiceMaterialPool(f.runtime, auth.digest));
     await firmLocks.acceptTerms(auth.practiceContext, { actorMembershipId: auth.membershipId, commandId: randomUUID(), termsVersion: "synthetic_final_check_terms.v1" });
     await expect(firmLocks.lock(auth.practiceContext, { jobId: String(a.jobId), actorMembershipId: auth.membershipId,

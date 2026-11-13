@@ -6,6 +6,11 @@ import { migrate, MIGRATION_URLS } from '../src/migrate.js';
 import { predecessorCatalogue } from './contractor-entitlement-fixtures.js';
 type Relation = { nspname:string; relname:string; relacl:unknown; [key:string]:unknown };
 function expectRelationsUnchanged(before:Relation[],after:Relation[],laterAcl:Set<string>) {
+ // 0733 adds only these quote bindings; retain every other predecessor attribute.
+ after=after.map(row=>row.nspname==='app'&&row.relname==='customer_portal_grant'?{...row,
+  columns:(row.columns as {attname:string}[]).filter(c=>!['quote_document_id','quote_document_version','quote_document_hash'].includes(c.attname)),
+  constraints:(row.constraints as {name:string}[]).filter(c=>!['customer_portal_grant_quote_complete','customer_portal_grant_quote_document_fk'].includes(c.name)),
+ }:row);
  for(const row of before){
   if(!laterAcl.has(`${row.nspname}.${row.relname}`)){expect(after).toContainEqual(row);continue;}
   const {relacl:_a,...kept}=row;
@@ -128,6 +133,14 @@ it('emergency_dual_owner/scim2_machine preserve populated identity state, instal
  const isLanding=(r:Relation)=>r.nspname==='app'&&r.relname==='landing_allocation';
  type Con={name:string;definition:string};
  expect((after.relations.find(isLanding)!.constraints as Con[]).filter(c=>c.name===added)).toEqual([{name:added,definition:'CHECK ((eligible_net_pence <= gross_pence))'}]);
+ // LATER-SAFETY-66 replaces exactly one identity.security_event CHECK to add 'session.revoked'; nothing else on that table may change.
+ const kinds='security_event_event_type_check';
+ const isSecurityEvent=(r:Relation)=>r.nspname==='identity'&&r.relname==='security_event';
+ const kindsCheck=(list:string[])=>`CHECK (((event_type)::text = ANY ((ARRAY[${list.map(k=>`'${k}'::character varying`).join(', ')}])::text[])))`;
+ const oldKinds=['challenge.requested','session.issued','identity.verified','invitation.created'];
+ expect((catalogue.relations.find(isSecurityEvent)!.constraints as Con[]).filter(c=>c.name===kinds)).toEqual([{name:kinds,definition:kindsCheck(oldKinds)}]);
+ expect((after.relations.find(isSecurityEvent)!.constraints as Con[]).filter(c=>c.name===kinds)).toEqual([{name:kinds,definition:kindsCheck([...oldKinds,'session.revoked'])}]);
+ const withoutKinds=(r:Relation)=>isSecurityEvent(r)?{...r,constraints:(r.constraints as Con[]).filter(c=>c.name!==kinds)}:r;
  // 0669 (LATER-SAFETY-119) only adds 'paid' to job_baseline_shape's imported v3 status list; nothing else on app.job may change.
  const isJob=(r:Relation)=>r.nspname==='app'&&r.relname==='job',shape='job_baseline_shape';
  const priorShape=(catalogue.relations.find(isJob)!.constraints as Con[]).find(c=>c.name===shape)!;
@@ -166,7 +179,7 @@ it('emergency_dual_owner/scim2_machine preserve populated identity state, instal
   columns:(newManifest.columns as {attname:string}[]).filter(c=>!attemptColumns.includes(c.attname)),
   constraints:[...(newManifest.constraints as Con[]).filter(c=>!attemptNames.has(c.name)),oldLockKey].sort((a,b)=>a.name<b.name?-1:a.name>b.name?1:0),
  };
- // 1401 adds only the nullable per-firm practice_session_digest column and its practice-session foreign key.
+ // 0736 adds only the nullable per-firm practice_session_digest column and its practice-session foreign key.
  const isTerms=(r:Relation)=>r.nspname==='app'&&r.relname==='final_check_terms_acceptance';
  const termsKey='final_check_terms_acceptance_practice_session_digest_fkey';
  expect((await h.admin.query(`SELECT a.attname name,format_type(a.atttypid,a.atttypmod) type,a.attnotnull not_null,a.atthasdef has_default
@@ -180,8 +193,8 @@ it('emergency_dual_owner/scim2_machine preserve populated identity state, instal
   constraints:(r.constraints as Con[]).filter(c=>c.name!==termsKey)});
  const afterRelations=after.relations.map((r:Relation)=>isTerms(r)?normalizedTerms(r):isLanding(r)?{...r,constraints:(r.constraints as Con[]).filter(c=>c.name!==added)}
   :isJob(r)?{...r,constraints:(r.constraints as Con[]).map(c=>c.name===shape?priorShape:c)}:isBinding(r)?{...r,columns:bindingBefore.columns,constraints:bindingBefore.constraints}:isManifest(r)?normalizedManifest
-  :isOriginal(r)?{...r,columns:(r.columns as Col[]).map(c=>c.attname==='scope_item_id'?{...c,attnotnull:true}:c)}:r);
- expectRelationsUnchanged(catalogue.relations,afterRelations,laterAcl);
+  :isOriginal(r)?{...r,columns:(r.columns as Col[]).map(c=>c.attname==='scope_item_id'?{...c,attnotnull:true}:c)}:r).map(withoutKinds);
+ expectRelationsUnchanged(catalogue.relations.map(withoutKinds),afterRelations,laterAcl);
  // 0672 lets its migration-owned pack writer read the sealed request binding; only that ACL entry is added.
  const bindingReaders=new Set(['app.current_actor','app.current_tenant']);
  for(const row of catalogue.routines){

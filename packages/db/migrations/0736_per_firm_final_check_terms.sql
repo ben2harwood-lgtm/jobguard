@@ -273,36 +273,11 @@ BEGIN
  PERFORM app.final_check_require_worker(t,j);
 END $$;
 
-CREATE OR REPLACE FUNCTION app.final_check_builder(t uuid, j uuid, d text, locking boolean DEFAULT false)
- RETURNS TABLE(member_id uuid, user_id uuid)
- LANGUAGE plpgsql
- SET search_path TO 'pg_catalog', 'app'
-AS $$
-DECLARE a record; owned boolean;
+CREATE OR REPLACE FUNCTION app.final_check_builder(t uuid,j uuid,d text,locking boolean DEFAULT false)
+ RETURNS TABLE(member_id uuid,user_id uuid) LANGUAGE plpgsql SET search_path=pg_catalog,app AS $$
 BEGIN
- PERFORM app.final_check_context(t);
- IF NOT pg_has_role(session_user,'jobguard_runtime','USAGE') THEN RAISE EXCEPTION 'FINAL_CHECK_FORBIDDEN' USING ERRCODE='42501'; END IF;
- IF locking THEN PERFORM 1 FROM control_plane.practice_session WHERE token_digest=d FOR SHARE; END IF;
- SELECT * INTO a FROM app.authenticate_practice_session(d,t);
- IF NOT FOUND THEN RAISE EXCEPTION 'FINAL_CHECK_FORBIDDEN' USING ERRCODE='42501'; END IF;
- IF locking THEN PERFORM 1 FROM app.membership WHERE tenant_id=t AND id=a.membership_id AND identity_user_id=a.identity_user_id FOR SHARE; END IF;
- IF NOT EXISTS(SELECT 1 FROM app.membership WHERE tenant_id=t AND id=a.membership_id AND identity_user_id=a.identity_user_id AND role='owner' AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp())) THEN RAISE EXCEPTION 'FINAL_CHECK_FORBIDDEN' USING ERRCODE='42501'; END IF;
- WITH RECURSIVE owned_jobs AS (
-  SELECT id FROM app.job WHERE tenant_id=t AND practice_session_digest=d
-  UNION SELECT child.id FROM owned_jobs source JOIN app.audit_event e ON e.tenant_id=t AND e.subject_type='job' AND e.event_type='job.imported_baseline_attested' AND e.payload->'references'->>'sourceJobId'=source.id::text
-  JOIN app.job child ON child.tenant_id=e.tenant_id AND child.id::text=e.subject_ref AND child.provenance='imported' AND child.practice_session_digest IS NULL
-    AND (EXISTS (SELECT 1 FROM app.job_import_v3 iv WHERE iv.tenant_id=t AND iv.job_id=child.id AND iv.source_job_id=source.id)
-     OR EXISTS (SELECT 1 FROM app.command_receipt rv WHERE rv.tenant_id=t AND rv.command_type='job.adopt_in_flight' AND rv.status='succeeded'
-      AND rv.semantic_key='import:'||child.id::text AND rv.result->>'jobId'=child.id::text AND rv.result->>'sourceJobId'=source.id::text))
- ) SELECT EXISTS(SELECT 1 FROM owned_jobs WHERE id=j) INTO owned;
+ RETURN QUERY SELECT * FROM app.final_check_read_authority(t,j,d,locking);
  IF NOT app.final_check_job_terms(t,j,'synthetic_final_check_terms.v1') THEN RAISE EXCEPTION 'FINAL_CHECK_FORBIDDEN' USING ERRCODE='42501'; END IF;
- IF NOT owned OR NOT EXISTS(SELECT 1 FROM app.job_commercial_track WHERE tenant_id=t AND job_id=j AND job_track='small_builder' AND environment='synthetic_demo') THEN RAISE EXCEPTION 'FINAL_CHECK_FORBIDDEN' USING ERRCODE='42501'; END IF;
- IF locking THEN
-  PERFORM 1 FROM app.job WHERE tenant_id=t AND id=j FOR UPDATE;
-  -- Recheck deadlines after every wait before replay or effects.
-  IF NOT EXISTS(SELECT 1 FROM app.authenticate_practice_session(d,t) s WHERE s.membership_id=a.membership_id AND s.identity_user_id=a.identity_user_id) THEN RAISE EXCEPTION 'FINAL_CHECK_FORBIDDEN' USING ERRCODE='42501'; END IF;
- END IF;
- RETURN QUERY SELECT a.membership_id::uuid,a.identity_user_id::uuid;
 END $$;
 
 CREATE OR REPLACE FUNCTION app.evidence_pack_v3_owner(t uuid, c uuid, d text)

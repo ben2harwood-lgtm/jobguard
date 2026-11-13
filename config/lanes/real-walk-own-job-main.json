@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-walk-own-job-main": {
+      "branches": [
+        "codex/sandbox/real-walk-own-job-main"
+      ],
+      "note": "REAL-WALK-OWN-JOB rebuilt on main after #706 revert; RED; NOPR. No migrations.",
+      "allow": [
+        "apps/web/app/practice-company/walkthrough/resume.test.ts",
+        "apps/web/app/practice-company/walkthrough/resume.ts",
+        "apps/web/app/practice-company/walkthrough/voice-journey.test.tsx",
+        "apps/web/app/practice-company/walkthrough/voice-journey.tsx",
+        "apps/web/e2e/WALK-3.spec.ts",
+        "apps/web/e2e/WALK-resume.spec.ts",
+        "apps/web/e2e/WALK-stress.spec.ts"
+      ]
+    }
+  }
+}
