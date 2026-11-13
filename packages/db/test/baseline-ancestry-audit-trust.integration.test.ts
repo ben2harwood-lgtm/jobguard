@@ -1,4 +1,3 @@
-import { bindOwnSession } from "./tenant-context-test-utils.js";
 // Synthetic PostgreSQL regression coverage; no live providers or customer data.
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -59,7 +58,7 @@ describe("trusted imported-baseline ancestry (real PostgreSQL)", () => {
     const db = await f.runtime.connect();
     try {
       await db.query("BEGIN");
-      await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenant]); await bindOwnSession(db, f.auth.digest);
+      await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenant]);
       return await db.query("SELECT app.decision_check_command($1,$2,'begin') result", [f.auth.digest,
         JSON.stringify({ version: "finding-evaluation-command.v1", commandId: randomUUID(), tenantId: tenant, jobId: child })]);
     } finally { await db.query("ROLLBACK"); db.release(); }
@@ -127,7 +126,7 @@ describe("trusted imported-baseline ancestry (real PostgreSQL)", () => {
       const reviewer = await f.runtime.connect();
       try {
         await reviewer.query("BEGIN");
-        await reviewer.query("SELECT set_config('app.tenant_id',$1,true)", [tenant]); await bindOwnSession(reviewer, f.auth.digest);
+        await reviewer.query("SELECT set_config('app.tenant_id',$1,true)", [tenant]);
         const result = await reviewer.query("SELECT app.ch6_record_integrity_review($1,$2,$3,$4,$5) result", [tenant, root, f.auth.digest, JSON.stringify(body), JSON.stringify(finding.sourceSnapshot)]);
         expect(result.rows[0].result.commandId).toBe(body.commandId);
         const competing = () => transaction(f.admin, db => db.query("SELECT 1 FROM app.job WHERE tenant_id=$1 AND id=$2 FOR UPDATE NOWAIT", [tenant, child]));
@@ -144,7 +143,7 @@ describe("trusted imported-baseline ancestry (real PostgreSQL)", () => {
     const db = await f.admin.connect();
     try {
       await db.query("BEGIN");
-      await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenant]); await bindOwnSession(db, f.auth.digest);
+      await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenant]);
       const definition = (await db.query("SELECT pg_get_functiondef('app.ch6_integrity_authority(uuid,uuid,text)'::regprocedure) body")).rows[0].body as string;
       expect(definition).toContain(binding);
       await db.query(definition.replace(binding, ""));
