@@ -27,7 +27,8 @@ describe("WALK-3 honest journey boundaries", () => {
     }
     expect(stages[2]![1]).toContain("invitation is still to build");
     expect(stages[3]![1]).toContain("not an authenticated customer response");
-    expect(stages[5]![1]).toContain("builder's practice attestation");
+    expect(stages[5]![1]).toContain("the builder records approval of the exact practice revision");
+    expect(stages[5]![1]).toContain("this practice job cannot receive approval from the customer");
     expect(stages[4]![1]).toContain("forget to add it to the bill");
     expect(stages[6]![1]).toContain("JobGuard checks your records against the bill");
     expect(stages[7]![1]).toContain("awaiting customer approval");
