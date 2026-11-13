@@ -32,6 +32,7 @@ it.each([false,true])("DW8 application read is byte-identical with zero and 25 p
 describe("DW8 real database application isolation",()=>{
  let fixture:{zero:Pool;many:Pool;session:string;jobId:string;command:unknown;copyLockedHistory:()=>Promise<void>;close:()=>Promise<void>};
  beforeAll(async()=>{
+  vi.stubEnv("JOBGUARD_ENV","synthetic_demo");
   // Dynamic path keeps test infrastructure out of the API build's rootDir and public exports.
   const fixturePath=fileURLToPath(new URL("../../../packages/db/test/final-account-lock.integration.test.ts",import.meta.url));
   const helpers=await import(fixturePath);

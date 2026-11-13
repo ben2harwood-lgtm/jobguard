@@ -8,6 +8,7 @@
       "allow": [
         "apps/api/src/final-account-lock.application.test.ts",
         "apps/api/src/final-account-lock.application.ts",
+        "apps/api/src/final-account-lock.isolation.test.ts",
         "apps/api/src/shadow-detection-lock-race.test.ts",
         "apps/api/src/shadow-detection.worker.test.ts",
         "apps/api/src/shadow-detection.worker.ts",
@@ -61,6 +62,7 @@
         "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
         "packages/db/test/post-lock-upload-guard.integration.test.ts",
         "packages/db/test/recovery-attribution-fixture.ts",
+        "packages/db/test/real-gap-proof-by-trade.integration.test.ts",
         "packages/db/test/serious-b9.integration.test.ts",
         "packages/db/test/shadow-detection.integration.test.ts",
         "packages/db/test/stored-receipt-case-fixture.ts",
