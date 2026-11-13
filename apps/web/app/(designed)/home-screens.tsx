@@ -34,7 +34,7 @@ export function Today({ workspace }: { workspace: Workspace }) {
   const router = useRouter();
   const { jobs, failed } = useJobs(workspace.tenantId);
   const facts = useJobFacts(workspace.tenantId, (jobs ?? []).map(job => job.id));
-  const attention = useAttention(workspace, jobs, facts);
+  const attention = useAttention(workspace, jobs, facts, 0, failed);
   const shown = attention.items;
   const active = (jobs ?? []).filter(job => job.status !== "lost" && job.status !== "paid");
   const featured = (jobs ?? []).find(job => job.status === "live") ?? jobs?.[0];
@@ -52,8 +52,8 @@ export function Today({ workspace }: { workspace: Workspace }) {
           <div className="rr-attention-list" style={{ height: "auto", gridTemplateRows: "none" }}>{shown.length ? shown.map((item, index) => <article className="rr-attention-row" key={item.id}>
             <span className={`rr-photo rr-photo-${ATTENTION_PHOTOS[index % 3]}`} role="img" aria-label="Illustrative image"></span>
             <span className="rr-medallion orange"><RailIcon name={"alert"}/></span>
-            <div className="rr-attention-copy"><h3>{item.title}</h3>{item.reasons.map(reason => <p key={reason} style={{ fontSize: 13, lineHeight: 1.5 }}>{reason}</p>)}<div className="rr-attention-bottom"><div className="rr-pills"><span>Job needing attention</span></div><button type="button" className="rr-button" style={{ minWidth: 0, whiteSpace: "normal" }} onClick={() => router.push(item.href)}>Work / Final Check <RailIcon name="arrow"/></button></div></div>
-          </article>) : attention.complete ? <div className="rr-clear"><h3>No immediate action</h3><p>Nothing needs a decision right now. Your job records are below.</p></div> : null}{!attention.complete && <p role="status">Some job checks could not be loaded</p>}</div>
+            <div className="rr-attention-copy"><h3>{item.title}</h3>{item.links.map((link, i) => <p key={i} style={{ fontSize: 13, lineHeight: 1.5 }}><a href={link.href}>{link.label}</a></p>)}<div className="rr-attention-bottom"><div className="rr-pills"><span>Job needing attention</span></div><button type="button" className="rr-button" style={{ minWidth: 0, whiteSpace: "normal" }} onClick={() => router.push(item.href)}>{item.href.includes("#variation-") ? "Open saved extra" : "Work / Final Check"} <RailIcon name="arrow"/></button></div></div>
+          </article>) : attention.complete ? <div className="rr-clear"><h3>No immediate action</h3><p>Nothing needs a decision right now. Your job records are below.</p></div> : null}{attention.failed && <p role="status">Some job checks could not be loaded</p>}{attention.loading && <p role="status">Loading job checks…</p>}</div>
         </section>
         {featured ? <section className="rr-feature rr-glass" style={{ height: "auto" }} aria-label={`Featured job: ${featured.title}`}>
           <div className="rr-feature-art"><div className="rr-feature-heading"><span className="rr-status green"><i></i>{jobStatusLabels[featured.status].toUpperCase()}</span><h2>{featured.title}</h2><p>{known(featured.customerLabel) || "Customer details needed"}</p><div className="rr-location"><RailIcon name="pin"/><span>{known(featured.siteLabel) || "Site details needed"}</span><b></b><RailIcon name="calendar"/><span>{featured.updatedLabel}</span><button type="button" className="rr-icon-button" aria-label={`Open ${featured.title}`} onClick={() => router.push(`/jobs/${featured.id}/overview`)}><RailIcon name="chevron"/></button></div></div>
@@ -83,13 +83,13 @@ export function DesignedCheck() {
 }
 function Check({ workspace }: { workspace: Workspace }) {
   const router = useRouter();
-  const { jobs } = useJobs(workspace.tenantId);
+  const { jobs, failed } = useJobs(workspace.tenantId);
   const facts = useJobFacts(workspace.tenantId, (jobs ?? []).map(job => job.id));
   const [counts, setCounts] = useState(workspace.decisions?.counts ?? null);
-  const attention = useAttention(workspace, jobs, facts, counts?.pending);
+  const attention = useAttention(workspace, jobs, facts, counts?.pending, failed);
   return <Shell workspace={{ ...workspace, pending: attention.items.length }} title="The things that need you." subtitle={INNER_SUBTITLE} active="check">
     <Head kicker="THE JOBGUARD WATCHDOG" title="Only what needs attention." text="Every item says what we noticed, why it matters and what to do. No AI makes approvals, sends claims or spends money in this practice." action={<Tag tone={attention.items.length || !attention.complete ? "amber" : "green"}>{attention.items.length} jobs need attention</Tag>}/>
-    <div data-testid="designed-check">{!attention.complete && <p role="status">Some job checks could not be loaded</p>}{attention.items.map(item => <Card key={item.id} title={item.title}><div className="card-body">{item.reasons.map(reason => <p key={reason}>{reason}</p>)}<a className="btn small" href={item.href}>Open Work / Final Check →</a></div></Card>)}<Legacy label="Decision inbox" cards><DecisionInbox tenantId={workspace.tenantId} close={() => router.push("/today")} onCounts={setCounts}/></Legacy></div>
+    <div data-testid="designed-check">{attention.failed && <p role="status">Some job checks could not be loaded</p>}{attention.loading && <p role="status">Loading job checks…</p>}{attention.items.map(item => <Card key={item.id} title={item.title}><div className="card-body">{item.links.map((link, i) => <p key={i}><a href={link.href}>{link.label}</a></p>)}<a className="btn small" href={item.href}>Open Work / Final Check →</a></div></Card>)}<Legacy label="Decision inbox" cards><DecisionInbox tenantId={workspace.tenantId} close={() => router.push("/today")} onCounts={setCounts}/></Legacy></div>
   </Shell>;
 }
 
@@ -152,7 +152,7 @@ const LINKS: [string, string][] = [["/demo-s", "Small-builder practice chooser"]
 
 function More({ workspace }: { workspace: Workspace }) {
   const router = useRouter();
-  const { jobs } = useJobs(workspace.tenantId);
+  const { jobs, failed } = useJobs(workspace.tenantId);
   const [tool, setTool] = useState<keyof typeof TOOLS | null>(null);
   const close = () => setTool(null);
   return <Shell workspace={workspace} title="Built to protect your profit." subtitle={INNER_SUBTITLE} active="more">
