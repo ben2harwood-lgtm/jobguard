@@ -5,7 +5,7 @@ import type { Pool } from "pg";
 import { WorkOrderError, sorVersionAuditPayloadV1, sorVersionImportV1, sorVersionListV1, sorVersionResultV1 } from "@jobguard/core";
 import { appendAuditBatch } from "./audit.js";
 import { assertContractorGate, canonicalJson, sha256Hex, workOrderFailure } from "./work-order-repository.js";
-import { verifiedTenantContextFromMembership, withTenant } from "./tenant-context.js";
+import { withTenant } from "./tenant-context.js";
 
 /**
  * Schedule-of-rates versions: immutable, imported by a member holding contract.manage (owner, admin, commercial_manager - Ben, 9 Oct 2026,

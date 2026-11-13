@@ -5,7 +5,7 @@ import { z } from "zod";
 import { ContractorPartyError, contractorPartyErrorCodes, contractorCustomerLinkV1, contractorPartyImportBoundaryV1, contractorPartyResultV1, contractorResidentReadV1, contractorPartyAuditPayload } from "@jobguard/core";
 import { ContractorRepository } from "./contractor-repository.js";
 import { appendAuditBatch } from "./audit.js";
-import { verifiedTenantContextFromMembership, withTenant, type AuthenticatedMembership, type TenantTransaction } from "./tenant-context.js";
+import { withTenant, type AuthenticatedMembership, type TenantTransaction } from "./tenant-context.js";
 const uuid = z.string().uuid();
 /** Never propagate PostgreSQL DETAIL, query arguments or untrusted contacts into HTTP/log errors. */
 function failure(error: unknown): never {

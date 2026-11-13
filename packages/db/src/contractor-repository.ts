@@ -32,16 +32,26 @@ function translate(error: unknown): never {
 // once, by the one reviewed constructor below, for a persisted contractor practice session, and
 // is never copied onto the principal object (no exported context-bearing alias type).
 const sessionContexts = new WeakMap<AuthenticatedMembership, VerifiedTenantContext>();
-function sessionPrincipal(row: { tenant_id: string; membership_id: string; identity_user_id: string }, sessionId: string): AuthenticatedMembership {
+// Refusal-only principals (checker r10 LATER): their context is kept apart, so no repository
+// query or command can use it; only the refusal-audit boundary reads it.
+const refusalContexts = new WeakMap<AuthenticatedMembership, VerifiedTenantContext>();
+function sessionPrincipal(row: { tenant_id: string; membership_id: string; identity_user_id: string }, sessionId: string, refusalOnly = false): AuthenticatedMembership {
  const principal = {tenantId:row.tenant_id,membershipId:row.membership_id,identityUserId:row.identity_user_id} as AuthenticatedMembership;
  const context = verifiedTenantContextFromMembership(principal, {kind:"contractor_practice", credential:sessionId});
- sessionContexts.set(principal, context);
+ (refusalOnly ? refusalContexts : sessionContexts).set(principal, context);
  return principal;
 }
 
 /** Legacy principal shapes remain typed, but cannot enter guarded business SQL. */
 export function requireContractorRequestContext(principal: AuthenticatedMembership): VerifiedTenantContext {
  const context = sessionContexts.get(principal);
+ if (!context || context.tenantId !== principal.tenantId) throw new RequestBindingRefusedError("contractor_practice");
+ return context;
+}
+
+/** Only a refusal-only principal (refusedSessionPrincipal) yields this context, for its refusal audit. */
+export function requireContractorRefusalContext(principal: AuthenticatedMembership): VerifiedTenantContext {
+ const context = refusalContexts.get(principal);
  if (!context || context.tenantId !== principal.tenantId) throw new RequestBindingRefusedError("contractor_practice");
  return context;
 }
@@ -60,7 +70,7 @@ export class ContractorRepository {
   */
  async refusedSessionPrincipal(sessionId: string): Promise<AuthenticatedMembership | undefined> {
   const row=(await this.pool.query<{tenant_id:string;membership_id:string;identity_user_id:string}>("SELECT * FROM app.lp6d_refused_contractor_principal($1)",[sessionId])).rows[0];
-  return row ? sessionPrincipal(row, sessionId) : undefined;
+  return row ? sessionPrincipal(row, sessionId, true) : undefined;
  }
  async startPractice(sessionId: string) {
   const client=await this.pool.connect();

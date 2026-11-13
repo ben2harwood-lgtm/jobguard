@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
 import { ZodError } from "zod";
-import { AuditExportError, AuditExportRepository, ContractorRepository, contractorSessionContext, requireContractorRequestContext, type VerifiedTenantContext, AUDIT_EXPORT_NOTICE, AUDIT_EXPORT_SANDBOX } from "@jobguard/db";
+import { AuditExportError, AuditExportRepository, ContractorRepository, contractorSessionContext, requireContractorRefusalContext, type VerifiedTenantContext, AUDIT_EXPORT_NOTICE, AUDIT_EXPORT_SANDBOX } from "@jobguard/db";
 import { auditExportFailureV1, auditExportRequestV1, auditExportSessionV1 } from "./audit-export.contracts.js";
 
 export function assertAuditExportMode(): void {
@@ -26,7 +26,7 @@ export class AuditExportApplication {
         if ((error as { code?: string }).code !== "42501") throw error;
         const refused = await repository.refusedSessionPrincipal(session.data);
         if (!refused) throw new AuditExportError("AUDIT_EXPORT_UNAUTHENTICATED");
-        await this.repository.refuse(requireContractorRequestContext(refused), { membershipId: refused.membershipId, identityUserId: refused.identityUserId }, action);
+        await this.repository.refuse(requireContractorRefusalContext(refused), { membershipId: refused.membershipId, identityUserId: refused.identityUserId }, action);
         throw new AuditExportError("AUDIT_EXPORT_FORBIDDEN");
       }
       // ENT-1's reviewed query verifies active membership before export access.

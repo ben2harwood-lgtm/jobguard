@@ -45,6 +45,10 @@ it("keeps every predecessor body and permission rule behind an early binding che
       previous = previous.replace(" IF NOT app.xc_link_current(v_link.id) THEN RAISE EXCEPTION 'PERMISSION_DENIED' USING ERRCODE='42501'; END IF;",
         " -- LP6D_ISSUER (checker r10): the link's issuer is a third party with no request of its own, so its\n -- current send authority is read through the private issuer chain (never through the customer's binding).\n IF NOT app.lp6d_xc_link_current(v_link.id) THEN RAISE EXCEPTION 'PERMISSION_DENIED' USING ERRCODE='42501'; END IF;");
     }
+    if (routine.name === "app.xa_client_view_authority") {
+      previous = previous.replace("  AND NOT app.xc_link_current(k.id)) THEN RAISE EXCEPTION 'PERMISSION_DENIED' USING ERRCODE='42501'; END IF;",
+        "  -- LP6D_ISSUER (checker r10): each link's issuer is a third party; read through the private issuer chain.\n  AND NOT app.lp6d_xc_link_current(k.id)) THEN RAISE EXCEPTION 'PERMISSION_DENIED' USING ERRCODE='42501'; END IF;");
+    }
     // This additional comparison precedes hidden billability source reads.
     const changed = body(sql, routine)
       .replace(/ IF a\.membership_id IS DISTINCT FROM app\.current_actor\(\) OR a\.tenant_id IS DISTINCT FROM app\.current_tenant\(\) THEN\n  RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';\n END IF;\n/u, "")
@@ -96,7 +100,7 @@ it("converts the invitation bridge and withdraws direct authorization revocation
   expect(inventory.entries.some(e => e.key.startsWith("acl|col|app.action_authorization.") && e.key.includes("|jobguard_runtime|UPDATE|"))).toBe(false);
   // r8: the revocation routine, revoke-claim helper and seven runtime lock/refusal/maintenance/probe helpers (owner + EXECUTE each),
   // plus (r10) the command-writer-owned delegated-actor match check (owner + migration EXECUTE). LP-6c's accessor gains no grant.
-  expect(inventory.entries.filter(e => e.group === "a-lp6d-routine-binding")).toHaveLength(22);
+  expect(inventory.entries.filter(e => e.group === "a-lp6d-routine-binding")).toHaveLength(26); // r11: + ClientViewExtra binder and scope check (owner + EXECUTE each)
   expect(inventory.entries.some(e => e.key.startsWith("acl|routine|function:app.lp6_delegated_actor(") && e.key.includes("|jobguard_migration|"))).toBe(false);
 });
 
@@ -190,7 +194,18 @@ it("preserves LP-6c client history and binding through the exact private read bo
   const prior = read("../migrations/0725_lp6c_client_extra_decision.sql")
     .match(/CREATE OR REPLACE FUNCTION identity\.extra_customer_approval\([\s\S]*?\$\$;/u)![0];
   expect(sql.match(/CREATE OR REPLACE FUNCTION identity\.extra_customer_approval\([\s\S]*?\$\$;/u)![0])
-    .toBe(prior.replaceAll("app.xa_client_view_authority(", "app.lp6d_client_view_authority("));
+    .toBe(prior.replaceAll("app.xa_client_view_authority(", "app.lp6d_client_view_authority(")
+      // Checker r11 (option 1): only the read-only queue/view binds its own ClientViewExtra request before the timing read.
+      .replace(" result:=jsonb_build_object('requestId',q.id,'revision',q.request_revision,",
+        " -- Checker r11: the read-only queue/view binds its own ClientViewExtra request before the\n -- guarded timing read. History stays unbound (it reads through the private view port).\n PERFORM app.lp6d_bind_client_viewer(t,j,c,k.token_hash,k.recipient);\n result:=jsonb_build_object('requestId',q.id,'revision',q.request_revision,"));
+  // The ClientViewExtra binder is LP-6c's binder with only its scope changed; ent3_extra_work_status alone accepts that scope.
+  const binder = read("../migrations/0725_lp6c_client_extra_decision.sql").match(/CREATE FUNCTION app\.lp6_bind_client_approver\([\s\S]*?\$\$;/u)![0];
+  expect(sql.match(/CREATE FUNCTION app\.lp6d_bind_client_viewer\([\s\S]*?\$\$;/u)![0]).toBe(binder
+    .replaceAll("lp6_bind_client_approver", "lp6d_bind_client_viewer")
+    .replace(" -- Tenant context permits only the lookup. The existing validator supplies authority\n -- and retains the decide path's shared tenant/job locks through completion.\n", "")
+    .replace("j,'ClientDecideExtra');", "j,'ClientViewExtra');"));
+  expect(sql.match(/'ClientViewExtra'/gu)!.length).toBe(2); // the binder and the status reader; nothing that decides
+  expect(sql).toContain("IF app.current_actor() IS NOT NULL OR NOT app.lp6d_has_delegated_scope('ClientViewExtra',p_job) THEN");
   expect(sql).toContain("REVOKE ALL ON FUNCTION app.lp6d_client_view_authority(uuid,uuid,uuid,text) FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure");
 });
 
@@ -209,7 +224,10 @@ it("preserves the exact delegated writer body behind private credential-scoped p
   const previous = read("../migrations/0724_lp6c_customer_portal_delegation.sql").match(pattern)![0];
   expect(sql.match(pattern)![0]).toBe(previous.replace("app.sv7a_intake_job_source(", "app.lp6d_customer_message_source("));
   const privateSource = sql.match(/CREATE FUNCTION app\.lp6d_customer_message_source\([\s\S]*?\$\$;/u)![0];
-  expect(privateSource.indexOf("app.lp6_bind_customer_portal(t,j,")).toBeLessThan(privateSource.indexOf("DECLARE actor"));
+  // The caller binds once (LP-6c refuses a second binding); the private port requires that delegated binding first.
+  expect(privateSource).not.toContain("app.lp6_bind_customer_portal(");
+  expect(privateSource.indexOf("IF app.current_actor() IS NOT NULL THEN RAISE EXCEPTION 'REQUEST_BINDING_REFUSED'")).toBeLessThan(privateSource.indexOf("DECLARE actor"));
+  expect(privateSource.indexOf("IF app.current_actor() IS NOT NULL THEN RAISE EXCEPTION 'REQUEST_BINDING_REFUSED'")).toBeGreaterThan(-1);
   expect(privateSource).toContain("source IS DISTINCT FROM 'customer_message'");
   expect(privateSource).toContain("app.lp6d_customer_watchdog_live(j)");
   for (const signature of ["lp6d_customer_watchdog_live(uuid)", "lp6d_customer_message_source(uuid,uuid,text,text,jsonb)"]) {
@@ -235,7 +253,8 @@ it("pins each private unguarded copy to its guarded original minus only the LP-6
   const maintenanceLine = /\n\s*IF NOT app\.lp6d_maintenance_login\(\) THEN RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501'; END IF;/u;
   for (const [copy, original, adapt] of [
     ["app.lp6d_mon8_feature_decision", "app.mon8_feature_decision", (b: string) => b],
-    ["app.lp6d_client_view_authority", "app.xa_client_view_authority", (b: string) => b.replaceAll("app.lp6d_xc_link_current(", "app.xc_link_current(")],
+    // Both the guarded original and its copy read the third-party issuer through the private issuer chain (checker r10).
+    ["app.lp6d_client_view_authority", "app.xa_client_view_authority", (b: string) => b],
     ["app.lp6d_customer_watchdog_live", "app.require_watchdog_live", (b: string) => b],
     // Maintenance copies add exactly one refusal of every non-maintenance login.
     ["app.lp6d_watchdog_live_maintenance", "app.require_watchdog_live", (b: string) => b.replace(maintenanceLine, "")],

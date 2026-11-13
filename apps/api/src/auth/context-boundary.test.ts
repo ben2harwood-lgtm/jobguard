@@ -93,15 +93,16 @@ const REVIEWED_PRACTICE_SOURCES: Readonly<Record<string, string>> = {
   // Renewed caller source review 6 Nov 2026, later-safety-108 repair 4: v1 ownership now requires the succeeded import receipt.
   // Persisted-session authentication, synthetic-only gate and the sole context constructor are unchanged; RED review remains required.
   "packages/db/src/practice-session.ts": "49c6c2dadcaa0412208dbce6585c0e30a283b4d4c3b98b50179eec3bad054729",
-  // LP-6d repair 10 re-pin (coordinator fresh caller review pending): the contractor request context
+  // LP-6d repair 10 re-pin (checker accepted on source: prechecks/lp-6d-r10-403be3a6-s9-and-oracle.md): the contractor request context
   // is created once, by sessionPrincipal(), for a persisted contractor practice session, and kept in a
   // module-private WeakMap; requireContractorRequestContext returns it. One constructor call (was 2).
-  "packages/db/src/contractor-repository.ts": "44df1edd68c6a9e79ef83c2faf82459b425a0c501e7a641eff8c1d39cf7a34a0",
+  // Repair 11: refusal-only principals keep their context in a separate map, read only by requireContractorRefusalContext.
+  "packages/db/src/contractor-repository.ts": "51d371939722dd3f0763f3c0b4861bf10848fee41564e7af99b31ff773a9ff5f",
   // Renewed caller review 5 Nov 2026: Ben approved batch-41 ("Yes, all three") in the router chat.
   // ~/.local/share/full-steam/coordinator/prechecks/batch-41.md: importCsvInTransaction makes no new context;
   // its one new caller, ConnectorPromotionRepository.promote, takes context and principal from the same
   // persisted session. The tenant lock and import permission check stay.
-  // LP-6d repair 10 re-pin (coordinator fresh caller review pending): principal type only (the
+  // LP-6d repair 10 re-pin (checker accepted on source: prechecks/lp-6d-r10-403be3a6-s9-and-oracle.md): principal type only (the
   // context-bearing alias is gone); the three DEMO fixture constructors are unchanged.
   "packages/db/src/work-order-fixtures.ts": "bfcdf0a9d57691b3af4672313069e333e1399be598c46fd5f7500289a833089a",
   "packages/db/src/contractor-session-context.ts": "6fc5382c5b912992d715ded455a79f115884eba53f25ee55f9a1050878f4605c",

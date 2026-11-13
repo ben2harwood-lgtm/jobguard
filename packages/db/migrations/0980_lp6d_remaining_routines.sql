@@ -1288,7 +1288,8 @@ BEGIN
  IF EXISTS(SELECT 1 FROM app.extra_client_link k WHERE k.tenant_id=v_tenant
   AND k.job_id=p_job AND k.request_id=p_request AND k.approver_membership_id=p_actor
   AND NOT EXISTS(SELECT 1 FROM app.extra_client_link_closure c WHERE(c.tenant_id,c.link_id)=(k.tenant_id,k.id))
-  AND NOT app.xc_link_current(k.id)) THEN RAISE EXCEPTION 'PERMISSION_DENIED' USING ERRCODE='42501'; END IF;
+  -- LP6D_ISSUER (checker r10): each link's issuer is a third party; read through the private issuer chain.
+  AND NOT app.lp6d_xc_link_current(k.id)) THEN RAISE EXCEPTION 'PERMISSION_DENIED' USING ERRCODE='42501'; END IF;
 END;
 END
 $$;
@@ -5659,7 +5660,11 @@ CREATE OR REPLACE FUNCTION app.ent3_extra_work_status(p_job uuid,p_extra uuid) R
 BEGIN
  PERFORM app.current_actor();
  IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text THEN
-  RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
+  -- LP6D_CLIENT_VIEW (checker r11): the customer's read-only queue/view holds a ClientViewExtra
+  -- binding for this job and tenant. No other delegated scope is accepted here.
+  IF app.current_actor() IS NOT NULL OR NOT app.lp6d_has_delegated_scope('ClientViewExtra',p_job) THEN
+   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
+  END IF;
  END IF;
  RETURN (SELECT x.work_status FROM app.site_extra_work_status x
  WHERE current_database()='jobguard_synthetic_demo'
@@ -6797,6 +6802,58 @@ REVOKE CREATE ON SCHEMA app FROM jobguard_command_writer;
 REVOKE ALL ON FUNCTION app.lp6d_is_delegated_actor(uuid,text,uuid) FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure;
 GRANT EXECUTE ON FUNCTION app.lp6d_is_delegated_actor(uuid,text,uuid) TO jobguard_migration;
 
+-- Checker r11 ruling (option 1): the customer's read-only queue/view binds a ClientViewExtra
+-- delegated request, issued through the same checks as LP-6c's lp6_bind_client_approver
+-- (0725): this job's link for this approver, exact token hash and recipient, a live session
+-- resolved by the existing validator, one binding per transaction, at most one minute.
+-- Only ent3_extra_work_status (read through xc_timing on queue/view) accepts this scope;
+-- no decide routine does. 0725 is landed and is not edited.
+CREATE FUNCTION app.lp6d_bind_client_viewer(t uuid,j uuid,c uuid,token_hash text,recipient text) RETURNS uuid
+ LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE s app.extra_client_session; k app.extra_client_link;
+ environment_key text:=extract(epoch FROM pg_postmaster_start_time())::text||':'||(SELECT d.oid::text FROM pg_catalog.pg_database d WHERE d.datname=current_database());
+ request_xid xid8:=pg_current_xact_id();
+BEGIN
+ IF EXISTS(SELECT 1 FROM control_plane.request_binding b
+  WHERE b.environment_id IS NOT DISTINCT FROM environment_key AND b.transaction_id IS NOT DISTINCT FROM request_xid) THEN
+  RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
+ END IF;
+ PERFORM set_config('app.tenant_id',t::text,true);
+ SELECT * INTO k FROM app.extra_client_link l
+  WHERE l.tenant_id=t AND l.job_id=j AND l.approver_membership_id=c
+   AND l.token_hash=lp6d_bind_client_viewer.token_hash AND lower(l.recipient)=lower(lp6d_bind_client_viewer.recipient);
+ SELECT * INTO s FROM app.extra_client_session x WHERE x.tenant_id=t AND x.link_id=k.id;
+ IF s.id IS NULL OR identity.extra_customer_use(t,j,c,s.token_digest,NULL,'resolve') IS NULL THEN
+  RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501';
+ END IF;
+ INSERT INTO control_plane.request_binding(environment_id,transaction_id,credential_kind,session_ref,tenant_id,actor_id,expires_at,scope_job_id,scope_command_type)
+ VALUES(environment_key,request_xid,'customer_portal_delegated',s.id::text,t,c,
+  least(s.expires_at,clock_timestamp()+interval '1 minute'),j,'ClientViewExtra');
+ RETURN c;
+END $$;
+GRANT CREATE ON SCHEMA app TO jobguard_binding_owner;
+ALTER FUNCTION app.lp6d_bind_client_viewer(uuid,uuid,uuid,text,text) OWNER TO jobguard_binding_owner;
+REVOKE CREATE ON SCHEMA app FROM jobguard_binding_owner;
+REVOKE ALL ON FUNCTION app.lp6d_bind_client_viewer(uuid,uuid,uuid,text,text) FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure,jobguard_shadow,jobguard_shadow_emergency_access,jobguard_command_writer;
+GRANT EXECUTE ON FUNCTION app.lp6d_bind_client_viewer(uuid,uuid,uuid,text,text) TO jobguard_migration;
+-- Yes/no: does this request hold a delegated binding of exactly this scope for this job and
+-- tenant? Never returns the actor. Command-writer owned for LP-6c's reader; EXECUTE only.
+CREATE FUNCTION app.lp6d_has_delegated_scope(p_command_type text,p_job uuid) RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog AS $$
+ SELECT p_command_type IS NOT NULL AND p_job IS NOT NULL AND
+  app.lp6_delegated_actor(nullif(current_setting('app.tenant_id',true),'')::uuid,p_command_type,p_job) IS NOT NULL
+$$;
+GRANT CREATE ON SCHEMA app TO jobguard_command_writer;
+ALTER FUNCTION app.lp6d_has_delegated_scope(text,uuid) OWNER TO jobguard_command_writer;
+REVOKE CREATE ON SCHEMA app FROM jobguard_command_writer;
+REVOKE ALL ON FUNCTION app.lp6d_has_delegated_scope(text,uuid) FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure;
+GRANT EXECUTE ON FUNCTION app.lp6d_has_delegated_scope(text,uuid) TO jobguard_migration;
+DO $$ DECLARE login record; BEGIN
+ FOR login IN SELECT rolname FROM pg_roles WHERE rolcanlogin LOOP
+  EXECUTE format('REVOKE ALL ON FUNCTION app.lp6d_bind_client_viewer(uuid,uuid,uuid,text,text), app.lp6d_has_delegated_scope(text,uuid) FROM %I',login.rolname);
+ END LOOP;
+END $$;
+
 -- Private unguarded copies ONLY for the issuer-authority check, a step with no possible request
 -- actor: it asks whether the link's ISSUER (a third party) still holds send authority, from the
 -- outbox worker (xc_cancel_authority_loss) and the customer's pre-binding link use. Revoked from
@@ -6934,6 +6991,7 @@ BEGIN
  IF EXISTS(SELECT 1 FROM app.extra_client_link k WHERE k.tenant_id=v_tenant
   AND k.job_id=p_job AND k.request_id=p_request AND k.approver_membership_id=p_actor
   AND NOT EXISTS(SELECT 1 FROM app.extra_client_link_closure c WHERE(c.tenant_id,c.link_id)=(k.tenant_id,k.id))
+  -- LP6D_ISSUER (checker r10): each link's issuer is a third party; read through the private issuer chain.
   AND NOT app.lp6d_xc_link_current(k.id)) THEN RAISE EXCEPTION 'PERMISSION_DENIED' USING ERRCODE='42501'; END IF;
 END $$;
 ALTER FUNCTION app.lp6d_client_view_authority(uuid,uuid,uuid,text) OWNER TO jobguard_migration;
@@ -7038,6 +7096,9 @@ BEGIN
  IF clock_timestamp()>=k.expires_at THEN RAISE EXCEPTION 'LINK_EXPIRED' USING ERRCODE='23514'; END IF;
  IF q.request_revision<>(SELECT max(request_revision) FROM app.extra_approval_request WHERE tenant_id=t AND variation_id=q.variation_id) THEN RAISE EXCEPTION 'STALE_REVISION' USING ERRCODE='40001'; END IF;
  IF EXISTS(SELECT 1 FROM app.extra_approval_outcome WHERE tenant_id=t AND request_id=q.id) THEN RAISE EXCEPTION 'ALREADY_DECIDED' USING ERRCODE='23514'; END IF;
+ -- Checker r11: the read-only queue/view binds its own ClientViewExtra request before the
+ -- guarded timing read. History stays unbound (it reads through the private view port).
+ PERFORM app.lp6d_bind_client_viewer(t,j,c,k.token_hash,k.recipient);
  result:=jsonb_build_object('requestId',q.id,'revision',q.request_revision,'revisionHash',q.revision_hash,'netPence',q.net_pence,'lane','mandatory',
   'description',(SELECT description FROM app.variation WHERE tenant_id=t AND id=q.variation_id),
   'timingInputs',app.xc_timing(t,j,q.variation_id,q.id));
@@ -7062,7 +7123,11 @@ BEGIN
   OR digest !~ '^customer:[a-f0-9-]{36}:[a-f0-9]{64}$' THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
- PERFORM app.lp6_bind_customer_portal(t,j,split_part(digest,':',2)::uuid,split_part(digest,':',3));
+ -- identity.customer_portal_message has just bound this customer's LP-6c delegated request
+ -- (LP-6c refuses a second binding in one transaction). Require that binding: an unbound
+ -- caller raises in current_actor(), and a bound contractor/practice actor is refused.
+ PERFORM app.current_actor();
+ IF app.current_actor() IS NOT NULL THEN RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501'; END IF;
 DECLARE actor uuid; cid uuid; request_digest text; prior app.command_receipt; allowed text[]; txt text; raw bytea; h text;
  sid uuid:=gen_random_uuid(); ev uuid:=gen_random_uuid(); ver text:=gen_random_uuid()::text; audit_id uuid:=gen_random_uuid();
  lp5_claim jsonb; lp5_input jsonb;
