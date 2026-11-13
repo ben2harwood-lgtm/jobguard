@@ -1,6 +1,7 @@
 import type { Pool } from "pg";
 import { z } from "zod";
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
+import { requireLiveJob } from "./watchdog.js";
 
 export const proofStatementSchema = z.object({ id: z.string().uuid(), includesElectricalWork: z.boolean(), membershipId: z.string().uuid(), recordedAt: z.string().datetime({ offset: true }) }).strict();
 export const jobProofStatementViewSchema = z.object({ statement: proofStatementSchema.nullable(), requiredEvidenceType: z.enum(["electrical_certificate", "completion_photo"]), stage: z.enum(["electrical-stage", "completion-photo-stage"]), canChange: z.boolean(), blockage: z.string().nullable() }).strict();
@@ -35,10 +36,17 @@ export async function readJobProofStatement(db: TenantTransaction, jobId: string
 /** Serialization only: the private credential bridge is exclusive to statement reads/writes. */
 export async function lockJobProofAuthority(db: TenantTransaction, jobId: string): Promise<void> {
  if (!await installed(db)) return;
- // The job share lock precedes proof serialization, matching the live writers and
- // avoiding inversion with Final Check's existing job update lock.
- await db.$client.query("SELECT 1 FROM app.job WHERE tenant_id=current_setting('app.tenant_id')::uuid AND id=$1 FOR SHARE", [jobId]);
  await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended('job-proof:'||current_setting('app.tenant_id')::uuid::text||':'||$1::uuid::text,0))", [jobId]);
+}
+
+/** Assembly is not a live-only command. A live job still takes the live guard's job
+ * share lock before proof serialization, avoiding inversion with Final Check's job
+ * update lock; a job that is not live has no proof or lock writer to race. */
+export async function lockJobProofAssembly(db: TenantTransaction, jobId: string): Promise<void> {
+ if (!await installed(db)) return;
+ const live = (await db.$client.query<{ live: boolean }>("SELECT status='live' live FROM app.job WHERE tenant_id=current_setting('app.tenant_id')::uuid AND id=$1", [jobId])).rows[0]?.live;
+ if (live) await requireLiveJob(db, jobId);
+ await lockJobProofAuthority(db, jobId);
 }
 
 /** Invalidation names evidence, not a job: resolve its job only once the statement objects exist. */
