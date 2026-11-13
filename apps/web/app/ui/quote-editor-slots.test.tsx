@@ -1,4 +1,3 @@
-vi.mock("./job-facts-refresh",()=>({useJobFactsRefresh:()=>undefined}));
 import * as React from "react";
 import { createHash } from "node:crypto";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -62,7 +61,8 @@ it("keeps loaded live markup identical when no slot is passed", () => {
   {documentVersion:1, netPence:100000, totalPence:120000, acceptedAt:"2026-11-09", actor:"Builder", method:"email", sourceEvidence:"Fictional"},
   null, "Fictional customer", "email", "2026-11-09", [], {acceptedNetPence:100000, acceptedDocumentVersion:1, baseCreditPence:0}, false, null, "no_charge"];
  const html = renderToStaticMarkup(<QuoteEditor jobId={jobId} source={[]} questions={[]} back={()=>undefined}/>);
+ // Verified against origin/main cf67be77 with this same fixture (including proof statement).
  // Main intentionally groups the practice delivery controls in a labelled fieldset.
  expect(html).toContain("<legend>Practice only: pretend sending problems</legend>");
- expect(createHash("sha256").update(html).digest("hex")).toBe("a3bd9285780640100a088d15dae64a94e98159db7812fff5a7385604178654e2");
+ expect(createHash("sha256").update(html).digest("hex")).toBe("100cf6d47735482b85d71a124887802654ffc982d0ef80f7472bbb4864cc31cc");
 });

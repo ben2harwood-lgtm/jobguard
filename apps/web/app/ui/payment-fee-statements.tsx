@@ -1,5 +1,4 @@
 "use client";
-import { useJobFactsRefresh } from "./job-facts-refresh";
 import { jobPageFetch as fetch } from "./job-page-fetch";
 import { useEffect,useState } from "react";
 import { paymentFeeViewV1,parseExactPence,divideRounded,type PaymentFeeAuthorityCommand,type PaymentFeeCommand } from "@jobguard/core";
@@ -23,8 +22,7 @@ export async function readPaymentFeeView(jobId:string):Promise<View>{
 export function PaymentFeeStatements({jobId}:{jobId:string}){
  const [reload,setReload]=useState(0);
  const [view,setView]=useState<View|null|undefined>(undefined),[error,setError]=useState(""),[busy,setBusy]=useState(false);
- useJobFactsRefresh(()=>setReload(value=>value+1));
- useEffect(()=>{let active=true;setError("");
+ useEffect(()=>{let active=true;setView(undefined);setError("");
   void readPaymentFeeView(jobId).then(data=>{if(active)setView(data);}).catch(e=>{if(active){if(e instanceof NoReceiptsYet)setView(null);else setError("Receipt statements could not be loaded.");}});
   return ()=>{active=false;};
  },[jobId,reload]);

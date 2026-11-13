@@ -1,5 +1,4 @@
 "use client";
-import { useJobFactsRefresh } from "./job-facts-refresh";
 import { jobPageFetch as fetch } from "./job-page-fetch";
 import { useCallback, useEffect, useState } from "react";
 import { practiceInvoiceResponseV1, type PracticeInvoiceResponse } from "@jobguard/api/customer-invoice-contracts";
@@ -42,7 +41,7 @@ function PracticeCustomerInvoices({jobId,finalAccount}:{jobId:string;finalAccoun
   }
   setError("Customer invoices could not load. Check the saved records before issuing again.");setLoading(false);
  },[jobId]);
- useJobFactsRefresh(()=>void load(true));useEffect(()=>{void load();},[load]);
+ useEffect(()=>{void load();},[load]);
  async function issue(){
   setBusy(true);setError("");setErrorCode("");
   try{

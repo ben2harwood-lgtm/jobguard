@@ -1,5 +1,4 @@
 "use client";
-import { useJobFactsRefresh } from "./job-facts-refresh";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { canonicalManifest, type EvidenceManifest, type EvidenceSource } from "@jobguard/core";
 import { EvidencePacksV3 } from "./evidence-packs-v3";
@@ -35,7 +34,7 @@ export function EvidencePacks({ caseId, claimedNetPence, onChange }: { caseId: s
     } catch (failure) { if (own === generation.current) setError(failure instanceof Error ? failure.message : "Pack could not be loaded"); }
     finally { if (own === generation.current) setLoading(false); }
   }, [endpoint]);
-  useJobFactsRefresh(load);useEffect(() => { setPacks([]); setInspection(null); setScenario("intact"); setError(""); void load(); }, [load]);
+  useEffect(() => { setPacks([]); setInspection(null); setScenario("intact"); setError(""); void load(); }, [load]);
   useEffect(() => { if (error) errorRef.current?.focus(); }, [error]);
   const pack = packs.at(-1);
   useEffect(() => {

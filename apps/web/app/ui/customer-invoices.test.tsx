@@ -1,5 +1,3 @@
-// This direct-component harness has no workspace provider. Navigation refresh is covered in job-final-account.test.tsx.
-vi.mock("./job-facts-refresh",()=>({useJobFactsRefresh:()=>undefined}));
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, expect, it, vi } from "vitest";

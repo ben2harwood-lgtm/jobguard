@@ -40,20 +40,20 @@ const jobId = "11111111-1111-4111-8111-111111111112";
 const props = {jobId, source: [], questions: [], back: () => undefined, practiceTools: null};
 beforeEach(() => { hooks.reset(); vi.stubGlobal("React", React); });
 afterEach(() => vi.unstubAllGlobals());
-function render(parties: boolean | null, layoutReady = true) {
+function render(parties: boolean | null) {
  // Seed only completed reads; retain the actual state setters and ref guard.
  hooks.seed(parties);
  hooks.render();
- return QuoteEditor({...props, layoutReady});
+ return QuoteEditor(props);
 }
 const saveButton = (tree: React.ReactNode) => all(tree, node => node.type === "button" && text(node) === "Save draft revision")[0]!;
 
-it("keeps saving disabled until parties and the panels above pricing have settled", () => {
- for (const [parties, layoutReady, ready] of [[null, true, false], [true, false, false], [false, true, true], [true, true, true]] as const) {
+it("uses main’s loaded quote readiness after remounting", () => {
+ for (const parties of [false, true]) {
   hooks.reset();
-  const tree = render(parties, layoutReady);
-  expect(tree.props["data-quote-ready"]).toBe(ready ? "true" : "false");
-  expect(saveButton(tree).props.disabled).toBe(!ready);
+  const tree = render(parties);
+  expect(tree.props["data-quote-ready"]).toBe("true");
+  expect(saveButton(tree).props.disabled).toBe(false);
  }
 });
 

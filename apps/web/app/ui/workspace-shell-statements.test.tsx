@@ -3,7 +3,7 @@ import { afterEach,expect,it,vi } from "vitest";
 import { WorkspaceShell } from "./workspace-shell";
 import { SimulationFeeStatements } from "./simulation-fee-statements";
 const state=vi.hoisted(()=>({values:[] as unknown[]}));
-vi.mock("react",async original=>({...await original<typeof import("react")>(), useContext: () => 0,useState:()=>[state.values.shift(),vi.fn()],useRef:(current:unknown)=>({current}),useCallback:(fn:unknown)=>fn,useEffect:()=>undefined}));
+vi.mock("react",async original=>({...await original<typeof import("react")>(),useState:()=>[state.values.shift(),vi.fn()],useRef:(current:unknown)=>({current}),useCallback:(fn:unknown)=>fn,useEffect:()=>undefined}));
 afterEach(()=>vi.unstubAllGlobals());
 const jobId="11111111-1111-4111-8111-111111111112";
 function panels(node:React.ReactNode):React.ReactElement[]{

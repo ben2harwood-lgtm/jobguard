@@ -1,5 +1,4 @@
 "use client";
-import { useJobFactsRefresh } from "./job-facts-refresh";
 import { jobPageFetch as fetch } from "./job-page-fetch";
 import * as React from "react";
 import { useEffect, useRef, useState } from "react";
@@ -90,7 +89,6 @@ export function useIntegrityJourney(jobId: string) {
  const [state, setState] = useState<IntegrityState>({ status: "loading" });
  const [review, setReview] = useState<ReviewTarget | null>(null), [explanation, setExplanation] = useState(""), [busy, setBusy] = useState(false), [error, setError] = useState("");
  const journey = useRef<IntegrityJourney | null>(null), epoch = useRef(0), textarea = useRef<HTMLTextAreaElement>(null), trigger = useRef<HTMLButtonElement | null>(null);
- useJobFactsRefresh(()=>{void journey.current?.load();});
  const reset = () => { ++epoch.current; setReview(null); setExplanation(""); setError(""); setBusy(false); };
  useEffect(() => {
   const current = new IntegrityJourney(jobId, setState); journey.current = current;

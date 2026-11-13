@@ -1,5 +1,4 @@
 "use client";
-import { useJobFactsRefresh } from "./job-facts-refresh";
 import { useEffect, useState } from "react";
 import { practiceInvoiceResponseV1 } from "@jobguard/api/customer-invoice-contracts";
 import { deriveJobPaymentState, type JobPaymentState } from "../lib/invoice-payment-state";
@@ -15,7 +14,6 @@ export function CustomerPaymentStatus({jobId}:{jobId:string}) {
   const [view,setView]=useState<JobPaymentState|null>(null);
   const [failed,setFailed]=useState(false);
   const [refresh,setRefresh]=useState(0);
-  useJobFactsRefresh(()=>setRefresh(value=>value+1));
   useEffect(()=>{
     let disposed=false;
     let generation=0;
@@ -24,7 +22,7 @@ export function CustomerPaymentStatus({jobId}:{jobId:string}) {
       const current=++generation;
       controller?.abort();
       const request=new AbortController();controller=request;
-      setFailed(false);
+      setView(null);setFailed(false);
       try {
         const response=await fetch(`/api/jobs/${encodeURIComponent(jobId)}/customer-invoices`,{cache:"no-store",signal:request.signal});
         if(!response.ok)throw new Error("PAYMENT_STATUS_UNAVAILABLE");

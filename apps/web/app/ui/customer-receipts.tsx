@@ -1,5 +1,4 @@
 "use client";
-import { useJobFactsRefresh } from "./job-facts-refresh";
 import { jobPageFetch as fetch } from "./job-page-fetch";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { isReceiptDate, parseReceiptPounds, practiceReceiptViewV1, type PracticeReceiptView } from "@jobguard/api/customer-invoice-contracts";
@@ -17,14 +16,14 @@ export function CustomerReceipts({jobId,invoiceId,onChanged}:{jobId:string;invoi
   return value;
  },[jobId,invoiceId]);
  const load=useCallback(async()=>{
-  setError("");
+  setLoading(true);setError("");
   for(let i=0;i<6;i++){
    try{const r=await fetch(base,{cache:"no-store"});if(r.ok){setView(parse(await r.json()));setLoading(false);notifyInvoiceChanged(jobId);return;}}catch{}
    await new Promise(resolve=>setTimeout(resolve,300));
   }
   setLoading(false);setError("Receipt history could not load. No balance has been invented.");
  },[base,parse,jobId]);
- useJobFactsRefresh(load);useEffect(()=>{void load();},[load]);
+ useEffect(()=>{void load();},[load]);
  async function submit(path:string,body:unknown){
   if(writing.current||unconfirmed||loading)return;
   writing.current=true;setBusy(true);setError("");

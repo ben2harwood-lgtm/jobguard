@@ -1,5 +1,4 @@
 "use client";
-import { useJobFactsRefresh } from "./job-facts-refresh";
 import { jobPageFetch as fetch } from "./job-page-fetch";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { customerTypes, jobPartiesCommandResultV1, jobPartiesImportResultV1, jobPartiesWorkspaceV1, siteMatchKey, suggestCapturePartyClause, partiesFieldErrors, jobPartiesFormV1, type JobPartiesCommandV1 } from "@jobguard/core";
@@ -28,7 +27,7 @@ function conflictSince(observed: View, latest: View, refs: DraftRefs): string | 
   if (isLive(observed.status) !== isLive(latest.status)) return WENT_LIVE_MESSAGE;
   return partiesChanged(observed, latest, refs) ? CHANGED_MESSAGE : null;
 }
-export function JobParties({ jobId, onSettled }: { jobId: string; onSettled?: (jobId: string) => void }) {
+export function JobParties({ jobId }: { jobId: string }) {
   const [view, setView] = useState<View | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState(false);
   const [customerRevisionId, setCustomerRevisionId] = useState("");
   const [customerId, setCustomerId] = useState(""), [name, setName] = useState("Practice Customer"), [type, setType] = useState<(typeof customerTypes)[number]>("person");
@@ -51,21 +50,15 @@ export function JobParties({ jobId, onSettled }: { jobId: string; onSettled?: (j
   // refreshes never advance it.
   const baseline = useRef<View | null>(null), draftRefs = useRef({ customerId: "", payer: "", reuse: "" });
   draftRefs.current = { customerId, payer, reuse };
-  const load = useCallback(async () => {
-    const observed = baseline.current;
-    const snapshot = await fetchView();
-    // A completed save or explicit conflict reload supersedes older background reads.
-    if (baseline.current !== observed) return snapshot;
-    setView(snapshot);
-    if (baseline.current === null) { baseline.current = snapshot; resetDraft(snapshot); }
-    return snapshot;
-  }, [fetchView]);
-  useJobFactsRefresh(()=>void load().catch(e=>setError(e.message)));
+  const load = useCallback(async () => { const snapshot = await fetchView(); setView(snapshot); if (baseline.current === null) { baseline.current = snapshot; resetDraft(snapshot); } return snapshot; }, [fetchView]);
   useEffect(() => {
     const refresh = (event: Event) => {
       if ((event as CustomEvent).detail !== jobId) return;
-      // Refresh saved facts only. Save checks the draft baseline for conflicts before writing.
-      void load().catch(e => setError(e.message));
+      void fetchView().then(latest => {
+        setView(latest);
+        // Another writer changed what the draft depends on: reload the draft now rather than keep stale text beside a refreshed view.
+        if (baseline.current && partiesChanged(baseline.current, latest, draftRefs.current)) { baseline.current = latest; resetDraft(latest, true); setError(CHANGED_MESSAGE); }
+      }).catch(e => setError(e.message));
     };
     void load().catch(e => setError(e.message)); window.addEventListener("job-lifecycle-changed", refresh); return () => window.removeEventListener("job-lifecycle-changed", refresh);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -92,7 +85,6 @@ export function JobParties({ jobId, onSettled }: { jobId: string; onSettled?: (j
     })().catch(() => { /* A missing source leaves the labelled practice example editable. */ });
     return () => { active = false; };
   }, [jobId, partiesLoaded]);
-  useEffect(() => { if (view || error) onSettled?.(jobId); }, [view, error, jobId, onSettled]);
   const site = { version: "site.v1" as const, addressLines: addressLinesFromDraft(address, more), town, postcode, ...(unit ? { unit } : {}), ...(uprn ? { uprn } : {}) };
   const saved = view?.current;
   const draftChanged = !saved || customerId !== view?.currentIds?.customerId || customerRevisionId !== saved.customerRevisionId

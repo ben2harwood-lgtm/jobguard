@@ -33,7 +33,7 @@ const hooks = vi.hoisted(() => {
     },
   };
 });
-vi.mock("react", async importOriginal => ({ ...await importOriginal<typeof React>(), useContext: () => 0, ...hooks }));
+vi.mock("react", async importOriginal => ({ ...await importOriginal<typeof React>(), ...hooks }));
 afterEach(() => { hooks.reset(); vi.unstubAllGlobals(); });
 
 const jobId = "11111111-1111-4111-8111-111111111111";

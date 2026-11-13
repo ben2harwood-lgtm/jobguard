@@ -23,7 +23,7 @@ const hooks = vi.hoisted(() => {
     },
   };
 });
-vi.mock("react", async original => ({ ...await original<typeof React>(), useContext: () => 0, ...hooks }));
+vi.mock("react", async original => ({ ...await original<typeof React>(), ...hooks }));
 type Node = React.ReactElement<Record<string, any>>;
 function all(tree: React.ReactNode, match: (node: Node) => boolean): Node[] {
   if (Array.isArray(tree)) return tree.flatMap(child => all(child, match));
@@ -116,57 +116,6 @@ it.each([["Accept", "accepted", "Accepted"], ["Dismiss", "dismissed", "Dismissed
   expect(p.focus).not.toHaveBeenCalled();
 });
 
-it.each(["", "#scope", "#quote"])("preserves locally opened pricing through snapshots at %s and handles explicit navigation", initialFragment => {
- let result = {...fixture, status:"quoting" as ReviewCaptureResult["status"]};
- let fragment = initialFragment;
- const render = () => {
-  hooks.render();
-  const tree = ReviewProposal({result, fragment, initialPricing:fragment==="#quote", back:vi.fn()});
-  hooks.effects();
-  return tree;
- };
- let tree = render();
- if (initialFragment !== "#quote") {
-  all(tree, node => node.type === "button" && text(node.props.children) === "Price the work")[0]!.props.onClick();
- }
- const editor = () => all(render(), node => typeof node.type === "function" && node.type.name === "QuoteEditor")[0];
- const source = editor()!.props.source;
- result = {...result, status:"live"};
- expect(editor()!.props.source).toEqual(source);
- // Fragment navigation selects the view without destroying review state.
- fragment = "#quote";
- render();
- expect(editor()).toBeDefined();
- // A hash change (e.g. a stray second tap on a section link) never closes the editor.
- fragment = "#scope";
- render();
- expect(editor()!.props.source).toEqual(source);
- fragment = "";
- render();
- expect(editor()!.props.source).toEqual(source);
- fragment = "#quote";
- render();
- expect(editor()!.props.source).toEqual(source);
-});
-it("keeps an editor opened by Price the work through a hash change while initialPricing is false", () => {
- const result = {...fixture, status:"quoting" as ReviewCaptureResult["status"]};
- let fragment = "";
- const render = () => { hooks.render(); const tree = ReviewProposal({result, fragment, initialPricing:false, back:vi.fn()}); hooks.effects(); return tree; };
- all(render(), node => node.type === "button" && text(node.props.children) === "Price the work")[0]!.props.onClick();
- const editor = () => all(render(), node => typeof node.type === "function" && node.type.name === "QuoteEditor")[0];
- expect(editor()).toBeDefined();
- for (const next of ["#scope", "#practice-tools", "#quote", ""]) { fragment = next; expect(editor(), next).toBeDefined(); }
-});
-it("keeps unsaved review choices through hash changes on a draft", () => {
- let fragment = "";
- const render = () => { hooks.render(); const tree = ReviewProposal({result:fixture as ReviewCaptureResult, fragment, back:vi.fn()}); hooks.effects(); return tree; };
- const accept = all(render(), node => node.type === "button" && text(node.props.children).startsWith("Accept"))[0]!;
- accept.props.onClick();
- for (const next of ["#scope", "#quote", ""]) {
-  fragment = next;
-  expect(all(render(), node => node.type === "strong").map(text), next).toContain("accepted");
- }
-});
 function validFixture(): ReviewCaptureResult {
   const jobId = crypto.randomUUID(), proposalId = crypto.randomUUID(), reviewId = crypto.randomUUID();
   const validLine = { ...line, origin: "proposal" as const, id: crypto.randomUUID(), scopeItemId: crypto.randomUUID(), disposition: "accepted" as const, unitPricePence: null };

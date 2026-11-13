@@ -1,6 +1,3 @@
-// Capture navigation refresh so held reads can exercise the real panel load.
-const factsRefresh = vi.hoisted(() => ({ current: () => {} }));
-vi.mock("./job-facts-refresh",()=>({useJobFactsRefresh:(refresh: () => void)=>{ factsRefresh.current = refresh; }}));
 import * as React from "react";
 import { renderToString } from "react-dom/server";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -1064,41 +1061,4 @@ it("M4-1 prevention on the existing identity leaves no landing or further preven
  expect(w.screen().button("Prevent before payment").props.disabled).toBe(true);
  expect(w.screen().button("Record a landed recovery").props.disabled).toBe(true);
  expect(w.screen().testId("case-landed-net")).toBe("£0.00");
-});
-
-it("coalesces navigation refreshes with an in-flight register read", async () => {
-  const panel = start();
-  factsRefresh.current(); factsRefresh.current();
-  expect(reads()).toHaveLength(1);
-  reads()[0]!.json(answerBody([]));
-  await new Promise<void>(resolve => setImmediate(resolve));
-  factsRefresh.current(); factsRefresh.current();
-  expect(reads()).toHaveLength(2);
-  panel.unmount();
-});
-
-it("keeps the held delivery lookup and Open controls through coalesced navigation refreshes", async () => {
- const panel=start();
- const held=holdLookups();
- reads()[0]!.json(answerBody([]));await panel.settle();
- expect(lookupRequests.filter(url=>url.endsWith("/supplier-documents"))).toHaveLength(1);
- factsRefresh.current();factsRefresh.current();await panel.settle();
- expect(reads()).toHaveLength(1);
- expect(lookupRequests).toHaveLength(1);
- expect(panel.screen().button("Open £2,500 withheld payment").props.disabled).toBe(false);
- held.release();await panel.settle();
- expect(lookupRequests.filter(url=>url.endsWith("/supplier-documents"))).toHaveLength(2);
- expect(reads()).toHaveLength(1);
- expect(panel.screen().button("Open £2,500 withheld payment").props.disabled).toBe(false);
- panel.unmount();
-});
-
-it("keeps ready Open controls on a failed silent register refresh", async()=>{
- const panel=start();reads()[0]!.json(answerBody([]));await panel.settle();
- factsRefresh.current();await panel.settle();
- expect(reads()).toHaveLength(2);
- reads()[1]!.reject();await panel.settle();
- expect(panel.screen().button("Open £2,500 withheld payment").props.disabled).toBe(false);
- expect(panel.screen().text()).toContain("Recovery cases could not be loaded");
- panel.unmount();
 });

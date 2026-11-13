@@ -1,5 +1,4 @@
 "use client";
-import { useJobFactsRefresh } from "./job-facts-refresh";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LINKED_JOB_COPY, jobWorkStateCommandV1, jobWorkStateReadV1, type JobWorkStateEvent } from "@jobguard/core";
 import { closeReasonLabels, workEventLabels, workStateView, type CloseReason } from "./job-work-state-view";
@@ -30,7 +29,7 @@ export function JobWorkState({ jobId, company }: { jobId: string; company?: { te
   } catch (e) { if (current(requestEpoch)) { setView(null); setError(e instanceof Error ? e.message : "Site work could not load."); } }
   finally { if (epoch.current === requestEpoch) { inFlight.current = false; setBusy(false); } }
  }, [jobId, endpoint, tenantId, csrfToken]);
-useJobFactsRefresh(read); useEffect(() => { pending.current = null; setView(null); setError(""); setOffer(false); void read(); return () => { epoch.current++; }; }, [read]);
+ useEffect(() => { pending.current = null; setView(null); setError(""); setOffer(false); void read(); return () => { epoch.current++; }; }, [read]);
  useEffect(() => {
   const saved = (event: Event) => {
    if ((event as CustomEvent<{ jobId: string }>).detail?.jobId !== jobId) return;

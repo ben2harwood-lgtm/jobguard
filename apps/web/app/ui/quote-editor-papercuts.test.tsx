@@ -4,14 +4,12 @@ import { QuoteEditor } from "./quote-editor";
 
 // Exercise the component's handlers and refresh effects using the same hook approach as job-parties.test.tsx.
 const hooks = vi.hoisted(() => {
-  let cursor = 0, generation = 0;
+  let cursor = 0;
   const slots: { value?: unknown; current?: unknown; deps?: readonly unknown[] }[] = [];
   const effects: (() => void)[] = [];
   return {
-    setGeneration(value: number) { generation=value; },
-    useContext() { return generation; },
     delivery: "simulated_delivery",
-    reset() { generation=0;cursor = 0; slots.length = 0; effects.length = 0; },
+    reset() { cursor = 0; slots.length = 0; effects.length = 0; },
     render() { cursor = 0; },
     effects() { while (effects.length) effects.shift()!(); },
     useState(initial: unknown) {
@@ -161,36 +159,4 @@ it.each([
   const request = vi.mocked(fetch).mock.calls.find(([url, options]) => String(url).endsWith("/acceptance") && options?.method === "POST");
   expect(request).toBeDefined();
   expect(JSON.parse(request![1]!.body as string).acceptedAt).toBe(expected.toISOString());
-});
-
-it("re-reads quote and customer facts on navigation while keeping edited prices", async () => {
- render();await settle();
- const tree=render();
- const rate=elements(tree).find(element=>element.type==="input"&&String(element.props["aria-label"]).includes("Unit rate"))!;
- expect(rate).toBeDefined();
- rate.props.onChange({target:{value:"245.00"}});
- const before=elements(render()).find(element=>element.props["aria-label"]===rate.props["aria-label"])!.props.value;
- const fetch=vi.mocked(globalThis.fetch);fetch.mockClear();
- hooks.setGeneration(1);render();render();await settle();
- expect(fetch.mock.calls.some(([url])=>String(url).endsWith("/quotes"))).toBe(true);
- expect(fetch.mock.calls.some(([url])=>String(url).endsWith("/parties"))).toBe(true);
- expect(elements(render()).find(element=>element.props["aria-label"]===rate.props["aria-label"])!.props.value).toBe(before);
-});
-
-it("ignores a pre-save parties answer after the saved binding has refreshed", async () => {
- let release!: (value: Response) => void;
- const fetcher=vi.mocked(globalThis.fetch);
- const original=fetcher.getMockImplementation()!;
- let parties=0;
- fetcher.mockImplementation((...args:any[])=>{
-  if(String(args[0]).endsWith("/parties")&&++parties===1)return new Promise(resolve=>{release=resolve;});
-  return original(...args as Parameters<typeof fetch>);
- });
- render();
- events.dispatchEvent(new Event("job-parties-saved"));await settle();
- expect(input(render(),"Stated customer").props.value).toBe("Fictional saved customer");
- release(new Response(JSON.stringify({current:null}),{status:200}));await settle();
- const tree=render();
- expect(input(tree,"Stated customer").props.value).toBe("Fictional saved customer");
- expect(elements(tree).some(element=>element.type==="p"&&element.props.children==="Customer and site are required before this job can switch live.")).toBe(false);
 });

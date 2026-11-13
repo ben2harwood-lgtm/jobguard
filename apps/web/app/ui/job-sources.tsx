@@ -1,5 +1,4 @@
 "use client";
-import { useJobFactsRefresh } from "./job-facts-refresh";
 import { jobPageFetch as fetch } from "./job-page-fetch";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LINKED_JOB_COPY, customerMessageInputV1, customerMessageReadV1, diaryInputV1, diaryReadV1, type CustomerMessageRead, type DiaryRead } from "@jobguard/core";
@@ -32,7 +31,7 @@ function useSource<T>(jobId: string, kind: Kind, parse: (raw: unknown) => T) {
   finally { if (epoch.current === requestEpoch) setBusy(false); }
  // parse wraps a module-level schema; only the job and kind select the request.
  }, [jobId, kind]);
-useJobFactsRefresh(load); useEffect(() => { pending.current = null; setView(null); setError(""); void load(); return () => { epoch.current++; }; }, [load]);
+ useEffect(() => { pending.current = null; setView(null); setError(""); void load(); return () => { epoch.current++; }; }, [load]);
  // A retry after an unknown outcome resends the same command id.
  const save = async (command: Record<string, unknown>) => {
   if (busy || (pending.current && pending.current !== command)) return false;

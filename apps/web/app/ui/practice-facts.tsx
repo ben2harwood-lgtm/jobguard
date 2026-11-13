@@ -1,5 +1,4 @@
 "use client";
-import { useJobFactsRefresh } from "./job-facts-refresh";
 import { jobPageFetch as fetch } from "./job-page-fetch";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { practiceFactsCommandV1, practiceFactsCatalogueV1, type PracticeFactKey, type PracticeFeedStep } from "@jobguard/core";
@@ -25,7 +24,7 @@ export function PracticeFacts({jobId}:{jobId:string}) {
     }catch(e){if(currentJob.current===jobId&&epoch.current===requestEpoch)setError(e instanceof Error?e.message:"Could not load extra movements.");}
     finally{if(epoch.current===requestEpoch){inFlight.current=false;setBusy(false);}}
   },[jobId]);
-useJobFactsRefresh(read);  useEffect(()=>{inFlight.current=false;setView(null);setError("");setUnknown(false);void read();return()=>{epoch.current++;};},[read]);
+  useEffect(()=>{inFlight.current=false;setView(null);setError("");setUnknown(false);void read();return()=>{epoch.current++;};},[read]);
   const send=async(extra:Record<string,unknown>)=>{
     if(!view||inFlight.current||unknown||view.feedState!=="connected")return;
     const requestEpoch=++epoch.current;

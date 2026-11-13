@@ -1,5 +1,4 @@
 "use client";
-import { useJobFactsRefresh } from "./job-facts-refresh";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { practiceInvoiceResponseV1 } from "@jobguard/api/customer-invoice-contracts";
@@ -25,17 +24,17 @@ async function readJson(path: string, signal: AbortSignal, absent?: { status: nu
 }
 
 /** Persisted read models decide the next step; this component never advances a job locally. */
-export function PracticeJourney({ jobId, status, onSettled }: { jobId: string; status: string; onSettled?: (jobId: string, status: string) => void }) {
+export function PracticeJourney({ jobId, status }: { jobId: string; status: string }) {
  const [state, setState] = useState<ReadState>({ jobId, status, phase: "loading" });
  const generation = useRef(0), activeRequest = useRef<AbortController | null>(null);
  const currentJob = useRef({ jobId, status }); currentJob.current = { jobId, status };
  const errorHeading = useRef<HTMLHeadingElement>(null), retryButton = useRef<HTMLButtonElement>(null);
- const load = useCallback(async (userInitiated = false, silent = false) => {
+ const load = useCallback(async (userInitiated = false) => {
   const request = ++generation.current;
   activeRequest.current?.abort();
   const controller = new AbortController(); activeRequest.current = controller;
   const isCurrent = () => request === generation.current && !controller.signal.aborted && currentJob.current.jobId === jobId && currentJob.current.status === status;
-  setState(previous=>silent&&previous.jobId===jobId&&previous.status===status&&previous.phase!=="loading"?previous:{ jobId, status, phase: "loading" });
+  setState({ jobId, status, phase: "loading" });
   try {
    const path = `/api/jobs/${jobId}`, beforeActivation = ["draft", "quoting", "accepted", "lost"].includes(status);
    const [proofRaw, variationsRaw, invoicesRaw, feeRaw] = await Promise.all([
@@ -59,7 +58,7 @@ export function PracticeJourney({ jobId, status, onSettled }: { jobId: string; s
    if (isCurrent()) setState({ jobId, status, phase: "failed", userInitiated });
   }
  }, [jobId, status]);
- useJobFactsRefresh(() => void load(false, true));useEffect(() => { void load(); return () => { generation.current++; activeRequest.current?.abort(); }; }, [load]);
+ useEffect(() => { void load(); return () => { generation.current++; activeRequest.current?.abort(); }; }, [load]);
  const phase = state.jobId === jobId && state.status === status ? state.phase : "loading";
  useEffect(() => {
   // Automatic reads announce through the alert without taking focus. A requested
@@ -67,8 +66,6 @@ export function PracticeJourney({ jobId, status, onSettled }: { jobId: string; s
   if (phase === "failed" && state.phase === "failed" && state.userInitiated &&
    (document.activeElement === retryButton.current || document.activeElement === document.body)) errorHeading.current?.focus();
  }, [phase, state]);
- // Report only the current read: a previous lifecycle must not enable pricing.
- useEffect(() => { if (phase !== "loading") onSettled?.(jobId, status); }, [phase, jobId, status, onSettled]);
  const retry = <button ref={retryButton} type="button" style={{ minHeight: 44, minWidth: 44 }} onClick={() => void load(true)}>{phase === "failed" ? "Try checking saved progress again" : "Check saved progress"}</button>;
  if (phase !== "ready" || state.phase !== "ready") return <section className="journey-progress" aria-label="Practice journey progress" data-testid="uiwire15-journey">
   <p className="eyebrow">One persisted practice job</p>

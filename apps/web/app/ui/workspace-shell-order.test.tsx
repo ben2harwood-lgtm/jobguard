@@ -41,7 +41,7 @@ function workspace(status: CaptureWorkspaceResponse["status"], fragment = "") {
  };
  state.live = ["live", "invoiced", "paid"].includes(status);
  state.effects = [];state.setters=[];
- state.values = [null, capture, null, false, fragment, 0];
+ state.values = [null, capture, null, false, fragment];
  return WorkspaceShell({ jobId });
 }
 function ids(html: string, attribute: string) {
@@ -62,7 +62,7 @@ it.each(["draft", "quoting", "live"] as const)("starts the %s job page with the 
 it("keeps the data-testid set rendered by the live job before reordering", () => {
  const html = renderToStaticMarkup(workspace("live", "#quote"));
  // Captured from unmodified HEAD with this same loaded live-job fixture.
- expect(ids(html, "data-testid")).toEqual(["accepted-net", "accepted-revision", "activation-policy", "base-credit", "confirmed-bill-reduction", "customer-messages", "final-account-lock", "final-baseline", "final-check-reveal", "final-gross", "final-net", "final-source-hash", "final-variation-net", "final-vat", "job-diary", "job-status", "job-work-state", "mandatory-decision-count", "prevention-panel", "proof-state", "quote-delivery", "quote-gross", "quote-net", "quote-revision", "quote-vat", "real-external-actions", "recovery-allocation-workbench", "stage-status", "supplier-debt-recognized", "supplier-document-identities", "supplier-document-status", "supplier-invoice-identities", "ttc-eligible-recovery-principal", "uiwire15-journey", "watchdog-panel", "workspace-job-id"]);
+ expect(ids(html, "data-testid")).toEqual(["accepted-net", "accepted-revision", "activation-policy", "base-credit", "confirmed-bill-reduction", "customer-messages", "final-account-lock", "final-baseline", "final-check-reveal", "final-gross", "final-net", "final-source-hash", "final-variation-net", "final-vat", "job-diary", "job-status", "job-work-state", "mandatory-decision-count", "prevention-panel", "proof-state", "proof-statement-loading", "quote-delivery", "quote-gross", "quote-net", "quote-revision", "quote-vat", "real-external-actions", "recovery-allocation-workbench", "stage-status", "supplier-debt-recognized", "supplier-document-identities", "supplier-document-status", "supplier-invoice-identities", "ttc-eligible-recovery-principal", "uiwire15-journey", "watchdog-panel", "workspace-job-id"]);
  for (const id of ["captured-job-workspace", "commercial-integrity", "customer-messages", "customer-messages-title", "diary-mode", "diary-text", "final-check", "final-check-title", "job-diary", "job-diary-title", "materials", "next-workday-readiness", `parties-${jobId}`, "practice-facts", "practice-facts-title", "practice-receipts", "practice-receipts-title", "purchase-orders", "recovery-allocations", "recovery-allocation-title", "recovery-cases", "relevance-inbox", "site-work", "site-work-title", "supplier-documents", "supplier-match", "things-to-check"]) expect(ids(html, "id")).toContain(id);
 });
 it.each(["draft", "quoting", "accepted", "live", "invoiced", "paid", "lost"] as const)("provides real scope and quote anchors for %s", status => {
@@ -133,7 +133,7 @@ it("keeps the review key stable when a command advances a plain job URL", () => 
 it.each(["live", "invoiced", "paid"] as const)("keeps independent job controls on a plain saved %s job and scope anchor", status => {
  for (const fragment of ["", "#scope"]) {
   const html = renderToStaticMarkup(workspace(status, fragment));
-  for (const marker of ['id="site-work"', 'id="job-diary"', 'id="customer-messages"', 'id="final-account-title"', 'data-testid="final-account-lock"', 'id="final-check"']) {
+  for (const marker of ['id="site-work"', 'id="job-diary"', 'id="customer-messages"', 'id="final-check"']) {
    expect(html, `${status}${fragment}: ${marker}`).toContain(marker);
    expect(html.indexOf(marker)).toBeLessThan(html.indexOf('id="practice-tools"'));
   }
@@ -160,7 +160,7 @@ it("does not put live job controls inside the quote fieldset or sidebar", () => 
  expect(activationFound).toBe(true);
 });
 
-it("handles fragment navigation by re-reading without remounting the workspace", () => {
+it("handles fragment navigation with main’s loading/remount path", () => {
  workspace("quoting");
  const listeners = new Map<string, () => void>();
  const fetch = vi.fn(()=>new Promise(()=>{}));
@@ -174,33 +174,26 @@ it("handles fragment navigation by re-reading without remounting the workspace",
  const cleanup = state.effects[1]!() as () => void;
  listeners.get("hashchange")!();
  expect(fetch).toHaveBeenCalledWith(`/api/jobs/${jobId}/proposal`, expect.objectContaining({cache:"no-store"}));
- expect(state.setters[5]).toHaveBeenCalledWith(expect.any(Function));
- expect(state.setters[3]).not.toHaveBeenCalledWith(true); // keep the workspace and editor mounted
+ expect(state.setters[3]).toHaveBeenCalledWith(true);
+ expect(state.setters[0]).toHaveBeenCalledWith(null);
+ expect(state.setters[1]).toHaveBeenCalledWith(null);
  cleanup();
 });
-it.each(["#scope", "#quote", "#job-diary", "#work-proof", "#final-account-title"])("keeps component identity across %s navigation", fragment => {
+it.each(["#scope", "#quote", "#job-diary", "#work-proof", "#final-account-title"])("uses main’s scope/editor key for %s navigation", fragment => {
  function review(node:React.ReactNode):React.ReactElement | undefined {
   if (Array.isArray(node)) return node.map(review).find(Boolean);
   if (!React.isValidElement<{children?:React.ReactNode}>(node)) return;
   if (typeof node.type === "function" && node.type.name === "ReviewProposal") return node;
   return review(node.props.children);
  }
- expect(review(workspace("live",fragment))!.key).toBe(review(workspace("live"))!.key);
+ expect(review(workspace("live",fragment))!.key).toBe(`${jobId}:${["#scope", "#job-diary"].includes(fragment) ? "scope" : "editor"}`);
 });
 
 
-it.each(["", "#scope", "#quote", "#final-account-title", "#recovery-cases"])("keeps one final-account panel outside pricing navigation at %s", fragment => {
- const tree = workspace("live", fragment);
- function find(node: React.ReactNode, name: string): React.ReactElement<{children?:React.ReactNode;finalAccount?:React.ReactNode}> | undefined {
-  if (!React.isValidElement<{children?:React.ReactNode;finalAccount?:React.ReactNode}>(node)) return;
-  if (typeof node.type === "function" && node.type.name === name) return node;
-  return React.Children.toArray(node.props.children).map(child => find(child, name)).find(Boolean);
- }
- const review = find(tree, "ReviewProposal")!;
- expect(review.props.finalAccount).toBeNull();
- expect(find(review, "JobFinalAccount")).toBeUndefined();
- expect(find(tree, "JobFinalAccount")).toBeDefined();
- const html = renderToStaticMarkup(tree);
- expect(html.match(/data-testid="final-account-lock"/gu)).toHaveLength(1);
- expect(html.indexOf('id="final-account-title"')).toBeLessThan(html.indexOf('id="practice-tools"'));
+it.each(["", "#scope", "#quote", "#final-account-title", "#recovery-cases"])("uses main’s final-account mounting inside pricing at %s", fragment => {
+ const html = renderToStaticMarkup(workspace("live", fragment));
+ const pricing = fragment !== "" && fragment !== "#scope";
+ expect(html.match(/data-testid="final-account-lock"/gu) ?? []).toHaveLength(pricing ? 1 : 0);
+ expect(html.match(/data-testid="final-check-reveal"/gu)).toHaveLength(1);
+ if (pricing) expect(html.indexOf('id="final-account-title"')).toBeLessThan(html.indexOf('id="practice-tools"'));
 });

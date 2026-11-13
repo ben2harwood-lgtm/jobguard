@@ -4,7 +4,6 @@ import { jobPartiesWorkspaceV1, siteMatchKey } from "@jobguard/core";
 import { JobParties } from "./job-parties";
 
 // Exercise the real component's handlers without a DOM/server. Browser persistence is covered in CH-3a.spec.ts.
-const facts = vi.hoisted(() => ({ generation: 0 }));
 const hooks = vi.hoisted(() => {
   let cursor = 0;
   const slots: { value?: unknown; current?: unknown; deps?: readonly unknown[]; cleanup?: (() => void) | undefined }[] = [];
@@ -33,8 +32,8 @@ const hooks = vi.hoisted(() => {
     },
   };
 });
-vi.mock("react", async importOriginal => ({ ...await importOriginal<typeof React>(), useContext: () => facts.generation, ...hooks }));
-afterEach(() => { facts.generation = 0; hooks.reset(); vi.unstubAllGlobals(); });
+vi.mock("react", async importOriginal => ({ ...await importOriginal<typeof React>(), ...hooks }));
+afterEach(() => { hooks.reset(); vi.unstubAllGlobals(); });
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const customer = { version: "customer.v1", name: "Fictional customer", type: "person" } as const;
@@ -263,26 +262,4 @@ describe("atomic form and own-word suggestions", () => {
     const p = await panel({ source: "Inspect the fictional shed" }); expect(text(p.render())).toContain("Practice example — check before saving");
     expect(find(p.render(), "Customer name")!.props.value).toBe("Practice Customer"); expect(p.sent).toEqual([]);
   });
-});
-
-it.each(["lifecycle", "navigation"])("keeps unsaved party edits when a %s refresh updates saved facts", async kind => {
-  hooks.reset(); vi.stubGlobal("React", React);
-  const listeners = new Map<string, (event: Event) => void>();
-  vi.stubGlobal("window", { addEventListener: (name: string, fn: (event: Event) => void) => listeners.set(name, fn), removeEventListener: vi.fn() });
-  let snapshot = view();
-  vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => ({ ok: true, json: async () => snapshot })));
-  const render = () => { hooks.render(); const tree = JobParties({ jobId: id(1) }); hooks.effects(); return tree; };
-  render(); await new Promise<void>(resolve => setImmediate(resolve)); let tree = render();
-  (find(tree, "Customer name")!.props.onChange as (e: unknown) => void)({ target: { value: "Unsaved fictional edit" } });
-  tree = render();
-  snapshot = structuredClone(snapshot); snapshot.currentIds!.bindingId = id(99); snapshot.current!.bindingId = id(99);
-  if (kind === "lifecycle") listeners.get("job-lifecycle-changed")!({ detail: id(1) } as unknown as Event);
-  else { facts.generation++; render(); }
-  await new Promise<void>(resolve => setImmediate(resolve)); tree = render();
-  expect(find(tree, "Customer name")!.props.value).toBe("Unsaved fictional edit");
-  expect(text(tree)).toContain("Unsaved draft");
-  // The original baseline still refuses saving across that changed binding.
-  (find(tree, "Customer and site details")!.props.onSubmit as (e: unknown) => void)({ preventDefault() {} });
-  await new Promise<void>(resolve => setImmediate(resolve));
-  expect(text(render())).toContain("This job changed");
 });

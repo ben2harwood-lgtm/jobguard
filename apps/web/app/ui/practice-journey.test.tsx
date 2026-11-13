@@ -4,7 +4,6 @@ import { afterEach, expect, it, vi } from "vitest";
 import { PracticeJourney } from "./practice-journey";
 
 // Reuse the job-sources/job-parties hook harness to run the real read and render.
-const facts = vi.hoisted(() => ({ generation: 0 }));
 const hooks = vi.hoisted(() => {
   let cursor = 0;
   const slots: { value?: unknown; current?: unknown; deps?: readonly unknown[]; cleanup?: (() => void) | undefined }[] = [];
@@ -16,7 +15,7 @@ const hooks = vi.hoisted(() => {
     useState(initial: unknown) {
       const index = cursor++;
       slots[index] ??= { value: initial };
-      return [slots[index]!.value, (value: unknown) => { slots[index]!.value = typeof value === "function" ? (value as (old: unknown) => unknown)(slots[index]!.value) : value; }];
+      return [slots[index]!.value, (value: unknown) => { slots[index]!.value = value; }];
     },
     useRef(initial: unknown) { return slots[cursor++] ??= { current: initial }; },
     useCallback(fn: unknown, deps: readonly unknown[]) {
@@ -33,8 +32,8 @@ const hooks = vi.hoisted(() => {
     },
   };
 });
-vi.mock("react", async importOriginal => ({ ...await importOriginal<typeof React>(), useContext: () => facts.generation, ...hooks }));
-afterEach(() => { facts.generation = 0; hooks.reset(); vi.unstubAllGlobals(); });
+vi.mock("react", async importOriginal => ({ ...await importOriginal<typeof React>(), ...hooks }));
+afterEach(() => { hooks.reset(); vi.unstubAllGlobals(); });
 
 const jobId = "11111111-1111-4111-8111-111111111111";
 const otherJobId = "22222222-2222-4222-8222-222222222222";
@@ -79,31 +78,4 @@ it("refuses a wrong-job invoice projection instead of showing progress", async (
   const { html } = await journey("accepted", 400, "ACTIVATION_REQUIRED", otherJobId);
   expect(html).toContain("Saved progress could not be checked");
   expect(html).not.toContain("journey-customer-balance");
-});
-
-it("announces a requested recheck and hides the old balance", async () => {
-  const { fetch } = await journey("accepted");
-  const render = () => { hooks.render(); const tree = PracticeJourney({ jobId, status: "accepted" }); hooks.effects(); return tree; };
-  const findButton = (node: React.ReactNode): React.ReactElement<{ onClick: () => void }> | undefined => {
-    if (Array.isArray(node)) return node.map(findButton).find(Boolean);
-    if (!React.isValidElement<{ children?: React.ReactNode; onClick: () => void }>(node)) return;
-    return node.type === "button" ? node : findButton(node.props.children);
-  };
-  fetch.mockImplementation(() => new Promise(() => {}));
-  findButton(render())!.props.onClick();
-  const html = renderToStaticMarkup(render());
-  expect(html).toContain("Checking saved progress");
-  expect(html).not.toContain("journey-customer-balance");
-});
-
-it("keeps the saved progress visible during a silent generation refresh", async () => {
-  const { fetch } = await journey("accepted");
-  fetch.mockImplementation(() => new Promise(() => {}));
-  const render = () => { hooks.render(); const tree = PracticeJourney({ jobId, status: "accepted" }); hooks.effects(); return renderToStaticMarkup(tree); };
-  facts.generation++;
-  render();
-  expect(fetch).toHaveBeenCalledTimes(8);
-  const html = render();
-  expect(html).toContain("journey-customer-balance");
-  expect(html).not.toContain("Checking saved progress");
 });

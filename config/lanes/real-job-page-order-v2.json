@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/real-job-page-order-v2"
       ],
-      "note": "REAL-JOB-PAGE-ORDER v2: job journey order and mobile pricing navigation; NOPR.",
+      "note": "REAL-JOB-PAGE-ORDER v2 repair 8: job journey order and anchor focus on main\u2019s hashchange/load/remount path; NOPR.",
       "allow": [
         "apps/web/app/ui/workspace-shell.tsx",
         "apps/web/app/ui/practice-journey.tsx",

@@ -1,15 +1,13 @@
-// Capture reads so a navigation refresh can be exercised during the first load.
-vi.mock("./job-facts-refresh",()=>({useJobFactsRefresh:(fn: () => void)=>{ fixture.refresh = fn; }}));
 import * as React from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { SupplierDocuments } from "./supplier-documents";
-const fixture = vi.hoisted(() => ({ state: null as any, refresh: () => {}, mount: () => {} }));
+const fixture = vi.hoisted(() => ({ state: null as any }));
 vi.mock("react", async importOriginal => ({ ...await importOriginal<typeof React>(),
   useState: (initial: unknown) => [initial === null ? fixture.state : initial, vi.fn()],
-  useRef: (initial: unknown) => ({ current: initial }), useEffect: (fn: () => void) => { fixture.mount = fn; }, useCallback: (fn: unknown) => fn,
+  useEffect: vi.fn(), useCallback: (fn: unknown) => fn,
 }));
-vi.mock("./materials-command", () => ({ materialsCommandFor: () => ({ read: async (_key: string, read: () => Promise<unknown>, apply: (value: unknown) => void) => apply(await read()) }),
+vi.mock("./materials-command", () => ({ materialsCommandFor: () => ({}),
   useMaterialsCommand: () => ({ busy: false, run: async (fn: () => Promise<void>) => fn() }),
 }));
 vi.stubGlobal("React", React);
@@ -48,18 +46,4 @@ it("labels each delivery quantity separately", () => {
   for (const label of ["Ordered", "Delivered", "Rejected", "Missing", "Later delivered"])
     expect(html).toContain(`<dt>${label}</dt>`);
   expect(html).toContain('data-testid="delivery-later-delivered">1 each');
-});
-
-it("finishes a held supplier read before one coalesced navigation reread", async () => {
-  const releases: Array<() => void> = [];
-  const fetcher = vi.fn().mockImplementation(() => new Promise(resolve => {
-    releases.push(() => resolve({ ok: true, json: async () => ({ state: fixture.state }) }));
-  }));
-  vi.stubGlobal("fetch", fetcher);
-  panel(); fixture.mount(); fixture.refresh(); fixture.refresh();
-  expect(fetcher).toHaveBeenCalledTimes(1);
-  releases.shift()!(); await new Promise<void>(resolve => setImmediate(resolve));
-  expect(fetcher).toHaveBeenCalledTimes(2);
-  releases.shift()!(); await new Promise<void>(resolve => setImmediate(resolve));
-  expect(fetcher).toHaveBeenCalledTimes(2);
 });

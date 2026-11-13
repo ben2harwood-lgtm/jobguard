@@ -1,5 +1,4 @@
 "use client";
-import { useJobFactsRefresh } from "./job-facts-refresh";
 import { jobPageFetch as fetch } from "./job-page-fetch";
 
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
@@ -48,7 +47,7 @@ export function PracticeReceipts({ jobId }: { jobId: string }) {
     }
   }, [path]);
 
-useJobFactsRefresh(load);  useEffect(() => {
+  useEffect(() => {
     setView(null); setNotice(""); void load();
     return () => { generation.current++; active.current?.abort(); };
   }, [load]);
