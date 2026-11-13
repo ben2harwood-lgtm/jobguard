@@ -333,8 +333,13 @@ it.each(["owner membership", "owner grant", "small-builder track"])("[PW4] %s ca
   });
  }
  const shapes = [];
+ // LP-6d: a revoked owner's session can no longer be bound (contractor_session refuses it before any request
+ // context exists), so that case is driven through the API route a caller uses; its visible answer stays main's.
+ const { PracticeWorkerSwitchApplication } = await import("../../../apps/api/src/contractor/practice-worker-switch.application.js");
  for (const workerId of [f.members.supervisor, f.members.operative, randomUUID(), other.members.operative]) {
-  const failure = await repo(c).switchOn(await requestContext(c, f), f.p, f.session, { ...on(), workerId }).catch(error => ({ code: error.code, message: error.message })); shapes.push(failure);
+  const failure = await (change === "owner membership"
+   ? new PracticeWorkerSwitchApplication(c.runtime).start({ version: "contractor-principal.v1", sessionId: f.session }, workerId, on())
+   : repo(c).switchOn(await requestContext(c, f), f.p, f.session, { ...on(), workerId })).catch(error => ({ code: error.code, message: error.message })); shapes.push(failure);
  }
  expect(shapes).toEqual(Array(4).fill({ code: "SWITCH_FORBIDDEN", message: "SWITCH_FORBIDDEN" }));
  expect(await text(c, "control_plane.practice_worker_switch", f.p.tenantId)).toEqual([]);
