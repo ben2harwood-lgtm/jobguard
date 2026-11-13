@@ -23,7 +23,8 @@
         "packages/db/test/extra-proceed-upgrade.integration.test.ts",
         "packages/db/migrations/0733_identity_linked_practice.sql",
         "packages/db/test/migration-proofs/0733_identity_linked_practice.proof.json",
-        "packages/db/test/extra-origin.integration.test.ts"
+        "packages/db/test/extra-origin.integration.test.ts",
+        "packages/db/migration-notes/0733_identity_linked_practice.md"
       ]
     }
   }
