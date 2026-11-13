@@ -32,11 +32,24 @@ test("after lock the check is running, shows no items and keeps that state after
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 });
 
-/** An existing held proposal on the pre-lock proof photo. The actual scheduled worker processes sources
+/** Save an explicit work source separately from the required electrical certificate. */
+async function saveBaselineWorkNote(page: Page, jobId: string) {
+  await page.goto(`/jobs/${jobId}#job-diary`);
+  const diary = page.getByTestId("job-diary");
+  const text = "Painted the walls as an extra. Agreed £80.";
+  await diary.getByLabel("Note", { exact: true }).fill(text);
+  await diary.getByRole("button", { name: "Save note", exact: true }).click();
+  await expect(diary.getByTestId("diary-entry")).toContainText(text);
+  const entries = await jsonResult(page.request.get(`/api/jobs/${jobId}/diary`), "Read baseline work note");
+  return entries.entries[0].evidence.id as string;
+}
+
+/** An existing held proposal on the pre-lock diary source. The actual scheduled worker processes sources
  * and reconciles it; this helper never writes source results or completion facts. */
 async function revealedJob(page: Page) {
   test.setTimeout(240_000);
-  const { jobId, tenantId, evidenceId, account } = await prepareLockJob(page);
+  const { jobId, tenantId, account } = await prepareLockJob(page);
+  const evidenceId = await saveBaselineWorkNote(page, jobId);
   const signalId = randomUUID();
   await withSyntheticShadow(tenantId, async (shadow, admin) => {
     const row = (await admin.query("SELECT object_version_id,sha256,server_received_at::text received FROM app.evidence_object WHERE tenant_id=$1 AND job_id=$2 AND id=$3", [tenantId, jobId, evidenceId])).rows[0];
@@ -93,7 +106,7 @@ test("K (existing proposal, real run): Already included must name a locked line 
   expect(JSON.stringify((await jsonResult(page.request.get(`/api/jobs/${jobId}/final-account`), "Re-read lock")).lock)).toBe(lock);
 });
 
-/** Live job with its generated proof photo, final account assembled, terms, dispositions and lock, all through the app. */
+/** Live job with its required certificate and baseline work note, final account, terms, dispositions and lock, all through the app. */
 async function lockedPracticeJob(page: Page, capturedExtra = false, beforeLock?: (tenantId:string,jobId:string)=>Promise<void>) {
   await openLiveWatchdogJob(page);
   const jobId = (await page.locator(".quote-editor").getAttribute("data-job-id"))!, tenantId = "11111111-1111-4111-8111-111111111111";
@@ -103,6 +116,7 @@ async function lockedPracticeJob(page: Page, capturedExtra = false, beforeLock?:
   const selected = await proof({ action: "select_generated", scopeItemId: initial.scopeItemId, fixture: "completion-photo" });
   const finalized = await proof({ action: "finalize", uploadId: selected.upload.id, objectVersionId: selected.upload.objectVersionId });
   await proof({ action: "complete", evidenceId: finalized.upload.evidenceId, scopeItemId: initial.scopeItemId });
+  await saveBaselineWorkNote(page, jobId);
   if (capturedExtra) {
     await page.goto(`/jobs/${jobId}#job-diary`);
     const diary = page.getByTestId("job-diary");
@@ -136,7 +150,7 @@ async function lockedPracticeJob(page: Page, capturedExtra = false, beforeLock?:
   return { jobId, tenantId };
 }
 
-test("D (practice run): a photo of work in the original quote is reconciled, never revealed", async ({ page }) => {
+test("D (practice run): a diary note of work in the original quote is reconciled, never revealed", async ({ page }) => {
   test.setTimeout(240_000);
   const { jobId, tenantId } = await lockedPracticeJob(page);
   await page.goto(`/jobs/${jobId}#final-check`);
@@ -204,7 +218,7 @@ test("O (real run): zero-result wording survives reload and replay creates no du
     const classifications = () => admin.query("SELECT * FROM app.shadow_signal_classification WHERE tenant_id=$1 AND job_id=$2 ORDER BY id", [tenantId, jobId]);
     const runs = () => admin.query("SELECT * FROM app.shadow_reconciliation_run WHERE tenant_id=$1 AND job_id=$2 ORDER BY id", [tenantId, jobId]);
     const before = (await classifications()).rows;
-    // This is an examined baseline photo, not an empty fixture that could pass without classifying anything.
+    // This is an examined baseline work note, not an empty fixture that could pass without classifying anything.
     expect(before).toEqual([expect.objectContaining({ run_id: completed.runId, outcome: "already_in_original_scope" })]);
     const originalRuns = (await runs()).rows;
     expect(originalRuns).toEqual([expect.objectContaining({ id: completed.runId })]);

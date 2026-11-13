@@ -36,6 +36,12 @@ export function decodeFinalCheckTypedText(text: string, reference: string | null
   let work = normalized.replace(priceSentence, (_all, agreed: string, estimated: string, fine: string) => {
     prices.push((agreed ?? estimated ?? fine).trim()); return ". ";
   }).trim();
+  // A bounded diary tail separates time spent from the money estimate. Keep
+  // whole-input matching and count its price alongside every other price slot.
+  const durationEstimate = new RegExp(`,\\s*(?:one|two|three|four|five|six|seven|eight|nine|ten|\\d+(?:\\.\\d+)?)\\s+hours?\\s+extra,\\s*about\\s+(${priceBody})$`, "u").exec(work);
+  if (durationEstimate) {
+    prices.push(durationEstimate[1]!.trim()); work = work.slice(0, durationEstimate.index).trim();
+  }
   // Directly attached amounts are allowed only at the end of the work clause.
   const attached = new RegExp(`\\s+(?:for\\s+)?(${priceBody})$`, "u").exec(work);
   if (attached && /£|\b(?:pounds|quid)\b/u.test(attached[1]!)) {
@@ -93,7 +99,8 @@ export async function readFinalCheckTypedText(pool: Pool, context: VerifiedTenan
         AND o.source_kind=CASE WHEN $4='job_diary_text' THEN 'diary' ELSE 'customer_message' END
         AND o.environment='synthetic_demo' AND tr.job_track='small_builder' AND tr.environment='synthetic_demo'
         AND current_database()='jobguard_synthetic_demo' AND j.provenance<>'imported'
-        AND EXISTS(SELECT 1 FROM app.authenticate_practice_session(j.practice_session_digest::text,j.tenant_id))
+        AND (j.practice_session_digest IS NULL OR EXISTS(
+          SELECT 1 FROM app.authenticate_practice_session(j.practice_session_digest::text,j.tenant_id)))
         AND e.kind='original' AND e.scope_item_id IS NULL AND e.server_verified_at IS NOT NULL
         AND e.object_key=o.object_key AND e.content_type=o.content_type AND e.byte_length=o.byte_length
         AND u.state='verified' AND u.server_verified_at IS NOT NULL AND u.scope_item_id IS NULL
