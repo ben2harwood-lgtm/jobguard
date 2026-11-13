@@ -39,7 +39,7 @@ export function FirmDetailsForm({ initial, refusal }: { initial: View | null; re
    {[0, 1, 2].map(index => <label key={index}>Address line {index + 1}<input maxLength={160} value={profile.addressLines[index] ?? ""} onChange={e => { const addressLines = [...profile.addressLines]; addressLines[index] = e.target.value; setProfile({ ...profile, addressLines }); }}/></label>)}
    <label>Contact email<input type="email" maxLength={320} value={profile.contactEmail} onChange={e => setProfile({ ...profile, contactEmail: e.target.value })}/></label>
    <label>Contact phone<input type="tel" maxLength={80} value={profile.contactPhone} onChange={e => setProfile({ ...profile, contactPhone: e.target.value })}/></label>
-   <button type="submit">{initial?.isPractice ? "Practice firms use the sample name" : saving ? "Saving…" : "Save firm details"}</button>
+   <button type="submit">{initial?.isPractice && !canSave ? "Practice firms use the sample name" : saving ? "Saving…" : "Save firm details"}</button>
   </fieldset></form>{notice && <p role="status">{notice}</p>}<a href="/">Back to your jobs</a></section>;
 }
 export function FirmDetailsScreen() {

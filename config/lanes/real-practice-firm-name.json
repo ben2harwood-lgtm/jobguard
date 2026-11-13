@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-practice-firm-name": {
+      "branches": [
+        "codex/sandbox/real-practice-firm-name"
+      ],
+      "allow": [
+        "apps/web/app/firm-details/firm-details.test.tsx",
+        "apps/web/app/firm-details/firm-details.tsx",
+        "apps/web/e2e/real-practice-firm-name.spec.ts",
+        "packages/db/migrations/0949_practice_firm_name.sql",
+        "packages/db/src/acceptance-repository.ts",
+        "packages/db/src/firm-profile-repository.ts",
+        "packages/db/src/quote-delivery-repository.ts",
+        "packages/db/test/migration-proofs/0949_practice_firm_name.proof.json",
+        "packages/db/test/practice-firm-name.integration.test.ts"
+      ]
+    }
+  }
+}

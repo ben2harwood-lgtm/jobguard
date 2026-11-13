@@ -1,0 +1,245 @@
+{
+  "migration": "0949_practice_firm_name.sql",
+  "lp0": [
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.current_firm_profile_key()",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.bound_context_reader"
+        ]
+      },
+      "after": {
+        "identity": "function:app.current_firm_profile_key()",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.authenticate_practice_session",
+          "app.bound_context_reader",
+          "app.final_check_bound_practice"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.job_saved_firm_name(uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.authenticate_practice_session",
+          "app.current_firm_profile_key",
+          "app.current_tenant",
+          "app.final_check_bound_practice",
+          "app.final_check_job_scope",
+          "app.firm_profile_access"
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.job_saved_firm_name(uuid)|jobguard_migration",
+        "group": "a-firm-profile"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.job_saved_firm_name(uuid)|jobguard_runtime|EXECUTE|-",
+        "group": "a-firm-profile"
+      }
+    },
+    {
+      "section": "authorityPaths",
+      "before": {
+        "title": "Company firm profile",
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Verify tenant-derived company isolation and owner-only writes.",
+          "LP-12": "Review use of the existing 0697 reader, runtime grants and FORCE RLS."
+        },
+        "sources": [
+          "packages/db/migrations/0726_firm_profile.sql",
+          "packages/db/src/firm-profile-repository.ts"
+        ],
+        "tests": [
+          "packages/db/test/firm-profile.integration.test.ts"
+        ],
+        "gaps": [
+          "Real PostgreSQL execution, privilege-pin admission and independent RED review pending."
+        ],
+        "id": "ap-firm-profile",
+        "description": "A synthetic company profile supplies new quote snapshots; issued documents remain immutable."
+      },
+      "after": {
+        "title": "Company firm profile",
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Verify tenant-derived company isolation and owner-only writes.",
+          "LP-12": "Review use of the existing 0697 reader, runtime grants and FORCE RLS."
+        },
+        "sources": [
+          "packages/db/migrations/0726_firm_profile.sql",
+          "packages/db/src/firm-profile-repository.ts",
+          "packages/db/migrations/0949_practice_firm_name.sql",
+          "packages/db/src/quote-delivery-repository.ts",
+          "packages/db/src/acceptance-repository.ts"
+        ],
+        "tests": [
+          "packages/db/test/firm-profile.integration.test.ts",
+          "packages/db/test/practice-firm-name.integration.test.ts",
+          "apps/web/e2e/real-practice-firm-name.spec.ts"
+        ],
+        "gaps": [
+          "Real PostgreSQL upgrade/repeat/populated-profile and issued-document preservation execution, browser regression, current-main CI and exact-head independent RED review pending."
+        ],
+        "id": "ap-firm-profile",
+        "description": "Blank practice profile ownership resolves exactly one canonical blank_practice_session via final_check_bound_practice, then authenticates it inside the protected transaction. Migration-owned fixed-path routines read existing control_plane.blank_practice_session, contractor_practice_session, practice_company_marker and app.membership/job/firm_profile only; no new table grants. job_saved_firm_name is runtime EXECUTE only and calls final_check_job_scope for exact job ownership. Existing current_firm_profile_key owner/ACL and all RLS policies remain. No profile, document, hash, outbox, approval or acceptance rows are rewritten. Reapplication is data preserving; forward fix replaces routines in a later migration without deleting or transferring stored profiles. A SELECT-only firm_profile_bound_reader policy gives the FORCE-RLS definer owner the existing bound firm_profile_access predicate; no write policy or table grant is added."
+      }
+    },
+    {
+      "section": "groups",
+      "before": {
+        "id": "a-firm-profile",
+        "title": "Company firm profile",
+        "kind": "authority",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Build-ahead only. Landing requires exact-head RED review, catalogue verification and green CI."
+        },
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Verify tenant-derived company isolation and owner-only writes.",
+          "LP-12": "Review use of the existing 0697 reader, runtime grants and FORCE RLS."
+        },
+        "downstream": "A synthetic company profile supplies new quote snapshots; issued documents remain immutable.",
+        "sources": [
+          "packages/db/migrations/0726_firm_profile.sql",
+          "packages/db/src/firm-profile-repository.ts"
+        ],
+        "tests": [
+          "packages/db/test/firm-profile.integration.test.ts"
+        ],
+        "gaps": [
+          "Real PostgreSQL execution, privilege-pin admission and independent RED review pending."
+        ],
+        "path": "ap-firm-profile"
+      },
+      "after": {
+        "id": "a-firm-profile",
+        "title": "Company firm profile",
+        "kind": "authority",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Build-ahead only. Landing requires exact-head RED review, catalogue verification and green CI."
+        },
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Verify tenant-derived company isolation and owner-only writes.",
+          "LP-12": "Review use of the existing 0697 reader, runtime grants and FORCE RLS."
+        },
+        "downstream": "Blank practice profile ownership resolves exactly one canonical blank_practice_session via final_check_bound_practice, then authenticates it inside the protected transaction. Migration-owned fixed-path routines read existing control_plane.blank_practice_session, contractor_practice_session, practice_company_marker and app.membership/job/firm_profile only; no new table grants. job_saved_firm_name is runtime EXECUTE only and calls final_check_job_scope for exact job ownership. Existing current_firm_profile_key owner/ACL and all RLS policies remain. No profile, document, hash, outbox, approval or acceptance rows are rewritten. Reapplication is data preserving; forward fix replaces routines in a later migration without deleting or transferring stored profiles. A SELECT-only firm_profile_bound_reader policy gives the FORCE-RLS definer owner the existing bound firm_profile_access predicate; no write policy or table grant is added.",
+        "sources": [
+          "packages/db/migrations/0726_firm_profile.sql",
+          "packages/db/src/firm-profile-repository.ts",
+          "packages/db/migrations/0949_practice_firm_name.sql",
+          "packages/db/src/quote-delivery-repository.ts",
+          "packages/db/src/acceptance-repository.ts"
+        ],
+        "tests": [
+          "packages/db/test/firm-profile.integration.test.ts",
+          "packages/db/test/practice-firm-name.integration.test.ts",
+          "apps/web/e2e/real-practice-firm-name.spec.ts"
+        ],
+        "gaps": [
+          "Real PostgreSQL upgrade/repeat/populated-profile and issued-document preservation execution, browser regression, current-main CI and exact-head independent RED review pending."
+        ],
+        "path": "ap-firm-profile"
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.firm_profile|firm_profile_bound_reader|PERMISSIVE|SELECT|jobguard_migration|6b3344dd74ba054e"
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "job_saved_firm_name",
+        "args": "j uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "firm_profile",
+        "policyname": "firm_profile_bound_reader",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "app.firm_profile_access(tenant_id, company_key, false)",
+        "with_check": null
+      }
+    }
+  ],
+  "tenancy": []
+}
