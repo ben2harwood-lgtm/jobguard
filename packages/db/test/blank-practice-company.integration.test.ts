@@ -1,3 +1,4 @@
+import { bindOwnSession } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { cluster, seedHomeOwner, digestOf, type Cluster } from "./contractor-practice-session-fixtures.js";
@@ -36,7 +37,7 @@ it("starts empty, isolates testers, retains history and rejects old credentials 
   const client = await c.runtime.connect();
   try {
     await client.query("BEGIN");
-    await client.query("SELECT set_config('app.tenant_id',$1,true)", [a.context.tenantId]);
+    await client.query("SELECT set_config('app.tenant_id',$1,true)", [a.context.tenantId]); await bindOwnSession(client, a.digest);
     await client.query("SELECT app.create_practice_sandbox_job($1,$2,$3,$4)", [a.context.tenantId, job, a.membershipId, a.digest]);
     await client.query("COMMIT");
   } finally { client.release(); }
@@ -153,7 +154,7 @@ it("refuses digest-only reset authority and the legacy entry point without chang
   const client = await c.runtime.connect();
   try {
     await client.query("BEGIN");
-    await client.query("SELECT set_config('app.tenant_id',$1,true)", [auth.context.tenantId]);
+    await client.query("SELECT set_config('app.tenant_id',$1,true)", [auth.context.tenantId]); await bindOwnSession(client, auth.digest);
     await client.query("SELECT app.create_practice_sandbox_job($1,$2,$3,$4)", [auth.context.tenantId, job, auth.membershipId, auth.digest]);
     await client.query("COMMIT");
     // The attacker can read this digest through the shared synthetic tenant.

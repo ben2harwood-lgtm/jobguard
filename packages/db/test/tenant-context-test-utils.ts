@@ -77,3 +77,19 @@ export async function bindTestClient(owner: Pool, client: { query: Pool["query"]
   await testBoundTenantContext(owner, tenantId, membershipId, credential);
   await client.query("SELECT app.bind_request('real',$1,$2)", [credential, tenantId]);
 }
+
+/**
+ * LP-6d: a raw fixture call binds the very session it names (practice owner or real signed-in session),
+ * inside the caller's transaction, before the guarded routine. A malformed or foreign session stays
+ * unbound (savepoint), so refusal tests still exercise their refusal.
+ */
+export async function bindOwnSession(client: { query: (sql: string, values?: unknown[]) => Promise<unknown> }, digest: unknown) {
+  for (const kind of ["practice", "real"]) {
+    await client.query("SAVEPOINT lp6d_own_session");
+    try {
+      await client.query("SELECT app.bind_request($1,$2,nullif(current_setting('app.tenant_id',true),'')::uuid)", [kind, digest]);
+      await client.query("RELEASE SAVEPOINT lp6d_own_session");
+      return;
+    } catch { await client.query("ROLLBACK TO SAVEPOINT lp6d_own_session"); }
+  }
+}
