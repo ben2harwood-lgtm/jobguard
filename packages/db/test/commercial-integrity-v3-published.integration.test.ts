@@ -27,7 +27,7 @@ it("CH-6 published not-completed advice cites the exact verified original eviden
  const {finding,raw}=await save(x.a,"dismissed_not_completed_with_completion_evidence");
  expect(finding.sourceSnapshot.compared.lockId).toBe(x.lockId);expect(finding.sourceReferences.some(s=>s.sourceId===x.lockId)).toBe(true);
  const forged={...finding.sourceSnapshot,facts:finding.sourceSnapshot.facts.map(f=>"lockId" in f?{...f,lockId:randomUUID()}:f)};
- await expect(finalCheckTenant(f.runtime,x.a.tenantId,db=>db.query("SELECT app.ch6_record_integrity_review($1,$2,$3,$4::jsonb,$5::jsonb)",[x.a.tenantId,x.a.jobId,x.a.digest,JSON.stringify({...raw,commandId:randomUUID()}),JSON.stringify(forged)]))).rejects.toThrow("INTEGRITY_SOURCE_CHANGED");
+ await expect(finalCheckTenant(f.runtime,x.a.tenantId,db=>db.query("SELECT app.ch6_record_integrity_review($1,$2,$3,$4::jsonb,$5::jsonb)",[x.a.tenantId,x.a.jobId,x.a.digest,JSON.stringify({...raw,commandId:randomUUID()}),JSON.stringify(forged)]),{practiceDigest:x.a.digest})).rejects.toThrow("INTEGRITY_SOURCE_CHANGED");
  const visible=await new CommercialIntegrityV3Repository(f.runtime).read(x.a.context,actor,x.a.digest,x.a.jobId);expect(visible.published).toBeNull();
 });
 // All financial parents use the real synthetic command writers with triggers and FKs enabled.

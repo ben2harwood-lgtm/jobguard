@@ -32,15 +32,15 @@ it("saved allocations reproduce £2820/£282/£2538 then £320/£32/£288, once 
 });
 it("denies another session/company before recovery source reads; reader has no write grants",async()=>{
  const x=await recoveryFeeFixture(f),other=await recoveryFeeFixture(f);
- await expect(finalCheckTenant(f.runtime,x.context.tenantId,db=>db.query("SELECT app.read_value_job_v2($1,$2)",[x.jobId,other.auth.digest]))).rejects.toThrow("VALUE_FORBIDDEN");
- await expect(finalCheckTenant(f.runtime,randomUUID(),db=>db.query("SELECT app.read_value_job_v2($1,$2)",[x.jobId,x.auth.digest]))).rejects.toThrow();
+ await expect(finalCheckTenant(f.runtime,x.context.tenantId,db=>db.query("SELECT app.read_value_job_v2($1,$2)",[x.jobId,other.auth.digest]),{practiceDigest:other.auth.digest})).rejects.toThrow("VALUE_FORBIDDEN");
+ await expect(finalCheckTenant(f.runtime,randomUUID(),db=>db.query("SELECT app.read_value_job_v2($1,$2)",[x.jobId,x.auth.digest]),{practiceDigest:x.auth.digest})).rejects.toThrow();
  const acl=(await f.admin.query("SELECT has_function_privilege('jobguard_runtime','app.read_value_job_v2(uuid,text)','EXECUTE') runtime,has_function_privilege('jobguard_shadow','app.read_value_job_v2(uuid,text)','EXECUTE') shadow")).rows[0];
  expect(acl).toEqual({runtime:true,shadow:false});
 });
 
 it("pre-lock direct reads preserve the refusal envelope without recovery sources",async()=>{
  const x=await seedFinalCheckJob(f);
- const raw=await finalCheckTenant(f.runtime,x.tenantId,async db=>(await db.query("SELECT app.read_value_job_v2($1,$2) result",[x.jobId,x.digest])).rows[0].result);
+ const raw=await finalCheckTenant(f.runtime,x.tenantId,async db=>(await db.query("SELECT app.read_value_job_v2($1,$2) result",[x.jobId,x.digest])).rows[0].result,{practiceDigest:x.digest});
  expect(raw).toBeNull();
 });
 

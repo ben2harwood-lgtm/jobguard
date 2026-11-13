@@ -37,20 +37,20 @@ it("reads the real £800/£80/£720 chain without allocating or appending on rep
  expect(receipt.sources.tracked).toEqual([]);expect((await f.admin.query("SELECT count(*)::int n FROM app.audit_event")).rows).toEqual(before);
 });
 it("refund immediately refuses stale money, then exposes a linked negative movement after reassessment",async()=>{
- const x=await allocated(),read=()=>finalCheckTenant(f.runtime,x.context.tenantId,async db=>(await db.query("SELECT app.read_value_job($1,$2) result",[x.jobId,x.auth.digest])).rows[0].result);
+ const x=await allocated(),read=()=>finalCheckTenant(f.runtime,x.context.tenantId,async db=>(await db.query("SELECT app.read_value_job($1,$2) result",[x.jobId,x.auth.digest])).rows[0].result,{practiceDigest:x.auth.digest});
  await x.invoices.reverseReceipt(x.context,{jobId:x.jobId,invoiceId:x.invoiceId,paymentId:x.paymentId,actorMembershipId:x.actor.membershipId,commandId:randomUUID(),reason:"Fictional refund"});
  const {mapValueReceipt}=await import("@jobguard/core");expect(mapValueReceipt(await read()).found.recovered).toBeNull();
  await assess(x,1);const receipt=mapValueReceipt(await read());expect(receipt.found.recovered?.pence).toBe(0);
  expect(receipt.found.movements[1]).toMatchObject({kind:"reversal",recovered:{pence:-80000},fee:{numerator:"-8000",denominator:"1"}});
 });
 it("only original locked bill builder captures are tracked and never fee-bearing",async()=>{
- const x=await realReceiptFixture(f,"F5"),raw=await finalCheckTenant(f.runtime,x.context.tenantId,async db=>(await db.query("SELECT app.read_value_job($1,$2) result",[x.jobId,x.auth.digest])).rows[0].result);
+ const x=await realReceiptFixture(f,"F5"),raw=await finalCheckTenant(f.runtime,x.context.tenantId,async db=>(await db.query("SELECT app.read_value_job($1,$2) result",[x.jobId,x.auth.digest])).rows[0].result,{practiceDigest:x.auth.digest});
  const {mapValueReceipt}=await import("@jobguard/core");expect(mapValueReceipt(raw)).toMatchObject({tracked:{pence:80000},trackedFee:{pence:0}});
 });
 it("cross-session/job/tenant access fails before source disclosure",async()=>{
  const x=await allocated(),other=await realReceiptFixture(f);
- await expect(finalCheckTenant(f.runtime,x.context.tenantId,db=>db.query("SELECT app.read_value_job($1,$2)",[x.jobId,other.auth.digest]))).rejects.toThrow("VALUE_FORBIDDEN");
- await expect(finalCheckTenant(f.runtime,randomUUID(),db=>db.query("SELECT app.read_value_job($1,$2)",[x.jobId,x.auth.digest]))).rejects.toThrow();
+ await expect(finalCheckTenant(f.runtime,x.context.tenantId,db=>db.query("SELECT app.read_value_job($1,$2)",[x.jobId,other.auth.digest]),{practiceDigest:other.auth.digest})).rejects.toThrow("VALUE_FORBIDDEN");
+ await expect(finalCheckTenant(f.runtime,randomUUID(),db=>db.query("SELECT app.read_value_job($1,$2)",[x.jobId,x.auth.digest]),{practiceDigest:x.auth.digest})).rejects.toThrow();
  await expect(new ValueV3Reader(f.runtime,randomUUID()).readJob(x.jobId)).rejects.toHaveProperty("code");
 });
 it("subscription periods reproduce MON-1/MON-2A statements and are never apportioned to a job",async()=>{

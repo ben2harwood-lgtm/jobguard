@@ -181,7 +181,7 @@ it.each(["settle","fail"])("builder connections cannot submit or replay %s even 
  const direct=()=>finalCheckTenant(f.runtime,x.context.tenantId,async db=>{
   await db.query("SELECT set_config('app.practice_material_digest',$1,true)",[x.auth.digest]);
   return db.query("SELECT app.write_platform_fee_collection($1,$2,$3::jsonb)",[x.jobId,x.auth.digest,c]);
- });
+ },{practiceDigest:x.auth.digest});
  await expect(repo.command(x.context,x.jobId,x.auth.digest,c)).rejects.toThrow("SUCCESS_FEE_FORBIDDEN");
  await expect(direct()).rejects.toMatchObject({code:"42501",message:"SUCCESS_FEE_FORBIDDEN"});
  expect(await x.view()).toMatchObject({settledPrincipal:0,collectionReserved:8000});

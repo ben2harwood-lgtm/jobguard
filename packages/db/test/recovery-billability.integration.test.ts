@@ -48,7 +48,7 @@ it("stored-fact derivation rejects caller allocationState, disclosedBeforeLock, 
   const { x, command } = await ready();
   for (const [key, value] of Object.entries({ allocationState: "available", disclosedBeforeLock: false, builderCaptured: false, lockId: randomUUID(), finalAccountLockId: randomUUID() })) {
     await expect(send(x, { ...command, [key]: value })).rejects.toThrow("INVALID_BILLABILITY_INPUT");
-    await expect(finalCheckTenant(f.runtime, x.context.tenantId, db => db.query("SELECT app.recovery_billability($1,$2,$3::jsonb)", [x.jobId, x.auth.digest, { ...command, [key]: value }]))).rejects.toThrow("INVALID_BILLABILITY_INPUT");
+    await expect(finalCheckTenant(f.runtime, x.context.tenantId, db => db.query("SELECT app.recovery_billability($1,$2,$3::jsonb)", [x.jobId, x.auth.digest, { ...command, [key]: value }]),{practiceDigest:x.auth.digest})).rejects.toThrow("INVALID_BILLABILITY_INPUT");
   }
   const result = await send(x, command);
   expect(result).toMatchObject({ snapshot: { allocationState: "available", builderCaptured: false, disclosedBeforeLock: false, finalAccountLockId: x.fact.invoiceBinding.lockId }, assessment: { classification: "eligible_for_review" } });
@@ -66,7 +66,7 @@ it("UNIQUE(tenant, command_id) replays the first review and approval; different 
 });
 it("approver = requester refused in database, including a different session for the same membership", async () => {
   const { x, command } = await ready(); await send(x, command); const same = await ownerSession(x, true);
-  await expect(finalCheckTenant(f.runtime, x.context.tenantId, db => db.query("SELECT app.recovery_billability($1,$2,$3::jsonb)", [x.jobId, same.digest, approval(command)]))).rejects.toThrow("BILLABILITY_FORBIDDEN");
+  await expect(finalCheckTenant(f.runtime, x.context.tenantId, db => db.query("SELECT app.recovery_billability($1,$2,$3::jsonb)", [x.jobId, same.digest, approval(command)]),{practiceDigest:same.digest})).rejects.toThrow("BILLABILITY_FORBIDDEN");
 });
 it("the same person with two owner memberships cannot approve their own review in the database", async () => {
   const { x, command } = await ready(); await send(x, command);
@@ -76,7 +76,7 @@ it("the same person with two owner memberships cannot approve their own review i
     await db.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [secondMembership, x.context.tenantId, account, x.actor.identityUserId]);
   });
   // The session person matches two active owners: never choose either arbitrarily.
-  await expect(finalCheckTenant(f.runtime, x.context.tenantId, db => db.query("SELECT app.recovery_billability($1,$2,$3::jsonb)", [x.jobId, same.digest, approval(command)]))).rejects.toThrow("BILLABILITY_FORBIDDEN");
+  await expect(finalCheckTenant(f.runtime, x.context.tenantId, db => db.query("SELECT app.recovery_billability($1,$2,$3::jsonb)", [x.jobId, same.digest, approval(command)]),{practiceDigest:same.digest})).rejects.toThrow("BILLABILITY_FORBIDDEN");
   // With only the second membership active, resolution is unambiguous but the
   // stored requester person must still forbid approval. The transaction rolls back.
   await expect(finalCheckTenant(f.admin, x.context.tenantId, async db => {
